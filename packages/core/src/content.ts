@@ -1,3 +1,5 @@
+import { parse } from 'yaml';
+
 export interface ContentEntry<T = unknown> {
   id: string;
   data: T;
@@ -33,4 +35,9 @@ export function staticSource<C extends Record<string, unknown>>(
         e.id.startsWith(`${locale}/`),
       ) as ContentEntry<C[typeof collection]>[],
   };
+}
+
+// Entry files are YAML; options stay fixed here so every site round-trips identically.
+export function parseEntry(_siteId: string, contents: string): unknown {
+  return parse(contents);
 }

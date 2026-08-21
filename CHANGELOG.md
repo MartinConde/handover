@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `GET /admin/api/entries/:collection/:slug` returns `{ fields, data, blob_sha }` for
+  `src/content/<collection>/en/<slug>.yaml` read from the site's GitHub repo. `fields` lists
+  every `z.string()` in the collection's schema as `{ path, type: 'text', required }`; any
+  other field is `{ path, type: 'unsupported' }`. Needs `GITHUB_APP_ID`, `GITHUB_INSTALLATION_ID`,
+  `GITHUB_PRIVATE_KEY` (PKCS#8 PEM) and `GITHUB_REPO` (`owner/repo`), optional `GITHUB_BRANCH`,
+  set with `wrangler secret put` (or `.dev.vars`).
+- `fieldsFrom(siteId, jsonSchema)` and `parseEntry(siteId, yaml)` in core.
 - Temporary password gate (removed in a later release): every `/admin/api/*` request except
   `POST /admin/api/login` needs `Authorization: Bearer <ADMIN_PASSWORD>` or the session cookie
   that `login` sets; otherwise it is 401. `/admin` shows a login form when no session exists.
