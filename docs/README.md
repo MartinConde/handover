@@ -1,3 +1,3 @@
 # Handover docs
 
-Nothing here yet. Pages are added as features land.
+- [Template convention](template-convention.md) — `schemas.ts`, `load()` and `ContentSource`, layouts that take `data` as a prop.

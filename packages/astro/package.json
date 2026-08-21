@@ -18,6 +18,9 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
   },
+  "dependencies": {
+    "@handover/core": "workspace:*"
+  },
   "peerDependencies": {
     "astro": "^7.0.0"
   },
