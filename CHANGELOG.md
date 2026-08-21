@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `createGitClient(siteId, app, { fetch?, now? })` in core: mints a GitHub App installation
+  token on demand (RS256 JWT via WebCrypto, cached on the client until it expires) and
+  `getFile(path)` returns `{ contents, blob_sha }` or `undefined` for a missing path. Not yet
+  exported from `astro-handover`.
 - `/admin` serves the pre-built Svelte admin shell (sidebar, top bar, no screens yet); its
   hashed JS/CSS are served from `/admin/_assets/*` by the same Worker and inlined at build
   time via `virtual:handover/ui`, so the site's own build config is untouched.
