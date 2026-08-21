@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `/admin` serves the pre-built Svelte admin shell (sidebar, top bar, no screens yet); its
+  hashed JS/CSS are served from `/admin/_assets/*` by the same Worker and inlined at build
+  time via `virtual:handover/ui`, so the site's own build config is untouched.
 - `/admin/[...path]` and `/admin/api/[...path]` are injected as SSR routes; `GET /admin/api/ping`
   returns `{ ok, collections }`. The integration requires a root `cms.config.ts` exporting
   `defineConfig({ collections: { name: { schema } } })` (from `astro-handover`), exposed to the

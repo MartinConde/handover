@@ -7,7 +7,7 @@ pnpm monorepo, Node 22+.
 ```
 packages/core    framework-agnostic logic — see packages/core/CONVENTIONS.md
 packages/astro   the `astro-handover` integration
-packages/ui      admin SPA (Svelte 5), pre-built to static assets
+packages/ui      admin SPA (Svelte 5 + Vite), built into packages/astro/dist/ui/
 packages/cli     scaffolding and migrations
 ```
 
@@ -15,10 +15,10 @@ packages/cli     scaffolding and migrations
 
 ```sh
 pnpm install
-pnpm build       # tsc to dist/, every package (core before astro)
+pnpm build       # every package: tsc to dist/, vite for ui (core, ui before astro)
 pnpm dev         # the same, watching
 pnpm test        # vitest, every package
-pnpm typecheck   # tsc --noEmit, every package
+pnpm typecheck   # tsc --noEmit (svelte-check in ui), every package
 pnpm lint        # biome
 pnpm format      # biome, writes
 ```

@@ -1,3 +1,5 @@
+import { readdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AstroIntegration } from 'astro';
 import type { z } from 'astro/zod';
@@ -17,6 +19,17 @@ export const NO_ADAPTER_MESSAGE =
   'astro-handover needs an SSR adapter: add `adapter: cloudflare()` from `@astrojs/cloudflare` to astro.config.';
 
 const VIRTUAL_CONFIG = 'virtual:handover/config';
+const VIRTUAL_UI = 'virtual:handover/ui';
+
+// The pre-built SPA (packages/ui → dist/ui) is inlined into the Worker bundle because a
+// Worker has no filesystem and the site's own build config must not know about it.
+export async function uiAssetsModule(dir: string): Promise<string> {
+  const names = (await readdir(dir)).filter((n) => /\.(js|css)$/.test(n)).sort();
+  const files = await Promise.all(
+    names.map(async (n) => [n, await readFile(join(dir, n), 'utf8')]),
+  );
+  return `export default ${JSON.stringify(Object.fromEntries(files))};`;
+}
 
 export default function handover(): AstroIntegration {
   return {
@@ -45,6 +58,14 @@ export default function handover(): AstroIntegration {
               {
                 name: 'handover-config',
                 resolveId: (id) => (id === VIRTUAL_CONFIG ? cmsConfig : undefined),
+              },
+              {
+                name: 'handover-ui',
+                resolveId: (id) => (id === VIRTUAL_UI ? `\0${VIRTUAL_UI}` : undefined),
+                load: (id) =>
+                  id === `\0${VIRTUAL_UI}`
+                    ? uiAssetsModule(fileURLToPath(new URL('./ui/', import.meta.url)))
+                    : undefined,
               },
             ],
           },
