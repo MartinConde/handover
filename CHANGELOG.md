@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Temporary password gate (removed in a later release): every `/admin/api/*` request except
+  `POST /admin/api/login` needs `Authorization: Bearer <ADMIN_PASSWORD>` or the session cookie
+  that `login` sets; otherwise it is 401. `/admin` shows a login form when no session exists.
+  Set the secret with `wrangler secret put ADMIN_PASSWORD` (and `ADMIN_PASSWORD=…` in
+  `.dev.vars` for `astro dev`); requests fail with an explicit error if it is unset.
 - `createGitClient(siteId, app, { fetch?, now? })` in core: mints a GitHub App installation
   token on demand (RS256 JWT via WebCrypto, cached on the client until it expires) and
   `getFile(path)` returns `{ contents, blob_sha }` or `undefined` for a missing path. Not yet

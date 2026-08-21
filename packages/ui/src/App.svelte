@@ -1,3 +1,14 @@
+<script lang="ts">
+import Login from './Login.svelte';
+
+let { authed }: { authed: boolean } = $props();
+// svelte-ignore state_referenced_locally -- the prop is the initial value on purpose
+let loggedIn = $state(authed);
+</script>
+
+{#if !loggedIn}
+  <Login onlogin={() => (loggedIn = true)} />
+{:else}
 <div class="shell">
   <aside class="sidebar" aria-label="Main">
     <div class="site-name">Handover</div>
@@ -20,6 +31,7 @@
     </main>
   </div>
 </div>
+{/if}
 
 <style>
   /* Layout only; the 0.5d tokens arrive with the first real screen. */

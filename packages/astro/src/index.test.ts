@@ -10,15 +10,17 @@ type Setup = HookParameters<'astro:config:setup'>;
 function runSetup(adapter: unknown) {
   const info = vi.fn();
   const injectRoute = vi.fn();
+  const addMiddleware = vi.fn();
   const updateConfig = vi.fn();
   const setup = handover().hooks['astro:config:setup'] as (o: Setup) => void;
   setup({
     config: { adapter, root: new URL('file:///site/') },
     logger: { info },
     injectRoute,
+    addMiddleware,
     updateConfig,
   } as unknown as Setup);
-  return { info, injectRoute, updateConfig };
+  return { info, injectRoute, addMiddleware, updateConfig };
 }
 
 test('throws the documented message when no adapter is configured', () => {
@@ -37,6 +39,12 @@ test('injects the admin shell and API routes as SSR', () => {
     ['/admin/[...path]', false],
     ['/admin/api/[...path]', false],
   ]);
+});
+
+test('registers the password-gate middleware before the routes', () => {
+  const { addMiddleware } = runSetup({ name: 'fake-adapter', hooks: {} });
+  expect(addMiddleware).toHaveBeenCalledWith({ order: 'pre', entrypoint: expect.any(URL) });
+  expect(String(addMiddleware.mock.calls[0]?.[0].entrypoint)).toMatch(/\/middleware\.js$/);
 });
 
 test('virtual:handover/config resolves to the root cms.config.ts', () => {

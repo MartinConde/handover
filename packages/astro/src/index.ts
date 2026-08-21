@@ -35,7 +35,7 @@ export default function handover(): AstroIntegration {
   return {
     name: 'astro-handover',
     hooks: {
-      'astro:config:setup': ({ config, logger, injectRoute, updateConfig }) => {
+      'astro:config:setup': ({ config, logger, injectRoute, addMiddleware, updateConfig }) => {
         if (!config.adapter) throw new Error(NO_ADAPTER_MESSAGE);
         logger.info('astro-handover integration loaded');
 
@@ -49,6 +49,7 @@ export default function handover(): AstroIntegration {
           entrypoint: new URL('./routes/api.js', import.meta.url),
           prerender: false,
         });
+        addMiddleware({ order: 'pre', entrypoint: new URL('./middleware.js', import.meta.url) });
 
         // The site's own cms.config.ts, so the Worker holds the real Zod objects.
         const cmsConfig = fileURLToPath(new URL('./cms.config.ts', config.root));

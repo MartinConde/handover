@@ -3,5 +3,13 @@
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "formatter": { "indentStyle": "space", "lineWidth": 100 },
   "javascript": { "formatter": { "quoteStyle": "single", "semicolons": "always" } },
-  "linter": { "enabled": true, "rules": { "preset": "recommended" } }
+  "linter": { "enabled": true, "rules": { "preset": "recommended" } },
+  "overrides": [
+    {
+      "includes": ["**/*.svelte"],
+      "linter": {
+        "rules": { "correctness": { "noUnusedVariables": "off", "noUnusedImports": "off" } }
+      }
+    }
+  ]
 }
