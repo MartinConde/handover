@@ -28,7 +28,9 @@ pnpm format      # biome, writes
 ## Tests
 
 Vitest. A new test is seen failing before it counts; a bug fix comes with a regression
-test. Mock only at boundaries (network, clock, DB).
+test. Mock only at boundaries (network, clock, DB). The GitHub integration tests in `packages/core` run only when `.env.test`
+exists at the repo root — copy `.env.test.example` and point it at a private throwaway repo
+the App is installed on.
 
 ## The demo site
 

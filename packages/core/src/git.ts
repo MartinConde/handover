@@ -50,7 +50,7 @@ async function appJwt(app: GitHubApp, nowMs: number): Promise<string> {
 export function createGitClient(
   _siteId: string,
   app: GitHubApp,
-  deps: { fetch?: typeof fetch; now?: () => number } = {},
+  deps: { fetch?: typeof globalThis.fetch; now?: () => number } = {},
 ): GitClient {
   const { fetch = globalThis.fetch, now = Date.now } = deps;
   let cached: { token: string; expiresAt: number } | undefined;
