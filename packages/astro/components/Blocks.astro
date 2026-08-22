@@ -1,0 +1,22 @@
+---
+import type { Block } from '@handover/core';
+import type { AstroComponentFactory } from 'astro/runtime/server/index.js';
+
+interface Props {
+  blocks: Block[];
+  components: Record<string, AstroComponentFactory>;
+}
+
+const { blocks, components } = Astro.props;
+
+// `_ref` blocks are filled from the globals collection, which does not exist yet.
+const own = blocks.filter((block) => !block._ref);
+for (const block of own) {
+  if (!(block._type in components)) throw new Error(`No component for block type "${block._type}"`);
+}
+---
+
+{own.map((block) => {
+  const Component = components[block._type];
+  return <Component block={block} components={components} />;
+})}

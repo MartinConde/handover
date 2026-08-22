@@ -1,0 +1,9 @@
+---
+import Blocks from '../../components/Blocks.astro';
+
+const { block, components } = Astro.props;
+---
+
+{block.columns.map((column: { blocks: unknown[] }) => (
+  <div class="column"><Blocks blocks={column.blocks} components={components} /></div>
+))}

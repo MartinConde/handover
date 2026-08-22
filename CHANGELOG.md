@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `<Blocks />` (`astro-handover/Blocks.astro`) renders a `blocks()` field: pass the list and a
+  `{ _type: component }` map; each component gets `block` and `components`, so nested
+  `blocks` render by calling `<Blocks />` again. An unmapped `_type` throws naming the type;
+  a `_ref` block is skipped until globals exist. See `docs/template-convention.md`.
 - Rich text: `richtext()` and `richtext('full')` from `astro-handover` store Markdown and
   validate it against the tier's construct list (basic: paragraphs, bold, italic, links,
   bullet and numbered lists; full adds `##`/`###` headings and blockquotes). Anything else

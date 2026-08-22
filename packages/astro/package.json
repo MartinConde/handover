@@ -12,6 +12,7 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./Blocks.astro": "./components/Blocks.astro",
     "./Markdown.astro": "./components/Markdown.astro"
   },
   "scripts": {
