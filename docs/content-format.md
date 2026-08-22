@@ -118,3 +118,6 @@ const listings = { collection: 'listings', route: '/listings/[slug]', locales: [
 await renameEntry('default', git, listings, 'seaview-cottage', 'seaview-cottage-devon');
 await deleteEntry('default', git, listings, 'mill-house', '/'); // undefined = no redirect
 ```
+
+The rule shape, and how the build turns the file into `_redirects`, is in
+[Site files](site-files.md#redirects), together with globals, navigation and templates.

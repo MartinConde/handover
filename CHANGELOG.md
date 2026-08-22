@@ -4,6 +4,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Site files: `cms.config.ts` takes `globals: { site, navigation }`, one schema per file
+  under `src/content/globals/<locale>/`; `navigation` from `astro-handover` is the schema
+  for the menus file (`menus[].items[]`, nesting through `children`, `newTab` on the item);
+  `redirects` validates `src/content/redirects.yaml` (`from` a path, `to` a path or absolute
+  URL, `status` 301, `reason` one of `slug-change | hidden | deleted | manual`) and the build
+  writes its rules to `_redirects` in the output directory, failing with the rule's path on a
+  bad one. Entry templates live in `src/content/_templates/<collection>/` without `_id`s and
+  are outside every collection. See `docs/site-files.md`.
 - `renameEntry` and `deleteEntry` from `@handover/core` move or remove every locale file of
   an entry in one commit and append the redirect rule to `src/content/redirects.yaml` in the
   same commit (`slug-change` on rename, `deleted` on delete when a target is given; chains

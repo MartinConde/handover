@@ -1,7 +1,13 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { appendFile, mkdir, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { checkCollections, type RichtextTier, richtextErrors } from '@handover/core';
+import {
+  checkCollections,
+  parseEntry,
+  type RichtextTier,
+  redirectsText,
+  richtextErrors,
+} from '@handover/core';
 import type { AstroIntegration } from 'astro';
 import { z } from 'astro/zod';
 
@@ -20,14 +26,54 @@ export const richtext = (tier: RichtextTier = 'basic') =>
     .meta({ handover: 'richtext', tier });
 
 // `.meta({ handover })` is how core's schema walker recognises a shape it does not own.
+const toUrl = z.object({ type: z.literal('url'), href: z.string() });
+const toRef = z.object({ type: z.enum(['entry', 'page']), ref: z.string() });
 const linkExtras = { label: z.string().optional(), newTab: z.boolean().optional() };
 export const link = z
-  .discriminatedUnion('type', [
-    z.object({ type: z.literal('url'), href: z.string(), ...linkExtras }),
-    z.object({ type: z.enum(['entry', 'page']), ref: z.string(), ...linkExtras }),
-  ])
+  .discriminatedUnion('type', [toUrl.extend(linkExtras), toRef.extend(linkExtras)])
   .meta({ handover: 'link' });
 export type Link = z.infer<typeof link>;
+
+// The `navigation` global: menus by key, items nesting through `children`. The item owns
+// `newTab`, so its link is the bare target.
+export interface NavItem {
+  _id: string;
+  _locales?: string[];
+  label: string;
+  link: z.infer<typeof toUrl> | z.infer<typeof toRef>;
+  newTab?: boolean;
+  children?: NavItem[];
+}
+const navItem: z.ZodType<NavItem> = z.lazy(() =>
+  z.strictObject({
+    _id: z.string(),
+    _locales: z.array(z.string()).optional(),
+    label: z.string(),
+    link: z.discriminatedUnion('type', [toUrl.strict(), toRef.strict()]),
+    newTab: z.boolean().optional(),
+    children: z.array(navItem).optional(),
+  }),
+);
+export const navigation = z.object({
+  menus: z.array(z.object({ _id: z.string(), key: z.string(), items: z.array(navItem) })),
+});
+export type Navigation = z.infer<typeof navigation>;
+
+// `src/content/redirects.yaml`; the build emits it as `_redirects`, see emitRedirects.
+export const redirects = z.object({
+  rules: z.array(
+    z.object({
+      _id: z.string(),
+      from: z.string().regex(/^\//, 'a path starting with "/"'),
+      to: z.string().regex(/^(\/|https?:\/\/)/, 'a path or an absolute URL'),
+      status: z.literal(301),
+      reason: z.enum(['slug-change', 'hidden', 'deleted', 'manual']),
+      entry: z.string().optional(),
+      createdAt: z.iso.datetime(),
+    }),
+  ),
+});
+export type RedirectRule = z.infer<typeof redirects>['rules'][number];
 
 // Media is stored as a key under media.publicBase, never a URL: a CDN move must not
 // touch content files.
@@ -143,10 +189,12 @@ export interface HandoverConfig {
       load?: string;
     }
   >;
+  /** One schema per file under `src/content/globals/<locale>/`, keyed by file name. */
+  globals?: Record<string, z.ZodType>;
 }
 
 export function defineConfig(config: HandoverConfig): HandoverConfig {
-  const errors = checkCollections('default', config.collections);
+  const errors = checkCollections('default', config.collections, config.globals);
   if (errors.length) throw new Error(errors.join('\n'));
   return config;
 }
@@ -167,10 +215,41 @@ export async function uiAssetsModule(dir: string): Promise<string> {
   return `export default ${JSON.stringify(Object.fromEntries(files))};`;
 }
 
+// Workers Static Assets serves `_redirects` from the client output; the Cloudflare adapter's
+// own hook runs after this one and appends Astro's config redirects to the same file.
+export async function emitRedirects(root: URL, clientDir: URL): Promise<number> {
+  const path = 'src/content/redirects.yaml';
+  const source = await readFile(new URL(path, root), 'utf8').catch(() => undefined);
+  if (source === undefined) return 0;
+  const parsed = redirects.safeParse(parseEntry('default', source));
+  if (!parsed.success) {
+    const at = (p: PropertyKey[]) =>
+      p
+        .map((k, i) => (typeof k === 'number' ? `[${k}]` : i ? `.${String(k)}` : String(k)))
+        .join('');
+    throw new Error(
+      parsed.error.issues.map((i) => `${path} › ${at(i.path)}: ${i.message}`).join('\n'),
+    );
+  }
+  await mkdir(clientDir, { recursive: true });
+  await appendFile(new URL('_redirects', clientDir), redirectsText('default', parsed.data.rules));
+  return parsed.data.rules.length;
+}
+
 export default function handover(): AstroIntegration {
+  let root: URL;
+  let clientDir: URL;
   return {
     name: 'astro-handover',
     hooks: {
+      'astro:config:done': ({ config }) => {
+        root = config.root;
+        clientDir = config.build.client;
+      },
+      'astro:build:done': async ({ logger }) => {
+        const n = await emitRedirects(root, clientDir);
+        if (n) logger.info(`Wrote ${n} redirect${n === 1 ? '' : 's'} to _redirects`);
+      },
       'astro:config:setup': ({ config, logger, injectRoute, addMiddleware, updateConfig }) => {
         if (!config.adapter) throw new Error(NO_ADAPTER_MESSAGE);
         logger.info('astro-handover integration loaded');

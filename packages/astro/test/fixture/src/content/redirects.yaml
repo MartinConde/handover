@@ -1,0 +1,15 @@
+_version: 1
+rules:
+  - _id: "m4n5o6p7"
+    from: "/listings/seaview-cottage"
+    to: "/listings/seaview-cottage-devon"
+    status: 301
+    reason: "slug-change"
+    entry: "listings/seaview-cottage-devon"
+    createdAt: "2026-08-20T10:14:00Z"
+  - _id: "q8r9s0t1"
+    from: "/brochure"
+    to: "https://example.com/files/brochure.pdf"
+    status: 301
+    reason: "manual"
+    createdAt: "2026-08-21T08:00:00Z"

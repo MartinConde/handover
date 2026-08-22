@@ -1,0 +1,18 @@
+_version: 1
+name: "Coastal Homes"
+logo:
+  src: "media/2b7c9e1a.svg"
+  alt: "Coastal Homes"
+  width: 320
+  height: 80
+contact:
+  phone: "+44 1548 000000"
+  email: "hello@example.com"
+social:
+  - _id: "s1a2b3c4"
+    network: "instagram"
+    href: "https://instagram.com/coastalhomes"
+footerText: "Coastal homes in Devon since 2009."
+defaultSeo:
+  title: "Coastal Homes"
+  description: "Coastal homes in Devon."

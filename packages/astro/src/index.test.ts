@@ -1,8 +1,9 @@
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fieldsFrom, type JsonSchema, parseEntry } from '@handover/core';
 import type { HookParameters } from 'astro';
+import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
 import { expect, expectTypeOf, test, vi } from 'vitest';
 import handover, {
@@ -12,10 +13,13 @@ import handover, {
   defineBlock,
   defineConfig,
   embed,
+  emitRedirects,
   file,
   image,
   link,
   NO_ADAPTER_MESSAGE,
+  navigation,
+  redirects,
   reference,
   richtext,
   seo,
@@ -265,4 +269,115 @@ test('defineConfig returns a valid config unchanged', () => {
     collections: { posts: { schema: z.object({}), route: '/blog/[slug]', index: '/blog' } },
   };
   expect(defineConfig(config)).toBe(config);
+});
+
+const golden = (name: string) =>
+  readFile(new URL(`../../core/test/golden/${name}.yaml`, import.meta.url), 'utf8').then((y) =>
+    parseEntry('default', y),
+  );
+
+test('the navigation golden parses: menus[].items[] nest through children', async () => {
+  const result = navigation.safeParse(await golden('navigation'));
+  expect(result.success).toBe(true);
+  expect(result.data?.menus[0]?.items[0]?.children?.[0]?.label).toBe('For sale');
+});
+
+test('a menu item link is a bare target: no label or newTab inside it', () => {
+  const item = { _id: 'a1b2c3d4', label: 'Listings', link: { type: 'url', href: '/listings' } };
+  const menu = (i: unknown) => ({ menus: [{ _id: '7h2kq9sd', key: 'header', items: [i] }] });
+  expect(navigation.safeParse(menu(item)).success).toBe(true);
+  expect(
+    navigation.safeParse(menu({ ...item, link: { ...item.link, newTab: true } })).success,
+  ).toBe(false);
+  expect(navigation.safeParse(menu({ ...item, link: { type: 'entry', href: '/x' } })).success).toBe(
+    false,
+  );
+});
+
+test('the redirects golden parses; from must be a path and to a path or absolute URL', async () => {
+  expect(redirects.safeParse(await golden('redirects')).success).toBe(true);
+  const rule = {
+    _id: 'aaaaaaaa',
+    from: '/old',
+    to: '/new',
+    status: 301,
+    reason: 'manual',
+    createdAt: '2026-01-01T00:00:00Z',
+  };
+  const file = (r: unknown) => redirects.safeParse({ rules: [r] }).success;
+  expect(file(rule)).toBe(true);
+  expect(file({ ...rule, to: 'https://example.com/new' })).toBe(true);
+  expect(file({ ...rule, from: 'https://example.com/old' })).toBe(false);
+  expect(file({ ...rule, from: 'old' })).toBe(false);
+  expect(file({ ...rule, to: 'new' })).toBe(false);
+  expect(file({ ...rule, status: 302 })).toBe(false);
+  expect(file({ ...rule, reason: 'moved' })).toBe(false);
+});
+
+const fixture = new URL('../test/fixture/', import.meta.url);
+
+test('emitRedirects appends one _redirects line per rule to the client dir', async () => {
+  const client = new URL(`${await mkdtemp(join(tmpdir(), 'handover-client-'))}/`, 'file://');
+  await writeFile(new URL('_redirects', client), '/a /b 301\n');
+  expect(await emitRedirects(fixture, client)).toBe(2);
+  expect(await readFile(new URL('_redirects', client), 'utf8')).toBe(
+    '/a /b 301\n/listings/seaview-cottage /listings/seaview-cottage-devon 301\n/brochure https://example.com/files/brochure.pdf 301\n',
+  );
+});
+
+test('emitRedirects writes nothing for a site without redirects.yaml', async () => {
+  const client = new URL(`${await mkdtemp(join(tmpdir(), 'handover-client-'))}/`, 'file://');
+  expect(await emitRedirects(new URL('file:///nowhere/'), client)).toBe(0);
+  await expect(readFile(new URL('_redirects', client), 'utf8')).rejects.toThrow();
+});
+
+test('emitRedirects fails the build on a bad rule, naming the path', async () => {
+  const root = new URL(`${await mkdtemp(join(tmpdir(), 'handover-site-'))}/`, 'file://');
+  await mkdir(new URL('src/content/', root), { recursive: true });
+  await writeFile(
+    new URL('src/content/redirects.yaml', root),
+    '_version: 1\nrules:\n  - _id: "aaaaaaaa"\n    from: "old"\n    to: "/new"\n    status: 301\n    reason: "manual"\n    createdAt: "2026-01-01T00:00:00Z"\n',
+  );
+  await expect(emitRedirects(root, root)).rejects.toThrow(
+    'src/content/redirects.yaml › rules[0].from: a path starting with "/"',
+  );
+});
+
+// The real glob loader on the fixture project: with the documented per-collection base,
+// `src/content/_templates/` is outside every collection and never becomes an entry.
+test('a _templates/ file is not in the built collection', async () => {
+  const store = new Map<string, { id: string }>();
+  const loader = glob({ pattern: '**/*.yaml', base: './src/content/listings' });
+  type Context = Parameters<typeof loader.load>[0];
+  const context = {
+    config: { root: fixture, srcDir: new URL('src/', fixture), prerenderConflictBehavior: 'error' },
+    collection: 'listings',
+    logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+    parseData: async ({ id, data }: { id: string; data: Record<string, unknown> }) => ({
+      id,
+      ...data,
+    }),
+    generateDigest: (s: unknown) => String(s).length.toString(),
+    entryTypes: new Map([
+      [
+        '.yaml',
+        {
+          getEntryInfo: async ({ contents }: { contents: string }) => ({
+            data: parseEntry('default', contents),
+            body: '',
+          }),
+        },
+      ],
+    ]),
+    store: {
+      keys: () => store.keys(),
+      get: (id: string) => store.get(id),
+      set: (e: { id: string }) => store.set(e.id, e) && true,
+      delete: (id: string) => store.delete(id),
+      addModuleImport: vi.fn(),
+      addAssetImports: vi.fn(),
+    },
+  };
+  await loader.load(context as unknown as Context);
+  expect([...store.keys()]).toEqual(['en/seaview-cottage']);
 });

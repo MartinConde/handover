@@ -236,3 +236,98 @@ test('an array directly inside an array is rejected at serialise time', () => {
     'blocks[0].columns[0]',
   );
 });
+
+// Collection-level shapes: a global, the navigation global, redirects.yaml and a template.
+// A template carries no `_id`s — they are generated when an entry is created from it.
+const conventions: Record<string, unknown> = {
+  'globals-site': {
+    _version: 1,
+    name: 'Coastal Homes',
+    logo: { src: 'media/2b7c9e1a.svg', alt: 'Coastal Homes', width: 320, height: 80 },
+    contact: { phone: '+44 1548 000000', email: 'hello@example.com' },
+    social: [{ _id: 's1a2b3c4', network: 'instagram', href: 'https://instagram.com/coastalhomes' }],
+    footerText: 'Coastal homes in Devon since 2009.',
+    defaultSeo: { title: 'Coastal Homes', description: 'Coastal homes in Devon.' },
+  },
+  navigation: {
+    _version: 1,
+    menus: [
+      {
+        _id: '7h2kq9sd',
+        key: 'header',
+        items: [
+          {
+            _id: 'a1b2c3d4',
+            label: 'Listings',
+            link: { type: 'entry', ref: 'listings/seaview-cottage' },
+            children: [
+              {
+                _id: 'e5f6g7h8',
+                label: 'For sale',
+                link: { type: 'url', href: '/listings?status=sale' },
+                newTab: false,
+              },
+            ],
+          },
+          {
+            _id: 'i9j0k1l2',
+            _locales: ['de'],
+            label: 'Impressum',
+            link: { type: 'page', ref: 'pages/impressum' },
+          },
+        ],
+      },
+      {
+        _id: 'x3y4z5w6',
+        key: 'footer',
+        items: [
+          {
+            _id: 'c7d8e9f0',
+            label: 'Contact',
+            link: { type: 'url', href: 'mailto:hello@example.com' },
+            newTab: true,
+          },
+        ],
+      },
+    ],
+  },
+  redirects: {
+    _version: 1,
+    rules: [
+      {
+        _id: 'm4n5o6p7',
+        from: '/listings/seaview-cottage',
+        to: '/listings/seaview-cottage-devon',
+        status: 301,
+        reason: 'slug-change',
+        entry: 'listings/seaview-cottage-devon',
+        createdAt: '2026-08-20T10:14:00Z',
+      },
+      {
+        _id: 'q8r9s0t1',
+        from: '/brochure',
+        to: 'https://example.com/files/brochure.pdf',
+        status: 301,
+        reason: 'manual',
+        createdAt: '2026-08-21T08:00:00Z',
+      },
+    ],
+  },
+  template: {
+    _version: 1,
+    title: 'New page',
+    blocks: [
+      { _type: 'hero', heading: 'Move to the coast' },
+      { _type: 'textSection', body: 'First paragraph.' },
+    ],
+  },
+};
+
+for (const [type, fixture] of Object.entries(conventions)) {
+  test(`${type} round-trips through its golden file`, () => {
+    const golden = readFileSync(join(goldenDir, `${type}.yaml`), 'utf8');
+    const out = stringifyEntry('default', fixture);
+    expect(out).toBe(golden);
+    expect(parseEntry('default', out)).toEqual(fixture);
+  });
+}

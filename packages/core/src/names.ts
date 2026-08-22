@@ -85,8 +85,15 @@ export interface CollectionRoutes {
 export function checkCollections(
   _siteId: string,
   collections: Record<string, CollectionRoutes>,
+  globals: Record<string, unknown> = {},
 ): string[] {
   const errors: string[] = [];
+  for (const key of Object.keys(globals)) {
+    if (!/^[a-z0-9-]+$/.test(key))
+      errors.push(
+        `cms.config.ts › globals.${key}: global keys are lowercase letters, digits and dashes (it is the file name under src/content/globals/<locale>/)`,
+      );
+  }
   const routes = new Map<string, string>();
   for (const [name, c] of Object.entries(collections)) {
     const at = (key?: string) => `cms.config.ts › collections.${name}${key ? `.${key}` : ''}: `;

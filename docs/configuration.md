@@ -7,14 +7,15 @@ with a message naming the key, for example
 
 ```ts
 // cms.config.ts
-import { defineConfig } from 'astro-handover';
-import { listing, page } from './src/content/schemas';
+import { defineConfig, navigation } from 'astro-handover';
+import { listing, page, site } from './src/content/schemas';
 
 export default defineConfig({
   collections: {
     listings: { schema: listing, route: '/listings/[slug]', index: '/', load: 'listing' },
     pages: { schema: page, route: '/[slug]', load: 'page' },
   },
+  globals: { site, navigation },
 });
 ```
 
@@ -29,6 +30,12 @@ digits and dashes.
 | `route` | no | The detail page's path with `[slug]` exactly once, e.g. `'/blog/[slug]'`. `[slug]` is the entry's filename without `.yaml`. Two collections cannot share a route. |
 | `index` | no | The listing page, a fixed path with no `[...]` segment, e.g. `'/blog'`. Used wherever something links to "the blog" as a whole rather than to one entry. |
 | `load` | no | The loader's name: `'post'` means `src/loaders/post.ts` ([Template convention](template-convention.md)). |
+
+## `globals`
+
+One key per site-wide file under `src/content/globals/<locale>/`, mapping the file name
+to its schema: `globals: { site, navigation }`. Keys are lowercase letters, digits and
+dashes. See [Site files](site-files.md).
 
 ## Entry filenames
 

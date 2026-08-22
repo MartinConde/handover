@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { parse } from 'yaml';
 import type { GitClient, PublishFile } from './git.js';
-import { deleteEntry, renameEntry } from './lifecycle.js';
+import { deleteEntry, redirectsText, renameEntry } from './lifecycle.js';
 
 // An in-memory repo: serves files, records every publish call.
 function fakeGit(files: Record<string, string>) {
@@ -196,4 +196,15 @@ test('delete with no redirect target touches only the entry files', async () => 
   expect(published[0]?.files).toEqual([
     { path: 'src/content/listings/en/seaview.yaml', contents: null },
   ]);
+});
+
+test('redirectsText is one "/from /to status" line per rule', () => {
+  const rule = { _id: 'aaaaaaaa', status: 301 as const, createdAt: '2026-01-01T00:00:00Z' };
+  expect(
+    redirectsText('default', [
+      { ...rule, from: '/old', to: '/new', reason: 'slug-change', entry: 'pages/new' },
+      { ...rule, from: '/brochure', to: 'https://example.com/b.pdf', reason: 'manual' },
+    ]),
+  ).toBe('/old /new 301\n/brochure https://example.com/b.pdf 301\n');
+  expect(redirectsText('default', [])).toBe('');
 });

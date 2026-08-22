@@ -3,7 +3,7 @@ export { parseEntry, staticSource, stringifyEntry } from './content.js';
 export type { GitClient, GitFile, GitHubApp, PublishFile } from './git.js';
 export { createGitClient, RefMovedError } from './git.js';
 export type { EntryLocation, RedirectRule } from './lifecycle.js';
-export { deleteEntry, renameEntry } from './lifecycle.js';
+export { deleteEntry, redirectsText, renameEntry } from './lifecycle.js';
 export type { CollectionRoutes } from './names.js';
 export { checkCollections, entryName } from './names.js';
 export { filterLive, isLive, newId, RESERVED_KEYS, regenerateIds } from './reserved.js';

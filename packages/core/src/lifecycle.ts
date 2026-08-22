@@ -116,3 +116,7 @@ export async function deleteEntry(
     );
   return git.publish(changes, { base_sha, message: `Delete ${loc.collection}/${name}` });
 }
+
+// The `_redirects` format Workers Static Assets serves: one `/from /to status` per line.
+export const redirectsText = (_siteId: string, rules: RedirectRule[]): string =>
+  rules.map((r) => `${r.from} ${r.to} ${r.status}\n`).join('');

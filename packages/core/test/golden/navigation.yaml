@@ -1,0 +1,33 @@
+_version: 1
+menus:
+  - _id: "7h2kq9sd"
+    key: "header"
+    items:
+      - _id: "a1b2c3d4"
+        label: "Listings"
+        link:
+          type: "entry"
+          ref: "listings/seaview-cottage"
+        children:
+          - _id: "e5f6g7h8"
+            label: "For sale"
+            link:
+              type: "url"
+              href: "/listings?status=sale"
+            newTab: false
+      - _id: "i9j0k1l2"
+        _locales:
+          - "de"
+        label: "Impressum"
+        link:
+          type: "page"
+          ref: "pages/impressum"
+  - _id: "x3y4z5w6"
+    key: "footer"
+    items:
+      - _id: "c7d8e9f0"
+        label: "Contact"
+        link:
+          type: "url"
+          href: "mailto:hello@example.com"
+        newTab: true

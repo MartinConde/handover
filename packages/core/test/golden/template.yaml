@@ -1,0 +1,7 @@
+_version: 1
+title: "New page"
+blocks:
+  - _type: "hero"
+    heading: "Move to the coast"
+  - _type: "textSection"
+    body: "First paragraph."

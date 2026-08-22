@@ -59,3 +59,10 @@ test('the same route on two collections is reported on the second', () => {
     'cms.config.ts › collections.pages.route: "/[slug]" is already the route of "posts"',
   ]);
 });
+
+test('globals keys are file names: lowercase letters, digits and dashes', () => {
+  expect(checkCollections('default', {}, { site: {}, 'cta-newsletter': {} })).toEqual([]);
+  expect(checkCollections('default', {}, { 'Site Settings': {} })).toEqual([
+    'cms.config.ts › globals.Site Settings: global keys are lowercase letters, digits and dashes (it is the file name under src/content/globals/<locale>/)',
+  ]);
+});
