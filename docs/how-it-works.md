@@ -28,9 +28,13 @@ The integration refuses to load without an SSR adapter, because the routes are S
 ## Config
 
 `cms.config.ts` at the site root is resolved as `virtual:handover/config`, so the Worker
-holds the site's real Zod schemas. `fieldsFrom()` turns `z.toJSONSchema()` of a
-collection schema into a flat field list: `z.string()` leaves become `text` fields,
-anything else is `unsupported` and shown read-only.
+holds the site's real Zod schemas. `formSchema()` runs `z.toJSONSchema()` on a collection
+schema (input side, so a transform shows what the editor types; `z.date()` named a date)
+and `formOf()` from `@handover/core` turns that into the descriptor tree the form is built
+from: `{ fields, blocks }`, where `fields` is one descriptor per field (`group` and `array`
+carry their own relative `fields` / `item`) and `blocks` maps every block type in the
+registry to its fields by name, so a block that nests `blocks` is not an infinite tree.
+Anything the walker does not know is `unsupported` and shown read-only.
 
 ## Content
 

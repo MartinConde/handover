@@ -1,17 +1,11 @@
 import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
 import type { GitClient } from '@handover/core';
-import {
-  createGitClient,
-  fieldsFrom,
-  type JsonSchema,
-  parseEntry,
-  RefMovedError,
-  stringifyEntry,
-} from '@handover/core';
+import { createGitClient, formOf, parseEntry, RefMovedError, stringifyEntry } from '@handover/core';
 import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
 import { login } from '../auth.js';
+import { formSchema } from '../index.js';
 
 function gitClient(): GitClient {
   const e = env as Record<string, string | undefined>;
@@ -45,7 +39,7 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
   ]);
   if (!file) return new Response('Not found', { status: 404 });
   return Response.json({
-    fields: fieldsFrom('default', z.toJSONSchema(schema, { unrepresentable: 'any' }) as JsonSchema),
+    ...formOf('default', formSchema(schema)),
     data: parseEntry('default', file.contents),
     blob_sha: file.blob_sha,
     head_sha,

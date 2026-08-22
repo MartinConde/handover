@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The form descriptor is complete: `formOf` from `@handover/core` returns `{ fields, blocks }`,
+  a nested `z.object()` is a `group` with its own relative `fields`, `$ref`s from recursive
+  schemas are resolved, and `blocks` maps each block type to its fields by name. `formSchema`
+  from `astro-handover` is the `z.toJSONSchema()` call to feed it (input side; `z.date()` is
+  a date; a `z.custom()` tagged `.meta({ handover: 'text' | 'number' | 'boolean' | 'date' })`
+  gets that widget). `GET /admin/api/entries/:collection/:slug` now returns `blocks` next to
+  `fields`. See `docs/field-types.md`.
 - Site files: `cms.config.ts` takes `globals: { site, navigation }`, one schema per file
   under `src/content/globals/<locale>/`; `navigation` from `astro-handover` is the schema
   for the menus file (`menus[].items[]`, nesting through `children`, `newTab` on the item);

@@ -181,5 +181,7 @@ A block whose `_type` is not in the registry fails validation. A block with `_re
 `globals/<key>` path) needs no fields of its own: its content is filled from that global
 at build time. There is no admin UI for `_ref` yet; write it by hand.
 
-Any other schema (tuples, unions, custom types) is read and written as-is but shows as
-"Not editable here yet" in the admin.
+A `z.date()` is edited as a date and a transform by its input type. A `z.custom()` gets a
+widget when you name one: `.meta({ handover: 'text' })` (`number`, `boolean` or `date`
+likewise). Any other schema (tuples, unions, untagged customs) is read and written as-is
+but shows as "Not editable here yet" in the admin.

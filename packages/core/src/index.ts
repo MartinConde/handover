@@ -9,5 +9,5 @@ export { checkCollections, entryName } from './names.js';
 export { filterLive, isLive, newId, RESERVED_KEYS, regenerateIds } from './reserved.js';
 export type { RichtextTier } from './richtext.js';
 export { RICHTEXT_CONSTRUCTS, richtextErrors } from './richtext.js';
-export type { Field, JsonSchema } from './schema.js';
-export { fieldsFrom } from './schema.js';
+export type { Field, Form, JsonSchema } from './schema.js';
+export { fieldsFrom, formOf } from './schema.js';

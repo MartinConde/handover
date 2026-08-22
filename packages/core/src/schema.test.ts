@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { fieldsFrom, type JsonSchema } from './schema.js';
+import { fieldsFrom, formOf, type JsonSchema } from './schema.js';
 
 // Hand-written `z.toJSONSchema()` output: core never holds a Zod object.
 const obj = (properties: Record<string, JsonSchema>, required: string[] = []): JsonSchema => ({
@@ -20,10 +20,15 @@ test('optional strings are text fields with required false', () => {
   ]);
 });
 
-test('strings inside nested objects get the full path', () => {
+test('a nested object is a group whose fields are relative to it', () => {
   const schema = obj({ address: obj({ street: { type: 'string' } }, ['street']) }, ['address']);
   expect(fieldsFrom('default', schema)).toEqual([
-    { path: ['address', 'street'], type: 'text', required: true },
+    {
+      path: ['address'],
+      type: 'group',
+      required: true,
+      fields: [{ path: ['street'], type: 'text', required: true }],
+    },
   ]);
 });
 
@@ -179,4 +184,82 @@ test('a string tagged richtext is a richtext field carrying its tier', () => {
     { path: ['body'], type: 'richtext', required: true, tier: 'full' },
     { path: ['note'], type: 'richtext', required: false, tier: 'basic' },
   ]);
+});
+
+test('a custom tagged with a scalar name is a field of that type', () => {
+  const schema = obj({ when: { handover: 'date' }, count: { handover: 'number' } }, ['when']);
+  expect(fieldsFrom('default', schema)).toEqual([
+    { path: ['when'], type: 'date', required: true },
+    { path: ['count'], type: 'number', required: false },
+  ]);
+});
+
+test('a $ref is resolved against the root $defs', () => {
+  const schema: JsonSchema = {
+    ...obj({ hero: { $ref: '#/$defs/__schema0' } }, ['hero']),
+    $defs: { __schema0: obj({ heading: { type: 'string' } }, ['heading']) },
+  };
+  expect(fieldsFrom('default', schema)).toEqual([
+    {
+      path: ['hero'],
+      type: 'group',
+      required: true,
+      fields: [{ path: ['heading'], type: 'text', required: true }],
+    },
+  ]);
+});
+
+// The shape `blocks()` from astro-handover produces: a ref block or one of the registered
+// block objects, the recursive one through $defs.
+const blockList = (types: string[]): JsonSchema => ({
+  type: 'array',
+  handover: 'blocks',
+  types,
+  items: {
+    anyOf: [
+      obj({ _type: { type: 'string' }, _ref: { type: 'string' } }, ['_type', '_ref']),
+      {
+        anyOf: [
+          obj({ _type: { type: 'string', const: 'hero' }, heading: { type: 'string' } }, ['_type']),
+          { $ref: '#/$defs/__schema0' },
+        ],
+      },
+    ],
+  },
+});
+
+test('formOf lists each block type once with its own fields, recursion included', () => {
+  const schema: JsonSchema = {
+    ...obj({ blocks: blockList(['hero', 'columns']) }, ['blocks']),
+    $defs: {
+      __schema0: obj(
+        {
+          _type: { type: 'string', const: 'columns' },
+          columns: { type: 'array', items: obj({ blocks: blockList(['hero', 'columns']) }) },
+        },
+        ['_type', 'columns'],
+      ),
+    },
+  };
+  expect(formOf('default', schema)).toEqual({
+    fields: [{ path: ['blocks'], type: 'blocks', required: true, types: ['hero', 'columns'] }],
+    blocks: {
+      hero: [{ path: ['heading'], type: 'text', required: false }],
+      columns: [
+        {
+          path: ['columns'],
+          type: 'array',
+          required: true,
+          item: [{ path: ['blocks'], type: 'blocks', required: false, types: ['hero', 'columns'] }],
+        },
+      ],
+    },
+  });
+});
+
+test('formOf of a schema without blocks has an empty block map', () => {
+  expect(formOf('default', obj({ title: { type: 'string' } }))).toEqual({
+    fields: [{ path: ['title'], type: 'text', required: false }],
+    blocks: {},
+  });
 });

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   checkCollections,
+  type JsonSchema,
   parseEntry,
   type RichtextTier,
   redirectsText,
@@ -191,6 +192,19 @@ export interface HandoverConfig {
   >;
   /** One schema per file under `src/content/globals/<locale>/`, keyed by file name. */
   globals?: Record<string, z.ZodType>;
+}
+
+// What the form is generated from. The input side, so a transform shows the value the
+// editor types; `z.date()` is named a date because Zod cannot represent it itself.
+export function formSchema(schema: z.ZodType): JsonSchema {
+  return z.toJSONSchema(schema, {
+    io: 'input',
+    unrepresentable: 'any',
+    override: ({ zodSchema, jsonSchema }) => {
+      if (zodSchema._zod.def.type === 'date')
+        Object.assign(jsonSchema, { type: 'string', format: 'date' });
+    },
+  }) as JsonSchema;
 }
 
 export function defineConfig(config: HandoverConfig): HandoverConfig {

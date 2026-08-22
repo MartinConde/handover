@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fieldsFrom, type JsonSchema, parseEntry } from '@handover/core';
+import { fieldsFrom, formOf, type JsonSchema, parseEntry } from '@handover/core';
 import type { HookParameters } from 'astro';
 import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
@@ -15,6 +15,7 @@ import handover, {
   embed,
   emitRedirects,
   file,
+  formSchema,
   image,
   link,
   NO_ADAPTER_MESSAGE,
@@ -150,8 +151,15 @@ test('group, array and blocks are detected from real Zod output', () => {
   });
   const json = z.toJSONSchema(schema, { unrepresentable: 'any' }) as JsonSchema;
   expect(fieldsFrom('default', json)).toEqual([
-    { path: ['address', 'street'], type: 'text', required: true },
-    { path: ['address', 'town'], type: 'text', required: false },
+    {
+      path: ['address'],
+      type: 'group',
+      required: true,
+      fields: [
+        { path: ['street'], type: 'text', required: true },
+        { path: ['town'], type: 'text', required: false },
+      ],
+    },
     {
       path: ['rooms'],
       type: 'array',
@@ -380,4 +388,42 @@ test('a _templates/ file is not in the built collection', async () => {
   };
   await loader.load(context as unknown as Context);
   expect([...store.keys()]).toEqual(['en/seaview-cottage']);
+});
+
+test('formSchema maps z.date() to a date field and a transform to its input type', () => {
+  const schema = z.object({
+    when: z.date(),
+    slug: z.string().transform((s) => s.toLowerCase()),
+    tag: z.custom<string>(() => true).meta({ handover: 'text' }),
+  });
+  expect(fieldsFrom('default', formSchema(schema))).toEqual([
+    { path: ['when'], type: 'date', required: true },
+    { path: ['slug'], type: 'text', required: true },
+    { path: ['tag'], type: 'text', required: true },
+  ]);
+});
+
+// Mirror of handover-demo/src/content/schemas.ts: the snapshot is the descriptor tree the
+// admin form is built from, and it must hold no unsupported marker.
+test('the demo schema produces a full descriptor tree', () => {
+  const hero = defineBlock('hero', { heading: z.string(), image: image.optional() });
+  const textSection = defineBlock('textSection', { body: z.string() });
+  const cta = defineBlock('cta', { heading: z.string(), button: link });
+  const columns = defineBlock('columns', {
+    columns: z.array(z.object({ _id: z.string(), blocks: blocks(() => registry) })),
+  });
+  const registry: BlockRegistry = { hero, textSection, cta, columns };
+  const page = z.object({ title: z.string(), blocks: blocks(() => registry) });
+  const listing = z.object({
+    title: z.string(),
+    location: z.string(),
+    price: z.string(),
+    summary: z.string(),
+  });
+  const form = {
+    listings: formOf('default', formSchema(listing)),
+    pages: formOf('default', formSchema(page)),
+  };
+  expect(JSON.stringify(form)).not.toContain('unsupported');
+  expect(form).toMatchSnapshot();
 });

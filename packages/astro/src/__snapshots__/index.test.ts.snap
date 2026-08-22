@@ -1,0 +1,130 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the demo schema produces a full descriptor tree 1`] = `
+{
+  "listings": {
+    "blocks": {},
+    "fields": [
+      {
+        "path": [
+          "title",
+        ],
+        "required": true,
+        "type": "text",
+      },
+      {
+        "path": [
+          "location",
+        ],
+        "required": true,
+        "type": "text",
+      },
+      {
+        "path": [
+          "price",
+        ],
+        "required": true,
+        "type": "text",
+      },
+      {
+        "path": [
+          "summary",
+        ],
+        "required": true,
+        "type": "text",
+      },
+    ],
+  },
+  "pages": {
+    "blocks": {
+      "columns": [
+        {
+          "item": [
+            {
+              "path": [
+                "blocks",
+              ],
+              "required": true,
+              "type": "blocks",
+              "types": [
+                "hero",
+                "textSection",
+                "cta",
+                "columns",
+              ],
+            },
+          ],
+          "path": [
+            "columns",
+          ],
+          "required": true,
+          "type": "array",
+        },
+      ],
+      "cta": [
+        {
+          "path": [
+            "heading",
+          ],
+          "required": true,
+          "type": "text",
+        },
+        {
+          "path": [
+            "button",
+          ],
+          "required": true,
+          "type": "link",
+        },
+      ],
+      "hero": [
+        {
+          "path": [
+            "heading",
+          ],
+          "required": true,
+          "type": "text",
+        },
+        {
+          "path": [
+            "image",
+          ],
+          "required": false,
+          "type": "image",
+        },
+      ],
+      "textSection": [
+        {
+          "path": [
+            "body",
+          ],
+          "required": true,
+          "type": "text",
+        },
+      ],
+    },
+    "fields": [
+      {
+        "path": [
+          "title",
+        ],
+        "required": true,
+        "type": "text",
+      },
+      {
+        "path": [
+          "blocks",
+        ],
+        "required": true,
+        "type": "blocks",
+        "types": [
+          "hero",
+          "textSection",
+          "cta",
+          "columns",
+        ],
+      },
+    ],
+  },
+}
+`;
