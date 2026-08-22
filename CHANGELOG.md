@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Unpublished edits get a home: the `drafts` table ships as a Drizzle schema at
+  `astro-handover/schema`, so a site points `drizzle.config.ts` at it, runs `drizzle-kit
+  generate` once and commits `migrations/`. The site needs a D1 database bound as `DB`,
+  and the deploy command becomes `wrangler d1 migrations apply <db> --remote && wrangler
+  deploy`. Nothing writes rows yet. See `docs/deploy.md`.
 - The admin edits `array` and `blocks`: rows and block cards with Add, Remove and move
   up / down, and a block-type picker built from your registry. Every `_id` survives a
   move and a new row or block gets a fresh one. A block with `_ref`, or one whose `_type`

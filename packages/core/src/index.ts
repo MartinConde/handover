@@ -1,5 +1,6 @@
 export type { AstroContent, ContentEntry, ContentSource } from './content.js';
 export { parseEntry, staticSource, stringifyEntry } from './content.js';
+export { drafts, openDb } from './db.js';
 export type { GitClient, GitFile, GitHubApp, PublishFile } from './git.js';
 export { createGitClient, RefMovedError } from './git.js';
 export type { EntryLocation, RedirectRule } from './lifecycle.js';

@@ -5,7 +5,7 @@ files from the site's GitHub repository and commits edits back; your normal buil
 publishes them. Nothing else runs.
 
 Requirements: Astro 7, `@astrojs/cloudflare` 14, a GitHub repository for the site, and a
-Cloudflare account. Until the package is on npm, install it from a checkout:
+Cloudflare account with a D1 database for the site's unpublished edits ([Deploy](deploy.md#the-database)). Until the package is on npm, install it from a checkout:
 
 ```sh
 pnpm add ../handover/packages/astro   # or a tarball from `pnpm pack` in that folder
@@ -64,7 +64,7 @@ Pages render them through a loader and a layout that takes `data` as a prop — 
 [Template convention](template-convention.md). Each collection can also declare its
 `route`, `index` and `load` — see [Configuration](configuration.md).
 
-## 3. Connect GitHub and set the password
+## 3. Connect GitHub, the database and the password
 
 Handover reads and writes through a GitHub App installed on the site's repository. Create
 the App and the secrets as described in [Deploy](deploy.md), then for local development
@@ -79,6 +79,10 @@ GITHUB_REPO=you/your-site
 ```
 
 `ADMIN_PASSWORD` is a temporary gate that a later release replaces with real accounts.
+
+Handover keeps edits in D1 until they are published, so create the database, bind it as
+`DB` and apply the migrations before the first deploy — all three steps are in
+[Deploy](deploy.md#the-database).
 
 ## 4. Edit and publish
 

@@ -12,6 +12,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./schema": {
+      "types": "./dist/schema.d.ts",
+      "import": "./dist/schema.js"
+    },
     "./Blocks.astro": "./components/Blocks.astro",
     "./Markdown.astro": "./components/Markdown.astro"
   },

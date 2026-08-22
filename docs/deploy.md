@@ -1,19 +1,66 @@
 # Deploy
 
 The site is one Cloudflare Worker: static pages as assets, `/admin` and `/admin/api` as
-SSR routes. Handover adds no bindings; it needs five secrets.
+SSR routes. Handover needs one binding — a D1 database for unpublished edits — and five
+secrets.
 
 ## wrangler.jsonc
 
 ```jsonc
 {
-  "name": "handover-demo",
+  "name": "your-site",
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "main": "@astrojs/cloudflare/entrypoints/server",
-  "assets": { "binding": "ASSETS", "directory": "./dist" }
+  "assets": { "binding": "ASSETS", "directory": "./dist" },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "your-site",
+      "database_id": "the id wrangler prints when you create it"
+    }
+  ]
 }
 ```
+
+## The database
+
+Edits are held in D1 until they are published, so the admin survives a refresh, a crash
+and a change of device. Create the database and take the id from the output:
+
+```sh
+npx wrangler d1 create your-site
+```
+
+The tables come from the package. `drizzle-kit` reads them from `astro-handover/schema`
+and writes plain SQL into `migrations/`, which `wrangler` applies:
+
+```sh
+pnpm add -D drizzle-kit drizzle-orm
+```
+
+```ts
+// drizzle.config.ts
+import { defineConfig } from 'drizzle-kit';
+
+export default defineConfig({
+  dialect: 'sqlite',
+  schema: './node_modules/astro-handover/dist/schema.js',
+  out: './migrations',
+});
+```
+
+```sh
+npx drizzle-kit generate                                # writes migrations/0000_*.sql
+npx wrangler d1 migrations apply your-site --local      # your machine
+npx wrangler d1 migrations apply your-site --remote     # the deployed site
+```
+
+Commit `migrations/` — the whole folder, `meta/` included. Migration files are written by
+the generator, never by hand, and an applied one is never edited. After a package upgrade
+adds a table or a column, run `drizzle-kit generate` again; the new SQL file is part of the
+upgrade's diff. Applying is idempotent, which is why it belongs in the deploy command
+below.
 
 ## The GitHub App
 
@@ -58,7 +105,10 @@ Connect the repository to the Worker under **Workers & Pages → your Worker →
 Builds** so every commit — including the ones Handover makes — rebuilds and deploys:
 
 - Build command: `pnpm build`
-- Deploy command: `npx wrangler deploy`
+- Deploy command: `npx wrangler d1 migrations apply your-site --remote && npx wrangler deploy`
+
+Migrations run before the new code is live, so a deploy can never reach a database that is
+missing a column, and applying an already-applied file does nothing.
 
 Commits an editor publishes are ordinary pushes to `main`; one publish is one build. A
 first deploy from your machine is `pnpm astro build && wrangler deploy`.

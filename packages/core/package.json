@@ -9,7 +9,7 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "default": "./dist/index.js"
     }
   },
   "scripts": {
@@ -19,12 +19,15 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.2",
     "mdast-util-from-markdown": "^2.0.3",
     "mdast-util-gfm": "^3.1.0",
     "micromark-extension-gfm": "^3.0.0",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
-    "@types/mdast": "^4.0.4"
+    "@types/mdast": "^4.0.4",
+    "drizzle-kit": "^0.31.10",
+    "miniflare": "^4.20260730.0"
   }
 }
