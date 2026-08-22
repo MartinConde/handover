@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `renameEntry` and `deleteEntry` from `@handover/core` move or remove every locale file of
+  an entry in one commit and append the redirect rule to `src/content/redirects.yaml` in the
+  same commit (`slug-change` on rename, `deleted` on delete when a target is given; chains
+  collapse, a rename back drops the rule). `GitClient.publish` takes `contents: null` to
+  remove a path. See `docs/content-format.md`.
 - `cms.config.ts` collections take `route` (`'/blog/[slug]'`), `index` (`'/blog'`) and
   `load` (`'post'`); `defineConfig` validates them and throws a message naming the key,
   e.g. `cms.config.ts › collections.posts.route: …`. Entry filenames are derived from the

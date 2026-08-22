@@ -179,6 +179,21 @@ test('publish builds the tree on base_tree, parents the commit on base_sha and n
   expect(gh.minted()).toBe(1);
 });
 
+test('publish removes a file with a null-sha tree entry', async () => {
+  const gh = fakeGitData();
+  const git = createGitClient('default', app, { fetch: gh.fetch });
+
+  await git.publish([{ path: 'src/content/a.yaml', contents: null }], {
+    base_sha: 'commit-A',
+    message: 'Delete A',
+  });
+
+  expect(gh.bodies['POST /repos/acme/site/git/trees']).toEqual({
+    base_tree: 'tree-A',
+    tree: [{ path: 'src/content/a.yaml', mode: '100644', type: 'blob', sha: null }],
+  });
+});
+
 test('publish throws RefMovedError when the branch moved past base_sha', async () => {
   const gh = fakeGitData({ headMovesTo: 'commit-X' });
   const git = createGitClient('default', app, { fetch: gh.fetch });

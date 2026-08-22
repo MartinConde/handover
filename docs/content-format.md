@@ -86,3 +86,35 @@ title: "Seaview Cottage"
 
 The file stays in the repo and in the admin, and the site ignores it when your loaders
 use `filterLive` (see [Template convention](template-convention.md#hidden-entries)).
+
+## Renaming and deleting an entry
+
+The filename is the entry's id across locales, so a rename moves every locale file in one
+commit. Because the URL comes from the filename, the same commit appends a redirect to
+`src/content/redirects.yaml` (created if missing):
+
+```yaml
+_version: 1
+rules:
+  - _id: "m4n5o6p7"
+    from: "/listings/seaview-cottage"
+    to: "/listings/seaview-cottage-devon"
+    status: 301
+    reason: "slug-change"
+    entry: "listings/seaview-cottage-devon"
+    createdAt: "2026-08-20T10:14:00Z"
+```
+
+Renaming twice keeps the oldest URL pointing at the newest name; renaming back removes
+the rule. Deleting an entry removes every locale file in one commit and, when the editor
+chose where visitors should go, appends a `reason: "deleted"` rule with no `entry`. A
+collection without a `route` has no URL and gets no rule.
+
+From code, `renameEntry` and `deleteEntry` in `@handover/core` do this through the
+`GitClient`:
+
+```ts
+const listings = { collection: 'listings', route: '/listings/[slug]', locales: ['en'] };
+await renameEntry('default', git, listings, 'seaview-cottage', 'seaview-cottage-devon');
+await deleteEntry('default', git, listings, 'mill-house', '/'); // undefined = no redirect
+```

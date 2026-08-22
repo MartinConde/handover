@@ -14,7 +14,8 @@ export interface GitFile {
 
 export interface PublishFile {
   path: string;
-  contents: string;
+  /** `null` removes the file from the tree. */
+  contents: string | null;
 }
 
 export interface GitClient {
@@ -149,7 +150,7 @@ export function createGitClient(
               path: f.path,
               mode: '100644',
               type: 'blob',
-              content: f.contents,
+              ...(f.contents === null ? { sha: null } : { content: f.contents }),
             })),
           }),
         },

@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 import { createGitClient, RefMovedError } from './git.js';
+import { deleteEntry, renameEntry } from './lifecycle.js';
 
 // Opt-in: needs a real GitHub App installed on the throwaway repo, see .env.test.example.
 try {
@@ -60,4 +61,76 @@ test.skipIf(!configured)(
     ).rejects.toBeInstanceOf(RefMovedError);
   },
   30_000,
+);
+
+test.skipIf(!configured)(
+  'rename and delete are one commit each and add exactly one redirect rule',
+  async () => {
+    const [owner, repo] = (env.GITHUB_REPO ?? '').split('/');
+    const app = {
+      appId: env.GITHUB_APP_ID ?? '',
+      privateKey: (env.GITHUB_PRIVATE_KEY ?? '').replace(/\\n/g, '\n'),
+      installationId: env.GITHUB_INSTALLATION_ID ?? '',
+      owner: owner ?? '',
+      repo: repo ?? '',
+      branch: env.GITHUB_BRANCH,
+    };
+    const git = createGitClient('default', app);
+    const loc = { collection: 'listings', route: '/listings/[slug]', locales: ['en', 'de'] };
+    const name = `it-${(await git.getHead()).slice(0, 7)}`;
+    const redirects = 'src/content/redirects.yaml';
+    const compare = async (from: string, to: string) => {
+      const res = await git.request(`/repos/${app.owner}/${app.repo}/compare/${from}...${to}`);
+      const body = (await res.json()) as {
+        total_commits: number;
+        files: { filename: string; status: string; previous_filename?: string; patch?: string }[];
+      };
+      return {
+        commits: body.total_commits,
+        files: body.files
+          .map(
+            (f) =>
+              `${f.status} ${f.previous_filename ? `${f.previous_filename} -> ` : ''}${f.filename}`,
+          )
+          .sort(),
+        newRules: (body.files.find((f) => f.filename === redirects)?.patch ?? '')
+          .split('\n')
+          .filter((l) => l.startsWith('+  - _id:')).length,
+      };
+    };
+    const { commit_sha: seeded } = await git.publish(
+      [
+        {
+          path: `src/content/listings/en/${name}.yaml`,
+          contents: `_version: 1\ntitle: "${name}"\n`,
+        },
+      ],
+      { base_sha: await git.getHead(), message: `Seed ${name}` },
+    );
+
+    const { commit_sha: renamed } = await renameEntry('default', git, loc, name, `${name}-b`);
+
+    expect(await compare(seeded, renamed)).toEqual({
+      commits: 1,
+      files: [
+        `renamed src/content/listings/en/${name}.yaml -> src/content/listings/en/${name}-b.yaml`,
+        expect.stringMatching(new RegExp(`^(added|modified) ${redirects}$`)),
+      ].sort(),
+      newRules: 1,
+    });
+
+    const { commit_sha: deleted } = await deleteEntry('default', git, loc, `${name}-b`, '/');
+
+    expect(await compare(renamed, deleted)).toEqual({
+      commits: 1,
+      files: [`modified ${redirects}`, `removed src/content/listings/en/${name}-b.yaml`],
+      newRules: 1,
+    });
+
+    await git.publish([{ path: redirects, contents: null }], {
+      base_sha: deleted,
+      message: `Clean up after ${name}`,
+    });
+  },
+  60_000,
 );
