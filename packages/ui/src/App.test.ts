@@ -3,17 +3,20 @@ import { afterEach, expect, test, vi } from 'vitest';
 import App from './App.svelte';
 
 let app: ReturnType<typeof mount>;
-const show = (authed: boolean) => {
-  app = mount(App, { target: document.body, props: { authed, path: '/admin' } });
+const show = (authed: boolean, path = '/admin') => {
+  app = mount(App, { target: document.body, props: { authed, path } });
   flushSync();
   return document.body;
 };
 const drafts = (...files: string[]) =>
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () =>
-      Response.json({ files: files.map((path) => ({ path, updated_at: 1755864000000 })) }),
-    ),
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/ping')
+        return Response.json({ ok: true, collections: ['listings', 'pages'] });
+      if (url.startsWith('/admin/api/entries/')) return Response.json({ entries: [] });
+      return Response.json({ files: files.map((path) => ({ path, updated_at: 1755864000000 })) });
+    }),
   );
 afterEach(() => {
   unmount(app);
@@ -55,4 +58,27 @@ test('the indicator counts the pending files and opens the drawer', async () => 
   flushSync();
   expect(root.querySelector('.drawer')).toBeNull();
   expect(document.activeElement).toBe(indicator);
+});
+
+test('the sidebar links one entry list per configured collection', async () => {
+  drafts();
+  const root = show(true);
+  await new Promise((r) => setTimeout(r, 0));
+  flushSync();
+  const links = root.querySelectorAll<HTMLAnchorElement>('[aria-labelledby="nav-content"] a');
+  expect(Array.from(links, (a) => [a.textContent, a.getAttribute('href')])).toEqual([
+    ['Listings', '/admin/c/listings'],
+    ['Pages', '/admin/c/pages'],
+  ]);
+});
+
+test("a collection path renders that collection's entry list", async () => {
+  drafts();
+  const root = show(true, '/admin/c/listings');
+  await new Promise((r) => setTimeout(r, 0));
+  flushSync();
+  expect(root.querySelector('.list-toolbar h1')?.textContent).toContain('Listings');
+  expect(
+    root.querySelector('[aria-labelledby="nav-content"] a[aria-current="page"]')?.textContent,
+  ).toBe('Listings');
 });

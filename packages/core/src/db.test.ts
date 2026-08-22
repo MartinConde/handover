@@ -2,8 +2,11 @@ import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/
 import { Miniflare } from 'miniflare';
 import { afterAll, beforeAll, expect, test, vi } from 'vitest';
 import {
+  createDraft,
   DraftConflictError,
+  discardDraft,
   drafts,
+  moveDraft,
   openDb,
   pendingDrafts,
   publishDrafts,
@@ -218,4 +221,71 @@ test('editing again after a publish is not a conflict with the publish itself', 
   await expect(repo.getFile(PATH)).resolves.toMatchObject({
     contents: FILE.replace('rooms: 3', 'rooms: 5'),
   });
+});
+
+const NEW = 'src/content/listings/en/strandhaus-nord.yaml';
+
+test('a new entry is a draft against a base blob nothing in the repo can match', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+
+  await createDraft('default', db, repo, NEW, { title: 'Strandhaus Nord', rooms: 0 });
+
+  const row = await only(db);
+  expect(row?.path).toBe(NEW);
+  expect(row?.contents).toBe('title: "Strandhaus Nord"\nrooms: 0\n');
+  expect(row?.baseSha).toBe('commit-A');
+  expect(row?.baseBlob).toBe('');
+  expect((await pendingDrafts('default', db)).map((r) => r.path)).toEqual([NEW]);
+});
+
+test('publishing a new entry creates its file in one commit', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+  await createDraft('default', db, repo, NEW, { title: 'Strandhaus Nord', rooms: 0 });
+
+  const result = await publishDrafts('default', db, repo);
+
+  expect(result?.paths).toEqual([NEW]);
+  expect(repo.publish).toHaveBeenCalledTimes(1);
+  await expect(repo.getFile(NEW)).resolves.toMatchObject({
+    contents: 'title: "Strandhaus Nord"\nrooms: 0\n',
+  });
+  expect(await db.select().from(drafts)).toEqual([]);
+});
+
+test('a new entry whose path someone else committed first is a conflict', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+  await createDraft('default', db, repo, NEW, { title: 'Strandhaus Nord', rooms: 0 });
+  repo.write(NEW, 'title: "Theirs"\n');
+
+  await expect(publishDrafts('default', db, repo)).rejects.toBeInstanceOf(DraftConflictError);
+  expect(repo.publish).not.toHaveBeenCalled();
+});
+
+test('a renamed entry keeps its unpublished edits at the new path', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+
+  await moveDraft('default', db, PATH, OTHER, 'commit-rename');
+
+  const row = await only(db);
+  expect(row?.path).toBe(OTHER);
+  expect(row?.baseSha).toBe('commit-rename');
+  // The rename commit moved the loaded bytes untouched, so the base blob still describes them.
+  expect(row?.baseBlob).toBe(await blobSha(FILE));
+  expect(row?.contents).toBe(FILE.replace('rooms: 3', 'rooms: 4'));
+});
+
+test('discarding a draft leaves nothing for the next publish to write back', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+
+  await discardDraft('default', db, PATH);
+
+  expect(await db.select().from(drafts)).toEqual([]);
+  expect(await publishDrafts('default', db, repo)).toBe(undefined);
 });

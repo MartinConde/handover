@@ -90,13 +90,18 @@ Handover keeps edits in D1 until they are published, so create the database, bin
 pnpm astro dev
 ```
 
-Open `http://localhost:4321/admin`, sign in with the password, then go to
-`/admin/c/listings/seaview-cottage`. Every `z.string()` field in the schema is an input;
-other field types show "Not editable here yet". Change a value: two seconds later the edit
-is saved into D1, and it is still there if you reload — see
-[Drafts and publishing](publishing.md). Click **Publish…**: the pending-changes drawer
-lists every edit waiting to go out, and **Publish 1 file** writes them back as one commit
-on `main`. If someone changed one of those files in the repository since you opened it,
-the publish is refused and nothing is overwritten.
+Open `http://localhost:4321/admin` and sign in with the password. Each collection is a
+link in the sidebar; **Listings** lists every entry with its title, and each row opens the
+editor. **New listing** asks for a title, shows the filename it derives from it and opens
+the new entry — which is a draft until you publish it, so nothing is in git yet. **Rename**
+and **Delete** are on the row.
+
+In the editor, every `z.string()` field in the schema is an input; other field types show
+"Not editable here yet". Change a value: two seconds later the edit is saved into D1, and
+it is still there if you reload — see [Drafts and publishing](publishing.md). Click
+**Publish…**: the pending-changes drawer lists every edit waiting to go out, and
+**Publish 1 file** writes them back as one commit on `main`. If someone changed one of
+those files in the repository since you opened it, the publish is refused and nothing is
+overwritten.
 
 Your build pipeline picks the commit up like any other push.

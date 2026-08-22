@@ -67,6 +67,22 @@ the **pending-changes drawer**, which lists them and publishes them:
 - A commit is not a live site: the site rebuilds afterwards, which takes a minute or two,
   and the admin itself is redeployed with it
 
+## Creating, renaming and deleting
+
+**New entry** writes a draft and nothing else: the file appears in the repository at its
+first publish, so an entry you started and abandoned never reaches git. The filename comes
+from the title ([Configuration](configuration.md#entry-filenames)) and counts names that
+exist only as drafts, so two unpublished entries cannot claim the same file. The draft
+starts with every required field present and empty — an autosave validates against the
+collection schema, and a missing required field would refuse the save.
+
+**Rename** and **delete** are commits of their own, not drafts, because they move files
+rather than change them ([Content format](content-format.md#renaming-and-deleting-an-entry)).
+A rename carries the entry's unpublished edits over to the new path; a delete throws them
+away. Both need the entry to exist in the repository: renaming one that has never been
+published is refused with "publish this entry before renaming it", and deleting one just
+drops the draft, with no commit and no redirect.
+
 ## The endpoints
 
 All of them are behind the admin password.
@@ -96,6 +112,29 @@ Titles come from the entry's `title` field; a collection without one lists by fi
 The list is the build's [content index](#the-content-index) with the pending drafts laid
 over it, so an entry you have edited but not published shows what you typed. It reads
 nothing from GitHub.
+
+```
+POST /admin/api/entries/:collection         { "title": "…" }  →  { "slug" }
+```
+
+Creates an entry as a draft. `slug` is the derived filename, which is what the admin opens
+next. Nothing is committed. `404` if the collection is not configured.
+
+```
+POST /admin/api/entries/:collection/:slug/rename   { "to": "…" }  →  { "slug", "commit_sha" }
+```
+
+One commit moving every locale file, plus the redirect. `to` goes through the same
+derivation as a new entry's title, so `slug` in the answer is the name that was actually
+used. `409` if the entry has never been published.
+
+```
+DELETE /admin/api/entries/:collection/:slug        →  { "commit_sha" }
+```
+
+One commit removing every locale file, with a redirect to the collection's `index` when it
+has one, and the entry's draft discarded. The answer is `{}` when nothing was committed —
+the entry existed only as a draft, or not at all.
 
 ```
 GET /admin/api/drafts                       →  { "files": [{ "path", "updated_at" }] }

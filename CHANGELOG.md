@@ -4,6 +4,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The admin has an entry list. Every collection in `cms.config.ts` is a link in the
+  sidebar, and `/admin/c/:collection` lists its entries with the titles the content index
+  and the pending drafts give it. **New entry** takes a title, shows the filename derived
+  from it — collisions included — and opens the entry; the entry is a **draft until its
+  first publish**, so an abandoned one never reaches the repository and its filename can
+  still change. **Rename** and **Delete** are per row and are one commit each, with the
+  redirect the [content format](docs/content-format.md#renaming-and-deleting-an-entry)
+  describes; a rename carries the entry's unpublished edits to the new path and a delete
+  discards them. New endpoints: `POST /admin/api/entries/:collection`,
+  `POST /admin/api/entries/:collection/:slug/rename` and
+  `DELETE /admin/api/entries/:collection/:slug`. `GET /admin/api/entries/:collection/:slug`
+  now answers for an entry that exists only as a draft instead of 404. See
+  `docs/publishing.md`.
+
 - The admin can list a collection without fetching every file from GitHub. The build reads
   every entry's title and `_status` out of `src/content/` — one row per entry across
   locales — and the new `GET /admin/api/entries/:collection` serves that with the pending

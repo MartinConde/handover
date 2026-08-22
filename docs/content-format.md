@@ -91,6 +91,14 @@ title: "Seaview Cottage"
 The file stays in the repo and in the admin, and the site ignores it when your loaders
 use `filterLive` (see [Template convention](template-convention.md#hidden-entries)).
 
+## Creating an entry
+
+"New entry" asks for a title and derives the filename from it
+([Configuration](configuration.md#entry-filenames)). The file itself is not written until
+the entry is published for the first time — until then it is a draft in D1, so the
+filename can still change and an abandoned entry leaves nothing behind. After the first
+publish, changing the filename is the rename below.
+
 ## Renaming and deleting an entry
 
 The filename is the entry's id across locales, so a rename moves every locale file in one

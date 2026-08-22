@@ -1,5 +1,6 @@
 <script lang="ts">
 import Editor from './Editor.svelte';
+import EntryList from './EntryList.svelte';
 import Login from './Login.svelte';
 import Pending from './Pending.svelte';
 
@@ -8,14 +9,25 @@ let { authed, path }: { authed: boolean; path: string } = $props();
 let loggedIn = $state(authed);
 
 const entryRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)\/([\w-]+)$/));
+const listRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)$/));
 
+let collections = $state<string[]>([]);
 let pending = $state<{ path: string; updated_at: number }[]>([]);
 let indicator = $state<HTMLButtonElement>();
 let drawer = $state(false);
 
 $effect(() => {
-  if (loggedIn) loadPending();
+  if (!loggedIn) return;
+  loadPending();
+  loadCollections();
 });
+
+// Ping answers 401 until there is a session, so the collections arrive after the login form
+// hands over, not with the page.
+async function loadCollections() {
+  const res = await fetch('/admin/api/ping');
+  if (res.ok) collections = ((await res.json()) as { collections: string[] }).collections;
+}
 
 async function loadPending() {
   const res = await fetch('/admin/api/drafts');
@@ -30,6 +42,8 @@ async function loadEntry(collection: string, slug: string) {
     );
   return res.json();
 }
+
+const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 </script>
 
 {#if !loggedIn}
@@ -40,11 +54,20 @@ async function loadEntry(collection: string, slug: string) {
     <div class="site-name"><span class="site-mark" aria-hidden="true">H</span> Handover</div>
     <nav class="nav">
       <div class="nav-group">
-        <a href="/admin" data-icon="dashboard" aria-current={entryRoute ? undefined : 'page'}>Dashboard</a>
+        <a href="/admin" data-icon="dashboard" aria-current={path === '/admin' ? 'page' : undefined}>Dashboard</a>
       </div>
     </nav>
     <nav class="nav" aria-labelledby="nav-content">
       <div class="nav-label" id="nav-content">Content</div>
+      <div class="nav-group">
+        {#each collections as name (name)}
+          <a
+            href="/admin/c/{name}"
+            data-icon={name}
+            aria-current={(listRoute ?? entryRoute)?.[1] === name ? 'page' : undefined}
+          >{capitalise(name)}</a>
+        {/each}
+      </div>
     </nav>
   </aside>
   <div class="shell-body" inert={drawer}>
@@ -81,6 +104,8 @@ async function loadEntry(collection: string, slug: string) {
       {:catch error}
         <main class="main"><p class="notice notice-danger" role="alert">{error.message}</p></main>
       {/await}
+    {:else if listRoute}
+      <EntryList collection={listRoute[1] ?? ''} onchanged={loadPending} />
     {:else}
       <main class="main">
         <h1>Dashboard</h1>

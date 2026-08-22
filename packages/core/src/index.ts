@@ -2,9 +2,12 @@ export type { AstroContent, ContentEntry, ContentSource } from './content.js';
 export { mergeEntry, parseEntry, staticSource, stringifyEntry } from './content.js';
 export type { Db, Draft } from './db.js';
 export {
+  createDraft,
   DraftConflictError,
+  discardDraft,
   drafts,
   loadDraft,
+  moveDraft,
   openDb,
   pendingDrafts,
   publishDrafts,
@@ -22,4 +25,4 @@ export { filterLive, isLive, newId, RESERVED_KEYS, regenerateIds } from './reser
 export type { RichtextTier } from './richtext.js';
 export { RICHTEXT_CONSTRUCTS, richtextErrors } from './richtext.js';
 export type { Field, Form, JsonSchema } from './schema.js';
-export { fieldsFrom, formOf } from './schema.js';
+export { blankValues, fieldsFrom, formOf } from './schema.js';

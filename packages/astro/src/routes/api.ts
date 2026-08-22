@@ -1,19 +1,26 @@
 import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
 import index from 'virtual:handover/index';
-import type { Db, GitClient } from '@handover/core';
+import type { Db, EntryLocation, GitClient } from '@handover/core';
 import {
+  blankValues,
   blobSha,
   collectionEntries,
+  createDraft,
   createGitClient,
   DraftConflictError,
+  deleteEntry,
+  discardDraft,
+  entryName,
   formOf,
   loadDraft,
+  moveDraft,
   openDb,
   parseEntry,
   pendingDrafts,
   publishDrafts,
   RefMovedError,
+  renameEntry,
   saveDraft,
 } from '@handover/core';
 import type { APIRoute } from 'astro';
@@ -55,11 +62,12 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
     gitClient().getFile(path),
     loadDraft('default', db(), path),
   ]);
-  if (!file) return new Response('Not found', { status: 404 });
+  const contents = draft?.contents ?? file?.contents;
+  if (contents === undefined) return new Response('Not found', { status: 404 });
   return Response.json({
     ...formOf('default', formSchema(schema)),
-    data: parseEntry('default', draft?.contents ?? file.contents),
-    pending: draft ? (await blobSha(draft.contents)) !== file.blob_sha : false,
+    data: parseEntry('default', contents),
+    pending: draft ? (await blobSha(draft.contents)) !== file?.blob_sha : false,
   });
 }
 
@@ -89,9 +97,76 @@ async function listEntries(collection: string): Promise<Response> {
   return Response.json({ entries: collectionEntries('default', index, collection, drafts) });
 }
 
+/** Every name the collection already uses, published or only drafted. */
+async function takenNames(collection: string, database: Db): Promise<string[]> {
+  const pending = await pendingDrafts('default', database);
+  return collectionEntries('default', index, collection, pending).map((e) => e.id);
+}
+
+// Phase 2 turns `locales` into the configured list; today an entry is one file under en/.
+const locationOf = (collection: string): EntryLocation => ({
+  collection,
+  route: config.collections[collection]?.route,
+  locales: ['en'],
+});
+
+/**
+ * A new entry is a draft, not a commit: nothing is in the repository until it is published,
+ * which is what lets the file name stay editable and keeps an abandoned entry out of git.
+ * The blanks matter — an autosave validates against the collection schema, so a required
+ * field that is missing rather than empty would throw away everything typed after it.
+ */
+async function createEntry(collection: string, request: Request): Promise<Response> {
+  const schema = config.collections[collection]?.schema;
+  if (!schema) return new Response('Not found', { status: 404 });
+  const body = (await request.json().catch(() => undefined)) as { title?: unknown } | undefined;
+  const title = typeof body?.title === 'string' ? body.title : '';
+  const database = db();
+  const slug = entryName('default', title, await takenNames(collection, database));
+  const { fields } = formOf('default', formSchema(schema));
+  const values: Record<string, unknown> = { _version: 1, ...blankValues('default', fields) };
+  if (fields.some((f) => f.path[0] === 'title' && f.type === 'text')) values.title = title;
+  await createDraft('default', database, gitClient(), entryPath(collection, slug), values);
+  return Response.json({ slug });
+}
+
+// The new name goes through the same derivation as a new entry's, so a rename can never
+// produce a file name the CMS could not have created.
+async function rename(collection: string, slug: string, request: Request): Promise<Response> {
+  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  const body = (await request.json().catch(() => undefined)) as { to?: unknown } | undefined;
+  const database = db();
+  const git = gitClient();
+  const from = entryPath(collection, slug);
+  if (!(await git.getFile(from)))
+    return new Response('Publish this entry before renaming it', { status: 409 });
+  const taken = (await takenNames(collection, database)).filter((id) => id !== slug);
+  const to = entryName('default', typeof body?.to === 'string' ? body.to : '', taken);
+  if (to === slug) return Response.json({ slug });
+  const { commit_sha } = await renameEntry('default', git, locationOf(collection), slug, to);
+  await moveDraft('default', database, from, entryPath(collection, to), commit_sha);
+  return Response.json({ slug: to, commit_sha });
+}
+
+// An entry that was never published has nothing to remove from the repository and no URL
+// anyone could have followed, so it goes without a commit and without a redirect.
+async function remove(collection: string, slug: string): Promise<Response> {
+  const collected = config.collections[collection];
+  if (!collected) return new Response('Not found', { status: 404 });
+  const git = gitClient();
+  const path = entryPath(collection, slug);
+  const committed = await git.getFile(path);
+  const result = committed
+    ? await deleteEntry('default', git, locationOf(collection), slug, collected.index)
+    : undefined;
+  await discardDraft('default', db(), path);
+  return Response.json(result ?? {});
+}
+
 const ENTRIES = /^entries\/([\w-]+)$/;
 const ENTRY = /^entries\/([\w-]+)\/([\w-]+)$/;
 const DRAFT = /^drafts\/([\w-]+)\/([\w-]+)$/;
+const RENAME = /^entries\/([\w-]+)\/([\w-]+)\/rename$/;
 
 export const GET: APIRoute = async ({ params }) => {
   if (params.path === 'ping') {
@@ -119,9 +194,14 @@ export const PUT: APIRoute = async ({ params, request }) => {
 // One commit for every draft that differs from the repository, then the rows are gone:
 // nothing keeps them, since the next open reads the file the publish just wrote.
 async function publish(): Promise<Response> {
+  const result = await publishDrafts('default', db(), gitClient());
+  return Response.json(result ?? { paths: [] });
+}
+
+// Every write that commits answers the same way when someone got there first.
+async function committing(work: () => Promise<Response>): Promise<Response> {
   try {
-    const result = await publishDrafts('default', db(), gitClient());
-    return Response.json(result ?? { paths: [] });
+    return await work();
   } catch (err) {
     if (err instanceof DraftConflictError || err instanceof RefMovedError)
       return new Response(err.message, { status: 409 });
@@ -134,6 +214,16 @@ export const POST: APIRoute = async ({ params, request }) => {
     const body = (await request.json().catch(() => ({}))) as { password?: unknown };
     return login(typeof body.password === 'string' ? body.password : '');
   }
-  if (params.path === 'publish') return publish();
+  if (params.path === 'publish') return committing(publish);
+  const renamed = params.path?.match(RENAME);
+  if (renamed) return committing(() => rename(renamed[1] ?? '', renamed[2] ?? '', request));
+  const created = params.path?.match(ENTRIES);
+  if (created) return createEntry(created[1] ?? '', request);
+  return new Response('Not found', { status: 404 });
+};
+
+export const DELETE: APIRoute = async ({ params }) => {
+  const entry = params.path?.match(ENTRY);
+  if (entry) return committing(() => remove(entry[1] ?? '', entry[2] ?? ''));
   return new Response('Not found', { status: 404 });
 };

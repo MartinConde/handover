@@ -90,6 +90,52 @@ export async function saveDraft(
   return { updated_at: updatedAt, pending: (await blobSha(contents)) !== base.blob };
 }
 
+/**
+ * A new entry. There is no file behind it, so the base blob is the empty string: nothing in
+ * the repository hashes to that, which is what makes the row pending and its first publish
+ * create the path — and what turns someone else getting there first into a conflict.
+ */
+export async function createDraft(
+  siteId: string,
+  db: Db,
+  git: Pick<GitClient, 'getHead'>,
+  path: string,
+  values: Record<string, unknown>,
+): Promise<{ updated_at: number }> {
+  const updatedAt = Date.now();
+  await db.insert(drafts).values({
+    siteId,
+    path,
+    contents: stringifyEntry(siteId, values),
+    baseSha: await git.getHead(),
+    baseBlob: '',
+    updatedAt,
+  });
+  return { updated_at: updatedAt };
+}
+
+/**
+ * Re-key a draft onto the path a rename commit moved it to. The commit carried the loaded
+ * bytes over untouched, so `base_blob` still describes the file at the new path.
+ */
+export async function moveDraft(
+  siteId: string,
+  db: Db,
+  from: string,
+  to: string,
+  baseSha: string,
+): Promise<void> {
+  await db
+    .update(drafts)
+    .set({ path: to, baseSha })
+    .where(and(eq(drafts.siteId, siteId), eq(drafts.path, from)));
+}
+
+/** Throw away the unpublished edits for one path; a deleted entry must not come back. */
+export async function discardDraft(siteId: string, db: Db, path: string): Promise<void> {
+  await db.delete(drafts).where(and(eq(drafts.siteId, siteId), eq(drafts.path, path)));
+}
+
 /** Drafts whose stored bytes differ from the file they were loaded from, newest first. */
 export async function pendingDrafts(siteId: string, db: Db): Promise<Draft[]> {
   const rows = await db.select().from(drafts).where(eq(drafts.siteId, siteId));
@@ -127,7 +173,9 @@ export async function publishDrafts(
   if (!rows.length) return undefined;
   const base_sha = await git.getHead();
   const changed = await Promise.all(
-    rows.map(async (r) => ((await git.getFile(r.path))?.blob_sha === r.baseBlob ? '' : r.path)),
+    rows.map(async (r) =>
+      ((await git.getFile(r.path))?.blob_sha ?? '') === r.baseBlob ? '' : r.path,
+    ),
   );
   const conflicts = changed.filter(Boolean);
   if (conflicts.length) throw new DraftConflictError(conflicts);

@@ -1,55 +1,71 @@
+import type { PublishFile } from '@handover/core';
 import type { APIContext } from 'astro';
 import { expect, test, vi } from 'vitest';
-import { GET, POST, PUT } from './api.js';
+import { DELETE, GET, POST, PUT } from './api.js';
 
-const { listing, getFile, getHead, publish, saveDraft, pendingDrafts, publishDrafts } =
-  await vi.hoisted(async () => {
-    const { z } = await import('astro/zod');
-    return {
-      listing: z.object({
-        title: z.string(),
-        location: z.string().optional(),
-        rooms: z.number(),
-        address: z.object({ street: z.string() }),
-      }),
-      // The GitHub boundary: one file in the repo, nothing else.
-      getFile: vi.fn(async (path: string) => {
-        if (path === 'src/content/listings/en/mill-house.yaml')
-          return {
-            contents: 'title: The Mill House\nlocation: Bakewell\nrooms: 3\n',
-            blob_sha: 'abc123',
-          };
-        return undefined;
-      }),
-      getHead: vi.fn(async () => 'head789'),
-      publish: vi.fn(async (_files: unknown, opts: { base_sha: string }) => {
-        if (opts.base_sha === 'stale') {
-          const { RefMovedError } = await import('@handover/core');
-          throw new RefMovedError('moved');
-        }
-        return { commit_sha: 'def456' };
-      }),
-      // The D1 boundary; the real ones run against a D1 in @handover/core's own tests.
-      pendingDrafts: vi.fn(async () => [
-        {
-          path: 'src/content/listings/en/mill-house.yaml',
-          contents: 'title: "The Mill House"\n',
-          updatedAt: 1755864000000,
-        },
-      ]),
-      publishDrafts: vi.fn<() => Promise<{ commit_sha: string; paths: string[] } | undefined>>(
-        async () => ({ commit_sha: 'def456', paths: ['src/content/listings/en/mill-house.yaml'] }),
-      ),
-      saveDraft: vi.fn<() => Promise<{ updated_at: number; pending: boolean } | undefined>>(
-        async () => ({ updated_at: 1755864000000, pending: true }),
-      ),
-    };
-  });
+const {
+  listing,
+  getFile,
+  getHead,
+  publish,
+  saveDraft,
+  createDraft,
+  moveDraft,
+  discardDraft,
+  pendingDrafts,
+  publishDrafts,
+} = await vi.hoisted(async () => {
+  const { z } = await import('astro/zod');
+  return {
+    listing: z.object({
+      title: z.string(),
+      location: z.string().optional(),
+      rooms: z.number(),
+      address: z.object({ street: z.string() }),
+    }),
+    // The GitHub boundary: one file in the repo, nothing else.
+    getFile: vi.fn(async (path: string) => {
+      if (path === 'src/content/listings/en/mill-house.yaml')
+        return {
+          contents: 'title: The Mill House\nlocation: Bakewell\nrooms: 3\n',
+          blob_sha: 'abc123',
+        };
+      return undefined;
+    }),
+    getHead: vi.fn(async () => 'head789'),
+    publish: vi.fn(async (_files: unknown, opts: { base_sha: string }) => {
+      if (opts.base_sha === 'stale') {
+        const { RefMovedError } = await import('@handover/core');
+        throw new RefMovedError('moved');
+      }
+      return { commit_sha: 'def456' };
+    }),
+    // The D1 boundary; the real ones run against a D1 in @handover/core's own tests.
+    pendingDrafts: vi.fn(async () => [
+      {
+        path: 'src/content/listings/en/mill-house.yaml',
+        contents: 'title: "The Mill House"\n',
+        updatedAt: 1755864000000,
+      },
+    ]),
+    publishDrafts: vi.fn<() => Promise<{ commit_sha: string; paths: string[] } | undefined>>(
+      async () => ({ commit_sha: 'def456', paths: ['src/content/listings/en/mill-house.yaml'] }),
+    ),
+    saveDraft: vi.fn<() => Promise<{ updated_at: number; pending: boolean } | undefined>>(
+      async () => ({ updated_at: 1755864000000, pending: true }),
+    ),
+    createDraft: vi.fn(async () => ({ updated_at: 1755864000000 })),
+    moveDraft: vi.fn(async () => {}),
+    discardDraft: vi.fn(async () => {}),
+  };
+});
 
 // The row GET should overlay, set per test.
 let draft: { contents: string; baseSha: string; baseBlob: string } | undefined;
 vi.mock('virtual:handover/config', () => ({
-  default: { collections: { listings: { schema: listing } } },
+  default: {
+    collections: { listings: { schema: listing, route: '/listings/[slug]', index: '/listings' } },
+  },
 }));
 // What the build read out of src/content/, inlined into the Worker bundle.
 vi.mock('virtual:handover/index', () => ({
@@ -89,6 +105,9 @@ vi.mock('@handover/core', async (original) => ({
   openDb: () => ({}),
   loadDraft: async () => draft,
   saveDraft,
+  createDraft,
+  moveDraft,
+  discardDraft,
   pendingDrafts,
   publishDrafts,
 }));
@@ -281,4 +300,122 @@ test('the entry list is the built index with the pending drafts over it', async 
 
 test('listing an unknown collection is 404', async () => {
   expect((await GET(ctx('entries/nope'))).status).toBe(404);
+});
+
+test('creating an entry derives its file name and stores it as a draft, uncommitted', async () => {
+  createDraft.mockClear();
+  publish.mockClear();
+  const res = await POST(post('entries/listings', JSON.stringify({ title: 'Café & Bar / 2026' })));
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ slug: 'cafe-bar-2026' });
+  expect(createDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/listings/en/cafe-bar-2026.yaml',
+    // Every required field, empty, so the first autosave passes the collection schema.
+    { _version: 1, title: 'Café & Bar / 2026', rooms: 0, address: { street: '' } },
+  );
+  expect(publish).not.toHaveBeenCalled();
+});
+
+test('a title already used in the collection gets the collision suffix', async () => {
+  const res = await POST(post('entries/listings', JSON.stringify({ title: 'Seaview Cottage' })));
+  expect(await res.json()).toEqual({ slug: 'seaview-cottage-2' });
+});
+
+test('a name already taken by an unpublished entry counts as taken too', async () => {
+  pendingDrafts.mockImplementationOnce(async () => [
+    {
+      path: 'src/content/listings/en/strandhaus-nord.yaml',
+      contents: 'title: "Strandhaus Nord"\n',
+      updatedAt: 1755864000000,
+    },
+  ]);
+  const res = await POST(post('entries/listings', JSON.stringify({ title: 'Strandhaus Nord' })));
+  expect(await res.json()).toEqual({ slug: 'strandhaus-nord-2' });
+});
+
+test('creating in an unknown collection is 404', async () => {
+  createDraft.mockClear();
+  expect((await POST(post('entries/nope', JSON.stringify({ title: 'x' })))).status).toBe(404);
+  expect(createDraft).not.toHaveBeenCalled();
+});
+
+test('an entry that exists only as a draft opens from it', async () => {
+  draft = { contents: 'title: "Strandhaus Nord"\nrooms: 0\n', baseSha: 'head789', baseBlob: '' };
+  const res = await GET(ctx('entries/listings/strandhaus-nord'));
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as { data: unknown; pending: boolean };
+  expect(body.data).toEqual({ title: 'Strandhaus Nord', rooms: 0 });
+  expect(body.pending).toBe(true);
+  draft = undefined;
+});
+
+test('renaming moves the entry in one commit and takes its unpublished edits with it', async () => {
+  publish.mockClear();
+  moveDraft.mockClear();
+  const res = await POST(
+    post('entries/listings/mill-house/rename', JSON.stringify({ to: 'The Old Mill' })),
+  );
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ slug: 'the-old-mill', commit_sha: 'def456' });
+  expect(publish).toHaveBeenCalledTimes(1);
+  const [files] = (publish.mock.calls[0] ?? []) as unknown as [PublishFile[]];
+  expect(files.map((f) => f.path)).toEqual([
+    'src/content/listings/en/mill-house.yaml',
+    'src/content/listings/en/the-old-mill.yaml',
+    'src/content/redirects.yaml',
+  ]);
+  expect(files[0]?.contents).toBe(null);
+  expect(files[2]?.contents).toContain('from: "/listings/mill-house"');
+  expect(moveDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    'src/content/listings/en/mill-house.yaml',
+    'src/content/listings/en/the-old-mill.yaml',
+    'def456',
+  );
+});
+
+test('renaming an entry that has never been published says so rather than failing', async () => {
+  publish.mockClear();
+  const res = await POST(
+    post('entries/listings/strandhaus-nord/rename', JSON.stringify({ to: 'x' })),
+  );
+  expect(res.status).toBe(409);
+  expect(await res.text()).toContain('Publish');
+  expect(publish).not.toHaveBeenCalled();
+});
+
+test('deleting commits the removal with a redirect and drops the draft', async () => {
+  publish.mockClear();
+  discardDraft.mockClear();
+  const res = await DELETE(ctx('entries/listings/mill-house'));
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ commit_sha: 'def456' });
+  const [files] = (publish.mock.calls[0] ?? []) as unknown as [PublishFile[]];
+  expect(files.map((f) => f.path)).toEqual([
+    'src/content/listings/en/mill-house.yaml',
+    'src/content/redirects.yaml',
+  ]);
+  expect(files[1]?.contents).toContain('reason: "deleted"');
+  expect(discardDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    'src/content/listings/en/mill-house.yaml',
+  );
+});
+
+test('deleting an entry that was never published makes no commit', async () => {
+  publish.mockClear();
+  discardDraft.mockClear();
+  const res = await DELETE(ctx('entries/listings/strandhaus-nord'));
+  expect(res.status).toBe(200);
+  expect(publish).not.toHaveBeenCalled();
+  expect(discardDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    'src/content/listings/en/strandhaus-nord.yaml',
+  );
 });
