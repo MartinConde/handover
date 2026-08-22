@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Nesting field types: a `group` is a plain `z.object`, an `array` holds groups or scalars
+  (never another array), and `blocks(() => registry)` holds blocks declared with
+  `defineBlock(type, fields)`, both exported from `astro-handover` together with the `Block`
+  and `BlockRegistry` types. A block with `_ref: "globals/<key>"` validates with no fields of
+  its own; an unregistered `_type` is rejected. `fieldsFrom` now reports `array` (with its
+  item fields) and `blocks` (with its block types) instead of `unsupported`. See
+  `docs/field-types.md`.
 - Structured field types: `image` (`{ src, alt?, width, height, focal? }`, `src` a
   `media/` key), `file` (`{ src, name, bytes, mime }`, `src` a `files/` key), `embed`
   (`{ provider, id, title?, start? }`, providers `youtube | vimeo | google-maps`, raw HTML

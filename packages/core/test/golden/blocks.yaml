@@ -1,0 +1,28 @@
+_version: 1
+title: "Home"
+blocks:
+  - _type: "hero"
+    _id: "k3nf9a2p"
+    heading: "Move to the coast"
+    image:
+      src: "media/9f3a2c7e.webp"
+      alt: "Front of the house"
+      width: 2400
+      height: 1600
+  - _type: "columns"
+    _id: "a1b2c3d4"
+    _label: "Two columns"
+    columns:
+      - _id: "e5f6g7h8"
+        blocks:
+          - _type: "textSection"
+            _id: "i9j0k1l2"
+            body: |-
+              First paragraph.
+
+              Second paragraph.
+      - _id: "m3n4o5p6"
+        blocks:
+          - _type: "cta"
+            _id: "q7r8s9t0"
+            _ref: "globals/cta-newsletter"

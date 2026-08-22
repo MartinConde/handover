@@ -73,6 +73,51 @@ export const reference = (collection: string) =>
     .regex(/^[^\s/]+\/[^\s/]+$/, 'reference must be collection/slug')
     .meta({ handover: 'reference', collection });
 
+// A block as stored. TypeScript cannot infer through a recursive discriminated union, so
+// the union is annotated with this hand-written type and the registered schemas narrow it.
+export interface Block {
+  _type: string;
+  _id: string;
+  _label?: string;
+  _ref?: string;
+  [field: string]: unknown;
+}
+export type BlockRegistry = Record<string, z.ZodType<Block>>;
+
+export function defineBlock<T extends string, F extends z.ZodRawShape>(type: T, fields: F) {
+  return z.object({
+    _type: z.literal(type),
+    _id: z.string(),
+    _label: z.string().optional(),
+    _ref: z.string().optional(),
+    ...fields,
+  });
+}
+
+// The registry is a thunk because a block that nests `blocks` refers to the registry from
+// inside its own initializer. A `_ref` block carries no fields of its own: its content
+// is filled from the global at build time.
+export function blocks(registry: () => BlockRegistry): z.ZodType<Block[]> {
+  const ref = z.object({
+    _type: z.string(),
+    _id: z.string(),
+    _label: z.string().optional(),
+    _ref: z.string().regex(/^globals\/[^\s/]+$/, '_ref must be globals/<key>'),
+  });
+  const block = z.lazy(() =>
+    z.union([
+      ref.refine((b) => b._type in registry(), 'unregistered block type'),
+      z.union(Object.values(registry())),
+    ]),
+  );
+  return z.array(block).meta({
+    handover: 'blocks',
+    get types() {
+      return Object.keys(registry());
+    },
+  });
+}
+
 export interface HandoverConfig {
   collections: Record<string, { schema: z.ZodType }>;
 }

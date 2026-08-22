@@ -1,11 +1,15 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fieldsFrom, type JsonSchema } from '@handover/core';
+import { fieldsFrom, type JsonSchema, parseEntry } from '@handover/core';
 import type { HookParameters } from 'astro';
 import { z } from 'astro/zod';
-import { expect, test, vi } from 'vitest';
+import { expect, expectTypeOf, test, vi } from 'vitest';
 import handover, {
+  type Block,
+  type BlockRegistry,
+  blocks,
+  defineBlock,
   embed,
   file,
   image,
@@ -88,6 +92,82 @@ test('reference is a collection/slug string', () => {
   expect(reference('agents').safeParse('agents/jane-doe').success).toBe(true);
   expect(reference('agents').safeParse('jane-doe').success).toBe(false);
   expect(reference('agents').safeParse('https://example.com/agents/jane').success).toBe(false);
+});
+
+// The 1.5 golden's registry: `columns` holds `blocks` again, so the union is recursive.
+const registry: BlockRegistry = {
+  hero: defineBlock('hero', { heading: z.string(), image: image.optional() }),
+  textSection: defineBlock('textSection', { body: z.string() }),
+  cta: defineBlock('cta', { heading: z.string(), button: link }),
+  columns: defineBlock('columns', {
+    columns: z.array(z.object({ _id: z.string(), blocks: blocks(() => registry) })),
+  }),
+};
+const page = z.object({ title: z.string(), blocks: blocks(() => registry) });
+
+test('the Block type recursion compiles: a page of blocks infers to Block[]', () => {
+  expectTypeOf<z.infer<typeof page>['blocks']>().toEqualTypeOf<Block[]>();
+});
+
+test('the 1.5 golden parses through the registry, three levels deep', async () => {
+  const yaml = await readFile(
+    new URL('../../core/test/golden/blocks.yaml', import.meta.url),
+    'utf8',
+  );
+  const data = parseEntry('default', yaml);
+  expect(page.safeParse(data).success).toBe(true);
+});
+
+test('a block with _ref needs nothing but _type and _id; without it the fields are required', () => {
+  const ref = { _type: 'cta', _id: 'q7r8s9t0', _ref: 'globals/cta-newsletter' };
+  expect(page.safeParse({ title: 'x', blocks: [ref] }).success).toBe(true);
+  expect(page.safeParse({ title: 'x', blocks: [{ _type: 'cta', _id: 'q7r8s9t0' }] }).success).toBe(
+    false,
+  );
+  expect(page.safeParse({ title: 'x', blocks: [{ ...ref, _ref: 'cta-newsletter' }] }).success).toBe(
+    false,
+  );
+});
+
+test('an unregistered block type is rejected', () => {
+  expect(
+    page.safeParse({ title: 'x', blocks: [{ _type: 'video', _id: 'q7r8s9t0' }] }).success,
+  ).toBe(false);
+});
+
+test('group, array and blocks are detected from real Zod output', () => {
+  const schema = z.object({
+    address: z.object({ street: z.string(), town: z.string().optional() }),
+    rooms: z.array(z.object({ _id: z.string(), name: z.string(), area: z.number() })),
+    tags: z.array(z.string()).optional(),
+    blocks: blocks(() => registry),
+  });
+  const json = z.toJSONSchema(schema, { unrepresentable: 'any' }) as JsonSchema;
+  expect(fieldsFrom('default', json)).toEqual([
+    { path: ['address', 'street'], type: 'text', required: true },
+    { path: ['address', 'town'], type: 'text', required: false },
+    {
+      path: ['rooms'],
+      type: 'array',
+      required: true,
+      item: [
+        { path: ['name'], type: 'text', required: true },
+        { path: ['area'], type: 'number', required: true },
+      ],
+    },
+    {
+      path: ['tags'],
+      type: 'array',
+      required: false,
+      item: [{ path: [], type: 'text', required: true }],
+    },
+    {
+      path: ['blocks'],
+      type: 'blocks',
+      required: true,
+      types: ['hero', 'textSection', 'cta', 'columns'],
+    },
+  ]);
 });
 
 type Setup = HookParameters<'astro:config:setup'>;

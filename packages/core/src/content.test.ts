@@ -121,6 +121,65 @@ for (const [type, fixture] of Object.entries(structured)) {
   });
 }
 
+// Nesting types: a group is a plain object, an array holds groups (each with an `_id`), and
+// `blocks` nests three levels deep — blocks → array of groups → blocks — with one `_ref`.
+const nesting: Record<string, unknown> = {
+  group: {
+    _version: 1,
+    address: { street: '12 Harbour Lane', town: 'Salcombe', postcode: 'TQ8 8AA' },
+  },
+  array: {
+    _version: 1,
+    rooms: [
+      { _id: 'b7c2d9e1', name: 'Kitchen', area: 18.5 },
+      { _id: 'f4a8c3d6', name: 'Master bedroom', area: 22 },
+    ],
+    tags: ['coastal', 'garden'],
+  },
+  blocks: {
+    _version: 1,
+    title: 'Home',
+    blocks: [
+      {
+        _type: 'hero',
+        _id: 'k3nf9a2p',
+        heading: 'Move to the coast',
+        image: { src: 'media/9f3a2c7e.webp', alt: 'Front of the house', width: 2400, height: 1600 },
+      },
+      {
+        _type: 'columns',
+        _id: 'a1b2c3d4',
+        _label: 'Two columns',
+        columns: [
+          {
+            _id: 'e5f6g7h8',
+            blocks: [
+              {
+                _type: 'textSection',
+                _id: 'i9j0k1l2',
+                body: 'First paragraph.\n\nSecond paragraph.',
+              },
+            ],
+          },
+          {
+            _id: 'm3n4o5p6',
+            blocks: [{ _type: 'cta', _id: 'q7r8s9t0', _ref: 'globals/cta-newsletter' }],
+          },
+        ],
+      },
+    ],
+  },
+};
+
+for (const [type, fixture] of Object.entries(nesting)) {
+  test(`${type} round-trips through its golden file`, () => {
+    const golden = readFileSync(join(goldenDir, `${type}.yaml`), 'utf8');
+    const out = stringifyEntry('default', fixture);
+    expect(out).toBe(golden);
+    expect(parseEntry('default', out)).toEqual(fixture);
+  });
+}
+
 test('a date is stored as a quoted string, never a YAML timestamp or a Date', () => {
   expect(parseEntry('default', 'availableFrom: 2026-09-01\n')).toEqual({
     availableFrom: '2026-09-01',

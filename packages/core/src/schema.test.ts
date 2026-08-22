@@ -87,7 +87,7 @@ test('a schema tagged reference carries its collection', () => {
 test('other leaves are marked unsupported, not rejected', () => {
   const schema = obj(
     {
-      tags: { type: 'array', items: { type: 'string' } },
+      tags: { type: 'array', prefixItems: [{ type: 'string' }] },
       nick: { anyOf: [{ type: 'string' }, { type: 'null' }] },
       when: {},
       title: { type: 'string' },
@@ -113,5 +113,56 @@ test('reserved _ keys are metadata, not form fields', () => {
   );
   expect(fieldsFrom('default', schema)).toEqual([
     { path: ['title'], type: 'text', required: true },
+  ]);
+});
+
+test('an array of objects is an array field whose item fields have no prefix', () => {
+  const schema = obj(
+    {
+      rooms: {
+        type: 'array',
+        items: obj({ name: { type: 'string' }, beds: { type: 'integer' } }, ['name']),
+      },
+    },
+    ['rooms'],
+  );
+  expect(fieldsFrom('default', schema)).toEqual([
+    {
+      path: ['rooms'],
+      type: 'array',
+      required: true,
+      item: [
+        { path: ['name'], type: 'text', required: true },
+        { path: ['beds'], type: 'number', required: false },
+      ],
+    },
+  ]);
+});
+
+test('an array of scalars is an array field with one unnamed item field', () => {
+  const schema = obj({ tags: { type: 'array', items: { type: 'string' } } });
+  expect(fieldsFrom('default', schema)).toEqual([
+    {
+      path: ['tags'],
+      type: 'array',
+      required: false,
+      item: [{ path: [], type: 'text', required: true }],
+    },
+  ]);
+});
+
+test('an array of arrays is unsupported, the serialiser rejects it anyway', () => {
+  const schema = obj({
+    grid: { type: 'array', items: { type: 'array', items: { type: 'string' } } },
+  });
+  expect(fieldsFrom('default', schema)).toEqual([{ path: ['grid'], type: 'unsupported' }]);
+});
+
+test('a schema tagged blocks is a blocks field carrying its block types', () => {
+  const schema = obj({ blocks: { type: 'array', handover: 'blocks', types: ['hero', 'cta'] } }, [
+    'blocks',
+  ]);
+  expect(fieldsFrom('default', schema)).toEqual([
+    { path: ['blocks'], type: 'blocks', required: true, types: ['hero', 'cta'] },
   ]);
 });

@@ -1,0 +1,11 @@
+_version: 1
+rooms:
+  - _id: "b7c2d9e1"
+    name: "Kitchen"
+    area: 18.5
+  - _id: "f4a8c3d6"
+    name: "Master bedroom"
+    area: 22
+tags:
+  - "coastal"
+  - "garden"

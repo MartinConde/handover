@@ -92,5 +92,63 @@ Media keys are resolved against your CDN base at render, so moving the CDN never
 touches a content file. An embed is rebuilt from `provider` + `id` by the shipped
 component; an `id` containing `<` or `>` fails validation, as does any extra key.
 
-Any other schema (arrays, objects, custom types) is read and written as-is but shows as
+### Nesting: group, array, blocks
+
+| Field | Schema | Stored as |
+|---|---|---|
+| group | `z.object({ … })` | a nested map; its fields appear in the form under the group's name |
+| array | `z.array(z.object({ _id: z.string(), … }))` or `z.array(z.string())` | a list; give each object item an `_id` so it can be addressed across locales |
+| blocks | `blocks(() => registry)` | a list of blocks, each `{ _type, _id, _label?, … }` matching its entry in the registry |
+
+An array may hold groups or scalars, never another array — wrap the inner list in a
+group (`columns: [{ _id, blocks: [...] }]`). Saving an array of arrays fails.
+
+Blocks are declared once each with `defineBlock(type, fields)` and collected in a
+registry. The registry is passed as a function so a block can contain `blocks` again:
+
+```ts
+import { type Block, type BlockRegistry, blocks, defineBlock, image, link } from 'astro-handover';
+import { z } from 'astro/zod';
+
+export const registry: BlockRegistry = {
+  hero: defineBlock('hero', { heading: z.string(), image: image.optional() }),
+  textSection: defineBlock('textSection', { body: z.string() }),
+  cta: defineBlock('cta', { heading: z.string(), button: link }),
+  columns: defineBlock('columns', {
+    columns: z.array(z.object({ _id: z.string(), blocks: blocks(() => registry) })),
+  }),
+};
+
+export const page = z.object({ title: z.string(), blocks: blocks(() => registry) });
+```
+
+The `BlockRegistry` annotation is what lets TypeScript accept the recursion; `Block` is
+the type of one stored block if you need it in a template.
+
+```yaml
+blocks:
+  - _type: "hero"
+    _id: "k3nf9a2p"
+    heading: "Move to the coast"
+  - _type: "columns"
+    _id: "a1b2c3d4"
+    _label: "Two columns"
+    columns:
+      - _id: "e5f6g7h8"
+        blocks:
+          - _type: "textSection"
+            _id: "i9j0k1l2"
+            body: "First paragraph."
+      - _id: "m3n4o5p6"
+        blocks:
+          - _type: "cta"
+            _id: "q7r8s9t0"
+            _ref: "globals/cta-newsletter"
+```
+
+A block whose `_type` is not in the registry fails validation. A block with `_ref` (a
+`globals/<key>` path) needs no fields of its own: its content is filled from that global
+at build time. There is no admin UI for `_ref` yet; write it by hand.
+
+Any other schema (tuples, unions, custom types) is read and written as-is but shows as
 "Not editable here yet" in the admin.
