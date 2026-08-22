@@ -70,7 +70,7 @@ export function regenerateIds<T>(siteId: string, data: T, ids = new Map<string, 
   const machine = (renamed as { _machine?: string[] })._machine;
   if (machine) {
     (renamed as { _machine: string[] })._machine = machine.map((p) =>
-      p.replace(/\[_id=([0-9a-z]+)\]/g, (m, old: string) => `[_id=${ids.get(old) ?? old}]`),
+      p.replace(/\[_id=([0-9a-z]+)\]/g, (_m, old: string) => `[_id=${ids.get(old) ?? old}]`),
     );
   }
   return renamed;
