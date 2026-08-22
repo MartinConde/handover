@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Content files are written in one canonical shape: strings double-quoted, multi-line text
+  as a `|-` block, `_`-prefixed keys first, `null`/empty keys omitted, two-space indent, no
+  line folding. Text is normalised on write (`\r\n` → `\n`, trailing whitespace and
+  control characters stripped), and an array directly inside an array is rejected with an
+  error naming the path. Reading a file and writing it back is byte-identical, so an
+  unchanged entry never shows as a pending change.
 - Publish works end to end: **Publish this entry** in the editor is enabled once a field
   changes and sends the entry to `PUT /admin/api/entries/:collection/:slug` with
   `{ data, base_sha }`. The route validates `data` against the collection schema (400 if

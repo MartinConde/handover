@@ -1,0 +1,26 @@
+_version: 1
+_status: "hidden"
+title: "Services"
+published: true
+year: "2026"
+answer: "no"
+blocks:
+  - _type: "columns"
+    _id: "a1b2c3d4"
+    columns:
+      - _id: "e5f6g7h8"
+        blocks:
+          - _type: "text"
+            _id: "i9j0k1l2"
+            body: |-
+              First paragraph.
+
+              Second paragraph with a colon: here.
+      - _id: "m3n4o5p6"
+        blocks:
+          - _type: "cta"
+            _id: "q7r8s9t0"
+            heading: "Call us"
+            button:
+              label: "Call"
+              href: "tel:+441234567890"

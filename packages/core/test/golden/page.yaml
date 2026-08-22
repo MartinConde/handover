@@ -1,0 +1,24 @@
+_version: 1
+title: "Home"
+seo:
+  title: "Move to the coast"
+  description: "Coastal homes in Devon."
+blocks:
+  - _type: "cta"
+    _id: "k3nf9a2p"
+    _label: "Newsletter signup"
+    heading: "Ready to move?"
+    body: |-
+      Book a viewing this week and we'll
+      cover your travel.
+    button:
+      label: "Contact us"
+      href: "/contact"
+    image:
+      src: "media/9f3a2c7e.webp"
+      alt: "Front of the house"
+      width: 2400
+      height: 1600
+      focal:
+        - 0.5
+        - 0.35

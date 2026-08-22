@@ -1,4 +1,4 @@
-import { parse, stringify } from 'yaml';
+import { Document, parse, visit } from 'yaml';
 
 export interface ContentEntry<T = unknown> {
   id: string;
@@ -37,12 +37,74 @@ export function staticSource<C extends Record<string, unknown>>(
   };
 }
 
-// Entry files are YAML; options stay fixed here so every site round-trips identically.
 export function parseEntry(_siteId: string, contents: string): unknown {
   return parse(contents);
 }
 
-// lineWidth 0 keeps a long sentence on one line, so a one-field edit is a one-line diff.
+// The only writer of content files. Pinned here so publish can compare blob SHAs:
+// parse(text) → stringify must give back text unchanged for any file the CMS wrote.
+const YAML_OPTIONS = {
+  defaultStringType: 'QUOTE_DOUBLE',
+  defaultKeyType: 'PLAIN',
+  blockQuote: 'literal',
+  lineWidth: 0,
+  indent: 2,
+} as const;
+
+const RESERVED_ORDER = [
+  '_version',
+  '_type',
+  '_id',
+  '_label',
+  '_ref',
+  '_i18n',
+  '_locales',
+  '_status',
+  '_machine',
+];
+
 export function stringifyEntry(_siteId: string, data: unknown): string {
-  return stringify(data, { lineWidth: 0 });
+  const doc = new Document(canonical(data, ''));
+  // QUOTE_DOUBLE as the default would also quote multiline prose; opt those into `|`.
+  visit(doc, {
+    Scalar(_key, node) {
+      if (typeof node.value === 'string' && node.value.includes('\n')) {
+        node.type = 'BLOCK_LITERAL';
+      }
+    },
+  });
+  return doc.toString(YAML_OPTIONS);
+}
+
+function canonical(value: unknown, path: string): unknown {
+  if (typeof value === 'string') return normalise(value);
+  if (Array.isArray(value)) {
+    return value.map((item, i) => {
+      if (Array.isArray(item)) {
+        throw new Error(`Nested array at ${path}[${i}]: wrap the inner array in an object`);
+      }
+      return canonical(item, `${path}[${i}]`);
+    });
+  }
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj).filter((k) => obj[k] !== null && obj[k] !== undefined);
+    const rank = (k: string) => {
+      const i = RESERVED_ORDER.indexOf(k);
+      return i === -1 ? RESERVED_ORDER.length : i;
+    };
+    keys.sort((a, b) => rank(a) - rank(b));
+    return Object.fromEntries(keys.map((k) => [k, canonical(obj[k], path ? `${path}.${k}` : k)]));
+  }
+  return value;
+}
+
+// The yaml library silently drops back from `|` to a quoted string on trailing spaces, a
+// trailing newline run or control characters, which would change the bytes on the next save.
+function normalise(text: string): string {
+  return text
+    .replace(/\r\n/g, '\n')
+    .replace(/[^\n\t\x20-\uFFFF]/g, '')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n+$/, '');
 }

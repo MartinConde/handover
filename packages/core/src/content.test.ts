@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import { parseEntry, staticSource, stringifyEntry } from './content.js';
 
@@ -21,8 +24,48 @@ test('getEntry returns undefined for a missing id', async () => {
   expect(await source.getEntry('listings', 'fr/mill-house')).toBeUndefined();
 });
 
-test('stringifyEntry writes the demo file shape back unchanged, long lines unfolded', () => {
-  const file =
-    'title: Seaview Cottage\nlocation: Port Isaac, Cornwall\nprice: £1,200 per week\nsummary: A whitewashed two-bedroom cottage above the harbour, with a slate terrace that catches the evening sun and a five-minute walk down to the fish market.\n';
-  expect(stringifyEntry('default', parseEntry('default', file))).toBe(file);
+// Publish decides "nothing pending" by blob SHA, so a byte change in the serialiser is a bug.
+const goldenDir = join(import.meta.dirname, '../test/golden');
+const blobSha = (text: string) =>
+  createHash('sha1')
+    .update(`blob ${Buffer.byteLength(text)}\0${text}`)
+    .digest('hex');
+
+for (const name of readdirSync(goldenDir)) {
+  test(`golden ${name} survives parse → serialise byte for byte`, () => {
+    const golden = readFileSync(join(goldenDir, name), 'utf8');
+    const out = stringifyEntry('default', parseEntry('default', golden));
+    expect(out).toBe(golden);
+    expect(blobSha(out)).toBe(blobSha(golden));
+  });
+}
+
+test('reserved keys come first in fixed order, then fields in schema order', () => {
+  const out = stringifyEntry('default', {
+    title: 'Home',
+    _id: 'k3nf9a2p',
+    _version: 1,
+    blocks: [{ heading: 'Hi', _id: 'x', _type: 'cta' }],
+  });
+  expect(out).toBe(
+    '_version: 1\n_id: "k3nf9a2p"\ntitle: "Home"\nblocks:\n  - _type: "cta"\n    _id: "x"\n    heading: "Hi"\n',
+  );
+});
+
+test('null and undefined values are omitted, never written', () => {
+  expect(stringifyEntry('default', { title: 'Home', body: null, seo: { title: undefined } })).toBe(
+    'title: "Home"\nseo: {}\n',
+  );
+});
+
+test('strings are normalised so the literal block never falls back to quotes', () => {
+  const out = stringifyEntry('default', { body: 'line one\u0007  \r\n\r\nline two \n\n\n' });
+  expect(out).toBe('body: |-\n  line one\n\n  line two\n');
+  expect(parseEntry('default', out)).toEqual({ body: 'line one\n\nline two' });
+});
+
+test('an array directly inside an array is rejected at serialise time', () => {
+  expect(() => stringifyEntry('default', { blocks: [{ _id: 'a', columns: [['x']] }] })).toThrow(
+    'blocks[0].columns[0]',
+  );
 });
