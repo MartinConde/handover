@@ -183,5 +183,18 @@ at build time. There is no admin UI for `_ref` yet; write it by hand.
 
 A `z.date()` is edited as a date and a transform by its input type. A `z.custom()` gets a
 widget when you name one: `.meta({ handover: 'text' })` (`number`, `boolean` or `date`
-likewise). Any other schema (tuples, unions, untagged customs) is read and written as-is
-but shows as "Not editable here yet" in the admin.
+likewise).
+
+### In the admin
+
+Every scalar type and `group` has a widget: text is an input (a textarea once it holds
+line breaks or more than 80 characters), number a numeric input, boolean a switch, date a
+native date input, select radios for five options or fewer and a dropdown above that,
+link a Page / Entry · URL toggle with label and "Open in new tab", group a collapsible
+fieldset. Rich text is a TipTap editor whose toolbar has exactly the tier's constructs;
+a value that already contains something outside the tier (edited in code) is shown
+read-only rather than rewritten. Leaving an optional field empty removes the key from
+the file.
+
+`array`, `blocks`, the structured types and any other schema (tuples, unions, untagged
+customs) are read and written as-is but show as "Not editable here yet" for now.

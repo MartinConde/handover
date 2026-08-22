@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { Field } from '@handover/core';
+import Fields from './Fields.svelte';
 
 type Data = Record<string, unknown>;
 let {
@@ -44,22 +45,7 @@ async function publish() {
   }
 }
 
-function read(path: readonly string[]): string {
-  const value = path.reduce<unknown>((node, key) => (node as Data | undefined)?.[key], data);
-  return typeof value === 'string' ? value : '';
-}
-
-function write(path: readonly string[], value: string) {
-  let node = data;
-  for (const key of path.slice(0, -1)) {
-    if (typeof node[key] !== 'object' || node[key] === null) node[key] = {};
-    node = node[key] as Data;
-  }
-  node[path[path.length - 1] as string] = value;
-}
-
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const label = (path: readonly string[]) => path.map(capitalise).join(' · ');
 </script>
 
 <main class="main main-editor">
@@ -94,22 +80,7 @@ const label = (path: readonly string[]) => path.map(capitalise).join(' · ');
   <div class="entry-body has-pane">
     <form class="form" onsubmit={(e) => e.preventDefault()}>
       {#if error}<p class="notice notice-danger" role="alert">{error}</p>{/if}
-      {#each entry.fields as field (field.path.join('.'))}
-        {@const id = `f-${field.path.join('.')}`}
-        <div class="field">
-          {#if field.type === 'text'}
-            <label for={id}>{label(field.path)}{#if field.required}<span class="req" aria-hidden="true">*</span>{/if}</label>
-            {#if read(field.path).length > 80}
-              <textarea class="input textarea" {id} value={read(field.path)} oninput={(e) => write(field.path, e.currentTarget.value)}></textarea>
-            {:else}
-              <input class="input" {id} type="text" value={read(field.path)} oninput={(e) => write(field.path, e.currentTarget.value)} />
-            {/if}
-          {:else}
-            <label for={id}>{label(field.path)}</label>
-            <p class="hint" {id}>Not editable here yet</p>
-          {/if}
-        </div>
-      {/each}
+      <Fields fields={entry.fields} bind:root={data} />
     </form>
     <aside class="pane" aria-label="Right pane">
       <div><strong>Right pane</strong>Preview or a second language, later.</div>

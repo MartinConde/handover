@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The admin edits every scalar field and `group`: text, number, boolean, date, select, link
+  and rich text each have a widget, and a rich text body with formatting outside its tier is
+  shown read-only instead of being rewritten. `array`, `blocks` and the structured types
+  still say "Not editable here yet". See `docs/field-types.md`.
 - The form descriptor is complete: `formOf` from `@handover/core` returns `{ fields, blocks }`,
   a nested `z.object()` is a `group` with its own relative `fields`, `$ref`s from recursive
   schemas are resolved, and `blocks` maps each block type to its fields by name. `formSchema`

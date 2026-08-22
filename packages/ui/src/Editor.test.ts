@@ -6,7 +6,12 @@ import Editor from './Editor.svelte';
 const entry = {
   fields: [
     { path: ['title'], type: 'text', required: true },
-    { path: ['seo', 'description'], type: 'text', required: false },
+    {
+      path: ['seo'],
+      type: 'group',
+      required: false,
+      fields: [{ path: ['description'], type: 'text', required: false }],
+    },
     { path: ['photos'], type: 'unsupported' },
   ] satisfies Field[],
   data: { title: 'Seaview Cottage', seo: { description: 'Harbour view' }, photos: [] },
@@ -29,7 +34,7 @@ test('renders one labelled input per text field, filled from the entry data', ()
   const root = show();
   expect($(root, 'label[for="f-title"]')?.textContent).toBe('Title*');
   expect($<HTMLInputElement>(root, 'input#f-title')?.value).toBe('Seaview Cottage');
-  expect($(root, 'label[for="f-seo.description"]')?.textContent).toBe('Seo · Description');
+  expect($(root, 'label[for="f-seo.description"]')?.textContent).toBe('Description');
   expect($<HTMLInputElement>(root, 'input#f-seo\\.description')?.value).toBe('Harbour view');
 });
 
