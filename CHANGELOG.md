@@ -4,6 +4,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The admin can list a collection without fetching every file from GitHub. The build writes
+  `handover-index.json` into your output directory — every entry's title and `_status`, one
+  row per entry across locales — and the new `GET /admin/api/entries/:collection` reads it
+  with the pending drafts laid over it, so an entry you have edited but not published lists
+  under the title you typed. Titles come from the entry's `title` field; a collection
+  without one lists by filename. `astro dev` serves the same file from disk, so the admin
+  works before the site has been built. The index is a public static asset like any other
+  file in your output. See `docs/publishing.md`.
 - Publishing commits what is stored, not what the form holds. The top bar counts the files
   waiting ("3 unpublished changes") and opens a pending-changes drawer that lists them and
   publishes the whole set in one commit through `POST /admin/api/publish`; the draft rows

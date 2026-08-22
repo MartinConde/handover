@@ -3,9 +3,12 @@ import config from 'virtual:handover/config';
 import type { Db, GitClient } from '@handover/core';
 import {
   blobSha,
+  type ContentIndex,
+  collectionEntries,
   createGitClient,
   DraftConflictError,
   formOf,
+  INDEX_FILE,
   loadDraft,
   openDb,
   parseEntry,
@@ -79,10 +82,27 @@ async function autosave(collection: string, slug: string, request: Request): Pro
   return saved ? Response.json(saved) : new Response('Not found', { status: 404 });
 }
 
+// The build writes the index into the site's output; in dev the integration serves the same
+// URL from Vite, so ASSETS answers both. No index means no build, which is worth saying.
+async function listEntries(collection: string, url: URL): Promise<Response> {
+  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  const assets = (env as { ASSETS?: { fetch(input: URL): Promise<Response> } }).ASSETS;
+  const res = await assets?.fetch(new URL(`/${INDEX_FILE}`, url));
+  if (!res?.ok) {
+    throw new Error(
+      `${INDEX_FILE} is not in the site's output: the build writes it, so build the site once before opening the admin`,
+    );
+  }
+  const index = (await res.json()) as ContentIndex;
+  const drafts = await pendingDrafts('default', db());
+  return Response.json({ entries: collectionEntries('default', index, collection, drafts) });
+}
+
+const ENTRIES = /^entries\/([\w-]+)$/;
 const ENTRY = /^entries\/([\w-]+)\/([\w-]+)$/;
 const DRAFT = /^drafts\/([\w-]+)\/([\w-]+)$/;
 
-export const GET: APIRoute = async ({ params }) => {
+export const GET: APIRoute = async ({ params, url }) => {
   if (params.path === 'ping') {
     return Response.json({ ok: true, collections: Object.keys(config.collections) });
   }
@@ -94,6 +114,8 @@ export const GET: APIRoute = async ({ params }) => {
   }
   const entry = params.path?.match(ENTRY);
   if (entry) return getEntry(entry[1] ?? '', entry[2] ?? '');
+  const list = params.path?.match(ENTRIES);
+  if (list) return listEntries(list[1] ?? '', url);
   return new Response('Not found', { status: 404 });
 };
 

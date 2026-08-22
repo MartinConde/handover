@@ -1,8 +1,11 @@
-import { appendFile, mkdir, readdir, readFile } from 'node:fs/promises';
+import { appendFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  type ContentIndex,
   checkCollections,
+  INDEX_FILE,
+  indexFrom,
   type JsonSchema,
   parseEntry,
   type RichtextTier,
@@ -250,6 +253,40 @@ export async function emitRedirects(root: URL, clientDir: URL): Promise<number> 
   return parsed.data.rules.length;
 }
 
+const dirNames = async (url: URL) =>
+  (await readdir(url, { withFileTypes: true }).catch(() => []))
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name);
+
+// Every content file, in the `<collection>/<locale>/<slug>.yaml` layout the format fixes;
+// core decides which of them are entries, so `_templates/` and `globals/` drop out there.
+export async function buildIndex(root: URL): Promise<ContentIndex> {
+  const base = new URL('src/content/', root);
+  const files = [];
+  for (const collection of await dirNames(base)) {
+    for (const locale of await dirNames(new URL(`${collection}/`, base))) {
+      const dir = new URL(`${collection}/${locale}/`, base);
+      for (const name of await readdir(dir)) {
+        if (!name.endsWith('.yaml')) continue;
+        files.push({
+          path: `src/content/${collection}/${locale}/${name}`,
+          contents: await readFile(new URL(name, dir), 'utf8'),
+        });
+      }
+    }
+  }
+  return indexFrom('default', files);
+}
+
+// The entry list needs a title for every entry and git is slow to list, so the build writes
+// them out next to the pages. Derived, never authoritative: the site itself never reads it.
+export async function emitIndex(root: URL, clientDir: URL): Promise<number> {
+  const index = await buildIndex(root);
+  await mkdir(clientDir, { recursive: true });
+  await writeFile(new URL(INDEX_FILE, clientDir), JSON.stringify(index));
+  return Object.values(index).reduce((n, entries) => n + entries.length, 0);
+}
+
 export default function handover(): AstroIntegration {
   let root: URL;
   let clientDir: URL;
@@ -263,6 +300,18 @@ export default function handover(): AstroIntegration {
       'astro:build:done': async ({ logger }) => {
         const n = await emitRedirects(root, clientDir);
         if (n) logger.info(`Wrote ${n} redirect${n === 1 ? '' : 's'} to _redirects`);
+        const entries = await emitIndex(root, clientDir);
+        logger.info(`Wrote ${entries} ${entries === 1 ? 'entry' : 'entries'} to ${INDEX_FILE}`);
+      },
+      // Dev has no build output, and the ASSETS binding resolves through Vite's middlewares,
+      // so the admin reads the index from the same URL in both.
+      'astro:server:setup': ({ server }) => {
+        server.middlewares.use(`/${INDEX_FILE}`, (_req, res, next) => {
+          buildIndex(root).then((index) => {
+            res.setHeader('content-type', 'application/json');
+            res.end(JSON.stringify(index));
+          }, next);
+        });
       },
       'astro:config:setup': ({ config, logger, injectRoute, addMiddleware, updateConfig }) => {
         if (!config.adapter) throw new Error(NO_ADAPTER_MESSAGE);

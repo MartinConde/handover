@@ -31,7 +31,11 @@ const { listing, getFile, getHead, publish, saveDraft, pendingDrafts, publishDra
       }),
       // The D1 boundary; the real ones run against a D1 in @handover/core's own tests.
       pendingDrafts: vi.fn(async () => [
-        { path: 'src/content/listings/en/mill-house.yaml', updatedAt: 1755864000000 },
+        {
+          path: 'src/content/listings/en/mill-house.yaml',
+          contents: 'title: "The Mill House"\n',
+          updatedAt: 1755864000000,
+        },
       ]),
       publishDrafts: vi.fn<() => Promise<{ commit_sha: string; paths: string[] } | undefined>>(
         async () => ({ commit_sha: 'def456', paths: ['src/content/listings/en/mill-house.yaml'] }),
@@ -55,6 +59,8 @@ vi.mock('cloudflare:workers', () => ({
     GITHUB_PRIVATE_KEY: 'key',
     GITHUB_REPO: 'acme/site',
     DB: {},
+    // The static assets the build wrote; only the content index is asked for.
+    ASSETS: { fetch: (url: URL) => Promise.resolve(index(url)) },
   },
 }));
 vi.mock('@handover/core', async (original) => ({
@@ -67,8 +73,39 @@ vi.mock('@handover/core', async (original) => ({
   publishDrafts,
 }));
 
+// What `handover-index.json` holds after a build of the two listings.
+let index = (url: URL) =>
+  url.pathname === '/handover-index.json'
+    ? Response.json({
+        listings: [
+          {
+            id: 'mill-house',
+            locales: {
+              en: {
+                title: 'The Mill House',
+                path: 'src/content/listings/en/mill-house.yaml',
+              },
+            },
+          },
+          {
+            id: 'seaview-cottage',
+            locales: {
+              en: {
+                title: 'Seaview Cottage',
+                path: 'src/content/listings/en/seaview-cottage.yaml',
+              },
+            },
+          },
+        ],
+      })
+    : new Response('Not found', { status: 404 });
+
 const ctx = (path: string, request?: Request) =>
-  ({ params: { path }, request }) as unknown as APIContext;
+  ({
+    params: { path },
+    url: new URL(`https://x/admin/api/${path}`),
+    request,
+  }) as unknown as APIContext;
 const post = (path: string, body: string) =>
   ctx(path, new Request(`https://x/admin/api/${path}`, { method: 'POST', body }));
 const put = (path: string, body: string) =>
@@ -217,4 +254,49 @@ test('the browser cannot hand file contents to the publish endpoint', async () =
   );
   await POST(post('publish', JSON.stringify({ files: [{ path: 'evil.yaml', contents: 'x' }] })));
   expect(publish).not.toHaveBeenCalled();
+});
+
+test('the entry list is the built index with the pending drafts over it', async () => {
+  pendingDrafts.mockImplementationOnce(async () => [
+    {
+      path: 'src/content/listings/en/mill-house.yaml',
+      contents: 'title: "The Mill House, renamed"\n',
+      updatedAt: 1755864000000,
+    },
+  ]);
+  const res = await GET(ctx('entries/listings'));
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    entries: [
+      {
+        id: 'mill-house',
+        locales: {
+          en: {
+            title: 'The Mill House, renamed',
+            path: 'src/content/listings/en/mill-house.yaml',
+          },
+        },
+      },
+      {
+        id: 'seaview-cottage',
+        locales: {
+          en: {
+            title: 'Seaview Cottage',
+            path: 'src/content/listings/en/seaview-cottage.yaml',
+          },
+        },
+      },
+    ],
+  });
+});
+
+test('listing an unknown collection is 404', async () => {
+  expect((await GET(ctx('entries/nope'))).status).toBe(404);
+});
+
+test('a missing index says the build writes it rather than answering an empty list', async () => {
+  const built = index;
+  index = () => new Response('Not found', { status: 404 });
+  await expect(GET(ctx('entries/listings'))).rejects.toThrow(/handover-index\.json is not in/);
+  index = built;
 });

@@ -87,6 +87,16 @@ GET /admin/api/entries/:collection/:slug    →  { fields, blocks, data, pending
 `data` is the draft when there is one, otherwise the file. `pending` says which.
 
 ```
+GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales" }] }
+```
+
+The collection's entries for the list screen: one row per entry, `id` is the filename and
+`locales` maps each locale to `{ title, path }` plus `status: "hidden"` when it is hidden.
+Titles come from the entry's `title` field; a collection without one lists by filename.
+The list is the build's [content index](#the-content-index) with the pending drafts laid
+over it, so an entry you have edited but not published shows what you typed.
+
+```
 GET /admin/api/drafts                       →  { "files": [{ "path", "updated_at" }] }
 ```
 
@@ -100,6 +110,22 @@ No body: the server publishes what it has stored. `paths` is what went into the 
 and is empty when there was nothing to publish. `409` when a file changed in the
 repository since its draft was loaded, or when the branch moved while the commit was being
 written; in both cases nothing was written and no row was cleared.
+
+## The content index
+
+Git is the source of truth but slow to list, so the build writes every entry's title and
+status into `handover-index.json` in the output directory, next to the pages. The entry
+list reads that one file instead of fetching every content file from GitHub. It is
+derived: the site itself never reads it, losing it costs nothing, and the next build
+writes it again. `astro dev` serves the same URL from the files on disk, so the admin
+works before anything is built.
+
+Two consequences:
+
+- It is a **static asset**, served like any other file in your output — anyone who knows
+  the URL can read the titles in it, including those of hidden entries
+- Between a publish and the build that follows it the index is one commit behind. The
+  entry list is still right, because the draft rows are laid over it
 
 ## Not yet
 

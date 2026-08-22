@@ -52,6 +52,15 @@ server's fact and not something a stale tab can assert. `blobSha()` computes a g
 id from bytes (`sha1("blob <length>\0" + bytes)`), which is what makes "does this draft
 still match the file?" a string comparison rather than a fetch.
 
+`GET /admin/api/entries/:collection` is the entry list and does not touch GitHub at all. At
+`astro:build:done` the integration walks `src/content/<collection>/<locale>/*.yaml`, hands
+the files to `indexFrom` in core — which decides what is an entry, so `_templates/` and
+`globals/` drop out in one place — and writes `handover-index.json` into the client output.
+The route reads it back through the `ASSETS` binding and lays the pending draft rows over
+it with `collectionEntries`. In dev there is no build output, so `astro:server:setup`
+serves the same URL from Vite's middlewares, which is what `ASSETS` resolves through there:
+one code path for both.
+
 Publishing (`POST /admin/api/publish`) takes no body at all: `publishDrafts` in core reads
 every draft row whose bytes differ from the file it was loaded from, checks each one's
 `base_blob` against the file at HEAD, and commits them through the Git Data API — a tree

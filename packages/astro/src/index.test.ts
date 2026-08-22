@@ -10,6 +10,7 @@ import handover, {
   type Block,
   type BlockRegistry,
   blocks,
+  buildIndex,
   defineBlock,
   defineConfig,
   embed,
@@ -388,6 +389,22 @@ test('a _templates/ file is not in the built collection', async () => {
   };
   await loader.load(context as unknown as Context);
   expect([...store.keys()]).toEqual(['en/seaview-cottage']);
+});
+
+test('buildIndex lists an entry per locale file and leaves _templates/ out', async () => {
+  expect(await buildIndex(fixture)).toEqual({
+    listings: [
+      {
+        id: 'seaview-cottage',
+        locales: {
+          en: {
+            title: 'Seaview Cottage',
+            path: 'src/content/listings/en/seaview-cottage.yaml',
+          },
+        },
+      },
+    ],
+  });
 });
 
 test('formSchema maps z.date() to a date field and a transform to its input type', () => {
