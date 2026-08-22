@@ -95,7 +95,7 @@ test('saving an entry validates it, writes its YAML file on base_sha and returns
     [
       {
         path: 'src/content/listings/en/mill-house.yaml',
-        contents: 'title: The Mill\nrooms: 3\naddress:\n  street: Mill Lane\n',
+        contents: 'title: "The Mill"\nrooms: 3\naddress:\n  street: "Mill Lane"\n',
       },
     ],
     { base_sha: 'head789', message: 'Update listings/mill-house' },
