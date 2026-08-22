@@ -10,6 +10,7 @@ import handover, {
   type BlockRegistry,
   blocks,
   defineBlock,
+  defineConfig,
   embed,
   file,
   image,
@@ -251,4 +252,17 @@ test('richtext rejects a construct outside its tier and names it', () => {
   const html = richtext('full').safeParse('<script>alert(1)</script>');
   expect(html.success).toBe(false);
   expect(html.error?.issues[0]?.message).toBe('html is not allowed (line 1)');
+});
+
+test('defineConfig fails on a bad route with a message naming the key', () => {
+  expect(() =>
+    defineConfig({ collections: { posts: { schema: z.object({}), route: '/blog' } } }),
+  ).toThrow(/cms\.config\.ts › collections\.posts\.route: expected a path .*"\/blog"/);
+});
+
+test('defineConfig returns a valid config unchanged', () => {
+  const config = {
+    collections: { posts: { schema: z.object({}), route: '/blog/[slug]', index: '/blog' } },
+  };
+  expect(defineConfig(config)).toBe(config);
 });

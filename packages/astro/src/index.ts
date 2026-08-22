@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { type RichtextTier, richtextErrors } from '@handover/core';
+import { checkCollections, type RichtextTier, richtextErrors } from '@handover/core';
 import type { AstroIntegration } from 'astro';
 import { z } from 'astro/zod';
 
@@ -131,10 +131,23 @@ export function blocks(registry: () => BlockRegistry): z.ZodType<Block[]> {
 }
 
 export interface HandoverConfig {
-  collections: Record<string, { schema: z.ZodType }>;
+  collections: Record<
+    string,
+    {
+      schema: z.ZodType;
+      /** Detail page, `[slug]` is the filename: `'/blog/[slug]'`. */
+      route?: string;
+      /** The listing page, a fixed path: `'/blog'`. */
+      index?: string;
+      /** Loader name, `'post'` for `src/loaders/post.ts`. */
+      load?: string;
+    }
+  >;
 }
 
 export function defineConfig(config: HandoverConfig): HandoverConfig {
+  const errors = checkCollections('default', config.collections);
+  if (errors.length) throw new Error(errors.join('\n'));
   return config;
 }
 

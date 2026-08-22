@@ -1,0 +1,45 @@
+# Configuration
+
+`cms.config.ts` at the project root is the one file Handover reads about your site. It is
+code: edit it in the repo, it is not editable from the admin. A mistake fails the build
+with a message naming the key, for example
+`cms.config.ts › collections.listings.route: expected a path starting with "/" containing "[slug]" once, like "/blog/[slug]", got "/listings"`.
+
+```ts
+// cms.config.ts
+import { defineConfig } from 'astro-handover';
+import { listing, page } from './src/content/schemas';
+
+export default defineConfig({
+  collections: {
+    listings: { schema: listing, route: '/listings/[slug]', index: '/', load: 'listing' },
+    pages: { schema: page, route: '/[slug]', load: 'page' },
+  },
+});
+```
+
+## `collections`
+
+One key per folder under `src/content/`. The key is the folder name: lowercase letters,
+digits and dashes.
+
+| Key | Required | What it is |
+|---|---|---|
+| `schema` | yes | The collection's Zod object from `src/content/schemas.ts`. |
+| `route` | no | The detail page's path with `[slug]` exactly once, e.g. `'/blog/[slug]'`. `[slug]` is the entry's filename without `.yaml`. Two collections cannot share a route. |
+| `index` | no | The listing page, a fixed path with no `[...]` segment, e.g. `'/blog'`. Used wherever something links to "the blog" as a whole rather than to one entry. |
+| `load` | no | The loader's name: `'post'` means `src/loaders/post.ts` ([Template convention](template-convention.md)). |
+
+## Entry filenames
+
+"New entry" derives the filename from the title: transliterated (`ä → ae`, `é → e`,
+Cyrillic to Latin; other scripts are dropped), lowercased, anything that is not a letter
+or digit becomes one dash, capped at 80 characters. An empty title gives `untitled`. If
+the name already exists in the collection in any locale, `-2`, `-3`, … is appended. The
+name is never a random id so the file is findable in GitHub by eye.
+
+| Title | File |
+|---|---|
+| `Seaview Cottage` | `seaview-cottage.yaml` |
+| `Größe über Fähre` | `groesse-ueber-faehre.yaml` |
+| `Seaview Cottage` (again) | `seaview-cottage-2.yaml` |

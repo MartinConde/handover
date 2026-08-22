@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `cms.config.ts` collections take `route` (`'/blog/[slug]'`), `index` (`'/blog'`) and
+  `load` (`'post'`); `defineConfig` validates them and throws a message naming the key,
+  e.g. `cms.config.ts › collections.posts.route: …`. Entry filenames are derived from the
+  title (transliterated, lowercased, dashed, capped at 80, `-2`/`-3` on collision, `untitled`
+  when empty) by `entryName` from `@handover/core`. See `docs/configuration.md`.
 - `<Blocks />` (`astro-handover/Blocks.astro`) renders a `blocks()` field: pass the list and a
   `{ _type: component }` map; each component gets `block` and `components`, so nested
   `blocks` render by calling `<Blocks />` again. An unmapped `_type` throws naming the type;

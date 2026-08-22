@@ -61,7 +61,8 @@ starting with `_` first, empty keys left out — so the first publish normalises
 and every later edit is a diff of just the lines that changed.
 
 Pages render them through a loader and a layout that takes `data` as a prop — see
-[Template convention](template-convention.md).
+[Template convention](template-convention.md). Each collection can also declare its
+`route`, `index` and `load` — see [Configuration](configuration.md).
 
 ## 3. Connect GitHub and set the password
 
