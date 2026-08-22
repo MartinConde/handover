@@ -1,4 +1,5 @@
 import { Document, parse, visit } from 'yaml';
+import { checkReserved, RESERVED_KEYS } from './reserved.js';
 
 export interface ContentEntry<T = unknown> {
   id: string;
@@ -38,7 +39,9 @@ export function staticSource<C extends Record<string, unknown>>(
 }
 
 export function parseEntry(_siteId: string, contents: string): unknown {
-  return parse(contents);
+  const data: unknown = parse(contents);
+  checkReserved(data);
+  return data;
 }
 
 // The only writer of content files. Pinned here so publish can compare blob SHAs:
@@ -50,18 +53,6 @@ const YAML_OPTIONS = {
   lineWidth: 0,
   indent: 2,
 } as const;
-
-const RESERVED_ORDER = [
-  '_version',
-  '_type',
-  '_id',
-  '_label',
-  '_ref',
-  '_i18n',
-  '_locales',
-  '_status',
-  '_machine',
-];
 
 export function stringifyEntry(_siteId: string, data: unknown): string {
   const doc = new Document(canonical(data, ''));
@@ -90,8 +81,8 @@ function canonical(value: unknown, path: string): unknown {
     const obj = value as Record<string, unknown>;
     const keys = Object.keys(obj).filter((k) => obj[k] !== null && obj[k] !== undefined);
     const rank = (k: string) => {
-      const i = RESERVED_ORDER.indexOf(k);
-      return i === -1 ? RESERVED_ORDER.length : i;
+      const i = RESERVED_KEYS.indexOf(k as (typeof RESERVED_KEYS)[number]);
+      return i === -1 ? RESERVED_KEYS.length : i;
     };
     keys.sort((a, b) => rank(a) - rank(b));
     return Object.fromEntries(keys.map((k) => [k, canonical(obj[k], path ? `${path}.${k}` : k)]));

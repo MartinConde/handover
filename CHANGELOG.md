@@ -4,6 +4,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Reserved keys are checked on read: `parseEntry` throws, naming the path, when `_version`
+  is not a number, `_status` is anything but `hidden`, `_id` is not eight characters from
+  `0-9a-z`, `_locales` is empty or at the top level, or `_machine`/`_i18n`/`_ref` have the
+  wrong shape. See `docs/content-format.md`.
+- `_status: hidden` in an entry file keeps it out of the site. `filterLive(siteId, entries)`
+  and `isLive(siteId, data)` are exported from `astro-handover` for loaders and
+  `getStaticPaths`.
+- `newId(siteId)` and `regenerateIds(siteId, data, ids?)` in core: fresh block ids, and a
+  deep copy of an entry with every `_id` replaced (`_machine` paths follow). Pass one `ids`
+  map across an entry's locale files so the copies share a skeleton.
 - Content files are written in one canonical shape: strings double-quoted, multi-line text
   as a `|-` block, `_`-prefixed keys first, `null`/empty keys omitted, two-space indent, no
   line folding. Text is normalised on write (`\r\n` → `\n`, trailing whitespace and

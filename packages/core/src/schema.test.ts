@@ -50,3 +50,13 @@ test('non-string leaves are marked unsupported, not rejected', () => {
 test('a schema that is not an object has no fields', () => {
   expect(fieldsFrom('default', { type: 'string' })).toEqual([]);
 });
+
+test('reserved _ keys are metadata, not form fields', () => {
+  const schema = obj(
+    { _version: { type: 'number' }, _status: { type: 'string' }, title: { type: 'string' } },
+    ['title'],
+  );
+  expect(fieldsFrom('default', schema)).toEqual([
+    { path: ['title'], type: 'text', required: true },
+  ]);
+});

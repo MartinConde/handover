@@ -90,5 +90,20 @@ const { data } = Astro.props;
 <p>{data.location} · {data.price}</p>
 ```
 
+## Hidden entries
+
+An entry with `_status: hidden` in its file stays in the repo but must not render.
+`filterLive` drops those entries from a `getCollection` result; `isLive(siteId, data)`
+is the same check for one entry. Use them in loaders and in `getStaticPaths`, so a hidden
+entry 404s instead of being reachable by URL.
+
+```ts
+import { filterLive } from 'astro-handover';
+
+export async function list(source: Source, locale: string) {
+  return filterLive('default', await source.getCollection('listings', locale));
+}
+```
+
 If a layout calls `getEntry()` itself, preview cannot substitute draft content for it.
 Keep fetching in loaders.

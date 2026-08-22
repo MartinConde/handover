@@ -1,0 +1,21 @@
+_version: 1
+_i18n:
+  sourceLocale: "en"
+  sourceBlob: "3f9c2e1a7b"
+  sourceHash: "8f3a1c"
+  translatedAt: "2026-08-20T10:14:00Z"
+_status: "hidden"
+_machine:
+  - "body"
+  - "blocks[_id=k3nf9a2p].heading"
+title: "Widerrufsbelehrung"
+body: "Kurz."
+blocks:
+  - _type: "cta"
+    _id: "k3nf9a2p"
+    _ref: "globals/cta-newsletter"
+  - _type: "compliance"
+    _id: "p8xk2m4q"
+    _locales:
+      - "de"
+    heading: "Widerrufsbelehrung"

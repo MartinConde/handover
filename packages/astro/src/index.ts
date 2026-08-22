@@ -5,7 +5,7 @@ import type { AstroIntegration } from 'astro';
 import type { z } from 'astro/zod';
 
 export type { AstroContent, ContentEntry, ContentSource } from '@handover/core';
-export { staticSource } from '@handover/core';
+export { filterLive, isLive, staticSource } from '@handover/core';
 
 export interface HandoverConfig {
   collections: Record<string, { schema: z.ZodType }>;
