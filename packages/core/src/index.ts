@@ -1,7 +1,15 @@
 export type { AstroContent, ContentEntry, ContentSource } from './content.js';
 export { mergeEntry, parseEntry, staticSource, stringifyEntry } from './content.js';
 export type { Db, Draft } from './db.js';
-export { drafts, loadDraft, openDb, saveDraft } from './db.js';
+export {
+  DraftConflictError,
+  drafts,
+  loadDraft,
+  openDb,
+  pendingDrafts,
+  publishDrafts,
+  saveDraft,
+} from './db.js';
 export type { GitClient, GitFile, GitHubApp, PublishFile } from './git.js';
 export { blobSha, createGitClient, RefMovedError } from './git.js';
 export type { EntryLocation, RedirectRule } from './lifecycle.js';

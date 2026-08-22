@@ -6,6 +6,6 @@
 - [Site files](site-files.md) — globals, the `navigation` menus, `redirects.yaml` and `_templates/`.
 - [Field types](field-types.md) — every field type, its schema and how it is stored; groups, arrays and blocks.
 - [Template convention](template-convention.md) — `schemas.ts`, `load()` and `ContentSource`, layouts that take `data` as a prop, `<Blocks />` and `<Markdown />`.
-- [Drafts and publishing](publishing.md) — autosave into D1, what a draft holds, the editor's save states, the endpoints.
+- [Drafts and publishing](publishing.md) — autosave into D1, what a draft holds, the pending-changes drawer, publishing in one commit, the endpoints.
 - [Deploy](deploy.md) — `wrangler.jsonc`, the GitHub App, secrets, building on push.
 - [How it works](how-it-works.md) — packages, injected routes, virtual config, the publish path. For contributors.

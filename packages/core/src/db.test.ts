@@ -1,7 +1,14 @@
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
 import { Miniflare } from 'miniflare';
-import { afterAll, beforeAll, expect, test } from 'vitest';
-import { drafts, openDb, saveDraft } from './db.js';
+import { afterAll, beforeAll, expect, test, vi } from 'vitest';
+import {
+  DraftConflictError,
+  drafts,
+  openDb,
+  pendingDrafts,
+  publishDrafts,
+  saveDraft,
+} from './db.js';
 import { blobSha } from './git.js';
 
 const mf = new Miniflare({
@@ -127,4 +134,88 @@ test('an autosave for a path that is not in the repo writes nothing', async () =
     undefined,
   );
   expect(await only(db)).toBe(undefined);
+});
+
+// A repo in a Map: publish moves the head and the files, so a second publish sees the
+// bytes the first one wrote.
+function fakeRepo(files: Record<string, string>) {
+  let head = 'commit-A';
+  let n = 0;
+  return {
+    async getHead() {
+      return head;
+    },
+    async getFile(path: string) {
+      const contents = files[path];
+      return contents === undefined ? undefined : { contents, blob_sha: await blobSha(contents) };
+    },
+    publish: vi.fn(async (list: { path: string; contents: string | null }[]) => {
+      for (const f of list) if (f.contents !== null) files[f.path] = f.contents;
+      head = `commit-${++n}`;
+      return { commit_sha: head };
+    }),
+    write(path: string, contents: string) {
+      files[path] = contents;
+    },
+  };
+}
+
+const OTHER = 'src/content/listings/en/barn.yaml';
+const OTHER_FILE = '_version: 1\ntitle: "The Barn"\nrooms: 1\n';
+
+test('a draft that matches the file it was loaded from is not pending', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+  await saveDraft('default', db, repo, PATH, VALUES);
+
+  expect(await pendingDrafts('default', db)).toEqual([]);
+});
+
+test('publishing commits every pending draft in one commit and clears those rows', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE, [OTHER]: OTHER_FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  await saveDraft('default', db, repo, OTHER, { title: 'The Barn', price: '£10', rooms: 2 });
+
+  const result = await publishDrafts('default', db, repo);
+
+  expect(repo.publish).toHaveBeenCalledTimes(1);
+  expect(result?.paths.toSorted()).toEqual([OTHER, PATH].toSorted());
+  expect(await db.select().from(drafts)).toEqual([]);
+});
+
+test('publishing refuses the whole set when a file changed in the repo since it was loaded', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE, [OTHER]: OTHER_FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  await saveDraft('default', db, repo, OTHER, { title: 'The Barn', price: '£10', rooms: 2 });
+  repo.write(PATH, FILE.replace('rooms: 3', 'rooms: 9'));
+
+  await expect(publishDrafts('default', db, repo)).rejects.toBeInstanceOf(DraftConflictError);
+  expect(repo.publish).not.toHaveBeenCalled();
+  expect((await db.select().from(drafts)).length).toBe(2);
+});
+
+test('publishing with nothing pending makes no commit', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+  await saveDraft('default', db, repo, PATH, VALUES);
+
+  expect(await publishDrafts('default', db, repo)).toBe(undefined);
+  expect(repo.publish).not.toHaveBeenCalled();
+});
+
+test('editing again after a publish is not a conflict with the publish itself', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  await publishDrafts('default', db, repo);
+
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 5 });
+  const second = await publishDrafts('default', db, repo);
+
+  expect(second?.paths).toEqual([PATH]);
+  await expect(repo.getFile(PATH)).resolves.toMatchObject({
+    contents: FILE.replace('rooms: 3', 'rooms: 5'),
+  });
 });

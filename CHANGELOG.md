@@ -4,6 +4,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Publishing commits what is stored, not what the form holds. The top bar counts the files
+  waiting ("3 unpublished changes") and opens a pending-changes drawer that lists them and
+  publishes the whole set in one commit through `POST /admin/api/publish`; the draft rows
+  are cleared once it lands, and a file that changed in the repository since its draft was
+  loaded refuses the publish with 409 rather than overwriting it. The entry header's
+  button is now **Publish…**: it stores the current edit and opens the drawer. The old
+  `PUT /admin/api/entries/:collection/:slug` is gone, and with it an endpoint that let the
+  browser hand arbitrary paths and file contents to the repository; publishing takes no
+  body at all. `GET /admin/api/entries/:collection/:slug` no longer returns `blob_sha` or
+  `head_sha`, and `GET /admin/api/drafts` is new. See `docs/publishing.md`.
 - Edits are autosaved. Two seconds after the last keystroke the admin sends the form to
   `PUT /admin/api/drafts/:collection/:slug`, which validates it, merges it into the entry
   and stores the serialised file in D1; reopening the entry shows the draft rather than
@@ -11,9 +21,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   keys a schema does not declare (`_version`, `_status`, `_machine`) are carried over on
   every save, and the commit and blob sha a draft was loaded from are recorded by the
   server, never sent by the browser. `GET /admin/api/entries/:collection/:slug` gains
-  `pending`. Publishing still commits what the form holds rather than the stored draft, but
-  it now keeps those reserved keys too — before, publishing an entry with a `_version` or a
-  `_status` silently dropped it. See `docs/publishing.md`.
+  `pending`. See `docs/publishing.md`.
 - Unpublished edits get a home: the `drafts` table ships as a Drizzle schema at
   `astro-handover/schema`, so a site points `drizzle.config.ts` at it, runs `drizzle-kit
   generate` once and commits `migrations/`. The site needs a D1 database bound as `DB`,

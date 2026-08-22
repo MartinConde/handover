@@ -7,6 +7,7 @@ let {
   collection,
   slug,
   entry,
+  onpublish,
 }: {
   collection: string;
   slug: string;
@@ -16,15 +17,13 @@ let {
     data: Data;
     /** The draft the data came from is ahead of the file in git. */
     pending: boolean;
-    head_sha: string;
   };
+  /** Open the pending-changes drawer, which is where publishing happens. */
+  onpublish: () => void;
 } = $props();
 
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let data = $state<Data>(structuredClone(entry.data));
-// What the page currently holds on the live branch; moves forward on every publish.
-// svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
-let live = $state({ data: JSON.stringify(entry.data), sha: entry.head_sha });
 // The last shape the draft row holds; the loaded data is already in it, hence no write on open.
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let saved = $state(JSON.stringify(entry.data));
@@ -32,13 +31,10 @@ let saved = $state(JSON.stringify(entry.data));
 let drafted = $state(entry.pending);
 let saving = $state(false);
 let saveFailed = $state(false);
-let busy = $state(false);
-let error = $state('');
-let published = $state('');
 
 const json = $derived(JSON.stringify(data));
 const title = $derived(typeof data.title === 'string' && data.title ? data.title : slug);
-const dirty = $derived(drafted || json !== live.data);
+const dirty = $derived(drafted || json !== saved);
 
 // Autosave. The wait restarts on every keystroke, so a burst of typing is one write.
 $effect(() => {
@@ -64,26 +60,11 @@ async function autosave() {
   }
 }
 
-async function publish() {
-  busy = true;
-  error = '';
-  const res = await fetch(`/admin/api/entries/${collection}/${slug}`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ data, base_sha: live.sha }),
-  });
-  busy = false;
-  if (res.ok) {
-    const { commit_sha } = (await res.json()) as { commit_sha: string };
-    live = { data: json, sha: commit_sha };
-    saved = json;
-    drafted = false;
-    published = commit_sha.slice(0, 7);
-  } else if (res.status === 409) {
-    error = 'Someone else published this entry since you opened it. Reload to see their version.';
-  } else {
-    error = `Publish failed (${res.status})`;
-  }
+// Publishing is the drawer's job, over every draft at once; the entry's own edit only has
+// to be in D1 before it opens, so a click inside the autosave window is not lost.
+async function openDrawer() {
+  if (json !== saved) await autosave();
+  if (!saveFailed) onpublish();
 }
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -93,8 +74,8 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   <header class="entry-header">
     <div class="crumbs">
       <span>{capitalise(collection)}</span><span class="sep" aria-hidden="true">/</span><span>{title}</span>
-      <span class="autosave" class:is-saving={busy || saving} class:is-offline={saveFailed}>
-        {#if busy}Publishing…{:else if saving}Saving…{:else if saveFailed}Not saved{:else if json !== saved}Unsaved changes{:else if published}Published {published}{:else}Saved{/if}
+      <span class="autosave" class:is-saving={saving} class:is-offline={saveFailed}>
+        {#if saving}Saving…{:else if saveFailed}Not saved{:else if json !== saved}Unsaved changes{:else}Saved{/if}
       </span>
     </div>
     <div class="title-row">
@@ -108,7 +89,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           <button type="button" aria-pressed="false" disabled title="Only English is configured">DE</button>
         </div>
         <button class="btn btn-preview" type="button" disabled title="Preview is not available yet">Preview</button>
-        <button class="btn btn-primary" type="button" disabled={!dirty || busy} onclick={publish}>Publish this entry</button>
+        <button class="btn btn-primary" type="button" disabled={!dirty || saving} onclick={openDrawer}>Publish…</button>
         <button class="btn btn-ghost" type="button" disabled aria-label="More actions">⋯</button>
       </div>
     </div>
@@ -120,7 +101,6 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   </header>
   <div class="entry-body has-pane">
     <form class="form" onsubmit={(e) => e.preventDefault()}>
-      {#if error}<p class="notice notice-danger" role="alert">{error}</p>{/if}
       <Fields fields={entry.fields} blocks={entry.blocks} bind:root={data} />
     </form>
     <aside class="pane" aria-label="Right pane">

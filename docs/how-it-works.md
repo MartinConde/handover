@@ -40,8 +40,9 @@ Anything the walker does not know is `unsupported` and shown read-only.
 
 Content never leaves git. Reading `GET /admin/api/entries/:collection/:slug` fetches
 `src/content/<collection>/en/<slug>.yaml` through the GitHub contents API and returns the
-parsed data with the file's blob sha and the branch's head sha — or, when the entry has a
-draft row, that row's contents instead, with `pending` saying which.
+parsed data — or, when the entry has a draft row, that row's contents instead, with
+`pending` saying which. No sha goes to the browser: publishing works from the stored rows,
+so the bases stay server-side.
 
 `PUT /admin/api/drafts/:collection/:slug` is the autosave. `saveDraft` in core merges the
 validated field values over the reserved keys of the entry as it stands, serialises the
@@ -51,13 +52,15 @@ server's fact and not something a stale tab can assert. `blobSha()` computes a g
 id from bytes (`sha1("blob <length>\0" + bytes)`), which is what makes "does this draft
 still match the file?" a string comparison rather than a fetch.
 
-Publishing (`PUT /admin/api/entries/:collection/:slug`) validates the data against the
-collection schema, merges it through the same `mergeEntry` so the bytes match what an
-autosave would store, and makes one commit through the Git Data API: a tree with
-`base_tree` set (so nothing else in the repo is touched), a commit whose parent is the
-head sha the editor loaded against, and a non-force ref update. If `main` moved in
-between, GitHub refuses the update, the API answers 409 and nothing is written. Commits
-carry no author, so GitHub signs them for the App and shows them as Verified.
+Publishing (`POST /admin/api/publish`) takes no body at all: `publishDrafts` in core reads
+every draft row whose bytes differ from the file it was loaded from, checks each one's
+`base_blob` against the file at HEAD, and commits them through the Git Data API — a tree
+with `base_tree` set (so nothing else in the repo is touched), a commit whose parent is
+HEAD, and a non-force ref update. One file changed in the repository since it was opened
+refuses the whole set with 409, as does a branch that moves under the ref update; either
+way nothing is written. The rows are deleted once the commit lands, so the next open reads
+the file that was just written. Commits carry no author, so GitHub signs them for the App
+and shows them as Verified.
 
 The GitHub client mints an installation token per request from the App's private key
 (RS256 via WebCrypto) and caches it on the client object only.

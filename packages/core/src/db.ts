@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { mergeEntry, parseEntry, stringifyEntry } from './content.js';
@@ -88,4 +88,54 @@ export async function saveDraft(
       set: { contents, updatedAt, publishedSha: null },
     });
   return { updated_at: updatedAt, pending: (await blobSha(contents)) !== base.blob };
+}
+
+/** Drafts whose stored bytes differ from the file they were loaded from, newest first. */
+export async function pendingDrafts(siteId: string, db: Db): Promise<Draft[]> {
+  const rows = await db.select().from(drafts).where(eq(drafts.siteId, siteId));
+  const pending = await Promise.all(
+    rows.map(async (r) => (await blobSha(r.contents)) !== r.baseBlob),
+  );
+  return rows.filter((_, i) => pending[i]).sort((a, b) => b.updatedAt - a.updatedAt);
+}
+
+/** A file someone changed in the repository after the editor loaded it. */
+export class DraftConflictError extends Error {
+  override name = 'DraftConflictError';
+  constructor(readonly paths: string[]) {
+    super(`Changed in the repository since they were opened: ${paths.join(', ')}`);
+  }
+}
+
+const commitMessage = (paths: string[]) =>
+  paths.length === 1 && paths[0]
+    ? `Update ${paths[0].replace(/^src\/content\//, '').replace(/\.[^.]+$/, '')}`
+    : `Update ${paths.length} files\n\n${paths.map((p) => `- ${p}`).join('\n')}`;
+
+/**
+ * Commit every pending draft as one commit and clear those rows. The parent is HEAD, so
+ * `base_blob` is what says whether a draft is still safe to write: it is the file as the
+ * editor loaded it, and a file that has moved on since is somebody else's work. One
+ * mismatch refuses the whole set — the ref update is all-or-nothing anyway.
+ */
+export async function publishDrafts(
+  siteId: string,
+  db: Db,
+  git: Pick<GitClient, 'getFile' | 'getHead' | 'publish'>,
+): Promise<{ commit_sha: string; paths: string[] } | undefined> {
+  const rows = await pendingDrafts(siteId, db);
+  if (!rows.length) return undefined;
+  const base_sha = await git.getHead();
+  const changed = await Promise.all(
+    rows.map(async (r) => ((await git.getFile(r.path))?.blob_sha === r.baseBlob ? '' : r.path)),
+  );
+  const conflicts = changed.filter(Boolean);
+  if (conflicts.length) throw new DraftConflictError(conflicts);
+  const paths = rows.map((r) => r.path);
+  const { commit_sha } = await git.publish(
+    rows.map(({ path, contents }) => ({ path, contents })),
+    { base_sha, message: commitMessage(paths) },
+  );
+  await db.delete(drafts).where(and(eq(drafts.siteId, siteId), inArray(drafts.path, paths)));
+  return { commit_sha, paths };
 }

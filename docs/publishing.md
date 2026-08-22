@@ -2,8 +2,8 @@
 
 Editing an entry does not touch git. Two seconds after the last keystroke the admin saves
 what you typed into the site's D1 database; the entry stays there, unpublished, until
-someone clicks **Publish this entry**. Close the tab, switch machine, crash the browser —
-the edit is still there when the entry is opened again.
+someone publishes. Close the tab, switch machine, crash the browser — the edit is still
+there when the entry is opened again.
 
 D1 has to be set up before this works: create the database, bind it as `DB` and apply the
 migrations, all three in [Deploy](deploy.md#the-database).
@@ -45,12 +45,31 @@ The state next to the breadcrumb is the autosave, not the publish:
 | `Saved` | the draft matches what you typed |
 | `Not saved` | the write failed — the edit is only in this tab, do not close it |
 
-**Publish this entry** is enabled whenever the entry differs from the file in git,
-including on a fresh page load with a draft already stored.
+**Publish…** is enabled whenever the entry differs from the file in git, including on a
+fresh page load with a draft already stored. It stores what you have typed and opens the
+pending-changes drawer.
+
+## Publishing
+
+The top bar says how many files are waiting ("3 unpublished changes"); the button opens
+the **pending-changes drawer**, which lists them and publishes them:
+
+- **Everything pending goes out together**, in one commit. There is no per-file choice
+  yet — picking what ships arrives with the checkboxes in a later release
+- The commit is the stored bytes, not the form: whatever the drawer lists is exactly what
+  lands in the repository
+- The rows are deleted once the commit succeeds, so reopening an entry reads the file that
+  was just written
+- **Nothing is written unless all of it can be.** If somebody changed one of those files
+  in the repository since the editor loaded it, the publish is refused with a message
+  naming the file and no commit is made — same for a branch that moves while the commit is
+  being written. Reload the entry to pick up their version and edit again
+- A commit is not a live site: the site rebuilds afterwards, which takes a minute or two,
+  and the admin itself is redeployed with it
 
 ## The endpoints
 
-Both are behind the admin password and take JSON.
+All of them are behind the admin password.
 
 ```
 PUT /admin/api/drafts/:collection/:slug     { "data": { … } }  →  { "updated_at", "pending" }
@@ -62,14 +81,28 @@ autosave that changed nothing. `400` if the data fails the schema, `404` if the 
 or the file does not exist.
 
 ```
-GET /admin/api/entries/:collection/:slug    →  { fields, blocks, data, pending, blob_sha, head_sha }
+GET /admin/api/entries/:collection/:slug    →  { fields, blocks, data, pending }
 ```
 
 `data` is the draft when there is one, otherwise the file. `pending` says which.
 
+```
+GET /admin/api/drafts                       →  { "files": [{ "path", "updated_at" }] }
+```
+
+The files waiting to be published, newest first — the drawer's list.
+
+```
+POST /admin/api/publish                     →  { "commit_sha", "paths" }
+```
+
+No body: the server publishes what it has stored. `paths` is what went into the commit,
+and is empty when there was nothing to publish. `409` when a file changed in the
+repository since its draft was loaded, or when the branch moved while the commit was being
+written; in both cases nothing was written and no row was cleared.
+
 ## Not yet
 
-Publish still commits what the form holds rather than the stored draft, one entry at a
-time, and leaves the row behind. There is no pending-changes list, no publishing several
-entries in one commit, and no conflict resolution beyond the refusal you already get when
-someone else published first. Those arrive in later releases.
+Publishing is all-or-nothing: no checkboxes, no holding an entry back, no three-way merge
+when a file has changed in code — you get the refusal, not a way to resolve it — and no
+build status. Those arrive in later releases.

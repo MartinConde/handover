@@ -97,6 +97,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .btn-ghost:hover { background: var(--badge-bg); color: var(--ink); }
 .btn-sm { min-height: 30px; padding: 0 var(--s-3); font-size: var(--text-sm); }
 .btn-block { width: 100%; }
+.btn-icon { width: 30px; min-height: 30px; padding: 0; font-size: var(--text-md); line-height: 1; }
 .btn[disabled], .btn[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
 .btn-link { background: none; border: 0; padding: 0; min-height: 0; color: var(--accent-ink); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; box-shadow: none; }
 
@@ -409,3 +410,49 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .sheet .handle { width: 36px; height: 4px; border-radius: 2px; background: var(--border-strong); margin: 0 auto; }
 .sheet .actions { display: flex; gap: var(--s-2); justify-content: flex-end; }
 
+/* ---------- pending-changes drawer (1.15d) ---------- */
+/* The drawer floats like every other panel: inset from the frame edge, one radius, one shadow. */
+.scrim.is-right { justify-items: end; align-items: stretch; padding: var(--s-4); }
+.drawer { width: min(560px, 100%); display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-toast); overflow: hidden; }
+.drawer-head { display: grid; gap: var(--s-2); padding: var(--s-5) var(--s-5) var(--s-4); border-bottom: 1px solid var(--border); }
+.drawer-head .head-row { display: flex; align-items: center; gap: var(--s-3); }
+.drawer-head h2 { margin-right: auto; font-size: var(--text-lg); font-weight: 600; letter-spacing: var(--tracking-tight); }
+.drawer-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-1) var(--s-2); font-size: var(--text-sm); color: var(--ink-2); }
+.drawer-meta .count { font-weight: 600; color: var(--ink); }
+.drawer-meta .sep { color: var(--border-strong); }
+.drawer-meta.is-summary { font-size: var(--text-xs); }
+.drawer-tools { display: flex; align-items: center; gap: var(--s-2); font-size: var(--text-sm); color: var(--ink-2); }
+.drawer-tools .spacer { flex: 1; }
+.drawer-body { overflow: auto; padding: var(--s-3) var(--s-4) var(--s-5); display: grid; gap: var(--s-5); align-content: start; }
+.drawer-body .empty { min-height: 260px; }
+.drawer-foot { display: grid; gap: var(--s-3); padding: var(--s-4) var(--s-5) var(--s-5); border-top: 1px solid var(--border); }
+.drawer-foot .foot-row { display: flex; align-items: center; gap: var(--s-3); }
+.drawer-foot .foot-row .btn-primary { flex: 1; }
+.drawer .foot-note { font-size: var(--text-xs); color: var(--ink-2); }
+.drawer-body > .foot-note, .change-group .foot-note { padding: 0 var(--s-2); }
+
+/* One row per change. The 32px lead column carries the pending dot in Phase 1 and the
+   checkbox from 3a, so the two versions stack pixel-aligned. */
+.change-list { display: grid; margin: 0; padding: 0; list-style: none; }
+.change-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: var(--s-1) var(--s-2); align-items: center; padding: var(--s-3) var(--s-2); border-bottom: 1px solid var(--border); }
+.change-list > li:last-child > .change-row { border-bottom: 0; }
+.change-row .lead { grid-row: 1 / span 2; display: grid; place-items: center; width: 32px; min-height: 32px; margin: 0; }
+.change-row .lead input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent-ink); }
+.change-row .change-title { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); min-width: 0; }
+.change-row .name { font-weight: 500; }
+.change-row .change-sub { grid-column: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); font-size: var(--text-xs); color: var(--ink-2); }
+.change-row .change-sub .sep { color: var(--border-strong); }
+.change-row .change-actions { grid-row: 1 / span 2; grid-column: 3; display: flex; align-items: center; gap: var(--s-1); }
+.change-row.is-held, .change-row.is-blocked { background: var(--surface-2); border-radius: var(--radius); border-bottom-color: transparent; }
+.change-row.is-held .name, .change-row.is-blocked .name { color: var(--ink-2); }
+.change-group { display: grid; gap: var(--s-2); }
+.group-title { padding: 0 var(--s-2); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.checks { display: grid; gap: var(--s-2); }
+.checks .notice { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); }
+.checks .notice .btn-link { margin-left: auto; color: inherit; white-space: nowrap; }
+.is-narrow .scrim.is-right { padding: 0; }
+.is-narrow .drawer { width: 100%; border-radius: 0; }
+.drawer-body:has(> .empty) { align-content: center; }
+.is-narrow .change-row { grid-template-columns: 32px minmax(0, 1fr); }
+.is-narrow .change-row .change-actions { grid-row: 3; grid-column: 2; justify-content: flex-start; }
+.is-narrow .change-row .lead { grid-row: 1; }

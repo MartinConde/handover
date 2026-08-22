@@ -1,4 +1,7 @@
+import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
+import { Miniflare } from 'miniflare';
 import { expect, test } from 'vitest';
+import { drafts, openDb, publishDrafts, saveDraft } from './db.js';
 import { createGitClient, RefMovedError } from './git.js';
 import { deleteEntry, renameEntry } from './lifecycle.js';
 
@@ -131,6 +134,62 @@ test.skipIf(!configured)(
       base_sha: deleted,
       message: `Clean up after ${name}`,
     });
+  },
+  60_000,
+);
+
+test.skipIf(!configured)(
+  'publishing two drafts is one commit with both paths and no rows left behind',
+  async () => {
+    const [owner, repo] = (env.GITHUB_REPO ?? '').split('/');
+    const app = {
+      appId: env.GITHUB_APP_ID ?? '',
+      privateKey: (env.GITHUB_PRIVATE_KEY ?? '').replace(/\\n/g, '\n'),
+      installationId: env.GITHUB_INSTALLATION_ID ?? '',
+      owner: owner ?? '',
+      repo: repo ?? '',
+      branch: env.GITHUB_BRANCH,
+    };
+    const git = createGitClient('default', app);
+    const mf = new Miniflare({
+      modules: true,
+      script: 'export default {}',
+      d1Databases: { DB: ':memory:' },
+    });
+    const binding = await mf.getD1Database('DB');
+    const ddl = await generateSQLiteMigration(
+      await generateSQLiteDrizzleJson({}),
+      await generateSQLiteDrizzleJson({ drafts }),
+    );
+    await binding.batch(ddl.map((sql) => binding.prepare(sql)));
+    const db = openDb('default', binding);
+
+    const name = `it-${(await git.getHead()).slice(0, 7)}`;
+    const paths = [1, 2].map((n) => `src/content/listings/en/${name}-${n}.yaml`);
+    const { commit_sha: seeded } = await git.publish(
+      paths.map((path) => ({ path, contents: `_version: 1\ntitle: "${name}"\n` })),
+      { base_sha: await git.getHead(), message: `Seed ${name}` },
+    );
+    for (const [i, path] of paths.entries()) {
+      await saveDraft('default', db, git, path, { title: `${name} edited ${i}` });
+    }
+
+    const published = await publishDrafts('default', db, git);
+
+    expect(published?.paths.toSorted()).toEqual(paths.toSorted());
+    const res = await git.request(
+      `/repos/${app.owner}/${app.repo}/compare/${seeded}...${published?.commit_sha}`,
+    );
+    const diff = (await res.json()) as { total_commits: number; files: { filename: string }[] };
+    expect(diff.total_commits).toBe(1);
+    expect(diff.files.map((f) => f.filename).toSorted()).toEqual(paths.toSorted());
+    expect(await db.select().from(drafts)).toEqual([]);
+
+    await git.publish(
+      paths.map((path) => ({ path, contents: null })),
+      { base_sha: published?.commit_sha ?? '', message: `Clean up after ${name}` },
+    );
+    await mf.dispose();
   },
   60_000,
 );

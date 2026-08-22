@@ -94,10 +94,9 @@ Open `http://localhost:4321/admin`, sign in with the password, then go to
 `/admin/c/listings/seaview-cottage`. Every `z.string()` field in the schema is an input;
 other field types show "Not editable here yet". Change a value: two seconds later the edit
 is saved into D1, and it is still there if you reload — see
-[Drafts and publishing](publishing.md). Click **Publish this
-entry**: Handover writes the YAML file back as one commit on `main` (message
-`Update listings/seaview-cottage`) and shows the short commit sha. When two people edit
-the same entry, the second Publish is refused with "Someone else published this entry
-since you opened it" and nothing is overwritten.
+[Drafts and publishing](publishing.md). Click **Publish…**: the pending-changes drawer
+lists every edit waiting to go out, and **Publish 1 file** writes them back as one commit
+on `main`. If someone changed one of those files in the repository since you opened it,
+the publish is refused and nothing is overwritten.
 
 Your build pipeline picks the commit up like any other push.
