@@ -1,6 +1,6 @@
 import type { Field } from '@handover/core';
 import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import Editor from './Editor.svelte';
 
 const entry = {
@@ -10,6 +10,7 @@ const entry = {
     { path: ['photos'], type: 'unsupported' },
   ] satisfies Field[],
   data: { title: 'Seaview Cottage', seo: { description: 'Harbour view' }, photos: [] },
+  head_sha: 'head789',
 };
 
 let app: ReturnType<typeof mount>;
@@ -39,12 +40,63 @@ test('an unsupported field shows a marker instead of an input', () => {
   expect($(root, '#f-photos')?.textContent).toBe('Not editable here yet');
 });
 
-test('the header shows the entry title and a disabled Publish button', () => {
+const type = (root: ParentNode, sel: string, value: string) => {
+  const input = $<HTMLInputElement>(root, sel);
+  if (!input) throw new Error(`${sel} missing`);
+  input.value = value;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  flushSync();
+};
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
+test('the header shows the entry title; Publish is disabled until something changes', () => {
   const root = show();
   expect($(root, 'h1')?.textContent).toBe('Seaview Cottage');
   const publish = $<HTMLButtonElement>(root, 'button.btn-primary');
   expect(publish?.textContent).toBe('Publish this entry');
   expect(publish?.disabled).toBe(true);
+  type(root, 'input#f-title', 'Seaview House');
+  expect(publish?.disabled).toBe(false);
+});
+
+test('Publish saves the edited data against the loaded head and reports the commit', async () => {
+  const fetchMock = vi.fn(async () => Response.json({ commit_sha: 'def4567890' }));
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  type(root, 'input#f-title', 'Seaview House');
+  $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
+  flushSync();
+  expect($(root, '.autosave')?.textContent).toBe('Publishing…');
+  await tick();
+  flushSync();
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/entries/listings/seaview-cottage', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      data: { title: 'Seaview House', seo: { description: 'Harbour view' }, photos: [] },
+      base_sha: 'head789',
+    }),
+  });
+  expect($(root, '.autosave')?.textContent).toBe('Published def4567');
+  expect($<HTMLButtonElement>(root, 'button.btn-primary')?.disabled).toBe(true);
+  vi.unstubAllGlobals();
+});
+
+test('a 409 tells the editor someone else published first', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('moved', { status: 409 })),
+  );
+  const root = show();
+  type(root, 'input#f-title', 'Seaview House');
+  $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
+  await tick();
+  flushSync();
+  expect($(root, '[role="alert"]')?.textContent).toBe(
+    'Someone else published this entry since you opened it. Reload to see their version.',
+  );
+  expect($<HTMLButtonElement>(root, 'button.btn-primary')?.disabled).toBe(false);
+  vi.unstubAllGlobals();
 });
 
 test('editing the title input updates the title in the header', () => {

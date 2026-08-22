@@ -6,12 +6,43 @@ let {
   collection,
   slug,
   entry,
-}: { collection: string; slug: string; entry: { fields: readonly Field[]; data: Data } } = $props();
+}: {
+  collection: string;
+  slug: string;
+  entry: { fields: readonly Field[]; data: Data; head_sha: string };
+} = $props();
 
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let data = $state<Data>(structuredClone(entry.data));
+// What the page currently holds on the live branch; moves forward on every publish.
+// svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
+let live = $state({ data: JSON.stringify(entry.data), sha: entry.head_sha });
+let busy = $state(false);
+let error = $state('');
+let published = $state('');
 
 const title = $derived(typeof data.title === 'string' && data.title ? data.title : slug);
+const dirty = $derived(JSON.stringify(data) !== live.data);
+
+async function publish() {
+  busy = true;
+  error = '';
+  const res = await fetch(`/admin/api/entries/${collection}/${slug}`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ data, base_sha: live.sha }),
+  });
+  busy = false;
+  if (res.ok) {
+    const { commit_sha } = (await res.json()) as { commit_sha: string };
+    live = { data: JSON.stringify(data), sha: commit_sha };
+    published = commit_sha.slice(0, 7);
+  } else if (res.status === 409) {
+    error = 'Someone else published this entry since you opened it. Reload to see their version.';
+  } else {
+    error = `Publish failed (${res.status})`;
+  }
+}
 
 function read(path: readonly string[]): string {
   const value = path.reduce<unknown>((node, key) => (node as Data | undefined)?.[key], data);
@@ -35,7 +66,9 @@ const label = (path: readonly string[]) => path.map(capitalise).join(' · ');
   <header class="entry-header">
     <div class="crumbs">
       <span>{capitalise(collection)}</span><span class="sep" aria-hidden="true">/</span><span>{title}</span>
-      <span class="autosave is-new">Not saved</span>
+      <span class="autosave" class:is-saving={busy} class:is-new={!busy && !published}>
+        {#if busy}Publishing…{:else if dirty}{published ? 'Unpublished changes' : 'Not saved'}{:else if published}Published {published}{:else}Not saved{/if}
+      </span>
     </div>
     <div class="title-row">
       <h1>{title}</h1>
@@ -48,7 +81,7 @@ const label = (path: readonly string[]) => path.map(capitalise).join(' · ');
           <button type="button" aria-pressed="false" disabled title="Only English is configured">DE</button>
         </div>
         <button class="btn btn-preview" type="button" disabled title="Preview is not available yet">Preview</button>
-        <button class="btn btn-primary" type="button" disabled title="Publishing is not available yet">Publish this entry</button>
+        <button class="btn btn-primary" type="button" disabled={!dirty || busy} onclick={publish}>Publish this entry</button>
         <button class="btn btn-ghost" type="button" disabled aria-label="More actions">⋯</button>
       </div>
     </div>
@@ -60,6 +93,7 @@ const label = (path: readonly string[]) => path.map(capitalise).join(' · ');
   </header>
   <div class="entry-body has-pane">
     <form class="form" onsubmit={(e) => e.preventDefault()}>
+      {#if error}<p class="notice notice-danger" role="alert">{error}</p>{/if}
       {#each entry.fields as field (field.path.join('.'))}
         {@const id = `f-${field.path.join('.')}`}
         <div class="field">

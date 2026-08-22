@@ -4,6 +4,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Publish works end to end: **Publish this entry** in the editor is enabled once a field
+  changes and sends the entry to `PUT /admin/api/entries/:collection/:slug` with
+  `{ data, base_sha }`. The route validates `data` against the collection schema (400 if
+  it fails), writes `src/content/<collection>/en/<slug>.yaml` as one commit
+  (`Update <collection>/<slug>`) on top of `base_sha` and returns `{ commit_sha }`; 409 if
+  the branch moved first, and the editor says so. `GET …/entries/:collection/:slug` now
+  also returns `head_sha`, the value to publish against.
+- `stringifyEntry(siteId, data)` in core: YAML with long lines unfolded, so an edit to one
+  field is a one-line diff.
+- Docs: `docs/getting-started.md`, `docs/deploy.md` (GitHub App, secrets, Workers Builds),
+  `docs/how-it-works.md`.
 - `POST /admin/api/publish` with `{ files: [{ path, contents }], base_sha, message }` writes
   the files to the site's repo as one commit on top of `base_sha` and returns `{ commit_sha }`.
   If the branch moved past `base_sha` in the meantime the response is 409 and nothing is

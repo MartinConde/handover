@@ -1,8 +1,8 @@
 import type { APIContext } from 'astro';
 import { expect, test, vi } from 'vitest';
-import { GET, POST } from './api.js';
+import { GET, POST, PUT } from './api.js';
 
-const { listing, getFile, publish } = await vi.hoisted(async () => {
+const { listing, getFile, getHead, publish } = await vi.hoisted(async () => {
   const { z } = await import('astro/zod');
   return {
     listing: z.object({
@@ -17,6 +17,7 @@ const { listing, getFile, publish } = await vi.hoisted(async () => {
         ? { contents: 'title: The Mill House\nlocation: Bakewell\nrooms: 3\n', blob_sha: 'abc123' }
         : undefined,
     ),
+    getHead: vi.fn(async () => 'head789'),
     publish: vi.fn(async (_files: unknown, opts: { base_sha: string }) => {
       if (opts.base_sha === 'stale') {
         const { RefMovedError } = await import('@handover/core');
@@ -40,13 +41,15 @@ vi.mock('cloudflare:workers', () => ({
 }));
 vi.mock('@handover/core', async (original) => ({
   ...(await original<typeof import('@handover/core')>()),
-  createGitClient: () => ({ getFile, publish }),
+  createGitClient: () => ({ getFile, getHead, publish }),
 }));
 
 const ctx = (path: string, request?: Request) =>
   ({ params: { path }, request }) as unknown as APIContext;
 const post = (path: string, body: string) =>
   ctx(path, new Request(`https://x/admin/api/${path}`, { method: 'POST', body }));
+const put = (path: string, body: string) =>
+  ctx(path, new Request(`https://x/admin/api/${path}`, { method: 'PUT', body }));
 
 test('ping returns the configured collection names', async () => {
   const res = await GET(ctx('ping'));
@@ -65,7 +68,7 @@ test('login reads the password from the JSON body', async () => {
   expect((await POST(post('login', 'not json'))).status).toBe(401);
 });
 
-test('an entry returns its text fields, parsed data and blob sha', async () => {
+test('an entry returns its text fields, parsed data, blob sha and head sha', async () => {
   const res = await GET(ctx('entries/listings/mill-house'));
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
@@ -77,7 +80,41 @@ test('an entry returns its text fields, parsed data and blob sha', async () => {
     ],
     data: { title: 'The Mill House', location: 'Bakewell', rooms: 3 },
     blob_sha: 'abc123',
+    head_sha: 'head789',
   });
+});
+
+test('saving an entry validates it, writes its YAML file on base_sha and returns the commit', async () => {
+  const data = { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } };
+  const res = await PUT(
+    put('entries/listings/mill-house', JSON.stringify({ data, base_sha: 'head789' })),
+  );
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ commit_sha: 'def456' });
+  expect(publish).toHaveBeenCalledWith(
+    [
+      {
+        path: 'src/content/listings/en/mill-house.yaml',
+        contents: 'title: The Mill\nrooms: 3\naddress:\n  street: Mill Lane\n',
+      },
+    ],
+    { base_sha: 'head789', message: 'Update listings/mill-house' },
+  );
+});
+
+test('saving an entry that fails the collection schema is 400 and writes nothing', async () => {
+  publish.mockClear();
+  const body = JSON.stringify({ data: { title: 'No rooms' }, base_sha: 'head789' });
+  expect((await PUT(put('entries/listings/mill-house', body))).status).toBe(400);
+  expect((await PUT(put('entries/listings/mill-house', 'not json'))).status).toBe(400);
+  expect((await PUT(put('entries/nope/mill-house', body))).status).toBe(404);
+  expect(publish).not.toHaveBeenCalled();
+});
+
+test('saving an entry is 409 when the branch moved past base_sha', async () => {
+  const data = { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } };
+  const body = JSON.stringify({ data, base_sha: 'stale' });
+  expect((await PUT(put('entries/listings/mill-house', body))).status).toBe(409);
 });
 
 test('an unknown collection or missing entry is 404', async () => {

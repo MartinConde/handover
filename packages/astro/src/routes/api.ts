@@ -7,6 +7,7 @@ import {
   type JsonSchema,
   parseEntry,
   RefMovedError,
+  stringifyEntry,
 } from '@handover/core';
 import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
@@ -30,25 +31,61 @@ function gitClient(): GitClient {
   });
 }
 
+// Every entry lives in en/ until Phase 1 adds locales.
+const entryPath = (collection: string, slug: string) => `src/content/${collection}/en/${slug}.yaml`;
+
+// head_sha is what a later PUT publishes on top of, so a publish in between is a 409, not a clobber.
 async function getEntry(collection: string, slug: string): Promise<Response> {
   const schema = config.collections[collection]?.schema;
   if (!schema) return new Response('Not found', { status: 404 });
-  // Every entry lives in en/ until Phase 1 adds locales.
-  const file = await gitClient().getFile(`src/content/${collection}/en/${slug}.yaml`);
+  const git = gitClient();
+  const [file, head_sha] = await Promise.all([
+    git.getFile(entryPath(collection, slug)),
+    git.getHead(),
+  ]);
   if (!file) return new Response('Not found', { status: 404 });
   return Response.json({
     fields: fieldsFrom('default', z.toJSONSchema(schema, { unrepresentable: 'any' }) as JsonSchema),
     data: parseEntry('default', file.contents),
     blob_sha: file.blob_sha,
+    head_sha,
   });
 }
+
+const saveBody = z.object({ data: z.unknown(), base_sha: z.string().min(1) });
+
+async function saveEntry(collection: string, slug: string, request: Request): Promise<Response> {
+  const schema = config.collections[collection]?.schema;
+  if (!schema) return new Response('Not found', { status: 404 });
+  const body = saveBody.safeParse(await request.json().catch(() => undefined));
+  const data = body.success ? schema.safeParse(body.data.data) : undefined;
+  if (!body.success || !data?.success) return new Response('Bad request', { status: 400 });
+  try {
+    const result = await gitClient().publish(
+      [{ path: entryPath(collection, slug), contents: stringifyEntry('default', data.data) }],
+      { base_sha: body.data.base_sha, message: `Update ${collection}/${slug}` },
+    );
+    return Response.json(result);
+  } catch (err) {
+    if (err instanceof RefMovedError) return new Response(err.message, { status: 409 });
+    throw err;
+  }
+}
+
+const ENTRY = /^entries\/([\w-]+)\/([\w-]+)$/;
 
 export const GET: APIRoute = async ({ params }) => {
   if (params.path === 'ping') {
     return Response.json({ ok: true, collections: Object.keys(config.collections) });
   }
-  const entry = params.path?.match(/^entries\/([\w-]+)\/([\w-]+)$/);
+  const entry = params.path?.match(ENTRY);
   if (entry) return getEntry(entry[1] ?? '', entry[2] ?? '');
+  return new Response('Not found', { status: 404 });
+};
+
+export const PUT: APIRoute = async ({ params, request }) => {
+  const entry = params.path?.match(ENTRY);
+  if (entry) return saveEntry(entry[1] ?? '', entry[2] ?? '', request);
   return new Response('Not found', { status: 404 });
 };
 

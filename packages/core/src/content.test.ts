@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { staticSource } from './content.js';
+import { parseEntry, staticSource, stringifyEntry } from './content.js';
 
 const entries = [
   { id: 'en/mill-house', data: { title: 'Mill House' } },
@@ -19,4 +19,10 @@ test('getCollection keeps only entries under the locale folder', async () => {
 
 test('getEntry returns undefined for a missing id', async () => {
   expect(await source.getEntry('listings', 'fr/mill-house')).toBeUndefined();
+});
+
+test('stringifyEntry writes the demo file shape back unchanged, long lines unfolded', () => {
+  const file =
+    'title: Seaview Cottage\nlocation: Port Isaac, Cornwall\nprice: £1,200 per week\nsummary: A whitewashed two-bedroom cottage above the harbour, with a slate terrace that catches the evening sun and a five-minute walk down to the fish market.\n';
+  expect(stringifyEntry('default', parseEntry('default', file))).toBe(file);
 });

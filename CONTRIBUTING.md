@@ -35,4 +35,6 @@ the App is installed on.
 ## The demo site
 
 A separate repository installs this package with `"astro-handover": "link:../handover/packages/astro"`
-and is how every change is exercised end to end.
+and is how every change is exercised end to end. Its deploy cannot see this checkout, so it
+commits `pnpm pack` tarballs of `core` and `astro` under `vendor/` (`pnpm vendor` there)
+and swaps them in at build time.

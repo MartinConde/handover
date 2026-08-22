@@ -1,4 +1,4 @@
-import { parse } from 'yaml';
+import { parse, stringify } from 'yaml';
 
 export interface ContentEntry<T = unknown> {
   id: string;
@@ -40,4 +40,9 @@ export function staticSource<C extends Record<string, unknown>>(
 // Entry files are YAML; options stay fixed here so every site round-trips identically.
 export function parseEntry(_siteId: string, contents: string): unknown {
   return parse(contents);
+}
+
+// lineWidth 0 keeps a long sentence on one line, so a one-field edit is a one-line diff.
+export function stringifyEntry(_siteId: string, data: unknown): string {
+  return stringify(data, { lineWidth: 0 });
 }
