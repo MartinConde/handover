@@ -20,17 +20,21 @@ async function submit(event: SubmitEvent) {
 }
 </script>
 
-<main class="login">
-  <form onsubmit={submit}>
-    <h1>Handover</h1>
-    <label for="password">Password</label>
-    <input id="password" type="password" autocomplete="current-password" required bind:value={password} />
-    <p role="alert">{error}</p>
-    <button type="submit" disabled={busy}>Log in</button>
-  </form>
-</main>
-
-<style>
-  .login { min-height: 100vh; display: grid; place-items: center; }
-  form { display: grid; gap: 0.5rem; width: min(20rem, 90vw); }
-</style>
+<div class="auth-page">
+  <div>
+    <main class="auth-card">
+      <div class="site">
+        <span class="site-logo" aria-hidden="true">H</span>
+        <h1>Handover</h1>
+      </div>
+      <form onsubmit={submit}>
+        <div class="field">
+          <label for="password">Password</label>
+          <input class="input" id="password" type="password" autocomplete="current-password" required bind:value={password} />
+          <p class="error" role="alert">{error}</p>
+        </div>
+        <button class="btn btn-primary btn-block" type="submit" disabled={busy}>Sign in</button>
+      </form>
+    </main>
+  </div>
+</div>

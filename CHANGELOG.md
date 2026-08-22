@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `/admin/c/<collection>/<slug>` opens the entry editor: a form with one text input per
+  `z.string()` field, filled from the entry; other fields show "Not editable here yet".
+  Edits are kept in the page only — nothing is saved yet and Publish is disabled.
+- The admin UI now ships its stylesheet (design tokens, shell, forms).
 - `GET /admin/api/entries/:collection/:slug` returns `{ fields, data, blob_sha }` for
   `src/content/<collection>/en/<slug>.yaml` read from the site's GitHub repo. `fields` lists
   every `z.string()` in the collection's schema as `{ path, type: 'text', required }`; any
