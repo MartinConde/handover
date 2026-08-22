@@ -179,7 +179,7 @@ blocks:
 
 A block whose `_type` is not in the registry fails validation. A block with `_ref` (a
 `globals/<key>` path) needs no fields of its own: its content is filled from that global
-at build time. There is no admin UI for `_ref` yet; write it by hand.
+at build time. The admin shows such a block read-only; write the `_ref` itself by hand.
 
 A `z.date()` is edited as a date and a transform by its input type. A `z.custom()` gets a
 widget when you name one: `.meta({ handover: 'text' })` (`number`, `boolean` or `date`
@@ -187,14 +187,21 @@ likewise).
 
 ### In the admin
 
-Every scalar type and `group` has a widget: text is an input (a textarea once it holds
-line breaks or more than 80 characters), number a numeric input, boolean a switch, date a
-native date input, select radios for five options or fewer and a dropdown above that,
-link a Page / Entry · URL toggle with label and "Open in new tab", group a collapsible
-fieldset. Rich text is a TipTap editor whose toolbar has exactly the tier's constructs;
-a value that already contains something outside the tier (edited in code) is shown
-read-only rather than rewritten. Leaving an optional field empty removes the key from
+Every scalar type, `group`, `array` and `blocks` has a widget: text is an input (a textarea
+once it holds line breaks or more than 80 characters), number a numeric input, boolean a
+switch, date a native date input, select radios for five options or fewer and a dropdown
+above that, link a Page / Entry · URL toggle with label and "Open in new tab", group a
+collapsible fieldset. Rich text is a TipTap editor whose toolbar has exactly the tier's
+constructs; a value that already contains something outside the tier (edited in code) is
+shown read-only rather than rewritten. Leaving an optional field empty removes the key from
 the file.
 
-`array`, `blocks`, the structured types and any other schema (tuples, unions, untagged
-customs) are read and written as-is but show as "Not editable here yet" for now.
+An `array` is a list of rows with Add, Remove and move up / down buttons — the first row's
+up and the last row's down are disabled. Every row keeps its `_id` across moves; a new row
+gets a fresh one. A `blocks` field is the same list of cards, each headed by its `_label` or
+`_type`, and Add block offers one button per type in your registry. Reordering never
+rewrites an `_id`, so translations and `_machine` paths keep pointing at the same block.
+
+`image`, `file`, `embed`, `seo` and `reference` show their stored value as read-only JSON
+until their pickers arrive. Any other schema (tuples, unions, untagged customs) shows as
+"Not editable here yet". Both are read and written back untouched.

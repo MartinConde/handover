@@ -14,6 +14,7 @@ const entry = {
     },
     { path: ['photos'], type: 'unsupported' },
   ] satisfies Field[],
+  blocks: {},
   data: { title: 'Seaview Cottage', seo: { description: 'Harbour view' }, photos: [] },
   head_sha: 'head789',
 };

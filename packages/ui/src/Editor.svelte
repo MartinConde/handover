@@ -10,7 +10,12 @@ let {
 }: {
   collection: string;
   slug: string;
-  entry: { fields: readonly Field[]; data: Data; head_sha: string };
+  entry: {
+    fields: readonly Field[];
+    blocks: Record<string, Field[]>;
+    data: Data;
+    head_sha: string;
+  };
 } = $props();
 
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
@@ -80,7 +85,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   <div class="entry-body has-pane">
     <form class="form" onsubmit={(e) => e.preventDefault()}>
       {#if error}<p class="notice notice-danger" role="alert">{error}</p>{/if}
-      <Fields fields={entry.fields} bind:root={data} />
+      <Fields fields={entry.fields} blocks={entry.blocks} bind:root={data} />
     </form>
     <aside class="pane" aria-label="Right pane">
       <div><strong>Right pane</strong>Preview or a second language, later.</div>
