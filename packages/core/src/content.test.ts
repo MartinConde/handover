@@ -73,6 +73,54 @@ for (const [type, fixture] of Object.entries(scalars)) {
   });
 }
 
+// Structured types: the shapes are locked before their upload/editor UI exists.
+const structured: Record<string, unknown> = {
+  image: {
+    _version: 1,
+    hero: {
+      src: 'media/9f3a2c7e.webp',
+      alt: 'Front of the house',
+      width: 2400,
+      height: 1600,
+      focal: [0.5, 0.35],
+    },
+  },
+  file: {
+    _version: 1,
+    brochure: {
+      src: 'files/3e8a1b9c.pdf',
+      name: 'Seaview Cottage brochure.pdf',
+      bytes: 2481033,
+      mime: 'application/pdf',
+    },
+  },
+  embed: {
+    _version: 1,
+    video: { provider: 'youtube', id: 'dQw4w9WgXcQ', title: 'Walkthrough video', start: 42 },
+    map: { provider: 'google-maps', id: 'Seaview Cottage, Devon' },
+  },
+  seo: {
+    _version: 1,
+    seo: {
+      title: 'Move to the coast',
+      description: 'Coastal homes in Devon.',
+      image: { src: 'media/9f3a2c7e.webp', alt: 'Front of the house', width: 2400, height: 1600 },
+      noindex: false,
+      canonical: 'https://example.com/listings/seaview-cottage',
+    },
+  },
+  reference: { _version: 1, agent: 'agents/jane-doe' },
+};
+
+for (const [type, fixture] of Object.entries(structured)) {
+  test(`${type} round-trips through its golden file`, () => {
+    const golden = readFileSync(join(goldenDir, `${type}.yaml`), 'utf8');
+    const out = stringifyEntry('default', fixture);
+    expect(out).toBe(golden);
+    expect(parseEntry('default', out)).toEqual(fixture);
+  });
+}
+
 test('a date is stored as a quoted string, never a YAML timestamp or a Date', () => {
   expect(parseEntry('default', 'availableFrom: 2026-09-01\n')).toEqual({
     availableFrom: '2026-09-01',

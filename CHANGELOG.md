@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Structured field types: `image` (`{ src, alt?, width, height, focal? }`, `src` a
+  `media/` key), `file` (`{ src, name, bytes, mime }`, `src` a `files/` key), `embed`
+  (`{ provider, id, title?, start? }`, providers `youtube | vimeo | google-maps`, raw HTML
+  rejected), `seo` (`{ title?, description?, image?, noindex?, canonical? }`) and
+  `reference(collection)` (`"collection/slug"`) are exported from `astro-handover` and
+  detected from the schema. See `docs/field-types.md`.
 - Scalar field types in the admin form: `number`, `boolean`, `date` (`z.iso.date()`,
   stored as a `"YYYY-MM-DD"` string), `select` (`z.enum`) and `link` (`link` from
   `astro-handover`: `{ type: url | entry | page, href | ref, label?, newTab? }`) are

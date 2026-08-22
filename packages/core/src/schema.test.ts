@@ -60,6 +60,30 @@ test('a schema tagged handover: link is a link field, whatever its shape', () =>
   ]);
 });
 
+test('schemas tagged image, file, embed and seo are fields of that type', () => {
+  const schema = obj({
+    hero: { type: 'object', properties: {}, handover: 'image' },
+    brochure: { type: 'object', properties: {}, handover: 'file' },
+    video: { type: 'object', properties: {}, handover: 'embed' },
+    seo: { type: 'object', properties: {}, handover: 'seo' },
+  });
+  expect(fieldsFrom('default', schema)).toEqual([
+    { path: ['hero'], type: 'image', required: false },
+    { path: ['brochure'], type: 'file', required: false },
+    { path: ['video'], type: 'embed', required: false },
+    { path: ['seo'], type: 'seo', required: false },
+  ]);
+});
+
+test('a schema tagged reference carries its collection', () => {
+  const schema = obj({ agent: { type: 'string', handover: 'reference', collection: 'agents' } }, [
+    'agent',
+  ]);
+  expect(fieldsFrom('default', schema)).toEqual([
+    { path: ['agent'], type: 'reference', required: true, collection: 'agents' },
+  ]);
+});
+
 test('other leaves are marked unsupported, not rejected', () => {
   const schema = obj(
     {

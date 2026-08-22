@@ -17,6 +17,62 @@ export const link = z
   .meta({ handover: 'link' });
 export type Link = z.infer<typeof link>;
 
+// Media is stored as a key under media.publicBase, never a URL: a CDN move must not
+// touch content files.
+export const image = z
+  .object({
+    src: z.string().regex(/^media\//, 'image src must be a media/ key'),
+    alt: z.string().optional(),
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+    focal: z.tuple([z.number().min(0).max(1), z.number().min(0).max(1)]).optional(),
+  })
+  .meta({ handover: 'image' });
+export type Image = z.infer<typeof image>;
+
+export const file = z
+  .object({
+    src: z.string().regex(/^files\//, 'file src must be a files/ key'),
+    name: z.string(),
+    bytes: z.number().int().nonnegative(),
+    mime: z.string(),
+  })
+  .meta({ handover: 'file' });
+export type File = z.infer<typeof file>;
+
+// Provider + id only; the iframe src is built from a template at render, so no raw HTML
+// can reach the page from a content file.
+export const embed = z
+  .strictObject({
+    provider: z.enum(['youtube', 'vimeo', 'google-maps']),
+    id: z
+      .string()
+      .min(1)
+      .regex(/^[^<>]+$/, 'embed id must not contain markup'),
+    title: z.string().optional(),
+    start: z.number().int().nonnegative().optional(),
+  })
+  .meta({ handover: 'embed' });
+export type Embed = z.infer<typeof embed>;
+
+export const seo = z
+  .object({
+    title: z.string().optional(),
+    description: z.string().optional(),
+    image: image.optional(),
+    noindex: z.boolean().optional(),
+    canonical: z.string().optional(),
+  })
+  .meta({ handover: 'seo' });
+export type Seo = z.infer<typeof seo>;
+
+// Stored as `collection/slug`; the collection name lets the picker list the right entries.
+export const reference = (collection: string) =>
+  z
+    .string()
+    .regex(/^[^\s/]+\/[^\s/]+$/, 'reference must be collection/slug')
+    .meta({ handover: 'reference', collection });
+
 export interface HandoverConfig {
   collections: Record<string, { schema: z.ZodType }>;
 }

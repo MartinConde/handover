@@ -13,6 +13,11 @@ export type Field =
   | { path: string[]; type: 'date'; required: boolean }
   | { path: string[]; type: 'select'; required: boolean; options: string[] }
   | { path: string[]; type: 'link'; required: boolean }
+  | { path: string[]; type: 'image'; required: boolean }
+  | { path: string[]; type: 'file'; required: boolean }
+  | { path: string[]; type: 'embed'; required: boolean }
+  | { path: string[]; type: 'seo'; required: boolean }
+  | { path: string[]; type: 'reference'; required: boolean; collection: string }
   | { path: string[]; type: 'unsupported' };
 
 export function fieldsFrom(_siteId: string, schema: JsonSchema, prefix: string[] = []): Field[] {
@@ -23,7 +28,16 @@ export function fieldsFrom(_siteId: string, schema: JsonSchema, prefix: string[]
     const path = [...prefix, name];
     const required = requiredKeys.has(name);
     // Shapes the package's own helpers tag with `.meta({ handover })`; see astro-handover.
-    if (child.handover === 'link') return [{ path, type: 'link', required }];
+    switch (child.handover) {
+      case 'link':
+      case 'image':
+      case 'file':
+      case 'embed':
+      case 'seo':
+        return [{ path, type: child.handover, required }];
+      case 'reference':
+        return [{ path, type: 'reference', required, collection: String(child.collection) }];
+    }
     if (child.type === 'string') {
       if (isStringArray(child.enum))
         return [{ path, type: 'select', required, options: child.enum }];

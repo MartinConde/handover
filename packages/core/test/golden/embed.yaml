@@ -1,0 +1,9 @@
+_version: 1
+video:
+  provider: "youtube"
+  id: "dQw4w9WgXcQ"
+  title: "Walkthrough video"
+  start: 42
+map:
+  provider: "google-maps"
+  id: "Seaview Cottage, Devon"

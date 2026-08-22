@@ -40,49 +40,8 @@ next save.
 
 ## Field types
 
-The form is generated from your Zod schema. These are the scalar types and how each one
-is stored:
-
-| Field | Schema | Stored as |
-|---|---|---|
-| text | `z.string()` | `"quoted"`, or a `\|-` block when it has line breaks |
-| number | `z.number()`, `z.number().int()` | plain number: `82.5`, `3` |
-| boolean | `z.boolean()` | `true` / `false` |
-| date | `z.iso.date()` | `"2026-09-01"` — always a quoted string, never a YAML timestamp |
-| select | `z.enum([...])` | the chosen value, quoted: `"sale"` |
-| link | `link` from `astro-handover` | `{ type, href \| ref, label?, newTab? }`, see below |
-
-```ts
-import { link } from 'astro-handover';
-import { z } from 'astro/zod';
-
-export const listing = z.object({
-  title: z.string(),
-  bedrooms: z.number().int(),
-  featured: z.boolean(),
-  availableFrom: z.iso.date(),
-  status: z.enum(['sale', 'rent']),
-  button: link.optional(),
-});
-```
-
-A link is one of three kinds: `url` with an `href`, or `entry` / `page` with a `ref` such
-as `listings/mill-house` (the entry's filename id, resolved to a URL at build time).
-`label` and `newTab` are optional on all three.
-
-```yaml
-button:
-  type: "url"
-  href: "https://example.com/viewings"
-  label: "Book a viewing"
-  newTab: true
-more:
-  type: "entry"
-  ref: "listings/mill-house"
-```
-
-Any other schema (arrays, objects, custom types) is read and written as-is but shows as
-"Not editable here yet" in the admin.
+The form is generated from your Zod schema. Every type and how it is stored is in
+[field-types.md](field-types.md).
 
 ## Reserved keys
 

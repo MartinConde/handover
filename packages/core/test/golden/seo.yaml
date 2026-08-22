@@ -1,0 +1,11 @@
+_version: 1
+seo:
+  title: "Move to the coast"
+  description: "Coastal homes in Devon."
+  image:
+    src: "media/9f3a2c7e.webp"
+    alt: "Front of the house"
+    width: 2400
+    height: 1600
+  noindex: false
+  canonical: "https://example.com/listings/seaview-cottage"
