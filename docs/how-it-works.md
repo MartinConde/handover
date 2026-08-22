@@ -62,9 +62,10 @@ address would otherwise be missing from a list that claims to hold every entry.
 
 The index is a virtual module and **not** a static asset: written into the output it would
 be a public list of every entry's title, hidden ones included, and no site config should be
-what keeps that private. The cost is bundle bytes — the demo's three entries add ~160 to
-the `api` chunk. Dev has no build, so the plugin watches `src/content/` and invalidates the
-module on a change; one code path for both.
+what keeps that private. The cost is bundle bytes: the index is a JSON string in the `api`
+chunk, roughly 120 per entry per locale (371 for the demo's three). Dev has no build, so
+the plugin watches `src/content/` and invalidates the module on a change; one code path
+for both.
 
 Publishing (`POST /admin/api/publish`) takes no body at all: `publishDrafts` in core reads
 every draft row whose bytes differ from the file it was loaded from, checks each one's
