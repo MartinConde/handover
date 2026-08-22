@@ -3,6 +3,11 @@ declare module 'virtual:handover/config' {
   export default config;
 }
 
+declare module 'virtual:handover/index' {
+  const index: import('@handover/core').ContentIndex;
+  export default index;
+}
+
 declare module 'virtual:handover/ui' {
   const assets: Record<string, string>;
   export default assets;

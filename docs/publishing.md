@@ -94,7 +94,8 @@ The collection's entries for the list screen: one row per entry, `id` is the fil
 `locales` maps each locale to `{ title, path }` plus `status: "hidden"` when it is hidden.
 Titles come from the entry's `title` field; a collection without one lists by filename.
 The list is the build's [content index](#the-content-index) with the pending drafts laid
-over it, so an entry you have edited but not published shows what you typed.
+over it, so an entry you have edited but not published shows what you typed. It reads
+nothing from GitHub.
 
 ```
 GET /admin/api/drafts                       →  { "files": [{ "path", "updated_at" }] }
@@ -113,19 +114,25 @@ written; in both cases nothing was written and no row was cleared.
 
 ## The content index
 
-Git is the source of truth but slow to list, so the build writes every entry's title and
-status into `handover-index.json` in the output directory, next to the pages. The entry
-list reads that one file instead of fetching every content file from GitHub. It is
-derived: the site itself never reads it, losing it costs nothing, and the next build
-writes it again. `astro dev` serves the same URL from the files on disk, so the admin
-works before anything is built.
+Git is the source of truth but slow to list: reading a collection through the GitHub
+contents API is one request per file. So the titles are read at build time instead — the
+build walks `src/content/`, collects every entry's title and `_status`, and puts the result
+into the Worker, where only `/admin` can reach it. It is never served as a file, so a list
+of your entries — hidden ones included — is not public.
 
-Two consequences:
+It is derived, not authoritative: the site itself never reads it and the next build makes
+it again. `astro dev` rebuilds it whenever a content file changes, so the list is current
+without a restart.
 
-- It is a **static asset**, served like any other file in your output — anyone who knows
-  the URL can read the titles in it, including those of hidden entries
-- Between a publish and the build that follows it the index is one commit behind. The
-  entry list is still right, because the draft rows are laid over it
+Two consequences worth knowing:
+
+- Between a publish and the build that follows it the index is one commit behind. The entry
+  list is still right, because the draft rows are laid over it
+- **The build fails on a content file that is not `src/content/<collection>/<locale>/<name>.yaml`**,
+  naming it. An entry is one file per locale and nothing below the locale folder — a file
+  in a sub-folder is not addressable as `collection/slug`, so rather than leave it out of
+  the list silently the build stops:
+  `src/content/listings/en/devon/seaview.yaml: an entry is src/content/<collection>/<locale>/<name>.yaml, one folder per locale and no folders below it`
 
 ## Not yet
 

@@ -1,8 +1,5 @@
 import { parseEntry } from './content.js';
 
-/** Written into the site's output by the build, read by the entry list. */
-export const INDEX_FILE = 'handover-index.json';
-
 export interface EntryLocale {
   title: string;
   path: string;
@@ -25,6 +22,28 @@ export interface ContentFile {
 // Collection names are lowercase, so `_templates/` never matches; `globals/` looks like a
 // collection and is not one. `redirects.yaml` has no locale segment.
 const ENTRY_PATH = /^src\/content\/([a-z0-9-]+)\/([^/]+)\/([^/]+)\.yaml$/;
+
+// The site files that are not entries; globals already share the entry layout.
+const OTHER_PATHS = [
+  /^src\/content\/redirects\.yaml$/,
+  /^src\/content\/_templates\/[a-z0-9-]+\/[^/]+\.yaml$/,
+];
+
+/**
+ * Why a `.yaml` file under `src/content/` is neither an entry nor one of the site files —
+ * empty when they all are. The build fails on these: the entry list promises every entry,
+ * and a file the CMS cannot address by `collection/slug` would silently not be in it.
+ */
+export function contentPathErrors(_siteId: string, paths: Iterable<string>): string[] {
+  const errors: string[] = [];
+  for (const path of paths) {
+    if (ENTRY_PATH.test(path) || OTHER_PATHS.some((p) => p.test(path))) continue;
+    errors.push(
+      `${path}: an entry is src/content/<collection>/<locale>/<name>.yaml, one folder per locale and no folders below it`,
+    );
+  }
+  return errors;
+}
 
 const byId = (a: IndexEntry, b: IndexEntry) => a.id.localeCompare(b.id);
 

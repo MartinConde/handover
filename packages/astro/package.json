@@ -34,6 +34,7 @@
   },
   "devDependencies": {
     "@handover/ui": "workspace:*",
-    "astro": "^7.2.4"
+    "astro": "^7.2.4",
+    "vite": "^8.0.0"
   }
 }

@@ -1,10 +1,10 @@
-import { appendFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { appendFile, mkdir, readdir, readFile } from 'node:fs/promises';
+import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   type ContentIndex,
   checkCollections,
-  INDEX_FILE,
+  contentPathErrors,
   indexFrom,
   type JsonSchema,
   parseEntry,
@@ -14,6 +14,7 @@ import {
 } from '@handover/core';
 import type { AstroIntegration } from 'astro';
 import { z } from 'astro/zod';
+import type { ViteDevServer } from 'vite';
 
 export type { AstroContent, ContentEntry, ContentSource, RichtextTier } from '@handover/core';
 export { filterLive, isLive, staticSource } from '@handover/core';
@@ -221,6 +222,7 @@ export const NO_ADAPTER_MESSAGE =
 
 const VIRTUAL_CONFIG = 'virtual:handover/config';
 const VIRTUAL_UI = 'virtual:handover/ui';
+const VIRTUAL_INDEX = 'virtual:handover/index';
 
 // The pre-built SPA (packages/ui → dist/ui) is inlined into the Worker bundle because a
 // Worker has no filesystem and the site's own build config must not know about it.
@@ -253,38 +255,28 @@ export async function emitRedirects(root: URL, clientDir: URL): Promise<number> 
   return parsed.data.rules.length;
 }
 
-const dirNames = async (url: URL) =>
-  (await readdir(url, { withFileTypes: true }).catch(() => []))
-    .filter((e) => e.isDirectory())
-    .map((e) => e.name);
-
-// Every content file, in the `<collection>/<locale>/<slug>.yaml` layout the format fixes;
-// core decides which of them are entries, so `_templates/` and `globals/` drop out there.
+/**
+ * The entry list needs a title for every entry and git is slow to list, so the titles are
+ * read at build time instead. Every `.yaml` under `src/content/` is walked, not just the
+ * two levels an entry lives at, because a file anywhere else is a mistake the build should
+ * name rather than a row the list would quietly be missing.
+ */
 export async function buildIndex(root: URL): Promise<ContentIndex> {
   const base = new URL('src/content/', root);
-  const files = [];
-  for (const collection of await dirNames(base)) {
-    for (const locale of await dirNames(new URL(`${collection}/`, base))) {
-      const dir = new URL(`${collection}/${locale}/`, base);
-      for (const name of await readdir(dir)) {
-        if (!name.endsWith('.yaml')) continue;
-        files.push({
-          path: `src/content/${collection}/${locale}/${name}`,
-          contents: await readFile(new URL(name, dir), 'utf8'),
-        });
-      }
-    }
-  }
+  const dir = fileURLToPath(base);
+  const found = await readdir(dir, { withFileTypes: true, recursive: true }).catch(() => []);
+  const paths = found
+    .filter((e) => e.isFile() && e.name.endsWith('.yaml'))
+    .map((e) => `src/content/${relative(dir, join(e.parentPath, e.name)).split(sep).join('/')}`);
+  const errors = contentPathErrors('default', paths);
+  if (errors.length) throw new Error(errors.join('\n'));
+  const files = await Promise.all(
+    paths.map(async (path) => ({
+      path,
+      contents: await readFile(new URL(path, root), 'utf8'),
+    })),
+  );
   return indexFrom('default', files);
-}
-
-// The entry list needs a title for every entry and git is slow to list, so the build writes
-// them out next to the pages. Derived, never authoritative: the site itself never reads it.
-export async function emitIndex(root: URL, clientDir: URL): Promise<number> {
-  const index = await buildIndex(root);
-  await mkdir(clientDir, { recursive: true });
-  await writeFile(new URL(INDEX_FILE, clientDir), JSON.stringify(index));
-  return Object.values(index).reduce((n, entries) => n + entries.length, 0);
 }
 
 export default function handover(): AstroIntegration {
@@ -300,18 +292,6 @@ export default function handover(): AstroIntegration {
       'astro:build:done': async ({ logger }) => {
         const n = await emitRedirects(root, clientDir);
         if (n) logger.info(`Wrote ${n} redirect${n === 1 ? '' : 's'} to _redirects`);
-        const entries = await emitIndex(root, clientDir);
-        logger.info(`Wrote ${entries} ${entries === 1 ? 'entry' : 'entries'} to ${INDEX_FILE}`);
-      },
-      // Dev has no build output, and the ASSETS binding resolves through Vite's middlewares,
-      // so the admin reads the index from the same URL in both.
-      'astro:server:setup': ({ server }) => {
-        server.middlewares.use(`/${INDEX_FILE}`, (_req, res, next) => {
-          buildIndex(root).then((index) => {
-            res.setHeader('content-type', 'application/json');
-            res.end(JSON.stringify(index));
-          }, next);
-        });
       },
       'astro:config:setup': ({ config, logger, injectRoute, addMiddleware, updateConfig }) => {
         if (!config.adapter) throw new Error(NO_ADAPTER_MESSAGE);
@@ -331,12 +311,31 @@ export default function handover(): AstroIntegration {
 
         // The site's own cms.config.ts, so the Worker holds the real Zod objects.
         const cmsConfig = fileURLToPath(new URL('./cms.config.ts', config.root));
+        const contentDir = fileURLToPath(new URL('src/content/', config.root));
         updateConfig({
           vite: {
             plugins: [
               {
                 name: 'handover-config',
                 resolveId: (id) => (id === VIRTUAL_CONFIG ? cmsConfig : undefined),
+              },
+              // The index goes into the Worker bundle rather than the static assets: served
+              // as an asset it would be a public list of every entry's title, hidden ones
+              // included. Rebuilt on a content change so the dev server does not go stale.
+              {
+                name: 'handover-index',
+                resolveId: (id) => (id === VIRTUAL_INDEX ? `\0${VIRTUAL_INDEX}` : undefined),
+                load: async (id) =>
+                  id === `\0${VIRTUAL_INDEX}`
+                    ? `export default JSON.parse(${JSON.stringify(JSON.stringify(await buildIndex(config.root)))});`
+                    : undefined,
+                configureServer(server: ViteDevServer) {
+                  server.watcher.on('all', (_event, file) => {
+                    if (!file.includes(contentDir)) return;
+                    const mod = server.moduleGraph.getModuleById(`\0${VIRTUAL_INDEX}`);
+                    if (mod) server.moduleGraph.invalidateModule(mod);
+                  });
+                },
               },
               {
                 name: 'handover-ui',

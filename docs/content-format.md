@@ -5,6 +5,10 @@ Handover writes these files; your Astro build reads them through the schema in
 `src/content/schemas.ts`. The file is the source of truth — nothing the site renders
 lives only in a database.
 
+That layout is exact: one folder per locale, and no folders below it. The filename is the
+entry's id, so a file in a sub-folder could not be opened as `collection/slug`; the build
+stops and names it rather than leaving it out of the admin's entry list.
+
 ## What a file looks like
 
 ```yaml

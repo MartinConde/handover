@@ -52,14 +52,19 @@ server's fact and not something a stale tab can assert. `blobSha()` computes a g
 id from bytes (`sha1("blob <length>\0" + bytes)`), which is what makes "does this draft
 still match the file?" a string comparison rather than a fetch.
 
-`GET /admin/api/entries/:collection` is the entry list and does not touch GitHub at all. At
-`astro:build:done` the integration walks `src/content/<collection>/<locale>/*.yaml`, hands
-the files to `indexFrom` in core — which decides what is an entry, so `_templates/` and
-`globals/` drop out in one place — and writes `handover-index.json` into the client output.
-The route reads it back through the `ASSETS` binding and lays the pending draft rows over
-it with `collectionEntries`. In dev there is no build output, so `astro:server:setup`
-serves the same URL from Vite's middlewares, which is what `ASSETS` resolves through there:
-one code path for both.
+`GET /admin/api/entries/:collection` is the entry list and does not touch GitHub at all. It
+reads `virtual:handover/index`, a module the integration's Vite plugin builds by walking
+every `.yaml` under `src/content/` and handing the files to `indexFrom` in core, which
+decides what is an entry — so `_templates/` and `globals/` drop out in one place — and lays
+the pending draft rows over it with `collectionEntries`. A file that is neither an entry
+nor a site file fails the build through `contentPathErrors`, because a path the CMS cannot
+address would otherwise be missing from a list that claims to hold every entry.
+
+The index is a virtual module and **not** a static asset: written into the output it would
+be a public list of every entry's title, hidden ones included, and no site config should be
+what keeps that private. The cost is bundle bytes — the demo's three entries add ~160 to
+the `api` chunk. Dev has no build, so the plugin watches `src/content/` and invalidates the
+module on a change; one code path for both.
 
 Publishing (`POST /admin/api/publish`) takes no body at all: `publishDrafts` in core reads
 every draft row whose bytes differ from the file it was loaded from, checks each one's

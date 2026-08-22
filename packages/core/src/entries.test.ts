@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { collectionEntries, indexFrom } from './entries.js';
+import { collectionEntries, contentPathErrors, indexFrom } from './entries.js';
 
 const file = (path: string, body: string) => ({ path, contents: `_version: 1\n${body}` });
 const listing = (locale: string, name: string, body: string) =>
@@ -46,6 +46,29 @@ test('a hidden entry carries its status and a live one has no status key', () =>
     status: 'hidden',
   });
   expect(index.listings?.[1]?.locales.en).not.toHaveProperty('status');
+});
+
+test('the entry layout is the only one accepted, and the site files with it', () => {
+  expect(
+    contentPathErrors('default', [
+      'src/content/listings/en/mill-house.yaml',
+      'src/content/globals/en/site.yaml',
+      'src/content/redirects.yaml',
+      'src/content/_templates/listings/house.yaml',
+    ]),
+  ).toEqual([]);
+});
+
+test('a content file below the locale folder fails rather than going missing', () => {
+  expect(
+    contentPathErrors('default', [
+      'src/content/listings/en/devon/mill-house.yaml',
+      'src/content/loose.yaml',
+    ]),
+  ).toEqual([
+    'src/content/listings/en/devon/mill-house.yaml: an entry is src/content/<collection>/<locale>/<name>.yaml, one folder per locale and no folders below it',
+    'src/content/loose.yaml: an entry is src/content/<collection>/<locale>/<name>.yaml, one folder per locale and no folders below it',
+  ]);
 });
 
 test('templates, globals and redirects are not entries', () => {

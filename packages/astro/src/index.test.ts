@@ -187,14 +187,14 @@ test('group, array and blocks are detected from real Zod output', () => {
 
 type Setup = HookParameters<'astro:config:setup'>;
 
-function runSetup(adapter: unknown) {
+function runSetup(adapter: unknown, root = new URL('file:///site/')) {
   const info = vi.fn();
   const injectRoute = vi.fn();
   const addMiddleware = vi.fn();
   const updateConfig = vi.fn();
   const setup = handover().hooks['astro:config:setup'] as (o: Setup) => void;
   setup({
-    config: { adapter, root: new URL('file:///site/') },
+    config: { adapter, root },
     logger: { info },
     injectRoute,
     addMiddleware,
@@ -239,7 +239,7 @@ test('virtual:handover/ui inlines every file in dist/ui', async () => {
   await writeFile(join(dir, 'main-abc.js'), 'js();');
   await writeFile(join(dir, 'main-abc.css'), 'b{}');
   const { updateConfig } = runSetup({ name: 'fake-adapter', hooks: {} });
-  const plugin = updateConfig.mock.calls[0]?.[0].vite.plugins[1];
+  const plugin = updateConfig.mock.calls[0]?.[0].vite.plugins[2];
   expect(plugin.resolveId('virtual:handover/ui')).toBe('\0virtual:handover/ui');
   expect(plugin.resolveId('other')).toBeUndefined();
   expect(await plugin.load('other')).toBeUndefined();
@@ -405,6 +405,32 @@ test('buildIndex lists an entry per locale file and leaves _templates/ out', asy
       },
     ],
   });
+});
+
+test('buildIndex fails on a content file below the locale folder, naming it', async () => {
+  const root = new URL(`${await mkdtemp(join(tmpdir(), 'handover-site-'))}/`, 'file://');
+  await mkdir(new URL('src/content/listings/en/devon/', root), { recursive: true });
+  await writeFile(new URL('src/content/listings/en/mill-house.yaml', root), 'title: "Mill"\n');
+  await writeFile(
+    new URL('src/content/listings/en/devon/seaview.yaml', root),
+    'title: "Seaview"\n',
+  );
+  await expect(buildIndex(root)).rejects.toThrow(
+    'src/content/listings/en/devon/seaview.yaml: an entry is src/content/<collection>/<locale>/<name>.yaml',
+  );
+});
+
+test('virtual:handover/index is the built index, inlined rather than served', async () => {
+  const { updateConfig } = runSetup({ name: 'fake-adapter', hooks: {} }, fixture);
+  const plugin = updateConfig.mock.calls[0]?.[0].vite.plugins[1];
+  expect(plugin.name).toBe('handover-index');
+  expect(plugin.resolveId('virtual:handover/index')).toBe('\0virtual:handover/index');
+  expect(plugin.resolveId('other')).toBeUndefined();
+  expect(await plugin.load('other')).toBeUndefined();
+  const module = await plugin.load('\0virtual:handover/index');
+  expect(module).toBe(
+    `export default JSON.parse(${JSON.stringify(JSON.stringify(await buildIndex(fixture)))});`,
+  );
 });
 
 test('formSchema maps z.date() to a date field and a transform to its input type', () => {

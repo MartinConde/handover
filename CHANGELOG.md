@@ -4,14 +4,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
-- The admin can list a collection without fetching every file from GitHub. The build writes
-  `handover-index.json` into your output directory — every entry's title and `_status`, one
-  row per entry across locales — and the new `GET /admin/api/entries/:collection` reads it
-  with the pending drafts laid over it, so an entry you have edited but not published lists
-  under the title you typed. Titles come from the entry's `title` field; a collection
-  without one lists by filename. `astro dev` serves the same file from disk, so the admin
-  works before the site has been built. The index is a public static asset like any other
-  file in your output. See `docs/publishing.md`.
+- The admin can list a collection without fetching every file from GitHub. The build reads
+  every entry's title and `_status` out of `src/content/` — one row per entry across
+  locales — and the new `GET /admin/api/entries/:collection` serves that with the pending
+  drafts laid over it, so an entry you have edited but not published lists under the title
+  you typed. Titles come from the entry's `title` field; a collection without one lists by
+  filename. The index lives inside the Worker and is never served as a file, so your entry
+  titles are not public. `astro dev` rebuilds it when a content file changes.
+- **The build now fails on a content file that is not
+  `src/content/<collection>/<locale>/<name>.yaml`**, naming the file. An entry is one file
+  per locale with no folders below the locale folder; a file anywhere else could not be
+  opened as `collection/slug` and would have been missing from the entry list without
+  saying so. Move such files into the locale folder, or out of `src/content/`.
+  See `docs/publishing.md`.
 - Publishing commits what is stored, not what the form holds. The top bar counts the files
   waiting ("3 unpublished changes") and opens a pending-changes drawer that lists them and
   publishes the whole set in one commit through `POST /admin/api/publish`; the draft rows

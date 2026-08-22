@@ -51,6 +51,28 @@ let draft: { contents: string; baseSha: string; baseBlob: string } | undefined;
 vi.mock('virtual:handover/config', () => ({
   default: { collections: { listings: { schema: listing } } },
 }));
+// What the build read out of src/content/, inlined into the Worker bundle.
+vi.mock('virtual:handover/index', () => ({
+  default: {
+    listings: [
+      {
+        id: 'mill-house',
+        locales: {
+          en: { title: 'The Mill House', path: 'src/content/listings/en/mill-house.yaml' },
+        },
+      },
+      {
+        id: 'seaview-cottage',
+        locales: {
+          en: {
+            title: 'Seaview Cottage',
+            path: 'src/content/listings/en/seaview-cottage.yaml',
+          },
+        },
+      },
+    ],
+  },
+}));
 vi.mock('cloudflare:workers', () => ({
   env: {
     ADMIN_PASSWORD: 'hunter2',
@@ -59,8 +81,6 @@ vi.mock('cloudflare:workers', () => ({
     GITHUB_PRIVATE_KEY: 'key',
     GITHUB_REPO: 'acme/site',
     DB: {},
-    // The static assets the build wrote; only the content index is asked for.
-    ASSETS: { fetch: (url: URL) => Promise.resolve(index(url)) },
   },
 }));
 vi.mock('@handover/core', async (original) => ({
@@ -73,39 +93,8 @@ vi.mock('@handover/core', async (original) => ({
   publishDrafts,
 }));
 
-// What `handover-index.json` holds after a build of the two listings.
-let index = (url: URL) =>
-  url.pathname === '/handover-index.json'
-    ? Response.json({
-        listings: [
-          {
-            id: 'mill-house',
-            locales: {
-              en: {
-                title: 'The Mill House',
-                path: 'src/content/listings/en/mill-house.yaml',
-              },
-            },
-          },
-          {
-            id: 'seaview-cottage',
-            locales: {
-              en: {
-                title: 'Seaview Cottage',
-                path: 'src/content/listings/en/seaview-cottage.yaml',
-              },
-            },
-          },
-        ],
-      })
-    : new Response('Not found', { status: 404 });
-
 const ctx = (path: string, request?: Request) =>
-  ({
-    params: { path },
-    url: new URL(`https://x/admin/api/${path}`),
-    request,
-  }) as unknown as APIContext;
+  ({ params: { path }, request }) as unknown as APIContext;
 const post = (path: string, body: string) =>
   ctx(path, new Request(`https://x/admin/api/${path}`, { method: 'POST', body }));
 const put = (path: string, body: string) =>
@@ -292,11 +281,4 @@ test('the entry list is the built index with the pending drafts over it', async 
 
 test('listing an unknown collection is 404', async () => {
   expect((await GET(ctx('entries/nope'))).status).toBe(404);
-});
-
-test('a missing index says the build writes it rather than answering an empty list', async () => {
-  const built = index;
-  index = () => new Response('Not found', { status: 404 });
-  await expect(GET(ctx('entries/listings'))).rejects.toThrow(/handover-index\.json is not in/);
-  index = built;
 });
