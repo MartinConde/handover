@@ -1,7 +1,8 @@
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
 import { Miniflare } from 'miniflare';
 import { afterAll, beforeAll, expect, test } from 'vitest';
-import { drafts, openDb } from './db.js';
+import { drafts, openDb, saveDraft } from './db.js';
+import { blobSha } from './git.js';
 
 const mf = new Miniflare({
   modules: true,
@@ -66,4 +67,64 @@ test('a draft row round-trips every column', async () => {
 
   const [read] = await db.select().from(drafts);
   expect(read).toEqual(row);
+});
+
+// A file as it sits in the repo, with the two reserved keys no collection schema declares.
+const FILE =
+  '_version: 1\n_status: "hidden"\ntitle: "The Mill House"\nprice: "£950 per week"\nrooms: 3\n';
+const BLOB = '0a682b93c14fc8fe88c614f5a2581c38120d7f69'; // git hash-object of FILE
+const PATH = 'src/content/listings/en/mill-house.yaml';
+// The form sends the schema's fields only — reserved keys are stripped by `schema.parse`.
+const VALUES = { title: 'The Mill House', price: '£950 per week', rooms: 3 };
+
+const git = {
+  getHead: async () => 'commit-A',
+  getFile: async (path: string) => (path === PATH ? { contents: FILE, blob_sha: BLOB } : undefined),
+};
+
+const fresh = async () => {
+  const db = openDb('default', binding);
+  await db.delete(drafts);
+  return db;
+};
+const only = async (db: ReturnType<typeof openDb>) => (await db.select().from(drafts))[0];
+
+test('the first autosave takes the base sha and blob from git, not from the browser', async () => {
+  const db = await fresh();
+  await saveDraft('default', db, git, PATH, VALUES);
+
+  const row = await only(db);
+  expect(row?.baseSha).toBe('commit-A');
+  expect(row?.baseBlob).toBe(BLOB);
+});
+
+test('a no-op autosave reproduces the loaded bytes exactly', async () => {
+  const db = await fresh();
+  const saved = await saveDraft('default', db, git, PATH, VALUES);
+
+  const row = await only(db);
+  expect(row?.contents).toBe(FILE);
+  expect(await blobSha(row?.contents ?? '')).toBe(row?.baseBlob);
+  expect(saved?.pending).toBe(false);
+});
+
+test('a later autosave replaces the contents and leaves the base where it was', async () => {
+  const db = await fresh();
+  await saveDraft('default', db, git, PATH, VALUES);
+  const saved = await saveDraft('default', db, git, PATH, { ...VALUES, rooms: 4 });
+
+  const row = await only(db);
+  expect(row?.contents).toBe(FILE.replace('rooms: 3', 'rooms: 4'));
+  expect(row?.baseSha).toBe('commit-A');
+  expect(row?.baseBlob).toBe(BLOB);
+  expect(saved?.pending).toBe(true);
+  expect((await db.select().from(drafts)).length).toBe(1);
+});
+
+test('an autosave for a path that is not in the repo writes nothing', async () => {
+  const db = await fresh();
+  expect(await saveDraft('default', db, git, 'src/content/listings/en/gone.yaml', VALUES)).toBe(
+    undefined,
+  );
+  expect(await only(db)).toBe(undefined);
 });

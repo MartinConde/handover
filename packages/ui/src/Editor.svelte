@@ -14,6 +14,8 @@ let {
     fields: readonly Field[];
     blocks: Record<string, Field[]>;
     data: Data;
+    /** The draft the data came from is ahead of the file in git. */
+    pending: boolean;
     head_sha: string;
   };
 } = $props();
@@ -23,12 +25,44 @@ let data = $state<Data>(structuredClone(entry.data));
 // What the page currently holds on the live branch; moves forward on every publish.
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let live = $state({ data: JSON.stringify(entry.data), sha: entry.head_sha });
+// The last shape the draft row holds; the loaded data is already in it, hence no write on open.
+// svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
+let saved = $state(JSON.stringify(entry.data));
+// svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
+let drafted = $state(entry.pending);
+let saving = $state(false);
+let saveFailed = $state(false);
 let busy = $state(false);
 let error = $state('');
 let published = $state('');
 
+const json = $derived(JSON.stringify(data));
 const title = $derived(typeof data.title === 'string' && data.title ? data.title : slug);
-const dirty = $derived(JSON.stringify(data) !== live.data);
+const dirty = $derived(drafted || json !== live.data);
+
+// Autosave. The wait restarts on every keystroke, so a burst of typing is one write.
+$effect(() => {
+  if (json === saved) return;
+  const timer = setTimeout(autosave, 2000);
+  return () => clearTimeout(timer);
+});
+
+async function autosave() {
+  const sent = json;
+  saving = true;
+  const res = await fetch(`/admin/api/drafts/${collection}/${slug}`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ data }),
+  });
+  saving = false;
+  saveFailed = !res.ok;
+  if (res.ok) {
+    saved = sent;
+    // Whether the stored draft differs from the file in git is the server's answer, not ours.
+    drafted = ((await res.json()) as { pending: boolean }).pending;
+  }
+}
 
 async function publish() {
   busy = true;
@@ -41,7 +75,9 @@ async function publish() {
   busy = false;
   if (res.ok) {
     const { commit_sha } = (await res.json()) as { commit_sha: string };
-    live = { data: JSON.stringify(data), sha: commit_sha };
+    live = { data: json, sha: commit_sha };
+    saved = json;
+    drafted = false;
     published = commit_sha.slice(0, 7);
   } else if (res.status === 409) {
     error = 'Someone else published this entry since you opened it. Reload to see their version.';
@@ -57,8 +93,8 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   <header class="entry-header">
     <div class="crumbs">
       <span>{capitalise(collection)}</span><span class="sep" aria-hidden="true">/</span><span>{title}</span>
-      <span class="autosave" class:is-saving={busy} class:is-new={!busy && !published}>
-        {#if busy}Publishing…{:else if dirty}{published ? 'Unpublished changes' : 'Not saved'}{:else if published}Published {published}{:else}Not saved{/if}
+      <span class="autosave" class:is-saving={busy || saving} class:is-offline={saveFailed}>
+        {#if busy}Publishing…{:else if saving}Saving…{:else if saveFailed}Not saved{:else if json !== saved}Unsaved changes{:else if published}Published {published}{:else}Saved{/if}
       </span>
     </div>
     <div class="title-row">

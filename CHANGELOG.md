@@ -4,6 +4,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Edits are autosaved. Two seconds after the last keystroke the admin sends the form to
+  `PUT /admin/api/drafts/:collection/:slug`, which validates it, merges it into the entry
+  and stores the serialised file in D1; reopening the entry shows the draft rather than
+  the file in git, so a reload, a crash or a change of machine loses nothing. The reserved
+  keys a schema does not declare (`_version`, `_status`, `_machine`) are carried over on
+  every save, and the commit and blob sha a draft was loaded from are recorded by the
+  server, never sent by the browser. `GET /admin/api/entries/:collection/:slug` gains
+  `pending`. Publishing still commits what the form holds rather than the stored draft, but
+  it now keeps those reserved keys too — before, publishing an entry with a `_version` or a
+  `_status` silently dropped it. See `docs/publishing.md`.
 - Unpublished edits get a home: the `drafts` table ships as a Drizzle schema at
   `astro-handover/schema`, so a site points `drizzle.config.ts` at it, runs `drizzle-kit
   generate` once and commits `migrations/`. The site needs a D1 database bound as `DB`,

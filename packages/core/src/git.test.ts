@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { createGitClient, RefMovedError } from './git.js';
+import { blobSha, createGitClient, RefMovedError } from './git.js';
 
 // A real key pair so the fake token endpoint can verify the JWT the client signs.
 const keys = await crypto.subtle.generateKey(
@@ -201,4 +201,11 @@ test('publish throws RefMovedError when the branch moved past base_sha', async (
   await expect(
     git.publish([{ path: 'a.yaml', contents: 'a' }], { base_sha: 'commit-A', message: 'm' }),
   ).rejects.toBeInstanceOf(RefMovedError);
+});
+
+// Oracle: `git hash-object`. The length in the header is bytes, so `£` counts as two.
+test('blobSha is the git object id of the file contents', async () => {
+  expect(await blobSha('')).toBe('e69de29bb2d1d6434b8b29ae775ad8c2e48c5391');
+  expect(await blobSha('hello\n')).toBe('ce013625030ba8dba906f756967f9e9ca394464a');
+  expect(await blobSha('£')).toBe('3048c9ab8389e833f2b95ef09b7e305a9df2e2b6');
 });

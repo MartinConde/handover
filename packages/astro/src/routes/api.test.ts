@@ -2,7 +2,7 @@ import type { APIContext } from 'astro';
 import { expect, test, vi } from 'vitest';
 import { GET, POST, PUT } from './api.js';
 
-const { listing, getFile, getHead, publish } = await vi.hoisted(async () => {
+const { listing, getFile, getHead, publish, saveDraft } = await vi.hoisted(async () => {
   const { z } = await import('astro/zod');
   return {
     listing: z.object({
@@ -12,11 +12,19 @@ const { listing, getFile, getHead, publish } = await vi.hoisted(async () => {
       address: z.object({ street: z.string() }),
     }),
     // The GitHub boundary: one file in the repo, nothing else.
-    getFile: vi.fn(async (path: string) =>
-      path === 'src/content/listings/en/mill-house.yaml'
-        ? { contents: 'title: The Mill House\nlocation: Bakewell\nrooms: 3\n', blob_sha: 'abc123' }
-        : undefined,
-    ),
+    getFile: vi.fn(async (path: string) => {
+      if (path === 'src/content/listings/en/mill-house.yaml')
+        return {
+          contents: 'title: The Mill House\nlocation: Bakewell\nrooms: 3\n',
+          blob_sha: 'abc123',
+        };
+      if (path === 'src/content/listings/en/hidden-barn.yaml')
+        return {
+          contents: '_version: 1\n_status: "hidden"\ntitle: "Hidden Barn"\nrooms: 2\n',
+          blob_sha: 'bcd234',
+        };
+      return undefined;
+    }),
     getHead: vi.fn(async () => 'head789'),
     publish: vi.fn(async (_files: unknown, opts: { base_sha: string }) => {
       if (opts.base_sha === 'stale') {
@@ -25,8 +33,15 @@ const { listing, getFile, getHead, publish } = await vi.hoisted(async () => {
       }
       return { commit_sha: 'def456' };
     }),
+    // The D1 boundary; the real saveDraft runs against a D1 in @handover/core's own tests.
+    saveDraft: vi.fn<() => Promise<{ updated_at: number; pending: boolean } | undefined>>(
+      async () => ({ updated_at: 1755864000000, pending: true }),
+    ),
   };
 });
+
+// The row GET should overlay, set per test.
+let draft: { contents: string; baseSha: string; baseBlob: string } | undefined;
 vi.mock('virtual:handover/config', () => ({
   default: { collections: { listings: { schema: listing } } },
 }));
@@ -37,11 +52,15 @@ vi.mock('cloudflare:workers', () => ({
     GITHUB_INSTALLATION_ID: '2',
     GITHUB_PRIVATE_KEY: 'key',
     GITHUB_REPO: 'acme/site',
+    DB: {},
   },
 }));
 vi.mock('@handover/core', async (original) => ({
   ...(await original<typeof import('@handover/core')>()),
   createGitClient: () => ({ getFile, getHead, publish }),
+  openDb: () => ({}),
+  loadDraft: async () => draft,
+  saveDraft,
 }));
 
 const ctx = (path: string, request?: Request) =>
@@ -85,6 +104,7 @@ test('an entry returns its fields, parsed data, blob sha and head sha', async ()
     ],
     blocks: {},
     data: { title: 'The Mill House', location: 'Bakewell', rooms: 3 },
+    pending: false,
     blob_sha: 'abc123',
     head_sha: 'head789',
   });
@@ -162,4 +182,72 @@ test('publish rejects a malformed body with 400', async () => {
       )
     ).status,
   ).toBe(400);
+});
+
+test('an entry with a draft returns the draft data and reports it as pending', async () => {
+  draft = {
+    contents: 'title: "The Mill House (draft)"\nlocation: "Bakewell"\nrooms: 3\n',
+    baseSha: 'head789',
+    baseBlob: 'abc123',
+  };
+  const res = await GET(ctx('entries/listings/mill-house'));
+  const body = (await res.json()) as { data: unknown; pending: boolean; blob_sha: string };
+  expect(body.data).toEqual({ title: 'The Mill House (draft)', location: 'Bakewell', rooms: 3 });
+  expect(body.pending).toBe(true);
+  expect(body.blob_sha).toBe('abc123');
+  draft = undefined;
+});
+
+test('autosaving a draft validates it and stores it under the entry path', async () => {
+  const data = { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } };
+  const res = await PUT(put('drafts/listings/mill-house', JSON.stringify({ data })));
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ updated_at: 1755864000000, pending: true });
+  expect(saveDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/listings/en/mill-house.yaml',
+    data,
+  );
+});
+
+test('autosaving never publishes, whatever the form holds', async () => {
+  publish.mockClear();
+  const data = { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } };
+  await PUT(put('drafts/listings/mill-house', JSON.stringify({ data })));
+  expect(publish).not.toHaveBeenCalled();
+});
+
+test('an autosave that fails the collection schema is 400 and stores nothing', async () => {
+  saveDraft.mockClear();
+  const body = JSON.stringify({ data: { title: 'No rooms' } });
+  expect((await PUT(put('drafts/listings/mill-house', body))).status).toBe(400);
+  expect((await PUT(put('drafts/listings/mill-house', 'not json'))).status).toBe(400);
+  expect((await PUT(put('drafts/nope/mill-house', body))).status).toBe(404);
+  expect(saveDraft).not.toHaveBeenCalled();
+});
+
+test('an autosave for an entry that is not in the repo is 404', async () => {
+  saveDraft.mockImplementationOnce(async () => undefined);
+  const data = { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } };
+  expect((await PUT(put('drafts/listings/gone', JSON.stringify({ data })))).status).toBe(404);
+});
+
+test('publishing keeps the reserved keys no collection schema declares', async () => {
+  const data = { title: 'Hidden Barn', rooms: 2, address: { street: 'Barn Lane' } };
+  const res = await PUT(
+    put('entries/listings/hidden-barn', JSON.stringify({ data, base_sha: 'head789' })),
+  );
+  expect(res.status).toBe(200);
+  expect(publish).toHaveBeenCalledWith(
+    [
+      {
+        path: 'src/content/listings/en/hidden-barn.yaml',
+        contents:
+          '_version: 1\n_status: "hidden"\ntitle: "Hidden Barn"\nrooms: 2\naddress:\n  street: "Barn Lane"\n',
+      },
+    ],
+    { base_sha: 'head789', message: 'Update listings/hidden-barn' },
+  );
 });

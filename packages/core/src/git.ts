@@ -36,6 +36,19 @@ export class RefMovedError extends Error {
 
 const API = 'https://api.github.com';
 
+// A git object id is a pure function of the bytes: sha1("blob <length>\0" + bytes). Two
+// of these decide whether a draft still matches the file it was loaded from, with no
+// fetch per file — the length is bytes, so a multibyte character is not one.
+export async function blobSha(contents: string): Promise<string> {
+  const bytes = new TextEncoder().encode(contents);
+  const header = new TextEncoder().encode(`blob ${bytes.length}\0`);
+  const object = new Uint8Array(header.length + bytes.length);
+  object.set(header);
+  object.set(bytes, header.length);
+  const hash = new Uint8Array(await crypto.subtle.digest('SHA-1', object));
+  return [...hash].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 function base64url(bytes: Uint8Array | string): string {
   const bin = typeof bytes === 'string' ? bytes : String.fromCharCode(...bytes);
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');

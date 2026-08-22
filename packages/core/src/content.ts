@@ -54,6 +54,20 @@ const YAML_OPTIONS = {
   indent: 2,
 } as const;
 
+// The form sends the fields the schema declares, and a schema strips what it does not know.
+// The `_` keys belong to the file, so they are read back off the entry as it stands rather
+// than being dropped on every save.
+export function mergeEntry(
+  _siteId: string,
+  entry: unknown,
+  values: Record<string, unknown>,
+): Record<string, unknown> {
+  const reserved = Object.entries((entry ?? {}) as Record<string, unknown>).filter(([k]) =>
+    k.startsWith('_'),
+  );
+  return { ...Object.fromEntries(reserved), ...values };
+}
+
 export function stringifyEntry(_siteId: string, data: unknown): string {
   const doc = new Document(canonical(data, ''));
   // QUOTE_DOUBLE as the default would also quote multiline prose; opt those into `|`.

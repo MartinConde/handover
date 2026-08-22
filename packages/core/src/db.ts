@@ -1,5 +1,8 @@
+import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { mergeEntry, parseEntry, stringifyEntry } from './content.js';
+import { blobSha, type GitClient } from './git.js';
 import type { RedirectRule } from './lifecycle.js';
 
 /**
@@ -40,4 +43,49 @@ export function openDb(_siteId: string, binding: D1Binding | undefined) {
     );
   }
   return drizzle(binding, { schema: { drafts } });
+}
+
+export type Db = ReturnType<typeof openDb>;
+export type Draft = typeof drafts.$inferSelect;
+
+export function loadDraft(siteId: string, db: Db, path: string): Promise<Draft | undefined> {
+  return db.query.drafts.findFirst({
+    where: and(eq(drafts.siteId, siteId), eq(drafts.path, path)),
+  });
+}
+
+/**
+ * One autosave. `base_*` are read from git the first time a row is written and never sent
+ * by the browser — a tab left open across someone else's publish would report a stale base.
+ * `undefined` when the path is not in the repo.
+ */
+export async function saveDraft(
+  siteId: string,
+  db: Db,
+  git: Pick<GitClient, 'getFile' | 'getHead'>,
+  path: string,
+  values: Record<string, unknown>,
+): Promise<{ updated_at: number; pending: boolean } | undefined> {
+  const row = await loadDraft(siteId, db, path);
+  let base: { sha: string; blob: string };
+  let entry: unknown;
+  if (row) {
+    base = { sha: row.baseSha, blob: row.baseBlob };
+    entry = parseEntry(siteId, row.contents);
+  } else {
+    const [file, head] = await Promise.all([git.getFile(path), git.getHead()]);
+    if (!file) return undefined;
+    base = { sha: head, blob: file.blob_sha };
+    entry = parseEntry(siteId, file.contents);
+  }
+  const contents = stringifyEntry(siteId, mergeEntry(siteId, entry, values));
+  const updatedAt = Date.now();
+  await db
+    .insert(drafts)
+    .values({ siteId, path, contents, baseSha: base.sha, baseBlob: base.blob, updatedAt })
+    .onConflictDoUpdate({
+      target: [drafts.siteId, drafts.path],
+      set: { contents, updatedAt, publishedSha: null },
+    });
+  return { updated_at: updatedAt, pending: (await blobSha(contents)) !== base.blob };
 }

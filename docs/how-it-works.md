@@ -40,10 +40,20 @@ Anything the walker does not know is `unsupported` and shown read-only.
 
 Content never leaves git. Reading `GET /admin/api/entries/:collection/:slug` fetches
 `src/content/<collection>/en/<slug>.yaml` through the GitHub contents API and returns the
-parsed data with the file's blob sha and the branch's head sha.
+parsed data with the file's blob sha and the branch's head sha — or, when the entry has a
+draft row, that row's contents instead, with `pending` saying which.
 
-Publishing (`PUT` on the same path) validates the data against the collection schema,
-serialises it back to YAML and makes one commit through the Git Data API: a tree with
+`PUT /admin/api/drafts/:collection/:slug` is the autosave. `saveDraft` in core merges the
+validated field values over the reserved keys of the entry as it stands, serialises the
+result and upserts one row keyed by `(site_id, path)`. `base_sha` and `base_blob` come
+from GitHub on the first write of a row and are then left alone, so the base is the
+server's fact and not something a stale tab can assert. `blobSha()` computes a git object
+id from bytes (`sha1("blob <length>\0" + bytes)`), which is what makes "does this draft
+still match the file?" a string comparison rather than a fetch.
+
+Publishing (`PUT /admin/api/entries/:collection/:slug`) validates the data against the
+collection schema, merges it through the same `mergeEntry` so the bytes match what an
+autosave would store, and makes one commit through the Git Data API: a tree with
 `base_tree` set (so nothing else in the repo is touched), a commit whose parent is the
 head sha the editor loaded against, and a non-force ref update. If `main` moved in
 between, GitHub refuses the update, the API answers 409 and nothing is written. Commits

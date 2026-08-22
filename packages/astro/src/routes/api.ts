@@ -1,7 +1,18 @@
 import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
-import type { GitClient } from '@handover/core';
-import { createGitClient, formOf, parseEntry, RefMovedError, stringifyEntry } from '@handover/core';
+import type { Db, GitClient } from '@handover/core';
+import {
+  blobSha,
+  createGitClient,
+  formOf,
+  loadDraft,
+  mergeEntry,
+  openDb,
+  parseEntry,
+  RefMovedError,
+  saveDraft,
+  stringifyEntry,
+} from '@handover/core';
 import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
 import { login } from '../auth.js';
@@ -25,25 +36,51 @@ function gitClient(): GitClient {
   });
 }
 
+function db(): Db {
+  return openDb('default', (env as { DB?: Parameters<typeof openDb>[1] }).DB);
+}
+
 // Every entry lives in en/ until Phase 1 adds locales.
 const entryPath = (collection: string, slug: string) => `src/content/${collection}/en/${slug}.yaml`;
 
-// head_sha is what a later PUT publishes on top of, so a publish in between is a 409, not a clobber.
+// The draft is what the editor was last looking at, so it wins over the file. head_sha is
+// what a later PUT publishes on top of, so a publish in between is a 409, not a clobber.
 async function getEntry(collection: string, slug: string): Promise<Response> {
   const schema = config.collections[collection]?.schema;
   if (!schema) return new Response('Not found', { status: 404 });
   const git = gitClient();
-  const [file, head_sha] = await Promise.all([
-    git.getFile(entryPath(collection, slug)),
+  const path = entryPath(collection, slug);
+  const [file, head_sha, draft] = await Promise.all([
+    git.getFile(path),
     git.getHead(),
+    loadDraft('default', db(), path),
   ]);
   if (!file) return new Response('Not found', { status: 404 });
   return Response.json({
     ...formOf('default', formSchema(schema)),
-    data: parseEntry('default', file.contents),
+    data: parseEntry('default', draft?.contents ?? file.contents),
+    pending: draft ? (await blobSha(draft.contents)) !== file.blob_sha : false,
     blob_sha: file.blob_sha,
     head_sha,
   });
+}
+
+// Autosave. No base comes from the browser: saveDraft reads it from git the first time it
+// writes a row and keeps it afterwards.
+async function autosave(collection: string, slug: string, request: Request): Promise<Response> {
+  const schema = config.collections[collection]?.schema;
+  if (!schema) return new Response('Not found', { status: 404 });
+  const body = (await request.json().catch(() => undefined)) as { data?: unknown } | undefined;
+  const data = schema.safeParse(body?.data);
+  if (!data.success) return new Response('Bad request', { status: 400 });
+  const saved = await saveDraft(
+    'default',
+    db(),
+    gitClient(),
+    entryPath(collection, slug),
+    data.data as Record<string, unknown>,
+  );
+  return saved ? Response.json(saved) : new Response('Not found', { status: 404 });
 }
 
 const saveBody = z.object({ data: z.unknown(), base_sha: z.string().min(1) });
@@ -54,11 +91,19 @@ async function saveEntry(collection: string, slug: string, request: Request): Pr
   const body = saveBody.safeParse(await request.json().catch(() => undefined));
   const data = body.success ? schema.safeParse(body.data.data) : undefined;
   if (!body.success || !data?.success) return new Response('Bad request', { status: 400 });
+  const git = gitClient();
+  const path = entryPath(collection, slug);
+  // Read the file for its reserved keys, so a publish writes the same bytes an autosave does.
+  const file = await git.getFile(path);
+  const contents = stringifyEntry(
+    'default',
+    mergeEntry('default', file && parseEntry('default', file.contents), data.data as never),
+  );
   try {
-    const result = await gitClient().publish(
-      [{ path: entryPath(collection, slug), contents: stringifyEntry('default', data.data) }],
-      { base_sha: body.data.base_sha, message: `Update ${collection}/${slug}` },
-    );
+    const result = await git.publish([{ path, contents }], {
+      base_sha: body.data.base_sha,
+      message: `Update ${collection}/${slug}`,
+    });
     return Response.json(result);
   } catch (err) {
     if (err instanceof RefMovedError) return new Response(err.message, { status: 409 });
@@ -67,6 +112,7 @@ async function saveEntry(collection: string, slug: string, request: Request): Pr
 }
 
 const ENTRY = /^entries\/([\w-]+)\/([\w-]+)$/;
+const DRAFT = /^drafts\/([\w-]+)\/([\w-]+)$/;
 
 export const GET: APIRoute = async ({ params }) => {
   if (params.path === 'ping') {
@@ -78,6 +124,8 @@ export const GET: APIRoute = async ({ params }) => {
 };
 
 export const PUT: APIRoute = async ({ params, request }) => {
+  const draft = params.path?.match(DRAFT);
+  if (draft) return autosave(draft[1] ?? '', draft[2] ?? '', request);
   const entry = params.path?.match(ENTRY);
   if (entry) return saveEntry(entry[1] ?? '', entry[2] ?? '', request);
   return new Response('Not found', { status: 404 });
