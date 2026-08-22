@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { createGitClient } from './git.js';
+import { createGitClient, RefMovedError } from './git.js';
 
 // A real key pair so the fake token endpoint can verify the JWT the client signs.
 const keys = await crypto.subtle.generateKey(
@@ -114,4 +114,76 @@ test('an expired installation token is minted again', async () => {
   await git.getFile('a.yaml');
 
   expect(gh.minted()).toBe(2);
+});
+
+// A fake Git Data API over one branch: records the ref PATCH body so a test can prove
+// the update is never forced, and moves the head underneath the client when asked.
+function fakeGitData(opts: { headMovesTo?: string } = {}) {
+  const bodies: Record<string, unknown> = {};
+  let minted = 0;
+  const fetch = async (url: string, init: RequestInit = {}): Promise<Response> => {
+    const path = url.replace('https://api.github.com', '');
+    if (path === '/app/installations/67890/access_tokens') {
+      minted += 1;
+      return Response.json({ token: 'ghs_1', expires_at: '2099-01-01T00:00:00Z' }, { status: 201 });
+    }
+    if (init.body) bodies[`${init.method} ${path}`] = JSON.parse(String(init.body));
+    if (path === '/repos/acme/site/git/ref/heads%2Fmain')
+      return Response.json({ object: { sha: opts.headMovesTo ?? 'commit-A' } });
+    if (path === '/repos/acme/site/git/commits/commit-A')
+      return Response.json({ sha: 'commit-A', tree: { sha: 'tree-A' } });
+    if (path === '/repos/acme/site/git/trees')
+      return Response.json({ sha: 'tree-B' }, { status: 201 });
+    if (path === '/repos/acme/site/git/commits')
+      return Response.json({ sha: 'commit-B' }, { status: 201 });
+    if (path === '/repos/acme/site/git/refs/heads%2Fmain') {
+      if (opts.headMovesTo)
+        return Response.json({ message: 'Update is not a fast forward' }, { status: 422 });
+      return Response.json({ object: { sha: 'commit-B' } });
+    }
+    return new Response('{}', { status: 404 });
+  };
+  return { fetch: fetch as unknown as typeof globalThis.fetch, bodies, minted: () => minted };
+}
+
+test('getHead returns the branch commit sha', async () => {
+  const gh = fakeGitData();
+  const git = createGitClient('default', app, { fetch: gh.fetch });
+
+  expect(await git.getHead()).toBe('commit-A');
+});
+
+test('publish builds the tree on base_tree, parents the commit on base_sha and never forces the ref', async () => {
+  const gh = fakeGitData();
+  const git = createGitClient('default', app, { fetch: gh.fetch });
+
+  const result = await git.publish([{ path: 'src/content/a.yaml', contents: 'title: A\n' }], {
+    base_sha: 'commit-A',
+    message: 'Update A',
+  });
+
+  expect(result).toEqual({ commit_sha: 'commit-B' });
+  expect(gh.bodies['POST /repos/acme/site/git/trees']).toEqual({
+    base_tree: 'tree-A',
+    tree: [{ path: 'src/content/a.yaml', mode: '100644', type: 'blob', content: 'title: A\n' }],
+  });
+  expect(gh.bodies['POST /repos/acme/site/git/commits']).toEqual({
+    message: 'Update A',
+    tree: 'tree-B',
+    parents: ['commit-A'],
+  });
+  expect(gh.bodies['PATCH /repos/acme/site/git/refs/heads%2Fmain']).toEqual({
+    sha: 'commit-B',
+    force: false,
+  });
+  expect(gh.minted()).toBe(1);
+});
+
+test('publish throws RefMovedError when the branch moved past base_sha', async () => {
+  const gh = fakeGitData({ headMovesTo: 'commit-X' });
+  const git = createGitClient('default', app, { fetch: gh.fetch });
+
+  await expect(
+    git.publish([{ path: 'a.yaml', contents: 'a' }], { base_sha: 'commit-A', message: 'm' }),
+  ).rejects.toBeInstanceOf(RefMovedError);
 });

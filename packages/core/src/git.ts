@@ -12,8 +12,25 @@ export interface GitFile {
   blob_sha: string;
 }
 
+export interface PublishFile {
+  path: string;
+  contents: string;
+}
+
 export interface GitClient {
+  /** Authenticated call against api.github.com; `path` starts with `/`. */
+  request(path: string, init?: RequestInit): Promise<Response>;
+  getHead(): Promise<string>;
   getFile(path: string): Promise<GitFile | undefined>;
+  publish(
+    files: PublishFile[],
+    opts: { base_sha: string; message: string },
+  ): Promise<{ commit_sha: string }>;
+}
+
+// The branch moved past base_sha between load and publish; the non-force ref update refused it.
+export class RefMovedError extends Error {
+  override name = 'RefMovedError';
 }
 
 const API = 'https://api.github.com';
@@ -79,20 +96,79 @@ export function createGitClient(
     return cached.token;
   }
 
+  const repo = `/repos/${app.owner}/${app.repo}`;
+  const ref = encodeURIComponent(`heads/${app.branch ?? 'main'}`);
+
+  async function request(path: string, init: RequestInit = {}): Promise<Response> {
+    return api(path, init, await token());
+  }
+
+  async function json<T>(path: string, init: RequestInit = {}, what: string): Promise<T> {
+    const res = await request(path, init);
+    if (!res.ok) throw new Error(`GitHub ${what} failed: ${res.status}`);
+    return (await res.json()) as T;
+  }
+
   return {
+    request,
+
+    async getHead() {
+      const body = await json<{ object: { sha: string } }>(`${repo}/git/ref/${ref}`, {}, 'getHead');
+      return body.object.sha;
+    },
+
     async getFile(path) {
       const encoded = path.split('/').map(encodeURIComponent).join('/');
-      const ref = encodeURIComponent(app.branch ?? 'main');
-      const res = await api(
-        `/repos/${app.owner}/${app.repo}/contents/${encoded}?ref=${ref}`,
-        {},
-        await token(),
+      const res = await request(
+        `${repo}/contents/${encoded}?ref=${encodeURIComponent(app.branch ?? 'main')}`,
       );
       if (res.status === 404) return undefined;
       if (!res.ok) throw new Error(`GitHub getFile ${path} failed: ${res.status}`);
       const body = (await res.json()) as { sha: string; content: string };
       const bytes = Uint8Array.from(atob(body.content.replace(/\s+/g, '')), (c) => c.charCodeAt(0));
       return { contents: new TextDecoder().decode(bytes), blob_sha: body.sha };
+    },
+
+    // Text goes inline in the tree, so no blob step. base_tree keeps every unlisted file;
+    // parents: [base_sha] plus a non-force ref update is what makes a concurrent push fail
+    // here instead of being clobbered.
+    async publish(files, { base_sha, message }) {
+      const post = { method: 'POST', headers: { 'content-type': 'application/json' } };
+      const parent = await json<{ tree: { sha: string } }>(
+        `${repo}/git/commits/${base_sha}`,
+        {},
+        'read base commit',
+      );
+      const tree = await json<{ sha: string }>(
+        `${repo}/git/trees`,
+        {
+          ...post,
+          body: JSON.stringify({
+            base_tree: parent.tree.sha,
+            tree: files.map((f) => ({
+              path: f.path,
+              mode: '100644',
+              type: 'blob',
+              content: f.contents,
+            })),
+          }),
+        },
+        'create tree',
+      );
+      const commit = await json<{ sha: string }>(
+        `${repo}/git/commits`,
+        { ...post, body: JSON.stringify({ message, tree: tree.sha, parents: [base_sha] }) },
+        'create commit',
+      );
+      const res = await request(`${repo}/git/refs/${ref}`, {
+        ...post,
+        method: 'PATCH',
+        body: JSON.stringify({ sha: commit.sha, force: false }),
+      });
+      if (res.status === 422)
+        throw new RefMovedError(`${app.branch ?? 'main'} moved past ${base_sha}`);
+      if (!res.ok) throw new Error(`GitHub update ref failed: ${res.status}`);
+      return { commit_sha: commit.sha };
     },
   };
 }

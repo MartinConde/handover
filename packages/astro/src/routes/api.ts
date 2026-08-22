@@ -1,7 +1,13 @@
 import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
 import type { GitClient } from '@handover/core';
-import { createGitClient, fieldsFrom, type JsonSchema, parseEntry } from '@handover/core';
+import {
+  createGitClient,
+  fieldsFrom,
+  type JsonSchema,
+  parseEntry,
+  RefMovedError,
+} from '@handover/core';
 import type { APIRoute } from 'astro';
 import { z } from 'astro/zod';
 import { login } from '../auth.js';
@@ -46,10 +52,29 @@ export const GET: APIRoute = async ({ params }) => {
   return new Response('Not found', { status: 404 });
 };
 
+const publishBody = z.object({
+  files: z.array(z.object({ path: z.string().min(1), contents: z.string() })).min(1),
+  base_sha: z.string().min(1),
+  message: z.string().min(1),
+});
+
+async function publish(request: Request): Promise<Response> {
+  const parsed = publishBody.safeParse(await request.json().catch(() => undefined));
+  if (!parsed.success) return new Response('Bad request', { status: 400 });
+  const { files, base_sha, message } = parsed.data;
+  try {
+    return Response.json(await gitClient().publish(files, { base_sha, message }));
+  } catch (err) {
+    if (err instanceof RefMovedError) return new Response(err.message, { status: 409 });
+    throw err;
+  }
+}
+
 export const POST: APIRoute = async ({ params, request }) => {
   if (params.path === 'login') {
     const body = (await request.json().catch(() => ({}))) as { password?: unknown };
     return login(typeof body.password === 'string' ? body.password : '');
   }
+  if (params.path === 'publish') return publish(request);
   return new Response('Not found', { status: 404 });
 };

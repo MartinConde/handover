@@ -4,6 +4,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `POST /admin/api/publish` with `{ files: [{ path, contents }], base_sha, message }` writes
+  the files to the site's repo as one commit on top of `base_sha` and returns `{ commit_sha }`.
+  If the branch moved past `base_sha` in the meantime the response is 409 and nothing is
+  written; a malformed body is 400. Commits carry no author/committer so GitHub shows them
+  as Verified.
+- `GitClient` in core gains `getHead()`, `publish(files, { base_sha, message })` (Git Data
+  API: tree with `base_tree` → commit → non-force ref update, throws `RefMovedError` on a
+  stale base) and `request(path, init)` for other authenticated API calls.
 - `/admin/c/<collection>/<slug>` opens the entry editor: a form with one text input per
   `z.string()` field, filled from the entry; other fields show "Not editable here yet".
   Edits are kept in the page only — nothing is saved yet and Publish is disabled.
