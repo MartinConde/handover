@@ -1,0 +1,9 @@
+_version: 1
+button:
+  type: "url"
+  href: "https://example.com/viewings"
+  label: "Book a viewing"
+  newTab: true
+more:
+  type: "entry"
+  ref: "listings/mill-house"

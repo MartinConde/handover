@@ -40,6 +40,48 @@ for (const name of readdirSync(goldenDir)) {
   });
 }
 
+// One fixture per scalar field type: the object a form produces must land in the golden
+// file byte for byte and come back equal, so the stored form of each type is pinned.
+const scalars: Record<string, unknown> = {
+  text: {
+    _version: 1,
+    title: 'Seaview Cottage',
+    summary: 'Two bedrooms, one bathroom.\n\nFive minutes from the beach.',
+  },
+  number: { _version: 1, bedrooms: 3, area: 82.5, price: 425000 },
+  boolean: { _version: 1, featured: true, sold: false },
+  date: { _version: 1, availableFrom: '2026-09-01' },
+  select: { _version: 1, status: 'sale' },
+  link: {
+    _version: 1,
+    button: {
+      type: 'url',
+      href: 'https://example.com/viewings',
+      label: 'Book a viewing',
+      newTab: true,
+    },
+    more: { type: 'entry', ref: 'listings/mill-house' },
+  },
+};
+
+for (const [type, fixture] of Object.entries(scalars)) {
+  test(`${type} round-trips through its golden file`, () => {
+    const golden = readFileSync(join(goldenDir, `${type}.yaml`), 'utf8');
+    const out = stringifyEntry('default', fixture);
+    expect(out).toBe(golden);
+    expect(parseEntry('default', out)).toEqual(fixture);
+  });
+}
+
+test('a date is stored as a quoted string, never a YAML timestamp or a Date', () => {
+  expect(parseEntry('default', 'availableFrom: 2026-09-01\n')).toEqual({
+    availableFrom: '2026-09-01',
+  });
+  expect(() => stringifyEntry('default', { availableFrom: new Date('2026-09-01') })).toThrow(
+    'Date object at availableFrom',
+  );
+});
+
 test('reserved keys come first in fixed order, then fields in schema order', () => {
   const out = stringifyEntry('default', {
     title: 'Home',

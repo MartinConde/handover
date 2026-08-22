@@ -2,10 +2,20 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { AstroIntegration } from 'astro';
-import type { z } from 'astro/zod';
+import { z } from 'astro/zod';
 
 export type { AstroContent, ContentEntry, ContentSource } from '@handover/core';
 export { filterLive, isLive, staticSource } from '@handover/core';
+
+// `.meta({ handover })` is how core's schema walker recognises a shape it does not own.
+const linkExtras = { label: z.string().optional(), newTab: z.boolean().optional() };
+export const link = z
+  .discriminatedUnion('type', [
+    z.object({ type: z.literal('url'), href: z.string(), ...linkExtras }),
+    z.object({ type: z.enum(['entry', 'page']), ref: z.string(), ...linkExtras }),
+  ])
+  .meta({ handover: 'link' });
+export type Link = z.infer<typeof link>;
 
 export interface HandoverConfig {
   collections: Record<string, { schema: z.ZodType }>;

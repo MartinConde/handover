@@ -27,19 +27,50 @@ test('strings inside nested objects get the full path', () => {
   ]);
 });
 
-test('non-string leaves are marked unsupported, not rejected', () => {
+test('number and integer schemas become number fields', () => {
+  const schema = obj({ area: { type: 'number' }, beds: { type: 'integer', minimum: 0 } }, ['area']);
+  expect(fieldsFrom('default', schema)).toEqual([
+    { path: ['area'], type: 'number', required: true },
+    { path: ['beds'], type: 'number', required: false },
+  ]);
+});
+
+test('boolean schemas become boolean fields', () => {
+  expect(fieldsFrom('default', obj({ sold: { type: 'boolean' } }, ['sold']))).toEqual([
+    { path: ['sold'], type: 'boolean', required: true },
+  ]);
+});
+
+test('a string with format date is a date field', () => {
+  const schema = obj({ from: { type: 'string', format: 'date', pattern: '^x$' } }, ['from']);
+  expect(fieldsFrom('default', schema)).toEqual([{ path: ['from'], type: 'date', required: true }]);
+});
+
+test('a string enum is a select field carrying its options', () => {
+  const schema = obj({ status: { type: 'string', enum: ['sale', 'rent'] } }, ['status']);
+  expect(fieldsFrom('default', schema)).toEqual([
+    { path: ['status'], type: 'select', required: true, options: ['sale', 'rent'] },
+  ]);
+});
+
+test('a schema tagged handover: link is a link field, whatever its shape', () => {
+  const schema = obj({ button: { oneOf: [obj({ href: { type: 'string' } })], handover: 'link' } });
+  expect(fieldsFrom('default', schema)).toEqual([
+    { path: ['button'], type: 'link', required: false },
+  ]);
+});
+
+test('other leaves are marked unsupported, not rejected', () => {
   const schema = obj(
     {
-      price: { type: 'number' },
       tags: { type: 'array', items: { type: 'string' } },
       nick: { anyOf: [{ type: 'string' }, { type: 'null' }] },
       when: {},
       title: { type: 'string' },
     },
-    ['price', 'tags', 'nick', 'when', 'title'],
+    ['tags', 'nick', 'when', 'title'],
   );
   expect(fieldsFrom('default', schema)).toEqual([
-    { path: ['price'], type: 'unsupported' },
     { path: ['tags'], type: 'unsupported' },
     { path: ['nick'], type: 'unsupported' },
     { path: ['when'], type: 'unsupported' },

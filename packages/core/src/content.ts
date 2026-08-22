@@ -69,6 +69,9 @@ export function stringifyEntry(_siteId: string, data: unknown): string {
 
 function canonical(value: unknown, path: string): unknown {
   if (typeof value === 'string') return normalise(value);
+  if (value instanceof Date) {
+    throw new Error(`Date object at ${path}: store dates as "YYYY-MM-DD" strings`);
+  }
   if (Array.isArray(value)) {
     return value.map((item, i) => {
       if (Array.isArray(item)) {

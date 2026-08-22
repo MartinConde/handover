@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Scalar field types in the admin form: `number`, `boolean`, `date` (`z.iso.date()`,
+  stored as a `"YYYY-MM-DD"` string), `select` (`z.enum`) and `link` (`link` from
+  `astro-handover`: `{ type: url | entry | page, href | ref, label?, newTab? }`) are
+  detected from the schema alongside `text`. Passing a JS `Date` to `stringifyEntry`
+  throws. See `docs/content-format.md`.
 - Reserved keys are checked on read: `parseEntry` throws, naming the path, when `_version`
   is not a number, `_status` is anything but `hidden`, `_id` is not eight characters from
   `0-9a-z`, `_locales` is empty or at the top level, or `_machine`/`_i18n`/`_ref` have the

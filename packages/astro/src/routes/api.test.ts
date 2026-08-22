@@ -68,14 +68,14 @@ test('login reads the password from the JSON body', async () => {
   expect((await POST(post('login', 'not json'))).status).toBe(401);
 });
 
-test('an entry returns its text fields, parsed data, blob sha and head sha', async () => {
+test('an entry returns its fields, parsed data, blob sha and head sha', async () => {
   const res = await GET(ctx('entries/listings/mill-house'));
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
     fields: [
       { path: ['title'], type: 'text', required: true },
       { path: ['location'], type: 'text', required: false },
-      { path: ['rooms'], type: 'unsupported' },
+      { path: ['rooms'], type: 'number', required: true },
       { path: ['address', 'street'], type: 'text', required: true },
     ],
     data: { title: 'The Mill House', location: 'Bakewell', rooms: 3 },

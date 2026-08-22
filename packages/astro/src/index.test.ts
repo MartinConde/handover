@@ -1,9 +1,37 @@
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fieldsFrom, type JsonSchema } from '@handover/core';
 import type { HookParameters } from 'astro';
+import { z } from 'astro/zod';
 import { expect, test, vi } from 'vitest';
-import handover, { NO_ADAPTER_MESSAGE, uiAssetsModule } from './index.js';
+import handover, { link, NO_ADAPTER_MESSAGE, uiAssetsModule } from './index.js';
+
+test('the scalar field types are detected from real Zod output', () => {
+  const schema = z.object({
+    title: z.string(),
+    area: z.number(),
+    sold: z.boolean(),
+    from: z.iso.date(),
+    status: z.enum(['sale', 'rent']),
+    button: link.optional(),
+  });
+  const json = z.toJSONSchema(schema, { unrepresentable: 'any' }) as JsonSchema;
+  expect(fieldsFrom('default', json).map((f) => [f.path.join('.'), f.type])).toEqual([
+    ['title', 'text'],
+    ['area', 'number'],
+    ['sold', 'boolean'],
+    ['from', 'date'],
+    ['status', 'select'],
+    ['button', 'link'],
+  ]);
+});
+
+test('link accepts url and ref shapes and rejects a mismatched pair', () => {
+  expect(link.safeParse({ type: 'url', href: '/contact', newTab: true }).success).toBe(true);
+  expect(link.safeParse({ type: 'page', ref: 'pages/impressum' }).success).toBe(true);
+  expect(link.safeParse({ type: 'url', ref: 'pages/impressum' }).success).toBe(false);
+});
 
 type Setup = HookParameters<'astro:config:setup'>;
 
