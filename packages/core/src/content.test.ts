@@ -52,6 +52,24 @@ const scalars: Record<string, unknown> = {
   boolean: { _version: 1, featured: true, sold: false },
   date: { _version: 1, availableFrom: '2026-09-01' },
   select: { _version: 1, status: 'sale' },
+  richtext: {
+    _version: 1,
+    body: [
+      '## The house',
+      '',
+      'Two **sunny** bedrooms, one *quiet* bathroom.',
+      '',
+      '- Sea view',
+      '- Walled garden',
+      '',
+      '1. Book a [viewing](https://example.com/viewings)',
+      '2. Make an offer',
+      '',
+      '### The garden',
+      '',
+      '> A rare find.',
+    ].join('\n'),
+  },
   link: {
     _version: 1,
     button: {

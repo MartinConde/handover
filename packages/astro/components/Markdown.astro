@@ -1,0 +1,13 @@
+---
+import { createSatteriMarkdownProcessor } from '@astrojs/markdown-satteri';
+
+interface Props {
+  content: string;
+}
+
+// Astro's own pipeline for `.md` bodies, minus the highlighter a richtext field can't use.
+const renderer = await createSatteriMarkdownProcessor({ syntaxHighlight: false });
+const { code } = await renderer.render(Astro.props.content);
+---
+
+<Fragment set:html={code} />

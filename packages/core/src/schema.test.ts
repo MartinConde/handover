@@ -166,3 +166,17 @@ test('a schema tagged blocks is a blocks field carrying its block types', () => 
     { path: ['blocks'], type: 'blocks', required: true, types: ['hero', 'cta'] },
   ]);
 });
+
+test('a string tagged richtext is a richtext field carrying its tier', () => {
+  const schema = obj(
+    {
+      body: { type: 'string', handover: 'richtext', tier: 'full' },
+      note: { type: 'string', handover: 'richtext', tier: 'basic' },
+    },
+    ['body'],
+  );
+  expect(fieldsFrom('default', schema)).toEqual([
+    { path: ['body'], type: 'richtext', required: true, tier: 'full' },
+    { path: ['note'], type: 'richtext', required: false, tier: 'basic' },
+  ]);
+});

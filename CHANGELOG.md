@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Rich text: `richtext()` and `richtext('full')` from `astro-handover` store Markdown and
+  validate it against the tier's construct list (basic: paragraphs, bold, italic, links,
+  bullet and numbered lists; full adds `##`/`###` headings and blockquotes). Anything else
+  — images, raw HTML, code, tables, other heading levels — fails validation naming the
+  construct and line. `<Markdown />` (`astro-handover/Markdown.astro`) renders a field
+  through Astro's own Sätteri pipeline. `fieldsFrom` reports `richtext` with its `tier`.
+  See `docs/field-types.md` and `docs/template-convention.md`.
 - Nesting field types: a `group` is a plain `z.object`, an `array` holds groups or scalars
   (never another array), and `blocks(() => registry)` holds blocks declared with
   `defineBlock(type, fields)`, both exported from `astro-handover` together with the `Block`

@@ -28,7 +28,8 @@ blocks:
 
 Handover always writes the same shape, so a one-field edit is a one-line diff:
 
-- strings are double-quoted; text with line breaks is a `|-` block
+- strings are double-quoted; text with line breaks is a `|-` block; rich text is Markdown
+  in that block, never HTML
 - keys starting with `_` come first, then your fields in schema order
 - empty and `null` values are left out
 - two-space indent, no line folding

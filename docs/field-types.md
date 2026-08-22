@@ -6,6 +6,7 @@ is stored:
 | Field | Schema | Stored as |
 |---|---|---|
 | text | `z.string()` | `"quoted"`, or a `\|-` block when it has line breaks |
+| richtext | `richtext()`, `richtext('full')` | Markdown in a `\|-` block, see below |
 | number | `z.number()`, `z.number().int()` | plain number: `82.5`, `3` |
 | boolean | `z.boolean()` | `true` / `false` |
 | date | `z.iso.date()` | `"2026-09-01"` — always a quoted string, never a YAML timestamp |
@@ -13,17 +14,47 @@ is stored:
 | link | `link` from `astro-handover` | `{ type, href \| ref, label?, newTab? }`, see below |
 
 ```ts
-import { link } from 'astro-handover';
+import { link, richtext } from 'astro-handover';
 import { z } from 'astro/zod';
 
 export const listing = z.object({
   title: z.string(),
+  body: richtext('full'),
   bedrooms: z.number().int(),
   featured: z.boolean(),
   availableFrom: z.iso.date(),
   status: z.enum(['sale', 'rent']),
   button: link.optional(),
 });
+```
+
+### Rich text
+
+A `richtext()` field stores Markdown, never HTML. There are two tiers:
+
+| Tier | Allows |
+|---|---|
+| `richtext()` | paragraphs, **bold**, *italic*, links, bullet and numbered lists |
+| `richtext('full')` | the same plus `##` / `###` headings and `>` blockquotes |
+
+Nothing else is accepted: no images, raw HTML, code, tables, `#` or `####` headings.
+Validation fails naming the construct and its line (`table is not allowed (line 4)`),
+so a paste that brings one in is caught before it is saved. Render the field with
+[`<Markdown />`](template-convention.md#rich-text).
+
+```yaml
+body: |-
+  ## The house
+
+  Two **sunny** bedrooms, one *quiet* bathroom.
+
+  - Sea view
+  - Walled garden
+
+  1. Book a [viewing](https://example.com/viewings)
+  2. Make an offer
+
+  > A rare find.
 ```
 
 A link is one of three kinds: `url` with an `href`, or `entry` / `page` with a `ref` such

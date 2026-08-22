@@ -16,6 +16,7 @@ import handover, {
   link,
   NO_ADAPTER_MESSAGE,
   reference,
+  richtext,
   seo,
   uiAssetsModule,
 } from './index.js';
@@ -231,4 +232,23 @@ test('virtual:handover/ui inlines every file in dist/ui', async () => {
   expect(await uiAssetsModule(dir)).toBe(
     `export default ${JSON.stringify({ 'main-abc.css': 'b{}', 'main-abc.js': 'js();' })};`,
   );
+});
+
+test('richtext is detected with its tier, basic by default', () => {
+  const schema = z.object({ body: richtext('full'), note: richtext().optional() });
+  expect(fieldsFrom('default', z.toJSONSchema(schema) as JsonSchema)).toEqual([
+    { path: ['body'], type: 'richtext', required: true, tier: 'full' },
+    { path: ['note'], type: 'richtext', required: false, tier: 'basic' },
+  ]);
+});
+
+test('richtext rejects a construct outside its tier and names it', () => {
+  expect(richtext().safeParse('A **bold** [link](https://x.y).').success).toBe(true);
+  expect(richtext('full').safeParse('## Heading\n\n> Quote').success).toBe(true);
+  const basic = richtext().safeParse('## Heading');
+  expect(basic.success).toBe(false);
+  expect(basic.error?.issues[0]?.message).toBe('heading needs richtext: full (line 1)');
+  const html = richtext('full').safeParse('<script>alert(1)</script>');
+  expect(html.success).toBe(false);
+  expect(html.error?.issues[0]?.message).toBe('html is not allowed (line 1)');
 });

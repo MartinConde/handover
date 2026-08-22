@@ -90,6 +90,24 @@ const { data } = Astro.props;
 <p>{data.location} · {data.price}</p>
 ```
 
+## Rich text
+
+Only a `.md` file's body goes through Astro's Markdown pipeline; a Markdown string inside
+a YAML field does not. `<Markdown />` renders a `richtext()` field with the same
+pipeline, so headings get ids and typography matches the rest of the site. It outputs the
+elements with no wrapper; put it inside your own `<div class="prose">` if you style one.
+
+```astro
+---
+import Markdown from 'astro-handover/Markdown.astro';
+---
+
+<Markdown content={data.body} />
+```
+
+The field's validation is what keeps raw HTML out; the component renders what it is
+given.
+
 ## Hidden entries
 
 An entry with `_status: hidden` in its file stays in the repo but must not render.

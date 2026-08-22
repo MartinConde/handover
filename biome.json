@@ -7,7 +7,7 @@
   "linter": { "enabled": true, "rules": { "preset": "recommended" } },
   "overrides": [
     {
-      "includes": ["**/*.svelte"],
+      "includes": ["**/*.svelte", "**/*.astro"],
       "linter": {
         "rules": { "correctness": { "noUnusedVariables": "off", "noUnusedImports": "off" } }
       }

@@ -4,13 +4,15 @@
   "private": true,
   "type": "module",
   "files": [
-    "dist"
+    "dist",
+    "components"
   ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./Markdown.astro": "./components/Markdown.astro"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -19,6 +21,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@astrojs/markdown-satteri": "0.3.7",
     "@handover/core": "workspace:*"
   },
   "peerDependencies": {

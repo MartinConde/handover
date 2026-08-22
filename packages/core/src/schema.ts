@@ -1,3 +1,5 @@
+import type { RichtextTier } from './richtext.js';
+
 // The subset of `z.toJSONSchema()` output the walker reads; anything else is "unsupported".
 export interface JsonSchema {
   type?: string;
@@ -9,6 +11,7 @@ export interface JsonSchema {
 
 export type Field =
   | { path: string[]; type: 'text'; required: boolean }
+  | { path: string[]; type: 'richtext'; required: boolean; tier: RichtextTier }
   | { path: string[]; type: 'number'; required: boolean }
   | { path: string[]; type: 'boolean'; required: boolean }
   | { path: string[]; type: 'date'; required: boolean }
@@ -45,6 +48,8 @@ function fieldOf(siteId: string, path: string[], child: JsonSchema, required: bo
     case 'embed':
     case 'seo':
       return [{ path, type: child.handover, required }];
+    case 'richtext':
+      return [{ path, type: 'richtext', required, tier: child.tier === 'full' ? 'full' : 'basic' }];
     case 'reference':
       return [{ path, type: 'reference', required, collection: String(child.collection) }];
     case 'blocks':

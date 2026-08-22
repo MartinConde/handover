@@ -1,11 +1,23 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { type RichtextTier, richtextErrors } from '@handover/core';
 import type { AstroIntegration } from 'astro';
 import { z } from 'astro/zod';
 
-export type { AstroContent, ContentEntry, ContentSource } from '@handover/core';
+export type { AstroContent, ContentEntry, ContentSource, RichtextTier } from '@handover/core';
 export { filterLive, isLive, staticSource } from '@handover/core';
+
+// Markdown, validated against the tier's construct list; the first offending construct
+// is the message so the editor can say what was dropped.
+export const richtext = (tier: RichtextTier = 'basic') =>
+  z
+    .string()
+    .superRefine((md, ctx) => {
+      const [message] = richtextErrors('default', md, tier);
+      if (message) ctx.addIssue({ code: 'custom', message });
+    })
+    .meta({ handover: 'richtext', tier });
 
 // `.meta({ handover })` is how core's schema walker recognises a shape it does not own.
 const linkExtras = { label: z.string().optional(), newTab: z.boolean().optional() };
