@@ -67,12 +67,20 @@ Keys starting with `_` belong to Handover. Name your own fields anything else â€
 | `_type` | block | The block type, matching a registered block. |
 | `_id` | block, array item | Eight characters from `0-9a-z`, unique in the file, the same across locales. |
 | `_label` | block | An editor-given name, shown in the block list instead of the type. |
-| `_ref` | block | A path such as `globals/cta-newsletter` whose content fills the block at build time. |
+| `_ref` | block | A path such as `globals/cta-newsletter` the block's content will come from. Reserved now; `<Blocks />` skips the block until the globals collection exists. |
 | `_locales` | block, array item | The locales this item exists in, e.g. `["de"]`. Absent means all. Never empty. |
 
 Reading a file checks these: a `_status` other than `hidden`, a malformed `_id`, an empty
 `_locales` or a top-level key on a block fails with an error naming the path, such as
 `blocks[0]._id: expected eight characters from 0-9a-z, got "ABCDEFGH"`.
+
+## A key your schema no longer declares
+
+Editing an entry keeps every key the file already had, including one the schema has
+stopped declaring: the editor writes back the file it read, not the fields it drew. A
+field you rename in `schemas.ts` before writing its `handover migrate` step therefore
+keeps its old value until the migration moves it, rather than being dropped on the first
+save.
 
 ## Block ids
 

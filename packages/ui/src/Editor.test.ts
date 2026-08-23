@@ -125,6 +125,33 @@ test('Publish stores the edit as a draft before it opens the drawer', async () =
   vi.unstubAllGlobals();
 });
 
+// The draft is what the browser read, not what the descriptors describe: a field renamed in
+// schemas.ts before its migration is written would otherwise lose its value on the first save.
+test('a key no descriptor mentions is written back, not dropped', async () => {
+  const fetchMock = autosaved();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({
+    entry: { ...entry, data: { ...entry.data, subtitle: 'By the harbour' } },
+  });
+  type(root, 'input#f-title', 'Seaview House');
+  $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
+  await tick();
+  flushSync();
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/drafts/listings/seaview-cottage', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      data: {
+        title: 'Seaview House',
+        seo: { description: 'Harbour view' },
+        photos: [],
+        subtitle: 'By the harbour',
+      },
+    }),
+  });
+  vi.unstubAllGlobals();
+});
+
 test('an edit that could not be stored does not open the drawer', async () => {
   vi.stubGlobal(
     'fetch',

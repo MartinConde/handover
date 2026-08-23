@@ -4,6 +4,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Editing an entry keeps a key your schema no longer declares. The editor writes back the
+  file it read rather than the fields it drew, so a field renamed in `schemas.ts` before
+  its `handover migrate` step keeps its old value in the file instead of being dropped on
+  the first save. This was already how it behaved; it is now a documented guarantee with a
+  test behind it. See `docs/content-format.md`.
+
+- `docs/content-format.md` said a `_ref` block's content is filled at build time. It is
+  not yet: the key is reserved, and `<Blocks />` skips the block until the globals
+  collection exists, which is what `docs/template-convention.md` already said.
+
 - The content format is locked at `_version: 1`. The shape of a content file — reserved
   keys, field types, block structure, how the serialiser writes them — does not change
   under you any more: a later release that changes it ships a `handover migrate` step that
