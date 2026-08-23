@@ -185,6 +185,19 @@ A `z.date()` is edited as a date and a transform by its input type. A `z.custom(
 widget when you name one: `.meta({ handover: 'text' })` (`number`, `boolean` or `date`
 likewise).
 
+### Labels
+
+A field is labelled by its key, humanised: `availableFrom` reads "Available from",
+`seo_title` reads "Seo title". Name it yourself with `.meta({ label })` when the key does
+not read well — on any field, including the helpers:
+
+```ts
+export const listing = z.object({
+  availableFrom: z.iso.date(),                 // "Available from"
+  seo: seo.meta({ label: 'SEO' }).optional(),  // "SEO"
+});
+```
+
 ### In the admin
 
 Every scalar type, `group`, `array` and `blocks` has a widget: text is an input (a textarea

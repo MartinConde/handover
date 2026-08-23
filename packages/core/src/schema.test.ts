@@ -10,13 +10,13 @@ const obj = (properties: Record<string, JsonSchema>, required: string[] = []): J
 
 test('top-level required strings become text fields', () => {
   expect(fieldsFrom('default', obj({ title: { type: 'string' } }, ['title']))).toEqual([
-    { path: ['title'], type: 'text', required: true },
+    { path: ['title'], label: 'Title', type: 'text', required: true },
   ]);
 });
 
 test('optional strings are text fields with required false', () => {
   expect(fieldsFrom('default', obj({ note: { type: 'string' } }))).toEqual([
-    { path: ['note'], type: 'text', required: false },
+    { path: ['note'], label: 'Note', type: 'text', required: false },
   ]);
 });
 
@@ -25,9 +25,10 @@ test('a nested object is a group whose fields are relative to it', () => {
   expect(fieldsFrom('default', schema)).toEqual([
     {
       path: ['address'],
+      label: 'Address',
       type: 'group',
       required: true,
-      fields: [{ path: ['street'], type: 'text', required: true }],
+      fields: [{ path: ['street'], label: 'Street', type: 'text', required: true }],
     },
   ]);
 });
@@ -35,33 +36,41 @@ test('a nested object is a group whose fields are relative to it', () => {
 test('number and integer schemas become number fields', () => {
   const schema = obj({ area: { type: 'number' }, beds: { type: 'integer', minimum: 0 } }, ['area']);
   expect(fieldsFrom('default', schema)).toEqual([
-    { path: ['area'], type: 'number', required: true },
-    { path: ['beds'], type: 'number', required: false },
+    { path: ['area'], label: 'Area', type: 'number', required: true },
+    { path: ['beds'], label: 'Beds', type: 'number', required: false },
   ]);
 });
 
 test('boolean schemas become boolean fields', () => {
   expect(fieldsFrom('default', obj({ sold: { type: 'boolean' } }, ['sold']))).toEqual([
-    { path: ['sold'], type: 'boolean', required: true },
+    { path: ['sold'], label: 'Sold', type: 'boolean', required: true },
   ]);
 });
 
 test('a string with format date is a date field', () => {
   const schema = obj({ from: { type: 'string', format: 'date', pattern: '^x$' } }, ['from']);
-  expect(fieldsFrom('default', schema)).toEqual([{ path: ['from'], type: 'date', required: true }]);
+  expect(fieldsFrom('default', schema)).toEqual([
+    { path: ['from'], label: 'From', type: 'date', required: true },
+  ]);
 });
 
 test('a string enum is a select field carrying its options', () => {
   const schema = obj({ status: { type: 'string', enum: ['sale', 'rent'] } }, ['status']);
   expect(fieldsFrom('default', schema)).toEqual([
-    { path: ['status'], type: 'select', required: true, options: ['sale', 'rent'] },
+    {
+      path: ['status'],
+      label: 'Status',
+      type: 'select',
+      required: true,
+      options: ['sale', 'rent'],
+    },
   ]);
 });
 
 test('a schema tagged handover: link is a link field, whatever its shape', () => {
   const schema = obj({ button: { oneOf: [obj({ href: { type: 'string' } })], handover: 'link' } });
   expect(fieldsFrom('default', schema)).toEqual([
-    { path: ['button'], type: 'link', required: false },
+    { path: ['button'], label: 'Button', type: 'link', required: false },
   ]);
 });
 
@@ -73,10 +82,10 @@ test('schemas tagged image, file, embed and seo are fields of that type', () => 
     seo: { type: 'object', properties: {}, handover: 'seo' },
   });
   expect(fieldsFrom('default', schema)).toEqual([
-    { path: ['hero'], type: 'image', required: false },
-    { path: ['brochure'], type: 'file', required: false },
-    { path: ['video'], type: 'embed', required: false },
-    { path: ['seo'], type: 'seo', required: false },
+    { path: ['hero'], label: 'Hero', type: 'image', required: false },
+    { path: ['brochure'], label: 'Brochure', type: 'file', required: false },
+    { path: ['video'], label: 'Video', type: 'embed', required: false },
+    { path: ['seo'], label: 'Seo', type: 'seo', required: false },
   ]);
 });
 
@@ -85,7 +94,7 @@ test('a schema tagged reference carries its collection', () => {
     'agent',
   ]);
   expect(fieldsFrom('default', schema)).toEqual([
-    { path: ['agent'], type: 'reference', required: true, collection: 'agents' },
+    { path: ['agent'], label: 'Agent', type: 'reference', required: true, collection: 'agents' },
   ]);
 });
 
@@ -100,10 +109,10 @@ test('other leaves are marked unsupported, not rejected', () => {
     ['tags', 'nick', 'when', 'title'],
   );
   expect(fieldsFrom('default', schema)).toEqual([
-    { path: ['tags'], type: 'unsupported' },
-    { path: ['nick'], type: 'unsupported' },
-    { path: ['when'], type: 'unsupported' },
-    { path: ['title'], type: 'text', required: true },
+    { path: ['tags'], label: 'Tags', type: 'unsupported' },
+    { path: ['nick'], label: 'Nick', type: 'unsupported' },
+    { path: ['when'], label: 'When', type: 'unsupported' },
+    { path: ['title'], label: 'Title', type: 'text', required: true },
   ]);
 });
 
@@ -117,7 +126,7 @@ test('reserved _ keys are metadata, not form fields', () => {
     ['title'],
   );
   expect(fieldsFrom('default', schema)).toEqual([
-    { path: ['title'], type: 'text', required: true },
+    { path: ['title'], label: 'Title', type: 'text', required: true },
   ]);
 });
 
@@ -134,11 +143,12 @@ test('an array of objects is an array field whose item fields have no prefix', (
   expect(fieldsFrom('default', schema)).toEqual([
     {
       path: ['rooms'],
+      label: 'Rooms',
       type: 'array',
       required: true,
       item: [
-        { path: ['name'], type: 'text', required: true },
-        { path: ['beds'], type: 'number', required: false },
+        { path: ['name'], label: 'Name', type: 'text', required: true },
+        { path: ['beds'], label: 'Beds', type: 'number', required: false },
       ],
     },
   ]);
@@ -149,9 +159,10 @@ test('an array of scalars is an array field with one unnamed item field', () => 
   expect(fieldsFrom('default', schema)).toEqual([
     {
       path: ['tags'],
+      label: 'Tags',
       type: 'array',
       required: false,
-      item: [{ path: [], type: 'text', required: true }],
+      item: [{ path: [], label: '', type: 'text', required: true }],
     },
   ]);
 });
@@ -160,7 +171,9 @@ test('an array of arrays is unsupported, the serialiser rejects it anyway', () =
   const schema = obj({
     grid: { type: 'array', items: { type: 'array', items: { type: 'string' } } },
   });
-  expect(fieldsFrom('default', schema)).toEqual([{ path: ['grid'], type: 'unsupported' }]);
+  expect(fieldsFrom('default', schema)).toEqual([
+    { path: ['grid'], label: 'Grid', type: 'unsupported' },
+  ]);
 });
 
 test('a schema tagged blocks is a blocks field carrying its block types', () => {
@@ -168,7 +181,7 @@ test('a schema tagged blocks is a blocks field carrying its block types', () => 
     'blocks',
   ]);
   expect(fieldsFrom('default', schema)).toEqual([
-    { path: ['blocks'], type: 'blocks', required: true, types: ['hero', 'cta'] },
+    { path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: ['hero', 'cta'] },
   ]);
 });
 
@@ -181,16 +194,16 @@ test('a string tagged richtext is a richtext field carrying its tier', () => {
     ['body'],
   );
   expect(fieldsFrom('default', schema)).toEqual([
-    { path: ['body'], type: 'richtext', required: true, tier: 'full' },
-    { path: ['note'], type: 'richtext', required: false, tier: 'basic' },
+    { path: ['body'], label: 'Body', type: 'richtext', required: true, tier: 'full' },
+    { path: ['note'], label: 'Note', type: 'richtext', required: false, tier: 'basic' },
   ]);
 });
 
 test('a custom tagged with a scalar name is a field of that type', () => {
   const schema = obj({ when: { handover: 'date' }, count: { handover: 'number' } }, ['when']);
   expect(fieldsFrom('default', schema)).toEqual([
-    { path: ['when'], type: 'date', required: true },
-    { path: ['count'], type: 'number', required: false },
+    { path: ['when'], label: 'When', type: 'date', required: true },
+    { path: ['count'], label: 'Count', type: 'number', required: false },
   ]);
 });
 
@@ -202,9 +215,10 @@ test('a $ref is resolved against the root $defs', () => {
   expect(fieldsFrom('default', schema)).toEqual([
     {
       path: ['hero'],
+      label: 'Hero',
       type: 'group',
       required: true,
-      fields: [{ path: ['heading'], type: 'text', required: true }],
+      fields: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }],
     },
   ]);
 });
@@ -242,15 +256,32 @@ test('formOf lists each block type once with its own fields, recursion included'
     },
   };
   expect(formOf('default', schema)).toEqual({
-    fields: [{ path: ['blocks'], type: 'blocks', required: true, types: ['hero', 'columns'] }],
+    fields: [
+      {
+        path: ['blocks'],
+        label: 'Blocks',
+        type: 'blocks',
+        required: true,
+        types: ['hero', 'columns'],
+      },
+    ],
     blocks: {
-      hero: [{ path: ['heading'], type: 'text', required: false }],
+      hero: [{ path: ['heading'], label: 'Heading', type: 'text', required: false }],
       columns: [
         {
           path: ['columns'],
+          label: 'Columns',
           type: 'array',
           required: true,
-          item: [{ path: ['blocks'], type: 'blocks', required: false, types: ['hero', 'columns'] }],
+          item: [
+            {
+              path: ['blocks'],
+              label: 'Blocks',
+              type: 'blocks',
+              required: false,
+              types: ['hero', 'columns'],
+            },
+          ],
         },
       ],
     },
@@ -259,7 +290,7 @@ test('formOf lists each block type once with its own fields, recursion included'
 
 test('formOf of a schema without blocks has an empty block map', () => {
   expect(formOf('default', obj({ title: { type: 'string' } }))).toEqual({
-    fields: [{ path: ['title'], type: 'text', required: false }],
+    fields: [{ path: ['title'], label: 'Title', type: 'text', required: false }],
     blocks: {},
   });
 });
@@ -301,4 +332,50 @@ test('required lists start empty and types with no valid blank are left out', ()
     ['blocks', 'tags', 'when', 'cover'],
   );
   expect(blankValues('default', fieldsFrom('default', schema))).toEqual({ blocks: [], tags: [] });
+});
+
+// F3: a camelCase key read as code in the form ("AvailableFrom"). The key is humanised
+// unless the schema names the field.
+test.each([
+  ['title', 'Title'],
+  ['availableFrom', 'Available from'],
+  ['publishedAt', 'Published at'],
+  ['heroImageAlt', 'Hero image alt'],
+  ['seo_title', 'Seo title'],
+  ['seo-title', 'Seo title'],
+])('the key %s is labelled %s', (key, label) => {
+  expect(fieldsFrom('default', obj({ [key]: { type: 'string' } }))[0]?.label).toBe(label);
+});
+
+test('a label in the schema wins over the humanised key', () => {
+  const schema = obj({ seo: { type: 'object', properties: {}, handover: 'seo', label: 'SEO' } });
+  expect(fieldsFrom('default', schema)[0]?.label).toBe('SEO');
+});
+
+test('groups, arrays, blocks and unsupported leaves are labelled too', () => {
+  const schema = obj({
+    mainContact: obj({ phoneNumber: { type: 'string' } }),
+    openDays: { type: 'array', items: obj({ dayName: { type: 'string' } }) },
+    pageBlocks: { type: 'array', handover: 'blocks', types: ['hero'] },
+    oddOne: { anyOf: [{ type: 'string' }, { type: 'null' }] },
+  });
+  const fields = fieldsFrom('default', schema);
+  expect(fields.map((f) => f.label)).toEqual([
+    'Main contact',
+    'Open days',
+    'Page blocks',
+    'Odd one',
+  ]);
+  const group = fields[0];
+  const array = fields[1];
+  if (group?.type !== 'group' || array?.type !== 'array') throw new Error('shape changed');
+  expect(group.fields[0]?.label).toBe('Phone number');
+  expect(array.item[0]?.label).toBe('Day name');
+});
+
+test('the item of an array of scalars has no label of its own', () => {
+  const schema = obj({ tags: { type: 'array', items: { type: 'string' } } });
+  const array = fieldsFrom('default', schema)[0];
+  if (array?.type !== 'array') throw new Error('shape changed');
+  expect(array.item[0]?.label).toBe('');
 });

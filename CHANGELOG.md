@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A field's label in the admin is its key, humanised: `availableFrom` reads "Available
+  from". `.meta({ label: 'SEO' })` on the field names it yourself, on any type including
+  the `image`, `file`, `embed`, `seo` and `reference` helpers. See `docs/field-types.md`.
+
 - The entry list's columns line up with their headers again, and a read-only field says why
   it is read-only: `image`, `file`, `embed`, `seo` and `reference` show one line under the
   stored value naming the release that brings their editor. See `docs/field-types.md`.

@@ -62,7 +62,7 @@ const type = (sel: string, value: string) =>
   });
 
 test('text: a typed value round-trips through the text golden', () => {
-  show([{ path: ['title'], type: 'text', required: true }], { _version: 1 });
+  show([{ path: ['title'], label: 'Title', type: 'text', required: true }], { _version: 1 });
   expect(q('label[for="f-title"]').textContent).toBe('Title*');
   type('input#f-title', 'Seaview Cottage');
   expect(root).toEqual({ _version: 1, title: 'Seaview Cottage' });
@@ -70,7 +70,7 @@ test('text: a typed value round-trips through the text golden', () => {
 });
 
 test('text: a value with line breaks is a textarea and survives the round trip', () => {
-  show([{ path: ['summary'], type: 'text', required: false }], {
+  show([{ path: ['summary'], label: 'Summary', type: 'text', required: false }], {
     _version: 1,
     summary: 'First line.\nSecond line.',
   });
@@ -79,7 +79,7 @@ test('text: a value with line breaks is a textarea and survives the round trip',
 });
 
 test('number: writes a number, never a string; clearing removes the key', () => {
-  show([{ path: ['price'], type: 'number', required: false }], { _version: 1 });
+  show([{ path: ['price'], label: 'Price', type: 'number', required: false }], { _version: 1 });
   fire('input#f-price', 'input', (el) => {
     el.value = '82.5';
   });
@@ -90,7 +90,9 @@ test('number: writes a number, never a string; clearing removes the key', () => 
 });
 
 test('boolean: a switch with the label as its text writes true / false', () => {
-  show([{ path: ['featured'], type: 'boolean', required: false }], { _version: 1 });
+  show([{ path: ['featured'], label: 'Featured', type: 'boolean', required: false }], {
+    _version: 1,
+  });
   const box = q<HTMLInputElement>('input#f-featured[role="switch"]');
   expect(q('label[for="f-featured"]').textContent).toBe('Featured');
   expect(box.checked).toBe(false);
@@ -105,7 +107,9 @@ test('boolean: a switch with the label as its text writes true / false', () => {
 });
 
 test('date: writes the ISO string from the date golden, never a Date', () => {
-  show([{ path: ['availableFrom'], type: 'date', required: false }], { _version: 1 });
+  show([{ path: ['availableFrom'], label: 'Available from', type: 'date', required: false }], {
+    _version: 1,
+  });
   expect(q<HTMLInputElement>('input#f-availableFrom').type).toBe('date');
   type('input#f-availableFrom', '2026-09-01');
   expect(stringifyEntry('default', $state.snapshot(root))).toBe(golden('date'));
@@ -114,9 +118,20 @@ test('date: writes the ISO string from the date golden, never a Date', () => {
 });
 
 test('select: five options or fewer are radios and store the value', () => {
-  show([{ path: ['status'], type: 'select', required: true, options: ['sale', 'rent'] }], {
-    _version: 1,
-  });
+  show(
+    [
+      {
+        path: ['status'],
+        label: 'Status',
+        type: 'select',
+        required: true,
+        options: ['sale', 'rent'],
+      },
+    ],
+    {
+      _version: 1,
+    },
+  );
   expect(q('fieldset legend').textContent).toBe('Status*');
   expect(document.querySelectorAll('input[type="radio"][name="f-status"]')).toHaveLength(2);
   fire('input[type="radio"][value="sale"]', 'change', (el) => {
@@ -127,7 +142,7 @@ test('select: five options or fewer are radios and store the value', () => {
 
 test('select: more than five options is a dropdown; Choose… removes the key', () => {
   const options = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
-  show([{ path: ['energy'], type: 'select', required: false, options }], {
+  show([{ path: ['energy'], label: 'Energy', type: 'select', required: false, options }], {
     _version: 1,
     energy: 'c',
   });
@@ -147,8 +162,8 @@ test('select: more than five options is a dropdown; Choose… removes the key', 
 test('link: URL and entry modes write the two shapes from the link golden', () => {
   show(
     [
-      { path: ['button'], type: 'link', required: true },
-      { path: ['more'], type: 'link', required: false },
+      { path: ['button'], label: 'Button', type: 'link', required: true },
+      { path: ['more'], label: 'More', type: 'link', required: false },
     ],
     { _version: 1 },
   );
@@ -165,7 +180,7 @@ test('link: URL and entry modes write the two shapes from the link golden', () =
 });
 
 test('link: switching type drops the other target; new tab off leaves no key', () => {
-  show([{ path: ['button'], type: 'link', required: true }], {
+  show([{ path: ['button'], label: 'Button', type: 'link', required: true }], {
     _version: 1,
     button: { type: 'url', href: 'https://example.com', newTab: true },
   });
@@ -184,12 +199,13 @@ test('link: switching type drops the other target; new tab off leaves no key', (
 test('group: fields nest under the group key and the object is created on first edit', () => {
   const address: Field = {
     path: ['address'],
+    label: 'Address',
     type: 'group',
     required: true,
     fields: [
-      { path: ['street'], type: 'text', required: true },
-      { path: ['town'], type: 'text', required: true },
-      { path: ['postcode'], type: 'text', required: true },
+      { path: ['street'], label: 'Street', type: 'text', required: true },
+      { path: ['town'], label: 'Town', type: 'text', required: true },
+      { path: ['postcode'], label: 'Postcode', type: 'text', required: true },
     ],
   };
   show([address], { _version: 1 });
@@ -203,7 +219,7 @@ test('group: fields nest under the group key and the object is created on first 
 const body = (parseEntry('default', golden('richtext')) as { body: string }).body;
 
 test('richtext: the full-tier golden loads into TipTap and comes back byte-identical', () => {
-  show([{ path: ['body'], type: 'richtext', required: false, tier: 'full' }], {
+  show([{ path: ['body'], label: 'Body', type: 'richtext', required: false, tier: 'full' }], {
     _version: 1,
     body,
   });
@@ -214,10 +230,13 @@ test('richtext: the full-tier golden loads into TipTap and comes back byte-ident
 });
 
 test('richtext: a toolbar command writes Markdown back and the button reads as pressed', () => {
-  show([{ path: ['summary'], type: 'richtext', required: false, tier: 'basic' }], {
-    _version: 1,
-    summary: 'Two bedrooms.',
-  });
+  show(
+    [{ path: ['summary'], label: 'Summary', type: 'richtext', required: false, tier: 'basic' }],
+    {
+      _version: 1,
+      summary: 'Two bedrooms.',
+    },
+  );
   expect(document.querySelectorAll('[role="toolbar"] button')).toHaveLength(5);
   q<HTMLButtonElement>('[aria-label="Bullet list"]').click();
   flushSync();
@@ -226,10 +245,13 @@ test('richtext: a toolbar command writes Markdown back and the button reads as p
 });
 
 test('richtext: a body outside the tier is shown read-only and left untouched', () => {
-  show([{ path: ['summary'], type: 'richtext', required: false, tier: 'basic' }], {
-    _version: 1,
-    summary: body,
-  });
+  show(
+    [{ path: ['summary'], label: 'Summary', type: 'richtext', required: false, tier: 'basic' }],
+    {
+      _version: 1,
+      summary: body,
+    },
+  );
   expect(document.querySelector('[role="toolbar"]')).toBeNull();
   expect(q('[role="region"] pre#f-summary').textContent).toBe(body);
   expect(q('#f-summary-hint').textContent).toContain('edited in code');
@@ -239,30 +261,38 @@ test('richtext: a body outside the tier is shown read-only and left untouched', 
 test('every control has a label', () => {
   show(
     [
-      { path: ['title'], type: 'text', required: true },
-      { path: ['price'], type: 'number', required: false },
-      { path: ['featured'], type: 'boolean', required: false },
-      { path: ['availableFrom'], type: 'date', required: false },
-      { path: ['status'], type: 'select', required: true, options: ['sale', 'rent'] },
+      { path: ['title'], label: 'Title', type: 'text', required: true },
+      { path: ['price'], label: 'Price', type: 'number', required: false },
+      { path: ['featured'], label: 'Featured', type: 'boolean', required: false },
+      { path: ['availableFrom'], label: 'Available from', type: 'date', required: false },
+      {
+        path: ['status'],
+        label: 'Status',
+        type: 'select',
+        required: true,
+        options: ['sale', 'rent'],
+      },
       {
         path: ['energy'],
+        label: 'Energy',
         type: 'select',
         required: false,
         options: ['a', 'b', 'c', 'd', 'e', 'f'],
       },
-      { path: ['button'], type: 'link', required: false },
-      { path: ['body'], type: 'richtext', required: false, tier: 'full' },
+      { path: ['button'], label: 'Button', type: 'link', required: false },
+      { path: ['body'], label: 'Body', type: 'richtext', required: false, tier: 'full' },
       {
         path: ['address'],
+        label: 'Address',
         type: 'group',
         required: true,
-        fields: [{ path: ['street'], type: 'text', required: true }],
+        fields: [{ path: ['street'], label: 'Street', type: 'text', required: true }],
       },
       rooms,
       tags,
-      { path: ['hero'], type: 'image', required: false },
-      { path: ['blocks'], type: 'blocks', required: true, types: TYPES },
-      { path: ['photos'], type: 'unsupported' },
+      { path: ['hero'], label: 'Hero', type: 'image', required: false },
+      { path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: TYPES },
+      { path: ['photos'], label: 'Photos', type: 'unsupported' },
     ],
     { ...arrayData(), ...blocksData() },
     registry,
@@ -284,18 +314,20 @@ test('every control has a label', () => {
 
 const rooms: Field = {
   path: ['rooms'],
+  label: 'Rooms',
   type: 'array',
   required: true,
   item: [
-    { path: ['name'], type: 'text', required: true },
-    { path: ['area'], type: 'number', required: true },
+    { path: ['name'], label: 'Name', type: 'text', required: true },
+    { path: ['area'], label: 'Area', type: 'number', required: true },
   ],
 };
 const tags: Field = {
   path: ['tags'],
+  label: 'Tags',
   type: 'array',
   required: false,
-  item: [{ path: [], type: 'text', required: true }],
+  item: [{ path: [], label: '', type: 'text', required: true }],
 };
 const arrayData = () => parseEntry('default', golden('array')) as Record<string, unknown>;
 const snap = () => $state.snapshot(root) as Record<string, never>;
@@ -374,26 +406,27 @@ test('array of scalars: rows are numbered, labelled and stay plain strings', () 
 const TYPES = ['hero', 'textSection', 'cta', 'columns'];
 const registry: Record<string, Field[]> = {
   hero: [
-    { path: ['heading'], type: 'text', required: true },
-    { path: ['image'], type: 'image', required: false },
+    { path: ['heading'], label: 'Heading', type: 'text', required: true },
+    { path: ['image'], label: 'Image', type: 'image', required: false },
   ],
-  textSection: [{ path: ['body'], type: 'text', required: true }],
+  textSection: [{ path: ['body'], label: 'Body', type: 'text', required: true }],
   cta: [
-    { path: ['heading'], type: 'text', required: true },
-    { path: ['button'], type: 'link', required: false },
+    { path: ['heading'], label: 'Heading', type: 'text', required: true },
+    { path: ['button'], label: 'Button', type: 'link', required: false },
   ],
   columns: [
     {
       path: ['columns'],
+      label: 'Columns',
       type: 'array',
       required: true,
-      item: [{ path: ['blocks'], type: 'blocks', required: true, types: TYPES }],
+      item: [{ path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: TYPES }],
     },
   ],
 };
 const pageFields: Field[] = [
-  { path: ['title'], type: 'text', required: true },
-  { path: ['blocks'], type: 'blocks', required: true, types: TYPES },
+  { path: ['title'], label: 'Title', type: 'text', required: true },
+  { path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: TYPES },
 ];
 const blocksData = () => parseEntry('default', golden('blocks')) as Record<string, unknown>;
 
@@ -469,7 +502,7 @@ test.each([
   ['seo', 'SEO settings can be changed from Phase 4. Shown as stored.'],
   ['reference', 'References can be changed from Phase 2. Shown as stored.'],
 ] as const)('structured types: %s says why it is read-only', (type, sentence) => {
-  show([{ path: ['thing'], type, required: false } as Field], {});
+  show([{ path: ['thing'], label: 'Thing', type, required: false } as Field], {});
   const hint = q('#f-thing-hint');
   expect(hint.textContent).toBe(sentence);
   expect(q('#f-thing').getAttribute('aria-describedby')).toBe('f-thing-hint');

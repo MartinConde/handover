@@ -9,7 +9,7 @@ let {
   root = $bindable(),
   path = [],
   blocks = {},
-  label = '',
+  rowLabel = '',
 }: {
   fields: readonly Field[];
   root: Data;
@@ -17,7 +17,7 @@ let {
   /** Fields per block type, keyed as `formOf` returns them. */
   blocks?: Record<string, Field[]>;
   /** Names a field whose own path is empty — one scalar row of an array. */
-  label?: string;
+  rowLabel?: string;
 } = $props();
 
 // One picker at a time per form level; the field id says which is open.
@@ -111,7 +111,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
 {#each fields as field (field.path.join('.'))}
   {@const at = [...path, ...field.path]}
   {@const id = `f-${at.join('.')}`}
-  {@const text = capitalise(field.path[0] ?? '') || label}
+  {@const text = field.label || rowLabel}
   <div class="field">
     {#if field.type === 'text'}
       {@render labelRow(id, field, text)}
@@ -173,7 +173,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <div class="list" {id} role="group" aria-labelledby="{id}-l">
         {#each items as row, i ((row as Data)?._id ?? i)}
           <div class="row-card">
-            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} path={[...at, String(i)]} label="{text} {i + 1}" /></div>
+            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} path={[...at, String(i)]} rowLabel="{text} {i + 1}" /></div>
             {@render controls(at, i, items.length, `${text} row ${i + 1}`)}
           </div>
         {:else}

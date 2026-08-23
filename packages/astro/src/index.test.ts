@@ -64,11 +64,11 @@ test('the structured field types are detected from real Zod output', () => {
   });
   const json = z.toJSONSchema(schema, { unrepresentable: 'any' }) as JsonSchema;
   expect(fieldsFrom('default', json)).toEqual([
-    { path: ['hero'], type: 'image', required: true },
-    { path: ['brochure'], type: 'file', required: false },
-    { path: ['video'], type: 'embed', required: true },
-    { path: ['seo'], type: 'seo', required: false },
-    { path: ['agent'], type: 'reference', required: true, collection: 'agents' },
+    { path: ['hero'], label: 'Hero', type: 'image', required: true },
+    { path: ['brochure'], label: 'Brochure', type: 'file', required: false },
+    { path: ['video'], label: 'Video', type: 'embed', required: true },
+    { path: ['seo'], label: 'Seo', type: 'seo', required: false },
+    { path: ['agent'], label: 'Agent', type: 'reference', required: true, collection: 'agents' },
   ]);
 });
 
@@ -154,30 +154,34 @@ test('group, array and blocks are detected from real Zod output', () => {
   expect(fieldsFrom('default', json)).toEqual([
     {
       path: ['address'],
+      label: 'Address',
       type: 'group',
       required: true,
       fields: [
-        { path: ['street'], type: 'text', required: true },
-        { path: ['town'], type: 'text', required: false },
+        { path: ['street'], label: 'Street', type: 'text', required: true },
+        { path: ['town'], label: 'Town', type: 'text', required: false },
       ],
     },
     {
       path: ['rooms'],
+      label: 'Rooms',
       type: 'array',
       required: true,
       item: [
-        { path: ['name'], type: 'text', required: true },
-        { path: ['area'], type: 'number', required: true },
+        { path: ['name'], label: 'Name', type: 'text', required: true },
+        { path: ['area'], label: 'Area', type: 'number', required: true },
       ],
     },
     {
       path: ['tags'],
+      label: 'Tags',
       type: 'array',
       required: false,
-      item: [{ path: [], type: 'text', required: true }],
+      item: [{ path: [], label: '', type: 'text', required: true }],
     },
     {
       path: ['blocks'],
+      label: 'Blocks',
       type: 'blocks',
       required: true,
       types: ['hero', 'textSection', 'cta', 'columns'],
@@ -251,8 +255,8 @@ test('virtual:handover/ui inlines every file in dist/ui', async () => {
 test('richtext is detected with its tier, basic by default', () => {
   const schema = z.object({ body: richtext('full'), note: richtext().optional() });
   expect(fieldsFrom('default', z.toJSONSchema(schema) as JsonSchema)).toEqual([
-    { path: ['body'], type: 'richtext', required: true, tier: 'full' },
-    { path: ['note'], type: 'richtext', required: false, tier: 'basic' },
+    { path: ['body'], label: 'Body', type: 'richtext', required: true, tier: 'full' },
+    { path: ['note'], label: 'Note', type: 'richtext', required: false, tier: 'basic' },
   ]);
 });
 
@@ -440,9 +444,20 @@ test('formSchema maps z.date() to a date field and a transform to its input type
     tag: z.custom<string>(() => true).meta({ handover: 'text' }),
   });
   expect(fieldsFrom('default', formSchema(schema))).toEqual([
-    { path: ['when'], type: 'date', required: true },
-    { path: ['slug'], type: 'text', required: true },
-    { path: ['tag'], type: 'text', required: true },
+    { path: ['when'], label: 'When', type: 'date', required: true },
+    { path: ['slug'], label: 'Slug', type: 'text', required: true },
+    { path: ['tag'], label: 'Tag', type: 'text', required: true },
+  ]);
+});
+
+test('a label names the field, on a plain type and on top of a helper', () => {
+  const schema = z.object({
+    availableFrom: z.iso.date(),
+    seo: seo.meta({ label: 'SEO' }).optional(),
+  });
+  expect(fieldsFrom('default', formSchema(schema)).map((f) => [f.type, f.label])).toEqual([
+    ['date', 'Available from'],
+    ['seo', 'SEO'],
   ]);
 });
 

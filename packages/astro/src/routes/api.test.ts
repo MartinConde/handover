@@ -141,14 +141,15 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
     fields: [
-      { path: ['title'], type: 'text', required: true },
-      { path: ['location'], type: 'text', required: false },
-      { path: ['rooms'], type: 'number', required: true },
+      { path: ['title'], label: 'Title', type: 'text', required: true },
+      { path: ['location'], label: 'Location', type: 'text', required: false },
+      { path: ['rooms'], label: 'Rooms', type: 'number', required: true },
       {
         path: ['address'],
+        label: 'Address',
         type: 'group',
         required: true,
-        fields: [{ path: ['street'], type: 'text', required: true }],
+        fields: [{ path: ['street'], label: 'Street', type: 'text', required: true }],
       },
     ],
     blocks: {},

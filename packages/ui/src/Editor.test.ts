@@ -5,14 +5,15 @@ import Editor from './Editor.svelte';
 
 const entry = {
   fields: [
-    { path: ['title'], type: 'text', required: true },
+    { path: ['title'], label: 'Title', type: 'text', required: true },
     {
       path: ['seo'],
+      label: 'Seo',
       type: 'group',
       required: false,
-      fields: [{ path: ['description'], type: 'text', required: false }],
+      fields: [{ path: ['description'], label: 'Description', type: 'text', required: false }],
     },
-    { path: ['photos'], type: 'unsupported' },
+    { path: ['photos'], label: 'Photos', type: 'unsupported' },
   ] satisfies Field[],
   blocks: {},
   data: { title: 'Seaview Cottage', seo: { description: 'Harbour view' }, photos: [] },
