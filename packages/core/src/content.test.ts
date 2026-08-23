@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import {
+  driftReport,
   mergeEntry,
   parseEntry,
   staticSource,
@@ -711,4 +712,88 @@ test('a language whose file has no blocks yet is given the structure, not left e
   expect(blockIds(synced)).toEqual(['k3nf9a2p', 'q1w2e3r4']);
   expect(synced.title).toBe('Accueil');
   expect(synced._version).toBe(1);
+});
+
+// Drift is what a save is not allowed to resolve: the same fixture pair, read rather than
+// written. `compliance` says which language it belongs to and `quote` says nothing at all.
+test('a block one language has without `_locales` is drift, and one with it is not', () => {
+  expect(driftReport('default', page, { en: drifted('en'), de: drifted('de') })).toEqual([
+    { path: 'blocks[_id=z9y8x7w6]', type: 'quote', in: ['de'], expected: ['en', 'de'] },
+  ]);
+});
+
+test('an entry with a file in one language alone has nothing to have drifted from', () => {
+  const de = drifted('de');
+  // A block naming a language the entry has no file in included: there is no second file to
+  // reconcile it against, so a publish of it is never the one that is blocked.
+  const stray = { _type: 'quote', _id: 'z9y8x7w6', _locales: ['en'], body: 'Ein seltener Fund.' };
+
+  expect(driftReport('default', page, { de: { ...de, blocks: [stray] } })).toEqual([]);
+});
+
+test('a block in a language its `_locales` does not name has drifted too', () => {
+  const de = drifted('de');
+  const compliance = (de.blocks as unknown[])[1];
+  const en = { ...drifted('en'), blocks: [...(drifted('en').blocks as unknown[]), compliance] };
+
+  expect(driftReport('default', page, { en, de })).toEqual([
+    { path: 'blocks[_id=p8xk2m4q]', type: 'compliance', in: ['en', 'de'], expected: ['de'] },
+    { path: 'blocks[_id=z9y8x7w6]', type: 'quote', in: ['de'], expected: ['en', 'de'] },
+  ]);
+});
+
+// Blocks inside a block, and rows inside a group's array: drift anywhere the structure is
+// shared is drift, and the report addresses the row the way `_machine` addresses a field.
+const nested: Form = {
+  fields: [
+    {
+      path: ['sidebar'],
+      label: 'Sidebar',
+      type: 'group',
+      required: false,
+      fields: [
+        {
+          path: ['features'],
+          label: 'Features',
+          type: 'array',
+          required: false,
+          item: [{ path: ['label'], label: 'Label', type: 'text', required: true }],
+        },
+      ],
+    },
+    { path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: ['section'] },
+  ],
+  blocks: {
+    section: [
+      { path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: ['quote'] },
+    ],
+    quote: [{ path: ['body'], label: 'Body', type: 'text', required: true }],
+  },
+};
+
+const section = (inner: unknown[]) => ({
+  blocks: [{ _type: 'section', _id: 'a1b2c3d4', blocks: inner }],
+});
+
+test('a block inside a block is compared too', () => {
+  const en = section([{ _type: 'quote', _id: 'z9y8x7w6', body: 'A rare find.' }]);
+  const de = section([]);
+
+  expect(driftReport('default', nested, { en, de })).toEqual([
+    {
+      path: 'blocks[_id=a1b2c3d4].blocks[_id=z9y8x7w6]',
+      type: 'quote',
+      in: ['en'],
+      expected: ['en', 'de'],
+    },
+  ]);
+});
+
+test('a row an array in one language has and the other does not is drift', () => {
+  const en = { sidebar: { features: [{ _id: 'f1f2f3f4', label: 'Parking' }] } };
+  const de = { sidebar: { features: [] } };
+
+  expect(driftReport('default', nested, { en, de })).toEqual([
+    { path: 'sidebar.features[_id=f1f2f3f4]', in: ['en'], expected: ['en', 'de'] },
+  ]);
 });

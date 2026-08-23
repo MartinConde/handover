@@ -219,3 +219,32 @@ test('a file the schema is not done with is named on its row and blocks the publ
   expect(button?.disabled).toBe(false);
   expect(published).not.toHaveBeenCalled();
 });
+
+// The other blocking refusal: the entry's own files disagree about which blocks it has, which
+// is settled in the editor and not here — so the row says that rather than "changed in the
+// repository", and Discard is not offered for it.
+test('an entry whose languages have drifted apart is named on its row as that', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json(
+        {
+          error:
+            "src/content/listings/en/mill-house.yaml has drifted apart from the entry's other languages — resolve it in the editor",
+          paths: ['src/content/listings/en/mill-house.yaml'],
+          reason: 'drift',
+        },
+        { status: 409 },
+      ),
+    ),
+  );
+  const root = show();
+  await refused(root);
+
+  expect(q(root, '[role="alert"]')?.textContent).toBe(
+    'Nothing was published. One file belongs to an entry whose languages disagree about which blocks it has — the files have to agree before it can go out.',
+  );
+  expect(q(root, '.change-row.is-blocked .badge-danger')?.textContent).toBe('Languages disagree');
+  expect(q(root, '.change-row.is-blocked .change-actions')).toBe(null);
+  expect(published).not.toHaveBeenCalled();
+});

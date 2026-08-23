@@ -1,11 +1,13 @@
 import { type PublishFile, RepoUnreachableError } from '@handover/core';
 import type { APIContext } from 'astro';
-import { expect, test, vi } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import { DELETE, GET, POST, PUT } from './api.js';
 
 const {
   listing,
   presenter,
+  page,
+  files,
   getFile,
   getHead,
   publish,
@@ -19,7 +21,19 @@ const {
   publishDrafts,
 } = await vi.hoisted(async () => {
   const { z } = await import('astro/zod');
+  const { blocks, defineBlock } = await import('../index.js');
+  // Every file the repository holds beyond the one below, path → contents; filled per test.
+  const files: Record<string, string> = {};
   return {
+    files,
+    // A collection with blocks in it: what two languages of one entry can disagree about.
+    page: z.object({
+      title: z.string(),
+      blocks: blocks(() => ({
+        hero: defineBlock('hero', { heading: z.string() }),
+        quote: defineBlock('quote', { body: z.string() }),
+      })),
+    }),
     listing: z.object({
       title: z.string(),
       location: z.string().optional(),
@@ -30,6 +44,8 @@ const {
     presenter: z.object({ name: z.string() }),
     // The GitHub boundary: one file in the repo, nothing else.
     getFile: vi.fn(async (path: string) => {
+      const stored = files[path];
+      if (stored !== undefined) return { contents: stored, blob_sha: `blob-${path}` };
       if (path === 'src/content/listings/en/mill-house.yaml')
         return {
           contents: 'title: The Mill House\nlocation: Bakewell\nrooms: 3\n',
@@ -70,12 +86,20 @@ const {
 
 // The row GET should overlay, set per test.
 let draft: { contents: string; baseSha: string; baseBlob: string } | undefined;
+// The languages the site declares, likewise: one and several are different code paths.
+let locales = ['en'];
 vi.mock('virtual:handover/config', () => ({
   default: {
-    i18n: { locales: ['en'], defaultLocale: 'en' },
+    i18n: {
+      get locales() {
+        return locales;
+      },
+      defaultLocale: 'en',
+    },
     collections: {
       listings: { schema: listing, route: '/listings/[slug]', index: '/listings' },
       presenters: { schema: presenter, titleField: 'name' },
+      pages: { schema: page },
     },
   },
 }));
@@ -132,6 +156,12 @@ vi.mock('@handover/core', async (original) => ({
   publishDrafts,
 }));
 
+afterEach(() => {
+  draft = undefined;
+  locales = ['en'];
+  for (const path of Object.keys(files)) delete files[path];
+});
+
 const ctx = (path: string, request?: Request) =>
   ({ params: { path }, request }) as unknown as APIContext;
 const post = (path: string, body: string) =>
@@ -142,7 +172,10 @@ const put = (path: string, body: string) =>
 test('ping returns the configured collection names', async () => {
   const res = await GET(ctx('ping'));
   expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ ok: true, collections: ['listings', 'presenters'] });
+  expect(await res.json()).toEqual({
+    ok: true,
+    collections: ['listings', 'presenters', 'pages'],
+  });
 });
 
 test('unknown paths are 404', async () => {
@@ -176,6 +209,7 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
     data: { title: 'The Mill House', location: 'Bakewell', rooms: 3 },
     pending: false,
     problems: [{ path: 'address', message: 'Required' }],
+    drift: [],
   });
 });
 
@@ -616,4 +650,95 @@ test('deleting an entry that was never published makes no commit', async () => {
     expect.anything(),
     'src/content/listings/en/strandhaus-nord.yaml',
   );
+});
+
+// One entry in two languages, with a block only the German file has and nothing saying it is
+// German-only: the fixture pair from @handover/core, through the routes the admin calls.
+const home = {
+  en: [
+    '_version: 1',
+    'title: "Home"',
+    'blocks:',
+    '  - _type: "hero"',
+    '    _id: "k3nf9a2p"',
+    '    heading: "Move to the coast"',
+    '',
+  ].join('\n'),
+  de: [
+    '_version: 1',
+    'title: "Startseite"',
+    'blocks:',
+    '  - _type: "hero"',
+    '    _id: "k3nf9a2p"',
+    '    heading: "Zieh an die Küste"',
+    '  - _type: "quote"',
+    '    _id: "z9y8x7w6"',
+    '    body: "Ein seltener Fund."',
+    '',
+  ].join('\n'),
+};
+
+const drifted = () => {
+  locales = ['en', 'de'];
+  files['src/content/pages/en/home.yaml'] = home.en;
+  files['src/content/pages/de/home.yaml'] = home.de;
+};
+
+test('opening an entry reports the blocks its languages disagree about', async () => {
+  drifted();
+
+  const body = (await (await GET(ctx('entries/pages/home'))).json()) as { drift: unknown };
+
+  expect(body.drift).toEqual([
+    { path: 'blocks[_id=z9y8x7w6]', type: 'quote', in: ['de'], expected: ['en', 'de'] },
+  ]);
+});
+
+test('publishing an entry whose languages have drifted apart is refused', async () => {
+  drifted();
+  publishDrafts.mockClear();
+  pendingDrafts.mockImplementationOnce(async () => [
+    { path: 'src/content/pages/en/home.yaml', contents: home.en, updatedAt: 1755864000000 },
+  ]);
+
+  const res = await POST(post('publish', ''));
+
+  expect(res.status).toBe(409);
+  expect(await res.json()).toEqual({
+    error:
+      "src/content/pages/en/home.yaml has drifted apart from the entry's other languages — resolve it in the editor",
+    paths: ['src/content/pages/en/home.yaml'],
+    // Which 409 it is: the drawer offers Discard for a conflict and the editor for this.
+    reason: 'drift',
+  });
+  expect(publishDrafts).not.toHaveBeenCalled();
+});
+
+test('an entry whose languages agree publishes, drift or no drift elsewhere', async () => {
+  locales = ['en', 'de'];
+  files['src/content/pages/en/home.yaml'] = home.en;
+  files['src/content/pages/de/home.yaml'] = home.en.replace('Home', 'Startseite');
+  publishDrafts.mockClear();
+  pendingDrafts.mockImplementationOnce(async () => [
+    { path: 'src/content/pages/en/home.yaml', contents: home.en, updatedAt: 1755864000000 },
+  ]);
+
+  expect((await POST(post('publish', ''))).status).toBe(200);
+  expect(publishDrafts).toHaveBeenCalled();
+});
+
+// A site with one language has no second file to compare against and never reads for one:
+// opening an entry is the one request it always was, and publishing reads nothing extra.
+test('a one-language site is not asked for a second language of anything', async () => {
+  getFile.mockClear();
+
+  const body = (await (await GET(ctx('entries/listings/mill-house'))).json()) as { drift: unknown };
+
+  expect(body.drift).toEqual([]);
+  expect(getFile).toHaveBeenCalledTimes(1);
+
+  getFile.mockClear();
+  await POST(post('publish', ''));
+
+  expect(getFile).not.toHaveBeenCalled();
 });

@@ -148,6 +148,100 @@ export function syncLocale(
   return { _version: FORMAT_VERSION, ...synced };
 }
 
+/** One row of an entry its languages disagree about — what a save must never resolve. */
+export interface Drift {
+  /** The row addressed the way `_machine` addresses a field: `blocks[_id=z9y8x7w6]`. */
+  path: string;
+  /** The block's `_type`, so the reconciliation panel can name it; array rows have none. */
+  type?: string;
+  /** The languages whose file has the row. */
+  in: string[];
+  /** The languages it belongs in: its `_locales`, or all of them where it names none. */
+  expected: string[];
+}
+
+/**
+ * Every row an entry's languages disagree about. The skeleton is shared, so a block one file
+ * has and another does not, with no `_locales` to say so, is a hand edit or a bad merge — and
+ * `syncLocale` leaves it exactly where it stands, because choosing a side is somebody's
+ * decision. A publish is refused while one stands: committing would bake it into git.
+ *
+ * `files` is the languages the entry has a file in, parsed; fewer than two cannot drift. Where
+ * two copies of a row name different `_locales`, the row is taken to belong to all of them
+ * together: what they name between them is what is expected of it.
+ */
+export function driftReport(_siteId: string, form: Form, files: Record<string, unknown>): Drift[] {
+  const found: Drift[] = [];
+  const copies = Object.entries(files).map(([locale, data]) => ({ locale, data }));
+  if (copies.length > 1) driftIn(form, form.fields, copies, '', found);
+  return found;
+}
+
+/** One entry as one language has it, at the depth the walk has reached. */
+interface Copy {
+  locale: string;
+  data: unknown;
+}
+
+// The same descent `overlay` makes: rows live under `blocks` fields, under arrays of objects
+// and inside groups, and nowhere else the CMS keeps in step.
+function driftIn(
+  form: Form,
+  fields: readonly Field[],
+  copies: Copy[],
+  at: string,
+  found: Drift[],
+): void {
+  for (const field of fields) {
+    const key = field.path[0];
+    if (key === undefined) continue;
+    const under = copies.map(({ locale, data }) => ({
+      locale,
+      data: isObject(data) ? data[key] : undefined,
+    }));
+    const path = at ? `${at}.${key}` : key;
+    if (field.type === 'group') driftIn(form, field.fields, under, path, found);
+    else if (field.type === 'blocks')
+      driftRows(form, (row) => form.blocks[String(row._type)], under, path, found);
+    else if (field.type === 'array' && field.item.some((f) => f.path.length > 0))
+      driftRows(form, () => field.item, under, path, found);
+  }
+}
+
+function driftRows(
+  form: Form,
+  fieldsOf: (row: Record<string, unknown>) => readonly Field[] | undefined,
+  copies: Copy[],
+  at: string,
+  found: Drift[],
+): void {
+  const locales = copies.map((c) => c.locale);
+  const rows = new Map<string, Copy[]>();
+  for (const { locale, data } of copies)
+    if (Array.isArray(data))
+      for (const [i, row] of data.entries()) {
+        const key = rowKey(row, i);
+        rows.set(key, [...(rows.get(key) ?? []), { locale, data: row }]);
+      }
+  for (const [key, row] of rows) {
+    const first = row[0]?.data;
+    const path = `${at}[${key.startsWith('#') ? key.slice(1) : `_id=${key}`}]`;
+    const named = row.flatMap((c) =>
+      isObject(c.data) && Array.isArray(c.data._locales) ? (c.data._locales as string[]) : [],
+    );
+    const expected = named.length ? locales.filter((l) => named.includes(l)) : locales;
+    const has = row.map((c) => c.locale);
+    if (has.join() !== expected.join()) {
+      const type = isObject(first) && typeof first._type === 'string' ? first._type : undefined;
+      found.push({ path, type, in: has, expected });
+    }
+    // A row only one file has cannot disagree with anything below it, and a block type the
+    // form has never heard of has no rows the CMS knows about either.
+    const fields = isObject(first) ? fieldsOf(first) : undefined;
+    if (fields && row.length > 1) driftIn(form, fields, row, path, found);
+  }
+}
+
 // The properties a structured field translates; everything else in one is the same in every
 // language. Getting this wrong is what makes clients retype image URLs.
 const TRANSLATED_PROPS: Partial<Record<Field['type'], readonly string[]>> = {

@@ -1,5 +1,6 @@
-export type { AstroContent, ContentEntry, ContentSource } from './content.js';
+export type { AstroContent, ContentEntry, ContentSource, Drift } from './content.js';
 export {
+  driftReport,
   FORMAT_VERSION,
   mergeEntry,
   parseEntry,

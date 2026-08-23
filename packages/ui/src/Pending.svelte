@@ -26,6 +26,8 @@ let published = $state(0);
 let conflicts = $state<string[]>([]);
 /** Paths whose stored file is not everything their schema needs; the entry is where they get fixed. */
 let unready = $state<string[]>([]);
+/** Paths whose entry's languages disagree about its structure; nothing here can settle that. */
+let drifted = $state<string[]>([]);
 /** The path whose discard is waiting to be confirmed, and whether it is being thrown away. */
 let confirming = $state('');
 let discarding = $state(false);
@@ -59,10 +61,18 @@ const incomplete = (paths: string[]) =>
     ? 'Nothing was published. One file is not finished — open it to see what is missing. Delete the entry if it cannot be filled in yet.'
     : `Nothing was published. ${paths.length} files are not finished — open them to see what is missing. Delete the entries that cannot be filled in yet.`;
 
+// And the third: the entry's own files disagree about which blocks it has. Nothing was taken
+// from anyone and no draft is stale, so Discard is not the way out — the files themselves are.
+const adrift = (paths: string[]) =>
+  paths.length === 1
+    ? 'Nothing was published. One file belongs to an entry whose languages disagree about which blocks it has — the files have to agree before it can go out.'
+    : `Nothing was published. ${paths.length} files belong to entries whose languages disagree about which blocks they have — the files have to agree before they can go out.`;
+
 async function publish() {
   busy = true;
   error = '';
   unready = [];
+  drifted = [];
   const res = await fetch('/admin/api/publish', { method: 'POST' });
   busy = false;
   if (res.ok) {
@@ -84,9 +94,18 @@ async function publish() {
     error = `Publish failed (${res.status}). Nothing was changed.`;
     return;
   }
-  // A conflict answers with JSON, a ref that moved with a sentence; both are 409.
+  // A conflict answers with JSON, drift with JSON that says which one it is, a ref that moved
+  // with a sentence; all three are 409.
   const body = await res.text();
-  const parsed = JSON.parse(body.startsWith('{') ? body : '{}') as { paths?: string[] };
+  const parsed = JSON.parse(body.startsWith('{') ? body : '{}') as {
+    paths?: string[];
+    reason?: string;
+  };
+  if (parsed.reason === 'drift') {
+    drifted = parsed.paths ?? [];
+    error = adrift(drifted);
+    return;
+  }
   conflicts = parsed.paths ?? [];
   error = refusal(body, conflicts);
 }
@@ -141,7 +160,7 @@ async function discard() {
         <ul class="change-list">
           {#each files as file (file.path)}
             <li>
-              <div class="change-row" class:is-blocked={conflicts.includes(file.path) || unready.includes(file.path)}>
+              <div class="change-row" class:is-blocked={conflicts.includes(file.path) || unready.includes(file.path) || drifted.includes(file.path)}>
                 <span class="lead" aria-hidden="true"><span class="pdot"></span></span>
                 <div class="change-title">
                   <span class="name filename">{named(file.path)}</span>
@@ -150,6 +169,8 @@ async function discard() {
                     <span class="badge badge-danger">Changed in the repository since you opened it</span>
                   {:else if unready.includes(file.path)}
                     <span class="badge badge-danger">Not ready to publish</span>
+                  {:else if drifted.includes(file.path)}
+                    <span class="badge badge-danger">Languages disagree</span>
                   {/if}
                 </div>
                 <div class="change-sub">Edited {new Date(file.updated_at).toLocaleString()}</div>

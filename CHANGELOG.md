@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- An entry's languages are compared when it opens. The structure is shared, so a block one
+  language's file has and another's does not — with no `_locales` to say it belongs to that
+  language alone — is two files that have drifted apart, and the entry now comes back with
+  every one of them named. Publishing such an entry is refused with `409`, and the drawer marks
+  the row *Languages disagree* rather than offering Discard — it is the one refusal besides an
+  unfinished schema, because committing the file would bake the difference into git. A save
+  still resolves nothing by itself. A site that declares one language reads nothing extra and
+  is never refused for this. See `docs/i18n.md`.
+
 - An entry's languages keep one structure. Adding a block, removing one or moving one is an
   edit to every language's file of that entry, written in the same autosave: the German file
   is reordered with the English one and keeps its German, a block that arrives brings the

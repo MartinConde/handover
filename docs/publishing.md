@@ -102,6 +102,11 @@ the **pending-changes drawer**, which lists them and publishes them:
   the draft keeps the base it was loaded against until it is discarded. Keeping your
   version over theirs, or choosing field by field, arrives with the three-way view in a
   later release
+- **An entry whose languages have drifted apart is refused too**, marked *Languages
+  disagree*. Which blocks an entry has is the same in every language
+  ([Languages](i18n.md#a-block-one-language-only-has)), so a file that disagrees with its
+  siblings is a hand edit or a bad merge and committing it would bake the difference into
+  git. Discard is not the way out of this one: the files have to agree
 - A commit is not a live site: the site rebuilds afterwards, which takes a minute or two,
   and the admin itself is redeployed with it
 
@@ -147,13 +152,15 @@ drawer's **Discard** does with a file a publish was refused over. `404` if the c
 is not configured.
 
 ```
-GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, pending, problems, titleField }
+GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, pending, problems, titleField, drift }
 ```
 
 `data` is the draft when there is one, otherwise the file. `pending` says which, and
 `problems` is the same list the autosave answers with, so an entry names what is missing
 the moment it opens. `titleField` is there when the collection declares one, and is the
-field the editor's heading reads.
+field the editor's heading reads. `drift` is the blocks the entry's languages disagree about,
+`[{ "path": "blocks[_id=z9y8x7w6]", "type": "quote", "in": ["de"], "expected": ["en", "de"] }]`
+— empty on a site with one language, which reads nothing for it.
 
 ```
 GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales" }] }
@@ -206,9 +213,12 @@ repository since its draft was loaded — the body is `{ "error", "paths" }`, na
 files so the drawer can mark them and offer the way out — or when the branch moved while
 the commit was being written, which answers with a plain sentence and no paths. `422`
 when a stored draft is not everything its collection schema needs, with the same
-`{ "error", "paths" }` body. In all three cases nothing was written and no row was
-cleared. A path no collection owns — `redirects.yaml`, a global — has no schema to be held
-to and is never the reason for a `422`.
+`{ "error", "paths" }` body, and `409` with `{ "error", "paths", "reason": "drift" }` when a
+pending file belongs to an entry whose languages have
+[drifted apart](i18n.md#a-block-one-language-only-has) — `reason` is what tells that from a
+file somebody else changed, since Discard is the way out of one and not of the other. In all
+of those cases nothing was written and no row was cleared. A path no collection owns —
+`redirects.yaml`, a global — has no schema to be held to and is never the reason for a `422`.
 
 ## The content index
 

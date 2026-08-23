@@ -10,6 +10,7 @@ import {
   DraftConflictError,
   deleteEntry,
   discardDraft,
+  driftReport,
   entryName,
   FORMAT_VERSION,
   formOf,
@@ -80,6 +81,30 @@ const entryFiles = async (git: GitClient, collection: string, slug: string) => {
   }));
 };
 
+// One entry as the editor has it, language by language: its draft where there is one, the
+// repository where there is not, and no key at all for a language it has no file in. What
+// `driftReport` compares — a structure two files disagree about is a hand edit or a bad merge.
+async function entryLocales(
+  collection: string,
+  slug: string,
+  locales: string[],
+): Promise<Record<string, unknown>> {
+  const git = gitClient();
+  const database = db();
+  const loaded = await Promise.all(
+    locales.map(async (locale) => {
+      const path = entryPath(collection, slug, locale);
+      const [file, row] = await Promise.all([
+        git.getFile(path),
+        loadDraft('default', database, path),
+      ]);
+      const contents = row?.contents || file?.contents;
+      return contents ? ([locale, parseEntry('default', contents)] as const) : undefined;
+    }),
+  );
+  return Object.fromEntries(loaded.filter((l) => l !== undefined));
+}
+
 // The draft is what the editor was last looking at, so it wins over the file. No sha goes
 // to the browser: a publish commits the stored bytes and compares the bases server-side.
 async function getEntry(collection: string, slug: string): Promise<Response> {
@@ -94,12 +119,20 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
   const contents = draft?.contents ?? file?.contents;
   if (contents === undefined) return new Response('Not found', { status: 404 });
   const data = parseEntry('default', contents);
+  const form = formOf('default', formSchema(schema));
+  const others = config.i18n.locales.filter((locale) => locale !== config.i18n.defaultLocale);
   return Response.json({
-    ...formOf('default', formSchema(schema)),
+    ...form,
     data,
     pending: draft ? (await blobSha(draft.contents)) !== file?.blob_sha : false,
     problems: entryProblems(schema, data),
     titleField: collected.titleField,
+    // The other languages, and nothing on a site that declares one: an entry with a single
+    // file has nothing to have drifted from and reads nothing to find that out.
+    drift: driftReport('default', form, {
+      [config.i18n.defaultLocale]: data,
+      ...(await entryLocales(collection, slug, others)),
+    }),
   });
 }
 
@@ -290,6 +323,37 @@ export const PUT: APIRoute = async ({ params, request }) => {
 // prefix and belong to no collection: there is no schema to hold them to.
 const schemaFor = (path: string) => config.collections[path.split('/')[2] ?? '']?.schema;
 
+const ENTRY_FILE = /^src\/content\/([a-z0-9-]+)\/[^/]+\/([^/]+)\.yaml$/;
+
+/**
+ * Which of these files belong to an entry whose languages have drifted apart. The one refusal
+ * besides the schema: the structure is shared, so committing a file that disagrees with its
+ * other languages would bake the difference into git, and which side is right is a decision
+ * somebody makes. A site with one language never has a second file to disagree with.
+ */
+async function driftedPaths(paths: string[]): Promise<string[]> {
+  if (config.i18n.locales.length < 2) return [];
+  // One entry is one check, however many of its languages are waiting to be published.
+  const entries = new Map<string, string[]>();
+  for (const path of paths) {
+    const [, collection = '', slug = ''] = ENTRY_FILE.exec(path) ?? [];
+    if (!collection) continue;
+    const key = `${collection}/${slug}`;
+    entries.set(key, [...(entries.get(key) ?? []), path]);
+  }
+  const drifted: string[] = [];
+  for (const [key, files] of entries) {
+    const [collection = '', slug = ''] = key.split('/');
+    // A path no collection owns — a global — has no schema, so no form and no structure.
+    const schema = config.collections[collection]?.schema;
+    if (!schema) continue;
+    const form = formOf('default', formSchema(schema));
+    const locales = await entryLocales(collection, slug, config.i18n.locales);
+    if (driftReport('default', form, locales).length) drifted.push(...files);
+  }
+  return drifted;
+}
+
 /**
  * One commit for every draft that differs from the repository, then the rows are gone:
  * nothing keeps them, since the next open reads the file the publish just wrote.
@@ -301,7 +365,8 @@ const schemaFor = (path: string) => config.collections[path.split('/')[2] ?? '']
  */
 async function publish(): Promise<Response> {
   const database = db();
-  const unready = (await pendingDrafts('default', database)).filter((row) => {
+  const pending = await pendingDrafts('default', database);
+  const unready = pending.filter((row) => {
     const schema = schemaFor(row.path);
     return schema && row.contents
       ? entryProblems(schema, parseEntry('default', row.contents)).length > 0
@@ -318,6 +383,22 @@ async function publish(): Promise<Response> {
         paths,
       },
       { status: 422 },
+    );
+  }
+  const drifted = await driftedPaths(pending.map((row) => row.path));
+  if (drifted.length) {
+    return Response.json(
+      {
+        error:
+          drifted.length === 1
+            ? `${drifted[0]} has drifted apart from the entry's other languages — resolve it in the editor`
+            : `${drifted.length} files have drifted apart from their entries' other languages — ${drifted.join(', ')}`,
+        paths: drifted,
+        // Which 409 this is: the drawer's way out of a conflict is Discard, and this one's is
+        // the editor.
+        reason: 'drift',
+      },
+      { status: 409 },
     );
   }
   const result = await publishDrafts('default', database, gitClient());
