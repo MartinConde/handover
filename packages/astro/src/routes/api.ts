@@ -14,12 +14,14 @@ import {
   entryName,
   formOf,
   loadDraft,
-  moveDraft,
   openDb,
+  overlayRows,
   parseEntry,
   pendingDrafts,
   publishDrafts,
   RefMovedError,
+  recordDelete,
+  recordRename,
   renameEntry,
   saveDraft,
 } from '@handover/core';
@@ -93,14 +95,14 @@ async function autosave(collection: string, slug: string, request: Request): Pro
 // listing a collection through the contents API is one request per file.
 async function listEntries(collection: string): Promise<Response> {
   if (!config.collections[collection]) return new Response('Not found', { status: 404 });
-  const drafts = await pendingDrafts('default', db());
-  return Response.json({ entries: collectionEntries('default', index, collection, drafts) });
+  const rows = await overlayRows('default', db(), index);
+  return Response.json({ entries: collectionEntries('default', index, collection, rows) });
 }
 
 /** Every name the collection already uses, published or only drafted. */
 async function takenNames(collection: string, database: Db): Promise<string[]> {
-  const pending = await pendingDrafts('default', database);
-  return collectionEntries('default', index, collection, pending).map((e) => e.id);
+  const rows = await overlayRows('default', database, index);
+  return collectionEntries('default', index, collection, rows).map((e) => e.id);
 }
 
 // Phase 2 turns `locales` into the configured list; today an entry is one file under en/.
@@ -138,13 +140,20 @@ async function rename(collection: string, slug: string, request: Request): Promi
   const database = db();
   const git = gitClient();
   const from = entryPath(collection, slug);
-  if (!(await git.getFile(from)))
-    return new Response('Publish this entry before renaming it', { status: 409 });
+  const file = await git.getFile(from);
+  if (!file) return new Response('Publish this entry before renaming it', { status: 409 });
   const taken = (await takenNames(collection, database)).filter((id) => id !== slug);
   const to = entryName('default', typeof body?.to === 'string' ? body.to : '', taken);
   if (to === slug) return Response.json({ slug });
   const { commit_sha } = await renameEntry('default', git, locationOf(collection), slug, to);
-  await moveDraft('default', database, from, entryPath(collection, to), commit_sha);
+  await recordRename(
+    'default',
+    database,
+    from,
+    entryPath(collection, to),
+    file.contents,
+    commit_sha,
+  );
   return Response.json({ slug: to, commit_sha });
 }
 
@@ -154,13 +163,15 @@ async function remove(collection: string, slug: string): Promise<Response> {
   const collected = config.collections[collection];
   if (!collected) return new Response('Not found', { status: 404 });
   const git = gitClient();
+  const database = db();
   const path = entryPath(collection, slug);
-  const committed = await git.getFile(path);
-  const result = committed
-    ? await deleteEntry('default', git, locationOf(collection), slug, collected.index)
-    : undefined;
-  await discardDraft('default', db(), path);
-  return Response.json(result ?? {});
+  if (!(await git.getFile(path))) {
+    await discardDraft('default', database, path);
+    return Response.json({});
+  }
+  const result = await deleteEntry('default', git, locationOf(collection), slug, collected.index);
+  await recordDelete('default', database, path, result.commit_sha);
+  return Response.json(result);
 }
 
 const ENTRIES = /^entries\/([\w-]+)$/;

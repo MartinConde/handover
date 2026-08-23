@@ -87,12 +87,27 @@ export function collectionEntries(
   drafts: readonly ContentFile[],
 ): IndexEntry[] {
   const prefix = `src/content/${collection}/`;
-  const pending = drafts.filter((d) => d.path.startsWith(prefix));
+  const rows = drafts.filter((d) => d.path.startsWith(prefix));
+  const gone = new Set(rows.filter((r) => !r.contents).map((r) => r.path));
   const entries = (index[collection] ?? []).map((e) => ({ id: e.id, locales: { ...e.locales } }));
-  for (const draft of indexFrom(siteId, pending)[collection] ?? []) {
+  for (const draft of indexFrom(
+    siteId,
+    rows.filter((r) => r.contents),
+  )[collection] ?? []) {
     const found = entries.find((e) => e.id === draft.id);
     if (found) Object.assign(found.locales, draft.locales);
     else entries.push(draft);
   }
-  return entries.sort(byId);
+  // A rename or a delete writes to git without touching the index, so the file it removed is
+  // still in there: an empty row is what says the path has gone until the build catches up.
+  for (const entry of entries)
+    for (const [locale, info] of Object.entries(entry.locales))
+      if (gone.has(info.path)) delete entry.locales[locale];
+  return entries.filter((e) => Object.keys(e.locales).length > 0).sort(byId);
 }
+
+/** Whether the built index knows this path — what says a repo write has reached the build. */
+export const indexHasPath = (index: ContentIndex, path: string): boolean =>
+  Object.values(index).some((entries) =>
+    entries.some((e) => Object.values(e.locales).some((l) => l.path === path)),
+  );

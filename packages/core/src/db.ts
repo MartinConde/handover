@@ -1,7 +1,8 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { mergeEntry, parseEntry, stringifyEntry } from './content.js';
+import { type ContentFile, type ContentIndex, indexHasPath } from './entries.js';
 import { blobSha, type GitClient } from './git.js';
 import type { RedirectRule } from './lifecycle.js';
 
@@ -48,9 +49,10 @@ export function openDb(_siteId: string, binding: D1Binding | undefined) {
 export type Db = ReturnType<typeof openDb>;
 export type Draft = typeof drafts.$inferSelect;
 
+/** A row with no contents is a path a commit removed, not a draft anyone can open. */
 export function loadDraft(siteId: string, db: Db, path: string): Promise<Draft | undefined> {
   return db.query.drafts.findFirst({
-    where: and(eq(drafts.siteId, siteId), eq(drafts.path, path)),
+    where: and(eq(drafts.siteId, siteId), eq(drafts.path, path), ne(drafts.contents, '')),
   });
 }
 
@@ -83,9 +85,13 @@ export async function saveDraft(
   await db
     .insert(drafts)
     .values({ siteId, path, contents, baseSha: base.sha, baseBlob: base.blob, updatedAt })
+    // The base moves only when it was just read from git — a row the editor is working on
+    // keeps the one it was loaded against, and the row a delete left has none worth keeping.
     .onConflictDoUpdate({
       target: [drafts.siteId, drafts.path],
-      set: { contents, updatedAt, publishedSha: null },
+      set: row
+        ? { contents, updatedAt, publishedSha: null }
+        : { contents, baseSha: base.sha, baseBlob: base.blob, updatedAt, publishedSha: null },
     });
   return { updated_at: updatedAt, pending: (await blobSha(contents)) !== base.blob };
 }
@@ -103,32 +109,101 @@ export async function createDraft(
   values: Record<string, unknown>,
 ): Promise<{ updated_at: number }> {
   const updatedAt = Date.now();
-  await db.insert(drafts).values({
-    siteId,
-    path,
-    contents: stringifyEntry(siteId, values),
-    baseSha: await git.getHead(),
-    baseBlob: '',
-    updatedAt,
-  });
+  const contents = stringifyEntry(siteId, values);
+  const baseSha = await git.getHead();
+  await db
+    .insert(drafts)
+    .values({ siteId, path, contents, baseSha, baseBlob: '', updatedAt })
+    // Only a removed row can be at this path: a name a live row holds is never picked again.
+    .onConflictDoUpdate({
+      target: [drafts.siteId, drafts.path],
+      set: { contents, baseSha, baseBlob: '', updatedAt, publishedSha: null },
+    });
   return { updated_at: updatedAt };
 }
 
 /**
- * Re-key a draft onto the path a rename commit moved it to. The commit carried the loaded
- * bytes over untouched, so `base_blob` still describes the file at the new path.
+ * What a commit removed, kept for the entry list: the index is made at build time, so until
+ * the build that carries the commit is live it still has the file. An empty row says the path
+ * has gone, and `published_sha` keeps it out of the drawer and out of the next publish.
  */
-export async function moveDraft(
+export async function recordDelete(
+  siteId: string,
+  db: Db,
+  path: string,
+  commitSha: string,
+): Promise<void> {
+  const gone = { contents: '', baseSha: commitSha, baseBlob: '', updatedAt: Date.now() };
+  await db
+    .insert(drafts)
+    .values({ siteId, path, ...gone, publishedSha: commitSha })
+    .onConflictDoUpdate({
+      target: [drafts.siteId, drafts.path],
+      set: { ...gone, publishedSha: commitSha },
+    });
+}
+
+/**
+ * The same for a rename, which is a delete and a write. An open draft moves onto the new path
+ * with its edits — the commit carried the loaded bytes over untouched, so `base_blob` still
+ * describes the file there; without one the committed bytes are stored so the row can name the
+ * entry in the list.
+ */
+export async function recordRename(
   siteId: string,
   db: Db,
   from: string,
   to: string,
-  baseSha: string,
+  contents: string,
+  commitSha: string,
 ): Promise<void> {
-  await db
-    .update(drafts)
-    .set({ path: to, baseSha })
-    .where(and(eq(drafts.siteId, siteId), eq(drafts.path, from)));
+  const open = await loadDraft(siteId, db, from);
+  // Only a removed row can be at the new path — a rename takes a free name, and a delete is
+  // what frees one before the build.
+  await db.delete(drafts).where(and(eq(drafts.siteId, siteId), eq(drafts.path, to)));
+  if (open)
+    await db
+      .update(drafts)
+      .set({ path: to, baseSha: commitSha })
+      .where(and(eq(drafts.siteId, siteId), eq(drafts.path, from)));
+  else
+    await db.insert(drafts).values({
+      siteId,
+      path: to,
+      contents,
+      baseSha: commitSha,
+      baseBlob: await blobSha(contents),
+      updatedAt: Date.now(),
+      publishedSha: commitSha,
+    });
+  await recordDelete(siteId, db, from, commitSha);
+}
+
+/**
+ * The rows the entry list lays over the built index, dropping the ones the build has caught up
+ * with on the way: what a rename or a delete leaves behind is about a path being there or not,
+ * so the index having it is the whole test.
+ */
+export async function overlayRows(
+  siteId: string,
+  db: Db,
+  index: ContentIndex,
+): Promise<ContentFile[]> {
+  const rows = await db.select().from(drafts).where(eq(drafts.siteId, siteId));
+  const settled = rows.filter(
+    (r) => r.publishedSha && indexHasPath(index, r.path) === (r.contents !== ''),
+  );
+  if (settled.length)
+    await db.delete(drafts).where(
+      and(
+        eq(drafts.siteId, siteId),
+        inArray(
+          drafts.path,
+          settled.map((r) => r.path),
+        ),
+      ),
+    );
+  return rows.filter((r) => !settled.includes(r)).map(({ path, contents }) => ({ path, contents }));
 }
 
 /** Throw away the unpublished edits for one path; a deleted entry must not come back. */
@@ -136,9 +211,15 @@ export async function discardDraft(siteId: string, db: Db, path: string): Promis
   await db.delete(drafts).where(and(eq(drafts.siteId, siteId), eq(drafts.path, path)));
 }
 
-/** Drafts whose stored bytes differ from the file they were loaded from, newest first. */
+/**
+ * Drafts whose stored bytes differ from the file they were loaded from, newest first. A row a
+ * commit left behind is not one: it is what the repository already holds.
+ */
 export async function pendingDrafts(siteId: string, db: Db): Promise<Draft[]> {
-  const rows = await db.select().from(drafts).where(eq(drafts.siteId, siteId));
+  const rows = await db
+    .select()
+    .from(drafts)
+    .where(and(eq(drafts.siteId, siteId), isNull(drafts.publishedSha)));
   const pending = await Promise.all(
     rows.map(async (r) => (await blobSha(r.contents)) !== r.baseBlob),
   );

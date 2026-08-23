@@ -6,12 +6,15 @@ import {
   DraftConflictError,
   discardDraft,
   drafts,
-  moveDraft,
   openDb,
+  overlayRows,
   pendingDrafts,
   publishDrafts,
+  recordDelete,
+  recordRename,
   saveDraft,
 } from './db.js';
+import { type ContentIndex, collectionEntries, indexFrom } from './entries.js';
 import { blobSha } from './git.js';
 
 const mf = new Miniflare({
@@ -164,6 +167,7 @@ function fakeRepo(files: Record<string, string>) {
 }
 
 const OTHER = 'src/content/listings/en/barn.yaml';
+const RENAMED = 'src/content/listings/en/the-old-mill.yaml';
 const OTHER_FILE = '_version: 1\ntitle: "The Barn"\nrooms: 1\n';
 
 test('a draft that matches the file it was loaded from is not pending', async () => {
@@ -264,21 +268,6 @@ test('a new entry whose path someone else committed first is a conflict', async 
   expect(repo.publish).not.toHaveBeenCalled();
 });
 
-test('a renamed entry keeps its unpublished edits at the new path', async () => {
-  const db = await fresh();
-  const repo = fakeRepo({ [PATH]: FILE });
-  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
-
-  await moveDraft('default', db, PATH, OTHER, 'commit-rename');
-
-  const row = await only(db);
-  expect(row?.path).toBe(OTHER);
-  expect(row?.baseSha).toBe('commit-rename');
-  // The rename commit moved the loaded bytes untouched, so the base blob still describes them.
-  expect(row?.baseBlob).toBe(await blobSha(FILE));
-  expect(row?.contents).toBe(FILE.replace('rooms: 3', 'rooms: 4'));
-});
-
 test('discarding a draft leaves nothing for the next publish to write back', async () => {
   const db = await fresh();
   const repo = fakeRepo({ [PATH]: FILE });
@@ -288,4 +277,85 @@ test('discarding a draft leaves nothing for the next publish to write back', asy
 
   expect(await db.select().from(drafts)).toEqual([]);
   expect(await publishDrafts('default', db, repo)).toBe(undefined);
+});
+
+// The index as the last build made it: the entry list's other half, one build behind
+// everything a rename or a delete commits.
+const indexOf = (files: Record<string, string>) =>
+  indexFrom(
+    'default',
+    Object.entries(files).map(([path, contents]) => ({ path, contents })),
+  );
+const listed = async (db: ReturnType<typeof openDb>, index: ContentIndex) =>
+  collectionEntries('default', index, 'listings', await overlayRows('default', db, index)).map(
+    (e) => [e.id, e.locales.en?.title],
+  );
+
+test('a rename shows the new name in the list before the build that carries it', async () => {
+  const db = await fresh();
+  const index = indexOf({ [PATH]: FILE, [OTHER]: OTHER_FILE });
+
+  await recordRename('default', db, PATH, RENAMED, FILE, 'commit-rename');
+
+  expect(await listed(db, index)).toEqual([
+    ['barn', 'The Barn'],
+    ['the-old-mill', 'The Mill House'],
+  ]);
+});
+
+test('a rename carries the unpublished edits rather than the committed bytes', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, title: 'The Old Mill' });
+
+  await recordRename('default', db, PATH, RENAMED, FILE, 'commit-rename');
+
+  expect(await listed(db, indexOf({ [PATH]: FILE }))).toEqual([['the-old-mill', 'The Old Mill']]);
+  const [row] = await pendingDrafts('default', db);
+  expect(row?.path).toBe(RENAMED);
+  expect(row?.baseSha).toBe('commit-rename');
+  // The rename commit moved the loaded bytes untouched, so the base blob still describes them.
+  expect(row?.baseBlob).toBe(await blobSha(FILE));
+});
+
+test('a delete takes the entry out of the list and leaves nothing to publish', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [OTHER]: OTHER_FILE });
+  const index = indexOf({ [PATH]: FILE, [OTHER]: OTHER_FILE });
+
+  await recordDelete('default', db, PATH, 'commit-delete');
+
+  expect(await listed(db, index)).toEqual([['barn', 'The Barn']]);
+  expect(await publishDrafts('default', db, repo)).toBe(undefined);
+});
+
+test('the rows a rename left are dropped by the build that catches up with them', async () => {
+  const db = await fresh();
+  await recordRename('default', db, PATH, RENAMED, FILE, 'commit-rename');
+
+  const built = indexOf({ [RENAMED]: FILE });
+  expect(await listed(db, built)).toEqual([['the-old-mill', 'The Mill House']]);
+  expect(await db.select().from(drafts)).toEqual([]);
+});
+
+test('an entry can take the name a delete freed', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+  await recordDelete('default', db, PATH, 'commit-delete');
+
+  await createDraft('default', db, repo, PATH, { title: 'The Mill House', rooms: 3 });
+
+  expect(await listed(db, indexOf({ [PATH]: FILE }))).toEqual([['mill-house', 'The Mill House']]);
+  expect((await pendingDrafts('default', db)).map((r) => r.path)).toEqual([PATH]);
+});
+
+test('an autosave after a delete takes its base from the file, not from the row', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+  await recordDelete('default', db, PATH, 'commit-delete');
+  repo.write(PATH, FILE); // the file is back: a developer added it again
+
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+
+  expect((await publishDrafts('default', db, repo))?.paths).toEqual([PATH]);
 });

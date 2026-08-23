@@ -133,7 +133,7 @@ DELETE /admin/api/entries/:collection/:slug        →  { "commit_sha" }
 ```
 
 One commit removing every locale file, with a redirect to the collection's `index` when it
-has one, and the entry's draft discarded. The answer is `{}` when nothing was committed —
+has one, and the entry's draft dropped. The answer is `{}` when nothing was committed —
 the entry existed only as a draft, or not at all.
 
 ```
@@ -165,8 +165,12 @@ without a restart.
 
 Two consequences worth knowing:
 
-- Between a publish and the build that follows it the index is one commit behind. The entry
-  list is still right, because the draft rows are laid over it
+- Between a commit and the build that follows it the index is one commit behind. A rename
+  or a delete is still right in the list straight away: both leave a row saying what the
+  commit did to that file, and the row is dropped by the first list after the build has
+  caught up. A **publish** is the one that waits — its rows are cleared with the commit, so
+  until the site has rebuilt a title you published still reads as the old one, and an entry
+  you have just created is not in the list at all
 - **The build fails on a content file that is not `src/content/<collection>/<locale>/<name>.yaml`**,
   naming it. An entry is one file per locale and nothing below the locale folder — a file
   in a sub-folder is not addressable as `collection/slug`, so rather than leave it out of

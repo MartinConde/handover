@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The entry list is right the moment a rename or a delete is committed: the renamed entry
+  is listed under its new name and a deleted one is gone, instead of waiting for the site
+  to rebuild. Both write a row that says what the commit did to that file, laid over the
+  build's index and dropped once the build has caught up; neither shows up as an
+  unpublished change. A rename still carries the entry's unpublished edits to the new path.
+  See `docs/publishing.md`.
+
 - A field's label in the admin is its key, humanised: `availableFrom` reads "Available
   from". `.meta({ label: 'SEO' })` on the field names it yourself, on any type including
   the `image`, `file`, `embed`, `seo` and `reference` helpers. See `docs/field-types.md`.

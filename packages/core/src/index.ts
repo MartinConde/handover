@@ -7,10 +7,12 @@ export {
   discardDraft,
   drafts,
   loadDraft,
-  moveDraft,
   openDb,
+  overlayRows,
   pendingDrafts,
   publishDrafts,
+  recordDelete,
+  recordRename,
   saveDraft,
 } from './db.js';
 export type { ContentFile, ContentIndex, EntryLocale, IndexEntry } from './entries.js';

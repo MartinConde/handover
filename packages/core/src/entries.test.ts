@@ -123,3 +123,21 @@ test('the built index is not mutated by the overlay', () => {
   ]);
   expect(index.listings?.[0]?.locales.en?.title).toBe('The Mill House');
 });
+
+test('a row saying the file is gone takes the entry out of the list', () => {
+  const entries = collectionEntries('default', index, 'listings', [
+    { path: 'src/content/listings/en/mill-house.yaml', contents: '' },
+  ]);
+  expect(entries.map((e) => e.id)).toEqual(['seaview-cottage']);
+});
+
+test('a renamed entry is listed under its new name before the build catches up', () => {
+  const entries = collectionEntries('default', index, 'listings', [
+    { path: 'src/content/listings/en/mill-house.yaml', contents: '' },
+    listing('en', 'the-old-mill', 'title: "The Mill House"\n'),
+  ]);
+  expect(entries.map((e) => [e.id, e.locales.en?.title])).toEqual([
+    ['seaview-cottage', 'Seaview Cottage'],
+    ['the-old-mill', 'The Mill House'],
+  ]);
+});

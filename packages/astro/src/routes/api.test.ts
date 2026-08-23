@@ -10,8 +10,10 @@ const {
   publish,
   saveDraft,
   createDraft,
-  moveDraft,
+  recordRename,
+  recordDelete,
   discardDraft,
+  overlayRows,
   pendingDrafts,
   publishDrafts,
 } = await vi.hoisted(async () => {
@@ -55,8 +57,11 @@ const {
       async () => ({ updated_at: 1755864000000, pending: true }),
     ),
     createDraft: vi.fn(async () => ({ updated_at: 1755864000000 })),
-    moveDraft: vi.fn(async () => {}),
+    recordRename: vi.fn(async () => {}),
+    recordDelete: vi.fn(async () => {}),
     discardDraft: vi.fn(async () => {}),
+    // What the entry list lays over the index: the pending drafts plus what a commit left.
+    overlayRows: vi.fn(async () => [] as { path: string; contents: string }[]),
   };
 });
 
@@ -106,8 +111,10 @@ vi.mock('@handover/core', async (original) => ({
   loadDraft: async () => draft,
   saveDraft,
   createDraft,
-  moveDraft,
+  recordRename,
+  recordDelete,
   discardDraft,
+  overlayRows,
   pendingDrafts,
   publishDrafts,
 }));
@@ -266,11 +273,10 @@ test('the browser cannot hand file contents to the publish endpoint', async () =
 });
 
 test('the entry list is the built index with the pending drafts over it', async () => {
-  pendingDrafts.mockImplementationOnce(async () => [
+  overlayRows.mockImplementationOnce(async () => [
     {
       path: 'src/content/listings/en/mill-house.yaml',
       contents: 'title: "The Mill House, renamed"\n',
-      updatedAt: 1755864000000,
     },
   ]);
   const res = await GET(ctx('entries/listings'));
@@ -326,11 +332,10 @@ test('a title already used in the collection gets the collision suffix', async (
 });
 
 test('a name already taken by an unpublished entry counts as taken too', async () => {
-  pendingDrafts.mockImplementationOnce(async () => [
+  overlayRows.mockImplementationOnce(async () => [
     {
       path: 'src/content/listings/en/strandhaus-nord.yaml',
       contents: 'title: "Strandhaus Nord"\n',
-      updatedAt: 1755864000000,
     },
   ]);
   const res = await POST(post('entries/listings', JSON.stringify({ title: 'Strandhaus Nord' })));
@@ -355,7 +360,7 @@ test('an entry that exists only as a draft opens from it', async () => {
 
 test('renaming moves the entry in one commit and takes its unpublished edits with it', async () => {
   publish.mockClear();
-  moveDraft.mockClear();
+  recordRename.mockClear();
   const res = await POST(
     post('entries/listings/mill-house/rename', JSON.stringify({ to: 'The Old Mill' })),
   );
@@ -370,11 +375,12 @@ test('renaming moves the entry in one commit and takes its unpublished edits wit
   ]);
   expect(files[0]?.contents).toBe(null);
   expect(files[2]?.contents).toContain('from: "/listings/mill-house"');
-  expect(moveDraft).toHaveBeenCalledWith(
+  expect(recordRename).toHaveBeenCalledWith(
     'default',
     expect.anything(),
     'src/content/listings/en/mill-house.yaml',
     'src/content/listings/en/the-old-mill.yaml',
+    'title: The Mill House\nlocation: Bakewell\nrooms: 3\n',
     'def456',
   );
 });
@@ -389,9 +395,9 @@ test('renaming an entry that has never been published says so rather than failin
   expect(publish).not.toHaveBeenCalled();
 });
 
-test('deleting commits the removal with a redirect and drops the draft', async () => {
+test('deleting commits the removal with a redirect and says the file has gone', async () => {
   publish.mockClear();
-  discardDraft.mockClear();
+  recordDelete.mockClear();
   const res = await DELETE(ctx('entries/listings/mill-house'));
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({ commit_sha: 'def456' });
@@ -401,10 +407,12 @@ test('deleting commits the removal with a redirect and drops the draft', async (
     'src/content/redirects.yaml',
   ]);
   expect(files[1]?.contents).toContain('reason: "deleted"');
-  expect(discardDraft).toHaveBeenCalledWith(
+  // The list is the build's index and the build has not run yet, so something has to say so.
+  expect(recordDelete).toHaveBeenCalledWith(
     'default',
     expect.anything(),
     'src/content/listings/en/mill-house.yaml',
+    'def456',
   );
 });
 
