@@ -313,6 +313,11 @@ test('a menu item link is a bare target: no label or newTab inside it', () => {
   expect(navigation.safeParse(menu({ ...item, link: { type: 'entry', href: '/x' } })).success).toBe(
     false,
   );
+  // A menu item is the most-clicked link on a site; it takes the same targets as any other.
+  expect(
+    navigation.safeParse(menu({ ...item, link: { type: 'url', href: 'javascript:alert(1)' } }))
+      .success,
+  ).toBe(false);
 });
 
 test('the redirects golden parses; from must be a path and to a path or absolute URL', async () => {
