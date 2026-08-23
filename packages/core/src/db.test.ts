@@ -13,6 +13,7 @@ import {
   publishDrafts,
   recordDelete,
   recordRename,
+  resolveDrift,
   saveDraft,
 } from './db.js';
 import { type ContentIndex, collectionEntries, indexFrom } from './entries.js';
@@ -410,11 +411,18 @@ const page = (title: string, first: string, second: string) =>
 const PAGE_FORM: Form = {
   fields: [
     { path: ['title'], label: 'Title', type: 'text', required: true },
-    { path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: ['hero', 'cta'] },
+    {
+      path: ['blocks'],
+      label: 'Blocks',
+      type: 'blocks',
+      required: true,
+      types: ['hero', 'cta', 'quote'],
+    },
   ],
   blocks: {
     hero: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }],
     cta: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }],
+    quote: [{ path: ['body'], label: 'Body', type: 'text', required: true }],
   },
 };
 const SYNC = { form: PAGE_FORM, locale: 'en', siblings: { de: PAGE_DE } };
@@ -499,4 +507,57 @@ test('publishing an entry commits the languages that moved with it in one commit
   expect(repo.publish).toHaveBeenCalledTimes(1);
   expect(result?.paths.toSorted()).toEqual([PAGE_DE, PAGE_EN]);
   expect(await db.select().from(drafts)).toEqual([]);
+});
+
+// Reconciling drift is the write `saveDraft` cannot make: the answer moves a block between
+// the entry's files, and every file it changes has to reach the drafts table together.
+const drifted = (title: string, blocks: string[]) =>
+  ['_version: 1', `title: "${title}"`, 'blocks:', ...blocks, ''].join('\n');
+const HERO = ['  - _type: "hero"', '    _id: "k3nf9a2p"', '    heading: "Hallo"'];
+const QUOTE = ['  - _type: "quote"', '    _id: "z9y8x7w6"', '    body: "Ein seltener Fund."'];
+const CTA = ['  - _type: "cta"', '    _id: "q1w2e3r4"', '    heading: "Los"'];
+const PAGE_PATHS = { en: PAGE_EN, de: PAGE_DE };
+
+test('answering drift writes every language the answer changes in one batch', async () => {
+  const db = await fresh();
+  const mark = ['    _locales:', '      - "de"'];
+  const repo = fakeRepo({
+    [PAGE_EN]: drifted('Home', [...HERO, ...CTA.slice(0, 2), ...mark, ...CTA.slice(2)]),
+    [PAGE_DE]: drifted('Startseite', [...HERO, ...CTA.slice(0, 2), ...mark, ...CTA.slice(2)]),
+  });
+
+  await resolveDrift('default', db, repo, PAGE_FORM, ['en', 'de'], PAGE_PATHS, [
+    { path: 'blocks[_id=q1w2e3r4]', locales: ['en', 'de'] },
+  ]);
+
+  const rows = (await db.select().from(drafts)).toSorted((a, b) => a.path.localeCompare(b.path));
+  expect(rows.map((r) => r.path)).toEqual([PAGE_DE, PAGE_EN]);
+  expect(rows[0]?.contents).toBe(drifted('Startseite', [...HERO, ...CTA]));
+  expect(rows[1]?.contents).toBe(drifted('Home', [...HERO, ...CTA]));
+  expect(rows[0]?.updatedAt).toBe(rows[1]?.updatedAt);
+});
+
+test('a language the answer leaves alone is not made pending by it', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({
+    [PAGE_EN]: drifted('Home', [...HERO, ...CTA]),
+    [PAGE_DE]: drifted('Startseite', [...HERO, ...QUOTE, ...CTA]),
+  });
+
+  await resolveDrift('default', db, repo, PAGE_FORM, ['en', 'de'], PAGE_PATHS, [
+    { path: 'blocks[_id=z9y8x7w6]', locales: ['de'] },
+  ]);
+
+  const rows = await db.select().from(drafts);
+  expect(rows.map((r) => r.path)).toEqual([PAGE_DE]);
+  expect(rows[0]?.contents).toBe(
+    drifted('Startseite', [
+      ...HERO,
+      ...QUOTE.slice(0, 2),
+      '    _locales:',
+      '      - "de"',
+      ...QUOTE.slice(2),
+      ...CTA,
+    ]),
+  );
 });

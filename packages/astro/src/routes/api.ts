@@ -25,6 +25,7 @@ import {
   recordDelete,
   recordRename,
   renameEntry,
+  resolveDrift,
   saveDraft,
 } from '@handover/core';
 import type { APIRoute } from 'astro';
@@ -127,6 +128,9 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
     pending: draft ? (await blobSha(draft.contents)) !== file?.blob_sha : false,
     problems: entryProblems(schema, data),
     titleField: collected.titleField,
+    // The languages the site declares, which is what says whether the editor draws any of the
+    // controls that are about having more than one.
+    locales: config.i18n.locales,
     // The other languages, and nothing on a site that declares one: an entry with a single
     // file has nothing to have drifted from and reads nothing to find that out.
     drift: driftReport('default', form, {
@@ -186,6 +190,42 @@ async function autosave(collection: string, slug: string, request: Request): Pro
   }
   if (!saved) return new Response('Not found', { status: 404 });
   return Response.json({ ...saved, problems: entryProblems(schema, data) });
+}
+
+/**
+ * The answers to one entry's structural drift, one per block its languages disagree about.
+ * They belong here and not in an autosave: that one carries the default language's values and
+ * has no way to say a block comes out of German. Nothing is marked resolved — the entry is read
+ * again afterwards, and the banner goes because the next report is empty.
+ */
+async function reconcile(collection: string, slug: string, request: Request): Promise<Response> {
+  const schema = config.collections[collection]?.schema;
+  if (!schema) return new Response('Not found', { status: 404 });
+  const body = (await request.json().catch(() => undefined)) as { choices?: unknown } | undefined;
+  const choices = (Array.isArray(body?.choices) ? body.choices : []).filter(
+    (choice): choice is { path: string; locales: string[] } =>
+      typeof choice?.path === 'string' &&
+      Array.isArray(choice.locales) &&
+      choice.locales.every((locale: unknown) => typeof locale === 'string'),
+  );
+  const form = formOf('default', formSchema(schema));
+  const locales = await entryLocales(collection, slug, config.i18n.locales);
+  const drift = new Set(driftReport('default', form, locales).map((row) => row.path));
+  // A row the languages agree about has nothing to answer: the report moved on under the tab.
+  if (!choices.length || choices.some((choice) => !drift.has(choice.path)))
+    return new Response("Those are not the blocks this entry's languages disagree about", {
+      status: 409,
+    });
+  await resolveDrift(
+    'default',
+    db(),
+    gitClient(),
+    form,
+    config.i18n.locales,
+    Object.fromEntries(Object.keys(locales).map((l) => [l, entryPath(collection, slug, l)])),
+    choices,
+  );
+  return Response.json({});
 }
 
 // The titles come from the build, the pending edits from D1. Nothing here touches GitHub:
@@ -295,6 +335,7 @@ const ENTRIES = /^entries\/([\w-]+)$/;
 const ENTRY = /^entries\/([\w-]+)\/([\w-]+)$/;
 const DRAFT = /^drafts\/([\w-]+)\/([\w-]+)$/;
 const RENAME = /^entries\/([\w-]+)\/([\w-]+)\/rename$/;
+const DRIFT = /^drift\/([\w-]+)\/([\w-]+)$/;
 
 export const GET: APIRoute = async ({ params }) => {
   if (params.path === 'ping') {
@@ -428,6 +469,8 @@ export const POST: APIRoute = async ({ params, request }) => {
     return login(typeof body.password === 'string' ? body.password : '');
   }
   if (params.path === 'publish') return answering(publish);
+  const answered = params.path?.match(DRIFT);
+  if (answered) return answering(() => reconcile(answered[1] ?? '', answered[2] ?? '', request));
   const renamed = params.path?.match(RENAME);
   if (renamed) return answering(() => rename(renamed[1] ?? '', renamed[2] ?? '', request));
   const created = params.path?.match(ENTRIES);

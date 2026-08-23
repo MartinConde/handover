@@ -4,6 +4,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Drift is answered in the entry. An entry whose languages disagree about its blocks opens on a
+  reconciliation panel instead of its form, one card per block with the answers that block
+  allows — derived from which languages have it against which should, so a block nothing marks
+  offers *add it to English*, *keep it in German only* or *remove it from German*, and one
+  marked for German that English has as well offers only the two the mark allows. Answering
+  every card writes each language the answers change in one batch: a block arrives in a new
+  language with the values every language shares and nothing to read yet, so what its schema
+  still wants comes back as ordinary validation problems rather than another refusal. A mark
+  naming a language the entry has no file in survives. Nothing is marked resolved — the entry is
+  read again and the banner goes because there is nothing left to report, which is also how a
+  fix made in the repository clears it. `POST /admin/api/drift/:collection/:slug` is the route
+  behind it, and the entry response now also carries the site's `locales`. See `docs/i18n.md`.
+
 - An entry's languages are compared when it opens. The structure is shared, so a block one
   language's file has and another's does not — with no `_locales` to say it belongs to that
   language alone — is two files that have drifted apart, and the entry now comes back with

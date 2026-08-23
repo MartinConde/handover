@@ -1,4 +1,4 @@
-import type { Field } from '@handover/core';
+import type { Drift, Field } from '@handover/core';
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Editor from './Editor.svelte';
@@ -19,6 +19,8 @@ const entry = {
   data: { title: 'Seaview Cottage', seo: { description: 'Harbour view' }, photos: [] },
   pending: false,
   problems: [] as { path: string; message: string }[],
+  locales: ['en'],
+  drift: [] as Drift[],
 };
 
 const opened = vi.fn();
@@ -27,7 +29,14 @@ let app: ReturnType<typeof mount>;
 const show = (over: Record<string, unknown> = {}) => {
   app = mount(Editor, {
     target: document.body,
-    props: { collection: 'listings', slug: 'seaview-cottage', entry, onpublish: opened, ...over },
+    props: {
+      collection: 'listings',
+      slug: 'seaview-cottage',
+      entry,
+      onpublish: opened,
+      onresolved: () => {},
+      ...over,
+    },
   });
   return document.body;
 };
@@ -75,6 +84,7 @@ const withProblems = (problems: { path: string; message: string }[]) => {
       slug: 'seaview-cottage',
       entry: { ...entry, pending: true, problems },
       onpublish: opened,
+      onresolved: () => {},
     },
   });
   return document.body;
@@ -101,6 +111,8 @@ test('the header shows the field the collection is keyed on', () => {
       pending: false,
       problems: [],
       titleField: 'name',
+      locales: ['en'],
+      drift: [],
     },
   });
   expect($(root, 'h1')?.textContent).toBe('Rosa Hale');
@@ -234,6 +246,7 @@ test('a draft that is ahead of the published file can be published on load', () 
       slug: 'seaview-cottage',
       entry: { ...entry, pending: true },
       onpublish: opened,
+      onresolved: () => {},
     },
   });
   expect($<HTMLButtonElement>(document.body, 'button.btn-primary')?.disabled).toBe(false);
@@ -331,4 +344,20 @@ test('an autosave that stores an entry the schema refuses says so instead of Not
   expect($(root, '.problems')?.textContent).toBe('1 problem');
   vi.unstubAllGlobals();
   vi.useRealTimers();
+});
+
+// State 10: the form is about a structure the languages have not agreed on, so it is not drawn.
+test('an entry whose languages disagree gets the panel where its form would be', () => {
+  const root = show({
+    entry: {
+      ...entry,
+      drift: [{ path: 'blocks[_id=z9y8x7w6]', type: 'quote', in: ['de'], expected: ['en', 'de'] }],
+      locales: ['en', 'de'],
+    },
+  });
+
+  expect($(root, '.lock-banner.is-drift')).not.toBe(null);
+  expect($(root, '.drift .block-card')).not.toBe(null);
+  expect($(root, 'form.form')).toBe(null);
+  expect($<HTMLButtonElement>(root, 'header button.btn-primary')?.disabled).toBe(true);
 });

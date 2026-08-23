@@ -148,6 +148,214 @@ export function syncLocale(
   return { _version: FORMAT_VERSION, ...synced };
 }
 
+/** One row of drift as somebody answered it: the languages it should end up in. */
+export interface DriftChoice {
+  /** The row's `path` in the report it came from. */
+  path: string;
+  /** Empty takes the row out of every file. */
+  locales: string[];
+}
+
+/**
+ * Every language's file with the answers applied. A row ends up in the files its answer names
+ * and comes out of the others, arriving in a new one with the values every language shares and
+ * nothing to read yet — the same as a block added to one language. `_locales` is rewritten only
+ * where the answer is not what the mark already said, so a mark naming a language the entry has
+ * no file in survives an answer about the languages it does have.
+ *
+ * `locales` is the site's declared languages: a row in every one of them carries no mark at all,
+ * which is not the same as one naming them.
+ */
+export function applyDrift(
+  _siteId: string,
+  form: Form,
+  locales: string[],
+  files: Record<string, unknown>,
+  choices: DriftChoice[],
+): Record<string, unknown> {
+  const out = structuredClone(files);
+  const answers = new Map(
+    choices.map((c) => [c.path, locales.filter((l) => c.locales.includes(l))]),
+  );
+  const copies = Object.keys(out).map((locale) => ({
+    locale,
+    here: isObject(out[locale]) ? out[locale] : undefined,
+    make: () => {
+      if (!isObject(out[locale])) out[locale] = {};
+      return out[locale] as Record<string, unknown>;
+    },
+  }));
+  applyIn(form, form.fields, copies, '', true, { answers, locales });
+  return out;
+}
+
+/** One language's file at the depth the walk has reached, made where an answer needs it. */
+interface Into {
+  locale: string;
+  /** The object as the file has it, or nothing where the file goes no deeper. */
+  here: Record<string, unknown> | undefined;
+  /** The same, made in its parent: called only when a row is being written into it. */
+  make: () => Record<string, unknown>;
+}
+
+interface Answers {
+  answers: Map<string, string[]>;
+  locales: string[];
+}
+
+const deeper = (parent: Into, key: string): Into => ({
+  locale: parent.locale,
+  here: isObject(parent.here?.[key]) ? parent.here[key] : undefined,
+  make: () => {
+    const owner = parent.make();
+    const made = isObject(owner[key]) ? owner[key] : {};
+    owner[key] = made;
+    return made;
+  },
+});
+
+// The same descent `driftIn` makes, so the paths it reports are the paths answered here.
+function applyIn(
+  form: Form,
+  fields: readonly Field[],
+  copies: Into[],
+  at: string,
+  inherited: Translation,
+  ctx: Answers,
+): void {
+  for (const field of fields) {
+    const key = field.path[0];
+    if (key === undefined) continue;
+    const path = at ? `${at}.${key}` : key;
+    const mode = field.i18n ?? inherited;
+    if (field.type === 'group')
+      applyIn(
+        form,
+        field.fields,
+        copies.map((c) => deeper(c, key)),
+        path,
+        mode,
+        ctx,
+      );
+    else if (field.type === 'blocks')
+      applyRows(form, (row) => form.blocks[String(row._type)], copies, key, path, mode, ctx);
+    else if (field.type === 'array' && field.item.some((f) => f.path.length > 0))
+      applyRows(form, () => field.item, copies, key, path, mode, ctx);
+  }
+}
+
+type FieldsOf = (row: Record<string, unknown>) => readonly Field[] | undefined;
+
+const rowsOf = (copy: Into, key: string) =>
+  Array.isArray(copy.here?.[key]) ? (copy.here[key] as unknown[]) : undefined;
+const rowIn = (copy: Into, key: string, id: string) =>
+  rowsOf(copy, key)?.find((row, i) => rowKey(row, i) === id);
+
+function applyRows(
+  form: Form,
+  fieldsOf: FieldsOf,
+  copies: Into[],
+  key: string,
+  at: string,
+  mode: Translation,
+  ctx: Answers,
+): void {
+  const ids: string[] = [];
+  for (const copy of copies)
+    for (const [i, row] of (rowsOf(copy, key) ?? []).entries()) {
+      const id = rowKey(row, i);
+      if (!ids.includes(id)) ids.push(id);
+    }
+  for (const id of ids) {
+    const path = `${at}[${id.startsWith('#') ? id.slice(1) : `_id=${id}`}]`;
+    const answer = ctx.answers.get(path);
+    if (answer) answerRow(form, fieldsOf, copies, key, id, answer, mode, ctx.locales);
+    // The languages that have the row now, an answer having just moved it about.
+    const inside = copies.flatMap((copy) => {
+      const row = rowIn(copy, key, id);
+      return isObject(row) ? [{ locale: copy.locale, here: row, make: () => row }] : [];
+    });
+    const first = inside[0]?.here;
+    const fields = first ? fieldsOf(first) : undefined;
+    if (fields && inside.length > 1) applyIn(form, fields, inside, path, mode, ctx);
+  }
+}
+
+/**
+ * One row's answer in every language's file. A file the answer names gets the row where its
+ * neighbours put it — behind the last row before it that this file also has — and one it does
+ * not name loses it. The mark follows the answer only where the two disagree.
+ */
+function answerRow(
+  form: Form,
+  fieldsOf: FieldsOf,
+  copies: Into[],
+  key: string,
+  id: string,
+  answer: string[],
+  mode: Translation,
+  locales: string[],
+): void {
+  const from = copies.find((c) => isObject(rowIn(c, key, id)));
+  const donor = from && rowIn(from, key, id);
+  if (!from || !isObject(donor)) return;
+  const files = copies.map((c) => c.locale);
+  const named = copies.flatMap((c) => {
+    const row = rowIn(c, key, id);
+    return isObject(row) && Array.isArray(row._locales) ? (row._locales as string[]) : [];
+  });
+  const expected = named.length ? files.filter((l) => named.includes(l)) : files;
+  // What the answer says the mark should be, keeping a language it names that has no file to
+  // disagree with. A row in every declared language carries no mark.
+  const mark = locales.filter(
+    (l) => answer.includes(l) || (named.includes(l) && !files.includes(l)),
+  );
+  const rewrite = locales.filter((l) => expected.includes(l)).join() !== answer.join();
+  // The rows the donor file has ahead of this one: what says where it belongs in another.
+  const ahead = (rowsOf(from, key) ?? []).map((row, i) => rowKey(row, i));
+  const before = ahead.slice(0, ahead.indexOf(id));
+  for (const copy of copies) {
+    const row = rowIn(copy, key, id);
+    if (!answer.includes(copy.locale)) {
+      const rows = rowsOf(copy, key);
+      if (rows && copy.here) copy.here[key] = rows.filter((r) => r !== row);
+      continue;
+    }
+    const kept = isObject(row) ? row : place(form, fieldsOf, copy, key, donor, before, mode);
+    if (rewrite) {
+      if (mark.join() === locales.join()) delete kept._locales;
+      else kept._locales = mark;
+    }
+  }
+}
+
+// A row arriving in a file that has not had it: its shared values and its skeleton, the blocks
+// inside it included, and the place its neighbours give it.
+function place(
+  form: Form,
+  fieldsOf: FieldsOf,
+  copy: Into,
+  key: string,
+  donor: Record<string, unknown>,
+  before: string[],
+  mode: Translation,
+): Record<string, unknown> {
+  const fields = fieldsOf(donor);
+  const made = fields
+    ? overlay(form, fields, donor, skeletonOf(donor, undefined), (m) => m === 'duplicate', mode, {
+        locale: copy.locale,
+        was: undefined,
+      })
+    : (structuredClone(donor) as Record<string, unknown>);
+  const owner = copy.make();
+  const rows = Array.isArray(owner[key]) ? (owner[key] as unknown[]) : [];
+  const here = rows.map((row, i) => rowKey(row, i));
+  const after = [...before].reverse().find((k) => here.includes(k));
+  rows.splice(after === undefined ? 0 : here.indexOf(after) + 1, 0, made);
+  owner[key] = rows;
+  return made;
+}
+
 /** One row of an entry its languages disagree about — what a save must never resolve. */
 export interface Drift {
   /** The row addressed the way `_machine` addresses a field: `blocks[_id=z9y8x7w6]`. */

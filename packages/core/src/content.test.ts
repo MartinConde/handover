@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import {
+  applyDrift,
   driftReport,
   mergeEntry,
   parseEntry,
@@ -796,4 +797,127 @@ test('a row an array in one language has and the other does not is drift', () =>
   expect(driftReport('default', nested, { en, de })).toEqual([
     { path: 'sidebar.features[_id=f1f2f3f4]', in: ['en'], expected: ['en', 'de'] },
   ]);
+});
+
+// Reconciliation: the same rows, answered. An answer names the languages the row should end
+// up in, and the files are made to say that — the one thing a save is not allowed to do.
+const QUOTE = 'blocks[_id=z9y8x7w6]';
+const answer = (locales: string[], files: Record<string, unknown>, path = QUOTE) =>
+  applyDrift('default', page, ['en', 'de'], files, [{ path, locales }]);
+
+test('a block answered with the language missing it arrives there with its shared values', () => {
+  const files = answer(['en', 'de'], { en: drifted('en'), de: drifted('de') });
+
+  // Behind the hero, which is the last block before it that English also has.
+  expect(stringifyEntry('default', files.en)).toBe(
+    [
+      '_version: 1',
+      'title: "Home"',
+      'blocks:',
+      '  - _type: "hero"',
+      '    _id: "k3nf9a2p"',
+      '    heading: "Move to the coast"',
+      '  - _type: "quote"',
+      '    _id: "z9y8x7w6"',
+      '  - _type: "cta"',
+      '    _id: "q1w2e3r4"',
+      '    heading: "Ready to move?"',
+      '',
+    ].join('\n'),
+  );
+  expect(stringifyEntry('default', files.de)).toBe(driftFile('de'));
+});
+
+test('a block answered with no language at all is taken out of every file', () => {
+  const files = answer([], { en: drifted('en'), de: drifted('de') });
+
+  expect(blockIds(files.de as Record<string, unknown>)).toEqual([
+    'k3nf9a2p',
+    'p8xk2m4q',
+    'q1w2e3r4',
+  ]);
+  expect(stringifyEntry('default', files.en)).toBe(driftFile('en'));
+});
+
+test('a block answered with the languages that already have it is marked for them', () => {
+  const files = answer(['de'], { en: drifted('en'), de: drifted('de') });
+
+  expect((files.de as { blocks: Record<string, unknown>[] }).blocks[2]).toEqual({
+    _type: 'quote',
+    _id: 'z9y8x7w6',
+    _locales: ['de'],
+    body: 'Ein seltener Fund.',
+  });
+  expect(stringifyEntry('default', files.en)).toBe(driftFile('en'));
+});
+
+// The other shape: a block whose `_locales` the file it sits in is not named by.
+const marked = () => {
+  const de = drifted('de');
+  const compliance = (de.blocks as unknown[])[1];
+  return {
+    en: { ...drifted('en'), blocks: [...(drifted('en').blocks as unknown[]), compliance] },
+    de,
+  };
+};
+const COMPLIANCE = 'blocks[_id=p8xk2m4q]';
+
+test('a marked block answered with what the mark says comes out of the other file', () => {
+  const files = answer(['de'], marked(), COMPLIANCE);
+
+  expect(blockIds(files.en as Record<string, unknown>)).toEqual(['k3nf9a2p', 'q1w2e3r4']);
+  expect(stringifyEntry('default', files.de)).toBe(driftFile('de'));
+});
+
+test('a marked block answered with every language loses the mark rather than widening it', () => {
+  const files = answer(['en', 'de'], marked(), COMPLIANCE);
+
+  for (const locale of ['en', 'de']) {
+    const blocks = (files[locale] as { blocks: Record<string, unknown>[] }).blocks;
+    expect(blocks.find((b) => b._id === 'p8xk2m4q')).toEqual({
+      _type: 'compliance',
+      _id: 'p8xk2m4q',
+      heading: 'Widerrufsbelehrung',
+    });
+  }
+});
+
+test('a mark naming a language the entry has no file in is left alone', () => {
+  const files = marked();
+  ((files.de.blocks as Record<string, unknown>[])[1] as Record<string, unknown>)._locales = [
+    'de',
+    'fr',
+  ];
+
+  const applied = applyDrift('default', page, ['en', 'de', 'fr'], files, [
+    { path: COMPLIANCE, locales: ['de'] },
+  ]);
+
+  expect((applied.de as { blocks: Record<string, unknown>[] }).blocks[1]?._locales).toEqual([
+    'de',
+    'fr',
+  ]);
+  expect(blockIds(applied.en as Record<string, unknown>)).toEqual(['k3nf9a2p', 'q1w2e3r4']);
+});
+
+test('a row answered inside a group arrives in a file that has neither the group nor the array', () => {
+  const en = { sidebar: { features: [{ _id: 'f1f2f3f4', label: 'Parking' }] } };
+
+  const files = applyDrift('default', nested, ['en', 'de'], { en, de: {} }, [
+    { path: 'sidebar.features[_id=f1f2f3f4]', locales: ['en', 'de'] },
+  ]);
+
+  expect(files.de).toEqual({ sidebar: { features: [{ _id: 'f1f2f3f4' }] } });
+});
+
+test('a block answered into another language takes the blocks inside it along', () => {
+  const de = section([{ _type: 'quote', _id: 'z9y8x7w6', body: 'Ein seltener Fund.' }]);
+
+  const files = applyDrift('default', nested, ['en', 'de'], { en: { blocks: [] }, de }, [
+    { path: 'blocks[_id=a1b2c3d4]', locales: ['en', 'de'] },
+  ]);
+
+  expect(files.en).toEqual({
+    blocks: [{ _type: 'section', _id: 'a1b2c3d4', blocks: [{ _type: 'quote', _id: 'z9y8x7w6' }] }],
+  });
 });

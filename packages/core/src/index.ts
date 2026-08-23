@@ -1,5 +1,12 @@
-export type { AstroContent, ContentEntry, ContentSource, Drift } from './content.js';
+export type {
+  AstroContent,
+  ContentEntry,
+  ContentSource,
+  Drift,
+  DriftChoice,
+} from './content.js';
 export {
+  applyDrift,
   driftReport,
   FORMAT_VERSION,
   mergeEntry,
@@ -22,6 +29,7 @@ export {
   publishDrafts,
   recordDelete,
   recordRename,
+  resolveDrift,
   SCHEMA_VERSION,
   saveDraft,
   schemaVersionError,

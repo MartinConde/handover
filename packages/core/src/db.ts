@@ -1,7 +1,14 @@
 import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { mergeEntry, parseEntry, stringifyEntry, syncLocale } from './content.js';
+import {
+  applyDrift,
+  type DriftChoice,
+  mergeEntry,
+  parseEntry,
+  stringifyEntry,
+  syncLocale,
+} from './content.js';
 import { type ContentFile, type ContentIndex, indexHasPath } from './entries.js';
 import { blobSha, type GitClient } from './git.js';
 import type { RedirectRule } from './lifecycle.js';
@@ -128,6 +135,43 @@ export async function saveDraft(
   const [first, ...rest] = writes;
   if (first) await db.batch([first, ...rest]);
   return { updated_at: updatedAt, pending: (await blobSha(contents)) !== loaded.baseBlob };
+}
+
+/**
+ * The answers to one entry's drift, written to every language they change in one batch. A
+ * `saveDraft` cannot make this write: it carries the default language's values and has no way
+ * to say a block comes out of German. The languages an answer leaves alone are not written at
+ * all, so reconciling one block does not make every file of the entry pending.
+ *
+ * `files` is the entry's languages that have a file, locale → path; nothing is created here.
+ */
+export async function resolveDrift(
+  siteId: string,
+  db: Db,
+  git: Pick<GitClient, 'getFile' | 'getHead'>,
+  form: Form,
+  locales: string[],
+  files: Record<string, string>,
+  choices: DriftChoice[],
+): Promise<void> {
+  const found = await Promise.all(
+    Object.entries(files).map(async ([locale, path]) => {
+      const loaded = await load(siteId, db, git, path);
+      return loaded && { locale, path, loaded };
+    }),
+  );
+  const open = found.filter((f) => f !== undefined);
+  const before = Object.fromEntries(open.map((f) => [f.locale, f.loaded.entry]));
+  const after = applyDrift(siteId, form, locales, before, choices);
+  const updatedAt = Date.now();
+  const writes = open.flatMap(({ locale, path, loaded }) => {
+    const contents = stringifyEntry(siteId, after[locale]);
+    return contents === stringifyEntry(siteId, before[locale])
+      ? []
+      : [upsert(db, siteId, path, contents, loaded, updatedAt)];
+  });
+  const [first, ...rest] = writes;
+  if (first) await db.batch([first, ...rest]);
 }
 
 // A file as the editor has it: its open draft, or the repository when there is none.

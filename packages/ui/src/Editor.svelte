@@ -1,5 +1,6 @@
 <script lang="ts">
-import type { Field } from '@handover/core';
+import type { Drift, Field } from '@handover/core';
+import DriftPanel from './Drift.svelte';
 import Fields from './Fields.svelte';
 
 type Data = Record<string, unknown>;
@@ -11,6 +12,7 @@ let {
   slug,
   entry,
   onpublish,
+  onresolved,
 }: {
   collection: string;
   slug: string;
@@ -24,9 +26,15 @@ let {
     problems: { path: string; message: string }[];
     /** The field this collection is keyed on, when it is not `title`. */
     titleField?: string;
+    /** The languages the site declares. */
+    locales: string[];
+    /** The blocks this entry's languages disagree about; publishing waits on these. */
+    drift: Drift[];
   };
   /** Open the pending-changes drawer, which is where publishing happens. */
   onpublish: () => void;
+  /** The drift was answered: the entry has to be read again, this screen with it. */
+  onresolved: () => void;
 } = $props();
 
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
@@ -93,6 +101,12 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 </script>
 
 <main class="main main-editor">
+  {#if entry.drift.length}
+    <div class="lock-banner is-drift">
+      The languages of this entry disagree about its blocks — publishing is blocked until that is
+      settled.
+    </div>
+  {/if}
   <header class="entry-header">
     <div class="crumbs">
       <span>{capitalise(collection)}</span><span class="sep" aria-hidden="true">/</span><span>{title}</span>
@@ -119,8 +133,12 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         <button
           class="btn btn-primary"
           type="button"
-          disabled={!dirty || saving || missing.length > 0}
-          title={missing.length ? 'Fill in what is missing before publishing this entry' : undefined}
+          disabled={!dirty || saving || missing.length > 0 || entry.drift.length > 0}
+          title={entry.drift.length
+            ? 'The languages of this entry disagree about its blocks'
+            : missing.length
+              ? 'Fill in what is missing before publishing this entry'
+              : undefined}
           onclick={openDrawer}
         >Publish…</button>
         <button class="btn btn-ghost" type="button" disabled aria-label="More actions">⋯</button>
@@ -132,12 +150,24 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       <button type="button" role="tab" aria-selected="false" disabled>History</button>
     </div>
   </header>
-  <div class="entry-body has-pane">
-    <form class="form" onsubmit={(e) => e.preventDefault()}>
-      <Fields fields={entry.fields} blocks={entry.blocks} {problems} bind:root={data} />
-    </form>
-    <aside class="pane" aria-label="Right pane">
-      <div><strong>Right pane</strong>Preview or a second language, later.</div>
-    </aside>
+  <!-- A decision to make, not a form to fill: the panel stands where the form would be, because
+       every field on it belongs to a structure the languages have not agreed on yet. -->
+  <div class="entry-body" class:has-pane={!entry.drift.length}>
+    {#if entry.drift.length}
+      <DriftPanel
+        {collection}
+        {slug}
+        drift={entry.drift}
+        locales={entry.locales}
+        {onresolved}
+      />
+    {:else}
+      <form class="form" onsubmit={(e) => e.preventDefault()}>
+        <Fields fields={entry.fields} blocks={entry.blocks} {problems} bind:root={data} />
+      </form>
+      <aside class="pane" aria-label="Right pane">
+        <div><strong>Right pane</strong>Preview or a second language, later.</div>
+      </aside>
+    {/if}
   </div>
 </main>

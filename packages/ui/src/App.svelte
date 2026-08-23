@@ -104,6 +104,10 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             await loadPending();
             drawer = true;
           }}
+          onresolved={async () => {
+            await loadPending();
+            reload += 1;
+          }}
         />
       {:catch error}
         <main class="main"><p class="notice notice-danger" role="alert">{error.message}</p></main>

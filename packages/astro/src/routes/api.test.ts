@@ -1,6 +1,14 @@
-import { type PublishFile, RepoUnreachableError } from '@handover/core';
+import {
+  applyDrift,
+  formOf,
+  type PublishFile,
+  parseEntry,
+  RepoUnreachableError,
+  stringifyEntry,
+} from '@handover/core';
 import type { APIContext } from 'astro';
 import { afterEach, expect, test, vi } from 'vitest';
+import { formSchema } from '../index.js';
 import { DELETE, GET, POST, PUT } from './api.js';
 
 const {
@@ -19,6 +27,7 @@ const {
   overlayRows,
   pendingDrafts,
   publishDrafts,
+  resolveDrift,
 } = await vi.hoisted(async () => {
   const { z } = await import('astro/zod');
   const { blocks, defineBlock } = await import('../index.js');
@@ -76,6 +85,7 @@ const {
       async () => ({ updated_at: 1755864000000, pending: true }),
     ),
     createDraft: vi.fn(async () => ({ updated_at: 1755864000000 })),
+    resolveDrift: vi.fn(async () => {}),
     recordRename: vi.fn(async () => {}),
     recordDelete: vi.fn(async () => {}),
     discardDraft: vi.fn(async () => {}),
@@ -154,6 +164,7 @@ vi.mock('@handover/core', async (original) => ({
   overlayRows,
   pendingDrafts,
   publishDrafts,
+  resolveDrift,
 }));
 
 afterEach(() => {
@@ -209,6 +220,7 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
     data: { title: 'The Mill House', location: 'Bakewell', rooms: 3 },
     pending: false,
     problems: [{ path: 'address', message: 'Required' }],
+    locales: ['en'],
     drift: [],
   });
 });
@@ -741,4 +753,84 @@ test('a one-language site is not asked for a second language of anything', async
   await POST(post('publish', ''));
 
   expect(getFile).not.toHaveBeenCalled();
+});
+
+// Reconciling that drift: the answers are the editor's, and every language of the entry is
+// written behind them. The entry is read again afterwards, so nothing is marked resolved.
+const answer = (choices: unknown) => post('drift/pages/home', JSON.stringify({ choices }));
+
+test("the answers to an entry's drift go to every language it has a file in", async () => {
+  drifted();
+  const choices = [{ path: 'blocks[_id=z9y8x7w6]', locales: ['de'] }];
+
+  const res = await POST(answer(choices));
+
+  expect(res.status).toBe(200);
+  expect(resolveDrift).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    expect.objectContaining({ blocks: expect.anything() }),
+    ['en', 'de'],
+    {
+      en: 'src/content/pages/en/home.yaml',
+      de: 'src/content/pages/de/home.yaml',
+    },
+    choices,
+  );
+});
+
+test('an answer about a block the languages agree on is refused rather than written', async () => {
+  drifted();
+  resolveDrift.mockClear();
+
+  const res = await POST(answer([{ path: 'blocks[_id=k3nf9a2p]', locales: ['de'] }]));
+
+  expect(res.status).toBe(409);
+  expect(resolveDrift).not.toHaveBeenCalled();
+  expect((await POST(answer([]))).status).toBe(409);
+});
+
+// The two ends of the done-when: the state an answer leaves behind is one that publishes, and
+// the answer that puts a block into English leaves the schema's own complaint, not a refusal.
+const resolved = (locales: string[]) => {
+  drifted();
+  const form = formOf('default', formSchema(page));
+  const applied = applyDrift(
+    'default',
+    form,
+    ['en', 'de'],
+    { en: parseEntry('default', home.en), de: parseEntry('default', home.de) },
+    [{ path: 'blocks[_id=z9y8x7w6]', locales }],
+  );
+  const written = Object.entries(applied).map(([locale, data]) => ({
+    path: `src/content/pages/${locale}/home.yaml`,
+    contents: stringifyEntry('default', data),
+    updatedAt: 1755864000000,
+  }));
+  for (const row of written) files[row.path] = row.contents;
+  pendingDrafts.mockImplementationOnce(async () => written);
+  return written;
+};
+
+test('an entry answered German-only publishes', async () => {
+  publishDrafts.mockClear();
+  resolved(['de']);
+
+  expect((await POST(post('publish', ''))).status).toBe(200);
+  expect(publishDrafts).toHaveBeenCalled();
+});
+
+test('a block answered into English is refused for what its schema needs, not for drift', async () => {
+  publishDrafts.mockClear();
+  resolved(['en', 'de']);
+
+  const res = await POST(post('publish', ''));
+
+  expect(res.status).toBe(422);
+  expect(await res.json()).toEqual({
+    error: 'src/content/pages/en/home.yaml is missing something the schema needs',
+    paths: ['src/content/pages/en/home.yaml'],
+  });
+  expect(publishDrafts).not.toHaveBeenCalled();
 });

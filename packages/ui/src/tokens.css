@@ -458,3 +458,28 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .is-narrow .change-row { grid-template-columns: 32px minmax(0, 1fr); }
 .is-narrow .change-row .change-actions { grid-row: 3; grid-column: 2; justify-content: flex-start; }
 .is-narrow .change-row .lead { grid-row: 1; }
+
+/* Drift reconciliation — one card per block the languages disagree about, each with the answers
+   that block allows. The options come from what has the block against what should: a block
+   German alone has can go into English, come out of German, or be declared German-only. */
+.readonly { padding: var(--s-3); border-radius: var(--radius); background: var(--surface-2); color: var(--ink-2); font-size: var(--text-sm); }
+.block-card { border-radius: var(--radius-lg); background: var(--surface-2); }
+.block-card > header { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); border-bottom: 1px solid var(--border); }
+.block-card > header .label { font-weight: 600; }
+.block-card > header .type { font-size: var(--text-xs); color: var(--ink-3); font-family: var(--font-mono); }
+.block-card .col-title { font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+.drift { display: grid; gap: var(--s-5); max-width: 760px; align-content: start; }
+.drift > header { display: grid; gap: var(--s-2); }
+.drift > header h2 { font-size: var(--text-lg); letter-spacing: var(--tracking-tight); }
+.drift > header p { font-size: var(--text-sm); color: var(--ink-2); }
+.drift-rows { display: grid; gap: var(--s-4); }
+.drift .block-card > .body { display: grid; gap: var(--s-3); padding: var(--s-4); }
+.drift .what { font-size: var(--text-sm); color: var(--ink-2); }
+.drift .readonly { background: var(--surface); }
+.drift .drift-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
+.drift .drift-cols > div { display: grid; gap: var(--s-2); align-content: start; }
+.drift fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: var(--s-2); }
+.drift legend { padding: 0; margin-bottom: var(--s-2); font-size: var(--text-sm); font-weight: 500; }
+.drift > .actions { display: flex; align-items: center; gap: var(--s-3); }
+.drift > .actions .left { font-size: var(--text-sm); color: var(--ink-2); margin-right: auto; }
+@media (max-width: 720px) { .drift .drift-cols { grid-template-columns: 1fr; } }

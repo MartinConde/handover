@@ -106,7 +106,8 @@ the **pending-changes drawer**, which lists them and publishes them:
   disagree*. Which blocks an entry has is the same in every language
   ([Languages](i18n.md#a-block-one-language-only-has)), so a file that disagrees with its
   siblings is a hand edit or a bad merge and committing it would bake the difference into
-  git. Discard is not the way out of this one: the files have to agree
+  git. Discard is not the way out of this one: open the entry and answer the panel it shows,
+  which is where the files are made to agree
 - A commit is not a live site: the site rebuilds afterwards, which takes a minute or two,
   and the admin itself is redeployed with it
 
@@ -152,13 +153,14 @@ drawer's **Discard** does with a file a publish was refused over. `404` if the c
 is not configured.
 
 ```
-GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, pending, problems, titleField, drift }
+GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, pending, problems, titleField, locales, drift }
 ```
 
 `data` is the draft when there is one, otherwise the file. `pending` says which, and
 `problems` is the same list the autosave answers with, so an entry names what is missing
 the moment it opens. `titleField` is there when the collection declares one, and is the
-field the editor's heading reads. `drift` is the blocks the entry's languages disagree about,
+field the editor's heading reads. `locales` is the languages the site declares, in config
+order. `drift` is the blocks the entry's languages disagree about,
 `[{ "path": "blocks[_id=z9y8x7w6]", "type": "quote", "in": ["de"], "expected": ["en", "de"] }]`
 — empty on a site with one language, which reads nothing for it.
 
@@ -198,6 +200,17 @@ has one, and the entry's draft dropped. The answer is `{}` when nothing was comm
 the entry existed only as a draft, or not at all.
 
 ```
+POST /admin/api/drift/:collection/:slug     →  {}
+```
+
+The answers to an entry's structural drift: `{ "choices": [{ "path", "locales" }] }`, one
+per block the report named, `path` being that block's `path` and `locales` the languages it
+should end up in — empty removes it everywhere. Every language of the entry that the answers
+change is written in the same batch, and the entry is read again afterwards: nothing is marked
+resolved, the drift is simply no longer reported. `409` when a `path` is not one the languages
+currently disagree about, which is the report having moved on since the screen was drawn.
+
+```
 GET /admin/api/drafts                       →  { "files": [{ "path", "updated_at" }] }
 ```
 
@@ -216,7 +229,8 @@ when a stored draft is not everything its collection schema needs, with the same
 `{ "error", "paths" }` body, and `409` with `{ "error", "paths", "reason": "drift" }` when a
 pending file belongs to an entry whose languages have
 [drifted apart](i18n.md#a-block-one-language-only-has) — `reason` is what tells that from a
-file somebody else changed, since Discard is the way out of one and not of the other. In all
+file somebody else changed, since Discard is the way out of one and the entry's own panel is
+the way out of the other. In all
 of those cases nothing was written and no row was cleared. A path no collection owns —
 `redirects.yaml`, a global — has no schema to be held to and is never the reason for a `422`.
 
