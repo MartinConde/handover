@@ -199,10 +199,13 @@ test('group, array and blocks are detected from real Zod output', () => {
 
 type Setup = HookParameters<'astro:config:setup'>;
 
+const EN = { locales: ['en'], defaultLocale: 'en' };
+
 function runSetup(
   adapter: unknown,
   root = new URL('file:///site/'),
-  cms: Parameters<typeof handover>[0] = { collections: {} },
+  cms: Parameters<typeof handover>[0] = { collections: {}, i18n: EN },
+  astro: Record<string, unknown> = { i18n: { ...EN, routing: { prefixDefaultLocale: false } } },
 ) {
   const info = vi.fn();
   const injectRoute = vi.fn();
@@ -210,7 +213,7 @@ function runSetup(
   const updateConfig = vi.fn();
   const setup = handover(cms).hooks['astro:config:setup'] as (o: Setup) => void;
   setup({
-    config: { adapter, root },
+    config: { adapter, root, ...astro },
     logger: { info },
     injectRoute,
     addMiddleware,
@@ -241,6 +244,77 @@ test('registers the password-gate middleware before the routes', () => {
   const { addMiddleware } = runSetup({ name: 'fake-adapter', hooks: {} });
   expect(addMiddleware).toHaveBeenCalledWith({ order: 'pre', entrypoint: expect.any(URL) });
   expect(String(addMiddleware.mock.calls[0]?.[0].entrypoint)).toMatch(/\/middleware\.js$/);
+});
+
+const adapter = { name: 'fake-adapter', hooks: {} };
+const drift = (cms: unknown, i18n?: unknown) =>
+  runSetup(adapter, new URL('file:///site/'), cms as Parameters<typeof handover>[0], { i18n });
+
+test('a cms.config.ts without an i18n block is refused before the build', () => {
+  expect(() => defineConfig({ collections: {} } as Parameters<typeof defineConfig>[0])).toThrow(
+    /^cms\.config\.ts › i18n: required/,
+  );
+});
+
+test('the documented message names both files when the default locale drifts', () => {
+  expect(() =>
+    drift(
+      { collections: {}, i18n: { locales: ['en', 'de'], defaultLocale: 'de' } },
+      {
+        locales: ['en', 'de'],
+        defaultLocale: 'en',
+        routing: { prefixDefaultLocale: false },
+      },
+    ),
+  ).toThrow(
+    'cms.config.ts › i18n.defaultLocale: "de" is not astro.config.mjs\'s i18n.defaultLocale "en"; the two must match exactly',
+  );
+});
+
+test('a different list of locales is refused', () => {
+  expect(() =>
+    drift(
+      { collections: {}, i18n: { locales: ['en', 'de'], defaultLocale: 'en' } },
+      {
+        locales: ['en', 'fr'],
+        defaultLocale: 'en',
+        routing: { prefixDefaultLocale: false },
+      },
+    ),
+  ).toThrow(
+    'cms.config.ts › i18n.locales: ["en","de"] is not astro.config.mjs\'s i18n.locales ["en","fr"]; the two must match exactly, in order',
+  );
+});
+
+test('a different prefixDefaultLocale is refused', () => {
+  expect(() =>
+    drift(
+      { collections: {}, i18n: { ...EN, prefixDefaultLocale: true } },
+      {
+        ...EN,
+        routing: { prefixDefaultLocale: false },
+      },
+    ),
+  ).toThrow(/i18n\.prefixDefaultLocale: true is not astro\.config\.mjs's/);
+});
+
+test('an astro.config.mjs with no i18n at all is refused', () => {
+  expect(() => drift({ collections: {}, i18n: EN })).toThrow(
+    /astro\.config\.mjs has no i18n block/,
+  );
+});
+
+test('a locale astro spells as a path with codes matches that path', () => {
+  expect(() =>
+    drift(
+      { collections: {}, i18n: { locales: ['en', 'de'], defaultLocale: 'en' } },
+      {
+        locales: ['en', { path: 'de', codes: ['de', 'de-AT'] }],
+        defaultLocale: 'en',
+        routing: { prefixDefaultLocale: false },
+      },
+    ),
+  ).not.toThrow();
 });
 
 test('virtual:handover/config resolves to the root cms.config.ts', () => {
@@ -285,27 +359,37 @@ test('richtext rejects a construct outside its tier and names it', () => {
 
 test('defineConfig fails on a bad route with a message naming the key', () => {
   expect(() =>
-    defineConfig({ collections: { posts: { schema: z.object({}), route: '/blog' } } }),
+    defineConfig({ i18n: EN, collections: { posts: { schema: z.object({}), route: '/blog' } } }),
   ).toThrow(/cms\.config\.ts › collections\.posts\.route: expected a path .*"\/blog"/);
 });
 
 test('defineConfig fails when titleField is not a text field of the schema', () => {
   const presenter = z.object({ name: z.string(), bio: richtext() });
   expect(() =>
-    defineConfig({ collections: { presenters: { schema: presenter, titleField: 'nmae' } } }),
+    defineConfig({
+      i18n: EN,
+      collections: { presenters: { schema: presenter, titleField: 'nmae' } },
+    }),
   ).toThrow(
     'cms.config.ts › collections.presenters.titleField: "nmae" is not a text field of this collection\'s schema',
   );
   expect(() =>
-    defineConfig({ collections: { presenters: { schema: presenter, titleField: 'bio' } } }),
+    defineConfig({
+      i18n: EN,
+      collections: { presenters: { schema: presenter, titleField: 'bio' } },
+    }),
   ).toThrow(/collections\.presenters\.titleField/);
   expect(() =>
-    defineConfig({ collections: { presenters: { schema: presenter, titleField: 'name' } } }),
+    defineConfig({
+      i18n: EN,
+      collections: { presenters: { schema: presenter, titleField: 'name' } },
+    }),
   ).not.toThrow();
 });
 
 test('defineConfig returns a valid config unchanged', () => {
   const config = {
+    i18n: EN,
     collections: { posts: { schema: z.object({}), route: '/blog/[slug]', index: '/blog' } },
   };
   expect(defineConfig(config)).toBe(config);
@@ -487,6 +571,7 @@ test('virtual:handover/index is the built index, inlined rather than served', as
 
 test('the index is built with the title field each collection declares', async () => {
   const { updateConfig } = runSetup({ name: 'fake-adapter', hooks: {} }, fixture, {
+    i18n: EN,
     collections: { listings: { schema: z.object({}), titleField: 'location' } },
   });
   const module = await updateConfig.mock.calls[0]?.[0].vite.plugins[1].load(
@@ -557,7 +642,7 @@ test('the demo schema produces a full descriptor tree', () => {
 });
 
 async function runBuildStart(root: URL) {
-  const hooks = handover({ collections: {} }).hooks;
+  const hooks = handover({ collections: {}, i18n: EN }).hooks;
   (hooks['astro:config:done'] as (o: unknown) => void)({
     config: { root, build: { client: new URL('dist/client/', root) } },
   });

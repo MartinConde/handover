@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `cms.config.ts` declares its languages: `i18n: { locales: ['en', 'de'], defaultLocale:
+  'en' }`, with an optional `prefixDefaultLocale`. It is required, a site with one language
+  included — content files sit in a folder per language either way, so a second language is
+  later a config change and a copy rather than a move of every file. The same block has to
+  be in `astro.config.mjs`, since Astro routes from its copy and Handover writes files and
+  preview paths from ours; where they disagree the build stops in `astro:config:setup`
+  naming both files and the key. Add the block to both files when you upgrade. See
+  `docs/i18n.md`.
+
 - Nothing in the package changed. The two i18n mistakes other CMSs shipped — a field
   configured to duplicate disappearing from a translated file on save, and duplicating an
   entry copying only the default locale — now have tests in the repo, written before the

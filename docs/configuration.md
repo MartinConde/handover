@@ -13,6 +13,7 @@ import { defineConfig, navigation } from 'astro-handover';
 import { listing, page, site } from './src/content/schemas';
 
 export default defineConfig({
+  i18n: { locales: ['en', 'de'], defaultLocale: 'en' },
   collections: {
     listings: { schema: listing, route: '/listings/[slug]', index: '/', load: 'listing' },
     pages: { schema: page, route: '/[slug]', load: 'page' },
@@ -33,6 +34,14 @@ digits and dashes.
 | `index` | no | The listing page, a fixed path with no `[...]` segment, e.g. `'/blog'`. Used wherever something links to "the blog" as a whole rather than to one entry. |
 | `load` | no | The loader's name: `'post'` means `src/loaders/post.ts` ([Template convention](template-convention.md)). |
 | `titleField` | no | The field the entry list shows, when the collection is not keyed on `title`: `titleField: 'name'`. It is also the field "New entry" writes the name you type into, so it has to be a text field of this collection's schema — the build says so if it is not. |
+
+## `i18n`
+
+Required, a site with one language included. `locales` are the folder names under
+`src/content/<collection>/` and `defaultLocale` is one of them; `prefixDefaultLocale` is
+`false` unless you say otherwise. The same block goes in `astro.config.mjs` and the build
+stops if the two disagree — the keys, the error and the folder layout are in
+[Languages](i18n.md).
 
 ## `globals`
 

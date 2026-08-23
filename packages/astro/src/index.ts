@@ -5,6 +5,7 @@ import {
   type ContentFile,
   type ContentIndex,
   checkCollections,
+  checkI18n,
   contentPathErrors,
   fieldsFrom,
   indexFrom,
@@ -210,6 +211,14 @@ export interface HandoverConfig {
   >;
   /** One schema per file under `src/content/globals/<locale>/`, keyed by file name. */
   globals?: Record<string, z.ZodType>;
+  /** Required, a one-language site too: the files live in a locale folder either way. */
+  i18n: {
+    /** The folder names under `src/content/<collection>/`: `'en'`, `'de'`, `'pt-br'`. */
+    locales: string[];
+    defaultLocale: string;
+    /** Whether the default locale's URLs carry its segment. Astro's `routing.prefixDefaultLocale`. */
+    prefixDefaultLocale?: boolean;
+  };
 }
 
 // What the form is generated from. The input side, so a transform shows the value the
@@ -226,7 +235,10 @@ export function formSchema(schema: z.ZodType): JsonSchema {
 }
 
 export function defineConfig(config: HandoverConfig): HandoverConfig {
-  const errors = checkCollections('default', config.collections, config.globals);
+  const errors = [
+    ...checkI18n('default', config.i18n),
+    ...checkCollections('default', config.collections, config.globals),
+  ];
   // The one config key that has to agree with a schema, and this is the only place holding
   // both: a titleField naming nothing would drop the name typed into New entry in silence.
   for (const [name, c] of Object.entries(config.collections)) {
@@ -330,6 +342,47 @@ export async function buildIndex(root: URL, titleFields: TitleFields = {}): Prom
   return indexFrom('default', files, titleFields);
 }
 
+// Astro's own i18n block, as `astro:config:setup` resolves it. A locale is either the
+// folder name or `{ path, codes }`, where the path is the folder and the URL segment.
+type AstroI18n = {
+  locales?: unknown;
+  defaultLocale?: unknown;
+  routing?: unknown;
+};
+
+/**
+ * Where the two copies of the locale list disagree. Astro routes from its own; the CMS
+ * writes files and preview paths from ours, so a drift would put a German file under a
+ * folder Astro never builds — silently, until someone opens the page.
+ */
+function i18nErrors(cms: HandoverConfig['i18n'], astro: AstroI18n | undefined): string[] {
+  const at = (key: string) => `cms.config.ts › i18n.${key}: `;
+  const is = (them: unknown, key: string) => `is not astro.config.mjs's i18n.${key} ${them}`;
+  if (!astro)
+    return [
+      `astro.config.mjs has no i18n block: cms.config.ts declares ${JSON.stringify(cms.locales)}, so astro.config.mjs needs i18n: { locales: ${JSON.stringify(cms.locales)}, defaultLocale: ${JSON.stringify(cms.defaultLocale)} }. The two must match exactly.`,
+    ];
+  const errors: string[] = [];
+  const locales = (Array.isArray(astro.locales) ? astro.locales : []).map((l) =>
+    typeof l === 'string' ? l : (l as { path?: string }).path,
+  );
+  if (JSON.stringify(cms.locales) !== JSON.stringify(locales))
+    errors.push(
+      `${at('locales')}${JSON.stringify(cms.locales)} ${is(JSON.stringify(locales), 'locales')}; the two must match exactly, in order`,
+    );
+  if (cms.defaultLocale !== astro.defaultLocale)
+    errors.push(
+      `${at('defaultLocale')}${JSON.stringify(cms.defaultLocale)} ${is(JSON.stringify(astro.defaultLocale), 'defaultLocale')}; the two must match exactly`,
+    );
+  const routing = astro.routing as { prefixDefaultLocale?: boolean } | 'manual' | undefined;
+  const prefix = (typeof routing === 'object' ? routing.prefixDefaultLocale : false) ?? false;
+  if ((cms.prefixDefaultLocale ?? false) !== prefix)
+    errors.push(
+      `${at('prefixDefaultLocale')}${cms.prefixDefaultLocale ?? false} ${is(prefix, 'routing.prefixDefaultLocale')}; the two must match exactly`,
+    );
+  return errors;
+}
+
 /**
  * The site's own `cms.config.ts`, imported by `astro.config.mjs` and passed in. The Worker
  * gets the same file through `virtual:handover/config`; this copy is for the build, which
@@ -367,6 +420,8 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
       },
       'astro:config:setup': ({ config, logger, injectRoute, addMiddleware, updateConfig }) => {
         if (!config.adapter) throw new Error(NO_ADAPTER_MESSAGE);
+        const drift = i18nErrors(cms.i18n, config.i18n);
+        if (drift.length) throw new Error(`\n${drift.join('\n')}`);
         logger.info('astro-handover integration loaded');
 
         injectRoute({

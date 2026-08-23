@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { checkCollections, entryName } from './names.js';
+import { checkCollections, checkI18n, entryName } from './names.js';
 
 test.each([
   ['plain title', 'Seaview Cottage', [], 'seaview-cottage'],
@@ -75,4 +75,33 @@ test('globals keys are file names: lowercase letters, digits and dashes', () => 
   expect(checkCollections('default', {}, { 'Site Settings': {} })).toEqual([
     'cms.config.ts › globals.Site Settings: global keys are lowercase letters, digits and dashes (it is the file name under src/content/globals/<locale>/)',
   ]);
+});
+
+test('a valid i18n block produces no errors', () => {
+  expect(checkI18n('default', { locales: ['en', 'de'], defaultLocale: 'en' })).toEqual([]);
+  expect(
+    checkI18n('default', { locales: ['pt-br'], defaultLocale: 'pt-br', prefixDefaultLocale: true }),
+  ).toEqual([]);
+});
+
+test.each([
+  ['no i18n block at all', undefined, 'i18n'],
+  ['locales that is not an array', { locales: 'en', defaultLocale: 'en' }, 'i18n.locales'],
+  ['no locales', { locales: [], defaultLocale: 'en' }, 'i18n.locales'],
+  ['a locale with an underscore', { locales: ['en_US'], defaultLocale: 'en_US' }, 'i18n.locales'],
+  ['a locale listed twice', { locales: ['en', 'en'], defaultLocale: 'en' }, 'i18n.locales'],
+  [
+    'a defaultLocale outside locales',
+    { locales: ['en'], defaultLocale: 'de' },
+    'i18n.defaultLocale',
+  ],
+  [
+    'a prefixDefaultLocale that is not a boolean',
+    { locales: ['en'], defaultLocale: 'en', prefixDefaultLocale: 'yes' },
+    'i18n.prefixDefaultLocale',
+  ],
+])('%s is reported at its key', (_name, i18n, at) => {
+  const [message, ...rest] = checkI18n('default', i18n);
+  expect(rest).toEqual([]);
+  expect(message).toMatch(new RegExp(`^cms\\.config\\.ts › ${at.replace(/\./g, '\\.')}: `));
 });

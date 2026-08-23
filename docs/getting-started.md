@@ -26,6 +26,8 @@ import cms from './cms.config.ts';
 export default defineConfig({
   session: false,
   adapter: cloudflare(),
+  // The same block goes in cms.config.ts; the build stops if the two disagree.
+  i18n: { locales: ['en'], defaultLocale: 'en' },
   integrations: [handover(cms)],
 });
 ```
@@ -42,13 +44,15 @@ import { defineConfig } from 'astro-handover';
 import { listing } from './src/content/schemas';
 
 export default defineConfig({
+  i18n: { locales: ['en'], defaultLocale: 'en' },
   collections: {
     listings: { schema: listing },
   },
 });
 ```
 
-Entries are YAML files at `src/content/<collection>/en/<slug>.yaml`, one key per field:
+Entries are YAML files at `src/content/<collection>/<locale>/<slug>.yaml`, one key per
+field — one folder per language, `en/` here ([Languages](i18n.md)):
 
 ```yaml
 # src/content/listings/en/seaview-cottage.yaml

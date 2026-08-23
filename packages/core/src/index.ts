@@ -32,8 +32,8 @@ export type { EntryLocation, RedirectRule } from './lifecycle.js';
 export { deleteEntry, redirectsText, renameEntry } from './lifecycle.js';
 export type { MigrationStep } from './migrate.js';
 export { MIGRATIONS, migrateDocument, versionOf } from './migrate.js';
-export type { CollectionRoutes } from './names.js';
-export { checkCollections, entryName } from './names.js';
+export type { CollectionRoutes, I18nConfig } from './names.js';
+export { checkCollections, checkI18n, entryName } from './names.js';
 export { filterLive, isLive, newId, RESERVED_KEYS, regenerateIds } from './reserved.js';
 export type { RichtextTier } from './richtext.js';
 export {

@@ -133,3 +133,47 @@ export function checkCollections(
   }
   return errors;
 }
+
+export interface I18nConfig {
+  locales?: unknown;
+  defaultLocale?: unknown;
+  prefixDefaultLocale?: unknown;
+}
+
+// Locales are folder names under src/content/<collection>/ and path segments in the URL,
+// so they are spelled the way Astro spells them: lowercase, dashes, never `en_US`.
+const LOCALE = /^[a-z0-9-]+$/;
+
+/**
+ * The `i18n` block's own shape. It is required even for one language: the file layout has
+ * a locale folder either way, so a single-locale site is the same code path with one entry
+ * in the list. What it has to agree with in astro.config.mjs is checked by the integration.
+ */
+export function checkI18n(_siteId: string, i18n: I18nConfig | undefined): string[] {
+  const at = (key?: string) => `cms.config.ts › i18n${key ? `.${key}` : ''}: `;
+  if (!i18n)
+    return [
+      `${at()}required, like i18n: { locales: ['en'], defaultLocale: 'en' } — a site with one language declares it too, and keeps its files under src/content/<collection>/en/`,
+    ];
+  const { locales, defaultLocale, prefixDefaultLocale } = i18n;
+  const errors: string[] = [];
+  if (
+    !Array.isArray(locales) ||
+    locales.length === 0 ||
+    !locales.every((l) => typeof l === 'string' && LOCALE.test(l))
+  )
+    errors.push(
+      `${at('locales')}expected a non-empty array of locale folder names in lowercase letters, digits and dashes, like ["en", "de"], got ${JSON.stringify(locales)}`,
+    );
+  else if (new Set(locales).size !== locales.length)
+    errors.push(`${at('locales')}${JSON.stringify(locales)} lists a locale twice`);
+  else if (!locales.includes(defaultLocale))
+    errors.push(
+      `${at('defaultLocale')}expected one of ${JSON.stringify(locales)}, got ${JSON.stringify(defaultLocale)}`,
+    );
+  if (prefixDefaultLocale !== undefined && typeof prefixDefaultLocale !== 'boolean')
+    errors.push(
+      `${at('prefixDefaultLocale')}expected true or false, got ${JSON.stringify(prefixDefaultLocale)}`,
+    );
+  return errors;
+}
