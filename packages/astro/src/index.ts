@@ -11,6 +11,7 @@ import {
   type RichtextTier,
   redirectsText,
   richtextErrors,
+  schemaVersionError,
 } from '@handover/core';
 import type { AstroIntegration } from 'astro';
 import { z } from 'astro/zod';
@@ -288,6 +289,15 @@ export default function handover(): AstroIntegration {
       'astro:config:done': ({ config }) => {
         root = config.root;
         clientDir = config.build.client;
+      },
+      // Deploy applies migrations/ before the new code is live, so a migrations/ that is
+      // behind the package's tables is caught here, not by the first query.
+      'astro:build:start': async () => {
+        const marker = await readFile(new URL('migrations/handover.json', root), 'utf8').catch(
+          () => undefined,
+        );
+        const error = schemaVersionError(marker);
+        if (error) throw new Error(error);
       },
       'astro:build:done': async ({ logger }) => {
         const n = await emitRedirects(root, clientDir);

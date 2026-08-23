@@ -4,6 +4,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The `handover` command. `npx handover migrate --dry-run` lists every content file with
+  its `_version`; `npx handover migrate` rewrites the ones behind the package (today that
+  only stamps `_version: 1` on files that have none). `npx handover db generate` replaces
+  running `drizzle-kit generate` yourself: it generates and records the package's schema
+  version in `migrations/handover.json`, and **`astro build` now fails** while that file is
+  missing or behind the installed package — run `npx handover db generate` once after
+  upgrading and commit `migrations/`. See `docs/cli.md`.
+
 - A content file with no `_version` is read as version 1, and a save through the admin
   writes `_version: 1` into it, so every file the CMS has touched says which format it is
   in. See `docs/content-format.md`.

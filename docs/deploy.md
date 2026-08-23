@@ -51,16 +51,17 @@ export default defineConfig({
 ```
 
 ```sh
-npx drizzle-kit generate                                # writes migrations/0000_*.sql
+npx handover db generate                                # writes migrations/0000_*.sql and handover.json
 npx wrangler d1 migrations apply your-site --local      # your machine
 npx wrangler d1 migrations apply your-site --remote     # the deployed site
 ```
 
-Commit `migrations/` — the whole folder, `meta/` included. Migration files are written by
-the generator, never by hand, and an applied one is never edited. After a package upgrade
-adds a table or a column, run `drizzle-kit generate` again; the new SQL file is part of the
-upgrade's diff. Applying is idempotent, which is why it belongs in the deploy command
-below.
+Commit `migrations/` — the whole folder, `meta/` and `handover.json` included. Migration
+files are written by the generator, never by hand, and an applied one is never edited.
+After a package upgrade adds a table or a column, run `handover db generate` again; the
+new SQL file is part of the upgrade's diff, and the build fails until it exists
+([CLI](cli.md#handover-db-generate)). Applying is idempotent, which is why it belongs in
+the deploy command below.
 
 ## The GitHub App
 

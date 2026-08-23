@@ -1,7 +1,8 @@
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fieldsFrom, formOf, type JsonSchema, parseEntry } from '@handover/core';
+import { pathToFileURL } from 'node:url';
+import { fieldsFrom, formOf, type JsonSchema, parseEntry, SCHEMA_VERSION } from '@handover/core';
 import type { HookParameters } from 'astro';
 import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
@@ -484,4 +485,29 @@ test('the demo schema produces a full descriptor tree', () => {
   };
   expect(JSON.stringify(form)).not.toContain('unsupported');
   expect(form).toMatchSnapshot();
+});
+
+async function runBuildStart(root: URL) {
+  const hooks = handover().hooks;
+  (hooks['astro:config:done'] as (o: unknown) => void)({
+    config: { root, build: { client: new URL('dist/client/', root) } },
+  });
+  await (hooks['astro:build:start'] as (o: unknown) => Promise<void>)({});
+}
+
+test('the build fails when migrations/ has no schema marker', async () => {
+  const root = pathToFileURL(`${await mkdtemp(join(tmpdir(), 'handover-build-'))}/`);
+  await expect(runBuildStart(root)).rejects.toThrow(
+    'migrations/ has no handover.json: run `npx handover db generate` and commit migrations/',
+  );
+});
+
+test('the build goes on when migrations/ records the package schema version', async () => {
+  const root = pathToFileURL(`${await mkdtemp(join(tmpdir(), 'handover-build-'))}/`);
+  await mkdir(new URL('migrations/', root));
+  await writeFile(
+    new URL('migrations/handover.json', root),
+    `{ "schemaVersion": ${SCHEMA_VERSION} }`,
+  );
+  await expect(runBuildStart(root)).resolves.toBeUndefined();
 });

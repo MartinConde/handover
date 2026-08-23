@@ -19,7 +19,9 @@ export {
   publishDrafts,
   recordDelete,
   recordRename,
+  SCHEMA_VERSION,
   saveDraft,
+  schemaVersionError,
 } from './db.js';
 export type { ContentFile, ContentIndex, EntryLocale, IndexEntry } from './entries.js';
 export { collectionEntries, contentPathErrors, indexFrom } from './entries.js';
@@ -27,6 +29,8 @@ export type { GitClient, GitFile, GitHubApp, PublishFile } from './git.js';
 export { blobSha, createGitClient, RefMovedError } from './git.js';
 export type { EntryLocation, RedirectRule } from './lifecycle.js';
 export { deleteEntry, redirectsText, renameEntry } from './lifecycle.js';
+export type { MigrationStep } from './migrate.js';
+export { MIGRATIONS, migrateDocument, versionOf } from './migrate.js';
 export type { CollectionRoutes } from './names.js';
 export { checkCollections, entryName } from './names.js';
 export { filterLive, isLive, newId, RESERVED_KEYS, regenerateIds } from './reserved.js';

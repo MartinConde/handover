@@ -26,6 +26,9 @@ importers:
       '@astrojs/markdown-satteri':
         specifier: 0.3.7
         version: 0.3.7
+      '@handover/cli':
+        specifier: workspace:*
+        version: link:../cli
       '@handover/core':
         specifier: workspace:*
         version: link:../core
@@ -40,7 +43,11 @@ importers:
         specifier: ^8.0.0
         version: 8.2.2(@types/node@22.20.1)(esbuild@0.28.2)(tsx@4.23.12)(yaml@2.9.0)
 
-  packages/cli: {}
+  packages/cli:
+    dependencies:
+      '@handover/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/core:
     dependencies:

@@ -5,8 +5,12 @@
   "type": "module",
   "files": [
     "dist",
-    "components"
+    "components",
+    "bin"
   ],
+  "bin": {
+    "handover": "./bin/handover.js"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -27,7 +31,8 @@
   },
   "dependencies": {
     "@astrojs/markdown-satteri": "0.3.7",
-    "@handover/core": "workspace:*"
+    "@handover/core": "workspace:*",
+    "@handover/cli": "workspace:*"
   },
   "peerDependencies": {
     "astro": "^7.0.0"

@@ -34,6 +34,25 @@ export const drafts = sqliteTable(
   (t) => [primaryKey({ columns: [t.siteId, t.path] })],
 );
 
+/**
+ * Bumped whenever a table above changes. `handover db generate` records it in
+ * `migrations/handover.json`; the build refuses to go out with a stale one, so a package
+ * upgrade that forgot to generate fails there rather than at the first query.
+ */
+export const SCHEMA_VERSION = 1;
+
+const GENERATE = 'run `npx handover db generate` and commit migrations/';
+
+/** Why `migrations/handover.json` (its text, or undefined when missing) is out of date. */
+export function schemaVersionError(marker: string | undefined): string | undefined {
+  if (marker === undefined) return `migrations/ has no handover.json: ${GENERATE}`;
+  const at = (JSON.parse(marker) as { schemaVersion?: unknown }).schemaVersion;
+  if (at === SCHEMA_VERSION) return undefined;
+  if (typeof at === 'number' && at > SCHEMA_VERSION)
+    return `migrations/ was generated for schema version ${at} but astro-handover's tables are at ${SCHEMA_VERSION}: the package is older than the migrations`;
+  return `astro-handover's tables are at schema version ${SCHEMA_VERSION} but migrations/ was generated for ${at}: ${GENERATE}`;
+}
+
 type D1Binding = Parameters<typeof drizzle>[0];
 
 /** The Handover tables on the site's D1 binding. */

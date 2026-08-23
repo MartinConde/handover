@@ -1,0 +1,60 @@
+# The `handover` CLI
+
+Installed with the package; run it from the site's root with `npx handover …`.
+
+## `handover migrate`
+
+Every content file under `src/content/` carries `_version` ([content format](content-format.md#reserved-keys)).
+When a package release changes what the files look like, it ships a migration step, and
+`migrate` brings every file up to the version the installed package writes.
+
+See what would happen first:
+
+```sh
+npx handover migrate --dry-run
+```
+
+```
+src/content/listings/en/mill-house.yaml  none → 1
+src/content/pages/en/home.yaml           1
+src/content/redirects.yaml               1
+3 files: 2 at version 1, 1 without a version. Dry run: 1 would be written.
+```
+
+Every `.yaml` under `src/content/` is listed — entries, globals, templates and
+`redirects.yaml` — with the version it has and the one it would get. A file with no
+`_version` is read as `1` and stamped. Then:
+
+```sh
+npx handover migrate
+git add src/content && git commit -m "Migrate content to format 2"
+```
+
+Files are rewritten in place and nothing is committed for you; the commit before the
+migration is the way back. Running it again is a no-op: a step only runs on files at the
+version it starts from. A file newer than the package knows fails the run, naming the
+file — upgrade the package.
+
+## `handover db generate`
+
+The package's own tables (`drafts`, later more) live in D1 and change with the package.
+After upgrading `astro-handover`:
+
+```sh
+npx handover db generate
+```
+
+runs `drizzle-kit generate` against `astro-handover/schema` — a new `migrations/*.sql`
+when a table changed, "nothing to migrate" when not — and records the package's schema
+version in `migrations/handover.json`. Commit both. The deploy command applies the SQL
+([deploy](deploy.md#the-database)).
+
+`astro build` refuses to run while `migrations/handover.json` is missing or behind the
+installed package, so an upgrade that forgot this step fails in the build log rather than
+on the first request:
+
+```
+astro-handover's tables are at schema version 2 but migrations/ was generated for 1: run `npx handover db generate` and commit migrations/
+```
+
+`npx handover db generate --check` runs the same check on its own, for a CI step.

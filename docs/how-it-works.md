@@ -10,7 +10,8 @@ free to change.
   Every function takes a `siteId` first, unused until multi-site.
 - `packages/astro` — the integration. Re-exports what sites need from core.
 - `packages/ui` — the admin SPA (Svelte 5 + Vite), built into `packages/astro/dist/ui/`.
-- `packages/cli` — empty so far.
+- `packages/cli` — the `handover` bin (`migrate`, `db generate`), declared on `astro-handover` so
+  `npx handover` resolves in a site.
 
 ## Routes
 
