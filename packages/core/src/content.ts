@@ -126,17 +126,26 @@ export function mergeEntry(
 }
 
 /**
- * One locale file's `duplicate` values written into another's. Values only: a block `target`
- * does not have stays absent, because keeping the skeletons in step is a separate step with
- * its own atomic write.
+ * One entry's other language, brought into line with the edit just made to this one. The
+ * skeleton is global, so `after`'s rows and their order win — adding, removing or moving a
+ * block is one edit to every language or it is not one at all. `before` is what tells a row
+ * the edit dropped from a row it never had: what only `target` has, a locale-only block or a
+ * drifted one, is left exactly where it stands, because reconciling drift is a decision
+ * somebody makes and not something a save does. `_locales` says which files a row is written
+ * to, `duplicate` values come from `after` and translated ones stay in `target`.
  */
-export function syncDuplicates(
+export function syncLocale(
   _siteId: string,
   form: Form,
-  source: unknown,
+  locale: string,
+  edit: { before: unknown; after: unknown },
   target: unknown,
 ): Record<string, unknown> {
-  return overlay(form, form.fields, source, target, (m) => m === 'duplicate', true);
+  const synced = overlay(form, form.fields, edit.after, target, (m) => m === 'duplicate', true, {
+    locale,
+    was: edit.before,
+  });
+  return { _version: FORMAT_VERSION, ...synced };
 }
 
 // The properties a structured field translates; everything else in one is the same in every
@@ -152,11 +161,22 @@ const TRANSLATED_PROPS: Partial<Record<Field['type'], readonly string[]>> = {
 const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
+/** Skeleton mode: the rows come from `from`, and `was` says which of `onto`'s are gone. */
+interface Skeleton {
+  locale: string;
+  was: unknown;
+}
+
+const into = (sync: Skeleton | undefined, key: string): Skeleton | undefined =>
+  sync && { ...sync, was: isObject(sync.was) ? sync.was[key] : undefined };
+
 /**
  * `onto` is the file being written and keeps its own structure; `from` supplies the value of
  * every field `pick` claims for it — an absent one included, since a field the form drew and
  * left empty comes back as no key at all. A save picks the translatable values out of the
  * form, propagation the duplicate ones out of the source locale, and it is the same walk.
+ * With `sync` the structure comes from `from` as well: that is a save of one language
+ * carrying its skeleton into another.
  */
 function overlay(
   form: Form,
@@ -165,6 +185,7 @@ function overlay(
   onto: unknown,
   pick: (mode: Translation) => boolean,
   inherited: Translation,
+  sync?: Skeleton,
 ): Record<string, unknown> {
   const sent = isObject(from) ? from : {};
   const out: Record<string, unknown> = isObject(onto) ? { ...onto } : {};
@@ -174,7 +195,7 @@ function overlay(
     const mode = field.i18n ?? inherited;
     const props = TRANSLATED_PROPS[field.type];
     if (field.type === 'group') {
-      const group = overlay(form, field.fields, sent[key], out[key], pick, mode);
+      const group = overlay(form, field.fields, sent[key], out[key], pick, mode, into(sync, key));
       if (Object.keys(group).length) out[key] = group;
       else delete out[key];
     } else if (props && mode === true) {
@@ -189,10 +210,19 @@ function overlay(
         out[key],
         pick,
         mode,
+        into(sync, key),
       );
       if (rows) out[key] = rows;
     } else if (field.type === 'array' && field.item.some((f) => f.path.length > 0)) {
-      const rows = pairRows(form, () => field.item, sent[key], out[key], pick, mode);
+      const rows = pairRows(
+        form,
+        () => field.item,
+        sent[key],
+        out[key],
+        pick,
+        mode,
+        into(sync, key),
+      );
       if (rows) out[key] = rows;
     } else if (pick(mode)) {
       if (key in sent) out[key] = sent[key];
@@ -251,6 +281,14 @@ function normalise(text: string): string {
     .replace(/\n+$/, '');
 }
 
+// A row is its `_id`; an array of rows without one — a template's blocks — pairs by position.
+const rowKey = (row: unknown, i: number) =>
+  isObject(row) && typeof row._id === 'string' ? row._id : `#${i}`;
+
+// A row is written to the languages `_locales` names, and to all of them when it names none.
+const inLocale = (row: unknown, locale: string) =>
+  !isObject(row) || !Array.isArray(row._locales) || row._locales.includes(locale);
+
 // The skeleton is the same in every language, so the file being written keeps its own rows in
 // their own order and the other side is read for values alone, paired by `_id`.
 function pairRows(
@@ -260,7 +298,9 @@ function pairRows(
   onto: unknown,
   pick: (mode: Translation) => boolean,
   mode: Translation,
+  sync?: Skeleton,
 ): unknown[] | undefined {
+  if (sync) return syncRows(form, fieldsOf, from, onto, pick, mode, sync);
   if (!Array.isArray(onto)) return undefined;
   const sent = Array.isArray(from) ? from : [];
   return onto.map((row, i) => {
@@ -297,4 +337,69 @@ function overlayProps(
     }
   }
   return Object.keys(out).length ? out : undefined;
+}
+
+/**
+ * The rows `sync.locale`'s file gets. `from`'s order is the order, minus the rows this
+ * language is not one of; a row only `onto` has holds its place behind the last row both
+ * sides know, so a block added to German alone stays next to the neighbour it was put after.
+ */
+function syncRows(
+  form: Form,
+  fieldsOf: (row: Record<string, unknown>) => readonly Field[] | undefined,
+  from: unknown,
+  onto: unknown,
+  pick: (mode: Translation) => boolean,
+  mode: Translation,
+  sync: Skeleton,
+): unknown[] | undefined {
+  if (!Array.isArray(from) && !Array.isArray(onto)) return undefined;
+  const sent = Array.isArray(from) ? from : [];
+  const rows = Array.isArray(onto) ? onto : [];
+  const was = Array.isArray(sync.was) ? sync.was : [];
+  const source = sent
+    .map((row, i) => ({ row, key: rowKey(row, i) }))
+    .filter(({ row }) => inLocale(row, sync.locale));
+  const written = new Set(source.map((r) => r.key));
+  const edited = new Set(sent.map(rowKey));
+  const removed = new Set(was.map(rowKey));
+  const before = new Map(was.map((row, i) => [rowKey(row, i), row]));
+  const target = new Map(rows.map((row, i) => [rowKey(row, i), row]));
+  // The rows this language alone has, filed behind the one they follow — '' being the top.
+  const kept = new Map<string, unknown[]>();
+  let behind = '';
+  for (const [i, row] of rows.entries()) {
+    const key = rowKey(row, i);
+    if (written.has(key)) behind = key;
+    else if (!edited.has(key) && !removed.has(key))
+      kept.set(behind, [...(kept.get(behind) ?? []), row]);
+  }
+  const out: unknown[] = [...(kept.get('') ?? [])];
+  for (const { row, key } of source) {
+    const fields = isObject(row) ? fieldsOf(row) : undefined;
+    const there = target.get(key);
+    // A block type the form has never heard of cannot be split into a shared half and a
+    // translated one, so the file keeps the row it has and a new one arrives whole.
+    out.push(
+      fields && isObject(row)
+        ? overlay(form, fields, row, skeletonOf(row, there), pick, mode, {
+            locale: sync.locale,
+            was: before.get(key),
+          })
+        : (there ?? row),
+    );
+    out.push(...(kept.get(key) ?? []));
+  }
+  return out;
+}
+
+// `_type`, `_id`, `_label` and `_locales` are the skeleton and come from the language being
+// saved; the values under them are the other language's own.
+function skeletonOf(source: Record<string, unknown>, target: unknown): Record<string, unknown> {
+  const keys = (obj: Record<string, unknown>, reserved: boolean) =>
+    Object.entries(obj).filter(([k]) => k.startsWith('_') === reserved);
+  return Object.fromEntries([
+    ...keys(isObject(target) ? target : {}, false),
+    ...keys(source, true),
+  ]);
 }

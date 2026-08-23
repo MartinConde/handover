@@ -1,10 +1,11 @@
 import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { mergeEntry, parseEntry, stringifyEntry } from './content.js';
+import { mergeEntry, parseEntry, stringifyEntry, syncLocale } from './content.js';
 import { type ContentFile, type ContentIndex, indexHasPath } from './entries.js';
 import { blobSha, type GitClient } from './git.js';
 import type { RedirectRule } from './lifecycle.js';
+import type { Form } from './schema.js';
 
 /**
  * Edits live here, not in git, until they are published. `contents` is the canonical
@@ -75,10 +76,25 @@ export function loadDraft(siteId: string, db: Db, path: string): Promise<Draft |
   });
 }
 
+/** The entry's other languages, so one save can keep their structure in step with this one. */
+export interface LocaleSync {
+  form: Form;
+  /** The language the form was drawn from. */
+  locale: string;
+  /** The entry's other languages, locale → path. */
+  siblings: Record<string, string>;
+}
+
 /**
  * One autosave. `base_*` are read from git the first time a row is written and never sent
  * by the browser — a tab left open across someone else's publish would report a stale base.
  * `undefined` when the path is not in the repo.
+ *
+ * With `sync`, the entry's other languages are brought into line with the structure this save
+ * has and written in the same batch: a block added, removed or moved is one edit to every
+ * language. A save that touched neither the structure nor a shared value does not touch them
+ * at all, and a language the entry has no file in is not created here — that is Create from
+ * English, further along.
  */
 export async function saveDraft(
   siteId: string,
@@ -86,34 +102,86 @@ export async function saveDraft(
   git: Pick<GitClient, 'getFile' | 'getHead'>,
   path: string,
   values: Record<string, unknown>,
+  sync?: LocaleSync,
 ): Promise<{ updated_at: number; pending: boolean } | undefined> {
-  const row = await loadDraft(siteId, db, path);
-  let base: { sha: string; blob: string };
-  let entry: unknown;
-  if (row) {
-    base = { sha: row.baseSha, blob: row.baseBlob };
-    entry = parseEntry(siteId, row.contents);
-  } else {
-    const [file, head] = await Promise.all([git.getFile(path), git.getHead()]);
-    if (!file) return undefined;
-    base = { sha: head, blob: file.blob_sha };
-    entry = parseEntry(siteId, file.contents);
-  }
-  const contents = stringifyEntry(siteId, mergeEntry(siteId, entry, values));
+  const loaded = await load(siteId, db, git, path);
+  if (!loaded) return undefined;
+  const before = loaded.entry;
+  const after = mergeEntry(siteId, before, values);
+  const edit = { before, after };
   const updatedAt = Date.now();
-  await db
+  const contents = stringifyEntry(
+    siteId,
+    sync ? syncLocale(siteId, sync.form, sync.locale, edit, after) : after,
+  );
+  const writes = [upsert(db, siteId, path, contents, loaded, updatedAt)];
+  for (const [locale, sibling] of Object.entries(sync?.siblings ?? {})) {
+    if (!sync) break;
+    const projection = (data: unknown) => skeleton(siteId, sync.form, locale, data);
+    if (projection(before) === projection(after)) continue;
+    const other = await load(siteId, db, git, sibling);
+    if (!other) continue;
+    const synced = syncLocale(siteId, sync.form, locale, edit, other.entry);
+    writes.push(upsert(db, siteId, sibling, stringifyEntry(siteId, synced), other, updatedAt));
+  }
+  // One batch: an entry's languages reach the drafts table together or not at all.
+  const [first, ...rest] = writes;
+  if (first) await db.batch([first, ...rest]);
+  return { updated_at: updatedAt, pending: (await blobSha(contents)) !== loaded.baseBlob };
+}
+
+// A file as the editor has it: its open draft, or the repository when there is none.
+async function load(
+  siteId: string,
+  db: Db,
+  git: Pick<GitClient, 'getFile' | 'getHead'>,
+  path: string,
+) {
+  const row = await loadDraft(siteId, db, path);
+  if (row)
+    return {
+      open: true,
+      baseSha: row.baseSha,
+      baseBlob: row.baseBlob,
+      entry: parseEntry(siteId, row.contents),
+    };
+  const [file, head] = await Promise.all([git.getFile(path), git.getHead()]);
+  if (!file) return undefined;
+  return {
+    open: false,
+    baseSha: head,
+    baseBlob: file.blob_sha,
+    entry: parseEntry(siteId, file.contents),
+  };
+}
+
+type Loaded = NonNullable<Awaited<ReturnType<typeof load>>>;
+
+// The base moves only when it was just read from git — a row the editor is working on keeps
+// the one it was loaded against, and the row a delete left has none worth keeping.
+function upsert(
+  db: Db,
+  siteId: string,
+  path: string,
+  contents: string,
+  { open, baseSha, baseBlob }: Loaded,
+  updatedAt: number,
+) {
+  return db
     .insert(drafts)
-    .values({ siteId, path, contents, baseSha: base.sha, baseBlob: base.blob, updatedAt })
-    // The base moves only when it was just read from git — a row the editor is working on
-    // keeps the one it was loaded against, and the row a delete left has none worth keeping.
+    .values({ siteId, path, contents, baseSha, baseBlob, updatedAt })
     .onConflictDoUpdate({
       target: [drafts.siteId, drafts.path],
-      set: row
+      set: open
         ? { contents, updatedAt, publishedSha: null }
-        : { contents, baseSha: base.sha, baseBlob: base.blob, updatedAt, publishedSha: null },
+        : { contents, baseSha, baseBlob, updatedAt, publishedSha: null },
     });
-  return { updated_at: updatedAt, pending: (await blobSha(contents)) !== base.blob };
 }
+
+// What a save of one language would put in another, values it does not own left out: two of
+// these being equal is what says the other languages have nothing to write.
+const skeleton = (siteId: string, form: Form, locale: string, data: unknown) =>
+  stringifyEntry(siteId, syncLocale(siteId, form, locale, { before: data, after: data }, {}));
 
 /**
  * A new entry. There is no file behind it, so the base blob is the empty string: nothing in

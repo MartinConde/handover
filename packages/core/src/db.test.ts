@@ -17,6 +17,7 @@ import {
 } from './db.js';
 import { type ContentIndex, collectionEntries, indexFrom } from './entries.js';
 import { blobSha } from './git.js';
+import type { Form } from './schema.js';
 
 const mf = new Miniflare({
   modules: true,
@@ -387,4 +388,115 @@ test('an autosave after a delete takes its base from the file, not from the row'
   await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
 
   expect((await publishDrafts('default', db, repo))?.paths).toEqual([PATH]);
+});
+
+// One entry, two languages. The structure is shared, so a block moved in English is a block
+// moved in German — in the same write, or the two files leave the editor out of step.
+const PAGE_EN = 'src/content/pages/en/home.yaml';
+const PAGE_DE = 'src/content/pages/de/home.yaml';
+const page = (title: string, first: string, second: string) =>
+  [
+    '_version: 1',
+    `title: "${title}"`,
+    'blocks:',
+    '  - _type: "hero"',
+    '    _id: "k3nf9a2p"',
+    `    heading: "${first}"`,
+    '  - _type: "cta"',
+    '    _id: "q1w2e3r4"',
+    `    heading: "${second}"`,
+    '',
+  ].join('\n');
+const PAGE_FORM: Form = {
+  fields: [
+    { path: ['title'], label: 'Title', type: 'text', required: true },
+    { path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: ['hero', 'cta'] },
+  ],
+  blocks: {
+    hero: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }],
+    cta: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }],
+  },
+};
+const SYNC = { form: PAGE_FORM, locale: 'en', siblings: { de: PAGE_DE } };
+const block = (id: string) => ({ _type: id === 'k3nf9a2p' ? 'hero' : 'cta', _id: id });
+const MOVED = {
+  title: 'Home',
+  blocks: [
+    { ...block('q1w2e3r4'), heading: 'Ready to move?' },
+    { ...block('k3nf9a2p'), heading: 'Move to the coast' },
+  ],
+};
+
+test('moving a block writes every language of the entry in one write', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({
+    [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?'),
+    [PAGE_DE]: page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?'),
+  });
+
+  await saveDraft('default', db, repo, PAGE_EN, MOVED, SYNC);
+
+  const rows = (await db.select().from(drafts)).toSorted((a, b) => a.path.localeCompare(b.path));
+  expect(rows.map((r) => r.path)).toEqual([PAGE_DE, PAGE_EN]);
+  expect(rows[0]?.contents).toBe(
+    [
+      '_version: 1',
+      'title: "Startseite"',
+      'blocks:',
+      '  - _type: "cta"',
+      '    _id: "q1w2e3r4"',
+      '    heading: "Bereit für den Umzug?"',
+      '  - _type: "hero"',
+      '    _id: "k3nf9a2p"',
+      '    heading: "Zieh an die Küste"',
+      '',
+    ].join('\n'),
+  );
+  expect(rows[0]?.updatedAt).toBe(rows[1]?.updatedAt);
+  expect(rows[0]?.baseBlob).toBe(
+    await blobSha(page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?')),
+  );
+});
+
+test('a save that changes no structure and no shared value leaves the other languages alone', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({
+    [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?'),
+    [PAGE_DE]: page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?'),
+  });
+
+  await saveDraft(
+    'default',
+    db,
+    repo,
+    PAGE_EN,
+    { ...MOVED, blocks: MOVED.blocks.toReversed() },
+    SYNC,
+  );
+
+  expect((await db.select().from(drafts)).map((r) => r.path)).toEqual([PAGE_EN]);
+});
+
+test('a language the entry does not have yet is not created by a save of another', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?') });
+
+  await saveDraft('default', db, repo, PAGE_EN, MOVED, SYNC);
+
+  expect((await db.select().from(drafts)).map((r) => r.path)).toEqual([PAGE_EN]);
+});
+
+test('publishing an entry commits the languages that moved with it in one commit', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({
+    [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?'),
+    [PAGE_DE]: page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?'),
+  });
+  await saveDraft('default', db, repo, PAGE_EN, MOVED, SYNC);
+
+  const result = await publishDrafts('default', db, repo);
+
+  expect(repo.publish).toHaveBeenCalledTimes(1);
+  expect(result?.paths.toSorted()).toEqual([PAGE_DE, PAGE_EN]);
+  expect(await db.select().from(drafts)).toEqual([]);
 });

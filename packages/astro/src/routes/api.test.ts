@@ -72,6 +72,7 @@ const {
 let draft: { contents: string; baseSha: string; baseBlob: string } | undefined;
 vi.mock('virtual:handover/config', () => ({
   default: {
+    i18n: { locales: ['en'], defaultLocale: 'en' },
     collections: {
       listings: { schema: listing, route: '/listings/[slug]', index: '/listings' },
       presenters: { schema: presenter, titleField: 'name' },
@@ -221,6 +222,8 @@ test('autosaving a draft stores it under the entry path with nothing to report',
     expect.anything(),
     'src/content/listings/en/mill-house.yaml',
     data,
+    // A site that declares one language has no other file to keep in step.
+    undefined,
   );
 });
 
@@ -250,6 +253,8 @@ test('an autosave the schema refuses is stored anyway, with what is missing name
     expect.anything(),
     'src/content/listings/en/mill-house.yaml',
     data,
+    // A site that declares one language has no other file to keep in step.
+    undefined,
   );
 });
 
@@ -290,6 +295,8 @@ test('reserved keys in the posted data are dropped before the draft is stored', 
     expect.anything(),
     'src/content/listings/en/mill-house.yaml',
     data,
+    // A site that declares one language has no other file to keep in step.
+    undefined,
   );
 });
 

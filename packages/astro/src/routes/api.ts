@@ -53,8 +53,32 @@ function db(): Db {
   return openDb('default', (env as { DB?: Parameters<typeof openDb>[1] }).DB);
 }
 
-// Every entry lives in en/ until Phase 1 adds locales.
-const entryPath = (collection: string, slug: string) => `src/content/${collection}/en/${slug}.yaml`;
+// The admin draws the default language's file; the others are kept in step behind it.
+const entryPath = (collection: string, slug: string, locale = config.i18n.defaultLocale) =>
+  `src/content/${collection}/${locale}/${slug}.yaml`;
+
+// One entry's other languages, locale → path. Empty on a site that declares one language,
+// which is what keeps that site's save exactly the write it was.
+const siblingPaths = (collection: string, slug: string) =>
+  Object.fromEntries(
+    config.i18n.locales
+      .filter((locale) => locale !== config.i18n.defaultLocale)
+      .map((locale) => [locale, entryPath(collection, slug, locale)]),
+  );
+
+// Every file one entry is made of. A rename or a delete commits all of them, so all of them
+// have to be recorded in D1 too, or a draft left at the old path publishes the file back.
+const entryFiles = async (git: GitClient, collection: string, slug: string) => {
+  const locales = config.i18n.locales;
+  const files = await Promise.all(
+    locales.map((locale) => git.getFile(entryPath(collection, slug, locale))),
+  );
+  return locales.map((locale, i) => ({
+    locale,
+    path: entryPath(collection, slug, locale),
+    file: files[i],
+  }));
+};
 
 // The draft is what the editor was last looking at, so it wins over the file. No sha goes
 // to the browser: a publish commits the stored bytes and compares the bases server-side.
@@ -87,10 +111,14 @@ function editable(value: unknown): Record<string, unknown> | undefined {
 }
 
 /**
- * Autosave. A draft holds what the editor typed, whether the schema accepts it yet or not: a
- * new entry in a collection with a required `reference` has no way to satisfy it from a form
- * whose widget is read-only, and refusing the write would throw the typed text away. What is
- * missing comes back named instead, and the publish is where the schema decides.
+ * Autosave of the default language, and of the structure every language shares: a block
+ * added, moved or removed goes into the other languages' files in the same write, values
+ * they own untouched.
+ *
+ * A draft holds what the editor typed, whether the schema accepts it yet or not: a new entry
+ * in a collection with a required `reference` has no way to satisfy it from a form whose
+ * widget is read-only, and refusing the write would throw the typed text away. What is missing
+ * comes back named instead, and the publish is where the schema decides.
  *
  * No base comes from the browser: saveDraft reads it from git the first time it writes a row
  * and keeps it afterwards.
@@ -103,7 +131,21 @@ async function autosave(collection: string, slug: string, request: Request): Pro
   if (!data) return new Response('Bad request', { status: 400 });
   let saved: Awaited<ReturnType<typeof saveDraft>>;
   try {
-    saved = await saveDraft('default', db(), gitClient(), entryPath(collection, slug), data);
+    const siblings = siblingPaths(collection, slug);
+    saved = await saveDraft(
+      'default',
+      db(),
+      gitClient(),
+      entryPath(collection, slug),
+      data,
+      Object.keys(siblings).length
+        ? {
+            form: formOf('default', formSchema(schema)),
+            locale: config.i18n.defaultLocale,
+            siblings,
+          }
+        : undefined,
+    );
   } catch (err) {
     // A shape the serialiser cannot write back — a nested array above all — leaves nothing to
     // store, so this one is still a refusal, with the reason rather than "Bad request".
@@ -130,11 +172,11 @@ async function takenNames(collection: string, database: Db): Promise<string[]> {
   return collectionEntries('default', index, collection, rows).map((e) => e.id);
 }
 
-// Phase 2 turns `locales` into the configured list; today an entry is one file under en/.
+// An entry is its file in every declared language: a rename or a delete moves all of them.
 const locationOf = (collection: string): EntryLocation => ({
   collection,
   route: config.collections[collection]?.route,
-  locales: ['en'],
+  locales: config.i18n.locales,
 });
 
 /**
@@ -166,21 +208,24 @@ async function rename(collection: string, slug: string, request: Request): Promi
   const body = (await request.json().catch(() => undefined)) as { to?: unknown } | undefined;
   const database = db();
   const git = gitClient();
-  const from = entryPath(collection, slug);
-  const file = await git.getFile(from);
-  if (!file) return new Response('Publish this entry before renaming it', { status: 409 });
+  const files = await entryFiles(git, collection, slug);
+  if (!files.some((f) => f.file))
+    return new Response('Publish this entry before renaming it', { status: 409 });
   const taken = (await takenNames(collection, database)).filter((id) => id !== slug);
   const to = entryName('default', typeof body?.to === 'string' ? body.to : '', taken);
   if (to === slug) return Response.json({ slug });
   const { commit_sha } = await renameEntry('default', git, locationOf(collection), slug, to);
-  await recordRename(
-    'default',
-    database,
-    from,
-    entryPath(collection, to),
-    file.contents,
-    commit_sha,
-  );
+  for (const { locale, path, file } of files) {
+    if (!file) continue;
+    await recordRename(
+      'default',
+      database,
+      path,
+      entryPath(collection, to, locale),
+      file.contents,
+      commit_sha,
+    );
+  }
   return Response.json({ slug: to, commit_sha });
 }
 
@@ -191,13 +236,14 @@ async function remove(collection: string, slug: string): Promise<Response> {
   if (!collected) return new Response('Not found', { status: 404 });
   const git = gitClient();
   const database = db();
-  const path = entryPath(collection, slug);
-  if (!(await git.getFile(path))) {
-    await discardDraft('default', database, path);
+  const files = await entryFiles(git, collection, slug);
+  if (!files.some((f) => f.file)) {
+    for (const { path } of files) await discardDraft('default', database, path);
     return Response.json({});
   }
   const result = await deleteEntry('default', git, locationOf(collection), slug, collected.index);
-  await recordDelete('default', database, path, result.commit_sha);
+  for (const { path, file } of files)
+    if (file) await recordDelete('default', database, path, result.commit_sha);
   return Response.json(result);
 }
 
@@ -205,7 +251,10 @@ async function remove(collection: string, slug: string): Promise<Response> {
 // repository again on the next open. Taking theirs whole — picking field by field is later.
 async function discard(collection: string, slug: string): Promise<Response> {
   if (!config.collections[collection]) return new Response('Not found', { status: 404 });
-  await discardDraft('default', db(), entryPath(collection, slug));
+  const database = db();
+  // Every language of it: the others hold the structure this edit gave them.
+  for (const locale of config.i18n.locales)
+    await discardDraft('default', database, entryPath(collection, slug, locale));
   return Response.json({});
 }
 

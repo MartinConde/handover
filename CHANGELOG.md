@@ -4,6 +4,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- An entry's languages keep one structure. Adding a block, removing one or moving one is an
+  edit to every language's file of that entry, written in the same autosave: the German file
+  is reordered with the English one and keeps its German, a block that arrives brings the
+  shared values it has and nothing to read yet. A block with `_locales` is written to the
+  languages it names and to no others, and holds its place among its neighbours when the
+  others reorder around it. A block only one language has *without* `_locales` is two files
+  that have drifted apart, and a save leaves it exactly where it stands rather than copying
+  or dropping it. A save that changed neither the structure nor a shared value does not
+  touch the other files, and a language the entry has no file in is not created by one.
+  Renaming, deleting or discarding an entry now covers every declared language's file, not
+  only the default one. A site that declares one language writes what it always did. See
+  `docs/i18n.md`.
+
 - A field says how it translates. `.meta({ i18n: 'duplicate' })` on a schema field makes it
   one value shared by every language, `.meta({ i18n: false })` keeps it in the default
   language alone, and everything else is translated as before. An object hands its mode to

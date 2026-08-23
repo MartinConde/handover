@@ -5,7 +5,7 @@ export {
   parseEntry,
   staticSource,
   stringifyEntry,
-  syncDuplicates,
+  syncLocale,
   timestampErrors,
 } from './content.js';
 export type { Db, Draft } from './db.js';

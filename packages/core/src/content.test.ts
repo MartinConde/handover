@@ -7,7 +7,7 @@ import {
   parseEntry,
   staticSource,
   stringifyEntry,
-  syncDuplicates,
+  syncLocale,
   timestampErrors,
 } from './content.js';
 import type { Form } from './schema.js';
@@ -543,7 +543,13 @@ test('a duplicate value follows the source locale into the other file, nested in
   const de = parseEntry('default', localeFile('de'));
   const image = { ...(en.image as Record<string, unknown>), src: 'media/2c40ab19.webp' };
 
-  const synced = syncDuplicates('default', millHouse, { ...en, price: 450000, image }, de);
+  const synced = syncLocale(
+    'default',
+    millHouse,
+    'de',
+    { before: en, after: { ...en, price: 450000, image } },
+    de,
+  );
 
   expect(synced.price).toBe(450000);
   expect(synced.image).toEqual({
@@ -558,11 +564,151 @@ test('a duplicate value follows the source locale into the other file, nested in
 
 test('the other locale file comes back byte for byte when the source has nothing new', () => {
   const de = localeFile('de');
-  const synced = syncDuplicates(
+  const en = parseEntry('default', localeFile('en'));
+  const synced = syncLocale(
     'default',
     millHouse,
-    parseEntry('default', localeFile('en')),
+    'de',
+    { before: en, after: en },
     parseEntry('default', de),
   );
   expect(stringifyEntry('default', synced)).toBe(de);
+});
+
+// The drift pair: EN has the two shared blocks, DE has those plus a `compliance` block marked
+// `_locales: [de]` and a `quote` block marked nothing at all. One fixture covers both rules —
+// what an edit in one language owns, and what it must not touch.
+const page: Form = {
+  fields: [
+    { path: ['title'], label: 'Title', type: 'text', required: true },
+    {
+      path: ['blocks'],
+      label: 'Blocks',
+      type: 'blocks',
+      required: true,
+      types: ['hero', 'cta', 'compliance', 'quote'],
+    },
+  ],
+  blocks: {
+    hero: [
+      { path: ['heading'], label: 'Heading', type: 'text', required: true },
+      { path: ['image'], label: 'Image', type: 'image', required: false },
+    ],
+    cta: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }],
+    compliance: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }],
+    quote: [{ path: ['body'], label: 'Body', type: 'text', required: true }],
+  },
+};
+
+const driftFile = (locale: string) =>
+  readFileSync(join(import.meta.dirname, '../test/drift', locale, 'home.yaml'), 'utf8');
+const drifted = (locale: string) =>
+  parseEntry('default', driftFile(locale)) as Record<string, unknown>;
+const blockIds = (data: Record<string, unknown>) =>
+  (data.blocks as Record<string, unknown>[]).map((b) => b._id);
+
+test('moving a block moves it in the other language, and a block only that language has holds its place', () => {
+  const before = drifted('en');
+  const [hero, cta] = before.blocks as Record<string, unknown>[];
+  const after = { ...before, blocks: [cta, hero] };
+
+  const de = syncLocale('default', page, 'de', { before, after }, drifted('de'));
+
+  expect(stringifyEntry('default', de)).toBe(
+    [
+      '_version: 1',
+      '_i18n:',
+      '  sourceLocale: "en"',
+      '  sourceBlob: "3f9c2e1a7b8d4c6e0a2f5b7c9d1e3a5b7c9d1e3a"',
+      '  sourceHash: "8f3a1c"',
+      '  translatedAt: "2026-08-20T10:14:00Z"',
+      'title: "Startseite"',
+      'blocks:',
+      '  - _type: "cta"',
+      '    _id: "q1w2e3r4"',
+      '    heading: "Bereit für den Umzug?"',
+      '  - _type: "hero"',
+      '    _id: "k3nf9a2p"',
+      '    heading: "Zieh an die Küste"',
+      '  - _type: "compliance"',
+      '    _id: "p8xk2m4q"',
+      '    _locales:',
+      '      - "de"',
+      '    heading: "Widerrufsbelehrung"',
+      '  - _type: "quote"',
+      '    _id: "z9y8x7w6"',
+      '    body: "Ein seltener Fund."',
+      '',
+    ].join('\n'),
+  );
+});
+
+test('a save that changes no structure leaves the other language byte for byte', () => {
+  const before = drifted('en');
+
+  const de = syncLocale('default', page, 'de', { before, after: before }, drifted('de'));
+
+  expect(stringifyEntry('default', de)).toBe(driftFile('de'));
+});
+
+test('a block added in one language arrives in the others with its shared values alone', () => {
+  const before = drifted('en');
+  const added = {
+    _type: 'hero',
+    _id: 'n5m6b7v8',
+    heading: 'Come and see',
+    image: { src: 'media/4b1d8e05.webp', alt: 'The river', width: 1800, height: 1200 },
+  };
+  const after = { ...before, blocks: [...(before.blocks as unknown[]), added] };
+
+  const de = syncLocale('default', page, 'de', { before, after }, drifted('de'));
+
+  expect(blockIds(de)).toEqual(['k3nf9a2p', 'p8xk2m4q', 'z9y8x7w6', 'q1w2e3r4', 'n5m6b7v8']);
+  expect((de.blocks as Record<string, unknown>[])[4]).toEqual({
+    _type: 'hero',
+    _id: 'n5m6b7v8',
+    image: { src: 'media/4b1d8e05.webp', width: 1800, height: 1200 },
+  });
+});
+
+test('a block deleted in one language is deleted in every language', () => {
+  const before = drifted('en');
+  const after = { ...before, blocks: [(before.blocks as unknown[])[0]] };
+
+  const de = syncLocale('default', page, 'de', { before, after }, drifted('de'));
+
+  expect(blockIds(de)).toEqual(['k3nf9a2p', 'p8xk2m4q', 'z9y8x7w6']);
+});
+
+test('a block the other language alone has is never written into this one', () => {
+  const before = drifted('en');
+
+  const en = syncLocale('default', page, 'en', { before, after: before }, before);
+
+  expect(stringifyEntry('default', en)).toBe(driftFile('en'));
+});
+
+test('a block marked for one language is written to that file and to no other', () => {
+  const before = drifted('en');
+  const only = { _type: 'compliance', _id: 'p8xk2m4q', _locales: ['de'], heading: 'Widerruf' };
+  const after = { ...before, blocks: [...(before.blocks as unknown[]), only] };
+
+  expect(blockIds(syncLocale('default', page, 'en', { before, after }, after))).toEqual([
+    'k3nf9a2p',
+    'q1w2e3r4',
+  ]);
+  expect(blockIds(syncLocale('default', page, 'de', { before, after }, drifted('de')))).toContain(
+    'p8xk2m4q',
+  );
+});
+
+test('a language whose file has no blocks yet is given the structure, not left empty', () => {
+  const before = drifted('en');
+  const fr = { title: 'Accueil' };
+
+  const synced = syncLocale('default', page, 'fr', { before, after: before }, fr);
+
+  expect(blockIds(synced)).toEqual(['k3nf9a2p', 'q1w2e3r4']);
+  expect(synced.title).toBe('Accueil');
+  expect(synced._version).toBe(1);
 });

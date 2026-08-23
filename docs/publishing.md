@@ -28,6 +28,9 @@ Two consequences worth knowing:
   written again. Publishing merges them the same way, so neither ever drops them.
 - **Reopening an entry shows the draft, not the file.** The file in git is what the site
   still serves; the admin shows what you were last typing.
+- **One save can write more than one row.** An entry's languages share their structure, so a
+  block added, removed or moved writes a row for every language of that entry in the same
+  write ([Languages](i18n.md#the-structure-is-shared)).
 
 Each row also records where it came from: the commit the file was loaded from and that
 file's git blob sha. Those are read from GitHub by the server on the first save of an
