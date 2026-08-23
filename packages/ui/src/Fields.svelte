@@ -1,5 +1,5 @@
 <script lang="ts">
-import { type Field, newId } from '@handover/core';
+import { type Field, newId, type Translation } from '@handover/core';
 import Fields from './Fields.svelte';
 import RichText from './RichText.svelte';
 
@@ -11,6 +11,9 @@ let {
   blocks = {},
   problems = {},
   rowLabel = '',
+  translating = false,
+  inherited = true,
+  prefix = 'f',
 }: {
   fields: readonly Field[];
   root: Data;
@@ -21,7 +24,28 @@ let {
   problems?: Record<string, string>;
   /** Names a field whose own path is empty — one scalar row of an array. */
   rowLabel?: string;
+  /** This is a language the entry is translated into: it owns its words and nothing else. */
+  translating?: boolean;
+  /** The translation mode the fields inherit — a group hands its own down. */
+  inherited?: Translation;
+  /** What the field ids start with; two forms on one screen cannot share it. */
+  prefix?: string;
 } = $props();
+
+const modeOf = (field: Field): Translation => field.i18n ?? inherited;
+// A group, an array or a blocks field is walked whatever its own mode says, because a field
+// inside it can say otherwise.
+const structural = (field: Field) =>
+  field.type === 'group' || field.type === 'array' || field.type === 'blocks';
+// Widgets that only show what is stored. Their translated half — an image's alt, a file's
+// name — has no editor before Phase 3, so the second language is not given a picture of the
+// first language's value it cannot act on.
+const FIXED = new Set(['image', 'file', 'embed', 'seo', 'reference', 'unsupported']);
+const shown = $derived(
+  translating
+    ? fields.filter((f) => structural(f) || (modeOf(f) !== false && !FIXED.has(f.type)))
+    : fields,
+);
 
 // One picker at a time per form level; the field id says which is open.
 let picker = $state('');
@@ -111,15 +135,20 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   </div>
 {/snippet}
 
-{#each fields as field (field.path.join('.'))}
+{#each shown as field (field.path.join('.'))}
   {@const at = [...path, ...field.path]}
-  {@const id = `f-${at.join('.')}`}
+  {@const id = `${prefix}-${at.join('.')}`}
+  {@const mode = modeOf(field)}
   {@const text = field.label || rowLabel}
   {@const err = problems[at.join('.')]}
   {@const bad = err ? 'true' : undefined}
   {@const says = err ? `${id}-err` : undefined}
   <div class="field" class:is-invalid={err}>
-    {#if field.type === 'text'}
+    {#if translating && mode === 'duplicate' && !structural(field)}
+      {@render groupLabel(id, field, text)}
+      <div class="readonly" {id} role="region" tabindex="-1" aria-labelledby="{id}-l">{read(at) ?? ''}</div>
+      <p class="hint">Same in every language</p>
+    {:else if field.type === 'text'}
       {@render labelRow(id, field, text)}
       {#if str(at).length > 80 || str(at).includes('\n')}
         <textarea class="input textarea" {id} aria-invalid={bad} aria-describedby={says} value={str(at)} oninput={(e) => write(at, e.currentTarget.value)}></textarea>
@@ -151,6 +180,10 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           {/each}
         </select>
       {/if}
+    {:else if field.type === 'link' && translating}
+      <!-- A link's label is the half a translation owns; where it points is the same everywhere. -->
+      {@render groupLabel(id, field, text)}
+      <div class="field"><div class="label-row"><label for="{id}.label">Label</label></div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
     {:else if field.type === 'link'}
       {@render groupLabel(id, field, text)}
       <div class="seg" role="group" aria-label="Link type">
@@ -170,7 +203,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'group'}
       <details class="group" open>
         <summary>{text}<span class="count">{field.fields.length} fields</span></summary>
-        <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} /></div>
+        <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} {translating} {prefix} inherited={mode} /></div>
       </details>
     {:else if field.type === 'array'}
       {@const items = rows(at)}
@@ -179,13 +212,13 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <div class="list" {id} role="group" aria-labelledby="{id}-l">
         {#each items as row, i ((row as Data)?._id ?? i)}
           <div class="row-card">
-            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" /></div>
-            {@render controls(at, i, items.length, `${text} row ${i + 1}`)}
+            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {prefix} inherited={mode} /></div>
+            {#if !translating}{@render controls(at, i, items.length, `${text} row ${i + 1}`)}{/if}
           </div>
         {:else}
           <p class="hint">Nothing here yet</p>
         {/each}
-        <button class="btn btn-sm add" type="button" onclick={() => add(at, scalar ? '' : { _id: newId('default') })}>Add to {text}</button>
+        {#if !translating}<button class="btn btn-sm add" type="button" onclick={() => add(at, scalar ? '' : { _id: newId('default') })}>Add to {text}</button>{/if}
       </div>
     {:else if field.type === 'blocks'}
       {@const items = rows(at)}
@@ -198,10 +231,10 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
             <header>
               <span class="label" id="{id}.{i}-h">{name}</span>
               <span class="type">{block(row)._type} · {block(row)._id}</span>
-              {@render controls(at, i, items.length, name)}
+              {#if !translating}{@render controls(at, i, items.length, name)}{/if}
             </header>
             {#if inner}
-              <div class="form"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} /></div>
+              <div class="form"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {prefix} inherited={mode} /></div>
             {:else}
               <p class="ref-note">{block(row)._ref ?? `No “${block(row)._type}” block in the registry`} — not editable here</p>
             {/if}
@@ -209,6 +242,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {:else}
           <p class="hint">Nothing here yet</p>
         {/each}
+        {#if !translating}
         <div class="pop-anchor">
           <button class="btn btn-sm add" type="button" aria-expanded={picker === id} onclick={() => (picker = picker === id ? '' : id)}>Add block</button>
           {#if picker === id}
@@ -221,6 +255,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
             </div>
           {/if}
         </div>
+        {/if}
       </div>
     {:else if field.type === 'image' || field.type === 'file' || field.type === 'embed' || field.type === 'seo' || field.type === 'reference'}
       {@render groupLabel(id, field, text)}

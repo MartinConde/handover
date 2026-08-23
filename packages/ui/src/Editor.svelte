@@ -2,6 +2,7 @@
 import type { Drift, Field } from '@handover/core';
 import DriftPanel from './Drift.svelte';
 import Fields from './Fields.svelte';
+import Translation from './Translation.svelte';
 
 type Data = Record<string, unknown>;
 type Problem = { path: string; message: string };
@@ -28,6 +29,12 @@ let {
     titleField?: string;
     /** The languages the site declares. */
     locales: string[];
+    /** The one the entry's structure is edited in, and the one a translation is made from. */
+    defaultLocale: string;
+    /** The other languages this entry has a file in, parsed; none where it has no other file. */
+    translations: Record<string, Data>;
+    /** Which of them were translated from a source language that has moved on since. */
+    stale: string[];
     /** The blocks this entry's languages disagree about; publishing waits on these. */
     drift: Drift[];
   };
@@ -50,12 +57,43 @@ let saveFailed = $state(false);
 // every save rather than a reason to refuse one; the publish is where it blocks.
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let problems = $state(byPath(entry.problems));
+// Which language the switcher has, and whether the second column is open. Two independent
+// things: the second column is always the default language beside a translation.
+// svelte-ignore state_referenced_locally -- the entry's default language is where it opens
+let locale = $state(entry.defaultLocale);
+let side = $state(false);
+let pane = $state<ReturnType<typeof Translation>>();
+// A second language stored ahead of the repository. It lives here rather than in the column,
+// which is thrown away whenever the screen changes and would take the fact with it.
+let translated = $state(false);
+
+// Every control below is about having more than one language, so a site that declares one
+// draws none of them — not greyed, not always-1-of-1, absent.
+const many = $derived(entry.locales.length > 1);
+const others = $derived(entry.locales.filter((l) => l !== entry.defaultLocale));
+// The column beside the default language: the one the switcher has, or the first other
+// language when the switcher is on the default one.
+const target = $derived(locale === entry.defaultLocale ? others[0] : locale);
+const shown = $derived(side ? target : locale === entry.defaultLocale ? undefined : locale);
+// A translation on its own: the switcher is on another language and the second column is shut.
+const alone = $derived(!side && shown !== undefined);
+// The entry always has the file it was opened on; the others are the ones that can be absent.
+const untranslated = (of: string) => of !== entry.defaultLocale && !(of in entry.translations);
 
 const json = $derived(JSON.stringify(data));
 const missing = $derived(Object.keys(problems));
 const named = $derived(data[entry.titleField ?? 'title']);
 const title = $derived(typeof named === 'string' && named ? named : slug);
-const dirty = $derived(drafted || json !== saved);
+// The second column is its own file, so an edit only made there is still something to publish.
+const dirty = $derived(drafted || translated || json !== saved || (pane?.unsaved() ?? false));
+const LANGUAGES = new Intl.DisplayNames(['en'], { type: 'language' });
+const language = (of: string) => {
+  try {
+    return LANGUAGES.of(of) ?? of;
+  } catch {
+    return of;
+  }
+};
 
 // Autosave. The wait restarts on every keystroke, so a burst of typing is one write.
 $effect(() => {
@@ -94,7 +132,18 @@ function goToFirst() {
 // to be in D1 before it opens, so a click inside the autosave window is not lost.
 async function openDrawer() {
   if (json !== saved) await autosave();
-  if (!saveFailed) onpublish();
+  if (saveFailed) return;
+  // The other language is its own file and its own row, and the publish reads the rows.
+  if (pane && !(await pane.flush())) return;
+  onpublish();
+}
+
+// The second column holds one language and goes when the screen changes under it — closed, or
+// pointed at another language. Its wait would go with it, so whatever is in it is sent before
+// the change; the request outlives the component, and the screen does not wait on it.
+function leaving(change: () => void) {
+  if (pane?.unsaved()) pane.flush();
+  change();
 }
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -125,10 +174,30 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         {/if}
       </div>
       <div class="actions">
-        <div class="seg" role="group" aria-label="Language">
-          <button type="button" aria-pressed="true">EN</button>
-          <button type="button" aria-pressed="false" disabled title="Only English is configured">DE</button>
-        </div>
+        {#if many}
+          {#if entry.locales.length < 5}
+            <div class="seg" role="group" aria-label="Language">
+              {#each entry.locales as of (of)}
+                <button type="button" aria-pressed={locale === of} onclick={() => leaving(() => (locale = of))}>
+                  {of.toUpperCase()}{#if untranslated(of)}<span class="visually-hidden"> — not translated yet</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {language(entry.defaultLocale)} changed since this was translated</span><span class="mark" aria-hidden="true"></span>{/if}
+                </button>
+              {/each}
+            </div>
+          {:else}
+            <label class="visually-hidden" for="entry-locale">Language</label>
+            <select
+              class="input"
+              id="entry-locale"
+              value={locale}
+              onchange={(e) => leaving(() => (locale = e.currentTarget.value))}
+            >
+              {#each entry.locales as of (of)}
+                <option value={of}>{language(of)}</option>
+              {/each}
+            </select>
+          {/if}
+          <button class="btn btn-sbs" type="button" aria-pressed={side} onclick={() => leaving(() => (side = !side))}>Side by side</button>
+        {/if}
         <button class="btn btn-preview" type="button" disabled title="Preview is not available yet">Preview</button>
         <button
           class="btn btn-primary"
@@ -152,7 +221,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   </header>
   <!-- A decision to make, not a form to fill: the panel stands where the form would be, because
        every field on it belongs to a structure the languages have not agreed on yet. -->
-  <div class="entry-body" class:has-pane={!entry.drift.length}>
+  <div class="entry-body" class:has-pane={!entry.drift.length && !alone}>
     {#if entry.drift.length}
       <DriftPanel
         {collection}
@@ -162,12 +231,41 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         {onresolved}
       />
     {:else}
-      <form class="form" onsubmit={(e) => e.preventDefault()}>
-        <Fields fields={entry.fields} blocks={entry.blocks} {problems} bind:root={data} />
-      </form>
-      <aside class="pane" aria-label="Right pane">
-        <div><strong>Right pane</strong>Preview or a second language, later.</div>
-      </aside>
+      <!-- The default language's form is the one the structure is edited in, so it is not
+           drawn when the switcher is on another language and the second column is shut. -->
+      {#if !alone}
+        <form class="form" onsubmit={(e) => e.preventDefault()}>
+          <Fields fields={entry.fields} blocks={entry.blocks} {problems} bind:root={data} />
+        </form>
+      {/if}
+      {#if shown === undefined}
+        <aside class="pane" aria-label="Right pane">
+          <div><strong>Right pane</strong>Preview or a second language, later.</div>
+        </aside>
+      {:else if untranslated(shown)}
+        <!-- An empty form here would autosave a file nobody asked for. -->
+        <section class="pane is-locale" aria-labelledby="pane-{shown}">
+          <div class="pane-head"><h2 id="pane-{shown}">{language(shown)}</h2></div>
+          <p class="placeholder">This entry has not been translated into {language(shown)} yet.</p>
+        </section>
+      {:else}
+        <!-- Keyed: another language is another file, not the same one under a new name. -->
+        {#key shown}
+          <Translation
+            bind:this={pane}
+            {collection}
+            {slug}
+            locale={shown}
+            fields={entry.fields}
+            blocks={entry.blocks}
+            data={entry.translations[shown] ?? {}}
+            source={entry.defaultLocale}
+            stale={entry.stale.includes(shown)}
+            onsaved={(pending) => (translated = pending)}
+            onclose={side ? () => leaving(() => (side = false)) : undefined}
+          />
+        {/key}
+      {/if}
     {/if}
   </div>
 </main>

@@ -22,9 +22,9 @@ const ENTRIES = [
 let app: ReturnType<typeof mount>;
 const changed = vi.fn();
 // Loading the list is a bare GET; every action carries an init, which is what tells them apart.
-const api = (entries: unknown[], reply: Record<string, unknown> = {}) => {
+const api = (entries: unknown[], reply: Record<string, unknown> = {}, locales = ['en']) => {
   const fetcher = vi.fn(async (_url: string, init?: RequestInit) =>
-    init ? Response.json(reply) : Response.json({ entries }),
+    init ? Response.json(reply) : Response.json({ entries, locales }),
   );
   vi.stubGlobal('fetch', fetcher);
   return fetcher;
@@ -170,4 +170,55 @@ test('a refused rename says so and keeps the dialog open', async () => {
   expect(q(root, '.dialog [role="alert"]')?.textContent).toContain('Publish this entry');
   expect(q(root, '.dialog')).not.toBeNull();
   expect(changed).not.toHaveBeenCalled();
+});
+
+// Which languages an entry has a file in, one chip each in the order the site declares them.
+// One language declared and the column is not drawn at all — nor emptied, nor always 1/1.
+test('a row says which languages it has been written in', async () => {
+  api(
+    [
+      ENTRIES[0],
+      { id: 'impressum', locales: { de: { title: 'Impressum', path: 'x/de/impressum.yaml' } } },
+    ],
+    {},
+    ['en', 'de'],
+  );
+  const root = show();
+  await tick();
+
+  expect(
+    Array.from(root.querySelectorAll('.row'), (row) =>
+      Array.from(
+        row.querySelectorAll('.chips .chip'),
+        (chip) =>
+          `${chip.textContent?.trim()}${chip.classList.contains('chip-missing') ? '?' : ''}`,
+      ),
+    ),
+  ).toEqual([
+    ['EN', 'DE?'],
+    ['EN?', 'DE'],
+  ]);
+});
+
+test('a site that declares one language has no languages column', async () => {
+  api(ENTRIES);
+  const root = show();
+  await tick();
+
+  expect(q(root, '.chips')).toBeNull();
+  expect(Array.from(root.querySelectorAll('.th'), (th) => th.textContent)).not.toContain(
+    'Languages',
+  );
+});
+
+test('an entry written only in a second language is listed by the words it has', async () => {
+  api(
+    [{ id: 'impressum', locales: { de: { title: 'Impressum', path: 'x/de/impressum.yaml' } } }],
+    {},
+    ['en', 'de'],
+  );
+  const root = show();
+  await tick();
+
+  expect(q(root, '.row .td.title a')?.textContent).toBe('Impressum');
 });

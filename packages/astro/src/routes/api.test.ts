@@ -218,9 +218,11 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
     ],
     blocks: {},
     data: { title: 'The Mill House', location: 'Bakewell', rooms: 3 },
+    translations: {},
     pending: false,
     problems: [{ path: 'address', message: 'Required' }],
     locales: ['en'],
+    defaultLocale: 'en',
     drift: [],
     stale: [],
   });
@@ -466,28 +468,26 @@ test('the entry list is the built index with the pending drafts over it', async 
   ]);
   const res = await GET(ctx('entries/listings'));
   expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({
-    entries: [
-      {
-        id: 'mill-house',
-        locales: {
-          en: {
-            title: 'The Mill House, renamed',
-            path: 'src/content/listings/en/mill-house.yaml',
-          },
+  expect(((await res.json()) as { entries: unknown }).entries).toEqual([
+    {
+      id: 'mill-house',
+      locales: {
+        en: {
+          title: 'The Mill House, renamed',
+          path: 'src/content/listings/en/mill-house.yaml',
         },
       },
-      {
-        id: 'seaview-cottage',
-        locales: {
-          en: {
-            title: 'Seaview Cottage',
-            path: 'src/content/listings/en/seaview-cottage.yaml',
-          },
+    },
+    {
+      id: 'seaview-cottage',
+      locales: {
+        en: {
+          title: 'Seaview Cottage',
+          path: 'src/content/listings/en/seaview-cottage.yaml',
         },
       },
-    ],
-  });
+    },
+  ]);
 });
 
 test('opening an entry names the field its collection is keyed on', async () => {
@@ -511,20 +511,18 @@ test('a collection keyed on another field lists its drafts by that field', async
     },
   ]);
   const res = await GET(ctx('entries/presenters'));
-  expect(await res.json()).toEqual({
-    entries: [
-      {
-        id: 'ada-fenwick',
-        locales: {
-          en: { title: 'Ada Fenwick', path: 'src/content/presenters/en/ada-fenwick.yaml' },
-        },
+  expect(((await res.json()) as { entries: unknown }).entries).toEqual([
+    {
+      id: 'ada-fenwick',
+      locales: {
+        en: { title: 'Ada Fenwick', path: 'src/content/presenters/en/ada-fenwick.yaml' },
       },
-      {
-        id: 'rosa-hale',
-        locales: { en: { title: 'Rosa Hale', path: 'src/content/presenters/en/rosa-hale.yaml' } },
-      },
-    ],
-  });
+    },
+    {
+      id: 'rosa-hale',
+      locales: { en: { title: 'Rosa Hale', path: 'src/content/presenters/en/rosa-hale.yaml' } },
+    },
+  ]);
 });
 
 test('listing an unknown collection is 404', async () => {
@@ -703,8 +701,71 @@ test('opening an entry reports the blocks its languages disagree about', async (
   const body = (await (await GET(ctx('entries/pages/home'))).json()) as { drift: unknown };
 
   expect(body.drift).toEqual([
-    { path: 'blocks[_id=z9y8x7w6]', type: 'quote', in: ['de'], expected: ['en', 'de'] },
+    {
+      path: 'blocks[_id=z9y8x7w6]',
+      type: 'quote',
+      in: ['de'],
+      expected: ['en', 'de'],
+      values: { de: ['Ein seltener Fund.'] },
+    },
   ]);
+});
+
+// Side by side: the second language is drawn from the same response, so opening an entry is
+// still one read per language and the browser never asks for a file of its own.
+test('an entry carries the languages it has a file in beside the one it opens on', async () => {
+  drifted();
+
+  const body = (await (await GET(ctx('entries/pages/home'))).json()) as {
+    translations: Record<string, unknown>;
+  };
+
+  expect(body.translations).toEqual({
+    de: {
+      _version: 1,
+      title: 'Startseite',
+      blocks: [
+        { _type: 'hero', _id: 'k3nf9a2p', heading: 'Zieh an die Küste' },
+        { _type: 'quote', _id: 'z9y8x7w6', body: 'Ein seltener Fund.' },
+      ],
+    },
+  });
+});
+
+test('the entry list says which languages the site declares', async () => {
+  locales = ['en', 'de'];
+
+  const body = (await (await GET(ctx('entries/listings'))).json()) as { locales: unknown };
+
+  expect(body.locales).toEqual(['en', 'de']);
+});
+
+test('a save of a translation goes to that language and takes only the words it owns', async () => {
+  drifted();
+  saveDraft.mockClear();
+  const data = { title: 'Startseite!' };
+
+  const res = await PUT(put('drafts/pages/home/de', JSON.stringify({ data })));
+
+  expect(res.status).toBe(200);
+  expect(saveDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/pages/de/home.yaml',
+    data,
+    { form: expect.anything(), locale: 'de', siblings: {}, translation: true },
+  );
+});
+
+test('a save to a language the site does not declare is refused', async () => {
+  drifted();
+  saveDraft.mockClear();
+
+  const res = await PUT(put('drafts/pages/home/fr', JSON.stringify({ data: { title: 'x' } })));
+
+  expect(res.status).toBe(404);
+  expect(saveDraft).not.toHaveBeenCalled();
 });
 
 test('publishing an entry whose languages have drifted apart is refused', async () => {

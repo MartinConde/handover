@@ -11,12 +11,14 @@ const STRAY = {
   type: 'quote',
   in: ['de'],
   expected: ['en', 'de'],
+  values: { de: ['Ein seltener Fund.'] },
 };
 const MARKED = {
   path: 'blocks[_id=p8xk2m4q]',
   type: 'compliance',
   in: ['en', 'de'],
   expected: ['de'],
+  values: { en: ['Right to cancel'], de: ['Widerrufsbelehrung'] },
 };
 
 let app: ReturnType<typeof mount>;
@@ -47,6 +49,10 @@ const labels = (root: ParentNode, card = 0) =>
     (n) => n.textContent,
   );
 const tick = () => new Promise((r) => setTimeout(r, 0));
+const columns = (root: ParentNode) =>
+  Array.from(root.querySelectorAll('.drift-cols > div'), (n) =>
+    (n.textContent ?? '').replace(/\s+/g, ' ').trim(),
+  );
 
 test('a block nothing says is one language’s can be added, dropped or marked', () => {
   expect(labels(show())).toEqual([
@@ -98,4 +104,18 @@ test('Apply waits until every block has been answered', () => {
 
   expect(apply?.disabled).toBe(true);
   expect(root.querySelector('.actions .left')?.textContent).toBe('1 of 2 answered');
+});
+
+// A card names files until it can name words: removing a block from English is losing what is
+// written there, and nobody should answer that against a file name.
+test('a card shows what each language says in the block it is deciding about', () => {
+  const root = show([MARKED]);
+
+  expect(columns(root)).toEqual(['English Right to cancel', 'German Widerrufsbelehrung']);
+});
+
+test('a language that does not have the block says so rather than showing nothing', () => {
+  const root = show([STRAY]);
+
+  expect(columns(root)).toEqual(['English Not in this language', 'German Ein seltener Fund.']);
 });

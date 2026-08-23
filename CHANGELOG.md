@@ -4,6 +4,23 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A second language is edited beside the first. The entry header carries a language switcher —
+  buttons up to four languages, a menu above that — with a mark against a language the entry has
+  no file in and against one whose source language has moved on since it was translated.
+  **Side by side** opens that language in the right-hand column: its own file, its own autosave
+  to `PUT /admin/api/drafts/:collection/:slug/:locale`, and both columns stored before the
+  publish drawer opens. The column shows what the language owns — a shared field as the value
+  it shares, a field the default language keeps to itself not at all, a link's label without its
+  target — and blocks are translated there but added, removed and reordered in the default
+  language alone. The entry list gains a chip per language saying which ones an entry is written
+  in, and lists an entry written in one language only by the words it has. **A site that
+  declares one language draws none of this**, and the rule is on the config: two languages and
+  no second file still draws every control. The entry response now carries `defaultLocale` and
+  the entry's other languages, the collection listing carries the site's `locales`, and a drift
+  card shows the words each language has for the block it is deciding about. `docs/i18n.md` is
+  now the half a developer configures and the new `docs/translating.md` the half the client
+  works in.
+
 - A translation says which English it was made from. Publishing a translated file writes
   `_i18n` into it — `sourceLocale`, the `sourceBlob` of the source language's file as that same
   commit leaves it, a `sourceHash` of the values inside it a translation is made from, and
@@ -14,7 +31,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   leave it current, and a translation the publish only carries along — rewritten because English
   added a block — keeps the mark it had rather than claiming to be up to date. Staleness is a
   warning and never a refusal: a stale file publishes and builds like any other. See
-  `docs/i18n.md`.
+  `docs/translating.md`.
 
 - Drift is answered in the entry. An entry whose languages disagree about its blocks opens on a
   reconciliation panel instead of its form, one card per block with the answers that block
@@ -27,7 +44,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   naming a language the entry has no file in survives. Nothing is marked resolved — the entry is
   read again and the banner goes because there is nothing left to report, which is also how a
   fix made in the repository clears it. `POST /admin/api/drift/:collection/:slug` is the route
-  behind it, and the entry response now also carries the site's `locales`. See `docs/i18n.md`.
+  behind it, and the entry response now also carries the site's `locales`. See
+  `docs/translating.md`.
 
 - An entry's languages are compared when it opens. The structure is shared, so a block one
   language's file has and another's does not — with no `_locales` to say it belongs to that
@@ -36,7 +54,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the row *Languages disagree* rather than offering Discard — it is the one refusal besides an
   unfinished schema, because committing the file would bake the difference into git. A save
   still resolves nothing by itself. A site that declares one language reads nothing extra and
-  is never refused for this. See `docs/i18n.md`.
+  is never refused for this. See `docs/translating.md`.
 
 - An entry's languages keep one structure. Adding a block, removing one or moving one is an
   edit to every language's file of that entry, written in the same autosave: the German file
@@ -58,9 +76,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   and `seo` split down the middle — an image's `alt` is translated and its `src`, `width`,
   `height` and `focal` are the same everywhere — so nobody retypes an image URL per language.
   A save of a translation writes the fields that language owns and reads the rest off the
-  file, instead of dropping what its form never showed (decap-cms#6978). The admin still
-  edits the default language; this is what its second-language editor is built on. See
-  `docs/i18n.md`.
+  file, instead of dropping what its form never showed (decap-cms#6978). See `docs/i18n.md`.
 
 - `cms.config.ts` declares its languages: `i18n: { locales: ['en', 'de'], defaultLocale:
   'en' }`, with an optional `prefixDefaultLocale`. It is required, a site with one language

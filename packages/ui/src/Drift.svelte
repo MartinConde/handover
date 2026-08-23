@@ -151,9 +151,12 @@ async function apply() {
             {#each shown(row) as locale (locale)}
               <div>
                 <p class="col-title">{named(locale)}</p>
-                <div class="readonly filename">
-                  {row.in.includes(locale) ? 'In' : 'Not in'}
-                  {locale}/{slug}.yaml
+                <div class="readonly">
+                  {#each row.values[locale] ?? [] as words, w (w)}
+                    <p>{words}</p>
+                  {:else}
+                    <p>{row.in.includes(locale) ? 'Nothing written in it' : 'Not in this language'}</p>
+                  {/each}
                 </div>
               </div>
             {/each}

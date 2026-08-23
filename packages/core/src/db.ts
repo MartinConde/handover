@@ -89,8 +89,14 @@ export interface LocaleSync {
   form: Form;
   /** The language the form was drawn from. */
   locale: string;
-  /** The entry's other languages, locale → path. */
+  /** The entry's other languages, locale → path. Empty on a save of a translation. */
   siblings: Record<string, string>;
+  /**
+   * This save is of a language the entry is translated into. Only the values that language
+   * owns are taken from it and the structure is the file's own, so a browser cannot move a
+   * block, change a shared value or add a field the default language keeps to itself.
+   */
+  translation?: boolean;
 }
 
 /**
@@ -103,6 +109,9 @@ export interface LocaleSync {
  * language. A save that touched neither the structure nor a shared value does not touch them
  * at all, and a language the entry has no file in is not created here — that is Create from
  * English, further along.
+ *
+ * With `sync.translation`, this is a save of one of those other languages instead: it writes
+ * that language's own words into its own file and nothing else moves.
  */
 export async function saveDraft(
   siteId: string,
@@ -115,15 +124,17 @@ export async function saveDraft(
   const loaded = await load(siteId, db, git, path);
   if (!loaded) return undefined;
   const before = loaded.entry;
-  const after = mergeEntry(siteId, before, values);
+  const translated = sync?.translation ? sync.form : undefined;
+  const after = mergeEntry(siteId, before, values, translated);
   const edit = { before, after };
   const updatedAt = Date.now();
   const contents = stringifyEntry(
     siteId,
-    sync ? syncLocale(siteId, sync.form, sync.locale, edit, after) : after,
+    sync && !translated ? syncLocale(siteId, sync.form, sync.locale, edit, after) : after,
   );
   const writes = [upsert(db, siteId, path, contents, loaded, updatedAt)];
-  for (const [locale, sibling] of Object.entries(sync?.siblings ?? {})) {
+  // A translation changes no structure, so the other languages have nothing to follow.
+  for (const [locale, sibling] of Object.entries(translated ? {} : (sync?.siblings ?? {}))) {
     if (!sync) break;
     const projection = (data: unknown) => skeleton(siteId, sync.form, locale, data);
     if (projection(before) === projection(after)) continue;

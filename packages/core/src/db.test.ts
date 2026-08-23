@@ -498,6 +498,70 @@ test('a language the entry does not have yet is not created by a save of another
   expect((await db.select().from(drafts)).map((r) => r.path)).toEqual([PAGE_EN]);
 });
 
+// The other direction: a save of a language the entry is translated into. It owns its own
+// words and nothing else — the structure and the shared values are the file's, whatever the
+// browser posts back (decap-cms#6978).
+const LISTING_DE = 'src/content/listings/de/mill-house.yaml';
+const DE_FORM: Form = {
+  fields: [
+    { path: ['title'], label: 'Title', type: 'text', required: true },
+    { path: ['price'], label: 'Price', type: 'text', required: true, i18n: 'duplicate' },
+    { path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: ['hero', 'cta'] },
+  ],
+  blocks: PAGE_FORM.blocks,
+};
+const GERMAN = [
+  '_version: 1',
+  'title: "Das Mühlenhaus"',
+  'price: "£950 per week"',
+  'blocks:',
+  '  - _type: "hero"',
+  '    _id: "k3nf9a2p"',
+  '    heading: "Zieh an die Küste"',
+  '  - _type: "cta"',
+  '    _id: "q1w2e3r4"',
+  '    heading: "Bereit für den Umzug?"',
+  '',
+].join('\n');
+
+test("a save of a translation writes that language's words and leaves the rest as it stands", async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [LISTING_DE]: GERMAN });
+
+  await saveDraft(
+    'default',
+    db,
+    repo,
+    LISTING_DE,
+    {
+      title: 'Mühlenhaus am Bach',
+      price: '£1 per week',
+      notes: 'Nur auf Deutsch',
+      blocks: [
+        { ...block('q1w2e3r4'), heading: 'Bereit für den Umzug?' },
+        { ...block('k3nf9a2p'), heading: 'Zieh ans Meer' },
+      ],
+    },
+    { form: DE_FORM, locale: 'de', siblings: {}, translation: true },
+  );
+
+  expect((await only(db))?.contents).toBe(
+    [
+      '_version: 1',
+      'title: "Mühlenhaus am Bach"',
+      'price: "£950 per week"',
+      'blocks:',
+      '  - _type: "hero"',
+      '    _id: "k3nf9a2p"',
+      '    heading: "Zieh ans Meer"',
+      '  - _type: "cta"',
+      '    _id: "q1w2e3r4"',
+      '    heading: "Bereit für den Umzug?"',
+      '',
+    ].join('\n'),
+  );
+});
+
 test('publishing an entry commits the languages that moved with it in one commit', async () => {
   const db = await fresh();
   const repo = fakeRepo({

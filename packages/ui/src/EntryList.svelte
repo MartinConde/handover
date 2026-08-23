@@ -5,6 +5,8 @@ type Entry = { id: string; locales: Record<string, { title: string; path: string
 let { collection, onchanged }: { collection: string; onchanged: () => void } = $props();
 
 let entries = $state<Entry[]>([]);
+// The languages the site declares, in its own order. One and the column is not drawn at all.
+let locales = $state<string[]>([]);
 let loading = $state(true);
 let dialog = $state<'' | 'new' | 'rename' | 'delete'>('');
 let target = $state<Entry>();
@@ -22,7 +24,13 @@ $effect(() => {
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const singular = $derived(collection.replace(/s$/, ''));
-const titleOf = (entry: Entry) => entry.locales.en?.title || entry.id;
+// The first language the entry is written in, in the site's own order: an entry that exists
+// in German alone is listed by its German title rather than by its file name.
+const titleOf = (entry: Entry) =>
+  locales.map((l) => entry.locales[l]?.title).find(Boolean) ||
+  Object.values(entry.locales)[0]?.title ||
+  entry.id;
+const many = $derived(locales.length > 1);
 
 // The same derivation the server runs on the same names, so the dialog can promise the file
 // name before anything is written. A rename does not collide with the entry being renamed.
@@ -36,8 +44,11 @@ const preview = $derived(
 
 async function load(name: string) {
   const res = await fetch(`/admin/api/entries/${name}`);
-  if (res.ok) entries = ((await res.json()) as { entries: Entry[] }).entries;
-  else error = `Could not load the list (${res.status})`;
+  if (res.ok) {
+    const body = (await res.json()) as { entries: Entry[]; locales?: string[] };
+    entries = body.entries;
+    locales = body.locales ?? [];
+  } else error = `Could not load the list (${res.status})`;
   loading = false;
 }
 
@@ -115,8 +126,9 @@ async function done() {
   {#if loading}
     <p class="placeholder">Loading…</p>
   {:else if entries.length}
-    <div class="table cols-3" role="table" aria-label={capitalise(collection)}>
+    <div class="table" class:cols-3={!many} class:cols-4={many} role="table" aria-label={capitalise(collection)}>
       <div class="th" role="columnheader">Title</div>
+      {#if many}<div class="th" role="columnheader">Languages</div>{/if}
       <div class="th" role="columnheader">File name</div>
       <div class="th"><span class="visually-hidden">Actions</span></div>
       {#each entries as entry (entry.id)}
@@ -124,6 +136,19 @@ async function done() {
           <div class="td title">
             <a href="/admin/c/{collection}/{entry.id}">{titleOf(entry)}</a>
           </div>
+          {#if many}
+            <div class="td" data-label="Languages">
+              <span class="chips" aria-label="Languages">
+                {#each locales as locale (locale)}
+                  <span
+                    class="chip"
+                    class:chip-missing={!entry.locales[locale]}
+                    title="{locale}: {entry.locales[locale] ? 'written' : 'not written yet'}"
+                  >{locale.toUpperCase()}</span>
+                {/each}
+              </span>
+            </div>
+          {/if}
           <div class="td num filename" data-label="File name">{entry.id}</div>
           <div class="td menu-cell">
             <button

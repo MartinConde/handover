@@ -144,6 +144,16 @@ is not an object or holds a shape the serialiser cannot write back (a nested arr
 the reason as the body; `404` if the collection or the file does not exist.
 
 ```
+PUT /admin/api/drafts/:collection/:slug/:locale  { "data": { … } }  →  { "updated_at", "pending", "problems" }
+```
+
+The same, for a language the entry is translated into
+([Translating](translating.md#what-a-save-of-a-translation-writes)). Only the values that
+language owns are taken from `data`: the structure and the shared values come from the file, so
+this write can never move a block or change what the languages share. `404` when the site does
+not declare that locale.
+
+```
 DELETE /admin/api/drafts/:collection/:slug  →  {}
 ```
 
@@ -153,23 +163,28 @@ drawer's **Discard** does with a file a publish was refused over. `404` if the c
 is not configured.
 
 ```
-GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, pending, problems, titleField, locales, drift }
+GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, translations, pending, problems, titleField, locales, defaultLocale, drift, stale }
 ```
 
 `data` is the draft when there is one, otherwise the file. `pending` says which, and
 `problems` is the same list the autosave answers with, so an entry names what is missing
 the moment it opens. `titleField` is there when the collection declares one, and is the
-field the editor's heading reads. `locales` is the languages the site declares, in config
-order. `drift` is the blocks the entry's languages disagree about,
-`[{ "path": "blocks[_id=z9y8x7w6]", "type": "quote", "in": ["de"], "expected": ["en", "de"] }]`
-— empty on a site with one language, which reads nothing for it.
+field the editor's heading reads. `data` is `defaultLocale`'s file and `translations` the other
+languages the entry has a file in, keyed by locale — what the editor's second column draws.
+`locales` is the languages the site declares, in config order. `drift` is the blocks the entry's
+languages disagree about, `[{ "path": "blocks[_id=z9y8x7w6]", "type": "quote", "in": ["de"],
+"expected": ["en", "de"], "values": { "de": ["Ein seltener Fund."] } }]`, and `stale` the
+languages whose translation was made from a source language that has moved on since
+([Translating](translating.md#when-the-source-language-moves-on)). Both are empty on a site with
+one language, which reads nothing for them.
 
 ```
-GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales" }] }
+GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales" }], "locales": ["en", "de"] }
 ```
 
 The collection's entries for the list screen: one row per entry, `id` is the filename and
-`locales` maps each locale to `{ title, path }` plus `status: "hidden"` when it is hidden.
+`locales` maps each locale to `{ title, path }` plus `status: "hidden"` when it is hidden. The
+response's own `locales` is the languages the site declares, in config order.
 Titles come from the field the collection is keyed on — `title`, or its
 [`titleField`](configuration.md#collections); an entry that has not filled it in lists by
 filename. The list is the build's [content index](#the-content-index) with the pending

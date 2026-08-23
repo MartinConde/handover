@@ -125,19 +125,21 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
   const others = config.i18n.locales.filter((locale) => locale !== config.i18n.defaultLocale);
   // The other languages, and nothing on a site that declares one: an entry with a single file
   // has nothing to have drifted from or been translated ahead of, and reads nothing to find out.
-  const languages = {
-    [config.i18n.defaultLocale]: data,
-    ...(await entryLocales(collection, slug, others)),
-  };
+  const translations = await entryLocales(collection, slug, others);
+  const languages = { [config.i18n.defaultLocale]: data, ...translations };
   return Response.json({
     ...form,
     data,
+    // The same read the drift and staleness answers come from, so editing a second language
+    // beside the first is this one response and not a request per column.
+    translations,
     pending: draft ? (await blobSha(draft.contents)) !== file?.blob_sha : false,
     problems: entryProblems(schema, data),
     titleField: collected.titleField,
     // The languages the site declares, which is what says whether the editor draws any of the
-    // controls that are about having more than one.
+    // controls that are about having more than one, and which of them this response is of.
     locales: config.i18n.locales,
+    defaultLocale: config.i18n.defaultLocale,
     drift: driftReport('default', form, languages),
     // Which of them were translated from an English that has moved on since. A warning the
     // editor draws next to the language, never a reason to refuse anything.
@@ -165,27 +167,33 @@ function editable(value: unknown): Record<string, unknown> | undefined {
  * No base comes from the browser: saveDraft reads it from git the first time it writes a row
  * and keeps it afterwards.
  */
-async function autosave(collection: string, slug: string, request: Request): Promise<Response> {
+async function autosave(
+  collection: string,
+  slug: string,
+  request: Request,
+  locale = config.i18n.defaultLocale,
+): Promise<Response> {
   const schema = config.collections[collection]?.schema;
-  if (!schema) return new Response('Not found', { status: 404 });
+  if (!schema || !config.i18n.locales.includes(locale))
+    return new Response('Not found', { status: 404 });
   const body = (await request.json().catch(() => undefined)) as { data?: unknown } | undefined;
   const data = editable(body?.data);
   if (!data) return new Response('Bad request', { status: 400 });
+  // A translation writes its own words into its own file and moves nothing; the default
+  // language is the one that carries the structure into the others. A site that declares one
+  // language does neither, so its save is exactly the write it always was.
+  const translation = locale !== config.i18n.defaultLocale;
+  const siblings = translation ? {} : siblingPaths(collection, slug);
   let saved: Awaited<ReturnType<typeof saveDraft>>;
   try {
-    const siblings = siblingPaths(collection, slug);
     saved = await saveDraft(
       'default',
       db(),
       gitClient(),
-      entryPath(collection, slug),
+      entryPath(collection, slug, locale),
       data,
-      Object.keys(siblings).length
-        ? {
-            form: formOf('default', formSchema(schema)),
-            locale: config.i18n.defaultLocale,
-            siblings,
-          }
+      translation || Object.keys(siblings).length
+        ? { form: formOf('default', formSchema(schema)), locale, siblings, translation }
         : undefined,
     );
   } catch (err) {
@@ -241,6 +249,8 @@ async function listEntries(collection: string): Promise<Response> {
   const rows = await overlayRows('default', db(), index);
   return Response.json({
     entries: collectionEntries('default', index, collection, rows, collected.titleField),
+    // Which languages the list draws a column for, and in which order — one language, no column.
+    locales: config.i18n.locales,
   });
 }
 
@@ -339,6 +349,7 @@ async function discard(collection: string, slug: string): Promise<Response> {
 const ENTRIES = /^entries\/([\w-]+)$/;
 const ENTRY = /^entries\/([\w-]+)\/([\w-]+)$/;
 const DRAFT = /^drafts\/([\w-]+)\/([\w-]+)$/;
+const TRANSLATION = /^drafts\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 const RENAME = /^entries\/([\w-]+)\/([\w-]+)\/rename$/;
 const DRIFT = /^drift\/([\w-]+)\/([\w-]+)$/;
 
@@ -360,6 +371,11 @@ export const GET: APIRoute = async ({ params }) => {
 };
 
 export const PUT: APIRoute = async ({ params, request }) => {
+  const translated = params.path?.match(TRANSLATION);
+  if (translated)
+    return answering(() =>
+      autosave(translated[1] ?? '', translated[2] ?? '', request, translated[3]),
+    );
   const draft = params.path?.match(DRAFT);
   if (draft) return answering(() => autosave(draft[1] ?? '', draft[2] ?? '', request));
   return new Response('Not found', { status: 404 });

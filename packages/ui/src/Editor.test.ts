@@ -20,7 +20,37 @@ const entry = {
   pending: false,
   problems: [] as { path: string; message: string }[],
   locales: ['en'],
+  defaultLocale: 'en',
+  translations: {} as Record<string, Record<string, unknown>>,
+  stale: [] as string[],
   drift: [] as Drift[],
+};
+
+// The same entry on a site that declares two languages. `price` is the same in both, `notes`
+// belongs to English alone, and the German file is the other half of the screen.
+const bilingual = {
+  ...entry,
+  fields: [
+    { path: ['title'], label: 'Title', type: 'text', required: true },
+    { path: ['price'], label: 'Price', type: 'text', required: true, i18n: 'duplicate' },
+    { path: ['notes'], label: 'Notes', type: 'text', required: false, i18n: false },
+    { path: ['body'], label: 'Body', type: 'blocks', required: true, types: ['hero'] },
+  ] satisfies Field[],
+  blocks: { hero: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }] },
+  data: {
+    title: 'Seaview Cottage',
+    price: '£1,200 per week',
+    notes: 'Saturday changeovers',
+    body: [{ _type: 'hero', _id: 'k3nf9a2p', heading: 'Above the harbour' }],
+  },
+  locales: ['en', 'de'],
+  translations: {
+    de: {
+      title: 'Seaview Cottage',
+      price: '£1,200 per week',
+      body: [{ _type: 'hero', _id: 'k3nf9a2p', heading: 'Über dem Hafen' }],
+    },
+  },
 };
 
 const opened = vi.fn();
@@ -112,6 +142,9 @@ test('the header shows the field the collection is keyed on', () => {
       problems: [],
       titleField: 'name',
       locales: ['en'],
+      defaultLocale: 'en',
+      translations: {},
+      stale: [],
       drift: [],
     },
   });
@@ -351,7 +384,15 @@ test('an entry whose languages disagree gets the panel where its form would be',
   const root = show({
     entry: {
       ...entry,
-      drift: [{ path: 'blocks[_id=z9y8x7w6]', type: 'quote', in: ['de'], expected: ['en', 'de'] }],
+      drift: [
+        {
+          path: 'blocks[_id=z9y8x7w6]',
+          type: 'quote',
+          in: ['de'],
+          expected: ['en', 'de'],
+          values: { de: ['Ein seltener Fund.'] },
+        },
+      ],
       locales: ['en', 'de'],
     },
   });
@@ -360,4 +401,184 @@ test('an entry whose languages disagree gets the panel where its form would be',
   expect($(root, '.drift .block-card')).not.toBe(null);
   expect($(root, 'form.form')).toBe(null);
   expect($<HTMLButtonElement>(root, 'header button.btn-primary')?.disabled).toBe(true);
+});
+
+// One language declared is a CMS with no i18n in it: the controls are not drawn at all, and
+// the rule is on the config rather than on the data — two languages and no German file still
+// draws every one of them, because the missing German is what the client is meant to see.
+test('a site that declares one language draws no language controls at all', () => {
+  const root = show();
+
+  expect($(root, '[aria-label="Language"]')).toBeNull();
+  expect($(root, 'button.btn-sbs')).toBeNull();
+});
+
+test('a second language with nothing written in it still draws every control', () => {
+  const root = show({ entry: { ...bilingual, translations: {} } });
+
+  const seg = $(root, '[aria-label="Language"]');
+  expect(Array.from(seg?.querySelectorAll('button') ?? [], (b) => b.textContent?.trim())).toEqual([
+    'EN',
+    'DE— not translated yet',
+  ]);
+  expect($(root, 'button.btn-sbs')).not.toBeNull();
+});
+
+test('side by side edits the second language and saves it to its own file', async () => {
+  const fetchMock = autosaved();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: bilingual });
+
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  type(root, 'input#t-title', 'Seeblick-Häuschen');
+  $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
+  await tick();
+  flushSync();
+
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/drafts/listings/seaview-cottage/de', {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      data: {
+        title: 'Seeblick-Häuschen',
+        price: '£1,200 per week',
+        body: [{ _type: 'hero', _id: 'k3nf9a2p', heading: 'Über dem Hafen' }],
+      },
+    }),
+  });
+  vi.unstubAllGlobals();
+});
+
+test('the second language shows a shared field without offering to change it', () => {
+  const root = show({ entry: bilingual });
+
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+
+  expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Seaview Cottage');
+  expect($(root, 'input#t-price')).toBeNull();
+  expect($(root, '#t-price')?.textContent).toContain('£1,200 per week');
+  expect($(root, '#t-notes')).toBeNull();
+});
+
+// The second language is its own file, so its draft is its own reason to publish: the button
+// cannot go back to disabled the moment that save lands.
+test('an edit made only in the second language is still something to publish', async () => {
+  vi.stubGlobal('fetch', autosaved());
+  const root = show({ entry: bilingual });
+
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  type(root, 'input#t-title', 'Seeblick-Häuschen');
+  $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
+  await tick();
+  flushSync();
+
+  expect($<HTMLButtonElement>(root, 'button.btn-primary')?.disabled).toBe(false);
+  vi.unstubAllGlobals();
+});
+
+// The second column is a component with its own copy of one language's file. Anything that
+// takes it off the screen — closing it, choosing another language — has to store what is in it
+// first, and anything that points it at another language has to give it that language's words.
+test('closing the second column stores what was typed in it', async () => {
+  const fetchMock = autosaved();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: bilingual });
+
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  type(root, 'input#t-title', 'Seeblick-Häuschen');
+  $<HTMLButtonElement>(root, 'button[aria-label="Close side by side"]')?.click();
+  await tick();
+  flushSync();
+
+  expect(fetchMock).toHaveBeenCalledWith(
+    '/admin/api/drafts/listings/seaview-cottage/de',
+    expect.objectContaining({
+      body: JSON.stringify({
+        data: {
+          title: 'Seeblick-Häuschen',
+          price: '£1,200 per week',
+          body: [{ _type: 'hero', _id: 'k3nf9a2p', heading: 'Über dem Hafen' }],
+        },
+      }),
+    }),
+  );
+  vi.unstubAllGlobals();
+});
+
+test('choosing a third language draws that language and not the one before it', async () => {
+  const root = show({
+    entry: {
+      ...bilingual,
+      locales: ['en', 'de', 'fr'],
+      translations: {
+        ...bilingual.translations,
+        fr: { title: 'Chaumière Seaview', price: '£1,200 per week' },
+      },
+    },
+  });
+
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  const buttons = Array.from(
+    root.querySelectorAll<HTMLButtonElement>('[aria-label="Language"] button'),
+  );
+  buttons[2]?.click();
+  await tick();
+  flushSync();
+
+  expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Chaumière Seaview');
+});
+
+test('the second language draws a block to translate but nothing to move it with', () => {
+  const root = show({ entry: bilingual });
+
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+
+  expect($<HTMLInputElement>(root, 'input#t-body\\.0\\.heading')?.value).toBe('Über dem Hafen');
+  expect($(root, '.pane.is-locale button.add')).toBeNull();
+  expect($(root, '.pane.is-locale .row-controls')).toBeNull();
+});
+
+test('what the schema still wants of the second language is marked on its own field', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({
+        updated_at: 1755864000000,
+        pending: true,
+        problems: [{ path: 'title', message: 'Required' }],
+      }),
+    ),
+  );
+  const root = show({ entry: bilingual });
+
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  type(root, 'input#t-title', '');
+  $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
+  await tick();
+  flushSync();
+
+  expect($(root, '#t-title-err')?.textContent).toBe('Required');
+  vi.unstubAllGlobals();
+});
+
+test('a translation typed and then closed is still something to publish', async () => {
+  vi.stubGlobal('fetch', autosaved());
+  const root = show({ entry: bilingual });
+
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  type(root, 'input#t-title', 'Seeblick-Häuschen');
+  $<HTMLButtonElement>(root, 'button[aria-label="Close side by side"]')?.click();
+  await tick();
+  flushSync();
+
+  expect($<HTMLButtonElement>(root, 'button.btn-primary')?.disabled).toBe(false);
+  vi.unstubAllGlobals();
 });

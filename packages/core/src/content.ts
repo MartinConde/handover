@@ -523,6 +523,8 @@ export interface Drift {
   in: string[];
   /** The languages it belongs in: its `_locales`, or all of them where it names none. */
   expected: string[];
+  /** The words each language that has the row says in it — what an answer stands to lose. */
+  values: Record<string, string[]>;
 }
 
 /**
@@ -596,14 +598,39 @@ function driftRows(
     );
     const expected = named.length ? locales.filter((l) => named.includes(l)) : locales;
     const has = row.map((c) => c.locale);
+    // A block type the form has never heard of has no fields to read and no rows below it.
+    const fields = isObject(first) ? fieldsOf(first) : undefined;
     if (has.join() !== expected.join()) {
       const type = isObject(first) && typeof first._type === 'string' ? first._type : undefined;
-      found.push({ path, type, in: has, expected });
+      const words = (data: unknown) => {
+        const said: string[] = [];
+        rowWords(fields ?? [], data, said);
+        return said;
+      };
+      found.push({
+        path,
+        type,
+        in: has,
+        expected,
+        values: Object.fromEntries(row.map((c) => [c.locale, words(c.data)])),
+      });
     }
-    // A row only one file has cannot disagree with anything below it, and a block type the
-    // form has never heard of has no rows the CMS knows about either.
-    const fields = isObject(first) ? fieldsOf(first) : undefined;
+    // A row only one file has cannot disagree with anything below it.
     if (fields && row.length > 1) driftIn(form, fields, row, path, found);
+  }
+}
+
+/**
+ * The words one row says, in the schema's order: what the reconciliation panel shows so an
+ * answer is made against the content and not against a file name. Prose only — a card is for
+ * reading, and nobody is deciding between two numbers.
+ */
+function rowWords(fields: readonly Field[], data: unknown, found: string[]): void {
+  for (const field of fields) {
+    const value = isObject(data) ? data[field.path[0] ?? ''] : undefined;
+    if (field.type === 'group') rowWords(field.fields, value, found);
+    else if ((field.type === 'text' || field.type === 'richtext') && typeof value === 'string')
+      found.push(value);
   }
 }
 

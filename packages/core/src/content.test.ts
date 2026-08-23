@@ -721,7 +721,13 @@ test('a language whose file has no blocks yet is given the structure, not left e
 // written. `compliance` says which language it belongs to and `quote` says nothing at all.
 test('a block one language has without `_locales` is drift, and one with it is not', () => {
   expect(driftReport('default', page, { en: drifted('en'), de: drifted('de') })).toEqual([
-    { path: 'blocks[_id=z9y8x7w6]', type: 'quote', in: ['de'], expected: ['en', 'de'] },
+    {
+      path: 'blocks[_id=z9y8x7w6]',
+      type: 'quote',
+      in: ['de'],
+      expected: ['en', 'de'],
+      values: { de: ['Ein seltener Fund.'] },
+    },
   ]);
 });
 
@@ -740,9 +746,37 @@ test('a block in a language its `_locales` does not name has drifted too', () =>
   const en = { ...drifted('en'), blocks: [...(drifted('en').blocks as unknown[]), compliance] };
 
   expect(driftReport('default', page, { en, de })).toEqual([
-    { path: 'blocks[_id=p8xk2m4q]', type: 'compliance', in: ['en', 'de'], expected: ['de'] },
-    { path: 'blocks[_id=z9y8x7w6]', type: 'quote', in: ['de'], expected: ['en', 'de'] },
+    {
+      path: 'blocks[_id=p8xk2m4q]',
+      type: 'compliance',
+      in: ['en', 'de'],
+      expected: ['de'],
+      values: { en: ['Widerrufsbelehrung'], de: ['Widerrufsbelehrung'] },
+    },
+    {
+      path: 'blocks[_id=z9y8x7w6]',
+      type: 'quote',
+      in: ['de'],
+      expected: ['en', 'de'],
+      values: { de: ['Ein seltener Fund.'] },
+    },
   ]);
+});
+
+// The card has to show what an answer would lose, and the report is where the words come from:
+// the panel reads no file of its own.
+test('a drift row carries the words each language has for it', () => {
+  const de = drifted('de');
+  const compliance = (de.blocks as Record<string, unknown>[])[1];
+  const en = {
+    ...drifted('en'),
+    blocks: [...(drifted('en').blocks as unknown[]), { ...compliance, heading: 'Right to cancel' }],
+  };
+
+  expect(driftReport('default', page, { en, de })[0]?.values).toEqual({
+    en: ['Right to cancel'],
+    de: ['Widerrufsbelehrung'],
+  });
 });
 
 // Blocks inside a block, and rows inside a group's array: drift anywhere the structure is
@@ -788,6 +822,7 @@ test('a block inside a block is compared too', () => {
       type: 'quote',
       in: ['en'],
       expected: ['en', 'de'],
+      values: { en: ['A rare find.'] },
     },
   ]);
 });
@@ -797,7 +832,12 @@ test('a row an array in one language has and the other does not is drift', () =>
   const de = { sidebar: { features: [] } };
 
   expect(driftReport('default', nested, { en, de })).toEqual([
-    { path: 'sidebar.features[_id=f1f2f3f4]', in: ['en'], expected: ['en', 'de'] },
+    {
+      path: 'sidebar.features[_id=f1f2f3f4]',
+      in: ['en'],
+      expected: ['en', 'de'],
+      values: { en: ['Parking'] },
+    },
   ]);
 });
 
