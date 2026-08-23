@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The content format is locked at `_version: 1`. The shape of a content file — reserved
+  keys, field types, block structure, how the serialiser writes them — does not change
+  under you any more: a later release that changes it ships a `handover migrate` step that
+  rewrites your files and raises their `_version`, and nothing reinterprets a file it has
+  not migrated. See `docs/content-format.md`.
+
 - The admin says when the GitHub App cannot see the repository. GitHub answers `404` for a
   repository outside the App's installation exactly as it does for a missing file, so every
   entry used to open onto "No such entry" with nothing pointing at the installation. The

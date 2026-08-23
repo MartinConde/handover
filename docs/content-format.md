@@ -9,6 +9,11 @@ That layout is exact: one folder per locale, and no folders below it. The filena
 entry's id, so a file in a sub-folder could not be opened as `collection/slug`; the build
 stops and names it rather than leaving it out of the admin's entry list.
 
+The shape on this page is fixed as of `_version: 1`. If a later release of Handover changes
+it, the change comes with a migration step: `handover migrate` rewrites your files and
+raises their `_version` ([CLI](cli.md#handover-migrate)). Handover never reinterprets a file
+it has not migrated, so an upgrade cannot quietly change what your build reads.
+
 ## What a file looks like
 
 ```yaml
