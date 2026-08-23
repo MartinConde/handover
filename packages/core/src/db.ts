@@ -4,6 +4,7 @@ import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import {
   applyDrift,
   type DriftChoice,
+  markTranslation,
   mergeEntry,
   parseEntry,
   stringifyEntry,
@@ -375,6 +376,14 @@ const commitMessage = (paths: string[]) =>
     : `Update ${paths.length} files\n\n${paths.map((p) => `- ${p}`).join('\n')}`;
 
 /**
+ * Which language a file was translated from, for the publish about to commit it: that
+ * language's name, its own file of the same entry and the form that says which of its values a
+ * translation is made from. Nothing for the source language's own file, for a path no
+ * collection owns, or on a site that declares one language.
+ */
+export type SourceOf = (path: string) => { locale: string; path: string; form: Form } | undefined;
+
+/**
  * Commit every pending draft as one commit and clear those rows. The parent is HEAD, so
  * `base_blob` is what says whether a draft is still safe to write: it is the file as the
  * editor loaded it, and a file that has moved on since is somebody else's work. One
@@ -384,22 +393,39 @@ export async function publishDrafts(
   siteId: string,
   db: Db,
   git: Pick<GitClient, 'getFile' | 'getHead' | 'publish'>,
+  sourceOf?: SourceOf,
 ): Promise<{ commit_sha: string; paths: string[] } | undefined> {
   const rows = await pendingDrafts(siteId, db);
   if (!rows.length) return undefined;
   const base_sha = await git.getHead();
-  const changed = await Promise.all(
-    rows.map(async (r) =>
-      ((await git.getFile(r.path))?.blob_sha ?? '') === r.baseBlob ? '' : r.path,
-    ),
-  );
-  const conflicts = changed.filter(Boolean);
+  const current = await Promise.all(rows.map((r) => git.getFile(r.path)));
+  const conflicts = rows
+    .filter((r, i) => (current[i]?.blob_sha ?? '') !== r.baseBlob)
+    .map((r) => r.path);
   if (conflicts.length) throw new DraftConflictError(conflicts);
   const paths = rows.map((r) => r.path);
-  const { commit_sha } = await git.publish(
-    rows.map(({ path, contents }) => ({ path, contents })),
-    { base_sha, message: commitMessage(paths) },
+  const files = await Promise.all(
+    rows.map(async ({ path, contents }, i) => {
+      const source = sourceOf?.(path);
+      if (!source || source.path === path) return { path, contents };
+      // The source language as this commit leaves it: its own draft where the same publish is
+      // writing one, and the repository where it is not.
+      const drafted = rows.find((r) => r.path === source.path)?.contents;
+      const file = drafted
+        ? { contents: drafted, blob_sha: await blobSha(drafted) }
+        : await git.getFile(source.path);
+      if (!file) return { path, contents };
+      const marked = await markTranslation(
+        siteId,
+        source.form,
+        { locale: source.locale, ...file },
+        contents,
+        current[i]?.contents,
+      );
+      return { path, contents: marked };
+    }),
   );
+  const { commit_sha } = await git.publish(files, { base_sha, message: commitMessage(paths) });
   await db.delete(drafts).where(and(eq(drafts.siteId, siteId), inArray(drafts.path, paths)));
   return { commit_sha, paths };
 }

@@ -27,6 +27,7 @@ import {
   renameEntry,
   resolveDrift,
   saveDraft,
+  staleLocales,
 } from '@handover/core';
 import type { APIRoute } from 'astro';
 import { login } from '../auth.js';
@@ -122,6 +123,12 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
   const data = parseEntry('default', contents);
   const form = formOf('default', formSchema(schema));
   const others = config.i18n.locales.filter((locale) => locale !== config.i18n.defaultLocale);
+  // The other languages, and nothing on a site that declares one: an entry with a single file
+  // has nothing to have drifted from or been translated ahead of, and reads nothing to find out.
+  const languages = {
+    [config.i18n.defaultLocale]: data,
+    ...(await entryLocales(collection, slug, others)),
+  };
   return Response.json({
     ...form,
     data,
@@ -131,12 +138,10 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
     // The languages the site declares, which is what says whether the editor draws any of the
     // controls that are about having more than one.
     locales: config.i18n.locales,
-    // The other languages, and nothing on a site that declares one: an entry with a single
-    // file has nothing to have drifted from and reads nothing to find that out.
-    drift: driftReport('default', form, {
-      [config.i18n.defaultLocale]: data,
-      ...(await entryLocales(collection, slug, others)),
-    }),
+    drift: driftReport('default', form, languages),
+    // Which of them were translated from an English that has moved on since. A warning the
+    // editor draws next to the language, never a reason to refuse anything.
+    stale: await staleLocales('default', form, languages),
   });
 }
 
@@ -364,7 +369,24 @@ export const PUT: APIRoute = async ({ params, request }) => {
 // prefix and belong to no collection: there is no schema to hold them to.
 const schemaFor = (path: string) => config.collections[path.split('/')[2] ?? '']?.schema;
 
-const ENTRY_FILE = /^src\/content\/([a-z0-9-]+)\/[^/]+\/([^/]+)\.yaml$/;
+const ENTRY_FILE = /^src\/content\/([a-z0-9-]+)\/([^/]+)\/([^/]+)\.yaml$/;
+
+/**
+ * Which language a file this publish is about to commit was translated from: the entry's
+ * default-language file and the form that says which of its values a translation is made from.
+ * Nothing for the default language's own file, and nothing for a path no collection owns — a
+ * global has no schema, so no form. On a site that declares one language it is always nothing.
+ */
+const sourceOf = (path: string) => {
+  const [, collection = '', locale = '', slug = ''] = ENTRY_FILE.exec(path) ?? [];
+  const schema = config.collections[collection]?.schema;
+  if (!schema || !locale || locale === config.i18n.defaultLocale) return undefined;
+  return {
+    locale: config.i18n.defaultLocale,
+    path: entryPath(collection, slug),
+    form: formOf('default', formSchema(schema)),
+  };
+};
 
 /**
  * Which of these files belong to an entry whose languages have drifted apart. The one refusal
@@ -377,7 +399,7 @@ async function driftedPaths(paths: string[]): Promise<string[]> {
   // One entry is one check, however many of its languages are waiting to be published.
   const entries = new Map<string, string[]>();
   for (const path of paths) {
-    const [, collection = '', slug = ''] = ENTRY_FILE.exec(path) ?? [];
+    const [, collection = '', , slug = ''] = ENTRY_FILE.exec(path) ?? [];
     if (!collection) continue;
     const key = `${collection}/${slug}`;
     entries.set(key, [...(entries.get(key) ?? []), path]);
@@ -442,7 +464,7 @@ async function publish(): Promise<Response> {
       { status: 409 },
     );
   }
-  const result = await publishDrafts('default', database, gitClient());
+  const result = await publishDrafts('default', database, gitClient(), sourceOf);
   return Response.json(result ?? { paths: [] });
 }
 

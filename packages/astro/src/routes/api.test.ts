@@ -78,9 +78,9 @@ const {
         updatedAt: 1755864000000,
       },
     ]),
-    publishDrafts: vi.fn<() => Promise<{ commit_sha: string; paths: string[] } | undefined>>(
-      async () => ({ commit_sha: 'def456', paths: ['src/content/listings/en/mill-house.yaml'] }),
-    ),
+    publishDrafts: vi.fn<
+      (...args: unknown[]) => Promise<{ commit_sha: string; paths: string[] } | undefined>
+    >(async () => ({ commit_sha: 'def456', paths: ['src/content/listings/en/mill-house.yaml'] })),
     saveDraft: vi.fn<() => Promise<{ updated_at: number; pending: boolean } | undefined>>(
       async () => ({ updated_at: 1755864000000, pending: true }),
     ),
@@ -222,6 +222,7 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
     problems: [{ path: 'address', message: 'Required' }],
     locales: ['en'],
     drift: [],
+    stale: [],
   });
 });
 
@@ -737,6 +738,53 @@ test('an entry whose languages agree publishes, drift or no drift elsewhere', as
 
   expect((await POST(post('publish', ''))).status).toBe(200);
   expect(publishDrafts).toHaveBeenCalled();
+});
+
+// Staleness: the German file says which English it was translated from, and the entry says
+// whether that is still the English it has. A warning and never a refusal.
+test('an entry whose translation was made from an older source language says so', async () => {
+  locales = ['en', 'de'];
+  files['src/content/pages/en/home.yaml'] = home.en;
+  files['src/content/pages/de/home.yaml'] = home.en
+    .replace('Home', 'Startseite')
+    .replace('Move to the coast', 'Zieh an die Küste')
+    .replace(
+      '_version: 1\n',
+      [
+        '_version: 1',
+        '_i18n:',
+        '  sourceLocale: "en"',
+        '  sourceBlob: "3f9c2e1a7b8d4c6e0a2f5b7c9d1e3a5b7c9d1e3a"',
+        '  sourceHash: "0000000000000000"',
+        '  translatedAt: "2026-08-20T10:14:00Z"',
+        '',
+      ].join('\n'),
+    );
+
+  const body = (await (await GET(ctx('entries/pages/home'))).json()) as {
+    stale: unknown;
+    drift: unknown;
+  };
+
+  expect(body.stale).toEqual(['de']);
+  expect(body.drift).toEqual([]);
+});
+
+test('a publish names the language each translation it commits was made from', async () => {
+  locales = ['en', 'de'];
+  publishDrafts.mockClear();
+
+  await POST(post('publish', ''));
+
+  const sourceOf = publishDrafts.mock.calls[0]?.[3] as (
+    path: string,
+  ) => { locale: string; path: string } | undefined;
+  expect(sourceOf('src/content/pages/de/home.yaml')).toMatchObject({
+    locale: 'en',
+    path: 'src/content/pages/en/home.yaml',
+  });
+  expect(sourceOf('src/content/pages/en/home.yaml')).toBe(undefined);
+  expect(sourceOf('src/content/redirects.yaml')).toBe(undefined);
 });
 
 // A site with one language has no second file to compare against and never reads for one:

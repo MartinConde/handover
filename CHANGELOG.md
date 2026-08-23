@@ -4,6 +4,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A translation says which English it was made from. Publishing a translated file writes
+  `_i18n` into it — `sourceLocale`, the `sourceBlob` of the source language's file as that same
+  commit leaves it, a `sourceHash` of the values inside it a translation is made from, and
+  `translatedAt`. Opening the entry hashes the source language it now has and reports every
+  language whose translation was made from an older one, so the German goes stale when the
+  English heading changes and stops being stale when somebody translates it again. A shared
+  value, a field the default language keeps to itself, a block moved and a file requoted all
+  leave it current, and a translation the publish only carries along — rewritten because English
+  added a block — keeps the mark it had rather than claiming to be up to date. Staleness is a
+  warning and never a refusal: a stale file publishes and builds like any other. See
+  `docs/i18n.md`.
+
 - Drift is answered in the entry. An entry whose languages disagree about its blocks opens on a
   reconciliation panel instead of its form, one card per block with the answers that block
   allows — derived from which languages have it against which should, so a block nothing marks

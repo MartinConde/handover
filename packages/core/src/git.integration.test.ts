@@ -1,9 +1,11 @@
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
 import { Miniflare } from 'miniflare';
 import { expect, test } from 'vitest';
+import { parseEntry, staleLocales } from './content.js';
 import { drafts, openDb, publishDrafts, saveDraft } from './db.js';
 import { createGitClient, RefMovedError } from './git.js';
 import { deleteEntry, renameEntry } from './lifecycle.js';
+import type { Form } from './schema.js';
 
 // Opt-in: needs a real GitHub App installed on the throwaway repo, see .env.test.example.
 try {
@@ -192,4 +194,105 @@ test.skipIf(!configured)(
     await mf.dispose();
   },
   60_000,
+);
+
+// The staleness walk on the real thing: the German is a translation of the English as it stood,
+// and the English moving on afterwards is what makes it stale — in the file, so a diff shows it.
+const TRANSLATED: Form = {
+  fields: [
+    { path: ['title'], label: 'Title', type: 'text', required: true },
+    { path: ['summary'], label: 'Summary', type: 'text', required: false },
+    { path: ['price'], label: 'Price', type: 'number', required: true, i18n: 'duplicate' },
+  ],
+  blocks: {},
+};
+
+test.skipIf(!configured)(
+  'publishing the source language marks its translation stale, and translating it clears that',
+  async () => {
+    const [owner, repo] = (env.GITHUB_REPO ?? '').split('/');
+    const app = {
+      appId: env.GITHUB_APP_ID ?? '',
+      privateKey: (env.GITHUB_PRIVATE_KEY ?? '').replace(/\\n/g, '\n'),
+      installationId: env.GITHUB_INSTALLATION_ID ?? '',
+      owner: owner ?? '',
+      repo: repo ?? '',
+      branch: env.GITHUB_BRANCH,
+    };
+    const git = createGitClient('default', app);
+    const mf = new Miniflare({
+      modules: true,
+      script: 'export default {}',
+      d1Databases: { DB: ':memory:' },
+    });
+    const binding = await mf.getD1Database('DB');
+    const ddl = await generateSQLiteMigration(
+      await generateSQLiteDrizzleJson({}),
+      await generateSQLiteDrizzleJson({ drafts }),
+    );
+    await binding.batch(ddl.map((sql) => binding.prepare(sql)));
+    const db = openDb('default', binding);
+
+    const name = `it-${(await git.getHead()).slice(0, 7)}`;
+    const en = `src/content/listings/en/${name}.yaml`;
+    const de = `src/content/listings/de/${name}.yaml`;
+    const sourceOf = (path: string) =>
+      path === de ? { locale: 'en', path: en, form: TRANSLATED } : undefined;
+    const stale = async () =>
+      staleLocales('default', TRANSLATED, {
+        en: parseEntry('default', (await git.getFile(en))?.contents ?? ''),
+        de: parseEntry('default', (await git.getFile(de))?.contents ?? ''),
+      });
+    const seeded = await git.publish(
+      [
+        {
+          path: en,
+          contents: `_version: 1\ntitle: "${name}"\nsummary: "A mill."\nprice: 425000\n`,
+        },
+        {
+          path: de,
+          contents: `_version: 1\ntitle: "${name}"\nsummary: "Eine Mühle."\nprice: 425000\n`,
+        },
+      ],
+      { base_sha: await git.getHead(), message: `Seed ${name}` },
+    );
+
+    // Somebody translates the German, and the publish writes down which English it came from.
+    await saveDraft('default', db, git, de, {
+      title: `${name} DE`,
+      summary: 'Eine restaurierte Mühle.',
+      price: 425000,
+    });
+    await publishDrafts('default', db, git, sourceOf);
+
+    expect((await git.getFile(de))?.contents).toContain('_i18n:');
+    expect(await stale()).toEqual([]);
+
+    // The English moves on without it.
+    await saveDraft('default', db, git, en, {
+      title: `${name} EN`,
+      summary: 'A restored mill above the weir.',
+      price: 425000,
+    });
+    await publishDrafts('default', db, git, sourceOf);
+
+    expect(await stale()).toEqual(['de']);
+
+    // And the German catches up.
+    await saveDraft('default', db, git, de, {
+      title: `${name} DE`,
+      summary: 'Eine restaurierte Mühle am Wehr.',
+      price: 425000,
+    });
+    const caught = await publishDrafts('default', db, git, sourceOf);
+
+    expect(await stale()).toEqual([]);
+
+    await git.publish(
+      [en, de].map((path) => ({ path, contents: null })),
+      { base_sha: caught?.commit_sha ?? seeded.commit_sha, message: `Clean up after ${name}` },
+    );
+    await mf.dispose();
+  },
+  120_000,
 );

@@ -1,6 +1,7 @@
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
 import { Miniflare } from 'miniflare';
 import { afterAll, beforeAll, expect, test, vi } from 'vitest';
+import { parseEntry, staleLocales } from './content.js';
 import {
   createDraft,
   DraftConflictError,
@@ -165,6 +166,9 @@ function fakeRepo(files: Record<string, string>) {
     }),
     write(path: string, contents: string) {
       files[path] = contents;
+    },
+    read(path: string) {
+      return files[path] ?? '';
     },
   };
 }
@@ -507,6 +511,91 @@ test('publishing an entry commits the languages that moved with it in one commit
   expect(repo.publish).toHaveBeenCalledTimes(1);
   expect(result?.paths.toSorted()).toEqual([PAGE_DE, PAGE_EN]);
   expect(await db.select().from(drafts)).toEqual([]);
+});
+
+// Staleness. The German file is a translation of the English as it stood when somebody wrote
+// it, and `_i18n` is the publish writing down which English that was.
+const sourceOf = (path: string) =>
+  path === PAGE_DE ? { locale: 'en', path: PAGE_EN, form: PAGE_FORM } : undefined;
+const mark = (contents: string) =>
+  (parseEntry('default', contents) as { _i18n?: Record<string, string> })._i18n;
+const german = (heading: string) => ({
+  title: 'Startseite',
+  blocks: [
+    { ...block('k3nf9a2p'), heading },
+    { ...block('q1w2e3r4'), heading: 'Bereit für den Umzug?' },
+  ],
+});
+const english = (heading: string) => ({
+  title: 'Home',
+  blocks: [
+    { ...block('k3nf9a2p'), heading },
+    { ...block('q1w2e3r4'), heading: 'Ready to move?' },
+  ],
+});
+const bilingual = () =>
+  fakeRepo({
+    [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?'),
+    [PAGE_DE]: page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?'),
+  });
+const stale = (repo: ReturnType<typeof bilingual>) =>
+  staleLocales('default', PAGE_FORM, {
+    en: parseEntry('default', repo.read(PAGE_EN)),
+    de: parseEntry('default', repo.read(PAGE_DE)),
+  });
+
+test('publishing a translation marks it with the source language as the commit leaves it', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+  await saveDraft('default', db, repo, PAGE_DE, german('Zieh an die Küste!'));
+
+  await publishDrafts('default', db, repo, sourceOf);
+
+  expect(mark(repo.read(PAGE_DE))).toEqual({
+    sourceLocale: 'en',
+    sourceBlob: await blobSha(repo.read(PAGE_EN)),
+    sourceHash: expect.stringMatching(/^[0-9a-f]{16}$/),
+    translatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/),
+  });
+  expect(mark(repo.read(PAGE_EN))).toBe(undefined);
+  expect(await stale(repo)).toEqual([]);
+});
+
+test('publishing the source language on its own leaves its translations stale', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+  await saveDraft('default', db, repo, PAGE_DE, german('Zieh an die Küste!'));
+  await publishDrafts('default', db, repo, sourceOf);
+
+  await saveDraft('default', db, repo, PAGE_EN, english('Move to the water'), SYNC);
+  await publishDrafts('default', db, repo, sourceOf);
+
+  expect(await stale(repo)).toEqual(['de']);
+});
+
+test('a structural edit that carries the translation along does not clear it', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+  await saveDraft('default', db, repo, PAGE_DE, german('Zieh an die Küste!'));
+  await publishDrafts('default', db, repo, sourceOf);
+  await saveDraft('default', db, repo, PAGE_EN, english('Move to the water'), SYNC);
+  await publishDrafts('default', db, repo, sourceOf);
+  const marked = mark(repo.read(PAGE_DE));
+
+  const moved = english('Move to the water');
+  await saveDraft(
+    'default',
+    db,
+    repo,
+    PAGE_EN,
+    { ...moved, blocks: moved.blocks.toReversed() },
+    SYNC,
+  );
+  await publishDrafts('default', db, repo, sourceOf);
+
+  expect(repo.read(PAGE_DE)).toContain('_type: "cta"\n    _id: "q1w2e3r4"');
+  expect(mark(repo.read(PAGE_DE))).toEqual(marked);
+  expect(await stale(repo)).toEqual(['de']);
 });
 
 // Reconciling drift is the write `saveDraft` cannot make: the answer moves a block between

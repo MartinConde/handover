@@ -5,8 +5,10 @@ import { expect, test } from 'vitest';
 import {
   applyDrift,
   driftReport,
+  markTranslation,
   mergeEntry,
   parseEntry,
+  staleLocales,
   staticSource,
   stringifyEntry,
   syncLocale,
@@ -920,4 +922,108 @@ test('a block answered into another language takes the blocks inside it along', 
   expect(files.en).toEqual({
     blocks: [{ _type: 'section', _id: 'a1b2c3d4', blocks: [{ _type: 'quote', _id: 'z9y8x7w6' }] }],
   });
+});
+
+// Staleness: the German was translated from the English as it then stood, and `_i18n` is what
+// says which English that was. The pair above is the one to ask it about — a shared price and
+// a source-language-only note must not count as something anybody has to retranslate.
+const translate = (en: string, de: string, was?: string) =>
+  markTranslation(
+    'default',
+    millHouse,
+    { locale: 'en', contents: en, blob_sha: 'e4a1c9b0'.repeat(5) },
+    de,
+    was,
+  );
+const marks = (file: string) =>
+  (parseEntry('default', file) as { _i18n: Record<string, string> })._i18n;
+
+test('a translation is marked with the source language it was made from', async () => {
+  const de = await translate(localeFile('en'), localeFile('de'), undefined);
+
+  expect(marks(de)).toEqual({
+    sourceLocale: 'en',
+    sourceBlob: 'e4a1c9b0'.repeat(5),
+    sourceHash: expect.stringMatching(/^[0-9a-f]{16}$/),
+    translatedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/),
+  });
+});
+
+test('the source language moving on makes the translation stale', async () => {
+  const en = localeFile('en');
+  const de = await translate(en, localeFile('de'));
+  const moved = en.replace('A restored mill on the Dart.', 'A restored mill above the weir.');
+
+  const files = {
+    en: parseEntry('default', moved),
+    de: parseEntry('default', de),
+  };
+  expect(await staleLocales('default', millHouse, files)).toEqual(['de']);
+});
+
+test('a shared value, a hidden one and a requoted file leave the translation current', async () => {
+  const en = localeFile('en');
+  const de = parseEntry('default', await translate(en, localeFile('de')));
+  // Single quotes are the same values in different bytes: `sourceBlob` moves, `sourceHash` does
+  // not, which is the whole reason there are two of them.
+  const same = {
+    ...(parseEntry('default', en.replace(/"/g, "'")) as Record<string, unknown>),
+    price: 450000,
+    notes: 'Completion moved to October.',
+  };
+
+  expect(await staleLocales('default', millHouse, { en: same, de })).toEqual([]);
+});
+
+test('a file nobody has marked is not stale', async () => {
+  const files = {
+    en: parseEntry('default', localeFile('en')),
+    de: parseEntry('default', localeFile('de')),
+  };
+
+  expect(await staleLocales('default', millHouse, files)).toEqual([]);
+});
+
+test('a block moved in the source language is not something to retranslate', async () => {
+  const en = drifted('en');
+  const de = await markTranslation(
+    'default',
+    page,
+    { locale: 'en', contents: driftFile('en'), blob_sha: 'e4a1c9b0'.repeat(5) },
+    driftFile('de'),
+    undefined,
+  );
+  const [hero, cta] = en.blocks as Record<string, unknown>[];
+
+  const files = { en: { ...en, blocks: [cta, hero] }, de: parseEntry('default', de) };
+  expect(await staleLocales('default', page, files)).toEqual([]);
+});
+
+// What a publish must not do: the German file is rewritten whenever English changes its
+// structure or a shared value, and neither of those is somebody translating it.
+test('a translation carried along by a structural edit keeps the mark it had', async () => {
+  const was = await translate(localeFile('en'), localeFile('de'), undefined);
+  const en = localeFile('en').replace('Mill House', 'The Mill House');
+  const carried = was.replace('price: 425000', 'price: 450000');
+
+  expect(await translate(en, carried, was)).toBe(carried);
+});
+
+test('a translation somebody typed into is marked with the source language as it now is', async () => {
+  const was = await translate(localeFile('en'), localeFile('de'), undefined);
+  const en = localeFile('en').replace(
+    'A restored mill on the Dart.',
+    'A restored mill above the weir.',
+  );
+  const typed = was.replace('Eine restaurierte Mühle am Dart.', 'Eine restaurierte Mühle am Wehr.');
+
+  const marked = await translate(en, typed, was);
+
+  expect(marks(marked).sourceHash).not.toBe(marks(was).sourceHash);
+  expect(
+    await staleLocales('default', millHouse, {
+      en: parseEntry('default', en),
+      de: parseEntry('default', marked),
+    }),
+  ).toEqual([]);
 });

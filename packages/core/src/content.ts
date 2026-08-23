@@ -1,4 +1,5 @@
 import { Document, isMap, isScalar, isSeq, parse, parseDocument, visit } from 'yaml';
+import { blobSha } from './git.js';
 import { checkReserved, RESERVED_KEYS } from './reserved.js';
 import type { Field, Form, Translation } from './schema.js';
 
@@ -354,6 +355,159 @@ function place(
   rows.splice(after === undefined ? 0 : here.indexOf(after) + 1, 0, made);
   owner[key] = rows;
   return made;
+}
+
+/** The mark a translation carries: which language it was made from, and that language as it stood. */
+export interface I18nMark {
+  sourceLocale: string;
+  /** Git blob SHA of the source language's file the translation was made from. */
+  sourceBlob: string;
+  /** Hash of the values that file was translated from; two of these agreeing is "not stale". */
+  sourceHash: string;
+  translatedAt: string;
+}
+
+/** One entry's source language, as the publish about to commit the translation leaves it. */
+export interface TranslationSource {
+  locale: string;
+  contents: string;
+  blob_sha: string;
+}
+
+/**
+ * One translation's file, marked with the language it was made from and that language as this
+ * same commit leaves it. When the source language moves on afterwards the two stop agreeing,
+ * which is what makes the translation stale — a warning and never a refusal.
+ *
+ * `was` is the file as the repository has it. A block arriving from another language or leaving
+ * it rewrites a translation without anybody translating anything, and so does a shared value:
+ * what says somebody translated is a value both files have and disagree about. Without a
+ * repository file there is nothing it could be but a translation.
+ */
+export async function markTranslation(
+  siteId: string,
+  form: Form,
+  source: TranslationSource,
+  contents: string,
+  was: string | undefined,
+): Promise<string> {
+  const data = parseEntry(siteId, contents);
+  if (!isObject(data)) return contents;
+  const before = new Map(was ? translatedValues(form, parseEntry(siteId, was)) : []);
+  const typed = translatedValues(form, data).some(
+    ([path, value]) => before.has(path) && before.get(path) !== value,
+  );
+  if (was !== undefined && !typed) return contents;
+  const mark: I18nMark = {
+    sourceLocale: source.locale,
+    sourceBlob: source.blob_sha,
+    sourceHash: await hashOf(form, parseEntry(siteId, source.contents)),
+    translatedAt: new Date().toISOString(),
+  };
+  return stringifyEntry(siteId, { ...data, _i18n: mark });
+}
+
+/**
+ * The languages whose translation was made from an older source language than the one this entry
+ * now has. A file with no `_i18n` has never been marked and is not stale; neither is one naming
+ * a source language the entry has no file in. Warn only — nothing is refused for this.
+ */
+export async function staleLocales(
+  _siteId: string,
+  form: Form,
+  files: Record<string, unknown>,
+): Promise<string[]> {
+  const hashes = new Map<string, Promise<string>>();
+  const stale: string[] = [];
+  for (const [locale, data] of Object.entries(files)) {
+    const mark = isObject(data) && isObject(data._i18n) ? data._i18n : undefined;
+    const from = typeof mark?.sourceLocale === 'string' ? mark.sourceLocale : undefined;
+    if (!mark || from === undefined || from === locale || !(from in files)) continue;
+    if (!hashes.has(from)) hashes.set(from, hashOf(form, files[from]));
+    if ((await hashes.get(from)) !== mark.sourceHash) stale.push(locale);
+  }
+  return stale;
+}
+
+// Sixteen characters: it goes in every translated file and answers one question. `blobSha` for
+// want of another hash in the bundle — it is taken over the values and not over a file, and
+// nothing in the repository is addressed by it.
+const hashOf = async (form: Form, data: unknown) =>
+  (
+    await blobSha(
+      translatedValues(form, data)
+        .map(([path, value]) => `${path}=${value}`)
+        .join('\n'),
+    )
+  ).slice(0, 16);
+
+/**
+ * Every value a translation is made from: the translated leaves of one file, addressed the way
+ * `_machine` addresses a field and sorted by that address, so moving a block is not a change to
+ * what the file says. Shared and source-language-only fields are left out — a price nobody
+ * retypes is not a reason to retranslate.
+ */
+function translatedValues(form: Form, data: unknown): [string, string][] {
+  const found: [string, string][] = [];
+  valuesIn(form, form.fields, data, '', true, found);
+  return found.sort(([a], [b]) => (a < b ? -1 : 1));
+}
+
+// The same descent `driftIn` and `overlay` make.
+function valuesIn(
+  form: Form,
+  fields: readonly Field[],
+  data: unknown,
+  at: string,
+  inherited: Translation,
+  found: [string, string][],
+): void {
+  for (const field of fields) {
+    const key = field.path[0];
+    if (key === undefined) continue;
+    const value = isObject(data) ? data[key] : undefined;
+    const path = at ? `${at}.${key}` : key;
+    const mode = field.i18n ?? inherited;
+    const props = TRANSLATED_PROPS[field.type];
+    if (field.type === 'group') valuesIn(form, field.fields, value, path, mode, found);
+    else if (props && mode === true)
+      for (const prop of props) {
+        const inner = prop
+          .split('.')
+          .reduce<unknown>((v, k) => (isObject(v) ? v[k] : undefined), value);
+        if (inner !== undefined) found.push([`${path}.${prop}`, JSON.stringify(inner)]);
+      }
+    else if (field.type === 'blocks')
+      valuesInRows(form, (row) => form.blocks[String(row._type)], value, path, mode, found);
+    else if (field.type === 'array' && field.item.some((f) => f.path.length > 0))
+      valuesInRows(form, () => field.item, value, path, mode, found);
+    else if (mode === true && value !== undefined) found.push([path, JSON.stringify(value)]);
+  }
+}
+
+function valuesInRows(
+  form: Form,
+  fieldsOf: FieldsOf,
+  rows: unknown,
+  at: string,
+  mode: Translation,
+  found: [string, string][],
+): void {
+  if (!Array.isArray(rows)) return;
+  for (const [i, row] of rows.entries()) {
+    if (!isObject(row)) continue;
+    const key = rowKey(row, i);
+    const fields = fieldsOf(row);
+    if (fields)
+      valuesIn(
+        form,
+        fields,
+        row,
+        `${at}[${key.startsWith('#') ? key.slice(1) : `_id=${key}`}]`,
+        mode,
+        found,
+      );
+  }
 }
 
 /** One row of an entry its languages disagree about — what a save must never resolve. */

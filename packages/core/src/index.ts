@@ -11,6 +11,7 @@ export {
   FORMAT_VERSION,
   mergeEntry,
   parseEntry,
+  staleLocales,
   staticSource,
   stringifyEntry,
   syncLocale,
