@@ -102,6 +102,7 @@ it is still there if you reload — see [Drafts and publishing](publishing.md). 
 **Publish…**: the pending-changes drawer lists every edit waiting to go out, and
 **Publish 1 file** writes them back as one commit on `main`. If someone changed one of
 those files in the repository since you opened it, the publish is refused and nothing is
-overwritten.
+overwritten; **Discard** on that row gives up your changes to it and takes theirs, which
+is the only way out of that refusal today.
 
 Your build pipeline picks the commit up like any other push.

@@ -252,7 +252,30 @@ test('publishing is 409 when a file changed in the repository since the draft wa
   });
   const res = await POST(post('publish', ''));
   expect(res.status).toBe(409);
-  expect(await res.text()).toContain('src/content/listings/en/mill-house.yaml');
+  // The drawer badges the rows it names, so the paths come back as data, not only as prose.
+  expect(await res.json()).toEqual({
+    error: 'src/content/listings/en/mill-house.yaml changed in the repository after it was opened',
+    paths: ['src/content/listings/en/mill-house.yaml'],
+  });
+});
+
+test('discarding a draft drops the row and commits nothing', async () => {
+  discardDraft.mockClear();
+  publish.mockClear();
+  const res = await DELETE(ctx('drafts/listings/mill-house'));
+  expect(res.status).toBe(200);
+  expect(discardDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    'src/content/listings/en/mill-house.yaml',
+  );
+  expect(publish).not.toHaveBeenCalled();
+});
+
+test('discarding a draft of a collection that is not configured is 404', async () => {
+  discardDraft.mockClear();
+  expect((await DELETE(ctx('drafts/nope/mill-house'))).status).toBe(404);
+  expect(discardDraft).not.toHaveBeenCalled();
 });
 
 test('publishing is 409 when the branch moved under it', async () => {

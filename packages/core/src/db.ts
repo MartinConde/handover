@@ -230,7 +230,11 @@ export async function pendingDrafts(siteId: string, db: Db): Promise<Draft[]> {
 export class DraftConflictError extends Error {
   override name = 'DraftConflictError';
   constructor(readonly paths: string[]) {
-    super(`Changed in the repository since they were opened: ${paths.join(', ')}`);
+    super(
+      paths.length === 1
+        ? `${paths[0]} changed in the repository after it was opened`
+        : `${paths.length} files changed in the repository after they were opened — ${paths.join(', ')}`,
+    );
   }
 }
 

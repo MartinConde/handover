@@ -15,6 +15,8 @@ let collections = $state<string[]>([]);
 let pending = $state<{ path: string; updated_at: number }[]>([]);
 let indicator = $state<HTMLButtonElement>();
 let drawer = $state(false);
+// Bumped when a screen's data has moved under it — the screen is thrown away and made again.
+let reload = $state(0);
 
 $effect(() => {
   if (!loggedIn) return;
@@ -88,6 +90,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       <span class="pill pill-live"><span class="dot" aria-hidden="true"></span> Live</span>
       <div class="user-menu"></div>
     </header>
+    {#key reload}
     {#if entryRoute}
       {#await loadEntry(entryRoute[1] ?? '', entryRoute[2] ?? '')}
         <main class="main"><p class="placeholder">Loading…</p></main>
@@ -111,6 +114,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         <h1>Dashboard</h1>
       </main>
     {/if}
+    {/key}
   </div>
   {#if drawer}
     <Pending
@@ -120,6 +124,10 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         indicator?.focus();
       }}
       onpublished={loadPending}
+      ondiscarded={async () => {
+        await loadPending();
+        reload += 1;
+      }}
     />
   {/if}
 </div>

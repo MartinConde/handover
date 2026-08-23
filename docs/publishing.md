@@ -61,9 +61,15 @@ the **pending-changes drawer**, which lists them and publishes them:
 - The rows are deleted once the commit succeeds, so reopening an entry reads the file that
   was just written
 - **Nothing is written unless all of it can be.** If somebody changed one of those files
-  in the repository since the editor loaded it, the publish is refused with a message
-  naming the file and no commit is made — same for a branch that moves while the commit is
-  being written. Reload the entry to pick up their version and edit again
+  in the repository since the editor loaded it, the publish is refused and no commit is
+  made: the drawer marks that row *Changed in the repository since you opened it* — same
+  for a branch that moves while the commit is being written
+- **A refused file has one way out: Discard.** It throws that file's unpublished changes
+  away and reads it from the repository again, so the entry is on their version and the
+  next publish goes through. Reopening or editing the entry does not clear the refusal —
+  the draft keeps the base it was loaded against until it is discarded. Keeping your
+  version over theirs, or choosing field by field, arrives with the three-way view in a
+  later release
 - A commit is not a live site: the site rebuilds afterwards, which takes a minute or two,
   and the admin itself is redeployed with it
 
@@ -95,6 +101,15 @@ Validates `data` against the collection schema, merges it into the entry and sto
 result. `pending` is false when the stored bytes are identical to the file in git — an
 autosave that changed nothing. `400` if the data fails the schema, `404` if the collection
 or the file does not exist.
+
+```
+DELETE /admin/api/drafts/:collection/:slug  →  {}
+```
+
+Throws the entry's stored draft away; the next open reads the file in the repository
+instead. Nothing is committed and the published page is untouched. This is what the
+drawer's **Discard** does with a file a publish was refused over. `404` if the collection
+is not configured.
 
 ```
 GET /admin/api/entries/:collection/:slug    →  { fields, blocks, data, pending }
@@ -148,8 +163,10 @@ POST /admin/api/publish                     →  { "commit_sha", "paths" }
 
 No body: the server publishes what it has stored. `paths` is what went into the commit,
 and is empty when there was nothing to publish. `409` when a file changed in the
-repository since its draft was loaded, or when the branch moved while the commit was being
-written; in both cases nothing was written and no row was cleared.
+repository since its draft was loaded — the body is `{ "error", "paths" }`, naming those
+files so the drawer can mark them and offer the way out — or when the branch moved while
+the commit was being written, which answers with a plain sentence and no paths. In both
+cases nothing was written and no row was cleared.
 
 ## The content index
 
@@ -179,6 +196,7 @@ Two consequences worth knowing:
 
 ## Not yet
 
-Publishing is all-or-nothing: no checkboxes, no holding an entry back, no three-way merge
-when a file has changed in code — you get the refusal, not a way to resolve it — and no
-build status. Those arrive in later releases.
+Publishing is all-or-nothing: no checkboxes, no holding an entry back and no build status.
+A file someone changed in the repository can only be taken whole, by discarding yours;
+there is no three-way merge and no way to keep your version over theirs. Those arrive in
+later releases.

@@ -82,3 +82,47 @@ test("a collection path renders that collection's entry list", async () => {
     root.querySelector('[aria-labelledby="nav-content"] a[aria-current="page"]')?.textContent,
   ).toBe('Listings');
 });
+
+// The load-bearing half of the way out of a conflict: after the draft is gone the editor must
+// not keep the values it had, or the next keystroke saves them back over what was taken.
+test('discarding a draft loads the entry again instead of leaving the old one on screen', async () => {
+  const PATH = 'src/content/listings/en/mill-house.yaml';
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
+    if (url === '/admin/api/drafts')
+      return Response.json({ files: [{ path: PATH, updated_at: 1755864000000 }] });
+    if (url === '/admin/api/publish')
+      return Response.json({ error: 'refused', paths: [PATH] }, { status: 409 });
+    if (init?.method === 'DELETE') return Response.json({});
+    return Response.json({
+      fields: [],
+      blocks: {},
+      data: { title: 'The Mill House' },
+      pending: true,
+    });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const settle = async () => {
+    for (let i = 0; i < 3; i++) {
+      await new Promise((r) => setTimeout(r, 0));
+      flushSync();
+    }
+  };
+  const loads = () =>
+    fetchMock.mock.calls.filter(([url]) => url === '/admin/api/entries/listings/mill-house').length;
+
+  const root = show(true, '/admin/c/listings/mill-house');
+  await settle();
+  expect(loads()).toBe(1);
+
+  root.querySelector<HTMLButtonElement>('button.indicator')?.click();
+  flushSync();
+  root.querySelector<HTMLButtonElement>('.drawer-foot .btn-primary')?.click();
+  await settle();
+  root.querySelector<HTMLButtonElement>('.change-row.is-blocked .change-actions .btn')?.click();
+  flushSync();
+  root.querySelector<HTMLButtonElement>('.dialog .btn-danger')?.click();
+  await settle();
+
+  expect(loads()).toBe(2);
+});

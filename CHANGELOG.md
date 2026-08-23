@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A publish that is refused because someone changed a file in the repository is no longer a
+  dead end. The drawer marks the file it was refused over, and **Discard** on that row
+  throws the unpublished changes away and reads the entry from the repository again, so the
+  next publish goes through; the open entry reloads with it rather than saving the old
+  values back. Retrying is not offered where it cannot work. New endpoint:
+  `DELETE /admin/api/drafts/:collection/:slug`, and `POST /admin/api/publish` answers a
+  conflict with `{ error, paths }` instead of a sentence. Keeping your version over theirs,
+  or choosing field by field, is still to come. See `docs/publishing.md`.
+
 - The entry list is right the moment a rename or a delete is committed: the renamed entry
   is listed under its new name and a deleted one is gone, instead of waiting for the site
   to rebuild. Both write a row that says what the commit did to that file, laid over the

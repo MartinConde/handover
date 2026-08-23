@@ -6,6 +6,7 @@ import {
   DraftConflictError,
   discardDraft,
   drafts,
+  loadDraft,
   openDb,
   overlayRows,
   pendingDrafts,
@@ -266,6 +267,34 @@ test('a new entry whose path someone else committed first is a conflict', async 
 
   await expect(publishDrafts('default', db, repo)).rejects.toBeInstanceOf(DraftConflictError);
   expect(repo.publish).not.toHaveBeenCalled();
+});
+
+test('the conflict names the file that changed and counts them when there are several', () => {
+  expect(new DraftConflictError([PATH]).message).toBe(
+    'src/content/listings/en/mill-house.yaml changed in the repository after it was opened',
+  );
+  expect(new DraftConflictError([PATH, OTHER]).message).toBe(
+    '2 files changed in the repository after they were opened — src/content/listings/en/mill-house.yaml, src/content/listings/en/barn.yaml',
+  );
+});
+
+// The way out of a 409: the entry gives up its draft and is read from the repository again.
+test('discarding the conflicted draft lets the rest of the set publish', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE, [OTHER]: OTHER_FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  await saveDraft('default', db, repo, OTHER, { title: 'The Barn', price: '£10', rooms: 2 });
+  const theirs = FILE.replace('rooms: 3', 'rooms: 9');
+  repo.write(PATH, theirs);
+  await expect(publishDrafts('default', db, repo)).rejects.toBeInstanceOf(DraftConflictError);
+
+  await discardDraft('default', db, PATH);
+  const second = await publishDrafts('default', db, repo);
+
+  expect(second?.paths).toEqual([OTHER]);
+  // Nothing is left to overlay the file, and the file is still the one they pushed.
+  expect(await loadDraft('default', db, PATH)).toBe(undefined);
+  await expect(repo.getFile(PATH)).resolves.toMatchObject({ contents: theirs });
 });
 
 test('discarding a draft leaves nothing for the next publish to write back', async () => {

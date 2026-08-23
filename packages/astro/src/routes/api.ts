@@ -174,6 +174,14 @@ async function remove(collection: string, slug: string): Promise<Response> {
   return Response.json(result);
 }
 
+// The way out of a publish conflict: the entry gives up its draft and is read from the
+// repository again on the next open. Taking theirs whole — picking field by field is later.
+async function discard(collection: string, slug: string): Promise<Response> {
+  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  await discardDraft('default', db(), entryPath(collection, slug));
+  return Response.json({});
+}
+
 const ENTRIES = /^entries\/([\w-]+)$/;
 const ENTRY = /^entries\/([\w-]+)\/([\w-]+)$/;
 const DRAFT = /^drafts\/([\w-]+)\/([\w-]+)$/;
@@ -214,8 +222,11 @@ async function committing(work: () => Promise<Response>): Promise<Response> {
   try {
     return await work();
   } catch (err) {
-    if (err instanceof DraftConflictError || err instanceof RefMovedError)
-      return new Response(err.message, { status: 409 });
+    // A conflict names its files as data as well as prose: the drawer badges those rows and
+    // offers each one the way out. A ref that moved has no file to name.
+    if (err instanceof DraftConflictError)
+      return Response.json({ error: err.message, paths: err.paths }, { status: 409 });
+    if (err instanceof RefMovedError) return new Response(err.message, { status: 409 });
     throw err;
   }
 }
@@ -234,6 +245,8 @@ export const POST: APIRoute = async ({ params, request }) => {
 };
 
 export const DELETE: APIRoute = async ({ params }) => {
+  const draft = params.path?.match(DRAFT);
+  if (draft) return discard(draft[1] ?? '', draft[2] ?? '');
   const entry = params.path?.match(ENTRY);
   if (entry) return committing(() => remove(entry[1] ?? '', entry[2] ?? ''));
   return new Response('Not found', { status: 404 });
