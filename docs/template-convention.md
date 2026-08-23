@@ -154,6 +154,15 @@ import Markdown from 'astro-handover/Markdown.astro';
 The field's validation is what keeps raw HTML out; the component renders what it is
 given.
 
+> **Not on Cloudflare yet.** Astro 7's Markdown pipeline is a native binary and the
+> Workers runtime cannot run it: a page that renders `<Markdown />` throws
+> `The WASI method is not implemented`. That includes prerendered pages, because
+> `@astrojs/cloudflare` prerenders inside the same runtime. (In a pnpm workspace the build
+> usually stops earlier still, unable to resolve the pipeline's WASI build.) A richtext
+> field therefore has no renderer on Cloudflare until `<Markdown />` is rewritten — don't
+> route the field through another Markdown library into `set:html`, which is the raw HTML
+> the tiers exist to keep out.
+
 ## Hidden entries
 
 An entry with `_status: hidden` in its file stays in the repo but must not render.
