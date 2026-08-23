@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The entry list's columns line up with their headers again, and a read-only field says why
+  it is read-only: `image`, `file`, `embed`, `seo` and `reference` show one line under the
+  stored value naming the release that brings their editor. See `docs/field-types.md`.
+
 - The admin has an entry list. Every collection in `cms.config.ts` is a link in the
   sidebar, and `/admin/c/:collection` lists its entries with the titles the content index
   and the pending drafts give it. **New entry** takes a title, shows the filename derived

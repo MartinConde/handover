@@ -461,3 +461,16 @@ test('structured types: the stored shape is shown as read-only JSON and left unt
   expect(document.querySelector('#f-blocks\\.0\\.image input')).toBeNull();
   expect(stringifyEntry('default', snap())).toBe(golden('blocks'));
 });
+
+test.each([
+  ['image', 'Images can be changed from Phase 3. Shown as stored.'],
+  ['file', 'Files can be changed from Phase 3. Shown as stored.'],
+  ['embed', 'Embeds can be changed from Phase 4. Shown as stored.'],
+  ['seo', 'SEO settings can be changed from Phase 4. Shown as stored.'],
+  ['reference', 'References can be changed from Phase 2. Shown as stored.'],
+] as const)('structured types: %s says why it is read-only', (type, sentence) => {
+  show([{ path: ['thing'], type, required: false } as Field], {});
+  const hint = q('#f-thing-hint');
+  expect(hint.textContent).toBe(sentence);
+  expect(q('#f-thing').getAttribute('aria-describedby')).toBe('f-thing-hint');
+});

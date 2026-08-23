@@ -203,5 +203,6 @@ gets a fresh one. A `blocks` field is the same list of cards, each headed by its
 rewrites an `_id`, so translations and `_machine` paths keep pointing at the same block.
 
 `image`, `file`, `embed`, `seo` and `reference` show their stored value as read-only JSON
-until their pickers arrive. Any other schema (tuples, unions, untagged customs) shows as
-"Not editable here yet". Both are read and written back untouched.
+until their pickers arrive, under one line naming the release that brings the editor. Any
+other schema (tuples, unions, untagged customs) shows as "Not editable here yet". Both are
+read and written back untouched.

@@ -111,7 +111,7 @@ async function done() {
   {#if loading}
     <p class="placeholder">Loading…</p>
   {:else if entries.length}
-    <div class="table" role="table" aria-label={capitalise(collection)}>
+    <div class="table cols-3" role="table" aria-label={capitalise(collection)}>
       <div class="th" role="columnheader">Title</div>
       <div class="th" role="columnheader">File name</div>
       <div class="th"><span class="visually-hidden">Actions</span></div>
@@ -120,7 +120,7 @@ async function done() {
           <div class="td title">
             <a href="/admin/c/{collection}/{entry.id}">{titleOf(entry)}</a>
           </div>
-          <div class="td num filename">{entry.id}</div>
+          <div class="td num filename" data-label="File name">{entry.id}</div>
           <div class="td menu-cell">
             <button
               class="btn btn-sm"

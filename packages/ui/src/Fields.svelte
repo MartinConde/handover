@@ -73,6 +73,16 @@ const blockName = (row: unknown) => block(row)._label || block(row)._type || '';
 const blockFields = (row: unknown) =>
   block(row)._ref === undefined ? blocks[block(row)._type ?? ''] : undefined;
 
+// A read-only field that says nothing reads as a broken one, so each names the release its
+// editor arrives in.
+const WHEN: Record<'image' | 'file' | 'embed' | 'seo' | 'reference', string> = {
+  image: 'Images can be changed from Phase 3. Shown as stored.',
+  file: 'Files can be changed from Phase 3. Shown as stored.',
+  embed: 'Embeds can be changed from Phase 4. Shown as stored.',
+  seo: 'SEO settings can be changed from Phase 4. Shown as stored.',
+  reference: 'References can be changed from Phase 2. Shown as stored.',
+};
+
 const linkType = (at: readonly string[]) => (read([...at, 'type']) === 'url' ? 'url' : 'entry');
 function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   write([...at, 'type'], type);
@@ -208,7 +218,8 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       </div>
     {:else if field.type === 'image' || field.type === 'file' || field.type === 'embed' || field.type === 'seo' || field.type === 'reference'}
       {@render groupLabel(id, field, text)}
-      <div class="readonly" {id} role="region" aria-labelledby="{id}-l"><pre>{read(at) === undefined ? 'Nothing here yet' : JSON.stringify(read(at), null, 2)}</pre></div>
+      <div class="readonly" {id} role="region" aria-labelledby="{id}-l" aria-describedby="{id}-hint"><pre>{read(at) === undefined ? 'Nothing here yet' : JSON.stringify(read(at), null, 2)}</pre></div>
+      <p class="hint" id="{id}-hint">{WHEN[field.type]}</p>
     {:else}
       <div class="label-row"><label for={id}>{text}</label></div>
       <p class="hint" {id}>Not editable here yet</p>
