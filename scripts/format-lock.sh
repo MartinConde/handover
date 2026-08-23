@@ -8,6 +8,7 @@
 set -eu
 
 base=${1:-}
+head=${2:-HEAD}
 case "$base" in
   '' | 0000000000000000000000000000000000000000)
     echo "format-lock: no base commit to compare against, nothing to check."
@@ -17,7 +18,7 @@ esac
 
 # --no-renames so a rename carrying an edit shows up as a delete plus an add, not as an R
 # the MD filter would let through.
-changed=$(git diff --name-only --no-renames --diff-filter=MD "$base...HEAD" -- packages/core/test/golden)
+changed=$(git diff --name-only --no-renames --diff-filter=MD "$base...$head" -- packages/core/test/golden)
 [ -n "$changed" ] || exit 0
 
 version() {
@@ -25,11 +26,11 @@ version() {
     sed -n 's/^export const FORMAT_VERSION = \([0-9][0-9]*\);$/\1/p'
 }
 before=$(version "$base")
-after=$(version HEAD)
+after=$(version "$head")
 
 if [ -z "$before" ] || [ -z "$after" ]; then
   echo "format-lock: could not read FORMAT_VERSION from packages/core/src/content.ts"
-  echo "  at $base: '${before:-not found}'   at HEAD: '${after:-not found}'"
+  echo "  at $base: '${before:-not found}'   at $head: '${after:-not found}'"
   exit 1
 fi
 

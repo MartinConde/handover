@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+# Turns the format-lock CI job into a refusal here, before the commit leaves. Git feeds us
+# "<local ref> <local sha> <remote ref> <remote sha>" per ref being pushed, and the remote
+# sha is exactly the base the check wants. Enable once per checkout with
+#   git config core.hooksPath .githooks
+# `git push --no-verify` skips it: it is here to catch the accident, not the decision.
+set -eu
+
+root=$(git rev-parse --show-toplevel)
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  # All zeros on the left is a branch being deleted; on the right, a branch the remote does
+  # not have yet, which leaves nothing to diff against — CI still sees that one.
+  if [ "$local_sha" != "0000000000000000000000000000000000000000" ]; then
+    "$root/scripts/format-lock.sh" "$remote_sha" "$local_sha"
+  fi
+done

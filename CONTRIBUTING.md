@@ -15,6 +15,7 @@ packages/cli     scaffolding and migrations
 
 ```sh
 pnpm install
+git config core.hooksPath .githooks   # once per checkout: the pre-push format-lock check
 pnpm build       # every package: tsc to dist/, vite for ui (core, ui before astro)
 pnpm dev         # the same, watching
 pnpm test        # vitest, every package
@@ -40,7 +41,16 @@ that shape now round-trips differently, so CI refuses it unless the same commit 
 `FORMAT_VERSION` in `packages/core/src/content.ts` — which in turn needs the `from: N` step
 in `migrate.ts` that `migrate.test.ts` checks for. Adding a golden is free. The check is
 `scripts/format-lock.sh`, run by the `format-lock` job against the base of the push or pull
-request.
+request, and by `.githooks/pre-push` against the commit `main` is at on the remote — so the
+push is refused here rather than the run going red afterwards. The hook needs enabling once
+per checkout, since git does not install hooks on clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+`git push --no-verify` skips it. That is deliberate: the hook is there to catch the
+accident, and CI is what catches the decision.
 
 ## The demo site
 
