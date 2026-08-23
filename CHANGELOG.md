@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- An unquoted date in a content file fails the build with a message that says to quote it.
+  `published: 2026-07-14` is a YAML timestamp: Astro's loader reads it as a `Date`, your
+  `z.iso.date()` wants a string, and the build used to stop on
+  `Expected type "string", received "object"` without mentioning quoting. The build now
+  refuses it first, naming the file and the key, and `handover migrate --dry-run` reports
+  the same files and exits `1`. Only hand-written files are affected — the CMS always
+  quotes. `docs/template-convention.md` now shows a `content.config.ts`, including what a
+  `base` that does not match the collection folder does.
+
 - A collection can say which field is its entry's title. `titleField: 'name'` on a
   collection in `cms.config.ts` makes the entry list, the editor's heading and **New
   entry** all use `name`, so a collection keyed on something other than `title` no longer

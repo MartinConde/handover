@@ -8,6 +8,7 @@ import {
   SCHEMA_VERSION,
   schemaVersionError,
   stringifyEntry,
+  timestampErrors,
   versionOf,
 } from '@handover/core';
 
@@ -55,7 +56,14 @@ function migrate(env: Env, dryRun: boolean): number {
     const from = typeof doc._version === 'number' ? String(doc._version) : 'none';
     const change = out === doc ? from : `${from} → ${FORMAT_VERSION}`;
     env.log(`${path.padEnd(width)}  ${change}`);
-    return { path, out, changed: out !== doc, missing: from === 'none', version: versionOf(doc) };
+    return {
+      path,
+      out,
+      changed: out !== doc,
+      missing: from === 'none',
+      version: versionOf(doc),
+      dates: timestampErrors('default', path, text),
+    };
   });
   const changed = files.filter((f) => f.changed);
   if (!dryRun)
@@ -73,7 +81,10 @@ function migrate(env: Env, dryRun: boolean): number {
       ? `Dry run: ${n} would be written.`
       : `Wrote ${n} file${n === 1 ? '' : 's'}; commit ${n === 1 ? 'it' : 'them'}.`;
   env.log(`${files.length} files: ${summary.join(', ')}. ${tail}`);
-  return 0;
+  // Serialising quotes every string, so a file this run rewrote has had its dates fixed.
+  const dates = files.filter((f) => dryRun || !f.changed).flatMap((f) => f.dates);
+  for (const line of dates) env.log(line);
+  return dates.length ? 1 : 0;
 }
 
 function dbGenerate(env: Env, check: boolean): number {

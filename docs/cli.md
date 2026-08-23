@@ -23,7 +23,17 @@ src/content/redirects.yaml               1
 
 Every `.yaml` under `src/content/` is listed — entries, globals, templates and
 `redirects.yaml` — with the version it has and the one it would get. A file with no
-`_version` is read as `1` and stamped. Then:
+`_version` is read as `1` and stamped.
+
+An unquoted date in a hand-written file is reported under the summary and exits `1`,
+because Astro's loader reads it as a `Date` and your schema wants a string
+([quoting](template-convention.md#quote-dates-in-a-file-you-write-by-hand)):
+
+```
+src/content/notes/en/one.yaml › published: an unquoted date is a timestamp, not a string. Quote it: "2026-07-14"
+```
+
+Then:
 
 ```sh
 npx handover migrate

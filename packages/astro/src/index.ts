@@ -2,6 +2,7 @@ import { appendFile, mkdir, readdir, readFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  type ContentFile,
   type ContentIndex,
   checkCollections,
   contentPathErrors,
@@ -14,6 +15,7 @@ import {
   richtextErrors,
   schemaVersionError,
   type TitleFields,
+  timestampErrors,
   unsafeLinkScheme,
 } from '@handover/core';
 import type { AstroIntegration } from 'astro';
@@ -280,26 +282,51 @@ export async function emitRedirects(root: URL, clientDir: URL): Promise<number> 
 }
 
 /**
+ * Every `.yaml` under `src/content/`, not just the two levels an entry lives at, because a
+ * file anywhere else is a mistake the build should name rather than a row the list would
+ * quietly be missing.
+ */
+export async function contentFiles(root: URL): Promise<ContentFile[]> {
+  const dir = fileURLToPath(new URL('src/content/', root));
+  const found = await readdir(dir, { withFileTypes: true, recursive: true }).catch(() => []);
+  return Promise.all(
+    found
+      .filter((e) => e.isFile() && e.name.endsWith('.yaml'))
+      .map(async (e) => {
+        const path = `src/content/${relative(dir, join(e.parentPath, e.name)).split(sep).join('/')}`;
+        return { path, contents: await readFile(new URL(path, root), 'utf8') };
+      }),
+  );
+}
+
+/**
+ * What the build refuses about the content files themselves: a path the CMS cannot address,
+ * and a date the two YAML parsers disagree about. Astro's content sync runs before
+ * `astro:build:start`, so this has to be `astro:config:done` or the loader gets there first
+ * with `Expected type "string", received "object"`.
+ */
+export async function contentErrors(root: URL): Promise<string[]> {
+  const files = await contentFiles(root);
+  return [
+    ...contentPathErrors(
+      'default',
+      files.map((f) => f.path),
+    ),
+    ...files.flatMap((f) => timestampErrors('default', f.path, f.contents)),
+  ];
+}
+
+/**
  * The entry list needs a title for every entry and git is slow to list, so the titles are
- * read at build time instead. Every `.yaml` under `src/content/` is walked, not just the
- * two levels an entry lives at, because a file anywhere else is a mistake the build should
- * name rather than a row the list would quietly be missing.
+ * read at build time instead.
  */
 export async function buildIndex(root: URL, titleFields: TitleFields = {}): Promise<ContentIndex> {
-  const base = new URL('src/content/', root);
-  const dir = fileURLToPath(base);
-  const found = await readdir(dir, { withFileTypes: true, recursive: true }).catch(() => []);
-  const paths = found
-    .filter((e) => e.isFile() && e.name.endsWith('.yaml'))
-    .map((e) => `src/content/${relative(dir, join(e.parentPath, e.name)).split(sep).join('/')}`);
-  const errors = contentPathErrors('default', paths);
-  if (errors.length) throw new Error(errors.join('\n'));
-  const files = await Promise.all(
-    paths.map(async (path) => ({
-      path,
-      contents: await readFile(new URL(path, root), 'utf8'),
-    })),
+  const files = await contentFiles(root);
+  const errors = contentPathErrors(
+    'default',
+    files.map((f) => f.path),
   );
+  if (errors.length) throw new Error(errors.join('\n'));
   return indexFrom('default', files, titleFields);
 }
 
@@ -319,9 +346,11 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
   return {
     name: 'astro-handover',
     hooks: {
-      'astro:config:done': ({ config }) => {
+      'astro:config:done': async ({ config }) => {
         root = config.root;
         clientDir = config.build.client;
+        const errors = await contentErrors(root);
+        if (errors.length) throw new Error(`\n${errors.join('\n')}`);
       },
       // Deploy applies migrations/ before the new code is live, so a migrations/ that is
       // behind the package's tables is caught here, not by the first query.

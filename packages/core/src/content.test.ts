@@ -2,7 +2,13 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
-import { mergeEntry, parseEntry, staticSource, stringifyEntry } from './content.js';
+import {
+  mergeEntry,
+  parseEntry,
+  staticSource,
+  stringifyEntry,
+  timestampErrors,
+} from './content.js';
 
 const entries = [
   { id: 'en/mill-house', data: { title: 'Mill House' } },
@@ -344,4 +350,33 @@ test('a save keeps the _version the entry already has', () => {
     _version: 3,
     title: 'New',
   });
+});
+
+const dated = (body: string) => timestampErrors('default', 'src/content/notes/en/one.yaml', body);
+
+test('an unquoted date is named with its file, its key and the quotes it needs', () => {
+  expect(dated('title: Note\npublished: 2026-07-14\n')).toEqual([
+    'src/content/notes/en/one.yaml › published: an unquoted date is a timestamp, not a string. Quote it: "2026-07-14"',
+  ]);
+});
+
+test('a quoted date is a string to both parsers and passes', () => {
+  expect(dated('published: "2026-07-14"\nalso: \'2026-07-14\'\n')).toEqual([]);
+});
+
+test('an unquoted date-time is a timestamp too', () => {
+  expect(dated('at: 2026-07-14 10:30:00\niso: 2026-07-14T10:30:00Z\n')).toEqual([
+    'src/content/notes/en/one.yaml › at: an unquoted date is a timestamp, not a string. Quote it: "2026-07-14 10:30:00"',
+    'src/content/notes/en/one.yaml › iso: an unquoted date is a timestamp, not a string. Quote it: "2026-07-14T10:30:00Z"',
+  ]);
+});
+
+test('a single-digit month or day is a string to js-yaml as well, so it passes', () => {
+  expect(dated('published: 2026-7-4\n')).toEqual([]);
+});
+
+test('a date nested in an array of groups is named by its path', () => {
+  expect(dated('slots:\n  - _id: "a1"\n    starts: 2026-07-14\n')).toEqual([
+    'src/content/notes/en/one.yaml › slots[0].starts: an unquoted date is a timestamp, not a string. Quote it: "2026-07-14"',
+  ]);
 });

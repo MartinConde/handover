@@ -25,6 +25,46 @@ export const listing = z.object({
 export type Listing = z.infer<typeof listing>;
 ```
 
+## `content.config.ts`
+
+Astro reads the same files, so every collection needs a `glob` loader whose `base` is that
+collection's folder and whose schema is the one from `schemas.ts`. A `base` that does not
+match the folder is not an error: the collection is simply empty, and every page built from
+it renders nothing.
+
+```ts
+// src/content.config.ts
+import { glob } from 'astro/loaders';
+import { defineCollection } from 'astro:content';
+import { listing, page } from './content/schemas';
+
+export const collections = {
+  listings: defineCollection({
+    loader: glob({ pattern: '**/*.yaml', base: './src/content/listings' }),
+    schema: listing,
+  }),
+  pages: defineCollection({
+    loader: glob({ pattern: '**/*.yaml', base: './src/content/pages' }),
+    schema: page,
+  }),
+};
+```
+
+The collection key is the folder name and the key in `cms.config.ts`; the locale folder
+inside it becomes the first segment of the entry id, which is why `getEntry` takes
+`locale/slug`.
+
+### Quote dates in a file you write by hand
+
+`published: 2026-07-14` is a YAML timestamp: Astro's loader reads it as a `Date` and your
+`z.iso.date()` fails with `Expected type "string", received "object"`. Write
+`published: "2026-07-14"`. The same goes for anything that looks like a time —
+`2026-07-14 09:00:00`.
+
+The build refuses an unquoted date before Astro's loader sees it, naming the file and the
+key, and `handover migrate --dry-run` reports them without writing. Files the CMS writes
+are always quoted, so this only bites on a file you or a script created.
+
 ## A loader
 
 `ContentSource` is `{ getEntry, getCollection }`. Entry ids are `locale/slug`, matching

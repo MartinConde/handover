@@ -1,4 +1,4 @@
-import { Document, parse, visit } from 'yaml';
+import { Document, isMap, isScalar, isSeq, parse, parseDocument, visit } from 'yaml';
 import { checkReserved, RESERVED_KEYS } from './reserved.js';
 
 export interface ContentEntry<T = unknown> {
@@ -42,6 +42,49 @@ export function parseEntry(_siteId: string, contents: string): unknown {
   const data: unknown = parse(contents);
   checkReserved(data);
   return data;
+}
+
+// Transcribed from js-yaml's lib/type/timestamp.js rather than depending on the package:
+// core/ ships in the Worker bundle. A plain scalar matching either of these is a `Date` to
+// js-yaml, which Astro's content loader parses with, and a string to `yaml`'s core schema,
+// which everything here parses with. `2026-7-4` matches neither and is a string to both.
+const YAML_DATE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
+const YAML_TIMESTAMP =
+  /^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?:[Tt]|[ \t]+)[0-9]{1,2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]*)?(?:[ \t]*(?:Z|[-+][0-9]{1,2}(?::[0-9]{2})?))?$/;
+
+// Anything but a plain scalar is a string to both parsers, so the test is on the style and
+// not on PLAIN: a scalar style this list has never heard of is reported rather than skipped.
+const QUOTED = ['QUOTE_DOUBLE', 'QUOTE_SINGLE', 'BLOCK_LITERAL', 'BLOCK_FOLDED'];
+
+/**
+ * Every unquoted date in a hand-written file, one message per key. The build calls this
+ * before Astro's loader reads the same file, because the loader's own message for it is
+ * `Expected type "string", received "object"` and never mentions the quotes.
+ */
+export function timestampErrors(_siteId: string, path: string, contents: string): string[] {
+  const errors: string[] = [];
+  const walk = (node: unknown, at: string): void => {
+    if (isSeq(node))
+      node.items.forEach((item, i) => {
+        walk(item, `${at}[${i}]`);
+      });
+    else if (isMap(node))
+      for (const pair of node.items) {
+        const key = isScalar(pair.key) ? String(pair.key.value) : '?';
+        walk(pair.value, at ? `${at}.${key}` : key);
+      }
+    else if (
+      isScalar(node) &&
+      typeof node.value === 'string' &&
+      !QUOTED.includes(node.type ?? '') &&
+      (YAML_DATE.test(node.value) || YAML_TIMESTAMP.test(node.value))
+    )
+      errors.push(
+        `${path} › ${at}: an unquoted date is a timestamp, not a string. Quote it: "${node.value}"`,
+      );
+  };
+  walk(parseDocument(contents).contents, '');
+  return errors;
 }
 
 // The only writer of content files. Pinned here so publish can compare blob SHAs:

@@ -5,7 +5,7 @@
 - [Content format](content-format.md) — what the YAML files look like, the reserved `_` keys, `_id` on blocks, hiding an entry.
 - [Site files](site-files.md) — globals, the `navigation` menus, `redirects.yaml` and `_templates/`.
 - [Field types](field-types.md) — every field type, its schema and how it is stored; groups, arrays and blocks.
-- [Template convention](template-convention.md) — `schemas.ts`, `load()` and `ContentSource`, layouts that take `data` as a prop, `<Blocks />` and `<Markdown />`.
+- [Template convention](template-convention.md) — `schemas.ts` and `content.config.ts`, `load()` and `ContentSource`, layouts that take `data` as a prop, `<Blocks />` and `<Markdown />`.
 - [Drafts and publishing](publishing.md) — autosave into D1, what a draft holds, the pending-changes drawer, publishing in one commit, the endpoints, the content index.
 - [CLI](cli.md) — `handover migrate` for content files, `handover db generate` for the package's tables.
 - [Deploy](deploy.md) — `wrangler.jsonc`, the GitHub App, secrets, building on push.

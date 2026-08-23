@@ -42,6 +42,15 @@ test('migrate --dry-run lists every content file with its version and writes not
   expect(readFileSync(join(cwd, 'src/content/listings/en/mill-house.yaml'), 'utf8')).toBe(OLD);
 });
 
+test('migrate --dry-run names an unquoted date and refuses', async () => {
+  const cwd = site({ 'src/content/notes/en/one.yaml': '_version: 1\npublished: 2026-07-14\n' });
+  const { code, out } = await run(['migrate', '--dry-run'], cwd);
+  expect(code).toBe(1);
+  expect(out.split('\n').at(-1)).toBe(
+    'src/content/notes/en/one.yaml \u203a published: an unquoted date is a timestamp, not a string. Quote it: "2026-07-14"',
+  );
+});
+
 test('migrate stamps the file without a version and leaves the others byte-identical', async () => {
   const cwd = site({
     'src/content/pages/en/home.yaml': HOME,

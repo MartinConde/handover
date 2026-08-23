@@ -33,7 +33,8 @@ export default defineConfig({
 ## 2. Describe your content
 
 Schemas are plain Zod in `src/content/schemas.ts`, shared by Astro's `content.config.ts`
-and Handover's `cms.config.ts` at the project root:
+([what that file looks like](template-convention.md#contentconfigts)) and Handover's
+`cms.config.ts` at the project root:
 
 ```ts
 // cms.config.ts
