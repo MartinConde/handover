@@ -129,6 +129,16 @@ test('a loose list keeps its paragraphs', () => {
   );
 });
 
+// The slug and the URL are editor text in an attribute, so neither may close it early.
+test('a heading and a link cannot break out of their attribute', () => {
+  expect(renderRichtext('default', '## a" onmouseover="alert(1)')).toBe(
+    '<h2 id="a-onmouseoveralert1">a" onmouseover="alert(1)</h2>',
+  );
+  expect(renderRichtext('default', '[x](https://e.com/?a="><script>)')).toBe(
+    '<p><a href="https://e.com/?a=&quot;&gt;&lt;script&gt;">x</a></p>',
+  );
+});
+
 test('two headings with the same text get different ids', () => {
   expect(renderRichtext('default', '## The house\n\n## The house')).toBe(
     '<h2 id="the-house">The house</h2>\n<h2 id="the-house-1">The house</h2>',

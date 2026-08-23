@@ -65,6 +65,10 @@ export function richtextErrors(_siteId: string, markdown: string, tier: Richtext
 const escapeHtml = (text: string) =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+// Every attribute value is editor text, so it is escaped here rather than trusted to
+// arrive clean — a heading's slug included.
+const escapeAttribute = (value: string) => escapeHtml(value).replace(/"/g, '&quot;');
+
 /**
  * Richtext as HTML. Astro's own Markdown pipeline is a native binary the Workers runtime
  * cannot run, and a hast pipeline in its place costs ~20 KiB gzip of a Worker bundle
@@ -88,7 +92,7 @@ export function renderRichtext(_siteId: string, markdown: string): string {
       case 'paragraph':
         return tight ? kids() : `<p>${kids()}</p>`;
       case 'heading':
-        return `<h${node.depth} id="${slugger.slug(textOf(node))}">${kids()}</h${node.depth}>`;
+        return `<h${node.depth} id="${escapeAttribute(slugger.slug(textOf(node)))}">${kids()}</h${node.depth}>`;
       case 'blockquote':
         // Not `kids`: a quote's own paragraphs are paragraphs even inside a tight list.
         return `<blockquote>\n${node.children.map((child) => render(child)).join('\n')}\n</blockquote>`;
@@ -106,7 +110,7 @@ export function renderRichtext(_siteId: string, markdown: string): string {
       case 'emphasis':
         return `<em>${kids()}</em>`;
       case 'link':
-        return `<a href="${escapeHtml(node.url).replace(/"/g, '&quot;')}">${kids()}</a>`;
+        return `<a href="${escapeAttribute(node.url)}">${kids()}</a>`;
       case 'break':
         return '<br>';
       case 'text':
