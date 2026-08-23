@@ -49,6 +49,33 @@ The state next to the breadcrumb is the autosave, not the publish:
 fresh page load with a draft already stored. It stores what you have typed and opens the
 pending-changes drawer.
 
+## Fields the schema is not happy with
+
+A draft holds what you typed, whether the schema accepts it yet or not. Nothing is refused
+while you are working: a new entry whose required `reference` has no picker yet, or a
+required `positive()` number you have not reached, would otherwise throw away everything
+typed after it.
+
+What is missing is named instead. The field is marked and carries the reason under it, and
+the header counts them — "2 problems", which jumps to the first one. The count comes back
+with every autosave, so it clears as you fill things in.
+
+**The schema decides at the publish.** *Publish…* on an entry with problems is disabled,
+and a publish from the drawer is refused whole while any file in the set is missing
+something: nothing is committed, and those rows are marked *Not ready to publish*. Finish
+the entry and press Publish again. This is what keeps a blank new entry from committing a
+file your own `content.config.ts` would reject and breaking the build behind it.
+
+One case an editor cannot get out of on their own: a **required** `image`, `file`, `embed`,
+`seo` or `reference`, whose widgets are read-only until their pickers ship
+([Field types](field-types.md#in-the-admin)). Deleting the entry is the only
+exit from the admin; the fix is `.optional()` in your schema until the editor for it
+arrives.
+
+A draft also keeps keys your schema no longer declares. Rename a field in `schemas.ts` and
+the old key is still written back on the next save, so the value is there for
+`handover migrate` to move rather than gone on the first edit.
+
 ## Publishing
 
 The top bar says how many files are waiting ("3 unpublished changes"); the button opens
@@ -64,6 +91,8 @@ the **pending-changes drawer**, which lists them and publishes them:
   in the repository since the editor loaded it, the publish is refused and no commit is
   made: the drawer marks that row *Changed in the repository since you opened it* — same
   for a branch that moves while the commit is being written
+- **A file the schema is not done with is refused the same way**, marked *Not ready to
+  publish*. It has no button in the drawer: open the entry and fill in what is marked
 - **A refused file has one way out: Discard.** It throws that file's unpublished changes
   away and reads it from the repository again, so the entry is on their version and the
   next publish goes through. Reopening or editing the entry does not clear the refusal —
@@ -79,8 +108,8 @@ the **pending-changes drawer**, which lists them and publishes them:
 first publish, so an entry you started and abandoned never reaches git. The filename comes
 from the title ([Configuration](configuration.md#entry-filenames)) and counts names that
 exist only as drafts, so two unpublished entries cannot claim the same file. The draft
-starts with every required field present and empty — an autosave validates against the
-collection schema, and a missing required field would refuse the save.
+holds the title and nothing else: a required field is left out rather than guessed at, and
+the editor shows every one of them as a problem until it is filled in.
 
 **Rename** and **delete** are commits of their own, not drafts, because they move files
 rather than change them ([Content format](content-format.md#renaming-and-deleting-an-entry)).
@@ -94,13 +123,16 @@ drops the draft, with no commit and no redirect.
 All of them are behind the admin password.
 
 ```
-PUT /admin/api/drafts/:collection/:slug     { "data": { … } }  →  { "updated_at", "pending" }
+PUT /admin/api/drafts/:collection/:slug  { "data": { … } }  →  { "updated_at", "pending", "problems" }
 ```
 
-Validates `data` against the collection schema, merges it into the entry and stores the
-result. `pending` is false when the stored bytes are identical to the file in git — an
-autosave that changed nothing. `400` if the data fails the schema, `404` if the collection
-or the file does not exist.
+Merges `data` into the entry and stores the result. `pending` is false when the stored
+bytes are identical to the file in git — an autosave that changed nothing. `problems` is
+what the collection schema will not accept, `[{ "path": "body.1.heading", "message":
+"Required" }]`, empty when it accepts all of it; the draft is stored either way. Keys
+beginning with `_` are ignored: they belong to the file, not to the form. `400` if `data`
+is not an object or holds a shape the serialiser cannot write back (a nested array), with
+the reason as the body; `404` if the collection or the file does not exist.
 
 ```
 DELETE /admin/api/drafts/:collection/:slug  →  {}
@@ -112,10 +144,12 @@ drawer's **Discard** does with a file a publish was refused over. `404` if the c
 is not configured.
 
 ```
-GET /admin/api/entries/:collection/:slug    →  { fields, blocks, data, pending }
+GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, pending, problems }
 ```
 
-`data` is the draft when there is one, otherwise the file. `pending` says which.
+`data` is the draft when there is one, otherwise the file. `pending` says which, and
+`problems` is the same list the autosave answers with, so an entry names what is missing
+the moment it opens.
 
 ```
 GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales" }] }
@@ -165,8 +199,11 @@ No body: the server publishes what it has stored. `paths` is what went into the 
 and is empty when there was nothing to publish. `409` when a file changed in the
 repository since its draft was loaded — the body is `{ "error", "paths" }`, naming those
 files so the drawer can mark them and offer the way out — or when the branch moved while
-the commit was being written, which answers with a plain sentence and no paths. In both
-cases nothing was written and no row was cleared.
+the commit was being written, which answers with a plain sentence and no paths. `422`
+when a stored draft is not everything its collection schema needs, with the same
+`{ "error", "paths" }` body. In all three cases nothing was written and no row was
+cleared. A path no collection owns — `redirects.yaml`, a global — has no schema to be held
+to and is never the reason for a `422`.
 
 ## The content index
 

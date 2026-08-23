@@ -3,7 +3,6 @@ import config from 'virtual:handover/config';
 import index from 'virtual:handover/index';
 import type { Db, EntryLocation, GitClient } from '@handover/core';
 import {
-  blankValues,
   blobSha,
   collectionEntries,
   createDraft,
@@ -29,6 +28,7 @@ import {
 import type { APIRoute } from 'astro';
 import { login } from '../auth.js';
 import { formSchema } from '../index.js';
+import { entryProblems } from '../problems.js';
 
 function gitClient(): GitClient {
   const e = env as Record<string, string | undefined>;
@@ -67,29 +67,47 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
   ]);
   const contents = draft?.contents ?? file?.contents;
   if (contents === undefined) return new Response('Not found', { status: 404 });
+  const data = parseEntry('default', contents);
   return Response.json({
     ...formOf('default', formSchema(schema)),
-    data: parseEntry('default', contents),
+    data,
     pending: draft ? (await blobSha(draft.contents)) !== file?.blob_sha : false,
+    problems: entryProblems(schema, data),
   });
 }
 
-// Autosave. No base comes from the browser: saveDraft reads it from git the first time it
-// writes a row and keeps it afterwards.
+// The `_` keys belong to the file, not to the form: `mergeEntry` reads them off the entry as
+// it stands, so a browser posting `_status` must not be able to set it.
+function editable(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !key.startsWith('_')));
+}
+
+/**
+ * Autosave. A draft holds what the editor typed, whether the schema accepts it yet or not: a
+ * new entry in a collection with a required `reference` has no way to satisfy it from a form
+ * whose widget is read-only, and refusing the write would throw the typed text away. What is
+ * missing comes back named instead, and the publish is where the schema decides.
+ *
+ * No base comes from the browser: saveDraft reads it from git the first time it writes a row
+ * and keeps it afterwards.
+ */
 async function autosave(collection: string, slug: string, request: Request): Promise<Response> {
   const schema = config.collections[collection]?.schema;
   if (!schema) return new Response('Not found', { status: 404 });
   const body = (await request.json().catch(() => undefined)) as { data?: unknown } | undefined;
-  const data = schema.safeParse(body?.data);
-  if (!data.success) return new Response('Bad request', { status: 400 });
-  const saved = await saveDraft(
-    'default',
-    db(),
-    gitClient(),
-    entryPath(collection, slug),
-    data.data as Record<string, unknown>,
-  );
-  return saved ? Response.json(saved) : new Response('Not found', { status: 404 });
+  const data = editable(body?.data);
+  if (!data) return new Response('Bad request', { status: 400 });
+  let saved: Awaited<ReturnType<typeof saveDraft>>;
+  try {
+    saved = await saveDraft('default', db(), gitClient(), entryPath(collection, slug), data);
+  } catch (err) {
+    // A shape the serialiser cannot write back — a nested array above all — leaves nothing to
+    // store, so this one is still a refusal, with the reason rather than "Bad request".
+    return new Response(err instanceof Error ? err.message : 'Bad request', { status: 400 });
+  }
+  if (!saved) return new Response('Not found', { status: 404 });
+  return Response.json({ ...saved, problems: entryProblems(schema, data) });
 }
 
 // The titles come from the build, the pending edits from D1. Nothing here touches GitHub:
@@ -116,8 +134,8 @@ const locationOf = (collection: string): EntryLocation => ({
 /**
  * A new entry is a draft, not a commit: nothing is in the repository until it is published,
  * which is what lets the file name stay editable and keeps an abandoned entry out of git.
- * The blanks matter — an autosave validates against the collection schema, so a required
- * field that is missing rather than empty would throw away everything typed after it.
+ * It starts empty apart from its title — a field the schema requires is left absent rather
+ * than guessed at, and the editor is shown what is still missing until the publish.
  */
 async function createEntry(collection: string, request: Request): Promise<Response> {
   const schema = config.collections[collection]?.schema;
@@ -127,10 +145,7 @@ async function createEntry(collection: string, request: Request): Promise<Respon
   const database = db();
   const slug = entryName('default', title, await takenNames(collection, database));
   const { fields } = formOf('default', formSchema(schema));
-  const values: Record<string, unknown> = {
-    _version: FORMAT_VERSION,
-    ...blankValues('default', fields),
-  };
+  const values: Record<string, unknown> = { _version: FORMAT_VERSION };
   if (fields.some((f) => f.path[0] === 'title' && f.type === 'text')) values.title = title;
   await createDraft('default', database, gitClient(), entryPath(collection, slug), values);
   return Response.json({ slug });
@@ -214,10 +229,41 @@ export const PUT: APIRoute = async ({ params, request }) => {
   return new Response('Not found', { status: 404 });
 };
 
-// One commit for every draft that differs from the repository, then the rows are gone:
-// nothing keeps them, since the next open reads the file the publish just wrote.
+// `src/content/<collection>/<locale>/<slug>.yaml`. redirects.yaml and the globals share the
+// prefix and belong to no collection: there is no schema to hold them to.
+const schemaFor = (path: string) => config.collections[path.split('/')[2] ?? '']?.schema;
+
+/**
+ * One commit for every draft that differs from the repository, then the rows are gone:
+ * nothing keeps them, since the next open reads the file the publish just wrote.
+ *
+ * The schema decides here rather than at every keystroke, so a blank new entry cannot commit
+ * a file the site's own content schema rejects and break the build behind it. The set is read
+ * again inside publishDrafts; a draft written between the two reads is a window this phase
+ * accepts, since the entry it belongs to is the one whose tab is doing the publishing.
+ */
 async function publish(): Promise<Response> {
-  const result = await publishDrafts('default', db(), gitClient());
+  const database = db();
+  const unready = (await pendingDrafts('default', database)).filter((row) => {
+    const schema = schemaFor(row.path);
+    return schema && row.contents
+      ? entryProblems(schema, parseEntry('default', row.contents)).length > 0
+      : false;
+  });
+  if (unready.length) {
+    const paths = unready.map((r) => r.path);
+    return Response.json(
+      {
+        error:
+          paths.length === 1
+            ? `${paths[0]} is missing something the schema needs`
+            : `${paths.length} files are missing something the schema needs — ${paths.join(', ')}`,
+        paths,
+      },
+      { status: 422 },
+    );
+  }
+  const result = await publishDrafts('default', database, gitClient());
   return Response.json(result ?? { paths: [] });
 }
 

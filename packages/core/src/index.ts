@@ -42,4 +42,4 @@ export {
   unsafeLinkScheme,
 } from './richtext.js';
 export type { Field, Form, JsonSchema } from './schema.js';
-export { blankValues, fieldsFrom, formOf } from './schema.js';
+export { fieldsFrom, formOf } from './schema.js';

@@ -22,12 +22,17 @@ let {
   labelId,
   tier,
   value,
+  invalid = false,
+  describedby,
   onchange,
 }: {
   id: string;
   labelId: string;
   tier: RichtextTier;
   value: string;
+  /** The schema will not accept what is in here; the message sits under the field. */
+  invalid?: boolean;
+  describedby?: string;
   onchange: (markdown: string) => void;
 } = $props();
 
@@ -80,6 +85,21 @@ function toggleLink(e: Editor) {
 
 let element = $state<HTMLDivElement>();
 let editor = $state<Editor>();
+
+// TipTap fixes the editable node's attributes when it is built, so the two that change with
+// the entry's problems are written onto the node itself.
+$effect(() => {
+  const body = editor?.view.dom;
+  if (!body) return;
+  for (const [name, value] of [
+    ['aria-invalid', invalid ? 'true' : undefined],
+    ['aria-describedby', describedby],
+  ] as const) {
+    if (value) body.setAttribute(name, value);
+    else body.removeAttribute(name);
+  }
+});
+
 // Bumped on every transaction so `isActive` re-runs; the Editor itself is not reactive.
 let tick = $state(0);
 

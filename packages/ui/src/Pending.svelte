@@ -24,6 +24,8 @@ let error = $state('');
 let published = $state(0);
 /** Paths the last publish was refused over; each one is offered the way out. */
 let conflicts = $state<string[]>([]);
+/** Paths whose stored file is not everything their schema needs; the entry is where they get fixed. */
+let unready = $state<string[]>([]);
 /** The path whose discard is waiting to be confirmed, and whether it is being thrown away. */
 let confirming = $state('');
 let discarding = $state(false);
@@ -49,14 +51,28 @@ const refusal = (body: string, paths: string[]) => {
   return `Nothing was published. ${what} changed in the repository after you opened ${them}. Discard your changes to ${them} to take what is there now.`;
 };
 
+// The other refusal: nothing was taken from anyone, the file simply is not finished. Unlike a
+// conflict, coming back and pressing again can work — so the button stays live, and the way out
+// for a field with no editor yet is named, because filling it in is not one.
+const incomplete = (paths: string[]) =>
+  paths.length === 1
+    ? 'Nothing was published. One file is not finished — open it to see what is missing. Delete the entry if it cannot be filled in yet.'
+    : `Nothing was published. ${paths.length} files are not finished — open them to see what is missing. Delete the entries that cannot be filled in yet.`;
+
 async function publish() {
   busy = true;
   error = '';
+  unready = [];
   const res = await fetch('/admin/api/publish', { method: 'POST' });
   busy = false;
   if (res.ok) {
     published = ((await res.json()) as { paths: string[] }).paths.length;
     onpublished();
+    return;
+  }
+  if (res.status === 422) {
+    unready = ((await res.json()) as { paths: string[] }).paths;
+    error = incomplete(unready);
     return;
   }
   if (res.status !== 409) {
@@ -120,13 +136,15 @@ async function discard() {
         <ul class="change-list">
           {#each files as file (file.path)}
             <li>
-              <div class="change-row" class:is-blocked={conflicts.includes(file.path)}>
+              <div class="change-row" class:is-blocked={conflicts.includes(file.path) || unready.includes(file.path)}>
                 <span class="lead" aria-hidden="true"><span class="pdot"></span></span>
                 <div class="change-title">
                   <span class="name filename">{named(file.path)}</span>
                   <span class="badge">{capitalise(collectionOf(file.path))}</span>
                   {#if conflicts.includes(file.path)}
                     <span class="badge badge-danger">Changed in the repository since you opened it</span>
+                  {:else if unready.includes(file.path)}
+                    <span class="badge badge-danger">Not ready to publish</span>
                   {/if}
                 </div>
                 <div class="change-sub">Edited {new Date(file.updated_at).toLocaleString()}</div>

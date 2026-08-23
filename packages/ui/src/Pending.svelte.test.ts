@@ -3,8 +3,8 @@ import { afterEach, expect, test, vi } from 'vitest';
 import Pending from './Pending.svelte';
 
 // Testing: the count and summary lines, one row per pending file, what Publish sends, the
-// three answers it can get (published / a file changed under it / the branch moved), the way
-// out of the first of those, and the empty state.
+// four answers it can get (published / a file changed under it / the branch moved / a file
+// the schema is not done with), the way out of the first of those, and the empty state.
 // Not testing: the drawer's chrome classes or the indicator that opens it.
 
 const FILES = [
@@ -189,4 +189,33 @@ test('discarding one of two conflicted files leaves the other named and says so'
     'Nothing was published. One file changed in the repository after you opened it. Discard your changes to it to take what is there now.',
   );
   expect(root.querySelectorAll('.change-row.is-blocked').length).toBe(1);
+});
+
+// S1: a blank new entry is a publishable row whose file the site's own schema rejects. The
+// commit is refused whole and the rows that are not ready say which they are.
+test('a file the schema is not done with is named on its row and blocks the publish', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json(
+        {
+          error: 'src/content/listings/en/mill-house.yaml is missing something the schema needs',
+          paths: ['src/content/listings/en/mill-house.yaml'],
+        },
+        { status: 422 },
+      ),
+    ),
+  );
+  const root = show();
+  await refused(root);
+
+  expect(q(root, '[role="alert"]')?.textContent).toBe(
+    'Nothing was published. One file is not finished — open it to see what is missing. Delete the entry if it cannot be filled in yet.',
+  );
+  expect(q(root, '.change-row.is-blocked .badge-danger')?.textContent).toBe('Not ready to publish');
+  // Unlike a conflict, this one can come right: finish the entry, come back, press again.
+  const button = q<HTMLButtonElement>(root, '.drawer-foot .btn-primary');
+  expect(button?.textContent).toBe('Try again');
+  expect(button?.disabled).toBe(false);
+  expect(published).not.toHaveBeenCalled();
 });

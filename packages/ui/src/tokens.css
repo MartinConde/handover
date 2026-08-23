@@ -266,6 +266,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .badge-info { background: var(--info-soft); color: var(--info-ink); }
 .textarea { min-height: 120px; padding: var(--s-2) var(--s-3); line-height: var(--leading); resize: vertical; }
 .field .error { font-size: var(--text-xs); font-weight: 500; color: var(--danger-ink); }
+.field.is-invalid .rte, .field.is-invalid .switch input, .field.is-invalid .readonly { border-color: var(--danger); }
 .field .req { color: var(--danger-ink); margin-left: 2px; }
 .field .hint.same-everywhere { color: var(--ink-2); display: inline-flex; gap: var(--s-1); align-items: center; }
 .input[disabled], .textarea[disabled] { background: var(--surface-2); color: var(--ink-2); cursor: not-allowed; }

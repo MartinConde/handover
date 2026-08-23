@@ -99,6 +99,7 @@ test('discarding a draft loads the entry again instead of leaving the old one on
       blocks: {},
       data: { title: 'The Mill House' },
       pending: true,
+      problems: [],
     });
   });
   vi.stubGlobal('fetch', fetchMock);

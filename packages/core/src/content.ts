@@ -57,10 +57,11 @@ const YAML_OPTIONS = {
 /** The format version a file without `_version` is read as, and the one a save writes. */
 export const FORMAT_VERSION = 1;
 
-// The form sends the fields the schema declares, and a schema strips what it does not know.
-// The `_` keys belong to the file, so they are read back off the entry as it stands rather
-// than being dropped on every save. A file from before Handover has no `_version`; it is
-// read as 1 and stamped here, so every file the CMS writes carries one.
+// The form sends back every key it was given, a key the schema no longer declares included:
+// a rename in `schemas.ts` before the migration is written must not lose the value on the
+// first save. The `_` keys belong to the file, so they are read back off the entry as it
+// stands rather than being dropped on every save. A file from before Handover has no
+// `_version`; it is read as 1 and stamped here, so every file the CMS writes carries one.
 export function mergeEntry(
   _siteId: string,
   entry: unknown,

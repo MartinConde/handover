@@ -18,6 +18,7 @@ const entry = {
   blocks: {},
   data: { title: 'Seaview Cottage', seo: { description: 'Harbour view' }, photos: [] },
   pending: false,
+  problems: [] as { path: string; message: string }[],
 };
 
 const opened = vi.fn();
@@ -34,6 +35,9 @@ afterEach(() => {
   unmount(app);
   opened.mockClear();
 });
+
+// jsdom has no layout, so nothing scrolls; the count still has to move focus.
+Element.prototype.scrollIntoView = () => {};
 
 const $ = <T extends Element>(root: ParentNode, sel: string) => root.querySelector<T>(sel);
 
@@ -61,7 +65,20 @@ const type = (root: ParentNode, sel: string, value: string) => {
 };
 const tick = () => new Promise((r) => setTimeout(r, 0));
 const autosaved = () =>
-  vi.fn(async () => Response.json({ updated_at: 1755864000000, pending: true }));
+  vi.fn(async () => Response.json({ updated_at: 1755864000000, pending: true, problems: [] }));
+
+const withProblems = (problems: { path: string; message: string }[]) => {
+  app = mount(Editor, {
+    target: document.body,
+    props: {
+      collection: 'listings',
+      slug: 'seaview-cottage',
+      entry: { ...entry, pending: true, problems },
+      onpublish: opened,
+    },
+  });
+  return document.body;
+};
 
 test('the header shows the entry title; Publish is disabled until something changes', () => {
   const root = show();
@@ -203,6 +220,7 @@ test('a draft that matches the published file again leaves nothing to publish', 
       Response.json({
         updated_at: 1755864000000,
         pending: !init.body.includes('"title":"Seaview Cottage"'),
+        problems: [],
       }),
     ),
   );
@@ -216,6 +234,58 @@ test('a draft that matches the published file again leaves nothing to publish', 
   await vi.advanceTimersByTimeAsync(2000);
   flushSync();
   expect($<HTMLButtonElement>(root, 'button.btn-primary')?.disabled).toBe(true);
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+// S1: a new entry whose required field has no widget yet used to say only "Not saved". The
+// entry names what is missing instead, and the schema stops it at the publish.
+test('what the schema is still missing is counted in the header and marked on the field', () => {
+  const root = withProblems([{ path: 'title', message: 'Required' }]);
+  expect($(root, '.problems')?.textContent).toBe('1 problem');
+  expect($(root, 'input#f-title')?.getAttribute('aria-invalid')).toBe('true');
+  expect($(root, '#f-title-err')?.textContent).toBe('Required');
+});
+
+test('two problems are counted as two, and Publish is held back until they are gone', () => {
+  const root = withProblems([
+    { path: 'title', message: 'Required' },
+    { path: 'seo.description', message: 'Required' },
+  ]);
+  expect($(root, '.problems')?.textContent).toBe('2 problems');
+  expect($<HTMLButtonElement>(root, 'button.btn-primary')?.disabled).toBe(true);
+});
+
+test('the problem count moves focus to the first field it is counting', () => {
+  const root = withProblems([{ path: 'seo.description', message: 'Required' }]);
+  $<HTMLButtonElement>(root, '.problems')?.click();
+  flushSync();
+  expect(document.activeElement?.id).toBe('f-seo.description');
+});
+
+test('an entry with nothing missing shows no count', () => {
+  const root = show();
+  expect($(root, '.problems')).toBeNull();
+});
+
+test('an autosave that stores an entry the schema refuses says so instead of Not saved', async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({
+        updated_at: 1755864000000,
+        pending: true,
+        problems: [{ path: 'title', message: 'Required' }],
+      }),
+    ),
+  );
+  const root = show();
+  type(root, 'input#f-title', '');
+  await vi.advanceTimersByTimeAsync(2000);
+  flushSync();
+  expect($(root, '.autosave')?.textContent).toBe('Saved');
+  expect($(root, '.problems')?.textContent).toBe('1 problem');
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });

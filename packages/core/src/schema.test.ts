@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { blankValues, fieldsFrom, formOf, type JsonSchema } from './schema.js';
+import { fieldsFrom, formOf, type JsonSchema } from './schema.js';
 
 // Hand-written `z.toJSONSchema()` output: core never holds a Zod object.
 const obj = (properties: Record<string, JsonSchema>, required: string[] = []): JsonSchema => ({
@@ -293,45 +293,6 @@ test('formOf of a schema without blocks has an empty block map', () => {
     fields: [{ path: ['title'], label: 'Title', type: 'text', required: false }],
     blocks: {},
   });
-});
-
-test('a new entry starts with every required scalar present and empty', () => {
-  const schema = obj(
-    {
-      title: { type: 'string' },
-      rooms: { type: 'integer' },
-      sold: { type: 'boolean' },
-      kind: { type: 'string', enum: ['house', 'flat'] },
-      note: { type: 'string' },
-    },
-    ['title', 'rooms', 'sold', 'kind'],
-  );
-  expect(blankValues('default', fieldsFrom('default', schema))).toEqual({
-    title: '',
-    rooms: 0,
-    sold: false,
-    kind: 'house',
-  });
-});
-
-test('a required group is blank all the way down', () => {
-  const schema = obj({ address: obj({ street: { type: 'string' } }, ['street']) }, ['address']);
-  expect(blankValues('default', fieldsFrom('default', schema))).toEqual({
-    address: { street: '' },
-  });
-});
-
-test('required lists start empty and types with no valid blank are left out', () => {
-  const schema = obj(
-    {
-      blocks: { type: 'array', items: obj({}), handover: 'blocks', types: ['hero'] },
-      tags: { type: 'array', items: { type: 'string' } },
-      when: { type: 'string', format: 'date' },
-      cover: { type: 'object', properties: {}, handover: 'image' },
-    },
-    ['blocks', 'tags', 'when', 'cover'],
-  );
-  expect(blankValues('default', fieldsFrom('default', schema))).toEqual({ blocks: [], tags: [] });
 });
 
 // F3: a camelCase key read as code in the form ("AvailableFrom"). The key is humanised

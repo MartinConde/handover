@@ -9,6 +9,7 @@ let {
   root = $bindable(),
   path = [],
   blocks = {},
+  problems = {},
   rowLabel = '',
 }: {
   fields: readonly Field[];
@@ -16,6 +17,8 @@ let {
   path?: readonly string[];
   /** Fields per block type, keyed as `formOf` returns them. */
   blocks?: Record<string, Field[]>;
+  /** What the collection schema will not accept, by the same dotted path the ids use. */
+  problems?: Record<string, string>;
   /** Names a field whose own path is empty — one scalar row of an array. */
   rowLabel?: string;
 } = $props();
@@ -112,25 +115,28 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   {@const at = [...path, ...field.path]}
   {@const id = `f-${at.join('.')}`}
   {@const text = field.label || rowLabel}
-  <div class="field">
+  {@const err = problems[at.join('.')]}
+  {@const bad = err ? 'true' : undefined}
+  {@const says = err ? `${id}-err` : undefined}
+  <div class="field" class:is-invalid={err}>
     {#if field.type === 'text'}
       {@render labelRow(id, field, text)}
       {#if str(at).length > 80 || str(at).includes('\n')}
-        <textarea class="input textarea" {id} value={str(at)} oninput={(e) => write(at, e.currentTarget.value)}></textarea>
+        <textarea class="input textarea" {id} aria-invalid={bad} aria-describedby={says} value={str(at)} oninput={(e) => write(at, e.currentTarget.value)}></textarea>
       {:else}
-        <input class="input" {id} type="text" value={str(at)} oninput={(e) => write(at, e.currentTarget.value)} />
+        <input class="input" {id} type="text" aria-invalid={bad} aria-describedby={says} value={str(at)} oninput={(e) => write(at, e.currentTarget.value)} />
       {/if}
     {:else if field.type === 'number'}
       {@render labelRow(id, field, text)}
-      <input class="input" {id} type="number" step="any" value={num(at)} oninput={(e) => write(at, e.currentTarget.value === '' ? undefined : e.currentTarget.valueAsNumber)} />
+      <input class="input" {id} type="number" step="any" aria-invalid={bad} aria-describedby={says} value={num(at)} oninput={(e) => write(at, e.currentTarget.value === '' ? undefined : e.currentTarget.valueAsNumber)} />
     {:else if field.type === 'boolean'}
-      <label class="switch" for={id}><input type="checkbox" role="switch" {id} checked={read(at) === true} onchange={(e) => write(at, e.currentTarget.checked)} /><span>{text}</span></label>
+      <label class="switch" for={id}><input type="checkbox" role="switch" {id} aria-invalid={bad} aria-describedby={says} checked={read(at) === true} onchange={(e) => write(at, e.currentTarget.checked)} /><span>{text}</span></label>
     {:else if field.type === 'date'}
       {@render labelRow(id, field, text)}
-      <input class="input" {id} type="date" value={str(at)} oninput={(e) => write(at, e.currentTarget.value || undefined)} />
+      <input class="input" {id} type="date" aria-invalid={bad} aria-describedby={says} value={str(at)} oninput={(e) => write(at, e.currentTarget.value || undefined)} />
     {:else if field.type === 'select'}
       {#if field.options.length <= 5}
-        <fieldset>
+        <fieldset aria-describedby={says}>
           <legend>{text}{#if field.required}<span class="req" aria-hidden="true">*</span>{/if}</legend>
           {#each field.options as option (option)}
             <label class="choice"><input type="radio" name={id} value={option} checked={read(at) === option} onchange={() => write(at, option)} /><span>{capitalise(option)}</span></label>
@@ -138,7 +144,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         </fieldset>
       {:else}
         {@render labelRow(id, field, text)}
-        <select class="input" {id} value={str(at)} onchange={(e) => write(at, e.currentTarget.value || undefined)}>
+        <select class="input" {id} aria-invalid={bad} aria-describedby={says} value={str(at)} onchange={(e) => write(at, e.currentTarget.value || undefined)}>
           <option value="">Choose…</option>
           {#each field.options as option (option)}
             <option value={option}>{capitalise(option)}</option>
@@ -160,11 +166,11 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <label class="check" for="{id}.newTab"><input type="checkbox" id="{id}.newTab" checked={read([...at, 'newTab']) === true} onchange={(e) => write([...at, 'newTab'], e.currentTarget.checked || undefined)} /><span>Open in new tab</span></label>
     {:else if field.type === 'richtext'}
       {@render groupLabel(id, field, text)}
-      <RichText {id} labelId="{id}-l" tier={field.tier} value={str(at)} onchange={(md) => write(at, md)} />
+      <RichText {id} labelId="{id}-l" tier={field.tier} invalid={!!err} describedby={says} value={str(at)} onchange={(md) => write(at, md)} />
     {:else if field.type === 'group'}
       <details class="group" open>
         <summary>{text}<span class="count">{field.fields.length} fields</span></summary>
-        <div class="form"><Fields fields={field.fields} bind:root {blocks} path={at} /></div>
+        <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} /></div>
       </details>
     {:else if field.type === 'array'}
       {@const items = rows(at)}
@@ -173,7 +179,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <div class="list" {id} role="group" aria-labelledby="{id}-l">
         {#each items as row, i ((row as Data)?._id ?? i)}
           <div class="row-card">
-            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} path={[...at, String(i)]} rowLabel="{text} {i + 1}" /></div>
+            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" /></div>
             {@render controls(at, i, items.length, `${text} row ${i + 1}`)}
           </div>
         {:else}
@@ -195,7 +201,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
               {@render controls(at, i, items.length, name)}
             </header>
             {#if inner}
-              <div class="form"><Fields fields={inner} bind:root {blocks} path={[...at, String(i)]} /></div>
+              <div class="form"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} /></div>
             {:else}
               <p class="ref-note">{block(row)._ref ?? `No “${block(row)._type}” block in the registry`} — not editable here</p>
             {/if}
@@ -218,11 +224,12 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       </div>
     {:else if field.type === 'image' || field.type === 'file' || field.type === 'embed' || field.type === 'seo' || field.type === 'reference'}
       {@render groupLabel(id, field, text)}
-      <div class="readonly" {id} role="region" aria-labelledby="{id}-l" aria-describedby="{id}-hint"><pre>{read(at) === undefined ? 'Nothing here yet' : JSON.stringify(read(at), null, 2)}</pre></div>
+      <div class="readonly" {id} role="region" tabindex="-1" aria-labelledby="{id}-l" aria-describedby={err ? `${id}-hint ${id}-err` : `${id}-hint`}><pre>{read(at) === undefined ? 'Nothing here yet' : JSON.stringify(read(at), null, 2)}</pre></div>
       <p class="hint" id="{id}-hint">{WHEN[field.type]}</p>
     {:else}
       <div class="label-row"><label for={id}>{text}</label></div>
       <p class="hint" {id}>Not editable here yet</p>
     {/if}
+    {#if err}<p class="error" id="{id}-err">{err}</p>{/if}
   </div>
 {/each}

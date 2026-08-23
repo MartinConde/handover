@@ -152,38 +152,3 @@ function fieldOf(root: JsonSchema, path: string[], node: JsonSchema, required: b
 
 const isStringArray = (v: unknown): v is string[] =>
   Array.isArray(v) && v.length > 0 && v.every((s) => typeof s === 'string');
-
-// Types with no valid empty value — a date, a media key, a reference — are left out; a new
-// entry that requires one does not validate until the editor fills it in.
-function blank(field: Field): unknown {
-  switch (field.type) {
-    case 'text':
-    case 'richtext':
-      return '';
-    case 'number':
-      return 0;
-    case 'boolean':
-      return false;
-    case 'select':
-      return field.options[0];
-    case 'array':
-    case 'blocks':
-      return [];
-    case 'group':
-      return blankValues('default', field.fields);
-    default:
-      return undefined;
-  }
-}
-
-/** What a new entry holds before anything is typed: the required fields, empty. */
-export function blankValues(_siteId: string, fields: readonly Field[]): Record<string, unknown> {
-  const values: Record<string, unknown> = {};
-  for (const field of fields) {
-    const key = field.path[0];
-    if (!key || field.type === 'unsupported' || !field.required) continue;
-    const value = blank(field);
-    if (value !== undefined) values[key] = value;
-  }
-  return values;
-}

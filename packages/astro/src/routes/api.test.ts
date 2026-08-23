@@ -46,7 +46,7 @@ const {
     pendingDrafts: vi.fn(async () => [
       {
         path: 'src/content/listings/en/mill-house.yaml',
-        contents: 'title: "The Mill House"\n',
+        contents: 'title: "The Mill House"\nrooms: 3\naddress:\n  street: "Mill Lane"\n',
         updatedAt: 1755864000000,
       },
     ]),
@@ -162,6 +162,7 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
     blocks: {},
     data: { title: 'The Mill House', location: 'Bakewell', rooms: 3 },
     pending: false,
+    problems: [{ path: 'address', message: 'Required' }],
   });
 });
 
@@ -184,11 +185,11 @@ test('an entry with a draft returns the draft data and reports it as pending', a
   draft = undefined;
 });
 
-test('autosaving a draft validates it and stores it under the entry path', async () => {
+test('autosaving a draft stores it under the entry path with nothing to report', async () => {
   const data = { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } };
   const res = await PUT(put('drafts/listings/mill-house', JSON.stringify({ data })));
   expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ updated_at: 1755864000000, pending: true });
+  expect(await res.json()).toEqual({ updated_at: 1755864000000, pending: true, problems: [] });
   expect(saveDraft).toHaveBeenCalledWith(
     'default',
     expect.anything(),
@@ -205,13 +206,66 @@ test('autosaving never publishes, whatever the form holds', async () => {
   expect(publish).not.toHaveBeenCalled();
 });
 
-test('an autosave that fails the collection schema is 400 and stores nothing', async () => {
+test('an autosave the schema refuses is stored anyway, with what is missing named', async () => {
+  saveDraft.mockClear();
+  const data = { title: 'No rooms yet' };
+  const res = await PUT(put('drafts/listings/mill-house', JSON.stringify({ data })));
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    updated_at: 1755864000000,
+    pending: true,
+    problems: [
+      { path: 'rooms', message: 'Required' },
+      { path: 'address', message: 'Required' },
+    ],
+  });
+  expect(saveDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/listings/en/mill-house.yaml',
+    data,
+  );
+});
+
+test('an autosave the serialiser cannot write back is refused, with the reason', async () => {
+  saveDraft.mockClear();
+  saveDraft.mockImplementationOnce(async () => {
+    throw new Error('Nested array at tags[0]: wrap the inner array in an object');
+  });
+  const res = await PUT(
+    put('drafts/listings/mill-house', JSON.stringify({ data: { tags: [[]] } })),
+  );
+  expect(res.status).toBe(400);
+  expect(await res.text()).toBe('Nested array at tags[0]: wrap the inner array in an object');
+});
+
+test('a body that is not an object, and an unknown collection, are refused', async () => {
   saveDraft.mockClear();
   const body = JSON.stringify({ data: { title: 'No rooms' } });
-  expect((await PUT(put('drafts/listings/mill-house', body))).status).toBe(400);
   expect((await PUT(put('drafts/listings/mill-house', 'not json'))).status).toBe(400);
+  expect((await PUT(put('drafts/listings/mill-house', JSON.stringify({ data: [] })))).status).toBe(
+    400,
+  );
   expect((await PUT(put('drafts/nope/mill-house', body))).status).toBe(404);
   expect(saveDraft).not.toHaveBeenCalled();
+});
+
+// The `_` keys belong to the file: the server reads them off the entry, so a browser cannot
+// set `_version` or `_status` by posting one.
+test('reserved keys in the posted data are dropped before the draft is stored', async () => {
+  saveDraft.mockClear();
+  const data = { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } };
+  await PUT(
+    put('drafts/listings/mill-house', JSON.stringify({ data: { ...data, _status: 'hidden' } })),
+  );
+  expect(saveDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/listings/en/mill-house.yaml',
+    data,
+  );
 });
 
 test('an autosave for an entry that is not in the repo is 404', async () => {
@@ -257,6 +311,35 @@ test('publishing is 409 when a file changed in the repository since the draft wa
     error: 'src/content/listings/en/mill-house.yaml changed in the repository after it was opened',
     paths: ['src/content/listings/en/mill-house.yaml'],
   });
+});
+
+test('publishing is refused when a stored draft is not everything the schema needs', async () => {
+  publishDrafts.mockClear();
+  pendingDrafts.mockImplementationOnce(async () => [
+    {
+      path: 'src/content/listings/en/mill-house.yaml',
+      contents: 'title: "The Mill House"\n',
+      updatedAt: 1755864000000,
+    },
+  ]);
+  const res = await POST(post('publish', ''));
+  expect(res.status).toBe(422);
+  expect(await res.json()).toEqual({
+    error: 'src/content/listings/en/mill-house.yaml is missing something the schema needs',
+    paths: ['src/content/listings/en/mill-house.yaml'],
+  });
+  expect(publishDrafts).not.toHaveBeenCalled();
+});
+
+// redirects.yaml and the globals share the prefix and belong to no collection; holding them
+// to a schema nobody declared would block every publish for good.
+test('a pending file no collection owns is not held to a collection schema', async () => {
+  publishDrafts.mockClear();
+  pendingDrafts.mockImplementationOnce(async () => [
+    { path: 'src/content/redirects.yaml', contents: 'rules: []\n', updatedAt: 1755864000000 },
+  ]);
+  expect((await POST(post('publish', ''))).status).toBe(200);
+  expect(publishDrafts).toHaveBeenCalled();
 });
 
 test('discarding a draft drops the row and commits nothing', async () => {
@@ -343,8 +426,9 @@ test('creating an entry derives its file name and stores it as a draft, uncommit
     expect.anything(),
     expect.anything(),
     'src/content/listings/en/cafe-bar-2026.yaml',
-    // Every required field, empty, so the first autosave passes the collection schema.
-    { _version: 1, title: 'Café & Bar / 2026', rooms: 0, address: { street: '' } },
+    // Only the title: a required field is left absent rather than guessed at, and the editor
+    // is shown what is still missing.
+    { _version: 1, title: 'Café & Bar / 2026' },
   );
   expect(publish).not.toHaveBeenCalled();
 });

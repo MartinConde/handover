@@ -225,3 +225,10 @@ rewrites an `_id`, so translations and `_machine` paths keep pointing at the sam
 until their pickers arrive, under one line naming the release that brings the editor. Any
 other schema (tuples, unions, untagged customs) shows as "Not editable here yet". Both are
 read and written back untouched.
+
+Make one of those **required** — `agent: reference('agents')` above — and a new entry
+cannot satisfy it from the form until that picker ships. Nothing you type is lost: the
+draft is stored anyway and the field is marked as a problem. What you cannot do is publish
+that entry, so keep a field required only when your site really cannot render without it,
+and use `.optional()` while the editor for it is still to come
+([Drafts and publishing](publishing.md#fields-the-schema-is-not-happy-with)).

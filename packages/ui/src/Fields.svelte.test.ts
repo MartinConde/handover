@@ -8,7 +8,8 @@ import Fields from './Fields.svelte';
 
 // Testing: every widget writes the documented value shape, proven by state → YAML → state
 // against the golden for the type; `array` and `blocks` add, remove and reorder while every
-// `_id` survives; labels on every control; a read-only structured field says why it is one.
+// `_id` survives; labels on every control; a read-only structured field says why it is one;
+// a field the schema refuses is marked, named and still editable.
 // Not testing: Editor wiring (Editor.test.ts) or styling.
 
 // jsdom has no layout; ProseMirror asks for it when it scrolls the selection into view.
@@ -21,6 +22,7 @@ const show = (
   fields: Field[],
   data: Record<string, unknown>,
   blocks: Record<string, Field[]> = {},
+  problems: Record<string, string> = {},
 ) => {
   root = data;
   app = mount(Fields, {
@@ -28,6 +30,7 @@ const show = (
     props: {
       fields,
       blocks,
+      problems,
       get root() {
         return root;
       },
@@ -506,4 +509,74 @@ test.each([
   const hint = q('#f-thing-hint');
   expect(hint.textContent).toBe(sentence);
   expect(q('#f-thing').getAttribute('aria-describedby')).toBe('f-thing-hint');
+});
+
+test('a field the schema refuses is marked, described and still editable', () => {
+  show(
+    [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+    {},
+    {},
+    {
+      title: 'Required',
+    },
+  );
+  expect(q('#f-title').closest('.field')?.classList.contains('is-invalid')).toBe(true);
+  expect(q('#f-title').getAttribute('aria-invalid')).toBe('true');
+  expect(q('#f-title').getAttribute('aria-describedby')).toBe('f-title-err');
+  expect(q('#f-title-err').textContent).toBe('Required');
+  type('#f-title', 'Morning Drift');
+  expect(root).toEqual({ title: 'Morning Drift' });
+});
+
+// The one an editor cannot fix from the form: the widget is read-only until its phase, so
+// saying what is wrong is all the screen can do — and it must not lose the hint that says so.
+test('a read-only structured field keeps its hint next to the error', () => {
+  show(
+    [
+      {
+        path: ['presenter'],
+        label: 'Presenter',
+        type: 'reference',
+        required: true,
+        collection: 'presenters',
+      },
+    ],
+    {},
+    {},
+    {
+      presenter: 'Required',
+    },
+  );
+  expect(q('#f-presenter').getAttribute('aria-describedby')).toBe(
+    'f-presenter-hint f-presenter-err',
+  );
+  expect(q('#f-presenter-err').textContent).toBe('Required');
+});
+
+test('a field inside a block is marked by its own path, not the block’s', () => {
+  show(pageFields, blocksData(), registry, { 'blocks.0.heading': 'Required' });
+  expect(q('#f-blocks\\.0\\.heading-err').textContent).toBe('Required');
+  expect(document.querySelector('#f-blocks\\.1\\.heading-err')).toBeNull();
+});
+
+test('a field with nothing wrong carries no error markup', () => {
+  show([{ path: ['title'], label: 'Title', type: 'text', required: true }], { title: 'x' });
+  expect(q('#f-title').getAttribute('aria-invalid')).toBeNull();
+  expect(q('#f-title').getAttribute('aria-describedby')).toBeNull();
+  expect(document.querySelector('.field.is-invalid')).toBeNull();
+});
+
+// TipTap owns the editable node, so the two attributes that change with the entry's problems
+// are written onto it rather than declared in the markup.
+test('an invalid richtext body is marked on the editable node itself', () => {
+  show(
+    [{ path: ['summary'], label: 'Summary', type: 'richtext', required: true, tier: 'basic' }],
+    {},
+    {},
+    { summary: 'Required' },
+  );
+  const body = q('#f-summary');
+  expect(body.getAttribute('aria-invalid')).toBe('true');
+  expect(body.getAttribute('aria-describedby')).toBe('f-summary-err');
+  expect(q('#f-summary-err').textContent).toBe('Required');
 });

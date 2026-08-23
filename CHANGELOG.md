@@ -4,6 +4,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Autosave no longer refuses an entry the schema is not happy with. A draft holds what you
+  typed — a new entry whose required `reference` has no picker yet, or a required
+  `positive()` number still at nothing, used to answer "Not saved" and lose the rest of the
+  form. What is missing is named on the field instead and counted in the entry's header,
+  and the **publish** is where the schema blocks: *Publish…* is disabled on an entry with
+  problems, and the drawer refuses the whole set while any file in it is not ready. A new
+  entry now starts with its title alone rather than a guessed blank per required field.
+  A save also keeps content keys your schema no longer declares, so renaming a field before
+  writing its migration no longer loses the value on the first edit. See
+  `docs/publishing.md`.
+
 - A link can only point somewhere safe. In a `richtext()` field and in a `link` field's
   `href`, the target must be `http`, `https`, `mailto`, `tel` or a path on your own site;
   `javascript:` and `data:` are refused when the entry is saved, naming the scheme and the

@@ -3,6 +3,9 @@ import type { Field } from '@handover/core';
 import Fields from './Fields.svelte';
 
 type Data = Record<string, unknown>;
+type Problem = { path: string; message: string };
+const byPath = (problems: Problem[]) =>
+  Object.fromEntries(problems.map((p) => [p.path, p.message]));
 let {
   collection,
   slug,
@@ -17,6 +20,8 @@ let {
     data: Data;
     /** The draft the data came from is ahead of the file in git. */
     pending: boolean;
+    /** What the collection schema will not accept yet, by field path. */
+    problems: { path: string; message: string }[];
   };
   /** Open the pending-changes drawer, which is where publishing happens. */
   onpublish: () => void;
@@ -31,8 +36,13 @@ let saved = $state(JSON.stringify(entry.data));
 let drafted = $state(entry.pending);
 let saving = $state(false);
 let saveFailed = $state(false);
+// A draft stores whatever was typed, so what the schema still wants is the server's answer to
+// every save rather than a reason to refuse one; the publish is where it blocks.
+// svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
+let problems = $state(byPath(entry.problems));
 
 const json = $derived(JSON.stringify(data));
+const missing = $derived(Object.keys(problems));
 const title = $derived(typeof data.title === 'string' && data.title ? data.title : slug);
 const dirty = $derived(drafted || json !== saved);
 
@@ -56,8 +66,17 @@ async function autosave() {
   if (res.ok) {
     saved = sent;
     // Whether the stored draft differs from the file in git is the server's answer, not ours.
-    drafted = ((await res.json()) as { pending: boolean }).pending;
+    const body = (await res.json()) as { pending: boolean; problems: Problem[] };
+    drafted = body.pending;
+    problems = byPath(body.problems);
   }
+}
+
+// Scrolling there is not enough on its own: the count is a button, so it has to land somewhere.
+function goToFirst() {
+  const field = document.getElementById(`f-${missing[0]}`);
+  field?.scrollIntoView({ block: 'center' });
+  field?.focus();
 }
 
 // Publishing is the drawer's job, over every draft at once; the entry's own edit only has
@@ -82,6 +101,11 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       <h1>{title}</h1>
       <div class="meta">
         <span class="status"><span class="dot" aria-hidden="true"></span> Live</span>
+        {#if missing.length}
+          <button class="problems" type="button" onclick={goToFirst}>
+            {missing.length} problem{missing.length === 1 ? '' : 's'}
+          </button>
+        {/if}
       </div>
       <div class="actions">
         <div class="seg" role="group" aria-label="Language">
@@ -89,7 +113,13 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           <button type="button" aria-pressed="false" disabled title="Only English is configured">DE</button>
         </div>
         <button class="btn btn-preview" type="button" disabled title="Preview is not available yet">Preview</button>
-        <button class="btn btn-primary" type="button" disabled={!dirty || saving} onclick={openDrawer}>Publish…</button>
+        <button
+          class="btn btn-primary"
+          type="button"
+          disabled={!dirty || saving || missing.length > 0}
+          title={missing.length ? 'Fill in what is missing before publishing this entry' : undefined}
+          onclick={openDrawer}
+        >Publish…</button>
         <button class="btn btn-ghost" type="button" disabled aria-label="More actions">⋯</button>
       </div>
     </div>
@@ -101,7 +131,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   </header>
   <div class="entry-body has-pane">
     <form class="form" onsubmit={(e) => e.preventDefault()}>
-      <Fields fields={entry.fields} blocks={entry.blocks} bind:root={data} />
+      <Fields fields={entry.fields} blocks={entry.blocks} {problems} bind:root={data} />
     </form>
     <aside class="pane" aria-label="Right pane">
       <div><strong>Right pane</strong>Preview or a second language, later.</div>
