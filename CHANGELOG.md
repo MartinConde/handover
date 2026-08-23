@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A content file with no `_version` is read as version 1, and a save through the admin
+  writes `_version: 1` into it, so every file the CMS has touched says which format it is
+  in. See `docs/content-format.md`.
+
 - A publish that is refused because someone changed a file in the repository is no longer a
   dead end. The drawer marks the file it was refused over, and **Discard** on that row
   throws the unpublished changes away and reads the entry from the repository again, so the

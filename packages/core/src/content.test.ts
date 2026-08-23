@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
-import { parseEntry, staticSource, stringifyEntry } from './content.js';
+import { mergeEntry, parseEntry, staticSource, stringifyEntry } from './content.js';
 
 const entries = [
   { id: 'en/mill-house', data: { title: 'Mill House' } },
@@ -331,3 +331,17 @@ for (const [type, fixture] of Object.entries(conventions)) {
     expect(parseEntry('default', out)).toEqual(fixture);
   });
 }
+
+test('a save stamps _version: 1 on an entry that has none', () => {
+  expect(mergeEntry('default', { title: 'Old' }, { title: 'New' })).toEqual({
+    _version: 1,
+    title: 'New',
+  });
+});
+
+test('a save keeps the _version the entry already has', () => {
+  expect(mergeEntry('default', { _version: 3, title: 'Old' }, { title: 'New' })).toEqual({
+    _version: 3,
+    title: 'New',
+  });
+});

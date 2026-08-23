@@ -12,6 +12,7 @@ import {
   deleteEntry,
   discardDraft,
   entryName,
+  FORMAT_VERSION,
   formOf,
   loadDraft,
   openDb,
@@ -126,7 +127,10 @@ async function createEntry(collection: string, request: Request): Promise<Respon
   const database = db();
   const slug = entryName('default', title, await takenNames(collection, database));
   const { fields } = formOf('default', formSchema(schema));
-  const values: Record<string, unknown> = { _version: 1, ...blankValues('default', fields) };
+  const values: Record<string, unknown> = {
+    _version: FORMAT_VERSION,
+    ...blankValues('default', fields),
+  };
   if (fields.some((f) => f.path[0] === 'title' && f.type === 'text')) values.title = title;
   await createDraft('default', database, gitClient(), entryPath(collection, slug), values);
   return Response.json({ slug });

@@ -1,5 +1,11 @@
 export type { AstroContent, ContentEntry, ContentSource } from './content.js';
-export { mergeEntry, parseEntry, staticSource, stringifyEntry } from './content.js';
+export {
+  FORMAT_VERSION,
+  mergeEntry,
+  parseEntry,
+  staticSource,
+  stringifyEntry,
+} from './content.js';
 export type { Db, Draft } from './db.js';
 export {
   createDraft,

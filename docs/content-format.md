@@ -55,7 +55,7 @@ Keys starting with `_` belong to Handover. Name your own fields anything else â€
 
 | Key | Where | Value |
 |---|---|---|
-| `_version` | top of file | The format version, currently `1`. `handover migrate` reads it. |
+| `_version` | top of file | The format version, currently `1`. A file without one is read as `1`; the next save writes it, and so does `handover migrate`. |
 | `_status` | top of file | `hidden` to keep the entry off the site. Absent means live. |
 | `_machine` | top of file | Field paths whose current value was written by a translation or AI assist, e.g. `blocks[_id=k3nf9a2p].heading`. Cleared per path when a person edits the field. |
 | `_i18n` | top of file | Which locale and which version of it a translation was made from. Only in translated files. |

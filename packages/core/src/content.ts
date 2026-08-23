@@ -54,9 +54,13 @@ const YAML_OPTIONS = {
   indent: 2,
 } as const;
 
+/** The format version a file without `_version` is read as, and the one a save writes. */
+export const FORMAT_VERSION = 1;
+
 // The form sends the fields the schema declares, and a schema strips what it does not know.
 // The `_` keys belong to the file, so they are read back off the entry as it stands rather
-// than being dropped on every save.
+// than being dropped on every save. A file from before Handover has no `_version`; it is
+// read as 1 and stamped here, so every file the CMS writes carries one.
 export function mergeEntry(
   _siteId: string,
   entry: unknown,
@@ -65,7 +69,7 @@ export function mergeEntry(
   const reserved = Object.entries((entry ?? {}) as Record<string, unknown>).filter(([k]) =>
     k.startsWith('_'),
   );
-  return { ...Object.fromEntries(reserved), ...values };
+  return { _version: FORMAT_VERSION, ...Object.fromEntries(reserved), ...values };
 }
 
 export function stringifyEntry(_siteId: string, data: unknown): string {
