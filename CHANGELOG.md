@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A link can only point somewhere safe. In a `richtext()` field and in a `link` field's
+  `href`, the target must be `http`, `https`, `mailto`, `tel` or a path on your own site;
+  `javascript:` and `data:` are refused when the entry is saved, naming the scheme and the
+  line. `<Markdown />` checks again as it renders, so a file written by hand keeps the
+  link's text and loses the link. See `docs/field-types.md`.
+
 - `<Markdown />` runs on Cloudflare. It no longer goes through Astro's Markdown pipeline,
   which is a native binary the Workers runtime cannot run (`The WASI method is not
   implemented`), and renders the richtext constructs from the Markdown the field is

@@ -12,6 +12,7 @@ import {
   redirectsText,
   richtextErrors,
   schemaVersionError,
+  unsafeLinkScheme,
 } from '@handover/core';
 import type { AstroIntegration } from 'astro';
 import { z } from 'astro/zod';
@@ -32,7 +33,13 @@ export const richtext = (tier: RichtextTier = 'basic') =>
     .meta({ handover: 'richtext', tier });
 
 // `.meta({ handover })` is how core's schema walker recognises a shape it does not own.
-const toUrl = z.object({ type: z.literal('url'), href: z.string() });
+// Same allow-list as a richtext link: the target of anything an editor can click is
+// http, https, mailto, tel or a path on this site, never a scheme that runs code.
+const href = z.string().superRefine((url, ctx) => {
+  const scheme = unsafeLinkScheme('default', url);
+  if (scheme) ctx.addIssue({ code: 'custom', message: `${scheme}: links are not allowed` });
+});
+const toUrl = z.object({ type: z.literal('url'), href });
 const toRef = z.object({ type: z.enum(['entry', 'page']), ref: z.string() });
 const linkExtras = { label: z.string().optional(), newTab: z.boolean().optional() };
 export const link = z

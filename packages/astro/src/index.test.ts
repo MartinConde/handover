@@ -49,6 +49,13 @@ test('the scalar field types are detected from real Zod output', () => {
   ]);
 });
 
+test('a link field refuses a target that would run code', () => {
+  const parsed = link.safeParse({ type: 'url', href: 'javascript:alert(1)' });
+  expect(parsed.success).toBe(false);
+  expect(parsed.error?.issues[0]?.message).toBe('javascript: links are not allowed');
+  expect(link.safeParse({ type: 'url', href: 'mailto:hello@example.com' }).success).toBe(true);
+});
+
 test('link accepts url and ref shapes and rejects a mismatched pair', () => {
   expect(link.safeParse({ type: 'url', href: '/contact', newTab: true }).success).toBe(true);
   expect(link.safeParse({ type: 'page', ref: 'pages/impressum' }).success).toBe(true);

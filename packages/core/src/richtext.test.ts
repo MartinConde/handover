@@ -1,5 +1,10 @@
 import { expect, test } from 'vitest';
-import { RICHTEXT_CONSTRUCTS, renderRichtext, richtextErrors } from './richtext.js';
+import {
+  RICHTEXT_CONSTRUCTS,
+  renderRichtext,
+  richtextErrors,
+  unsafeLinkScheme,
+} from './richtext.js';
 
 // One fixture per allowed construct, exactly as the editor will store it.
 const basic: Record<string, string> = {
@@ -77,6 +82,47 @@ test('blockquote and heading errors in the basic tier say which tier allows them
 test('a nested list is a list, not a new construct', () => {
   expect(richtextErrors('default', '- a\n  - b\n- c', 'basic')).toEqual([]);
 });
+
+// A link is the one construct that carries a target, and a `javascript:` or `data:` one
+// runs in the reader's browser. Browsers ignore ASCII whitespace inside a URL, so the
+// mangled forms are the same link.
+const unsafeLinks: Record<string, string> = {
+  javascript: '[x](javascript:alert(1))',
+  mixedCase: '[x](JaVaScRiPt:alert(1))',
+  entity: '[x](javascript&#58;alert(1))',
+  tabbed: '[x](<java\tscript:alert(1)>)',
+  spaced: '[x](<java script:alert(1)>)',
+  data: '[x](data:text/html;base64,PHNjcmlwdD4=)',
+};
+
+for (const [name, md] of Object.entries(unsafeLinks)) {
+  test(`a ${name} link is rejected by both tiers`, () => {
+    expect(richtextErrors('default', md, 'basic')).toHaveLength(1);
+    expect(richtextErrors('default', md, 'full')[0]).toMatch(/links are not allowed \(line 1\)/);
+  });
+
+  test(`a ${name} link renders as text, without an anchor`, () => {
+    expect(renderRichtext('default', md)).toBe('<p>x</p>');
+  });
+}
+
+const safeLinks: Record<string, string> = {
+  https: 'https://example.com/plan',
+  http: 'http://example.com/plan',
+  mailto: 'mailto:hello@example.com',
+  tel: 'tel:+34600000000',
+  absolutePath: '/listings/mill-house/',
+  anchor: '#the-garden',
+  relativePath: 'plan.pdf',
+  protocolRelative: '//example.com/plan',
+};
+
+for (const [name, url] of Object.entries(safeLinks)) {
+  test(`a ${name} link is allowed`, () => {
+    expect(unsafeLinkScheme('default', url)).toBeUndefined();
+    expect(richtextErrors('default', `[x](${url})`, 'basic')).toEqual([]);
+  });
+}
 
 test('an empty string is valid in both tiers', () => {
   expect(richtextErrors('default', '', 'basic')).toEqual([]);

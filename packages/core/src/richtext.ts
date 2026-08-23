@@ -25,6 +25,19 @@ export const RICHTEXT_CONSTRUCTS = {
   ],
 } as const satisfies Record<RichtextTier, readonly string[]>;
 
+// A link is the only construct that carries a target. Browsers ignore ASCII whitespace
+// and control characters inside a URL, so `java<tab>script:` is a live `javascript:` link
+// and the scheme is read from the stripped string.
+const LINK_SCHEMES = new Set(['http', 'https', 'mailto', 'tel']);
+
+/** The scheme of a link that must not be rendered, or undefined when the target is fine. */
+export function unsafeLinkScheme(_siteId: string, url: string): string | undefined {
+  // biome-ignore lint/suspicious/noControlCharactersInRegex: what a browser itself drops.
+  const found = /^([a-z][a-z0-9+.-]*):/i.exec(url.replace(/[\u0000-\u0020\u007f]/g, ''));
+  const scheme = found?.[1]?.toLowerCase();
+  return scheme && !LINK_SCHEMES.has(scheme) ? scheme : undefined;
+}
+
 const BASIC_NODES = new Set([
   'root',
   'paragraph',
@@ -52,6 +65,8 @@ export function richtextErrors(_siteId: string, markdown: string, tier: Richtext
       errors.push(`heading level ${node.depth} is not allowed${at}`);
     else if (FULL_ONLY_NODES.has(node.type) && tier === 'basic')
       errors.push(`${node.type} needs richtext: full${at}`);
+    else if (node.type === 'link' && unsafeLinkScheme(_siteId, node.url))
+      errors.push(`${unsafeLinkScheme(_siteId, node.url)}: links are not allowed${at}`);
     else if (node.type === 'listItem' && typeof node.checked === 'boolean')
       errors.push(`task list item is not allowed${at}`);
     else if (!BASIC_NODES.has(node.type) && !FULL_ONLY_NODES.has(node.type))
@@ -110,7 +125,11 @@ export function renderRichtext(_siteId: string, markdown: string): string {
       case 'emphasis':
         return `<em>${kids()}</em>`;
       case 'link':
-        return `<a href="${escapeAttribute(node.url)}">${kids()}</a>`;
+        // A file written outside the CMS never passed the tier check, so the target is
+        // read again here and a link that would run code keeps only its text.
+        return unsafeLinkScheme(_siteId, node.url)
+          ? kids()
+          : `<a href="${escapeAttribute(node.url)}">${kids()}</a>`;
       case 'break':
         return '<br>';
       case 'text':

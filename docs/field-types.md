@@ -42,6 +42,11 @@ Validation fails naming the construct and its line (`table is not allowed (line 
 so a paste that brings one in is caught before it is saved. Render the field with
 [`<Markdown />`](template-convention.md#rich-text).
 
+A link inside rich text may point at `http`, `https`, `mailto`, `tel` or a path on this
+site. Anything else — `javascript:` and `data:` above all — fails validation
+(`javascript: links are not allowed (line 2)`), and if a file written by hand carries one
+anyway, `<Markdown />` renders the link's text without the link.
+
 ```yaml
 body: |-
   ## The house
@@ -59,7 +64,8 @@ body: |-
 
 A link is one of three kinds: `url` with an `href`, or `entry` / `page` with a `ref` such
 as `listings/mill-house` (the entry's filename id, resolved to a URL at build time).
-`label` and `newTab` are optional on all three.
+`label` and `newTab` are optional on all three. An `href` takes the same schemes a rich
+text link does: `http`, `https`, `mailto`, `tel` or a path on this site.
 
 ```yaml
 button:

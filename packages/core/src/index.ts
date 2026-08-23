@@ -35,6 +35,11 @@ export type { CollectionRoutes } from './names.js';
 export { checkCollections, entryName } from './names.js';
 export { filterLive, isLive, newId, RESERVED_KEYS, regenerateIds } from './reserved.js';
 export type { RichtextTier } from './richtext.js';
-export { RICHTEXT_CONSTRUCTS, renderRichtext, richtextErrors } from './richtext.js';
+export {
+  RICHTEXT_CONSTRUCTS,
+  renderRichtext,
+  richtextErrors,
+  unsafeLinkScheme,
+} from './richtext.js';
 export type { Field, Form, JsonSchema } from './schema.js';
 export { blankValues, fieldsFrom, formOf } from './schema.js';
