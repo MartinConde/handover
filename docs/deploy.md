@@ -100,6 +100,12 @@ Optional: `GITHUB_BRANCH` if the live branch is not `main`.
 `/admin/api` requests fail with an explicit error naming the missing secret. For local
 `astro dev`, the same names go in `.dev.vars`.
 
+A repository the App was never installed on answers `404` on every path, which looks the
+same to GitHub's API as a file that does not exist. The admin tells them apart: it says
+*The GitHub App cannot see owner/repo* and names the installation, so a wrong
+`GITHUB_REPO` or a missing step 3 shows up as itself rather than as an entry that will not
+open.
+
 ## Building on push
 
 Connect the repository to the Worker under **Workers & Pages → your Worker → Settings →

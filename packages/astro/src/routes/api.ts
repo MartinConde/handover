@@ -20,6 +20,7 @@ import {
   pendingDrafts,
   publishDrafts,
   RefMovedError,
+  RepoUnreachableError,
   recordDelete,
   recordRename,
   renameEntry,
@@ -224,7 +225,7 @@ export const GET: APIRoute = async ({ params }) => {
     });
   }
   const entry = params.path?.match(ENTRY);
-  if (entry) return getEntry(entry[1] ?? '', entry[2] ?? '');
+  if (entry) return answering(() => getEntry(entry[1] ?? '', entry[2] ?? ''));
   const list = params.path?.match(ENTRIES);
   if (list) return listEntries(list[1] ?? '');
   return new Response('Not found', { status: 404 });
@@ -232,7 +233,7 @@ export const GET: APIRoute = async ({ params }) => {
 
 export const PUT: APIRoute = async ({ params, request }) => {
   const draft = params.path?.match(DRAFT);
-  if (draft) return autosave(draft[1] ?? '', draft[2] ?? '', request);
+  if (draft) return answering(() => autosave(draft[1] ?? '', draft[2] ?? '', request));
   return new Response('Not found', { status: 404 });
 };
 
@@ -274,11 +275,14 @@ async function publish(): Promise<Response> {
   return Response.json(result ?? { paths: [] });
 }
 
-// Every write that commits answers the same way when someone got there first.
-async function committing(work: () => Promise<Response>): Promise<Response> {
+// Every route answers the same way when git refuses, whether it was reading or committing.
+async function answering(work: () => Promise<Response>): Promise<Response> {
   try {
     return await work();
   } catch (err) {
+    // The repository is out of reach for every path, so this is about the installation and
+    // not about whatever entry happened to be open — hence the message rather than a 404.
+    if (err instanceof RepoUnreachableError) return new Response(err.message, { status: 503 });
     // A conflict names its files as data as well as prose: the drawer badges those rows and
     // offers each one the way out. A ref that moved has no file to name.
     if (err instanceof DraftConflictError)
@@ -293,11 +297,11 @@ export const POST: APIRoute = async ({ params, request }) => {
     const body = (await request.json().catch(() => ({}))) as { password?: unknown };
     return login(typeof body.password === 'string' ? body.password : '');
   }
-  if (params.path === 'publish') return committing(publish);
+  if (params.path === 'publish') return answering(publish);
   const renamed = params.path?.match(RENAME);
-  if (renamed) return committing(() => rename(renamed[1] ?? '', renamed[2] ?? '', request));
+  if (renamed) return answering(() => rename(renamed[1] ?? '', renamed[2] ?? '', request));
   const created = params.path?.match(ENTRIES);
-  if (created) return createEntry(created[1] ?? '', request);
+  if (created) return answering(() => createEntry(created[1] ?? '', request));
   return new Response('Not found', { status: 404 });
 };
 
@@ -305,6 +309,6 @@ export const DELETE: APIRoute = async ({ params }) => {
   const draft = params.path?.match(DRAFT);
   if (draft) return discard(draft[1] ?? '', draft[2] ?? '');
   const entry = params.path?.match(ENTRY);
-  if (entry) return committing(() => remove(entry[1] ?? '', entry[2] ?? ''));
+  if (entry) return answering(() => remove(entry[1] ?? '', entry[2] ?? ''));
   return new Response('Not found', { status: 404 });
 };

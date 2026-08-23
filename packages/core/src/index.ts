@@ -27,7 +27,7 @@ export {
 export type { ContentFile, ContentIndex, EntryLocale, IndexEntry, TitleFields } from './entries.js';
 export { collectionEntries, contentPathErrors, indexFrom } from './entries.js';
 export type { GitClient, GitFile, GitHubApp, PublishFile } from './git.js';
-export { blobSha, createGitClient, RefMovedError } from './git.js';
+export { blobSha, createGitClient, RefMovedError, RepoUnreachableError } from './git.js';
 export type { EntryLocation, RedirectRule } from './lifecycle.js';
 export { deleteEntry, redirectsText, renameEntry } from './lifecycle.js';
 export type { MigrationStep } from './migrate.js';

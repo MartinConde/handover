@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The admin says when the GitHub App cannot see the repository. GitHub answers `404` for a
+  repository outside the App's installation exactly as it does for a missing file, so every
+  entry used to open onto "No such entry" with nothing pointing at the installation. The
+  admin now names the repository and the installation instead — on opening an entry, on
+  creating, renaming or deleting one, and on publishing. See `docs/deploy.md`.
+
 - An unquoted date in a content file fails the build with a message that says to quote it.
   `published: 2026-07-14` is a YAML timestamp: Astro's loader reads it as a `Date`, your
   `z.iso.date()` wants a string, and the build used to stop on

@@ -1,4 +1,4 @@
-import type { PublishFile } from '@handover/core';
+import { type PublishFile, RepoUnreachableError } from '@handover/core';
 import type { APIContext } from 'astro';
 import { expect, test, vi } from 'vitest';
 import { DELETE, GET, POST, PUT } from './api.js';
@@ -182,6 +182,19 @@ test('an unknown collection or missing entry is 404', async () => {
   expect((await GET(ctx('entries/nope/mill-house'))).status).toBe(404);
   expect((await GET(ctx('entries/listings/nope'))).status).toBe(404);
   expect(getFile).not.toHaveBeenCalledWith(expect.stringContaining('nope/'));
+});
+
+test('an entry the App cannot reach names the repository rather than the entry', async () => {
+  const message =
+    'The GitHub App cannot see acme/site. Add the repository to installation 2, or correct the repository name.';
+  getFile.mockImplementationOnce(async () => {
+    throw new RepoUnreachableError(message);
+  });
+
+  const res = await GET(ctx('entries/listings/mill-house'));
+
+  expect(res.status).toBe(503);
+  expect(await res.text()).toBe(message);
 });
 
 test('an entry with a draft returns the draft data and reports it as pending', async () => {

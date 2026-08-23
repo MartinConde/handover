@@ -38,11 +38,12 @@ async function loadPending() {
 
 async function loadEntry(collection: string, slug: string) {
   const res = await fetch(`/admin/api/entries/${collection}/${slug}`);
-  if (!res.ok)
-    throw new Error(
-      res.status === 404 ? 'No such entry' : `Could not load the entry (${res.status})`,
-    );
-  return res.json();
+  if (res.ok) return res.json();
+  // A 503 is about the repository, not about this entry, so it is the server's own sentence.
+  if (res.status === 503) throw new Error(await res.text());
+  throw new Error(
+    res.status === 404 ? 'No such entry' : `Could not load the entry (${res.status})`,
+  );
 }
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

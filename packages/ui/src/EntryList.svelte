@@ -59,14 +59,18 @@ const json = (body: unknown) => ({
 });
 
 // A 409 is the server's own sentence — "publish this first", "someone else changed it" —
-// and reads better than anything this component could say about it.
+// and reads better than anything this component could say about it. So is the 503 that says
+// the App cannot see the repository.
 async function send(url: string, init: RequestInit) {
   busy = true;
   error = '';
   const res = await fetch(url, init);
   busy = false;
   if (res.ok) return res;
-  error = res.status === 409 ? await res.text() : `That did not work (${res.status})`;
+  error =
+    res.status === 409 || res.status === 503
+      ? await res.text()
+      : `That did not work (${res.status})`;
   return undefined;
 }
 

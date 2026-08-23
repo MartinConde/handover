@@ -34,6 +34,12 @@ export class RefMovedError extends Error {
   override name = 'RefMovedError';
 }
 
+// The App cannot reach the repository at all, so every path answers 404 and no file the
+// admin asks for exists as far as GitHub is concerned.
+export class RepoUnreachableError extends Error {
+  override name = 'RepoUnreachableError';
+}
+
 const API = 'https://api.github.com';
 
 // A git object id is a pure function of the bytes: sha1("blob <length>\0" + bytes). Two
@@ -117,8 +123,21 @@ export function createGitClient(
     return api(path, init, await token());
   }
 
+  // GitHub answers 404 for a repository outside the installation exactly as it does for a
+  // missing path, so a 404 only means "no such file" once the repository itself has answered.
+  // Asked at most once per client, and never on a path that succeeds.
+  let reachable: Promise<boolean> | undefined;
+  async function assertRepoReachable(): Promise<void> {
+    reachable ??= request(repo).then((res) => res.status !== 404);
+    if (!(await reachable))
+      throw new RepoUnreachableError(
+        `The GitHub App cannot see ${app.owner}/${app.repo}. Add the repository to installation ${app.installationId}, or correct the repository name.`,
+      );
+  }
+
   async function json<T>(path: string, init: RequestInit = {}, what: string): Promise<T> {
     const res = await request(path, init);
+    if (res.status === 404) await assertRepoReachable();
     if (!res.ok) throw new Error(`GitHub ${what} failed: ${res.status}`);
     return (await res.json()) as T;
   }
@@ -136,7 +155,10 @@ export function createGitClient(
       const res = await request(
         `${repo}/contents/${encoded}?ref=${encodeURIComponent(app.branch ?? 'main')}`,
       );
-      if (res.status === 404) return undefined;
+      if (res.status === 404) {
+        await assertRepoReachable();
+        return undefined;
+      }
       if (!res.ok) throw new Error(`GitHub getFile ${path} failed: ${res.status}`);
       const body = (await res.json()) as { sha: string; content: string };
       const bytes = Uint8Array.from(atob(body.content.replace(/\s+/g, '')), (c) => c.charCodeAt(0));

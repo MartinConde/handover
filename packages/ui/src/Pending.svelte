@@ -75,6 +75,11 @@ async function publish() {
     error = incomplete(unready);
     return;
   }
+  // A repository the App cannot reach is the server's own sentence; nothing else adds to it.
+  if (res.status === 503) {
+    error = await res.text();
+    return;
+  }
   if (res.status !== 409) {
     error = `Publish failed (${res.status}). Nothing was changed.`;
     return;

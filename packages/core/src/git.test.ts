@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { blobSha, createGitClient, RefMovedError } from './git.js';
+import { blobSha, createGitClient, RefMovedError, RepoUnreachableError } from './git.js';
 
 // A real key pair so the fake token endpoint can verify the JWT the client signs.
 const keys = await crypto.subtle.generateKey(
@@ -33,7 +33,9 @@ async function verifyJwt(header: string | null): Promise<{ iss: string; exp: num
 }
 
 // A fake GitHub: mints a token when the JWT verifies, serves one file, records every call.
-function fakeGitHub(files: Record<string, string>) {
+// `visible: false` is a repository outside the installation — GitHub 404s every path of it,
+// the repository itself included.
+function fakeGitHub(files: Record<string, string>, visible = true) {
   const calls: string[] = [];
   let minted = 0;
   const fetch = async (url: string, init: RequestInit = {}): Promise<Response> => {
@@ -52,6 +54,9 @@ function fakeGitHub(files: Record<string, string>) {
       );
     }
     if (auth !== `token ghs_${minted}`) return new Response('{}', { status: 401 });
+    if (!visible) return new Response('{"message":"Not Found"}', { status: 404 });
+    if (url === 'https://api.github.com/repos/acme/site')
+      return Response.json({ full_name: 'acme/site' });
     const m = url.match(
       /^https:\/\/api\.github\.com\/repos\/acme\/site\/contents\/(.+)\?ref=main$/,
     );
@@ -84,6 +89,39 @@ test('getFile returns undefined for a missing path', async () => {
   const git = createGitClient('default', app, { fetch: gh.fetch });
 
   expect(await git.getFile('nope.yaml')).toBeUndefined();
+});
+
+test('getFile names the repository when the App cannot see it', async () => {
+  const gh = fakeGitHub({}, false);
+  const git = createGitClient('default', app, { fetch: gh.fetch });
+
+  await expect(git.getFile('src/content/listings/en/mill-house.yaml')).rejects.toThrow(
+    new RepoUnreachableError(
+      'The GitHub App cannot see acme/site. Add the repository to installation 67890, or correct the repository name.',
+    ),
+  );
+});
+
+test('getHead names the repository too, rather than reporting a 404', async () => {
+  const gh = fakeGitHub({}, false);
+  const git = createGitClient('default', app, { fetch: gh.fetch });
+
+  await expect(git.getHead()).rejects.toBeInstanceOf(RepoUnreachableError);
+});
+
+test('the repository is asked for once, however many paths answer 404', async () => {
+  const gh = fakeGitHub({}, false);
+  const git = createGitClient('default', app, { fetch: gh.fetch });
+
+  await Promise.all([
+    git.getFile('a.yaml').catch(() => {}),
+    git.getFile('b.yaml').catch(() => {}),
+    git.getHead().catch(() => {}),
+  ]);
+
+  expect(gh.calls.filter((c) => c === 'GET https://api.github.com/repos/acme/site')).toHaveLength(
+    1,
+  );
 });
 
 test('getFile throws on any other GitHub error', async () => {
