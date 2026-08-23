@@ -46,6 +46,19 @@ for (const name of readdirSync(goldenDir)) {
   });
 }
 
+// The pair session 2.5 compares. DE has two blocks EN has not: `compliance` carries
+// `_locales`, so it is DE-only on purpose, and `quote` carries nothing, so it is drift. A
+// report that flags every difference passes on one of them and fails on the other.
+for (const locale of ['en', 'de']) {
+  test(`the drift fixture's ${locale} file is one the serialiser could have written`, () => {
+    const file = readFileSync(
+      join(import.meta.dirname, '../test/drift', locale, 'home.yaml'),
+      'utf8',
+    );
+    expect(stringifyEntry('default', parseEntry('default', file))).toBe(file);
+  });
+}
+
 // One fixture per scalar field type: the object a form produces must land in the golden
 // file byte for byte and come back equal, so the stored form of each type is pinned.
 const scalars: Record<string, unknown> = {
@@ -349,6 +362,40 @@ test('a save keeps the _version the entry already has', () => {
   expect(mergeEntry('default', { _version: 3, title: 'Old' }, { title: 'New' })).toEqual({
     _version: 3,
     title: 'New',
+  });
+});
+
+// decap-cms#6978: fields configured to duplicate are stripped from a translated document on
+// save, because the German form never showed them and so never sent them back. `price` and
+// `bedrooms` are duplicate, `image.src` / `width` / `height` are duplicate and `image.alt` is
+// translatable — the nested case is the one clients notice, since it makes them retype URLs.
+// Red until session 2.3 teaches the save which fields the locale it is saving does not own.
+test.skip('a save of a translated entry keeps the fields its form does not show', () => {
+  const de = {
+    _version: 1,
+    title: 'Mühlenhaus',
+    price: 425000,
+    bedrooms: 3,
+    image: {
+      src: 'media/9f3a2c7e.webp',
+      alt: 'Vorderseite des Hauses',
+      width: 2400,
+      height: 1600,
+    },
+  };
+  const values = { title: 'Mühlenhaus am Fluss', image: { alt: 'Das Haus vom Fluss aus' } };
+
+  expect(mergeEntry('default', de, values)).toEqual({
+    _version: 1,
+    title: 'Mühlenhaus am Fluss',
+    price: 425000,
+    bedrooms: 3,
+    image: {
+      src: 'media/9f3a2c7e.webp',
+      alt: 'Das Haus vom Fluss aus',
+      width: 2400,
+      height: 1600,
+    },
   });
 });
 

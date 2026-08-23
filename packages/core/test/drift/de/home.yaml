@@ -1,0 +1,22 @@
+_version: 1
+_i18n:
+  sourceLocale: "en"
+  sourceBlob: "3f9c2e1a7b8d4c6e0a2f5b7c9d1e3a5b7c9d1e3a"
+  sourceHash: "8f3a1c"
+  translatedAt: "2026-08-20T10:14:00Z"
+title: "Startseite"
+blocks:
+  - _type: "hero"
+    _id: "k3nf9a2p"
+    heading: "Zieh an die Küste"
+  - _type: "compliance"
+    _id: "p8xk2m4q"
+    _locales:
+      - "de"
+    heading: "Widerrufsbelehrung"
+  - _type: "quote"
+    _id: "z9y8x7w6"
+    body: "Ein seltener Fund."
+  - _type: "cta"
+    _id: "q1w2e3r4"
+    heading: "Bereit für den Umzug?"

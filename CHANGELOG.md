@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Nothing in the package changed. The two i18n mistakes other CMSs shipped — a field
+  configured to duplicate disappearing from a translated file on save, and duplicating an
+  entry copying only the default locale — now have tests in the repo, written before the
+  feature and skipped until the sessions that make them pass.
+
 - Editing an entry keeps a key your schema no longer declares. The editor writes back the
   file it read rather than the fields it drew, so a field renamed in `schemas.ts` before
   its `handover migrate` step keeps its old value in the file instead of being dropped on

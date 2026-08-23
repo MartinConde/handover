@@ -1,0 +1,9 @@
+_version: 1
+title: "Home"
+blocks:
+  - _type: "hero"
+    _id: "k3nf9a2p"
+    heading: "Move to the coast"
+  - _type: "cta"
+    _id: "q1w2e3r4"
+    heading: "Ready to move?"

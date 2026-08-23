@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import { parse } from 'yaml';
 import type { GitClient, PublishFile } from './git.js';
-import { deleteEntry, redirectsText, renameEntry } from './lifecycle.js';
+import { deleteEntry, duplicateEntry, redirectsText, renameEntry } from './lifecycle.js';
 
 // An in-memory repo: serves files, records every publish call.
 function fakeGit(files: Record<string, string>) {
@@ -207,4 +207,29 @@ test('redirectsText is one "/from /to status" line per rule', () => {
     ]),
   ).toBe('/old /new 301\n/brochure https://example.com/b.pdf 301\n');
   expect(redirectsText('default', [])).toBe('');
+});
+
+// decap-cms#7371 / payload#14491: duplicating an entry copies the default locale and
+// silently drops the rest. The copy has to stay one cross-locale entry, so the same block
+// gets the same new `_id` in every locale file. Red until session 2.9 writes duplicateEntry.
+test.skip('duplicate copies every locale of the entry with one shared id map', async () => {
+  const block = (heading: string) =>
+    `_version: 1\nblocks:\n  - _type: "hero"\n    _id: "k3nf9a2p"\n    heading: "${heading}"\n`;
+  const { git } = fakeGit({
+    'src/content/listings/en/seaview.yaml': block('Seaview'),
+    'src/content/listings/de/seaview.yaml': block('Meerblick'),
+  });
+
+  const copies = await duplicateEntry('default', git, listings, 'seaview', 'seaview-copy');
+
+  expect(copies.map((c) => c.path)).toEqual([
+    'src/content/listings/en/seaview-copy.yaml',
+    'src/content/listings/de/seaview-copy.yaml',
+  ]);
+  const ids = copies.map(
+    (c) => (parse(c.contents) as { blocks: { _id: string }[] }).blocks[0]?._id,
+  );
+  expect(ids[0]).toEqual(ANY_ID);
+  expect(ids[1]).toBe(ids[0]);
+  expect(ids[0]).not.toBe('k3nf9a2p');
 });
