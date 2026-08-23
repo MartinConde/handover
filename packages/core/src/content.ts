@@ -409,8 +409,10 @@ export async function markTranslation(
 
 /**
  * The languages whose translation was made from an older source language than the one this entry
- * now has. A file with no `_i18n` has never been marked and is not stale; neither is one naming
- * a source language the entry has no file in. Warn only — nothing is refused for this.
+ * now has. A file with no `_i18n` has never been marked and is not stale; neither is one whose
+ * mark carries no hash, or one naming a source language the entry has no file in — a mark that
+ * says nothing about the values cannot say they have moved on, and there would be no way to
+ * clear the warning if it did. Warn only — nothing is refused for this.
  */
 export async function staleLocales(
   _siteId: string,
@@ -420,9 +422,10 @@ export async function staleLocales(
   const hashes = new Map<string, Promise<string>>();
   const stale: string[] = [];
   for (const [locale, data] of Object.entries(files)) {
-    const mark = isObject(data) && isObject(data._i18n) ? data._i18n : undefined;
-    const from = typeof mark?.sourceLocale === 'string' ? mark.sourceLocale : undefined;
-    if (!mark || from === undefined || from === locale || !(from in files)) continue;
+    const mark = isObject(data) && isObject(data._i18n) ? data._i18n : {};
+    const from = typeof mark.sourceLocale === 'string' ? mark.sourceLocale : undefined;
+    if (from === undefined || from === locale || !(from in files)) continue;
+    if (typeof mark.sourceHash !== 'string') continue;
     if (!hashes.has(from)) hashes.set(from, hashOf(form, files[from]));
     if ((await hashes.get(from)) !== mark.sourceHash) stale.push(locale);
   }

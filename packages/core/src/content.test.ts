@@ -1027,3 +1027,14 @@ test('a translation somebody typed into is marked with the source language as it
     }),
   ).toEqual([]);
 });
+
+test('a mark that says nothing about the values is not a claim to be stale', async () => {
+  const de = {
+    ...(parseEntry('default', localeFile('de')) as object),
+    _i18n: { sourceLocale: 'en' },
+  };
+
+  expect(
+    await staleLocales('default', millHouse, { en: parseEntry('default', localeFile('en')), de }),
+  ).toEqual([]);
+});
