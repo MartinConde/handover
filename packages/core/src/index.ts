@@ -23,7 +23,7 @@ export {
   saveDraft,
   schemaVersionError,
 } from './db.js';
-export type { ContentFile, ContentIndex, EntryLocale, IndexEntry } from './entries.js';
+export type { ContentFile, ContentIndex, EntryLocale, IndexEntry, TitleFields } from './entries.js';
 export { collectionEntries, contentPathErrors, indexFrom } from './entries.js';
 export type { GitClient, GitFile, GitHubApp, PublishFile } from './git.js';
 export { blobSha, createGitClient, RefMovedError } from './git.js';

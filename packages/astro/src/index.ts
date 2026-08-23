@@ -5,6 +5,7 @@ import {
   type ContentIndex,
   checkCollections,
   contentPathErrors,
+  fieldsFrom,
   indexFrom,
   type JsonSchema,
   parseEntry,
@@ -12,6 +13,7 @@ import {
   redirectsText,
   richtextErrors,
   schemaVersionError,
+  type TitleFields,
   unsafeLinkScheme,
 } from '@handover/core';
 import type { AstroIntegration } from 'astro';
@@ -200,6 +202,8 @@ export interface HandoverConfig {
       index?: string;
       /** Loader name, `'post'` for `src/loaders/post.ts`. */
       load?: string;
+      /** The field the entry list shows, when it is not `title`: `'name'`. */
+      titleField?: string;
     }
   >;
   /** One schema per file under `src/content/globals/<locale>/`, keyed by file name. */
@@ -221,6 +225,18 @@ export function formSchema(schema: z.ZodType): JsonSchema {
 
 export function defineConfig(config: HandoverConfig): HandoverConfig {
   const errors = checkCollections('default', config.collections, config.globals);
+  // The one config key that has to agree with a schema, and this is the only place holding
+  // both: a titleField naming nothing would drop the name typed into New entry in silence.
+  for (const [name, c] of Object.entries(config.collections)) {
+    if (!c.titleField) continue;
+    const found = fieldsFrom('default', formSchema(c.schema)).find(
+      (f) => f.path[0] === c.titleField,
+    );
+    if (found?.type !== 'text')
+      errors.push(
+        `cms.config.ts › collections.${name}.titleField: ${JSON.stringify(c.titleField)} is not a text field of this collection's schema`,
+      );
+  }
   if (errors.length) throw new Error(errors.join('\n'));
   return config;
 }
@@ -269,7 +285,7 @@ export async function emitRedirects(root: URL, clientDir: URL): Promise<number> 
  * two levels an entry lives at, because a file anywhere else is a mistake the build should
  * name rather than a row the list would quietly be missing.
  */
-export async function buildIndex(root: URL): Promise<ContentIndex> {
+export async function buildIndex(root: URL, titleFields: TitleFields = {}): Promise<ContentIndex> {
   const base = new URL('src/content/', root);
   const dir = fileURLToPath(base);
   const found = await readdir(dir, { withFileTypes: true, recursive: true }).catch(() => []);
@@ -284,10 +300,20 @@ export async function buildIndex(root: URL): Promise<ContentIndex> {
       contents: await readFile(new URL(path, root), 'utf8'),
     })),
   );
-  return indexFrom('default', files);
+  return indexFrom('default', files, titleFields);
 }
 
-export default function handover(): AstroIntegration {
+/**
+ * The site's own `cms.config.ts`, imported by `astro.config.mjs` and passed in. The Worker
+ * gets the same file through `virtual:handover/config`; this copy is for the build, which
+ * cannot execute TypeScript and needs to know which field each collection lists by.
+ */
+export default function handover(cms: HandoverConfig): AstroIntegration {
+  const titleFields = Object.fromEntries(
+    Object.entries(cms.collections).flatMap(([name, c]) =>
+      c.titleField ? [[name, c.titleField]] : [],
+    ),
+  );
   let root: URL;
   let clientDir: URL;
   return {
@@ -344,7 +370,7 @@ export default function handover(): AstroIntegration {
                 resolveId: (id) => (id === VIRTUAL_INDEX ? `\0${VIRTUAL_INDEX}` : undefined),
                 load: async (id) =>
                   id === `\0${VIRTUAL_INDEX}`
-                    ? `export default JSON.parse(${JSON.stringify(JSON.stringify(await buildIndex(config.root)))});`
+                    ? `export default JSON.parse(${JSON.stringify(JSON.stringify(await buildIndex(config.root, titleFields)))});`
                     : undefined,
                 configureServer(server: ViteDevServer) {
                   server.watcher.on('all', (_event, file) => {

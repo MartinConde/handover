@@ -43,11 +43,21 @@ test.each([
   ['index with a parameter', { posts: { index: '/blog/[slug]' } }, 'collections.posts.index'],
   ['index not starting with /', { posts: { index: 'blog' } }, 'collections.posts.index'],
   ['load that is not a string', { posts: { load: () => 1 } }, 'collections.posts.load'],
+  ['titleField that is not a string', { posts: { titleField: 1 } }, 'collections.posts.titleField'],
+  [
+    'titleField naming a reserved key',
+    { posts: { titleField: '_id' } },
+    'collections.posts.titleField',
+  ],
   ['collection name with a capital', { Posts: {} }, 'collections.Posts'],
 ])('%s is reported at its key', (_name, collections, at) => {
   const [message, ...rest] = checkCollections('default', collections);
   expect(rest).toEqual([]);
   expect(message).toMatch(new RegExp(`^cms\\.config\\.ts › ${at.replace(/\./g, '\\.')}: `));
+});
+
+test('a titleField naming an ordinary field is accepted', () => {
+  expect(checkCollections('default', { presenters: { titleField: 'name' } })).toEqual([]);
 });
 
 test('the same route on two collections is reported on the second', () => {

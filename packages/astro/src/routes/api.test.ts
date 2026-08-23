@@ -5,6 +5,7 @@ import { DELETE, GET, POST, PUT } from './api.js';
 
 const {
   listing,
+  presenter,
   getFile,
   getHead,
   publish,
@@ -25,6 +26,8 @@ const {
       rooms: z.number(),
       address: z.object({ street: z.string() }),
     }),
+    // A collection keyed on something other than `title`.
+    presenter: z.object({ name: z.string() }),
     // The GitHub boundary: one file in the repo, nothing else.
     getFile: vi.fn(async (path: string) => {
       if (path === 'src/content/listings/en/mill-house.yaml')
@@ -69,7 +72,10 @@ const {
 let draft: { contents: string; baseSha: string; baseBlob: string } | undefined;
 vi.mock('virtual:handover/config', () => ({
   default: {
-    collections: { listings: { schema: listing, route: '/listings/[slug]', index: '/listings' } },
+    collections: {
+      listings: { schema: listing, route: '/listings/[slug]', index: '/listings' },
+      presenters: { schema: presenter, titleField: 'name' },
+    },
   },
 }));
 // What the build read out of src/content/, inlined into the Worker bundle.
@@ -90,6 +96,12 @@ vi.mock('virtual:handover/index', () => ({
             path: 'src/content/listings/en/seaview-cottage.yaml',
           },
         },
+      },
+    ],
+    presenters: [
+      {
+        id: 'rosa-hale',
+        locales: { en: { title: 'Rosa Hale', path: 'src/content/presenters/en/rosa-hale.yaml' } },
       },
     ],
   },
@@ -129,7 +141,7 @@ const put = (path: string, body: string) =>
 test('ping returns the configured collection names', async () => {
   const res = await GET(ctx('ping'));
   expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ ok: true, collections: ['listings'] });
+  expect(await res.json()).toEqual({ ok: true, collections: ['listings', 'presenters'] });
 });
 
 test('unknown paths are 404', async () => {
@@ -411,6 +423,43 @@ test('the entry list is the built index with the pending drafts over it', async 
   });
 });
 
+test('opening an entry names the field its collection is keyed on', async () => {
+  draft = { contents: 'name: "Rosa Hale"\n', baseSha: 'head789', baseBlob: '' };
+  const keyed = (await (await GET(ctx('entries/presenters/rosa-hale'))).json()) as {
+    titleField?: string;
+  };
+  expect(keyed.titleField).toBe('name');
+  const plain = (await (await GET(ctx('entries/listings/mill-house'))).json()) as {
+    titleField?: string;
+  };
+  expect(plain.titleField).toBeUndefined();
+  draft = undefined;
+});
+
+test('a collection keyed on another field lists its drafts by that field', async () => {
+  overlayRows.mockImplementationOnce(async () => [
+    {
+      path: 'src/content/presenters/en/ada-fenwick.yaml',
+      contents: 'name: "Ada Fenwick"\n',
+    },
+  ]);
+  const res = await GET(ctx('entries/presenters'));
+  expect(await res.json()).toEqual({
+    entries: [
+      {
+        id: 'ada-fenwick',
+        locales: {
+          en: { title: 'Ada Fenwick', path: 'src/content/presenters/en/ada-fenwick.yaml' },
+        },
+      },
+      {
+        id: 'rosa-hale',
+        locales: { en: { title: 'Rosa Hale', path: 'src/content/presenters/en/rosa-hale.yaml' } },
+      },
+    ],
+  });
+});
+
 test('listing an unknown collection is 404', async () => {
   expect((await GET(ctx('entries/nope'))).status).toBe(404);
 });
@@ -431,6 +480,19 @@ test('creating an entry derives its file name and stores it as a draft, uncommit
     { _version: 1, title: 'Café & Bar / 2026' },
   );
   expect(publish).not.toHaveBeenCalled();
+});
+
+test('a new entry keeps the title that named its file, under the declared field', async () => {
+  createDraft.mockClear();
+  const res = await POST(post('entries/presenters', JSON.stringify({ title: 'Ada Fenwick' })));
+  expect(await res.json()).toEqual({ slug: 'ada-fenwick' });
+  expect(createDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/presenters/en/ada-fenwick.yaml',
+    { _version: 1, name: 'Ada Fenwick' },
+  );
 });
 
 test('a title already used in the collection gets the collision suffix', async () => {

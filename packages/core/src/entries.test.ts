@@ -35,6 +35,18 @@ test('an entry with no title is listed under its filename', () => {
   expect(index.listings?.[0]?.locales.en?.title).toBe('mill-house');
 });
 
+test('a collection keyed on another field is listed by that field', () => {
+  const index = indexFrom(
+    'default',
+    [
+      listing('en', 'rosa-hale', 'name: "Rosa Hale"\n'),
+      listing('en', 'theo-adeyemi', 'title: "Theo Adeyemi"\n'),
+    ],
+    { listings: 'name' },
+  );
+  expect(index.listings?.map((e) => e.locales.en?.title)).toEqual(['Rosa Hale', 'theo-adeyemi']);
+});
+
 test('a hidden entry carries its status and a live one has no status key', () => {
   const index = indexFrom('default', [
     listing('en', 'mill-house', '_status: "hidden"\ntitle: "The Mill House"\n'),
@@ -101,6 +113,17 @@ test('a draft that hides an entry wins over the live file', () => {
     listing('en', 'mill-house', '_status: "hidden"\ntitle: "The Mill House"\n'),
   ]);
   expect(entries[0]?.locales.en?.status).toBe('hidden');
+});
+
+test('a draft in a collection keyed on another field is listed by that field too', () => {
+  const entries = collectionEntries(
+    'default',
+    index,
+    'listings',
+    [listing('en', 'rosa-hale', 'name: "Rosa Hale"\n')],
+    'name',
+  );
+  expect(entries.map((e) => e.locales.en?.title)).toContain('Rosa Hale');
 });
 
 test('an entry that exists only as a draft is in the list', () => {

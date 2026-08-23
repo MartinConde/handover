@@ -47,24 +47,33 @@ export function contentPathErrors(_siteId: string, paths: Iterable<string>): str
 
 const byId = (a: IndexEntry, b: IndexEntry) => a.id.localeCompare(b.id);
 
+/** Which field holds the entry's title, per collection: `titleField` in cms.config.ts. */
+export type TitleFields = Record<string, string>;
+
 /** Everything the list needs about one file, or nothing if it is not an entry. */
-function indexFile(siteId: string, { path, contents }: ContentFile) {
+function indexFile(siteId: string, { path, contents }: ContentFile, titleFields: TitleFields) {
   const found = ENTRY_PATH.exec(path);
   if (!found) return undefined;
   const [, collection = '', locale = '', id = ''] = found;
   if (collection === 'globals') return undefined;
-  const data = parseEntry(siteId, contents) as { title?: unknown; _status?: unknown } | null;
-  // A collection keyed on something other than `title` lists by filename rather than by nothing.
-  const title = typeof data?.title === 'string' && data.title ? data.title : id;
+  const data = parseEntry(siteId, contents) as Record<string, unknown> | null;
+  // A collection that declares no title field, or an entry that has not filled it in yet,
+  // lists by filename rather than by nothing.
+  const named = data?.[titleFields[collection] ?? 'title'];
+  const title = typeof named === 'string' && named ? named : id;
   const info: EntryLocale = { title, path };
   if (data?._status === 'hidden') info.status = 'hidden';
   return { collection, locale, id, info };
 }
 
-export function indexFrom(siteId: string, files: Iterable<ContentFile>): ContentIndex {
+export function indexFrom(
+  siteId: string,
+  files: Iterable<ContentFile>,
+  titleFields: TitleFields = {},
+): ContentIndex {
   const index = new Map<string, IndexEntry[]>();
   for (const file of files) {
-    const entry = indexFile(siteId, file);
+    const entry = indexFile(siteId, file, titleFields);
     if (!entry) continue;
     const entries = index.get(entry.collection) ?? [];
     index.set(entry.collection, entries);
@@ -85,6 +94,7 @@ export function collectionEntries(
   index: ContentIndex,
   collection: string,
   drafts: readonly ContentFile[],
+  titleField?: string,
 ): IndexEntry[] {
   const prefix = `src/content/${collection}/`;
   const rows = drafts.filter((d) => d.path.startsWith(prefix));
@@ -93,6 +103,7 @@ export function collectionEntries(
   for (const draft of indexFrom(
     siteId,
     rows.filter((r) => r.contents),
+    titleField ? { [collection]: titleField } : {},
   )[collection] ?? []) {
     const found = entries.find((e) => e.id === draft.id);
     if (found) Object.assign(found.locales, draft.locales);

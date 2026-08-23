@@ -106,10 +106,10 @@ the **pending-changes drawer**, which lists them and publishes them:
 
 **New entry** writes a draft and nothing else: the file appears in the repository at its
 first publish, so an entry you started and abandoned never reaches git. The filename comes
-from the title ([Configuration](configuration.md#entry-filenames)) and counts names that
-exist only as drafts, so two unpublished entries cannot claim the same file. The draft
-holds the title and nothing else: a required field is left out rather than guessed at, and
-the editor shows every one of them as a problem until it is filled in.
+from the name you type ([Configuration](configuration.md#entry-filenames)) and counts
+names that exist only as drafts, so two unpublished entries cannot claim the same file.
+The draft holds that name and nothing else: a required field is left out rather than
+guessed at, and the editor shows every one of them as a problem until it is filled in.
 
 **Rename** and **delete** are commits of their own, not drafts, because they move files
 rather than change them ([Content format](content-format.md#renaming-and-deleting-an-entry)).
@@ -144,12 +144,13 @@ drawer's **Discard** does with a file a publish was refused over. `404` if the c
 is not configured.
 
 ```
-GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, pending, problems }
+GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, pending, problems, titleField }
 ```
 
 `data` is the draft when there is one, otherwise the file. `pending` says which, and
 `problems` is the same list the autosave answers with, so an entry names what is missing
-the moment it opens.
+the moment it opens. `titleField` is there when the collection declares one, and is the
+field the editor's heading reads.
 
 ```
 GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales" }] }
@@ -157,10 +158,11 @@ GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales"
 
 The collection's entries for the list screen: one row per entry, `id` is the filename and
 `locales` maps each locale to `{ title, path }` plus `status: "hidden"` when it is hidden.
-Titles come from the entry's `title` field; a collection without one lists by filename.
-The list is the build's [content index](#the-content-index) with the pending drafts laid
-over it, so an entry you have edited but not published shows what you typed. It reads
-nothing from GitHub.
+Titles come from the field the collection is keyed on — `title`, or its
+[`titleField`](configuration.md#collections); an entry that has not filled it in lists by
+filename. The list is the build's [content index](#the-content-index) with the pending
+drafts laid over it, so an entry you have edited but not published shows what you typed.
+It reads nothing from GitHub.
 
 ```
 POST /admin/api/entries/:collection         { "title": "…" }  →  { "slug" }

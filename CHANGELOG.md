@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A collection can say which field is its entry's title. `titleField: 'name'` on a
+  collection in `cms.config.ts` makes the entry list, the editor's heading and **New
+  entry** all use `name`, so a collection keyed on something other than `title` no longer
+  lists file names and no longer drops the name you typed into the dialog; it has to name a
+  text field of that collection's schema, and the build fails saying so if it does not. The
+  integration now takes that config — `astro.config.mjs` imports `cms.config.ts` and passes
+  it to `handover(cms)`, because the build reads the titles and cannot execute your config
+  on its own. See `docs/configuration.md`.
+
 - Autosave no longer refuses an entry the schema is not happy with. A draft holds what you
   typed — a new entry whose required `reference` has no picker yet, or a required
   `positive()` number still at nothing, used to answer "Not saved" and lose the rest of the

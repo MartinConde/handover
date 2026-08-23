@@ -22,6 +22,8 @@ let {
     pending: boolean;
     /** What the collection schema will not accept yet, by field path. */
     problems: { path: string; message: string }[];
+    /** The field this collection is keyed on, when it is not `title`. */
+    titleField?: string;
   };
   /** Open the pending-changes drawer, which is where publishing happens. */
   onpublish: () => void;
@@ -43,7 +45,8 @@ let problems = $state(byPath(entry.problems));
 
 const json = $derived(JSON.stringify(data));
 const missing = $derived(Object.keys(problems));
-const title = $derived(typeof data.title === 'string' && data.title ? data.title : slug);
+const named = $derived(data[entry.titleField ?? 'title']);
+const title = $derived(typeof named === 'string' && named ? named : slug);
 const dirty = $derived(drafted || json !== saved);
 
 // Autosave. The wait restarts on every keystroke, so a burst of typing is one write.

@@ -1,8 +1,10 @@
 # Configuration
 
 `cms.config.ts` at the project root is the one file Handover reads about your site. It is
-code: edit it in the repo, it is not editable from the admin. A mistake fails the build
-with a message naming the key, for example
+code: edit it in the repo, it is not editable from the admin. `astro.config.mjs` imports it
+and hands it to the integration — `handover(cms)` — so the build reads it as well as the
+admin ([Getting started](getting-started.md)). A mistake fails the build with a message
+naming the key, for example
 `cms.config.ts › collections.listings.route: expected a path starting with "/" containing "[slug]" once, like "/blog/[slug]", got "/listings"`.
 
 ```ts
@@ -30,6 +32,7 @@ digits and dashes.
 | `route` | no | The detail page's path with `[slug]` exactly once, e.g. `'/blog/[slug]'`. `[slug]` is the entry's filename without `.yaml`. Two collections cannot share a route. |
 | `index` | no | The listing page, a fixed path with no `[...]` segment, e.g. `'/blog'`. Used wherever something links to "the blog" as a whole rather than to one entry. |
 | `load` | no | The loader's name: `'post'` means `src/loaders/post.ts` ([Template convention](template-convention.md)). |
+| `titleField` | no | The field the entry list shows, when the collection is not keyed on `title`: `titleField: 'name'`. It is also the field "New entry" writes the name you type into, so it has to be a text field of this collection's schema — the build says so if it is not. |
 
 ## `globals`
 
@@ -39,11 +42,12 @@ dashes. See [Site files](site-files.md).
 
 ## Entry filenames
 
-"New entry" derives the filename from the title: transliterated (`ä → ae`, `é → e`,
-Cyrillic to Latin; other scripts are dropped), lowercased, anything that is not a letter
-or digit becomes one dash, capped at 80 characters. An empty title gives `untitled`. If
-the name already exists in the collection in any locale, `-2`, `-3`, … is appended. The
-name is never a random id so the file is findable in GitHub by eye.
+"New entry" derives the filename from the name you type — the collection's `titleField`
+where it has one: transliterated (`ä → ae`, `é → e`, Cyrillic to Latin; other scripts are
+dropped), lowercased, anything that is not a letter or digit becomes one dash, capped at
+80 characters. An empty name gives `untitled`. If the name already exists in the collection
+in any locale, `-2`, `-3`, … is appended. The name is never a random id so the file is
+findable in GitHub by eye.
 
 | Title | File |
 |---|---|

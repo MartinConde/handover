@@ -78,6 +78,7 @@ export interface CollectionRoutes {
   route?: unknown;
   index?: unknown;
   load?: unknown;
+  titleField?: unknown;
 }
 
 // Every message names the key in cms.config.ts that is wrong; the integration throws
@@ -115,6 +116,15 @@ export function checkCollections(
     if (c.index !== undefined && (typeof c.index !== 'string' || !/^\/[^\s[\]]*$/.test(c.index)))
       errors.push(
         `${at('index')}expected a fixed path starting with "/", like "/blog", got ${JSON.stringify(c.index)}`,
+      );
+    // Whether the field exists and holds a string is the schema's business; this is the only
+    // place that sees the key, so it checks the shape of the name alone.
+    if (
+      c.titleField !== undefined &&
+      (typeof c.titleField !== 'string' || !/^[^_\s][^\s]*$/.test(c.titleField))
+    )
+      errors.push(
+        `${at('titleField')}expected the name of a field in the collection's schema, like "name", got ${JSON.stringify(c.titleField)}`,
       );
     if (c.load !== undefined && typeof c.load !== 'string')
       errors.push(

@@ -24,10 +24,10 @@ const entry = {
 const opened = vi.fn();
 
 let app: ReturnType<typeof mount>;
-const show = () => {
+const show = (over: Record<string, unknown> = {}) => {
   app = mount(Editor, {
     target: document.body,
-    props: { collection: 'listings', slug: 'seaview-cottage', entry, onpublish: opened },
+    props: { collection: 'listings', slug: 'seaview-cottage', entry, onpublish: opened, ...over },
   });
   return document.body;
 };
@@ -88,6 +88,22 @@ test('the header shows the entry title; Publish is disabled until something chan
   expect(publish?.disabled).toBe(true);
   type(root, 'input#f-title', 'Seaview House');
   expect(publish?.disabled).toBe(false);
+});
+
+test('the header shows the field the collection is keyed on', () => {
+  const root = show({
+    collection: 'presenters',
+    slug: 'rosa-hale',
+    entry: {
+      fields: [{ path: ['name'], label: 'Name', type: 'text', required: true }] satisfies Field[],
+      blocks: {},
+      data: { name: 'Rosa Hale' },
+      pending: false,
+      problems: [],
+      titleField: 'name',
+    },
+  });
+  expect($(root, 'h1')?.textContent).toBe('Rosa Hale');
 });
 
 test('Publish stores the edit as a draft before it opens the drawer', async () => {

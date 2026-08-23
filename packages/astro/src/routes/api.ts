@@ -58,8 +58,9 @@ const entryPath = (collection: string, slug: string) => `src/content/${collectio
 // The draft is what the editor was last looking at, so it wins over the file. No sha goes
 // to the browser: a publish commits the stored bytes and compares the bases server-side.
 async function getEntry(collection: string, slug: string): Promise<Response> {
-  const schema = config.collections[collection]?.schema;
-  if (!schema) return new Response('Not found', { status: 404 });
+  const collected = config.collections[collection];
+  if (!collected) return new Response('Not found', { status: 404 });
+  const schema = collected.schema;
   const path = entryPath(collection, slug);
   const [file, draft] = await Promise.all([
     gitClient().getFile(path),
@@ -73,6 +74,7 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
     data,
     pending: draft ? (await blobSha(draft.contents)) !== file?.blob_sha : false,
     problems: entryProblems(schema, data),
+    titleField: collected.titleField,
   });
 }
 
@@ -113,9 +115,12 @@ async function autosave(collection: string, slug: string, request: Request): Pro
 // The titles come from the build, the pending edits from D1. Nothing here touches GitHub:
 // listing a collection through the contents API is one request per file.
 async function listEntries(collection: string): Promise<Response> {
-  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  const collected = config.collections[collection];
+  if (!collected) return new Response('Not found', { status: 404 });
   const rows = await overlayRows('default', db(), index);
-  return Response.json({ entries: collectionEntries('default', index, collection, rows) });
+  return Response.json({
+    entries: collectionEntries('default', index, collection, rows, collected.titleField),
+  });
 }
 
 /** Every name the collection already uses, published or only drafted. */
@@ -138,15 +143,17 @@ const locationOf = (collection: string): EntryLocation => ({
  * than guessed at, and the editor is shown what is still missing until the publish.
  */
 async function createEntry(collection: string, request: Request): Promise<Response> {
-  const schema = config.collections[collection]?.schema;
-  if (!schema) return new Response('Not found', { status: 404 });
+  const collected = config.collections[collection];
+  if (!collected) return new Response('Not found', { status: 404 });
   const body = (await request.json().catch(() => undefined)) as { title?: unknown } | undefined;
   const title = typeof body?.title === 'string' ? body.title : '';
   const database = db();
   const slug = entryName('default', title, await takenNames(collection, database));
-  const { fields } = formOf('default', formSchema(schema));
+  const { fields } = formOf('default', formSchema(collected.schema));
+  // The field the collection lists by is the one the title typed into the dialog belongs in.
+  const named = collected.titleField ?? 'title';
   const values: Record<string, unknown> = { _version: FORMAT_VERSION };
-  if (fields.some((f) => f.path[0] === 'title' && f.type === 'text')) values.title = title;
+  if (fields.some((f) => f.path[0] === named && f.type === 'text')) values[named] = title;
   await createDraft('default', database, gitClient(), entryPath(collection, slug), values);
   return Response.json({ slug });
 }

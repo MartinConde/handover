@@ -199,12 +199,16 @@ test('group, array and blocks are detected from real Zod output', () => {
 
 type Setup = HookParameters<'astro:config:setup'>;
 
-function runSetup(adapter: unknown, root = new URL('file:///site/')) {
+function runSetup(
+  adapter: unknown,
+  root = new URL('file:///site/'),
+  cms: Parameters<typeof handover>[0] = { collections: {} },
+) {
   const info = vi.fn();
   const injectRoute = vi.fn();
   const addMiddleware = vi.fn();
   const updateConfig = vi.fn();
-  const setup = handover().hooks['astro:config:setup'] as (o: Setup) => void;
+  const setup = handover(cms).hooks['astro:config:setup'] as (o: Setup) => void;
   setup({
     config: { adapter, root },
     logger: { info },
@@ -283,6 +287,21 @@ test('defineConfig fails on a bad route with a message naming the key', () => {
   expect(() =>
     defineConfig({ collections: { posts: { schema: z.object({}), route: '/blog' } } }),
   ).toThrow(/cms\.config\.ts › collections\.posts\.route: expected a path .*"\/blog"/);
+});
+
+test('defineConfig fails when titleField is not a text field of the schema', () => {
+  const presenter = z.object({ name: z.string(), bio: richtext() });
+  expect(() =>
+    defineConfig({ collections: { presenters: { schema: presenter, titleField: 'nmae' } } }),
+  ).toThrow(
+    'cms.config.ts › collections.presenters.titleField: "nmae" is not a text field of this collection\'s schema',
+  );
+  expect(() =>
+    defineConfig({ collections: { presenters: { schema: presenter, titleField: 'bio' } } }),
+  ).toThrow(/collections\.presenters\.titleField/);
+  expect(() =>
+    defineConfig({ collections: { presenters: { schema: presenter, titleField: 'name' } } }),
+  ).not.toThrow();
 });
 
 test('defineConfig returns a valid config unchanged', () => {
@@ -424,6 +443,22 @@ test('buildIndex lists an entry per locale file and leaves _templates/ out', asy
   });
 });
 
+test('buildIndex titles an entry by the field its collection declares', async () => {
+  const root = new URL(`${await mkdtemp(join(tmpdir(), 'handover-site-'))}/`, 'file://');
+  await mkdir(new URL('src/content/presenters/en/', root), { recursive: true });
+  await writeFile(new URL('src/content/presenters/en/rosa-hale.yaml', root), 'name: "Rosa Hale"\n');
+  expect(await buildIndex(root, { presenters: 'name' })).toEqual({
+    presenters: [
+      {
+        id: 'rosa-hale',
+        locales: {
+          en: { title: 'Rosa Hale', path: 'src/content/presenters/en/rosa-hale.yaml' },
+        },
+      },
+    ],
+  });
+});
+
 test('buildIndex fails on a content file below the locale folder, naming it', async () => {
   const root = new URL(`${await mkdtemp(join(tmpdir(), 'handover-site-'))}/`, 'file://');
   await mkdir(new URL('src/content/listings/en/devon/', root), { recursive: true });
@@ -448,6 +483,28 @@ test('virtual:handover/index is the built index, inlined rather than served', as
   expect(module).toBe(
     `export default JSON.parse(${JSON.stringify(JSON.stringify(await buildIndex(fixture)))});`,
   );
+});
+
+test('the index is built with the title field each collection declares', async () => {
+  const { updateConfig } = runSetup({ name: 'fake-adapter', hooks: {} }, fixture, {
+    collections: { listings: { schema: z.object({}), titleField: 'location' } },
+  });
+  const module = await updateConfig.mock.calls[0]?.[0].vite.plugins[1].load(
+    '\0virtual:handover/index',
+  );
+  // The fixture entry has a title and no location, so it lists under its file name: the
+  // declared field is the only one read.
+  const listed = {
+    listings: [
+      {
+        id: 'seaview-cottage',
+        locales: {
+          en: { title: 'seaview-cottage', path: 'src/content/listings/en/seaview-cottage.yaml' },
+        },
+      },
+    ],
+  };
+  expect(module).toBe(`export default JSON.parse(${JSON.stringify(JSON.stringify(listed))});`);
 });
 
 test('formSchema maps z.date() to a date field and a transform to its input type', () => {
@@ -500,7 +557,7 @@ test('the demo schema produces a full descriptor tree', () => {
 });
 
 async function runBuildStart(root: URL) {
-  const hooks = handover().hooks;
+  const hooks = handover({ collections: {} }).hooks;
   (hooks['astro:config:done'] as (o: unknown) => void)({
     config: { root, build: { client: new URL('dist/client/', root) } },
   });

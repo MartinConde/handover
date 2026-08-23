@@ -13,18 +13,20 @@ pnpm add ../handover/packages/astro   # or a tarball from `pnpm pack` in that fo
 
 ## 1. Add the integration
 
-It needs the SSR adapter; without one it throws at startup.
+It takes your `cms.config.ts` — step 2 writes it — and needs the SSR adapter; without one
+it throws at startup.
 
 ```js
 // astro.config.mjs
 import cloudflare from '@astrojs/cloudflare';
 import handover from 'astro-handover';
 import { defineConfig } from 'astro/config';
+import cms from './cms.config.ts';
 
 export default defineConfig({
   session: false,
   adapter: cloudflare(),
-  integrations: [handover()],
+  integrations: [handover(cms)],
 });
 ```
 
