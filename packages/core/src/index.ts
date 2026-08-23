@@ -5,6 +5,7 @@ export {
   parseEntry,
   staticSource,
   stringifyEntry,
+  syncDuplicates,
   timestampErrors,
 } from './content.js';
 export type { Db, Draft } from './db.js';
@@ -42,5 +43,5 @@ export {
   richtextErrors,
   unsafeLinkScheme,
 } from './richtext.js';
-export type { Field, Form, JsonSchema } from './schema.js';
+export type { Field, Form, JsonSchema, Translation } from './schema.js';
 export { fieldsFrom, formOf } from './schema.js';

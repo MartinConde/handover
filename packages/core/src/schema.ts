@@ -12,7 +12,14 @@ export interface JsonSchema {
   [key: string]: unknown;
 }
 
-export type Field =
+/**
+ * A field's translation mode, `.meta({ i18n })` in the schema: `true` is a value per locale,
+ * `'duplicate'` the same value in every one, `false` the source locale alone. Absent is the
+ * default — translatable, or the group's mode where the group declared one.
+ */
+export type Translation = true | 'duplicate' | false;
+
+type FieldOf =
   | { path: string[]; label: string; type: 'text'; required: boolean }
   | { path: string[]; label: string; type: 'richtext'; required: boolean; tier: RichtextTier }
   | { path: string[]; label: string; type: 'number'; required: boolean }
@@ -30,6 +37,8 @@ export type Field =
   | { path: string[]; label: string; type: 'array'; required: boolean; item: Field[] }
   | { path: string[]; label: string; type: 'blocks'; required: boolean; types: string[] }
   | { path: string[]; label: string; type: 'unsupported' };
+
+export type Field = FieldOf & { i18n?: Translation };
 
 // Block types are keyed by name, not nested under each `blocks` field, because a block
 // can contain `blocks` of its own type.
@@ -79,9 +88,14 @@ function objectFields(root: JsonSchema, node: JsonSchema): Field[] {
   const schema = resolve(root, node);
   if (schema.type !== 'object' || !schema.properties) return [];
   const requiredKeys = new Set(schema.required ?? []);
-  return Object.entries(schema.properties).flatMap(([name, child]): Field[] =>
-    name.startsWith('_') ? [] : fieldOf(root, [name], child, requiredKeys.has(name)),
-  );
+  return Object.entries(schema.properties).flatMap(([name, child]): Field[] => {
+    if (name.startsWith('_')) return [];
+    const mode = resolve(root, child).i18n;
+    const declared = mode === true || mode === 'duplicate' || mode === false;
+    return fieldOf(root, [name], child, requiredKeys.has(name)).map((f) =>
+      declared ? { ...f, i18n: mode } : f,
+    );
+  });
 }
 
 const humanise = (key: string) =>

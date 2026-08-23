@@ -665,3 +665,18 @@ test('the build goes on when migrations/ records the package schema version', as
   );
   await expect(runBuildStart(root)).resolves.toBeUndefined();
 });
+
+test('a field says how it translates through .meta({ i18n })', () => {
+  const schema = z.object({
+    title: z.string(),
+    price: z.number().meta({ i18n: 'duplicate' }),
+    notes: z.string().optional().meta({ i18n: false }),
+    hero: image.meta({ i18n: 'duplicate' }).optional(),
+  });
+  expect(fieldsFrom('default', formSchema(schema)).map((f) => [f.path[0], f.i18n])).toEqual([
+    ['title', undefined],
+    ['price', 'duplicate'],
+    ['notes', false],
+    ['hero', 'duplicate'],
+  ]);
+});

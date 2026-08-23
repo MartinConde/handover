@@ -4,6 +4,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A field says how it translates. `.meta({ i18n: 'duplicate' })` on a schema field makes it
+  one value shared by every language, `.meta({ i18n: false })` keeps it in the default
+  language alone, and everything else is translated as before. An object hands its mode to
+  the fields inside it and a field inside can say otherwise. `image`, `file`, `embed`, `link`
+  and `seo` split down the middle — an image's `alt` is translated and its `src`, `width`,
+  `height` and `focal` are the same everywhere — so nobody retypes an image URL per language.
+  A save of a translation writes the fields that language owns and reads the rest off the
+  file, instead of dropping what its form never showed (decap-cms#6978). The admin still
+  edits the default language; this is what its second-language editor is built on. See
+  `docs/i18n.md`.
+
 - `cms.config.ts` declares its languages: `i18n: { locales: ['en', 'de'], defaultLocale:
   'en' }`, with an optional `prefixDefaultLocale`. It is required, a site with one language
   included — content files sit in a folder per language either way, so a second language is

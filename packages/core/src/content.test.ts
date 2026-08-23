@@ -7,8 +7,10 @@ import {
   parseEntry,
   staticSource,
   stringifyEntry,
+  syncDuplicates,
   timestampErrors,
 } from './content.js';
+import type { Form } from './schema.js';
 
 const entries = [
   { id: 'en/mill-house', data: { title: 'Mill House' } },
@@ -369,8 +371,21 @@ test('a save keeps the _version the entry already has', () => {
 // save, because the German form never showed them and so never sent them back. `price` and
 // `bedrooms` are duplicate, `image.src` / `width` / `height` are duplicate and `image.alt` is
 // translatable — the nested case is the one clients notice, since it makes them retype URLs.
-// Red until session 2.3 teaches the save which fields the locale it is saving does not own.
-test.skip('a save of a translated entry keeps the fields its form does not show', () => {
+// The form a translated locale draws: `price` and `bedrooms` are the same in every language,
+// `image` splits — its `src`, `width` and `height` are the file's, only `alt` is translated.
+const listing: Form = {
+  fields: [
+    { path: ['title'], label: 'Title', type: 'text', required: true },
+    { path: ['summary'], label: 'Summary', type: 'text', required: false },
+    { path: ['price'], label: 'Price', type: 'number', required: true, i18n: 'duplicate' },
+    { path: ['bedrooms'], label: 'Bedrooms', type: 'number', required: true, i18n: 'duplicate' },
+    { path: ['notes'], label: 'Notes', type: 'text', required: false, i18n: false },
+    { path: ['image'], label: 'Image', type: 'image', required: false },
+  ],
+  blocks: {},
+};
+
+test('a save of a translated entry keeps the fields its form does not show', () => {
   const de = {
     _version: 1,
     title: 'Mühlenhaus',
@@ -385,7 +400,7 @@ test.skip('a save of a translated entry keeps the fields its form does not show'
   };
   const values = { title: 'Mühlenhaus am Fluss', image: { alt: 'Das Haus vom Fluss aus' } };
 
-  expect(mergeEntry('default', de, values)).toEqual({
+  expect(mergeEntry('default', de, values, listing)).toEqual({
     _version: 1,
     title: 'Mühlenhaus am Fluss',
     price: 425000,
@@ -426,4 +441,128 @@ test('a date nested in an array of groups is named by its path', () => {
   expect(dated('slots:\n  - _id: "a1"\n    starts: 2026-07-14\n')).toEqual([
     'src/content/notes/en/one.yaml › slots[0].starts: an unquoted date is a timestamp, not a string. Quote it: "2026-07-14"',
   ]);
+});
+
+test('a translated field its form left empty goes, rather than coming back', () => {
+  const de = { _version: 1, title: 'Mühlenhaus', summary: 'Am Fluss', price: 425000 };
+
+  expect(mergeEntry('default', de, { title: 'Mühlenhaus' }, listing)).toEqual({
+    _version: 1,
+    title: 'Mühlenhaus',
+    price: 425000,
+  });
+});
+
+// The skeleton is the same in every language, so a translated save carries values and never
+// structure: the blocks it writes are the ones the file has, paired by `_id`.
+const article: Form = {
+  fields: [{ path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: ['hero'] }],
+  blocks: {
+    hero: [
+      { path: ['heading'], label: 'Heading', type: 'text', required: true },
+      { path: ['image'], label: 'Image', type: 'image', required: false },
+    ],
+  },
+};
+
+test('a duplicate value inside a block survives a translated save', () => {
+  const de = {
+    _version: 1,
+    blocks: [
+      {
+        _type: 'hero',
+        _id: 'k3nf9a2p',
+        heading: 'Willkommen',
+        image: { src: 'media/9f3a2c7e.webp', alt: 'Vorderseite', width: 2400, height: 1600 },
+      },
+    ],
+  };
+  const values = {
+    blocks: [{ _type: 'hero', _id: 'k3nf9a2p', heading: 'Herzlich willkommen', image: {} }],
+  };
+
+  expect(mergeEntry('default', de, values, article)).toEqual({
+    _version: 1,
+    blocks: [
+      {
+        _type: 'hero',
+        _id: 'k3nf9a2p',
+        heading: 'Herzlich willkommen',
+        image: { src: 'media/9f3a2c7e.webp', width: 2400, height: 1600 },
+      },
+    ],
+  });
+});
+
+test('a translated save does not add, drop or reorder blocks', () => {
+  const de = {
+    _version: 1,
+    blocks: [
+      { _type: 'hero', _id: 'aaaaaaaa', heading: 'Erstens' },
+      { _type: 'hero', _id: 'bbbbbbbb', heading: 'Zweitens' },
+    ],
+  };
+  const values = {
+    blocks: [
+      { _type: 'hero', _id: 'bbbbbbbb', heading: 'Zweitens, neu' },
+      { _type: 'hero', _id: 'cccccccc', heading: 'Drittens' },
+    ],
+  };
+
+  expect(mergeEntry('default', de, values, article)).toEqual({
+    _version: 1,
+    blocks: [
+      { _type: 'hero', _id: 'aaaaaaaa', heading: 'Erstens' },
+      { _type: 'hero', _id: 'bbbbbbbb', heading: 'Zweitens, neu' },
+    ],
+  });
+});
+
+// The pair the `image.src` / `image.alt` split is drawn on: everything the two files share is
+// byte for byte the same, `notes` is the source locale's alone, and the German file holds
+// nothing but translations of the rest.
+const millHouse: Form = {
+  fields: [
+    ...listing.fields,
+    { path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: ['hero'] },
+  ],
+  blocks: article.blocks,
+};
+const localeFile = (locale: string) =>
+  readFileSync(join(import.meta.dirname, '../test/locales', locale, 'mill-house.yaml'), 'utf8');
+
+for (const locale of ['en', 'de']) {
+  test(`the ${locale} locale fixture is one the serialiser could have written`, () => {
+    const file = localeFile(locale);
+    expect(stringifyEntry('default', parseEntry('default', file))).toBe(file);
+  });
+}
+
+test('a duplicate value follows the source locale into the other file, nested included', () => {
+  const en = parseEntry('default', localeFile('en')) as Record<string, unknown>;
+  const de = parseEntry('default', localeFile('de'));
+  const image = { ...(en.image as Record<string, unknown>), src: 'media/2c40ab19.webp' };
+
+  const synced = syncDuplicates('default', millHouse, { ...en, price: 450000, image }, de);
+
+  expect(synced.price).toBe(450000);
+  expect(synced.image).toEqual({
+    src: 'media/2c40ab19.webp',
+    alt: 'Vorderseite des Hauses',
+    width: 2400,
+    height: 1600,
+  });
+  expect(synced.title).toBe('Mühlenhaus');
+  expect(synced.notes).toBeUndefined();
+});
+
+test('the other locale file comes back byte for byte when the source has nothing new', () => {
+  const de = localeFile('de');
+  const synced = syncDuplicates(
+    'default',
+    millHouse,
+    parseEntry('default', localeFile('en')),
+    parseEntry('default', de),
+  );
+  expect(stringifyEntry('default', synced)).toBe(de);
 });

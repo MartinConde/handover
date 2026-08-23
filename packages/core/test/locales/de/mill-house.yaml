@@ -1,0 +1,19 @@
+_version: 1
+title: "Mühlenhaus"
+summary: "Eine restaurierte Mühle am Dart."
+price: 425000
+bedrooms: 3
+image:
+  src: "media/9f3a2c7e.webp"
+  alt: "Vorderseite des Hauses"
+  width: 2400
+  height: 1600
+blocks:
+  - _type: "hero"
+    _id: "k3nf9a2p"
+    heading: "Aufwachen am Wasser"
+    image:
+      src: "media/4b1d8e05.webp"
+      alt: "Die Mühle vom Fluss aus"
+      width: 1800
+      height: 1200

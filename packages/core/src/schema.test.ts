@@ -340,3 +340,36 @@ test('the item of an array of scalars has no label of its own', () => {
   if (array?.type !== 'array') throw new Error('shape changed');
   expect(array.item[0]?.label).toBe('');
 });
+
+test('a field says how it translates only when it is not the default', () => {
+  const schema = obj({
+    heading: { type: 'string' },
+    price: { type: 'number', i18n: 'duplicate' },
+    notes: { type: 'string', i18n: false },
+    tagline: { type: 'string', i18n: true },
+  });
+  expect(fieldsFrom('default', schema).map((f) => f.i18n)).toEqual([
+    undefined,
+    'duplicate',
+    false,
+    true,
+  ]);
+});
+
+test('a nested property carries its own mode, whatever its group says', () => {
+  const schema = obj({
+    contact: {
+      ...obj({ name: { type: 'string' }, phone: { type: 'string', i18n: true } }),
+      i18n: 'duplicate',
+    },
+  });
+  const group = fieldsFrom('default', schema)[0];
+  if (group?.type !== 'group') throw new Error('shape changed');
+  expect(group.i18n).toBe('duplicate');
+  expect(group.fields.map((f) => f.i18n)).toEqual([undefined, true]);
+});
+
+test('a mode that is not one of the three is ignored', () => {
+  const schema = obj({ price: { type: 'number', i18n: 'duplicated' } });
+  expect(fieldsFrom('default', schema)[0]?.i18n).toBeUndefined();
+});
