@@ -4,11 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
-- **Known limitation:** `<Markdown />` does not work on Cloudflare. Astro's Markdown
-  pipeline is a native binary the Workers runtime cannot run, so a page that renders the
-  component throws `The WASI method is not implemented` — prerendered pages included, since
-  `@astrojs/cloudflare` prerenders inside that runtime. A rewrite is coming; until then a
-  `richtext()` field has no renderer on Cloudflare. See `docs/template-convention.md`.
+- `<Markdown />` runs on Cloudflare. It no longer goes through Astro's Markdown pipeline,
+  which is a native binary the Workers runtime cannot run (`The WASI method is not
+  implemented`), and renders the richtext constructs from the Markdown the field is
+  validated against instead. Headings still get ids; anything outside the tier's construct
+  list, raw HTML above all, comes out as text and never as markup.
 
 - The `handover` command. `npx handover migrate --dry-run` lists every content file with
   its `_version`; `npx handover migrate` rewrites the ones behind the package (today that

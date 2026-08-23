@@ -139,9 +139,10 @@ The layout renders the top level: `<Blocks blocks={data.blocks} components={comp
 ## Rich text
 
 Only a `.md` file's body goes through Astro's Markdown pipeline; a Markdown string inside
-a YAML field does not. `<Markdown />` renders a `richtext()` field with the same
-pipeline, so headings get ids and typography matches the rest of the site. It outputs the
-elements with no wrapper; put it inside your own `<div class="prose">` if you style one.
+a YAML field does not. `<Markdown />` renders a `richtext()` field, and renders only what
+the field's tier allows: paragraphs, bold, italic, links, lists, and — in `richtext('full')`
+— `##`/`###` headings with ids and blockquotes. It outputs the elements with no wrapper;
+put it inside your own `<div class="prose">` if you style one.
 
 ```astro
 ---
@@ -151,17 +152,16 @@ import Markdown from 'astro-handover/Markdown.astro';
 <Markdown content={data.body} />
 ```
 
-The field's validation is what keeps raw HTML out; the component renders what it is
-given.
+The HTML is built element by element from the parsed Markdown, so nothing the tiers
+disallow can reach the page: raw HTML in a hand-written file comes out as visible text,
+not as markup. That is why the component may set it as HTML at all, and why routing a
+richtext field through some other Markdown library into `set:html` yourself is not the
+same thing.
 
-> **Not on Cloudflare yet.** Astro 7's Markdown pipeline is a native binary and the
-> Workers runtime cannot run it: a page that renders `<Markdown />` throws
-> `The WASI method is not implemented`. That includes prerendered pages, because
-> `@astrojs/cloudflare` prerenders inside the same runtime. (In a pnpm workspace the build
-> usually stops earlier still, unable to resolve the pipeline's WASI build.) A richtext
-> field therefore has no renderer on Cloudflare until `<Markdown />` is rewritten — don't
-> route the field through another Markdown library into `set:html`, which is the raw HTML
-> the tiers exist to keep out.
+It runs on Cloudflare, which Astro's own pipeline does not: that pipeline is a native
+binary, and a page that renders it on a Worker throws `The WASI method is not
+implemented` — prerendered pages included, since `@astrojs/cloudflare` prerenders inside
+the same runtime.
 
 ## Hidden entries
 

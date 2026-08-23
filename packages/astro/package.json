@@ -30,7 +30,6 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@astrojs/markdown-satteri": "0.3.7",
     "@handover/core": "workspace:*",
     "@handover/cli": "workspace:*"
   },

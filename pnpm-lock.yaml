@@ -23,9 +23,6 @@ importers:
 
   packages/astro:
     dependencies:
-      '@astrojs/markdown-satteri':
-        specifier: 0.3.7
-        version: 0.3.7
       '@handover/cli':
         specifier: workspace:*
         version: link:../cli
@@ -54,6 +51,9 @@ importers:
       drizzle-orm:
         specifier: ^0.45.2
         version: 0.45.2
+      github-slugger:
+        specifier: ^2.0.0
+        version: 2.0.0
       mdast-util-from-markdown:
         specifier: ^2.0.3
         version: 2.0.3

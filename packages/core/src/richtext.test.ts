@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { RICHTEXT_CONSTRUCTS, richtextErrors } from './richtext.js';
+import { RICHTEXT_CONSTRUCTS, renderRichtext, richtextErrors } from './richtext.js';
 
 // One fixture per allowed construct, exactly as the editor will store it.
 const basic: Record<string, string> = {
@@ -80,4 +80,57 @@ test('a nested list is a list, not a new construct', () => {
 
 test('an empty string is valid in both tiers', () => {
   expect(richtextErrors('default', '', 'basic')).toEqual([]);
+});
+
+// 1.6's construct list, rendered. Every allowed construct has one expected string, so a
+// construct that validates but renders as nothing fails here.
+const rendered: Record<string, string> = {
+  paragraph: '<p>Two bedrooms, one bathroom.</p>\n<p>Five minutes from the beach.</p>',
+  bold: '<p>A <strong>sunny</strong> terrace.</p>',
+  italic: '<p>A <em>quiet</em> lane.</p>',
+  link: '<p>See the <a href="https://example.com/plan">floor plan</a>.</p>',
+  bulletList: '<ul>\n<li>Two bedrooms</li>\n<li>One bathroom</li>\n</ul>',
+  numberedList: '<ol>\n<li>Book a viewing</li>\n<li>Make an offer</li>\n</ol>',
+  h2: '<h2 id="the-house">The house</h2>',
+  h3: '<h3 id="the-garden">The garden</h3>',
+  blockquote: '<blockquote>\n<p>A rare find.</p>\n</blockquote>',
+};
+
+const fixtures: Record<string, string> = { ...basic, ...full };
+
+for (const [name, html] of Object.entries(rendered)) {
+  test(`${name} renders as ${html.split('\n')[0]}`, () => {
+    expect(renderRichtext('default', fixtures[name] ?? '')).toBe(html);
+  });
+}
+
+test('every allowed construct has a render fixture', () => {
+  expect(Object.keys(rendered)).toEqual([...RICHTEXT_CONSTRUCTS.full]);
+});
+
+// The tiers exist to keep raw HTML out of the page; the renderer is the last place it
+// could get back in, so it escapes rather than emits.
+test('raw HTML is escaped, never emitted', () => {
+  expect(renderRichtext('default', '<script>alert(1)</script>')).not.toContain('<script>');
+  expect(renderRichtext('default', 'A <b>bold</b> claim.')).toBe(
+    '<p>A &lt;b&gt;bold&lt;/b&gt; claim.</p>',
+  );
+});
+
+test('a nested list renders inside its parent item', () => {
+  expect(renderRichtext('default', '- a\n  - b\n- c')).toBe(
+    '<ul>\n<li>a\n<ul>\n<li>b</li>\n</ul></li>\n<li>c</li>\n</ul>',
+  );
+});
+
+test('a loose list keeps its paragraphs', () => {
+  expect(renderRichtext('default', '- a\n\n- b')).toBe(
+    '<ul>\n<li><p>a</p></li>\n<li><p>b</p></li>\n</ul>',
+  );
+});
+
+test('two headings with the same text get different ids', () => {
+  expect(renderRichtext('default', '## The house\n\n## The house')).toBe(
+    '<h2 id="the-house">The house</h2>\n<h2 id="the-house-1">The house</h2>',
+  );
 });

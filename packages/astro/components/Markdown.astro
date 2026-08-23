@@ -1,13 +1,13 @@
 ---
-import { createSatteriMarkdownProcessor } from '@astrojs/markdown-satteri';
+import { renderRichtext } from '@handover/core';
 
 interface Props {
   content: string;
 }
 
-// Astro's own pipeline for `.md` bodies, minus the highlighter a richtext field can't use.
-const renderer = await createSatteriMarkdownProcessor({ syntaxHighlight: false });
-const { code } = await renderer.render(Astro.props.content);
+// The HTML is built from the validated tree, never from the file's own markup, so
+// `set:html` here cannot emit anything a richtext tier disallows.
+const html = renderRichtext('default', Astro.props.content);
 ---
 
-<Fragment set:html={code} />
+<Fragment set:html={html} />
