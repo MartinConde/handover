@@ -8,7 +8,7 @@ import Fields from './Fields.svelte';
 
 // Testing: every widget writes the documented value shape, proven by state → YAML → state
 // against the golden for the type; `array` and `blocks` add, remove and reorder while every
-// `_id` survives; labels on every control.
+// `_id` survives; labels on every control; a read-only structured field says why it is one.
 // Not testing: Editor wiring (Editor.test.ts) or styling.
 
 // jsdom has no layout; ProseMirror asks for it when it scrolls the selection into view.
