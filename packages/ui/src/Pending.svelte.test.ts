@@ -151,3 +151,42 @@ test('with nothing pending there is no Publish button to press', () => {
   expect(q(root, '.empty h2')?.textContent).toBe('Everything is published');
   expect(q(root, '.drawer-foot')).toBeNull();
 });
+
+test('discarding one of two conflicted files leaves the other named and says so', async () => {
+  let release: (() => void) | undefined;
+  const paused = new Promise<void>((r) => (release = r));
+  const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+    if (init?.method !== 'DELETE')
+      return Response.json({ error: 'refused', paths: FILES.map((f) => f.path) }, { status: 409 });
+    await paused;
+    return Response.json({});
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  await refused(root);
+
+  expect(q(root, '[role="alert"]')?.textContent).toBe(
+    'Nothing was published. 2 files changed in the repository after you opened them. Discard your changes to them to take what is there now.',
+  );
+  root
+    .querySelectorAll<HTMLButtonElement>('.change-row.is-blocked .change-actions .btn')[0]
+    ?.click();
+  flushSync();
+  q<HTMLButtonElement>(root, '.dialog .btn-danger')?.click();
+  await tick();
+  flushSync();
+
+  // A discard in flight is not a publish in flight: neither the button nor the live region says so.
+  expect(q(root, '.drawer-foot .btn-primary')?.textContent?.trim()).not.toContain('Publishing');
+  expect(q(root, '.drawer-foot [role="status"]')).toBeNull();
+
+  release?.();
+  await tick();
+  flushSync();
+
+  expect(fetchMock).toHaveBeenLastCalledWith('/admin/api/drafts/pages/home', { method: 'DELETE' });
+  expect(q(root, '[role="alert"]')?.textContent).toBe(
+    'Nothing was published. One file changed in the repository after you opened it. Discard your changes to it to take what is there now.',
+  );
+  expect(root.querySelectorAll('.change-row.is-blocked').length).toBe(1);
+});

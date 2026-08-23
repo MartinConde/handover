@@ -24,8 +24,9 @@ let error = $state('');
 let published = $state(0);
 /** Paths the last publish was refused over; each one is offered the way out. */
 let conflicts = $state<string[]>([]);
-/** The path whose discard is waiting to be confirmed. */
+/** The path whose discard is waiting to be confirmed, and whether it is being thrown away. */
 let confirming = $state('');
+let discarding = $state(false);
 
 const collectionOf = (path: string) => path.replace('src/content/', '').split('/')[0] ?? '';
 const slugOf = (path: string) => path.replace(/^.*\//, '').replace(/\.yaml$/, '');
@@ -73,18 +74,19 @@ async function publish() {
 // again. Choosing field by field is the three-way view, which is not built yet.
 async function discard() {
   const path = confirming;
-  busy = true;
+  discarding = true;
   const res = await fetch(`/admin/api/drafts/${collectionOf(path)}/${slugOf(path)}`, {
     method: 'DELETE',
   });
-  busy = false;
+  discarding = false;
   confirming = '';
   if (!res.ok) {
     error = `Those changes were not discarded (${res.status}).`;
     return;
   }
   conflicts = conflicts.filter((p) => p !== path);
-  if (!conflicts.length) error = '';
+  // The refusal is about the files still in it, so it is written again rather than kept.
+  error = conflicts.length ? refusal('', conflicts) : '';
   ondiscarded();
 }
 </script>
@@ -133,7 +135,7 @@ async function discard() {
                     <button
                       class="btn btn-sm"
                       type="button"
-                      disabled={busy}
+                      disabled={busy || discarding}
                       onclick={() => (confirming = file.path)}
                     >Discard<span class="visually-hidden"> your changes to {named(file.path)}</span></button>
                   </div>
@@ -163,7 +165,7 @@ async function discard() {
           <button
             class="btn btn-primary"
             type="button"
-            disabled={busy || conflicts.length > 0}
+            disabled={busy || discarding || conflicts.length > 0}
             onclick={publish}
           >
             {busy
@@ -191,8 +193,8 @@ async function discard() {
       </p>
       <div class="actions">
         <button class="btn" type="button" onclick={() => (confirming = '')}>Cancel</button>
-        <button class="btn btn-danger" type="button" disabled={busy} onclick={discard}>
-          {busy ? 'Discarding…' : 'Discard changes'}
+        <button class="btn btn-danger" type="button" disabled={discarding} onclick={discard}>
+          {discarding ? 'Discarding…' : 'Discard changes'}
         </button>
       </div>
     </div>
