@@ -9,7 +9,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the `slug` in the language's own file, so a rename leaves a language whose address is its own
   alone. A delete sends each language to its own copy of the collection's `index`. `renameEntry`,
   `deleteEntry` and `duplicateEntry` take `i18n` and `localizedSlugs` on their `EntryLocation`
-  where they took `locales`. A duplicate no longer copies the original's address.
+  where they took `locales`, and `setEntryAddress` takes the collection's form. A duplicate no
+  longer copies the original's address.
 
 - Reading a collection whose `glob` loader is missing `generateId` now throws, naming the option,
   instead of quietly matching no entry: Astro files an entry with a `slug` under its address, and
