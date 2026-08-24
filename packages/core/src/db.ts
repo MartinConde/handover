@@ -481,8 +481,13 @@ const commitMessage = (paths: string[]) =>
  * language's name, its own file of the same entry and the form that says which of its values a
  * translation is made from. Nothing for the source language's own file, for a path no
  * collection owns, or on a site that declares one language.
+ *
+ * It answers late because the language an entry is written in is the entry's own — which file
+ * it has, not which language the site defaults to — and that is something to go and look up.
  */
-export type SourceOf = (path: string) => { locale: string; path: string; form: Form } | undefined;
+export type SourceOf = (
+  path: string,
+) => Promise<{ locale: string; path: string; form: Form } | undefined>;
 
 /**
  * Commit every pending draft as one commit and clear those rows. The parent is HEAD, so
@@ -507,7 +512,7 @@ export async function publishDrafts(
   const paths = rows.map((r) => r.path);
   const files: PublishFile[] = await Promise.all(
     rows.map(async ({ path, contents }, i) => {
-      const source = sourceOf?.(path);
+      const source = await sourceOf?.(path);
       if (!source || source.path === path) return { path, contents };
       // The source language as this commit leaves it: its own draft where the same publish is
       // writing one, and the repository where it is not.

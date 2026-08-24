@@ -21,6 +21,7 @@ const entry = {
   problems: [] as { path: string; message: string }[],
   locales: ['en'],
   defaultLocale: 'en',
+  sourceLocale: 'en',
   offered: ['en'],
   translations: {} as Record<string, Record<string, unknown>>,
   stale: [] as string[],
@@ -147,6 +148,7 @@ test('the header shows the field the collection is keyed on', () => {
       titleField: 'name',
       locales: ['en'],
       defaultLocale: 'en',
+      sourceLocale: 'en',
       translations: {},
       stale: [],
       drift: [],
@@ -674,6 +676,27 @@ test('a language turned off is struck through and offers no way to write it', ()
   expect($(root, '.pane h2')?.textContent).toContain('German');
   expect($(root, '.pane button.btn')?.textContent).toContain('back on');
   expect($(root, 'button.btn-link')).toBeNull();
+});
+
+// An entry written in a language the site does not default to: no English file was ever made,
+// so German is where its structure is edited and what its English would be created from.
+const germanOnly = {
+  ...bilingual,
+  sourceLocale: 'de',
+  data: bilingual.translations.de as Record<string, unknown>,
+  translations: {},
+};
+
+test('an entry opens on the language it is written in, not on the site default', () => {
+  const root = show({ entry: germanOnly });
+
+  const buttons = $$<HTMLButtonElement>(root, '[aria-label="Language"] button');
+  expect(buttons[1]?.getAttribute('aria-pressed')).toBe('true');
+  expect($<HTMLInputElement>(root, '#f-title')?.value).toBe('Seaview Cottage');
+  // English is the language with no file, so it is the offer and not the form.
+  buttons[0]?.click();
+  flushSync();
+  expect($(root, 'button.btn-create')?.textContent?.trim()).toBe('Create from German');
 });
 
 // Machine translation. Nothing is drawn without something to translate with, and what a

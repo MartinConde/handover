@@ -237,7 +237,7 @@ test.skipIf(!configured)(
     const name = `it-${(await git.getHead()).slice(0, 7)}`;
     const en = `src/content/listings/en/${name}.yaml`;
     const de = `src/content/listings/de/${name}.yaml`;
-    const sourceOf = (path: string) =>
+    const sourceOf = async (path: string) =>
       path === de ? { locale: 'en', path: en, form: TRANSLATED } : undefined;
     const stale = async () =>
       staleLocales('default', TRANSLATED, {

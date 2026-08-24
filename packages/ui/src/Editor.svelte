@@ -29,8 +29,11 @@ let {
     titleField?: string;
     /** The languages the site declares. */
     locales: string[];
-    /** The one the entry's structure is edited in, and the one a translation is made from. */
+    /** The site's default, which is what says whether a language's URLs carry its segment. */
     defaultLocale: string;
+    /** The one this entry's structure is edited in, and the one a translation is made from:
+        the site default only where the entry has a file in it. */
+    sourceLocale: string;
     /** The languages it is offered in; the rest are turned off and get no file. */
     offered: string[];
     /** What its own `_locales` says that the files it has contradict — a hand edit or a merge. */
@@ -64,7 +67,7 @@ let data = $state<Data>(structuredClone(entry.data));
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let saved = $state(JSON.stringify(entry.data));
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
-let drafted = $state(entry.pending.includes(entry.defaultLocale));
+let drafted = $state(entry.pending.includes(entry.sourceLocale));
 let saving = $state(false);
 let saveFailed = $state(false);
 // A draft stores whatever was typed, so what the schema still wants is the server's answer to
@@ -73,8 +76,8 @@ let saveFailed = $state(false);
 let problems = $state(byPath(entry.problems));
 // Which language the switcher has, and whether the second column is open. Two independent
 // things: the second column is always the default language beside a translation.
-// svelte-ignore state_referenced_locally -- the entry's default language is where it opens
-let locale = $state(entry.defaultLocale);
+// svelte-ignore state_referenced_locally -- the language the entry is written in is where it opens
+let locale = $state(entry.sourceLocale);
 let side = $state(false);
 let pane = $state<ReturnType<typeof Translation>>();
 // A second language stored ahead of the repository. It lives here rather than in the column,
@@ -84,15 +87,15 @@ let translated = $state(false);
 // Every control below is about having more than one language, so a site that declares one
 // draws none of them — not greyed, not always-1-of-1, absent.
 const many = $derived(entry.locales.length > 1);
-const others = $derived(entry.locales.filter((l) => l !== entry.defaultLocale));
-// The column beside the default language: the one the switcher has, or the first other
-// language when the switcher is on the default one.
-const target = $derived(locale === entry.defaultLocale ? others[0] : locale);
-const shown = $derived(side ? target : locale === entry.defaultLocale ? undefined : locale);
+const others = $derived(entry.locales.filter((l) => l !== entry.sourceLocale));
+// The column beside the language the entry is written in: the one the switcher has, or the
+// first other language when the switcher is on that one.
+const target = $derived(locale === entry.sourceLocale ? others[0] : locale);
+const shown = $derived(side ? target : locale === entry.sourceLocale ? undefined : locale);
 // A translation on its own: the switcher is on another language and the second column is shut.
 const alone = $derived(!side && shown !== undefined);
 // The entry always has the file it was opened on; the others are the ones that can be absent.
-const untranslated = (of: string) => of !== entry.defaultLocale && !(of in entry.translations);
+const untranslated = (of: string) => of !== entry.sourceLocale && !(of in entry.translations);
 // Turned off for this entry: no file is written for it and the site does not offer it.
 const off = (of: string) => !entry.offered.includes(of);
 let busy = $state(false);
@@ -138,7 +141,7 @@ const title = $derived(typeof named === 'string' && named ? named : slug);
 // A language other than the one this screen's form saves, already ahead of the repository when
 // the entry was read. It stands until the entry is read again: a false offer costs an empty
 // drawer, a false refusal loses the draft behind a disabled button.
-const elsewhere = $derived(entry.pending.some((l) => l !== entry.defaultLocale));
+const elsewhere = $derived(entry.pending.some((l) => l !== entry.sourceLocale));
 // The second column is its own file, so an edit only made there is still something to publish.
 const dirty = $derived(
   drafted || elsewhere || translated || json !== saved || (pane?.unsaved() ?? false),
@@ -212,7 +215,7 @@ let addressFailed = $state('');
 const address = $derived(entry.addresses?.[locale] ?? '');
 // A language with no file has no address: the offer to make one stands where the form would be.
 const addressable = $derived(
-  entry.localizedSlugs === true && (locale === entry.defaultLocale || !untranslated(locale)),
+  entry.localizedSlugs === true && (locale === entry.sourceLocale || !untranslated(locale)),
 );
 const routing = $derived({
   locales: entry.locales,
@@ -288,7 +291,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             <div class="seg" role="group" aria-label="Language">
               {#each entry.locales as of (of)}
                 <button type="button" class:is-off={off(of)} aria-pressed={locale === of} onclick={() => leaving(() => (locale = of))}>
-                  {of.toUpperCase()}{#if off(of)}<span class="visually-hidden"> — turned off for this entry</span>{:else if untranslated(of)}<span class="visually-hidden"> — not translated yet</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {language(entry.defaultLocale)} changed since this was translated</span><span class="mark" aria-hidden="true"></span>{/if}
+                  {of.toUpperCase()}{#if off(of)}<span class="visually-hidden"> — turned off for this entry</span>{:else if untranslated(of)}<span class="visually-hidden"> — not translated yet</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {language(entry.sourceLocale)} changed since this was translated</span><span class="mark" aria-hidden="true"></span>{/if}
                 </button>
               {/each}
             </div>
@@ -391,7 +394,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
                   language. The text fields start empty.
                 </p>
                 <button class="btn btn-primary btn-create" type="button" disabled={busy} onclick={() => createFrom(shown)}>
-                  Create from {language(entry.defaultLocale)}
+                  Create from {language(entry.sourceLocale)}
                 </button>
                 {#if entry.translator}
                   <button class="btn btn-fill" type="button" disabled={busy} onclick={() => createFilled(shown)}>
@@ -416,7 +419,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             fields={entry.fields}
             blocks={entry.blocks}
             data={entry.translations[shown] ?? {}}
-            source={entry.defaultLocale}
+            source={entry.sourceLocale}
             stale={entry.stale.includes(shown)}
             translator={entry.translator}
             onsaved={(pending) => (translated = pending)}

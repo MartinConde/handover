@@ -74,16 +74,45 @@ function translator(): Translate | undefined {
   return config.i18n.translate ?? (key ? deeplTranslate('default', key) : undefined);
 }
 
-// The admin draws the default language's file; the others are kept in step behind it.
-const entryPath = (collection: string, slug: string, locale = config.i18n.defaultLocale) =>
+// One file of one entry. No language is implied: which one an entry is written in is the
+// entry's own answer, so every caller says which file it means.
+const entryPath = (collection: string, slug: string, locale: string) =>
   `src/content/${collection}/${locale}/${slug}.yaml`;
+
+/**
+ * The language an entry's structure is edited in, and the one its translations are made from:
+ * the site's default where the entry has that file, and otherwise the first language it does
+ * have one in. It is the entry's property and not the site's — an entry written in German alone
+ * is a German entry, not a broken English one. What stays the site's is the URL, since whether a
+ * language carries its segment is the same answer for every entry.
+ */
+const sourceOrder = () => [...new Set([config.i18n.defaultLocale, ...config.i18n.locales])];
+
+const sourceIn = (loaded: Record<string, unknown>) => sourceOrder().find((l) => l in loaded);
+
+// The same answer for a route that has not read the entry: the languages are asked in order, so
+// an ordinary entry costs one read and a site with one language costs none.
+async function sourceFor(collection: string, slug: string): Promise<string | undefined> {
+  if (config.i18n.locales.length < 2) return config.i18n.defaultLocale;
+  const git = gitClient();
+  const database = db();
+  for (const locale of sourceOrder()) {
+    const path = entryPath(collection, slug, locale);
+    const [file, row] = await Promise.all([
+      git.getFile(path),
+      loadDraft('default', database, path),
+    ]);
+    if (row?.contents || file?.contents) return locale;
+  }
+  return undefined;
+}
 
 // One entry's other languages, locale → path. Empty on a site that declares one language,
 // which is what keeps that site's save exactly the write it was.
-const siblingPaths = (collection: string, slug: string) =>
+const siblingPaths = (collection: string, slug: string, source: string) =>
   Object.fromEntries(
     config.i18n.locales
-      .filter((locale) => locale !== config.i18n.defaultLocale)
+      .filter((locale) => locale !== source)
       .map((locale) => [locale, entryPath(collection, slug, locale)]),
   );
 
@@ -167,14 +196,14 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
   // drafts are all answered from. A site that declares one language reads the one file it
   // always read: it has nothing to have drifted from or been translated ahead of.
   const loaded = await entryLocales(collection, slug, config.i18n.locales);
-  const own = loaded[config.i18n.defaultLocale];
-  if (!own) return new Response('Not found', { status: 404 });
-  const data = own.data;
+  const source = sourceIn(loaded);
+  if (!source) return new Response('Not found', { status: 404 });
+  const data = loaded[source]?.data;
   const form = formFor(collection);
   const offer = offeredIn(data, Object.keys(loaded));
   const languages = localeData(loaded);
   const translations = Object.fromEntries(
-    Object.entries(languages).filter(([locale]) => locale !== config.i18n.defaultLocale),
+    Object.entries(languages).filter(([locale]) => locale !== source),
   );
   return Response.json({
     ...form,
@@ -190,7 +219,11 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
     // The languages the site declares, which is what says whether the editor draws any of the
     // controls that are about having more than one, and which of them this response is of.
     locales: config.i18n.locales,
+    // The site's, which is what says whether a language's URLs carry its segment.
     defaultLocale: config.i18n.defaultLocale,
+    // And the entry's own: the language its structure is edited in and its translations are
+    // made from, which is the default language only where it has that file.
+    sourceLocale: source,
     // And which of them this entry is offered in: the rest are not translated but turned off,
     // which is a decision and not a gap to fill.
     offered: offer.offered,
@@ -246,29 +279,36 @@ async function autosave(
   collection: string,
   slug: string,
   request: Request,
-  locale = config.i18n.defaultLocale,
+  locale?: string,
 ): Promise<Response> {
   const schema = config.collections[collection]?.schema;
-  if (!schema || !config.i18n.locales.includes(locale))
+  if (!schema || (locale !== undefined && !config.i18n.locales.includes(locale)))
     return new Response('Not found', { status: 404 });
   const body = (await request.json().catch(() => undefined)) as { data?: unknown } | undefined;
   const data = editable(body?.data);
   if (!data) return new Response('Bad request', { status: 400 });
-  // A translation writes its own words into its own file and moves nothing; the default
-  // language is the one that carries the structure into the others. A site that declares one
-  // language does neither, so its save is exactly the write it always was.
-  const translation = locale !== config.i18n.defaultLocale;
-  const siblings = translation ? {} : siblingPaths(collection, slug);
+  // Which file this is a save of: the second column names its language, and the form on screen
+  // is the entry's own — which is not the site's default on an entry nobody wrote one in. The
+  // server works it out rather than believing the tab, which may have been open since before
+  // somebody else gave the entry a file in a language that outranks the one it is showing.
+  const source = await sourceFor(collection, slug);
+  if (!source) return new Response('Not found', { status: 404 });
+  const at = locale ?? source;
+  // A translation writes its own words into its own file and moves nothing; the language the
+  // entry is written in is the one that carries the structure into the others. A site that
+  // declares one language does neither, so its save is exactly the write it always was.
+  const translation = at !== source;
+  const siblings = translation ? {} : siblingPaths(collection, slug, source);
   let saved: Awaited<ReturnType<typeof saveDraft>>;
   try {
     saved = await saveDraft(
       'default',
       db(),
       gitClient(),
-      entryPath(collection, slug, locale),
+      entryPath(collection, slug, at),
       data,
       translation || Object.keys(siblings).length
-        ? { form: formFor(collection), locale, siblings, translation }
+        ? { form: formFor(collection), locale: at, siblings, translation }
         : undefined,
     );
   } catch (err) {
@@ -291,11 +331,14 @@ async function createTranslation(
   locale: string,
 ): Promise<Response> {
   const schema = config.collections[collection]?.schema;
-  if (!schema || locale === config.i18n.defaultLocale || !config.i18n.locales.includes(locale))
+  if (!schema || !config.i18n.locales.includes(locale))
     return new Response('Not found', { status: 404 });
   const loaded = await entryLocales(collection, slug, config.i18n.locales);
+  // Including the language the entry is written in, which is the only guard that language now
+  // needs: a missing default language is exactly what this route is for.
   if (loaded[locale]) return new Response('That language already has a file', { status: 409 });
-  const data = loaded[config.i18n.defaultLocale]?.data;
+  const source = sourceIn(loaded);
+  const data = source === undefined ? undefined : loaded[source]?.data;
   if (data === undefined) return new Response('Not found', { status: 404 });
   const { offered, problems } = offeredIn(data, Object.keys(loaded));
   // A mark the files contradict is answered before the offer it would otherwise be read as.
@@ -324,7 +367,7 @@ async function machineTranslate(
   request: Request,
 ): Promise<Response> {
   const schema = config.collections[collection]?.schema;
-  if (!schema || locale === config.i18n.defaultLocale || !config.i18n.locales.includes(locale))
+  if (!schema || !config.i18n.locales.includes(locale))
     return new Response('Not found', { status: 404 });
   // Before the entry is read at all: having nothing to translate with is about the site, so it
   // is the answer whatever else would have refused this one.
@@ -334,9 +377,11 @@ async function machineTranslate(
       'This site has nothing to translate with: set DEEPL_API_KEY, or an i18n.translate in cms.config.ts',
       { status: 409 },
     );
-  const loaded = await entryLocales(collection, slug, [config.i18n.defaultLocale, locale]);
-  const source = loaded[config.i18n.defaultLocale];
-  if (!source || !loaded[locale]) return new Response('Not found', { status: 404 });
+  const loaded = await entryLocales(collection, slug, config.i18n.locales);
+  const from = sourceIn(loaded);
+  const source = from === undefined ? undefined : loaded[from];
+  if (!from || !source || from === locale || !loaded[locale])
+    return new Response('Not found', { status: 404 });
   const body = (await request.json().catch(() => undefined)) as { paths?: unknown } | undefined;
   const named = Array.isArray(body?.paths) ? body.paths.map(String) : undefined;
   const form = formFor(collection);
@@ -351,7 +396,7 @@ async function machineTranslate(
   if (wanted.length) {
     const answers = await translate(
       wanted.map((v) => v.text),
-      config.i18n.defaultLocale,
+      from,
       locale,
     );
     await saveTranslated(
@@ -560,7 +605,10 @@ async function createEntry(collection: string, request: Request): Promise<Respon
   const named = collected.titleField ?? 'title';
   const values: Record<string, unknown> = { _version: FORMAT_VERSION };
   if (fields.some((f) => f.path[0] === named && f.type === 'text')) values[named] = title;
-  await createDraft('default', database, gitClient(), entryPath(collection, slug), values);
+  // The site's default language, and the one place it is still an entry's: a brand-new entry has
+  // no file to be written in any other, so it starts in the language the site is written in.
+  const path = entryPath(collection, slug, config.i18n.defaultLocale);
+  await createDraft('default', database, gitClient(), path, values);
   return Response.json({ slug });
 }
 
@@ -666,20 +714,19 @@ const schemaFor = (path: string) => config.collections[path.split('/')[2] ?? '']
 const ENTRY_FILE = /^src\/content\/([a-z0-9-]+)\/([^/]+)\/([^/]+)\.yaml$/;
 
 /**
- * Which language a file this publish is about to commit was translated from: the entry's
- * default-language file and the form that says which of its values a translation is made from.
- * Nothing for the default language's own file, and nothing for a path no collection owns — a
- * global has no schema, so no form. On a site that declares one language it is always nothing.
+ * Which language a file this publish is about to commit was translated from: the file of the
+ * language its entry is written in, and the form that says which of its values a translation is
+ * made from. Nothing for that language's own file, and nothing for a path no collection owns —
+ * a global has no schema, so no form. On a site that declares one language it is always nothing,
+ * which is what keeps such a site's publish the read-free write it always was.
  */
-const sourceOf = (path: string) => {
+const sourceOf = async (path: string) => {
   const [, collection = '', locale = '', slug = ''] = ENTRY_FILE.exec(path) ?? [];
   const schema = config.collections[collection]?.schema;
-  if (!schema || !locale || locale === config.i18n.defaultLocale) return undefined;
-  return {
-    locale: config.i18n.defaultLocale,
-    path: entryPath(collection, slug),
-    form: formFor(collection),
-  };
+  if (!schema || !locale || config.i18n.locales.length < 2) return undefined;
+  const source = await sourceFor(collection, slug);
+  if (!source || source === locale) return undefined;
+  return { locale: source, path: entryPath(collection, slug, source), form: formFor(collection) };
 };
 
 /**

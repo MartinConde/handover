@@ -275,6 +275,7 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
     problems: [{ path: 'address', message: 'Required' }],
     locales: ['en'],
     defaultLocale: 'en',
+    sourceLocale: 'en',
     offered: ['en'],
     offerProblems: [],
     drift: [],
@@ -904,21 +905,23 @@ test('an entry whose translation was made from an older source language says so'
   expect(body.drift).toEqual([]);
 });
 
+// It reads the entry rather than the path: which language a file was translated from is the
+// entry's answer, and an entry with no English file has not been translated from English.
 test('a publish names the language each translation it commits was made from', async () => {
-  locales = ['en', 'de'];
+  drifted();
   publishDrafts.mockClear();
 
   await POST(post('publish', ''));
 
   const sourceOf = publishDrafts.mock.calls[0]?.[3] as (
     path: string,
-  ) => { locale: string; path: string } | undefined;
-  expect(sourceOf('src/content/pages/de/home.yaml')).toMatchObject({
+  ) => Promise<{ locale: string; path: string } | undefined>;
+  expect(await sourceOf('src/content/pages/de/home.yaml')).toMatchObject({
     locale: 'en',
     path: 'src/content/pages/en/home.yaml',
   });
-  expect(sourceOf('src/content/pages/en/home.yaml')).toBe(undefined);
-  expect(sourceOf('src/content/redirects.yaml')).toBe(undefined);
+  expect(await sourceOf('src/content/pages/en/home.yaml')).toBe(undefined);
+  expect(await sourceOf('src/content/redirects.yaml')).toBe(undefined);
 });
 
 // A site with one language has no second file to compare against and never reads for one:
@@ -1067,11 +1070,14 @@ test('creating a language the entry already has is refused', async () => {
   expect(createDraft).not.toHaveBeenCalled();
 });
 
-test('creating the default language, or one the site does not declare, is refused', async () => {
+// The site's default language is no longer a language this route refuses on sight: an entry
+// with no file in it is exactly what it is for. What refuses it here is the file this entry
+// has — the same rule every other language is held to.
+test('the language an entry is written in is refused for the file it has, not for being it', async () => {
   untranslated();
   createDraft.mockClear();
 
-  expect((await POST(post('drafts/pages/home/en', ''))).status).toBe(404);
+  expect((await POST(post('drafts/pages/home/en', ''))).status).toBe(409);
   expect((await POST(post('drafts/pages/home/fr', ''))).status).toBe(404);
   expect(createDraft).not.toHaveBeenCalled();
 });
@@ -1455,4 +1461,101 @@ test('a collection without localized slugs has no address to set', async () => {
   );
 
   expect(res.status).toBe(404);
+});
+
+// An entry with no file in the site's default language — the demo's German-only Impressum.
+// Its structure is German's, because that is the only language anybody wrote it in.
+const germanOnly = () => {
+  locales = ['en', 'de'];
+  files['src/content/pages/de/impressum.yaml'] = [
+    '_version: 1',
+    'title: "Impressum"',
+    'blocks:',
+    '  - _type: "hero"',
+    '    _id: "b7t4x1m9"',
+    '    heading: "Impressum"',
+    '',
+  ].join('\n');
+};
+
+test('an entry with no file in the site default opens on the language it has', async () => {
+  germanOnly();
+
+  const res = await GET(ctx('entries/pages/impressum'));
+
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as {
+    sourceLocale: string;
+    data: unknown;
+    translations: unknown;
+    offered: string[];
+  };
+  expect(body.sourceLocale).toBe('de');
+  expect(body.data).toEqual({
+    _version: 1,
+    title: 'Impressum',
+    blocks: [{ _type: 'hero', _id: 'b7t4x1m9', heading: 'Impressum' }],
+  });
+  // The language it is written in is the form, not a translation of something else.
+  expect(body.translations).toEqual({});
+  // No `_locales`, so English is a gap somebody can fill and not a decision.
+  expect(body.offered).toEqual(['en', 'de']);
+});
+
+test('the missing default language is created from the language the entry has', async () => {
+  germanOnly();
+  createDraft.mockClear();
+
+  const res = await POST(post('drafts/pages/impressum/en', ''));
+
+  expect(res.status).toBe(200);
+  expect(createDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/pages/en/impressum.yaml',
+    { _version: 1, blocks: [{ _type: 'hero', _id: 'b7t4x1m9' }] },
+  );
+});
+
+test("a save of the entry's own language carries the structure, whichever language it is", async () => {
+  germanOnly();
+  saveDraft.mockClear();
+  const data = { title: 'Impressum!' };
+
+  const res = await PUT(put('drafts/pages/impressum', JSON.stringify({ data })));
+
+  expect(res.status).toBe(200);
+  expect(saveDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/pages/de/impressum.yaml',
+    data,
+    {
+      form: expect.anything(),
+      locale: 'de',
+      siblings: { en: 'src/content/pages/en/impressum.yaml' },
+      translation: false,
+    },
+  );
+});
+
+test('a publish marks a translation from the language the entry is written in', async () => {
+  locales = ['en', 'de', 'fr'];
+  files['src/content/pages/de/impressum.yaml'] = home.de;
+  files['src/content/pages/fr/impressum.yaml'] = home.de;
+  publishDrafts.mockClear();
+
+  await POST(post('publish', ''));
+
+  const sourceOf = publishDrafts.mock.calls[0]?.[3] as (
+    path: string,
+  ) => Promise<{ locale: string; path: string } | undefined>;
+  // German, not English: the entry has no English file, so nothing was translated from one.
+  expect(await sourceOf('src/content/pages/fr/impressum.yaml')).toMatchObject({
+    locale: 'de',
+    path: 'src/content/pages/de/impressum.yaml',
+  });
+  expect(await sourceOf('src/content/pages/de/impressum.yaml')).toBe(undefined);
 });

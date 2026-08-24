@@ -168,20 +168,22 @@ POST /admin/api/drafts/:collection/:slug/:locale  →  {}
 
 **Create from English**: writes that language's file for the entry as a draft — the structure
 and the values the languages share, none of the words
-([Translating](translating.md#a-language-with-no-file-yet)). `409` when the language already has
-a file or a draft, or when the entry is not offered in it; `404` for the default language, one
-the site does not declare, or an entry with no source file.
+([Translating](translating.md#a-language-with-no-file-yet)). It is made from the language the
+entry is written in, which is the site's default only where the entry has a file in it, so this
+is also how an entry written in one other language gets its default-language file. `409` when
+the language already has a file or a draft, or when the entry is not offered in it; `404` for a
+language the site does not declare, or an entry with no file in any of them.
 
 ```
 POST /admin/api/translate/:collection/:slug/:locale  { "paths": ["title"] }  →  { "data", "pending" }
 ```
 
-Machine-translates that language from the default one and stores the answers in its draft
-([Translating](translating.md#a-machines-first-draft)). `paths` names the fields to translate
+Machine-translates that language from the one the entry is written in and stores the answers in
+its draft ([Translating](translating.md#a-machines-first-draft)). `paths` names the fields to translate
 and is optional: without it, every field this language has nothing in yet is filled. Only prose
 is sent. The paths a machine wrote go into the file's `_machine`; `data` is the file as the
-fill leaves it, which is what the second column redraws from. `404` for the default language or
-one the site does not declare. `409` when the site has nothing configured to translate with —
+fill leaves it, which is what the second column redraws from. `404` for the language the entry
+is written in, or one the site does not declare. `409` when the site has nothing configured to translate with —
 that one is about the site rather than the entry, so it comes before the entry is read at all,
 and `404` for an entry with no file in either language comes after it.
 
@@ -195,7 +197,7 @@ drawer's **Discard** does with a file a publish was refused over. `404` if the c
 is not configured.
 
 ```
-GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, translations, pending, problems, titleField, locales, defaultLocale, offered, drift, stale, translator }
+GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, translations, pending, problems, titleField, locales, defaultLocale, sourceLocale, offered, drift, stale, translator }
 ```
 
 `data` is the draft when there is one, otherwise the file. `pending` is the entry's languages
@@ -204,10 +206,13 @@ whose draft is ahead of the repository, in config order: `[]` when nothing of it
 language is not — the editor offers **Publish…** whenever it is not empty. It is a list of
 locales here and the `true`/`false` of one file in the draft writes above. `problems` is the
 same list the autosave answers with, so an entry names what is missing the moment it opens. `titleField` is there when the collection declares one, and is the
-field the editor's heading reads. `data` is `defaultLocale`'s file and `translations` the other
+field the editor's heading reads. `data` is `sourceLocale`'s file and `translations` the other
 languages the entry has a file in, keyed by locale — what the editor's second column draws.
-`locales` is the languages the site declares, in config order, and `offered` the ones this entry
-is offered in — the rest are turned off for it. `drift` is the blocks the entry's
+`locales` is the languages the site declares, in config order, `defaultLocale` the site's own —
+which is what says whose URLs carry a language segment — and `sourceLocale` the language **this
+entry** is written in: the site default where the entry has that file, otherwise the first
+language it does ([Translating](translating.md#choosing-a-language)). `offered` is the languages
+this entry is offered in — the rest are turned off for it. `drift` is the blocks the entry's
 languages disagree about, `[{ "path": "blocks[_id=z9y8x7w6]", "type": "quote", "in": ["de"],
 "expected": ["en", "de"], "values": { "de": ["Ein seltener Fund."] } }]`, and `stale` the
 languages whose translation was made from a source language that has moved on since

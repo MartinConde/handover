@@ -584,7 +584,7 @@ test('publishing an entry commits the languages that moved with it in one commit
 
 // Staleness. The German file is a translation of the English as it stood when somebody wrote
 // it, and `_i18n` is the publish writing down which English that was.
-const sourceOf = (path: string) =>
+const sourceOf = async (path: string) =>
   path === PAGE_DE ? { locale: 'en', path: PAGE_EN, form: PAGE_FORM } : undefined;
 const mark = (contents: string) =>
   (parseEntry('default', contents) as { _i18n?: Record<string, string> })._i18n;

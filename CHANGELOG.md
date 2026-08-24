@@ -4,6 +4,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **An entry with no file in the site's default language can now be opened.** The language an
+  entry's structure is edited in — and that its translations are made from — is the entry's own
+  rather than the site's: the default language where the entry has a file in it, and otherwise
+  the first declared language it does. A German-only page used to be listed in the admin and
+  answer *No such entry* on click, with no way in: Create from English refused to create the
+  English. It now opens in German and offers *Create from German*. The entry response carries
+  `sourceLocale` beside `defaultLocale`, which stays the site's and stays what decides whether a
+  language's URLs carry its segment. `POST /admin/api/drafts/:collection/:slug/:locale` no longer
+  refuses the site's default language on sight — it refuses any language the entry already has a
+  file in, with `409` — and `SourceOf`, the callback `publishDrafts` takes, now returns a promise.
+
 - Renaming or deleting an entry writes one redirect per language, under that language's own
   segment, from the URL that language actually served: on a `localizedSlugs` collection that is
   the `slug` in the language's own file, so a rename leaves a language whose address is its own
