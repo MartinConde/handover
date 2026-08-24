@@ -116,6 +116,26 @@ Each button is the language's code in capitals. For anything else — the langua
 flag, a menu — call `getEntryLocales()` and write the markup yourself. One URL on its own is
 `entryUrl('default', cms.i18n, '/[slug]', slug, 'de')`.
 
+`getEntryLocales()` answers about an entry. A page that is not one — an index, a search, a
+contact form — builds its own pair from the same rule:
+
+```astro
+---
+// src/pages/index.astro
+import { entryUrl } from 'astro-handover';
+import LocaleSwitcher from 'astro-handover/LocaleSwitcher.astro';
+import cms from '../../cms.config';
+
+// `entryUrl` is undefined only for a collection with no route; '/' is one.
+const locales = cms.i18n.locales.map((locale) => ({
+  locale,
+  url: entryUrl('default', cms.i18n, '/', '', locale)!,
+}));
+---
+
+<LocaleSwitcher locales={locales} current="en" />
+```
+
 ## Hidden entries
 
 An entry with `_status: hidden` in its file stays in the repo but must not render.

@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `docs/rendering.md` shows the language switcher on a page that is not an entry.
+  `getEntryLocales()` answers about a collection and a slug, so an index builds its own pair
+  from `entryUrl()` and the site's locales.
+
 - `entryAddress()` is exported: the address one file serves at, which is the `slug` in its data
   or its file name. A prerendered route on a `localizedSlugs` collection builds its
   `getStaticPaths` from it, and it is the only safe way to read that key — Astro puts a warning
