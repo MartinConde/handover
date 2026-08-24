@@ -57,8 +57,7 @@ The collection key is the folder name and the key in `cms.config.ts`; the locale
 it becomes the first segment of the entry id, which is why `getEntry` takes `locale/slug`.
 **`generateId` is not optional on a collection with
 [`localizedSlugs`](configuration.md#localizedslugs)** — without it those entries are filed under
-their addresses, every lookup by `locale/name` misses, and reading the collection throws saying
-so.
+their addresses, every lookup misses, and reading the collection throws saying so.
 
 ### Quote dates in a file you write by hand
 
@@ -75,8 +74,8 @@ quoted, so this only bites on a file you or a script created.
 `ContentSource` is `{ getEntry, getCollection }`. Entry ids are `locale/slug`, matching the
 folder layout `src/content/<collection>/<locale>/<slug>.yaml`, and `getCollection` takes the
 locale and returns only that folder. `staticSource` wraps Astro's own `astro:content` functions;
-pass them in, since the package does not import `astro:content` itself. The first argument is
-the site id — use `'default'`.
+pass them in, since the package does not import `astro:content` itself. The first argument
+everywhere is the site id — use `'default'`.
 
 ```ts
 // src/loaders/listing.ts
@@ -93,13 +92,16 @@ export const staticSource: Source = createStaticSource('default', {
 
 export async function load(source: Source, { locale, slug }: { locale: string; slug: string }) {
   const entry = await source.getEntry('listings', `${locale}/${slug}`);
-  if (!entry) throw new Error(`No listing ${locale}/${slug}`);
-  return entry.data;
+  return entry?.data;
 }
 ```
 
 `ContentSource<{ listings: Listing }>` maps collection names to their data type, so
 `entry.data` is typed without casts.
+
+**A miss is a value, not an error.** Return `undefined` and let the page answer `404`. A
+`.catch()` around the call swallows everything, so a real problem — a `generateId` the loader is
+missing, a schema a file no longer satisfies — reaches the visitor as a 404 with nothing said.
 
 ## A page
 
@@ -110,6 +112,7 @@ import Page from '../../layouts/Page.astro';
 import { load, staticSource } from '../../loaders/listing';
 
 const data = await load(staticSource, { locale: 'en', slug: Astro.params.slug });
+if (!data) return new Response('Not found', { status: 404 });
 ---
 
 <Page data={data} />
@@ -128,7 +131,7 @@ import cms from '../../cms.config';
 
 export async function load(source: Source, { locale, slug }: { locale: string; slug: string }) {
   const entry = await entryAt('default', source, cms, 'pages', locale, slug);
-  if (!entry) throw new Error(`No page ${locale}/${slug}`);
+  if (!entry) return undefined;
   const name = entry.id.slice(locale.length + 1);
   return { data: entry.data, locales: await getEntryLocales('default', source, cms, 'pages', name) };
 }

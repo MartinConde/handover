@@ -14,7 +14,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Reading a collection whose `glob` loader is missing `generateId` now throws, naming the option,
   instead of quietly matching no entry: Astro files an entry with a `slug` under its address, and
-  a `localizedSlugs` collection keeps its address there.
+  a `localizedSlugs` collection keeps its address there. **A loader's miss is now a value rather
+  than a thrown error** — `return undefined` and let the page answer `404`, instead of throwing
+  and catching it in the route. A `.catch()` around the call swallows everything, which is what
+  turned this new message back into a silent 404. `template-convention.md` shows the new shape.
 
 - Every write stamps `_version` and writes the file's keys in schema order, not the editor's save
   alone: reconciling drift, turning a language off, setting an address and duplicating an entry
