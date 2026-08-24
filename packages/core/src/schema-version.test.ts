@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { SCHEMA_VERSION, schemaVersionError } from './db.js';
+import { SCHEMA_VERSION, schemaVersionError } from './tables.js';
 
 test('a marker at the package version passes', () => {
   expect(schemaVersionError(`{ "schemaVersion": ${SCHEMA_VERSION} }`)).toBeUndefined();

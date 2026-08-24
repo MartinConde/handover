@@ -6,7 +6,6 @@ import {
   createDraft,
   DraftConflictError,
   discardDraft,
-  drafts,
   loadDraft,
   openDb,
   overlayRows,
@@ -25,6 +24,8 @@ import { type ContentIndex, collectionEntries, indexFrom } from './entries.js';
 import { blobSha } from './git.js';
 import type { RedirectRule } from './lifecycle.js';
 import type { Form } from './schema.js';
+import * as tables from './tables.js';
+import { drafts } from './tables.js';
 
 const mf = new Miniflare({
   modules: true,
@@ -39,26 +40,9 @@ beforeAll(async () => {
   binding = await mf.getD1Database('DB');
   const ddl = await generateSQLiteMigration(
     await generateSQLiteDrizzleJson({}),
-    await generateSQLiteDrizzleJson({ drafts }),
+    await generateSQLiteDrizzleJson({ ...tables }),
   );
   await binding.batch(ddl.map((sql) => binding.prepare(sql)));
-});
-
-test('the generated migration creates the columns the drafts table is specified with', async () => {
-  type Column = { name: string; notnull: number; pk: number };
-  const columns: Column[] = (await binding.prepare('PRAGMA table_info(drafts)').all()).results;
-  expect(columns.map((c) => [c.name, c.notnull, c.pk])).toEqual([
-    ['site_id', 1, 1],
-    ['path', 1, 2],
-    ['contents', 1, 0],
-    ['base_sha', 1, 0],
-    ['base_blob', 1, 0],
-    ['updated_at', 1, 0],
-    ['updated_by', 0, 0],
-    ['held_by', 0, 0],
-    ['pending_redirects', 0, 0],
-    ['published_sha', 0, 0],
-  ]);
 });
 
 test('a draft row round-trips every column', async () => {

@@ -1,6 +1,5 @@
 import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
-import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import {
   applyDrift,
   type DriftChoice,
@@ -16,54 +15,8 @@ import { type ContentFile, type ContentIndex, indexHasPath } from './entries.js'
 import { blobSha, type GitClient, type PublishFile } from './git.js';
 import { appendRedirects, type RedirectRule, redirectRule } from './lifecycle.js';
 import type { Form } from './schema.js';
+import { drafts } from './tables.js';
 import { machineFilled } from './translate.js';
-
-/**
- * Edits live here, not in git, until they are published. `contents` is the canonical
- * serialised file — the exact bytes a publish would commit — so "nothing pending" is a
- * blob-SHA comparison against `base_blob` rather than a deep-equal of form state.
- */
-export const drafts = sqliteTable(
-  'drafts',
-  {
-    siteId: text('site_id').notNull().default('default'),
-    path: text('path').notNull(),
-    contents: text('contents').notNull(),
-    /** Commit the file was loaded from; the diff base of the three-way view. */
-    baseSha: text('base_sha').notNull(),
-    /** Blob SHA of that file at `base_sha`; conflict detection compares this against HEAD. */
-    baseBlob: text('base_blob').notNull(),
-    /** Epoch milliseconds. */
-    updatedAt: integer('updated_at').notNull(),
-    updatedBy: text('updated_by'),
-    /** "Not ready yet": the user id holding the entry back, null when it is ready. */
-    heldBy: text('held_by'),
-    /** Rules this entry adds to redirects.yaml when it is the one being published. */
-    pendingRedirects: text('pending_redirects', { mode: 'json' }).$type<RedirectRule[]>(),
-    /** The commit this row was published in; the row is cleared once that build is live. */
-    publishedSha: text('published_sha'),
-  },
-  (t) => [primaryKey({ columns: [t.siteId, t.path] })],
-);
-
-/**
- * Bumped whenever a table above changes. `handover db generate` records it in
- * `migrations/handover.json`; the build refuses to go out with a stale one, so a package
- * upgrade that forgot to generate fails there rather than at the first query.
- */
-export const SCHEMA_VERSION = 1;
-
-const GENERATE = 'run `npx handover db generate` and commit migrations/';
-
-/** Why `migrations/handover.json` (its text, or undefined when missing) is out of date. */
-export function schemaVersionError(marker: string | undefined): string | undefined {
-  if (marker === undefined) return `migrations/ has no handover.json: ${GENERATE}`;
-  const at = (JSON.parse(marker) as { schemaVersion?: unknown }).schemaVersion;
-  if (at === SCHEMA_VERSION) return undefined;
-  if (typeof at === 'number' && at > SCHEMA_VERSION)
-    return `migrations/ was generated for schema version ${at} but astro-handover's tables are at ${SCHEMA_VERSION}: the package is older than the migrations`;
-  return `astro-handover's tables are at schema version ${SCHEMA_VERSION} but migrations/ was generated for ${at}: ${GENERATE}`;
-}
 
 type D1Binding = Parameters<typeof drizzle>[0];
 

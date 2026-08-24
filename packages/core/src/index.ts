@@ -27,7 +27,6 @@ export {
   createDraft,
   DraftConflictError,
   discardDraft,
-  drafts,
   loadDraft,
   openDb,
   overlayRows,
@@ -37,10 +36,8 @@ export {
   recordOffer,
   recordRename,
   resolveDrift,
-  SCHEMA_VERSION,
   saveDraft,
   saveTranslated,
-  schemaVersionError,
   setEntryAddress,
   setEntryLocales,
 } from './db.js';
@@ -79,5 +76,20 @@ export {
 } from './richtext.js';
 export type { Field, Form, JsonSchema, Translation } from './schema.js';
 export { fieldsFrom, formOf } from './schema.js';
+export {
+  account,
+  activity,
+  cronState,
+  drafts,
+  locks,
+  media,
+  rateLimit,
+  SCHEMA_VERSION,
+  schemaVersionError,
+  session,
+  settings,
+  user,
+  verification,
+} from './tables.js';
 export type { Translate } from './translate.js';
 export { deeplTranslate, fieldAddress, keptMachine, machineFilled } from './translate.js';

@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `astro-handover/schema` exports the tables the rest of the CMS runs on — `media`, `locks`,
+  `activity`, `settings` and `cron_state` — plus the login's `user`, `session`, `account`,
+  `verification` and `rate_limit`, generated from the Better Auth config. Upgrading needs one
+  `handover db generate`; the build fails until it has run. Nothing drops or changes an existing
+  column, so a database holding drafts keeps them.
+
 - `docs/rendering.md` shows the language switcher on a page that is not an entry.
   `getEntryLocales()` answers about a collection and a slug, so an index builds its own pair
   from `entryUrl()` and the site's locales.

@@ -19,6 +19,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "better-auth": "^1.7.1",
     "drizzle-orm": "^0.45.2",
     "github-slugger": "^2.0.0",
     "mdast-util-from-markdown": "^2.0.3",

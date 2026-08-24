@@ -2,10 +2,11 @@ import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/
 import { Miniflare } from 'miniflare';
 import { expect, test } from 'vitest';
 import { parseEntry, staleLocales } from './content.js';
-import { drafts, openDb, publishDrafts, saveDraft } from './db.js';
+import { openDb, publishDrafts, saveDraft } from './db.js';
 import { createGitClient, RefMovedError } from './git.js';
 import { deleteEntry, renameEntry } from './lifecycle.js';
 import type { Form } from './schema.js';
+import { drafts } from './tables.js';
 
 // Opt-in: needs a real GitHub App installed on the throwaway repo, see .env.test.example.
 try {

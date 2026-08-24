@@ -47,8 +47,9 @@ file — upgrade the package.
 
 ## `handover db generate`
 
-The package's own tables (`drafts`, later more) live in D1 and change with the package.
-After upgrading `astro-handover`:
+The package's own tables live in D1 and change with the package: `drafts`, `media`, `locks`,
+`activity`, `settings`, `cron_state`, and the login's own `user`, `session`, `account`,
+`verification` and `rate_limit`. After upgrading `astro-handover`:
 
 ```sh
 npx handover db generate
