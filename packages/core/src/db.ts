@@ -14,6 +14,7 @@ import { type ContentFile, type ContentIndex, indexHasPath } from './entries.js'
 import { blobSha, type GitClient } from './git.js';
 import type { RedirectRule } from './lifecycle.js';
 import type { Form } from './schema.js';
+import { machineFilled } from './translate.js';
 
 /**
  * Edits live here, not in git, until they are published. `contents` is the canonical
@@ -476,4 +477,26 @@ export async function publishDrafts(
   const { commit_sha } = await git.publish(files, { base_sha, message: commitMessage(paths) });
   await db.delete(drafts).where(and(eq(drafts.siteId, siteId), inArray(drafts.path, paths)));
   return { commit_sha, paths };
+}
+
+/**
+ * A machine's answers in one language's file. Not a `saveDraft`: that one writes what a form
+ * sent back, and this is neither the form's values nor anything a person typed — the paths it
+ * fills go into `_machine`, and stay there until somebody types over them.
+ *
+ * `undefined` when that language has no file; a fill only ever follows a file that is there.
+ */
+export async function saveTranslated(
+  siteId: string,
+  db: Db,
+  git: Pick<GitClient, 'getFile' | 'getHead'>,
+  path: string,
+  filled: Record<string, string>,
+): Promise<{ updated_at: number; pending: boolean } | undefined> {
+  const loaded = await load(siteId, db, git, path);
+  if (!loaded) return undefined;
+  const contents = stringifyEntry(siteId, machineFilled(siteId, loaded.entry, filled));
+  const updatedAt = Date.now();
+  await db.batch([upsert(db, siteId, path, contents, loaded, updatedAt)]);
+  return { updated_at: updatedAt, pending: (await blobSha(contents)) !== loaded.baseBlob };
 }

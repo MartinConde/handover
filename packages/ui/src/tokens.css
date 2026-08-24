@@ -269,6 +269,11 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .field.is-invalid .rte, .field.is-invalid .switch input, .field.is-invalid .readonly { border-color: var(--danger); }
 .field .req { color: var(--danger-ink); margin-left: 2px; }
 .field .hint.same-everywhere { color: var(--ink-2); display: inline-flex; gap: var(--s-1); align-items: center; }
+.field .label-row { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; min-height: 22px; }
+.field .label-row > :first-child { margin-right: auto; }
+.badge-machine { background: var(--info-soft); color: var(--info-ink); }
+.badge-machine::before { content: "\2726"; margin-right: 3px; }
+.btn-translate { min-height: 24px; padding: 0 var(--s-2); font-size: var(--text-xs); }
 .input[disabled], .textarea[disabled] { background: var(--surface-2); color: var(--ink-2); cursor: not-allowed; }
 .input[readonly] { background: var(--surface-2); }
 .scrim { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; padding: var(--s-6); background: rgba(23, 26, 33, 0.38); }

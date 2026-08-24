@@ -2,6 +2,7 @@ import { Document, isMap, isScalar, isSeq, parse, parseDocument, visit } from 'y
 import { blobSha } from './git.js';
 import { checkReserved, RESERVED_KEYS } from './reserved.js';
 import type { Field, Form, Translation } from './schema.js';
+import { keptMachine } from './translate.js';
 
 export interface ContentEntry<T = unknown> {
   id: string;
@@ -123,7 +124,17 @@ export function mergeEntry(
   const merged = translated
     ? overlay(translated, translated.fields, values, entry, (m) => m === true, true)
     : values;
-  return { _version: FORMAT_VERSION, ...Object.fromEntries(reserved), ...merged };
+  const out: Record<string, unknown> = {
+    _version: FORMAT_VERSION,
+    ...Object.fromEntries(reserved),
+    ...merged,
+  };
+  // A machine wrote some of these values; a person typing over one takes its badge off, and
+  // the save is the only place that notices, since the form sends every field it drew.
+  const machine = keptMachine(_siteId, entry, out);
+  if (machine.length) out._machine = machine;
+  else delete out._machine;
+  return out;
 }
 
 /**
@@ -888,4 +899,76 @@ function skeletonOf(source: Record<string, unknown>, target: unknown): Record<st
     ...keys(isObject(target) ? target : {}, false),
     ...keys(source, true),
   ]);
+}
+
+/**
+ * Every string a machine can be asked to translate, in the order the form draws them and
+ * addressed the way `_machine` addresses a field. Prose only: a shared value and one the source
+ * language keeps to itself are not translations, and the pickers whose translated half has no
+ * editor in the second column yet are left out — a machine's words nobody can see are words
+ * nobody can correct, and the badge would never come off.
+ */
+export function translatableText(
+  _siteId: string,
+  form: Form,
+  data: unknown,
+): { path: string; text: string }[] {
+  const found: { path: string; text: string }[] = [];
+  textIn(form, form.fields, data, '', true, found);
+  return found;
+}
+
+// The same descent `valuesIn` makes, over the fields a person types into.
+function textIn(
+  form: Form,
+  fields: readonly Field[],
+  data: unknown,
+  at: string,
+  inherited: Translation,
+  found: { path: string; text: string }[],
+): void {
+  for (const field of fields) {
+    const key = field.path[0];
+    if (key === undefined) continue;
+    const value = isObject(data) ? data[key] : undefined;
+    const path = at ? `${at}.${key}` : key;
+    const mode = field.i18n ?? inherited;
+    if (field.type === 'group') textIn(form, field.fields, value, path, mode, found);
+    else if (field.type === 'blocks')
+      textInRows(form, (row) => form.blocks[String(row._type)], value, path, mode, found);
+    else if (field.type === 'array' && field.item.some((f) => f.path.length > 0))
+      textInRows(form, () => field.item, value, path, mode, found);
+    else if (mode !== true) continue;
+    else if (field.type === 'text' || field.type === 'richtext') {
+      if (typeof value === 'string' && value) found.push({ path, text: value });
+    } else if (field.type === 'link') {
+      const label = isObject(value) ? value.label : undefined;
+      if (typeof label === 'string' && label) found.push({ path: `${path}.label`, text: label });
+    }
+  }
+}
+
+function textInRows(
+  form: Form,
+  fieldsOf: FieldsOf,
+  rows: unknown,
+  at: string,
+  mode: Translation,
+  found: { path: string; text: string }[],
+): void {
+  if (!Array.isArray(rows)) return;
+  for (const [i, row] of rows.entries()) {
+    if (!isObject(row)) continue;
+    const key = rowKey(row, i);
+    const fields = fieldsOf(row);
+    if (fields)
+      textIn(
+        form,
+        fields,
+        row,
+        `${at}[${key.startsWith('#') ? key.slice(1) : `_id=${key}`}]`,
+        mode,
+        found,
+      );
+  }
 }

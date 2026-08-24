@@ -28,7 +28,9 @@ const {
   pendingDrafts,
   publishDrafts,
   resolveDrift,
+  saveTranslated,
   setEntryLocales,
+  translate,
 } = await vi.hoisted(async () => {
   const { z } = await import('astro/zod');
   const { blocks, defineBlock } = await import('../index.js');
@@ -91,7 +93,12 @@ const {
       updated_at: 1755864000000,
     })),
     resolveDrift: vi.fn(async () => {}),
+    saveTranslated: vi.fn(async () => ({ updated_at: 1755864000000, pending: true })),
     setEntryLocales: vi.fn(async () => {}),
+    // The provider behind the hook: whatever the site configured, seen from the route.
+    translate: vi.fn(async (texts: string[], _from: string, to: string) =>
+      texts.map((t) => `[${to}] ${t}`),
+    ),
     recordRename: vi.fn(async () => {}),
     recordDelete: vi.fn(async () => {}),
     discardDraft: vi.fn(async () => {}),
@@ -107,6 +114,8 @@ let draft: Row | undefined;
 const rows: Record<string, Row> = {};
 // The languages the site declares, likewise: one and several are different code paths.
 let locales = ['en'];
+// What the site translates with: its own hook, or nothing at all.
+let translator: typeof translate | undefined = translate;
 vi.mock('virtual:handover/config', () => ({
   default: {
     i18n: {
@@ -114,6 +123,9 @@ vi.mock('virtual:handover/config', () => ({
         return locales;
       },
       defaultLocale: 'en',
+      get translate() {
+        return translator;
+      },
     },
     collections: {
       listings: { schema: listing, route: '/listings/[slug]', index: '/listings' },
@@ -174,12 +186,14 @@ vi.mock('@handover/core', async (original) => ({
   pendingDrafts,
   publishDrafts,
   resolveDrift,
+  saveTranslated,
   setEntryLocales,
 }));
 
 afterEach(() => {
   draft = undefined;
   locales = ['en'];
+  translator = translate;
   for (const path of Object.keys(files)) delete files[path];
   for (const path of Object.keys(rows)) delete rows[path];
 });
@@ -237,6 +251,7 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
     offered: ['en'],
     drift: [],
     stale: [],
+    translator: true,
   });
 });
 
@@ -1068,4 +1083,95 @@ test('an entry says which languages it is offered in', async () => {
   const body = (await (await GET(ctx('entries/pages/home'))).json()) as { offered: unknown };
 
   expect(body.offered).toEqual(['en']);
+});
+
+// The `translate(from, to)` hook: whatever answers, the route asks it for prose and writes
+// the answers into the translation's own draft with `_machine` naming them.
+const machine = () => {
+  locales = ['en', 'de'];
+  files['src/content/pages/en/home.yaml'] = home.en;
+  files['src/content/pages/de/home.yaml'] = [
+    '_version: 1',
+    'title: "Startseite"',
+    'blocks:',
+    '  - _type: "hero"',
+    '    _id: "k3nf9a2p"',
+    '',
+  ].join('\n');
+};
+
+test('a machine is asked for the fields the translation has not got, and no others', async () => {
+  machine();
+  translate.mockClear();
+  saveTranslated.mockClear();
+
+  const res = await POST(post('translate/pages/home/de', ''));
+
+  expect(res.status).toBe(200);
+  // `title` is there in German already; the hero's heading is the gap.
+  expect(translate).toHaveBeenCalledWith(['Move to the coast'], 'en', 'de');
+  expect(saveTranslated).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/pages/de/home.yaml',
+    { 'blocks[_id=k3nf9a2p].heading': '[de] Move to the coast' },
+  );
+});
+
+test('a named field is translated whether it is empty or not', async () => {
+  machine();
+  translate.mockClear();
+  saveTranslated.mockClear();
+
+  const res = await POST(post('translate/pages/home/de', JSON.stringify({ paths: ['title'] })));
+
+  expect(res.status).toBe(200);
+  expect(translate).toHaveBeenCalledWith(['Home'], 'en', 'de');
+  expect(saveTranslated).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/pages/de/home.yaml',
+    { title: '[de] Home' },
+  );
+});
+
+test('a translation with nothing left to fill asks no machine anything', async () => {
+  machine();
+  files['src/content/pages/de/home.yaml'] = home.en.replace('Home', 'Startseite');
+  translate.mockClear();
+
+  expect((await POST(post('translate/pages/home/de', ''))).status).toBe(200);
+  expect(translate).not.toHaveBeenCalled();
+});
+
+test('a site with nothing to translate with says so rather than failing quietly', async () => {
+  machine();
+  translator = undefined;
+
+  const res = await POST(post('translate/pages/home/de', ''));
+
+  expect(res.status).toBe(409);
+  expect(await res.text()).toContain('DEEPL_API_KEY');
+});
+
+test('the default language and a language with no file are both refused', async () => {
+  machine();
+
+  expect((await POST(post('translate/pages/home/en', ''))).status).toBe(404);
+  expect((await POST(post('translate/pages/home/fr', ''))).status).toBe(404);
+  delete files['src/content/pages/de/home.yaml'];
+  expect((await POST(post('translate/pages/home/de', ''))).status).toBe(404);
+});
+
+test('an entry says whether there is anything to translate with', async () => {
+  machine();
+  expect(
+    ((await (await GET(ctx('entries/pages/home'))).json()) as { translator: unknown }).translator,
+  ).toBe(true);
+  translator = undefined;
+  expect(
+    ((await (await GET(ctx('entries/pages/home'))).json()) as { translator: unknown }).translator,
+  ).toBe(false);
 });

@@ -99,6 +99,34 @@ no longer anything to report.
 Each card shows what every language has written in the block, so *Remove it from English* is
 answered against the words it would lose rather than against a file name.
 
+## A machine's first draft
+
+With something to translate with configured, the second language's header offers **Translate
+what's empty** and each field a **Translate** button; the offer a language with no file draws
+gains **Create and pre-fill**, which writes the file and fills it in one go. Only prose is
+sent — the fields that column draws as something to type in. A shared value, a field the
+default language keeps to itself, and where a link points are not translations.
+
+What a machine wrote is written down in the file:
+
+```yaml
+_machine:
+  - "title"
+  - "blocks[_id=k3nf9a2p].heading"
+```
+
+Those fields are badged **Machine translated** in the form, and the badge comes off one field
+at a time: the first save after somebody types in one takes its path out of the list. It is in
+the file rather than the database so a diff shows it and a lost database does not lose it.
+
+Nothing about it blocks anything — a machine-filled translation publishes like any other file,
+and publishing one stamps `_i18n` below, since a value the two languages disagree about is
+what says the translation is of this English and not an older one.
+
+**Configuring it** is one secret: `DEEPL_API_KEY` ([Deploying](deploy.md#secrets)). Another
+provider goes in `i18n.translate` ([Configuration](configuration.md#i18n)). With neither, none
+of the buttons above is drawn.
+
 ## When the source language moves on
 
 A translation is made from the default language as it stood at some moment, and the translated

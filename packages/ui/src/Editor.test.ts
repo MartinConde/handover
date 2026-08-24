@@ -599,7 +599,7 @@ test('a translation drafted before the screen opened is something to publish', (
 // A language with no file: two ways out, and an empty form is neither — it would autosave a
 // file nobody asked for.
 const missing = { ...bilingual, translations: {} };
-const posted = () => vi.fn(async () => Response.json({}));
+const posted = () => vi.fn(async (_url: string, _init?: RequestInit) => Response.json({}));
 
 test('a language the entry has no file in offers one made from the source language', async () => {
   const fetchMock = posted();
@@ -648,4 +648,118 @@ test('a language turned off is struck through and offers no way to write it', ()
   expect($(root, '.pane h2')?.textContent).toContain('German');
   expect($(root, '.pane button.btn')?.textContent).toContain('back on');
   expect($(root, 'button.btn-link')).toBeNull();
+});
+
+// Machine translation. Nothing is drawn without something to translate with, and what a
+// machine wrote is badged in the column until somebody types over it.
+const machine = { ...bilingual, translator: true };
+const filled = (data: Record<string, unknown>) =>
+  vi.fn(async () => Response.json({ data, pending: true }));
+
+test('nothing offers a machine translation on a site with nothing to translate with', () => {
+  const root = show({ entry: bilingual });
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+
+  expect($(root, 'button.btn-fill')).toBeNull();
+  expect($(root, 'button.btn-translate')).toBeNull();
+});
+
+test('the second language offers to fill what it has nothing in', async () => {
+  const fetchMock = filled({ title: 'Seaview Cottage', notes: undefined });
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: machine });
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+
+  $<HTMLButtonElement>(root, 'button.btn-fill')?.click();
+  await tick();
+
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/translate/listings/seaview-cottage/de', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  vi.unstubAllGlobals();
+});
+
+test('one field is translated on its own and the answer lands in the input', async () => {
+  const fetchMock = filled({
+    title: 'Meerblick-Häuschen',
+    body: [{ _type: 'hero', _id: 'k3nf9a2p', heading: 'Über dem Hafen' }],
+    _machine: ['title'],
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: machine });
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+
+  $<HTMLButtonElement>(root, 'button.btn-translate')?.click();
+  await tick();
+  flushSync();
+
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/translate/listings/seaview-cottage/de', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ paths: ['title'] }),
+  });
+  expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Meerblick-Häuschen');
+  expect($(root, '.badge-machine')).not.toBeNull();
+  vi.unstubAllGlobals();
+});
+
+test('a block a machine filled is badged where the block is, not at the top', () => {
+  const root = show({
+    entry: {
+      ...machine,
+      translations: {
+        de: {
+          ...machine.translations.de,
+          _machine: ['body[_id=k3nf9a2p].heading'],
+        },
+      },
+    },
+  });
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+
+  expect(
+    $(root, '.field:has(> .label-row > label[for="t-body.0.heading"]) .badge-machine'),
+  ).not.toBeNull();
+  expect($(root, '.field:has(> .label-row > label[for="t-title"]) .badge-machine')).toBeNull();
+});
+
+test('a language with no file can be made and filled in one go', async () => {
+  const fetchMock = posted();
+  vi.stubGlobal('fetch', fetchMock);
+  const changed = vi.fn();
+  const root = show({ entry: { ...missing, translator: true }, onchanged: changed });
+
+  $$<HTMLButtonElement>(root, '[aria-label="Language"] button')[1]?.click();
+  flushSync();
+  $<HTMLButtonElement>(root, 'button.btn-fill')?.click();
+  await tick();
+
+  expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+    '/admin/api/drafts/listings/seaview-cottage/de',
+    '/admin/api/translate/listings/seaview-cottage/de',
+  ]);
+  expect(changed).toHaveBeenCalledTimes(1);
+  vi.unstubAllGlobals();
+});
+
+test('typing over a machine-filled field takes its badge off there and then', () => {
+  const root = show({
+    entry: {
+      ...machine,
+      translations: { de: { ...machine.translations.de, _machine: ['title'] } },
+    },
+  });
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  expect($(root, '.badge-machine')).not.toBeNull();
+
+  type(root, 'input#t-title', 'Meerblick');
+
+  expect($(root, '.badge-machine')).toBeNull();
 });

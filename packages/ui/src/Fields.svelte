@@ -1,5 +1,5 @@
 <script lang="ts">
-import { type Field, newId, type Translation } from '@handover/core';
+import { type Field, fieldAddress, newId, type Translation } from '@handover/core';
 import Fields from './Fields.svelte';
 import RichText from './RichText.svelte';
 
@@ -12,6 +12,8 @@ let {
   problems = {},
   rowLabel = '',
   translating = false,
+  machine = [],
+  ontranslate,
   inherited = true,
   prefix = 'f',
 }: {
@@ -26,6 +28,10 @@ let {
   rowLabel?: string;
   /** This is a language the entry is translated into: it owns its words and nothing else. */
   translating?: boolean;
+  /** The paths a machine's words are still standing at — the file's `_machine`. */
+  machine?: string[];
+  /** Translate one field from the source language; absent when the site has nothing to do it. */
+  ontranslate?: (path: string) => void;
   /** The translation mode the fields inherit — a group hands its own down. */
   inherited?: Translation;
   /** What the field ids start with; two forms on one screen cannot share it. */
@@ -49,6 +55,13 @@ const shown = $derived(
 
 // One picker at a time per form level; the field id says which is open.
 let picker = $state('');
+
+// Where the file names this field: `blocks[_id=k3nf9a2p].heading`, which is what `_machine`
+// and the machine translation route both address it by. The form knows it by its position.
+const address = (at: readonly string[]) => fieldAddress('default', at, root);
+// Prose is what a machine is offered — the fields this column draws as something to type in.
+const prose = (field: Field) =>
+  !!ontranslate && translating && (field.type === 'text' || field.type === 'richtext');
 
 function read(at: readonly string[]): unknown {
   return at.reduce<unknown>((node, key) => (node as Data | undefined)?.[key], root);
@@ -117,8 +130,13 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
 }
 </script>
 
-{#snippet groupLabel(id: string, field: Field, text: string)}
-  <div class="label-row"><span id="{id}-l">{text}{#if 'required' in field && field.required}<span class="req" aria-hidden="true">*</span>{/if}</span></div>
+{#snippet machineMark(path: string, text: string)}
+  {#if machine.includes(path)}<span class="badge badge-machine">Machine translated</span>{/if}
+  <button class="btn btn-ghost btn-translate" type="button" aria-label="Translate {text} from the source language" onclick={() => ontranslate?.(path)}>Translate</button>
+{/snippet}
+
+{#snippet groupLabel(id: string, field: Field, text: string, at: readonly string[] = [])}
+  <div class="label-row"><span id="{id}-l">{text}{#if 'required' in field && field.required}<span class="req" aria-hidden="true">*</span>{/if}</span>{#if prose(field)}{@render machineMark(address(at), text)}{/if}</div>
 {/snippet}
 
 {#snippet controls(at: readonly string[], i: number, count: number, name: string)}
@@ -129,9 +147,10 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   </div>
 {/snippet}
 
-{#snippet labelRow(id: string, field: Field, text: string)}
+{#snippet labelRow(id: string, field: Field, text: string, at: readonly string[] = [])}
   <div class="label-row">
     <label for={id}>{text}{#if 'required' in field && field.required}<span class="req" aria-hidden="true">*</span>{/if}</label>
+    {#if prose(field)}{@render machineMark(address(at), text)}{/if}
   </div>
 {/snippet}
 
@@ -145,23 +164,23 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   {@const says = err ? `${id}-err` : undefined}
   <div class="field" class:is-invalid={err}>
     {#if translating && mode === 'duplicate' && !structural(field)}
-      {@render groupLabel(id, field, text)}
+      {@render groupLabel(id, field, text, at)}
       <div class="readonly" {id} role="region" tabindex="-1" aria-labelledby="{id}-l">{read(at) ?? ''}</div>
       <p class="hint">Same in every language</p>
     {:else if field.type === 'text'}
-      {@render labelRow(id, field, text)}
+      {@render labelRow(id, field, text, at)}
       {#if str(at).length > 80 || str(at).includes('\n')}
         <textarea class="input textarea" {id} aria-invalid={bad} aria-describedby={says} value={str(at)} oninput={(e) => write(at, e.currentTarget.value)}></textarea>
       {:else}
         <input class="input" {id} type="text" aria-invalid={bad} aria-describedby={says} value={str(at)} oninput={(e) => write(at, e.currentTarget.value)} />
       {/if}
     {:else if field.type === 'number'}
-      {@render labelRow(id, field, text)}
+      {@render labelRow(id, field, text, at)}
       <input class="input" {id} type="number" step="any" aria-invalid={bad} aria-describedby={says} value={num(at)} oninput={(e) => write(at, e.currentTarget.value === '' ? undefined : e.currentTarget.valueAsNumber)} />
     {:else if field.type === 'boolean'}
       <label class="switch" for={id}><input type="checkbox" role="switch" {id} aria-invalid={bad} aria-describedby={says} checked={read(at) === true} onchange={(e) => write(at, e.currentTarget.checked)} /><span>{text}</span></label>
     {:else if field.type === 'date'}
-      {@render labelRow(id, field, text)}
+      {@render labelRow(id, field, text, at)}
       <input class="input" {id} type="date" aria-invalid={bad} aria-describedby={says} value={str(at)} oninput={(e) => write(at, e.currentTarget.value || undefined)} />
     {:else if field.type === 'select'}
       {#if field.options.length <= 5}
@@ -172,7 +191,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           {/each}
         </fieldset>
       {:else}
-        {@render labelRow(id, field, text)}
+        {@render labelRow(id, field, text, at)}
         <select class="input" {id} aria-invalid={bad} aria-describedby={says} value={str(at)} onchange={(e) => write(at, e.currentTarget.value || undefined)}>
           <option value="">Choose…</option>
           {#each field.options as option (option)}
@@ -182,10 +201,10 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       {/if}
     {:else if field.type === 'link' && translating}
       <!-- A link's label is the half a translation owns; where it points is the same everywhere. -->
-      {@render groupLabel(id, field, text)}
-      <div class="field"><div class="label-row"><label for="{id}.label">Label</label></div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
+      {@render groupLabel(id, field, text, at)}
+      <div class="field"><div class="label-row"><label for="{id}.label">Label</label>{#if ontranslate}{@render machineMark(`${address(at)}.label`, `${text} label`)}{/if}</div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
     {:else if field.type === 'link'}
-      {@render groupLabel(id, field, text)}
+      {@render groupLabel(id, field, text, at)}
       <div class="seg" role="group" aria-label="Link type">
         <button type="button" aria-pressed={linkType(at) === 'entry'} onclick={() => setLinkType(at, 'entry')}>Page / Entry</button>
         <button type="button" aria-pressed={linkType(at) === 'url'} onclick={() => setLinkType(at, 'url')}>URL</button>
@@ -198,21 +217,21 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <div class="field"><div class="label-row"><label for="{id}.label">Label</label></div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
       <label class="check" for="{id}.newTab"><input type="checkbox" id="{id}.newTab" checked={read([...at, 'newTab']) === true} onchange={(e) => write([...at, 'newTab'], e.currentTarget.checked || undefined)} /><span>Open in new tab</span></label>
     {:else if field.type === 'richtext'}
-      {@render groupLabel(id, field, text)}
+      {@render groupLabel(id, field, text, at)}
       <RichText {id} labelId="{id}-l" tier={field.tier} invalid={!!err} describedby={says} value={str(at)} onchange={(md) => write(at, md)} />
     {:else if field.type === 'group'}
       <details class="group" open>
         <summary>{text}<span class="count">{field.fields.length} fields</span></summary>
-        <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} {translating} {prefix} inherited={mode} /></div>
+        <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} {translating} {machine} {ontranslate} {prefix} inherited={mode} /></div>
       </details>
     {:else if field.type === 'array'}
       {@const items = rows(at)}
       {@const scalar = field.item.length === 1 && field.item[0]?.path.length === 0}
-      {@render groupLabel(id, field, text)}
+      {@render groupLabel(id, field, text, at)}
       <div class="list" {id} role="group" aria-labelledby="{id}-l">
         {#each items as row, i ((row as Data)?._id ?? i)}
           <div class="row-card">
-            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {prefix} inherited={mode} /></div>
+            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {prefix} inherited={mode} /></div>
             {#if !translating}{@render controls(at, i, items.length, `${text} row ${i + 1}`)}{/if}
           </div>
         {:else}
@@ -222,7 +241,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       </div>
     {:else if field.type === 'blocks'}
       {@const items = rows(at)}
-      {@render groupLabel(id, field, text)}
+      {@render groupLabel(id, field, text, at)}
       <div class="list" {id} role="group" aria-labelledby="{id}-l">
         {#each items as row, i (block(row)._id ?? i)}
           {@const name = blockName(row)}
@@ -234,7 +253,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
               {#if !translating}{@render controls(at, i, items.length, name)}{/if}
             </header>
             {#if inner}
-              <div class="form"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {prefix} inherited={mode} /></div>
+              <div class="form"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {prefix} inherited={mode} /></div>
             {:else}
               <p class="ref-note">{block(row)._ref ?? `No “${block(row)._type}” block in the registry`} — not editable here</p>
             {/if}
@@ -258,7 +277,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {/if}
       </div>
     {:else if field.type === 'image' || field.type === 'file' || field.type === 'embed' || field.type === 'seo' || field.type === 'reference'}
-      {@render groupLabel(id, field, text)}
+      {@render groupLabel(id, field, text, at)}
       <div class="readonly" {id} role="region" tabindex="-1" aria-labelledby="{id}-l" aria-describedby={err ? `${id}-hint ${id}-err` : `${id}-hint`}><pre>{read(at) === undefined ? 'Nothing here yet' : JSON.stringify(read(at), null, 2)}</pre></div>
       <p class="hint" id="{id}-hint">{WHEN[field.type]}</p>
     {:else}

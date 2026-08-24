@@ -95,7 +95,9 @@ the `\n`-escaped one-line form.
 | `GITHUB_PRIVATE_KEY` | the PKCS#8 PEM |
 | `GITHUB_REPO` | `owner/repo` of the site |
 
-Optional: `GITHUB_BRANCH` if the live branch is not `main`.
+Optional: `GITHUB_BRANCH` if the live branch is not `main`, and `DEEPL_API_KEY` to
+[machine-translate](translating.md#a-machines-first-draft) from the admin — a free key ends in
+`:fx` and is recognised as one. Without it the translate buttons are not drawn.
 
 `/admin/api` requests fail with an explicit error naming the missing secret. For local
 `astro dev`, the same names go in `.dev.vars`.

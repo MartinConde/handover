@@ -16,6 +16,7 @@ export {
   stringifyEntry,
   syncLocale,
   timestampErrors,
+  translatableText,
 } from './content.js';
 export type { Db, Draft } from './db.js';
 export {
@@ -33,6 +34,7 @@ export {
   resolveDrift,
   SCHEMA_VERSION,
   saveDraft,
+  saveTranslated,
   schemaVersionError,
   setEntryLocales,
 } from './db.js';
@@ -56,3 +58,5 @@ export {
 } from './richtext.js';
 export type { Field, Form, JsonSchema, Translation } from './schema.js';
 export { fieldsFrom, formOf } from './schema.js';
+export type { Translate } from './translate.js';
+export { deeplTranslate, fieldAddress, keptMachine, machineFilled } from './translate.js';

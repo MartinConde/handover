@@ -43,6 +43,21 @@ Required, a site with one language included. `locales` are the folder names unde
 stops if the two disagree — the keys, the error and the folder layout are in
 [Languages](i18n.md).
 
+`translate` is optional and only for using something other than DeepL to
+[machine-translate](translating.md#a-machines-first-draft): given the texts and the two
+language codes, hand back the same texts translated, in the same order.
+
+```ts
+i18n: {
+  locales: ['en', 'de'],
+  defaultLocale: 'en',
+  translate: async (texts, from, to) => myProvider.translate(texts, { from, to }),
+}
+```
+
+Without it, `DEEPL_API_KEY` ([Deploying](deploy.md#secrets)) is what translates; without
+either, the admin offers no machine translation at all.
+
 ## `globals`
 
 One key per site-wide file under `src/content/globals/<locale>/`, mapping the file name

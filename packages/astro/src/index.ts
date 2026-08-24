@@ -16,6 +16,7 @@ import {
   richtextErrors,
   schemaVersionError,
   type TitleFields,
+  type Translate,
   timestampErrors,
   unsafeLinkScheme,
 } from '@handover/core';
@@ -23,7 +24,13 @@ import type { AstroIntegration } from 'astro';
 import { z } from 'astro/zod';
 import type { ViteDevServer } from 'vite';
 
-export type { AstroContent, ContentEntry, ContentSource, RichtextTier } from '@handover/core';
+export type {
+  AstroContent,
+  ContentEntry,
+  ContentSource,
+  RichtextTier,
+  Translate,
+} from '@handover/core';
 export { filterLive, isLive, staticSource } from '@handover/core';
 
 // Markdown, validated against the tier's construct list; the first offending construct
@@ -218,6 +225,12 @@ export interface HandoverConfig {
     defaultLocale: string;
     /** Whether the default locale's URLs carry its segment. Astro's `routing.prefixDefaultLocale`. */
     prefixDefaultLocale?: boolean;
+    /**
+     * What machine-translates a field, when it is not DeepL: given the texts and the two
+     * languages, the same texts translated, in order. Without one, `DEEPL_API_KEY` is used;
+     * without either, the admin offers no machine translation at all.
+     */
+    translate?: Translate;
   };
 }
 

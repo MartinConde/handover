@@ -39,6 +39,8 @@ let {
     stale: string[];
     /** The blocks this entry's languages disagree about; publishing waits on these. */
     drift: Drift[];
+    /** The site has something to machine-translate with: without one, none of it is offered. */
+    translator?: boolean;
   };
   /** Open the pending-changes drawer, which is where publishing happens. */
   onpublish: () => void;
@@ -95,6 +97,20 @@ async function ask(url: string, init: RequestInit = {}) {
 }
 
 const createFrom = (of: string) => ask(`/admin/api/drafts/${collection}/${slug}/${of}`);
+// Create from English and then a machine's first draft of it, as one answer to the offer: the
+// file has to exist before anything can be written into it.
+async function createFilled(of: string) {
+  busy = true;
+  const made = await fetch(`/admin/api/drafts/${collection}/${slug}/${of}`, { method: 'POST' });
+  if (made.ok)
+    await fetch(`/admin/api/translate/${collection}/${slug}/${of}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+  busy = false;
+  if (made.ok) onchanged();
+}
 const offer = (of: string, on: boolean) =>
   ask(`/admin/api/entries/${collection}/${slug}/locales`, {
     headers: { 'content-type': 'application/json' },
@@ -299,6 +315,11 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
                 <button class="btn btn-primary btn-create" type="button" disabled={busy} onclick={() => createFrom(shown)}>
                   Create from {language(entry.defaultLocale)}
                 </button>
+                {#if entry.translator}
+                  <button class="btn btn-fill" type="button" disabled={busy} onclick={() => createFilled(shown)}>
+                    Create and pre-fill
+                  </button>
+                {/if}
                 <p>
                   Or <button class="btn-link" type="button" disabled={busy} onclick={() => offer(shown, false)}>don't offer this entry in {language(shown)}</button> — no file is written for it.
                 </p>
@@ -319,6 +340,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             data={entry.translations[shown] ?? {}}
             source={entry.defaultLocale}
             stale={entry.stale.includes(shown)}
+            translator={entry.translator}
             onsaved={(pending) => (translated = pending)}
             onclose={side ? () => leaving(() => (side = false)) : undefined}
           />

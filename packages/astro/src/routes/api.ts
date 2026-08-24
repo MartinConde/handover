@@ -1,13 +1,14 @@
 import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
 import index from 'virtual:handover/index';
-import type { Db, EntryLocation, GitClient } from '@handover/core';
+import type { Db, EntryLocation, GitClient, Translate } from '@handover/core';
 import {
   blobSha,
   collectionEntries,
   createDraft,
   createGitClient,
   DraftConflictError,
+  deeplTranslate,
   deleteEntry,
   discardDraft,
   driftReport,
@@ -27,9 +28,11 @@ import {
   renameEntry,
   resolveDrift,
   saveDraft,
+  saveTranslated,
   setEntryLocales,
   staleLocales,
   syncLocale,
+  translatableText,
 } from '@handover/core';
 import type { APIRoute } from 'astro';
 import { login } from '../auth.js';
@@ -56,6 +59,14 @@ function gitClient(): GitClient {
 
 function db(): Db {
   return openDb('default', (env as { DB?: Parameters<typeof openDb>[1] }).DB);
+}
+
+// What machine-translates a field: the site's own hook, or DeepL on the key the Worker holds.
+// Neither is an ordinary state of a site — the admin draws no translate button at all — so it
+// is a question the entry answers rather than something a route discovers on the way.
+function translator(): Translate | undefined {
+  const key = (env as Record<string, string | undefined>).DEEPL_API_KEY;
+  return config.i18n.translate ?? (key ? deeplTranslate('default', key) : undefined);
 }
 
 // The admin draws the default language's file; the others are kept in step behind it.
@@ -166,6 +177,9 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
     // Which of them were translated from an English that has moved on since. A warning the
     // editor draws next to the language, never a reason to refuse anything.
     stale: await staleLocales('default', form, languages),
+    // Whether anything can machine-translate: with nothing configured the buttons that offer
+    // it are not drawn, the same rule the locale controls follow on a one-language site.
+    translator: translator() !== undefined,
   });
 }
 
@@ -261,6 +275,63 @@ async function createTranslation(
   if (offered.length < config.i18n.locales.length) made._locales = offered;
   await createDraft('default', database, git, path, made);
   return Response.json({});
+}
+
+/**
+ * A machine's first draft of one language, from the language the entry is written in. `paths`
+ * names the fields to translate — one Translate button — and without it every field this
+ * language has nothing in yet is filled, which is what pre-fill is.
+ *
+ * The answers land in `_machine`, so the badge stands until somebody types over the field: a
+ * machine filling something and a person meaning it are different states of the same value.
+ */
+async function machineTranslate(
+  collection: string,
+  slug: string,
+  locale: string,
+  request: Request,
+): Promise<Response> {
+  const schema = config.collections[collection]?.schema;
+  if (!schema || locale === config.i18n.defaultLocale || !config.i18n.locales.includes(locale))
+    return new Response('Not found', { status: 404 });
+  const translate = translator();
+  if (!translate)
+    return new Response(
+      'This site has nothing to translate with: set DEEPL_API_KEY, or an i18n.translate in cms.config.ts',
+      { status: 409 },
+    );
+  const loaded = await entryLocales(collection, slug, [config.i18n.defaultLocale, locale]);
+  const source = loaded[config.i18n.defaultLocale];
+  if (!source || !loaded[locale]) return new Response('Not found', { status: 404 });
+  const body = (await request.json().catch(() => undefined)) as { paths?: unknown } | undefined;
+  const named = Array.isArray(body?.paths) ? body.paths.map(String) : undefined;
+  const form = formOf('default', formSchema(schema));
+  // What this language has words in already: a pre-fill is for the gaps, and a Translate button
+  // names the field it is on whether there is anything there or not.
+  const written = new Set(
+    translatableText('default', form, loaded[locale].data).map((v) => v.path),
+  );
+  const wanted = translatableText('default', form, source.data).filter((v) =>
+    named ? named.includes(v.path) : !written.has(v.path),
+  );
+  if (wanted.length) {
+    const answers = await translate(
+      wanted.map((v) => v.text),
+      config.i18n.defaultLocale,
+      locale,
+    );
+    await saveTranslated(
+      'default',
+      db(),
+      gitClient(),
+      entryPath(collection, slug, locale),
+      Object.fromEntries(wanted.map((v, i) => [v.path, answers[i] ?? v.text])),
+    );
+  }
+  // The column redraws from this rather than reloading the entry, so an edit in the other one
+  // is not thrown away by a pre-fill.
+  const after = await entryLocales(collection, slug, [locale]);
+  return Response.json(after[locale] ?? {});
 }
 
 /**
@@ -441,6 +512,7 @@ const TRANSLATION = /^drafts\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 const RENAME = /^entries\/([\w-]+)\/([\w-]+)\/rename$/;
 const LOCALES = /^entries\/([\w-]+)\/([\w-]+)\/locales$/;
 const DRIFT = /^drift\/([\w-]+)\/([\w-]+)$/;
+const TRANSLATE = /^translate\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 
 export const GET: APIRoute = async ({ params }) => {
   if (params.path === 'ping') {
@@ -596,6 +668,11 @@ export const POST: APIRoute = async ({ params, request }) => {
     return login(typeof body.password === 'string' ? body.password : '');
   }
   if (params.path === 'publish') return answering(publish);
+  const filling = params.path?.match(TRANSLATE);
+  if (filling)
+    return answering(() =>
+      machineTranslate(filling[1] ?? '', filling[2] ?? '', filling[3] ?? '', request),
+    );
   const made = params.path?.match(TRANSLATION);
   if (made) return answering(() => createTranslation(made[1] ?? '', made[2] ?? '', made[3] ?? ''));
   const offered = params.path?.match(LOCALES);

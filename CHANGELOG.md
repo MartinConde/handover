@@ -4,6 +4,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Machine translation, behind a `translate(from, to)` hook. **Translate what's empty** in the
+  second language's header fills every field that language has nothing in yet, a **Translate**
+  button beside a field fills that one, and **Create and pre-fill** does both in one go from
+  the offer a language with no file draws — `POST /admin/api/translate/:collection/:slug/:locale`,
+  with an optional `{ "paths": [...] }` naming the fields. What a machine wrote is listed in the
+  file's `_machine` and badged in the form until somebody types over it, one path at a time.
+  DeepL is the implementation: set `DEEPL_API_KEY` and it is used, free keys (`…:fx`) included.
+  Another provider goes in `i18n.translate` in `cms.config.ts` — texts in, the same texts
+  translated out. With neither, none of the buttons is drawn, and the entry response says so
+  in `translator`.
+
 - An entry's **Publish…** is offered when any of its languages has an unpublished draft, not
   only the default one. `GET /admin/api/entries/:collection/:slug` answers `pending` with the
   languages that are ahead of the repository — `["de"]`, `[]` — where it used to answer

@@ -16,6 +16,7 @@ import {
   recordRename,
   resolveDrift,
   saveDraft,
+  saveTranslated,
   setEntryLocales,
 } from './db.js';
 import { type ContentIndex, collectionEntries, indexFrom } from './entries.js';
@@ -744,4 +745,37 @@ test('turning every language back on takes the mark out again', async () => {
   await setEntryLocales('default', db, repo, [PAGE_EN], ['en', 'de'], ['en', 'de']);
 
   expect((await only(db))?.contents).toBe(page('Home', 'Move to the coast', 'Ready to move?'));
+});
+
+// A machine's answers are their own write: `saveDraft` carries what a form sent back, and a
+// fill is neither a form nor the words of the language whose file it lands in.
+test('a machine fill writes the values into the draft and names them in the file', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+
+  const saved = await saveTranslated('default', db, repo, PAGE_DE, {
+    title: 'Zuhause',
+    'blocks[_id=k3nf9a2p].heading': 'Zieh ans Meer',
+  });
+
+  const row = await only(db);
+  expect(row?.path).toBe(PAGE_DE);
+  expect(row?.contents).toBe(
+    page('Zuhause', 'Zieh ans Meer', 'Bereit für den Umzug?').replace(
+      '_version: 1\n',
+      '_version: 1\n_machine:\n  - "title"\n  - "blocks[_id=k3nf9a2p].heading"\n',
+    ),
+  );
+  expect(saved?.pending).toBe(true);
+});
+
+test('a fill of a language with no file writes nothing', async () => {
+  const db = await fresh();
+
+  expect(
+    await saveTranslated('default', db, bilingual(), 'src/content/pages/fr/home.yaml', {
+      title: 'Accueil',
+    }),
+  ).toBeUndefined();
+  expect(await db.select().from(drafts)).toEqual([]);
 });

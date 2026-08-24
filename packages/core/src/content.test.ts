@@ -13,8 +13,10 @@ import {
   stringifyEntry,
   syncLocale,
   timestampErrors,
+  translatableText,
 } from './content.js';
 import type { Form } from './schema.js';
+import { fieldAddress } from './translate.js';
 
 const entries = [
   { id: 'en/mill-house', data: { title: 'Mill House' } },
@@ -1077,4 +1079,71 @@ test('a mark that says nothing about the values is not a claim to be stale', asy
   expect(
     await staleLocales('default', millHouse, { en: parseEntry('default', localeFile('en')), de }),
   ).toEqual([]);
+});
+
+// What a machine is offered: the words the second column actually draws. A shared value and a
+// source-language-only one are not translations, and an image's `alt` or a file's name have no
+// editor in that column before Phase 3 — filling one would leave a machine's words where
+// nobody can see them, correct them or take the badge off.
+test('the values offered for translation are the prose the translated form draws', () => {
+  expect(translatableText('default', millHouse, parseEntry('default', localeFile('en')))).toEqual([
+    { path: 'title', text: 'Mill House' },
+    { path: 'summary', text: 'A restored mill on the Dart.' },
+    { path: 'blocks[_id=k3nf9a2p].heading', text: 'Wake up to the water' },
+  ]);
+});
+
+test('a link offers its label and never where it points', () => {
+  const form: Form = {
+    fields: [
+      { path: ['body'], label: 'Body', type: 'richtext', required: false, tier: 'basic' },
+      { path: ['cta'], label: 'Call to action', type: 'link', required: false },
+    ],
+    blocks: {},
+  };
+  const data = { body: 'A **line**.', cta: { type: 'url', href: 'https://x.test', label: 'Book' } };
+
+  expect(translatableText('default', form, data)).toEqual([
+    { path: 'body', text: 'A **line**.' },
+    { path: 'cta.label', text: 'Book' },
+  ]);
+});
+
+// The address the walk reports is the address the form's own field ids turn into, or a badge
+// in the second column would sit on a field the file never named.
+test('a reported path is the one the form derives for the same field', () => {
+  const en = parseEntry('default', localeFile('en'));
+  const [, , block] = translatableText('default', millHouse, en);
+
+  expect(fieldAddress('default', ['blocks', '0', 'heading'], en)).toBe(block?.path);
+});
+
+test('a machine-written path that a save types over stops being machine-written', () => {
+  const de = {
+    _version: 1,
+    _machine: ['title', 'summary'],
+    title: 'Mühlenhaus',
+    summary: 'Eine restaurierte Mühle am Dart.',
+  };
+
+  const saved = mergeEntry(
+    'default',
+    de,
+    { title: 'Mühlenhaus', summary: 'Eine restaurierte Mühle am Wehr.' },
+    listing,
+  );
+
+  expect(saved._machine).toEqual(['title']);
+});
+
+test('a save that changes nothing leaves the machine-written paths alone', () => {
+  const de = { _version: 1, _machine: ['title'], title: 'Mühlenhaus' };
+
+  expect(mergeEntry('default', de, { title: 'Mühlenhaus' }, listing)._machine).toEqual(['title']);
+});
+
+test('the last machine-written path typed over takes the key out of the file', () => {
+  const de = { _version: 1, _machine: ['title'], title: 'Mühlenhaus' };
+
+  expect(mergeEntry('default', de, { title: 'Mühle' }, listing)).not.toHaveProperty('_machine');
 });

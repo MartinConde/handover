@@ -165,6 +165,18 @@ a file or a draft, or when the entry is not offered in it; `404` for the default
 the site does not declare, or an entry with no source file.
 
 ```
+POST /admin/api/translate/:collection/:slug/:locale  { "paths": ["title"] }  →  { "data", "pending" }
+```
+
+Machine-translates that language from the default one and stores the answers in its draft
+([Translating](translating.md#a-machines-first-draft)). `paths` names the fields to translate
+and is optional: without it, every field this language has nothing in yet is filled. Only prose
+is sent. The paths a machine wrote go into the file's `_machine`; `data` is the file as the
+fill leaves it, which is what the second column redraws from. `409` when the site has nothing
+configured to translate with; `404` for the default language, one the site does not declare, or
+an entry with no file in either language.
+
+```
 DELETE /admin/api/drafts/:collection/:slug  →  {}
 ```
 
@@ -174,7 +186,7 @@ drawer's **Discard** does with a file a publish was refused over. `404` if the c
 is not configured.
 
 ```
-GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, translations, pending, problems, titleField, locales, defaultLocale, offered, drift, stale }
+GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, translations, pending, problems, titleField, locales, defaultLocale, offered, drift, stale, translator }
 ```
 
 `data` is the draft when there is one, otherwise the file. `pending` is the entry's languages
@@ -191,7 +203,8 @@ languages disagree about, `[{ "path": "blocks[_id=z9y8x7w6]", "type": "quote", "
 "expected": ["en", "de"], "values": { "de": ["Ein seltener Fund."] } }]`, and `stale` the
 languages whose translation was made from a source language that has moved on since
 ([Translating](translating.md#when-the-source-language-moves-on)). Both are empty on a site with
-one language, which reads nothing for them.
+one language, which reads nothing for them. `translator` is whether the site has anything to
+machine-translate with: false, and none of the buttons that offer it is drawn.
 
 ```
 GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales" }], "locales": ["en", "de"] }
