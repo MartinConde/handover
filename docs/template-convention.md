@@ -35,7 +35,7 @@ the folder is not an error — the collection is simply empty, and its pages ren
 // src/content.config.ts
 import { glob } from 'astro/loaders';
 import { defineCollection } from 'astro:content';
-import { listing } from './content/schemas';
+import { listing, page } from './content/schemas';
 
 // The id is the file's path and nothing else; Astro's default would file an entry under the
 // `slug` in its data, which is where localizedSlugs keeps an address.
@@ -45,6 +45,10 @@ export const collections = {
   listings: defineCollection({
     loader: glob({ pattern: '**/*.yaml', base: './src/content/listings', generateId: byPath }),
     schema: listing,
+  }),
+  pages: defineCollection({
+    loader: glob({ pattern: '**/*.yaml', base: './src/content/pages', generateId: byPath }),
+    schema: page,
   }),
 };
 ```
