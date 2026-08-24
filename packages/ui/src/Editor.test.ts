@@ -17,7 +17,7 @@ const entry = {
   ] satisfies Field[],
   blocks: {},
   data: { title: 'Seaview Cottage', seo: { description: 'Harbour view' }, photos: [] },
-  pending: false,
+  pending: [] as string[],
   problems: [] as { path: string; message: string }[],
   locales: ['en'],
   defaultLocale: 'en',
@@ -116,7 +116,7 @@ const withProblems = (problems: { path: string; message: string }[]) => {
     props: {
       collection: 'listings',
       slug: 'seaview-cottage',
-      entry: { ...entry, pending: true, problems },
+      entry: { ...entry, pending: ['en'], problems },
       onpublish: opened,
       onchanged: () => {},
     },
@@ -142,7 +142,7 @@ test('the header shows the field the collection is keyed on', () => {
       fields: [{ path: ['name'], label: 'Name', type: 'text', required: true }] satisfies Field[],
       blocks: {},
       data: { name: 'Rosa Hale' },
-      pending: false,
+      pending: [],
       problems: [],
       titleField: 'name',
       locales: ['en'],
@@ -281,7 +281,7 @@ test('a draft that is ahead of the published file can be published on load', () 
     props: {
       collection: 'listings',
       slug: 'seaview-cottage',
-      entry: { ...entry, pending: true },
+      entry: { ...entry, pending: ['en'] },
       onpublish: opened,
       onchanged: () => {},
     },
@@ -585,6 +585,15 @@ test('a translation typed and then closed is still something to publish', async 
 
   expect($<HTMLButtonElement>(root, 'button.btn-primary')?.disabled).toBe(false);
   vi.unstubAllGlobals();
+});
+
+// The other half of that: a translation already stored ahead of the repository when the screen
+// opens — which is what Create from English leaves behind — is the entry's to publish, without
+// anybody opening the column and typing in it.
+test('a translation drafted before the screen opened is something to publish', () => {
+  const root = show({ entry: { ...bilingual, pending: ['de'] } });
+
+  expect($<HTMLButtonElement>(root, 'button.btn-primary')?.disabled).toBe(false);
 });
 
 // A language with no file: two ways out, and an empty form is neither — it would autosave a

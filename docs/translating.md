@@ -23,7 +23,9 @@ file nobody asked for.
 **Create from English** — from whichever language is the default — writes that language's file:
 the same blocks in the same order, every value the languages share, and the text fields empty.
 It is a draft like any other, so nothing is in the repository until you publish, and what the
-schema still wants of it is listed as the entry's ordinary validation problems until then.
+schema still wants of it is listed as the entry's ordinary validation problems until then. The
+entry's **Publish…** is offered the moment the file is written, without the column being typed
+in: it is one of the entry's languages waiting like any other.
 
 **Not offering the entry in that language** is the other answer, and a different one: some
 pages genuinely belong to one market. No file is written for it, and the languages the entry is

@@ -100,8 +100,11 @@ const {
   };
 });
 
-// The row GET should overlay, set per test.
-let draft: { contents: string; baseSha: string; baseBlob: string } | undefined;
+// The row GET should overlay, set per test. `rows` is the same thing keyed by path, for an
+// entry whose languages are not all in the same state.
+type Row = { contents: string; baseSha: string; baseBlob: string };
+let draft: Row | undefined;
+const rows: Record<string, Row> = {};
 // The languages the site declares, likewise: one and several are different code paths.
 let locales = ['en'];
 vi.mock('virtual:handover/config', () => ({
@@ -161,7 +164,7 @@ vi.mock('@handover/core', async (original) => ({
   ...(await original<typeof import('@handover/core')>()),
   createGitClient: () => ({ getFile, getHead, publish }),
   openDb: () => ({}),
-  loadDraft: async () => draft,
+  loadDraft: async (_site: string, _db: unknown, path: string) => rows[path] ?? draft,
   saveDraft,
   createDraft,
   recordRename,
@@ -178,6 +181,7 @@ afterEach(() => {
   draft = undefined;
   locales = ['en'];
   for (const path of Object.keys(files)) delete files[path];
+  for (const path of Object.keys(rows)) delete rows[path];
 });
 
 const ctx = (path: string, request?: Request) =>
@@ -226,7 +230,7 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
     blocks: {},
     data: { title: 'The Mill House', location: 'Bakewell', rooms: 3 },
     translations: {},
-    pending: false,
+    pending: [],
     problems: [{ path: 'address', message: 'Required' }],
     locales: ['en'],
     defaultLocale: 'en',
@@ -262,9 +266,9 @@ test('an entry with a draft returns the draft data and reports it as pending', a
     baseBlob: 'abc123',
   };
   const res = await GET(ctx('entries/listings/mill-house'));
-  const body = (await res.json()) as { data: unknown; pending: boolean };
+  const body = (await res.json()) as { data: unknown; pending: unknown };
   expect(body.data).toEqual({ title: 'The Mill House (draft)', location: 'Bakewell', rooms: 3 });
-  expect(body.pending).toBe(true);
+  expect(body.pending).toEqual(['en']);
   draft = undefined;
 });
 
@@ -594,9 +598,9 @@ test('an entry that exists only as a draft opens from it', async () => {
   draft = { contents: 'title: "Strandhaus Nord"\nrooms: 0\n', baseSha: 'head789', baseBlob: '' };
   const res = await GET(ctx('entries/listings/strandhaus-nord'));
   expect(res.status).toBe(200);
-  const body = (await res.json()) as { data: unknown; pending: boolean };
+  const body = (await res.json()) as { data: unknown; pending: unknown };
   expect(body.data).toEqual({ title: 'Strandhaus Nord', rooms: 0 });
-  expect(body.pending).toBe(true);
+  expect(body.pending).toEqual(['en']);
   draft = undefined;
 });
 
@@ -1009,6 +1013,22 @@ test('creating the default language, or one the site does not declare, is refuse
   expect((await POST(post('drafts/pages/home/en', ''))).status).toBe(404);
   expect((await POST(post('drafts/pages/home/fr', ''))).status).toBe(404);
   expect(createDraft).not.toHaveBeenCalled();
+});
+
+// Create from English writes a draft in a language the entry's form does not draw, so the
+// response has to name it: the editor offers Publish on any language being ahead, not on the
+// one it happens to be showing.
+test('an entry names every language whose draft is ahead of the repository', async () => {
+  untranslated();
+  rows['src/content/pages/de/home.yaml'] = {
+    contents: home.en.replace('Home', 'Startseite'),
+    baseSha: 'head789',
+    baseBlob: '',
+  };
+
+  const body = (await (await GET(ctx('entries/pages/home'))).json()) as { pending: unknown };
+
+  expect(body.pending).toEqual(['de']);
 });
 
 test('turning a language off writes the ones it keeps into every file the entry has', async () => {

@@ -95,13 +95,15 @@ const offeredIn = (data: unknown): string[] => {
 };
 
 // One entry as the editor has it, language by language: its draft where there is one, the
-// repository where there is not, and no key at all for a language it has no file in. What
-// `driftReport` compares — a structure two files disagree about is a hand edit or a bad merge.
+// repository where there is not, and no key at all for a language it has no file in. Each
+// language also says whether what the editor has is ahead of the repository, which is what
+// the entry's Publish is offered on. What `driftReport` compares — a structure two files
+// disagree about is a hand edit or a bad merge.
 async function entryLocales(
   collection: string,
   slug: string,
   locales: string[],
-): Promise<Record<string, unknown>> {
+): Promise<Record<string, { data: unknown; pending: boolean }>> {
   const git = gitClient();
   const database = db();
   const loaded = await Promise.all(
@@ -112,11 +114,17 @@ async function entryLocales(
         loadDraft('default', database, path),
       ]);
       const contents = row?.contents || file?.contents;
-      return contents ? ([locale, parseEntry('default', contents)] as const) : undefined;
+      if (!contents) return undefined;
+      const pending = row ? (await blobSha(row.contents)) !== file?.blob_sha : false;
+      return [locale, { data: parseEntry('default', contents), pending }] as const;
     }),
   );
   return Object.fromEntries(loaded.filter((l) => l !== undefined));
 }
+
+/** The words alone, for the readers that compare the languages rather than publish them. */
+const localeData = (loaded: Record<string, { data: unknown }>): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(loaded).map(([locale, l]) => [locale, l.data]));
 
 // The draft is what the editor was last looking at, so it wins over the file. No sha goes
 // to the browser: a publish commits the stored bytes and compares the bases server-side.
@@ -124,27 +132,27 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
   const collected = config.collections[collection];
   if (!collected) return new Response('Not found', { status: 404 });
   const schema = collected.schema;
-  const path = entryPath(collection, slug);
-  const [file, draft] = await Promise.all([
-    gitClient().getFile(path),
-    loadDraft('default', db(), path),
-  ]);
-  const contents = draft?.contents ?? file?.contents;
-  if (contents === undefined) return new Response('Not found', { status: 404 });
-  const data = parseEntry('default', contents);
+  // Every language in one pass, which is the read the drift, the staleness and the unpublished
+  // drafts are all answered from. A site that declares one language reads the one file it
+  // always read: it has nothing to have drifted from or been translated ahead of.
+  const loaded = await entryLocales(collection, slug, config.i18n.locales);
+  const own = loaded[config.i18n.defaultLocale];
+  if (!own) return new Response('Not found', { status: 404 });
+  const data = own.data;
   const form = formOf('default', formSchema(schema));
-  const others = config.i18n.locales.filter((locale) => locale !== config.i18n.defaultLocale);
-  // The other languages, and nothing on a site that declares one: an entry with a single file
-  // has nothing to have drifted from or been translated ahead of, and reads nothing to find out.
-  const translations = await entryLocales(collection, slug, others);
-  const languages = { [config.i18n.defaultLocale]: data, ...translations };
+  const languages = localeData(loaded);
+  const translations = Object.fromEntries(
+    Object.entries(languages).filter(([locale]) => locale !== config.i18n.defaultLocale),
+  );
   return Response.json({
     ...form,
     data,
-    // The same read the drift and staleness answers come from, so editing a second language
-    // beside the first is this one response and not a request per column.
+    // The same read as the rest, so editing a second language beside the first is this one
+    // response and not a request per column.
     translations,
-    pending: draft ? (await blobSha(draft.contents)) !== file?.blob_sha : false,
+    // Which languages the editor has ahead of the repository: a translation drafted on its own
+    // — by Create from English, or waiting since last time — is the entry's to publish too.
+    pending: config.i18n.locales.filter((locale) => loaded[locale]?.pending),
     problems: entryProblems(schema, data),
     titleField: collected.titleField,
     // The languages the site declares, which is what says whether the editor draws any of the
@@ -302,7 +310,7 @@ async function reconcile(collection: string, slug: string, request: Request): Pr
       choice.locales.every((locale: unknown) => typeof locale === 'string'),
   );
   const form = formOf('default', formSchema(schema));
-  const locales = await entryLocales(collection, slug, config.i18n.locales);
+  const locales = localeData(await entryLocales(collection, slug, config.i18n.locales));
   const drift = new Set(driftReport('default', form, locales).map((row) => row.path));
   // A row the languages agree about has nothing to answer: the report moved on under the tab.
   if (!choices.length || choices.some((choice) => !drift.has(choice.path)))
@@ -508,7 +516,7 @@ async function driftedPaths(paths: string[]): Promise<string[]> {
     const schema = config.collections[collection]?.schema;
     if (!schema) continue;
     const form = formOf('default', formSchema(schema));
-    const locales = await entryLocales(collection, slug, config.i18n.locales);
+    const locales = localeData(await entryLocales(collection, slug, config.i18n.locales));
     if (driftReport('default', form, locales).length) drifted.push(...files);
   }
   return drifted;

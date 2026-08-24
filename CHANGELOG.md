@@ -4,6 +4,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- An entry's **Publish…** is offered when any of its languages has an unpublished draft, not
+  only the default one. `GET /admin/api/entries/:collection/:slug` answers `pending` with the
+  languages that are ahead of the repository — `["de"]`, `[]` — where it used to answer
+  `true`/`false` about the default language's file alone. Create from English therefore leaves
+  the entry publishable without the second column being typed in, and a translation drafted
+  last time offers Publish the moment the entry opens. The `pending` of the draft writes is
+  unchanged: still `true`/`false`, still about the one file that write touched.
+
 - A language an entry has no file in now offers two answers instead of an empty form.
   **Create from English** — `POST /admin/api/drafts/:collection/:slug/:locale` — writes that
   language's file as a draft: the same blocks in the same order, every value the languages

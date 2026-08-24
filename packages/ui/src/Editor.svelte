@@ -21,8 +21,8 @@ let {
     fields: readonly Field[];
     blocks: Record<string, Field[]>;
     data: Data;
-    /** The draft the data came from is ahead of the file in git. */
-    pending: boolean;
+    /** The languages whose file this entry has a draft ahead of in git. */
+    pending: string[];
     /** What the collection schema will not accept yet, by field path. */
     problems: { path: string; message: string }[];
     /** The field this collection is keyed on, when it is not `title`. */
@@ -52,7 +52,7 @@ let data = $state<Data>(structuredClone(entry.data));
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let saved = $state(JSON.stringify(entry.data));
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
-let drafted = $state(entry.pending);
+let drafted = $state(entry.pending.includes(entry.defaultLocale));
 let saving = $state(false);
 let saveFailed = $state(false);
 // A draft stores whatever was typed, so what the schema still wants is the server's answer to
@@ -109,8 +109,14 @@ const json = $derived(JSON.stringify(data));
 const missing = $derived(Object.keys(problems));
 const named = $derived(data[entry.titleField ?? 'title']);
 const title = $derived(typeof named === 'string' && named ? named : slug);
+// A language other than the one this screen's form saves, already ahead of the repository when
+// the entry was read. It stands until the entry is read again: a false offer costs an empty
+// drawer, a false refusal loses the draft behind a disabled button.
+const elsewhere = $derived(entry.pending.some((l) => l !== entry.defaultLocale));
 // The second column is its own file, so an edit only made there is still something to publish.
-const dirty = $derived(drafted || translated || json !== saved || (pane?.unsaved() ?? false));
+const dirty = $derived(
+  drafted || elsewhere || translated || json !== saved || (pane?.unsaved() ?? false),
+);
 const LANGUAGES = new Intl.DisplayNames(['en'], { type: 'language' });
 const language = (of: string) => {
   try {

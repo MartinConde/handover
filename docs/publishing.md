@@ -48,8 +48,9 @@ The state next to the breadcrumb is the autosave, not the publish:
 | `Saved` | the draft matches what you typed |
 | `Not saved` | the write failed — the edit is only in this tab, do not close it |
 
-**Publish…** is enabled whenever the entry differs from the file in git, including on a
-fresh page load with a draft already stored. It stores what you have typed and opens the
+**Publish…** is enabled whenever any language of the entry differs from the file in git,
+including on a fresh page load with a draft already stored — a translation drafted on its
+own counts, whether or not its column is open. It stores what you have typed and opens the
 pending-changes drawer.
 
 ## Fields the schema is not happy with
@@ -176,9 +177,12 @@ is not configured.
 GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, translations, pending, problems, titleField, locales, defaultLocale, offered, drift, stale }
 ```
 
-`data` is the draft when there is one, otherwise the file. `pending` says which, and
-`problems` is the same list the autosave answers with, so an entry names what is missing
-the moment it opens. `titleField` is there when the collection declares one, and is the
+`data` is the draft when there is one, otherwise the file. `pending` is the entry's languages
+whose draft is ahead of the repository, in config order: `[]` when nothing of it is waiting,
+`["en"]` when `data` is a draft, `["de"]` when a translation is drafted and the default
+language is not — the editor offers **Publish…** whenever it is not empty. It is a list of
+locales here and the `true`/`false` of one file in the draft writes above. `problems` is the
+same list the autosave answers with, so an entry names what is missing the moment it opens. `titleField` is there when the collection declares one, and is the
 field the editor's heading reads. `data` is `defaultLocale`'s file and `translations` the other
 languages the entry has a file in, keyed by locale — what the editor's second column draws.
 `locales` is the languages the site declares, in config order, and `offered` the ones this entry

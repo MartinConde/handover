@@ -98,9 +98,10 @@ test('discarding a draft loads the entry again instead of leaving the old one on
       fields: [],
       blocks: {},
       data: { title: 'The Mill House' },
-      pending: true,
+      pending: ['en'],
       problems: [],
       locales: ['en'],
+      defaultLocale: 'en',
       drift: [],
     });
   });

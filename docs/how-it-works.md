@@ -41,9 +41,10 @@ Anything the walker does not know is `unsupported` and shown read-only.
 
 Content never leaves git. Reading `GET /admin/api/entries/:collection/:slug` fetches
 `src/content/<collection>/en/<slug>.yaml` through the GitHub contents API and returns the
-parsed data — or, when the entry has a draft row, that row's contents instead, with
-`pending` saying which. No sha goes to the browser: publishing works from the stored rows,
-so the bases stay server-side.
+parsed data — or, when the entry has a draft row, that row's contents instead. It reads every
+language the site declares in the one pass, so `pending` comes back as the languages of the
+entry that have a draft ahead of the repository, not as a yes or no about one file. No sha goes
+to the browser: publishing works from the stored rows, so the bases stay server-side.
 
 `PUT /admin/api/drafts/:collection/:slug` is the autosave. `saveDraft` in core merges the
 validated field values over the reserved keys of the entry as it stands, serialises the
