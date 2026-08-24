@@ -4,6 +4,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A language an entry has no file in now offers two answers instead of an empty form.
+  **Create from English** — `POST /admin/api/drafts/:collection/:slug/:locale` — writes that
+  language's file as a draft: the same blocks in the same order, every value the languages
+  share, and none of the words. **Not offering the entry in that language** —
+  `POST /admin/api/entries/:collection/:slug/locales` — writes no file for it at all and marks
+  the languages the entry is offered in with a top-level `_locales` in the files it has;
+  turning them all back on takes the key out again. `_locales` is therefore now valid at the
+  top of a file as well as on a block, and a language that already has a file cannot be turned
+  off. The entry response carries `offered`, the entry list strikes a turned-off language
+  through rather than listing it as one still to write, and the switcher strikes it through
+  too. Duplicating an entry copies every language of it with one shared map of new `_id`s, so
+  the copy is still one entry across its files.
+
 - A second language is edited beside the first. The entry header carries a language switcher —
   buttons up to four languages, a menu above that — with a mark against a language the entry has
   no file in and against one whose source language has moved on since it was translated.

@@ -211,8 +211,8 @@ test('redirectsText is one "/from /to status" line per rule', () => {
 
 // decap-cms#7371 / payload#14491: duplicating an entry copies the default locale and
 // silently drops the rest. The copy has to stay one cross-locale entry, so the same block
-// gets the same new `_id` in every locale file. Red until session 2.9 writes duplicateEntry.
-test.skip('duplicate copies every locale of the entry with one shared id map', async () => {
+// gets the same new `_id` in every locale file.
+test('duplicate copies every locale of the entry with one shared id map', async () => {
   const block = (heading: string) =>
     `_version: 1\nblocks:\n  - _type: "hero"\n    _id: "k3nf9a2p"\n    heading: "${heading}"\n`;
   const { git } = fakeGit({

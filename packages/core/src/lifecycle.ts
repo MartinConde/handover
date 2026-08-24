@@ -1,7 +1,7 @@
 import { parseEntry, stringifyEntry } from './content.js';
 import type { ContentFile } from './entries.js';
 import type { GitClient, PublishFile } from './git.js';
-import { newId } from './reserved.js';
+import { newId, regenerateIds } from './reserved.js';
 
 export interface RedirectRule {
   _id: string;
@@ -127,12 +127,17 @@ export const redirectsText = (_siteId: string, rules: RedirectRule[]): string =>
  * `_id` map shared across the locales, so the copy is still one entry with a matching
  * skeleton. Session 2.9 (decap-cms#7371, payload#14491).
  */
-export function duplicateEntry(
-  _siteId: string,
-  _git: GitClient,
-  _loc: EntryLocation,
-  _from: string,
-  _to: string,
+export async function duplicateEntry(
+  siteId: string,
+  git: GitClient,
+  loc: EntryLocation,
+  from: string,
+  to: string,
 ): Promise<ContentFile[]> {
-  throw new Error('duplicateEntry lands in session 2.9');
+  const files = await localeFiles(git, loc, from);
+  const ids = new Map<string, string>();
+  return files.map(({ locale, contents }) => ({
+    path: entryPath(loc.collection, locale, to),
+    contents: stringifyEntry(siteId, regenerateIds(siteId, parseEntry(siteId, contents), ids)),
+  }));
 }

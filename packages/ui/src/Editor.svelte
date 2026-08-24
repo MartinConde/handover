@@ -13,7 +13,7 @@ let {
   slug,
   entry,
   onpublish,
-  onresolved,
+  onchanged,
 }: {
   collection: string;
   slug: string;
@@ -31,6 +31,8 @@ let {
     locales: string[];
     /** The one the entry's structure is edited in, and the one a translation is made from. */
     defaultLocale: string;
+    /** The languages it is offered in; the rest are turned off and get no file. */
+    offered: string[];
     /** The other languages this entry has a file in, parsed; none where it has no other file. */
     translations: Record<string, Data>;
     /** Which of them were translated from a source language that has moved on since. */
@@ -40,8 +42,8 @@ let {
   };
   /** Open the pending-changes drawer, which is where publishing happens. */
   onpublish: () => void;
-  /** The drift was answered: the entry has to be read again, this screen with it. */
-  onresolved: () => void;
+  /** A file of this entry was made, removed or settled: it has to be read again, screen with it. */
+  onchanged: () => void;
 } = $props();
 
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
@@ -79,6 +81,29 @@ const shown = $derived(side ? target : locale === entry.defaultLocale ? undefine
 const alone = $derived(!side && shown !== undefined);
 // The entry always has the file it was opened on; the others are the ones that can be absent.
 const untranslated = (of: string) => of !== entry.defaultLocale && !(of in entry.translations);
+// Turned off for this entry: no file is written for it and the site does not offer it.
+const off = (of: string) => !entry.offered.includes(of);
+let busy = $state(false);
+
+// The two answers to a language with no file. Both change which files the entry has, so the
+// screen is read again rather than patched here.
+async function ask(url: string, init: RequestInit = {}) {
+  busy = true;
+  const res = await fetch(url, { method: 'POST', ...init });
+  busy = false;
+  if (res.ok) onchanged();
+}
+
+const createFrom = (of: string) => ask(`/admin/api/drafts/${collection}/${slug}/${of}`);
+const offer = (of: string, on: boolean) =>
+  ask(`/admin/api/entries/${collection}/${slug}/locales`, {
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      locales: on
+        ? entry.locales.filter((l) => l === of || !off(l))
+        : entry.offered.filter((l) => l !== of),
+    }),
+  });
 
 const json = $derived(JSON.stringify(data));
 const missing = $derived(Object.keys(problems));
@@ -178,8 +203,8 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           {#if entry.locales.length < 5}
             <div class="seg" role="group" aria-label="Language">
               {#each entry.locales as of (of)}
-                <button type="button" aria-pressed={locale === of} onclick={() => leaving(() => (locale = of))}>
-                  {of.toUpperCase()}{#if untranslated(of)}<span class="visually-hidden"> — not translated yet</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {language(entry.defaultLocale)} changed since this was translated</span><span class="mark" aria-hidden="true"></span>{/if}
+                <button type="button" class:is-off={off(of)} aria-pressed={locale === of} onclick={() => leaving(() => (locale = of))}>
+                  {of.toUpperCase()}{#if off(of)}<span class="visually-hidden"> — turned off for this entry</span>{:else if untranslated(of)}<span class="visually-hidden"> — not translated yet</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {language(entry.defaultLocale)} changed since this was translated</span><span class="mark" aria-hidden="true"></span>{/if}
                 </button>
               {/each}
             </div>
@@ -228,7 +253,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         {slug}
         drift={entry.drift}
         locales={entry.locales}
-        {onresolved}
+        onresolved={onchanged}
       />
     {:else}
       <!-- The default language's form is the one the structure is edited in, so it is not
@@ -243,10 +268,37 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           <div><strong>Right pane</strong>Preview or a second language, later.</div>
         </aside>
       {:else if untranslated(shown)}
-        <!-- An empty form here would autosave a file nobody asked for. -->
+        <!-- An empty form here would autosave a file nobody asked for, so the language with no
+             file is an offer instead: make one from the source language, or say the entry is
+             not offered in it at all. -->
         <section class="pane is-locale" aria-labelledby="pane-{shown}">
           <div class="pane-head"><h2 id="pane-{shown}">{language(shown)}</h2></div>
-          <p class="placeholder">This entry has not been translated into {language(shown)} yet.</p>
+          <div class="empty">
+            {#if off(shown)}
+              <div class="is-wide">
+                <p>
+                  This entry is not offered in {language(shown)}. No {language(shown)} file is
+                  written and the site does not link to one.
+                </p>
+                <button class="btn" type="button" disabled={busy} onclick={() => offer(shown, true)}>
+                  Turn {language(shown)} back on
+                </button>
+              </div>
+            {:else}
+              <div class="is-wide">
+                <p>
+                  Creating it copies the structure and everything that reads the same in every
+                  language. The text fields start empty.
+                </p>
+                <button class="btn btn-primary btn-create" type="button" disabled={busy} onclick={() => createFrom(shown)}>
+                  Create from {language(entry.defaultLocale)}
+                </button>
+                <p>
+                  Or <button class="btn-link" type="button" disabled={busy} onclick={() => offer(shown, false)}>don't offer this entry in {language(shown)}</button> — no file is written for it.
+                </p>
+              </div>
+            {/if}
+          </div>
         </section>
       {:else}
         <!-- Keyed: another language is another file, not the same one under a new name. -->

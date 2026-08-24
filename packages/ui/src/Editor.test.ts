@@ -21,6 +21,7 @@ const entry = {
   problems: [] as { path: string; message: string }[],
   locales: ['en'],
   defaultLocale: 'en',
+  offered: ['en'],
   translations: {} as Record<string, Record<string, unknown>>,
   stale: [] as string[],
   drift: [] as Drift[],
@@ -44,6 +45,7 @@ const bilingual = {
     body: [{ _type: 'hero', _id: 'k3nf9a2p', heading: 'Above the harbour' }],
   },
   locales: ['en', 'de'],
+  offered: ['en', 'de'],
   translations: {
     de: {
       title: 'Seaview Cottage',
@@ -64,7 +66,7 @@ const show = (over: Record<string, unknown> = {}) => {
       slug: 'seaview-cottage',
       entry,
       onpublish: opened,
-      onresolved: () => {},
+      onchanged: () => {},
       ...over,
     },
   });
@@ -79,6 +81,8 @@ afterEach(() => {
 Element.prototype.scrollIntoView = () => {};
 
 const $ = <T extends Element>(root: ParentNode, sel: string) => root.querySelector<T>(sel);
+const $$ = <T extends Element>(root: ParentNode, sel: string) =>
+  Array.from(root.querySelectorAll<T>(sel));
 
 test('renders one labelled input per text field, filled from the entry data', () => {
   const root = show();
@@ -114,7 +118,7 @@ const withProblems = (problems: { path: string; message: string }[]) => {
       slug: 'seaview-cottage',
       entry: { ...entry, pending: true, problems },
       onpublish: opened,
-      onresolved: () => {},
+      onchanged: () => {},
     },
   });
   return document.body;
@@ -279,7 +283,7 @@ test('a draft that is ahead of the published file can be published on load', () 
       slug: 'seaview-cottage',
       entry: { ...entry, pending: true },
       onpublish: opened,
-      onresolved: () => {},
+      onchanged: () => {},
     },
   });
   expect($<HTMLButtonElement>(document.body, 'button.btn-primary')?.disabled).toBe(false);
@@ -581,4 +585,58 @@ test('a translation typed and then closed is still something to publish', async 
 
   expect($<HTMLButtonElement>(root, 'button.btn-primary')?.disabled).toBe(false);
   vi.unstubAllGlobals();
+});
+
+// A language with no file: two ways out, and an empty form is neither — it would autosave a
+// file nobody asked for.
+const missing = { ...bilingual, translations: {} };
+const posted = () => vi.fn(async () => Response.json({}));
+
+test('a language the entry has no file in offers one made from the source language', async () => {
+  const fetchMock = posted();
+  vi.stubGlobal('fetch', fetchMock);
+  const changed = vi.fn();
+  const root = show({ entry: missing, onchanged: changed });
+
+  $$<HTMLButtonElement>(root, '[aria-label="Language"] button')[1]?.click();
+  flushSync();
+  $<HTMLButtonElement>(root, 'button.btn-primary.btn-create')?.click();
+  await tick();
+
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/drafts/listings/seaview-cottage/de', {
+    method: 'POST',
+  });
+  expect(changed).toHaveBeenCalled();
+  vi.unstubAllGlobals();
+});
+
+test('turning a language off sends the ones the entry keeps', async () => {
+  const fetchMock = posted();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: missing });
+
+  $$<HTMLButtonElement>(root, '[aria-label="Language"] button')[1]?.click();
+  flushSync();
+  $<HTMLButtonElement>(root, 'button.btn-link')?.click();
+  await tick();
+
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/entries/listings/seaview-cottage/locales', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ locales: ['en'] }),
+  });
+  vi.unstubAllGlobals();
+});
+
+test('a language turned off is struck through and offers no way to write it', () => {
+  const root = show({ entry: { ...missing, offered: ['en'] } });
+
+  const de = $$<HTMLButtonElement>(root, '[aria-label="Language"] button')[1];
+  expect(de?.className).toContain('is-off');
+  de?.click();
+  flushSync();
+  expect($(root, 'button.btn-create')).toBeNull();
+  expect($(root, '.pane h2')?.textContent).toContain('German');
+  expect($(root, '.pane button.btn')?.textContent).toContain('back on');
+  expect($(root, 'button.btn-link')).toBeNull();
 });

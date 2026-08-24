@@ -13,8 +13,31 @@ languages, a menu above that. A language marked with a hollow ring has no file f
 a filled one has a translation the default language has moved on from since. A language that is
 finished carries no mark, so an entry nobody has to look at is quiet.
 
-Choosing a language the entry has no file in says so rather than drawing an empty form: an
-empty form would autosave a file nobody asked for.
+A language turned off for the entry is struck through, and choosing it says so.
+
+## A language with no file yet
+
+Choosing one draws the two ways out rather than an empty form — an empty form would autosave a
+file nobody asked for.
+
+**Create from English** — from whichever language is the default — writes that language's file:
+the same blocks in the same order, every value the languages share, and the text fields empty.
+It is a draft like any other, so nothing is in the repository until you publish, and what the
+schema still wants of it is listed as the entry's ordinary validation problems until then.
+
+**Not offering the entry in that language** is the other answer, and a different one: some
+pages genuinely belong to one market. No file is written for it, and the languages the entry is
+offered in go into the files it does have:
+
+```yaml
+_locales:
+  - "en"
+name: "Theo Adeyemi"
+```
+
+Turning the language back on takes the key out again — an entry offered in every language the
+site declares carries none. A language that already has a file cannot be turned off, since that
+would be deleting the file, which is what Delete is for.
 
 ## Side by side
 
@@ -115,6 +138,6 @@ from.
 ## In the entry list
 
 Each row carries one chip per language, in the order the site declares them: filled where the
-entry has a file in that language, outlined where it has none. The column is not drawn at all on
-a site with one language. An entry written in one language only is listed by the words it has,
-whichever language they are in.
+entry has a file in that language, outlined where it has none, struck through where the entry is
+not offered in it. The column is not drawn at all on a site with one language. An entry written
+in one language only is listed by the words it has, whichever language they are in.

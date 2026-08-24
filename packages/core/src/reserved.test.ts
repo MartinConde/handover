@@ -10,6 +10,7 @@ test.each([
   ['_status', { _status: 'hidden', title: 'Sold' }],
   ['_machine', { _machine: ['body', 'blocks[_id=k3nf9a2p].heading'], body: 'x' }],
   ['_locales', { blocks: [{ _type: 'cta', _id: 'p8xk2m4q', _locales: ['de'] }] }],
+  ['_locales on the entry', { _locales: ['en'], title: 'Seaview Cottage' }],
   ['_ref', { blocks: [{ _type: 'cta', _id: 'k3nf9a2p', _ref: 'globals/cta-newsletter' }] }],
   [
     '_i18n',
@@ -35,7 +36,7 @@ test.each([
   ['_machine: "body"', '_machine'],
   ['_ref: 7', '_ref'],
   ['_i18n: "en"', '_i18n'],
-  ['_locales: ["de"]', '_locales'],
+  ['_locales: []', '_locales'],
 ])('parse rejects malformed %j naming the path', (yaml, path) => {
   expect(() => parseEntry('default', yaml)).toThrow(path);
 });

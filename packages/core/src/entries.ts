@@ -10,6 +10,8 @@ export interface EntryLocale {
 export interface IndexEntry {
   id: string;
   locales: Record<string, EntryLocale>;
+  /** The languages it is offered in, absent when that is every language the site declares. */
+  offered?: string[];
 }
 
 export type ContentIndex = Record<string, IndexEntry[]>;
@@ -63,7 +65,9 @@ function indexFile(siteId: string, { path, contents }: ContentFile, titleFields:
   const title = typeof named === 'string' && named ? named : id;
   const info: EntryLocale = { title, path };
   if (data?._status === 'hidden') info.status = 'hidden';
-  return { collection, locale, id, info };
+  // Every file of the entry carries the same list, so whichever one is read says the same thing.
+  const offered = Array.isArray(data?._locales) ? (data._locales as string[]) : undefined;
+  return { collection, locale, id, info, offered };
 }
 
 export function indexFrom(
@@ -77,9 +81,13 @@ export function indexFrom(
     if (!entry) continue;
     const entries = index.get(entry.collection) ?? [];
     index.set(entry.collection, entries);
-    const found = entries.find((e) => e.id === entry.id);
-    if (found) found.locales[entry.locale] = entry.info;
-    else entries.push({ id: entry.id, locales: { [entry.locale]: entry.info } });
+    let row = entries.find((e) => e.id === entry.id);
+    if (!row) {
+      row = { id: entry.id, locales: {} };
+      entries.push(row);
+    }
+    row.locales[entry.locale] = entry.info;
+    if (entry.offered) row.offered = entry.offered;
   }
   return Object.fromEntries([...index].map(([name, entries]) => [name, entries.sort(byId)]));
 }
@@ -99,15 +107,18 @@ export function collectionEntries(
   const prefix = `src/content/${collection}/`;
   const rows = drafts.filter((d) => d.path.startsWith(prefix));
   const gone = new Set(rows.filter((r) => !r.contents).map((r) => r.path));
-  const entries = (index[collection] ?? []).map((e) => ({ id: e.id, locales: { ...e.locales } }));
+  const entries = (index[collection] ?? []).map((e) => ({ ...e, locales: { ...e.locales } }));
   for (const draft of indexFrom(
     siteId,
     rows.filter((r) => r.contents),
     titleField ? { [collection]: titleField } : {},
   )[collection] ?? []) {
     const found = entries.find((e) => e.id === draft.id);
-    if (found) Object.assign(found.locales, draft.locales);
-    else entries.push(draft);
+    if (found) {
+      Object.assign(found.locales, draft.locales);
+      if (draft.offered) found.offered = draft.offered;
+      else delete found.offered;
+    } else entries.push(draft);
   }
   // A rename or a delete writes to git without touching the index, so the file it removed is
   // still in there: an empty row is what says the path has gone until the build catches up.

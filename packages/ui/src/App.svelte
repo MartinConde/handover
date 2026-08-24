@@ -104,7 +104,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             await loadPending();
             drawer = true;
           }}
-          onresolved={async () => {
+          onchanged={async () => {
             await loadPending();
             reload += 1;
           }}

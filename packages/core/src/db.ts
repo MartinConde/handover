@@ -186,6 +186,43 @@ export async function resolveDrift(
   if (first) await db.batch([first, ...rest]);
 }
 
+/**
+ * The languages one entry is offered in, written into every file it has. A language nobody
+ * offers it in gets no file, so the decision has to live in the files there are — the site
+ * builds from git alone, and the entry list has to read it long after the browser that made it
+ * has gone. `locales` is the site's declared languages: an entry offered in all of them carries
+ * no mark at all, the same rule a block's `_locales` follows.
+ */
+export async function setEntryLocales(
+  siteId: string,
+  db: Db,
+  git: Pick<GitClient, 'getFile' | 'getHead'>,
+  paths: string[],
+  offered: string[],
+  locales: string[],
+): Promise<void> {
+  const found = await Promise.all(
+    paths.map(async (path) => {
+      const loaded = await load(siteId, db, git, path);
+      return loaded && { path, loaded };
+    }),
+  );
+  const kept = locales.filter((l) => offered.includes(l));
+  const updatedAt = Date.now();
+  const writes = found.flatMap((f) => {
+    if (!f) return [];
+    const entry = { ...(f.loaded.entry as Record<string, unknown>) };
+    if (kept.length === locales.length) delete entry._locales;
+    else entry._locales = kept;
+    const contents = stringifyEntry(siteId, entry);
+    return contents === stringifyEntry(siteId, f.loaded.entry)
+      ? []
+      : [upsert(db, siteId, f.path, contents, f.loaded, updatedAt)];
+  });
+  const [first, ...rest] = writes;
+  if (first) await db.batch([first, ...rest]);
+}
+
 // A file as the editor has it: its open draft, or the repository when there is none.
 async function load(
   siteId: string,

@@ -68,7 +68,7 @@ Keys starting with `_` belong to Handover. Name your own fields anything else â€
 | `_id` | block, array item | Eight characters from `0-9a-z`, unique in the file, the same across locales. |
 | `_label` | block | An editor-given name, shown in the block list instead of the type. |
 | `_ref` | block | A path such as `globals/cta-newsletter` the block's content will come from. Reserved now; `<Blocks />` skips the block until the globals collection exists. |
-| `_locales` | block, array item | The locales this item exists in, e.g. `["de"]`. Absent means all. Never empty. |
+| `_locales` | top of file, block, array item | The locales this exists in, e.g. `["de"]`: on a block, the files it is written to; at the top of a file, the languages the entry is offered in ([Translating](translating.md#a-language-with-no-file-yet)). Absent means all. Never empty. |
 
 Reading a file checks these: a `_status` other than `hidden`, a malformed `_id`, an empty
 `_locales` or a top-level key on a block fails with an error naming the path, such as

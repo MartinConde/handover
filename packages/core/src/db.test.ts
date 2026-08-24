@@ -16,6 +16,7 @@ import {
   recordRename,
   resolveDrift,
   saveDraft,
+  setEntryLocales,
 } from './db.js';
 import { type ContentIndex, collectionEntries, indexFrom } from './entries.js';
 import { blobSha } from './git.js';
@@ -713,4 +714,34 @@ test('a language the answer leaves alone is not made pending by it', async () =>
       ...CTA,
     ]),
   );
+});
+
+// Turning a language off is a decision about the entry, so it goes in the files the entry has
+// rather than in D1: the site builds from git alone, and no file is written for the language
+// that was turned off.
+test('turning a language off marks every file the entry has with the ones it keeps', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+
+  await setEntryLocales('default', db, repo, [PAGE_EN, PAGE_DE], ['en', 'de'], ['en', 'de', 'fr']);
+
+  const rows = (await db.select().from(drafts)).toSorted((a, b) => a.path.localeCompare(b.path));
+  expect(rows.map((r) => r.path)).toEqual([PAGE_DE, PAGE_EN]);
+  expect(rows[1]?.contents).toBe(
+    page('Home', 'Move to the coast', 'Ready to move?').replace(
+      '_version: 1\n',
+      '_version: 1\n_locales:\n  - "en"\n  - "de"\n',
+    ),
+  );
+  expect(rows[0]?.updatedAt).toBe(rows[1]?.updatedAt);
+});
+
+test('turning every language back on takes the mark out again', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+  await setEntryLocales('default', db, repo, [PAGE_EN], ['en'], ['en', 'de']);
+
+  await setEntryLocales('default', db, repo, [PAGE_EN], ['en', 'de'], ['en', 'de']);
+
+  expect((await only(db))?.contents).toBe(page('Home', 'Move to the coast', 'Ready to move?'));
 });

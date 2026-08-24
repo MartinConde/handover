@@ -1,7 +1,12 @@
 <script lang="ts">
 import { entryName } from '@handover/core';
 
-type Entry = { id: string; locales: Record<string, { title: string; path: string }> };
+type Entry = {
+  id: string;
+  locales: Record<string, { title: string; path: string }>;
+  /** The languages it is offered in, absent when that is every language the site declares. */
+  offered?: string[];
+};
 let { collection, onchanged }: { collection: string; onchanged: () => void } = $props();
 
 let entries = $state<Entry[]>([]);
@@ -31,6 +36,8 @@ const titleOf = (entry: Entry) =>
   Object.values(entry.locales)[0]?.title ||
   entry.id;
 const many = $derived(locales.length > 1);
+// A language turned off for the entry gets no file, so it is not one still to write.
+const offered = (entry: Entry, locale: string) => entry.offered?.includes(locale) ?? true;
 
 // The same derivation the server runs on the same names, so the dialog can promise the file
 // name before anything is written. A rename does not collide with the entry being renamed.
@@ -142,8 +149,13 @@ async function done() {
                 {#each locales as locale (locale)}
                   <span
                     class="chip"
-                    class:chip-missing={!entry.locales[locale]}
-                    title="{locale}: {entry.locales[locale] ? 'written' : 'not written yet'}"
+                    class:chip-missing={!entry.locales[locale] && offered(entry, locale)}
+                    class:chip-disabled={!offered(entry, locale)}
+                    title="{locale}: {offered(entry, locale)
+                      ? entry.locales[locale]
+                        ? 'written'
+                        : 'not written yet'
+                      : 'turned off for this entry'}"
                   >{locale.toUpperCase()}</span>
                 {/each}
               </span>

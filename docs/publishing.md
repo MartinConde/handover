@@ -154,6 +154,16 @@ this write can never move a block or change what the languages share. `404` when
 not declare that locale.
 
 ```
+POST /admin/api/drafts/:collection/:slug/:locale  →  {}
+```
+
+**Create from English**: writes that language's file for the entry as a draft — the structure
+and the values the languages share, none of the words
+([Translating](translating.md#a-language-with-no-file-yet)). `409` when the language already has
+a file or a draft, or when the entry is not offered in it; `404` for the default language, one
+the site does not declare, or an entry with no source file.
+
+```
 DELETE /admin/api/drafts/:collection/:slug  →  {}
 ```
 
@@ -163,7 +173,7 @@ drawer's **Discard** does with a file a publish was refused over. `404` if the c
 is not configured.
 
 ```
-GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, translations, pending, problems, titleField, locales, defaultLocale, drift, stale }
+GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, translations, pending, problems, titleField, locales, defaultLocale, offered, drift, stale }
 ```
 
 `data` is the draft when there is one, otherwise the file. `pending` says which, and
@@ -171,7 +181,8 @@ GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, translati
 the moment it opens. `titleField` is there when the collection declares one, and is the
 field the editor's heading reads. `data` is `defaultLocale`'s file and `translations` the other
 languages the entry has a file in, keyed by locale — what the editor's second column draws.
-`locales` is the languages the site declares, in config order. `drift` is the blocks the entry's
+`locales` is the languages the site declares, in config order, and `offered` the ones this entry
+is offered in — the rest are turned off for it. `drift` is the blocks the entry's
 languages disagree about, `[{ "path": "blocks[_id=z9y8x7w6]", "type": "quote", "in": ["de"],
 "expected": ["en", "de"], "values": { "de": ["Ein seltener Fund."] } }]`, and `stale` the
 languages whose translation was made from a source language that has moved on since
@@ -183,8 +194,9 @@ GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales"
 ```
 
 The collection's entries for the list screen: one row per entry, `id` is the filename and
-`locales` maps each locale to `{ title, path }` plus `status: "hidden"` when it is hidden. The
-response's own `locales` is the languages the site declares, in config order.
+`locales` maps each locale to `{ title, path }` plus `status: "hidden"` when it is hidden, and
+`offered` is there when the entry is not offered in every language. The response's own
+`locales` is the languages the site declares, in config order.
 Titles come from the field the collection is keyed on — `title`, or its
 [`titleField`](configuration.md#collections); an entry that has not filled it in lists by
 filename. The list is the build's [content index](#the-content-index) with the pending
@@ -197,6 +209,15 @@ POST /admin/api/entries/:collection         { "title": "…" }  →  { "slug" }
 
 Creates an entry as a draft. `slug` is the derived filename, which is what the admin opens
 next. Nothing is committed. `404` if the collection is not configured.
+
+```
+POST /admin/api/entries/:collection/:slug/locales  { "locales": ["en"] }  →  {}
+```
+
+The languages the entry is offered in, written as `_locales` into every file it has — or taken
+out again when they are all of them. No file is written for a language left out, which is the
+point of it. `409` naming any language that already has a file, since turning that one off would
+be a delete; `404` when the entry has no file at all.
 
 ```
 POST /admin/api/entries/:collection/:slug/rename   { "to": "…" }  →  { "slug", "commit_sha" }

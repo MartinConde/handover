@@ -27,7 +27,9 @@ import {
   renameEntry,
   resolveDrift,
   saveDraft,
+  setEntryLocales,
   staleLocales,
+  syncLocale,
 } from '@handover/core';
 import type { APIRoute } from 'astro';
 import { login } from '../auth.js';
@@ -81,6 +83,15 @@ const entryFiles = async (git: GitClient, collection: string, slug: string) => {
     path: entryPath(collection, slug, locale),
     file: files[i],
   }));
+};
+
+// The languages an entry is offered in: what its files say, or every language the site
+// declares. A language it is not offered in gets no file at all — see `offering` below.
+const offeredIn = (data: unknown): string[] => {
+  const marked = (data as { _locales?: unknown } | null)?._locales;
+  return Array.isArray(marked)
+    ? config.i18n.locales.filter((locale) => marked.includes(locale))
+    : config.i18n.locales;
 };
 
 // One entry as the editor has it, language by language: its draft where there is one, the
@@ -140,6 +151,9 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
     // controls that are about having more than one, and which of them this response is of.
     locales: config.i18n.locales,
     defaultLocale: config.i18n.defaultLocale,
+    // And which of them this entry is offered in: the rest are not translated but turned off,
+    // which is a decision and not a gap to fill.
+    offered: offeredIn(data),
     drift: driftReport('default', form, languages),
     // Which of them were translated from an English that has moved on since. A warning the
     // editor draws next to the language, never a reason to refuse anything.
@@ -203,6 +217,72 @@ async function autosave(
   }
   if (!saved) return new Response('Not found', { status: 404 });
   return Response.json({ ...saved, problems: entryProblems(schema, data) });
+}
+
+/**
+ * Create from English: the missing language's file made from the one the entry is written in —
+ * its structure and the values every language shares, none of its words. A draft like any
+ * other, so nothing is in the repository until somebody publishes it.
+ */
+async function createTranslation(
+  collection: string,
+  slug: string,
+  locale: string,
+): Promise<Response> {
+  const schema = config.collections[collection]?.schema;
+  if (!schema || locale === config.i18n.defaultLocale || !config.i18n.locales.includes(locale))
+    return new Response('Not found', { status: 404 });
+  const git = gitClient();
+  const database = db();
+  const path = entryPath(collection, slug, locale);
+  const [file, row] = await Promise.all([git.getFile(path), loadDraft('default', database, path)]);
+  if (file || row) return new Response('That language already has a file', { status: 409 });
+  const from = entryPath(collection, slug);
+  const [source, drafted] = await Promise.all([
+    git.getFile(from),
+    loadDraft('default', database, from),
+  ]);
+  const contents = drafted?.contents ?? source?.contents;
+  if (!contents) return new Response('Not found', { status: 404 });
+  const data = parseEntry('default', contents);
+  const offered = offeredIn(data);
+  if (!offered.includes(locale))
+    return new Response(`This entry is not offered in ${locale}`, { status: 409 });
+  const form = formOf('default', formSchema(schema));
+  const made = syncLocale('default', form, locale, { before: data, after: data }, {});
+  if (offered.length < config.i18n.locales.length) made._locales = offered;
+  await createDraft('default', database, git, path, made);
+  return Response.json({});
+}
+
+/**
+ * The languages this entry is offered in. Turning one off writes no file for it: the mark goes
+ * into the files the entry does have, so the entry list and the site read the decision out of
+ * the repository. A language that already has a file cannot be turned off — that would be a
+ * delete, and a delete asks about redirects.
+ */
+async function offering(collection: string, slug: string, request: Request): Promise<Response> {
+  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  const body = (await request.json().catch(() => undefined)) as { locales?: unknown } | undefined;
+  const wanted = Array.isArray(body?.locales) ? body.locales : [];
+  const offered = config.i18n.locales.filter((locale) => wanted.includes(locale));
+  const written = Object.keys(await entryLocales(collection, slug, config.i18n.locales));
+  if (!written.length) return new Response('Not found', { status: 404 });
+  const has = written.filter((locale) => !offered.includes(locale));
+  if (has.length)
+    return new Response(
+      `${has.join(', ')} already has a file for this entry: delete it before turning the language off`,
+      { status: 409 },
+    );
+  await setEntryLocales(
+    'default',
+    db(),
+    gitClient(),
+    written.map((locale) => entryPath(collection, slug, locale)),
+    offered,
+    config.i18n.locales,
+  );
+  return Response.json({});
 }
 
 /**
@@ -351,6 +431,7 @@ const ENTRY = /^entries\/([\w-]+)\/([\w-]+)$/;
 const DRAFT = /^drafts\/([\w-]+)\/([\w-]+)$/;
 const TRANSLATION = /^drafts\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 const RENAME = /^entries\/([\w-]+)\/([\w-]+)\/rename$/;
+const LOCALES = /^entries\/([\w-]+)\/([\w-]+)\/locales$/;
 const DRIFT = /^drift\/([\w-]+)\/([\w-]+)$/;
 
 export const GET: APIRoute = async ({ params }) => {
@@ -507,6 +588,10 @@ export const POST: APIRoute = async ({ params, request }) => {
     return login(typeof body.password === 'string' ? body.password : '');
   }
   if (params.path === 'publish') return answering(publish);
+  const made = params.path?.match(TRANSLATION);
+  if (made) return answering(() => createTranslation(made[1] ?? '', made[2] ?? '', made[3] ?? ''));
+  const offered = params.path?.match(LOCALES);
+  if (offered) return answering(() => offering(offered[1] ?? '', offered[2] ?? '', request));
   const answered = params.path?.match(DRIFT);
   if (answered) return answering(() => reconcile(answered[1] ?? '', answered[2] ?? '', request));
   const renamed = params.path?.match(RENAME);

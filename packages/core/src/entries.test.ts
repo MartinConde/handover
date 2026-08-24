@@ -30,6 +30,17 @@ test('an entry is one row with a locale per file', () => {
   });
 });
 
+// The language a client turned off has no file, so the row's own languages cannot say it: the
+// list reads which ones the entry is offered in off the files it does have.
+test('an entry carries the languages it is offered in when it is not offered in all of them', () => {
+  const index = indexFrom('default', [
+    listing('en', 'mill-house', '_locales:\n  - "en"\ntitle: "The Mill House"\n'),
+    listing('en', 'seaview-cottage', 'title: "Seaview Cottage"\n'),
+  ]);
+  expect(index.listings?.[0]?.offered).toEqual(['en']);
+  expect(index.listings?.[1]).not.toHaveProperty('offered');
+});
+
 test('an entry with no title is listed under its filename', () => {
   const index = indexFrom('default', [listing('en', 'mill-house', 'name: "The Mill House"\n')]);
   expect(index.listings?.[0]?.locales.en?.title).toBe('mill-house');

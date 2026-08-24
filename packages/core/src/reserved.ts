@@ -52,8 +52,9 @@ export function checkReserved(value: unknown, path = ''): void {
       fail(k, top ? 'an object' : 'no _i18n below the top level');
     if (k === '_id' && (typeof v !== 'string' || !ID.test(v)))
       fail(k, 'eight characters from 0-9a-z');
-    if (k === '_locales' && (top || !isStringArray(v) || v.length === 0))
-      fail(k, top ? 'no _locales at the top level' : 'a non-empty list of locales');
+    // On the entry, the languages it is offered in; on a row, the files it is written to.
+    if (k === '_locales' && (!isStringArray(v) || v.length === 0))
+      fail(k, 'a non-empty list of locales');
     if ((k === '_type' || k === '_label' || k === '_ref') && typeof v !== 'string')
       fail(k, 'a string');
     if (v && typeof v === 'object') checkReserved(v, at(k));

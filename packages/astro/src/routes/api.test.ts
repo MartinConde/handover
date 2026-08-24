@@ -28,6 +28,7 @@ const {
   pendingDrafts,
   publishDrafts,
   resolveDrift,
+  setEntryLocales,
 } = await vi.hoisted(async () => {
   const { z } = await import('astro/zod');
   const { blocks, defineBlock } = await import('../index.js');
@@ -38,6 +39,8 @@ const {
     // A collection with blocks in it: what two languages of one entry can disagree about.
     page: z.object({
       title: z.string(),
+      // A field with the same value in every language: what Create from English carries over.
+      layout: z.string().optional().meta({ i18n: 'duplicate' }),
       blocks: blocks(() => ({
         hero: defineBlock('hero', { heading: z.string() }),
         quote: defineBlock('quote', { body: z.string() }),
@@ -84,8 +87,11 @@ const {
     saveDraft: vi.fn<() => Promise<{ updated_at: number; pending: boolean } | undefined>>(
       async () => ({ updated_at: 1755864000000, pending: true }),
     ),
-    createDraft: vi.fn(async () => ({ updated_at: 1755864000000 })),
+    createDraft: vi.fn<(...args: unknown[]) => Promise<{ updated_at: number }>>(async () => ({
+      updated_at: 1755864000000,
+    })),
     resolveDrift: vi.fn(async () => {}),
+    setEntryLocales: vi.fn(async () => {}),
     recordRename: vi.fn(async () => {}),
     recordDelete: vi.fn(async () => {}),
     discardDraft: vi.fn(async () => {}),
@@ -165,6 +171,7 @@ vi.mock('@handover/core', async (original) => ({
   pendingDrafts,
   publishDrafts,
   resolveDrift,
+  setEntryLocales,
 }));
 
 afterEach(() => {
@@ -223,6 +230,7 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
     problems: [{ path: 'address', message: 'Required' }],
     locales: ['en'],
     defaultLocale: 'en',
+    offered: ['en'],
     drift: [],
     stale: [],
   });
@@ -942,4 +950,102 @@ test('a block answered into English is refused for what its schema needs, not fo
     paths: ['src/content/pages/en/home.yaml'],
   });
   expect(publishDrafts).not.toHaveBeenCalled();
+});
+
+// An entry with no German file: the two things the editor offers there — make one from the
+// English, or say this entry is not offered in German at all.
+const untranslated = (english = home.en) => {
+  locales = ['en', 'de'];
+  files['src/content/pages/en/home.yaml'] = english;
+};
+
+test('creating a language copies the structure and the shared values, not the words', async () => {
+  untranslated(home.en.replace('title: "Home"', 'title: "Home"\nlayout: "wide"'));
+  createDraft.mockClear();
+
+  const res = await POST(post('drafts/pages/home/de', ''));
+
+  expect(res.status).toBe(200);
+  expect(createDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/pages/de/home.yaml',
+    {
+      _version: 1,
+      layout: 'wide',
+      blocks: [{ _type: 'hero', _id: 'k3nf9a2p' }],
+    },
+  );
+});
+
+test('the new language is offered in the same ones the entry already is', async () => {
+  locales = ['en', 'de', 'fr'];
+  files['src/content/pages/en/home.yaml'] = home.en.replace(
+    '_version: 1',
+    '_version: 1\n_locales:\n  - "en"\n  - "de"',
+  );
+  createDraft.mockClear();
+
+  await POST(post('drafts/pages/home/de', ''));
+
+  expect(createDraft.mock.calls[0]?.[4]).toMatchObject({ _locales: ['en', 'de'] });
+});
+
+test('creating a language the entry already has is refused', async () => {
+  drifted();
+  createDraft.mockClear();
+
+  const res = await POST(post('drafts/pages/home/de', ''));
+
+  expect(res.status).toBe(409);
+  expect(createDraft).not.toHaveBeenCalled();
+});
+
+test('creating the default language, or one the site does not declare, is refused', async () => {
+  untranslated();
+  createDraft.mockClear();
+
+  expect((await POST(post('drafts/pages/home/en', ''))).status).toBe(404);
+  expect((await POST(post('drafts/pages/home/fr', ''))).status).toBe(404);
+  expect(createDraft).not.toHaveBeenCalled();
+});
+
+test('turning a language off writes the ones it keeps into every file the entry has', async () => {
+  untranslated();
+  setEntryLocales.mockClear();
+
+  const res = await POST(post('entries/pages/home/locales', JSON.stringify({ locales: ['en'] })));
+
+  expect(res.status).toBe(200);
+  expect(setEntryLocales).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    ['src/content/pages/en/home.yaml'],
+    ['en'],
+    ['en', 'de'],
+  );
+});
+
+test('turning off a language the entry has a file in is refused', async () => {
+  drifted();
+  setEntryLocales.mockClear();
+
+  const res = await POST(post('entries/pages/home/locales', JSON.stringify({ locales: ['en'] })));
+
+  expect(res.status).toBe(409);
+  expect(setEntryLocales).not.toHaveBeenCalled();
+});
+
+test('an entry says which languages it is offered in', async () => {
+  locales = ['en', 'de'];
+  files['src/content/pages/en/home.yaml'] = home.en.replace(
+    '_version: 1',
+    '_version: 1\n_locales:\n  - "en"',
+  );
+
+  const body = (await (await GET(ctx('entries/pages/home'))).json()) as { offered: unknown };
+
+  expect(body.offered).toEqual(['en']);
 });

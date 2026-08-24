@@ -200,6 +200,18 @@ test('a row says which languages it has been written in', async () => {
   ]);
 });
 
+// A language somebody turned off for the entry has no file and never will: struck through
+// rather than listed as one still to write.
+test('a language turned off for an entry is struck through, not counted as missing', async () => {
+  api([{ ...ENTRIES[0], offered: ['en'] }], {}, ['en', 'de']);
+  const root = show();
+  await tick();
+
+  const de = root.querySelectorAll('.chips .chip')[1];
+  expect(de?.classList.contains('chip-disabled')).toBe(true);
+  expect(de?.classList.contains('chip-missing')).toBe(false);
+});
+
 test('a site that declares one language has no languages column', async () => {
   api(ENTRIES);
   const root = show();
