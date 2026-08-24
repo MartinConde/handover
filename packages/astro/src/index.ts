@@ -33,6 +33,7 @@ export type {
   Translate,
 } from '@handover/core';
 export {
+  entryAddress,
   entryAt,
   entryUrl,
   filterLive,

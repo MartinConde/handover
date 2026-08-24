@@ -35,7 +35,7 @@ the folder is not an error — the collection is simply empty, and its pages ren
 // src/content.config.ts
 import { glob } from 'astro/loaders';
 import { defineCollection } from 'astro:content';
-import { listing, page } from './content/schemas';
+import { listing } from './content/schemas';
 
 // The id is the file's path and nothing else; Astro's default would file an entry under the
 // `slug` in its data, which is where localizedSlugs keeps an address.
@@ -45,10 +45,6 @@ export const collections = {
   listings: defineCollection({
     loader: glob({ pattern: '**/*.yaml', base: './src/content/listings', generateId: byPath }),
     schema: listing,
-  }),
-  pages: defineCollection({
-    loader: glob({ pattern: '**/*.yaml', base: './src/content/pages', generateId: byPath }),
-    schema: page,
   }),
 };
 ```
@@ -122,8 +118,11 @@ if (!data) return new Response('Not found', { status: 404 });
 
 A collection with [`localizedSlugs`](configuration.md#localizedslugs) is not addressed by its
 file name: `de/home.yaml` with `slug: startseite` is served at `/de/startseite` and no longer at
-`/de/home`. Resolve it with `entryAt()` rather than by id — the file name comes back off the
-entry, for the switcher:
+`/de/home`. The old address 301s from `_redirects`, which the assets layer serves before the
+route runs.
+
+An **on-demand** route resolves the address with `entryAt()` rather than by id — the file name
+comes back off the entry, for the switcher:
 
 ```ts
 import { entryAt, getEntryLocales } from 'astro-handover';
@@ -137,7 +136,32 @@ export async function load(source: Source, { locale, slug }: { locale: string; s
 }
 ```
 
-The old address 301s from `_redirects`, which the assets layer serves before the route runs.
+A **prerendered** one has nothing to resolve: it reads the collection anyway, so it builds the
+paths from the addresses and passes the file name through `props`. One `getStaticPaths` per
+language, each in that language's own folder:
+
+```astro
+---
+// src/pages/de/listings/[slug].astro
+export async function getStaticPaths() {
+  return (await loadAll(staticSource, { locale: 'de' })).map(({ name, address }) => ({
+    params: { slug: address },
+    props: { name },
+  }));
+}
+
+const { name } = Astro.props;
+const listing = await load(staticSource, { locale: 'de', name });
+if (!listing) throw new Error(`No listing de/${name}`);
+---
+```
+
+`loadAll` reads each address with `entryAddress('default', entry.data, name)` — the `slug` in the
+file, or the file name. Never `entry.data.slug`: Astro puts a warning getter there on every entry
+without one, and touching it logs on every render.
+
+**A miss here is a bug and not a 404**, the one place the rule above is the other way round:
+every path came from `getStaticPaths`, so `undefined` means the build disagrees with itself.
 
 ## The layout
 

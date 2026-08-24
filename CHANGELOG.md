@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `entryAddress()` is exported: the address one file serves at, which is the `slug` in its data
+  or its file name. A prerendered route on a `localizedSlugs` collection builds its
+  `getStaticPaths` from it, and it is the only safe way to read that key — Astro puts a warning
+  getter on `slug` for every entry without one.
+
 - **A language that already has a file can now be turned off.** The second column's header offers
   *Turn German off*, and confirming it commits: the German file leaves the repository, the
   languages the entry keeps go into the files that stay, and the URL German served redirects to

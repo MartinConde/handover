@@ -94,7 +94,8 @@ cms.config.ts › collections.posts.localizedSlugs: this collection's schema has
 - The collection's `glob` loader needs `generateId` so the id stays the file's path — Astro
   files an entry under its `slug` otherwise
   ([Template convention](template-convention.md#contentconfigts))
-- Your own route resolves through `entryAt()` rather than by id
+- Your own route resolves through `entryAt()` rather than by id, or — if it is prerendered —
+  builds its paths from `entryAddress()`
   ([Template convention](template-convention.md#a-page-with-an-address-per-language))
 - Publishing a change to an address that was live writes one `slug-change` redirect, for that
   language only ([Publishing](publishing.md#creating-renaming-and-deleting)) — the other languages' URLs did not move
