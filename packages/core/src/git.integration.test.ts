@@ -81,7 +81,8 @@ test.skipIf(!configured)(
       branch: env.GITHUB_BRANCH,
     };
     const git = createGitClient('default', app);
-    const loc = { collection: 'listings', route: '/listings/[slug]', locales: ['en', 'de'] };
+    const i18n = { locales: ['en', 'de'], defaultLocale: 'en' };
+    const loc = { collection: 'listings', route: '/listings/[slug]', i18n };
     const name = `it-${(await git.getHead()).slice(0, 7)}`;
     const redirects = 'src/content/redirects.yaml';
     const compare = async (from: string, to: string) => {

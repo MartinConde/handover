@@ -136,7 +136,7 @@ vi.mock('virtual:handover/config', () => ({
       listings: { schema: listing, route: '/listings/[slug]', index: '/listings' },
       presenters: { schema: presenter, titleField: 'name' },
       pages: { schema: page },
-      posts: { schema: article, route: '/blog/[slug]', localizedSlugs: true },
+      posts: { schema: article, route: '/blog/[slug]', index: '/blog', localizedSlugs: true },
     },
   },
 }));
@@ -696,6 +696,24 @@ test('deleting commits the removal with a redirect and says the file has gone', 
     'src/content/listings/en/mill-house.yaml',
     'def456',
   );
+});
+
+// The rule a rename or a delete owes is a URL on the site: it carries the language's segment,
+// and on a collection with localized slugs the address that language actually served rather
+// than the file name every language shares (F5 in 02-i18n.md).
+test('deleting a bilingual entry sends each language its own URL to its own index', async () => {
+  locales = ['en', 'de'];
+  files['src/content/posts/en/hello.yaml'] = '_version: 1\ntitle: "Hello"\n';
+  files['src/content/posts/de/hello.yaml'] = '_version: 1\ntitle: "Hallo"\nslug: "hallo"\n';
+  publish.mockClear();
+
+  const res = await DELETE(ctx('entries/posts/hello'));
+
+  expect(res.status).toBe(200);
+  const [written] = (publish.mock.calls[0] ?? []) as unknown as [PublishFile[]];
+  const rules = written.find((f) => f.path === 'src/content/redirects.yaml')?.contents ?? '';
+  expect(rules).toContain('from: "/blog/hello"\n    to: "/blog"');
+  expect(rules).toContain('from: "/de/blog/hallo"\n    to: "/de/blog"');
 });
 
 test('deleting an entry that was never published makes no commit', async () => {
@@ -1356,6 +1374,9 @@ test('moving a published address owes a redirect from where it was, in that lang
     'default',
     expect.anything(),
     expect.anything(),
+    expect.objectContaining({
+      fields: expect.arrayContaining([expect.objectContaining({ path: ['slug'] })]),
+    }),
     'src/content/posts/de/hello.yaml',
     'servus',
     { from: '/de/blog/hallo', to: '/de/blog/servus', entry: 'posts/hello' },
@@ -1380,6 +1401,9 @@ test('an entry with no file in the repository yet owes nothing', async () => {
     'default',
     expect.anything(),
     expect.anything(),
+    expect.objectContaining({
+      fields: expect.arrayContaining([expect.objectContaining({ path: ['slug'] })]),
+    }),
     'src/content/posts/de/hello.yaml',
     'hallo',
     undefined,

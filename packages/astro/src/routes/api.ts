@@ -452,6 +452,9 @@ async function address(
     'default',
     db(),
     git,
+    // The whole form, `slug` included: `formFor` takes the address out of what the client
+    // types into, but it is a key the schema declares and the file writes it where it says.
+    formOf('default', formSchema(collected.schema)),
     path,
     wanted,
     from && to && from !== to ? { from, to, entry: `${collection}/${slug}` } : undefined,
@@ -535,7 +538,8 @@ async function takenNames(collection: string, database: Db): Promise<string[]> {
 const locationOf = (collection: string): EntryLocation => ({
   collection,
   route: config.collections[collection]?.route,
-  locales: config.i18n.locales,
+  i18n: config.i18n,
+  localizedSlugs: config.collections[collection]?.localizedSlugs,
 });
 
 /**

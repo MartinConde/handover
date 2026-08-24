@@ -40,7 +40,7 @@ A `richtext()` field stores Markdown, never HTML. There are two tiers:
 Nothing else is accepted: no images, raw HTML, code, tables, `#` or `####` headings.
 Validation fails naming the construct and its line (`table is not allowed (line 4)`),
 so a paste that brings one in is caught before it is saved. Render the field with
-[`<Markdown />`](template-convention.md#rich-text).
+[`<Markdown />`](rendering.md#rich-text).
 
 A link inside rich text may point at `http`, `https`, `mailto`, `tel` or a path on this
 site. Anything else — `javascript:` and `data:` above all — fails validation

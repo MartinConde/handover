@@ -9,6 +9,7 @@ import {
   parseEntry,
   stringifyEntry,
   syncLocale,
+  writtenEntry,
 } from './content.js';
 import { type ContentFile, type ContentIndex, indexHasPath } from './entries.js';
 import { blobSha, type GitClient, type PublishFile } from './git.js';
@@ -177,9 +178,10 @@ export async function resolveDrift(
   const before = Object.fromEntries(open.map((f) => [f.locale, f.loaded.entry]));
   const after = applyDrift(siteId, form, locales, before, choices);
   const updatedAt = Date.now();
+  // Both sides stamped, so a file the answer leaves alone is not written for the stamp's sake.
   const writes = open.flatMap(({ locale, path, loaded }) => {
-    const contents = stringifyEntry(siteId, after[locale]);
-    return contents === stringifyEntry(siteId, before[locale])
+    const contents = stringifyEntry(siteId, writtenEntry(siteId, after[locale], form.fields));
+    return contents === stringifyEntry(siteId, writtenEntry(siteId, before[locale], form.fields))
       ? []
       : [upsert(db, siteId, path, contents, loaded, updatedAt)];
   });
@@ -212,11 +214,11 @@ export async function setEntryLocales(
   const updatedAt = Date.now();
   const writes = found.flatMap((f) => {
     if (!f) return [];
-    const entry = { ...(f.loaded.entry as Record<string, unknown>) };
+    const entry = writtenEntry(siteId, f.loaded.entry);
     if (kept.length === locales.length) delete entry._locales;
     else entry._locales = kept;
     const contents = stringifyEntry(siteId, entry);
-    return contents === stringifyEntry(siteId, f.loaded.entry)
+    return contents === stringifyEntry(siteId, writtenEntry(siteId, f.loaded.entry))
       ? []
       : [upsert(db, siteId, f.path, contents, f.loaded, updatedAt)];
   });
@@ -238,6 +240,7 @@ export async function setEntryAddress(
   siteId: string,
   db: Db,
   git: Pick<GitClient, 'getFile' | 'getHead'>,
+  form: Form,
   path: string,
   address: string,
   redirect?: { from: string; to: string; entry: string },
@@ -247,7 +250,9 @@ export async function setEntryAddress(
   const entry = { ...(loaded.entry as Record<string, unknown>) };
   if (address) entry.slug = address;
   else delete entry.slug;
-  const contents = stringifyEntry(siteId, entry);
+  // The form is the one the collection is read through, `slug` included: the address is not a
+  // field somebody types into, but it is a key the schema declares and it goes where it says.
+  const contents = stringifyEntry(siteId, writtenEntry(siteId, entry, form.fields));
   const updatedAt = Date.now();
   const rule = redirect
     ? redirectRule(

@@ -259,17 +259,17 @@ already answers to it in that language, its file name counted.
 POST /admin/api/entries/:collection/:slug/rename   { "to": "…" }  →  { "slug", "commit_sha" }
 ```
 
-One commit moving every locale file, plus the redirect. `to` goes through the same
-derivation as a new entry's title, so `slug` in the answer is the name that was actually
-used. `409` if the entry has never been published.
+One commit moving every locale file, plus one redirect per language whose URL moved. `to`
+goes through the same derivation as a new entry's title, so `slug` in the answer is the name
+that was actually used. `409` if the entry has never been published.
 
 ```
 DELETE /admin/api/entries/:collection/:slug        →  { "commit_sha" }
 ```
 
-One commit removing every locale file, with a redirect to the collection's `index` when it
-has one, and the entry's draft dropped. The answer is `{}` when nothing was committed —
-the entry existed only as a draft, or not at all.
+One commit removing every locale file, with a redirect per language to that language's copy
+of the collection's `index` when it has one, and the entry's draft dropped. The answer is `{}`
+when nothing was committed — the entry existed only as a draft, or not at all.
 
 ```
 POST /admin/api/drift/:collection/:slug     →  {}

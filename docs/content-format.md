@@ -90,7 +90,8 @@ The same item has the same `_id` in every locale file; that is what lets the adm
 two languages side by side.
 
 Duplicating an entry gives every item a new `_id`, the same new id in every locale of the
-copy. Write a template or a fixture with ids of your own, or leave them out — the admin
+copy, and leaves the original's address behind so the copy is served under its new file
+name. Write a template or a fixture with ids of your own, or leave them out — the admin
 fills them in on first save.
 
 ## Hiding an entry
@@ -102,7 +103,7 @@ title: "Seaview Cottage"
 ```
 
 The file stays in the repo and in the admin, and the site ignores it when your loaders
-use `filterLive` (see [Template convention](template-convention.md#hidden-entries)).
+use `filterLive` (see [Rendering content](rendering.md#hidden-entries)).
 
 ## Creating an entry
 
@@ -135,11 +136,17 @@ the rule. Deleting an entry removes every locale file in one commit and, when th
 chose where visitors should go, appends a `reason: "deleted"` rule with no `entry`. A
 collection without a `route` has no URL and gets no rule.
 
+**One rule per language whose URL moved**, under that language's own segment; a delete's
+target is served under it too, so the German page goes to the German index. On a
+[`localizedSlugs`](configuration.md#localizedslugs) collection that URL is the `slug` in the
+language's own file, so renaming the file writes no rule for a language that has one.
+
 From code, `renameEntry` and `deleteEntry` in `@handover/core` do this through the
 `GitClient`:
 
 ```ts
-const listings = { collection: 'listings', route: '/listings/[slug]', locales: ['en'] };
+const i18n = { locales: ['en', 'de'], defaultLocale: 'en' };
+const listings = { collection: 'listings', route: '/listings/[slug]', index: '/', i18n };
 await renameEntry('default', git, listings, 'seaview-cottage', 'seaview-cottage-devon');
 await deleteEntry('default', git, listings, 'mill-house', '/'); // undefined = no redirect
 ```

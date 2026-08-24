@@ -35,10 +35,21 @@ export function staticSource<C extends Record<string, unknown>>(
   return {
     getEntry: (collection, id) =>
       astro.getEntry(collection, id) as Promise<ContentEntry<C[typeof collection]> | undefined>,
-    getCollection: async (collection, locale) =>
-      (await astro.getCollection(collection)).filter((e) =>
-        e.id.startsWith(`${locale}/`),
-      ) as ContentEntry<C[typeof collection]>[],
+    getCollection: async (collection, locale) => {
+      const all = await astro.getCollection(collection);
+      // Astro's glob loader files an entry under a `slug` it finds in the data, which is where
+      // a `localizedSlugs` collection keeps its address. Nothing outside the site's own
+      // `content.config.ts` can see the loader, so the reader handed the ids is where the
+      // missing option is caught — otherwise it shows as a 404 on every entry.
+      const misfiled = all.find((e) => !e.id.includes('/'));
+      if (misfiled)
+        throw new Error(
+          `Collection "${collection}" has an entry filed under "${misfiled.id}" rather than "<locale>/<name>": its glob loader in src/content.config.ts needs generateId: ({ entry }) => entry.replace(/\\.ya?ml$/, '')`,
+        );
+      return all.filter((e) => e.id.startsWith(`${locale}/`)) as ContentEntry<
+        C[typeof collection]
+      >[];
+    },
   };
 }
 
@@ -175,6 +186,42 @@ const YAML_OPTIONS = {
 
 /** The format version a file without `_version` is read as, and the one a save writes. */
 export const FORMAT_VERSION = 1;
+
+// Sorted last, so a key the schema does not declare keeps the place the file gave it.
+const UNDECLARED = Number.MAX_SAFE_INTEGER;
+
+/**
+ * One object's keys in the order the format fixes: the reserved `_` keys, then the schema's
+ * own order, then whatever else it carries — a key the schema no longer declares keeps the
+ * place the file gave it rather than being dropped (session 1.23).
+ */
+function ordered(
+  fields: readonly Field[],
+  entry: Record<string, unknown>,
+): Record<string, unknown> {
+  const schema = new Map<string, number>();
+  for (const [i, field] of fields.entries()) {
+    const key = field.path[0];
+    if (key !== undefined && !schema.has(key)) schema.set(key, i);
+  }
+  const rank = (key: string) => (key.startsWith('_') ? -1 : (schema.get(key) ?? UNDECLARED));
+  const keys = Object.keys(entry).sort((a, b) => rank(a) - rank(b));
+  return Object.fromEntries(keys.map((key) => [key, entry[key]]));
+}
+
+/**
+ * One file as a write must leave it, for every write that is not the editor's save: `_version`
+ * in front of a file that has none, and the canonical key order. Reconciling drift, turning a
+ * language off, setting an address and duplicating an entry all write files the browser never
+ * sent, and `content-format.md`'s "the next save stamps it" is about them too.
+ */
+export function writtenEntry(
+  _siteId: string,
+  entry: unknown,
+  fields: readonly Field[] = [],
+): Record<string, unknown> {
+  return { _version: FORMAT_VERSION, ...ordered(fields, (entry ?? {}) as Record<string, unknown>) };
+}
 
 // The form sends back every key it was given, a key the schema no longer declares included:
 // a rename in `schemas.ts` before the migration is written must not lose the value on the
@@ -799,7 +846,9 @@ function overlay(
       else delete out[key];
     }
   }
-  return out;
+  // A key this walk added lands at the end of the object it was added to, so a file written
+  // from another language would carry the shared values before the translated ones.
+  return ordered(fields, out);
 }
 
 export function stringifyEntry(_siteId: string, data: unknown): string {

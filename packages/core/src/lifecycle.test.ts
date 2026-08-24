@@ -21,13 +21,14 @@ function fakeGit(files: Record<string, string>) {
   return { git, published };
 }
 
-const listings = { collection: 'listings', route: '/listings/[slug]', locales: ['en', 'de', 'fr'] };
+const i18n = { locales: ['en', 'de', 'fr'], defaultLocale: 'en' };
+const listings = { collection: 'listings', route: '/listings/[slug]', i18n };
 const now = () => Date.parse('2026-08-22T09:30:00Z');
 const redirects = (files: PublishFile[]) =>
   parse(files.find((f) => f.path === 'src/content/redirects.yaml')?.contents ?? '');
 const ANY_ID = expect.stringMatching(/^[0-9a-z]{8}$/);
 
-test('rename moves every locale file and appends one slug-change rule in one commit', async () => {
+test('rename moves every locale file and appends a rule per language in one commit', async () => {
   const { git, published } = fakeGit({
     'src/content/listings/en/seaview.yaml': '_version: 1\ntitle: "Seaview"\n',
     'src/content/listings/de/seaview.yaml': '_version: 1\ntitle: "Meerblick"\n',
@@ -74,8 +75,42 @@ test('rename moves every locale file and appends one slug-change rule in one com
         entry: 'listings/seaview-cottage',
         createdAt: '2026-08-22T09:30:00Z',
       },
+      {
+        _id: ANY_ID,
+        from: '/de/listings/seaview',
+        to: '/de/listings/seaview-cottage',
+        status: 301,
+        reason: 'slug-change',
+        entry: 'listings/seaview-cottage',
+        createdAt: '2026-08-22T09:30:00Z',
+      },
     ],
   });
+});
+
+// The URL a language serves the entry at is the one that moved, and on a collection with
+// localized slugs the file name is not it: renaming the file leaves that language's address
+// exactly where it was, so there is nothing to redirect.
+test('rename writes no rule for a language whose address is its own', async () => {
+  const { git, published } = fakeGit({
+    'src/content/pages/en/seaview.yaml': '_version: 1\ntitle: "Seaview"\n',
+    'src/content/pages/de/seaview.yaml': '_version: 1\nslug: "meerblick"\ntitle: "Meerblick"\n',
+  });
+  const pages = { collection: 'pages', route: '/[slug]', i18n, localizedSlugs: true };
+
+  await renameEntry('default', git, pages, 'seaview', 'seaview-cottage', { now });
+
+  expect(redirects(published[0]?.files ?? []).rules).toEqual([
+    {
+      _id: ANY_ID,
+      from: '/seaview',
+      to: '/seaview-cottage',
+      status: 301,
+      reason: 'slug-change',
+      entry: 'pages/seaview-cottage',
+      createdAt: '2026-08-22T09:30:00Z',
+    },
+  ]);
 });
 
 test('rename creates redirects.yaml when the repo has none', async () => {
@@ -144,7 +179,14 @@ test('renaming back drops the rule that would redirect a URL to itself', async (
 test('rename of a collection without a route writes no redirect', async () => {
   const { git, published } = fakeGit({ 'src/content/globals/en/a.yaml': '_version: 1\n' });
 
-  await renameEntry('default', git, { collection: 'globals', locales: ['en'] }, 'a', 'b', { now });
+  await renameEntry(
+    'default',
+    git,
+    { collection: 'globals', i18n: { locales: ['en'], defaultLocale: 'en' } },
+    'a',
+    'b',
+    { now },
+  );
 
   expect(published[0]?.files.map((f) => f.path)).toEqual([
     'src/content/globals/en/a.yaml',
@@ -161,7 +203,7 @@ test('rename refuses an entry that exists in no locale', async () => {
   expect(published).toHaveLength(0);
 });
 
-test('delete removes every locale file and appends one deleted rule without an entry', async () => {
+test('delete removes every locale file and sends each language to its own index', async () => {
   const { git, published } = fakeGit({
     'src/content/listings/en/seaview.yaml': '_version: 1\n',
     'src/content/listings/fr/seaview.yaml': '_version: 1\n',
@@ -181,6 +223,36 @@ test('delete removes every locale file and appends one deleted rule without an e
       _id: ANY_ID,
       from: '/listings/seaview',
       to: '/',
+      status: 301,
+      reason: 'deleted',
+      createdAt: '2026-08-22T09:30:00Z',
+    },
+    {
+      _id: ANY_ID,
+      from: '/fr/listings/seaview',
+      to: '/fr/',
+      status: 301,
+      reason: 'deleted',
+      createdAt: '2026-08-22T09:30:00Z',
+    },
+  ]);
+});
+
+// A delete is the one place the address still has to be read: the file goes, so the URL it
+// answered to is the only record of where the visitors were going.
+test('delete redirects the address a language served, not the file name', async () => {
+  const { git, published } = fakeGit({
+    'src/content/pages/de/seaview.yaml': '_version: 1\nslug: "meerblick"\n',
+  });
+  const pages = { collection: 'pages', route: '/[slug]', i18n, localizedSlugs: true };
+
+  await deleteEntry('default', git, pages, 'seaview', '/', { now });
+
+  expect(redirects(published[0]?.files ?? []).rules).toEqual([
+    {
+      _id: ANY_ID,
+      from: '/de/meerblick',
+      to: '/de/',
       status: 301,
       reason: 'deleted',
       createdAt: '2026-08-22T09:30:00Z',
@@ -232,4 +304,27 @@ test('duplicate copies every locale of the entry with one shared id map', async 
   expect(ids[0]).toEqual(ANY_ID);
   expect(ids[1]).toBe(ids[0]);
   expect(ids[0]).not.toBe('k3nf9a2p');
+});
+
+// An address is one entry's own: a copy that kept it would be a second page answering to the
+// same URL, which is the thing `POST …/address/:locale` refuses with a 409.
+test('duplicate leaves the original address behind and falls back to the new file name', async () => {
+  const { git } = fakeGit({
+    'src/content/pages/de/seaview.yaml': '_version: 1\nslug: "meerblick"\ntitle: "Meerblick"\n',
+  });
+  const pages = { collection: 'pages', route: '/[slug]', i18n, localizedSlugs: true };
+
+  const copies = await duplicateEntry('default', git, pages, 'seaview', 'seaview-copy');
+
+  expect(copies[0]?.contents).toBe('_version: 1\ntitle: "Meerblick"\n');
+});
+
+// A file from before Handover has no `_version`, and every write stamps it — not the editor's
+// save alone (F3 in 02-i18n.md).
+test('duplicate stamps the version onto a file that has none', async () => {
+  const { git } = fakeGit({ 'src/content/listings/en/seaview.yaml': 'title: "Seaview"\n' });
+
+  const copies = await duplicateEntry('default', git, listings, 'seaview', 'seaview-copy');
+
+  expect(copies[0]?.contents).toBe('_version: 1\ntitle: "Seaview"\n');
 });

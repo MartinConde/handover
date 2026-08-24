@@ -4,6 +4,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Renaming or deleting an entry writes one redirect per language, under that language's own
+  segment, from the URL that language actually served: on a `localizedSlugs` collection that is
+  the `slug` in the language's own file, so a rename leaves a language whose address is its own
+  alone. A delete sends each language to its own copy of the collection's `index`. `renameEntry`,
+  `deleteEntry` and `duplicateEntry` take `i18n` and `localizedSlugs` on their `EntryLocation`
+  where they took `locales`. A duplicate no longer copies the original's address.
+
+- Reading a collection whose `glob` loader is missing `generateId` now throws, naming the option,
+  instead of quietly matching no entry: Astro files an entry with a `slug` under its address, and
+  a `localizedSlugs` collection keeps its address there.
+
+- Every write stamps `_version` and writes the file's keys in schema order, not the editor's save
+  alone: reconciling drift, turning a language off, setting an address and duplicating an entry
+  all leave a file the way `content-format.md` describes it. A file written by an earlier version
+  has its keys reordered by the first write that touches it.
+
 - A web address per language, per collection: `localizedSlugs: true` beside a collection's
   `route` lets each language's file carry an optional `slug` overriding the file name in the
   URL. Empty falls back to the file name, so turning it on changes no URL until somebody fills

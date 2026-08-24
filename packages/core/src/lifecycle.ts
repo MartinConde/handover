@@ -1,6 +1,7 @@
-import { parseEntry, stringifyEntry } from './content.js';
+import { parseEntry, stringifyEntry, writtenEntry } from './content.js';
 import type { ContentFile } from './entries.js';
 import type { GitClient, PublishFile } from './git.js';
+import { entryAddress, entryUrl, type I18nRouting } from './names.js';
 import { newId, regenerateIds } from './reserved.js';
 
 export interface RedirectRule {
@@ -17,7 +18,10 @@ export interface EntryLocation {
   collection: string;
   /** The collection's `route`; without one the entry has no URL and no redirect is written. */
   route?: string;
-  locales: string[];
+  /** The site's languages, and what a URL under each of them looks like. */
+  i18n: I18nRouting;
+  /** Whether the collection's files carry an address of their own, which is not the file name. */
+  localizedSlugs?: boolean;
 }
 
 const REDIRECTS = 'src/content/redirects.yaml';
@@ -26,12 +30,14 @@ const entryPath = (collection: string, locale: string, name: string) =>
 
 async function localeFiles(git: GitClient, loc: EntryLocation, name: string) {
   const found: { locale: string; contents: string }[] = [];
-  for (const locale of loc.locales) {
+  for (const locale of loc.i18n.locales) {
     const file = await git.getFile(entryPath(loc.collection, locale, name));
     if (file) found.push({ locale, contents: file.contents });
   }
   if (found.length === 0)
-    throw new Error(`${loc.collection}/${name} has no file in any of ${loc.locales.join(', ')}`);
+    throw new Error(
+      `${loc.collection}/${name} has no file in any of ${loc.i18n.locales.join(', ')}`,
+    );
   return found;
 }
 
@@ -72,11 +78,32 @@ export async function appendRedirects(
 const redirectsFile = (
   siteId: string,
   git: GitClient,
-  rule: Omit<RedirectRule, '_id' | 'createdAt'>,
+  rules: Omit<RedirectRule, '_id' | 'createdAt'>[],
   now: () => number,
-) => appendRedirects(siteId, git, [redirectRule(siteId, rule, now())]);
+) =>
+  appendRedirects(
+    siteId,
+    git,
+    rules.map((rule) => redirectRule(siteId, rule, now())),
+  );
 
-// One commit moves every locale file and records where the old URL now goes.
+/**
+ * The URL one language served this file at. The file name is the address only where the
+ * collection has none of its own; with `localizedSlugs` a language answers to the `slug` in its
+ * own file, so each language's URL has to be read out of that language's file rather than
+ * built from the name every language shares.
+ */
+const urlOf = (
+  siteId: string,
+  loc: EntryLocation,
+  file: { locale: string; contents: string },
+  name: string,
+) => {
+  const data = loc.localizedSlugs ? parseEntry(siteId, file.contents) : undefined;
+  return entryUrl(siteId, loc.i18n, loc.route, entryAddress(siteId, data, name), file.locale);
+};
+
+// One commit moves every locale file and records where each language's old URL now goes.
 export async function renameEntry(
   siteId: string,
   git: GitClient,
@@ -90,25 +117,32 @@ export async function renameEntry(
     { path: entryPath(loc.collection, locale, from), contents: null },
     { path: entryPath(loc.collection, locale, to), contents },
   ]);
-  if (loc.route)
-    changes.push(
-      await redirectsFile(
-        siteId,
-        git,
-        {
-          from: loc.route.replace('[slug]', from),
-          to: loc.route.replace('[slug]', to),
-          status: 301,
-          reason: 'slug-change',
-          entry: `${loc.collection}/${to}`,
-        },
-        deps.now ?? Date.now,
-      ),
-    );
+  // A language whose address is its own did not move: renaming the file changes no URL there.
+  const rules = files.flatMap((file) => {
+    const was = urlOf(siteId, loc, file, from);
+    const now = urlOf(siteId, loc, file, to);
+    return was && now && was !== now
+      ? [
+          {
+            from: was,
+            to: now,
+            status: 301 as const,
+            reason: 'slug-change' as const,
+            entry: `${loc.collection}/${to}`,
+          },
+        ]
+      : [];
+  });
+  if (rules.length) changes.push(await redirectsFile(siteId, git, rules, deps.now ?? Date.now));
   return git.publish(changes, { base_sha, message: `Rename ${loc.collection}/${from} to ${to}` });
 }
 
-// `redirectTo` is what the client picked in the dialog; `undefined` means "nowhere".
+/**
+ * `redirectTo` is the route on this site the client picked in the dialog; `undefined` means
+ * "nowhere". It is a route rather than a URL, so it is served under each language's own
+ * segment too: a German page that goes away sends its visitors to the German index and not to
+ * an English page they cannot read.
+ */
 export async function deleteEntry(
   siteId: string,
   git: GitClient,
@@ -122,15 +156,16 @@ export async function deleteEntry(
     path: entryPath(loc.collection, locale, name),
     contents: null,
   }));
-  if (loc.route && redirectTo)
-    changes.push(
-      await redirectsFile(
-        siteId,
-        git,
-        { from: loc.route.replace('[slug]', name), to: redirectTo, status: 301, reason: 'deleted' },
-        deps.now ?? Date.now,
-      ),
-    );
+  const rules = !redirectTo
+    ? []
+    : files.flatMap((file) => {
+        const was = urlOf(siteId, loc, file, name);
+        const to = entryUrl(siteId, loc.i18n, redirectTo, '', file.locale);
+        return was && to && was !== to
+          ? [{ from: was, to, status: 301 as const, reason: 'deleted' as const }]
+          : [];
+      });
+  if (rules.length) changes.push(await redirectsFile(siteId, git, rules, deps.now ?? Date.now));
   return git.publish(changes, { base_sha, message: `Delete ${loc.collection}/${name}` });
 }
 
@@ -142,6 +177,10 @@ export const redirectsText = (_siteId: string, rules: RedirectRule[]): string =>
  * Every locale file of an entry copied under a new name, ready to be written as drafts: one
  * `_id` map shared across the locales, so the copy is still one entry with a matching
  * skeleton. Session 2.9 (decap-cms#7371, payload#14491).
+ *
+ * The address stays with the entry that had it — two entries answering to one URL is what the
+ * address route refuses — so the copy falls back to its new file name until somebody gives it
+ * one of its own.
  */
 export async function duplicateEntry(
   siteId: string,
@@ -152,8 +191,9 @@ export async function duplicateEntry(
 ): Promise<ContentFile[]> {
   const files = await localeFiles(git, loc, from);
   const ids = new Map<string, string>();
-  return files.map(({ locale, contents }) => ({
-    path: entryPath(loc.collection, locale, to),
-    contents: stringifyEntry(siteId, regenerateIds(siteId, parseEntry(siteId, contents), ids)),
-  }));
+  return files.map(({ locale, contents }) => {
+    const copy = writtenEntry(siteId, regenerateIds(siteId, parseEntry(siteId, contents), ids));
+    if (loc.localizedSlugs) delete copy.slug;
+    return { path: entryPath(loc.collection, locale, to), contents: stringifyEntry(siteId, copy) };
+  });
 }

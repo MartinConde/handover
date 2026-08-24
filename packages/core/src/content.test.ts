@@ -40,6 +40,24 @@ test('getEntry returns undefined for a missing id', async () => {
   expect(await source.getEntry('listings', 'fr/mill-house')).toBeUndefined();
 });
 
+// Astro's glob loader files an entry under a `slug` it finds in the data, which is exactly
+// where a `localizedSlugs` collection keeps its address: without `generateId` the German half
+// of `home` stops being `de/home` and every lookup misses. Nothing else can see the loader, so
+// the reader that is handed the ids says so (F7 in 02-i18n.md).
+test('an entry filed under its address rather than its path names the loader option', async () => {
+  const misfiled = staticSource<{ pages: unknown }>('default', {
+    getEntry: async () => undefined,
+    getCollection: async () => [
+      { id: 'en/home', data: {} },
+      { id: 'startseite', data: {} },
+    ],
+  });
+
+  await expect(misfiled.getCollection('pages', 'de')).rejects.toThrow(
+    'Collection "pages" has an entry filed under "startseite" rather than "<locale>/<name>": its glob loader in src/content.config.ts needs generateId: ({ entry }) => entry.replace(/\\.ya?ml$/, \'\')',
+  );
+});
+
 // Publish decides "nothing pending" by blob SHA, so a byte change in the serialiser is a bug.
 const goldenDir = join(import.meta.dirname, '../test/golden');
 const blobSha = (text: string) =>
@@ -581,6 +599,38 @@ test('the other locale file comes back byte for byte when the source has nothing
     parseEntry('default', de),
   );
   expect(stringifyEntry('default', synced)).toBe(de);
+});
+
+// A file Create-from-English made had its shared keys before its translated ones — the order
+// `overlay` acquired them in, the create carrying one and the first save adding the rest —
+// rather than the order the schema declares them (F4 in 02-i18n.md). The serialiser already
+// puts the reserved keys in front; what it cannot know is where the rest belong.
+const presenter: Form = {
+  fields: [
+    { path: ['name'], label: 'Name', type: 'text', required: true },
+    { path: ['role'], label: 'Role', type: 'text', required: true, i18n: 'duplicate' },
+    { path: ['bio'], label: 'Bio', type: 'text', required: false },
+  ],
+  blocks: {},
+};
+
+test('a file made from another language is written in schema order', () => {
+  const en = {
+    _version: 1,
+    name: 'Theo Adeyemi',
+    role: 'Presenter',
+    bio: 'Mornings on the coast.',
+  };
+
+  const made = syncLocale('default', presenter, 'de', { before: en, after: en }, {});
+  const typed = mergeEntry(
+    'default',
+    made,
+    { name: 'Theo Adeyemi', bio: 'Morgens am Meer.' },
+    presenter,
+  );
+
+  expect(Object.keys(typed)).toEqual(['_version', 'name', 'role', 'bio']);
 });
 
 // The drift pair: EN has the two shared blocks, DE has those plus a `compliance` block marked

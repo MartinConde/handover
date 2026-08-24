@@ -720,6 +720,35 @@ test('a language the answer leaves alone is not made pending by it', async () =>
   );
 });
 
+// Every write stamps `_version`, not the editor's save alone: a file written before Handover,
+// or by hand, has none, and `content-format.md` promises the next save gives it one (F3).
+test('answering drift stamps the version on the file the answer changes', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({
+    [PAGE_EN]: drifted('Home', [...HERO, ...CTA]).replace('_version: 1\n', ''),
+    [PAGE_DE]: drifted('Startseite', [...HERO, ...QUOTE, ...CTA]).replace('_version: 1\n', ''),
+  });
+
+  await resolveDrift('default', db, repo, PAGE_FORM, ['en', 'de'], PAGE_PATHS, [
+    { path: 'blocks[_id=z9y8x7w6]', locales: ['de'] },
+  ]);
+
+  const rows = await db.select().from(drafts);
+  expect(rows.map((r) => r.path)).toEqual([PAGE_DE]);
+  expect(rows[0]?.contents.startsWith('_version: 1\n')).toBe(true);
+});
+
+test('turning a language off stamps the version on a file that has none', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PAGE_EN]: page('Home', 'a', 'b').replace('_version: 1\n', '') });
+
+  await setEntryLocales('default', db, repo, [PAGE_EN], ['en'], ['en', 'de']);
+
+  expect((await only(db))?.contents).toBe(
+    page('Home', 'a', 'b').replace('_version: 1\n', '_version: 1\n_locales:\n  - "en"\n'),
+  );
+});
+
 // Turning a language off is a decision about the entry, so it goes in the files the entry has
 // rather than in D1: the site builds from git alone, and no file is written for the language
 // that was turned off.
@@ -787,25 +816,47 @@ test('a fill of a language with no file writes nothing', async () => {
 // a form's values, and the redirect it owes cannot be committed until the entry is published —
 // until then the old address is the live one.
 const REDIRECT = { from: '/de/home', to: '/de/startseite', entry: 'pages/home' };
+// `slug` is the first key the page schema declares, and the address goes where the schema puts
+// it rather than at the end of the file (F4 in 02-i18n.md).
+const ADDRESSED: Form = {
+  ...PAGE_FORM,
+  fields: [
+    { path: ['slug'], label: 'Address', type: 'text', required: false },
+    ...PAGE_FORM.fields,
+  ],
+};
 
-test('an address is written into that language alone', async () => {
+test('an address is written into that language alone, in schema order', async () => {
   const db = await fresh();
   const repo = bilingual();
 
-  await setEntryAddress('default', db, repo, PAGE_DE, 'startseite', REDIRECT);
+  await setEntryAddress('default', db, repo, ADDRESSED, PAGE_DE, 'startseite', REDIRECT);
 
   const rows = await db.select().from(drafts);
   expect(rows.map((r) => r.path)).toEqual([PAGE_DE]);
-  // At the end, where a key a write did not start from has always landed (F4 in 02-i18n.md).
   expect(rows[0]?.contents).toBe(
-    `${page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?')}slug: "startseite"\n`,
+    page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?').replace(
+      '_version: 1\n',
+      '_version: 1\nslug: "startseite"\n',
+    ),
+  );
+});
+
+test('an address stamps the version on a file that has none', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PAGE_DE]: page('Startseite', 'a', 'b').replace('_version: 1\n', '') });
+
+  await setEntryAddress('default', db, repo, ADDRESSED, PAGE_DE, 'startseite', undefined);
+
+  expect((await only(db))?.contents).toBe(
+    page('Startseite', 'a', 'b').replace('_version: 1\n', '_version: 1\nslug: "startseite"\n'),
   );
 });
 
 test('publishing an address change writes one redirect for that language', async () => {
   const db = await fresh();
   const repo = bilingual();
-  await setEntryAddress('default', db, repo, PAGE_DE, 'startseite', REDIRECT);
+  await setEntryAddress('default', db, repo, ADDRESSED, PAGE_DE, 'startseite', REDIRECT);
 
   await publishDrafts('default', db, repo);
 
@@ -827,7 +878,7 @@ test('an entry with no redirect to owe publishes redirects.yaml untouched', asyn
   const db = await fresh();
   const repo = bilingual();
 
-  await setEntryAddress('default', db, repo, PAGE_DE, 'startseite', undefined);
+  await setEntryAddress('default', db, repo, ADDRESSED, PAGE_DE, 'startseite', undefined);
   await publishDrafts('default', db, repo);
 
   expect(repo.read(REDIRECTS)).toBe('');
@@ -838,9 +889,9 @@ test('an entry with no redirect to owe publishes redirects.yaml untouched', asyn
 test('an address put back the way it was owes nothing', async () => {
   const db = await fresh();
   const repo = bilingual();
-  await setEntryAddress('default', db, repo, PAGE_DE, 'startseite', REDIRECT);
+  await setEntryAddress('default', db, repo, ADDRESSED, PAGE_DE, 'startseite', REDIRECT);
 
-  await setEntryAddress('default', db, repo, PAGE_DE, '', undefined);
+  await setEntryAddress('default', db, repo, ADDRESSED, PAGE_DE, '', undefined);
   await saveDraft('default', db, repo, PAGE_DE, german('Zieh ans Meer'));
   await publishDrafts('default', db, repo);
 
