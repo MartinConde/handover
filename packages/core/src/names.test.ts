@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { checkCollections, checkI18n, entryName } from './names.js';
+import { checkCollections, checkI18n, entryName, entryUrl } from './names.js';
 
 test.each([
   ['plain title', 'Seaview Cottage', [], 'seaview-cottage'],
@@ -104,4 +104,24 @@ test.each([
   const [message, ...rest] = checkI18n('default', i18n);
   expect(rest).toEqual([]);
   expect(message).toMatch(new RegExp(`^cms\\.config\\.ts › ${at.replace(/\./g, '\\.')}: `));
+});
+
+const two = { locales: ['en', 'de'], defaultLocale: 'en' };
+
+test('the default language has no segment and the others do', () => {
+  expect(entryUrl('default', two, '/listings/[slug]', 'mill-house', 'en')).toBe(
+    '/listings/mill-house',
+  );
+  expect(entryUrl('default', two, '/listings/[slug]', 'mill-house', 'de')).toBe(
+    '/de/listings/mill-house',
+  );
+});
+
+test('prefixDefaultLocale gives the default language a segment too', () => {
+  const prefixed = { ...two, prefixDefaultLocale: true };
+  expect(entryUrl('default', prefixed, '/[slug]', 'home', 'en')).toBe('/en/home');
+});
+
+test('a collection with no route of its own has no URL', () => {
+  expect(entryUrl('default', two, undefined, 'everything', 'de')).toBe(undefined);
 });

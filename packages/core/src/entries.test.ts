@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { collectionEntries, contentPathErrors, indexFrom } from './entries.js';
+import { collectionEntries, contentPathErrors, entryOffer, indexFrom } from './entries.js';
 
 const file = (path: string, body: string) => ({ path, contents: `_version: 1\n${body}` });
 const listing = (locale: string, name: string, body: string) =>
@@ -174,4 +174,33 @@ test('a renamed entry is listed under its new name before the build catches up',
     ['seaview-cottage', 'Seaview Cottage'],
     ['the-old-mill', 'The Mill House'],
   ]);
+});
+
+// A top-level `_locales` is written by the admin into every file the entry has, so a mark
+// that disagrees with the files there are is a hand edit or a bad merge — drift, one level up.
+test('the languages an entry has a file in are offered whatever the mark says', () => {
+  const { offered, problems } = entryOffer('default', ['en', 'de'], ['en'], ['en', 'de']);
+  expect(offered).toEqual(['en', 'de']);
+  expect(problems).toEqual([
+    '_locales says this entry is not offered in de, and it has a file in de',
+  ]);
+});
+
+test('a language the site does not declare is named rather than silently dropped', () => {
+  const { offered, problems } = entryOffer('default', ['en', 'de'], ['en', 'fr'], ['en']);
+  expect(offered).toEqual(['en']);
+  expect(problems).toEqual([
+    '_locales names "fr", which is not one of the languages this site declares: en, de',
+  ]);
+});
+
+test('a mark that agrees with the files reports nothing', () => {
+  expect(entryOffer('default', ['en', 'de'], ['en'], ['en'])).toEqual({
+    offered: ['en'],
+    problems: [],
+  });
+  expect(entryOffer('default', ['en', 'de'], undefined, ['en'])).toEqual({
+    offered: ['en', 'de'],
+    problems: [],
+  });
 });

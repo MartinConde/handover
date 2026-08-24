@@ -90,8 +90,16 @@ function walk(siteId: string, value: unknown, ids: Map<string, string>): unknown
   );
 }
 
-export function isLive(_siteId: string, data: unknown): boolean {
-  return (data as { _status?: unknown } | null)?._status === undefined;
+/**
+ * Whether a file renders: no `_status`, and — given a locale — one the entry is offered in.
+ * The top-level `_locales` is written into every file the entry has, so whichever one is read
+ * says the same thing. Called with no locale it is the check it has always been.
+ */
+export function isLive(_siteId: string, data: unknown, locale?: string): boolean {
+  const entry = data as { _status?: unknown; _locales?: unknown } | null;
+  if (entry?._status !== undefined) return false;
+  if (locale === undefined || !Array.isArray(entry?._locales)) return true;
+  return entry._locales.includes(locale);
 }
 
 export function filterLive<T>(siteId: string, entries: ContentEntry<T>[]): ContentEntry<T>[] {

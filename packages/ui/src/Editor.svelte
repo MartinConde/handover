@@ -33,6 +33,8 @@ let {
     defaultLocale: string;
     /** The languages it is offered in; the rest are turned off and get no file. */
     offered: string[];
+    /** What its own `_locales` says that the files it has contradict — a hand edit or a merge. */
+    offerProblems?: string[];
     /** The other languages this entry has a file in, parsed; none where it has no other file. */
     translations: Record<string, Data>;
     /** Which of them were translated from a source language that has moved on since. */
@@ -197,6 +199,12 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 </script>
 
 <main class="main main-editor">
+  {#each entry.offerProblems ?? [] as problem (problem)}
+    <div class="lock-banner is-offer">
+      This entry's file says something its languages contradict — {problem}. Fix it in the
+      repository; until then the files are what counts.
+    </div>
+  {/each}
   {#if entry.drift.length}
     <div class="lock-banner is-drift">
       The languages of this entry disagree about its blocks — publishing is blocked until that is

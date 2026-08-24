@@ -4,11 +4,14 @@ export type {
   ContentSource,
   Drift,
   DriftChoice,
+  LocaleLink,
+  LocaleSite,
 } from './content.js';
 export {
   applyDrift,
   driftReport,
   FORMAT_VERSION,
+  getEntryLocales,
   mergeEntry,
   parseEntry,
   staleLocales,
@@ -39,15 +42,15 @@ export {
   setEntryLocales,
 } from './db.js';
 export type { ContentFile, ContentIndex, EntryLocale, IndexEntry, TitleFields } from './entries.js';
-export { collectionEntries, contentPathErrors, indexFrom } from './entries.js';
+export { collectionEntries, contentPathErrors, entryOffer, indexFrom } from './entries.js';
 export type { GitClient, GitFile, GitHubApp, PublishFile } from './git.js';
 export { blobSha, createGitClient, RefMovedError, RepoUnreachableError } from './git.js';
 export type { EntryLocation, RedirectRule } from './lifecycle.js';
 export { deleteEntry, duplicateEntry, redirectsText, renameEntry } from './lifecycle.js';
 export type { MigrationStep } from './migrate.js';
 export { MIGRATIONS, migrateDocument, versionOf } from './migrate.js';
-export type { CollectionRoutes, I18nConfig } from './names.js';
-export { checkCollections, checkI18n, entryName } from './names.js';
+export type { CollectionRoutes, I18nConfig, I18nRouting } from './names.js';
+export { checkCollections, checkI18n, entryName, entryUrl } from './names.js';
 export { filterLive, isLive, newId, RESERVED_KEYS, regenerateIds } from './reserved.js';
 export type { RichtextTier } from './richtext.js';
 export {

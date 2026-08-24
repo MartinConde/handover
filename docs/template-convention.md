@@ -203,12 +203,57 @@ binary, and a page that renders it on a Worker throws `The WASI method is not
 implemented` — prerendered pages included, since `@astrojs/cloudflare` prerenders inside
 the same runtime.
 
+## The language switcher
+
+`getEntryLocales()` answers which languages one entry can be read in — it has a file in that
+language's folder and the file is not hidden — and where each one is served. It reads the
+collections, so it costs the build no lookup of its own. Give it your `cms.config.ts`: the
+languages and the collections' routes are all it takes.
+
+```ts
+// src/loaders/page.ts
+import { getEntryLocales } from 'astro-handover';
+import cms from '../../cms.config';
+
+export const locales = (source: Source, slug: string) =>
+  getEntryLocales('default', source, cms, 'pages', slug);
+```
+
+```astro
+---
+// src/pages/de/[slug].astro
+import LocaleSwitcher from 'astro-handover/LocaleSwitcher.astro';
+import { load, locales, staticSource } from '../../loaders/page';
+
+const slug = Astro.params.slug ?? '';
+const data = await load(staticSource, { locale: 'de', slug });
+---
+
+<LocaleSwitcher locales={await locales(staticSource, slug)} current="de" />
+```
+
+The links come from the collection's `route` with the language's segment applied, so
+`prefixDefaultLocale` is honoured and no template hardcodes `/de/`. The language being read is
+a `<span aria-current="true">`, not a link.
+
+An entry that can be read in one language draws **nothing** — a single button says nothing and
+goes nowhere — so a site that declares one language never draws a switcher.
+
+Each button is the language's code in capitals. For anything else — the language's own name, a
+flag, a menu — call `getEntryLocales()` and write the markup yourself. One URL on its own is
+`entryUrl('default', cms.i18n, '/[slug]', slug, 'de')`.
+
 ## Hidden entries
 
 An entry with `_status: hidden` in its file stays in the repo but must not render.
 `filterLive` drops those entries from a `getCollection` result; `isLive(siteId, data)`
 is the same check for one entry. Use them in loaders and in `getStaticPaths`, so a hidden
 entry 404s instead of being reachable by URL.
+
+`isLive(siteId, data, locale)` asks the same of one language: a hidden file is not live in any,
+and neither is a language the entry's `_locales` does not offer it in. The switcher does not
+need the third argument — it holds the language's own file, and a language an entry is not
+offered in has no file. Pass it when what you hold is an entry rather than a file.
 
 ```ts
 import { filterLive } from 'astro-handover';

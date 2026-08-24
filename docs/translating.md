@@ -41,6 +41,12 @@ Turning the language back on takes the key out again — an entry offered in eve
 site declares carries none. A language that already has a file cannot be turned off, since that
 would be deleting the file, which is what Delete is for.
 
+Because the key is written into every file the entry has, a hand edit or a bad merge can leave
+it disagreeing with them. **The files win** — a language with a file is offered in it whatever
+the key says — and the entry says so above its form rather than striking the language through
+in the list and letting you type in it on the next screen. A code the site does not declare is
+named the same way. Both are fixed in the repository.
+
 ## Side by side
 
 **Side by side** puts the second language beside the first: the default language's form on the

@@ -407,6 +407,21 @@ test('an entry whose languages disagree gets the panel where its form would be',
   expect($<HTMLButtonElement>(root, 'header button.btn-primary')?.disabled).toBe(true);
 });
 
+// F2: the list read `_locales` one way and the form another. Now the file wins and the
+// disagreement is said out loud, above the form it would otherwise have decided in silence.
+test('an entry whose _locales its files contradict says so', () => {
+  const root = show({
+    entry: {
+      ...bilingual,
+      offerProblems: ['_locales says this entry is not offered in de, and it has a file in de'],
+    },
+  });
+
+  const banner = $(root, '.lock-banner.is-offer');
+  expect(banner?.textContent).toContain('not offered in de');
+  expect($(root, 'form.form')).not.toBe(null);
+});
+
 // One language declared is a CMS with no i18n in it: the controls are not drawn at all, and
 // the rule is on the config rather than on the data — two languages and no German file still
 // draws every one of them, because the missing German is what the client is meant to see.

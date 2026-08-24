@@ -13,6 +13,7 @@ import {
   discardDraft,
   driftReport,
   entryName,
+  entryOffer,
   FORMAT_VERSION,
   formOf,
   loadDraft,
@@ -96,14 +97,15 @@ const entryFiles = async (git: GitClient, collection: string, slug: string) => {
   }));
 };
 
-// The languages an entry is offered in: what its files say, or every language the site
-// declares. A language it is not offered in gets no file at all — see `offering` below.
-const offeredIn = (data: unknown): string[] => {
-  const marked = (data as { _locales?: unknown } | null)?._locales;
-  return Array.isArray(marked)
-    ? config.i18n.locales.filter((locale) => marked.includes(locale))
-    : config.i18n.locales;
-};
+// The languages an entry is offered in, and what its `_locales` gets wrong: `written` is the
+// languages it has a file in, and a file is the fact the mark has to agree with.
+const offeredIn = (data: unknown, written: string[]) =>
+  entryOffer(
+    'default',
+    config.i18n.locales,
+    (data as { _locales?: unknown } | null)?._locales,
+    written,
+  );
 
 // One entry as the editor has it, language by language: its draft where there is one, the
 // repository where there is not, and no key at all for a language it has no file in. Each
@@ -151,6 +153,7 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
   if (!own) return new Response('Not found', { status: 404 });
   const data = own.data;
   const form = formOf('default', formSchema(schema));
+  const offer = offeredIn(data, Object.keys(loaded));
   const languages = localeData(loaded);
   const translations = Object.fromEntries(
     Object.entries(languages).filter(([locale]) => locale !== config.i18n.defaultLocale),
@@ -172,7 +175,10 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
     defaultLocale: config.i18n.defaultLocale,
     // And which of them this entry is offered in: the rest are not translated but turned off,
     // which is a decision and not a gap to fill.
-    offered: offeredIn(data),
+    offered: offer.offered,
+    // What its own `_locales` says that the files contradict. Reported rather than acted on:
+    // the list and the form would otherwise each believe a different half of it.
+    offerProblems: offer.problems,
     drift: driftReport('default', form, languages),
     // Which of them were translated from an English that has moved on since. A warning the
     // editor draws next to the language, never a reason to refuse anything.
@@ -254,26 +260,19 @@ async function createTranslation(
   const schema = config.collections[collection]?.schema;
   if (!schema || locale === config.i18n.defaultLocale || !config.i18n.locales.includes(locale))
     return new Response('Not found', { status: 404 });
-  const git = gitClient();
-  const database = db();
-  const path = entryPath(collection, slug, locale);
-  const [file, row] = await Promise.all([git.getFile(path), loadDraft('default', database, path)]);
-  if (file || row) return new Response('That language already has a file', { status: 409 });
-  const from = entryPath(collection, slug);
-  const [source, drafted] = await Promise.all([
-    git.getFile(from),
-    loadDraft('default', database, from),
-  ]);
-  const contents = drafted?.contents ?? source?.contents;
-  if (!contents) return new Response('Not found', { status: 404 });
-  const data = parseEntry('default', contents);
-  const offered = offeredIn(data);
+  const loaded = await entryLocales(collection, slug, config.i18n.locales);
+  if (loaded[locale]) return new Response('That language already has a file', { status: 409 });
+  const data = loaded[config.i18n.defaultLocale]?.data;
+  if (data === undefined) return new Response('Not found', { status: 404 });
+  const { offered, problems } = offeredIn(data, Object.keys(loaded));
+  // A mark the files contradict is answered before the offer it would otherwise be read as.
+  if (problems.length) return new Response(problems.join('\n'), { status: 409 });
   if (!offered.includes(locale))
     return new Response(`This entry is not offered in ${locale}`, { status: 409 });
   const form = formOf('default', formSchema(schema));
   const made = syncLocale('default', form, locale, { before: data, after: data }, {});
   if (offered.length < config.i18n.locales.length) made._locales = offered;
-  await createDraft('default', database, git, path, made);
+  await createDraft('default', db(), gitClient(), entryPath(collection, slug, locale), made);
   return Response.json({});
 }
 
@@ -408,8 +407,25 @@ async function listEntries(collection: string): Promise<Response> {
   const collected = config.collections[collection];
   if (!collected) return new Response('Not found', { status: 404 });
   const rows = await overlayRows('default', db(), index);
+  // The same reading of `_locales` the editor does, so a language with a file is never struck
+  // through in the list and typed in on the next screen.
+  const entries = collectionEntries('default', index, collection, rows, collected.titleField).map(
+    (entry) => {
+      const { offered } = entryOffer(
+        'default',
+        config.i18n.locales,
+        entry.offered,
+        Object.keys(entry.locales),
+      );
+      // Absent when that is every language the site declares, as the built index has it.
+      return {
+        ...entry,
+        offered: offered.length === config.i18n.locales.length ? undefined : offered,
+      };
+    },
+  );
   return Response.json({
-    entries: collectionEntries('default', index, collection, rows, collected.titleField),
+    entries,
     // Which languages the list draws a column for, and in which order — one language, no column.
     locales: config.i18n.locales,
   });

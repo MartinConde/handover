@@ -4,6 +4,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A language switcher for the site. `<LocaleSwitcher locales current />` from
+  `astro-handover/LocaleSwitcher.astro` draws the languages one entry can actually be read in;
+  `getEntryLocales('default', source, cms, collection, slug)` is what answers that — a file in
+  that language's folder, not hidden — and `entryUrl()` is one of its URLs on its own, with the
+  language segment `prefixDefaultLocale` asks for. An entry that exists in one language draws no
+  switcher at all. `isLive()` takes an optional third argument, the language, for a caller that
+  holds an entry rather than a file.
+
+- A top-level `_locales` that the entry's files contradict — a hand edit or a bad merge naming
+  fewer languages than the entry has files in, or a code the site does not declare — is
+  reported instead of being read two ways. The files win: a language with a file is offered in
+  it, the entry list no longer strikes it through, and the entry says what is wrong above its
+  form. `GET /admin/api/entries/:collection/:slug` carries the messages in `offerProblems`, and
+  Create from English refuses citing them rather than "this entry is not offered in de".
+
 - Machine translation, behind a `translate(from, to)` hook. **Translate what's empty** in the
   second language's header fills every field that language has nothing in yet, a **Translate**
   button beside a field fills that one, and **Create and pre-fill** does both in one go from

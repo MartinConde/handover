@@ -107,3 +107,12 @@ test('filterLive drops entries with a _status', () => {
   const hidden = { id: 'en/b', data: { _status: 'hidden', title: 'b' } };
   expect(filterLive('default', [live, hidden])).toEqual([live]);
 });
+
+test('a locale the entry is not offered in is not live in it', () => {
+  const both = { title: 'x' };
+  const english = { _locales: ['en'], title: 'x' };
+  expect(isLive('default', both, 'de')).toBe(true);
+  expect(isLive('default', english, 'de')).toBe(false);
+  expect(isLive('default', english, 'en')).toBe(true);
+  expect(isLive('default', { _status: 'hidden', _locales: ['en', 'de'] }, 'de')).toBe(false);
+});

@@ -21,6 +21,7 @@
       "import": "./dist/schema.js"
     },
     "./Blocks.astro": "./components/Blocks.astro",
+    "./LocaleSwitcher.astro": "./components/LocaleSwitcher.astro",
     "./Markdown.astro": "./components/Markdown.astro"
   },
   "scripts": {

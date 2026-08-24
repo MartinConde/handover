@@ -352,6 +352,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .lock-banner .btn-link { color: inherit; margin-left: auto; }
 .lock-banner.is-lost { background: var(--warn-soft); color: var(--warn-ink); }
 .lock-banner.is-drift { background: var(--danger-soft); color: var(--danger-ink); }
+.lock-banner.is-offer { background: var(--warn-soft); color: var(--warn-ink); }
 .form-placeholder { min-height: 160px; border: 1.5px dashed var(--border); border-radius: var(--radius-lg); background: var(--surface-2); display: grid; place-items: center; color: var(--ink-3); font-size: var(--text-sm); text-align: center; padding: var(--s-6); }
 .is-narrow .entry-header { padding: var(--s-4) var(--s-5) 0; }
 .is-narrow .entry-header .actions .btn-preview, .is-narrow .entry-header .actions .btn-sbs, .is-narrow .tabs { display: none; }

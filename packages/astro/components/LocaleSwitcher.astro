@@ -1,0 +1,29 @@
+---
+import type { LocaleLink } from '@handover/core';
+
+interface Props {
+  /** What `getEntryLocales()` answered: the languages this entry can be read in, and where. */
+  locales: LocaleLink[];
+  /** The language of the page being rendered. */
+  current: string;
+}
+
+const { locales, current } = Astro.props;
+// One language is not a switcher: an entry that exists in one, and a site that declares one,
+// both draw nothing rather than a button that goes where the reader already is.
+const many = locales.length > 1;
+---
+
+{many && (
+  <nav aria-label="Language">
+    <ul>
+      {locales.map(({ locale, url }) => (
+        <li>
+          {locale === current
+            ? <span aria-current="true">{locale.toUpperCase()}</span>
+            : <a href={url} hreflang={locale}>{locale.toUpperCase()}</a>}
+        </li>
+      ))}
+    </ul>
+  </nav>
+)}

@@ -5,6 +5,7 @@ import { expect, test } from 'vitest';
 import {
   applyDrift,
   driftReport,
+  getEntryLocales,
   markTranslation,
   mergeEntry,
   parseEntry,
@@ -1146,4 +1147,49 @@ test('the last machine-written path typed over takes the key out of the file', (
   const de = { _version: 1, _machine: ['title'], title: 'Mühlenhaus' };
 
   expect(mergeEntry('default', de, { title: 'Mühle' }, listing)).not.toHaveProperty('_machine');
+});
+
+// The switcher's own read: which languages an entry can be followed to from the page it is on.
+const site = {
+  i18n: { locales: ['en', 'de', 'fr'], defaultLocale: 'en' },
+  collections: { listings: { route: '/listings/[slug]' }, samples: {} },
+};
+const files: Record<string, unknown> = {
+  'en/coast': { title: 'Coast' },
+  'de/coast': { title: 'Küste' },
+  'en/hidden': { _status: 'hidden', title: 'Hidden' },
+  'de/hidden': { title: 'Versteckt' },
+  'en/offer': { _locales: ['en'], title: 'Offer' },
+  'de/offer': { _locales: ['en'], title: 'Angebot' },
+};
+const switcherSource = staticSource<{ listings: unknown; samples: unknown }>('default', {
+  getEntry: async (_c, id) => (files[id] ? { id, data: files[id] } : undefined),
+  getCollection: async () => [],
+});
+
+test('a language the entry has no file in is not offered by the switcher', async () => {
+  expect(await getEntryLocales('default', switcherSource, site, 'listings', 'coast')).toEqual([
+    { locale: 'en', url: '/listings/coast' },
+    { locale: 'de', url: '/de/listings/coast' },
+  ]);
+});
+
+test('a hidden file is skipped', async () => {
+  expect(await getEntryLocales('default', switcherSource, site, 'listings', 'hidden')).toEqual([
+    { locale: 'de', url: '/de/listings/hidden' },
+  ]);
+});
+
+// The files are the fact: turning a language off writes no file for it, so a mark that says
+// otherwise while the file is there is a contradiction for the CMS to report, not a page to
+// hide. Reading it here would answer differently depending on which file the bad edit landed in.
+test('a _locales the files contradict does not take a page out of the switcher', async () => {
+  expect(await getEntryLocales('default', switcherSource, site, 'listings', 'offer')).toEqual([
+    { locale: 'en', url: '/listings/offer' },
+    { locale: 'de', url: '/de/listings/offer' },
+  ]);
+});
+
+test('a collection nothing renders has nowhere to link', async () => {
+  expect(await getEntryLocales('default', switcherSource, site, 'samples', 'coast')).toEqual([]);
 });

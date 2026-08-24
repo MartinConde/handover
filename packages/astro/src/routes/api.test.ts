@@ -249,6 +249,7 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
     locales: ['en'],
     defaultLocale: 'en',
     offered: ['en'],
+    offerProblems: [],
     drift: [],
     stale: [],
     translator: true,
@@ -1071,6 +1072,43 @@ test('turning off a language the entry has a file in is refused', async () => {
 
   expect(res.status).toBe(409);
   expect(setEntryLocales).not.toHaveBeenCalled();
+});
+
+// A top-level `_locales` is written into every file the entry has, so one that names fewer
+// languages than the entry has files is a hand edit or a bad merge: the list struck the
+// language through while the editor let somebody type in it, and neither said why.
+test('a _locales the files contradict is reported, and the file wins', async () => {
+  locales = ['en', 'de'];
+  files['src/content/pages/en/home.yaml'] = home.en.replace(
+    '_version: 1',
+    '_version: 1\n_locales:\n  - "en"',
+  );
+  files['src/content/pages/de/home.yaml'] = home.de;
+
+  const body = (await (await GET(ctx('entries/pages/home'))).json()) as {
+    offered: unknown;
+    offerProblems: unknown;
+  };
+
+  expect(body.offered).toEqual(['en', 'de']);
+  expect(body.offerProblems).toEqual([
+    '_locales says this entry is not offered in de, and it has a file in de',
+  ]);
+});
+
+test('creating a language is refused over a _locales naming one the site does not declare', async () => {
+  locales = ['en', 'de'];
+  files['src/content/pages/en/home.yaml'] = home.en.replace(
+    '_version: 1',
+    '_version: 1\n_locales:\n  - "en"\n  - "fr"',
+  );
+  createDraft.mockClear();
+
+  const res = await POST(post('drafts/pages/home/de', ''));
+
+  expect(res.status).toBe(409);
+  expect(await res.text()).toContain('"fr"');
+  expect(createDraft).not.toHaveBeenCalled();
 });
 
 test('an entry says which languages it is offered in', async () => {

@@ -133,3 +133,35 @@ export const indexHasPath = (index: ContentIndex, path: string): boolean =>
   Object.values(index).some((entries) =>
     entries.some((e) => Object.values(e.locales).some((l) => l.path === path)),
   );
+
+/**
+ * The languages an entry is offered in, and what its own `_locales` gets wrong. The mark is
+ * written into every file the entry has, so a language with a file that the mark leaves out is
+ * a hand edit or a bad merge — the same contradiction a block's `_locales` has as drift, one
+ * level up. **The file wins**: the entry list and the editor read one answer rather than two,
+ * and the disagreement is reported instead of being drawn twice.
+ *
+ * A code the site does not declare is offered nowhere, so it is named here rather than leaving
+ * an empty `offered` for the routes to refuse over.
+ */
+export function entryOffer(
+  _siteId: string,
+  locales: string[],
+  marked: unknown,
+  written: string[],
+): { offered: string[]; problems: string[] } {
+  if (!Array.isArray(marked)) return { offered: locales, problems: [] };
+  const problems = marked
+    .filter((locale) => !locales.includes(locale as string))
+    .map(
+      (locale) =>
+        `_locales names ${JSON.stringify(locale)}, which is not one of the languages this site declares: ${locales.join(', ')}`,
+    );
+  const offered = locales.filter((locale) => marked.includes(locale) || written.includes(locale));
+  for (const locale of offered)
+    if (!marked.includes(locale))
+      problems.push(
+        `_locales says this entry is not offered in ${locale}, and it has a file in ${locale}`,
+      );
+  return { offered, problems };
+}

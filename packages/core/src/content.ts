@@ -1,6 +1,7 @@
 import { Document, isMap, isScalar, isSeq, parse, parseDocument, visit } from 'yaml';
 import { blobSha } from './git.js';
-import { checkReserved, RESERVED_KEYS } from './reserved.js';
+import { entryUrl, type I18nRouting } from './names.js';
+import { checkReserved, isLive, RESERVED_KEYS } from './reserved.js';
 import type { Field, Form, Translation } from './schema.js';
 import { keptMachine } from './translate.js';
 
@@ -39,6 +40,51 @@ export function staticSource<C extends Record<string, unknown>>(
         e.id.startsWith(`${locale}/`),
       ) as ContentEntry<C[typeof collection]>[],
   };
+}
+
+/** One language an entry can be read in, and where. */
+export interface LocaleLink {
+  locale: string;
+  url: string;
+}
+
+/** As much of `cms.config.ts` as a link needs: the languages and the collections' routes. */
+export interface LocaleSite {
+  i18n: I18nRouting;
+  collections: Record<string, { route?: string }>;
+}
+
+/**
+ * The languages one entry can be followed to: it has a file in that language's folder and that
+ * file is live. The switcher on the site draws these.
+ *
+ * **The files are the fact.** A language the entry is not offered in has no file — that is how
+ * turning one off is written — so having the file is the whole question, and the top-level
+ * `_locales` is the CMS's record of the decision rather than the site's arbiter. Reading the
+ * mark here would answer differently depending on which of the entry's files a bad edit landed
+ * in; `entryOffer` reports that contradiction instead, where somebody can fix it.
+ *
+ * Everything it reads is in the content collections, so it costs the build no lookup of its
+ * own — and a collection nothing renders has nowhere to send anyone.
+ */
+export async function getEntryLocales<C extends Record<string, unknown>>(
+  siteId: string,
+  source: ContentSource<C>,
+  site: LocaleSite,
+  collection: keyof C & string,
+  slug: string,
+): Promise<LocaleLink[]> {
+  const route = site.collections[collection]?.route;
+  if (!route) return [];
+  const found = await Promise.all(
+    site.i18n.locales.map(async (locale) => {
+      const entry = await source.getEntry(collection, `${locale}/${slug}`);
+      if (!entry || !isLive(siteId, entry.data)) return undefined;
+      const url = entryUrl(siteId, site.i18n, route, slug, locale);
+      return url ? { locale, url } : undefined;
+    }),
+  );
+  return found.filter((l) => l !== undefined);
 }
 
 export function parseEntry(_siteId: string, contents: string): unknown {

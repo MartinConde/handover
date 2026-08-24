@@ -177,3 +177,29 @@ export function checkI18n(_siteId: string, i18n: I18nConfig | undefined): string
     );
   return errors;
 }
+
+/** What a URL is built from: the same block, with the shapes `checkI18n` has already accepted. */
+export interface I18nRouting {
+  locales: string[];
+  defaultLocale: string;
+  prefixDefaultLocale?: boolean;
+}
+
+/**
+ * Where one entry is served: the collection's `route` with `[slug]` filled in, under the
+ * language's own segment. The default language has none unless the site asked for one, which
+ * is Astro's `prefixDefaultLocale`. The preview path is this path behind its own prefix, so
+ * the segment is settled here rather than in each site's routes. `undefined` for a collection
+ * with no route: nothing renders it, so there is nowhere to link.
+ */
+export function entryUrl(
+  _siteId: string,
+  i18n: I18nRouting,
+  route: string | undefined,
+  slug: string,
+  locale: string,
+): string | undefined {
+  if (!route) return undefined;
+  const prefix = locale === i18n.defaultLocale && !i18n.prefixDefaultLocale ? '' : `/${locale}`;
+  return prefix + route.replace('[slug]', slug);
+}

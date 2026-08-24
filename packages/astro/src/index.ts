@@ -28,10 +28,11 @@ export type {
   AstroContent,
   ContentEntry,
   ContentSource,
+  LocaleLink,
   RichtextTier,
   Translate,
 } from '@handover/core';
-export { filterLive, isLive, staticSource } from '@handover/core';
+export { entryUrl, filterLive, getEntryLocales, isLive, staticSource } from '@handover/core';
 
 // Markdown, validated against the tier's construct list; the first offending construct
 // is the message so the editor can say what was dropped.
