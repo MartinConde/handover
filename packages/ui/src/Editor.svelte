@@ -52,6 +52,8 @@ let {
     addresses?: Record<string, string>;
     /** The collection's own route, which is what an address is a segment of. */
     route?: string;
+    /** The page above it, where a language that loses its file sends its readers. */
+    index?: string;
     /** Whether the default language's URLs carry its segment. */
     prefixDefaultLocale?: boolean;
   };
@@ -107,6 +109,7 @@ async function ask(url: string, init: RequestInit = {}) {
   const res = await fetch(url, { method: 'POST', ...init });
   busy = false;
   if (res.ok) onchanged();
+  return res.ok;
 }
 
 const createFrom = (of: string) => ask(`/admin/api/drafts/${collection}/${slug}/${of}`);
@@ -225,6 +228,20 @@ const routing = $derived({
 const url = $derived(entryUrl('default', routing, entry.route, address || slug, locale) ?? '');
 // The part in front of the address, so what is being typed reads as the URL it will be.
 const before = $derived(entryUrl('default', routing, entry.route, '', locale) ?? '');
+
+// Turning a language off commits, and the screen is read again afterwards: whatever is in the
+// other form goes into its row first, the way an address change stores everything before it
+// writes. The column's own draft is not flushed — it goes with the file.
+async function turnOff(): Promise<boolean> {
+  if (json !== saved) await autosave();
+  return shown !== undefined && (await offer(shown, false));
+}
+
+// What the second column's Turn-off dialog names: the URL that language serves this entry at,
+// and where its readers go afterwards — nothing when the collection has no page above it.
+const localeUrl = (of: string) =>
+  entryUrl('default', routing, entry.route, entry.addresses?.[of] || slug, of) ?? undefined;
+const localeIndex = (of: string) => entryUrl('default', routing, entry.index, '', of) ?? undefined;
 
 function editAddress() {
   typed = address;
@@ -422,8 +439,11 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             source={entry.sourceLocale}
             stale={entry.stale.includes(shown)}
             translator={entry.translator}
+            url={localeUrl(shown)}
+            redirect={localeIndex(shown)}
             onsaved={(pending) => (translated = pending)}
             onclose={side ? () => leaving(() => (side = false)) : undefined}
+            onturnoff={turnOff}
           />
         {/key}
       {/if}

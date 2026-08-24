@@ -665,6 +665,34 @@ test('turning a language off sends the ones the entry keeps', async () => {
   vi.unstubAllGlobals();
 });
 
+// The other way to turn a language off: on one that has a file, which is a delete of that file.
+// It is asked for where the column is — beside its close button — and through the dialog a
+// delete gets, naming the URL that goes and where its readers are sent.
+test('a language with a file is turned off from its own column, through a dialog', async () => {
+  const fetchMock = posted();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({
+    entry: { ...bilingual, route: '/listings/[slug]', index: '/listings' },
+  });
+
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  $<HTMLButtonElement>(root, '.pane-head button.btn-off')?.click();
+  flushSync();
+  const dialog = $(root, '.dialog')?.textContent ?? '';
+  expect(dialog).toContain('/de/listings/seaview-cottage');
+  expect(dialog).toContain('/de/listings');
+  $<HTMLButtonElement>(root, '.dialog button.btn-danger')?.click();
+  await tick();
+
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/entries/listings/seaview-cottage/locales', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ locales: ['en'] }),
+  });
+  vi.unstubAllGlobals();
+});
+
 test('a language turned off is struck through and offers no way to write it', () => {
   const root = show({ entry: { ...missing, offered: ['en'] } });
 

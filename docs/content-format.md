@@ -68,7 +68,7 @@ Keys starting with `_` belong to Handover. Name your own fields anything else â€
 | `_id` | block, array item | Eight characters from `0-9a-z`, unique in the file, the same across locales. |
 | `_label` | block | An editor-given name, shown in the block list instead of the type. |
 | `_ref` | block | A path such as `globals/cta-newsletter` the block's content will come from. Reserved now; `<Blocks />` skips the block until the globals collection exists. |
-| `_locales` | top of file, block, array item | The locales this exists in, e.g. `["de"]`: on a block, the files it is written to; at the top of a file, the languages the entry is offered in ([Translating](translating.md#a-language-with-no-file-yet)). Absent means all. Never empty. |
+| `_locales` | top of file, block, array item | The locales this exists in, e.g. `["de"]`: on a block, the files it is written to; at the top of a file, the languages the entry is offered in ([Translating](translating.md#turning-a-language-off)). Absent means all. Never empty. |
 
 Reading a file checks these: a `_status` other than `hidden`, a malformed `_id`, an empty
 `_locales` or a top-level key on a block fails with an error naming the path, such as
@@ -131,10 +131,12 @@ rules:
     createdAt: "2026-08-20T10:14:00Z"
 ```
 
-Renaming twice keeps the oldest URL pointing at the newest name; renaming back removes
-the rule. Deleting an entry removes every locale file in one commit and, when the editor
-chose where visitors should go, appends a `reason: "deleted"` rule with no `entry`. A
-collection without a `route` has no URL and gets no rule.
+Renaming twice keeps the oldest URL pointing at the newest name; renaming back removes the
+rule. Deleting an entry removes every locale file in one commit and, when the editor chose
+where visitors should go, appends a `reason: "deleted"` rule with no `entry`; turning off a
+language that has a file removes that one file the same way, with the same rule for the URL
+it served ([Translating](translating.md#turning-a-language-off)). A collection without a
+`route` has no URL and gets no rule.
 
 **One rule per language whose URL moved**, under that language's own segment; a delete's
 target is served under it too, so the German page goes to the German index. On a

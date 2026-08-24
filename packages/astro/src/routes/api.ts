@@ -11,6 +11,7 @@ import {
   DraftConflictError,
   deeplTranslate,
   deleteEntry,
+  deleteLocales,
   discardDraft,
   driftReport,
   entryAddress,
@@ -28,6 +29,7 @@ import {
   RefMovedError,
   RepoUnreachableError,
   recordDelete,
+  recordOffer,
   recordRename,
   renameEntry,
   resolveDrift,
@@ -237,6 +239,11 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
     // Whether anything can machine-translate: with nothing configured the buttons that offer
     // it are not drawn, the same rule the locale controls follow on a one-language site.
     translator: translator() !== undefined,
+    // Where the site serves this entry and what stands above it: what the editor builds the
+    // address row from, and what it names when a language that has a file is turned off.
+    route: collected.route,
+    index: collected.index,
+    prefixDefaultLocale: config.i18n.prefixDefaultLocale ?? false,
     // The address each language serves this entry at, empty where it serves it under the file
     // name. Absent on a collection without localized slugs, which draws no address row at all.
     ...(collected.localizedSlugs
@@ -248,8 +255,6 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
               (file as { slug?: unknown })?.slug ?? '',
             ]),
           ),
-          route: collected.route,
-          prefixDefaultLocale: config.i18n.prefixDefaultLocale ?? false,
         }
       : {}),
   });
@@ -414,32 +419,81 @@ async function machineTranslate(
 }
 
 /**
- * The languages this entry is offered in. Turning one off writes no file for it: the mark goes
- * into the files the entry does have, so the entry list and the site read the decision out of
- * the repository. A language that already has a file cannot be turned off — that would be a
- * delete, and a delete asks about redirects.
+ * The languages this entry is offered in. The mark goes into the files the entry does have, so
+ * the entry list and the site read the decision out of the repository rather than out of D1.
+ *
+ * Turning off a language that has a file is a delete of that one file, and a delete commits:
+ * the file goes, the mark goes into the files that stay, and the URL that language served sends
+ * its readers to the collection's index, all in one commit. Turning off the last language an
+ * entry has a file in is refused — that is a delete of the entry, and Delete is where the
+ * redirect question is asked for all of it at once.
  */
 async function offering(collection: string, slug: string, request: Request): Promise<Response> {
-  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  const collected = config.collections[collection];
+  if (!collected) return new Response('Not found', { status: 404 });
   const body = (await request.json().catch(() => undefined)) as { locales?: unknown } | undefined;
   const wanted = Array.isArray(body?.locales) ? body.locales : [];
   const offered = config.i18n.locales.filter((locale) => wanted.includes(locale));
   const written = Object.keys(await entryLocales(collection, slug, config.i18n.locales));
   if (!written.length) return new Response('Not found', { status: 404 });
-  const has = written.filter((locale) => !offered.includes(locale));
-  if (has.length)
+  const going = written.filter((locale) => !offered.includes(locale));
+  const staying = written.filter((locale) => offered.includes(locale));
+  const git = gitClient();
+  const database = db();
+  const files = going.length ? await entryFiles(git, collection, slug) : [];
+  // What the entry is left with. A language whose file is only a draft cannot stand in for a
+  // published one: discarding it afterwards would leave the entry with nothing, and this commit
+  // has already taken the published file away.
+  const published = files.filter((f) => f.file).map((f) => f.locale);
+  const left = published.length ? published.filter((l) => !going.includes(l)) : staying;
+  if (going.length && !left.length)
     return new Response(
-      `${has.join(', ')} already has a file for this entry: delete it before turning the language off`,
+      staying.length
+        ? `Turning ${going.join(', ')} off would leave this entry with no published file: publish ${staying.join(', ')} first, or Delete the entry`
+        : `Turning ${going.join(', ')} off would leave this entry with no file in any language: Delete the entry instead, which asks where its readers should go`,
       { status: 409 },
     );
-  await setEntryLocales(
-    'default',
-    db(),
-    gitClient(),
-    written.map((locale) => entryPath(collection, slug, locale)),
-    offered,
-    config.i18n.locales,
-  );
+  const pathsOf = (locales: string[]) => locales.map((l) => entryPath(collection, slug, l));
+  if (published.some((locale) => going.includes(locale))) {
+    const { commit_sha, kept } = await deleteLocales(
+      'default',
+      git,
+      locationOf(collection),
+      slug,
+      going,
+      offered,
+      collected.index,
+    );
+    for (const { locale, path, file } of files) {
+      if (!going.includes(locale)) continue;
+      // A language that had a draft as well as a file loses both: the row would otherwise
+      // publish the file the commit just removed.
+      if (file) await recordDelete('default', database, path, commit_sha);
+      else await discardDraft('default', database, path);
+    }
+    const offer = { offered, locales: config.i18n.locales, gone: going };
+    for (const file of kept)
+      await recordOffer('default', database, file.path, file.contents, offer, commit_sha);
+    // A language that stays and has no file of its own yet — one Create from English drafted and
+    // never published — is not in the commit, so its draft is where the mark goes.
+    const drafted = staying.filter((l) => !files.some((f) => f.locale === l && f.file));
+    if (drafted.length)
+      await setEntryLocales(
+        'default',
+        database,
+        git,
+        pathsOf(drafted),
+        offered,
+        config.i18n.locales,
+      );
+    return Response.json({ commit_sha });
+  }
+  // Nothing that goes is in the repository, so there is nothing to commit and no URL anybody
+  // could have followed: what Create from English left behind is thrown away, and the mark is
+  // drafted the way it is for a language that never had a file.
+  for (const { locale, path } of files)
+    if (going.includes(locale)) await discardDraft('default', database, path);
+  await setEntryLocales('default', database, git, pathsOf(staying), offered, config.i18n.locales);
   return Response.json({});
 }
 

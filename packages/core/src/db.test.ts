@@ -13,6 +13,7 @@ import {
   pendingDrafts,
   publishDrafts,
   recordDelete,
+  recordOffer,
   recordRename,
   resolveDrift,
   saveDraft,
@@ -777,6 +778,45 @@ test('turning every language back on takes the mark out again', async () => {
   await setEntryLocales('default', db, repo, [PAGE_EN], ['en', 'de'], ['en', 'de']);
 
   expect((await only(db))?.contents).toBe(page('Home', 'Move to the coast', 'Ready to move?'));
+});
+
+// The other half of turning a language off: the commit that removed one language's file also
+// wrote the mark into the files that stay, and somebody may have had one of them open. The
+// draft keeps their words, takes the mark, and is rebased on the commit — without that it would
+// publish the language back on, over a base that has moved.
+test('a file rewritten by a commit carries the mark into the draft somebody had open', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+  await saveDraft('default', db, repo, PAGE_EN, {
+    title: 'Home again',
+    blocks: [
+      { _type: 'hero', _id: 'k3nf9a2p', heading: 'Move to the coast' },
+      { _type: 'cta', _id: 'q1w2e3r4', heading: 'Ready to move?' },
+    ],
+  });
+  const committed = page('Home', 'Move to the coast', 'Ready to move?').replace(
+    '_version: 1\n',
+    '_version: 1\n_locales:\n  - "en"\n',
+  );
+
+  await recordOffer(
+    'default',
+    db,
+    PAGE_EN,
+    committed,
+    { offered: ['en'], locales: ['en', 'de'], gone: ['de'] },
+    'commit-Z',
+  );
+
+  const row = await only(db);
+  expect(row?.contents).toBe(
+    page('Home again', 'Move to the coast', 'Ready to move?').replace(
+      '_version: 1\n',
+      '_version: 1\n_locales:\n  - "en"\n',
+    ),
+  );
+  expect(row?.baseSha).toBe('commit-Z');
+  expect(row?.baseBlob).toBe(await blobSha(committed));
 });
 
 // A machine's answers are their own write: `saveDraft` carries what a form sent back, and a

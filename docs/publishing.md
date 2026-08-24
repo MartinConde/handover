@@ -126,7 +126,9 @@ rather than change them ([Content format](content-format.md#renaming-and-deletin
 A rename carries the entry's unpublished edits over to the new path; a delete throws them
 away. Both need the entry to exist in the repository: renaming one that has never been
 published is refused with "publish this entry before renaming it", and deleting one just
-drops the draft, with no commit and no redirect.
+drops the draft, with no commit and no redirect. **Turning off a language that has a file**
+is the third, for the same reason: it removes that one file
+([Translating](translating.md#turning-a-language-off)).
 
 **Changing the web address** of an entry in a collection with
 [`localizedSlugs`](configuration.md#localizedslugs) is a draft like an edit, not a commit like
@@ -197,7 +199,7 @@ drawer's **Discard** does with a file a publish was refused over. `404` if the c
 is not configured.
 
 ```
-GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, translations, pending, problems, titleField, locales, defaultLocale, sourceLocale, offered, drift, stale, translator }
+GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, translations, pending, problems, titleField, locales, defaultLocale, sourceLocale, offered, drift, stale, translator, route, index, prefixDefaultLocale }
 ```
 
 `data` is the draft when there is one, otherwise the file. `pending` is the entry's languages
@@ -218,7 +220,10 @@ languages disagree about, `[{ "path": "blocks[_id=z9y8x7w6]", "type": "quote", "
 languages whose translation was made from a source language that has moved on since
 ([Translating](translating.md#when-the-source-language-moves-on)). Both are empty on a site with
 one language, which reads nothing for them. `translator` is whether the site has anything to
-machine-translate with: false, and none of the buttons that offer it is drawn.
+machine-translate with: false, and none of the buttons that offer it is drawn. `route`, `index`
+and `prefixDefaultLocale` are where the site serves the collection, which is what the editor
+builds a URL out of: the address row, and the URL it names when a language is turned off. A
+collection with no `route` has neither, and both are absent from the response.
 
 ```
 GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales" }], "locales": ["en", "de"] }
@@ -247,8 +252,19 @@ POST /admin/api/entries/:collection/:slug/locales  { "locales": ["en"] }  →  {
 
 The languages the entry is offered in, written as `_locales` into every file it has — or taken
 out again when they are all of them. No file is written for a language left out, which is the
-point of it. `409` naming any language that already has a file, since turning that one off would
-be a delete; `404` when the entry has no file at all.
+point of it.
+
+Leaving out a language that **has** a file deletes that file, so this one commits where the rest
+of the editor drafts: one commit removes it, writes the mark into the files that stay and appends
+the redirect its URL owes to the collection's `index` under that language's own segment — none
+where the collection has no `index`. An `_i18n` naming a language that went is dropped from the
+files that carry it, and unpublished changes to a language that goes are dropped with its file.
+A language whose file is only a draft is not in the repository, so it makes no commit and no
+redirect: the draft is thrown away and the mark is drafted like any other.
+
+`409` when the entry would be left with no published file — that is deleting the entry, which is
+what `DELETE` is for, and a language whose file is only a draft does not stand in for one that is
+published; `404` when the entry has no file at all.
 
 ```
 POST /admin/api/entries/:collection/:slug/address/:locale   { "address": "…" }  →  {}

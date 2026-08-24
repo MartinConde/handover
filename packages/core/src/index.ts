@@ -34,6 +34,7 @@ export {
   pendingDrafts,
   publishDrafts,
   recordDelete,
+  recordOffer,
   recordRename,
   resolveDrift,
   SCHEMA_VERSION,
@@ -51,6 +52,7 @@ export type { EntryLocation, RedirectRule } from './lifecycle.js';
 export {
   appendRedirects,
   deleteEntry,
+  deleteLocales,
   duplicateEntry,
   redirectRule,
   redirectsText,

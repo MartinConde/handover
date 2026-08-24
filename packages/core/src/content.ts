@@ -223,6 +223,31 @@ export function writtenEntry(
   return { _version: FORMAT_VERSION, ...ordered(fields, (entry ?? {}) as Record<string, unknown>) };
 }
 
+/**
+ * One file of an entry whose languages changed: the ones it is still offered in written into it —
+ * the key taken out again when they are all of them — and an `_i18n` made against a language
+ * that has gone dropped with them. A mark naming a file the entry no longer has can never be
+ * compared against anything, so it would stand as a warning nobody could clear.
+ */
+export function offeredEntry(
+  siteId: string,
+  entry: unknown,
+  offer: { offered: string[]; locales: string[]; gone?: string[] },
+): Record<string, unknown> {
+  const written = writtenEntry(siteId, entry);
+  const kept = offer.locales.filter((locale) => offer.offered.includes(locale));
+  if (kept.length === offer.locales.length) delete written._locales;
+  else written._locales = kept;
+  const mark = written._i18n;
+  if (
+    isObject(mark) &&
+    typeof mark.sourceLocale === 'string' &&
+    offer.gone?.includes(mark.sourceLocale)
+  )
+    delete written._i18n;
+  return written;
+}
+
 // The form sends back every key it was given, a key the schema no longer declares included:
 // a rename in `schemas.ts` before the migration is written must not lose the value on the
 // first save. The `_` keys belong to the file, so they are read back off the entry as it

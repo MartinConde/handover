@@ -1,4 +1,4 @@
-import { parseEntry, stringifyEntry, writtenEntry } from './content.js';
+import { offeredEntry, parseEntry, stringifyEntry, writtenEntry } from './content.js';
 import type { ContentFile } from './entries.js';
 import type { GitClient, PublishFile } from './git.js';
 import { entryAddress, entryUrl, type I18nRouting } from './names.js';
@@ -167,6 +167,64 @@ export async function deleteEntry(
       });
   if (rules.length) changes.push(await redirectsFile(siteId, git, rules, deps.now ?? Date.now));
   return git.publish(changes, { base_sha, message: `Delete ${loc.collection}/${name}` });
+}
+
+/**
+ * One language's file removed from an entry that keeps its others: not a delete of the entry but
+ * of one file of it, so the languages it is still offered in are written into the files that
+ * stay and each language that went sends its readers to the collection's index under its own
+ * segment. One commit, the way a delete makes one.
+ *
+ * The caller has already refused the last language an entry has a file in: with nothing left
+ * this would be a delete of the entry, and that asks where its readers go for all of it at once.
+ */
+export async function deleteLocales(
+  siteId: string,
+  git: GitClient,
+  loc: EntryLocation,
+  name: string,
+  going: string[],
+  offered: string[],
+  redirectTo: string | undefined,
+  deps: { now?: () => number } = {},
+): Promise<{ commit_sha: string; kept: ContentFile[] }> {
+  const [base_sha, files] = await Promise.all([git.getHead(), localeFiles(git, loc, name)]);
+  const gone = files.filter((file) => going.includes(file.locale));
+  const kept = files
+    .filter((file) => !going.includes(file.locale))
+    .map(({ locale, contents }) => ({
+      path: entryPath(loc.collection, locale, name),
+      contents: stringifyEntry(
+        siteId,
+        offeredEntry(siteId, parseEntry(siteId, contents), {
+          offered,
+          locales: loc.i18n.locales,
+          gone: going,
+        }),
+      ),
+    }));
+  const changes: PublishFile[] = [
+    ...gone.map(({ locale }) => ({
+      path: entryPath(loc.collection, locale, name),
+      contents: null,
+    })),
+    ...kept,
+  ];
+  const rules = !redirectTo
+    ? []
+    : gone.flatMap((file) => {
+        const was = urlOf(siteId, loc, file, name);
+        const to = entryUrl(siteId, loc.i18n, redirectTo, '', file.locale);
+        return was && to && was !== to
+          ? [{ from: was, to, status: 301 as const, reason: 'deleted' as const }]
+          : [];
+      });
+  if (rules.length) changes.push(await redirectsFile(siteId, git, rules, deps.now ?? Date.now));
+  const { commit_sha } = await git.publish(changes, {
+    base_sha,
+    message: `Turn off ${going.join(', ')} for ${loc.collection}/${name}`,
+  });
+  return { commit_sha, kept };
 }
 
 // The `_redirects` format Workers Static Assets serves: one `/from /to status` per line.

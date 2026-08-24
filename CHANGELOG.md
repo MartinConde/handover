@@ -4,6 +4,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **A language that already has a file can now be turned off.** The second column's header offers
+  *Turn German off*, and confirming it commits: the German file leaves the repository, the
+  languages the entry keeps go into the files that stay, and the URL German served redirects to
+  the collection's `index` under its own language segment — none where the collection has no
+  `index`, which the dialog says before you press. Turning off the last language an entry has a
+  published file in is refused with `409` — that is deleting the entry, which is what `DELETE` is
+  for, and a language whose file is only a draft does not stand in for a published one. An
+  `_i18n` naming a language that went is dropped from the files that carry it, and a language
+  whose file is only an unpublished draft makes no commit — the draft is thrown away. The entry
+  response gained `route`, `index` and `prefixDefaultLocale` for the URLs the dialog names.
+
 - **An entry with no file in the site's default language can now be opened.** The language an
   entry's structure is edited in — and that its translations are made from — is the entry's own
   rather than the site's: the default language where the entry has a file in it, and otherwise

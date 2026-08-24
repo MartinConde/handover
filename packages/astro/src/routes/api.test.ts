@@ -24,6 +24,7 @@ const {
   createDraft,
   recordRename,
   recordDelete,
+  recordOffer,
   discardDraft,
   overlayRows,
   pendingDrafts,
@@ -106,6 +107,7 @@ const {
     ),
     recordRename: vi.fn(async () => {}),
     recordDelete: vi.fn(async () => {}),
+    recordOffer: vi.fn(async () => {}),
     discardDraft: vi.fn(async () => {}),
     // What the entry list lays over the index: the pending drafts plus what a commit left.
     overlayRows: vi.fn(async () => [] as { path: string; contents: string }[]),
@@ -205,6 +207,7 @@ vi.mock('@handover/core', async (original) => ({
   createDraft,
   recordRename,
   recordDelete,
+  recordOffer,
   discardDraft,
   overlayRows,
   pendingDrafts,
@@ -281,6 +284,11 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
     drift: [],
     stale: [],
     translator: true,
+    // Where the site serves it, which is what the editor builds a URL from — the address row,
+    // and the URL it names when a language that has a file is turned off.
+    route: '/listings/[slug]',
+    index: '/listings',
+    prefixDefaultLocale: false,
   });
 });
 
@@ -1115,14 +1123,148 @@ test('turning a language off writes the ones it keeps into every file the entry 
   );
 });
 
-test('turning off a language the entry has a file in is refused', async () => {
+// Turning off a language that has a file is a delete of that one file: it goes in a commit of
+// its own, the languages the entry keeps go into the files that stay, and the URL that language
+// served sends its readers to the collection's index under that language's segment — the
+// address that language answered to, not the file name every language shares (F5's shape).
+const bilingualPost = () => {
+  locales = ['en', 'de'];
+  files['src/content/posts/en/taken.yaml'] = '_version: 1\ntitle: "Taken"\n';
+  files['src/content/posts/de/taken.yaml'] = '_version: 1\ntitle: "Belegt"\nslug: "belegt"\n';
+};
+
+test('turning off a language that has a file removes it in one commit, with its redirect', async () => {
+  bilingualPost();
+  publish.mockClear();
+  recordDelete.mockClear();
+
+  const res = await POST(post('entries/posts/taken/locales', JSON.stringify({ locales: ['en'] })));
+
+  expect(res.status).toBe(200);
+  const [written] = (publish.mock.calls[0] ?? []) as unknown as [PublishFile[]];
+  expect(written.map((f) => f.path)).toEqual([
+    'src/content/posts/de/taken.yaml',
+    'src/content/posts/en/taken.yaml',
+    'src/content/redirects.yaml',
+  ]);
+  expect(written[0]?.contents).toBe(null);
+  expect(written[1]?.contents).toContain('_locales:\n  - "en"');
+  expect(written[2]?.contents).toContain('from: "/de/blog/belegt"\n    to: "/de/blog"');
+  // The list is the build's index and the build has not run yet, so something has to say so.
+  expect(recordDelete).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    'src/content/posts/de/taken.yaml',
+    'def456',
+  );
+});
+
+// The one refusal: with no other file left this is a delete of the entry, and a delete asks the
+// redirect question for the whole entry rather than for one of its languages.
+test('turning off the last language an entry has a file in is refused', async () => {
+  locales = ['en', 'de'];
+  files['src/content/posts/en/taken.yaml'] = '_version: 1\ntitle: "Taken"\n';
+  publish.mockClear();
+  setEntryLocales.mockClear();
+
+  const res = await POST(post('entries/posts/taken/locales', JSON.stringify({ locales: ['de'] })));
+
+  expect(res.status).toBe(409);
+  expect(await res.text()).toContain('Delete');
+  expect(publish).not.toHaveBeenCalled();
+  expect(setEntryLocales).not.toHaveBeenCalled();
+});
+
+// A draft is not a file yet: discarding it afterwards would leave the entry with nothing, and
+// the commit has already taken the published one away. Publishing it first is the way through.
+test('a language whose only other file is a draft cannot be turned off', async () => {
+  untranslated();
+  rows['src/content/pages/de/home.yaml'] = {
+    contents: home.en.replace('Home', 'Startseite'),
+    baseSha: 'head789',
+    baseBlob: '',
+  };
+  publish.mockClear();
+  setEntryLocales.mockClear();
+
+  const res = await POST(post('entries/pages/home/locales', JSON.stringify({ locales: ['de'] })));
+
+  expect(res.status).toBe(409);
+  expect(await res.text()).toContain('publish de first');
+  expect(publish).not.toHaveBeenCalled();
+  expect(setEntryLocales).not.toHaveBeenCalled();
+});
+
+// A collection nothing renders has nowhere to send anybody: the file goes anyway, and the
+// dialog is where the client is told the old URL will 404.
+test('a collection with no index writes no redirect for the language that went', async () => {
   drifted();
+  publish.mockClear();
+
+  const res = await POST(post('entries/pages/home/locales', JSON.stringify({ locales: ['en'] })));
+
+  expect(res.status).toBe(200);
+  const [written] = (publish.mock.calls[0] ?? []) as unknown as [PublishFile[]];
+  expect(written.map((f) => f.path)).toEqual([
+    'src/content/pages/de/home.yaml',
+    'src/content/pages/en/home.yaml',
+  ]);
+});
+
+// The language a translation was made from can be the one that goes: what is left becomes the
+// entry's own language, and a mark against a file the entry no longer has cannot say anything
+// is stale — so it goes with it.
+test('turning off the language a translation was made from drops the mark that named it', async () => {
+  locales = ['en', 'de'];
+  files['src/content/pages/en/home.yaml'] = home.en;
+  files['src/content/pages/de/home.yaml'] = home.en
+    .replace(
+      '_version: 1',
+      '_version: 1\n_i18n:\n  sourceLocale: "en"\n  sourceHash: "8a41c0b2e9d7f350"',
+    )
+    .replace('Home', 'Startseite');
+  publish.mockClear();
+
+  const res = await POST(post('entries/pages/home/locales', JSON.stringify({ locales: ['de'] })));
+
+  expect(res.status).toBe(200);
+  const [written] = (publish.mock.calls[0] ?? []) as unknown as [PublishFile[]];
+  const german = written.find((f) => f.path === 'src/content/pages/de/home.yaml')?.contents ?? '';
+  expect(german).toContain('_locales:\n  - "de"');
+  expect(german).not.toContain('_i18n');
+});
+
+// Nothing of that language is in the repository, so there is nothing to commit and no URL
+// anybody could have followed: what Create from English left behind is thrown away, and the
+// mark is drafted the way it is for a language that never had a file.
+test('turning off a language whose file is only a draft commits nothing', async () => {
+  untranslated();
+  rows['src/content/pages/de/home.yaml'] = {
+    contents: home.en.replace('Home', 'Startseite'),
+    baseSha: 'head789',
+    baseBlob: '',
+  };
+  publish.mockClear();
+  discardDraft.mockClear();
   setEntryLocales.mockClear();
 
   const res = await POST(post('entries/pages/home/locales', JSON.stringify({ locales: ['en'] })));
 
-  expect(res.status).toBe(409);
-  expect(setEntryLocales).not.toHaveBeenCalled();
+  expect(res.status).toBe(200);
+  expect(publish).not.toHaveBeenCalled();
+  expect(discardDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    'src/content/pages/de/home.yaml',
+  );
+  expect(setEntryLocales).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    ['src/content/pages/en/home.yaml'],
+    ['en'],
+    ['en', 'de'],
+  );
 });
 
 // A top-level `_locales` is written into every file the entry has, so one that names fewer

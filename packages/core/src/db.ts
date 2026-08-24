@@ -6,6 +6,7 @@ import {
   type DriftChoice,
   markTranslation,
   mergeEntry,
+  offeredEntry,
   parseEntry,
   stringifyEntry,
   syncLocale,
@@ -210,14 +211,13 @@ export async function setEntryLocales(
       return loaded && { path, loaded };
     }),
   );
-  const kept = locales.filter((l) => offered.includes(l));
   const updatedAt = Date.now();
   const writes = found.flatMap((f) => {
     if (!f) return [];
-    const entry = writtenEntry(siteId, f.loaded.entry);
-    if (kept.length === locales.length) delete entry._locales;
-    else entry._locales = kept;
-    const contents = stringifyEntry(siteId, entry);
+    const contents = stringifyEntry(
+      siteId,
+      offeredEntry(siteId, f.loaded.entry, { offered, locales }),
+    );
     return contents === stringifyEntry(siteId, writtenEntry(siteId, f.loaded.entry))
       ? []
       : [upsert(db, siteId, f.path, contents, f.loaded, updatedAt)];
@@ -410,6 +410,34 @@ export async function recordRename(
       publishedSha: commitSha,
     });
   await recordDelete(siteId, db, from, commitSha);
+}
+
+/**
+ * A file the commit that turned a language off rewrote while somebody had it open: the mark
+ * naming the languages the entry is still offered in goes into their draft, which keeps its own
+ * words, and the draft is rebased on that commit. Without this it would publish the language
+ * back on, against a base blob that has moved. Nothing to do where there is no draft — the
+ * repository already says it.
+ */
+export async function recordOffer(
+  siteId: string,
+  db: Db,
+  path: string,
+  committed: string,
+  offer: { offered: string[]; locales: string[]; gone: string[] },
+  commitSha: string,
+): Promise<void> {
+  const open = await loadDraft(siteId, db, path);
+  if (!open) return;
+  const entry = offeredEntry(siteId, parseEntry(siteId, open.contents), offer);
+  await db
+    .update(drafts)
+    .set({
+      contents: stringifyEntry(siteId, entry),
+      baseSha: commitSha,
+      baseBlob: await blobSha(committed),
+    })
+    .where(and(eq(drafts.siteId, siteId), eq(drafts.path, path)));
 }
 
 /**
