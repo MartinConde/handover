@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { Drift, Field } from '@handover/core';
+import { type Drift, entryUrl, type Field } from '@handover/core';
 import DriftPanel from './Drift.svelte';
 import Fields from './Fields.svelte';
 import Translation from './Translation.svelte';
@@ -43,6 +43,14 @@ let {
     drift: Drift[];
     /** The site has something to machine-translate with: without one, none of it is offered. */
     translator?: boolean;
+    /** This collection serves an address per language; without it the row is not drawn at all. */
+    localizedSlugs?: boolean;
+    /** The address each language serves this entry at, empty meaning under the file name. */
+    addresses?: Record<string, string>;
+    /** The collection's own route, which is what an address is a segment of. */
+    route?: string;
+    /** Whether the default language's URLs carry its segment. */
+    prefixDefaultLocale?: boolean;
   };
   /** Open the pending-changes drawer, which is where publishing happens. */
   onpublish: () => void;
@@ -195,6 +203,52 @@ function leaving(change: () => void) {
   change();
 }
 
+// The address the language on screen serves this entry at. Its own control and its own write:
+// unlike a field it is validated and has to be unique, and moving a published one owes a
+// redirect. The file name never moves with it — renaming is the other action.
+let editing = $state(false);
+let typed = $state('');
+let addressFailed = $state('');
+const address = $derived(entry.addresses?.[locale] ?? '');
+// A language with no file has no address: the offer to make one stands where the form would be.
+const addressable = $derived(
+  entry.localizedSlugs === true && (locale === entry.defaultLocale || !untranslated(locale)),
+);
+const routing = $derived({
+  locales: entry.locales,
+  defaultLocale: entry.defaultLocale,
+  prefixDefaultLocale: entry.prefixDefaultLocale,
+});
+const url = $derived(entryUrl('default', routing, entry.route, address || slug, locale) ?? '');
+// The part in front of the address, so what is being typed reads as the URL it will be.
+const before = $derived(entryUrl('default', routing, entry.route, '', locale) ?? '');
+
+function editAddress() {
+  typed = address;
+  addressFailed = '';
+  editing = true;
+}
+
+// Everything on screen is stored first: this write goes into the same rows, and the screen is
+// read again afterwards so both columns come back with the address the server settled on.
+async function saveAddress() {
+  busy = true;
+  if (json !== saved) await autosave();
+  if (pane?.unsaved()) await pane.flush();
+  const res = await fetch(`/admin/api/entries/${collection}/${slug}/address/${locale}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ address: typed.trim() }),
+  });
+  busy = false;
+  if (!res.ok) {
+    addressFailed = await res.text();
+    return;
+  }
+  editing = false;
+  onchanged();
+}
+
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 </script>
 
@@ -268,6 +322,22 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         <button class="btn btn-ghost" type="button" disabled aria-label="More actions">⋯</button>
       </div>
     </div>
+    {#if addressable}
+      <p class="slug-row">
+        {#if editing}
+          <span class="url">{before}</span>
+          <label class="visually-hidden" for="entry-address">Web address in {language(locale)}</label>
+          <input class="input" id="entry-address" type="text" bind:value={typed} placeholder={slug} />
+          <button class="btn btn-sm" type="button" disabled={busy} onclick={saveAddress}>Save</button>
+          <button class="btn btn-ghost btn-sm" type="button" onclick={() => (editing = false)}>Cancel</button>
+          {#if addressFailed}<span class="mode is-bad">{addressFailed}</span>{/if}
+        {:else}
+          <span class="url">{url}</span>
+          {#if !address}<span class="mode">Same as the file name</span>{/if}
+          <button class="btn-link" type="button" onclick={editAddress}>Edit web address</button>
+        {/if}
+      </p>
+    {/if}
     <div class="tabs" role="tablist" aria-label="Entry sections">
       <button type="button" role="tab" aria-selected="true">Content</button>
       <button type="button" role="tab" aria-selected="false" disabled>SEO</button>

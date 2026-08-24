@@ -34,6 +34,7 @@ digits and dashes.
 | `index` | no | The listing page, a fixed path with no `[...]` segment, e.g. `'/blog'`. Used wherever something links to "the blog" as a whole rather than to one entry. |
 | `load` | no | The loader's name: `'post'` means `src/loaders/post.ts` ([Template convention](template-convention.md)). |
 | `titleField` | no | The field the entry list shows, when the collection is not keyed on `title`: `titleField: 'name'`. It is also the field "New entry" writes the name you type into, so it has to be a text field of this collection's schema — the build says so if it is not. |
+| `localizedSlugs` | no | Each language may serve this collection's entries at a web address of its own. See below. |
 
 ## `i18n`
 
@@ -57,6 +58,47 @@ i18n: {
 
 Without it, `DEEPL_API_KEY` ([Deploying](deploy.md#secrets)) is what translates; without
 either, the admin offers no machine translation at all.
+
+## `localizedSlugs`
+
+Off by default, and a per-collection call rather than a site-wide one: a blog wants a German
+address for a German post, a listings grid keyed on a reference number does not.
+
+```ts
+collections: {
+  posts: { schema: post, route: '/blog/[slug]', localizedSlugs: true },
+}
+```
+
+The collection's schema declares the field the address is kept in, and it has to be optional:
+
+```ts
+export const post = z.object({ slug: z.string().optional(), title: z.string() /* … */ });
+```
+
+The collection also needs a `route`: an address is a segment of one, and without it nothing
+renders the entry to serve at that address. Miss either and the build stops, the same way a bad
+`titleField` does:
+
+```
+cms.config.ts › collections.posts.localizedSlugs: this collection's schema has no optional
+"slug" text field — add slug: z.string().optional() to it, since the site's own route reads it
+```
+
+- **Empty falls back to the file name**, so turning it on changes no URL until someone fills
+  one in. The file name is still the entry's id across the languages, and it does not change
+  because an address did — renaming is the other action, with the other consequence
+- The address is lowercase letters, digits and single dashes, never percent-encoded, and
+  unique within its collection and language, drafts counted — a file name is spelled the same
+  way for the same reason
+- The collection's `glob` loader needs `generateId` so the id stays the file's path — Astro
+  files an entry under its `slug` otherwise
+  ([Template convention](template-convention.md#contentconfigts))
+- Your own route resolves through `entryAt()` rather than by id
+  ([Template convention](template-convention.md#a-page-with-an-address-per-language))
+- Publishing a change to an address that was live writes one `slug-change` redirect, for that
+  language only ([Publishing](publishing.md#creating-renaming-and-deleting)) — the other languages' URLs did not move
+- Off, a `slug` in a file is an ordinary field of that collection's schema like any other
 
 ## `globals`
 

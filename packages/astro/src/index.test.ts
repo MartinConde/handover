@@ -387,6 +387,46 @@ test('defineConfig fails when titleField is not a text field of the schema', () 
   ).not.toThrow();
 });
 
+// The twin of the titleField check: the site's own route reads the field, so a collection
+// promising an address per language without one would fail at the first page rather than here.
+test('defineConfig fails when localizedSlugs has no optional slug field to read', () => {
+  const bare = z.object({ title: z.string() });
+  expect(() =>
+    defineConfig({ i18n: EN, collections: { pages: { schema: bare, localizedSlugs: true } } }),
+  ).toThrow(
+    'cms.config.ts › collections.pages.localizedSlugs: this collection\'s schema has no optional "slug" text field — add slug: z.string().optional() to it, since the site\'s own route reads it',
+  );
+  expect(() =>
+    defineConfig({
+      i18n: EN,
+      collections: { pages: { schema: z.object({ slug: z.string() }), localizedSlugs: true } },
+    }),
+  ).toThrow(/"slug" is required in this collection's schema/);
+  expect(() =>
+    defineConfig({
+      i18n: EN,
+      collections: {
+        pages: {
+          schema: z.object({ slug: z.string().optional() }),
+          route: '/[slug]',
+          localizedSlugs: true,
+        },
+      },
+    }),
+  ).not.toThrow();
+  // Nothing renders the collection, so an address is a segment of nothing.
+  expect(() =>
+    defineConfig({
+      i18n: EN,
+      collections: {
+        pages: { schema: z.object({ slug: z.string().optional() }), localizedSlugs: true },
+      },
+    }),
+  ).toThrow(/has no route, so an address has nothing to be a segment of/);
+  // Without the flag a `slug` is an ordinary field and nothing is asked of it.
+  expect(() => defineConfig({ i18n: EN, collections: { pages: { schema: bare } } })).not.toThrow();
+});
+
 test('defineConfig returns a valid config unchanged', () => {
   const config = {
     i18n: EN,

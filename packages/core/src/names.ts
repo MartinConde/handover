@@ -79,6 +79,7 @@ export interface CollectionRoutes {
   index?: unknown;
   load?: unknown;
   titleField?: unknown;
+  localizedSlugs?: unknown;
 }
 
 // Every message names the key in cms.config.ts that is wrong; the integration throws
@@ -125,6 +126,10 @@ export function checkCollections(
     )
       errors.push(
         `${at('titleField')}expected the name of a field in the collection's schema, like "name", got ${JSON.stringify(c.titleField)}`,
+      );
+    if (c.localizedSlugs !== undefined && typeof c.localizedSlugs !== 'boolean')
+      errors.push(
+        `${at('localizedSlugs')}expected true or false, got ${JSON.stringify(c.localizedSlugs)}`,
       );
     if (c.load !== undefined && typeof c.load !== 'string')
       errors.push(
@@ -202,4 +207,34 @@ export function entryUrl(
   if (!route) return undefined;
   const prefix = locale === i18n.defaultLocale && !i18n.prefixDefaultLocale ? '' : `/${locale}`;
   return prefix + route.replace('[slug]', slug);
+}
+
+const ADDRESS = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/**
+ * Why this cannot be the web address of an entry, or nothing. Empty is not a mistake: a file
+ * with no address of its own is served under its name. The rules are the file name's, since
+ * the two are alternatives for the same URL segment — percent-encoding above all, which turns
+ * a clean URL into garbage and every redirect into something nobody can read.
+ */
+export function addressError(_siteId: string, address: string): string | undefined {
+  if (!address) return undefined;
+  if (address.length > MAX) return `${JSON.stringify(address)} is longer than ${MAX} characters`;
+  if (!ADDRESS.test(address))
+    return `${JSON.stringify(address)} is not a web address: lowercase letters, digits and single dashes, like "start-seite"`;
+  return undefined;
+}
+
+/**
+ * The address one file is served under: its own `slug` where the collection has localized
+ * slugs, and its file name where it has none. The file name never changes because an address
+ * did — it is the entry's id across the languages, and only the URL moved.
+ */
+export function entryAddress(_siteId: string, data: unknown, name: string): string {
+  // Read as a key rather than a property: Astro's content layer defines a non-enumerable `slug`
+  // getter on every entry that has none, to warn that its own `slug` is gone, and touching that
+  // would log the warning on every page the site renders.
+  const found = data ? Object.getOwnPropertyDescriptor(data, 'slug') : undefined;
+  const slug = found?.enumerable ? found.value : undefined;
+  return typeof slug === 'string' && slug ? slug : name;
 }

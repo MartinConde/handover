@@ -1,6 +1,6 @@
 import { Document, isMap, isScalar, isSeq, parse, parseDocument, visit } from 'yaml';
 import { blobSha } from './git.js';
-import { entryUrl, type I18nRouting } from './names.js';
+import { entryAddress, entryUrl, type I18nRouting } from './names.js';
 import { checkReserved, isLive, RESERVED_KEYS } from './reserved.js';
 import type { Field, Form, Translation } from './schema.js';
 import { keptMachine } from './translate.js';
@@ -51,7 +51,7 @@ export interface LocaleLink {
 /** As much of `cms.config.ts` as a link needs: the languages and the collections' routes. */
 export interface LocaleSite {
   i18n: I18nRouting;
-  collections: Record<string, { route?: string }>;
+  collections: Record<string, { route?: string; localizedSlugs?: boolean }>;
 }
 
 /**
@@ -80,11 +80,38 @@ export async function getEntryLocales<C extends Record<string, unknown>>(
     site.i18n.locales.map(async (locale) => {
       const entry = await source.getEntry(collection, `${locale}/${slug}`);
       if (!entry || !isLive(siteId, entry.data)) return undefined;
-      const url = entryUrl(siteId, site.i18n, route, slug, locale);
+      const address = site.collections[collection]?.localizedSlugs
+        ? entryAddress(siteId, entry.data, slug)
+        : slug;
+      const url = entryUrl(siteId, site.i18n, route, address, locale);
       return url ? { locale, url } : undefined;
     }),
   );
   return found.filter((l) => l !== undefined);
+}
+
+/**
+ * The entry one language serves at this address, for the site's own `[slug]` route. Without
+ * localized slugs the address is the file name and this is the lookup it always was.
+ *
+ * With them the file name is no longer the URL, so it stops answering to one: a file whose
+ * `slug` has moved it elsewhere is **not** served under its name — the old address is a
+ * redirect the publish wrote, not a second live page. Only then is the language's folder read
+ * through, which is a page's worth of files on the sites this is for.
+ */
+export async function entryAt<C extends Record<string, unknown>, K extends keyof C & string>(
+  siteId: string,
+  source: ContentSource<C>,
+  site: LocaleSite,
+  collection: K,
+  locale: string,
+  address: string,
+): Promise<ContentEntry<C[K]> | undefined> {
+  const named = await source.getEntry(collection, `${locale}/${address}`);
+  if (!site.collections[collection]?.localizedSlugs) return named;
+  if (named && entryAddress(siteId, named.data, address) === address) return named;
+  const found = await source.getCollection(collection, locale);
+  return found.find((e) => entryAddress(siteId, e.data, e.id.slice(locale.length + 1)) === address);
 }
 
 export function parseEntry(_siteId: string, contents: string): unknown {

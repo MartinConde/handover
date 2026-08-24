@@ -4,6 +4,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A web address per language, per collection: `localizedSlugs: true` beside a collection's
+  `route` lets each language's file carry an optional `slug` overriding the file name in the
+  URL. Empty falls back to the file name, so turning it on changes no URL until somebody fills
+  one in; the file name stays the entry's id across the languages. The schema has to declare
+  `slug: z.string().optional()` or the build stops, the way a bad `titleField` does. The
+  address is edited in the entry header rather than in the form, validated like a file name and
+  unique within its collection and language with drafts counted, and publishing a change to a
+  live one writes one `slug-change` redirect for that language alone. Sites resolve their own
+  route with `entryAt('default', source, cms, collection, locale, address)`, and
+  `<LocaleSwitcher />` links each language at the address that language serves.
+  `POST /admin/api/entries/:collection/:slug/address/:locale` is the write. Such a collection's
+  `glob` loader needs a `generateId` that returns the file's path: Astro's default files an
+  entry under its `slug`, which is where the address lives.
+
 - A language switcher for the site. `<LocaleSwitcher locales current />` from
   `astro-handover/LocaleSwitcher.astro` draws the languages one entry can actually be read in;
   `getEntryLocales('default', source, cms, collection, slug)` is what answers that — a file in

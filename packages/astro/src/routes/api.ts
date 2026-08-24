@@ -1,8 +1,9 @@
 import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
 import index from 'virtual:handover/index';
-import type { Db, EntryLocation, GitClient, Translate } from '@handover/core';
+import type { Db, EntryLocation, Form, GitClient, Translate } from '@handover/core';
 import {
+  addressError,
   blobSha,
   collectionEntries,
   createDraft,
@@ -12,8 +13,10 @@ import {
   deleteEntry,
   discardDraft,
   driftReport,
+  entryAddress,
   entryName,
   entryOffer,
+  entryUrl,
   FORMAT_VERSION,
   formOf,
   loadDraft,
@@ -30,6 +33,7 @@ import {
   resolveDrift,
   saveDraft,
   saveTranslated,
+  setEntryAddress,
   setEntryLocales,
   staleLocales,
   syncLocale,
@@ -97,6 +101,20 @@ const entryFiles = async (git: GitClient, collection: string, slug: string) => {
   }));
 };
 
+/**
+ * The form the CMS works one collection through. A collection with localized slugs keeps its
+ * `slug` out of it: the address is edited in the entry header and not in the form, and a form
+ * field would put it in front of the translator, into the staleness hash and into the words a
+ * second column can type over. The schema still validates it — this is the form, not the file.
+ */
+function formFor(collection: string): Form {
+  const collected = config.collections[collection];
+  if (!collected) throw new Error(`No collection ${collection}`);
+  const form = formOf('default', formSchema(collected.schema));
+  if (!collected.localizedSlugs) return form;
+  return { ...form, fields: form.fields.filter((f) => f.path[0] !== 'slug') };
+}
+
 // The languages an entry is offered in, and what its `_locales` gets wrong: `written` is the
 // languages it has a file in, and a file is the fact the mark has to agree with.
 const offeredIn = (data: unknown, written: string[]) =>
@@ -152,7 +170,7 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
   const own = loaded[config.i18n.defaultLocale];
   if (!own) return new Response('Not found', { status: 404 });
   const data = own.data;
-  const form = formOf('default', formSchema(schema));
+  const form = formFor(collection);
   const offer = offeredIn(data, Object.keys(loaded));
   const languages = localeData(loaded);
   const translations = Object.fromEntries(
@@ -186,6 +204,21 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
     // Whether anything can machine-translate: with nothing configured the buttons that offer
     // it are not drawn, the same rule the locale controls follow on a one-language site.
     translator: translator() !== undefined,
+    // The address each language serves this entry at, empty where it serves it under the file
+    // name. Absent on a collection without localized slugs, which draws no address row at all.
+    ...(collected.localizedSlugs
+      ? {
+          localizedSlugs: true,
+          addresses: Object.fromEntries(
+            Object.entries(languages).map(([locale, file]) => [
+              locale,
+              (file as { slug?: unknown })?.slug ?? '',
+            ]),
+          ),
+          route: collected.route,
+          prefixDefaultLocale: config.i18n.prefixDefaultLocale ?? false,
+        }
+      : {}),
   });
 }
 
@@ -235,7 +268,7 @@ async function autosave(
       entryPath(collection, slug, locale),
       data,
       translation || Object.keys(siblings).length
-        ? { form: formOf('default', formSchema(schema)), locale, siblings, translation }
+        ? { form: formFor(collection), locale, siblings, translation }
         : undefined,
     );
   } catch (err) {
@@ -269,7 +302,7 @@ async function createTranslation(
   if (problems.length) return new Response(problems.join('\n'), { status: 409 });
   if (!offered.includes(locale))
     return new Response(`This entry is not offered in ${locale}`, { status: 409 });
-  const form = formOf('default', formSchema(schema));
+  const form = formFor(collection);
   const made = syncLocale('default', form, locale, { before: data, after: data }, {});
   if (offered.length < config.i18n.locales.length) made._locales = offered;
   await createDraft('default', db(), gitClient(), entryPath(collection, slug, locale), made);
@@ -306,7 +339,7 @@ async function machineTranslate(
   if (!source || !loaded[locale]) return new Response('Not found', { status: 404 });
   const body = (await request.json().catch(() => undefined)) as { paths?: unknown } | undefined;
   const named = Array.isArray(body?.paths) ? body.paths.map(String) : undefined;
-  const form = formOf('default', formSchema(schema));
+  const form = formFor(collection);
   // What this language has words in already: a pre-fill is for the gaps, and a Translate button
   // names the field it is on whether there is anything there or not.
   const written = new Set(
@@ -366,6 +399,67 @@ async function offering(collection: string, slug: string, request: Request): Pro
 }
 
 /**
+ * Every address the collection could serve in this language, the entry's own left out. Each
+ * other entry holds two: the address it has there, and its file name — which is what it falls
+ * back to the moment somebody clears that address, so a name is never free to be taken.
+ * Drafts count, exactly as they do for a file name.
+ */
+async function takenAddresses(collection: string, locale: string, slug: string): Promise<string[]> {
+  const rows = await overlayRows('default', db(), index);
+  return collectionEntries('default', index, collection, rows)
+    .filter((entry) => entry.id !== slug)
+    .flatMap((entry) => [entry.id, entry.locales[locale]?.slug ?? '']);
+}
+
+/**
+ * The address one language serves this entry at: the `slug` key in that language's file, empty
+ * putting it back under the file name. The file name does not move — it is the entry's id
+ * across the languages, and renaming is the other action, with the other consequence.
+ *
+ * A published address that moves owes a redirect from where it was. It is stored against the
+ * draft rather than committed now: the old URL is the live one until this is published.
+ */
+async function address(
+  collection: string,
+  slug: string,
+  locale: string,
+  request: Request,
+): Promise<Response> {
+  const collected = config.collections[collection];
+  if (!collected?.localizedSlugs || !config.i18n.locales.includes(locale))
+    return new Response('Not found', { status: 404 });
+  const body = (await request.json().catch(() => undefined)) as { address?: unknown } | undefined;
+  const wanted = typeof body?.address === 'string' ? body.address.trim() : '';
+  const bad = addressError('default', wanted);
+  if (bad) return new Response(bad, { status: 422 });
+  const path = entryPath(collection, slug, locale);
+  const git = gitClient();
+  const [file, row] = await Promise.all([git.getFile(path), loadDraft('default', db(), path)]);
+  if (!file && !row) return new Response('Not found', { status: 404 });
+  // Empty falls back to the file name, so that is the address being claimed either way.
+  const after = wanted || slug;
+  if ((await takenAddresses(collection, locale, slug)).includes(after))
+    return new Response(
+      `${JSON.stringify(after)} is already the web address of another entry in ${collection} in ${locale}`,
+      { status: 409 },
+    );
+  // Only a published address can have been followed, and only the collection's own route
+  // gives it a URL to be followed at.
+  const was = file ? entryAddress('default', parseEntry('default', file.contents), slug) : after;
+  const from = entryUrl('default', config.i18n, collected.route, was, locale);
+  const to = entryUrl('default', config.i18n, collected.route, after, locale);
+  await setEntryAddress(
+    'default',
+    db(),
+    git,
+    path,
+    wanted,
+    from && to && from !== to ? { from, to, entry: `${collection}/${slug}` } : undefined,
+  );
+  return Response.json({});
+}
+
+/**
  * The answers to one entry's structural drift, one per block its languages disagree about.
  * They belong here and not in an autosave: that one carries the default language's values and
  * has no way to say a block comes out of German. Nothing is marked resolved — the entry is read
@@ -381,7 +475,7 @@ async function reconcile(collection: string, slug: string, request: Request): Pr
       Array.isArray(choice.locales) &&
       choice.locales.every((locale: unknown) => typeof locale === 'string'),
   );
-  const form = formOf('default', formSchema(schema));
+  const form = formFor(collection);
   const locales = localeData(await entryLocales(collection, slug, config.i18n.locales));
   const drift = new Set(driftReport('default', form, locales).map((row) => row.path));
   // A row the languages agree about has nothing to answer: the report moved on under the tab.
@@ -529,6 +623,7 @@ const DRAFT = /^drafts\/([\w-]+)\/([\w-]+)$/;
 const TRANSLATION = /^drafts\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 const RENAME = /^entries\/([\w-]+)\/([\w-]+)\/rename$/;
 const LOCALES = /^entries\/([\w-]+)\/([\w-]+)\/locales$/;
+const ADDRESS = /^entries\/([\w-]+)\/([\w-]+)\/address\/([\w-]+)$/;
 const DRIFT = /^drift\/([\w-]+)\/([\w-]+)$/;
 const TRANSLATE = /^translate\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 
@@ -579,7 +674,7 @@ const sourceOf = (path: string) => {
   return {
     locale: config.i18n.defaultLocale,
     path: entryPath(collection, slug),
-    form: formOf('default', formSchema(schema)),
+    form: formFor(collection),
   };
 };
 
@@ -605,7 +700,7 @@ async function driftedPaths(paths: string[]): Promise<string[]> {
     // A path no collection owns — a global — has no schema, so no form and no structure.
     const schema = config.collections[collection]?.schema;
     if (!schema) continue;
-    const form = formOf('default', formSchema(schema));
+    const form = formFor(collection);
     const locales = localeData(await entryLocales(collection, slug, config.i18n.locales));
     if (driftReport('default', form, locales).length) drifted.push(...files);
   }
@@ -693,6 +788,11 @@ export const POST: APIRoute = async ({ params, request }) => {
     );
   const made = params.path?.match(TRANSLATION);
   if (made) return answering(() => createTranslation(made[1] ?? '', made[2] ?? '', made[3] ?? ''));
+  const addressed = params.path?.match(ADDRESS);
+  if (addressed)
+    return answering(() =>
+      address(addressed[1] ?? '', addressed[2] ?? '', addressed[3] ?? '', request),
+    );
   const offered = params.path?.match(LOCALES);
   if (offered) return answering(() => offering(offered[1] ?? '', offered[2] ?? '', request));
   const answered = params.path?.match(DRIFT);

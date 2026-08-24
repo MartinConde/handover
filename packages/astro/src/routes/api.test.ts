@@ -15,6 +15,7 @@ const {
   listing,
   presenter,
   page,
+  article,
   files,
   getFile,
   getHead,
@@ -29,6 +30,7 @@ const {
   publishDrafts,
   resolveDrift,
   saveTranslated,
+  setEntryAddress,
   setEntryLocales,
   translate,
 } = await vi.hoisted(async () => {
@@ -56,6 +58,8 @@ const {
     }),
     // A collection keyed on something other than `title`.
     presenter: z.object({ name: z.string() }),
+    // A collection whose languages each serve their entries at an address of their own.
+    article: z.object({ title: z.string(), slug: z.string().optional() }),
     // The GitHub boundary: one file in the repo, nothing else.
     getFile: vi.fn(async (path: string) => {
       const stored = files[path];
@@ -95,6 +99,7 @@ const {
     resolveDrift: vi.fn(async () => {}),
     saveTranslated: vi.fn(async () => ({ updated_at: 1755864000000, pending: true })),
     setEntryLocales: vi.fn(async () => {}),
+    setEntryAddress: vi.fn(async () => ({ updated_at: 1755864000000, pending: true })),
     // The provider behind the hook: whatever the site configured, seen from the route.
     translate: vi.fn(async (texts: string[], _from: string, to: string) =>
       texts.map((t) => `[${to}] ${t}`),
@@ -131,6 +136,7 @@ vi.mock('virtual:handover/config', () => ({
       listings: { schema: listing, route: '/listings/[slug]', index: '/listings' },
       presenters: { schema: presenter, titleField: 'name' },
       pages: { schema: page },
+      posts: { schema: article, route: '/blog/[slug]', localizedSlugs: true },
     },
   },
 }));
@@ -151,6 +157,19 @@ vi.mock('virtual:handover/index', () => ({
             title: 'Seaview Cottage',
             path: 'src/content/listings/en/seaview-cottage.yaml',
           },
+        },
+      },
+    ],
+    posts: [
+      {
+        id: 'hello',
+        locales: { en: { title: 'Hello', path: 'src/content/posts/en/hello.yaml' } },
+      },
+      {
+        id: 'taken',
+        locales: {
+          en: { title: 'Taken', path: 'src/content/posts/en/taken.yaml' },
+          de: { title: 'Belegt', path: 'src/content/posts/de/taken.yaml', slug: 'belegt' },
         },
       },
     ],
@@ -187,6 +206,7 @@ vi.mock('@handover/core', async (original) => ({
   publishDrafts,
   resolveDrift,
   saveTranslated,
+  setEntryAddress,
   setEntryLocales,
 }));
 
@@ -210,7 +230,7 @@ test('ping returns the configured collection names', async () => {
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
     ok: true,
-    collections: ['listings', 'presenters', 'pages'],
+    collections: ['listings', 'presenters', 'pages', 'posts'],
   });
 });
 
@@ -1222,4 +1242,154 @@ test('nothing to translate with outranks the entry having no file in that langua
   delete files['src/content/pages/de/home.yaml'];
 
   expect((await POST(post('translate/pages/home/de', ''))).status).toBe(409);
+});
+
+// A collection with an address per language. The file name stays the entry's id across them;
+// the address is only what a URL is built from.
+const addressed = () => {
+  locales = ['en', 'de'];
+  files['src/content/posts/en/hello.yaml'] = '_version: 1\ntitle: "Hello"\nslug: "hello-world"\n';
+  files['src/content/posts/de/hello.yaml'] = '_version: 1\ntitle: "Hallo"\nslug: "hallo"\n';
+};
+
+test('the address is not a field of the form and comes beside it instead', async () => {
+  addressed();
+
+  const body = (await (await GET(ctx('entries/posts/hello'))).json()) as {
+    fields: { path: string[] }[];
+    addresses: Record<string, string>;
+    localizedSlugs: boolean;
+    route: string;
+  };
+
+  expect(body.fields.map((f) => f.path[0])).toEqual(['title']);
+  expect(body.addresses).toEqual({ en: 'hello-world', de: 'hallo' });
+  expect(body.localizedSlugs).toBe(true);
+  expect(body.route).toBe('/blog/[slug]');
+});
+
+test('a collection without localized slugs draws no address at all', async () => {
+  files['src/content/listings/en/mill-house.yaml'] = 'title: "The Mill House"\nrooms: 3\n';
+
+  const body = (await (await GET(ctx('entries/listings/mill-house'))).json()) as {
+    addresses?: unknown;
+    localizedSlugs?: unknown;
+  };
+
+  expect(body.localizedSlugs).toBe(undefined);
+  expect(body.addresses).toBe(undefined);
+});
+
+// It is a URL, not prose: a machine's guess at one is not a word anybody can read in the form
+// and correct, and it would not survive the address rules anyway.
+test('a machine is never asked to translate the address', async () => {
+  addressed();
+  translate.mockClear();
+
+  const res = await POST(post('translate/posts/hello/de', JSON.stringify({ paths: ['slug'] })));
+
+  expect(res.status).toBe(200);
+  expect(translate).not.toHaveBeenCalled();
+});
+
+test('an address that is not one is refused with the reason', async () => {
+  addressed();
+
+  const res = await POST(
+    post('entries/posts/hello/address/de', JSON.stringify({ address: 'Hallo Welt' })),
+  );
+
+  expect(res.status).toBe(422);
+  expect(await res.text()).toMatch(/lowercase letters, digits and single dashes/);
+});
+
+test('an address another entry in that language already serves is refused', async () => {
+  addressed();
+
+  // `belegt` is another entry's address in German; `taken` is its file name, which is what it
+  // would fall back to the moment somebody cleared that address.
+  for (const address of ['belegt', 'taken']) {
+    const res = await POST(post('entries/posts/hello/address/de', JSON.stringify({ address })));
+    expect([address, res.status]).toEqual([address, 409]);
+  }
+});
+
+// The same rule a file name follows: an entry nobody has published yet still holds its address.
+test('an address an unpublished draft already claims is refused', async () => {
+  addressed();
+  overlayRows.mockResolvedValueOnce([
+    {
+      path: 'src/content/posts/de/fresh.yaml',
+      contents: '_version: 1\ntitle: "Frisch"\nslug: "frisch"\n',
+    },
+  ]);
+
+  const res = await POST(
+    post('entries/posts/hello/address/de', JSON.stringify({ address: 'frisch' })),
+  );
+
+  expect(res.status).toBe(409);
+});
+
+test('an entry keeping the address it already has is not a clash with itself', async () => {
+  addressed();
+  setEntryAddress.mockClear();
+
+  const res = await POST(
+    post('entries/posts/hello/address/de', JSON.stringify({ address: 'hallo' })),
+  );
+
+  expect(res.status).toBe(200);
+  expect(setEntryAddress).toHaveBeenCalled();
+});
+
+test('moving a published address owes a redirect from where it was, in that language alone', async () => {
+  addressed();
+  setEntryAddress.mockClear();
+
+  const res = await POST(
+    post('entries/posts/hello/address/de', JSON.stringify({ address: 'servus' })),
+  );
+
+  expect(res.status).toBe(200);
+  expect(setEntryAddress).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/posts/de/hello.yaml',
+    'servus',
+    { from: '/de/blog/hallo', to: '/de/blog/servus', entry: 'posts/hello' },
+  );
+});
+
+test('an entry with no file in the repository yet owes nothing', async () => {
+  locales = ['en', 'de'];
+  rows['src/content/posts/de/hello.yaml'] = {
+    contents: '_version: 1\ntitle: "Hallo"\n',
+    baseSha: 'head789',
+    baseBlob: '',
+  };
+  setEntryAddress.mockClear();
+
+  const res = await POST(
+    post('entries/posts/hello/address/de', JSON.stringify({ address: 'hallo' })),
+  );
+
+  expect(res.status).toBe(200);
+  expect(setEntryAddress).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/posts/de/hello.yaml',
+    'hallo',
+    undefined,
+  );
+});
+
+test('a collection without localized slugs has no address to set', async () => {
+  const res = await POST(
+    post('entries/listings/mill-house/address/en', JSON.stringify({ address: 'mill' })),
+  );
+
+  expect(res.status).toBe(404);
 });

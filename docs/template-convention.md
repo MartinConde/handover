@@ -38,13 +38,18 @@ import { glob } from 'astro/loaders';
 import { defineCollection } from 'astro:content';
 import { listing, page } from './content/schemas';
 
+// The id is the file's path and nothing else. Astro's default reads a `slug` out of the data
+// and files the entry under that instead, which is exactly where localizedSlugs keeps an
+// address: `de/home.yaml` with `slug: startseite` would stop being the German half of `home`.
+const byPath = ({ entry }: { entry: string }) => entry.replace(/\.ya?ml$/, '');
+
 export const collections = {
   listings: defineCollection({
-    loader: glob({ pattern: '**/*.yaml', base: './src/content/listings' }),
+    loader: glob({ pattern: '**/*.yaml', base: './src/content/listings', generateId: byPath }),
     schema: listing,
   }),
   pages: defineCollection({
-    loader: glob({ pattern: '**/*.yaml', base: './src/content/pages' }),
+    loader: glob({ pattern: '**/*.yaml', base: './src/content/pages', generateId: byPath }),
     schema: page,
   }),
 };
@@ -52,7 +57,9 @@ export const collections = {
 
 The collection key is the folder name and the key in `cms.config.ts`; the locale folder
 inside it becomes the first segment of the entry id, which is why `getEntry` takes
-`locale/slug`.
+`locale/slug`. **`generateId` is not optional on a collection with
+[`localizedSlugs`](configuration.md#localizedslugs)** — without it that collection's entries
+are filed under their addresses, and every lookup by `locale/name` misses.
 
 ### Quote dates in a file you write by hand
 
@@ -111,6 +118,27 @@ const data = await load(staticSource, { locale: 'en', slug: Astro.params.slug })
 
 <Page data={data} />
 ```
+
+## A page with an address per language
+
+A collection with [`localizedSlugs`](configuration.md#localizedslugs) is not addressed by its
+file name: `de/home.yaml` with `slug: startseite` is served at `/de/startseite` and no longer
+at `/de/home`. Resolve it with `entryAt()` rather than by id, and the file name comes back off
+the entry for the switcher:
+
+```ts
+import { entryAt, getEntryLocales } from 'astro-handover';
+import cms from '../../cms.config';
+
+export async function load(source: Source, { locale, slug }: { locale: string; slug: string }) {
+  const entry = await entryAt('default', source, cms, 'pages', locale, slug);
+  if (!entry) throw new Error(`No page ${locale}/${slug}`);
+  const name = entry.id.slice(locale.length + 1);
+  return { data: entry.data, locales: await getEntryLocales('default', source, cms, 'pages', name) };
+}
+```
+
+The old address 301s from `_redirects`, which the assets layer serves before the route runs.
 
 ## The layout
 

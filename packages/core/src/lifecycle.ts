@@ -35,30 +35,46 @@ async function localeFiles(git: GitClient, loc: EntryLocation, name: string) {
   return found;
 }
 
-// Appends one rule. Existing rules that pointed at `from` now point at `to`, so a visitor never
-// hops twice; a rule that would then redirect a URL to itself (a rename back) is dropped.
-async function redirectsFile(
+/** One rule as the file carries it: an id of its own and when it was made. */
+export const redirectRule = (
   siteId: string,
-  git: GitClient,
   rule: Omit<RedirectRule, '_id' | 'createdAt'>,
-  now: () => number,
+  at: number,
+): RedirectRule => ({
+  _id: newId(siteId),
+  ...rule,
+  createdAt: new Date(at).toISOString().replace(/\.\d{3}Z$/, 'Z'),
+});
+
+/**
+ * `redirects.yaml` with these rules appended. Existing rules that pointed at one's `from` now
+ * point at its `to`, so a visitor never hops twice; a rule that would then redirect a URL to
+ * itself (a rename back) is dropped. A publish carrying an address change appends here rather
+ * than committing on its own, so the entry and the redirect for it land in one commit.
+ */
+export async function appendRedirects(
+  siteId: string,
+  git: Pick<GitClient, 'getFile'>,
+  added: readonly RedirectRule[],
 ): Promise<PublishFile> {
   const file = await git.getFile(REDIRECTS);
   const doc = (file ? parseEntry(siteId, file.contents) : { _version: 1 }) as {
     rules?: RedirectRule[];
   };
-  const added: RedirectRule = {
-    _id: newId(siteId),
-    ...rule,
-    createdAt: new Date(now()).toISOString().replace(/\.\d{3}Z$/, 'Z'),
-  };
-  const rules = [...(doc.rules ?? []), added]
-    .map((r) =>
-      r !== added && r.to === added.from ? { ...r, to: added.to, entry: added.entry } : r,
-    )
-    .filter((r) => r.from !== r.to);
+  let rules = doc.rules ?? [];
+  for (const rule of added)
+    rules = [...rules, rule]
+      .map((r) => (r !== rule && r.to === rule.from ? { ...r, to: rule.to, entry: rule.entry } : r))
+      .filter((r) => r.from !== r.to);
   return { path: REDIRECTS, contents: stringifyEntry(siteId, { ...doc, rules }) };
 }
+
+const redirectsFile = (
+  siteId: string,
+  git: GitClient,
+  rule: Omit<RedirectRule, '_id' | 'createdAt'>,
+  now: () => number,
+) => appendRedirects(siteId, git, [redirectRule(siteId, rule, now())]);
 
 // One commit moves every locale file and records where the old URL now goes.
 export async function renameEntry(

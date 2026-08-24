@@ -1,5 +1,12 @@
-import { expect, test } from 'vitest';
-import { checkCollections, checkI18n, entryName, entryUrl } from './names.js';
+import { expect, test, vi } from 'vitest';
+import {
+  addressError,
+  checkCollections,
+  checkI18n,
+  entryAddress,
+  entryName,
+  entryUrl,
+} from './names.js';
 
 test.each([
   ['plain title', 'Seaview Cottage', [], 'seaview-cottage'],
@@ -124,4 +131,41 @@ test('prefixDefaultLocale gives the default language a segment too', () => {
 
 test('a collection with no route of its own has no URL', () => {
   expect(entryUrl('default', two, undefined, 'everything', 'de')).toBe(undefined);
+});
+
+test('a web address is spelled the way a file name is', () => {
+  expect(addressError('default', 'start-seite')).toBe(undefined);
+  // Empty is the fallback to the file name, not a mistake.
+  expect(addressError('default', '')).toBe(undefined);
+  expect(addressError('default', 'Start-Seite')).toMatch(/lowercase/);
+  expect(addressError('default', 'de/start')).toMatch(/lowercase/);
+  expect(addressError('default', 'gr%C3%B6sse')).toMatch(/lowercase/);
+  expect(addressError('default', 'start seite')).toMatch(/lowercase/);
+  expect(addressError('default', '-start')).toMatch(/lowercase/);
+  expect(addressError('default', 'start--seite')).toMatch(/lowercase/);
+  expect(addressError('default', 'a'.repeat(81))).toMatch(/longer than 80/);
+});
+
+test('a file with no slug of its own is addressed by its name', () => {
+  expect(entryAddress('default', { title: 'Home' }, 'home')).toBe('home');
+  expect(entryAddress('default', { slug: '' }, 'home')).toBe('home');
+  expect(entryAddress('default', { slug: 'startseite' }, 'home')).toBe('startseite');
+});
+
+// Astro defines one on every entry that has no `slug` of its own, to say the property is gone.
+// Reading it logs that on every render, so the address is read as a key and not as a property.
+test('a warning getter Astro left behind is never read', () => {
+  const data = { title: 'Home' };
+  const read = vi.fn(() => undefined);
+  Object.defineProperty(data, 'slug', { get: read, enumerable: false });
+
+  expect(entryAddress('default', data, 'home')).toBe('home');
+  expect(read).not.toHaveBeenCalled();
+});
+
+test('localizedSlugs is true or false and says so when it is not', () => {
+  expect(checkCollections('default', { pages: { localizedSlugs: true } })).toEqual([]);
+  expect(checkCollections('default', { pages: { localizedSlugs: 'yes' } })).toEqual([
+    'cms.config.ts › collections.pages.localizedSlugs: expected true or false, got "yes"',
+  ]);
 });

@@ -128,6 +128,14 @@ away. Both need the entry to exist in the repository: renaming one that has neve
 published is refused with "publish this entry before renaming it", and deleting one just
 drops the draft, with no commit and no redirect.
 
+**Changing the web address** of an entry in a collection with
+[`localizedSlugs`](configuration.md#localizedslugs) is a draft like an edit, not a commit like
+a rename: the old address is the live one until the change is published. The publish that
+carries it writes one `slug-change` redirect into `redirects.yaml` in the same commit, from
+where that language served the entry to where it serves it now — and one only, however many
+times the address was changed before publishing. The other languages' URLs did not move, so
+nothing is written for them, and an entry that has never been published owes nothing at all.
+
 ## The endpoints
 
 All of them are behind the admin password.
@@ -236,6 +244,16 @@ The languages the entry is offered in, written as `_locales` into every file it 
 out again when they are all of them. No file is written for a language left out, which is the
 point of it. `409` naming any language that already has a file, since turning that one off would
 be a delete; `404` when the entry has no file at all.
+
+```
+POST /admin/api/entries/:collection/:slug/address/:locale   { "address": "…" }  →  {}
+```
+
+The address one language serves the entry at, written into that language's draft. Empty takes
+the key out and leaves the file name to serve it. `404` on a collection without
+`localizedSlugs`, on a language the site does not declare, and on an entry with no file in
+that language; `422` when the address is not one; `409` when another entry in the collection
+already answers to it in that language, its file name counted.
 
 ```
 POST /admin/api/entries/:collection/:slug/rename   { "to": "…" }  →  { "slug", "commit_sha" }

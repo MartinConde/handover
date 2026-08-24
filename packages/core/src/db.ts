@@ -11,8 +11,8 @@ import {
   syncLocale,
 } from './content.js';
 import { type ContentFile, type ContentIndex, indexHasPath } from './entries.js';
-import { blobSha, type GitClient } from './git.js';
-import type { RedirectRule } from './lifecycle.js';
+import { blobSha, type GitClient, type PublishFile } from './git.js';
+import { appendRedirects, type RedirectRule, redirectRule } from './lifecycle.js';
 import type { Form } from './schema.js';
 import { machineFilled } from './translate.js';
 
@@ -224,6 +224,52 @@ export async function setEntryLocales(
   if (first) await db.batch([first, ...rest]);
 }
 
+/**
+ * The address one language serves an entry at: the `slug` key in that language's file, empty
+ * taking the key back out and leaving the file name to serve it. One language, because the
+ * others' URLs did not move.
+ *
+ * The redirect the change owes is **stored on the row rather than committed here**: the old
+ * address is the live one until this is published, and a client who changes their mind twice
+ * before publishing owes one rule, from what the repository has, and not two. `undefined`
+ * clears it — an address put back the way it was owes nothing.
+ */
+export async function setEntryAddress(
+  siteId: string,
+  db: Db,
+  git: Pick<GitClient, 'getFile' | 'getHead'>,
+  path: string,
+  address: string,
+  redirect?: { from: string; to: string; entry: string },
+): Promise<{ updated_at: number; pending: boolean } | undefined> {
+  const loaded = await load(siteId, db, git, path);
+  if (!loaded) return undefined;
+  const entry = { ...(loaded.entry as Record<string, unknown>) };
+  if (address) entry.slug = address;
+  else delete entry.slug;
+  const contents = stringifyEntry(siteId, entry);
+  const updatedAt = Date.now();
+  const rule = redirect
+    ? redirectRule(
+        siteId,
+        {
+          from: redirect.from,
+          to: redirect.to,
+          status: 301,
+          reason: 'slug-change',
+          entry: redirect.entry,
+        },
+        updatedAt,
+      )
+    : undefined;
+  await db.batch([
+    upsert(db, siteId, path, contents, loaded, updatedAt, {
+      pendingRedirects: rule ? [rule] : null,
+    }),
+  ]);
+  return { updated_at: updatedAt, pending: (await blobSha(contents)) !== loaded.baseBlob };
+}
+
 // A file as the editor has it: its open draft, or the repository when there is none.
 async function load(
   siteId: string,
@@ -260,15 +306,16 @@ function upsert(
   contents: string,
   { open, baseSha, baseBlob }: Loaded,
   updatedAt: number,
+  extra: { pendingRedirects?: RedirectRule[] | null } = {},
 ) {
   return db
     .insert(drafts)
-    .values({ siteId, path, contents, baseSha, baseBlob, updatedAt })
+    .values({ siteId, path, contents, baseSha, baseBlob, updatedAt, ...extra })
     .onConflictDoUpdate({
       target: [drafts.siteId, drafts.path],
       set: open
-        ? { contents, updatedAt, publishedSha: null }
-        : { contents, baseSha, baseBlob, updatedAt, publishedSha: null },
+        ? { contents, updatedAt, publishedSha: null, ...extra }
+        : { contents, baseSha, baseBlob, updatedAt, publishedSha: null, ...extra },
     });
 }
 
@@ -453,7 +500,7 @@ export async function publishDrafts(
     .map((r) => r.path);
   if (conflicts.length) throw new DraftConflictError(conflicts);
   const paths = rows.map((r) => r.path);
-  const files = await Promise.all(
+  const files: PublishFile[] = await Promise.all(
     rows.map(async ({ path, contents }, i) => {
       const source = sourceOf?.(path);
       if (!source || source.path === path) return { path, contents };
@@ -474,6 +521,10 @@ export async function publishDrafts(
       return { path, contents: marked };
     }),
   );
+  // What the address changes in this set owe. Appended here rather than committed when the
+  // address was typed: the old URL is live until now, and one commit carries both.
+  const rules = rows.flatMap((r) => r.pendingRedirects ?? []);
+  if (rules.length) files.push(await appendRedirects(siteId, git, rules));
   const { commit_sha } = await git.publish(files, { base_sha, message: commitMessage(paths) });
   await db.delete(drafts).where(and(eq(drafts.siteId, siteId), inArray(drafts.path, paths)));
   return { commit_sha, paths };

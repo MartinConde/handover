@@ -5,6 +5,7 @@ import { expect, test } from 'vitest';
 import {
   applyDrift,
   driftReport,
+  entryAt,
   getEntryLocales,
   markTranslation,
   mergeEntry,
@@ -1152,20 +1153,30 @@ test('the last machine-written path typed over takes the key out of the file', (
 // The switcher's own read: which languages an entry can be followed to from the page it is on.
 const site = {
   i18n: { locales: ['en', 'de', 'fr'], defaultLocale: 'en' },
-  collections: { listings: { route: '/listings/[slug]' }, samples: {} },
+  collections: {
+    listings: { route: '/listings/[slug]' },
+    samples: {},
+    pages: { route: '/[slug]', localizedSlugs: true },
+  },
 };
 const files: Record<string, unknown> = {
-  'en/coast': { title: 'Coast' },
+  // A `slug` in a collection that did not opt in is an ordinary field of its schema.
+  'en/coast': { slug: 'kueste', title: 'Coast' },
   'de/coast': { title: 'Küste' },
   'en/hidden': { _status: 'hidden', title: 'Hidden' },
   'de/hidden': { title: 'Versteckt' },
   'en/offer': { _locales: ['en'], title: 'Offer' },
   'de/offer': { _locales: ['en'], title: 'Angebot' },
+  'en/home': { title: 'Home' },
+  'de/home': { slug: 'startseite', title: 'Startseite' },
 };
-const switcherSource = staticSource<{ listings: unknown; samples: unknown }>('default', {
-  getEntry: async (_c, id) => (files[id] ? { id, data: files[id] } : undefined),
-  getCollection: async () => [],
-});
+const switcherSource = staticSource<{ listings: unknown; samples: unknown; pages: unknown }>(
+  'default',
+  {
+    getEntry: async (_c, id) => (files[id] ? { id, data: files[id] } : undefined),
+    getCollection: async () => Object.entries(files).map(([id, data]) => ({ id, data })),
+  },
+);
 
 test('a language the entry has no file in is not offered by the switcher', async () => {
   expect(await getEntryLocales('default', switcherSource, site, 'listings', 'coast')).toEqual([
@@ -1192,4 +1203,49 @@ test('a _locales the files contradict does not take a page out of the switcher',
 
 test('a collection nothing renders has nowhere to link', async () => {
   expect(await getEntryLocales('default', switcherSource, site, 'samples', 'coast')).toEqual([]);
+});
+
+test('a collection without localized slugs is addressed by the file name', async () => {
+  const found = await entryAt('default', switcherSource, site, 'listings', 'en', 'coast');
+
+  expect(found?.id).toBe('en/coast');
+  // Its `slug` is a field like any other: nothing is served under it and no link points there.
+  expect(await entryAt('default', switcherSource, site, 'listings', 'en', 'kueste')).toBe(
+    undefined,
+  );
+  expect(await getEntryLocales('default', switcherSource, site, 'listings', 'coast')).toEqual([
+    { locale: 'en', url: '/listings/coast' },
+    { locale: 'de', url: '/de/listings/coast' },
+  ]);
+});
+
+test('a file with no slug of its own is served under its name', async () => {
+  const found = await entryAt('default', switcherSource, site, 'pages', 'en', 'home');
+
+  expect(found?.id).toBe('en/home');
+});
+
+// The whole point of an address: the file name stops being the URL, so it must stop serving it
+// — the old one is a redirect the publish wrote, not a second live page.
+test('a file name a slug has moved off does not serve that address', async () => {
+  expect(await entryAt('default', switcherSource, site, 'pages', 'de', 'home')).toBe(undefined);
+});
+
+test('the address finds the file whose slug it is', async () => {
+  const found = await entryAt('default', switcherSource, site, 'pages', 'de', 'startseite');
+
+  expect(found?.id).toBe('de/home');
+});
+
+test('an address no file in that language has is nothing', async () => {
+  expect(await entryAt('default', switcherSource, site, 'pages', 'en', 'startseite')).toBe(
+    undefined,
+  );
+});
+
+test('the switcher links each language at the address that language serves', async () => {
+  expect(await getEntryLocales('default', switcherSource, site, 'pages', 'home')).toEqual([
+    { locale: 'en', url: '/home' },
+    { locale: 'de', url: '/de/startseite' },
+  ]);
 });

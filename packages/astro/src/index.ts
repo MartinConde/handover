@@ -32,7 +32,14 @@ export type {
   RichtextTier,
   Translate,
 } from '@handover/core';
-export { entryUrl, filterLive, getEntryLocales, isLive, staticSource } from '@handover/core';
+export {
+  entryAt,
+  entryUrl,
+  filterLive,
+  getEntryLocales,
+  isLive,
+  staticSource,
+} from '@handover/core';
 
 // Markdown, validated against the tier's construct list; the first offending construct
 // is the message so the editor can say what was dropped.
@@ -215,6 +222,12 @@ export interface HandoverConfig {
       load?: string;
       /** The field the entry list shows, when it is not `title`: `'name'`. */
       titleField?: string;
+      /**
+       * Each language may serve this collection's entries at an address of its own, the
+       * optional `slug` field in its file. Empty falls back to the file name, so turning it
+       * on changes no URL until somebody fills one in.
+       */
+      localizedSlugs?: boolean;
     }
   >;
   /** One schema per file under `src/content/globals/<locale>/`, keyed by file name. */
@@ -263,6 +276,25 @@ export function defineConfig(config: HandoverConfig): HandoverConfig {
     if (found?.type !== 'text')
       errors.push(
         `cms.config.ts › collections.${name}.titleField: ${JSON.stringify(c.titleField)} is not a text field of this collection's schema`,
+      );
+  }
+  // Its twin: with localized slugs the site's own route reads the file's `slug`, so the schema
+  // has to declare one — and leave it optional, since an empty address falls back to the name.
+  for (const [name, c] of Object.entries(config.collections)) {
+    if (!c.localizedSlugs) continue;
+    const at = `cms.config.ts › collections.${name}.localizedSlugs: `;
+    if (!c.route)
+      errors.push(
+        `${at}this collection has no route, so an address has nothing to be a segment of — give it a route, or drop localizedSlugs`,
+      );
+    const found = fieldsFrom('default', formSchema(c.schema)).find((f) => f.path[0] === 'slug');
+    if (found?.type !== 'text')
+      errors.push(
+        `${at}this collection's schema has no optional "slug" text field — add slug: z.string().optional() to it, since the site's own route reads it`,
+      );
+    else if (found.required)
+      errors.push(
+        `${at}"slug" is required in this collection's schema — make it optional, since an empty address falls back to the file name`,
       );
   }
   if (errors.length) throw new Error(errors.join('\n'));

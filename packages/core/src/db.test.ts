@@ -17,10 +17,12 @@ import {
   resolveDrift,
   saveDraft,
   saveTranslated,
+  setEntryAddress,
   setEntryLocales,
 } from './db.js';
 import { type ContentIndex, collectionEntries, indexFrom } from './entries.js';
 import { blobSha } from './git.js';
+import type { RedirectRule } from './lifecycle.js';
 import type { Form } from './schema.js';
 
 const mf = new Miniflare({
@@ -399,6 +401,7 @@ test('an autosave after a delete takes its base from the file, not from the row'
 
 // One entry, two languages. The structure is shared, so a block moved in English is a block
 // moved in German — in the same write, or the two files leave the editor out of step.
+const REDIRECTS = 'src/content/redirects.yaml';
 const PAGE_EN = 'src/content/pages/en/home.yaml';
 const PAGE_DE = 'src/content/pages/de/home.yaml';
 const page = (title: string, first: string, second: string) =>
@@ -778,4 +781,69 @@ test('a fill of a language with no file writes nothing', async () => {
     }),
   ).toBeUndefined();
   expect(await db.select().from(drafts)).toEqual([]);
+});
+
+// The address a language serves an entry at. Its own write, like the language mark: it is not
+// a form's values, and the redirect it owes cannot be committed until the entry is published —
+// until then the old address is the live one.
+const REDIRECT = { from: '/de/home', to: '/de/startseite', entry: 'pages/home' };
+
+test('an address is written into that language alone', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+
+  await setEntryAddress('default', db, repo, PAGE_DE, 'startseite', REDIRECT);
+
+  const rows = await db.select().from(drafts);
+  expect(rows.map((r) => r.path)).toEqual([PAGE_DE]);
+  // At the end, where a key a write did not start from has always landed (F4 in 02-i18n.md).
+  expect(rows[0]?.contents).toBe(
+    `${page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?')}slug: "startseite"\n`,
+  );
+});
+
+test('publishing an address change writes one redirect for that language', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+  await setEntryAddress('default', db, repo, PAGE_DE, 'startseite', REDIRECT);
+
+  await publishDrafts('default', db, repo);
+
+  const rules = (parseEntry('default', repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules;
+  expect(rules).toEqual([
+    {
+      _id: expect.stringMatching(/^[0-9a-z]{8}$/),
+      from: '/de/home',
+      to: '/de/startseite',
+      status: 301,
+      reason: 'slug-change',
+      entry: 'pages/home',
+      createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T[\d:]+Z$/),
+    },
+  ]);
+});
+
+test('an entry with no redirect to owe publishes redirects.yaml untouched', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+
+  await setEntryAddress('default', db, repo, PAGE_DE, 'startseite', undefined);
+  await publishDrafts('default', db, repo);
+
+  expect(repo.read(REDIRECTS)).toBe('');
+});
+
+// The row is still published for the words typed after it, so the rule has to be gone rather
+// than merely unreachable: a redirect from a URL that never moved is a redirect forever.
+test('an address put back the way it was owes nothing', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+  await setEntryAddress('default', db, repo, PAGE_DE, 'startseite', REDIRECT);
+
+  await setEntryAddress('default', db, repo, PAGE_DE, '', undefined);
+  await saveDraft('default', db, repo, PAGE_DE, german('Zieh ans Meer'));
+  await publishDrafts('default', db, repo);
+
+  expect(repo.read(REDIRECTS)).toBe('');
+  expect(repo.read(PAGE_DE)).toBe(page('Startseite', 'Zieh ans Meer', 'Bereit für den Umzug?'));
 });

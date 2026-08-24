@@ -778,3 +778,69 @@ test('typing over a machine-filled field takes its badge off there and then', ()
 
   expect($(root, '.badge-machine')).toBeNull();
 });
+
+// An address per language: its own row in the header rather than a field in the form, because
+// it is validated, has to be unique and owes a redirect when a published one moves.
+const addressed = {
+  ...bilingual,
+  localizedSlugs: true,
+  addresses: { en: '', de: 'ueber-dem-hafen' },
+  route: '/listings/[slug]',
+};
+
+const switchTo = (body: HTMLElement, code: string) => {
+  const button = Array.from(body.querySelectorAll<HTMLButtonElement>('.seg button')).find((b) =>
+    b.textContent?.includes(code),
+  );
+  button?.click();
+  flushSync();
+};
+
+test('the address row shows the URL this language serves, and its fallback', () => {
+  const body = show({ entry: addressed });
+
+  const row = body.querySelector('.slug-row');
+  expect(row?.querySelector('.url')?.textContent).toBe('/listings/seaview-cottage');
+  expect(row?.querySelector('.mode')?.textContent).toBe('Same as the file name');
+});
+
+test('a collection without localized slugs has no address row', () => {
+  expect(show({ entry: bilingual }).querySelector('.slug-row')).toBe(null);
+});
+
+// One language's address, not the entry's: the other languages' URLs did not move.
+test('the row follows the language the switcher is on', async () => {
+  const body = show({ entry: addressed });
+
+  switchTo(body, 'DE');
+
+  expect(body.querySelector('.slug-row .url')?.textContent).toBe('/de/listings/ueber-dem-hafen');
+  expect(body.querySelector('.slug-row .mode')).toBe(null);
+});
+
+test('a language the entry has no file in has no address to edit', () => {
+  const body = show({ entry: { ...addressed, translations: {}, addresses: { en: '' } } });
+
+  switchTo(body, 'DE');
+
+  expect(body.querySelector('.slug-row')).toBe(null);
+});
+
+test('the reason an address was refused is shown against the row', async () => {
+  const body = show({ entry: addressed });
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () =>
+        new Response('"home" is already the web address of another entry', { status: 409 }),
+    ),
+  );
+
+  (body.querySelector('.slug-row .btn-link') as HTMLButtonElement).click();
+  flushSync();
+  (body.querySelector('.slug-row .btn') as HTMLButtonElement).click();
+  await vi.waitFor(() => expect(body.querySelector('.slug-row .is-bad')).not.toBe(null));
+
+  expect(body.querySelector('.slug-row .is-bad')?.textContent).toMatch(/already the web address/);
+  vi.unstubAllGlobals();
+});

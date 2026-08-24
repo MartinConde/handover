@@ -4,6 +4,8 @@ export interface EntryLocale {
   title: string;
   path: string;
   status?: 'hidden';
+  /** The file's own `slug`, where it has one: the address this language serves it at. */
+  slug?: string;
 }
 
 /** One row per entry, never per file: the filename is the id across locales. */
@@ -65,6 +67,9 @@ function indexFile(siteId: string, { path, contents }: ContentFile, titleFields:
   const title = typeof named === 'string' && named ? named : id;
   const info: EntryLocale = { title, path };
   if (data?._status === 'hidden') info.status = 'hidden';
+  // Read whatever the collection's flag turns out to be: a `slug` in a collection without
+  // localized slugs is an ordinary field, and nothing addresses an entry through this.
+  if (typeof data?.slug === 'string' && data.slug) info.slug = data.slug;
   // Every file of the entry carries the same list, so whichever one is read says the same thing.
   const offered = Array.isArray(data?._locales) ? (data._locales as string[]) : undefined;
   return { collection, locale, id, info, offered };
