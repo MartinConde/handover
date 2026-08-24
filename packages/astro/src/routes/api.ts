@@ -294,6 +294,8 @@ async function machineTranslate(
   const schema = config.collections[collection]?.schema;
   if (!schema || locale === config.i18n.defaultLocale || !config.i18n.locales.includes(locale))
     return new Response('Not found', { status: 404 });
+  // Before the entry is read at all: having nothing to translate with is about the site, so it
+  // is the answer whatever else would have refused this one.
   const translate = translator();
   if (!translate)
     return new Response(

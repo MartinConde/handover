@@ -172,9 +172,10 @@ Machine-translates that language from the default one and stores the answers in 
 ([Translating](translating.md#a-machines-first-draft)). `paths` names the fields to translate
 and is optional: without it, every field this language has nothing in yet is filled. Only prose
 is sent. The paths a machine wrote go into the file's `_machine`; `data` is the file as the
-fill leaves it, which is what the second column redraws from. `409` when the site has nothing
-configured to translate with; `404` for the default language, one the site does not declare, or
-an entry with no file in either language.
+fill leaves it, which is what the second column redraws from. `404` for the default language or
+one the site does not declare. `409` when the site has nothing configured to translate with —
+that one is about the site rather than the entry, so it comes before the entry is read at all,
+and `404` for an entry with no file in either language comes after it.
 
 ```
 DELETE /admin/api/drafts/:collection/:slug  →  {}

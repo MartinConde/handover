@@ -1175,3 +1175,13 @@ test('an entry says whether there is anything to translate with', async () => {
     ((await (await GET(ctx('entries/pages/home'))).json()) as { translator: unknown }).translator,
   ).toBe(false);
 });
+
+// Having nothing to translate with is about the site and not about this entry, so it is the
+// answer even when the entry would have been refused for its own reasons.
+test('nothing to translate with outranks the entry having no file in that language', async () => {
+  machine();
+  translator = undefined;
+  delete files['src/content/pages/de/home.yaml'];
+
+  expect((await POST(post('translate/pages/home/de', ''))).status).toBe(409);
+});
