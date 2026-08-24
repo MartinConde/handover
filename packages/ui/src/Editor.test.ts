@@ -443,6 +443,17 @@ test('a second language with nothing written in it still draws every control', (
   expect($(root, 'button.btn-sbs')).not.toBeNull();
 });
 
+// Five languages is where a row of buttons stops fitting, so the switcher becomes a menu —
+// Sveltia's threshold, and the only other shape this control has.
+test('a site with five languages picks its language from a menu', () => {
+  const five = ['en', 'de', 'fr', 'es', 'it'];
+  const root = show({ entry: { ...bilingual, locales: five, offered: five } });
+
+  expect($(root, '[aria-label="Language"]')).toBeNull();
+  const menu = $<HTMLSelectElement>(root, 'select#entry-locale');
+  expect(Array.from(menu?.options ?? [], (o) => o.value)).toEqual(five);
+});
+
 test('side by side edits the second language and saves it to its own file', async () => {
   const fetchMock = autosaved();
   vi.stubGlobal('fetch', fetchMock);

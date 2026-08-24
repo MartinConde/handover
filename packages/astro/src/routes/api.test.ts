@@ -121,6 +121,8 @@ const rows: Record<string, Row> = {};
 let locales = ['en'];
 // What the site translates with: its own hook, or nothing at all.
 let translator: typeof translate | undefined = translate;
+// And what the Worker holds when the site has no hook of its own.
+let deeplKey: string | undefined;
 vi.mock('virtual:handover/config', () => ({
   default: {
     i18n: {
@@ -188,6 +190,9 @@ vi.mock('cloudflare:workers', () => ({
     GITHUB_INSTALLATION_ID: '2',
     GITHUB_PRIVATE_KEY: 'key',
     GITHUB_REPO: 'acme/site',
+    get DEEPL_API_KEY() {
+      return deeplKey;
+    },
     DB: {},
   },
 }));
@@ -211,9 +216,11 @@ vi.mock('@handover/core', async (original) => ({
 }));
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   draft = undefined;
   locales = ['en'];
   translator = translate;
+  deeplKey = undefined;
   for (const path of Object.keys(files)) delete files[path];
   for (const path of Object.keys(rows)) delete rows[path];
 });
@@ -1220,6 +1227,38 @@ test('a translation with nothing left to fill asks no machine anything', async (
 
   expect((await POST(post('translate/pages/home/de', ''))).status).toBe(200);
   expect(translate).not.toHaveBeenCalled();
+});
+
+// Every other test here supplies `i18n.translate`, so the fallback — and which DeepL the key
+// then reaches — is the one wiring none of them walks.
+test('a site with no hook of its own translates with the DEEPL_API_KEY it holds', async () => {
+  machine();
+  translator = undefined;
+  deeplKey = 'key-123';
+  const calls: { url: string; init: RequestInit }[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      const sent = JSON.parse(String(init.body)) as { text: string[] };
+      return Response.json({ translations: sent.text.map((t) => ({ text: `[de] ${t}` })) });
+    }),
+  );
+  saveTranslated.mockClear();
+
+  const res = await POST(post('translate/pages/home/de', ''));
+
+  expect(res.status).toBe(200);
+  expect(calls[0]?.url).toBe('https://api.deepl.com/v2/translate');
+  const headers = calls[0]?.init.headers as Record<string, string> | undefined;
+  expect(headers?.authorization).toBe('DeepL-Auth-Key key-123');
+  expect(saveTranslated).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/pages/de/home.yaml',
+    { 'blocks[_id=k3nf9a2p].heading': '[de] Move to the coast' },
+  );
 });
 
 test('a site with nothing to translate with says so rather than failing quietly', async () => {
