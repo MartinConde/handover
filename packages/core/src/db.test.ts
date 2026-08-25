@@ -137,16 +137,17 @@ test('an autosave for a path that is not in the repo writes nothing', async () =
 });
 
 // A repo in a Map: publish moves the head and the files, so a second publish sees the
-// bytes the first one wrote.
+// bytes the first one wrote. A read with no commit is the branch, which `lag` can hold behind.
 function fakeRepo(files: Record<string, string>) {
   let head = 'commit-A';
   let n = 0;
+  const behind: Record<string, string> = {};
   return {
     async getHead() {
       return head;
     },
-    async getFile(path: string) {
-      const contents = files[path];
+    async getFile(path: string, ref?: string) {
+      const contents = ref ? files[path] : (behind[path] ?? files[path]);
       return contents === undefined ? undefined : { contents, blob_sha: await blobSha(contents) };
     },
     publish: vi.fn(async (list: { path: string; contents: string | null }[]) => {
@@ -156,6 +157,10 @@ function fakeRepo(files: Record<string, string>) {
     }),
     write(path: string, contents: string) {
       files[path] = contents;
+    },
+    /** What a read of the branch still answers: the API serves one from a cache under its name. */
+    lag(path: string, contents: string) {
+      behind[path] = contents;
     },
     read(path: string) {
       return files[path] ?? '';
@@ -1031,4 +1036,34 @@ test('an address change published once is not written a second time', async () =
 
   const rules = (parseEntry('default', repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules;
   expect(rules.map((r) => r.from)).toEqual(['/de/home']);
+});
+
+// Every read a write is made from names the commit it is made against. The branch is a name the
+// contents API answers from a cache, so a read of it can be a commit behind — and a base_sha
+// taken beside a blob from an older one is somebody else's commit going in unnoticed.
+test('a branch read that has not caught up cannot make a publish miss a commit', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  const theirs = FILE.replace('rooms: 3', 'rooms: 9');
+  repo.write(PATH, theirs);
+  repo.lag(PATH, FILE);
+
+  await expect(publishDrafts('default', db, repo)).rejects.toBeInstanceOf(DraftConflictError);
+  expect(repo.publish).not.toHaveBeenCalled();
+  expect(repo.read(PATH)).toBe(theirs);
+});
+
+test('a draft records the base blob of the commit it recorded the base sha of', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+  repo.lag(PATH, FILE.replace('rooms: 3', 'rooms: 1'));
+
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+
+  const row = await only(db);
+  expect(row?.baseSha).toBe('commit-A');
+  expect(row?.baseBlob).toBe(await blobSha(FILE));
+  // And nothing is pending against a file nobody has: the publish that follows goes through.
+  expect((await publishDrafts('default', db, repo))?.paths).toEqual([PATH]);
 });

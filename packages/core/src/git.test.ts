@@ -58,7 +58,7 @@ function fakeGitHub(files: Record<string, string>, visible = true) {
     if (url === 'https://api.github.com/repos/acme/site')
       return Response.json({ full_name: 'acme/site' });
     const m = url.match(
-      /^https:\/\/api\.github\.com\/repos\/acme\/site\/contents\/(.+)\?ref=main$/,
+      /^https:\/\/api\.github\.com\/repos\/acme\/site\/contents\/(.+)\?ref=(.+)$/,
     );
     const name = decodeURIComponent(m?.[1] ?? '');
     const body = files[name];
@@ -82,6 +82,19 @@ test('getFile returns decoded contents and the blob sha', async () => {
     contents: 'title: Mühlenhaus\n',
     blob_sha: 'sha-of-src/content/listings/en/mill-house.yaml',
   });
+});
+
+// The read a publish makes. A branch is a name the API answers from a cache, so a set of reads
+// of one is not a snapshot; a commit is immutable and reading one is.
+test('getFile reads the commit it is given rather than the branch', async () => {
+  const gh = fakeGitHub({ 'src/content/listings/en/mill-house.yaml': 'title: Mühlenhaus\n' });
+  const git = createGitClient('default', app, { fetch: gh.fetch });
+
+  await git.getFile('src/content/listings/en/mill-house.yaml', 'a1b2c3d');
+
+  expect(gh.calls).toContain(
+    'GET https://api.github.com/repos/acme/site/contents/src/content/listings/en/mill-house.yaml?ref=a1b2c3d',
+  );
 });
 
 test('getFile returns undefined for a missing path', async () => {

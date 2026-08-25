@@ -22,7 +22,11 @@ export interface GitClient {
   /** Authenticated call against api.github.com; `path` starts with `/`. */
   request(path: string, init?: RequestInit): Promise<Response>;
   getHead(): Promise<string>;
-  getFile(path: string): Promise<GitFile | undefined>;
+  /**
+   * The file as one commit has it, or as the branch does when no commit is named. Anything
+   * that is about to **write** names one: see the note on the implementation.
+   */
+  getFile(path: string, ref?: string): Promise<GitFile | undefined>;
   publish(
     files: PublishFile[],
     opts: { base_sha: string; message: string },
@@ -117,7 +121,7 @@ export function createGitClient(
   }
 
   const repo = `/repos/${app.owner}/${app.repo}`;
-  const ref = encodeURIComponent(`heads/${app.branch ?? 'main'}`);
+  const branchRef = encodeURIComponent(`heads/${app.branch ?? 'main'}`);
 
   async function request(path: string, init: RequestInit = {}): Promise<Response> {
     return api(path, init, await token());
@@ -146,14 +150,28 @@ export function createGitClient(
     request,
 
     async getHead() {
-      const body = await json<{ object: { sha: string } }>(`${repo}/git/ref/${ref}`, {}, 'getHead');
+      const body = await json<{ object: { sha: string } }>(
+        `${repo}/git/ref/${branchRef}`,
+        {},
+        'getHead',
+      );
       return body.object.sha;
     },
 
-    async getFile(path) {
+    /**
+     * ⚠️ **Pass `ref` wherever the answer is going to be written back.** The contents API is
+     * served from a replica and cached under the ref it was asked for, so two reads of the
+     * branch seconds apart can be two different commits — and a `base_sha` taken beside a blob
+     * from an older one is how somebody else's commit is quietly overwritten: the blobs agree,
+     * no conflict is reported, and the ref update succeeds because the parent was current. A
+     * commit is immutable, so a read of one is the same answer forever and a set of reads at
+     * one commit is a snapshot. A read that only shows somebody something can stay on the
+     * branch, where being a moment behind costs nothing.
+     */
+    async getFile(path, ref) {
       const encoded = path.split('/').map(encodeURIComponent).join('/');
       const res = await request(
-        `${repo}/contents/${encoded}?ref=${encodeURIComponent(app.branch ?? 'main')}`,
+        `${repo}/contents/${encoded}?ref=${encodeURIComponent(ref ?? app.branch ?? 'main')}`,
       );
       if (res.status === 404) {
         await assertRepoReachable();
@@ -196,7 +214,7 @@ export function createGitClient(
         { ...post, body: JSON.stringify({ message, tree: tree.sha, parents: [base_sha] }) },
         'create commit',
       );
-      const res = await request(`${repo}/git/refs/${ref}`, {
+      const res = await request(`${repo}/git/refs/${branchRef}`, {
         ...post,
         method: 'PATCH',
         body: JSON.stringify({ sha: commit.sha, force: false }),

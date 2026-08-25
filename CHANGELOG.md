@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Every read a write is made from names a commit.** GitHub answers the contents API from a
+  replica, cached under the ref it was asked for, so two reads of the branch seconds apart can be
+  two different commits. A publish took `base_sha` from one read and the blobs it compares against
+  it from others: if the blob read was the older one, a colleague's commit was reported as no
+  change at all and the publish quietly wrote over it — the ref update had nothing to refuse,
+  since the parent was current. A publish, an autosave's first read of a file, and a rename,
+  delete or language-off now read every file at the one commit they are made against, and
+  `getFile` takes that commit ([Working together](docs/working-together.md#a-file-that-changed-in-the-repository)).
+
 - **A publish can be of one entry or a chosen set.** `POST /admin/api/publish` now takes
   `{ "entries": ["listings/mill-house"] }` and commits those entries — every language of each,
   with the redirect rules they owe; the entries left out keep theirs until they are published

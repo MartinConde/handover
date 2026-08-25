@@ -3,13 +3,16 @@ import { parse } from 'yaml';
 import type { GitClient, PublishFile } from './git.js';
 import { deleteEntry, duplicateEntry, redirectsText, renameEntry } from './lifecycle.js';
 
-// An in-memory repo: serves files, records every publish call.
+// An in-memory repo: serves files, records every publish call and every read that named a
+// commit rather than the branch.
 function fakeGit(files: Record<string, string>) {
   const published: { files: PublishFile[]; message: string; base_sha: string }[] = [];
+  const read: { path: string; at?: string }[] = [];
   const git: GitClient = {
     request: () => Promise.reject(new Error('not used')),
     getHead: async () => 'commit-A',
-    getFile: async (path) => {
+    getFile: async (path, at) => {
+      read.push({ path, at });
       const contents = files[path];
       return contents === undefined ? undefined : { contents, blob_sha: `sha-of-${path}` };
     },
@@ -18,7 +21,7 @@ function fakeGit(files: Record<string, string>) {
       return { commit_sha: 'commit-B' };
     },
   };
-  return { git, published };
+  return { git, published, read };
 }
 
 const i18n = { locales: ['en', 'de', 'fr'], defaultLocale: 'en' };
@@ -327,4 +330,20 @@ test('duplicate stamps the version onto a file that has none', async () => {
   const copies = await duplicateEntry('default', git, listings, 'seaview', 'seaview-copy');
 
   expect(copies[0]?.contents).toBe('_version: 1\ntitle: "Seaview"\n');
+});
+
+// A commit made of files read from the branch is a commit that can carry bytes from before
+// somebody else's push and put them back, without the ref update having anything to refuse.
+test('a rename reads every file it moves at the commit it is made against', async () => {
+  const { git, published, read } = fakeGit({
+    'src/content/listings/en/seaview.yaml': '_version: 1\ntitle: "Seaview"\n',
+    'src/content/redirects.yaml': '_version: 1\nrules: []\n',
+  });
+
+  await renameEntry('default', git, listings, 'seaview', 'seaview-cottage', { now });
+
+  expect(published[0]?.base_sha).toBe('commit-A');
+  expect(read.every((r) => r.at === 'commit-A')).toBe(true);
+  // redirects.yaml is in the commit too, so the rules it is appended to are that commit's.
+  expect(read).toContainEqual({ path: 'src/content/redirects.yaml', at: 'commit-A' });
 });

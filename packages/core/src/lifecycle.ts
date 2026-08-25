@@ -28,10 +28,13 @@ const REDIRECTS = 'src/content/redirects.yaml';
 const entryPath = (collection: string, locale: string, name: string) =>
   `src/content/${collection}/${locale}/${name}.yaml`;
 
-async function localeFiles(git: GitClient, loc: EntryLocation, name: string) {
+// `at` is the commit these files are read from, which is the one the caller is about to commit
+// against: a rename that carried bytes from a different commit would put somebody else's work
+// back, and the ref update would not refuse it (git.ts, `getFile`).
+async function localeFiles(git: GitClient, loc: EntryLocation, name: string, at: string) {
   const found: { locale: string; contents: string }[] = [];
   for (const locale of loc.i18n.locales) {
-    const file = await git.getFile(entryPath(loc.collection, locale, name));
+    const file = await git.getFile(entryPath(loc.collection, locale, name), at);
     if (file) found.push({ locale, contents: file.contents });
   }
   if (found.length === 0)
@@ -62,8 +65,10 @@ export async function appendRedirects(
   siteId: string,
   git: Pick<GitClient, 'getFile'>,
   added: readonly RedirectRule[],
+  /** The commit this is going into, which is the one its existing rules are read from. */
+  at: string,
 ): Promise<PublishFile> {
-  const file = await git.getFile(REDIRECTS);
+  const file = await git.getFile(REDIRECTS, at);
   const doc = (file ? parseEntry(siteId, file.contents) : { _version: 1 }) as {
     rules?: RedirectRule[];
   };
@@ -80,11 +85,13 @@ const redirectsFile = (
   git: GitClient,
   rules: Omit<RedirectRule, '_id' | 'createdAt'>[],
   now: () => number,
+  at: string,
 ) =>
   appendRedirects(
     siteId,
     git,
     rules.map((rule) => redirectRule(siteId, rule, now())),
+    at,
   );
 
 /**
@@ -112,7 +119,8 @@ export async function renameEntry(
   to: string,
   deps: { now?: () => number } = {},
 ): Promise<{ commit_sha: string }> {
-  const [base_sha, files] = await Promise.all([git.getHead(), localeFiles(git, loc, from)]);
+  const base_sha = await git.getHead();
+  const files = await localeFiles(git, loc, from, base_sha);
   const changes: PublishFile[] = files.flatMap(({ locale, contents }) => [
     { path: entryPath(loc.collection, locale, from), contents: null },
     { path: entryPath(loc.collection, locale, to), contents },
@@ -133,7 +141,8 @@ export async function renameEntry(
         ]
       : [];
   });
-  if (rules.length) changes.push(await redirectsFile(siteId, git, rules, deps.now ?? Date.now));
+  if (rules.length)
+    changes.push(await redirectsFile(siteId, git, rules, deps.now ?? Date.now, base_sha));
   return git.publish(changes, { base_sha, message: `Rename ${loc.collection}/${from} to ${to}` });
 }
 
@@ -151,7 +160,8 @@ export async function deleteEntry(
   redirectTo: string | undefined,
   deps: { now?: () => number } = {},
 ): Promise<{ commit_sha: string }> {
-  const [base_sha, files] = await Promise.all([git.getHead(), localeFiles(git, loc, name)]);
+  const base_sha = await git.getHead();
+  const files = await localeFiles(git, loc, name, base_sha);
   const changes: PublishFile[] = files.map(({ locale }) => ({
     path: entryPath(loc.collection, locale, name),
     contents: null,
@@ -165,7 +175,8 @@ export async function deleteEntry(
           ? [{ from: was, to, status: 301 as const, reason: 'deleted' as const }]
           : [];
       });
-  if (rules.length) changes.push(await redirectsFile(siteId, git, rules, deps.now ?? Date.now));
+  if (rules.length)
+    changes.push(await redirectsFile(siteId, git, rules, deps.now ?? Date.now, base_sha));
   return git.publish(changes, { base_sha, message: `Delete ${loc.collection}/${name}` });
 }
 
@@ -188,7 +199,8 @@ export async function deleteLocales(
   redirectTo: string | undefined,
   deps: { now?: () => number } = {},
 ): Promise<{ commit_sha: string; kept: ContentFile[] }> {
-  const [base_sha, files] = await Promise.all([git.getHead(), localeFiles(git, loc, name)]);
+  const base_sha = await git.getHead();
+  const files = await localeFiles(git, loc, name, base_sha);
   const gone = files.filter((file) => going.includes(file.locale));
   const kept = files
     .filter((file) => !going.includes(file.locale))
@@ -219,7 +231,8 @@ export async function deleteLocales(
           ? [{ from: was, to, status: 301 as const, reason: 'deleted' as const }]
           : [];
       });
-  if (rules.length) changes.push(await redirectsFile(siteId, git, rules, deps.now ?? Date.now));
+  if (rules.length)
+    changes.push(await redirectsFile(siteId, git, rules, deps.now ?? Date.now, base_sha));
   const { commit_sha } = await git.publish(changes, {
     base_sha,
     message: `Turn off ${going.join(', ')} for ${loc.collection}/${name}`,
@@ -247,7 +260,9 @@ export async function duplicateEntry(
   from: string,
   to: string,
 ): Promise<ContentFile[]> {
-  const files = await localeFiles(git, loc, from);
+  // One commit for the whole entry, the way a rename reads it: a copy made of an English from
+  // one commit and a German from another is an entry whose languages never agreed.
+  const files = await localeFiles(git, loc, from, await git.getHead());
   const ids = new Map<string, string>();
   return files.map(({ locale, contents }) => {
     const copy = writtenEntry(siteId, regenerateIds(siteId, parseEntry(siteId, contents), ids));

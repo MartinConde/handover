@@ -85,7 +85,9 @@ are free straight away rather than two minutes later. The remove dialog names th
 ## A file that changed in the repository
 
 The other half is git. Every draft row records the commit its file was loaded from and
-that file's blob sha, and a publish compares the stored sha against the file at HEAD:
+that file's blob sha, and a publish compares the stored sha against the file **at the commit
+it is being made against** — one commit, not "whatever the branch says at each read", so a
+change pushed a moment earlier is caught rather than read as no change at all:
 
 - **Nothing is written unless all of it can be.** If somebody changed one of those files
   in the repository since the editor loaded it, the publish is refused and no commit is

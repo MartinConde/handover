@@ -243,7 +243,11 @@ async function load(
       baseBlob: row.baseBlob,
       entry: parseEntry(siteId, row.contents),
     };
-  const [file, head] = await Promise.all([git.getFile(path), git.getHead()]);
+  // The head first and the file at it, rather than both at once: `base_sha` and `base_blob` are
+  // one answer about one commit, and taking them from two reads of a moving branch is a conflict
+  // on the next publish that nobody made — or none where somebody did.
+  const head = await git.getHead();
+  const file = await git.getFile(path, head);
   if (!file) return undefined;
   return {
     open: false,
@@ -564,7 +568,9 @@ export async function publishDrafts(
   const rows = await readyDrafts(siteId, db, entries);
   if (!rows.length) return undefined;
   const base_sha = await git.getHead();
-  const current = await Promise.all(rows.map((r) => git.getFile(r.path)));
+  // Every read of this publish is of the commit it is made against, so what the conflict check
+  // compares and what the commit's parent is are the same repository.
+  const current = await Promise.all(rows.map((r) => git.getFile(r.path, base_sha)));
   const conflicts = rows
     .filter((r, i) => (current[i]?.blob_sha ?? '') !== r.baseBlob)
     .map((r) => r.path);
@@ -579,7 +585,7 @@ export async function publishDrafts(
       const drafted = rows.find((r) => r.path === source.path)?.contents;
       const file = drafted
         ? { contents: drafted, blob_sha: await blobSha(drafted) }
-        : await git.getFile(source.path);
+        : await git.getFile(source.path, base_sha);
       if (!file) return { path, contents };
       const marked = await markTranslation(
         siteId,
@@ -596,7 +602,7 @@ export async function publishDrafts(
   // address was typed: the old URL is live until now, and one commit carries both. The rules of
   // an entry nobody chose are on its own rows and wait there with it.
   const rules = rows.flatMap((r) => r.pendingRedirects ?? []);
-  if (rules.length) files.push(await appendRedirects(siteId, git, rules));
+  if (rules.length) files.push(await appendRedirects(siteId, git, rules, base_sha));
   const { commit_sha } = await git.publish(files, { base_sha, message: commitMessage(paths) });
   // The blobs first: a drizzle statement is thenable, so awaiting anything beside one inside
   // the map would run it there instead of in the batch.

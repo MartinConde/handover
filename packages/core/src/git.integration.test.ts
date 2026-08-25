@@ -16,22 +16,19 @@ import type { Form } from './schema.js';
 import * as tables from './tables.js';
 
 /**
- * Wait for the contents API to serve what a commit put in a file. It answers from a cache keyed
- * on the branch, so a read straight after a publish can still be the bytes before it — and
- * `saveDraft` and the translation stamp both read through it, so every test here waits for the
- * repository to agree with the commit it just made before doing anything else. It gives up
- * loudly: a timeout here is that cache, and reading it as the assertion below would be wrong.
+ * Wait for the branch to report a commit. The ref endpoint answers from a replica, so a read
+ * straight after a publish can still be the commit before it — and a test that seeds a file and
+ * saves a draft against a head from before the seed is testing nothing. It is the only wait
+ * left: everything the code under test reads, it reads **at a commit** (git.ts, `getFile`), and
+ * a commit is the same answer forever. It gives up loudly rather than letting an assertion
+ * further down report the replica instead of the code.
  */
-const serving = async (
-  git: { getFile: (path: string) => Promise<{ contents: string } | undefined> },
-  path: string,
-  mark: string,
-) => {
+const settled = async (git: { getHead: () => Promise<string> }, sha: string) => {
   for (let i = 0; i < 60; i++) {
-    if ((await git.getFile(path))?.contents.includes(mark)) return;
+    if ((await git.getHead()) === sha) return;
     await new Promise((r) => setTimeout(r, 500));
   }
-  throw new Error(`GitHub is still not serving ${mark} in ${path} after 30s`);
+  throw new Error(`GitHub is still not reporting ${sha} as the branch after 30s`);
 };
 
 // Opt-in: needs a real GitHub App installed on the throwaway repo, see .env.test.example.
@@ -268,10 +265,12 @@ test.skipIf(!configured)(
     const de = `src/content/listings/de/${name}.yaml`;
     const sourceOf = async (path: string) =>
       path === de ? { locale: 'en', path: en, form: TRANSLATED } : undefined;
-    const stale = async () =>
+    // Both files as one commit has them: two reads of a moving branch are two repositories, and
+    // "has the source moved on since the translation" is a question about one.
+    const stale = async (at: string) =>
       staleLocales('default', TRANSLATED, {
-        en: parseEntry('default', (await git.getFile(en))?.contents ?? ''),
-        de: parseEntry('default', (await git.getFile(de))?.contents ?? ''),
+        en: parseEntry('default', (await git.getFile(en, at))?.contents ?? ''),
+        de: parseEntry('default', (await git.getFile(de, at))?.contents ?? ''),
       });
     const seeded = await git.publish(
       [
@@ -286,8 +285,7 @@ test.skipIf(!configured)(
       ],
       { base_sha: await git.getHead(), message: `Seed ${name}` },
     );
-    await serving(git, en, 'A mill.');
-    await serving(git, de, 'Eine Mühle.');
+    await settled(git, seeded.commit_sha);
 
     // Somebody translates the German, and the publish writes down which English it came from.
     await saveDraft('default', db, git, de, {
@@ -295,11 +293,10 @@ test.skipIf(!configured)(
       summary: 'Eine restaurierte Mühle.',
       price: 425000,
     });
-    await publishDrafts('default', db, git, sourceOf);
-    await serving(git, de, '_i18n:');
+    const marked = await publishDrafts('default', db, git, sourceOf);
 
-    expect((await git.getFile(de))?.contents).toContain('_i18n:');
-    expect(await stale()).toEqual([]);
+    expect((await git.getFile(de, marked?.commit_sha ?? ''))?.contents).toContain('_i18n:');
+    expect(await stale(marked?.commit_sha ?? '')).toEqual([]);
 
     // The English moves on without it.
     await saveDraft('default', db, git, en, {
@@ -307,23 +304,19 @@ test.skipIf(!configured)(
       summary: 'A restored mill above the weir.',
       price: 425000,
     });
-    await publishDrafts('default', db, git, sourceOf);
-    await serving(git, en, 'above the weir');
+    const moved = await publishDrafts('default', db, git, sourceOf);
 
-    expect(await stale()).toEqual(['de']);
+    expect(await stale(moved?.commit_sha ?? '')).toEqual(['de']);
 
-    // And the German catches up. The stamp is made from the English the publish reads back, so
-    // that read is warmed here rather than left to whatever the cache still holds.
-    await serving(git, en, 'above the weir');
+    // And the German catches up.
     await saveDraft('default', db, git, de, {
       title: `${name} DE`,
       summary: 'Eine restaurierte Mühle am Wehr.',
       price: 425000,
     });
     const caught = await publishDrafts('default', db, git, sourceOf);
-    await serving(git, de, 'am Wehr');
 
-    expect(await stale()).toEqual([]);
+    expect(await stale(caught?.commit_sha ?? '')).toEqual([]);
 
     await git.publish(
       [en, de].map((path) => ({ path, contents: null })),
@@ -367,22 +360,7 @@ const harness = async () => {
     const res = await git.request(`/repos/${app.owner}/${app.repo}/git/commits/${sha}`);
     return ((await res.json()) as { parents: { sha: string }[] }).parents[0]?.sha;
   };
-  // GitHub serves the ref and the contents from replicas, so a read straight after a commit can
-  // still answer the one before it. These tests wait for it rather than race it: a person's next
-  // click is seconds away and none of the four is about that window. What they wait for is what
-  // the commit put in the repository, never what the drafts table says about it.
-  const settled = async (sha: string) => {
-    for (let i = 0; i < 20 && (await git.getHead()) !== sha; i++)
-      await new Promise((r) => setTimeout(r, 500));
-  };
-  return {
-    app,
-    git,
-    db: openDb('default', binding),
-    parentOf,
-    settled,
-    dispose: () => mf.dispose(),
-  };
+  return { app, git, db: openDb('default', binding), parentOf, dispose: () => mf.dispose() };
 };
 
 const LISTING = (name: string) =>
@@ -407,7 +385,7 @@ const publishing = async (...args: Parameters<typeof publishDrafts>) => {
 test.skipIf(!configured)(
   'a publish that follows your own is not a conflict with it',
   async () => {
-    const { git, db, parentOf, settled, dispose } = await harness();
+    const { git, db, parentOf, dispose } = await harness();
     const name = `it-self-${(await git.getHead()).slice(0, 7)}`;
     const en = `src/content/listings/en/${name}.yaml`;
     const de = `src/content/listings/de/${name}.yaml`;
@@ -422,11 +400,7 @@ test.skipIf(!configured)(
       ],
       { base_sha: await git.getHead(), message: `Seed ${name}` },
     );
-    await settled(seed.commit_sha);
-    // Both files: the publish stamps the German with the English it was made from, and an
-    // English the contents API has not caught up with is one the stamp is left off for.
-    await serving(git, en, `${name}`);
-    await serving(git, de, `${name} DE`);
+    await settled(git, seed.commit_sha);
 
     await saveDraft('default', db, git, de, {
       title: `${name} DE`,
@@ -434,9 +408,7 @@ test.skipIf(!configured)(
       price: 425000,
     });
     const first = await publishing('default', db, git, sourceOf);
-    await settled(first?.commit_sha ?? '');
-    // The publish stamped the German on its way past; the next one reads that file back.
-    await serving(git, de, '_i18n:');
+    await settled(git, first?.commit_sha ?? '');
     await saveDraft('default', db, git, de, {
       title: `${name} DE`,
       summary: 'Eine restaurierte Mühle.',
@@ -449,7 +421,7 @@ test.skipIf(!configured)(
     // And the row is on the file as the commit left it, which is what made that true.
     const row = await loadDraft('default', db, de);
     expect(row?.baseSha).toBe(second?.commit_sha);
-    expect(row?.baseBlob).toBe((await git.getFile(de))?.blob_sha);
+    expect(row?.baseBlob).toBe((await git.getFile(de, second?.commit_sha ?? ''))?.blob_sha);
 
     await git.publish(
       [en, de].map((path) => ({ path, contents: null })),
@@ -463,15 +435,14 @@ test.skipIf(!configured)(
 test.skipIf(!configured)(
   'a commit that rewrites the file with identical bytes is not a conflict',
   async () => {
-    const { git, db, parentOf, settled, dispose } = await harness();
+    const { git, db, parentOf, dispose } = await harness();
     const name = `it-same-${(await git.getHead()).slice(0, 7)}`;
     const path = `src/content/listings/en/${name}.yaml`;
     const { commit_sha: seeded } = await git.publish([{ path, contents: LISTING(name) }], {
       base_sha: await git.getHead(),
       message: `Seed ${name}`,
     });
-    await settled(seeded);
-    await serving(git, path, name);
+    await settled(git, seeded);
     await saveDraft('default', db, git, path, {
       title: name,
       summary: 'A restored mill.',
@@ -483,7 +454,7 @@ test.skipIf(!configured)(
       base_sha: seeded,
       message: `Reformat ${name}`,
     });
-    await settled(reformatted);
+    await settled(git, reformatted);
     const published = await publishing('default', db, git);
 
     // The commit moved and the file did not, which is the whole of the case: the publish went
@@ -491,6 +462,9 @@ test.skipIf(!configured)(
     expect(reformatted).not.toBe(seeded);
     expect(published?.paths).toEqual([path]);
     expect(await parentOf(published?.commit_sha ?? '')).toBe(reformatted);
+    expect((await git.getFile(path, published?.commit_sha ?? ''))?.contents).toContain(
+      'A restored mill.',
+    );
 
     await git.publish([{ path, contents: null }], {
       base_sha: published?.commit_sha ?? '',
@@ -504,15 +478,14 @@ test.skipIf(!configured)(
 test.skipIf(!configured)(
   'a commit that changed the file is a conflict, and nothing is written',
   async () => {
-    const { git, db, settled, dispose } = await harness();
+    const { git, db, dispose } = await harness();
     const name = `it-theirs-${(await git.getHead()).slice(0, 7)}`;
     const path = `src/content/listings/en/${name}.yaml`;
     const { commit_sha: seeded } = await git.publish([{ path, contents: LISTING(name) }], {
       base_sha: await git.getHead(),
       message: `Seed ${name}`,
     });
-    await settled(seeded);
-    await serving(git, path, name);
+    await settled(git, seeded);
     await saveDraft('default', db, git, path, {
       title: name,
       summary: 'A restored mill.',
@@ -525,19 +498,16 @@ test.skipIf(!configured)(
       [{ path, contents: LISTING(name).replace('A mill.', 'A mill above the weir.') }],
       { base_sha: seeded, message: `Edit ${name} in code` },
     );
-    await settled(theirs);
-    // The precondition, not the assertion: the publish below is refused because the blob at HEAD
-    // is no longer the one the draft was loaded from, and it can only be refused once the
-    // contents API is serving that blob at all.
-    await serving(git, path, 'A mill above the weir.');
-    await new Promise((r) => setTimeout(r, 1000));
-    expect((await git.getFile(path))?.blob_sha).not.toBe(loaded?.baseBlob);
+    await settled(git, theirs);
+    // The precondition, not the assertion: what makes the publish below a conflict is that the
+    // blob at the commit it will be made against is no longer the one the draft was loaded from.
+    expect((await git.getFile(path, theirs))?.blob_sha).not.toBe(loaded?.baseBlob);
     const caught = await publishing('default', db, git).catch((err) => err);
 
     expect(caught).toBeInstanceOf(DraftConflictError);
     expect((caught as DraftConflictError).paths).toEqual([path]);
     expect(await git.getHead()).toBe(theirs);
-    expect((await git.getFile(path))?.contents).toContain('A mill above the weir.');
+    expect((await git.getFile(path, theirs))?.contents).toContain('A mill above the weir.');
 
     await git.publish([{ path, contents: null }], {
       base_sha: theirs,
@@ -551,7 +521,7 @@ test.skipIf(!configured)(
 test.skipIf(!configured)(
   'a commit to a different file leaves the publish alone',
   async () => {
-    const { app, git, db, settled, dispose } = await harness();
+    const { app, git, db, dispose } = await harness();
     const name = `it-other-${(await git.getHead()).slice(0, 7)}`;
     const mine = `src/content/listings/en/${name}.yaml`;
     const theirs = `src/content/listings/en/${name}-theirs.yaml`;
@@ -559,8 +529,7 @@ test.skipIf(!configured)(
       [mine, theirs].map((path) => ({ path, contents: LISTING(name) })),
       { base_sha: await git.getHead(), message: `Seed ${name}` },
     );
-    await settled(seeded);
-    await serving(git, mine, name);
+    await settled(git, seeded);
     await saveDraft('default', db, git, mine, {
       title: name,
       summary: 'A restored mill.',
@@ -571,7 +540,7 @@ test.skipIf(!configured)(
       [{ path: theirs, contents: LISTING(name).replace('A mill.', 'Somebody else.') }],
       { base_sha: seeded, message: `Edit ${name}-theirs in code` },
     );
-    await settled(elsewhere);
+    await settled(git, elsewhere);
     const published = await publishing('default', db, git);
 
     expect(published?.paths).toEqual([mine]);
