@@ -10,6 +10,7 @@ import {
   fieldsFrom,
   indexFrom,
   type JsonSchema,
+  type Mailer,
   parseEntry,
   type RichtextTier,
   redirectsText,
@@ -29,6 +30,7 @@ export type {
   ContentEntry,
   ContentSource,
   LocaleLink,
+  Mailer,
   RichtextTier,
   Translate,
 } from '@handover/core';
@@ -233,6 +235,12 @@ export interface HandoverConfig {
   >;
   /** One schema per file under `src/content/globals/<locale>/`, keyed by file name. */
   globals?: Record<string, z.ZodType>;
+  /**
+   * Who sends the site's mail: the provider the package ships, on the key the Worker holds,
+   * or a function of your own. Without one the admin offers no test email and no emailed
+   * link — the same silence as a site with no translator.
+   */
+  mailer?: Mailer | { provider: 'resend'; from: string };
   /** Required, a one-language site too: the files live in a locale folder either way. */
   i18n: {
     /** The folder names under `src/content/<collection>/`: `'en'`, `'de'`, `'pt-br'`. */

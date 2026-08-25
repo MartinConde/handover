@@ -95,9 +95,13 @@ the `\n`-escaped one-line form.
 | `GITHUB_PRIVATE_KEY` | the PKCS#8 PEM |
 | `GITHUB_REPO` | `owner/repo` of the site |
 
-Optional: `GITHUB_BRANCH` if the live branch is not `main`, and `DEEPL_API_KEY` to
-[machine-translate](translating.md#a-machines-first-draft) from the admin — a free key ends in
-`:fx` and is recognised as one. Without it the translate buttons are not drawn.
+Optional, each turning on the feature that reads it:
+
+| Secret | Value |
+|---|---|
+| `GITHUB_BRANCH` | the live branch, if it is not `main` |
+| `DEEPL_API_KEY` | [machine translation](translating.md#a-machines-first-draft) from the admin — a free key ends in `:fx` and is recognised as one. Without it the translate buttons are not drawn |
+| `RESEND_API_KEY` | sending mail, when `cms.config.ts` says `mailer: { provider: 'resend', … }` ([Configuration](configuration.md#mailer)). Verify the sending domain at `resend.com/domains` and put an address on it in `from` — until you do, Resend only delivers to the address its own account was created with |
 
 `/admin/api` requests fail with an explicit error naming the missing secret. For local
 `astro dev`, the same names go in `.dev.vars`.

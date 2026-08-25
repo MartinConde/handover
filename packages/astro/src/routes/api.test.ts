@@ -1,6 +1,7 @@
 import {
   applyDrift,
   formOf,
+  type Mailer,
   type PublishFile,
   parseEntry,
   RepoUnreachableError,
@@ -123,6 +124,16 @@ const rows: Record<string, Row> = {};
 let locales = ['en'];
 // What the site translates with: its own hook, or nothing at all.
 let translator: typeof translate | undefined = translate;
+// What the site sends mail with: a function of its own, the provider it named, or nothing.
+let siteMailer: Mailer | { provider: 'resend'; from: string } | undefined;
+// And the key the Worker holds for that provider.
+let resendKey: string | undefined;
+// The fake mailer: every message it was asked to send, so a test can read who it went to.
+const sent: { to: string; subject: string; text: string }[] = [];
+const fakeMailer: Mailer = async (message) => {
+  sent.push(message);
+  return { id: 'fake-1' };
+};
 // And what the Worker holds when the site has no hook of its own.
 let deeplKey: string | undefined;
 vi.mock('virtual:handover/config', () => ({
@@ -135,6 +146,9 @@ vi.mock('virtual:handover/config', () => ({
       get translate() {
         return translator;
       },
+    },
+    get mailer() {
+      return siteMailer;
     },
     collections: {
       listings: { schema: listing, route: '/listings/[slug]', index: '/listings' },
@@ -194,6 +208,9 @@ vi.mock('cloudflare:workers', () => ({
     get DEEPL_API_KEY() {
       return deeplKey;
     },
+    get RESEND_API_KEY() {
+      return resendKey;
+    },
     DB: {},
   },
 }));
@@ -223,6 +240,9 @@ afterEach(() => {
   locales = ['en'];
   translator = translate;
   deeplKey = undefined;
+  siteMailer = undefined;
+  resendKey = undefined;
+  sent.length = 0;
   for (const path of Object.keys(files)) delete files[path];
   for (const path of Object.keys(rows)) delete rows[path];
 });
@@ -252,6 +272,84 @@ test('ping returns the collection names and who is signed in', async () => {
     user: session.user,
     role: 'editor',
   });
+});
+
+const owner = { user: { id: 'u1', name: 'Martin', email: 'martin@example.com' }, role: 'owner' };
+const editor = { user: { id: 'u2', name: 'Anna', email: 'anna@example.com' }, role: 'editor' };
+const testEmail = (session?: unknown) =>
+  POST(
+    ctx('checks/email', new Request('https://x/admin/api/checks/email', { method: 'POST' }), {
+      handover: session,
+    }),
+  );
+
+test('a test email goes to the signed-in owner and answers with the id it was given', async () => {
+  siteMailer = fakeMailer;
+  const res = await testEmail(owner);
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ ok: true, to: 'martin@example.com', id: 'fake-1' });
+  // Nobody else can be named: the recipient is the session's, not the request's.
+  expect(sent).toHaveLength(1);
+  expect(sent[0]?.to).toBe('martin@example.com');
+});
+
+test('an editor cannot send a test email', async () => {
+  siteMailer = fakeMailer;
+  const res = await testEmail(editor);
+  expect(res.status).toBe(403);
+  expect(sent).toEqual([]);
+});
+
+test('a site that configured no mailer says so instead of failing', async () => {
+  const res = await testEmail(owner);
+  expect(res.status).toBe(503);
+  expect(((await res.json()) as { error: string }).error).toContain('cms.config.ts');
+});
+
+test('a site whose provider has no key names the key', async () => {
+  siteMailer = { provider: 'resend', from: 'Handover <onboarding@resend.dev>' };
+  const res = await testEmail(owner);
+  expect(res.status).toBe(503);
+  expect(((await res.json()) as { error: string }).error).toContain('RESEND_API_KEY');
+});
+
+test('the named provider sends through Resend on the key the Worker holds', async () => {
+  siteMailer = { provider: 'resend', from: 'Handover <onboarding@resend.dev>' };
+  resendKey = 're_123';
+  const calls: Record<string, unknown>[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init: RequestInit) => {
+      calls.push(JSON.parse(String(init.body)));
+      return Response.json({ id: 'e1b2c3d4' });
+    }),
+  );
+  const res = await testEmail(owner);
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ ok: true, to: 'martin@example.com', id: 'e1b2c3d4' });
+  expect(calls[0]).toMatchObject({
+    from: 'Handover <onboarding@resend.dev>',
+    to: 'martin@example.com',
+  });
+});
+
+test("the provider's own refusal is what a failed test email says", async () => {
+  siteMailer = { provider: 'resend', from: 'Handover <onboarding@resend.dev>' };
+  resendKey = 're_123';
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json(
+        { message: 'The onboarding@resend.dev domain is for testing.' },
+        { status: 403 },
+      ),
+    ),
+  );
+  const res = await testEmail(owner);
+  expect(res.status).toBe(502);
+  expect(((await res.json()) as { error: string }).error).toBe(
+    'Resend refused the message (403): The onboarding@resend.dev domain is for testing.',
+  );
 });
 
 test('unknown paths are 404', async () => {

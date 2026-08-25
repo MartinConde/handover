@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
 import index from 'virtual:handover/index';
-import type { Db, EntryLocation, Form, GitClient, Translate } from '@handover/core';
+import type { Db, EntryLocation, Form, GitClient, Mailer, Translate } from '@handover/core';
 import {
   AUTH_BASE_PATH,
   addressError,
@@ -33,6 +33,7 @@ import {
   recordOffer,
   recordRename,
   renameEntry,
+  resendMailer,
   resolveDrift,
   saveDraft,
   saveTranslated,
@@ -75,6 +76,50 @@ function db(): Db {
 function translator(): Translate | undefined {
   const key = (env as Record<string, string | undefined>).DEEPL_API_KEY;
   return config.i18n.translate ?? (key ? deeplTranslate('default', key) : undefined);
+}
+
+// Who sends a message: the site's own function, or the provider it named on the key the
+// Worker holds. Neither is an ordinary state of a site — a site with no mailer is offered no
+// test email at all — so it is asked for where it is needed rather than resolved on the way.
+function mailer(): Mailer | undefined {
+  const configured = config.mailer;
+  if (typeof configured === 'function') return configured;
+  const key = (env as Record<string, string | undefined>).RESEND_API_KEY;
+  return configured && key ? resendMailer('default', key, configured.from) : undefined;
+}
+
+/**
+ * The one message the admin sends on its own account: proof to whoever pasted the key that it
+ * works. It goes to the person who asked for it and to nobody else — a recipient the caller
+ * names is a mail relay behind a login — and only an owner may ask, which is what the settings
+ * screen it sits on is. Every way it can fail is answered in words the person who configured
+ * the mailer can act on rather than as a status.
+ */
+async function testEmail(session: App.Locals['handover']): Promise<Response> {
+  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  const send = mailer();
+  if (!send)
+    return Response.json(
+      {
+        error: config.mailer
+          ? 'RESEND_API_KEY is not set: put it in .dev.vars, or set it with `wrangler secret put RESEND_API_KEY`'
+          : 'No mailer is configured: add a `mailer` block to cms.config.ts',
+      },
+      { status: 503 },
+    );
+  const to = session.user.email;
+  try {
+    const { id } = await send({
+      to,
+      subject: 'Handover test email',
+      text: 'Your site can send email. Nothing else to do — this message was sent from the admin to check.',
+    });
+    return Response.json({ ok: true, to, id });
+  } catch (err) {
+    // The provider's own refusal, which names the rule that was broken — an unverified sending
+    // domain above all — and is the whole use of the button.
+    return Response.json({ error: (err as Error).message }, { status: 502 });
+  }
 }
 
 // One file of one entry. No language is implied: which one an entry is written in is the
@@ -892,8 +937,9 @@ async function answering(work: () => Promise<Response>): Promise<Response> {
   }
 }
 
-export const POST: APIRoute = async ({ params, request, url }) => {
+export const POST: APIRoute = async ({ params, request, url, locals }) => {
   if (mounted(url.pathname)) return createAuth(url).handler(request);
+  if (params.path === 'checks/email') return testEmail(locals.handover);
   if (params.path === 'publish') return answering(publish);
   const filling = params.path?.match(TRANSLATE);
   if (filling)

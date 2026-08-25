@@ -107,6 +107,32 @@ One key per site-wide file under `src/content/globals/<locale>/`, mapping the fi
 to its schema: `globals: { site, navigation }`. Keys are lowercase letters, digits and
 dashes. See [Site files](site-files.md).
 
+## `mailer`
+
+Optional, and what the admin sends mail with — the "send a test email" check on the settings
+screen, and the emailed sign-in link when it lands. Name the provider and the address mail comes
+from; the key is a secret and lives in the environment:
+
+```ts
+mailer: { provider: 'resend', from: 'Your Site <hello@your-site.com>' },
+```
+
+`'resend'` is the only provider so far, and it reads `RESEND_API_KEY`
+([Deploying](deploy.md#secrets)). `from` has to be on a domain verified at `resend.com/domains`;
+without one, the only sender that works is `onboarding@resend.dev`, which Resend delivers **only
+to the address the Resend account was created with** — enough to prove a key works, not enough
+to write to anyone else. Anything other than Resend is a function of your own, given the message
+and answering with the provider's id for it where there is one:
+
+```ts
+mailer: async ({ to, subject, text, html }) => {
+  const { id } = await myProvider.send({ to, subject, text, html });
+  return { id };
+},
+```
+
+Without either, the admin offers no test email and no emailed link at all.
+
 ## Entry filenames
 
 "New entry" derives the filename from the name you type — the collection's `titleField`

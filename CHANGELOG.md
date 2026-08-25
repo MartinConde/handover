@@ -4,6 +4,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Handover can send email.** `mailer` in `cms.config.ts` names who sends it — the provider the
+  package ships, `{ provider: 'resend', from: 'You <hello@your-site.com>' }` on a
+  `RESEND_API_KEY` secret, or a function of your own given the message. With one configured, an
+  owner can `POST /admin/api/checks/email` and the admin mails them at their own account's
+  address, answering with the provider's id for the message; the settings screen puts a button
+  on it later. Editors get `403`, a site with no mailer gets `503` naming what is missing, and a
+  provider that refuses gets `502` carrying the provider's own words — an unverified sending
+  domain reads as itself rather than as a number
+  ([Configuration](docs/configuration.md#mailer), [Accounts and signing in](docs/auth.md#sending-email)).
+
 - **`/admin` has accounts instead of one shared password.** Sign in with an email address and a
   password against the site's own D1; sessions are signed with `BETTER_AUTH_SECRET`, which
   replaces the old shared-password variable in `.dev.vars` and in `wrangler secret put`. Nobody

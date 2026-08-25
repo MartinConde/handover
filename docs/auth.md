@@ -98,8 +98,33 @@ There is no route that lets a stranger make an account:
 The status codes are Better Auth's and are not all `403`; what matters, and what the package's
 tests assert, is that **no row is created** on any of these paths.
 
+## Sending email
+
+The admin sends mail through whatever `mailer` in `cms.config.ts` names — Resend on a
+`RESEND_API_KEY`, or a function of your own ([Configuration](configuration.md#mailer)). Nothing
+in the login needs it yet; the emailed sign-in link does, and arrives with it.
+
+What is here is the check that proves a key before anything depends on it. An **owner** posts to
+it and the admin mails them at their own account's address:
+
+```sh
+curl -X POST https://your-site.example/admin/api/checks/email -b cookies.txt
+{"ok":true,"to":"you@your-site.com","id":"3f6b…"}
+```
+
+The recipient is never asked for. It is the address of whoever is signed in, so the button
+cannot be pointed at a stranger — and on a Resend account with no verified domain that is the
+only address it could reach anyway.
+
+| Answer | Means |
+|---|---|
+| `200` | It sent. `id` is the provider's own id for the message |
+| `403` | You are an editor. Test email is the owner's |
+| `503` | No mailer is configured, or its key is not set. The message names which |
+| `502` | The provider refused, in the provider's own words — an unverified sending domain reads as itself rather than as a number |
+
 ## Not here yet
 
 Signing in by emailed link, *Continue with GitHub*, *Forgot password?* and the account page all
-need a mail sender or GitHub credentials, and arrive with them. Until then the login screen
-shows the email and password form and nothing that does not work.
+need a mailer to be wired into the login or GitHub credentials, and arrive with them. Until then
+the login screen shows the email and password form and nothing that does not work.
