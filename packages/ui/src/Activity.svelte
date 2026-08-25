@@ -17,6 +17,17 @@ let person = $state('');
 let entry = $state('');
 let typed = $state('');
 const filtered = $derived(Boolean(group || person || entry));
+/** Changing a filter replaces the list in place, which is a change nobody is otherwise told
+    about. The element is always in the document, or its first content would not be announced. */
+const status = $derived(
+  loading
+    ? ''
+    : events.length
+      ? `${events.length} event${events.length === 1 ? '' : 's'} shown`
+      : filtered
+        ? 'No activity matches these filters'
+        : 'Nothing has been recorded yet',
+);
 
 /** A page that is no longer the one being asked for must not land in the list. */
 let asked = 0;
@@ -141,7 +152,8 @@ function said(event: ActivityEvent): Said {
       const one = entryOf(event.subject);
       if (one) return { lead: `${actor} published `, link: one };
       const files = (d as { files?: unknown } | null)?.files;
-      return { lead: `${actor} published ${typeof files === 'number' ? files : 'several'} files.` };
+      const many = typeof files === 'number' ? `${files} file${files === 1 ? '' : 's'}` : 'several files';
+      return { lead: `${actor} published ${many}.` };
     }
     case 'mail-failed':
       return { lead: `${MESSAGE[str(d, 'message') ?? ''] ?? 'A message'} could not be sent.` };
@@ -232,6 +244,7 @@ function when(at: number): string {
       {/if}
     </div>
   </div>
+  <p class="visually-hidden" role="status">{status}</p>
   {#if role !== 'owner'}
     <p class="list-note">Showing your own activity. Owners see everyone's.</p>
   {/if}

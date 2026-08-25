@@ -32,7 +32,10 @@ const ev = (kind: string, extra: Partial<Event> = {}): Event => ({
 });
 
 /** What `GET /admin/api/activity` answers, one page per call, and the member list beside it. */
-function server(pages: Page | Page[], members: { id: string; name: string; email: string }[] = []) {
+function server(
+  pages: Page | (Page | (() => Promise<Page>))[],
+  members: { id: string; name: string; email: string }[] = [],
+) {
   const calls: string[] = [];
   const queue = Array.isArray(pages) ? [...pages] : [pages];
   vi.stubGlobal(
@@ -40,7 +43,8 @@ function server(pages: Page | Page[], members: { id: string; name: string; email
     vi.fn(async (url: string) => {
       calls.push(url);
       if (url === '/admin/api/members') return Response.json({ members });
-      return Response.json(queue.length > 1 ? queue.shift() : queue[0]);
+      const answer = queue.length > 1 ? queue.shift() : queue[0];
+      return Response.json(typeof answer === 'function' ? await answer() : answer);
     }),
   );
   return calls;
@@ -183,15 +187,24 @@ test('a publish of one file links to the entry and names its language', async ()
   expect(sentences(root)).toEqual(['Anna Berg published mill-house DE a1b2c3d']);
 });
 
-// The commit had more than one file in it, so there is no one entry to send anybody to.
-test('a publish of several files says how many and links to none of them', async () => {
+// A commit with no one entry on it has nowhere to send anybody, so it counts its files instead
+// — and counts them in words, since 3.11 decides again what a `publish` row carries.
+test('a publish with no entry on it counts its files and links to none of them', async () => {
   server({
-    events: [ev('publish', { detail: { files: 4 }, commitSha: 'a1b2c3d4e5f60718' })],
+    events: [
+      ev('publish', { detail: { files: 4 }, commitSha: 'a1b2c3d4e5f60718' }),
+      ev('publish', { detail: { files: 1 }, commitSha: 'b1b2c3d4e5f60718' }),
+      ev('publish', { detail: {}, commitSha: 'c1b2c3d4e5f60718' }),
+    ],
     cursor: null,
   });
   const root = await show();
 
-  expect(sentences(root)).toEqual(['Anna Berg published 4 files. a1b2c3d']);
+  expect(sentences(root)).toEqual([
+    'Anna Berg published 4 files. a1b2c3d',
+    'Anna Berg published 1 file. b1b2c3d',
+    'Anna Berg published several files. c1b2c3d',
+  ]);
   expect(root.querySelector('.said a')).toBe(null);
 });
 
@@ -384,6 +397,44 @@ test('load more appends the next page rather than replacing the list', async () 
     'Anna Berg signed in through GitHub.',
   ]);
   expect(root.querySelector('.load-more')).toBe(null);
+});
+
+test('load more says so, and refuses a second press, while the page is on its way', async () => {
+  let land: (page: Page) => void = () => {};
+  const second = new Promise<Page>((resolve) => {
+    land = resolve;
+  });
+  server([
+    { events: [ev('login', { detail: { method: 'password' } })], cursor: '1000.a' },
+    () => second,
+  ]);
+  const root = await show();
+
+  const more = () => root.querySelector('.load-more button') as HTMLButtonElement;
+  more().click();
+  await settle();
+  expect([more().textContent?.trim(), more().disabled]).toEqual(['Loading…', true]);
+
+  land({ events: [ev('login', { detail: { method: 'link' } })], cursor: null });
+  await settle();
+  expect(sentences(root)).toHaveLength(2);
+});
+
+// Replacing the list under somebody is a change axe scores nothing on and a keyboard pass does
+// not catch: the region has to be in the document before its content changes, or nothing is said.
+test('the result of a filter is announced, not only redrawn', async () => {
+  const calls = server([
+    { events: [ev('login', { detail: { method: 'password' } })], cursor: null },
+    { events: [], cursor: null },
+  ]);
+  const root = await show();
+  const said = () => root.querySelector('[role="status"]')?.textContent?.trim();
+  expect(said()).toBe('1 event shown');
+
+  await choose(root, 'activity-group', 'Media');
+
+  expect(activityCalls(calls).at(-1)).toBe('/admin/api/activity?group=Media');
+  expect(said()).toBe('No activity matches these filters');
 });
 
 test('an editor is offered no person filter and is told whose activity this is', async () => {
