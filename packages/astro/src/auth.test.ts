@@ -217,7 +217,7 @@ test('the session cookie is Secure on an https site even when the request arrive
  */
 function sendInvite(email: string, host = 'https://demo.example') {
   const url = new URL(`${host}${AUTH_BASE_PATH}/sign-in/magic-link`);
-  return memberApi(createAuth(url, undefined, { invite: true })).signInMagicLink({
+  return memberApi('default', createAuth(url, undefined, { invite: true })).signInMagicLink({
     body: { email, callbackURL: '/admin/account' },
     headers: new Headers({
       'content-type': 'application/json',

@@ -292,15 +292,26 @@ type MemberRow = {
   invitedAt: number;
 };
 let memberRows: MemberRow[] = [];
+/** Which rows the routes took out of the owner count, in order. */
+const demoted: string[] = [];
 // Which user and which session the route asked about — the two values that must come from the
 // session and never from the request, or one person could read another's account.
 let asked: unknown[] = [];
 vi.mock('@handover/core', async (original) => ({
   ...(await original<typeof import('@handover/core')>()),
   memberList: async () => memberRows,
-  ownerCount: async () => memberRows.filter((row) => row.role === 'owner').length,
+  // The real one is an UPDATE whose WHERE holds the rule; against a real D1 it is proven in
+  // core's own auth.test.ts. What the route owes is asking it before it removes anybody.
+  demoteOwner: async (_site: string, _db: unknown, id: string) => {
+    const target = memberRows.find((row) => row.id === id);
+    if (target?.role !== 'owner') return false;
+    if (memberRows.filter((row) => row.role === 'owner').length < 2) return false;
+    target.role = 'editor';
+    demoted.push(id);
+    return true;
+  },
   accountFacts: async (..._args: unknown[]) => {
-    asked = _args.slice(1);
+    asked = _args.slice(2);
     return facts;
   },
   createGitClient: () => ({ getFile, getHead, publish }),
@@ -332,6 +343,7 @@ afterEach(() => {
   facts = { hasPassword: true, sessions: [] };
   asked = [];
   memberRows = [];
+  demoted.length = 0;
   createUserRefusal = undefined;
   magicLinkRefusal = undefined;
   setRoleRefusal = undefined;
@@ -2249,7 +2261,7 @@ test('the last owner cannot be demoted', async () => {
   expect(calls.setRole).toEqual([]);
 });
 
-test('an owner can be demoted once there is a second one', async () => {
+test('demoting an owner goes through the statement that holds the rule', async () => {
   memberRows = [
     member('u1', 'martin@example.com', 'owner'),
     member('u2', 'anna@example.com', 'owner'),
@@ -2258,7 +2270,22 @@ test('an owner can be demoted once there is a second one', async () => {
   const res = await memberPost('members/u2/role', { role: 'editor' }, owner);
 
   expect(res.status).toBe(200);
-  expect(calls.setRole).toEqual([{ body: { userId: 'u2', role: 'editor' }, invite: false }]);
+  expect(demoted).toEqual(['u2']);
+  // Not `setRole`: it would write the column behind a count another request can change.
+  expect(calls.setRole).toEqual([]);
+});
+
+test('promoting an editor is still Better Auth setting the role', async () => {
+  memberRows = [
+    member('u1', 'martin@example.com', 'owner'),
+    member('u2', 'anna@example.com', 'editor'),
+  ];
+
+  const res = await memberPost('members/u2/role', { role: 'owner' }, owner);
+
+  expect(res.status).toBe(200);
+  expect(calls.setRole).toEqual([{ body: { userId: 'u2', role: 'owner' }, invite: false }]);
+  expect(demoted).toEqual([]);
 });
 
 // The guard, aimed at directly. Its premise is synthetic: reaching this route needs an owner
@@ -2300,6 +2327,23 @@ test('removing somebody else takes their sessions and accounts with them', async
   const res = await memberDelete('members/u2', owner);
 
   expect(res.status).toBe(200);
+  expect(calls.removeUser).toEqual([{ body: { userId: 'u2' }, invite: false }]);
+  // An editor is nobody's last owner, so nothing is taken out of the count first.
+  expect(demoted).toEqual([]);
+});
+
+// The removal asks for the owner slot before it asks for the row, so two owners removing each
+// other cannot both be told yes.
+test('removing an owner takes them out of the count before it deletes them', async () => {
+  memberRows = [
+    member('u1', 'martin@example.com', 'owner'),
+    member('u2', 'anna@example.com', 'owner'),
+  ];
+
+  const res = await memberDelete('members/u2', owner);
+
+  expect(res.status).toBe(200);
+  expect(demoted).toEqual(['u2']);
   expect(calls.removeUser).toEqual([{ body: { userId: 'u2' }, invite: false }]);
 });
 

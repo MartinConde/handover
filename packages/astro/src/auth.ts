@@ -160,7 +160,7 @@ export function createAuth(url: URL, ctx?: CloudflareContext, options?: { invite
   const db = openDb('default', (env as { DB?: Parameters<typeof openDb>[1] }).DB);
   const base = baseUrl();
   const send = mailer();
-  return create(db, {
+  return create('default', db, {
     secret,
     baseURL: base,
     // The same string the cookie's `Secure` is decided from, so the two cannot disagree about
@@ -200,7 +200,7 @@ export function createAuth(url: URL, ctx?: CloudflareContext, options?: { invite
 const signInLink =
   (db: Db, send: Mailer) =>
   async ({ email, url }: { email: string; url: string }) => {
-    if (!(await userExists(db, email))) return;
+    if (!(await userExists('default', db, email))) return;
     await send({
       to: email,
       subject: 'Your sign-in link',
@@ -225,7 +225,7 @@ const INVITE_HOURS = 72;
 const inviteLink =
   (db: Db, send: Mailer, site: string) =>
   async ({ email, url }: { email: string; url: string }) => {
-    if (!(await userExists(db, email))) return;
+    if (!(await userExists('default', db, email))) return;
     await send({
       to: email,
       subject: 'You have been invited',

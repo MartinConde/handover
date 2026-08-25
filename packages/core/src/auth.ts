@@ -5,7 +5,7 @@ import { createAccessControl } from 'better-auth/plugins/access';
 import { admin } from 'better-auth/plugins/admin';
 import { adminAc, defaultStatements, userAc } from 'better-auth/plugins/admin/access';
 import { magicLink } from 'better-auth/plugins/magic-link';
-import { and, count, desc, eq, gt, isNotNull, or } from 'drizzle-orm';
+import { and, desc, eq, exists, gt, isNotNull, ne, or, sql } from 'drizzle-orm';
 import * as authTables from './auth-schema.js';
 import type { Db } from './db.js';
 
@@ -29,7 +29,7 @@ const roles = { owner: adminAc, editor: userAc };
  * rather than cast at each call site.
  */
 export type Role = 'owner' | 'editor';
-export const roleOf = (user: { id: string; role?: string | null }): Role =>
+export const roleOf = (_siteId: string, user: { id: string; role?: string | null }): Role =>
   user.role === 'owner' ? 'owner' : 'editor';
 
 /** What differs per site; everything else about the login is the package's decision. */
@@ -75,7 +75,7 @@ export interface AuthConfig {
  * the two that put a URL in an email also want `baseURL`: without one they would mail a link
  * built from whatever `Host` the request carried.
  */
-export function authOptions(db: Db, config: AuthConfig): BetterAuthOptions {
+export function authOptions(_siteId: string, db: Db, config: AuthConfig): BetterAuthOptions {
   const emailing = Boolean(config.baseURL);
   const resetting = emailing && config.sendPasswordReset;
   return {
@@ -179,18 +179,19 @@ export interface MemberApi {
 }
 
 /** The endpoints above, off an instance that mounts them. */
-export const memberApi = (auth: Auth): MemberApi => auth.api as unknown as MemberApi;
+export const memberApi = (_siteId: string, auth: Auth): MemberApi =>
+  auth.api as unknown as MemberApi;
 
 /**
  * Per request, never at module scope and never both: a singleton and a per-request instance
  * fighting over the D1 lock is the documented 33-second `wrangler dev` hang.
  */
-export function createAuth(db: Db, config: AuthConfig): Auth {
-  return betterAuth(authOptions(db, config));
+export function createAuth(siteId: string, db: Db, config: AuthConfig): Auth {
+  return betterAuth(authOptions(siteId, db, config));
 }
 
 /** Whether this address has an account at all — what decides if a sign-in link is worth sending. */
-export async function userExists(db: Db, email: string): Promise<boolean> {
+export async function userExists(_siteId: string, db: Db, email: string): Promise<boolean> {
   const rows = await db
     .select({ id: authTables.user.id })
     .from(authTables.user)
@@ -212,6 +213,7 @@ export interface AccountFacts {
  * anything; "sign out everywhere" is one endpoint that needs no id at all.
  */
 export async function accountFacts(
+  _siteId: string,
   db: Db,
   userId: string,
   currentSessionId: string,
@@ -284,7 +286,7 @@ export interface Member {
  * so a site with twenty members costs three round trips rather than twenty-one; the password
  * hash is never one of the columns asked for.
  */
-export async function memberList(db: Db): Promise<Member[]> {
+export async function memberList(siteId: string, db: Db): Promise<Member[]> {
   const [users, accounts, sessions] = await Promise.all([
     db
       .select({
@@ -332,7 +334,7 @@ export async function memberList(db: Db): Promise<Member[]> {
         id: row.id,
         name: row.name,
         email: row.email,
-        role: roleOf(row),
+        role: roleOf(siteId, row),
         pending,
         // GitHub first: it is the one a person recognises, and somebody who has linked it
         // signs in with it whatever else they also hold.
@@ -351,14 +353,28 @@ export async function memberList(db: Db): Promise<Member[]> {
 }
 
 /**
- * How many owners the site has. The last one may not be demoted or removed, and that is a
- * rule the route enforces — a menu that greys the item out is drawing the rule, not applying
- * it.
+ * Take one owner out of the count — the write and the rule in the same statement, because the
+ * rule is about how many owners there are and any check that reads first can be overtaken.
+ * Two owners demoting or removing each other at the same instant would both read a count of
+ * two and both go, leaving a site nobody can manage; one `UPDATE` whose own `WHERE` asks
+ * whether another owner is left serialises them, and the second finds none and changes
+ * nothing.
+ *
+ * `false` is the refusal: this row is the last owner, or somebody else demoted it first. A row
+ * that is not an owner is not this function's business — callers ask about the role before
+ * they get here, since removing an editor never touches the count.
  */
-export async function ownerCount(db: Db): Promise<number> {
-  const [row] = await db
-    .select({ owners: count() })
+export async function demoteOwner(_siteId: string, db: Db, userId: string): Promise<boolean> {
+  const anotherOwner = db
+    .select({ one: sql`1` })
     .from(authTables.user)
-    .where(eq(authTables.user.role, 'owner'));
-  return row?.owners ?? 0;
+    .where(and(eq(authTables.user.role, 'owner'), ne(authTables.user.id, userId)));
+  const changed = await db
+    .update(authTables.user)
+    .set({ role: 'editor' })
+    .where(
+      and(eq(authTables.user.id, userId), eq(authTables.user.role, 'owner'), exists(anotherOwner)),
+    )
+    .returning({ id: authTables.user.id });
+  return changed.length > 0;
 }

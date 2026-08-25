@@ -12,7 +12,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   column is worked out from the account rows rather than stored, so it says `GitHub`,
   `Password + email link` or `Email link only` and cannot go stale. Two rules are refused by the
   server rather than only greyed out in the menu: **the last owner cannot be demoted or removed**,
-  and **nobody can remove themselves**. Removing somebody ends every session and deletes their
+  and **nobody can remove themselves**. The first is one database statement rather than a count
+  read beside a write, so two owners demoting each other at the same instant cannot both succeed. Removing somebody ends every session and deletes their
   password and linked accounts; their unpublished drafts stay, because a draft belongs to the
   site ([Roles and permissions](docs/roles.md#members--adminmembers)).
 

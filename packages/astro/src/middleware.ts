@@ -15,7 +15,7 @@ export const onRequest: MiddlewareHandler = async ({ request, url, locals }, nex
   if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 });
   locals.handover = {
     user: { id: session.user.id, name: session.user.name, email: session.user.email },
-    role: roleOf(session.user),
+    role: roleOf('default', session.user),
     sessionId: session.session.id,
   };
   return next();

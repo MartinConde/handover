@@ -14,6 +14,7 @@ import {
   deeplTranslate,
   deleteEntry,
   deleteLocales,
+  demoteOwner,
   discardDraft,
   driftReport,
   entryAddress,
@@ -27,7 +28,6 @@ import {
   memberList,
   openDb,
   overlayRows,
-  ownerCount,
   parseEntry,
   pendingDrafts,
   publishDrafts,
@@ -133,7 +133,7 @@ async function testEmail(session: App.Locals['handover']): Promise<Response> {
  */
 async function account(session: App.Locals['handover']): Promise<Response> {
   if (!session) return new Response('Unauthorized', { status: 401 });
-  return Response.json(await accountFacts(db(), session.user.id, session.sessionId));
+  return Response.json(await accountFacts('default', db(), session.user.id, session.sessionId));
 }
 
 /**
@@ -176,7 +176,7 @@ async function setPassword(
  */
 async function members(session: App.Locals['handover']): Promise<Response> {
   if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
-  return Response.json({ members: await memberList(db()) });
+  return Response.json({ members: await memberList('default', db()) });
 }
 
 /**
@@ -219,7 +219,7 @@ async function invite(
   try {
     // Three values, named one at a time. The endpoint also takes a `data` record that writes
     // user columns directly, and a body spread into it would be a way to set any of them.
-    const created = await memberApi(auth).createUser({
+    const created = await memberApi('default', auth).createUser({
       body: { email: body.email.trim(), name: '', role },
       headers: request.headers,
     });
@@ -229,7 +229,7 @@ async function invite(
     return refused(err);
   }
   try {
-    await memberApi(auth).signInMagicLink({
+    await memberApi('default', auth).signInMagicLink({
       body: { email, callbackURL: '/admin/account' },
       headers: request.headers,
     });
@@ -257,14 +257,14 @@ async function resendInvite(
   if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
   // The list rather than one row, because `pending` is computed from three tables and this is
   // the one place that knows how. A members table is tens of rows, not thousands.
-  const member = (await memberList(db())).find((row) => row.id === id);
+  const member = (await memberList('default', db())).find((row) => row.id === id);
   if (!member) return new Response('Not found', { status: 404 });
   if (!member.pending)
     return Response.json({ error: 'They have already signed in' }, { status: 400 });
   const send = mailer();
   if (!send) return Response.json({ error: missingMailer() }, { status: 503 });
   try {
-    await memberApi(createAuth(url, ctx, { invite: true })).signInMagicLink({
+    await memberApi('default', createAuth(url, ctx, { invite: true })).signInMagicLink({
       body: { email: member.email, callbackURL: '/admin/account' },
       headers: request.headers,
     });
@@ -289,12 +289,18 @@ async function setMemberRole(
   const role = roleIn(await request.json().catch(() => ({})));
   if (!role) return Response.json({ error: 'That is not a role' }, { status: 400 });
   const database = db();
-  const member = (await memberList(database)).find((row) => row.id === id);
+  const member = (await memberList('default', database)).find((row) => row.id === id);
   if (!member) return new Response('Not found', { status: 404 });
-  if (role === 'editor' && member.role === 'owner' && (await ownerCount(database)) < 2)
-    return Response.json({ error: 'There must be at least one owner' }, { status: 400 });
+  // Demoting an owner is the one role change that can break a rule, so it is done by the
+  // statement that holds the rule rather than by `setRole` behind a count somebody else can
+  // change in between. Promotions have nothing to race with and stay Better Auth's.
+  if (role === 'editor' && member.role === 'owner') {
+    return (await demoteOwner('default', database, id))
+      ? Response.json({ ok: true })
+      : Response.json({ error: 'There must be at least one owner' }, { status: 400 });
+  }
   try {
-    await memberApi(createAuth(url, ctx)).setRole({
+    await memberApi('default', createAuth(url, ctx)).setRole({
       body: { userId: id, role },
       headers: request.headers,
     });
@@ -323,12 +329,15 @@ async function removeMember(
   if (id === session.user.id)
     return Response.json({ error: 'You cannot remove yourself' }, { status: 400 });
   const database = db();
-  const member = (await memberList(database)).find((row) => row.id === id);
+  const member = (await memberList('default', database)).find((row) => row.id === id);
   if (!member) return new Response('Not found', { status: 404 });
-  if (member.role === 'owner' && (await ownerCount(database)) < 2)
+  // The same statement, used as the claim: an owner is taken out of the count before they are
+  // taken out of the table, so two owners removing each other cannot both win. If the delete
+  // then fails they are an editor rather than an owner, which is the safe direction to fail in.
+  if (member.role === 'owner' && !(await demoteOwner('default', database, id)))
     return Response.json({ error: 'There must be at least one owner' }, { status: 400 });
   try {
-    await memberApi(createAuth(url, ctx)).removeUser({
+    await memberApi('default', createAuth(url, ctx)).removeUser({
       body: { userId: id },
       headers: request.headers,
     });

@@ -10,7 +10,7 @@ import { authOptions } from '../packages/core/src/auth.js';
 import { openDb } from '../packages/core/src/db.js';
 
 export const auth = betterAuth(
-  authOptions(openDb('default', {} as never), {
+  authOptions('default', openDb('default', {} as never), {
     secret: 'schema-generation-only',
     // Every optional method concretely, so generation sees the widest set of tables the
     // package can mount. `baseURL` is what gates the two that mail a link.

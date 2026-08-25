@@ -4,9 +4,9 @@ export {
   accountFacts,
   authOptions,
   createAuth,
+  demoteOwner,
   memberApi,
   memberList,
-  ownerCount,
   roleOf,
   userExists,
 } from './auth.js';

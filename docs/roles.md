@@ -53,7 +53,8 @@ If the mail cannot be sent the row is still made, so the invite is there to rese
 
 Owner ↔ editor, from the row's menu. **The last owner cannot be demoted** — a site with no owner
 has nobody who can invite, change a role or reach Settings, and nothing in the admin could undo
-it.
+it. The rule and the write are one database statement, so two owners demoting each other at the
+same instant end with one of them refused rather than both going through.
 
 ### Taking access away
 
@@ -65,7 +66,8 @@ request.
 it, so removing somebody never loses work.
 
 Two removals are refused by the server, not just hidden: **you cannot remove yourself**, and the
-last owner stays. Getting a colleague to remove you is the way out of the first.
+last owner stays — an owner is taken out of the count by the same statement that checks it, and
+only then deleted. Getting a colleague to remove you is the way out of the first.
 
 ### How somebody signs in
 

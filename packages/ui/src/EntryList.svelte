@@ -134,17 +134,22 @@ async function done() {
     <p class="placeholder">Loading…</p>
   {:else if entries.length}
     <div class="table" class:cols-3={!many} class:cols-4={many} role="table" aria-label={capitalise(collection)}>
-      <div class="th" role="columnheader">Title</div>
-      {#if many}<div class="th" role="columnheader">Languages</div>{/if}
-      <div class="th" role="columnheader">File name</div>
-      <div class="th"><span class="visually-hidden">Actions</span></div>
+      <!-- The header cells need a row of their own, and every cell a role: `role="table"`
+           with `columnheader` children and nothing between them is aria-required-parent. Both
+           wrappers are `display: contents`, so the grid is unchanged. -->
+      <div class="row-head" role="row">
+        <div class="th" role="columnheader">Title</div>
+        {#if many}<div class="th" role="columnheader">Languages</div>{/if}
+        <div class="th" role="columnheader">File name</div>
+        <div class="th" role="columnheader"><span class="visually-hidden">Actions</span></div>
+      </div>
       {#each entries as entry (entry.id)}
-        <div class="row">
-          <div class="td title">
+        <div class="row" role="row">
+          <div class="td title" role="cell">
             <a href="/admin/c/{collection}/{entry.id}">{titleOf(entry)}</a>
           </div>
           {#if many}
-            <div class="td" data-label="Languages">
+            <div class="td" role="cell" data-label="Languages">
               <span class="chips" aria-label="Languages">
                 {#each locales as locale (locale)}
                   <span
@@ -161,8 +166,8 @@ async function done() {
               </span>
             </div>
           {/if}
-          <div class="td num filename" data-label="File name">{entry.id}</div>
-          <div class="td menu-cell">
+          <div class="td num filename" role="cell" data-label="File name">{entry.id}</div>
+          <div class="td menu-cell" role="cell">
             <button
               class="btn btn-sm"
               type="button"

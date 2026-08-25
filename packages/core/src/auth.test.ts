@@ -3,7 +3,7 @@ import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/
 import { drizzle } from 'drizzle-orm/d1';
 import { Miniflare } from 'miniflare';
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest';
-import { AUTH_BASE_PATH, accountFacts, createAuth, memberList, ownerCount } from './auth.js';
+import { AUTH_BASE_PATH, accountFacts, createAuth, demoteOwner, memberList } from './auth.js';
 import type { Db } from './db.js';
 import * as tables from './tables.js';
 
@@ -55,7 +55,7 @@ beforeEach(() => {
 });
 
 const auth = (secureCookies = true) =>
-  createAuth(db, {
+  createAuth('default', db, {
     secret: 'a-secret-long-enough-for-better-auth-32',
     secureCookies,
     baseURL,
@@ -382,7 +382,10 @@ test('a new password under twelve characters is refused', async () => {
 test('an invited user has no password and no session anywhere', async () => {
   const id = await seedUser('invited@example.com', 'editor');
 
-  expect(await accountFacts(db, id, 'none')).toEqual({ hasPassword: false, sessions: [] });
+  expect(await accountFacts('default', db, id, 'none')).toEqual({
+    hasPassword: false,
+    sessions: [],
+  });
 });
 
 test('a signed-in user has a password and sees the session that asked marked as theirs', async () => {
@@ -393,7 +396,7 @@ test('a signed-in user has a password and sees the session that asked marked as 
   });
   const [row] = (await binding.prepare('SELECT id FROM session').all()).results as { id: string }[];
 
-  const facts = await accountFacts(db, id, row?.id ?? '');
+  const facts = await accountFacts('default', db, id, row?.id ?? '');
 
   expect(facts.hasPassword).toBe(true);
   expect(facts.sessions).toHaveLength(1);
@@ -409,7 +412,7 @@ test('no session token reaches the account page', async () => {
     password: 'correct-horse-battery',
   });
 
-  const facts = await accountFacts(db, id, 'whichever');
+  const facts = await accountFacts('default', db, id, 'whichever');
 
   expect(Object.keys(facts.sessions[0] ?? {}).sort()).toEqual([
     'current',
@@ -622,7 +625,7 @@ test('somebody with a password signs in with a password and an email link', asyn
   const id = await seed('anna@example.com', 'correct-horse-battery', 'editor');
   await seedSession(id, 2_000);
 
-  const [anna] = await memberList(db);
+  const [anna] = await memberList('default', db);
 
   expect(anna?.method).toBe('password');
   expect(anna?.pending).toBe(false);
@@ -632,7 +635,7 @@ test('somebody with no account row at all signs in by email link only', async ()
   const id = await seedUser('jonas@example.com', 'editor');
   await seedSession(id, 2_000);
 
-  const [jonas] = await memberList(db);
+  const [jonas] = await memberList('default', db);
 
   expect(jonas?.method).toBe('link');
 });
@@ -649,7 +652,7 @@ test('a credential row with no password is not a password', async () => {
     .run();
   await seedSession(id, 2_000);
 
-  expect((await memberList(db))[0]?.method).toBe('link');
+  expect((await memberList('default', db))[0]?.method).toBe('link');
 });
 
 test('a linked GitHub account is what the list names, whatever else the person holds', async () => {
@@ -657,7 +660,7 @@ test('a linked GitHub account is what the list names, whatever else the person h
   await seedGithub(id, '34409953');
   await seedSession(id, 2_000);
 
-  const [martin] = await memberList(db);
+  const [martin] = await memberList('default', db);
 
   expect(martin?.method).toBe('github');
 });
@@ -665,7 +668,7 @@ test('a linked GitHub account is what the list names, whatever else the person h
 test('an invite nobody has opened is pending and has no sign-in method', async () => {
   await seedInvite('lea@example.com', 'editor');
 
-  const [lea] = await memberList(db);
+  const [lea] = await memberList('default', db);
 
   expect(lea?.pending).toBe(true);
   expect(lea?.method).toBe(null);
@@ -676,7 +679,7 @@ test('an invite stops being pending the moment its address is proved', async () 
   const id = await seedInvite('lea@example.com', 'editor');
   await seedSession(id, 5_000);
 
-  const [lea] = await memberList(db);
+  const [lea] = await memberList('default', db);
 
   expect(lea?.pending).toBe(false);
   expect(lea?.lastSignIn).toBe(5_000);
@@ -689,7 +692,7 @@ test('the list is newest sign-in first, with the people who never signed in last
   await seedSession(martin, 9_000);
   await seedInvite('lea@example.com', 'editor');
 
-  expect((await memberList(db)).map((m) => m.email)).toEqual([
+  expect((await memberList('default', db)).map((m) => m.email)).toEqual([
     'martin@example.com',
     'anna@example.com',
     'lea@example.com',
@@ -702,19 +705,58 @@ test('the newest of several sessions is the one the list reports', async () => {
   await seedSession(id, 8_000);
   await seedSession(id, 4_000);
 
-  expect((await memberList(db))[0]?.lastSignIn).toBe(8_000);
+  expect((await memberList('default', db))[0]?.lastSignIn).toBe(8_000);
 });
 
 test('a role the package does not recognise reads as editor', async () => {
   await seedUser('anna@example.com', 'admin');
 
-  expect((await memberList(db))[0]?.role).toBe('editor');
+  expect((await memberList('default', db))[0]?.role).toBe('editor');
 });
 
-test('the owners are counted by the column, not by who has an account', async () => {
-  await seedUser('martin@example.com', 'owner');
+const roleOfRow = async (id: string) =>
+  (
+    (await binding.prepare('SELECT role FROM user WHERE id = ?').bind(id).all()).results[0] as
+      | { role: string }
+      | undefined
+  )?.role;
+
+test('an owner beside another owner is demoted', async () => {
+  const martin = await seedUser('martin@example.com', 'owner');
   await seedInvite('kim@example.com', 'owner');
+
+  expect(await demoteOwner('default', db, martin)).toBe(true);
+  expect(await roleOfRow(martin)).toBe('editor');
+});
+
+test('the last owner is not demoted, and is left as they were', async () => {
+  const martin = await seedUser('martin@example.com', 'owner');
   await seedUser('anna@example.com', 'editor');
 
-  expect(await ownerCount(db)).toBe(2);
+  expect(await demoteOwner('default', db, martin)).toBe(false);
+  expect(await roleOfRow(martin)).toBe('owner');
+});
+
+// The whole point of doing it in one statement. Two owners removing each other both read a
+// count of two; whichever `UPDATE` lands second finds no other owner and changes nothing.
+test('two owners cannot demote each other into a site with no owner', async () => {
+  const martin = await seedUser('martin@example.com', 'owner');
+  const kim = await seedUser('kim@example.com', 'owner');
+
+  const both = await Promise.all([
+    demoteOwner('default', db, martin),
+    demoteOwner('default', db, kim),
+  ]);
+
+  expect(both.filter(Boolean)).toHaveLength(1);
+  const left = (await binding.prepare("SELECT id FROM user WHERE role = 'owner'").all()).results;
+  expect(left).toHaveLength(1);
+});
+
+test('somebody who is not an owner is nobody to demote', async () => {
+  const anna = await seedUser('anna@example.com', 'editor');
+  await seedUser('martin@example.com', 'owner');
+
+  expect(await demoteOwner('default', db, anna)).toBe(false);
+  expect(await roleOfRow(anna)).toBe('editor');
 });
