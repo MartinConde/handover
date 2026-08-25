@@ -152,7 +152,8 @@ function said(event: ActivityEvent): Said {
       const one = entryOf(event.subject);
       if (one) return { lead: `${actor} published `, link: one };
       const files = (d as { files?: unknown } | null)?.files;
-      const many = typeof files === 'number' ? `${files} file${files === 1 ? '' : 's'}` : 'several files';
+      const many =
+        typeof files === 'number' ? `${files} file${files === 1 ? '' : 's'}` : 'several files';
       return { lead: `${actor} published ${many}.` };
     }
     case 'mail-failed':
