@@ -1,8 +1,8 @@
 # Deploy
 
 The site is one Cloudflare Worker: static pages as assets, `/admin` and `/admin/api` as
-SSR routes. Handover needs one binding — a D1 database for unpublished edits — and five
-secrets.
+SSR routes. Handover needs one binding — a D1 database for unpublished edits — five
+required secrets, and one more per optional feature.
 
 ## wrangler.jsonc
 

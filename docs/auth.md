@@ -121,7 +121,7 @@ only address it could reach anyway.
 | `200` | It sent. `id` is the provider's own id for the message |
 | `403` | You are an editor. Test email is the owner's |
 | `503` | No mailer is configured, or its key is not set. The message names which |
-| `502` | The provider refused, in the provider's own words — an unverified sending domain reads as itself rather than as a number |
+| `502` | The provider refused, in the provider's own words — an unverified sending domain reads as itself rather than as a number, and so does a placeholder address like `you@example.com`, which Resend rejects outright |
 
 ## Not here yet
 
