@@ -113,6 +113,11 @@ export function authOptions(db: Db, config: AuthConfig): BetterAuthOptions {
       // around by varying a header. `cf-connecting-ip` is written by the edge and cannot be
       // sent in.
       ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] },
+      // The fourth default that reads the environment rather than the config, and the one that
+      // makes a test suite prove nothing: `skipOriginCheck` is `isTest()`, so under vitest every
+      // `origin` header is waved through while the Worker checks it. Saying it means the two run
+      // the same configuration; production is unchanged, since `isTest()` is false there.
+      disableOriginCheck: false,
       // Stated from the same string `baseURL` came from, so the two cannot disagree. Left to
       // Better Auth it falls back through the request's protocol to `NODE_ENV === 'production'`,
       // which a Worker never sets — and the deployed site hands out a cookie with no `Secure`.

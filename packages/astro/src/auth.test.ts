@@ -115,6 +115,7 @@ async function seedCredentials(email: string, password: string) {
 function askForLink(
   email: string,
   host = 'https://demo.example',
+  origin = 'https://demo.example',
   ctx?: { waitUntil(p: Promise<unknown>): void },
 ) {
   const url = new URL(`${host}${AUTH_BASE_PATH}/sign-in/magic-link`);
@@ -123,7 +124,7 @@ function askForLink(
       method: 'POST',
       headers: {
         'content-type': 'application/json',
-        origin: host,
+        origin,
         'cf-connecting-ip': '203.0.113.7',
       },
       body: JSON.stringify({ email, callbackURL: '/admin' }),
@@ -142,11 +143,17 @@ test('a mailer with no base URL offers no sign-in link at all', async () => {
 });
 
 // The whole reason the base URL is stated rather than read off the request: the link in this
-// email is a working credential, and `Host` is a value the caller writes.
+// email is a working credential, and `Host` is a value the caller writes. Better Auth's origin
+// check refuses a request whose `Origin` is untrusted, so the case left to defend is a forged
+// `Host` behind a trusted `Origin` — which is what a proxy or a routing mistake looks like.
 test('the emailed link points at the configured base URL, not at the request Host', async () => {
   await seedUser('owner@example.com');
 
-  const res = await askForLink('owner@example.com', 'https://attacker.example');
+  const res = await askForLink(
+    'owner@example.com',
+    'https://attacker.example',
+    'https://demo.example',
+  );
 
   expect(res.status).toBe(200);
   expect(sent).toHaveLength(1);
@@ -168,6 +175,20 @@ test('an address with no account is mailed nothing, and gets the same answer', a
 
 // `baseURL` and the cookie's `Secure` come from one string, so they cannot disagree about a
 // request: a site that says it is https gets a Secure cookie however the request reached it.
+// A request whose `Origin` is nobody's business here does not get as far as minting anything.
+test('a request from an untrusted origin is refused before a link is made', async () => {
+  await seedUser('owner@example.com');
+
+  const res = await askForLink(
+    'owner@example.com',
+    'https://demo.example',
+    'https://attacker.example',
+  );
+
+  expect(res.status).toBe(403);
+  expect(sent).toEqual([]);
+});
+
 test('the session cookie is Secure on an https site even when the request arrived over http', async () => {
   await seedCredentials('owner@example.com', 'correct-horse-battery');
   const url = new URL(`http://localhost:4321${AUTH_BASE_PATH}/sign-in/email`);

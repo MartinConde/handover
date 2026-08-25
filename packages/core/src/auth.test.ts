@@ -527,3 +527,45 @@ test('setting a password refuses when one already exists', async () => {
 
   expect((refused as { body?: { code?: string } }).body?.code).toBe('PASSWORD_ALREADY_SET');
 });
+
+// An emailed link that establishes a session and then bounces the person somewhere else is a
+// session handed to whoever asked for it. 1.7.1 refuses the address before minting anything;
+// this is here so an upgrade that loosened it would not pass quietly.
+test('a magic link cannot be pointed off the site, and mails nothing when it is tried', async () => {
+  emailing();
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+
+  const res = await call('/sign-in/magic-link', {
+    email: 'owner@example.com',
+    callbackURL: 'https://example.com/x',
+  });
+
+  expect(res.status).toBe(403);
+  expect(magicLinks).toEqual([]);
+});
+
+test('a GitHub sign-in cannot be pointed off the site either', async () => {
+  emailing();
+  github = { clientId: 'gh_id', clientSecret: 'gh_secret' };
+
+  const res = await call('/sign-in/social', {
+    provider: 'github',
+    callbackURL: 'https://example.com/x',
+    disableRedirect: true,
+  });
+
+  expect(res.status).toBe(403);
+});
+
+test('a reset link cannot be pointed off the site either', async () => {
+  emailing();
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+
+  const res = await call('/request-password-reset', {
+    email: 'owner@example.com',
+    redirectTo: 'https://example.com/x',
+  });
+
+  expect(res.status).toBe(403);
+  expect(resetLinks).toEqual([]);
+});

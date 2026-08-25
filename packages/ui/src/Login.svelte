@@ -24,9 +24,18 @@ const params = new URLSearchParams(query);
 // in `error` — an expired link, a GitHub account nobody invited — is one message, below.
 // svelte-ignore state_referenced_locally -- same page load
 const resetToken = path === '/admin/reset' ? (params.get('token') ?? '') : '';
+// Better Auth sends every refusal back here the same way — a dead link, and a GitHub account
+// nobody invited — and they read the same, so the form never says which addresses exist. On a
+// site with no emailed link the expired-link wording would be a lie, so it gets the plain one.
+const refused = Boolean(params.get('error'));
+
+// One message for both causes, so the form never confirms which addresses have an account.
+const REFUSED = "We couldn't sign you in. Check your email and password.";
 
 type View = 'sign-in' | 'link-sent' | 'reset-sent' | 'link-dead' | 'reset';
-let view = $state<View>(resetToken ? 'reset' : params.get('error') ? 'link-dead' : 'sign-in');
+let view = $state<View>(
+  resetToken ? 'reset' : refused && methods.emailLink ? 'link-dead' : 'sign-in',
+);
 let email = $state('');
 let password = $state('');
 let next = $state('');
@@ -36,14 +45,11 @@ let confirm = $state('');
 // svelte-ignore state_referenced_locally -- a site does not gain a mailer while the page is up
 let usePassword = $state(!methods.emailLink);
 let reveal = $state(false);
-let error = $state('');
+let error = $state(refused && !methods.emailLink ? REFUSED : '');
 let fieldError = $state('');
 let notice = $state('');
 let limited = $state(false);
 let busy = $state(false);
-
-// One message for both causes, so the form never confirms which addresses have an account.
-const REFUSED = "We couldn't sign you in. Check your email and password.";
 
 async function post(path: string, body: unknown) {
   busy = true;

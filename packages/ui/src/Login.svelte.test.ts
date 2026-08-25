@@ -145,3 +145,15 @@ test('a new password under twelve characters is refused without asking the serve
   );
   expect(root.querySelector('input#new-password')?.getAttribute('aria-invalid')).toBe('true');
 });
+
+// The same refusal on a site with no emailed link: the expired-link wording would be a lie, so
+// it reads as the one message the form gives for everything else.
+test('a refused GitHub sign-in on a password-only site does not talk about links', () => {
+  const root = show({ emailLink: false, github: true }, '/admin', '?error=signup_disabled');
+
+  expect(text(root)).not.toContain('expired');
+  expect(text(root)).not.toContain('15 minutes');
+  expect(root.querySelector('#sign-in-message')?.textContent).toBe(
+    "We couldn't sign you in. Check your email and password.",
+  );
+});
