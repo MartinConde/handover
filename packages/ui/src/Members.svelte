@@ -7,6 +7,8 @@ interface Member {
   /** An invite nobody has opened yet. Computed by the server; there is no invite table. */
   pending: boolean;
   method: 'github' | 'password' | 'link' | null;
+  /** The entries they are holding a lock on right now, by the name the list shows. */
+  editing: string[];
   lastSignIn: number | null;
   invitedAt: number;
 }
@@ -375,6 +377,13 @@ async function remove() {
             same address again whenever you like.
           </p>
         {:else}
+          {#if target?.editing.length}
+            <p>
+              They are editing {#each target.editing as name, i}{#if i > 0}{i === target.editing.length - 1 ? ' and ' : ', '}{/if}<strong>{name}</strong>{/each}
+              right now. Removing them signs them out and releases
+              {target.editing.length === 1 ? 'it' : 'them'} straight away.
+            </p>
+          {/if}
           <p>
             They are signed out everywhere straight away, and their password and any linked
             GitHub account go with the row.

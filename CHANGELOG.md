@@ -4,6 +4,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Two people can no longer type over each other.** Opening an entry takes a soft lock on it
+  — every language at once, since they share a structure — and the lock is held by typing: the
+  admin extends it while somebody edits and it frees itself about two minutes after the last
+  keystroke, so a tab left open lets go on its own. The second person gets the entry read-only
+  under *Being edited by Anna Berg — active a few seconds ago*, which ages into *nothing typed
+  for a minute; the lock frees itself after two* because that is the whole of the decision; when
+  it lapses the banner says so and offers **Reload**. What goes quiet is everything that writes
+  to any of the entry's files — the form, the second language's column, the web address,
+  **Publish…** and the answers to a language with no file. `POST /admin/api/locks/:collection/:slug`
+  is the heartbeat and `GET` the same answer taking nothing; both carry the `base_sha`/`base_blob`
+  each of the entry's files was loaded against. Removing a member releases their locks, and the
+  remove dialog names the entries first. Taking a lock over is still to come — the way past one
+  is to wait ([Working together](docs/working-together.md)).
+
 - **An Activity screen at `/admin/activity`.** The log now has a page over it, and both roles
   get it: an owner sees everybody, an editor sees their own, and which is which stays the
   server's filter rather than the screen's. Each row is a sentence — *Anna Berg published

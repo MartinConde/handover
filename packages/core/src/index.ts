@@ -74,6 +74,8 @@ export {
   redirectsText,
   renameEntry,
 } from './lifecycle.js';
+export type { Lock } from './locks.js';
+export { claimLock, heldEntries, LOCK_TTL, lockHolder, releaseLocks } from './locks.js';
 export type { EmailSender, Mailer } from './mailer.js';
 export { cloudflareMailer, resendMailer, senderAddress } from './mailer.js';
 export type { MigrationStep } from './migrate.js';

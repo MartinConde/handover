@@ -62,8 +62,10 @@ same instant end with one of them refused rather than both going through.
 their linked GitHub, and any browser they were signed in on. It takes effect on their next
 request.
 
-**Their drafts stay.** An unpublished change belongs to the site, not to whoever last typed in
-it, so removing somebody never loses work. The [activity log](activity.md) keeps the address and
+**Their locks go, their drafts stay.** Any entry they had open is free straight away rather
+than two minutes later ([Working together](working-together.md#being-edited-by)), and the
+dialog names those entries before you press Remove. An unpublished change belongs to the site,
+not to whoever last typed in it, so removing somebody never loses work. The [activity log](activity.md) keeps the address and
 who took it away, which is the only record left once the row is gone.
 
 Two removals are refused by the server, not just hidden: **you cannot remove yourself**, and the

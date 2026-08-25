@@ -298,6 +298,13 @@ const logged: Record<string, unknown>[] = [];
 let read: unknown[] = [];
 /** Which rows the routes took out of the owner count, in order. */
 const demoted: string[] = [];
+// The locks table, per test: who is editing the entry a request is about, what everybody is
+// editing, and whose locks a removal let go of. The statements themselves run against a real
+// D1 in core's own `locks.test.ts`.
+let holder: { userId: string; name: string; expiresAt: number } | undefined;
+let editing: Record<string, string[]> = {};
+const released: string[] = [];
+const beats: string[] = [];
 // Which user and which session the route asked about — the two values that must come from the
 // session and never from the request, or one person could read another's account.
 let asked: unknown[] = [];
@@ -324,6 +331,15 @@ vi.mock('@handover/core', async (original) => ({
   accountFacts: async (..._args: unknown[]) => {
     asked = _args.slice(2);
     return facts;
+  },
+  claimLock: async (_site: string, _db: unknown, entry: string, userId: string) => {
+    beats.push(entry);
+    return holder && holder.userId !== userId ? undefined : 1755864120000;
+  },
+  lockHolder: async () => holder,
+  heldEntries: async () => editing,
+  releaseLocks: async (_site: string, _db: unknown, userId: string) => {
+    released.push(userId);
   },
   createGitClient: () => ({ getFile, getHead, publish }),
   openDb: () => ({}),
@@ -357,6 +373,10 @@ afterEach(() => {
   logged.length = 0;
   read = [];
   demoted.length = 0;
+  holder = undefined;
+  editing = {};
+  released.length = 0;
+  beats.length = 0;
   createUserRefusal = undefined;
   magicLinkRefusal = undefined;
   setRoleRefusal = undefined;
@@ -2113,8 +2133,78 @@ test("the members list is the owner's and nobody else's", async () => {
   const asEditor = await GET(ctx('members', undefined, { handover: editor }));
 
   expect(asOwner.status).toBe(200);
-  expect(await asOwner.json()).toEqual({ members: memberRows });
+  expect(await asOwner.json()).toEqual({
+    members: [{ ...memberRows[0], editing: [] }],
+  });
   expect(asEditor.status).toBe(403);
+});
+
+test('the members list says what each of them is editing, by the name on the entry', async () => {
+  memberRows = [member('u1', 'martin@example.com', 'owner')];
+  editing = { u1: ['listings/seaview-cottage', 'listings/nowhere'] };
+
+  const res = await GET(ctx('members', undefined, { handover: owner }));
+
+  // The index knows the first and has never seen the second, which is still an entry somebody
+  // is holding: it is named by its file name rather than left out.
+  expect(((await res.json()) as { members: { editing: string[] }[] }).members[0]?.editing).toEqual([
+    'Seaview Cottage',
+    'nowhere',
+  ]);
+});
+
+const beat = (path: string, session?: unknown) =>
+  POST(
+    ctx(path, new Request(`https://x/admin/api/${path}`, { method: 'POST' }), {
+      handover: session,
+    }),
+  );
+
+test('a beat on an entry nobody is editing takes it, with the base each file was loaded from', async () => {
+  rows['src/content/listings/en/mill-house.yaml'] = {
+    contents: 'title: The Mill House\n',
+    baseSha: 'head789',
+    baseBlob: 'abc123',
+  };
+
+  const res = await beat('locks/listings/mill-house', editor);
+
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    held_by: null,
+    mine: true,
+    expires_at: 1755864120000,
+    base: {
+      'src/content/listings/en/mill-house.yaml': { sha: 'head789', blob: 'abc123' },
+    },
+  });
+});
+
+test('a beat on an entry somebody else is editing names them and takes nothing', async () => {
+  holder = { userId: 'u1', name: 'Anna Berg', expiresAt: 1755864060000 };
+
+  const res = await beat('locks/listings/mill-house', editor);
+
+  expect(await res.json()).toMatchObject({
+    held_by: { id: 'u1', name: 'Anna Berg' },
+    mine: false,
+    expires_at: 1755864060000,
+  });
+});
+
+// The read the second editor polls on: it watches the lock, and a poll arriving first is not a
+// way to take an entry off somebody.
+test('reading the lock never claims it', async () => {
+  const res = await GET(ctx('locks/listings/mill-house', undefined, { handover: editor }));
+
+  expect(await res.json()).toMatchObject({ held_by: null, mine: false, expires_at: null });
+  expect(beats).toEqual([]);
+});
+
+test('a collection nothing declares has no lock to take', async () => {
+  const res = await beat('locks/nothing/mill-house', editor);
+
+  expect(res.status).toBe(404);
 });
 
 test('an editor cannot invite, change a role, resend an invite or remove anybody', async () => {
@@ -2341,6 +2431,8 @@ test('removing somebody else takes their sessions and accounts with them', async
 
   expect(res.status).toBe(200);
   expect(calls.removeUser).toEqual([{ body: { userId: 'u2' }, invite: false }]);
+  // The entries they had open go quiet with the account, rather than two minutes later.
+  expect(released).toEqual(['u2']);
   // An editor is nobody's last owner, so nothing is taken out of the count first.
   expect(demoted).toEqual([]);
 });

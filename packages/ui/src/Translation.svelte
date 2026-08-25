@@ -11,6 +11,7 @@ let {
   blocks,
   data: loaded,
   source,
+  locked = false,
   stale = false,
   translator = false,
   url,
@@ -29,6 +30,9 @@ let {
   data: Data;
   /** The language it was translated from, for the header. */
   source: string;
+  /** Somebody else is editing this entry. The lock is on all of its languages, so this
+      column reads like the other one. */
+  locked?: boolean;
   /** Its source language has moved on since somebody translated this. A warning, no more. */
   stale?: boolean;
   /** The site has something to machine-translate with; without one, none of it is drawn. */
@@ -177,7 +181,7 @@ const named = (of: string) => {
     </span>
     <span class="spacer"></span>
     {#if translator}
-      <button class="btn btn-sm btn-fill" type="button" disabled={filling} onclick={() => fill()}>
+      <button class="btn btn-sm btn-fill" type="button" disabled={filling || locked} onclick={() => fill()}>
         Translate what's empty
       </button>
     {/if}
@@ -186,6 +190,7 @@ const named = (of: string) => {
         class="btn btn-sm btn-off"
         type="button"
         bind:this={trigger}
+        disabled={locked}
         onclick={() => (asking = true)}>Turn {named(locale)} off</button
       >
     {/if}
@@ -199,16 +204,18 @@ const named = (of: string) => {
     {/if}
   </div>
   <form class="form" onsubmit={(e) => e.preventDefault()}>
-    <Fields
-      {fields}
-      {blocks}
-      {problems}
-      {machine}
-      bind:root={data}
-      translating
-      ontranslate={translator ? (path) => fill([path]) : undefined}
-      prefix="t"
-    />
+    <fieldset disabled={locked}>
+      <Fields
+        {fields}
+        {blocks}
+        {problems}
+        {machine}
+        bind:root={data}
+        translating
+        ontranslate={translator ? (path) => fill([path]) : undefined}
+        prefix="t"
+      />
+    </fieldset>
   </form>
 </section>
 

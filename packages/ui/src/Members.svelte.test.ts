@@ -12,6 +12,7 @@ interface Row {
   role: 'owner' | 'editor';
   pending: boolean;
   method: 'github' | 'password' | 'link' | null;
+  editing: string[];
   lastSignIn: number | null;
   invitedAt: number;
 }
@@ -23,6 +24,7 @@ const row = (id: string, email: string, extra: Partial<Row> = {}): Row => ({
   role: 'editor',
   pending: false,
   method: 'link',
+  editing: [],
   lastSignIn: Date.now() - 3_600_000,
   invitedAt: 0,
   ...extra,
@@ -254,8 +256,8 @@ test('changing a role sends the one that was picked', async () => {
   });
 });
 
-// Hazard: the one line people get wrong. Locks are 3.9, so what this dialog can promise today
-// is what leaves with the row and what stays behind.
+// Hazard: the one line people get wrong. Their drafts belong to the site and stay; what goes
+// is their access, and the entries they were holding.
 test('removing somebody warns what goes and says their drafts stay', async () => {
   const calls = server([
     row('u1', 'martin@example.com', { role: 'owner' }),
@@ -272,6 +274,20 @@ test('removing somebody warns what goes and says their drafts stay', async () =>
   await settle();
 
   expect(calls[0]).toEqual({ url: '/admin/api/members/u2', method: 'DELETE', body: undefined });
+});
+
+test('removing somebody who is editing names what goes quiet', async () => {
+  server([
+    row('u1', 'martin@example.com', { role: 'owner' }),
+    row('u2', 'anna@example.com', { name: 'Anna Berg', editing: ['Seaview Cottage', 'Home'] }),
+  ]);
+  const root = await show();
+
+  click(actions(root, 'Anna Berg'), 'Remove');
+
+  const dialog = root.querySelector('[role="alertdialog"]') as HTMLElement;
+  expect(text(dialog)).toContain('They are editing Seaview Cottage and Home right now');
+  expect(text(dialog)).toContain('releases them straight away');
 });
 
 test('revoking an invite is a different question from removing a member', async () => {

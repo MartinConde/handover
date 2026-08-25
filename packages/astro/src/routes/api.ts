@@ -8,6 +8,7 @@ import {
   activityPage,
   addressError,
   blobSha,
+  claimLock,
   collectionEntries,
   createDraft,
   createGitClient,
@@ -24,7 +25,9 @@ import {
   entryUrl,
   FORMAT_VERSION,
   formOf,
+  heldEntries,
   loadDraft,
+  lockHolder,
   logActivity,
   memberApi,
   memberList,
@@ -38,6 +41,7 @@ import {
   recordDelete,
   recordOffer,
   recordRename,
+  releaseLocks,
   renameEntry,
   resolveDrift,
   saveDraft,
@@ -208,7 +212,24 @@ async function activityLog(url: URL, session: App.Locals['handover']): Promise<R
  */
 async function members(session: App.Locals['handover']): Promise<Response> {
   if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
-  return Response.json({ members: await memberList('default', db()) });
+  const database = db();
+  const [rows, held] = await Promise.all([
+    memberList('default', database),
+    heldEntries('default', database),
+  ]);
+  // Named rather than counted: the remove dialog says which entries go quiet, and an id would
+  // name somebody nothing on that screen can look up.
+  return Response.json({
+    members: rows.map((row) => ({ ...row, editing: (held[row.id] ?? []).map(entryTitle) })),
+  });
+}
+
+// An entry as the list would show it: the title of whichever language the build read first, and
+// the file name for one the index has never seen — a lock outlives the commit that removed it.
+function entryTitle(entry: string): string {
+  const [collection = '', slug = ''] = entry.split('/');
+  const found = index[collection]?.find((e) => e.id === slug);
+  return Object.values(found?.locales ?? {})[0]?.title ?? slug;
 }
 
 /**
@@ -391,6 +412,9 @@ async function removeMember(
   } catch (err) {
     return refused(err);
   }
+  // Their sessions went with the row; the entries they were holding are let go here, so nobody
+  // waits two minutes on somebody who no longer has an account.
+  await releaseLocks('default', database, id);
   // The `user` row is gone by the time anybody reads this, so the address is in the event or
   // it is nowhere — an id on its own would name somebody nothing can look up. `pending` is
   // what makes this a revoked invite rather than somebody losing access they had.
@@ -585,6 +609,49 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
         }
       : {}),
   });
+}
+
+/**
+ * Who is editing this entry, and what each of its files was loaded against. One entry, every
+ * language: the structure is shared, so a lock on one file would be a lock on none.
+ *
+ * `claim` is the beat. It takes an entry nobody is editing and pushes our own lock further out,
+ * and a request from anybody else only ever reads — a lock changes hands when somebody presses
+ * Take over, never because their tab asked first.
+ */
+async function lockState(
+  collection: string,
+  slug: string,
+  session: App.Locals['handover'],
+  claim: boolean,
+): Promise<Response> {
+  if (!session) return new Response('Unauthorized', { status: 401 });
+  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  const database = db();
+  const entry = `${collection}/${slug}`;
+  const taken = claim ? await claimLock('default', database, entry, session.user.id) : undefined;
+  const holder = taken ? undefined : await lockHolder('default', database, entry);
+  return Response.json({
+    held_by: holder ? { id: holder.userId, name: holder.name } : null,
+    mine: taken !== undefined || holder?.userId === session.user.id,
+    expires_at: taken ?? holder?.expiresAt ?? null,
+    base: await entryBases(collection, slug),
+  });
+}
+
+// What each of the entry's files was loaded against, path -> { sha, blob }: the rows in D1 and
+// nothing from git, since a beat every 45 seconds per open tab is not a GitHub request. A
+// language with no draft has no base of its own — the next save reads it.
+async function entryBases(collection: string, slug: string) {
+  const database = db();
+  const found = await Promise.all(
+    config.i18n.locales.map(async (locale) => {
+      const path = entryPath(collection, slug, locale);
+      const row = await loadDraft('default', database, path);
+      return row ? ([path, { sha: row.baseSha, blob: row.baseBlob }] as const) : undefined;
+    }),
+  );
+  return Object.fromEntries(found.filter((f) => f !== undefined));
 }
 
 // The `_` keys belong to the file, not to the form: `mergeEntry` reads them off the entry as
@@ -1061,6 +1128,7 @@ const RENAME = /^entries\/([\w-]+)\/([\w-]+)\/rename$/;
 const LOCALES = /^entries\/([\w-]+)\/([\w-]+)\/locales$/;
 const ADDRESS = /^entries\/([\w-]+)\/([\w-]+)\/address\/([\w-]+)$/;
 const DRIFT = /^drift\/([\w-]+)\/([\w-]+)$/;
+const LOCK = /^locks\/([\w-]+)\/([\w-]+)$/;
 const TRANSLATE = /^translate\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 
 // Better Auth owns everything under its base path. Both verbs go straight to its handler:
@@ -1087,6 +1155,8 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
       files: rows.map((r) => ({ path: r.path, updated_at: r.updatedAt })),
     });
   }
+  const held = params.path?.match(LOCK);
+  if (held) return lockState(held[1] ?? '', held[2] ?? '', locals.handover, false);
   const entry = params.path?.match(ENTRY);
   if (entry) return answering(() => getEntry(entry[1] ?? '', entry[2] ?? ''));
   const list = params.path?.match(ENTRIES);
@@ -1248,6 +1318,8 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   const resent = params.path?.match(MEMBER_INVITE);
   if (resent) return resendInvite(resent[1] ?? '', request, url, locals.cfContext, locals.handover);
   if (params.path === 'publish') return answering(() => publish(locals.handover));
+  const beat = params.path?.match(LOCK);
+  if (beat) return lockState(beat[1] ?? '', beat[2] ?? '', locals.handover, true);
   const filling = params.path?.match(TRANSLATE);
   if (filling)
     return answering(() =>

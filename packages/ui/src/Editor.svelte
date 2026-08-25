@@ -1,5 +1,5 @@
 <script lang="ts">
-import { type Drift, entryUrl, type Field } from '@handover/core';
+import { type Drift, entryUrl, type Field, LOCK_TTL } from '@handover/core';
 import DriftPanel from './Drift.svelte';
 import Fields from './Fields.svelte';
 import Translation from './Translation.svelte';
@@ -158,6 +158,48 @@ const language = (of: string) => {
   }
 };
 
+/**
+ * The soft lock on this entry — every language of it at once, since they share a structure.
+ * `undefined` until the first answer comes back; the tab that has it edits, the tab that has
+ * not reads.
+ */
+type Lock = {
+  held_by: { id: string; name: string | null } | null;
+  mine: boolean;
+  expires_at: number | null;
+};
+let lock = $state<Lock>();
+// When the last answer came back, and when this tab last extended a lock of its own.
+let asked = $state(0);
+let beatAt = 0;
+const locked = $derived(lock !== undefined && !lock.mine);
+// How long ago the holder last typed: the lock is taken by a beat and beats ride on the
+// autosave, so the expiry it carries is that keystroke plus one lifetime.
+const idle = $derived(lock?.expires_at ? asked - (lock.expires_at - LOCK_TTL) : 0);
+
+$effect(() => {
+  void beat(true);
+});
+
+// While somebody else has it, the banner has to age and the lock has to be seen running out.
+// The poll only reads: an entry changes hands when somebody presses Take over, not because a
+// tab was watching when the last beat lapsed.
+$effect(() => {
+  if (!locked) return;
+  const timer = setInterval(() => beat(false), 30000);
+  return () => clearInterval(timer);
+});
+
+async function beat(claim: boolean) {
+  const res = await fetch(`/admin/api/locks/${collection}/${slug}`, {
+    method: claim ? 'POST' : 'GET',
+  }).catch(() => undefined);
+  if (!res?.ok) return;
+  lock = (await res.json()) as Lock;
+  asked = Date.now();
+  if (lock.mine) beatAt = asked;
+}
+
 // Autosave. The wait restarts on every keystroke, so a burst of typing is one write.
 $effect(() => {
   if (json === saved) return;
@@ -175,6 +217,9 @@ async function autosave() {
   });
   saving = false;
   saveFailed = !res.ok;
+  // Typing is what holds the entry, and this is where the CMS hears it. Once every three
+  // quarters of a lifetime, so a fast typist is not a write per pause.
+  if (Date.now() - beatAt >= 45000) void beat(true);
   if (res.ok) {
     saved = sent;
     // Whether the stored draft differs from the file in git is the server's answer, not ours.
@@ -279,6 +324,21 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       repository; until then the files are what counts.
     </div>
   {/each}
+  {#if locked}
+    <div class="lock-banner">
+      {#if lock?.held_by}
+        Being edited by {lock.held_by.name || 'somebody else'}
+        <span class="when">
+          {idle >= 60000
+            ? '— nothing typed for a minute; the lock frees itself after two'
+            : '— active a few seconds ago'}
+        </span>
+      {:else}
+        Nobody is editing this entry any more.
+        <button class="btn-link" type="button" onclick={onchanged}>Reload</button>
+      {/if}
+    </div>
+  {/if}
   {#if entry.drift.length}
     <div class="lock-banner is-drift">
       The languages of this entry disagree about its blocks — publishing is blocked until that is
@@ -331,8 +391,10 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         <button
           class="btn btn-primary"
           type="button"
-          disabled={!dirty || saving || missing.length > 0 || entry.drift.length > 0}
-          title={entry.drift.length
+          disabled={!dirty || saving || missing.length > 0 || entry.drift.length > 0 || locked}
+          title={locked
+            ? 'Somebody else is editing this entry'
+            : entry.drift.length
             ? 'The languages of this entry disagree about its blocks'
             : missing.length
               ? 'Fill in what is missing before publishing this entry'
@@ -354,7 +416,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         {:else}
           <span class="url">{url}</span>
           {#if !address}<span class="mode">Same as the file name</span>{/if}
-          <button class="btn-link" type="button" onclick={editAddress}>Edit web address</button>
+          <button class="btn-link" type="button" disabled={locked} onclick={editAddress}>Edit web address</button>
         {/if}
       </p>
     {/if}
@@ -380,7 +442,9 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
            drawn when the switcher is on another language and the second column is shut. -->
       {#if !alone}
         <form class="form" onsubmit={(e) => e.preventDefault()}>
-          <Fields fields={entry.fields} blocks={entry.blocks} {problems} bind:root={data} />
+          <fieldset disabled={locked}>
+            <Fields fields={entry.fields} blocks={entry.blocks} {problems} bind:root={data} />
+          </fieldset>
         </form>
       {/if}
       {#if shown === undefined}
@@ -400,7 +464,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
                   This entry is not offered in {language(shown)}. No {language(shown)} file is
                   written and the site does not link to one.
                 </p>
-                <button class="btn" type="button" disabled={busy} onclick={() => offer(shown, true)}>
+                <button class="btn" type="button" disabled={busy || locked} onclick={() => offer(shown, true)}>
                   Turn {language(shown)} back on
                 </button>
               </div>
@@ -410,16 +474,16 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
                   Creating it copies the structure and everything that reads the same in every
                   language. The text fields start empty.
                 </p>
-                <button class="btn btn-primary btn-create" type="button" disabled={busy} onclick={() => createFrom(shown)}>
+                <button class="btn btn-primary btn-create" type="button" disabled={busy || locked} onclick={() => createFrom(shown)}>
                   Create from {language(entry.sourceLocale)}
                 </button>
                 {#if entry.translator}
-                  <button class="btn btn-fill" type="button" disabled={busy} onclick={() => createFilled(shown)}>
+                  <button class="btn btn-fill" type="button" disabled={busy || locked} onclick={() => createFilled(shown)}>
                     Create and pre-fill
                   </button>
                 {/if}
                 <p>
-                  Or <button class="btn-link" type="button" disabled={busy} onclick={() => offer(shown, false)}>don't offer this entry in {language(shown)}</button> — no file is written for it.
+                  Or <button class="btn-link" type="button" disabled={busy || locked} onclick={() => offer(shown, false)}>don't offer this entry in {language(shown)}</button> — no file is written for it.
                 </p>
               </div>
             {/if}
@@ -437,6 +501,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             blocks={entry.blocks}
             data={entry.translations[shown] ?? {}}
             source={entry.sourceLocale}
+            {locked}
             stale={entry.stale.includes(shown)}
             translator={entry.translator}
             url={localeUrl(shown)}

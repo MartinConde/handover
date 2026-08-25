@@ -91,18 +91,11 @@ the **pending-changes drawer**, which lists them and publishes them:
   lands in the repository
 - The rows are deleted once the commit succeeds, so reopening an entry reads the file that
   was just written
-- **Nothing is written unless all of it can be.** If somebody changed one of those files
-  in the repository since the editor loaded it, the publish is refused and no commit is
-  made: the drawer marks that row *Changed in the repository since you opened it* — same
-  for a branch that moves while the commit is being written
 - **A file the schema is not done with is refused the same way**, marked *Not ready to
   publish*. It has no button in the drawer: open the entry and fill in what is marked
-- **A refused file has one way out: Discard.** It throws that file's unpublished changes
-  away and reads it from the repository again, so the entry is on their version and the
-  next publish goes through. Reopening or editing the entry does not clear the refusal —
-  the draft keeps the base it was loaded against until it is discarded. Keeping your
-  version over theirs, or choosing field by field, arrives with the three-way view in a
-  later release
+- **A file somebody changed in the repository is refused too**, and the whole publish
+  with it. Discard is the way out of that one
+  ([Working together](working-together.md#a-file-that-changed-in-the-repository))
 - **An entry whose languages have drifted apart is refused too**, marked *Languages
   disagree*. Which blocks an entry has is the same in every language
   ([Languages](i18n.md#a-block-one-language-only-has)), so a file that disagrees with its
@@ -195,8 +188,9 @@ DELETE /admin/api/drafts/:collection/:slug  →  {}
 
 Throws the entry's stored draft away; the next open reads the file in the repository
 instead. Nothing is committed and the published page is untouched. This is what the
-drawer's **Discard** does with a file a publish was refused over. `404` if the collection
-is not configured.
+drawer's **Discard** does with a file a publish was refused over
+([Working together](working-together.md#a-file-that-changed-in-the-repository)). `404` if
+the collection is not configured.
 
 ```
 GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, translations, pending, problems, titleField, locales, defaultLocale, sourceLocale, offered, drift, stale, translator, route, index, prefixDefaultLocale }
@@ -355,7 +349,6 @@ Two consequences worth knowing:
 
 ## Not yet
 
-Publishing is all-or-nothing: no checkboxes, no holding an entry back and no build status.
-A file someone changed in the repository can only be taken whole, by discarding yours;
-there is no three-way merge and no way to keep your version over theirs. Those arrive in
-later releases.
+Publishing is all-or-nothing: no checkboxes, no holding an entry back and no build
+status; a lock cannot be taken over, and a file somebody changed in the repository can
+only be taken whole ([Working together](working-together.md#not-yet)).

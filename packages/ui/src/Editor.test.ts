@@ -1,4 +1,4 @@
-import type { Drift, Field } from '@handover/core';
+import { type Drift, type Field, LOCK_TTL } from '@handover/core';
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Editor from './Editor.svelte';
@@ -108,8 +108,19 @@ const type = (root: ParentNode, sel: string, value: string) => {
   flushSync();
 };
 const tick = () => new Promise((r) => setTimeout(r, 0));
+// Every editor takes the entry's lock as it opens, so a stub answers that route too — an answer
+// of any other shape reads as somebody else holding it, and the screen would go read-only.
+const HELD = { held_by: null, mine: true, expires_at: 1755864120000, base: {} };
+const isLock = (url: unknown) => String(url).startsWith('/admin/api/locks/');
+/** The writes a test is about: the beat rides on the same fetch and is none of them. */
+const wrote = (mock: { mock: { calls: unknown[][] } }) =>
+  mock.mock.calls.filter((call) => !isLock(call[0]));
 const autosaved = () =>
-  vi.fn(async () => Response.json({ updated_at: 1755864000000, pending: true, problems: [] }));
+  vi.fn(async (url: string) =>
+    isLock(url)
+      ? Response.json(HELD)
+      : Response.json({ updated_at: 1755864000000, pending: true, problems: [] }),
+  );
 
 const withProblems = (problems: { path: string; message: string }[]) => {
   app = mount(Editor, {
@@ -258,10 +269,10 @@ test('each keystroke restarts the two seconds, so one pause is one draft write',
   await vi.advanceTimersByTimeAsync(1500);
   type(root, 'input#f-title', 'Seaview House');
   await vi.advanceTimersByTimeAsync(1500);
-  expect(fetchMock).not.toHaveBeenCalled();
+  expect(wrote(fetchMock)).toEqual([]);
 
   await vi.advanceTimersByTimeAsync(500);
-  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(wrote(fetchMock)).toHaveLength(1);
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -272,9 +283,74 @@ test('opening an entry and changing nothing writes no draft', async () => {
   vi.stubGlobal('fetch', fetchMock);
   show();
   await vi.advanceTimersByTimeAsync(10_000);
-  expect(fetchMock).not.toHaveBeenCalled();
+  expect(wrote(fetchMock)).toEqual([]);
   vi.unstubAllGlobals();
   vi.useRealTimers();
+});
+
+// The lock is the entry's, so what it takes away is everything that writes to any of its files.
+const heldBy = (over: Record<string, unknown> = {}) =>
+  vi.fn(async (url: string) =>
+    isLock(url)
+      ? Response.json({
+          held_by: { id: 'u1', name: 'Anna Berg' },
+          mine: false,
+          expires_at: Date.now() + LOCK_TTL,
+          base: {},
+          ...over,
+        })
+      : Response.json({}),
+  );
+
+test('an entry somebody else is editing reads, and says who has it', async () => {
+  vi.stubGlobal('fetch', heldBy());
+  const root = show();
+  await tick();
+  flushSync();
+
+  expect($(root, '.lock-banner')?.textContent).toContain('Being edited by Anna Berg');
+  expect($(root, '.lock-banner .when')?.textContent).toContain('active a few seconds ago');
+  expect($<HTMLFieldSetElement>(root, '.form > fieldset')?.disabled).toBe(true);
+  expect($<HTMLButtonElement>(root, 'button.btn-primary')?.disabled).toBe(true);
+  vi.unstubAllGlobals();
+});
+
+// The whole of the decision the banner is there for: a lock held by somebody who has stopped
+// typing is a minute from freeing itself, and one held by somebody mid-sentence is not.
+test('the banner says how long ago the holder last typed', async () => {
+  vi.stubGlobal('fetch', heldBy({ expires_at: Date.now() + LOCK_TTL - 70_000 }));
+  const root = show();
+  await tick();
+  flushSync();
+
+  expect($(root, '.lock-banner .when')?.textContent).toContain('nothing typed for a minute');
+  vi.unstubAllGlobals();
+});
+
+test('a lock that has run out leaves the screen reading, with a way back in', async () => {
+  vi.stubGlobal('fetch', heldBy({ held_by: null, expires_at: null }));
+  const changed = vi.fn();
+  const root = show({ onchanged: changed });
+  await tick();
+  flushSync();
+
+  expect($(root, '.lock-banner')?.textContent).toContain('Nobody is editing this entry any more');
+  expect($<HTMLFieldSetElement>(root, '.form > fieldset')?.disabled).toBe(true);
+  $<HTMLButtonElement>(root, '.lock-banner .btn-link')?.click();
+  expect(changed).toHaveBeenCalled();
+  vi.unstubAllGlobals();
+});
+
+test('the entry this screen opened is taken as it opens', async () => {
+  const fetchMock = autosaved();
+  vi.stubGlobal('fetch', fetchMock);
+  show();
+  await tick();
+
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/locks/listings/seaview-cottage', {
+    method: 'POST',
+  });
+  vi.unstubAllGlobals();
 });
 
 test('a draft that is ahead of the published file can be published on load', () => {
@@ -627,7 +703,10 @@ test('a translation drafted before the screen opened is something to publish', (
 // A language with no file: two ways out, and an empty form is neither — it would autosave a
 // file nobody asked for.
 const missing = { ...bilingual, translations: {} };
-const posted = () => vi.fn(async (_url: string, _init?: RequestInit) => Response.json({}));
+const posted = () =>
+  vi.fn(async (url: string, _init?: RequestInit) =>
+    isLock(url) ? Response.json(HELD) : Response.json({}),
+  );
 
 test('a language the entry has no file in offers one made from the source language', async () => {
   const fetchMock = posted();
@@ -817,7 +896,7 @@ test('a language with no file can be made and filled in one go', async () => {
   $<HTMLButtonElement>(root, 'button.btn-fill')?.click();
   await tick();
 
-  expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+  expect(wrote(fetchMock).map((c) => c[0])).toEqual([
     '/admin/api/drafts/listings/seaview-cottage/de',
     '/admin/api/translate/listings/seaview-cottage/de',
   ]);
