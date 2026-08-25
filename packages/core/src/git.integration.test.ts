@@ -6,6 +6,7 @@ import { openDb, publishDrafts, saveDraft } from './db.js';
 import { createGitClient, RefMovedError } from './git.js';
 import { deleteEntry, renameEntry } from './lifecycle.js';
 import type { Form } from './schema.js';
+import * as tables from './tables.js';
 import { drafts } from './tables.js';
 
 // Opt-in: needs a real GitHub App installed on the throwaway repo, see .env.test.example.
@@ -163,7 +164,7 @@ test.skipIf(!configured)(
     const binding = await mf.getD1Database('DB');
     const ddl = await generateSQLiteMigration(
       await generateSQLiteDrizzleJson({}),
-      await generateSQLiteDrizzleJson({ drafts }),
+      await generateSQLiteDrizzleJson({ ...tables }),
     );
     await binding.batch(ddl.map((sql) => binding.prepare(sql)));
     const db = openDb('default', binding);
@@ -230,7 +231,7 @@ test.skipIf(!configured)(
     const binding = await mf.getD1Database('DB');
     const ddl = await generateSQLiteMigration(
       await generateSQLiteDrizzleJson({}),
-      await generateSQLiteDrizzleJson({ drafts }),
+      await generateSQLiteDrizzleJson({ ...tables }),
     );
     await binding.batch(ddl.map((sql) => binding.prepare(sql)));
     const db = openDb('default', binding);

@@ -17,6 +17,7 @@ let {
   url,
   redirect,
   onsaved,
+  onrefused,
   onclose,
   onturnoff,
 }: {
@@ -44,6 +45,9 @@ let {
   /** A save landed: whether this language's file is now ahead of the repository. The entry
       keeps it, because this column is thrown away when the screen changes and its edit is not. */
   onsaved?: (pending: boolean) => void;
+  /** A save was refused: somebody took the entry over. The lock is the entry's, so what the
+      screen does about it belongs to the entry rather than to this column. */
+  onrefused?: (lock: unknown) => void;
   /** Close the second column; nothing when it is the only one on screen. */
   onclose?: () => void;
   /** Turn this language off for the entry, which deletes its file; true when it happened. */
@@ -114,6 +118,10 @@ async function save() {
     body: JSON.stringify({ data }),
   });
   saving = false;
+  if (res.status === 409) {
+    onrefused?.(await res.json());
+    return;
+  }
   failed = !res.ok;
   if (!res.ok) return;
   saved = sent;

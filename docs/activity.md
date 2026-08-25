@@ -13,7 +13,7 @@ first sign-in onwards.
 | Group | What lands there |
 |---|---|
 | Accounts | `login` (by password, by emailed link or through GitHub) · `invite` · `role-change` · `member-removed` · `password-set` (a first one, a change or a reset) |
-| Publishing | `publish`, with the commit it made and how many files were in it |
+| Publishing | `publish`, with the commit it made and how many files were in it · `lock-takeover`, naming who the entry was taken from · `hold-released` |
 | System | `mail-failed` — a message the provider would not take |
 
 **Per-field edits are not logged.** Typing in the editor autosaves every couple of seconds; a

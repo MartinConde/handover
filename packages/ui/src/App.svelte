@@ -44,7 +44,9 @@ const manage = $derived(MANAGE.filter((item) => !item.ownerOnly || session?.role
 const managePage = $derived(manage.find((item) => item.path === path));
 
 const collections = $derived(session?.collections ?? []);
-let pending = $state<{ path: string; updated_at: number }[]>([]);
+let pending = $state<
+  { path: string; updated_at: number; held_by?: { id: string; name: string | null } | null }[]
+>([]);
 let indicator = $state<HTMLButtonElement>();
 let drawer = $state(false);
 // Bumped when a screen's data has moved under it — the screen is thrown away and made again.

@@ -34,13 +34,49 @@ not edits and still work.
 When the lock runs out while somebody is waiting on it, the banner says so and offers
 **Reload**, which opens the entry with the lock theirs.
 
+## Take over
+
+Waiting is not always the answer — the holder may be at lunch with the tab open, and the
+entry frees itself two minutes after their last keystroke rather than the moment they walk
+away. So the banner carries **Take over**, and it confirms before it does anything: it is
+the one action that takes somebody else's work away.
+
+```
+Take over editing from Anna Berg?
+Nothing Anna Berg has written is lost — there is one shared draft and you carry on from
+where they left off. Their next save is refused and they are told you took over.
+```
+
+Both halves of that are true because there is only ever **one draft row per file**. Taking
+over transfers the lock and re-reads the entry, so the form opens on what the other person
+had typed, down to their last autosave. Nothing is copied, merged or thrown away.
+
+The person it was taken from finds out **when the save their tab makes next is refused** —
+not from a poll, so a tab nobody is typing in keeps its banner and changes nothing else:
+
+```
+Anna Berg took over this entry. Everything you wrote is in the shared draft —
+Anna Berg is carrying on from it.                                        [ Reload ]
+```
+
+The inputs go quiet at that moment and **Reload** opens the entry the way anybody else
+waiting on it sees it. The words inside the last two seconds — whatever was still in the
+autosave's wait — are the one thing that does not reach the draft; everything saved before
+the take-over is what the new holder is now editing.
+
+A take-over is logged as `lock-takeover`, with the name it was taken from
+([Activity log](activity.md)).
+
 Two things worth knowing:
 
 - **The lock is per person, not per tab.** The same person with one entry open twice is
   not two editors: both tabs write the same draft row and the later save wins, with no
   warning in either.
-- **It is advisory.** It is what the admin draws, not something the draft endpoints
-  enforce: a request made by hand still writes. It is there so two people do not type
+- **The saves are the half the server enforces.** `PUT /admin/api/drafts/...` refuses a
+  write from anybody who does not hold the lock — that is what makes a take-over safe to
+  lose, since the tab that lost the entry is typing into a form nobody told yet. The rest
+  of it is what the admin draws: a rename, a web address or a language turned off is behind
+  a control the lock disables, and a request made by hand still writes. It is there so two people do not type
   over each other, not as a permission.
 
 **Removing a member** releases the locks they were holding, so the entries they had open
@@ -83,10 +119,26 @@ The same answer, taking nothing. This is what the person waiting polls: an entry
 hands when somebody asks for it, never because their tab was watching when the last beat
 lapsed.
 
+```
+POST /admin/api/locks/:collection/:slug  { "take": true }
+```
+
+Take over. The lock moves whatever it says, and the answer is the same shape with
+`"mine": true`. Without the body it is an ordinary beat, so a tab that asks first is still
+not a way to take an entry off somebody.
+
+```
+PUT /admin/api/drafts/:collection/:slug  →  409  { "held_by", "mine", "expires_at" }
+```
+
+What a save looks like once somebody else holds the lock: nothing is written, and the
+answer names them so the screen can say who. Both draft endpoints answer this way — the
+entry's own language and a translation ([Drafts and publishing](publishing.md#the-endpoints)).
+
 ## Not yet
 
-Publishing is all-or-nothing: no checkboxes, no holding an entry back and no build
-status. A lock cannot be taken over — the way past one is to wait for it. A file someone
-changed in the repository can only be taken whole, by discarding yours; there is no
-three-way merge and no way to keep your version over theirs. Those arrive in later
-releases.
+Publishing has no checkboxes and no build status: a batch publish is everything pending
+except what is on hold ([Drafts and publishing](publishing.md#holding-an-entry-back)),
+and picking a subset by hand arrives in a later release. A file someone changed in the
+repository can only be taken whole, by discarding yours; there is no three-way merge and
+no way to keep your version over theirs.

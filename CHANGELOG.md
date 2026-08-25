@@ -4,6 +4,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Take over an entry somebody else is editing.** The *Being edited by…* banner now carries
+  **Take over**, which confirms first and then moves the lock: the entry is re-read, so the form
+  opens on what the other person had typed — there is one shared draft and nothing is copied or
+  thrown away. They find out when the save their tab makes next is refused, under *Anna Berg took
+  over this entry. Everything you wrote is in the shared draft*, with the inputs quiet and
+  **Reload** the way back in. `POST /admin/api/locks/:collection/:slug` takes `{ "take": true }`
+  for it, and both draft endpoints now answer `409` with the lock when the caller does not hold
+  it — the saves are the half the server enforces. Logged as `lock-takeover`
+  ([Working together](docs/working-together.md#take-over)).
+
+- **"Not ready yet" holds an entry back from everybody's publish.** A toggle in the entry header,
+  next to the status: the header tints and a batch publish leaves that entry out — every language
+  of it, and its schema is not checked either, so a half-written page nobody is holding back is
+  still the only thing that can refuse a publish. The drawer lists held files under **On hold**,
+  badged with who holds them, and the button counts what is actually going out. It is a courtesy
+  rather than a permission — anybody can take it off, which is logged as `hold-released` — and it
+  is cleared with the draft when the entry publishes or is discarded.
+  `POST /admin/api/hold/:collection/:slug` takes `{ "hold": true }`
+  ([Drafts and publishing](docs/publishing.md#holding-an-entry-back)).
+
 - **Two people can no longer type over each other.** Opening an entry takes a soft lock on it
   — every language at once, since they share a structure — and the lock is held by typing: the
   admin extends it while somebody edits and it frees itself about two minutes after the last
@@ -15,8 +35,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   **Publish…** and the answers to a language with no file. `POST /admin/api/locks/:collection/:slug`
   is the heartbeat and `GET` the same answer taking nothing; both carry the `base_sha`/`base_blob`
   each of the entry's files was loaded against. Removing a member releases their locks, and the
-  remove dialog names the entries first. Taking a lock over is still to come — the way past one
-  is to wait ([Working together](docs/working-together.md)).
+  remove dialog names the entries first ([Working together](docs/working-together.md)).
 
 - **An Activity screen at `/admin/activity`.** The log now has a page over it, and both roles
   get it: an owner sees everybody, an editor sees their own, and which is which stays the

@@ -2,9 +2,10 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Pending from './Pending.svelte';
 
-// Testing: the count and summary lines, one row per pending file, what Publish sends, the
-// four answers it can get (published / a file changed under it / the branch moved / a file
-// the schema is not done with), the way out of the first of those, and the empty state.
+// Testing: the count and summary lines, one row per pending file, the files a hold keeps out
+// of the publish, what Publish sends, the four answers it can get (published / a file changed
+// under it / the branch moved / a file the schema is not done with), the way out of the first
+// of those, and the empty state.
 // Not testing: the drawer's chrome classes or the indicator that opens it.
 
 const FILES = [
@@ -247,4 +248,56 @@ test('an entry whose languages have drifted apart is named on its row as that', 
   expect(q(root, '.change-row.is-blocked .badge-danger')?.textContent).toBe('Languages disagree');
   expect(q(root, '.change-row.is-blocked .change-actions')).toBe(null);
   expect(published).not.toHaveBeenCalled();
+});
+
+// A hold is a promise between colleagues, so the drawer has to say what it kept back before
+// anybody presses Publish — a count that quietly went down is not a reason anybody can read.
+const HELD = [
+  { path: 'src/content/pages/en/home.yaml', updated_at: 1755864000000 },
+  {
+    path: 'src/content/listings/en/mill-house.yaml',
+    updated_at: 1755863000000,
+    held_by: { id: 'u1', name: 'Martin' },
+  },
+];
+
+test('a file on hold is listed apart, named and out of what Publish commits', () => {
+  const root = show(HELD);
+
+  expect(q(root, '.change-group .group-title')?.textContent).toBe('On hold');
+  const row = q(root, '.change-group .change-row');
+  expect(row?.classList.contains('is-held')).toBe(true);
+  expect(q(root, '.change-group .badge-warn')?.textContent).toBe('On hold · Martin');
+  expect(q(root, '.drawer-foot .btn-primary')?.textContent).toBe('Publish 1 file');
+  expect(q(root, '.drawer-meta.is-summary')?.textContent).toBe('1 page · 1 listing · 1 on hold');
+});
+
+test('a set that is entirely on hold has nothing to publish and says why', () => {
+  const root = show([{ ...HELD[1] }] as typeof HELD);
+
+  const button = q<HTMLButtonElement>(root, '.drawer-foot .btn-primary');
+  expect(button?.disabled).toBe(true);
+  expect(button?.textContent?.trim()).toBe('Publish');
+  expect(q(root, '.drawer-foot .foot-note')?.textContent).toContain('on hold');
+});
+
+// A publish that leaves something behind does not empty the drawer, so the empty state cannot
+// be where it says what went out: a client who sees the list still standing has been told
+// nothing about their commit.
+test('a publish that left a hold behind still says what it published', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ commit_sha: 'def4567890', paths: [HELD[0]?.path] })),
+  );
+  const root = show(HELD);
+
+  q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.click();
+  await tick();
+  // What the shell hands back once the published row has gone: the hold, on its own.
+  files = HELD.slice(1);
+  flushSync();
+
+  expect(q(root, '.publish-result h3')?.textContent).toBe('Published 1 file');
+  expect(q(root, '.change-group .group-title')?.textContent).toBe('Still on hold');
+  expect(published).toHaveBeenCalled();
 });

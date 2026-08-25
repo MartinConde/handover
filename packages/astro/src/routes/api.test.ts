@@ -29,8 +29,11 @@ const {
   recordOffer,
   discardDraft,
   overlayRows,
+  heldDrafts,
+  holdEntry,
   pendingDrafts,
   publishDrafts,
+  readyDrafts,
   resolveDrift,
   saveTranslated,
   setEntryAddress,
@@ -90,6 +93,19 @@ const {
         updatedAt: 1755864000000,
       },
     ]),
+    // What a publish will write: `pendingDrafts` minus the entries somebody is holding back.
+    // The filter itself runs against a real D1 in core's `db.test.ts`.
+    readyDrafts: vi.fn(async () => [
+      {
+        path: 'src/content/listings/en/mill-house.yaml',
+        contents: 'title: "The Mill House"\nrooms: 3\naddress:\n  street: "Mill Lane"\n',
+        updatedAt: 1755864000000,
+      },
+    ]),
+    heldDrafts: vi.fn<() => Promise<Record<string, { id: string; name: string | null }>>>(
+      async () => ({}),
+    ),
+    holdEntry: vi.fn(async () => {}),
     publishDrafts: vi.fn<
       (...args: unknown[]) => Promise<{ commit_sha: string; paths: string[] } | undefined>
     >(async () => ({ commit_sha: 'def456', paths: ['src/content/listings/en/mill-house.yaml'] })),
@@ -305,6 +321,8 @@ let holder: { userId: string; name: string; expiresAt: number } | undefined;
 let editing: Record<string, string[]> = {};
 const released: string[] = [];
 const beats: string[] = [];
+/** And which ones Take over transferred. */
+const taken: string[] = [];
 // Which user and which session the route asked about — the two values that must come from the
 // session and never from the request, or one person could read another's account.
 let asked: unknown[] = [];
@@ -336,6 +354,11 @@ vi.mock('@handover/core', async (original) => ({
     beats.push(entry);
     return holder && holder.userId !== userId ? undefined : 1755864120000;
   },
+  takeLock: async (_site: string, _db: unknown, entry: string) => {
+    taken.push(entry);
+    holder = undefined;
+    return 1755864120000;
+  },
   lockHolder: async () => holder,
   heldEntries: async () => editing,
   releaseLocks: async (_site: string, _db: unknown, userId: string) => {
@@ -351,8 +374,11 @@ vi.mock('@handover/core', async (original) => ({
   recordOffer,
   discardDraft,
   overlayRows,
+  heldDrafts,
+  holdEntry,
   pendingDrafts,
   publishDrafts,
+  readyDrafts,
   resolveDrift,
   saveTranslated,
   setEntryAddress,
@@ -377,6 +403,7 @@ afterEach(() => {
   editing = {};
   released.length = 0;
   beats.length = 0;
+  taken.length = 0;
   createUserRefusal = undefined;
   magicLinkRefusal = undefined;
   setRoleRefusal = undefined;
@@ -602,6 +629,7 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
     data: { title: 'The Mill House', location: 'Bakewell', rooms: 3 },
     translations: {},
     pending: [],
+    held: false,
     problems: [{ path: 'address', message: 'Required' }],
     locales: ['en'],
     defaultLocale: 'en',
@@ -750,7 +778,9 @@ test('the pending list is what the drafts hold that the repository does not', as
   const res = await GET(ctx('drafts'));
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
-    files: [{ path: 'src/content/listings/en/mill-house.yaml', updated_at: 1755864000000 }],
+    files: [
+      { path: 'src/content/listings/en/mill-house.yaml', updated_at: 1755864000000, held_by: null },
+    ],
   });
 });
 
@@ -787,7 +817,7 @@ test('publishing is 409 when a file changed in the repository since the draft wa
 
 test('publishing is refused when a stored draft is not everything the schema needs', async () => {
   publishDrafts.mockClear();
-  pendingDrafts.mockImplementationOnce(async () => [
+  readyDrafts.mockImplementationOnce(async () => [
     {
       path: 'src/content/listings/en/mill-house.yaml',
       contents: 'title: "The Mill House"\n',
@@ -807,7 +837,7 @@ test('publishing is refused when a stored draft is not everything the schema nee
 // to a schema nobody declared would block every publish for good.
 test('a pending file no collection owns is not held to a collection schema', async () => {
   publishDrafts.mockClear();
-  pendingDrafts.mockImplementationOnce(async () => [
+  readyDrafts.mockImplementationOnce(async () => [
     { path: 'src/content/redirects.yaml', contents: 'rules: []\n', updatedAt: 1755864000000 },
   ]);
   expect((await POST(post('publish', ''))).status).toBe(200);
@@ -1180,7 +1210,7 @@ test('a save to a language the site does not declare is refused', async () => {
 test('publishing an entry whose languages have drifted apart is refused', async () => {
   drifted();
   publishDrafts.mockClear();
-  pendingDrafts.mockImplementationOnce(async () => [
+  readyDrafts.mockImplementationOnce(async () => [
     { path: 'src/content/pages/en/home.yaml', contents: home.en, updatedAt: 1755864000000 },
   ]);
 
@@ -1202,7 +1232,7 @@ test('an entry whose languages agree publishes, drift or no drift elsewhere', as
   files['src/content/pages/en/home.yaml'] = home.en;
   files['src/content/pages/de/home.yaml'] = home.en.replace('Home', 'Startseite');
   publishDrafts.mockClear();
-  pendingDrafts.mockImplementationOnce(async () => [
+  readyDrafts.mockImplementationOnce(async () => [
     { path: 'src/content/pages/en/home.yaml', contents: home.en, updatedAt: 1755864000000 },
   ]);
 
@@ -1329,7 +1359,7 @@ const resolved = (locales: string[]) => {
     updatedAt: 1755864000000,
   }));
   for (const row of written) files[row.path] = row.contents;
-  pendingDrafts.mockImplementationOnce(async () => written);
+  readyDrafts.mockImplementationOnce(async () => written);
   return written;
 };
 
@@ -2608,7 +2638,7 @@ test('a publish that commits nothing writes no event', async () => {
 });
 
 test('a publish the schema refused writes no event', async () => {
-  pendingDrafts.mockImplementationOnce(async () => [
+  readyDrafts.mockImplementationOnce(async () => [
     { path: 'src/content/listings/en/mill-house.yaml', contents: 'rooms: 3\n', updatedAt: 1 },
   ]);
 
@@ -2711,4 +2741,186 @@ test('removing somebody who is not there is no event', async () => {
 
   expect(res.status).toBe(404);
   expect(logged).toEqual([]);
+});
+
+// Take over is what makes the lock safe to lose: the person it was taken from finds out because
+// the save their tab makes next is refused, not because a poll noticed.
+test('an autosave from somebody who does not hold the lock is refused, naming who has it', async () => {
+  holder = { userId: 'u1', name: 'Anna Berg', expiresAt: 1755864060000 };
+  saveDraft.mockClear();
+
+  const data = { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } };
+  const res = await PUT(
+    ctx(
+      'drafts/listings/mill-house',
+      new Request('https://x/admin/api/drafts', {
+        method: 'PUT',
+        body: JSON.stringify({ data }),
+      }),
+      { handover: editor },
+    ),
+  );
+
+  expect(res.status).toBe(409);
+  expect(await res.json()).toEqual({
+    held_by: { id: 'u1', name: 'Anna Berg' },
+    mine: false,
+    expires_at: 1755864060000,
+  });
+  expect(saveDraft).not.toHaveBeenCalled();
+});
+
+test('the holder of the lock saves as they always did', async () => {
+  holder = { userId: 'u2', name: 'Anna', expiresAt: 1755864060000 };
+
+  const res = await PUT(
+    ctx(
+      'drafts/listings/mill-house',
+      new Request('https://x/admin/api/drafts', {
+        method: 'PUT',
+        body: JSON.stringify({
+          data: { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } },
+        }),
+      }),
+      { handover: editor },
+    ),
+  );
+
+  expect(res.status).toBe(200);
+});
+
+test('Take over transfers the entry and says so in the log', async () => {
+  holder = { userId: 'u1', name: 'Anna Berg', expiresAt: 1755864060000 };
+
+  const res = await POST(
+    ctx(
+      'locks/listings/mill-house',
+      new Request('https://x/admin/api/locks', {
+        method: 'POST',
+        body: JSON.stringify({ take: true }),
+      }),
+      { handover: editor },
+    ),
+  );
+
+  expect(await res.json()).toMatchObject({ held_by: null, mine: true, expires_at: 1755864120000 });
+  expect(taken).toEqual(['listings/mill-house']);
+  expect(logged).toEqual([
+    {
+      userId: 'u2',
+      kind: 'lock-takeover',
+      subject: 'src/content/listings/en/mill-house.yaml',
+      detail: { from: 'Anna Berg' },
+    },
+  ]);
+});
+
+test('a beat is not a take-over, whatever else the body carries', async () => {
+  holder = { userId: 'u1', name: 'Anna Berg', expiresAt: 1755864060000 };
+
+  const res = await POST(
+    ctx(
+      'locks/listings/mill-house',
+      new Request('https://x/admin/api/locks', {
+        method: 'POST',
+        body: JSON.stringify({ take: false }),
+      }),
+      { handover: editor },
+    ),
+  );
+
+  expect(await res.json()).toMatchObject({ mine: false });
+  expect(taken).toEqual([]);
+  expect(logged).toEqual([]);
+});
+
+test('a hold is written to every language the entry could have', async () => {
+  locales = ['en', 'de'];
+
+  const res = await POST(
+    ctx(
+      'hold/listings/mill-house',
+      new Request('https://x/admin/api/hold', {
+        method: 'POST',
+        body: JSON.stringify({ hold: true }),
+      }),
+      { handover: editor },
+    ),
+  );
+
+  expect(await res.json()).toEqual({ held: true });
+  expect(holdEntry).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    ['src/content/listings/en/mill-house.yaml', 'src/content/listings/de/mill-house.yaml'],
+    'u2',
+  );
+  expect(logged).toEqual([]);
+});
+
+// Only the way off is an event: a hold is a promise to somebody else, and taking it off is the
+// half they would want to read about afterwards.
+test('taking a hold off clears the column and is logged', async () => {
+  const res = await POST(
+    ctx(
+      'hold/listings/mill-house',
+      new Request('https://x/admin/api/hold', {
+        method: 'POST',
+        body: JSON.stringify({ hold: false }),
+      }),
+      { handover: editor },
+    ),
+  );
+
+  expect(await res.json()).toEqual({ held: false });
+  expect(holdEntry).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    ['src/content/listings/en/mill-house.yaml'],
+    null,
+  );
+  expect(logged).toEqual([
+    {
+      userId: 'u2',
+      kind: 'hold-released',
+      subject: 'src/content/listings/en/mill-house.yaml',
+      detail: null,
+    },
+  ]);
+});
+
+test('the drawer reads which of its files belong to an entry on hold', async () => {
+  heldDrafts.mockResolvedValueOnce({
+    'listings/mill-house': { id: 'u1', name: 'Anna Berg' },
+  });
+
+  const res = await GET(ctx('drafts'));
+
+  expect(await res.json()).toEqual({
+    files: [
+      {
+        path: 'src/content/listings/en/mill-house.yaml',
+        updated_at: 1755864000000,
+        held_by: { id: 'u1', name: 'Anna Berg' },
+      },
+    ],
+  });
+});
+
+// The checks a publish runs are about the files it is going to write, and a held entry is not
+// one of them: a half-written draft somebody is holding back must not block everybody else's
+// publish the way an unfinished one they are not holding back does.
+test('a publish is checked against the files it will write, not the ones on hold', async () => {
+  pendingDrafts.mockResolvedValueOnce([
+    {
+      path: 'src/content/listings/en/mill-house.yaml',
+      contents: 'title: "Half written"\n',
+      updatedAt: 1755864000000,
+    },
+  ]);
+
+  const res = await POST(post('publish', ''));
+
+  expect(res.status).toBe(200);
+  expect(publishDrafts).toHaveBeenCalled();
 });

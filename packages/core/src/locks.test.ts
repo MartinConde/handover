@@ -3,7 +3,7 @@ import { drizzle } from 'drizzle-orm/d1';
 import { Miniflare } from 'miniflare';
 import { afterAll, beforeAll, beforeEach, expect, test } from 'vitest';
 import type { Db } from './db.js';
-import { claimLock, heldEntries, LOCK_TTL, lockHolder, releaseLocks } from './locks.js';
+import { claimLock, heldEntries, LOCK_TTL, lockHolder, releaseLocks, takeLock } from './locks.js';
 import * as tables from './tables.js';
 
 // The same harness `activity.test.ts` uses: a real D1 behind the real generated schema, since
@@ -105,4 +105,15 @@ test('removing a member lets go of their entries and leaves everyone else holdin
   await releaseLocks('default', db, 'u1');
   expect(await lockHolder('default', db, 'listings/seaview-cottage', NOW)).toBeUndefined();
   expect((await lockHolder('default', db, 'pages/home', NOW))?.userId).toBe('u2');
+});
+
+test('Take over transfers a lock somebody else is holding, with a fresh lifetime', async () => {
+  await claimLock('default', db, 'listings/seaview-cottage', 'u1', NOW);
+  expect(await takeLock('default', db, 'listings/seaview-cottage', 'u2', NOW + 1000)).toBe(
+    NOW + 1000 + LOCK_TTL,
+  );
+  expect(await lockHolder('default', db, 'listings/seaview-cottage', NOW + 1000)).toMatchObject({
+    userId: 'u2',
+    expiresAt: NOW + 1000 + LOCK_TTL,
+  });
 });

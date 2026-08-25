@@ -1,5 +1,10 @@
 <script lang="ts">
-type File = { path: string; updated_at: number };
+type File = {
+  path: string;
+  updated_at: number;
+  /** Somebody marked this file's entry "Not ready yet"; null where nobody has. */
+  held_by?: { id: string; name: string | null } | null;
+};
 let {
   files,
   onclose,
@@ -38,11 +43,20 @@ const named = (path: string) => path.replace('src/content/', '');
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const plural = (n: number, what: string) => `${n} ${n === 1 ? what.replace(/s$/, '') : what}`;
 
-// "2 pages · 1 listing" — the collections behind the paths, in the order they first appear.
+// What this publish would commit, and what it would leave behind. A held entry is somebody
+// else's promise not to ship half a page, so it is listed rather than quietly missing.
+const ready = $derived(files.filter((f) => !f.held_by));
+const held = $derived(files.filter((f) => f.held_by));
+
+// "2 pages · 1 listing · 1 on hold" — the collections behind the paths, in the order they
+// first appear.
 const summary = $derived(
-  [...new Set(files.map((f) => collectionOf(f.path)))]
-    .map((c) => plural(files.filter((f) => collectionOf(f.path) === c).length, c))
-    .join(' · '),
+  [
+    ...[...new Set(files.map((f) => collectionOf(f.path)))].map((c) =>
+      plural(files.filter((f) => collectionOf(f.path) === c).length, c),
+    ),
+    ...(held.length ? [`${held.length} on hold`] : []),
+  ].join(' · '),
 );
 
 // What a refusal says. A conflict names its files, and those rows carry the rest of it; a
@@ -133,6 +147,38 @@ async function discard() {
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && (confirming ? (confirming = '') : onclose())} />
 
+{#snippet change(file: File)}
+  <li>
+    <div class="change-row" class:is-held={file.held_by} class:is-blocked={conflicts.includes(file.path) || unready.includes(file.path) || drifted.includes(file.path)}>
+      <span class="lead" aria-hidden="true"><span class="pdot"></span></span>
+      <div class="change-title">
+        <span class="name filename">{named(file.path)}</span>
+        <span class="badge">{capitalise(collectionOf(file.path))}</span>
+        {#if file.held_by}
+          <span class="badge badge-warn">On hold · {file.held_by.name || 'somebody'}</span>
+        {:else if conflicts.includes(file.path)}
+          <span class="badge badge-danger">Changed in the repository since you opened it</span>
+        {:else if unready.includes(file.path)}
+          <span class="badge badge-danger">Not ready to publish</span>
+        {:else if drifted.includes(file.path)}
+          <span class="badge badge-danger">Languages disagree</span>
+        {/if}
+      </div>
+      <div class="change-sub">Edited {new Date(file.updated_at).toLocaleString()}</div>
+      {#if conflicts.includes(file.path)}
+        <div class="change-actions">
+          <button
+            class="btn btn-sm"
+            type="button"
+            disabled={busy || discarding}
+            onclick={() => (confirming = file.path)}
+          >Discard<span class="visually-hidden"> your changes to {named(file.path)}</span></button>
+        </div>
+      {/if}
+    </div>
+  </li>
+{/snippet}
+
 <div class="scrim is-right">
   <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
   <aside
@@ -157,37 +203,30 @@ async function discard() {
     </header>
     <div class="drawer-body">
       {#if files.length}
+        <!-- A publish that left a hold behind does not empty the drawer, so the empty state below
+             is not where the commit gets named. Neutral, not green: the commit landed, the site
+             has not. -->
+        {#if published}
+          <div class="publish-result">
+            <h3>Published {plural(published, 'files')}</h3>
+            <p>One commit is on its way; the site rebuilds in a minute or two.</p>
+          </div>
+        {/if}
         <ul class="change-list">
-          {#each files as file (file.path)}
-            <li>
-              <div class="change-row" class:is-blocked={conflicts.includes(file.path) || unready.includes(file.path) || drifted.includes(file.path)}>
-                <span class="lead" aria-hidden="true"><span class="pdot"></span></span>
-                <div class="change-title">
-                  <span class="name filename">{named(file.path)}</span>
-                  <span class="badge">{capitalise(collectionOf(file.path))}</span>
-                  {#if conflicts.includes(file.path)}
-                    <span class="badge badge-danger">Changed in the repository since you opened it</span>
-                  {:else if unready.includes(file.path)}
-                    <span class="badge badge-danger">Not ready to publish</span>
-                  {:else if drifted.includes(file.path)}
-                    <span class="badge badge-danger">Languages disagree</span>
-                  {/if}
-                </div>
-                <div class="change-sub">Edited {new Date(file.updated_at).toLocaleString()}</div>
-                {#if conflicts.includes(file.path)}
-                  <div class="change-actions">
-                    <button
-                      class="btn btn-sm"
-                      type="button"
-                      disabled={busy || discarding}
-                      onclick={() => (confirming = file.path)}
-                    >Discard<span class="visually-hidden"> your changes to {named(file.path)}</span></button>
-                  </div>
-                {/if}
-              </div>
-            </li>
-          {/each}
+          {#each ready as file (file.path)}{@render change(file)}{/each}
         </ul>
+        {#if held.length}
+          <div class="change-group">
+            <h3 class="group-title">{published ? 'Still on hold' : 'On hold'}</h3>
+            <ul class="change-list">
+              {#each held as file (file.path)}{@render change(file)}{/each}
+            </ul>
+            <p class="foot-note">
+              Whoever is editing these says they are not ready. Publishing goes ahead without them;
+              they go out once the hold comes off in the entry.
+            </p>
+          </div>
+        {/if}
       {:else}
         <div class="empty">
           <div>
@@ -204,22 +243,32 @@ async function discard() {
     {#if files.length}
       <footer class="drawer-foot">
         {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
-        {#if busy}<div class="notice notice-info" role="status">Publishing {plural(files.length, 'files')}…</div>{/if}
+        {#if busy}<div class="notice notice-info" role="status">Publishing {plural(ready.length, 'files')}…</div>{/if}
         <div class="foot-row">
           <button
             class="btn btn-primary"
             type="button"
-            disabled={busy || discarding || conflicts.length > 0}
+            disabled={busy || discarding || conflicts.length > 0 || !ready.length}
             onclick={publish}
           >
             {busy
               ? 'Publishing…'
-              : error && !conflicts.length
-                ? 'Try again'
-                : `Publish ${plural(files.length, 'files')}`}
+              : !ready.length
+                ? 'Publish'
+                : error && !conflicts.length
+                  ? 'Try again'
+                  : `Publish ${plural(ready.length, 'files')}`}
           </button>
         </div>
-        <p class="foot-note">One commit, then the site rebuilds — live in 1–3 minutes. Nothing is written until the whole set lands.</p>
+        <p class="foot-note">
+          {#if !ready.length}
+            Everything still here is on hold. It goes out once whoever is editing it says it is
+            ready.
+          {:else}
+            One commit, then the site rebuilds — live in 1–3 minutes. Nothing is written until the
+            whole set lands.
+          {/if}
+        </p>
       </footer>
     {/if}
   </aside>

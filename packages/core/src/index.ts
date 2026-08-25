@@ -46,11 +46,14 @@ export {
   createDraft,
   DraftConflictError,
   discardDraft,
+  heldDrafts,
+  holdEntry,
   loadDraft,
   openDb,
   overlayRows,
   pendingDrafts,
   publishDrafts,
+  readyDrafts,
   recordDelete,
   recordOffer,
   recordRename,
@@ -61,7 +64,13 @@ export {
   setEntryLocales,
 } from './db.js';
 export type { ContentFile, ContentIndex, EntryLocale, IndexEntry, TitleFields } from './entries.js';
-export { collectionEntries, contentPathErrors, entryOffer, indexFrom } from './entries.js';
+export {
+  collectionEntries,
+  contentPathErrors,
+  entryKey,
+  entryOffer,
+  indexFrom,
+} from './entries.js';
 export type { GitClient, GitFile, GitHubApp, PublishFile } from './git.js';
 export { blobSha, createGitClient, RefMovedError, RepoUnreachableError } from './git.js';
 export type { EntryLocation, RedirectRule } from './lifecycle.js';
@@ -75,7 +84,7 @@ export {
   renameEntry,
 } from './lifecycle.js';
 export type { Lock } from './locks.js';
-export { claimLock, heldEntries, LOCK_TTL, lockHolder, releaseLocks } from './locks.js';
+export { claimLock, heldEntries, LOCK_TTL, lockHolder, releaseLocks, takeLock } from './locks.js';
 export type { EmailSender, Mailer } from './mailer.js';
 export { cloudflareMailer, resendMailer, senderAddress } from './mailer.js';
 export type { MigrationStep } from './migrate.js';

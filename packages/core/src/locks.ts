@@ -78,3 +78,23 @@ export async function heldEntries(
 export async function releaseLocks(siteId: string, db: Db, userId: string): Promise<void> {
   await db.delete(locks).where(and(eq(locks.siteId, siteId), eq(locks.userId, userId)));
 }
+
+/**
+ * Take an entry off whoever is holding it: the same upsert as `claimLock` without the condition,
+ * because Take over is a person deciding rather than two tabs racing. The holder hears about it
+ * when their next save is refused.
+ */
+export async function takeLock(
+  siteId: string,
+  db: Db,
+  entry: string,
+  userId: string,
+  now = Date.now(),
+): Promise<number> {
+  const expiresAt = now + LOCK_TTL;
+  await db
+    .insert(locks)
+    .values({ siteId, entry, userId, expiresAt })
+    .onConflictDoUpdate({ target: [locks.siteId, locks.entry], set: { userId, expiresAt } });
+  return expiresAt;
+}

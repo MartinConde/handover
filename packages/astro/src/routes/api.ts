@@ -20,12 +20,15 @@ import {
   discardDraft,
   driftReport,
   entryAddress,
+  entryKey,
   entryName,
   entryOffer,
   entryUrl,
   FORMAT_VERSION,
   formOf,
+  heldDrafts,
   heldEntries,
+  holdEntry,
   loadDraft,
   lockHolder,
   logActivity,
@@ -38,6 +41,7 @@ import {
   publishDrafts,
   RefMovedError,
   RepoUnreachableError,
+  readyDrafts,
   recordDelete,
   recordOffer,
   recordRename,
@@ -50,6 +54,7 @@ import {
   setEntryLocales,
   staleLocales,
   syncLocale,
+  takeLock,
   translatableText,
 } from '@handover/core';
 import type { APIRoute } from 'astro';
@@ -516,7 +521,7 @@ async function entryLocales(
   collection: string,
   slug: string,
   locales: string[],
-): Promise<Record<string, { data: unknown; pending: boolean }>> {
+): Promise<Record<string, { data: unknown; pending: boolean; held: boolean }>> {
   const git = gitClient();
   const database = db();
   const loaded = await Promise.all(
@@ -529,7 +534,10 @@ async function entryLocales(
       const contents = row?.contents || file?.contents;
       if (!contents) return undefined;
       const pending = row ? (await blobSha(row.contents)) !== file?.blob_sha : false;
-      return [locale, { data: parseEntry('default', contents), pending }] as const;
+      return [
+        locale,
+        { data: parseEntry('default', contents), pending, held: Boolean(row?.heldBy) },
+      ] as const;
     }),
   );
   return Object.fromEntries(loaded.filter((l) => l !== undefined));
@@ -567,6 +575,9 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
     // Which languages the editor has ahead of the repository: a translation drafted on its own
     // — by Create from English, or waiting since last time — is the entry's to publish too.
     pending: config.i18n.locales.filter((locale) => loaded[locale]?.pending),
+    // "Not ready yet", read off the entry rather than off one file: the flag is written to the
+    // languages the editor was on, and it holds the whole entry back either way.
+    held: Object.values(loaded).some((l) => l.held),
     problems: entryProblems(schema, data),
     titleField: collected.titleField,
     // The languages the site declares, which is what says whether the editor draws any of the
@@ -615,21 +626,24 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
  * Who is editing this entry, and what each of its files was loaded against. One entry, every
  * language: the structure is shared, so a lock on one file would be a lock on none.
  *
- * `claim` is the beat. It takes an entry nobody is editing and pushes our own lock further out,
- * and a request from anybody else only ever reads — a lock changes hands when somebody presses
- * Take over, never because their tab asked first.
+ * `beat` takes an entry nobody is editing and pushes our own lock further out; `read` only ever
+ * reads, so a tab watching one is not a way to take it. `take` is the one that moves an entry
+ * between people, and it is a person pressing Take over — the holder hears about it when the
+ * save their tab makes next is refused.
  */
 async function lockState(
   collection: string,
   slug: string,
   session: App.Locals['handover'],
-  claim: boolean,
+  mode: 'read' | 'beat' | 'take',
 ): Promise<Response> {
   if (!session) return new Response('Unauthorized', { status: 401 });
   if (!config.collections[collection]) return new Response('Not found', { status: 404 });
   const database = db();
   const entry = `${collection}/${slug}`;
-  const taken = claim ? await claimLock('default', database, entry, session.user.id) : undefined;
+  if (mode === 'take') return Response.json(await takeOver(collection, slug, entry, session));
+  const taken =
+    mode === 'beat' ? await claimLock('default', database, entry, session.user.id) : undefined;
   const holder = taken ? undefined : await lockHolder('default', database, entry);
   return Response.json({
     held_by: holder ? { id: holder.userId, name: holder.name } : null,
@@ -637,6 +651,77 @@ async function lockState(
     expires_at: taken ?? holder?.expiresAt ?? null,
     base: await entryBases(collection, slug),
   });
+}
+
+/**
+ * Take over: the lock moves whatever it says, and the log carries who it was taken from, since
+ * that is the half the event would otherwise lose. Nobody holding it is not a take-over and is
+ * not an event — the beat would have taken it anyway.
+ */
+async function takeOver(
+  collection: string,
+  slug: string,
+  entry: string,
+  session: NonNullable<App.Locals['handover']>,
+) {
+  const database = db();
+  const holder = await lockHolder('default', database, entry);
+  const expiresAt = await takeLock('default', database, entry, session.user.id);
+  if (holder && holder.userId !== session.user.id) {
+    await logActivity('default', database, {
+      userId: session.user.id,
+      kind: 'lock-takeover',
+      subject: await entrySubject(collection, slug),
+      detail: { from: holder.name },
+    });
+  }
+  return {
+    held_by: null,
+    mine: true,
+    expires_at: expiresAt,
+    base: await entryBases(collection, slug),
+  };
+}
+
+// Which file an event about the whole entry names: the one the entry is written in, so the log
+// links to the language somebody would open.
+async function entrySubject(collection: string, slug: string): Promise<string | null> {
+  const source = await sourceFor(collection, slug);
+  return source ? entryPath(collection, slug, source) : null;
+}
+
+/**
+ * "Not ready yet" on the entry, or off it. Every language it could have, whether it has that
+ * file or not: the write is one statement and a language nobody has drafted has no row to hit.
+ */
+async function hold(
+  collection: string,
+  slug: string,
+  request: Request,
+  session: App.Locals['handover'],
+): Promise<Response> {
+  if (!session) return new Response('Unauthorized', { status: 401 });
+  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  const body = (await request.json().catch(() => undefined)) as { hold?: unknown } | undefined;
+  const held = body?.hold === true;
+  const database = db();
+  await holdEntry(
+    'default',
+    database,
+    config.i18n.locales.map((locale) => entryPath(collection, slug, locale)),
+    held ? session.user.id : null,
+  );
+  // Only the way off is an event: a hold is a promise to somebody else, and taking it off is
+  // the half they would want to read about afterwards.
+  if (!held) {
+    await logActivity('default', database, {
+      userId: session.user.id,
+      kind: 'hold-released',
+      subject: await entrySubject(collection, slug),
+      detail: null,
+    });
+  }
+  return Response.json({ held });
 }
 
 // What each of the entry's files was loaded against, path -> { sha, blob }: the rows in D1 and
@@ -678,11 +763,25 @@ async function autosave(
   collection: string,
   slug: string,
   request: Request,
+  session: App.Locals['handover'],
   locale?: string,
 ): Promise<Response> {
   const schema = config.collections[collection]?.schema;
   if (!schema || (locale !== undefined && !config.i18n.locales.includes(locale)))
     return new Response('Not found', { status: 404 });
+  // The one write the lock enforces rather than draws, because it is the one that runs on its
+  // own: after a take-over the tab that lost the entry keeps typing, and this is where it finds
+  // out. The answer is the lock, so the screen can name who has it.
+  const holder = await lockHolder('default', db(), `${collection}/${slug}`);
+  if (holder && holder.userId !== session?.user.id)
+    return Response.json(
+      {
+        held_by: { id: holder.userId, name: holder.name },
+        mine: false,
+        expires_at: holder.expiresAt,
+      },
+      { status: 409 },
+    );
   const body = (await request.json().catch(() => undefined)) as { data?: unknown } | undefined;
   const data = editable(body?.data);
   if (!data) return new Response('Bad request', { status: 400 });
@@ -1129,6 +1228,7 @@ const LOCALES = /^entries\/([\w-]+)\/([\w-]+)\/locales$/;
 const ADDRESS = /^entries\/([\w-]+)\/([\w-]+)\/address\/([\w-]+)$/;
 const DRIFT = /^drift\/([\w-]+)\/([\w-]+)$/;
 const LOCK = /^locks\/([\w-]+)\/([\w-]+)$/;
+const HOLD = /^hold\/([\w-]+)\/([\w-]+)$/;
 const TRANSLATE = /^translate\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 
 // Better Auth owns everything under its base path. Both verbs go straight to its handler:
@@ -1150,13 +1250,23 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
     });
   }
   if (params.path === 'drafts') {
-    const rows = await pendingDrafts('default', db());
+    const database = db();
+    const [rows, held] = await Promise.all([
+      pendingDrafts('default', database),
+      heldDrafts('default', database),
+    ]);
     return Response.json({
-      files: rows.map((r) => ({ path: r.path, updated_at: r.updatedAt })),
+      files: rows.map((r) => ({
+        path: r.path,
+        updated_at: r.updatedAt,
+        // The hold is the entry's, so every language of a held entry is greyed, not only the
+        // file the person who marked it happened to be on.
+        held_by: held[entryKey(r.path) ?? ''] ?? null,
+      })),
     });
   }
   const held = params.path?.match(LOCK);
-  if (held) return lockState(held[1] ?? '', held[2] ?? '', locals.handover, false);
+  if (held) return lockState(held[1] ?? '', held[2] ?? '', locals.handover, 'read');
   const entry = params.path?.match(ENTRY);
   if (entry) return answering(() => getEntry(entry[1] ?? '', entry[2] ?? ''));
   const list = params.path?.match(ENTRIES);
@@ -1164,14 +1274,15 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
   return new Response('Not found', { status: 404 });
 };
 
-export const PUT: APIRoute = async ({ params, request }) => {
+export const PUT: APIRoute = async ({ params, request, locals }) => {
   const translated = params.path?.match(TRANSLATION);
   if (translated)
     return answering(() =>
-      autosave(translated[1] ?? '', translated[2] ?? '', request, translated[3]),
+      autosave(translated[1] ?? '', translated[2] ?? '', request, locals.handover, translated[3]),
     );
   const draft = params.path?.match(DRAFT);
-  if (draft) return answering(() => autosave(draft[1] ?? '', draft[2] ?? '', request));
+  if (draft)
+    return answering(() => autosave(draft[1] ?? '', draft[2] ?? '', request, locals.handover));
   return new Response('Not found', { status: 404 });
 };
 
@@ -1237,7 +1348,9 @@ async function driftedPaths(paths: string[]): Promise<string[]> {
  */
 async function publish(session: App.Locals['handover']): Promise<Response> {
   const database = db();
-  const pending = await pendingDrafts('default', database);
+  // Not `pendingDrafts`: an entry somebody is holding back is not in this commit, so it is not
+  // this commit's job to hold it to the schema either.
+  const pending = await readyDrafts('default', database);
   const unready = pending.filter((row) => {
     const schema = schemaFor(row.path);
     return schema && row.contents
@@ -1319,7 +1432,17 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   if (resent) return resendInvite(resent[1] ?? '', request, url, locals.cfContext, locals.handover);
   if (params.path === 'publish') return answering(() => publish(locals.handover));
   const beat = params.path?.match(LOCK);
-  if (beat) return lockState(beat[1] ?? '', beat[2] ?? '', locals.handover, true);
+  if (beat) {
+    const body = (await request.json().catch(() => undefined)) as { take?: unknown } | undefined;
+    return lockState(
+      beat[1] ?? '',
+      beat[2] ?? '',
+      locals.handover,
+      body?.take === true ? 'take' : 'beat',
+    );
+  }
+  const holding = params.path?.match(HOLD);
+  if (holding) return hold(holding[1] ?? '', holding[2] ?? '', request, locals.handover);
   const filling = params.path?.match(TRANSLATE);
   if (filling)
     return answering(() =>

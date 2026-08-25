@@ -27,6 +27,16 @@ export interface ContentFile {
 // collection and is not one. `redirects.yaml` has no locale segment.
 const ENTRY_PATH = /^src\/content\/([a-z0-9-]+)\/([^/]+)\/([^/]+)\.yaml$/;
 
+/**
+ * `src/content/listings/en/mill-house.yaml` → `listings/mill-house`, and nothing for a file
+ * that is not an entry. The key a lock and a hold are on: both are the entry's, since its
+ * languages share a structure and are published together.
+ */
+export const entryKey = (path: string): string | undefined => {
+  const found = ENTRY_PATH.exec(path);
+  return found ? `${found[1]}/${found[3]}` : undefined;
+};
+
 // The site files that are not entries; globals already share the entry layout.
 const OTHER_PATHS = [
   /^src\/content\/redirects\.yaml$/,

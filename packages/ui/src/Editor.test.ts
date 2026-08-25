@@ -985,3 +985,155 @@ test('the reason an address was refused is shown against the row', async () => {
   expect(body.querySelector('.slug-row .is-bad')?.textContent).toMatch(/already the web address/);
   vi.unstubAllGlobals();
 });
+
+// The other half of a take-over, from the tab that lost the entry: it finds out because the
+// save it makes next comes back refused, and everything about the screen follows from that.
+const refused = () =>
+  vi.fn(async (url: string) =>
+    isLock(url)
+      ? Response.json(HELD)
+      : Response.json(
+          {
+            held_by: { id: 'u1', name: 'Anna Berg' },
+            mine: false,
+            expires_at: Date.now() + LOCK_TTL,
+          },
+          { status: 409 },
+        ),
+  );
+
+test('a save refused by a take-over says where the work went and stops the tab', async () => {
+  vi.useFakeTimers();
+  const fetchMock = refused();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  type(root, 'input#f-title', 'Seaview House');
+
+  await vi.advanceTimersByTimeAsync(2000);
+  flushSync();
+
+  expect($(root, '.lock-banner.is-lost')?.textContent).toContain('Anna Berg took over this entry');
+  expect($<HTMLFieldSetElement>(root, '.form > fieldset')?.disabled).toBe(true);
+  expect($<HTMLButtonElement>(root, 'button.btn-primary')?.disabled).toBe(true);
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+// 3.9 beat on every save, refused or not. Once a refusal means "you lost it", that beat would
+// push the lock the entry no longer has back out.
+test('a refused save does not push the lock back out', async () => {
+  vi.useFakeTimers();
+  const fetchMock = refused();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  // Past the three quarters of a lifetime that says the next save also beats.
+  await vi.advanceTimersByTimeAsync(50_000);
+  const before = fetchMock.mock.calls.filter((call) => isLock(call[0])).length;
+  type(root, 'input#f-title', 'Seaview House');
+
+  await vi.advanceTimersByTimeAsync(2000);
+  flushSync();
+
+  expect(fetchMock.mock.calls.filter((call) => isLock(call[0])).length).toBe(before);
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+test('Take over asks first, and reads the entry again once it is yours', async () => {
+  const fetchMock = heldBy();
+  vi.stubGlobal('fetch', fetchMock);
+  const changed = vi.fn();
+  const root = show({ onchanged: changed });
+  await tick();
+  flushSync();
+
+  $<HTMLButtonElement>(root, '.lock-banner .btn-link')?.click();
+  flushSync();
+  expect($(root, '.dialog')?.textContent).toContain('Take over editing from Anna Berg?');
+  expect(changed).not.toHaveBeenCalled();
+
+  $<HTMLButtonElement>(root, '.dialog .btn-primary')?.click();
+  await tick();
+  flushSync();
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/locks/listings/seaview-cottage', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ take: true }),
+  });
+  expect(changed).toHaveBeenCalled();
+  vi.unstubAllGlobals();
+});
+
+// The hold is stored on the draft rows, so whatever is in the form goes first — otherwise the
+// entry is held back and the words that made somebody hold it are still in the browser.
+test('Not ready yet stores the edit, then holds the entry', async () => {
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (isLock(url)) return Response.json(HELD);
+    if (String(url).startsWith('/admin/api/hold/'))
+      return Response.json({ held: (JSON.parse(String(init?.body)) as { hold: boolean }).hold });
+    return Response.json({ updated_at: 1755864000000, pending: true, problems: [] });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  type(root, 'input#f-title', 'Seaview House');
+
+  $<HTMLButtonElement>(root, '.hold-toggle')?.click();
+  await tick();
+  await tick();
+  flushSync();
+
+  expect(wrote(fetchMock).map((call) => call[0])).toEqual([
+    '/admin/api/drafts/listings/seaview-cottage',
+    '/admin/api/hold/listings/seaview-cottage',
+  ]);
+  expect(wrote(fetchMock)[1]?.[1]).toMatchObject({ body: JSON.stringify({ hold: true }) });
+  expect($(root, '.hold-toggle')?.getAttribute('aria-pressed')).toBe('true');
+  expect($(root, '.entry-header')?.classList.contains('is-held')).toBe(true);
+  vi.unstubAllGlobals();
+});
+
+test('an entry with nothing unpublished has nothing to hold back', () => {
+  const root = show();
+  expect($<HTMLButtonElement>(root, '.hold-toggle')?.disabled).toBe(true);
+});
+
+test('an entry somebody is already holding back opens with the toggle on', () => {
+  const root = show({ entry: { ...entry, pending: ['en'], held: true } });
+  expect($(root, '.hold-toggle')?.getAttribute('aria-pressed')).toBe('true');
+});
+
+// The lock is the entry's, so the second language surrenders on the same refusal — otherwise a
+// tab that lost the entry keeps typing German at a draft row it no longer holds.
+test('a refused save in the second language loses the entry too', async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal('fetch', refused());
+  const root = show({ entry: bilingual });
+
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  type(root, 'input#t-title', 'Seeblick-Häuschen');
+  await vi.advanceTimersByTimeAsync(2000);
+  flushSync();
+
+  expect($(root, '.lock-banner.is-lost')?.textContent).toContain('Anna Berg took over this entry');
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+test('the take-over confirm closes on Escape and hands focus back', async () => {
+  vi.stubGlobal('fetch', heldBy());
+  const root = show();
+  await tick();
+  flushSync();
+  const trigger = $<HTMLButtonElement>(root, '.lock-banner .btn-link');
+  trigger?.focus();
+  trigger?.click();
+  flushSync();
+
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  flushSync();
+
+  expect($(root, '.dialog')).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+  vi.unstubAllGlobals();
+});

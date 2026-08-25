@@ -6,6 +6,7 @@ import {
   createDraft,
   DraftConflictError,
   discardDraft,
+  holdEntry,
   loadDraft,
   openDb,
   overlayRows,
@@ -921,4 +922,35 @@ test('an address put back the way it was owes nothing', async () => {
 
   expect(repo.read(REDIRECTS)).toBe('');
   expect(repo.read(PAGE_DE)).toBe(page('Startseite', 'Zieh ans Meer', 'Bereit für den Umzug?'));
+});
+
+// "Not ready yet" is the entry's, the way a lock is: it is written to the language the editor
+// was on, and the entry's other files are not somebody else's to publish because of that.
+test('a publish leaves out every language of an entry somebody is holding back', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE, [LISTING_DE]: GERMAN, [OTHER]: OTHER_FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  await saveDraft('default', db, repo, LISTING_DE, { title: 'Mühlenhaus am Bach' });
+  await saveDraft('default', db, repo, OTHER, { title: 'The Barn', price: '£10', rooms: 2 });
+
+  await holdEntry('default', db, [PATH], 'u1');
+  const result = await publishDrafts('default', db, repo);
+
+  expect(result?.paths).toEqual([OTHER]);
+  expect((await db.select().from(drafts)).map((r) => r.path).toSorted()).toEqual(
+    [PATH, LISTING_DE].toSorted(),
+  );
+});
+
+test('the same set publishes whole once the hold comes off', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE, [LISTING_DE]: GERMAN });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  await saveDraft('default', db, repo, LISTING_DE, { title: 'Mühlenhaus am Bach' });
+  await holdEntry('default', db, [PATH], 'u1');
+
+  await holdEntry('default', db, [PATH, LISTING_DE], null);
+  const result = await publishDrafts('default', db, repo);
+
+  expect(result?.paths.toSorted()).toEqual([PATH, LISTING_DE].toSorted());
 });

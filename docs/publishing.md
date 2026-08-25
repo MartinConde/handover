@@ -85,8 +85,9 @@ the old key is still written back on the next save, so the value is there for
 The top bar says how many files are waiting ("3 unpublished changes"); the button opens
 the **pending-changes drawer**, which lists them and publishes them:
 
-- **Everything pending goes out together**, in one commit. There is no per-file choice
-  yet — picking what ships arrives with the checkboxes in a later release
+- **Everything pending goes out together**, in one commit — except an entry somebody is
+  holding back, below. There is no per-file choice yet — picking what ships arrives with
+  the checkboxes in a later release
 - The commit is the stored bytes, not the form: whatever the drawer lists is exactly what
   lands in the repository
 - The rows are deleted once the commit succeeds, so reopening an entry reads the file that
@@ -104,6 +105,27 @@ the **pending-changes drawer**, which lists them and publishes them:
   which is where the files are made to agree
 - A commit is not a live site: the site rebuilds afterwards, which takes a minute or two,
   and the admin itself is redeployed with it
+
+## Holding an entry back
+
+Drafts are shared, so publishing everything pending means publishing everybody's pending —
+including the page somebody is halfway through rewriting. The person who knows it is
+halfway is the one editing it, so that is where the flag lives: **Not ready yet**, next to
+the status in the entry header.
+
+- It is the **whole entry**, every language, the way a lock is. The header tints and says
+  *On hold — won't be included when others publish*
+- The pending-changes drawer lists held files under **On hold**, greyed and badged *On hold
+  · Martin Vale*, so a publish never quietly leaves something out: the button counts what
+  is going, `Publish 3 files`, and says *Every change here is on hold* when that is nothing
+- A held entry is **not checked** either — a half-written draft somebody is holding back
+  does not refuse anybody else's publish for what its schema is still missing
+- The flag is stored on the entry's draft rows, so **discarding or publishing the entry
+  clears it** along with the draft
+- It is a courtesy, not a permission: anybody who can open the entry can turn it off, and
+  that is logged as `hold-released` ([Activity log](activity.md)). A
+  [take-over](working-together.md#take-over) does not touch it — the new holder inherits
+  the hold and sees the toggle pressed
 
 ## Creating, renaming and deleting
 
@@ -145,7 +167,18 @@ what the collection schema will not accept, `[{ "path": "body.1.heading", "messa
 "Required" }]`, empty when it accepts all of it; the draft is stored either way. Keys
 beginning with `_` are ignored: they belong to the file, not to the form. `400` if `data`
 is not an object or holds a shape the serialiser cannot write back (a nested array), with
-the reason as the body; `404` if the collection or the file does not exist.
+the reason as the body; `404` if the collection or the file does not exist. `409` with
+`{ "held_by", "mine", "expires_at" }` when somebody else is editing the entry
+([Working together](working-together.md#take-over)).
+
+```
+POST /admin/api/hold/:collection/:slug  { "hold": true }  →  { "held" }
+```
+
+Marks the entry *Not ready yet*, or takes the mark off with `false`. It writes the flag to
+every language's draft row, so it holds back files the caller has not touched; an entry
+with nothing pending has no row to write and nothing to hold back. `404` if the collection
+is not configured.
 
 ```
 PUT /admin/api/drafts/:collection/:slug/:locale  { "data": { … } }  →  { "updated_at", "pending", "problems" }
@@ -349,6 +382,7 @@ Two consequences worth knowing:
 
 ## Not yet
 
-Publishing is all-or-nothing: no checkboxes, no holding an entry back and no build
-status; a lock cannot be taken over, and a file somebody changed in the repository can
-only be taken whole ([Working together](working-together.md#not-yet)).
+A batch publish is still everything pending that is not on hold: no checkboxes, no
+publishing one entry on its own from its header, and no build status. A file somebody
+changed in the repository can only be taken whole
+([Working together](working-together.md#not-yet)).

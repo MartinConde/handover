@@ -23,6 +23,8 @@ let {
     data: Data;
     /** The languages whose file this entry has a draft ahead of in git. */
     pending: string[];
+    /** Somebody marked it "Not ready yet" — the toggle opens pressed, whoever they were. */
+    held?: boolean;
     /** What the collection schema will not accept yet, by field path. */
     problems: { path: string; message: string }[];
     /** The field this collection is keyed on, when it is not `title`. */
@@ -72,6 +74,8 @@ let saved = $state(JSON.stringify(entry.data));
 let drafted = $state(entry.pending.includes(entry.sourceLocale));
 let saving = $state(false);
 let saveFailed = $state(false);
+// svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
+let held = $state(entry.held === true);
 // A draft stores whatever was typed, so what the schema still wants is the server's answer to
 // every save rather than a reason to refuse one; the publish is where it blocks.
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
@@ -169,10 +173,26 @@ type Lock = {
   expires_at: number | null;
 };
 let lock = $state<Lock>();
+// A save came back refused: somebody took the entry over while this tab had it. Its own state
+// rather than the lock's, because the two banners say different things about the same fact.
+let lost = $state(false);
+let taking = $state(false);
+let takePanel = $state<HTMLElement>();
+let takeTrigger = $state<HTMLButtonElement>();
+$effect(() => {
+  if (taking) takePanel?.focus();
+});
+// Cancel gives focus back to the button that opened it; taking over reads the entry again and
+// there is no banner left to go back to.
+function cancelTake() {
+  taking = false;
+  takeTrigger?.focus();
+}
 // When the last answer came back, and when this tab last extended a lock of its own.
 let asked = $state(0);
 let beatAt = 0;
 const locked = $derived(lock !== undefined && !lock.mine);
+const holder = $derived(lock?.held_by?.name || 'Somebody else');
 // How long ago the holder last typed: the lock is taken by a beat and beats ride on the
 // autosave, so the expiry it carries is that keystroke plus one lifetime.
 const idle = $derived(lock?.expires_at ? asked - (lock.expires_at - LOCK_TTL) : 0);
@@ -216,17 +236,62 @@ async function autosave() {
     body: JSON.stringify({ data }),
   });
   saving = false;
+  // Somebody pressed Take over. The words are not lost — they are in the shared draft the new
+  // holder is carrying on from — but this tab is reading from here on.
+  if (res.status === 409) {
+    lost = true;
+    lock = (await res.json()) as Lock;
+    return;
+  }
   saveFailed = !res.ok;
-  // Typing is what holds the entry, and this is where the CMS hears it. Once every three
-  // quarters of a lifetime, so a fast typist is not a write per pause.
-  if (Date.now() - beatAt >= 45000) void beat(true);
   if (res.ok) {
+    // Typing is what holds the entry, and this is where the CMS hears it. Once every three
+    // quarters of a lifetime, so a fast typist is not a write per pause. A refused save is not
+    // a beat: the lock it would push out is not ours any more.
+    if (Date.now() - beatAt >= 45000) void beat(true);
     saved = sent;
     // Whether the stored draft differs from the file in git is the server's answer, not ours.
     const body = (await res.json()) as { pending: boolean; problems: Problem[] };
     drafted = body.pending;
     problems = byPath(body.problems);
   }
+}
+
+// The one thing that takes somebody else's work away, so it confirms first. The entry is read
+// again afterwards: there is one shared draft, and carrying on from it means loading what they
+// left rather than saving this tab's form over it.
+async function takeOver() {
+  busy = true;
+  const res = await fetch(`/admin/api/locks/${collection}/${slug}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ take: true }),
+  });
+  busy = false;
+  taking = false;
+  if (!res.ok) return;
+  lock = (await res.json()) as Lock;
+  onchanged();
+}
+
+// "Not ready yet". The flag lives on the draft rows, so whatever is in the form is stored
+// first — otherwise the entry is held back and the words that made somebody hold it are not.
+async function toggleHold() {
+  const next = !held;
+  busy = true;
+  if (json !== saved) await autosave();
+  if (saveFailed || lost) {
+    busy = false;
+    return;
+  }
+  if (pane?.unsaved()) await pane.flush();
+  const res = await fetch(`/admin/api/hold/${collection}/${slug}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ hold: next }),
+  });
+  busy = false;
+  if (res.ok) held = ((await res.json()) as { held: unknown }).held === true;
 }
 
 // Scrolling there is not enough on its own: the count is a button, so it has to land somewhere.
@@ -317,6 +382,8 @@ async function saveAddress() {
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 </script>
 
+<svelte:window onkeydown={(e) => e.key === 'Escape' && taking && cancelTake()} />
+
 <main class="main main-editor">
   {#each entry.offerProblems ?? [] as problem (problem)}
     <div class="lock-banner is-offer">
@@ -324,7 +391,15 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       repository; until then the files are what counts.
     </div>
   {/each}
-  {#if locked}
+  {#if lost}
+    <!-- Leads with where the work went, because the fear is that it is gone: the draft rows are
+         in D1 and the new holder carries on from them, so "lost" is never true of the words. -->
+    <div class="lock-banner is-lost">
+      {holder} took over this entry. Everything you wrote is in the shared draft — {holder} is carrying
+      on from it.
+      <button class="btn-link" type="button" onclick={onchanged}>Reload</button>
+    </div>
+  {:else if locked}
     <div class="lock-banner">
       {#if lock?.held_by}
         Being edited by {lock.held_by.name || 'somebody else'}
@@ -333,6 +408,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             ? '— nothing typed for a minute; the lock frees itself after two'
             : '— active a few seconds ago'}
         </span>
+        <button class="btn-link" type="button" bind:this={takeTrigger} onclick={() => (taking = true)}>Take over</button>
       {:else}
         Nobody is editing this entry any more.
         <button class="btn-link" type="button" onclick={onchanged}>Reload</button>
@@ -345,7 +421,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       settled.
     </div>
   {/if}
-  <header class="entry-header">
+  <header class="entry-header" class:is-held={held}>
     <div class="crumbs">
       <span>{capitalise(collection)}</span><span class="sep" aria-hidden="true">/</span><span>{title}</span>
       <span class="autosave" class:is-saving={saving} class:is-offline={saveFailed}>
@@ -356,6 +432,14 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       <h1>{title}</h1>
       <div class="meta">
         <span class="status"><span class="dot" aria-hidden="true"></span> Live</span>
+        <button
+          class="hold-toggle"
+          type="button"
+          aria-pressed={held}
+          disabled={locked || lost || busy || (!dirty && !held)}
+          title={dirty || held ? undefined : 'There is nothing unpublished to hold back yet'}
+          onclick={toggleHold}
+        ><span class="dot" aria-hidden="true"></span> Not ready yet</button>
         {#if missing.length}
           <button class="problems" type="button" onclick={goToFirst}>
             {missing.length} problem{missing.length === 1 ? '' : 's'}
@@ -404,6 +488,9 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         <button class="btn btn-ghost" type="button" disabled aria-label="More actions">⋯</button>
       </div>
     </div>
+    {#if held}
+      <p class="subline">On hold — won't be included when others publish</p>
+    {/if}
     {#if addressable}
       <p class="slug-row">
         {#if editing}
@@ -507,6 +594,10 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             url={localeUrl(shown)}
             redirect={localeIndex(shown)}
             onsaved={(pending) => (translated = pending)}
+            onrefused={(taken) => {
+              lost = true;
+              lock = taken as Lock;
+            }}
             onclose={side ? () => leaving(() => (side = false)) : undefined}
             onturnoff={turnOff}
           />
@@ -514,4 +605,20 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {/if}
     {/if}
   </div>
+  {#if taking}
+    <div class="scrim">
+      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="take-h" tabindex="-1" bind:this={takePanel}>
+        <h2 id="take-h">Take over editing from {holder}?</h2>
+        <p>
+          Nothing {holder} has written is lost — there is one shared draft and you carry on from
+          where they left off.
+        </p>
+        <p>Their next save is refused and they are told you took over.</p>
+        <div class="actions">
+          <button class="btn" type="button" onclick={cancelTake}>Cancel</button>
+          <button class="btn btn-primary" type="button" disabled={busy} onclick={takeOver}>Take over</button>
+        </div>
+      </div>
+    </div>
+  {/if}
 </main>

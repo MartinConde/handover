@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import {
   applyDrift,
@@ -11,11 +11,11 @@ import {
   syncLocale,
   writtenEntry,
 } from './content.js';
-import { type ContentFile, type ContentIndex, indexHasPath } from './entries.js';
+import { type ContentFile, type ContentIndex, entryKey, indexHasPath } from './entries.js';
 import { blobSha, type GitClient, type PublishFile } from './git.js';
 import { appendRedirects, type RedirectRule, redirectRule } from './lifecycle.js';
 import type { Form } from './schema.js';
-import { drafts } from './tables.js';
+import { drafts, user } from './tables.js';
 import { machineFilled } from './translate.js';
 
 type D1Binding = Parameters<typeof drizzle>[0];
@@ -440,6 +440,56 @@ export async function pendingDrafts(siteId: string, db: Db): Promise<Draft[]> {
   return rows.filter((_, i) => pending[i]).sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
+/**
+ * "Not ready yet" on one entry, or off it. It is written to the languages the editor names,
+ * and read back as the entry's: a hold set on the English file holds the German one too, which
+ * is what stops a publish splitting an entry that is only half rewritten.
+ */
+export async function holdEntry(
+  siteId: string,
+  db: Db,
+  paths: string[],
+  heldBy: string | null,
+): Promise<void> {
+  await db
+    .update(drafts)
+    .set({ heldBy })
+    .where(and(eq(drafts.siteId, siteId), inArray(drafts.path, paths)));
+}
+
+/**
+ * The entries somebody is holding back, `"listings/mill-house"` → who marked it. Named here
+ * rather than in the drawer, since the drawer is where somebody else reads it.
+ */
+export async function heldDrafts(
+  siteId: string,
+  db: Db,
+): Promise<Record<string, { id: string; name: string | null }>> {
+  const rows = await db
+    .select({ path: drafts.path, heldBy: drafts.heldBy, name: user.name })
+    .from(drafts)
+    .leftJoin(user, eq(user.id, drafts.heldBy))
+    .where(and(eq(drafts.siteId, siteId), isNotNull(drafts.heldBy)));
+  return Object.fromEntries(
+    rows.flatMap((row) => {
+      const entry = entryKey(row.path);
+      return entry && row.heldBy ? [[entry, { id: row.heldBy, name: row.name }] as const] : [];
+    }),
+  );
+}
+
+/**
+ * What a batch publish commits: the pending drafts, minus every file of an entry somebody
+ * marked "Not ready yet". Its redirect rules wait with it — they are on the same rows.
+ */
+export async function readyDrafts(siteId: string, db: Db): Promise<Draft[]> {
+  const [rows, held] = await Promise.all([pendingDrafts(siteId, db), heldDrafts(siteId, db)]);
+  return rows.filter((row) => {
+    const entry = entryKey(row.path);
+    return !entry || !(entry in held);
+  });
+}
+
 /** A file someone changed in the repository after the editor loaded it. */
 export class DraftConflictError extends Error {
   override name = 'DraftConflictError';
@@ -471,7 +521,8 @@ export type SourceOf = (
 ) => Promise<{ locale: string; path: string; form: Form } | undefined>;
 
 /**
- * Commit every pending draft as one commit and clear those rows. The parent is HEAD, so
+ * Commit every pending draft as one commit and clear those rows — every one an entry on hold
+ * is not keeping back. The parent is HEAD, so
  * `base_blob` is what says whether a draft is still safe to write: it is the file as the
  * editor loaded it, and a file that has moved on since is somebody else's work. One
  * mismatch refuses the whole set — the ref update is all-or-nothing anyway.
@@ -482,7 +533,7 @@ export async function publishDrafts(
   git: Pick<GitClient, 'getFile' | 'getHead' | 'publish'>,
   sourceOf?: SourceOf,
 ): Promise<{ commit_sha: string; paths: string[] } | undefined> {
-  const rows = await pendingDrafts(siteId, db);
+  const rows = await readyDrafts(siteId, db);
   if (!rows.length) return undefined;
   const base_sha = await git.getHead();
   const current = await Promise.all(rows.map((r) => git.getFile(r.path)));
