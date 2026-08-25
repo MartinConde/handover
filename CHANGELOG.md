@@ -4,6 +4,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **The pending-changes drawer picks what goes out.** It lists **entries** rather than files
+  now — one row per entry, with its title, the languages of it that are waiting and what its
+  address changes owe — and each row has a checkbox. Everything is checked except entries on
+  hold, so "publish all of it" is still one press; checking a held entry includes it and
+  releases the hold, which the drawer says before the button is pressed. Selection is per
+  publish and is not stored ([Drafts and publishing](docs/publishing.md#publishing)).
+
+- **Publish this entry.** The entry header's button now commits that entry on its own instead
+  of opening the drawer. It confirms first, naming every language file that goes with it.
+
+- **A refused entry no longer blocks the batch.** An entry somebody changed in the repository,
+  or one the schema is not done with, takes itself out of the checked set and says why on its
+  own row, so pressing Publish again sends the rest. Taking theirs whole with Discard is still
+  the only way out of a conflict — there is no three-way merge
+  ([Working together](docs/working-together.md#a-file-that-changed-in-the-repository)).
+
+- **`GET /admin/api/drafts` answers entries, not files.** `{ "entries": [{ "key", "title",
+  "collection", "locales", "files", "redirects", "updated_at", "held_by" }] }`. The grouping is
+  done on the server because an entry's title comes from the build's content index, which
+  nothing outside the Worker can read ([Drafts and publishing](docs/publishing.md#the-endpoints)).
+
 - **Every read a write is made from names a commit.** GitHub answers the contents API from a
   replica, cached under the ref it was asked for, so two reads of the branch seconds apart can be
   two different commits. A publish took `base_sha` from one read and the blobs it compares against

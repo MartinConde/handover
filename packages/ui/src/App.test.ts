@@ -13,7 +13,15 @@ const show = (signedIn: ReturnType<typeof session> | null, path = '/admin') => {
   flushSync();
   return document.body;
 };
-const drafts = (...files: string[]) =>
+const pendingEntry = (key: string) => ({
+  key,
+  title: key.split('/')[1] ?? key,
+  collection: key.split('/')[0] ?? '',
+  locales: ['en'],
+  files: [`src/content/${key.split('/')[0]}/en/${key.split('/')[1]}.yaml`],
+  updated_at: 1755864000000,
+});
+const drafts = (...keys: string[]) =>
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
@@ -22,7 +30,7 @@ const drafts = (...files: string[]) =>
       if (url.startsWith('/admin/api/entries/')) return Response.json({ entries: [] });
       if (url.startsWith('/admin/api/activity')) return Response.json({ events: [], cursor: null });
       if (url === '/admin/api/members') return Response.json({ members: [] });
-      return Response.json({ files: files.map((path) => ({ path, updated_at: 1755864000000 })) });
+      return Response.json({ entries: keys.map(pendingEntry) });
     }),
   );
 afterEach(() => {
@@ -122,8 +130,8 @@ test('without a session only the login form renders', () => {
   expect(root.querySelector('.sidebar')).toBeNull();
 });
 
-test('the indicator counts the pending files and opens the drawer', async () => {
-  drafts('src/content/listings/en/mill-house.yaml');
+test('the indicator counts the pending entries and opens the drawer', async () => {
+  drafts('listings/mill-house');
   const root = show(session());
   await new Promise((r) => setTimeout(r, 0));
   flushSync();
@@ -133,7 +141,7 @@ test('the indicator counts the pending files and opens the drawer', async () => 
 
   indicator?.click();
   flushSync();
-  expect(root.querySelector('.drawer .drawer-meta .count')?.textContent).toBe('1 file');
+  expect(root.querySelector('.drawer .drawer-meta .count')?.textContent).toBe('1 change');
   // The shell is inert while the drawer is up, so focus has to be inside it.
   expect(document.activeElement).toBe(root.querySelector('.drawer'));
 
@@ -173,7 +181,7 @@ test('discarding a draft loads the entry again instead of leaving the old one on
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
     if (url === '/admin/api/drafts')
-      return Response.json({ files: [{ path: PATH, updated_at: 1755864000000 }] });
+      return Response.json({ entries: [pendingEntry('listings/mill-house')] });
     if (url === '/admin/api/publish')
       return Response.json({ error: 'refused', paths: [PATH] }, { status: 409 });
     if (init?.method === 'DELETE') return Response.json({});

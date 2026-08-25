@@ -140,7 +140,7 @@ test('the header shows the entry title; Publish is disabled until something chan
   const root = show();
   expect($(root, 'h1')?.textContent).toBe('Seaview Cottage');
   const publish = $<HTMLButtonElement>(root, 'button.btn-primary');
-  expect(publish?.textContent).toBe('Publish…');
+  expect(publish?.textContent).toBe('Publish this entry');
   expect(publish?.disabled).toBe(true);
   type(root, 'input#f-title', 'Seaview House');
   expect(publish?.disabled).toBe(false);
@@ -168,7 +168,7 @@ test('the header shows the field the collection is keyed on', () => {
   expect($(root, 'h1')?.textContent).toBe('Rosa Hale');
 });
 
-test('Publish stores the edit as a draft before it opens the drawer', async () => {
+test('Publish stores the edit as a draft before it asks to commit it', async () => {
   const fetchMock = autosaved();
   vi.stubGlobal('fetch', fetchMock);
   const root = show();
@@ -183,7 +183,116 @@ test('Publish stores the edit as a draft before it opens the drawer', async () =
       data: { title: 'Seaview House', seo: { description: 'Harbour view' }, photos: [] },
     }),
   });
-  expect(opened).toHaveBeenCalled();
+  // The title it names is the one that was just typed, not the one the entry was loaded with.
+  expect($(root, '.dialog h2')?.textContent).toBe('Publish Seaview House?');
+  vi.unstubAllGlobals();
+});
+
+test('Escape closes the publish dialog and gives focus back to the button', async () => {
+  vi.stubGlobal('fetch', autosaved());
+  const root = show({ entry: { ...entry, pending: ['en'] } });
+  const button = $<HTMLButtonElement>(root, 'button.btn-primary');
+  button?.focus();
+  button?.click();
+  await tick();
+  flushSync();
+  expect($(root, '.dialog')).not.toBeNull();
+
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  flushSync();
+
+  expect($(root, '.dialog')).toBeNull();
+  expect(document.activeElement).toBe(button);
+  vi.unstubAllGlobals();
+});
+
+// An entry you were holding back publishes like any other, and the hold goes with the draft:
+// the button is not blocked by it, and what comes back has the toggle off.
+test('an entry on hold can still be published from its own header', async () => {
+  vi.stubGlobal('fetch', autosaved());
+  const root = show({ entry: { ...entry, pending: ['en'], held: true } });
+  const button = $<HTMLButtonElement>(root, 'button.btn-primary');
+  expect(button?.disabled).toBe(false);
+  expect($(root, '.hold-toggle')?.getAttribute('aria-pressed')).toBe('true');
+  button?.click();
+  await tick();
+  flushSync();
+  expect($(root, '.dialog h2')?.textContent).toBe('Publish Seaview Cottage?');
+  vi.unstubAllGlobals();
+});
+
+// The one-entry half of publishing: it commits, so it confirms, and it names everything that
+// goes with the entry — every language file, since they are written together.
+test('Publish this entry names the language files it is about to commit', async () => {
+  vi.stubGlobal('fetch', autosaved());
+  const root = show({ entry: { ...bilingual, pending: ['en', 'de'] } });
+  $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
+  await tick();
+  flushSync();
+
+  expect($(root, '.dialog h2')?.textContent).toBe('Publish Seaview Cottage?');
+  expect($(root, '.dialog .publish-set')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+    'ENDE All 2 language files',
+  );
+  vi.unstubAllGlobals();
+});
+
+test('confirming publishes this entry alone and reads the screen again', async () => {
+  const changed = vi.fn();
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) =>
+    isLock(url)
+      ? Response.json(HELD)
+      : init?.method === 'POST' && url === '/admin/api/publish'
+        ? Response.json({ commit_sha: 'def4567890', paths: ['src/content/x.yaml'] })
+        : Response.json({ updated_at: 1755864000000, pending: true, problems: [] }),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: { ...entry, pending: ['en'] }, onchanged: changed });
+  $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
+  await tick();
+  flushSync();
+  $<HTMLButtonElement>(root, '.dialog .btn-primary')?.click();
+  await tick();
+  flushSync();
+
+  expect(fetchMock).toHaveBeenLastCalledWith('/admin/api/publish', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ entries: ['listings/seaview-cottage'] }),
+  });
+  expect(changed).toHaveBeenCalled();
+  expect($(root, '.dialog')).toBeNull();
+  vi.unstubAllGlobals();
+});
+
+// Detection, not resolution: the header says the entry is stale and the drawer's Discard is
+// the way out. Choosing field by field is the three-way view, which is not built yet.
+test('a file somebody changed in the repository badges the header and names the drawer', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      isLock(url)
+        ? Response.json(HELD)
+        : url === '/admin/api/publish'
+          ? Response.json({ error: 'moved', paths: ['src/content/x.yaml'] }, { status: 409 })
+          : Response.json({ updated_at: 1755864000000, pending: true, problems: [] }),
+    ),
+  );
+  const root = show({ entry: { ...entry, pending: ['en'] } });
+  $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
+  await tick();
+  flushSync();
+  $<HTMLButtonElement>(root, '.dialog .btn-primary')?.click();
+  await tick();
+  flushSync();
+
+  expect($(root, '.dialog')).toBeNull();
+  expect($(root, '.entry-header .badge-danger')?.textContent).toBe(
+    'Changed in the repository since you opened it',
+  );
+  expect($(root, '.entry-header .subline')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+    'Somebody changed this in the repository after you opened it. Open Unpublished changes to discard yours and take what is there now.',
+  );
   vi.unstubAllGlobals();
 });
 

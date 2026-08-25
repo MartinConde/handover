@@ -91,9 +91,13 @@ change pushed a moment earlier is caught rather than read as no change at all:
 
 - **Nothing is written unless all of it can be.** If somebody changed one of those files
   in the repository since the editor loaded it, the publish is refused and no commit is
-  made: the drawer marks that row *Changed in the repository since you opened it* — same
+  made: the drawer marks that entry *Changed in the repository since you opened it* — same
   for a branch that moves while the commit is being written
-- **A refused file has one way out: Discard.** It throws that file's unpublished changes
+- **The refusal is about that entry, not about the batch.** A refused entry takes itself
+  out of the set — its checkbox goes off and cannot go back on — so pressing Publish again
+  sends the rest. **Publish this entry** in the header has no rest to send, so it puts the
+  same badge on the entry header and points at the drawer
+- **A refused entry has one way out: Discard.** It throws that entry's unpublished changes
   away and reads it from the repository again, so the entry is on their version and the
   next publish goes through. Reopening or editing the entry does not clear the refusal —
   the draft keeps the base it was loaded against until it is discarded
@@ -152,8 +156,9 @@ entry's own language and a translation ([Drafts and publishing](publishing.md#th
 
 ## Not yet
 
-Publishing has no checkboxes and no build status: the endpoint takes a chosen set
-([Drafts and publishing](publishing.md#the-endpoints)) but the admin sends none yet, so what
-a button publishes is everything pending except what is on hold. A file someone changed in
-the repository can only be taken whole, by discarding yours; there is no three-way merge and
-no way to keep your version over theirs.
+An entry someone changed in the repository can only be taken whole, by discarding yours:
+there is no three-way merge, no per-field *Keep mine* / *Take theirs*, and no way to keep
+your version over theirs. Nor is there any way to see what they changed from inside the
+admin — the refusal names the entry, and the repository is where the change is read.
+Publishing shows no build status either, so what happens to a commit after it lands is not
+reported anywhere.

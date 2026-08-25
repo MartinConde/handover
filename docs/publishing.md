@@ -82,28 +82,38 @@ the old key is still written back on the next save, so the value is there for
 
 ## Publishing
 
-The top bar says how many files are waiting ("3 unpublished changes"); the button opens
-the **pending-changes drawer**, which lists them and publishes them:
+There are two ways to publish, and both are one click.
 
-- **Everything pending goes out together**, in one commit — except an entry somebody is
-  holding back, below. A publish can also be of **one entry or a chosen set**: the endpoint
-  takes the entries it is of, and the drawer's checkboxes for picking them arrive in a later
-  release
-- **The unit is the entry, never the file.** Choosing an entry publishes every language of
+**"I changed one thing."** The entry header has **Publish this entry**. It confirms first,
+naming every language file that goes with the entry, and then commits that entry and
+nothing else — whatever else you or anybody else has been working on stays unpublished.
+
+**"I have been working through a dozen pages."** The top bar says how many entries are
+waiting ("3 unpublished changes"); the button opens the **pending-changes drawer**, which
+lists them with a checkbox each and commits the checked ones:
+
+- **Everything is checked to begin with, except entries on hold.** So "publish all of it"
+  is still one press. Unchecking is per publish and is not remembered: reopening the drawer
+  starts from the defaults again, because the durable "leave this out" is the hold
+- **The unit is the entry, never the file.** Checking an entry publishes every language of
   it: a block added in English is added to the German file in the same write, and the two
   have to land together. The redirect rules an entry owes travel with it, and the entries
-  left out keep theirs until they are published themselves
+  left out keep theirs until they are published themselves — `redirects.yaml` is assembled
+  at publish out of the entries going out, so it is never a row of its own. An entry that
+  owes one says so, `+1 redirect`
 - The commit is the stored bytes, not the form: whatever the drawer lists is exactly what
   lands in the repository
 - The rows are kept once the commit succeeds and re-seeded on it, which is what makes the
   next publish of an entry somebody is still editing not look like a conflict with this one
   ([Working together](working-together.md#your-own-publish-is-not-a-conflict)). They are
   cleared later, when the build carrying them is live
-- **A file the schema is not done with is refused the same way**, marked *Not ready to
-  publish*. It has no button in the drawer: open the entry and fill in what is marked
-- **A file somebody changed in the repository is refused too**, and the whole publish
-  with it. Discard is the way out of that one
-  ([Working together](working-together.md#a-file-that-changed-in-the-repository))
+- **An entry the schema is not done with is refused the same way**, marked *Not ready to
+  publish*, and likewise takes itself out. It has no button in the drawer: open the entry
+  and fill in what is marked
+- **An entry somebody changed in the repository is refused**, and the whole publish with
+  it. That entry then takes itself out of the set — its checkbox goes off and cannot go back
+  on — so pressing Publish again sends the rest. Discard is the way out of the refusal
+  itself ([Working together](working-together.md#a-file-that-changed-in-the-repository))
 - **An entry whose languages have drifted apart is refused too**, marked *Languages
   disagree*. Which blocks an entry has is the same in every language
   ([Languages](i18n.md#a-block-one-language-only-has)), so a file that disagrees with its
@@ -122,11 +132,15 @@ the status in the entry header.
 
 - It is the **whole entry**, every language, the way a lock is. The header tints and says
   *On hold — won't be included when others publish*
-- The pending-changes drawer lists held files under **On hold**, greyed and badged *On hold
-  · Martin Vale*, so a publish never quietly leaves something out: the button counts what
-  is going, `Publish 3 files`, and says *Every change here is on hold* when that is nothing
-- A held entry is **not checked** either — a half-written draft somebody is holding back
-  does not refuse anybody else's publish for what its schema is still missing
+- The pending-changes drawer lists held entries under **On hold**, tinted, badged *On hold
+  · Martin Vale* and with their checkbox off, so a publish never quietly leaves something
+  out: the count line reads *5 changes · 4 selected · 1 on hold* and the button counts what
+  is going, `Publish 4 changes`
+- Anybody can check one anyway — it is a courtesy flag, not a permission — and the drawer
+  says what that does before the button is pressed: publishing it releases the hold, logged
+- A held entry's draft is **not held to the schema** either, until somebody includes it: a
+  half-written draft somebody is holding back does not refuse anybody else's publish for
+  what it is still missing
 - The flag is stored on the entry's draft rows, so **discarding or publishing the entry
   clears it**: an entry named in a publish goes out whether it is held or not, and the hold
   comes off with it, logged as `hold-released` against whoever set it. That is what makes
@@ -340,10 +354,21 @@ resolved, the drift is simply no longer reported. `409` when a `path` is not one
 currently disagree about, which is the report having moved on since the screen was drawn.
 
 ```
-GET /admin/api/drafts                       →  { "files": [{ "path", "updated_at" }] }
+GET /admin/api/drafts  →  { "entries": [{ "key", "title", "collection", "locales", "files", "redirects", "updated_at", "held_by" }] }
 ```
 
-The files waiting to be published, newest first — the drawer's list.
+What is waiting to be published — the drawer's list, **one row per entry** and never per
+file, newest first. `key` is `collection/name`, the same key `POST /admin/api/publish`
+takes. `title` is the entry's, read the way the entry list reads it: the first language
+that has one, falling back to the file name. `locales` is the languages of it that are
+waiting, in config order, and `files` their paths — which is what matches a refusal's
+`paths` back to a row. `redirects` is how many redirect rules the entry owes and is absent
+when it owes none; `redirects.yaml` itself is assembled at publish and is never a row.
+`held_by` is `{ "id", "name" }` when somebody marked the entry *Not ready yet*, and it is
+read once per entry rather than per file, since the hold is the entry's.
+
+Grouping happens here rather than in the browser because a title comes from the build's
+[content index](#the-content-index), which nothing outside the Worker can read.
 
 ```
 POST /admin/api/publish   { "entries": ["listings/mill-house"] }  →  { "commit_sha", "paths", "released" }
@@ -398,7 +423,9 @@ Two consequences worth knowing:
 
 ## Not yet
 
-The endpoint takes a chosen set, but the admin has nothing that sends one: no checkboxes in
-the drawer, no **Publish this entry** in the header, and no build status. A file somebody
-changed in the repository can only be taken whole
-([Working together](working-together.md#not-yet)).
+No build status: a commit is answered for, but what the site does with it afterwards is not
+shown anywhere yet, so "live in 1–3 minutes" is a promise rather than a reading. The drawer
+runs no pre-publish checks and shows no per-field diff of what is about to go out. An entry
+somebody changed in the repository can only be taken whole
+([Working together](working-together.md#not-yet)), and **Publish this entry** does not name
+the redirect rules riding along with it the way the drawer does.

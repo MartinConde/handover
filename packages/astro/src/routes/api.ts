@@ -1120,6 +1120,75 @@ async function listEntries(collection: string): Promise<Response> {
   });
 }
 
+/**
+ * The drawer's list: one row per **entry**, never per file. Grouped and named here rather than
+ * in the browser because a title comes from the build's content index, which only the Worker
+ * can read — handing over paths would mean sending a title with each of them anyway.
+ */
+async function pendingList(): Promise<Response> {
+  const database = db();
+  const [rows, held, overlay] = await Promise.all([
+    pendingDrafts('default', database),
+    heldDrafts('default', database),
+    overlayRows('default', database, index),
+  ]);
+  const titles = new Map<string, string>();
+  // The entry list's own reading, so one entry is called the same thing on both screens: the
+  // first language that has a title, whichever language that turns out to be.
+  for (const collection of new Set(rows.flatMap((r) => ENTRY_FILE.exec(r.path)?.[1] ?? [])))
+    for (const entry of collectionEntries(
+      'default',
+      index,
+      collection,
+      overlay,
+      config.collections[collection]?.titleField,
+    ))
+      titles.set(
+        `${collection}/${entry.id}`,
+        config.i18n.locales.map((l) => entry.locales[l]?.title).find(Boolean) ||
+          Object.values(entry.locales)[0]?.title ||
+          entry.id,
+      );
+  type Row = {
+    key: string;
+    title: string;
+    collection: string;
+    locales: string[];
+    files: string[];
+    redirects?: number;
+    updated_at: number;
+    held_by: { id: string; name: string | null } | null;
+  };
+  const entries: Row[] = [];
+  // Newest first, and the row that made an entry appear is the newest it has.
+  for (const row of rows) {
+    const [, collection = '', locale = '', slug = ''] = ENTRY_FILE.exec(row.path) ?? [];
+    const key = entryKey(row.path) ?? row.path;
+    let found = entries.find((e) => e.key === key);
+    if (!found) {
+      found = {
+        key,
+        title: titles.get(key) || slug || key,
+        collection,
+        locales: [],
+        files: [],
+        updated_at: row.updatedAt,
+        held_by: held[key] ?? null,
+      };
+      entries.push(found);
+    }
+    found.files.push(row.path);
+    if (locale) found.locales.push(locale);
+    // What the entry owes for an address it moved. redirects.yaml is assembled at publish out
+    // of the rules of the entries going out, so it is never a row of its own to list.
+    const rules = row.pendingRedirects?.length ?? 0;
+    if (rules) found.redirects = (found.redirects ?? 0) + rules;
+  }
+  for (const entry of entries)
+    entry.locales = config.i18n.locales.filter((l) => entry.locales.includes(l));
+  return Response.json({ entries });
+}
+
 /** Every name the collection already uses, published or only drafted. */
 async function takenNames(collection: string, database: Db): Promise<string[]> {
   const rows = await overlayRows('default', database, index);
@@ -1249,22 +1318,7 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
       role: locals.handover?.role,
     });
   }
-  if (params.path === 'drafts') {
-    const database = db();
-    const [rows, held] = await Promise.all([
-      pendingDrafts('default', database),
-      heldDrafts('default', database),
-    ]);
-    return Response.json({
-      files: rows.map((r) => ({
-        path: r.path,
-        updated_at: r.updatedAt,
-        // The hold is the entry's, so every language of a held entry is greyed, not only the
-        // file the person who marked it happened to be on.
-        held_by: held[entryKey(r.path) ?? ''] ?? null,
-      })),
-    });
-  }
+  if (params.path === 'drafts') return pendingList();
   const held = params.path?.match(LOCK);
   if (held) return lockState(held[1] ?? '', held[2] ?? '', locals.handover, 'read');
   const entry = params.path?.match(ENTRY);

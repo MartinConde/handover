@@ -45,7 +45,16 @@ const managePage = $derived(manage.find((item) => item.path === path));
 
 const collections = $derived(session?.collections ?? []);
 let pending = $state<
-  { path: string; updated_at: number; held_by?: { id: string; name: string | null } | null }[]
+  {
+    key: string;
+    title: string;
+    collection: string;
+    locales: string[];
+    files: string[];
+    redirects?: number;
+    updated_at: number;
+    held_by?: { id: string; name: string | null } | null;
+  }[]
 >([]);
 let indicator = $state<HTMLButtonElement>();
 let drawer = $state(false);
@@ -76,7 +85,7 @@ async function signOut() {
 
 async function loadPending() {
   const res = await fetch('/admin/api/drafts');
-  if (res.ok) pending = ((await res.json()) as { files: typeof pending }).files;
+  if (res.ok) pending = ((await res.json()) as { entries: typeof pending }).entries;
 }
 
 async function loadEntry(collection: string, slug: string) {
@@ -167,10 +176,6 @@ const initial = $derived(
           collection={entryRoute[1] ?? ''}
           slug={entryRoute[2] ?? ''}
           {entry}
-          onpublish={async () => {
-            await loadPending();
-            drawer = true;
-          }}
           onchanged={async () => {
             await loadPending();
             reload += 1;
@@ -203,7 +208,7 @@ const initial = $derived(
   </div>
   {#if drawer}
     <Pending
-      files={pending}
+      entries={pending}
       onclose={() => {
         drawer = false;
         indicator?.focus();

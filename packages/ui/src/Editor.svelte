@@ -12,7 +12,6 @@ let {
   collection,
   slug,
   entry,
-  onpublish,
   onchanged,
 }: {
   collection: string;
@@ -59,8 +58,6 @@ let {
     /** Whether the default language's URLs carry its segment. */
     prefixDefaultLocale?: boolean;
   };
-  /** Open the pending-changes drawer, which is where publishing happens. */
-  onpublish: () => void;
   /** A file of this entry was made, removed or settled: it has to be read again, screen with it. */
   onchanged: () => void;
 } = $props();
@@ -303,12 +300,85 @@ function goToFirst() {
 
 // Publishing is the drawer's job, over every draft at once; the entry's own edit only has
 // to be in D1 before it opens, so a click inside the autosave window is not lost.
-async function openDrawer() {
+// The header's half of publishing: this entry, whole, and nothing else anybody has been
+// working on. It commits, so it confirms first.
+let confirming = $state(false);
+let sending = $state(false);
+let publishFailed = $state('');
+// Somebody committed to one of this entry's files after it was opened. Detection only: taking
+// theirs whole is the drawer's Discard, and choosing field by field is the three-way view.
+let conflicted = $state(false);
+let publishButton = $state<HTMLButtonElement>();
+let publishPanel = $state<HTMLElement>();
+$effect(() => {
+  if (confirming) publishPanel?.focus();
+});
+
+// The languages this publish would write. `drafted` is the live answer for the one the form
+// saves; the rest are as the entry was read, plus whatever the second column has since sent.
+const going = $derived(
+  entry.locales.filter(
+    (of) =>
+      (of === entry.sourceLocale ? drafted : entry.pending.includes(of)) ||
+      (of === target && translated),
+  ),
+);
+
+async function askToPublish() {
   if (json !== saved) await autosave();
   if (saveFailed) return;
   // The other language is its own file and its own row, and the publish reads the rows.
   if (pane && !(await pane.flush())) return;
-  onpublish();
+  publishFailed = '';
+  confirming = true;
+}
+
+function closePublish() {
+  confirming = false;
+  publishButton?.focus();
+}
+
+async function publishEntry() {
+  sending = true;
+  publishFailed = '';
+  const res = await fetch('/admin/api/publish', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ entries: [`${collection}/${slug}`] }),
+  });
+  sending = false;
+  if (res.ok) {
+    confirming = false;
+    // The rows are re-seeded on the commit and a hold comes off with them, so the screen is
+    // read again rather than patched here.
+    onchanged();
+    return;
+  }
+  // A repository the App cannot reach is the server's own sentence; nothing else adds to it.
+  if (res.status === 503) {
+    publishFailed = await res.text();
+    return;
+  }
+  if (res.status === 422) {
+    publishFailed =
+      'Nothing was published. Something this entry needs is still missing — open each of its languages to see what.';
+    return;
+  }
+  if (res.status === 409) {
+    const body = await res.text();
+    const parsed = JSON.parse(body.startsWith('{') ? body : '{}') as { reason?: string };
+    // Drift is the panel this screen already draws; a file somebody else changed is not, and
+    // the way out of that one is in the drawer.
+    if (parsed.reason !== 'drift') {
+      closePublish();
+      conflicted = true;
+      return;
+    }
+    publishFailed =
+      "Nothing was published. This entry's languages disagree about which blocks it has — the panel on this screen is where that is settled.";
+    return;
+  }
+  publishFailed = `Nothing was published (${res.status}).`;
 }
 
 // The second column holds one language and goes when the screen changes under it — closed, or
@@ -382,7 +452,13 @@ async function saveAddress() {
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && taking && cancelTake()} />
+<svelte:window
+  onkeydown={(e) => {
+    if (e.key !== 'Escape') return;
+    if (confirming) closePublish();
+    else if (taking) cancelTake();
+  }}
+/>
 
 <main class="main main-editor">
   {#each entry.offerProblems ?? [] as problem (problem)}
@@ -432,6 +508,9 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       <h1>{title}</h1>
       <div class="meta">
         <span class="status"><span class="dot" aria-hidden="true"></span> Live</span>
+        {#if conflicted}
+          <span class="badge badge-danger">Changed in the repository since you opened it</span>
+        {/if}
         <button
           class="hold-toggle"
           type="button"
@@ -475,6 +554,8 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         <button
           class="btn btn-primary"
           type="button"
+          aria-haspopup="dialog"
+          aria-expanded={confirming}
           disabled={!dirty || saving || missing.length > 0 || entry.drift.length > 0 || locked}
           title={locked
             ? 'Somebody else is editing this entry'
@@ -483,11 +564,18 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             : missing.length
               ? 'Fill in what is missing before publishing this entry'
               : undefined}
-          onclick={openDrawer}
-        >Publish…</button>
+          onclick={askToPublish}
+          bind:this={publishButton}
+        >Publish this entry</button>
         <button class="btn btn-ghost" type="button" disabled aria-label="More actions">⋯</button>
       </div>
     </div>
+    {#if conflicted}
+      <p class="subline">
+        Somebody changed this in the repository after you opened it. Open Unpublished changes to
+        discard yours and take what is there now.
+      </p>
+    {/if}
     {#if held}
       <p class="subline">On hold — won't be included when others publish</p>
     {/if}
@@ -605,6 +693,44 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {/if}
     {/if}
   </div>
+  <!-- It commits, so it confirms — and it names everything that goes with the entry, which is
+       every language file. What it never offers is a choice of what to include: an entry
+       publishes whole or not at all, and picking is what the drawer is for. -->
+  {#if confirming}
+    <div class="scrim">
+      <!-- Not aria-modal: the screen under it is not inert, and claiming a trap that is not
+           there is worse than not claiming it. -->
+      <div class="dialog" role="dialog" aria-labelledby="publish-h" tabindex="-1" bind:this={publishPanel}>
+        <h2 id="publish-h">Publish {title}?</h2>
+        <p>
+          This publishes it on its own. Anything else you have been working on stays unpublished.
+        </p>
+        {#if many && going.length}
+          <ul class="publish-set">
+            <li>
+              <span class="chips" aria-label="Languages">
+                {#each going as of (of)}<span class="chip">{of.toUpperCase()}</span>{/each}
+              </span>
+              {going.length === 1
+                ? `The ${language(going[0] ?? '')} file`
+                : `All ${going.length} language files`}
+            </li>
+          </ul>
+        {/if}
+        <p class="rebuild-note">
+          One commit, then the site rebuilds — live in 1–3 minutes. The admin may reload while it
+          deploys.
+        </p>
+        {#if publishFailed}<div class="notice notice-danger" role="alert">{publishFailed}</div>{/if}
+        <div class="actions">
+          <button class="btn" type="button" onclick={closePublish}>Cancel</button>
+          <button class="btn btn-primary" type="button" disabled={sending} onclick={publishEntry}>
+            {sending ? 'Publishing…' : 'Publish this entry'}
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
   {#if taking}
     <div class="scrim">
       <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="take-h" tabindex="-1" bind:this={takePanel}>

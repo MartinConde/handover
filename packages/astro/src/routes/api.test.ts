@@ -778,8 +778,66 @@ test('the pending list is what the drafts hold that the repository does not', as
   const res = await GET(ctx('drafts'));
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
-    files: [
-      { path: 'src/content/listings/en/mill-house.yaml', updated_at: 1755864000000, held_by: null },
+    entries: [
+      {
+        key: 'listings/mill-house',
+        title: 'The Mill House',
+        collection: 'listings',
+        locales: ['en'],
+        files: ['src/content/listings/en/mill-house.yaml'],
+        updated_at: 1755864000000,
+        held_by: null,
+      },
+    ],
+  });
+});
+
+// The drawer picks entries, so the grouping is done where the titles are: the content index
+// lives in the Worker, and a browser handed paths could only fold them back into files.
+test('the pending list is one row per entry, whatever languages of it are waiting', async () => {
+  locales = ['en', 'de'];
+  pendingDrafts.mockImplementationOnce(async () => [
+    { path: 'src/content/listings/de/mill-house.yaml', contents: 'x', updatedAt: 1755864000000 },
+    {
+      path: 'src/content/listings/en/mill-house.yaml',
+      contents: 'y',
+      updatedAt: 1755863000000,
+      pendingRedirects: [{ from: '/listings/mill', to: '/listings/mill-house' }],
+    },
+    { path: 'src/content/pages/en/home.yaml', contents: 'z', updatedAt: 1755862000000 },
+  ]);
+  heldDrafts.mockImplementationOnce(async () => ({
+    'pages/home': { id: 'u2', name: 'Martin' },
+  }));
+  const res = await GET(ctx('drafts'));
+  expect(await res.json()).toEqual({
+    entries: [
+      {
+        key: 'listings/mill-house',
+        title: 'The Mill House',
+        collection: 'listings',
+        // In the order the site declares them, not the order the rows came back in.
+        locales: ['en', 'de'],
+        files: [
+          'src/content/listings/de/mill-house.yaml',
+          'src/content/listings/en/mill-house.yaml',
+        ],
+        // What the address change on one of its rows owes; the file itself is never a row.
+        redirects: 1,
+        updated_at: 1755864000000,
+        held_by: null,
+      },
+      {
+        key: 'pages/home',
+        // Nothing in the index and nothing published: the file name is what there is to call it.
+        title: 'home',
+        collection: 'pages',
+        locales: ['en'],
+        files: ['src/content/pages/en/home.yaml'],
+        updated_at: 1755862000000,
+        // The hold is the entry's, so it is read once rather than per file.
+        held_by: { id: 'u2', name: 'Martin' },
+      },
     ],
   });
 });
@@ -2889,7 +2947,7 @@ test('taking a hold off clears the column and is logged', async () => {
   ]);
 });
 
-test('the drawer reads which of its files belong to an entry on hold', async () => {
+test('the drawer reads the hold as the entry\u2019s, whichever of its files carries it', async () => {
   heldDrafts.mockResolvedValueOnce({
     'listings/mill-house': { id: 'u1', name: 'Anna Berg' },
   });
@@ -2897,9 +2955,13 @@ test('the drawer reads which of its files belong to an entry on hold', async () 
   const res = await GET(ctx('drafts'));
 
   expect(await res.json()).toEqual({
-    files: [
+    entries: [
       {
-        path: 'src/content/listings/en/mill-house.yaml',
+        key: 'listings/mill-house',
+        title: 'The Mill House',
+        collection: 'listings',
+        locales: ['en'],
+        files: ['src/content/listings/en/mill-house.yaml'],
         updated_at: 1755864000000,
         held_by: { id: 'u1', name: 'Anna Berg' },
       },
