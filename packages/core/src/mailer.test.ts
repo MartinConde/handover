@@ -71,14 +71,14 @@ test("Resend's own message is what a refused send says", async () => {
 });
 
 test('a sender with a display name is split into the two halves a binding takes apart', () => {
-  expect(senderAddress('Handover <admin@dev.martinconde.de>')).toEqual({
+  expect(senderAddress('default', 'Handover <admin@dev.martinconde.de>')).toEqual({
     name: 'Handover',
     email: 'admin@dev.martinconde.de',
   });
 });
 
 test('a sender that is only an address stays one string', () => {
-  expect(senderAddress('  admin@dev.martinconde.de  ')).toBe('admin@dev.martinconde.de');
+  expect(senderAddress('default', '  admin@dev.martinconde.de  ')).toBe('admin@dev.martinconde.de');
 });
 
 // The `send_email` binding. Every call is kept, the way the Resend stub above keeps its own.

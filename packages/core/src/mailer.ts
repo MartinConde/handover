@@ -57,7 +57,10 @@ export interface EmailSender {
  * an error. Exported because the SMTP implementation lives in the Astro package and needs the
  * same split; getting it wrong in two places is the thing worth avoiding.
  */
-export function senderAddress(from: string): { name: string; email: string } | string {
+export function senderAddress(
+  _siteId: string,
+  from: string,
+): { name: string; email: string } | string {
   const angled = /^\s*(.*?)\s*<([^>]+)>\s*$/.exec(from);
   if (!angled) return from.trim();
   const name = (angled[1] ?? '').replace(/^"|"$/g, '').trim();
@@ -79,7 +82,7 @@ export function cloudflareMailer(_siteId: string, binding: EmailSender, from: st
     try {
       const { messageId } = await binding.send({
         to,
-        from: senderAddress(from),
+        from: senderAddress(_siteId, from),
         subject,
         text,
         ...(html ? { html } : {}),

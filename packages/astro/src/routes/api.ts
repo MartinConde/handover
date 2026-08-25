@@ -98,7 +98,9 @@ function missingMailer(): string {
     return 'SMTP_USER and SMTP_PASS are not both set: put them in .dev.vars, or set them with `wrangler secret put`';
   if (configured.provider === 'cloudflare')
     return 'No EMAIL binding: add `"send_email": [{ "name": "EMAIL" }]` to wrangler.jsonc and onboard the sending domain';
-  return 'RESEND_API_KEY is not set: put it in .dev.vars, or set it with `wrangler secret put RESEND_API_KEY`';
+  if (configured.provider === 'resend')
+    return 'RESEND_API_KEY is not set: put it in .dev.vars, or set it with `wrangler secret put RESEND_API_KEY`';
+  return 'No mailer is configured: add a `mailer` block to cms.config.ts';
 }
 
 async function testEmail(session: App.Locals['handover']): Promise<Response> {

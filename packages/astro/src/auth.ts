@@ -61,12 +61,16 @@ function smtpMailer(host: string, port: number, user: string, pass: string, from
       },
       {
         to,
-        from: senderAddress(from),
+        from: senderAddress('default', from),
         subject,
         text,
         ...(html ? { html } : {}),
       },
-    );
+    ).catch((err: unknown) => {
+      // The server's own line, and the host it came from — `Socket timeout!` on its own tells
+      // the person reading the settings screen nothing. Neither half is a credential.
+      throw new Error(`${host} did not take the message: ${(err as Error).message}`);
+    });
     // SMTP hands back no identifier a person can look a message up by, so the check reports none.
     return {};
   };
@@ -102,7 +106,11 @@ export function mailer(): Mailer | undefined {
     const binding = (env as { EMAIL?: EmailSender }).EMAIL;
     return binding ? cloudflareMailer('default', binding, configured.from) : undefined;
   }
-  return e.RESEND_API_KEY ? resendMailer('default', e.RESEND_API_KEY, configured.from) : undefined;
+  if (configured.provider === 'resend')
+    return e.RESEND_API_KEY
+      ? resendMailer('default', e.RESEND_API_KEY, configured.from)
+      : undefined;
+  return undefined;
 }
 
 /**

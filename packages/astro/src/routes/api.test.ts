@@ -456,7 +456,9 @@ test('a refused smtp send tells the owner nothing about the password', async () 
   const res = await testEmail(owner);
   expect(res.status).toBe(502);
   const { error } = (await res.json()) as { error: string };
-  expect(error).toBe('Failed to plain authentication: 535 Authentication failed');
+  expect(error).toBe(
+    'smtp.resend.com did not take the message: Failed to plain authentication: 535 Authentication failed',
+  );
   expect(error).not.toContain('re_secret_123');
   expect(error).not.toContain(btoa('\0resend\0re_secret_123'));
 });
