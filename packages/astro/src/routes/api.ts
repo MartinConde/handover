@@ -3,6 +3,7 @@ import config from 'virtual:handover/config';
 import index from 'virtual:handover/index';
 import type { Db, EntryLocation, Form, GitClient, Translate } from '@handover/core';
 import {
+  AUTH_BASE_PATH,
   addressError,
   blobSha,
   collectionEntries,
@@ -42,7 +43,7 @@ import {
   translatableText,
 } from '@handover/core';
 import type { APIRoute } from 'astro';
-import { login } from '../auth.js';
+import { createAuth } from '../auth.js';
 import { formSchema } from '../index.js';
 import { entryProblems } from '../problems.js';
 
@@ -733,9 +734,20 @@ const ADDRESS = /^entries\/([\w-]+)\/([\w-]+)\/address\/([\w-]+)$/;
 const DRIFT = /^drift\/([\w-]+)\/([\w-]+)$/;
 const TRANSLATE = /^translate\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 
-export const GET: APIRoute = async ({ params }) => {
+// Better Auth owns everything under its base path. Both verbs go straight to its handler:
+// the middleware exempts these paths, so this is the only thing in front of the login.
+const mounted = (pathname: string) => pathname.startsWith(`${AUTH_BASE_PATH}/`);
+
+export const GET: APIRoute = async ({ params, request, url, locals }) => {
+  if (mounted(url.pathname)) return createAuth().handler(request);
   if (params.path === 'ping') {
-    return Response.json({ ok: true, collections: Object.keys(config.collections) });
+    return Response.json({
+      ok: true,
+      collections: Object.keys(config.collections),
+      // The middleware has already asserted a session by the time any of this runs.
+      user: locals.handover?.user,
+      role: locals.handover?.role,
+    });
   }
   if (params.path === 'drafts') {
     const rows = await pendingDrafts('default', db());
@@ -880,11 +892,8 @@ async function answering(work: () => Promise<Response>): Promise<Response> {
   }
 }
 
-export const POST: APIRoute = async ({ params, request }) => {
-  if (params.path === 'login') {
-    const body = (await request.json().catch(() => ({}))) as { password?: unknown };
-    return login(typeof body.password === 'string' ? body.password : '');
-  }
+export const POST: APIRoute = async ({ params, request, url }) => {
+  if (mounted(url.pathname)) return createAuth().handler(request);
   if (params.path === 'publish') return answering(publish);
   const filling = params.path?.match(TRANSLATE);
   if (filling)

@@ -4,6 +4,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **`/admin` has accounts instead of one shared password.** Sign in with an email address and a
+  password against the site's own D1; sessions are signed with `BETTER_AUTH_SECRET`, which
+  replaces the old shared-password variable in `.dev.vars` and in `wrangler secret put`. Nobody
+  can create an account: `POST /admin/api/auth/sign-up/email` answers 400 and writes no row, and inviting
+  people is an owner-only endpoint. Two roles live in `user.role` — `owner` and `editor`, and an
+  unrecognised value reads as `editor`. The sidebar's new **Manage** group hides *Members* and
+  *Settings* from an editor, and the top bar shows who is signed in with a *Sign out* button.
+  Password sign-in allows three attempts per ten seconds per address before a 429.
+  **Upgrading: set `BETTER_AUTH_SECRET` and insert the first owner by hand** — there is no
+  sign-up, so a site with no rows in `user` cannot be signed in to
+  ([Accounts and signing in](docs/auth.md)).
+
 - `astro-handover/schema` exports the tables the rest of the CMS runs on — `media`, `locks`,
   `activity`, `settings` and `cron_state` — plus the login's `user`, `session`, `account`,
   `verification` and `rate_limit`, generated from the Better Auth config. Upgrading needs one
@@ -468,11 +480,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `GITHUB_PRIVATE_KEY` (PKCS#8 PEM) and `GITHUB_REPO` (`owner/repo`), optional `GITHUB_BRANCH`,
   set with `wrangler secret put` (or `.dev.vars`).
 - `fieldsFrom(siteId, jsonSchema)` and `parseEntry(siteId, yaml)` in core.
-- Temporary password gate (removed in a later release): every `/admin/api/*` request except
-  `POST /admin/api/login` needs `Authorization: Bearer <ADMIN_PASSWORD>` or the session cookie
-  that `login` sets; otherwise it is 401. `/admin` shows a login form when no session exists.
-  Set the secret with `wrangler secret put ADMIN_PASSWORD` (and `ADMIN_PASSWORD=…` in
-  `.dev.vars` for `astro dev`); requests fail with an explicit error if it is unset.
+- Temporary password gate (replaced before the first release by the accounts above):
+  `/admin/api/*` was behind a single shared password in one environment variable.
 - `createGitClient(siteId, app, { fetch?, now? })` in core: mints a GitHub App installation
   token on demand (RS256 JWT via WebCrypto, cached on the client until it expires) and
   `getFile(path)` returns `{ contents, blob_sha }` or `undefined` for a missing path. Not yet

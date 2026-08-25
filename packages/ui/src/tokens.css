@@ -191,7 +191,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 @media (prefers-reduced-motion: reduce) { .pill-building .dot { animation: none; } }
 
 /* User menu — avatar + stacked name / role */
-.user-menu { position: relative; }
+.user-menu { position: relative; display: flex; align-items: center; gap: var(--s-2); }
 .user-menu > .btn { gap: var(--s-3); padding: 0 var(--s-3) 0 var(--s-1); border-color: transparent; box-shadow: none; min-height: 44px; }
 .user-menu > .btn:hover { background: rgba(23, 26, 33, 0.04); }
 .user-menu .avatar { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, var(--accent), #8fdc2a); color: var(--on-accent); font-size: var(--text-sm); font-weight: 600; display: grid; place-items: center; }

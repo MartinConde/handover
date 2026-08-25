@@ -71,21 +71,23 @@ Pages render them through a loader and a layout that takes `data` as a prop — 
 [Template convention](template-convention.md). Each collection can also declare its
 `route`, `index` and `load` — see [Configuration](configuration.md).
 
-## 3. Connect GitHub, the database and the password
+## 3. Connect GitHub, the database and the login
 
 Handover reads and writes through a GitHub App installed on the site's repository. Create
 the App and the secrets as described in [Deploy](deploy.md), then for local development
 put the same values in `.dev.vars` (gitignored):
 
 ```ini
-ADMIN_PASSWORD=choose-something
+BETTER_AUTH_SECRET=paste-the-output-of-openssl-rand-base64-32
 GITHUB_APP_ID=123456
 GITHUB_INSTALLATION_ID=12345678
 GITHUB_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n…\n-----END PRIVATE KEY-----\n"
 GITHUB_REPO=you/your-site
 ```
 
-`ADMIN_PASSWORD` is a temporary gate that a later release replaces with real accounts.
+`BETTER_AUTH_SECRET` signs the sessions. `/admin` has accounts rather than one shared
+password, and nobody can create one — so before you can sign in, insert the first owner:
+[Accounts and signing in](auth.md#2-create-the-first-account).
 
 Handover keeps edits in D1 until they are published, so create the database, bind it as
 `DB` and apply the migrations before the first deploy — all three steps are in

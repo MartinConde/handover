@@ -89,7 +89,7 @@ the `\n`-escaped one-line form.
 
 | Secret | Value |
 |---|---|
-| `ADMIN_PASSWORD` | the admin password — temporary, a later release replaces it |
+| `BETTER_AUTH_SECRET` | signs the admin's sessions — `openssl rand -base64 32`. Changing it signs everyone out ([Accounts](auth.md)) |
 | `GITHUB_APP_ID` | App ID from step 2 |
 | `GITHUB_INSTALLATION_ID` | installation id from step 3 |
 | `GITHUB_PRIVATE_KEY` | the PKCS#8 PEM |

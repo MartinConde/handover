@@ -16,3 +16,10 @@ declare module 'virtual:handover/ui' {
 declare module 'cloudflare:workers' {
   export const env: Record<string, unknown>;
 }
+
+// What the session middleware puts in front of every handler under /admin/api/.
+declare namespace App {
+  interface Locals {
+    handover?: import('./auth.js').Session;
+  }
+}

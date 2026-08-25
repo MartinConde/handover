@@ -4,6 +4,9 @@ import './tokens.css';
 
 const target = document.getElementById('app');
 if (!target) throw new Error('Handover shell: #app missing');
-// Phase 0 password gate: a 401 from the API means "show the login form".
+// A 401 means "show the login form"; anything else carries who is signed in and what they may see.
 const res = await fetch('/admin/api/ping');
-mount(App, { target, props: { authed: res.ok, path: location.pathname } });
+mount(App, {
+  target,
+  props: { session: res.ok ? await res.json() : null, path: location.pathname },
+});

@@ -4,14 +4,33 @@ import EntryList from './EntryList.svelte';
 import Login from './Login.svelte';
 import Pending from './Pending.svelte';
 
-let { authed, path }: { authed: boolean; path: string } = $props();
-// svelte-ignore state_referenced_locally -- the prop is the initial value on purpose
-let loggedIn = $state(authed);
+export interface Session {
+  collections: string[];
+  user: { id: string; name: string; email: string };
+  role: 'owner' | 'editor';
+}
+
+let { session: signedIn, path }: { session: Session | null; path: string } = $props();
+// svelte-ignore state_referenced_locally -- the prop is the initial value on purpose; the
+// shell reloads it itself after a sign-in or a sign-out
+let session = $state(signedIn);
 
 const entryRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)\/([\w-]+)$/));
 const listRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)$/));
 
-let collections = $state<string[]>([]);
+// Members and Settings are owner-only in the screen inventory, so an editor's sidebar has
+// neither. The screens themselves land later; until then the shell names the route it is on
+// rather than quietly showing the dashboard under a Manage heading.
+const MANAGE = [
+  { path: '/admin/media', icon: 'media', label: 'Media', ownerOnly: false },
+  { path: '/admin/activity', icon: 'activity', label: 'Activity', ownerOnly: false },
+  { path: '/admin/members', icon: 'members', label: 'Members', ownerOnly: true },
+  { path: '/admin/settings', icon: 'settings', label: 'Settings', ownerOnly: true },
+];
+const manage = $derived(MANAGE.filter((item) => !item.ownerOnly || session?.role === 'owner'));
+const managePage = $derived(manage.find((item) => item.path === path));
+
+const collections = $derived(session?.collections ?? []);
 let pending = $state<{ path: string; updated_at: number }[]>([]);
 let indicator = $state<HTMLButtonElement>();
 let drawer = $state(false);
@@ -19,16 +38,25 @@ let drawer = $state(false);
 let reload = $state(0);
 
 $effect(() => {
-  if (!loggedIn) return;
-  loadPending();
-  loadCollections();
+  if (session) loadPending();
 });
 
-// Ping answers 401 until there is a session, so the collections arrive after the login form
-// hands over, not with the page.
-async function loadCollections() {
+// Ping answers 401 until there is a session, so the shell's own data arrives after the login
+// form hands over, not with the page.
+async function loadSession() {
   const res = await fetch('/admin/api/ping');
-  if (res.ok) collections = ((await res.json()) as { collections: string[] }).collections;
+  session = res.ok ? ((await res.json()) as Session) : null;
+}
+
+// The content type is load-bearing: without it Better Auth answers 415 and the session
+// outlives the click, so the next person at this browser is still signed in.
+async function signOut() {
+  await fetch('/admin/api/auth/sign-out', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: '{}',
+  });
+  session = null;
 }
 
 async function loadPending() {
@@ -47,10 +75,13 @@ async function loadEntry(collection: string, slug: string) {
 }
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const initial = $derived(
+  (session?.user.name || session?.user.email || '?').charAt(0).toUpperCase(),
+);
 </script>
 
-{#if !loggedIn}
-  <Login onlogin={() => (loggedIn = true)} />
+{#if !session}
+  <Login onlogin={loadSession} />
 {:else}
 <div class="shell">
   <aside class="sidebar" aria-label="Main" inert={drawer}>
@@ -72,6 +103,18 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         {/each}
       </div>
     </nav>
+    <nav class="nav" aria-labelledby="nav-manage">
+      <div class="nav-label" id="nav-manage">Manage</div>
+      <div class="nav-group">
+        {#each manage as item (item.path)}
+          <a
+            href={item.path}
+            data-icon={item.icon}
+            aria-current={path === item.path ? 'page' : undefined}
+          >{item.label}</a>
+        {/each}
+      </div>
+    </nav>
   </aside>
   <div class="shell-body" inert={drawer}>
     <header class="topbar">
@@ -89,7 +132,14 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       </button>
       <span class="spacer"></span>
       <span class="pill pill-live"><span class="dot" aria-hidden="true"></span> Live</span>
-      <div class="user-menu"></div>
+      <div class="user-menu">
+        <span class="avatar" aria-hidden="true">{initial}</span>
+        <span class="label">
+          <span class="name">{session.user.name || session.user.email}</span>
+          <span class="role">{session.role === 'owner' ? 'Owner' : 'Editor'}</span>
+        </span>
+        <button class="btn" type="button" onclick={signOut}>Sign out</button>
+      </div>
     </header>
     {#key reload}
     {#if entryRoute}
@@ -114,6 +164,11 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {/await}
     {:else if listRoute}
       <EntryList collection={listRoute[1] ?? ''} onchanged={loadPending} />
+    {:else if managePage}
+      <main class="main">
+        <h1>{managePage.label}</h1>
+        <p class="placeholder">This screen is not built yet.</p>
+      </main>
     {:else}
       <main class="main">
         <h1>Dashboard</h1>

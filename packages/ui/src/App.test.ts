@@ -3,8 +3,13 @@ import { afterEach, expect, test, vi } from 'vitest';
 import App from './App.svelte';
 
 let app: ReturnType<typeof mount>;
-const show = (authed: boolean, path = '/admin') => {
-  app = mount(App, { target: document.body, props: { authed, path } });
+const session = (role: 'owner' | 'editor' = 'owner') => ({
+  collections: ['listings', 'pages'],
+  user: { id: 'u1', name: 'Martin', email: 'martin@example.com' },
+  role,
+});
+const show = (signedIn: ReturnType<typeof session> | null, path = '/admin') => {
+  app = mount(App, { target: document.body, props: { session: signedIn, path } });
   flushSync();
   return document.body;
 };
@@ -25,15 +30,70 @@ afterEach(() => {
 
 test('the shell renders sidebar, top bar and main regions once logged in', () => {
   drafts();
-  const root = show(true);
+  const root = show(session());
   expect(root.querySelector('aside.sidebar[aria-label="Main"]')).not.toBeNull();
   expect(root.querySelector('header.topbar')).not.toBeNull();
   expect(root.querySelector('main.main')).not.toBeNull();
   expect(root.querySelector('input[type="password"]')).toBeNull();
 });
 
+test('the Manage group offers Members and Settings to an owner', () => {
+  drafts();
+  const root = show(session('owner'));
+  const links = root.querySelectorAll<HTMLAnchorElement>('[aria-labelledby="nav-manage"] a');
+  expect(Array.from(links, (a) => a.textContent)).toEqual([
+    'Media',
+    'Activity',
+    'Members',
+    'Settings',
+  ]);
+});
+
+test('an editor is offered neither Members nor Settings', () => {
+  drafts();
+  const root = show(session('editor'));
+  const links = root.querySelectorAll<HTMLAnchorElement>('[aria-labelledby="nav-manage"] a');
+  expect(Array.from(links, (a) => a.textContent)).toEqual(['Media', 'Activity']);
+});
+
+// A Manage destination whose screen has not been built yet must say so: the shell serves the
+// same HTML for every /admin path, so falling through would show a page headed Dashboard.
+test('a Manage route with no screen yet names itself', () => {
+  drafts();
+  const root = show(session('owner'), '/admin/members');
+  expect(root.querySelector('main.main h1')?.textContent).toBe('Members');
+});
+
+test('the signed-in name and role are in the top bar', () => {
+  drafts();
+  const root = show(session('owner'));
+  expect(root.querySelector('.user-menu .name')?.textContent).toBe('Martin');
+  expect(root.querySelector('.user-menu .role')?.textContent).toBe('Owner');
+});
+
+// Regression: sign-out was posted with no content type, which Better Auth refuses with 415 —
+// the form came back while the cookie stayed valid.
+test('signing out posts a request Better Auth accepts, and shows the login form', async () => {
+  const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
+    Response.json({ success: true }),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show(session('owner'));
+
+  root.querySelector<HTMLButtonElement>('.user-menu button')?.click();
+  await new Promise((r) => setTimeout(r, 0));
+  flushSync();
+
+  const call = fetchMock.mock.calls.find(([url]) => url === '/admin/api/auth/sign-out');
+  expect(call?.[1]).toMatchObject({
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+  });
+  expect(root.querySelector('input#password')).not.toBeNull();
+});
+
 test('without a session only the login form renders', () => {
-  const root = show(false);
+  const root = show(null);
   expect(root.querySelector('label[for="password"]')?.textContent).toBe('Password');
   expect(root.querySelector('input#password[type="password"]')).not.toBeNull();
   expect(root.querySelector('.sidebar')).toBeNull();
@@ -41,7 +101,7 @@ test('without a session only the login form renders', () => {
 
 test('the indicator counts the pending files and opens the drawer', async () => {
   drafts('src/content/listings/en/mill-house.yaml');
-  const root = show(true);
+  const root = show(session());
   await new Promise((r) => setTimeout(r, 0));
   flushSync();
   const indicator = root.querySelector<HTMLButtonElement>('button.indicator');
@@ -62,7 +122,7 @@ test('the indicator counts the pending files and opens the drawer', async () => 
 
 test('the sidebar links one entry list per configured collection', async () => {
   drafts();
-  const root = show(true);
+  const root = show(session());
   await new Promise((r) => setTimeout(r, 0));
   flushSync();
   const links = root.querySelectorAll<HTMLAnchorElement>('[aria-labelledby="nav-content"] a');
@@ -74,7 +134,7 @@ test('the sidebar links one entry list per configured collection', async () => {
 
 test("a collection path renders that collection's entry list", async () => {
   drafts();
-  const root = show(true, '/admin/c/listings');
+  const root = show(session(), '/admin/c/listings');
   await new Promise((r) => setTimeout(r, 0));
   flushSync();
   expect(root.querySelector('.list-toolbar h1')?.textContent).toContain('Listings');
@@ -116,7 +176,7 @@ test('discarding a draft loads the entry again instead of leaving the old one on
   const loads = () =>
     fetchMock.mock.calls.filter(([url]) => url === '/admin/api/entries/listings/mill-house').length;
 
-  const root = show(true, '/admin/c/listings/mill-house');
+  const root = show(session(), '/admin/c/listings/mill-house');
   await settle();
   expect(loads()).toBe(1);
 

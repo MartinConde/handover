@@ -187,7 +187,6 @@ vi.mock('virtual:handover/index', () => ({
 }));
 vi.mock('cloudflare:workers', () => ({
   env: {
-    ADMIN_PASSWORD: 'hunter2',
     GITHUB_APP_ID: '1',
     GITHUB_INSTALLATION_ID: '2',
     GITHUB_PRIVATE_KEY: 'key',
@@ -228,31 +227,36 @@ afterEach(() => {
   for (const path of Object.keys(rows)) delete rows[path];
 });
 
-const ctx = (path: string, request?: Request) =>
-  ({ params: { path }, request }) as unknown as APIContext;
+const ctx = (path: string, request?: Request, locals: Record<string, unknown> = {}) =>
+  ({
+    params: { path },
+    request,
+    url: new URL(`https://x/admin/api/${path}`),
+    locals,
+  }) as unknown as APIContext;
 const post = (path: string, body: string) =>
   ctx(path, new Request(`https://x/admin/api/${path}`, { method: 'POST', body }));
 const put = (path: string, body: string) =>
   ctx(path, new Request(`https://x/admin/api/${path}`, { method: 'PUT', body }));
 
-test('ping returns the configured collection names', async () => {
-  const res = await GET(ctx('ping'));
+test('ping returns the collection names and who is signed in', async () => {
+  const session = {
+    user: { id: 'u1', name: 'Anna Berg', email: 'anna@example.com' },
+    role: 'editor',
+  };
+  const res = await GET(ctx('ping', undefined, { handover: session }));
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
     ok: true,
     collections: ['listings', 'presenters', 'pages', 'posts'],
+    user: session.user,
+    role: 'editor',
   });
 });
 
 test('unknown paths are 404', async () => {
   expect((await GET(ctx('nope'))).status).toBe(404);
   expect((await POST(post('nope', ''))).status).toBe(404);
-});
-
-test('login reads the password from the JSON body', async () => {
-  expect((await POST(post('login', JSON.stringify({ password: 'hunter2' })))).status).toBe(200);
-  expect((await POST(post('login', JSON.stringify({ password: 'nope' })))).status).toBe(401);
-  expect((await POST(post('login', 'not json'))).status).toBe(401);
 });
 
 test('an entry returns its fields and its parsed data, and no sha', async () => {

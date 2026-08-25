@@ -10,6 +10,7 @@
 - [Template convention](template-convention.md) — `schemas.ts` and `content.config.ts`, `load()` and `ContentSource`, layouts that take `data` as a prop.
 - [Rendering content](rendering.md) — `<Blocks />`, `<Markdown />`, `<LocaleSwitcher />` and hidden entries.
 - [Drafts and publishing](publishing.md) — autosave into D1, what a draft holds, the pending-changes drawer, publishing in one commit, the endpoints, the content index.
+- [Accounts and signing in](auth.md) — the `BETTER_AUTH_SECRET`, seeding the first owner, the two roles, closed sign-up and rate limiting.
 - [CLI](cli.md) — `handover migrate` for content files, `handover db generate` for the package's tables.
 - [Deploy](deploy.md) — `wrangler.jsonc`, the GitHub App, secrets, building on push.
 - [How it works](how-it-works.md) — packages, injected routes, virtual config, the publish path. For contributors.
