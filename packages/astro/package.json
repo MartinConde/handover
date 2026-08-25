@@ -40,6 +40,9 @@
   "devDependencies": {
     "@handover/ui": "workspace:*",
     "astro": "^7.2.4",
+    "better-auth": "^1.7.1",
+    "drizzle-kit": "^0.31.10",
+    "miniflare": "^4.20260730.0",
     "vite": "^8.0.0"
   }
 }
