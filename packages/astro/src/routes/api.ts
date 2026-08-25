@@ -85,18 +85,26 @@ function translator(): Translate | undefined {
  * screen it sits on is. Every way it can fail is answered in words the person who configured
  * the mailer can act on rather than as a status.
  */
+/**
+ * Why there is no mailer, in the words of the thing that has to be set. State 2 of the settings
+ * screen is a person who has done half the wiring, so it names the half that is missing rather
+ * than reporting that email is off.
+ */
+function missingMailer(): string {
+  const configured = config.mailer;
+  if (!configured || typeof configured === 'function')
+    return 'No mailer is configured: add a `mailer` block to cms.config.ts';
+  if (configured.provider === 'smtp')
+    return 'SMTP_USER and SMTP_PASS are not both set: put them in .dev.vars, or set them with `wrangler secret put`';
+  if (configured.provider === 'cloudflare')
+    return 'No EMAIL binding: add `"send_email": [{ "name": "EMAIL" }]` to wrangler.jsonc and onboard the sending domain';
+  return 'RESEND_API_KEY is not set: put it in .dev.vars, or set it with `wrangler secret put RESEND_API_KEY`';
+}
+
 async function testEmail(session: App.Locals['handover']): Promise<Response> {
   if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
   const send = mailer();
-  if (!send)
-    return Response.json(
-      {
-        error: config.mailer
-          ? 'RESEND_API_KEY is not set: put it in .dev.vars, or set it with `wrangler secret put RESEND_API_KEY`'
-          : 'No mailer is configured: add a `mailer` block to cms.config.ts',
-      },
-      { status: 503 },
-    );
+  if (!send) return Response.json({ error: missingMailer() }, { status: 503 });
   const to = session.user.email;
   try {
     const { id } = await send({

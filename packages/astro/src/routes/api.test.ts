@@ -1,5 +1,6 @@
 import {
   applyDrift,
+  type EmailSender,
   formOf,
   type Mailer,
   type PublishFile,
@@ -9,7 +10,7 @@ import {
 } from '@handover/core';
 import type { APIContext } from 'astro';
 import { afterEach, expect, test, vi } from 'vitest';
-import { formSchema } from '../index.js';
+import { formSchema, type HandoverConfig } from '../index.js';
 import { DELETE, GET, POST, PUT } from './api.js';
 
 const {
@@ -125,9 +126,24 @@ let locales = ['en'];
 // What the site translates with: its own hook, or nothing at all.
 let translator: typeof translate | undefined = translate;
 // What the site sends mail with: a function of its own, the provider it named, or nothing.
-let siteMailer: Mailer | { provider: 'resend'; from: string } | undefined;
-// And the key the Worker holds for that provider.
+let siteMailer: HandoverConfig['mailer'];
+// And the credential the Worker holds for that provider — a key, a login, or a binding.
 let resendKey: string | undefined;
+let smtpUser: string | undefined;
+let smtpPass: string | undefined;
+let emailBinding: EmailSender | undefined;
+// What `worker-mailer` was asked to do, since the SMTP boundary is a socket rather than a fetch.
+const smtpCalls: { options: Record<string, unknown>; email: Record<string, unknown> }[] = [];
+let smtpRefusal: Error | undefined;
+vi.mock('worker-mailer', () => ({
+  LogLevel: { NONE: 4 },
+  WorkerMailer: {
+    send: async (options: Record<string, unknown>, email: Record<string, unknown>) => {
+      smtpCalls.push({ options, email });
+      if (smtpRefusal) throw smtpRefusal;
+    },
+  },
+}));
 // The fake mailer: every message it was asked to send, so a test can read who it went to.
 const sent: { to: string; subject: string; text: string }[] = [];
 const fakeMailer: Mailer = async (message) => {
@@ -211,6 +227,15 @@ vi.mock('cloudflare:workers', () => ({
     get RESEND_API_KEY() {
       return resendKey;
     },
+    get SMTP_USER() {
+      return smtpUser;
+    },
+    get SMTP_PASS() {
+      return smtpPass;
+    },
+    get EMAIL() {
+      return emailBinding;
+    },
     DB: {},
   },
 }));
@@ -260,6 +285,11 @@ afterEach(() => {
   facts = { hasPassword: true, sessions: [] };
   asked = [];
   resendKey = undefined;
+  smtpUser = undefined;
+  smtpPass = undefined;
+  emailBinding = undefined;
+  smtpCalls.length = 0;
+  smtpRefusal = undefined;
   sent.length = 0;
   for (const path of Object.keys(files)) delete files[path];
   for (const path of Object.keys(rows)) delete rows[path];
@@ -367,6 +397,84 @@ test("the provider's own refusal is what a failed test email says", async () => 
   expect(res.status).toBe(502);
   expect(((await res.json()) as { error: string }).error).toBe(
     'Resend refused the message (403): The onboarding@resend.dev domain is for testing.',
+  );
+});
+
+test('a site on smtp with no login names both halves of it', async () => {
+  siteMailer = { provider: 'smtp', from: 'Handover <admin@example.com>', host: 'smtp.example.com' };
+  smtpUser = 'resend';
+  const res = await testEmail(owner);
+  expect(res.status).toBe(503);
+  const { error } = (await res.json()) as { error: string };
+  expect(error).toContain('SMTP_USER');
+  expect(error).toContain('SMTP_PASS');
+});
+
+test('a site on cloudflare with no binding names the binding', async () => {
+  siteMailer = { provider: 'cloudflare', from: 'Handover <admin@example.com>' };
+  const res = await testEmail(owner);
+  expect(res.status).toBe(503);
+  expect(((await res.json()) as { error: string }).error).toContain('send_email');
+});
+
+test('smtp sends over implicit TLS with the sender split, and reports no id', async () => {
+  siteMailer = {
+    provider: 'smtp',
+    from: 'Handover <admin@dev.martinconde.de>',
+    host: 'smtp.resend.com',
+  };
+  smtpUser = 'resend';
+  smtpPass = 're_secret_123';
+  const res = await testEmail(owner);
+  expect(res.status).toBe(200);
+  // No `id`: SMTP hands back nothing a person could look the message up by.
+  expect(await res.json()).toEqual({ ok: true, to: 'martin@example.com' });
+  expect(smtpCalls).toHaveLength(1);
+  expect(smtpCalls[0]?.options).toMatchObject({
+    host: 'smtp.resend.com',
+    port: 465,
+    secure: true,
+    startTls: false,
+    authType: ['plain', 'login'],
+    credentials: { username: 'resend', password: 're_secret_123' },
+  });
+  expect(smtpCalls[0]?.email).toMatchObject({
+    to: 'martin@example.com',
+    from: { name: 'Handover', email: 'admin@dev.martinconde.de' },
+  });
+});
+
+test('a refused smtp send tells the owner nothing about the password', async () => {
+  siteMailer = {
+    provider: 'smtp',
+    from: 'Handover <admin@dev.martinconde.de>',
+    host: 'smtp.resend.com',
+  };
+  smtpUser = 'resend';
+  smtpPass = 're_secret_123';
+  smtpRefusal = new Error('Failed to plain authentication: 535 Authentication failed');
+  const res = await testEmail(owner);
+  expect(res.status).toBe(502);
+  const { error } = (await res.json()) as { error: string };
+  expect(error).toBe('Failed to plain authentication: 535 Authentication failed');
+  expect(error).not.toContain('re_secret_123');
+  expect(error).not.toContain(btoa('\0resend\0re_secret_123'));
+});
+
+test("Cloudflare's refusal reaches the owner naming the rule that was broken", async () => {
+  siteMailer = { provider: 'cloudflare', from: 'Handover <admin@not-onboarded.example.com>' };
+  emailBinding = {
+    send: () =>
+      Promise.reject(
+        new Error(
+          'email from not-onboarded.example.com not allowed because domain is not owned by the same account',
+        ),
+      ),
+  };
+  const res = await testEmail(owner);
+  expect(res.status).toBe(502);
+  expect(((await res.json()) as { error: string }).error).toBe(
+    'Cloudflare refused the message: email from not-onboarded.example.com not allowed because domain is not owned by the same account',
   );
 });
 

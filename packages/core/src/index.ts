@@ -64,8 +64,8 @@ export {
   redirectsText,
   renameEntry,
 } from './lifecycle.js';
-export type { Mailer } from './mailer.js';
-export { resendMailer } from './mailer.js';
+export type { EmailSender, Mailer } from './mailer.js';
+export { cloudflareMailer, resendMailer, senderAddress } from './mailer.js';
 export type { MigrationStep } from './migrate.js';
 export { MIGRATIONS, migrateDocument, versionOf } from './migrate.js';
 export type { CollectionRoutes, I18nConfig, I18nRouting } from './names.js';

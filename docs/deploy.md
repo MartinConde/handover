@@ -102,8 +102,14 @@ Optional, each turning on the feature that reads it:
 | `GITHUB_BRANCH` | the live branch, if it is not `main` |
 | `DEEPL_API_KEY` | [machine translation](translating.md#a-machines-first-draft) from the admin — a free key ends in `:fx` and is recognised as one. Without it the translate buttons are not drawn |
 | `RESEND_API_KEY` | sending mail, when `cms.config.ts` says `mailer: { provider: 'resend', … }` ([Sending email](email.md)). Verify the sending domain at `resend.com/domains` and put an address on it in `from` — until you do, Resend only delivers to the address its own account was created with |
+| `SMTP_USER` | the login for `mailer: { provider: 'smtp', … }` — Resend's own relay, for one, wants the literal `resend` |
+| `SMTP_PASS` | the password for that login. Without both, the admin treats the site as having no mailer ([Sending email](email.md#smtp)) |
 | `GITHUB_CLIENT_ID` | *Continue with GitHub* on the login. An OAuth app whose callback URL is `<HANDOVER_BASE_URL>/admin/api/auth/callback/github`; one app per origin, so local dev needs its own ([Accounts](auth.md#continue-with-github)) |
 | `GITHUB_CLIENT_SECRET` | the same app's client secret. Without both, GitHub is not offered |
+
+`mailer: { provider: 'cloudflare', … }` has no secret at all: it sends through a `send_email`
+binding in `wrangler.jsonc`, so it is set up in the dashboard rather than here
+([Sending email](email.md#cloudflare)).
 
 One more is a **var rather than a secret**, because an origin is not private — and without it the
 emailed sign-in link and GitHub are not offered at all:

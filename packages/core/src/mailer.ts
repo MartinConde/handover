@@ -34,3 +34,60 @@ export function resendMailer(_siteId: string, key: string, from: string): Mailer
     return { id: body.id };
   };
 }
+
+/**
+ * The `send_email` binding, named here rather than pulled in from `workers-types`: one method,
+ * the one that is called. Its shape is `SendEmail.send(EmailMessageBuilder)` from
+ * `@cloudflare/workers-types@5.20260825.1`, narrowed to the fields a Handover message has.
+ */
+export interface EmailSender {
+  send(message: {
+    to: string;
+    from: string | { name: string; email: string };
+    subject: string;
+    text: string;
+    html?: string;
+  }): Promise<{ messageId: string }>;
+}
+
+/**
+ * `Display Name <someone@example.com>` split into the two halves a provider that takes them
+ * apart needs. Resend takes the whole string; the Cloudflare binding and SMTP do not, and an
+ * unsplit `from` becomes `MAIL FROM: <Handover <admin@…>>` — a malformed envelope rather than
+ * an error. Exported because the SMTP implementation lives in the Astro package and needs the
+ * same split; getting it wrong in two places is the thing worth avoiding.
+ */
+export function senderAddress(from: string): { name: string; email: string } | string {
+  const angled = /^\s*(.*?)\s*<([^>]+)>\s*$/.exec(from);
+  if (!angled) return from.trim();
+  const name = (angled[1] ?? '').replace(/^"|"$/g, '').trim();
+  const email = (angled[2] ?? '').trim();
+  return name ? { name, email } : email;
+}
+
+/**
+ * Cloudflare Email Sending behind the interface. The binding is the credential — there is no
+ * key to hold — which is why it arrives as an argument like every other resolved credential.
+ * A refusal arrives as a plain `Error` whose message is the rule that was broken, and that
+ * sentence is what the settings screen quotes back: an unonboarded sending domain, or the
+ * recipient narrowing a plan imposes, has to read as itself rather than as a number. The
+ * documented `E_*` codes are not on the error the runtime throws — checked against three
+ * refusals, whose only own property is `remote`.
+ */
+export function cloudflareMailer(_siteId: string, binding: EmailSender, from: string): Mailer {
+  return async ({ to, subject, text, html }) => {
+    try {
+      const { messageId } = await binding.send({
+        to,
+        from: senderAddress(from),
+        subject,
+        text,
+        ...(html ? { html } : {}),
+      });
+      return { id: messageId };
+    } catch (err) {
+      const { message } = err as { message?: string };
+      throw new Error(`Cloudflare refused the message${message ? `: ${message}` : ''}`);
+    }
+  };
+}

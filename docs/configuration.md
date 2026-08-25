@@ -109,18 +109,22 @@ dashes. See [Site files](site-files.md).
 
 ## `mailer`
 
-Optional, and what the admin sends mail with — the "send a test email" check on the settings
-screen, and the emailed sign-in link when it lands. Name the provider and the address mail comes
-from; the key is a secret and lives in the environment:
+Optional, and what the admin sends mail with — the settings screen's test email, and the emailed
+sign-in link. Name a provider and the address it sends from; `from` is config, never a secret:
 
 ```ts
 mailer: { provider: 'resend', from: 'Your Site <hello@your-site.com>' },
 ```
 
-`'resend'` is the only provider so far, and it reads `RESEND_API_KEY`. `from` has to be on a
-domain verified at `resend.com/domains` — [Sending email](email.md) has the whole of it, including
-what the admin sends and how to prove a key. Anything other than Resend is a function of your own,
-given the message and answering with the provider's id for it where there is one:
+| `provider` | What the Worker needs |
+|---|---|
+| `'resend'` | `RESEND_API_KEY` |
+| `'smtp'` | `SMTP_USER` and `SMTP_PASS`, plus `host` here (and `port`, if it is not `465`) |
+| `'cloudflare'` | a `send_email` binding named `EMAIL`, and no secret at all |
+
+Each needs a sending domain it may write from — [Sending email](email.md) has all three, and how
+to prove one works. Anything else is a function of your own, given the message and answering with
+the provider's id for it where there is one:
 
 ```ts
 mailer: async ({ to, subject, text, html }) => {
@@ -128,8 +132,6 @@ mailer: async ({ to, subject, text, html }) => {
   return { id };
 },
 ```
-
-Without either, the admin offers no test email and no emailed link at all.
 
 ## Entry filenames
 

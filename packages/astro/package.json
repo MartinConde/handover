@@ -31,8 +31,9 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@handover/cli": "workspace:*",
     "@handover/core": "workspace:*",
-    "@handover/cli": "workspace:*"
+    "worker-mailer": "1.2.1"
   },
   "peerDependencies": {
     "astro": "^7.0.0"

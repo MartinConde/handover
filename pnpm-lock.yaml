@@ -29,6 +29,9 @@ importers:
       '@handover/core':
         specifier: workspace:*
         version: link:../core
+      worker-mailer:
+        specifier: 1.2.1
+        version: 1.2.1
     devDependencies:
       '@handover/ui':
         specifier: workspace:*
@@ -3199,6 +3202,9 @@ packages:
     engines: {node: '>=8'}
     hasBin: true
 
+  worker-mailer@1.2.1:
+    resolution: {integrity: sha512-gS2ei/mrpRqNs+AHmqxhT6vFPwCLw2qnz5ShmyGD0ULaU0Q9hxnFAcx9jhAip/MnD6+MjgnQu6hQQgA8mlOkVA==}
+
   workerd@1.20260730.1:
     resolution: {integrity: sha512-zmfNIjwYSWFY5chGBOjWtH3xAE7p97FTC6vR4Ep98290ho6AeAR/NVcBD274YCLEUYzqm8yxdtZlxMybU8a3jA==}
     engines: {node: '>=16'}
@@ -6078,6 +6084,8 @@ snapshots:
     dependencies:
       siginfo: 2.0.0
       stackback: 0.0.2
+
+  worker-mailer@1.2.1: {}
 
   workerd@1.20260730.1:
     optionalDependencies:

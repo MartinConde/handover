@@ -2,12 +2,15 @@ import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
 import {
   type Auth,
+  cloudflareMailer,
   createAuth as create,
   type Db,
+  type EmailSender,
   type Mailer,
   openDb,
   type Role,
   resendMailer,
+  senderAddress,
   userExists,
 } from '@handover/core';
 
@@ -28,17 +31,78 @@ export interface Session {
 }
 
 /**
- * Who sends a message: the site's own function, or the provider it named on the key the
+ * SMTP behind the same interface, and the one implementation that cannot live in `core`:
+ * `worker-mailer` imports `cloudflare:sockets` at module scope, which does not resolve under
+ * Node — so a static import here would stop this package's own test files loading, and would
+ * break the CLI's Node-side resolution of the schema through `core`. The import is inside the
+ * send, so nothing pays for it until a message is actually sent.
+ *
+ * TLS is implicit and not negotiated. `worker-mailer` will otherwise `STARTTLS` only if the
+ * server offers it and carry on in plaintext if it does not, which sends the password in the
+ * clear; 465 is what Resend and Cloudflare both speak, so the branch is not worth having.
+ */
+function smtpMailer(host: string, port: number, user: string, pass: string, from: string): Mailer {
+  return async ({ to, subject, text, html }) => {
+    const { LogLevel, WorkerMailer } = await import('worker-mailer');
+    await WorkerMailer.send(
+      {
+        host,
+        port,
+        secure: true,
+        startTls: false,
+        credentials: { username: user, password: pass },
+        // Empty by default, and an empty list is refused by every server that advertises AUTH
+        // with `No supported auth method found.` — read out of `worker-mailer@1.2.1`'s own
+        // `auth()`, not from its README.
+        authType: ['plain', 'login'],
+        // Nothing about the session reaches the Worker's log: its debug level prints the
+        // `AUTH PLAIN` payload, which is the password in base64.
+        logLevel: LogLevel.NONE,
+      },
+      {
+        to,
+        from: senderAddress(from),
+        subject,
+        text,
+        ...(html ? { html } : {}),
+      },
+    );
+    // SMTP hands back no identifier a person can look a message up by, so the check reports none.
+    return {};
+  };
+}
+
+/**
+ * Who sends a message: the site's own function, or the provider it named on the credential the
  * Worker holds. Neither is an ordinary state of a site — a site with no mailer is offered no
  * test email and no sign-in link at all — so it is asked for where it is needed rather than
  * resolved on the way. It lives here rather than beside its first caller because the login
  * needs it too, and `routes/api.ts` already imports this file.
+ *
+ * A provider named with its credential missing is the same answer as no mailer at all, which is
+ * what keeps the login from drawing a button that cannot work.
  */
 export function mailer(): Mailer | undefined {
   const configured = config.mailer;
+  if (!configured) return undefined;
   if (typeof configured === 'function') return configured;
-  const key = (env as Record<string, string | undefined>).RESEND_API_KEY;
-  return configured && key ? resendMailer('default', key, configured.from) : undefined;
+  const e = env as Record<string, string | undefined>;
+  if (configured.provider === 'smtp') {
+    return e.SMTP_USER && e.SMTP_PASS
+      ? smtpMailer(
+          configured.host,
+          configured.port ?? 465,
+          e.SMTP_USER,
+          e.SMTP_PASS,
+          configured.from,
+        )
+      : undefined;
+  }
+  if (configured.provider === 'cloudflare') {
+    const binding = (env as { EMAIL?: EmailSender }).EMAIL;
+    return binding ? cloudflareMailer('default', binding, configured.from) : undefined;
+  }
+  return e.RESEND_API_KEY ? resendMailer('default', e.RESEND_API_KEY, configured.from) : undefined;
 }
 
 /**

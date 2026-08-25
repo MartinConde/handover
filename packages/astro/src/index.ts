@@ -236,11 +236,18 @@ export interface HandoverConfig {
   /** One schema per file under `src/content/globals/<locale>/`, keyed by file name. */
   globals?: Record<string, z.ZodType>;
   /**
-   * Who sends the site's mail: the provider the package ships, on the key the Worker holds,
-   * or a function of your own. Without one the admin offers no test email and no emailed
-   * link — the same silence as a site with no translator.
+   * Who sends the site's mail: one of the three providers the package ships, on the credential
+   * the Worker holds, or a function of your own. Without one the admin offers no test email and
+   * no emailed link — the same silence as a site with no translator. `from` is config rather
+   * than env in every case: an address is not a secret and the settings screen shows it.
    */
-  mailer?: Mailer | { provider: 'resend'; from: string };
+  mailer?:
+    | Mailer
+    | { provider: 'resend'; from: string }
+    /** `host` is not a secret, so it is named here; `SMTP_USER` and `SMTP_PASS` are. */
+    | { provider: 'smtp'; from: string; host: string; port?: number }
+    /** Cloudflare Email Sending, through a `send_email` binding named `EMAIL`. */
+    | { provider: 'cloudflare'; from: string };
   /** Required, a one-language site too: the files live in a locale folder either way. */
   i18n: {
     /** The folder names under `src/content/<collection>/`: `'en'`, `'de'`, `'pt-br'`. */

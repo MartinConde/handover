@@ -4,6 +4,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Two more mailers: SMTP and Cloudflare.** `mailer` in `cms.config.ts` now takes
+  `{ provider: 'smtp', from, host, port? }` on `SMTP_USER` and `SMTP_PASS`, or
+  `{ provider: 'cloudflare', from }` on a `send_email` binding named `EMAIL` and no secret at
+  all. A provider named without its credential is treated as no mailer, so the login never draws
+  a sign-in-link button that cannot work, and the settings check answers `503` naming the half
+  that is missing. SMTP speaks implicit TLS only — the port has to be encrypted from the first
+  byte, since a session that starts in plaintext and is refused its upgrade would hand the
+  server your password in the clear. Cloudflare sending to anyone but yourself needs the Workers
+  Paid plan, and the refusal says so in as many words ([Sending email](docs/email.md),
+  [Configuration](docs/configuration.md#mailer), [Deploy](docs/deploy.md#secrets)).
+
 - **Three ways into `/admin`, and an account page.** The login now offers an emailed sign-in
   link and *Continue with GitHub* beside the password, and *Forgot password?* mails a link to a
   reset page at `/admin/reset`. Every one of them is closed to strangers: a link is mailed only
