@@ -12,7 +12,7 @@ first sign-in onwards.
 
 | Group | What lands there |
 |---|---|
-| Accounts | `login` (by password, by emailed link or through GitHub) · `invite` · `role-change` · `password-set` |
+| Accounts | `login` (by password, by emailed link or through GitHub) · `invite` · `role-change` · `member-removed` · `password-set` (a first one, a change or a reset) |
 | Publishing | `publish`, with the commit it made and how many files were in it |
 | System | `mail-failed` — a message the provider would not take |
 
@@ -20,6 +20,12 @@ first sign-in onwards.
 row per keystroke would tell an owner nothing and would spend a site's whole daily write budget
 on one busy afternoon. What an entry used to say is git's job, and the pending-changes drawer
 shows what a publish is about to change.
+
+Two kinds cover a pair of events each, because what happened is the same write. `password-set`
+says which in `detail.how` — `first`, `changed` or `reset`. `member-removed` says whether the
+person had ever signed in through `detail.pending`, so *removed Anna* and *revoked Lea's invite*
+read differently. A removal also carries the address, since the `user` row it names is deleted by
+the time anybody reads the log.
 
 **A one-time link is never in a row.** A sign-in link, an invite link and a reset link are all
 working credentials for as long as they live, so an `invite` row names the address and the role

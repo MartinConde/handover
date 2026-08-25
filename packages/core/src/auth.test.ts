@@ -910,3 +910,78 @@ test('an owner impersonating somebody is not a sign-in by that person', async ()
 
   expect((await activityRows()).map((r) => r.user_id)).toEqual(['usr_owner@example.com']);
 });
+
+test('changing a password is a password-set event saying it was a change', async () => {
+  const id = await seed('owner@example.com', 'correct-horse-battery', 'owner');
+  const cookie = await sessionCookie('owner@example.com', 'correct-horse-battery');
+
+  await call(
+    '/change-password',
+    { currentPassword: 'correct-horse-battery', newPassword: 'a-brand-new-password' },
+    { cookie },
+  );
+
+  expect((await activityRows()).map((r) => [r.user_id, r.kind, r.detail])).toEqual([
+    [id, 'login', '{"method":"password"}'],
+    [id, 'password-set', '{"how":"changed"}'],
+  ]);
+});
+
+// The user is in neither the updated row nor the endpoint context on this path, so it comes off
+// the `verification` row the reset consumes — whose *other* column is the token in the clear.
+test('resetting a password is a password-set event naming whose it was', async () => {
+  const id = await seed('owner@example.com', 'correct-horse-battery', 'owner');
+  emailing();
+  await call('/request-password-reset', {
+    email: 'owner@example.com',
+    redirectTo: `${SITE}/admin/reset`,
+  });
+  const token = (resetLinks[0]?.url ?? '').split('/reset-password/')[1]?.split('?')[0] ?? '';
+
+  await call('/reset-password', { newPassword: 'a-brand-new-password', token });
+
+  const rows = await activityRows();
+  expect(
+    rows.map((r) => [r.user_id, r.kind, (JSON.parse(r.detail ?? '{}') as { how: string }).how]),
+  ).toEqual([[id, 'password-set', 'reset']]);
+  expect(JSON.stringify(rows)).not.toContain(token);
+});
+
+test('a reset the password rules refused is no event, and leaves the link usable', async () => {
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+  emailing();
+  await call('/request-password-reset', {
+    email: 'owner@example.com',
+    redirectTo: `${SITE}/admin/reset`,
+  });
+  const token = (resetLinks[0]?.url ?? '').split('/reset-password/')[1]?.split('?')[0] ?? '';
+
+  const refused = await call('/reset-password', { newPassword: 'short', token });
+
+  expect(refused.status).toBe(400);
+  expect(await activityRows()).toEqual([]);
+});
+
+// A second sign-in through GitHub updates the account row the first one made, on the same
+// endpoint the first used. Only the two password endpoints are a password being set.
+test('signing in through GitHub again is not a password being set', async () => {
+  emailing();
+  github = { clientId: 'gh_id', clientSecret: 'gh_secret' };
+  await seedUser('owner@example.com', 'owner');
+  await githubCallback({ login: 'martin', email: 'owner@example.com', verified: true });
+
+  await githubCallback({ login: 'martin', email: 'owner@example.com', verified: true });
+
+  expect((await activityRows()).map((r) => r.kind)).toEqual(['login', 'login']);
+});
+
+// The magic link consumes a `verification` row too, on its own path.
+test('opening a sign-in link is not a password being set', async () => {
+  emailing();
+  await seedUser('owner@example.com', 'owner');
+  await call('/sign-in/magic-link', { email: 'owner@example.com', callbackURL: '/admin' });
+
+  await open(magicLinks[0]?.url ?? '');
+
+  expect((await activityRows()).map((r) => r.kind)).toEqual(['login']);
+});

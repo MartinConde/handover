@@ -158,6 +158,40 @@ export function authOptions(siteId: string, db: Db, config: AuthConfig): BetterA
     // failures, and that is load-bearing here — a throw in an after-hook answers `500` with
     // the session row already committed, which is a sign-in that half happened.
     databaseHooks: {
+      // Whose password was reset. It is in neither the updated account row — which arrives
+      // empty on this path — nor anywhere in the endpoint's context, so it comes off the
+      // `verification` row the reset consumes, whose `value` is the user id. **Its other
+      // column is the token in the clear**, so `value` is the only thing read here. Better
+      // Auth checks the new password before consuming the row, so a refused reset consumes
+      // nothing and this does not fire.
+      verification: {
+        delete: {
+          after: async (row, context) => {
+            if (context?.path !== '/reset-password') return;
+            await logActivity(siteId, db, {
+              userId: row.value,
+              kind: 'password-set',
+              detail: { how: 'reset' },
+            });
+          },
+        },
+      },
+      // Somebody changing a password they already knew. Keyed on the endpoint and not on what
+      // changed, because a second sign-in through GitHub updates the same table — a filter on
+      // the row would count a refreshed OAuth token as a new password. A reset is the hook
+      // above, since on that path this one is handed an empty row.
+      account: {
+        update: {
+          after: async (account, context) => {
+            if (context?.path !== '/change-password') return;
+            await logActivity(siteId, db, {
+              userId: account.userId,
+              kind: 'password-set',
+              detail: { how: 'changed' },
+            });
+          },
+        },
+      },
       session: {
         create: {
           after: async (session, context) => {

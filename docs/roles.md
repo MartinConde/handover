@@ -63,7 +63,8 @@ their linked GitHub, and any browser they were signed in on. It takes effect on 
 request.
 
 **Their drafts stay.** An unpublished change belongs to the site, not to whoever last typed in
-it, so removing somebody never loses work.
+it, so removing somebody never loses work. The [activity log](activity.md) keeps the address and
+who took it away, which is the only record left once the row is gone.
 
 Two removals are refused by the server, not just hidden: **you cannot remove yourself**, and the
 last owner stays — an owner is taken out of the count by the same statement that checks it, and

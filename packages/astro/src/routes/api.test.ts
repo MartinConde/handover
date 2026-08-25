@@ -2460,7 +2460,7 @@ test('setting a first password is a password-set event for the person who set it
     ),
   );
 
-  expect(logged).toEqual([{ userId: 'u2', kind: 'password-set' }]);
+  expect(logged).toEqual([{ userId: 'u2', kind: 'password-set', detail: { how: 'first' } }]);
 });
 
 test('a password Better Auth refused is no event', async () => {
@@ -2567,4 +2567,56 @@ test('the filters and the cursor are passed on as they were asked for', async ()
     entry: 'src/content/pages/en/about.yaml',
     cursor: '5000.abc',
   });
+});
+
+// The row is gone by the time anybody reads this, so the address is in the event or it is
+// nowhere: an id alone would name somebody nothing can look up.
+test('removing a member is an event naming who was removed', async () => {
+  memberRows = [
+    member('u1', 'martin@example.com', 'owner'),
+    member('u2', 'anna@example.com', 'editor'),
+  ];
+
+  await memberDelete('members/u2', owner);
+
+  expect(logged).toEqual([
+    {
+      userId: 'u1',
+      kind: 'member-removed',
+      subject: 'u2',
+      detail: { email: 'anna@example.com', role: 'editor', pending: false },
+    },
+  ]);
+});
+
+test('revoking an invite nobody opened says it was still pending', async () => {
+  memberRows = [
+    member('u1', 'martin@example.com', 'owner'),
+    member('u3', 'lea@example.com', 'editor', { pending: true, method: null, lastSignIn: null }),
+  ];
+
+  await memberDelete('members/u3', owner);
+
+  expect(logged[0]?.detail).toEqual({ email: 'lea@example.com', role: 'editor', pending: true });
+});
+
+test('a removal the last-owner rule refuses is no event', async () => {
+  memberRows = [
+    member('u1', 'martin@example.com', 'owner'),
+    member('u2', 'anna@example.com', 'editor'),
+  ];
+
+  const res = await memberDelete('members/u1', { ...owner, user: { ...owner.user, id: 'u9' } });
+
+  expect(res.status).toBe(400);
+  expect(logged).toEqual([]);
+});
+
+test('removing somebody who is not there is no event', async () => {
+  memberRows = [member('u1', 'martin@example.com', 'owner')];
+
+  const res = await memberDelete('members/u9', owner);
+
+  expect(res.status).toBe(404);
+  expect(logged).toEqual([]);
 });

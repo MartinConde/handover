@@ -13,7 +13,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   rather than offset, because two events can share a millisecond. **No one-time link and no
   token reaches a row** — an `invite` names the address and the role, and a message the provider
   refused leaves a `mail-failed` row naming only what it was for, which is the first time a
-  failed reset is visible anywhere but `wrangler tail`. The members screen's **Last sign-in** is
+  failed reset is visible anywhere but `wrangler tail`. Removing somebody, and revoking an invite
+  nobody opened, are recorded with the address, which is the only record left once the `user` row
+  is deleted; a password being **changed** or **reset** is recorded as well as a first one being
+  set. The members screen's **Last sign-in** is
   now the newer of a live session and a `login` event, so signing out everywhere no longer erases
   it ([Activity log](docs/activity.md), [Roles and permissions](docs/roles.md#how-somebody-signs-in)).
 

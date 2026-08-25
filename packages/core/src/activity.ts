@@ -49,7 +49,7 @@ export interface ActivityQuery {
  * that has no caller yet is here anyway — adding one is a string and needs no migration.
  */
 export const ACTIVITY_GROUPS = {
-  Accounts: ['login', 'invite', 'role-change', 'password-set'],
+  Accounts: ['login', 'invite', 'role-change', 'member-removed', 'password-set'],
   Publishing: [
     'publish',
     'publish-failed',

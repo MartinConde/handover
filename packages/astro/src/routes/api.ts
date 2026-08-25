@@ -166,7 +166,11 @@ async function setPassword(
     return Response.json({ error: 'No password was sent' }, { status: 400 });
   try {
     await createAuth(url, ctx).api.setPassword({ body: { newPassword }, headers: request.headers });
-    await logActivity('default', db(), { userId: session?.user.id, kind: 'password-set' });
+    await logActivity('default', db(), {
+      userId: session?.user.id,
+      kind: 'password-set',
+      detail: { how: 'first' },
+    });
     return Response.json({ ok: true });
   } catch (err) {
     // Too short, or already set: either way the account page shows Better Auth's sentence.
@@ -387,6 +391,15 @@ async function removeMember(
   } catch (err) {
     return refused(err);
   }
+  // The `user` row is gone by the time anybody reads this, so the address is in the event or
+  // it is nowhere — an id on its own would name somebody nothing can look up. `pending` is
+  // what makes this a revoked invite rather than somebody losing access they had.
+  await logActivity('default', database, {
+    userId: session.user.id,
+    kind: 'member-removed',
+    subject: id,
+    detail: { email: member.email, role: member.role, pending: member.pending },
+  });
   return Response.json({ ok: true });
 }
 
