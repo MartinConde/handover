@@ -18,7 +18,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   header is written by whoever sent the request and an emailed sign-in link built from one is a
   working credential pointing somewhere else. Without it the login shows the password form and
   nothing else — the same answer a missing key gets. `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`
-  turn on GitHub; the callback URL is `<HANDOVER_BASE_URL>/admin/api/auth/callback/github`
+  turn on GitHub; the callback URL is `<HANDOVER_BASE_URL>/admin/api/auth/callback/github`. The
+  trip to GitHub and back has five minutes on it, and running out of them now comes back to the
+  login rather than to Better Auth's own error page
   ([Accounts and signing in](docs/auth.md), [Deploy](docs/deploy.md#secrets)).
 
 - `docs/auth.md` split three ways as it grew: [Accounts and signing in](docs/auth.md) is the ways

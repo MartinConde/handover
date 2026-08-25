@@ -569,3 +569,16 @@ test('a reset link cannot be pointed off the site either', async () => {
   expect(res.status).toBe(403);
   expect(resetLinks).toEqual([]);
 });
+
+// Five minutes is all the OAuth state gets, and a first trip through GitHub's consent screen can
+// take longer. The callback cannot read where to go back to out of a state that is gone, so it
+// falls back — and the fallback has to be the login rather than Better Auth's own error page.
+test('a GitHub callback whose state has expired lands on the login, not on an error page', async () => {
+  emailing();
+  github = { clientId: 'gh_id', clientSecret: 'gh_secret' };
+
+  const res = await open(`${SITE}${AUTH_BASE_PATH}/callback/github?code=gh_code&state=long_gone`);
+
+  expect(res.status).toBe(302);
+  expect(res.headers.get('location')).toBe('/admin?error=state_mismatch');
+});

@@ -107,6 +107,12 @@ export function authOptions(db: Db, config: AuthConfig): BetterAuthOptions {
     // `enabled` defaults to `NODE_ENV === 'production'`, which a Worker never sets, so saying
     // it is what turns the limit on at all.
     rateLimit: { enabled: true, storage: 'database' },
+    // Where a failure that cannot route itself lands. An OAuth callback carries where to go
+    // back to inside its own state, so when the state is what expired — five minutes is all it
+    // gets, and a first trip through GitHub's consent screen can take longer — there is nothing
+    // left to read it out of. Without this the person ends on Better Auth's own error page;
+    // with it they end on the login, which says the one thing every refusal here says.
+    onAPIError: { errorURL: '/admin' },
     advanced: {
       // Which bucket an attempt is counted against. The default reads `x-forwarded-for`, whose
       // first entry the caller writes — behind Cloudflare that is a limit anyone can walk

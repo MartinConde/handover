@@ -89,6 +89,11 @@ email** GitHub reports as verified; it links to that row rather than making a ne
 account nobody invited lands back on the login with the message a dead link gets, and is not told
 whether the address is known here.
 
+The trip to GitHub and back has **five minutes** on it. Sitting on the consent screen for longer
+than that — which a first time through, signing in to GitHub as well, can easily take — comes
+back to the login rather than into the admin. Clicking *Continue with GitHub* again is the whole
+of the fix, and the second time is instant because the consent is already given.
+
 Which of the two roles somebody has, and what each may do, is
 [Roles and permissions](roles.md).
 
