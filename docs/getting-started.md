@@ -87,7 +87,7 @@ GITHUB_REPO=you/your-site
 
 `BETTER_AUTH_SECRET` signs the sessions. `/admin` has accounts rather than one shared
 password, and nobody can create one — so before you can sign in, insert the first owner:
-[Accounts and signing in](auth.md#2-create-the-first-account).
+[Accounts and signing in](auth.md#3-create-the-first-account).
 
 Handover keeps edits in D1 until they are published, so create the database, bind it as
 `DB` and apply the migrations before the first deploy — all three steps are in

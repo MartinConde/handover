@@ -4,6 +4,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Three ways into `/admin`, and an account page.** The login now offers an emailed sign-in
+  link and *Continue with GitHub* beside the password, and *Forgot password?* mails a link to a
+  reset page at `/admin/reset`. Every one of them is closed to strangers: a link is mailed only
+  to an address that already has an account, opening one minted for an address that does not
+  makes no user, and GitHub signs in only against a row that already carries the same verified
+  email. `/admin/account` is everyone's own page — display name, email and role, a password form,
+  and the sessions they are signed in on with *Sign out everywhere*. Somebody who arrived by an
+  emailed link and has no password is offered one there.
+
+- **`HANDOVER_BASE_URL` is a new var, and the two emailing methods need it.** It is the site's
+  own origin, stated in `wrangler.jsonc` rather than read off the request, because a `Host`
+  header is written by whoever sent the request and an emailed sign-in link built from one is a
+  working credential pointing somewhere else. Without it the login shows the password form and
+  nothing else — the same answer a missing key gets. `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`
+  turn on GitHub; the callback URL is `<HANDOVER_BASE_URL>/admin/api/auth/callback/github`
+  ([Accounts and signing in](docs/auth.md), [Deploy](docs/deploy.md#secrets)).
+
+- `docs/auth.md` split three ways as it grew: [Accounts and signing in](docs/auth.md) is the ways
+  in, [Roles and permissions](docs/roles.md) is who may do what, and [Sending email](docs/email.md)
+  is the `mailer` block and the check that proves a key. Existing links to `auth.md` still land on
+  the right page; the seeding recipe moved from `#2-` to `#3-create-the-first-account`.
+
 - **Handover can send email.** `mailer` in `cms.config.ts` names who sends it — the provider the
   package ships, `{ provider: 'resend', from: 'You <hello@your-site.com>' }` on a
   `RESEND_API_KEY` secret, or a function of your own given the message. With one configured, an
@@ -12,7 +34,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   on it later. Editors get `403`, a site with no mailer gets `503` naming what is missing, and a
   provider that refuses gets `502` carrying the provider's own words — an unverified sending
   domain reads as itself rather than as a number
-  ([Configuration](docs/configuration.md#mailer), [Accounts and signing in](docs/auth.md#sending-email)).
+  ([Configuration](docs/configuration.md#mailer), [Sending email](docs/email.md)).
 
 - **`/admin` has accounts instead of one shared password.** Sign in with an email address and a
   password against the site's own D1; sessions are signed with `BETTER_AUTH_SECRET`, which

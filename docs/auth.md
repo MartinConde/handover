@@ -1,8 +1,9 @@
 # Accounts and signing in
 
-`/admin` is behind a real login: an email address and a password, checked against accounts in
-the site's own D1 database. There is **no sign-up** — an account exists because someone put it
-there, and the endpoints that would create one are closed.
+`/admin` is behind a real login, checked against accounts in the site's own D1 database. There
+are three ways in — an emailed link, a password, and *Continue with GitHub* — and the login
+offers only the ones the site is configured for. There is **no sign-up**: an account exists
+because someone put it there, and every endpoint that would create one is closed.
 
 ## 1. Set the secret
 
@@ -16,10 +17,36 @@ npx wrangler secret put BETTER_AUTH_SECRET
 For `astro dev` and `wrangler dev`, the same name goes in `.dev.vars` (gitignored). Without it
 every `/admin/api` request fails with a message naming it. Changing it later signs everyone out.
 
-## 2. Create the first account
+## 2. Say where the site is
 
-Until `handover init` does this for you, the first owner is two rows you insert yourself.
-Hash the password with the same function the login verifies against:
+`HANDOVER_BASE_URL` is the site's own origin, and it is the one thing about the login that is
+never read off the request:
+
+```jsonc
+// wrangler.jsonc — a plain var, not a secret. An origin is not private.
+"vars": { "HANDOVER_BASE_URL": "https://your-site.example" }
+```
+
+It is what an emailed sign-in link points at, and a `Host` header is written by whoever sent the
+request — so a link built from one is a working credential mailed to the right person pointing at
+somebody else's server. Locally the same name goes in `.dev.vars`, matching the port `astro dev`
+prints: `HANDOVER_BASE_URL=http://localhost:4321`.
+
+**Without it the emailed link and GitHub are not offered at all**, the same answer a missing key
+gets. Passwords and sessions work without it; only what puts a URL in an email needs it.
+
+## 3. Create the first account
+
+Until `handover init` does this for you, the first owner is a row you insert yourself:
+
+```sql
+INSERT INTO user (id, name, email, email_verified, role, created_at, updated_at)
+VALUES ('usr_1', 'Your Name', 'you@example.com', 1, 'owner', 0, 0);
+```
+
+With a mailer and a base URL set that is the whole of it: they sign in with an emailed link and
+set a password from their account page. Otherwise give them a password too, hashed with the same
+function the login verifies against:
 
 ```sh
 node --input-type=module -e "
@@ -28,57 +55,64 @@ console.log(await hashPassword(process.argv[1]));
 " 'the-password-you-chose'
 ```
 
-Then insert the account, replacing the id, the email and the hash. Run it once with `--local`
-and once with `--remote`, since those are two different databases:
-
 ```sql
-INSERT INTO user (id, name, email, email_verified, role, created_at, updated_at)
-VALUES ('usr_1', 'Your Name', 'you@example.com', 1, 'owner', 0, 0);
-
 INSERT INTO account (id, issuer, account_id, provider_id, user_id, password, created_at, updated_at)
 VALUES ('acc_1', 'local:credential', 'usr_1', 'credential', 'usr_1', '<the hash>', 0, 0);
 ```
 
-Three of those values are not free choices, and a password that never works is what you get
-when one is wrong: `provider_id` is `credential`, `issuer` is `local:credential`, and
-`account_id` is the **user's own id**, not the email.
+Run each once with `--local` and once with `--remote`: those are two different databases. Three
+values are not free choices, and a password that never works is what you get when one is wrong:
+`provider_id` is `credential`, `issuer` is `local:credential`, and `account_id` is the **user's
+own id**, not the email. A password is at least 12 characters, with no other rules.
 
-A password is at least 12 characters. There are no composition rules and no forced rotation.
+## Signing in by emailed link
 
-## Roles
+Needs a [mailer](email.md) and the base URL above. The login takes an address and answers *Check
+your inbox* — the same answer for every address, so the form never confirms which ones have an
+account. A link is mailed only to an address that does, works **once**, and expires in **15
+minutes**; the database stores a hash of it, so a copy of the database is not a way in. A used or
+expired link lands back on the login saying so.
 
-Two, in the `user.role` column:
+## Continue with GitHub
 
-| Role | Can |
-|---|---|
-| `owner` | Everything: manage members, change settings, edit and publish |
-| `editor` | Edit, upload and publish. Cannot change what is editable, or who has an account |
+Needs `HANDOVER_BASE_URL`, and a GitHub OAuth app per origin — the callback URL is
+`<HANDOVER_BASE_URL>/admin/api/auth/callback/github`, and GitHub allows one per app, so a site
+you also run locally needs a second app for `http://localhost:4321`.
 
-Any other value — including an empty column — is treated as `editor`, because the narrower of
-the two is the safe reading of a row nothing recognises.
+```sh
+npx wrangler secret put GITHUB_CLIENT_ID
+npx wrangler secret put GITHUB_CLIENT_SECRET
+```
 
-## What is protected, and what is not
+Sign-up is closed here too, so GitHub only works when a `user` row **already carries the same
+email** GitHub reports as verified; it links to that row rather than making a new one. A GitHub
+account nobody invited lands back on the login with the message a dead link gets, and is not told
+whether the address is known here.
 
-Every request to `/admin/api/*` needs a session, except the login's own endpoints under
-`/admin/api/auth/*` — those are the way in, so nothing can sit in front of them. Handlers are
-given the signed-in `{ user, role }` and assert on it; none works it out again.
+Which of the two roles somebody has, and what each may do, is
+[Roles and permissions](roles.md).
 
-**The admin HTML and its JavaScript are public on purpose.** They hold no content — the shell
-renders the login form, and every byte of the site's data arrives through the API, behind the
-session. Do not put a gate in front of `/admin` itself.
+## Forgot password, and the account page
 
-**The sidebar is not a permission.** An editor is not offered *Members* or *Settings*, but
-hiding a link is presentation. Every route that owners alone may use asserts the role on the
-server as well; a screen that only filters the nav is not protected.
+*Forgot password?* mails a link to `/admin/reset` that lives for **an hour** and works once.
+Setting a new password there ends every session the account had, including the one that asked —
+which is the point, if the reason for the reset is that somebody else had it.
+
+Everyone has an account page at `/admin/account`: their display name, their email and role as
+facts, a password form, and their sessions with *Sign out everywhere*. Somebody who signed in
+with a link and has no password yet is offered one there instead of the password form — that is
+how an invited person gets one. Changing a password signs the other devices out.
 
 ## Signing in too often
 
-Password sign-in allows **3 attempts per 10 seconds** from one address, then answers `429` and
-the login says so. The counter lives in the `rate_limit` table in D1, so it is shared across the
-Worker's isolates rather than being per-isolate and meaningless. The address is read from
-`cf-connecting-ip`, which Cloudflare writes and a caller cannot send in.
+Password sign-in allows **3 attempts per 10 seconds** from one address, then answers `429` and the
+login says so; asking for an emailed link is limited separately, at 5 a minute. Both counters live
+in the `rate_limit` table in D1, so they are shared across the Worker's isolates rather than being
+per-isolate and meaningless. The address is read from `cf-connecting-ip`, which Cloudflare writes
+and a caller cannot send in.
 
-The session cookie is `HttpOnly`, `SameSite=Lax`, and `Secure` on any site served over https.
+The session cookie is `HttpOnly`, `SameSite=Lax`, and `Secure` on any site whose
+`HANDOVER_BASE_URL` is `https:` — so `http://localhost` still signs in.
 
 ## Signing out
 
@@ -93,38 +127,9 @@ There is no route that lets a stranger make an account:
 | Endpoint | Answers |
 |---|---|
 | `POST /admin/api/auth/sign-up/email` | `400`, always. Email/password sign-up is disabled outright |
+| `POST /admin/api/auth/sign-in/magic-link` | `200`, always — and mails nothing to an address with no account. Opening a link minted for one makes no user |
+| `GET /admin/api/auth/callback/github` | back to the login. A GitHub account with no matching row makes no user |
 | `POST /admin/api/auth/admin/create-user` | `401` with no session, `403` for an editor. This is how an owner will invite people |
 
 The status codes are Better Auth's and are not all `403`; what matters, and what the package's
 tests assert, is that **no row is created** on any of these paths.
-
-## Sending email
-
-The admin sends mail through whatever `mailer` in `cms.config.ts` names — Resend on a
-`RESEND_API_KEY`, or a function of your own ([Configuration](configuration.md#mailer)). Nothing
-in the login needs it yet; the emailed sign-in link does, and arrives with it.
-
-What is here is the check that proves a key before anything depends on it. An **owner** posts to
-it and the admin mails them at their own account's address:
-
-```sh
-curl -X POST https://your-site.example/admin/api/checks/email -b cookies.txt
-{"ok":true,"to":"you@your-site.com","id":"3f6b…"}
-```
-
-The recipient is never asked for. It is the address of whoever is signed in, so the button
-cannot be pointed at a stranger — and on a Resend account with no verified domain that is the
-only address it could reach anyway.
-
-| Answer | Means |
-|---|---|
-| `200` | It sent. `id` is the provider's own id for the message |
-| `403` | You are an editor. Test email is the owner's |
-| `503` | No mailer is configured, or its key is not set. The message names which |
-| `502` | The provider refused, in the provider's own words — an unverified sending domain reads as itself rather than as a number, and so does a placeholder address like `you@example.com`, which Resend rejects outright |
-
-## Not here yet
-
-Signing in by emailed link, *Continue with GitHub*, *Forgot password?* and the account page all
-need a mailer to be wired into the login or GitHub credentials, and arrive with them. Until then
-the login screen shows the email and password form and nothing that does not work.

@@ -1,7 +1,8 @@
 <script lang="ts">
+import Account from './Account.svelte';
 import Editor from './Editor.svelte';
 import EntryList from './EntryList.svelte';
-import Login from './Login.svelte';
+import Login, { type LoginMethods } from './Login.svelte';
 import Pending from './Pending.svelte';
 
 export interface Session {
@@ -10,7 +11,17 @@ export interface Session {
   role: 'owner' | 'editor';
 }
 
-let { session: signedIn, path }: { session: Session | null; path: string } = $props();
+let {
+  session: signedIn,
+  path,
+  query = '',
+  methods = { emailLink: false, github: false },
+}: {
+  session: Session | null;
+  path: string;
+  query?: string;
+  methods?: LoginMethods;
+} = $props();
 // svelte-ignore state_referenced_locally -- the prop is the initial value on purpose; the
 // shell reloads it itself after a sign-in or a sign-out
 let session = $state(signedIn);
@@ -81,7 +92,7 @@ const initial = $derived(
 </script>
 
 {#if !session}
-  <Login onlogin={loadSession} />
+  <Login {methods} {path} {query} onlogin={loadSession} />
 {:else}
 <div class="shell">
   <aside class="sidebar" aria-label="Main" inert={drawer}>
@@ -133,11 +144,13 @@ const initial = $derived(
       <span class="spacer"></span>
       <span class="pill pill-live"><span class="dot" aria-hidden="true"></span> Live</span>
       <div class="user-menu">
-        <span class="avatar" aria-hidden="true">{initial}</span>
-        <span class="label">
-          <span class="name">{session.user.name || session.user.email}</span>
-          <span class="role">{session.role === 'owner' ? 'Owner' : 'Editor'}</span>
-        </span>
+        <a class="btn" href="/admin/account" aria-current={path === '/admin/account' ? 'page' : undefined}>
+          <span class="avatar" aria-hidden="true">{initial}</span>
+          <span class="label">
+            <span class="name">{session.user.name || session.user.email}</span>
+            <span class="role">{session.role === 'owner' ? 'Owner' : 'Editor'}</span>
+          </span>
+        </a>
         <button class="btn" type="button" onclick={signOut}>Sign out</button>
       </div>
     </header>
@@ -164,6 +177,8 @@ const initial = $derived(
       {/await}
     {:else if listRoute}
       <EntryList collection={listRoute[1] ?? ''} onchanged={loadPending} />
+    {:else if path === '/admin/account'}
+      <Account user={session.user} role={session.role} onname={loadSession} />
     {:else if managePage}
       <main class="main">
         <h1>{managePage.label}</h1>

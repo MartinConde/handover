@@ -4,8 +4,10 @@ import { onRequest } from './middleware.js';
 
 // The Better Auth instance is the boundary here: what it answers is proven against a real D1
 // in core's auth.test.ts, and what this file tests is which requests ever get to ask it.
-let session: { user: { id: string; name: string; email: string; role: string | null } } | null =
-  null;
+let session: {
+  user: { id: string; name: string; email: string; role: string | null };
+  session: { id: string };
+} | null = null;
 const getSession = vi.fn(async () => session);
 vi.mock('./auth.js', () => ({ createAuth: () => ({ api: { getSession } }) }));
 
@@ -36,17 +38,26 @@ test("the login's own endpoints are reachable without a session", async () => {
 });
 
 test('a signed-in call passes through carrying the user and the role', async () => {
-  session = { user: { id: 'u1', name: 'Martin', email: 'martin@example.com', role: 'owner' } };
+  session = {
+    user: { id: 'u1', name: 'Martin', email: 'martin@example.com', role: 'owner' },
+    session: { id: 's1' },
+  };
   const { status, passed, locals } = await run('/admin/api/drafts');
   expect({ status, passed }).toEqual({ status: 200, passed: true });
+  // The session's own id rides along so the account page can mark one row "this device"
+  // without the browser ever being handed a session token.
   expect(locals.handover).toEqual({
     user: { id: 'u1', name: 'Martin', email: 'martin@example.com' },
     role: 'owner',
+    sessionId: 's1',
   });
 });
 
 test('a session whose row carries no role is an editor', async () => {
-  session = { user: { id: 'u2', name: 'Anna', email: 'anna@example.com', role: null } };
+  session = {
+    user: { id: 'u2', name: 'Anna', email: 'anna@example.com', role: null },
+    session: { id: 's2' },
+  };
   const { locals } = await run('/admin/api/drafts');
   expect((locals.handover as { role: string }).role).toBe('editor');
 });

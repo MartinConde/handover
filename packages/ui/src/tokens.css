@@ -90,6 +90,8 @@ button, input, textarea, select { font: inherit; color: inherit; }
   box-shadow: var(--shadow-chip);
 }
 .btn:hover { background: var(--surface-2); }
+a.btn { text-decoration: none; }
+
 .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); box-shadow: 0 6px 16px -8px rgba(198, 255, 61, 0.6); }
 .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 .btn-danger { background: var(--danger); border-color: var(--danger); color: var(--on-danger); }
@@ -509,3 +511,37 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .drift > .actions { display: flex; align-items: center; gap: var(--s-3); }
 .drift > .actions .left { font-size: var(--text-sm); color: var(--ink-2); margin-right: auto; }
 @media (max-width: 720px) { .drift .drift-cols { grid-template-columns: 1fr; } }
+
+/* A one-time prompt in accent ground, above the sections rather than inside them. */
+.suggestion { display: grid; gap: var(--s-3); padding: var(--s-4); border-radius: var(--radius-lg); background: var(--accent-soft); color: var(--ink); }
+.suggestion .actions { display: flex; gap: var(--s-2); }
+
+/* Account — one column of sections, each with its own heading and its own form, separated by a
+   rule rather than boxed into cards. */
+.settings { display: grid; max-width: 620px; }
+.settings-section { display: grid; gap: var(--s-4); padding: var(--s-6) 0; border-top: 1px solid var(--border); }
+.settings-section:first-child { border-top: 0; padding-top: 0; }
+.settings-section > header { display: grid; gap: var(--s-1); }
+.settings-section h2 { font-size: var(--text-lg); letter-spacing: var(--tracking-tight); font-weight: 600; }
+.settings-section > header p { font-size: var(--text-sm); color: var(--ink-2); }
+.settings-section .form { max-width: 420px; gap: var(--s-4); }
+.settings-section .actions { display: flex; gap: var(--s-2); }
+.main > .suggestion { max-width: 620px; margin-bottom: var(--s-8); }
+.main > .suggestion strong { display: block; margin-bottom: var(--s-1); }
+.main > .suggestion .form { max-width: 420px; gap: var(--s-4); }
+
+/* A value the screen shows but nobody edits here. Not a disabled input: a greyed-out field
+   invites clicking and then explains nothing. */
+.facts { display: grid; gap: var(--s-4); margin: 0; }
+.facts > div { display: grid; gap: var(--s-1); }
+.facts dt { font-size: var(--text-sm); font-weight: 500; }
+.facts dd { margin: 0; display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; color: var(--ink-2); }
+/* 12px is right where `.sub` is a fragment beside a name — a table row's email, a log row's
+   "EN, DE". Where it is a sentence it takes the sentence size. */
+.sub { font-size: var(--text-xs); color: var(--ink-2); }
+.facts .sub, .session-item .sub { font-size: var(--text-sm); }
+
+.session-list { display: grid; gap: var(--s-2); margin: 0; padding: 0; list-style: none; }
+.session-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); min-height: 44px; padding: var(--s-2) var(--s-3); border-radius: var(--radius); background: var(--surface-2); font-size: var(--text-sm); }
+.session-item .where { display: flex; align-items: center; gap: var(--s-2); font-weight: 500; }
+.session-item .sub { margin-left: auto; }

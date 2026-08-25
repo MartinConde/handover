@@ -117,12 +117,10 @@ from; the key is a secret and lives in the environment:
 mailer: { provider: 'resend', from: 'Your Site <hello@your-site.com>' },
 ```
 
-`'resend'` is the only provider so far, and it reads `RESEND_API_KEY`
-([Deploying](deploy.md#secrets)). `from` has to be on a domain verified at `resend.com/domains`;
-without one, the only sender that works is `onboarding@resend.dev`, which Resend delivers **only
-to the address the Resend account was created with** — enough to prove a key works, not enough
-to write to anyone else. Anything other than Resend is a function of your own, given the message
-and answering with the provider's id for it where there is one:
+`'resend'` is the only provider so far, and it reads `RESEND_API_KEY`. `from` has to be on a
+domain verified at `resend.com/domains` — [Sending email](email.md) has the whole of it, including
+what the admin sends and how to prove a key. Anything other than Resend is a function of your own,
+given the message and answering with the provider's id for it where there is one:
 
 ```ts
 mailer: async ({ to, subject, text, html }) => {

@@ -1,9 +1,10 @@
 import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
 import index from 'virtual:handover/index';
-import type { Db, EntryLocation, Form, GitClient, Mailer, Translate } from '@handover/core';
+import type { Db, EntryLocation, Form, GitClient, Translate } from '@handover/core';
 import {
   AUTH_BASE_PATH,
+  accountFacts,
   addressError,
   blobSha,
   collectionEntries,
@@ -33,7 +34,6 @@ import {
   recordOffer,
   recordRename,
   renameEntry,
-  resendMailer,
   resolveDrift,
   saveDraft,
   saveTranslated,
@@ -44,7 +44,7 @@ import {
   translatableText,
 } from '@handover/core';
 import type { APIRoute } from 'astro';
-import { createAuth } from '../auth.js';
+import { createAuth, mailer } from '../auth.js';
 import { formSchema } from '../index.js';
 import { entryProblems } from '../problems.js';
 
@@ -78,16 +78,6 @@ function translator(): Translate | undefined {
   return config.i18n.translate ?? (key ? deeplTranslate('default', key) : undefined);
 }
 
-// Who sends a message: the site's own function, or the provider it named on the key the
-// Worker holds. Neither is an ordinary state of a site — a site with no mailer is offered no
-// test email at all — so it is asked for where it is needed rather than resolved on the way.
-function mailer(): Mailer | undefined {
-  const configured = config.mailer;
-  if (typeof configured === 'function') return configured;
-  const key = (env as Record<string, string | undefined>).RESEND_API_KEY;
-  return configured && key ? resendMailer('default', key, configured.from) : undefined;
-}
-
 /**
  * The one message the admin sends on its own account: proof to whoever pasted the key that it
  * works. It goes to the person who asked for it and to nobody else — a recipient the caller
@@ -119,6 +109,43 @@ async function testEmail(session: App.Locals['handover']): Promise<Response> {
     // The provider's own refusal, which names the rule that was broken — an unverified sending
     // domain above all — and is the whole use of the button.
     return Response.json({ error: (err as Error).message }, { status: 502 });
+  }
+}
+
+/**
+ * The signed-in person's own account, and the only two facts the page cannot work out for
+ * itself: whether a password exists, and where else they are signed in. Everything else it
+ * does — the name, changing a password, signing out everywhere — is a Better Auth endpoint
+ * the browser calls directly.
+ */
+async function account(session: App.Locals['handover']): Promise<Response> {
+  if (!session) return new Response('Unauthorized', { status: 401 });
+  return Response.json(await accountFacts(db(), session.user.id, session.sessionId));
+}
+
+/**
+ * The first password for somebody who has never had one — an invited user who arrived by an
+ * emailed link. Better Auth's `setPassword` is server-only, so reaching it needs a route; it
+ * refuses when a password already exists rather than becoming a way past `/change-password`,
+ * which asks for the old one.
+ */
+async function setPassword(
+  request: Request,
+  url: URL,
+  ctx: App.Locals['cfContext'],
+): Promise<Response> {
+  const { newPassword } = (await request.json()) as { newPassword?: unknown };
+  if (typeof newPassword !== 'string')
+    return Response.json({ error: 'No password was sent' }, { status: 400 });
+  try {
+    await createAuth(url, ctx).api.setPassword({ body: { newPassword }, headers: request.headers });
+    return Response.json({ ok: true });
+  } catch (err) {
+    // Better Auth says which rule was broken — too short, or already set — and its sentence is
+    // what the account page shows. Anything without a code is not its refusal and is not ours.
+    const refusal = (err as { body?: { code?: string; message?: string } }).body;
+    if (!refusal?.code) throw err;
+    return Response.json({ error: refusal.message ?? refusal.code }, { status: 400 });
   }
 }
 
@@ -784,7 +811,8 @@ const TRANSLATE = /^translate\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 const mounted = (pathname: string) => pathname.startsWith(`${AUTH_BASE_PATH}/`);
 
 export const GET: APIRoute = async ({ params, request, url, locals }) => {
-  if (mounted(url.pathname)) return createAuth(url).handler(request);
+  if (mounted(url.pathname)) return createAuth(url, locals.cfContext).handler(request);
+  if (params.path === 'account') return account(locals.handover);
   if (params.path === 'ping') {
     return Response.json({
       ok: true,
@@ -938,8 +966,9 @@ async function answering(work: () => Promise<Response>): Promise<Response> {
 }
 
 export const POST: APIRoute = async ({ params, request, url, locals }) => {
-  if (mounted(url.pathname)) return createAuth(url).handler(request);
+  if (mounted(url.pathname)) return createAuth(url, locals.cfContext).handler(request);
   if (params.path === 'checks/email') return testEmail(locals.handover);
+  if (params.path === 'account/set-password') return setPassword(request, url, locals.cfContext);
   if (params.path === 'publish') return answering(publish);
   const filling = params.path?.match(TRANSLATE);
   if (filling)

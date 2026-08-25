@@ -214,8 +214,23 @@ vi.mock('cloudflare:workers', () => ({
     DB: {},
   },
 }));
+// Better Auth's own `setPassword` is proven against a real database in core's auth.test.ts;
+// what these route tests are about is what this file does with its answers.
+let setPassword: (args: unknown) => Promise<unknown> = async () => ({ status: true });
+vi.mock('../auth.js', async (original) => ({
+  ...(await original<typeof import('../auth.js')>()),
+  createAuth: () => ({ api: { setPassword: (args: unknown) => setPassword(args) } }),
+}));
+let facts = { hasPassword: true, sessions: [] as unknown[] };
+// Which user and which session the route asked about — the two values that must come from the
+// session and never from the request, or one person could read another's account.
+let asked: unknown[] = [];
 vi.mock('@handover/core', async (original) => ({
   ...(await original<typeof import('@handover/core')>()),
+  accountFacts: async (..._args: unknown[]) => {
+    asked = _args.slice(1);
+    return facts;
+  },
   createGitClient: () => ({ getFile, getHead, publish }),
   openDb: () => ({}),
   loadDraft: async (_site: string, _db: unknown, path: string) => rows[path] ?? draft,
@@ -241,6 +256,9 @@ afterEach(() => {
   translator = translate;
   deeplKey = undefined;
   siteMailer = undefined;
+  setPassword = async () => ({ status: true });
+  facts = { hasPassword: true, sessions: [] };
+  asked = [];
   resendKey = undefined;
   sent.length = 0;
   for (const path of Object.keys(files)) delete files[path];
@@ -1802,4 +1820,65 @@ test('a publish marks a translation from the language the entry is written in', 
     path: 'src/content/pages/de/impressum.yaml',
   });
   expect(await sourceOf('src/content/pages/de/impressum.yaml')).toBe(undefined);
+});
+
+test('the account route refuses a caller with no session', async () => {
+  const res = await GET(ctx('account', undefined, {}));
+  expect(res.status).toBe(401);
+});
+
+// The path carries no id, and neither may the answer: an account page that read a user from
+// the request would be one URL away from being everybody's account page.
+test("the account route reads the session's own user, never the request's", async () => {
+  const url = new URL('https://x/admin/api/account?userId=u9&sessionId=s9');
+  const res = await GET({
+    params: { path: 'account' },
+    url,
+    locals: { handover: { ...owner, sessionId: 's1' } },
+  } as unknown as APIContext);
+
+  expect(res.status).toBe(200);
+  expect(asked).toEqual(['u1', 's1']);
+});
+
+const setting = (body: string) =>
+  POST(
+    ctx(
+      'account/set-password',
+      new Request('https://x/admin/api/account/set-password', { method: 'POST', body }),
+      { handover: { ...owner, sessionId: 's1' } },
+    ),
+  );
+
+test('setting a password with nothing in the body says so', async () => {
+  const res = await setting('{}');
+  expect(res.status).toBe(400);
+  expect(((await res.json()) as { error: string }).error).toBe('No password was sent');
+});
+
+// The account page shows the sentence, so which rule was broken has to survive the route.
+test("a refused password comes back in Better Auth's own words", async () => {
+  setPassword = async () => {
+    throw { body: { code: 'PASSWORD_TOO_SHORT', message: 'Password too short' } };
+  };
+  const res = await setting(JSON.stringify({ newPassword: 'beach' }));
+  expect(res.status).toBe(400);
+  expect(((await res.json()) as { error: string }).error).toBe('Password too short');
+});
+
+test('a password Better Auth accepts answers ok', async () => {
+  const res = await setting(JSON.stringify({ newPassword: 'a-brand-new-password' }));
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ ok: true });
+});
+
+// A throw with no code is not Better Auth refusing — it is something broken, and answering
+// `400` would tell the person at the keyboard to fix their password.
+test('an error that is not a refusal is not turned into one', async () => {
+  setPassword = async () => {
+    throw new Error('D1 is unreachable');
+  };
+  await expect(setting(JSON.stringify({ newPassword: 'a-brand-new-password' }))).rejects.toThrow(
+    'D1 is unreachable',
+  );
 });

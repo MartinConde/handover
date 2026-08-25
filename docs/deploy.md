@@ -101,7 +101,20 @@ Optional, each turning on the feature that reads it:
 |---|---|
 | `GITHUB_BRANCH` | the live branch, if it is not `main` |
 | `DEEPL_API_KEY` | [machine translation](translating.md#a-machines-first-draft) from the admin — a free key ends in `:fx` and is recognised as one. Without it the translate buttons are not drawn |
-| `RESEND_API_KEY` | sending mail, when `cms.config.ts` says `mailer: { provider: 'resend', … }` ([Configuration](configuration.md#mailer)). Verify the sending domain at `resend.com/domains` and put an address on it in `from` — until you do, Resend only delivers to the address its own account was created with |
+| `RESEND_API_KEY` | sending mail, when `cms.config.ts` says `mailer: { provider: 'resend', … }` ([Sending email](email.md)). Verify the sending domain at `resend.com/domains` and put an address on it in `from` — until you do, Resend only delivers to the address its own account was created with |
+| `GITHUB_CLIENT_ID` | *Continue with GitHub* on the login. An OAuth app whose callback URL is `<HANDOVER_BASE_URL>/admin/api/auth/callback/github`; one app per origin, so local dev needs its own ([Accounts](auth.md#continue-with-github)) |
+| `GITHUB_CLIENT_SECRET` | the same app's client secret. Without both, GitHub is not offered |
+
+One more is a **var rather than a secret**, because an origin is not private — and without it the
+emailed sign-in link and GitHub are not offered at all:
+
+```jsonc
+// wrangler.jsonc
+"vars": { "HANDOVER_BASE_URL": "https://your-site.example" }
+```
+
+It is what an emailed link points at, and it is stated rather than read off the request so a
+forged `Host` cannot decide where a sign-in link goes ([Accounts](auth.md#2-say-where-the-site-is)).
 
 `/admin/api` requests fail with an explicit error naming the missing secret. For local
 `astro dev`, the same names go in `.dev.vars`.

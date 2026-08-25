@@ -1,5 +1,12 @@
-export type { Auth, AuthConfig, Role } from './auth.js';
-export { AUTH_BASE_PATH, authOptions, createAuth, roleOf } from './auth.js';
+export type { AccountFacts, Auth, AuthConfig, Role } from './auth.js';
+export {
+  AUTH_BASE_PATH,
+  accountFacts,
+  authOptions,
+  createAuth,
+  roleOf,
+  userExists,
+} from './auth.js';
 export type {
   AstroContent,
   ContentEntry,

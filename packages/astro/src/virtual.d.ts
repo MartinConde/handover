@@ -17,9 +17,11 @@ declare module 'cloudflare:workers' {
   export const env: Record<string, unknown>;
 }
 
-// What the session middleware puts in front of every handler under /admin/api/.
+// What the session middleware puts in front of every handler under /admin/api/, and what
+// @astrojs/cloudflare puts there before either of us — `cfContext` is its `ExecutionContext`.
 declare namespace App {
   interface Locals {
     handover?: import('./auth.js').Session;
+    cfContext?: import('./auth.js').CloudflareContext;
   }
 }

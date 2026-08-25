@@ -1,5 +1,6 @@
 import assets from 'virtual:handover/ui';
 import type { APIRoute } from 'astro';
+import { loginMethods } from '../auth.js';
 
 const ASSET_PREFIX = '_assets/';
 const TYPES: Record<string, string> = { js: 'text/javascript', css: 'text/css' };
@@ -13,7 +14,10 @@ const tags = Object.keys(assets)
   )
   .join('\n    ');
 
-const shell = `<!doctype html>
+// The one value in the shell that is not the same on every site. It is two booleans, so it
+// carries nothing a signed-out visitor could not work out from the buttons anyway — and it
+// saves the login a request it has no session to make.
+const shell = (methods: string) => `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8">
@@ -23,7 +27,7 @@ const shell = `<!doctype html>
     ${tags}
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app" data-methods='${methods}'></div>
   </body>
 </html>
 `;
@@ -42,5 +46,7 @@ export const GET: APIRoute = ({ params }) => {
       },
     });
   }
-  return new Response(shell, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+  return new Response(shell(JSON.stringify(loginMethods())), {
+    headers: { 'content-type': 'text/html; charset=utf-8' },
+  });
 };
