@@ -2924,3 +2924,106 @@ test('a publish is checked against the files it will write, not the ones on hold
   expect(res.status).toBe(200);
   expect(publishDrafts).toHaveBeenCalled();
 });
+
+// Selective publish. The body names entries and the server reads its own rows for them: the
+// checks and the commit are made of the same set, and neither is made of what a browser sent.
+const publishing = (body: string, session: Record<string, unknown> = owner) =>
+  ctx('publish', new Request('https://x/admin/api/publish', { method: 'POST', body }), {
+    handover: session,
+  });
+
+test('a publish of a chosen set reads and commits exactly those entries', async () => {
+  publishDrafts.mockClear();
+  readyDrafts.mockClear();
+
+  const res = await POST(publishing(JSON.stringify({ entries: ['listings/mill-house'] })));
+
+  expect(res.status).toBe(200);
+  expect(readyDrafts).toHaveBeenCalledWith('default', expect.anything(), ['listings/mill-house']);
+  expect(publishDrafts.mock.calls[0]?.[4]).toEqual(['listings/mill-house']);
+});
+
+// What the drawer sends: a POST with no body at all, which is not the same request as one
+// carrying an empty string.
+test('a publish with no body is still every entry that is ready', async () => {
+  publishDrafts.mockClear();
+  readyDrafts.mockClear();
+
+  const res = await POST(
+    ctx('publish', new Request('https://x/admin/api/publish', { method: 'POST' }), {
+      handover: owner,
+    }),
+  );
+
+  expect(res.status).toBe(200);
+
+  expect(readyDrafts).toHaveBeenCalledWith('default', expect.anything(), undefined);
+  expect(publishDrafts.mock.calls[0]?.[4]).toBe(undefined);
+});
+
+test('a publish that released a hold logs it against the person who set it', async () => {
+  heldDrafts.mockResolvedValueOnce({ 'listings/mill-house': { id: 'u2', name: 'Anna Berg' } });
+  publishDrafts.mockImplementationOnce(async () => ({
+    commit_sha: 'def456',
+    paths: ['src/content/listings/en/mill-house.yaml'],
+    released: ['listings/mill-house'],
+  }));
+
+  await POST(publishing(JSON.stringify({ entries: ['listings/mill-house'] })));
+
+  expect(logged).toEqual([
+    {
+      userId: 'u1',
+      kind: 'hold-released',
+      subject: 'src/content/listings/en/mill-house.yaml',
+      detail: { from: 'Anna Berg' },
+    },
+    {
+      userId: 'u1',
+      kind: 'publish',
+      subject: 'src/content/listings/en/mill-house.yaml',
+      detail: { files: 1 },
+      commitSha: 'def456',
+    },
+  ]);
+});
+
+// The two refusals that are somebody else's work rather than the clicker's own drafts, and the
+// only two a publish spends a write on.
+test('a file that changed in the repository is logged as a conflict', async () => {
+  const { DraftConflictError } = await import('@handover/core');
+  publishDrafts.mockImplementationOnce(async () => {
+    throw new DraftConflictError(['src/content/listings/en/mill-house.yaml']);
+  });
+
+  const res = await POST(publishing(''));
+
+  expect(res.status).toBe(409);
+  expect(logged).toEqual([
+    {
+      userId: 'u1',
+      kind: 'publish-conflict',
+      subject: 'src/content/listings/en/mill-house.yaml',
+      detail: { files: 1 },
+    },
+  ]);
+});
+
+test('a branch that moved under the commit is logged as a failed publish', async () => {
+  const { RefMovedError } = await import('@handover/core');
+  publishDrafts.mockImplementationOnce(async () => {
+    throw new RefMovedError('main moved past abc123');
+  });
+
+  const res = await POST(publishing(''));
+
+  expect(res.status).toBe(409);
+  expect(logged).toEqual([
+    {
+      userId: 'u1',
+      kind: 'publish-failed',
+      subject: null,
+      detail: { files: 1, reason: 'ref-moved' },
+    },
+  ]);
+});

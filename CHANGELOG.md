@@ -4,6 +4,29 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **A publish can be of one entry or a chosen set.** `POST /admin/api/publish` now takes
+  `{ "entries": ["listings/mill-house"] }` and commits those entries — every language of each,
+  with the redirect rules they owe; the entries left out keep theirs until they are published
+  themselves. No body still publishes everything pending that is not on hold. An entry that is
+  **on hold** goes out when it is named, which releases the hold and logs `hold-released`
+  against whoever set it. The drawer's checkboxes that will send this arrive next
+  ([Drafts and publishing](docs/publishing.md#the-endpoints)).
+
+- **Your own publish no longer looks like a conflict.** The rows a publish commits are re-seeded
+  on that commit rather than thrown away — on the bytes it actually wrote, so a translation the
+  publish stamped on the way past does not report a conflict with itself. Carry on typing in an
+  entry after publishing it and the next publish goes through; a commit somebody *else* made is
+  still caught. Rows are kept until the build carrying them is live, so a title you published
+  reads right in the entry list straight away
+  ([Working together](docs/working-together.md#your-own-publish-is-not-a-conflict)).
+
+- **A publish that made no commit is in the activity log.** `publish-conflict` when a file had
+  changed in the repository since it was opened, `publish-failed` when the repository turned the
+  commit down (`detail.reason` is `ref-moved` when another change got there first), and both rows
+  expand on the activity screen to say what happened. A draft the schema is not done with is not
+  a row — that is answered to whoever pressed the button. `lock-takeover` and `hold-released` read
+  as sentences now instead of naming their kind ([Activity log](docs/activity.md)).
+
 - **Take over an entry somebody else is editing.** The *Being edited by…* banner now carries
   **Take over**, which confirms first and then moves the lock: the entry is re-read, so the form
   opens on what the other person had typed — there is one shared draft and nothing is copied or

@@ -395,8 +395,11 @@ export async function recordOffer(
 
 /**
  * The rows the entry list lays over the built index, dropping the ones the build has caught up
- * with on the way: what a rename or a delete leaves behind is about a path being there or not,
- * so the index having it is the whole test.
+ * with on the way. Only a row that says a path has **gone** is dropped here: that much the
+ * index answers on its own, since it is about the path being there or not. A row carrying bytes
+ * the repository already has waits for the build status instead — clearing it the moment a
+ * title agrees would let the next autosave take whatever HEAD is by then as its base, and
+ * somebody else's commit would go in unnoticed.
  */
 export async function overlayRows(
   siteId: string,
@@ -405,7 +408,7 @@ export async function overlayRows(
 ): Promise<ContentFile[]> {
   const rows = await db.select().from(drafts).where(eq(drafts.siteId, siteId));
   const settled = rows.filter(
-    (r) => r.publishedSha && indexHasPath(index, r.path) === (r.contents !== ''),
+    (r) => r.publishedSha && r.contents === '' && !indexHasPath(index, r.path),
   );
   if (settled.length)
     await db.delete(drafts).where(
@@ -479,11 +482,28 @@ export async function heldDrafts(
 }
 
 /**
- * What a batch publish commits: the pending drafts, minus every file of an entry somebody
- * marked "Not ready yet". Its redirect rules wait with it — they are on the same rows.
+ * What a publish commits. With nothing chosen it is every pending draft minus the files of an
+ * entry somebody marked "Not ready yet"; with a chosen set it is the pending drafts of exactly
+ * those entries, hold and all — picking a held entry is how a hold is released, and the entries
+ * left out wait with their redirect rules, which are on their own rows.
+ *
+ * `entries` are entry keys, `"listings/mill-house"`: the unit of selection is the entry and
+ * never the file, since one entry's languages share a structure and are committed together.
  */
-export async function readyDrafts(siteId: string, db: Db): Promise<Draft[]> {
-  const [rows, held] = await Promise.all([pendingDrafts(siteId, db), heldDrafts(siteId, db)]);
+export async function readyDrafts(
+  siteId: string,
+  db: Db,
+  entries?: readonly string[],
+): Promise<Draft[]> {
+  const rows = await pendingDrafts(siteId, db);
+  if (entries) {
+    const chosen = new Set(entries);
+    return rows.filter((row) => {
+      const entry = entryKey(row.path);
+      return entry !== undefined && chosen.has(entry);
+    });
+  }
+  const held = await heldDrafts(siteId, db);
   return rows.filter((row) => {
     const entry = entryKey(row.path);
     return !entry || !(entry in held);
@@ -521,19 +541,27 @@ export type SourceOf = (
 ) => Promise<{ locale: string; path: string; form: Form } | undefined>;
 
 /**
- * Commit every pending draft as one commit and clear those rows — every one an entry on hold
- * is not keeping back. The parent is HEAD, so
+ * Commit drafts as one commit and re-seed those rows on it. With no `entries` that is every
+ * pending draft an entry on hold is not keeping back; with them it is the chosen entries,
+ * whose holds this publish releases. The parent is HEAD, so
  * `base_blob` is what says whether a draft is still safe to write: it is the file as the
  * editor loaded it, and a file that has moved on since is somebody else's work. One
  * mismatch refuses the whole set — the ref update is all-or-nothing anyway.
+ *
+ * **The rows are re-seeded rather than deleted**, on the bytes the commit actually wrote: a
+ * translation is stamped on the way past, so seeding from what the row stored would report a
+ * conflict with this very publish next time. `published_sha` is what then keeps them out of
+ * the drawer and out of the next commit, and what says an editor whose tab is still open
+ * keeps the base this publish gave them rather than silently taking whatever HEAD is by then.
  */
 export async function publishDrafts(
   siteId: string,
   db: Db,
   git: Pick<GitClient, 'getFile' | 'getHead' | 'publish'>,
   sourceOf?: SourceOf,
-): Promise<{ commit_sha: string; paths: string[] } | undefined> {
-  const rows = await readyDrafts(siteId, db);
+  entries?: readonly string[],
+): Promise<{ commit_sha: string; paths: string[]; released: string[] } | undefined> {
+  const rows = await readyDrafts(siteId, db, entries);
   if (!rows.length) return undefined;
   const base_sha = await git.getHead();
   const current = await Promise.all(rows.map((r) => git.getFile(r.path)));
@@ -542,7 +570,7 @@ export async function publishDrafts(
     .map((r) => r.path);
   if (conflicts.length) throw new DraftConflictError(conflicts);
   const paths = rows.map((r) => r.path);
-  const files: PublishFile[] = await Promise.all(
+  const written = await Promise.all(
     rows.map(async ({ path, contents }, i) => {
       const source = await sourceOf?.(path);
       if (!source || source.path === path) return { path, contents };
@@ -563,13 +591,39 @@ export async function publishDrafts(
       return { path, contents: marked };
     }),
   );
+  const files: PublishFile[] = [...written];
   // What the address changes in this set owe. Appended here rather than committed when the
-  // address was typed: the old URL is live until now, and one commit carries both.
+  // address was typed: the old URL is live until now, and one commit carries both. The rules of
+  // an entry nobody chose are on its own rows and wait there with it.
   const rules = rows.flatMap((r) => r.pendingRedirects ?? []);
   if (rules.length) files.push(await appendRedirects(siteId, git, rules));
   const { commit_sha } = await git.publish(files, { base_sha, message: commitMessage(paths) });
-  await db.delete(drafts).where(and(eq(drafts.siteId, siteId), inArray(drafts.path, paths)));
-  return { commit_sha, paths };
+  // The blobs first: a drizzle statement is thenable, so awaiting anything beside one inside
+  // the map would run it there instead of in the batch.
+  const seeded = await Promise.all(
+    written.map(async (file) => ({ ...file, blob: await blobSha(file.contents) })),
+  );
+  const writes = seeded.map(({ path, contents, blob }) =>
+    db
+      .update(drafts)
+      .set({
+        contents,
+        baseSha: commit_sha,
+        baseBlob: blob,
+        publishedSha: commit_sha,
+        // A hold this publish went through is over: the entry it was keeping back is out.
+        heldBy: null,
+        // The rules are in the commit now; leaving them on the row writes them again.
+        pendingRedirects: null,
+      })
+      .where(and(eq(drafts.siteId, siteId), eq(drafts.path, path))),
+  );
+  const [first, ...rest] = writes;
+  if (first) await db.batch([first, ...rest]);
+  const released = [
+    ...new Set(rows.filter((r) => r.heldBy).flatMap((r) => entryKey(r.path) ?? [])),
+  ];
+  return { commit_sha, paths, released };
 }
 
 /**

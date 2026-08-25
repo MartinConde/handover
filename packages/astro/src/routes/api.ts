@@ -1338,19 +1338,30 @@ async function driftedPaths(paths: string[]): Promise<string[]> {
 }
 
 /**
- * One commit for every draft that differs from the repository, then the rows are gone:
- * nothing keeps them, since the next open reads the file the publish just wrote.
+ * One commit, of every draft that differs from the repository or of the entries the body names.
+ * The rows it committed are re-seeded on it rather than deleted, so an editor who carries on
+ * typing is measured against what was published and not against whatever HEAD is by then.
  *
  * The schema decides here rather than at every keystroke, so a blank new entry cannot commit
  * a file the site's own content schema rejects and break the build behind it. The set is read
  * again inside publishDrafts; a draft written between the two reads is a window this phase
  * accepts, since the entry it belongs to is the one whose tab is doing the publishing.
  */
-async function publish(session: App.Locals['handover']): Promise<Response> {
+async function publish(request: Request, session: App.Locals['handover']): Promise<Response> {
   const database = db();
-  // Not `pendingDrafts`: an entry somebody is holding back is not in this commit, so it is not
-  // this commit's job to hold it to the schema either.
-  const pending = await readyDrafts('default', database);
+  // The drawer's Publish sends no body at all, which is not a parse failure but is read as one.
+  const body = (await request.json().catch(() => undefined)) as { entries?: unknown } | undefined;
+  // The entries this publish is of, or nothing for all of them. Anything that is not a string is
+  // not an entry key and would only ever match nothing.
+  const chosen = Array.isArray(body?.entries)
+    ? body.entries.filter((e): e is string => typeof e === 'string')
+    : undefined;
+  // The same set the commit will be made of, held to the schema before anything is written: an
+  // entry nobody chose is not in this commit, so it is not this commit's job to hold it to the
+  // schema either — and a held entry that *was* chosen is, since it is going out.
+  const pending = await readyDrafts('default', database, chosen);
+  // Who was holding what, read while the holds are still there: the publish releases them.
+  const holders = chosen?.length ? await heldDrafts('default', database) : {};
   const unready = pending.filter((row) => {
     const schema = schemaFor(row.path);
     return schema && row.contents
@@ -1386,7 +1397,38 @@ async function publish(session: App.Locals['handover']): Promise<Response> {
       { status: 409 },
     );
   }
-  const result = await publishDrafts('default', database, gitClient(), sourceOf);
+  let result: Awaited<ReturnType<typeof publishDrafts>>;
+  try {
+    result = await publishDrafts('default', database, gitClient(), sourceOf, chosen);
+  } catch (err) {
+    // A publish the repository refused is somebody else's work getting in the way of this one —
+    // the file that moved, or the branch that did — and that is what an owner reads the log for.
+    // A schema or a drift refusal is not: it is the state of this person's own drafts, and it is
+    // answered to them in the same response.
+    const conflict = err instanceof DraftConflictError;
+    await logActivity('default', database, {
+      userId: session?.user.id,
+      kind: conflict ? 'publish-conflict' : 'publish-failed',
+      // One file is an entry somebody can open; several are a list the 409 already carries.
+      subject: conflict && err.paths.length === 1 ? (err.paths[0] ?? null) : null,
+      detail: conflict
+        ? { files: err.paths.length }
+        : { files: pending.length, reason: err instanceof RefMovedError ? 'ref-moved' : 'refused' },
+    });
+    throw err;
+  }
+  // A hold this publish went through is released, and that is the half the person who set it
+  // would want to read about afterwards — the same event the toggle writes.
+  for (const entry of result?.released ?? []) {
+    const [collection = '', slug = ''] = entry.split('/');
+    const from = holders[entry]?.name;
+    await logActivity('default', database, {
+      userId: session?.user.id,
+      kind: 'hold-released',
+      subject: await entrySubject(collection, slug),
+      detail: from ? { from } : null,
+    });
+  }
   // Only a commit is an event. A Publish click with nothing pending is not one, and spending a
   // D1 write on it is how one busy editor costs a site its day's budget.
   if (result?.commit_sha) {
@@ -1430,7 +1472,7 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   if (roled) return setMemberRole(roled[1] ?? '', request, url, locals.cfContext, locals.handover);
   const resent = params.path?.match(MEMBER_INVITE);
   if (resent) return resendInvite(resent[1] ?? '', request, url, locals.cfContext, locals.handover);
-  if (params.path === 'publish') return answering(() => publish(locals.handover));
+  if (params.path === 'publish') return answering(() => publish(request, locals.handover));
   const beat = params.path?.match(LOCK);
   if (beat) {
     const body = (await request.json().catch(() => undefined)) as { take?: unknown } | undefined;

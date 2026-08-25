@@ -13,7 +13,7 @@ first sign-in onwards.
 | Group | What lands there |
 |---|---|
 | Accounts | `login` (by password, by emailed link or through GitHub) · `invite` · `role-change` · `member-removed` · `password-set` (a first one, a change or a reset) |
-| Publishing | `publish`, with the commit it made and how many files were in it · `lock-takeover`, naming who the entry was taken from · `hold-released` |
+| Publishing | `publish`, with the commit it made and how many files were in it · `publish-conflict`, when a file had changed in the repository since it was opened · `publish-failed`, when the repository turned the commit down · `lock-takeover`, naming who the entry was taken from · `hold-released` |
 | System | `mail-failed` — a message the provider would not take |
 
 **Per-field edits are not logged.** Typing in the editor autosaves every couple of seconds; a
@@ -67,6 +67,17 @@ reads as *Yesterday* from 01:00 and not as *2 days ago*. The exact instant is in
 `<time datetime>` and in the tooltip; it is not spoken by a screen reader, which reads the
 words.
 
+**A publish that made no commit is a row too, and it expands.** The two that are recorded are
+the two that are somebody else's work rather than your own drafts: `publish-conflict`, where a
+file had changed in the repository since it was opened, and `publish-failed`, where the
+repository would not take the commit — `detail.reason` is `ref-moved` when another change got
+there first. Both rows open on a sentence saying what happened and what to do about it; nothing
+was written either way. A publish refused because a draft is missing something its schema needs
+is **not** a row: that is answered to whoever pressed the button, in the same response.
+
+A hold that a publish took off is logged as `hold-released` the same way the toggle logs it,
+with `detail.from` naming whoever had set it.
+
 **A `publish` of one file names the entry and links to it.** A commit with more than one file
 in it says how many instead, since there is no single entry to open. Either way the row carries
 the first seven characters of the commit, which is how the log and git are lined up by hand.
@@ -87,7 +98,7 @@ again from the newest — the cursor belongs to the query that produced it.
 
 **A kind with no sentence of its own still gets a row.** Kinds arrive with the features that
 write them, and the screen names one it does not recognise rather than throwing:
-*Anna Berg — lock-takeover contact EN*. Adding the sentence is one line beside the others.
+*Anna Berg — entry-rename contact EN*. Adding the sentence is one line beside the others.
 
 ## Reading it from your own code
 

@@ -86,12 +86,19 @@ The top bar says how many files are waiting ("3 unpublished changes"); the butto
 the **pending-changes drawer**, which lists them and publishes them:
 
 - **Everything pending goes out together**, in one commit — except an entry somebody is
-  holding back, below. There is no per-file choice yet — picking what ships arrives with
-  the checkboxes in a later release
+  holding back, below. A publish can also be of **one entry or a chosen set**: the endpoint
+  takes the entries it is of, and the drawer's checkboxes for picking them arrive in a later
+  release
+- **The unit is the entry, never the file.** Choosing an entry publishes every language of
+  it: a block added in English is added to the German file in the same write, and the two
+  have to land together. The redirect rules an entry owes travel with it, and the entries
+  left out keep theirs until they are published themselves
 - The commit is the stored bytes, not the form: whatever the drawer lists is exactly what
   lands in the repository
-- The rows are deleted once the commit succeeds, so reopening an entry reads the file that
-  was just written
+- The rows are kept once the commit succeeds and re-seeded on it, which is what makes the
+  next publish of an entry somebody is still editing not look like a conflict with this one
+  ([Working together](working-together.md#your-own-publish-is-not-a-conflict)). They are
+  cleared later, when the build carrying them is live
 - **A file the schema is not done with is refused the same way**, marked *Not ready to
   publish*. It has no button in the drawer: open the entry and fill in what is marked
 - **A file somebody changed in the repository is refused too**, and the whole publish
@@ -121,7 +128,9 @@ the status in the entry header.
 - A held entry is **not checked** either — a half-written draft somebody is holding back
   does not refuse anybody else's publish for what its schema is still missing
 - The flag is stored on the entry's draft rows, so **discarding or publishing the entry
-  clears it** along with the draft
+  clears it**: an entry named in a publish goes out whether it is held or not, and the hold
+  comes off with it, logged as `hold-released` against whoever set it. That is what makes
+  the hold a courtesy rather than a lock — see below
 - It is a courtesy, not a permission: anybody who can open the entry can turn it off, and
   that is logged as `hold-released` ([Activity log](activity.md)). A
   [take-over](working-together.md#take-over) does not touch it — the new holder inherits
@@ -337,11 +346,18 @@ GET /admin/api/drafts                       →  { "files": [{ "path", "updated_
 The files waiting to be published, newest first — the drawer's list.
 
 ```
-POST /admin/api/publish                     →  { "commit_sha", "paths" }
+POST /admin/api/publish   { "entries": ["listings/mill-house"] }  →  { "commit_sha", "paths", "released" }
 ```
 
-No body: the server publishes what it has stored. `paths` is what went into the commit,
-and is empty when there was nothing to publish. `409` when a file changed in the
+Publishes the entries the body names, or everything pending that is not on hold when there
+is no body. An entry is `collection/name` — the same key for every language, since the
+languages of one entry are published together — and an entry that is **on hold** goes out
+when it is named, which releases the hold. Naming an entry with nothing pending, or passing
+an empty list, publishes nothing and is not an error.
+
+The body never carries content: what is committed is what the server has stored, and this
+says only which of it. `paths` is what went into the commit, empty when there was nothing to
+publish, and `released` names the entries whose hold this publish took off. `409` when a file changed in the
 repository since its draft was loaded — the body is `{ "error", "paths" }`, naming those
 files so the drawer can mark them and offer the way out — or when the branch moved while
 the commit was being written, which answers with a plain sentence and no paths. `422`
@@ -368,12 +384,12 @@ without a restart.
 
 Two consequences worth knowing:
 
-- Between a commit and the build that follows it the index is one commit behind. A rename
-  or a delete is still right in the list straight away: both leave a row saying what the
-  commit did to that file, and the row is dropped by the first list after the build has
-  caught up. A **publish** is the one that waits — its rows are cleared with the commit, so
-  until the site has rebuilt a title you published still reads as the old one, and an entry
-  you have just created is not in the list at all
+- Between a commit and the build that follows it the index is one commit behind, and the
+  draft rows are what covers the gap: a rename, a delete and a publish all leave a row
+  saying what the commit did, so the list reads right straight away. A row that says a path
+  has **gone** is dropped by the first list after the build has caught up; the rest are kept
+  until the build carrying them is live, since a row is also what an editor's open tab
+  publishes against
 - **The build fails on a content file that is not `src/content/<collection>/<locale>/<name>.yaml`**,
   naming it. An entry is one file per locale and nothing below the locale folder — a file
   in a sub-folder is not addressable as `collection/slug`, so rather than leave it out of
@@ -382,7 +398,7 @@ Two consequences worth knowing:
 
 ## Not yet
 
-A batch publish is still everything pending that is not on hold: no checkboxes, no
-publishing one entry on its own from its header, and no build status. A file somebody
+The endpoint takes a chosen set, but the admin has nothing that sends one: no checkboxes in
+the drawer, no **Publish this entry** in the header, and no build status. A file somebody
 changed in the repository can only be taken whole
 ([Working together](working-together.md#not-yet)).

@@ -175,7 +175,7 @@ test('a draft that matches the file it was loaded from is not pending', async ()
   expect(await pendingDrafts('default', db)).toEqual([]);
 });
 
-test('publishing commits every pending draft in one commit and clears those rows', async () => {
+test('publishing commits every pending draft in one commit and re-seeds those rows', async () => {
   const db = await fresh();
   const repo = fakeRepo({ [PATH]: FILE, [OTHER]: OTHER_FILE });
   await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
@@ -185,7 +185,9 @@ test('publishing commits every pending draft in one commit and clears those rows
 
   expect(repo.publish).toHaveBeenCalledTimes(1);
   expect(result?.paths.toSorted()).toEqual([OTHER, PATH].toSorted());
-  expect(await db.select().from(drafts)).toEqual([]);
+  // The rows are still there, re-seeded on the commit: what says they are published is that
+  // nothing about them is waiting any more.
+  expect(await pendingDrafts('default', db)).toEqual([]);
 });
 
 test('publishing refuses the whole set when a file changed in the repo since it was loaded', async () => {
@@ -252,7 +254,7 @@ test('publishing a new entry creates its file in one commit', async () => {
   await expect(repo.getFile(NEW)).resolves.toMatchObject({
     contents: 'title: "Strandhaus Nord"\nrooms: 0\n',
   });
-  expect(await db.select().from(drafts)).toEqual([]);
+  expect(await pendingDrafts('default', db)).toEqual([]);
 });
 
 test('a new entry whose path someone else committed first is a conflict', async () => {
@@ -354,13 +356,15 @@ test('a delete takes the entry out of the list and leaves nothing to publish', a
   expect(await publishDrafts('default', db, repo)).toBe(undefined);
 });
 
-test('the rows a rename left are dropped by the build that catches up with them', async () => {
+// Only the half that says a path has gone: the row carrying the file's own bytes is one the
+// repository already has, and those wait for the build status rather than for a title to agree.
+test('the row a rename left at the old path is dropped by the build that catches up', async () => {
   const db = await fresh();
   await recordRename('default', db, PATH, RENAMED, FILE, 'commit-rename');
 
   const built = indexOf({ [RENAMED]: FILE });
   expect(await listed(db, built)).toEqual([['the-old-mill', 'The Mill House']]);
-  expect(await db.select().from(drafts)).toEqual([]);
+  expect((await db.select().from(drafts)).map((r) => r.path)).toEqual([RENAMED]);
 });
 
 test('an entry can take the name a delete freed', async () => {
@@ -565,7 +569,7 @@ test('publishing an entry commits the languages that moved with it in one commit
 
   expect(repo.publish).toHaveBeenCalledTimes(1);
   expect(result?.paths.toSorted()).toEqual([PAGE_DE, PAGE_EN]);
-  expect(await db.select().from(drafts)).toEqual([]);
+  expect(await pendingDrafts('default', db)).toEqual([]);
 });
 
 // Staleness. The German file is a translation of the English as it stood when somebody wrote
@@ -937,7 +941,7 @@ test('a publish leaves out every language of an entry somebody is holding back',
   const result = await publishDrafts('default', db, repo);
 
   expect(result?.paths).toEqual([OTHER]);
-  expect((await db.select().from(drafts)).map((r) => r.path).toSorted()).toEqual(
+  expect((await pendingDrafts('default', db)).map((r) => r.path).toSorted()).toEqual(
     [PATH, LISTING_DE].toSorted(),
   );
 });
@@ -953,4 +957,78 @@ test('the same set publishes whole once the hold comes off', async () => {
   const result = await publishDrafts('default', db, repo);
 
   expect(result?.paths.toSorted()).toEqual([PATH, LISTING_DE].toSorted());
+});
+
+// Selective publish. The unit of selection is the entry, never the file: one entry's languages
+// share a structure and a block moved in English is moved in German, so they go together.
+test('a chosen entry publishes its languages and leaves the rest waiting', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE, [LISTING_DE]: GERMAN, [OTHER]: OTHER_FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  await saveDraft('default', db, repo, LISTING_DE, { title: 'Mühlenhaus am Bach' });
+  await saveDraft('default', db, repo, OTHER, { title: 'The Barn', price: '£10', rooms: 2 });
+
+  const result = await publishDrafts('default', db, repo, undefined, ['listings/mill-house']);
+
+  expect(result?.paths.toSorted()).toEqual([PATH, LISTING_DE].toSorted());
+  expect((await pendingDrafts('default', db)).map((r) => r.path)).toEqual([OTHER]);
+});
+
+test('choosing an entry somebody is holding back publishes it and releases the hold', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE, [LISTING_DE]: GERMAN });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  await saveDraft('default', db, repo, LISTING_DE, { title: 'Mühlenhaus am Bach' });
+  await holdEntry('default', db, [PATH, LISTING_DE], 'u1');
+
+  const result = await publishDrafts('default', db, repo, undefined, ['listings/mill-house']);
+
+  expect(result?.paths.toSorted()).toEqual([PATH, LISTING_DE].toSorted());
+  expect(result?.released).toEqual(['listings/mill-house']);
+  expect((await db.select().from(drafts)).map((r) => r.heldBy)).toEqual([null, null]);
+});
+
+test('the entries left out of a publish keep their redirect rules', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+  await setEntryAddress('default', db, repo, ADDRESSED, PAGE_DE, 'startseite', REDIRECT);
+
+  const result = await publishDrafts('default', db, repo, undefined, ['pages/other']);
+
+  expect(result).toBe(undefined);
+  expect(repo.read(REDIRECTS)).toBe('');
+  expect((await pendingDrafts('default', db)).map((r) => r.path)).toEqual([PAGE_DE]);
+});
+
+// Trap 1 of the re-seed: a translation is stamped on the way into the commit, so the file and
+// the row the publish started from are different bytes. Seed both from the marked ones or the
+// next publish reports a conflict with this one.
+test('a published translation is re-seeded on the bytes the commit wrote', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+  await saveDraft('default', db, repo, PAGE_DE, german('Zieh an die Küste!'));
+
+  const result = await publishDrafts('default', db, repo, sourceOf);
+
+  const row = await only(db);
+  expect(row?.contents).toBe(repo.read(PAGE_DE));
+  expect(row?.baseBlob).toBe(await blobSha(repo.read(PAGE_DE)));
+  expect(row?.baseSha).toBe(result?.commit_sha);
+  expect(row?.publishedSha).toBe(result?.commit_sha);
+  expect(await pendingDrafts('default', db)).toEqual([]);
+});
+
+// The row outlives the commit now, so the rule it carried has to go: it is in redirects.yaml
+// already, and a second copy of it is a redirect nobody asked for.
+test('an address change published once is not written a second time', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+  await setEntryAddress('default', db, repo, ADDRESSED, PAGE_DE, 'startseite', REDIRECT);
+  await publishDrafts('default', db, repo);
+
+  await saveDraft('default', db, repo, PAGE_DE, german('Zieh ans Meer'));
+  await publishDrafts('default', db, repo);
+
+  const rules = (parseEntry('default', repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules;
+  expect(rules.map((r) => r.from)).toEqual(['/de/home']);
 });

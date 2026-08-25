@@ -219,22 +219,22 @@ test('a message the provider would not take names what it was for and nobody', a
   expect(root.querySelector('.avatar')?.classList.contains('is-system')).toBe(true);
 });
 
-// 3.9 to 3.17 add kinds without opening this file, so a kind with no sentence of its own has to
-// read as a record rather than throw or render nothing. A subject that is an entry file is
+// 3.14 to 3.29 add kinds without opening this file, so a kind with no sentence of its own has
+// to read as a record rather than throw or render nothing. A subject that is an entry file is
 // named the way a publish names one, since that much is true whatever the kind turns out to be.
 test('a kind nothing has written a sentence for still reads as a record', async () => {
   server({
     events: [
-      ev('lock-takeover', {
+      ev('entry-rename', {
         subject: 'src/content/pages/en/contact.yaml',
-        detail: { from: 'u9', heldSince: 12 },
+        detail: { from: 'contact-us' },
       }),
     ],
     cursor: null,
   });
   const root = await show();
 
-  expect(sentences(root)).toEqual(['Anna Berg — lock-takeover contact EN']);
+  expect(sentences(root)).toEqual(['Anna Berg — entry-rename contact EN']);
   expect(root.querySelector('.said a')?.getAttribute('href')).toBe('/admin/c/pages/contact');
 });
 
@@ -467,4 +467,85 @@ test('a log with nothing in it yet is not the same sentence as one nothing match
 
   expect(text(root)).toContain('Nothing has been recorded yet');
   expect(text(root)).not.toContain('No activity matches these filters');
+});
+
+// The two ways a publish comes back with nothing written, and the one row on this screen that
+// expands: 3.19 puts the other commit's diff under it, this puts the reason.
+test('a failed publish says the repository refused it and opens on the reason', async () => {
+  server({
+    events: [ev('publish-failed', { detail: { files: 3, reason: 'ref-moved' } })],
+    cursor: null,
+  });
+  const root = await show();
+
+  expect(sentences(root)).toEqual(['Publish failed: the repository refused the update.']);
+  const toggle = root.querySelector('.expand button') as HTMLButtonElement;
+  const panel = root.querySelector('.activity-detail') as HTMLElement;
+  expect(toggle.getAttribute('aria-expanded')).toBe('false');
+  expect(toggle.getAttribute('aria-controls')).toBe(panel.id);
+  expect(panel.hidden).toBe(true);
+
+  toggle.click();
+  flushSync();
+
+  expect(root.querySelector('.activity-detail')?.textContent).toContain(
+    'Another change reached the repository first.',
+  );
+  expect((root.querySelector('.activity-detail') as HTMLElement).hidden).toBe(false);
+  expect(toggle.getAttribute('aria-expanded')).toBe('true');
+});
+
+test('a publish stopped by a file somebody else changed names that entry', async () => {
+  server({
+    events: [
+      ev('publish-conflict', {
+        subject: 'src/content/listings/en/mill-house.yaml',
+        detail: { files: 1 },
+      }),
+    ],
+    cursor: null,
+  });
+  const root = await show();
+
+  expect(sentences(root)).toEqual(['Publish stopped: somebody else had changed mill-house EN']);
+  expect(root.querySelector('.said a')?.getAttribute('href')).toBe('/admin/c/listings/mill-house');
+  expect(root.querySelector('.activity-detail')?.textContent).toContain(
+    'discard the draft in the pending-changes drawer',
+  );
+});
+
+// 3.10's two kinds, whose sentences the mockup draws beside the failed publish.
+test('a take-over and a released hold read as sentences, and neither expands', async () => {
+  server({
+    events: [
+      ev('lock-takeover', {
+        subject: 'src/content/pages/en/contact.yaml',
+        detail: { from: 'Martin Vale' },
+      }),
+      ev('hold-released', {
+        subject: 'src/content/pages/en/about-us.yaml',
+        detail: { from: 'Martin Vale' },
+      }),
+    ],
+    cursor: null,
+  });
+  const root = await show();
+
+  expect(sentences(root)).toEqual([
+    "Anna Berg took over Martin Vale's editing of contact EN",
+    "Anna Berg released Martin Vale's hold on about-us EN",
+  ]);
+  expect(root.querySelector('.expand button')).toBe(null);
+  expect(root.querySelector('.activity-detail')).toBe(null);
+});
+
+// The hold toggle writes no name, so the sentence has to read without one.
+test('a hold released with nobody named still reads', async () => {
+  server({
+    events: [ev('hold-released', { subject: 'src/content/pages/en/about-us.yaml' })],
+    cursor: null,
+  });
+  const root = await show();
+
+  expect(sentences(root)).toEqual(['Anna Berg released the hold on about-us EN']);
 });

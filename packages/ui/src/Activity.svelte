@@ -31,6 +31,8 @@ const status = $derived(
 
 /** A page that is no longer the one being asked for must not land in the list. */
 let asked = 0;
+/** Which row has its reason open — one at a time, the way the log reads. */
+let why = $state('');
 
 $effect(() => {
   load();
@@ -120,7 +122,24 @@ const named = (id: string | null) => {
 interface Said {
   lead: string;
   link?: { href: string; label: string; locale: string };
+  /** Why a publish was not made. The one kind of row that expands, until 3.19 draws the diff. */
+  reason?: string;
 }
+
+const REFUSED: Record<string, string> = {
+  'ref-moved':
+    'Another change reached the repository first. Nothing was written, and publishing again writes on top of it.',
+  refused: 'The repository would not take the commit. Nothing was written.',
+};
+const changed = (files: number) =>
+  files === 1
+    ? 'That file had changed in the repository after it was opened. Nothing was written: discard the draft in the pending-changes drawer, then publish again.'
+    : `${files} files had changed in the repository after they were opened. Nothing was written: discard those drafts in the pending-changes drawer, then publish again.`;
+/** How many files a Publishing event was about, as its route wrote it down. */
+const count = (detail: unknown): number => {
+  const value = (detail as { files?: unknown } | null | undefined)?.files;
+  return typeof value === 'number' ? value : 0;
+};
 
 function said(event: ActivityEvent): Said {
   const actor = who(event);
@@ -156,10 +175,42 @@ function said(event: ActivityEvent): Said {
         typeof files === 'number' ? `${files} file${files === 1 ? '' : 's'}` : 'several files';
       return { lead: `${actor} published ${many}.` };
     }
+    case 'publish-failed':
+      return {
+        lead: 'Publish failed: the repository refused the update.',
+        reason: REFUSED[str(d, 'reason') ?? ''] ?? REFUSED.refused,
+      };
+    case 'publish-conflict': {
+      const one = entryOf(event.subject);
+      const files = count(d);
+      return {
+        lead: one
+          ? 'Publish stopped: somebody else had changed '
+          : `Publish stopped: ${files} files had changed in the repository.`,
+        link: one,
+        reason: changed(one ? 1 : files),
+      };
+    }
+    case 'hold-released': {
+      const one = entryOf(event.subject);
+      const from = str(d, 'from');
+      const whose = from ? `${from}'s hold` : 'the hold';
+      return one
+        ? { lead: `${actor} released ${whose} on `, link: one }
+        : { lead: `${actor} released ${whose}.` };
+    }
+    case 'lock-takeover': {
+      const one = entryOf(event.subject);
+      const from = str(d, 'from');
+      const whose = from ? `${from}'s editing of ` : 'editing of ';
+      return one
+        ? { lead: `${actor} took over ${whose}`, link: one }
+        : { lead: `${actor} took over an entry.` };
+    }
     case 'mail-failed':
       return { lead: `${MESSAGE[str(d, 'message') ?? ''] ?? 'A message'} could not be sent.` };
   }
-  // 3.9 onwards add kinds without opening this file. A row whose sentence nobody has written is
+  // 3.14 onwards add kinds without opening this file. A row whose sentence nobody has written is
   // still a record of something, so it names the kind rather than throwing or vanishing.
   const one = entryOf(event.subject);
   return { lead: one ? `${actor} — ${event.kind} ` : `${actor} — ${event.kind}`, link: one };
@@ -289,8 +340,27 @@ function when(at: number): string {
               <time class="when" datetime={new Date(event.at).toISOString()} title={EXACT.format(event.at)}
                 >{when(event.at)}</time
               >
+              <!-- Empty on every other row, which is what keeps the column straight. -->
+              <span class="expand">
+                {#if line.reason}
+                  <button
+                    class="btn btn-ghost btn-icon"
+                    type="button"
+                    aria-expanded={why === event.id}
+                    aria-controls="why-{event.id}"
+                    aria-label="Why it failed, {when(event.at)}"
+                    onclick={() => (why = why === event.id ? '' : event.id)}
+                    >{why === event.id ? '▾' : '▸'}</button
+                  >
+                {/if}
+              </span>
             </span>
           </div>
+          {#if line.reason}
+            <div class="activity-detail" id="why-{event.id}" hidden={why !== event.id}>
+              <p>{line.reason}</p>
+            </div>
+          {/if}
         </li>
       {/each}
     </ol>

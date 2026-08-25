@@ -95,6 +95,19 @@ that file's blob sha, and a publish compares the stored sha against the file at 
   away and reads it from the repository again, so the entry is on their version and the
   next publish goes through. Reopening or editing the entry does not clear the refusal —
   the draft keeps the base it was loaded against until it is discarded
+- A refusal is recorded: `publish-conflict` for a file that changed, `publish-failed` for
+  the repository turning the commit itself down. Both rows expand to say which it was
+  ([Activity log](activity.md)). Nothing else about a publish is logged as a failure —
+  a file the schema is not done with is answered to whoever pressed the button
+
+### Your own publish is not a conflict
+
+The comparison is against the file as *that draft* was loaded, so a publish somebody else
+made while you were typing is caught — but the one **you** just made is not. A publish
+re-seeds the rows it committed on its own commit rather than throwing them away, so an
+entry you carry on editing afterwards is measured against what was published, and the next
+publish goes through. It is checked deliberately, because it will not happen by accident in
+development: publish, type, publish again, and the second commit sits on the first.
 
 ## The endpoints
 
@@ -137,8 +150,8 @@ entry's own language and a translation ([Drafts and publishing](publishing.md#th
 
 ## Not yet
 
-Publishing has no checkboxes and no build status: a batch publish is everything pending
-except what is on hold ([Drafts and publishing](publishing.md#holding-an-entry-back)),
-and picking a subset by hand arrives in a later release. A file someone changed in the
-repository can only be taken whole, by discarding yours; there is no three-way merge and
+Publishing has no checkboxes and no build status: the endpoint takes a chosen set
+([Drafts and publishing](publishing.md#the-endpoints)) but the admin sends none yet, so what
+a button publishes is everything pending except what is on hold. A file someone changed in
+the repository can only be taken whole, by discarding yours; there is no three-way merge and
 no way to keep your version over theirs.
