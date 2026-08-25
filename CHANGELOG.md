@@ -4,6 +4,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **A Members screen at `/admin/members`.** Owners can now invite people, change a role between
+  owner and editor, resend an invite and remove somebody, without a `wrangler d1 execute` in
+  sight. An invite is a `user` row and an emailed link: the person opens it, which signs them in,
+  and their account page offers them a first password. That link works once and lasts **three
+  days**, where an ordinary sign-in link lasts fifteen minutes. The list's **Sign-in method**
+  column is worked out from the account rows rather than stored, so it says `GitHub`,
+  `Password + email link` or `Email link only` and cannot go stale. Two rules are refused by the
+  server rather than only greyed out in the menu: **the last owner cannot be demoted or removed**,
+  and **nobody can remove themselves**. Removing somebody ends every session and deletes their
+  password and linked accounts; their unpublished drafts stay, because a draft belongs to the
+  site ([Roles and permissions](docs/roles.md#members--adminmembers)).
+
 - **Two more mailers: SMTP and Cloudflare.** `mailer` in `cms.config.ts` now takes
   `{ provider: 'smtp', from, host, port? }` on `SMTP_USER` and `SMTP_PASS`, or
   `{ provider: 'cloudflare', from }` on a `send_email` binding named `EMAIL` and no secret at

@@ -3,7 +3,7 @@ import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/
 import { drizzle } from 'drizzle-orm/d1';
 import { Miniflare } from 'miniflare';
 import { afterAll, afterEach, beforeAll, beforeEach, expect, test, vi } from 'vitest';
-import { AUTH_BASE_PATH, accountFacts, createAuth } from './auth.js';
+import { AUTH_BASE_PATH, accountFacts, createAuth, memberList, ownerCount } from './auth.js';
 import type { Db } from './db.js';
 import * as tables from './tables.js';
 
@@ -581,4 +581,140 @@ test('a GitHub callback whose state has expired lands on the login, not on an er
 
   expect(res.status).toBe(302);
   expect(res.headers.get('location')).toBe('/admin?error=state_mismatch');
+});
+
+// ─── the members list's two computed facts ───────────────────────────────────────────────
+
+/** An invite as `createUser` writes one: a row, no password, and an unproven address. */
+async function seedInvite(email: string, role: string, at = 1_000) {
+  const id = `usr_${email}`;
+  await binding
+    .prepare(
+      `INSERT INTO user (id, name, email, email_verified, role, created_at, updated_at)
+       VALUES (?, '', ?, 0, ?, ?, ?)`,
+    )
+    .bind(id, email, role, at, at)
+    .run();
+  return id;
+}
+
+async function seedGithub(userId: string, accountId: string) {
+  await binding
+    .prepare(
+      `INSERT INTO account (id, issuer, account_id, provider_id, user_id, created_at, updated_at)
+       VALUES (?, 'local:oauth:github', ?, 'github', ?, 0, 0)`,
+    )
+    .bind(`acc_gh_${userId}`, accountId, userId)
+    .run();
+}
+
+async function seedSession(userId: string, at: number) {
+  await binding
+    .prepare(
+      `INSERT INTO session (id, expires_at, token, created_at, updated_at, user_id)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(`ses_${userId}_${at}`, at + 604_800_000, `tok_${userId}_${at}`, at, at, userId)
+    .run();
+}
+
+test('somebody with a password signs in with a password and an email link', async () => {
+  const id = await seed('anna@example.com', 'correct-horse-battery', 'editor');
+  await seedSession(id, 2_000);
+
+  const [anna] = await memberList(db);
+
+  expect(anna?.method).toBe('password');
+  expect(anna?.pending).toBe(false);
+});
+
+test('somebody with no account row at all signs in by email link only', async () => {
+  const id = await seedUser('jonas@example.com', 'editor');
+  await seedSession(id, 2_000);
+
+  const [jonas] = await memberList(db);
+
+  expect(jonas?.method).toBe('link');
+});
+
+test('a credential row with no password is not a password', async () => {
+  const id = await seedUser('anna@example.com', 'editor');
+  // What `auth.md` warns a hand-seeded account can be: the row exists and the hash does not.
+  await binding
+    .prepare(
+      `INSERT INTO account (id, issuer, account_id, provider_id, user_id, created_at, updated_at)
+       VALUES ('acc_empty', 'local:credential', ?, 'credential', ?, 0, 0)`,
+    )
+    .bind(id, id)
+    .run();
+  await seedSession(id, 2_000);
+
+  expect((await memberList(db))[0]?.method).toBe('link');
+});
+
+test('a linked GitHub account is what the list names, whatever else the person holds', async () => {
+  const id = await seed('martin@example.com', 'correct-horse-battery', 'owner');
+  await seedGithub(id, '34409953');
+  await seedSession(id, 2_000);
+
+  const [martin] = await memberList(db);
+
+  expect(martin?.method).toBe('github');
+});
+
+test('an invite nobody has opened is pending and has no sign-in method', async () => {
+  await seedInvite('lea@example.com', 'editor');
+
+  const [lea] = await memberList(db);
+
+  expect(lea?.pending).toBe(true);
+  expect(lea?.method).toBe(null);
+  expect(lea?.lastSignIn).toBe(null);
+});
+
+test('an invite stops being pending the moment its address is proved', async () => {
+  const id = await seedInvite('lea@example.com', 'editor');
+  await seedSession(id, 5_000);
+
+  const [lea] = await memberList(db);
+
+  expect(lea?.pending).toBe(false);
+  expect(lea?.lastSignIn).toBe(5_000);
+});
+
+test('the list is newest sign-in first, with the people who never signed in last', async () => {
+  const anna = await seedUser('anna@example.com', 'editor');
+  await seedSession(anna, 2_000);
+  const martin = await seedUser('martin@example.com', 'owner');
+  await seedSession(martin, 9_000);
+  await seedInvite('lea@example.com', 'editor');
+
+  expect((await memberList(db)).map((m) => m.email)).toEqual([
+    'martin@example.com',
+    'anna@example.com',
+    'lea@example.com',
+  ]);
+});
+
+test('the newest of several sessions is the one the list reports', async () => {
+  const id = await seedUser('anna@example.com', 'editor');
+  await seedSession(id, 2_000);
+  await seedSession(id, 8_000);
+  await seedSession(id, 4_000);
+
+  expect((await memberList(db))[0]?.lastSignIn).toBe(8_000);
+});
+
+test('a role the package does not recognise reads as editor', async () => {
+  await seedUser('anna@example.com', 'admin');
+
+  expect((await memberList(db))[0]?.role).toBe('editor');
+});
+
+test('the owners are counted by the column, not by who has an account', async () => {
+  await seedUser('martin@example.com', 'owner');
+  await seedInvite('kim@example.com', 'owner');
+  await seedUser('anna@example.com', 'editor');
+
+  expect(await ownerCount(db)).toBe(2);
 });

@@ -1,4 +1,4 @@
-import { AUTH_BASE_PATH } from '@handover/core';
+import { AUTH_BASE_PATH, memberApi } from '@handover/core';
 import { hashPassword } from 'better-auth/crypto';
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
 import { Miniflare } from 'miniflare';
@@ -207,4 +207,70 @@ test('the session cookie is Secure on an https site even when the request arrive
 
   expect(res.status).toBe(200);
   expect(res.headers.get('set-cookie')).toMatch(/Secure/);
+});
+
+// ─── the invite's own link ───────────────────────────────────────────────────────────────
+
+/**
+ * What the members screen does after it has written the row: the same endpoint the login uses,
+ * on the instance that mints a longer-lived link and says something else in the mail.
+ */
+function sendInvite(email: string, host = 'https://demo.example') {
+  const url = new URL(`${host}${AUTH_BASE_PATH}/sign-in/magic-link`);
+  return memberApi(createAuth(url, undefined, { invite: true })).signInMagicLink({
+    body: { email, callbackURL: '/admin/account' },
+    headers: new Headers({
+      'content-type': 'application/json',
+      origin: 'https://demo.example',
+      'cf-connecting-ip': '203.0.113.8',
+    }),
+  });
+}
+
+const linkIn = (text: string) => text.match(/https:\/\/\S+magic-link\/verify\?\S+/)?.[0] ?? '';
+
+test('an invite says it is an invite and lands the person on their account page', async () => {
+  await seedUser('lea@example.com');
+
+  await sendInvite('lea@example.com');
+
+  expect(sent).toHaveLength(1);
+  expect(sent[0]?.subject).toBe('You have been invited');
+  expect(sent[0]?.text).toContain('You have been invited to help run https://demo.example');
+  expect(linkIn(sent[0]?.text ?? '')).toContain('callbackURL=%2Fadmin%2Faccount');
+});
+
+test("an invite's link lives three days, where a sign-in link lives fifteen minutes", async () => {
+  await seedUser('lea@example.com');
+  await seedUser('owner@example.com');
+
+  await sendInvite('lea@example.com');
+  await askForLink('owner@example.com');
+
+  const rows = (
+    await binding.prepare('SELECT expires_at FROM verification ORDER BY created_at').all()
+  ).results as { expires_at: number }[];
+  const lives = rows.map((row) => Math.round((row.expires_at - Date.now()) / 60_000));
+  expect(lives[0]).toBe(72 * 60);
+  expect(lives[1]).toBe(15);
+});
+
+test('an invite link signs the person in once and no more', async () => {
+  await seedUser('lea@example.com');
+  await sendInvite('lea@example.com');
+  const link = linkIn(sent[0]?.text ?? '');
+
+  const first = await createAuth(new URL(link)).handler(new Request(link));
+  const second = await createAuth(new URL(link)).handler(new Request(link));
+
+  expect(first.headers.get('location')).toBe('https://demo.example/admin/account');
+  expect(second.headers.get('location')).toBe(
+    'https://demo.example/admin/account?error=INVALID_TOKEN',
+  );
+});
+
+test('an invite to an address with no row mails nothing', async () => {
+  await sendInvite('stranger@example.com');
+
+  expect(sent).toEqual([]);
 });

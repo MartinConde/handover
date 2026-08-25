@@ -242,16 +242,63 @@ vi.mock('cloudflare:workers', () => ({
 // Better Auth's own `setPassword` is proven against a real database in core's auth.test.ts;
 // what these route tests are about is what this file does with its answers.
 let setPassword: (args: unknown) => Promise<unknown> = async () => ({ status: true });
+// The admin plugin's four endpoints are proven against a real Better Auth in core's own
+// auth.test.ts; what these route tests are about is what this file sends them and does with
+// their answers. `invited` records whether the instance asking was the invite one.
+type Call = { body: Record<string, unknown>; invite: boolean };
+const calls: Record<string, Call[]> = {
+  createUser: [],
+  signInMagicLink: [],
+  setRole: [],
+  removeUser: [],
+};
+let createUserRefusal: unknown;
+let magicLinkRefusal: unknown;
+let setRoleRefusal: unknown;
 vi.mock('../auth.js', async (original) => ({
   ...(await original<typeof import('../auth.js')>()),
-  createAuth: () => ({ api: { setPassword: (args: unknown) => setPassword(args) } }),
+  createAuth: (_url: URL, _ctx: unknown, options?: { invite?: true }) => {
+    const record = (name: string) => async (args: { body: Record<string, unknown> }) => {
+      calls[name]?.push({ body: args.body, invite: Boolean(options?.invite) });
+      if (name === 'createUser') {
+        if (createUserRefusal) throw createUserRefusal;
+        return { user: { id: 'new', email: String(args.body.email).toLowerCase() } };
+      }
+      if (name === 'signInMagicLink' && magicLinkRefusal) throw magicLinkRefusal;
+      if (name === 'setRole' && setRoleRefusal) throw setRoleRefusal;
+      return { status: true };
+    };
+    return {
+      api: {
+        setPassword: (args: unknown) => setPassword(args),
+        createUser: record('createUser'),
+        signInMagicLink: record('signInMagicLink'),
+        setRole: record('setRole'),
+        removeUser: record('removeUser'),
+      },
+    };
+  },
 }));
 let facts = { hasPassword: true, sessions: [] as unknown[] };
+// Who this site's members are, per test. The real query runs against a real D1 in core.
+type MemberRow = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  pending: boolean;
+  method: string | null;
+  lastSignIn: number | null;
+  invitedAt: number;
+};
+let memberRows: MemberRow[] = [];
 // Which user and which session the route asked about — the two values that must come from the
 // session and never from the request, or one person could read another's account.
 let asked: unknown[] = [];
 vi.mock('@handover/core', async (original) => ({
   ...(await original<typeof import('@handover/core')>()),
+  memberList: async () => memberRows,
+  ownerCount: async () => memberRows.filter((row) => row.role === 'owner').length,
   accountFacts: async (..._args: unknown[]) => {
     asked = _args.slice(1);
     return facts;
@@ -284,6 +331,11 @@ afterEach(() => {
   setPassword = async () => ({ status: true });
   facts = { hasPassword: true, sessions: [] };
   asked = [];
+  memberRows = [];
+  createUserRefusal = undefined;
+  magicLinkRefusal = undefined;
+  setRoleRefusal = undefined;
+  for (const list of Object.values(calls)) list.length = 0;
   resendKey = undefined;
   smtpUser = undefined;
   smtpPass = undefined;
@@ -1991,4 +2043,271 @@ test('an error that is not a refusal is not turned into one', async () => {
   await expect(setting(JSON.stringify({ newPassword: 'a-brand-new-password' }))).rejects.toThrow(
     'D1 is unreachable',
   );
+});
+
+// ─── members ─────────────────────────────────────────────────────────────────────────────
+
+const member = (
+  id: string,
+  email: string,
+  role: string,
+  extra: Partial<MemberRow> = {},
+): MemberRow => ({
+  id,
+  name: '',
+  email,
+  role,
+  pending: false,
+  method: 'link',
+  lastSignIn: 1,
+  invitedAt: 0,
+  ...extra,
+});
+
+const memberPost = (path: string, body: unknown, session?: unknown) =>
+  POST(
+    ctx(
+      path,
+      new Request(`https://x/admin/api/${path}`, { method: 'POST', body: JSON.stringify(body) }),
+      {
+        handover: session,
+      },
+    ),
+  );
+const memberDelete = (path: string, session?: unknown) =>
+  DELETE(
+    ctx(path, new Request(`https://x/admin/api/${path}`, { method: 'DELETE' }), {
+      handover: session,
+    }),
+  );
+
+test("the members list is the owner's and nobody else's", async () => {
+  memberRows = [member('u1', 'martin@example.com', 'owner')];
+
+  const asOwner = await GET(ctx('members', undefined, { handover: owner }));
+  const asEditor = await GET(ctx('members', undefined, { handover: editor }));
+
+  expect(asOwner.status).toBe(200);
+  expect(await asOwner.json()).toEqual({ members: memberRows });
+  expect(asEditor.status).toBe(403);
+});
+
+test('an editor cannot invite, change a role, resend an invite or remove anybody', async () => {
+  memberRows = [
+    member('u1', 'martin@example.com', 'owner'),
+    member('u2', 'anna@example.com', 'editor'),
+  ];
+  siteMailer = fakeMailer;
+
+  const invited = await memberPost('members', { email: 'lea@example.com', role: 'editor' }, editor);
+  const roled = await memberPost('members/u2/role', { role: 'owner' }, editor);
+  const resent = await memberPost('members/u2/invite', {}, editor);
+  const removed = await memberDelete('members/u2', editor);
+
+  expect([invited.status, roled.status, resent.status, removed.status]).toEqual([
+    403, 403, 403, 403,
+  ]);
+  expect(calls.createUser).toEqual([]);
+  expect(calls.setRole).toEqual([]);
+  expect(calls.removeUser).toEqual([]);
+  expect(sent).toEqual([]);
+});
+
+test('an invite creates one row and mails exactly one address', async () => {
+  siteMailer = fakeMailer;
+
+  const res = await memberPost('members', { email: ' Lea@Example.com ', role: 'editor' }, owner);
+
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ ok: true, to: 'lea@example.com' });
+  expect(calls.createUser).toEqual([
+    { body: { email: 'Lea@Example.com', name: '', role: 'editor' }, invite: true },
+  ]);
+  expect(calls.signInMagicLink).toEqual([
+    { body: { email: 'lea@example.com', callbackURL: '/admin/account' }, invite: true },
+  ]);
+});
+
+// The endpoint also takes a `data` record that writes user columns directly, so a body spread
+// into it would let an invite set `banned`, `emailVerified` or a role it was refused.
+test('an invite carries the three values it is allowed to and nothing else the body holds', async () => {
+  siteMailer = fakeMailer;
+
+  const res = await memberPost(
+    'members',
+    {
+      email: 'lea@example.com',
+      role: 'editor',
+      data: { role: 'owner', banned: true },
+      name: 'Lea',
+    },
+    owner,
+  );
+
+  expect(res.status).toBe(200);
+  expect(calls.createUser?.[0]?.body).toEqual({
+    email: 'lea@example.com',
+    name: '',
+    role: 'editor',
+  });
+});
+
+// `setRole` takes an array and stores it joined with commas; `hasPermission` splits on the
+// comma and grants on any segment, while `roleOf` reads the whole string and sees an editor.
+// So `owner,editor` is an owner Better Auth honours and a screen that shows Editor.
+test('a role sent as an array is refused rather than stored', async () => {
+  memberRows = [
+    member('u1', 'martin@example.com', 'owner'),
+    member('u2', 'anna@example.com', 'editor'),
+  ];
+  siteMailer = fakeMailer;
+
+  const invited = await memberPost(
+    'members',
+    { email: 'lea@example.com', role: ['owner', 'editor'] },
+    owner,
+  );
+  const roled = await memberPost('members/u2/role', { role: ['owner', 'editor'] }, owner);
+
+  expect([invited.status, roled.status]).toEqual([400, 400]);
+  expect(calls.createUser).toEqual([]);
+  expect(calls.setRole).toEqual([]);
+});
+
+test('an invite with no mailer names the credential that is missing and writes nothing', async () => {
+  siteMailer = { provider: 'resend', from: 'Handover <admin@example.com>' };
+
+  const res = await memberPost('members', { email: 'lea@example.com', role: 'editor' }, owner);
+
+  expect(res.status).toBe(503);
+  expect(((await res.json()) as { error: string }).error).toContain('RESEND_API_KEY');
+  expect(calls.createUser).toEqual([]);
+});
+
+// The row is written before the mail is tried, so the screen's failure notice can tell the
+// owner to fix the mailer and resend rather than to invite the same person twice.
+test('an invite whose mail fails leaves the row, and names no link', async () => {
+  siteMailer = fakeMailer;
+  magicLinkRefusal = new Error(
+    'Resend refused the message (403): https://demo.example/x?token=abc',
+  );
+
+  const res = await memberPost('members', { email: 'lea@example.com', role: 'editor' }, owner);
+  const body = (await res.json()) as { error: string; to: string };
+
+  expect(res.status).toBe(502);
+  expect(body).toEqual({ error: 'invite-not-sent', to: 'lea@example.com' });
+  expect(calls.createUser ?? []).toHaveLength(1);
+  expect(JSON.stringify(body)).not.toContain('token=');
+});
+
+test("an invite to somebody who is already a member comes back in Better Auth's own words", async () => {
+  siteMailer = fakeMailer;
+  createUserRefusal = {
+    body: {
+      code: 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL',
+      message: 'User already exists. Use another email.',
+    },
+  };
+
+  const res = await memberPost('members', { email: 'anna@example.com', role: 'editor' }, owner);
+
+  expect(res.status).toBe(400);
+  expect(((await res.json()) as { error: string }).error).toBe(
+    'User already exists. Use another email.',
+  );
+  expect(calls.signInMagicLink).toEqual([]);
+});
+
+test('an invite is only resent to somebody who has never signed in', async () => {
+  memberRows = [
+    member('u2', 'anna@example.com', 'editor'),
+    member('u3', 'lea@example.com', 'editor', { pending: true, method: null, lastSignIn: null }),
+  ];
+  siteMailer = fakeMailer;
+
+  const active = await memberPost('members/u2/invite', {}, owner);
+  const pending = await memberPost('members/u3/invite', {}, owner);
+  const nobody = await memberPost('members/u9/invite', {}, owner);
+
+  expect([active.status, pending.status, nobody.status]).toEqual([400, 200, 404]);
+  expect(calls.signInMagicLink).toEqual([
+    { body: { email: 'lea@example.com', callbackURL: '/admin/account' }, invite: true },
+  ]);
+});
+
+test('the last owner cannot be demoted', async () => {
+  memberRows = [
+    member('u1', 'martin@example.com', 'owner'),
+    member('u2', 'anna@example.com', 'editor'),
+  ];
+
+  const res = await memberPost('members/u1/role', { role: 'editor' }, owner);
+
+  expect(res.status).toBe(400);
+  expect(((await res.json()) as { error: string }).error).toBe('There must be at least one owner');
+  expect(calls.setRole).toEqual([]);
+});
+
+test('an owner can be demoted once there is a second one', async () => {
+  memberRows = [
+    member('u1', 'martin@example.com', 'owner'),
+    member('u2', 'anna@example.com', 'owner'),
+  ];
+
+  const res = await memberPost('members/u2/role', { role: 'editor' }, owner);
+
+  expect(res.status).toBe(200);
+  expect(calls.setRole).toEqual([{ body: { userId: 'u2', role: 'editor' }, invite: false }]);
+});
+
+// The guard, aimed at directly. Its premise is synthetic: reaching this route needs an owner
+// session, so if there is one owner the caller *is* them and the self-check answers first. The
+// database cannot produce a caller who is an owner and is not the owner — what this pins is
+// that the rule is stated on the route rather than emerging from a different one.
+test('the last owner is refused even to a caller who is not them', async () => {
+  memberRows = [
+    member('u1', 'martin@example.com', 'owner'),
+    member('u2', 'anna@example.com', 'editor'),
+  ];
+
+  const res = await memberDelete('members/u1', { ...owner, user: { ...owner.user, id: 'u2' } });
+
+  expect(res.status).toBe(400);
+  expect(((await res.json()) as { error: string }).error).toBe('There must be at least one owner');
+  expect(calls.removeUser).toEqual([]);
+});
+
+test('an owner cannot remove themselves, even when they are not the last one', async () => {
+  memberRows = [
+    member('u1', 'martin@example.com', 'owner'),
+    member('u2', 'anna@example.com', 'owner'),
+  ];
+
+  const res = await memberDelete('members/u1', owner);
+
+  expect(res.status).toBe(400);
+  expect(((await res.json()) as { error: string }).error).toBe('You cannot remove yourself');
+  expect(calls.removeUser).toEqual([]);
+});
+
+test('removing somebody else takes their sessions and accounts with them', async () => {
+  memberRows = [
+    member('u1', 'martin@example.com', 'owner'),
+    member('u2', 'anna@example.com', 'editor'),
+  ];
+
+  const res = await memberDelete('members/u2', owner);
+
+  expect(res.status).toBe(200);
+  expect(calls.removeUser).toEqual([{ body: { userId: 'u2' }, invite: false }]);
+});
+
+test('a member id the request made up is a 404, not a 500', async () => {
+  memberRows = [member('u1', 'martin@example.com', 'owner')];
+
+  const roled = await memberPost('members/u9/role', { role: 'editor' }, owner);
+  const removed = await memberDelete('members/u9', owner);
+
+  expect([roled.status, removed.status]).toEqual([404, 404]);
 });

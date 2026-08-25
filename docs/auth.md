@@ -3,7 +3,8 @@
 `/admin` is behind a real login, checked against accounts in the site's own D1 database. There
 are three ways in — an emailed link, a password, and *Continue with GitHub* — and the login
 offers only the ones the site is configured for. There is **no sign-up**: an account exists
-because someone put it there, and every endpoint that would create one is closed.
+because someone put it there, and every endpoint that would create one is closed. After the
+first one, that someone is an owner on the [Members screen](roles.md#members--adminmembers).
 
 ## 1. Set the secret
 
@@ -71,7 +72,10 @@ Needs a [mailer](email.md) and the base URL above. The login takes an address an
 your inbox* — the same answer for every address, so the form never confirms which ones have an
 account. A link is mailed only to an address that does, works **once**, and expires in **15
 minutes**; the database stores a hash of it, so a copy of the database is not a way in. A used or
-expired link lands back on the login saying so.
+expired link lands back on the login saying so, with *Send a new link* under it.
+
+The one exception is the link in an [invite](roles.md#inviting-somebody), which lasts **three
+days** — it is read when the person gets round to it rather than in the minute they asked.
 
 ## Continue with GitHub
 
@@ -134,7 +138,7 @@ There is no route that lets a stranger make an account:
 | `POST /admin/api/auth/sign-up/email` | `400`, always. Email/password sign-up is disabled outright |
 | `POST /admin/api/auth/sign-in/magic-link` | `200`, always — and mails nothing to an address with no account. Opening a link minted for one makes no user |
 | `GET /admin/api/auth/callback/github` | back to the login. A GitHub account with no matching row makes no user |
-| `POST /admin/api/auth/admin/create-user` | `401` with no session, `403` for an editor. This is how an owner will invite people |
+| `POST /admin/api/auth/admin/create-user` | `401` with no session, `403` for an editor. This is what an owner's invite is built on |
 
 The status codes are Better Auth's and are not all `403`; what matters, and what the package's
 tests assert, is that **no row is created** on any of these paths.

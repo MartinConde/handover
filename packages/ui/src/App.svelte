@@ -3,6 +3,7 @@ import Account from './Account.svelte';
 import Editor from './Editor.svelte';
 import EntryList from './EntryList.svelte';
 import Login, { type LoginMethods } from './Login.svelte';
+import Members from './Members.svelte';
 import Pending from './Pending.svelte';
 
 export interface Session {
@@ -179,6 +180,8 @@ const initial = $derived(
       <EntryList collection={listRoute[1] ?? ''} onchanged={loadPending} />
     {:else if path === '/admin/account'}
       <Account user={session.user} role={session.role} onname={loadSession} />
+    {:else if path === '/admin/members' && session.role === 'owner'}
+      <Members user={session.user} />
     {:else if managePage}
       <main class="main">
         <h1>{managePage.label}</h1>

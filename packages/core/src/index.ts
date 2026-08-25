@@ -1,9 +1,12 @@
-export type { AccountFacts, Auth, AuthConfig, Role } from './auth.js';
+export type { AccountFacts, Auth, AuthConfig, Member, MemberApi, Role } from './auth.js';
 export {
   AUTH_BASE_PATH,
   accountFacts,
   authOptions,
   createAuth,
+  memberApi,
+  memberList,
+  ownerCount,
   roleOf,
   userExists,
 } from './auth.js';

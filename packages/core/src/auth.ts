@@ -5,7 +5,7 @@ import { createAccessControl } from 'better-auth/plugins/access';
 import { admin } from 'better-auth/plugins/admin';
 import { adminAc, defaultStatements, userAc } from 'better-auth/plugins/admin/access';
 import { magicLink } from 'better-auth/plugins/magic-link';
-import { and, desc, eq, gt, isNotNull } from 'drizzle-orm';
+import { and, count, desc, eq, gt, isNotNull, or } from 'drizzle-orm';
 import * as authTables from './auth-schema.js';
 import type { Db } from './db.js';
 
@@ -53,6 +53,13 @@ export interface AuthConfig {
    * session cookie a plaintext request can carry.
    */
   secureCookies?: boolean;
+  /**
+   * How long an emailed link lives, when 15 minutes is the wrong number. An invite is read
+   * hours later; a sign-in link is clicked now. Nothing else about the two differs, and the
+   * row that is minted carries its own expiry, so a link made by one instance is verified by
+   * the other.
+   */
+  magicLinkMinutes?: number;
   /**
    * Hands a promise to the platform so it outlives the response — `ctx.waitUntil` on Workers.
    * Absent, Better Auth awaits the send inline, which is slower and always correct; a handler
@@ -136,7 +143,7 @@ export function authOptions(db: Db, config: AuthConfig): BetterAuthOptions {
             magicLink({
               sendMagicLink: config.sendMagicLink,
               disableSignUp: true,
-              expiresIn: MAGIC_LINK_MINUTES * 60,
+              expiresIn: (config.magicLinkMinutes ?? MAGIC_LINK_MINUTES) * 60,
               // The row in `verification` is then no use to anyone who reads the database:
               // what is stored is a hash of the link that was mailed, not the link.
               storeToken: 'hashed',
@@ -150,6 +157,29 @@ export function authOptions(db: Db, config: AuthConfig): BetterAuthOptions {
 
 /** Named so the declaration emit does not have to reach into better-auth's own dist. */
 export type Auth = ReturnType<typeof betterAuth<BetterAuthOptions>>;
+
+/**
+ * The four endpoints the package drives itself, with the signatures they really have —
+ * `createUser` wants a `name` whether or not there is one, `setRole` takes a string *or an
+ * array*, and both live on plugins. `Auth` is typed on generic options so the declaration
+ * emit stays out of better-auth's dist, and the price of that is that no plugin's endpoints
+ * are on it; this is the one place that pays it.
+ */
+export interface MemberApi {
+  createUser(args: {
+    body: { email: string; name: string; role: Role };
+    headers: Headers;
+  }): Promise<{ user: { id: string; email: string } }>;
+  signInMagicLink(args: {
+    body: { email: string; callbackURL?: string };
+    headers: Headers;
+  }): Promise<{ status: boolean }>;
+  setRole(args: { body: { userId: string; role: Role }; headers: Headers }): Promise<unknown>;
+  removeUser(args: { body: { userId: string }; headers: Headers }): Promise<unknown>;
+}
+
+/** The endpoints above, off an instance that mounts them. */
+export const memberApi = (auth: Auth): MemberApi => auth.api as unknown as MemberApi;
 
 /**
  * Per request, never at module scope and never both: a singleton and a per-request instance
@@ -219,4 +249,116 @@ export async function accountFacts(
       lastUsed: row.updatedAt.getTime(),
     })),
   };
+}
+
+/** A row on the members screen: who can sign in to this site, and as what. */
+export interface Member {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  /**
+   * An invite nobody has opened yet. There is no `invited_at` column and none may be added,
+   * so what makes somebody pending is that they have never proved they own the address:
+   * `emailVerified` is false and they have neither an account nor a session to show for it.
+   * Every way in flips one of the three — a magic link verifies the address outright, GitHub
+   * does the same and leaves a row, a password is a row — so the only reading this gets wrong
+   * is a member seeded by hand with `email_verified 0` and a password, who signs in happily
+   * while the screen calls the invite pending.
+   */
+  pending: boolean;
+  /** How they sign in, and nothing while they are pending, because nobody knows yet. */
+  method: 'github' | 'password' | 'link' | null;
+  /**
+   * The newest session this person has opened. Signing out deletes the row, so somebody who
+   * signed out of their last device reads as unknown rather than as a date — the activity
+   * log's login events are what make this exact, and they are 3.7's.
+   */
+  lastSignIn: number | null;
+  invitedAt: number;
+}
+
+/**
+ * Everyone who can sign in, with the two facts that are computed rather than stored: how
+ * each of them gets in, and whether an invite has ever been opened. Three reads and no join,
+ * so a site with twenty members costs three round trips rather than twenty-one; the password
+ * hash is never one of the columns asked for.
+ */
+export async function memberList(db: Db): Promise<Member[]> {
+  const [users, accounts, sessions] = await Promise.all([
+    db
+      .select({
+        id: authTables.user.id,
+        name: authTables.user.name,
+        email: authTables.user.email,
+        role: authTables.user.role,
+        emailVerified: authTables.user.emailVerified,
+        createdAt: authTables.user.createdAt,
+      })
+      .from(authTables.user),
+    db
+      .select({ userId: authTables.account.userId, providerId: authTables.account.providerId })
+      .from(authTables.account)
+      .where(
+        or(
+          eq(authTables.account.providerId, 'github'),
+          and(
+            eq(authTables.account.providerId, 'credential'),
+            isNotNull(authTables.account.password),
+          ),
+        ),
+      ),
+    db
+      .select({ userId: authTables.session.userId, createdAt: authTables.session.createdAt })
+      .from(authTables.session),
+  ]);
+  const providers = new Map<string, Set<string>>();
+  for (const row of accounts) {
+    const held = providers.get(row.userId) ?? new Set<string>();
+    held.add(row.providerId);
+    providers.set(row.userId, held);
+  }
+  const signedIn = new Map<string, number>();
+  for (const row of sessions) {
+    const at = row.createdAt.getTime();
+    signedIn.set(row.userId, Math.max(signedIn.get(row.userId) ?? 0, at));
+  }
+  return users
+    .map((row) => {
+      const held = providers.get(row.id);
+      const lastSignIn = signedIn.get(row.id) ?? null;
+      const pending = !row.emailVerified && !held && lastSignIn === null;
+      return {
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        role: roleOf(row),
+        pending,
+        // GitHub first: it is the one a person recognises, and somebody who has linked it
+        // signs in with it whatever else they also hold.
+        method: pending
+          ? null
+          : held?.has('github')
+            ? ('github' as const)
+            : held?.has('credential')
+              ? ('password' as const)
+              : ('link' as const),
+        lastSignIn,
+        invitedAt: row.createdAt.getTime(),
+      };
+    })
+    .sort((a, b) => (b.lastSignIn ?? -1) - (a.lastSignIn ?? -1) || a.invitedAt - b.invitedAt);
+}
+
+/**
+ * How many owners the site has. The last one may not be demoted or removed, and that is a
+ * rule the route enforces — a menu that greys the item out is drawing the rule, not applying
+ * it.
+ */
+export async function ownerCount(db: Db): Promise<number> {
+  const [row] = await db
+    .select({ owners: count() })
+    .from(authTables.user)
+    .where(eq(authTables.user.role, 'owner'));
+  return row?.owners ?? 0;
 }

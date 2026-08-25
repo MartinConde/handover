@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
 import index from 'virtual:handover/index';
-import type { Db, EntryLocation, Form, GitClient, Translate } from '@handover/core';
+import type { Db, EntryLocation, Form, GitClient, Role, Translate } from '@handover/core';
 import {
   AUTH_BASE_PATH,
   accountFacts,
@@ -23,8 +23,11 @@ import {
   FORMAT_VERSION,
   formOf,
   loadDraft,
+  memberApi,
+  memberList,
   openDb,
   overlayRows,
+  ownerCount,
   parseEntry,
   pendingDrafts,
   publishDrafts,
@@ -134,6 +137,17 @@ async function account(session: App.Locals['handover']): Promise<Response> {
 }
 
 /**
+ * Better Auth's own refusal, in its own words: everything it declines carries a code and a
+ * sentence a person can act on. Anything without a code is not its answer and is not ours to
+ * dress up as one.
+ */
+function refused(err: unknown): Response {
+  const body = (err as { body?: { code?: string; message?: string } }).body;
+  if (!body?.code) throw err;
+  return Response.json({ error: body.message ?? body.code }, { status: 400 });
+}
+
+/**
  * The first password for somebody who has never had one — an invited user who arrived by an
  * emailed link. Better Auth's `setPassword` is server-only, so reaching it needs a route; it
  * refuses when a password already exists rather than becoming a way past `/change-password`,
@@ -151,12 +165,177 @@ async function setPassword(
     await createAuth(url, ctx).api.setPassword({ body: { newPassword }, headers: request.headers });
     return Response.json({ ok: true });
   } catch (err) {
-    // Better Auth says which rule was broken — too short, or already set — and its sentence is
-    // what the account page shows. Anything without a code is not its refusal and is not ours.
-    const refusal = (err as { body?: { code?: string; message?: string } }).body;
-    if (!refusal?.code) throw err;
-    return Response.json({ error: refusal.message ?? refusal.code }, { status: 400 });
+    // Too short, or already set: either way the account page shows Better Auth's sentence.
+    return refused(err);
   }
+}
+
+/**
+ * Who can sign in to this site. Owner-only, and asserted here rather than trusted from the
+ * sidebar: an editor is not offered the screen, but hiding a link is presentation.
+ */
+async function members(session: App.Locals['handover']): Promise<Response> {
+  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  return Response.json({ members: await memberList(db()) });
+}
+
+/**
+ * The one role value a request is allowed to carry. The admin plugin takes a string *or an
+ * array* and stores an array joined with commas, which `hasPermission` then splits and grants
+ * on any segment — so `['owner', 'editor']` is stored as `owner,editor`, read as an owner by
+ * Better Auth and as an editor by `roleOf`. Two literals or nothing.
+ */
+const roleIn = (body: unknown): Role | undefined => {
+  const { role } = (body ?? {}) as { role?: unknown };
+  return role === 'owner' || role === 'editor' ? role : undefined;
+};
+
+/**
+ * The whole of an invite: a `user` row and a link mailed to it. There is no invite table and
+ * no password — the person opens the link, which signs them in, and their account page offers
+ * them a first password. The link lives longer than a sign-in link and says something else;
+ * that is what the invite instance is for.
+ *
+ * The row is written before the mail is tried, so a send that fails leaves a pending invite
+ * the owner can resend rather than nothing at all — which is what the screen's failure notice
+ * tells them to do.
+ */
+async function invite(
+  request: Request,
+  url: URL,
+  ctx: App.Locals['cfContext'],
+  session: App.Locals['handover'],
+): Promise<Response> {
+  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  const body = (await request.json().catch(() => ({}))) as { email?: unknown };
+  const role = roleIn(body);
+  if (typeof body.email !== 'string' || !body.email.trim())
+    return Response.json({ error: 'No email address was sent' }, { status: 400 });
+  if (!role) return Response.json({ error: 'That is not a role' }, { status: 400 });
+  const send = mailer();
+  if (!send) return Response.json({ error: missingMailer() }, { status: 503 });
+  const auth = createAuth(url, ctx, { invite: true });
+  let email: string;
+  try {
+    // Three values, named one at a time. The endpoint also takes a `data` record that writes
+    // user columns directly, and a body spread into it would be a way to set any of them.
+    const created = await memberApi(auth).createUser({
+      body: { email: body.email.trim(), name: '', role },
+      headers: request.headers,
+    });
+    email = created.user.email;
+  } catch (err) {
+    // Already a member, or not an address: Better Auth's own sentence, which names which.
+    return refused(err);
+  }
+  try {
+    await memberApi(auth).signInMagicLink({
+      body: { email, callbackURL: '/admin/account' },
+      headers: request.headers,
+    });
+  } catch {
+    // The row is there and the message is not. Nothing about the failure names the link, and
+    // the provider's own words are the developer's to find in the log — the person reading
+    // this screen is told what to do, not what broke.
+    return Response.json({ error: 'invite-not-sent', to: email }, { status: 502 });
+  }
+  return Response.json({ ok: true, to: email });
+}
+
+/**
+ * The same link again, for an invite that never arrived. Only for somebody who has never
+ * signed in: a member who has would get a mail telling them they have been invited to a site
+ * they already use, and the login's own *Email me a link* is what they want instead.
+ */
+async function resendInvite(
+  id: string,
+  request: Request,
+  url: URL,
+  ctx: App.Locals['cfContext'],
+  session: App.Locals['handover'],
+): Promise<Response> {
+  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  // The list rather than one row, because `pending` is computed from three tables and this is
+  // the one place that knows how. A members table is tens of rows, not thousands.
+  const member = (await memberList(db())).find((row) => row.id === id);
+  if (!member) return new Response('Not found', { status: 404 });
+  if (!member.pending)
+    return Response.json({ error: 'They have already signed in' }, { status: 400 });
+  const send = mailer();
+  if (!send) return Response.json({ error: missingMailer() }, { status: 503 });
+  try {
+    await memberApi(createAuth(url, ctx, { invite: true })).signInMagicLink({
+      body: { email: member.email, callbackURL: '/admin/account' },
+      headers: request.headers,
+    });
+  } catch {
+    return Response.json({ error: 'invite-not-sent', to: member.email }, { status: 502 });
+  }
+  return Response.json({ ok: true, to: member.email });
+}
+
+/**
+ * Owner ↔ editor. The last owner may not be demoted, which is a rule of this site's and not
+ * Better Auth's: `setRole` will happily leave a site with nobody who can manage it.
+ */
+async function setMemberRole(
+  id: string,
+  request: Request,
+  url: URL,
+  ctx: App.Locals['cfContext'],
+  session: App.Locals['handover'],
+): Promise<Response> {
+  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  const role = roleIn(await request.json().catch(() => ({})));
+  if (!role) return Response.json({ error: 'That is not a role' }, { status: 400 });
+  const database = db();
+  const member = (await memberList(database)).find((row) => row.id === id);
+  if (!member) return new Response('Not found', { status: 404 });
+  if (role === 'editor' && member.role === 'owner' && (await ownerCount(database)) < 2)
+    return Response.json({ error: 'There must be at least one owner' }, { status: 400 });
+  try {
+    await memberApi(createAuth(url, ctx)).setRole({
+      body: { userId: id, role },
+      headers: request.headers,
+    });
+  } catch (err) {
+    return refused(err);
+  }
+  return Response.json({ ok: true });
+}
+
+/**
+ * Removing a member, and revoking an invite nobody opened: the same row and the same delete.
+ * Better Auth takes their sessions and accounts with it, so access ends with the request.
+ * Their drafts stay — a draft belongs to the site, not to whoever last typed in it.
+ *
+ * Two refusals are this site's, and both are rules rather than disabled buttons: nobody
+ * removes themselves, and the last owner stays.
+ */
+async function removeMember(
+  id: string,
+  request: Request,
+  url: URL,
+  ctx: App.Locals['cfContext'],
+  session: App.Locals['handover'],
+): Promise<Response> {
+  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  if (id === session.user.id)
+    return Response.json({ error: 'You cannot remove yourself' }, { status: 400 });
+  const database = db();
+  const member = (await memberList(database)).find((row) => row.id === id);
+  if (!member) return new Response('Not found', { status: 404 });
+  if (member.role === 'owner' && (await ownerCount(database)) < 2)
+    return Response.json({ error: 'There must be at least one owner' }, { status: 400 });
+  try {
+    await memberApi(createAuth(url, ctx)).removeUser({
+      body: { userId: id },
+      headers: request.headers,
+    });
+  } catch (err) {
+    return refused(err);
+  }
+  return Response.json({ ok: true });
 }
 
 // One file of one entry. No language is implied: which one an entry is written in is the
@@ -806,6 +985,9 @@ async function discard(collection: string, slug: string): Promise<Response> {
   return Response.json({});
 }
 
+const MEMBER = /^members\/([\w-]+)$/;
+const MEMBER_ROLE = /^members\/([\w-]+)\/role$/;
+const MEMBER_INVITE = /^members\/([\w-]+)\/invite$/;
 const ENTRIES = /^entries\/([\w-]+)$/;
 const ENTRY = /^entries\/([\w-]+)\/([\w-]+)$/;
 const DRAFT = /^drafts\/([\w-]+)\/([\w-]+)$/;
@@ -823,6 +1005,7 @@ const mounted = (pathname: string) => pathname.startsWith(`${AUTH_BASE_PATH}/`);
 export const GET: APIRoute = async ({ params, request, url, locals }) => {
   if (mounted(url.pathname)) return createAuth(url, locals.cfContext).handler(request);
   if (params.path === 'account') return account(locals.handover);
+  if (params.path === 'members') return members(locals.handover);
   if (params.path === 'ping') {
     return Response.json({
       ok: true,
@@ -979,6 +1162,11 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   if (mounted(url.pathname)) return createAuth(url, locals.cfContext).handler(request);
   if (params.path === 'checks/email') return testEmail(locals.handover);
   if (params.path === 'account/set-password') return setPassword(request, url, locals.cfContext);
+  if (params.path === 'members') return invite(request, url, locals.cfContext, locals.handover);
+  const roled = params.path?.match(MEMBER_ROLE);
+  if (roled) return setMemberRole(roled[1] ?? '', request, url, locals.cfContext, locals.handover);
+  const resent = params.path?.match(MEMBER_INVITE);
+  if (resent) return resendInvite(resent[1] ?? '', request, url, locals.cfContext, locals.handover);
   if (params.path === 'publish') return answering(publish);
   const filling = params.path?.match(TRANSLATE);
   if (filling)
@@ -1003,7 +1191,9 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   return new Response('Not found', { status: 404 });
 };
 
-export const DELETE: APIRoute = async ({ params }) => {
+export const DELETE: APIRoute = async ({ params, request, url, locals }) => {
+  const member = params.path?.match(MEMBER);
+  if (member) return removeMember(member[1] ?? '', request, url, locals.cfContext, locals.handover);
   const draft = params.path?.match(DRAFT);
   if (draft) return discard(draft[1] ?? '', draft[2] ?? '');
   const entry = params.path?.match(ENTRY);

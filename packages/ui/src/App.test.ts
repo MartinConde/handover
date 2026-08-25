@@ -58,10 +58,21 @@ test('an editor is offered neither Members nor Settings', () => {
 
 // A Manage destination whose screen has not been built yet must say so: the shell serves the
 // same HTML for every /admin path, so falling through would show a page headed Dashboard.
+// Members was this test's subject until its screen was built; Settings is 3.25's.
 test('a Manage route with no screen yet names itself', () => {
   drafts();
+  const root = show(session('owner'), '/admin/settings');
+  expect(root.querySelector('main.main h1')?.textContent).toBe('Settings');
+  expect(root.querySelector('main.main')?.textContent).toContain('This screen is not built yet');
+});
+
+test('an owner on the members route gets the members screen, not the placeholder', () => {
+  drafts();
   const root = show(session('owner'), '/admin/members');
-  expect(root.querySelector('main.main h1')?.textContent).toBe('Members');
+  expect(root.querySelector('main.main')?.textContent).not.toContain('not built yet');
+  expect(root.querySelector('main.main .list-toolbar .btn-primary')?.textContent?.trim()).toBe(
+    'Invite',
+  );
 });
 
 test('the signed-in name and role are in the top bar', () => {

@@ -149,7 +149,7 @@ export function loginMethods(): { emailLink: boolean; github: boolean } {
  * `ctx` is the Cloudflare execution context off `Astro.locals.cfContext`; without one the
  * email is sent before the response rather than after it.
  */
-export function createAuth(url: URL, ctx?: CloudflareContext): Auth {
+export function createAuth(url: URL, ctx?: CloudflareContext, options?: { invite?: true }): Auth {
   const secret = (env as { BETTER_AUTH_SECRET?: string }).BETTER_AUTH_SECRET;
   if (!secret) {
     throw new Error(
@@ -172,7 +172,10 @@ export function createAuth(url: URL, ctx?: CloudflareContext): Auth {
       : {}),
     ...(send
       ? {
-          sendMagicLink: signInLink(db, send),
+          sendMagicLink: options?.invite
+            ? inviteLink(db, send, base ?? url.origin)
+            : signInLink(db, send),
+          ...(options?.invite ? { magicLinkMinutes: INVITE_HOURS * 60 } : {}),
           sendPasswordReset: ({ email, url: link }) =>
             send({
               to: email,
@@ -202,5 +205,30 @@ const signInLink =
       to: email,
       subject: 'Your sign-in link',
       text: `Open this link to sign in as ${email}. It works once and expires in 15 minutes.\n\n${url}\n\nIf you did not ask for it, ignore it — nobody can sign in without opening the link.`,
+    });
+  };
+
+/**
+ * How long the link in an invite lives. A sign-in link is clicked in the minute it was asked
+ * for and gets fifteen; an invite is read in the evening, so fifteen minutes would make the
+ * link in it a lie more often than not. Nothing else about it is different — still one use,
+ * still stored as a hash — and the `verification` row carries its own expiry, so the ordinary
+ * instance verifies a link this one minted.
+ */
+const INVITE_HOURS = 72;
+
+/**
+ * The same one-time link, said differently: the person opening it has never heard of this
+ * site and needs to know why the mail arrived and what to do next. It goes to the account
+ * page rather than the dashboard, because the first thing they want is a password.
+ */
+const inviteLink =
+  (db: Db, send: Mailer, site: string) =>
+  async ({ email, url }: { email: string; url: string }) => {
+    if (!(await userExists(db, email))) return;
+    await send({
+      to: email,
+      subject: 'You have been invited',
+      text: `You have been invited to help run ${site}.\n\nOpen this link to sign in as ${email}. It works once and expires in three days; once you are in, your account page offers you a password so the next time needs no link.\n\n${url}\n\nIf you were not expecting this, ignore it — nobody can sign in without opening the link.`,
     });
   };
