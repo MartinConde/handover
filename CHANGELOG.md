@@ -11,7 +11,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   people is an owner-only endpoint. Two roles live in `user.role` — `owner` and `editor`, and an
   unrecognised value reads as `editor`. The sidebar's new **Manage** group hides *Members* and
   *Settings* from an editor, and the top bar shows who is signed in with a *Sign out* button.
-  Password sign-in allows three attempts per ten seconds per address before a 429.
+  Password sign-in allows three attempts per ten seconds per address before a 429, and the
+  session cookie is `Secure` whenever the request arrived over https.
   **Upgrading: set `BETTER_AUTH_SECRET` and insert the first owner by hand** — there is no
   sign-up, so a site with no rows in `user` cannot be signed in to
   ([Accounts and signing in](docs/auth.md)).

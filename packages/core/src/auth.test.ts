@@ -37,14 +37,20 @@ beforeEach(async () => {
   await binding.batch(ddl.map((sql) => binding.prepare(sql)));
 });
 
-const auth = () => createAuth(db, { secret: 'a-secret-long-enough-for-better-auth-32' });
+const auth = (secureCookies = true) =>
+  createAuth(db, { secret: 'a-secret-long-enough-for-better-auth-32', secureCookies });
 
 // Each request declares its own client address: the limiter buckets on `cf-connecting-ip`,
 // so without one every test in the file would share the three attempts per ten seconds.
 let caller = 0;
-function call(path: string, body: unknown, headers: Record<string, string> = {}) {
+function call(
+  path: string,
+  body: unknown,
+  headers: Record<string, string> = {},
+  secureCookies = true,
+) {
   caller += 1;
-  return auth().handler(
+  return auth(secureCookies).handler(
     new Request(`https://demo.example${AUTH_BASE_PATH}${path}`, {
       method: 'POST',
       headers: {
@@ -151,4 +157,30 @@ test('an editor session cannot create a user', async () => {
 
   expect(res.status).toBe(403);
   expect((await userRows()).map((r) => r.email)).toEqual(['editor@example.com']);
+});
+
+// Better Auth infers this from `NODE_ENV` when no baseURL is set, and a Worker has none — so
+// left alone the deployed site hands out a session cookie any plaintext request can carry.
+test('the session cookie is marked Secure when the request came over https', async () => {
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+
+  const res = await call('/sign-in/email', {
+    email: 'owner@example.com',
+    password: 'correct-horse-battery',
+  });
+
+  expect(res.headers.get('set-cookie')).toMatch(/Secure/);
+});
+
+test('a request over plain http gets no Secure cookie, so localhost still signs in', async () => {
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+
+  const res = await call(
+    '/sign-in/email',
+    { email: 'owner@example.com', password: 'correct-horse-battery' },
+    {},
+    false,
+  );
+
+  expect(res.headers.get('set-cookie')).not.toMatch(/Secure/);
 });

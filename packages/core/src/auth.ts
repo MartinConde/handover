@@ -35,6 +35,12 @@ export interface AuthConfig {
   github?: { clientId: string; clientSecret: string };
   /** Sends the link the user clicks; absent until the site has a `Mailer`. */
   sendMagicLink?: (data: { email: string; url: string }) => Promise<void>;
+  /**
+   * Whether this request arrived over https. Defaults to yes, because the wrong answer in
+   * that direction is only an inconvenience on a dev machine, and in the other it is a
+   * session cookie a plaintext request can carry.
+   */
+  secureCookies?: boolean;
 }
 
 /**
@@ -60,10 +66,17 @@ export function authOptions(db: Db, config: AuthConfig): BetterAuthOptions {
     // `enabled` defaults to `NODE_ENV === 'production'`, which a Worker never sets, so saying
     // it is what turns the limit on at all.
     rateLimit: { enabled: true, storage: 'database' },
-    // Which bucket an attempt is counted against. The default reads `x-forwarded-for`, whose
-    // first entry the caller writes — behind Cloudflare that is a limit anyone can walk around
-    // by varying a header. `cf-connecting-ip` is written by the edge and cannot be sent in.
-    advanced: { ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] } },
+    advanced: {
+      // Which bucket an attempt is counted against. The default reads `x-forwarded-for`, whose
+      // first entry the caller writes — behind Cloudflare that is a limit anyone can walk
+      // around by varying a header. `cf-connecting-ip` is written by the edge and cannot be
+      // sent in.
+      ipAddress: { ipAddressHeaders: ['cf-connecting-ip'] },
+      // Said rather than inferred: with no `baseURL` set, Better Auth falls back to
+      // `NODE_ENV === 'production'`, which a Worker never sets — so the deployed site was
+      // handing out a session cookie with no `Secure` on it.
+      useSecureCookies: config.secureCookies ?? true,
+    },
     plugins: [
       ...(config.sendMagicLink
         ? [magicLink({ sendMagicLink: config.sendMagicLink, disableSignUp: true })]

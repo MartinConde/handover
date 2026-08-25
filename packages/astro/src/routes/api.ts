@@ -739,7 +739,7 @@ const TRANSLATE = /^translate\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 const mounted = (pathname: string) => pathname.startsWith(`${AUTH_BASE_PATH}/`);
 
 export const GET: APIRoute = async ({ params, request, url, locals }) => {
-  if (mounted(url.pathname)) return createAuth().handler(request);
+  if (mounted(url.pathname)) return createAuth(url).handler(request);
   if (params.path === 'ping') {
     return Response.json({
       ok: true,
@@ -893,7 +893,7 @@ async function answering(work: () => Promise<Response>): Promise<Response> {
 }
 
 export const POST: APIRoute = async ({ params, request, url }) => {
-  if (mounted(url.pathname)) return createAuth().handler(request);
+  if (mounted(url.pathname)) return createAuth(url).handler(request);
   if (params.path === 'publish') return answering(publish);
   const filling = params.path?.match(TRANSLATE);
   if (filling)

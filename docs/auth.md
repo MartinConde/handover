@@ -78,6 +78,8 @@ the login says so. The counter lives in the `rate_limit` table in D1, so it is s
 Worker's isolates rather than being per-isolate and meaningless. The address is read from
 `cf-connecting-ip`, which Cloudflare writes and a caller cannot send in.
 
+The session cookie is `HttpOnly`, `SameSite=Lax`, and `Secure` on any site served over https.
+
 ## Signing out
 
 `POST /admin/api/auth/sign-out`, which the user menu does for you. It must carry
