@@ -6,6 +6,7 @@ import {
   createAuth as create,
   type Db,
   type EmailSender,
+  logActivity,
   type Mailer,
   openDb,
   type Role,
@@ -181,7 +182,9 @@ export function createAuth(url: URL, ctx?: CloudflareContext, options?: { invite
               to: email,
               subject: 'Set a new password',
               text: `Open this link to choose a new password for ${email}. It works once and expires in an hour.\n\n${link}\n\nIf you did not ask for this, ignore it — nothing has changed.`,
-            }).then(() => undefined),
+            })
+              .catch(mailFailed(db, 'password reset'))
+              .then(() => undefined),
         }
       : {}),
     // Handed straight over: Better Auth has already attached its own `.catch` by the time this
@@ -191,6 +194,20 @@ export function createAuth(url: URL, ctx?: CloudflareContext, options?: { invite
     ...(ctx ? { background: (promise) => ctx.waitUntil(promise) } : {}),
   });
 }
+
+/**
+ * The one trace of a message that did not go. A failed sign-in link is a `500` with an empty
+ * body, a failed invite is a `502` the owner can act on, and a failed reset is a `200` sent
+ * before the send was even tried — so for two of the three the only record is a line in the
+ * Worker's log, which the person running the site cannot read. It names what the message was
+ * for and nothing else: not the address, and never the link, which is a credential.
+ *
+ * The refusal is re-thrown, so nothing above this changes its answer.
+ */
+const mailFailed = (db: Db, what: string) => async (err: unknown) => {
+  await logActivity('default', db, { kind: 'mail-failed', detail: { message: what } });
+  throw err;
+};
 
 /**
  * `/sign-in/magic-link` answers the same for every address — which is what keeps it from
@@ -205,7 +222,7 @@ const signInLink =
       to: email,
       subject: 'Your sign-in link',
       text: `Open this link to sign in as ${email}. It works once and expires in 15 minutes.\n\n${url}\n\nIf you did not ask for it, ignore it — nobody can sign in without opening the link.`,
-    });
+    }).catch(mailFailed(db, 'sign-in link'));
   };
 
 /**
@@ -230,5 +247,5 @@ const inviteLink =
       to: email,
       subject: 'You have been invited',
       text: `You have been invited to help run ${site}.\n\nOpen this link to sign in as ${email}. It works once and expires in three days; once you are in, your account page offers you a password so the next time needs no link.\n\n${url}\n\nIf you were not expecting this, ignore it — nobody can sign in without opening the link.`,
-    });
+    }).catch(mailFailed(db, 'invite'));
   };

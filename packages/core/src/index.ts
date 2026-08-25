@@ -1,3 +1,10 @@
+export type {
+  ActivityEntry,
+  ActivityEvent,
+  ActivityGroup,
+  ActivityQuery,
+} from './activity.js';
+export { ACTIVITY_GROUPS, activityPage, logActivity } from './activity.js';
 export type { AccountFacts, Auth, AuthConfig, Member, MemberApi, Role } from './auth.js';
 export {
   AUTH_BASE_PATH,

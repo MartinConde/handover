@@ -292,6 +292,10 @@ type MemberRow = {
   invitedAt: number;
 };
 let memberRows: MemberRow[] = [];
+// The D1 boundary again: what each route asked to be written, and what it asked the reader
+// for. The reader's own filter runs against a real D1 in core's `activity.test.ts`.
+const logged: Record<string, unknown>[] = [];
+let read: unknown[] = [];
 /** Which rows the routes took out of the owner count, in order. */
 const demoted: string[] = [];
 // Which user and which session the route asked about — the two values that must come from the
@@ -309,6 +313,13 @@ vi.mock('@handover/core', async (original) => ({
     target.role = 'editor';
     demoted.push(id);
     return true;
+  },
+  logActivity: async (_site: string, _db: unknown, event: Record<string, unknown>) => {
+    logged.push(event);
+  },
+  activityPage: async (..._args: unknown[]) => {
+    read = _args.slice(2);
+    return { events: [], cursor: null };
   },
   accountFacts: async (..._args: unknown[]) => {
     asked = _args.slice(2);
@@ -343,6 +354,8 @@ afterEach(() => {
   facts = { hasPassword: true, sessions: [] };
   asked = [];
   memberRows = [];
+  logged.length = 0;
+  read = [];
   demoted.length = 0;
   createUserRefusal = undefined;
   magicLinkRefusal = undefined;
@@ -2354,4 +2367,204 @@ test('a member id the request made up is a 404, not a 500', async () => {
   const removed = await memberDelete('members/u9', owner);
 
   expect([roled.status, removed.status]).toEqual([404, 404]);
+});
+
+// ─── what reaches the activity log ───────────────────────────────────────────────────────
+
+test('an invite is an invite event naming who invited whom', async () => {
+  siteMailer = fakeMailer;
+
+  await memberPost('members', { email: 'lea@example.com', role: 'editor' }, owner);
+
+  expect(logged).toEqual([
+    {
+      userId: 'u1',
+      kind: 'invite',
+      subject: 'new',
+      detail: { email: 'lea@example.com', role: 'editor' },
+    },
+  ]);
+});
+
+// The row exists whether or not the message went, so the log says so too — and the link that
+// was minted for it is in neither the answer nor the row.
+test('an invite whose mail fails is still an invite event, and carries no link', async () => {
+  siteMailer = fakeMailer;
+  magicLinkRefusal = new Error('https://x/admin/api/auth/magic-link/verify?token=SECRET_TOKEN');
+
+  const res = await memberPost('members', { email: 'lea@example.com', role: 'editor' }, owner);
+
+  expect(res.status).toBe(502);
+  expect(logged.map((e) => e.kind)).toEqual(['invite']);
+  expect(JSON.stringify(logged)).not.toContain('SECRET_TOKEN');
+});
+
+test('an invite that was refused is no event at all', async () => {
+  siteMailer = fakeMailer;
+  createUserRefusal = { body: { code: 'USER_ALREADY_EXISTS', message: 'User already exists' } };
+
+  await memberPost('members', { email: 'lea@example.com', role: 'editor' }, owner);
+
+  expect(logged).toEqual([]);
+});
+
+test('promoting somebody is a role-change event', async () => {
+  memberRows = [
+    member('u1', 'martin@example.com', 'owner'),
+    member('u2', 'anna@example.com', 'editor'),
+  ];
+
+  await memberPost('members/u2/role', { role: 'owner' }, owner);
+
+  expect(logged).toEqual([
+    { userId: 'u1', kind: 'role-change', subject: 'u2', detail: { role: 'owner' } },
+  ]);
+});
+
+// Demotion is the branch that goes through `demoteOwner` rather than `setRole`, so it is the
+// one a log line hung off Better Auth's endpoint would miss.
+test('demoting an owner is a role-change event too', async () => {
+  memberRows = [
+    member('u1', 'martin@example.com', 'owner'),
+    member('u2', 'kim@example.com', 'owner'),
+  ];
+
+  await memberPost('members/u2/role', { role: 'editor' }, owner);
+
+  expect(logged).toEqual([
+    { userId: 'u1', kind: 'role-change', subject: 'u2', detail: { role: 'editor' } },
+  ]);
+});
+
+test('a role change the last-owner rule refuses is no event', async () => {
+  memberRows = [
+    member('u1', 'martin@example.com', 'owner'),
+    member('u2', 'anna@example.com', 'editor'),
+  ];
+
+  const res = await memberPost('members/u1/role', { role: 'editor' }, owner);
+
+  expect(res.status).toBe(400);
+  expect(logged).toEqual([]);
+});
+
+test('setting a first password is a password-set event for the person who set it', async () => {
+  await POST(
+    ctx(
+      'account/set-password',
+      new Request('https://x/admin/api/account/set-password', {
+        method: 'POST',
+        body: JSON.stringify({ newPassword: 'a-password-of-twelve' }),
+      }),
+      { handover: editor },
+    ),
+  );
+
+  expect(logged).toEqual([{ userId: 'u2', kind: 'password-set' }]);
+});
+
+test('a password Better Auth refused is no event', async () => {
+  setPassword = async () => {
+    throw { body: { code: 'PASSWORD_TOO_SHORT', message: 'Password too short' } };
+  };
+
+  await POST(
+    ctx(
+      'account/set-password',
+      new Request('https://x/admin/api/account/set-password', {
+        method: 'POST',
+        body: JSON.stringify({ newPassword: 'short' }),
+      }),
+      { handover: editor },
+    ),
+  );
+
+  expect(logged).toEqual([]);
+});
+
+test('a publish is a publish event carrying the commit and the file count', async () => {
+  await POST(
+    ctx('publish', new Request('https://x/admin/api/publish', { method: 'POST' }), {
+      handover: owner,
+    }),
+  );
+
+  expect(logged).toEqual([
+    {
+      userId: 'u1',
+      kind: 'publish',
+      subject: 'src/content/listings/en/mill-house.yaml',
+      detail: { files: 1 },
+      commitSha: 'def456',
+    },
+  ]);
+});
+
+// Hazard 4: a Publish click with nothing pending must not spend a write. `publish-failed` and
+// `publish-conflict` have no caller in this row either — a schema refusal is answered to the
+// person who asked, in the same response.
+test('a publish that commits nothing writes no event', async () => {
+  publishDrafts.mockImplementationOnce(async () => undefined);
+
+  await POST(
+    ctx('publish', new Request('https://x/admin/api/publish', { method: 'POST' }), {
+      handover: owner,
+    }),
+  );
+
+  expect(logged).toEqual([]);
+});
+
+test('a publish the schema refused writes no event', async () => {
+  pendingDrafts.mockImplementationOnce(async () => [
+    { path: 'src/content/listings/en/mill-house.yaml', contents: 'rooms: 3\n', updatedAt: 1 },
+  ]);
+
+  const res = await POST(
+    ctx('publish', new Request('https://x/admin/api/publish', { method: 'POST' }), {
+      handover: owner,
+    }),
+  );
+
+  expect(res.status).toBe(422);
+  expect(logged).toEqual([]);
+});
+
+// `params.path` is the route's own segment and the filters ride on the query string, so this
+// one builds its context by hand rather than through `ctx`.
+const activityGet = (query: string, session?: unknown) =>
+  GET({
+    params: { path: 'activity' },
+    request: undefined,
+    url: new URL(`https://x/admin/api/activity${query}`),
+    locals: { handover: session },
+  } as unknown as APIContext);
+
+// The whole of `editor sees only their own`: the id is the session's and a `user` in the
+// query is passed on for core to ignore, never swapped in for the caller.
+test('the activity log is read as the signed-in person, whoever the query string names', async () => {
+  await activityGet('?user=u1', editor);
+
+  expect(read[0]).toEqual({ id: 'u2', role: 'editor' });
+});
+
+test('an editor may read the activity log', async () => {
+  const res = await activityGet('', editor);
+
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ events: [], cursor: null });
+});
+
+test('the filters and the cursor are passed on as they were asked for', async () => {
+  await activityGet(
+    '?group=Accounts&user=u3&entry=src/content/pages/en/about.yaml&cursor=5000.abc',
+    owner,
+  );
+
+  expect(read[1]).toEqual({
+    group: 'Accounts',
+    user: 'u3',
+    entry: 'src/content/pages/en/about.yaml',
+    cursor: '5000.abc',
+  });
 });

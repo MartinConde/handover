@@ -133,10 +133,13 @@ nothing is coming to.
 
 The **reset link** does not wait. `Forgot password?` answers *If this email exists in our system,
 check your email for the reset link* before the mail is handed over — which is what keeps it from
-confirming who has an account. A send that then fails reaches the Worker's log and nowhere else,
-as `Failed to run background task` carrying the provider's own sentence. `npx wrangler tail` is
-where to look when somebody says a reset link never arrived. Nothing in that line is the link
-itself.
+confirming who has an account. A send that then fails reaches the Worker's log as
+`Failed to run background task` carrying the provider's own sentence, so `npx wrangler tail` is
+where the reason is. Nothing in that line is the link itself.
+
+Every failed send of all three also leaves a row in the [activity log](activity.md), which is
+where to look first when somebody says a link never arrived: it says which kind of message it
+was and when, and the provider's reason is the line in the tail.
 
 See also: [Configuration](configuration.md#mailer) for the config key, and
 [Accounts and signing in](auth.md) for what the links do.

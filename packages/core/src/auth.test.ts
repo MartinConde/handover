@@ -760,3 +760,153 @@ test('somebody who is not an owner is nobody to demote', async () => {
   expect(await demoteOwner('default', db, anna)).toBe(false);
   expect(await roleOfRow(anna)).toBe('editor');
 });
+
+// ─── what a sign-in leaves behind ────────────────────────────────────────────────────────
+
+/**
+ * The activity table as anybody reading it would: every column of every row, so a test that
+ * says "no token was written" is looking at what was written rather than at the code.
+ */
+const activityRows = async () =>
+  (await binding.prepare('SELECT * FROM activity ORDER BY at').all()).results as {
+    user_id: string | null;
+    kind: string;
+    subject: string | null;
+    detail: string | null;
+    commit_sha: string | null;
+  }[];
+
+test('a password sign-in is a login event naming the method and the person', async () => {
+  const id = await seed('owner@example.com', 'correct-horse-battery', 'owner');
+
+  await call('/sign-in/email', { email: 'owner@example.com', password: 'correct-horse-battery' });
+
+  expect(await activityRows()).toEqual([
+    {
+      id: expect.any(String),
+      site_id: 'default',
+      at: expect.any(Number),
+      user_id: id,
+      kind: 'login',
+      subject: null,
+      detail: '{"method":"password"}',
+      commit_sha: null,
+    },
+  ]);
+});
+
+test('a wrong password is not a login event', async () => {
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+
+  await call('/sign-in/email', { email: 'owner@example.com', password: 'wrong-password-here' });
+
+  expect(await activityRows()).toEqual([]);
+});
+
+test('opening an emailed link is a login event, and the link is not in it', async () => {
+  emailing();
+  await seedUser('owner@example.com', 'owner');
+  await call('/sign-in/magic-link', { email: 'owner@example.com', callbackURL: '/admin' });
+  const link = magicLinks[0]?.url ?? '';
+  const token = new URL(link).searchParams.get('token') ?? '';
+
+  await open(link);
+
+  const rows = await activityRows();
+  expect(rows.map((r) => [r.kind, r.detail])).toEqual([['login', '{"method":"link"}']]);
+  expect(token).not.toBe('');
+  expect(JSON.stringify(rows)).not.toContain(token);
+});
+
+test('signing in through GitHub is a login event naming GitHub', async () => {
+  emailing();
+  github = { clientId: 'gh_id', clientSecret: 'gh_secret' };
+  await seedUser('owner@example.com', 'owner');
+
+  await githubCallback({ login: 'martin', email: 'owner@example.com', verified: true });
+
+  expect((await activityRows()).map((r) => [r.kind, r.detail])).toEqual([
+    ['login', '{"method":"github"}'],
+  ]);
+});
+
+test('a GitHub account nobody invited signs nobody in and logs nothing', async () => {
+  emailing();
+  github = { clientId: 'gh_id', clientSecret: 'gh_secret' };
+
+  await githubCallback({ login: 'stranger', email: 'stranger@example.com', verified: true });
+
+  expect(await activityRows()).toEqual([]);
+});
+
+test('a reset link is not written anywhere either', async () => {
+  emailing();
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+  await call('/request-password-reset', {
+    email: 'owner@example.com',
+    redirectTo: `${SITE}/admin/reset`,
+  });
+  const token = (resetLinks[0]?.url ?? '').split('/reset-password/')[1]?.split('?')[0] ?? '';
+
+  expect(token).not.toBe('');
+  expect(JSON.stringify(await activityRows())).not.toContain(token);
+});
+
+test('carrying on with a session is not a second login', async () => {
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+  const res = await call('/sign-in/email', {
+    email: 'owner@example.com',
+    password: 'correct-horse-battery',
+  });
+  const cookie = cookiesOf(res);
+
+  for (let i = 0; i < 3; i += 1) await open(`${SITE}${AUTH_BASE_PATH}/get-session`, cookie);
+
+  expect(await activityRows()).toHaveLength(1);
+});
+
+test('the last sign-in is the login event, not a session row that has been signed out of', async () => {
+  const id = await seedUser('anna@example.com', 'editor');
+  await binding
+    .prepare(
+      `INSERT INTO activity (id, site_id, at, user_id, kind, subject, detail, commit_sha)
+       VALUES ('act1', 'default', 7000, ?, 'login', NULL, '{"method":"link"}', NULL)`,
+    )
+    .bind(id)
+    .run();
+
+  expect((await memberList('default', db))[0]?.lastSignIn).toBe(7_000);
+});
+
+test('a session opened since the last login event is the newer of the two', async () => {
+  const id = await seedUser('anna@example.com', 'editor');
+  await binding
+    .prepare(
+      `INSERT INTO activity (id, site_id, at, user_id, kind, subject, detail, commit_sha)
+       VALUES ('act1', 'default', 7000, ?, 'login', NULL, '{"method":"link"}', NULL)`,
+    )
+    .bind(id)
+    .run();
+  await seedSession(id, 9_000);
+
+  expect((await memberList('default', db))[0]?.lastSignIn).toBe(9_000);
+});
+
+// The admin plugin mounts `impersonate-user` and an owner may call it. The session it creates
+// belongs to somebody who did not sign in, so a `login` row for them would be a false record.
+test('an owner impersonating somebody is not a sign-in by that person', async () => {
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+  await seedUser('anna@example.com', 'editor');
+  const signed = await call('/sign-in/email', {
+    email: 'owner@example.com',
+    password: 'correct-horse-battery',
+  });
+
+  await call(
+    '/admin/impersonate-user',
+    { userId: 'usr_anna@example.com' },
+    { cookie: cookiesOf(signed) },
+  );
+
+  expect((await activityRows()).map((r) => r.user_id)).toEqual(['usr_owner@example.com']);
+});

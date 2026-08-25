@@ -5,9 +5,11 @@ import { createAccessControl } from 'better-auth/plugins/access';
 import { admin } from 'better-auth/plugins/admin';
 import { adminAc, defaultStatements, userAc } from 'better-auth/plugins/admin/access';
 import { magicLink } from 'better-auth/plugins/magic-link';
-import { and, desc, eq, exists, gt, isNotNull, ne, or, sql } from 'drizzle-orm';
+import { and, desc, eq, exists, gt, isNotNull, max, ne, or, sql } from 'drizzle-orm';
+import { logActivity } from './activity.js';
 import * as authTables from './auth-schema.js';
 import type { Db } from './db.js';
+import { activity } from './tables.js';
 
 /** Where the login's own endpoints are served, and the one path no session assert may cover. */
 export const AUTH_BASE_PATH = '/admin/api/auth';
@@ -69,13 +71,27 @@ export interface AuthConfig {
 }
 
 /**
+ * Which of the three ways in a session was created by, keyed on the endpoint that created it.
+ * Read out of a real instance rather than recalled: `path` is the endpoint's own path and not
+ * the mounted URL, and a social callback is the *pattern* with the provider in `params`.
+ *
+ * A path that is not one of these is deliberately not a login. `/admin/impersonate-user` is
+ * the one that matters: it creates a session for somebody who did not sign in, and a row
+ * saying they did would be a false record rather than a missing one.
+ */
+const SIGN_IN_METHOD: Record<string, string> = {
+  '/sign-in/email': 'password',
+  '/magic-link/verify': 'link',
+};
+
+/**
  * The options `npx auth generate` reads and the ones the Worker runs — one object, so the
  * tables in `auth-schema.ts` cannot drift from the config that queries them. A method whose
  * credentials the site does not hold is left unmounted rather than mounted and broken, and
  * the two that put a URL in an email also want `baseURL`: without one they would mail a link
  * built from whatever `Host` the request carried.
  */
-export function authOptions(_siteId: string, db: Db, config: AuthConfig): BetterAuthOptions {
+export function authOptions(siteId: string, db: Db, config: AuthConfig): BetterAuthOptions {
   const emailing = Boolean(config.baseURL);
   const resetting = emailing && config.sendPasswordReset;
   return {
@@ -136,6 +152,29 @@ export function authOptions(_siteId: string, db: Db, config: AuthConfig): Better
       // which a Worker never sets — and the deployed site hands out a cookie with no `Secure`.
       useSecureCookies: config.secureCookies ?? true,
       ...(config.background ? { backgroundTasks: { handler: config.background } } : {}),
+    },
+    // The only seam that sees all three ways in: they are all inside Better Auth's own
+    // handler, so there is no route of ours to hang this on. `logActivity` swallows its own
+    // failures, and that is load-bearing here — a throw in an after-hook answers `500` with
+    // the session row already committed, which is a sign-in that half happened.
+    databaseHooks: {
+      session: {
+        create: {
+          after: async (session, context) => {
+            const path = context?.path ?? '';
+            const method =
+              path === '/callback/:id'
+                ? String((context?.params as { id?: string } | undefined)?.id ?? '')
+                : SIGN_IN_METHOD[path];
+            if (!method) return;
+            await logActivity(siteId, db, {
+              userId: session.userId,
+              kind: 'login',
+              detail: { method },
+            });
+          },
+        },
+      },
     },
     plugins: [
       ...(emailing && config.sendMagicLink
@@ -272,9 +311,9 @@ export interface Member {
   /** How they sign in, and nothing while they are pending, because nobody knows yet. */
   method: 'github' | 'password' | 'link' | null;
   /**
-   * The newest session this person has opened. Signing out deletes the row, so somebody who
-   * signed out of their last device reads as unknown rather than as a date — the activity
-   * log's login events are what make this exact, and they are 3.7's.
+   * When this person last signed in: the newer of their newest session and their newest
+   * `login` event. The session alone is a convenience — signing out deletes the row — and the
+   * event alone misses everybody who signed in before there was a log, so both are read.
    */
   lastSignIn: number | null;
   invitedAt: number;
@@ -282,12 +321,12 @@ export interface Member {
 
 /**
  * Everyone who can sign in, with the two facts that are computed rather than stored: how
- * each of them gets in, and whether an invite has ever been opened. Three reads and no join,
- * so a site with twenty members costs three round trips rather than twenty-one; the password
+ * each of them gets in, and whether an invite has ever been opened. Four reads and no join,
+ * so a site with twenty members costs four round trips rather than twenty-one; the password
  * hash is never one of the columns asked for.
  */
 export async function memberList(siteId: string, db: Db): Promise<Member[]> {
-  const [users, accounts, sessions] = await Promise.all([
+  const [users, accounts, sessions, logins] = await Promise.all([
     db
       .select({
         id: authTables.user.id,
@@ -313,6 +352,13 @@ export async function memberList(siteId: string, db: Db): Promise<Member[]> {
     db
       .select({ userId: authTables.session.userId, createdAt: authTables.session.createdAt })
       .from(authTables.session),
+    // A grouped read of one kind rather than the whole table: an owner opens this screen now
+    // and then, and 180 days of sign-ins is thousands of rows, not millions.
+    db
+      .select({ userId: activity.userId, at: max(activity.at) })
+      .from(activity)
+      .where(and(eq(activity.siteId, siteId), eq(activity.kind, 'login')))
+      .groupBy(activity.userId),
   ]);
   const providers = new Map<string, Set<string>>();
   for (const row of accounts) {
@@ -324,6 +370,10 @@ export async function memberList(siteId: string, db: Db): Promise<Member[]> {
   for (const row of sessions) {
     const at = row.createdAt.getTime();
     signedIn.set(row.userId, Math.max(signedIn.get(row.userId) ?? 0, at));
+  }
+  for (const row of logins) {
+    if (row.userId && row.at !== null)
+      signedIn.set(row.userId, Math.max(signedIn.get(row.userId) ?? 0, row.at));
   }
   return users
     .map((row) => {

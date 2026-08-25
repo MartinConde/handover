@@ -4,6 +4,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **An activity log, and the first events in it.** Signing in, being invited, having a role
+  changed, setting a first password and publishing each write one row to the `activity` table
+  the Phase 3 migration created — no new migration, and nothing to turn on. `GET
+  /admin/api/activity` reads the newest 50 for whoever is signed in: **an owner sees everybody
+  and an editor sees only their own**, filtered on the server, so an editor naming somebody else
+  in the query string gets their own events back rather than a refusal. Paging is by cursor
+  rather than offset, because two events can share a millisecond. **No one-time link and no
+  token reaches a row** — an `invite` names the address and the role, and a message the provider
+  refused leaves a `mail-failed` row naming only what it was for, which is the first time a
+  failed reset is visible anywhere but `wrangler tail`. The members screen's **Last sign-in** is
+  now the newer of a live session and a `login` event, so signing out everywhere no longer erases
+  it ([Activity log](docs/activity.md), [Roles and permissions](docs/roles.md#how-somebody-signs-in)).
+
 - **A Members screen at `/admin/members`.** Owners can now invite people, change a role between
   owner and editor, resend an invite and remove somebody, without a `wrangler d1 execute` in
   sight. An invite is a `user` row and an emailed link: the person opens it, which signs them in,

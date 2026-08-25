@@ -5,6 +5,7 @@ import type { Db, EntryLocation, Form, GitClient, Role, Translate } from '@hando
 import {
   AUTH_BASE_PATH,
   accountFacts,
+  activityPage,
   addressError,
   blobSha,
   collectionEntries,
@@ -24,6 +25,7 @@ import {
   FORMAT_VERSION,
   formOf,
   loadDraft,
+  logActivity,
   memberApi,
   memberList,
   openDb,
@@ -157,17 +159,43 @@ async function setPassword(
   request: Request,
   url: URL,
   ctx: App.Locals['cfContext'],
+  session: App.Locals['handover'],
 ): Promise<Response> {
   const { newPassword } = (await request.json()) as { newPassword?: unknown };
   if (typeof newPassword !== 'string')
     return Response.json({ error: 'No password was sent' }, { status: 400 });
   try {
     await createAuth(url, ctx).api.setPassword({ body: { newPassword }, headers: request.headers });
+    await logActivity('default', db(), { userId: session?.user.id, kind: 'password-set' });
     return Response.json({ ok: true });
   } catch (err) {
     // Too short, or already set: either way the account page shows Better Auth's sentence.
     return refused(err);
   }
+}
+
+/**
+ * The half of "who changed this?" that never reaches git. **The first route with a per-role
+ * filter rather than a per-role gate**: an editor may read it, and sees only their own events
+ * — their id comes off the session, so a `user` in the query string is not a way to somebody
+ * else's. There is no `limit`: a caller-chosen page size is a scan somebody else pays for.
+ */
+async function activityLog(url: URL, session: App.Locals['handover']): Promise<Response> {
+  if (!session) return new Response('Unauthorized', { status: 401 });
+  const asked = url.searchParams;
+  return Response.json(
+    await activityPage(
+      'default',
+      db(),
+      { id: session.user.id, role: session.role },
+      {
+        group: asked.get('group') ?? undefined,
+        user: asked.get('user') ?? undefined,
+        entry: asked.get('entry') ?? undefined,
+        cursor: asked.get('cursor') ?? undefined,
+      },
+    ),
+  );
 }
 
 /**
@@ -224,6 +252,15 @@ async function invite(
       headers: request.headers,
     });
     email = created.user.email;
+    // Before the send rather than after it: the row is what an invite is, and one whose mail
+    // failed is the case the owner most needs a record of. The link is not minted here and is
+    // in nothing this writes.
+    await logActivity('default', db(), {
+      userId: session.user.id,
+      kind: 'invite',
+      subject: created.user.id,
+      detail: { email, role },
+    });
   } catch (err) {
     // Already a member, or not an address: Better Auth's own sentence, which names which.
     return refused(err);
@@ -295,18 +332,24 @@ async function setMemberRole(
   // statement that holds the rule rather than by `setRole` behind a count somebody else can
   // change in between. Promotions have nothing to race with and stay Better Auth's.
   if (role === 'editor' && member.role === 'owner') {
-    return (await demoteOwner('default', database, id))
-      ? Response.json({ ok: true })
-      : Response.json({ error: 'There must be at least one owner' }, { status: 400 });
+    if (!(await demoteOwner('default', database, id)))
+      return Response.json({ error: 'There must be at least one owner' }, { status: 400 });
+  } else {
+    try {
+      await memberApi('default', createAuth(url, ctx)).setRole({
+        body: { userId: id, role },
+        headers: request.headers,
+      });
+    } catch (err) {
+      return refused(err);
+    }
   }
-  try {
-    await memberApi('default', createAuth(url, ctx)).setRole({
-      body: { userId: id, role },
-      headers: request.headers,
-    });
-  } catch (err) {
-    return refused(err);
-  }
+  await logActivity('default', database, {
+    userId: session.user.id,
+    kind: 'role-change',
+    subject: id,
+    detail: { role },
+  });
   return Response.json({ ok: true });
 }
 
@@ -1014,6 +1057,7 @@ const mounted = (pathname: string) => pathname.startsWith(`${AUTH_BASE_PATH}/`);
 export const GET: APIRoute = async ({ params, request, url, locals }) => {
   if (mounted(url.pathname)) return createAuth(url, locals.cfContext).handler(request);
   if (params.path === 'account') return account(locals.handover);
+  if (params.path === 'activity') return activityLog(url, locals.handover);
   if (params.path === 'members') return members(locals.handover);
   if (params.path === 'ping') {
     return Response.json({
@@ -1108,7 +1152,7 @@ async function driftedPaths(paths: string[]): Promise<string[]> {
  * again inside publishDrafts; a draft written between the two reads is a window this phase
  * accepts, since the entry it belongs to is the one whose tab is doing the publishing.
  */
-async function publish(): Promise<Response> {
+async function publish(session: App.Locals['handover']): Promise<Response> {
   const database = db();
   const pending = await pendingDrafts('default', database);
   const unready = pending.filter((row) => {
@@ -1147,6 +1191,19 @@ async function publish(): Promise<Response> {
     );
   }
   const result = await publishDrafts('default', database, gitClient(), sourceOf);
+  // Only a commit is an event. A Publish click with nothing pending is not one, and spending a
+  // D1 write on it is how one busy editor costs a site its day's budget.
+  if (result?.commit_sha) {
+    await logActivity('default', database, {
+      userId: session?.user.id,
+      kind: 'publish',
+      // One file is an entry somebody can open; a batch is the commit, and the paths are not
+      // small json.
+      subject: result.paths.length === 1 ? (result.paths[0] ?? null) : null,
+      detail: { files: result.paths.length },
+      commitSha: result.commit_sha,
+    });
+  }
   return Response.json(result ?? { paths: [] });
 }
 
@@ -1170,13 +1227,14 @@ async function answering(work: () => Promise<Response>): Promise<Response> {
 export const POST: APIRoute = async ({ params, request, url, locals }) => {
   if (mounted(url.pathname)) return createAuth(url, locals.cfContext).handler(request);
   if (params.path === 'checks/email') return testEmail(locals.handover);
-  if (params.path === 'account/set-password') return setPassword(request, url, locals.cfContext);
+  if (params.path === 'account/set-password')
+    return setPassword(request, url, locals.cfContext, locals.handover);
   if (params.path === 'members') return invite(request, url, locals.cfContext, locals.handover);
   const roled = params.path?.match(MEMBER_ROLE);
   if (roled) return setMemberRole(roled[1] ?? '', request, url, locals.cfContext, locals.handover);
   const resent = params.path?.match(MEMBER_INVITE);
   if (resent) return resendInvite(resent[1] ?? '', request, url, locals.cfContext, locals.handover);
-  if (params.path === 'publish') return answering(publish);
+  if (params.path === 'publish') return answering(() => publish(locals.handover));
   const filling = params.path?.match(TRANSLATE);
   if (filling)
     return answering(() =>

@@ -11,6 +11,9 @@ let clientId: string | undefined;
 let clientSecret: string | undefined;
 let resendKey: string | undefined;
 const sent: { to: string; subject: string; text: string }[] = [];
+// What a mailer that is having a bad day answers with. Its message names nothing, because a
+// provider's refusal is the developer's to read in the log and not a person's to see.
+let refuseSend: Error | undefined;
 let binding: Awaited<ReturnType<Miniflare['getD1Database']>>;
 
 const mf = new Miniflare({
@@ -48,6 +51,7 @@ vi.mock('virtual:handover/config', () => ({
     i18n: { locales: ['en'], defaultLocale: 'en' },
     collections: {},
     mailer: async (message: { to: string; subject: string; text: string }) => {
+      if (refuseSend) throw refuseSend;
       sent.push(message);
       return { id: 'fake-1' };
     },
@@ -68,6 +72,7 @@ beforeAll(async () => {
       account: tables.account,
       verification: tables.verification,
       rateLimit: tables.rateLimit,
+      activity: tables.activity,
     }),
   );
 });
@@ -77,6 +82,7 @@ beforeEach(async () => {
   clientId = undefined;
   clientSecret = undefined;
   resendKey = undefined;
+  refuseSend = undefined;
   sent.length = 0;
   const rows = (await binding.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all())
     .results as { name: string }[];
@@ -273,4 +279,90 @@ test('an invite to an address with no row mails nothing', async () => {
   await sendInvite('stranger@example.com');
 
   expect(sent).toEqual([]);
+});
+
+// ─── a message that never went ───────────────────────────────────────────────────────────
+
+/**
+ * The one trace of a send that failed. A sign-in link answers `500` with an empty body and a
+ * reset answers `200` nobody hears about, so without a row the only record is a line in the
+ * Worker's log — which the person running the site cannot read.
+ */
+const mailFailures = async () =>
+  (await binding.prepare("SELECT * FROM activity WHERE kind = 'mail-failed'").all()).results as {
+    user_id: string | null;
+    detail: string;
+  }[];
+
+test('a sign-in link that could not be sent leaves a row saying so', async () => {
+  await seedUser('owner@example.com');
+  refuseSend = new Error('resend refused: 403');
+
+  const res = await askForLink('owner@example.com');
+
+  expect(res.status).toBe(500);
+  expect(await mailFailures()).toEqual([
+    expect.objectContaining({
+      site_id: 'default',
+      user_id: null,
+      kind: 'mail-failed',
+      subject: null,
+      detail: '{"message":"sign-in link"}',
+      commit_sha: null,
+    }),
+  ]);
+});
+
+test('an invite that could not be sent says it was an invite', async () => {
+  await seedUser('lea@example.com');
+  refuseSend = new Error('resend refused: 403');
+
+  await expect(sendInvite('lea@example.com')).rejects.toThrow();
+
+  expect((await mailFailures()).map((r) => r.detail)).toEqual(['{"message":"invite"}']);
+});
+
+test('a reset that could not be sent leaves a row, and no link in it', async () => {
+  await seedCredentials('owner@example.com', 'correct-horse-battery');
+  refuseSend = new Error('resend refused: 403');
+  const url = new URL(`https://demo.example${AUTH_BASE_PATH}/request-password-reset`);
+
+  const res = await createAuth(url).handler(
+    new Request(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin: 'https://demo.example',
+        'cf-connecting-ip': '203.0.113.9',
+      },
+      body: JSON.stringify({
+        email: 'owner@example.com',
+        redirectTo: 'https://demo.example/admin/reset',
+      }),
+    }),
+  );
+
+  expect(res.status).toBe(200);
+  const rows = await mailFailures();
+  expect(rows.map((r) => (JSON.parse(r.detail) as { message: string }).message)).toEqual([
+    'password reset',
+  ]);
+  // What a reset stores is `reset-password:<token>` with the token in the clear — unlike a
+  // magic link, which is hashed. So the row this test reads is the credential itself.
+  const stored = (
+    (await binding.prepare('SELECT identifier FROM verification').all()).results as {
+      identifier: string;
+    }[]
+  )[0]?.identifier;
+  const token = stored?.split(':')[1] ?? '';
+  expect(token).not.toBe('');
+  expect(JSON.stringify(rows)).not.toContain(token);
+});
+
+test('a message that went leaves no failure behind', async () => {
+  await seedUser('owner@example.com');
+
+  await askForLink('owner@example.com');
+
+  expect(await mailFailures()).toEqual([]);
 });

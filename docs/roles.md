@@ -81,8 +81,9 @@ stale:
 | `Email link only` | They have no password yet. Setting one is on their account page |
 | `—` | The invite has not been opened, so nobody knows yet |
 
-**Last sign-in** is read from their live sessions. Signing out removes the last one, so somebody
-who signed out everywhere reads *Not known* until they are back — the number is a convenience,
-not a record.
+**Last sign-in** is the newer of their live sessions and their sign-ins in the
+[activity log](activity.md). Signing out removes the session row, but the sign-in that opened it
+stays, so somebody who signed out everywhere still reads a date. Only somebody whose last sign-in
+was before this version reads *Not known*.
 
 See also: [Accounts and signing in](auth.md) for how somebody gets a session in the first place.

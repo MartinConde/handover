@@ -13,6 +13,7 @@
 - [Accounts and signing in](auth.md) — the secrets, `HANDOVER_BASE_URL`, seeding the first owner, the three ways in, the account page, closed sign-up and rate limiting.
 - [Roles and permissions](roles.md) — the two roles, what each may do, and what is behind the session and what is deliberately not.
 - [Sending email](email.md) — the `mailer` block, verifying a sending domain, and the check that proves a key.
+- [Activity log](activity.md) — what is recorded and what is not, who sees whose events, the read endpoint and its filters.
 - [CLI](cli.md) — `handover migrate` for content files, `handover db generate` for the package's tables.
 - [Deploy](deploy.md) — `wrangler.jsonc`, the GitHub App, secrets, building on push.
 - [How it works](how-it-works.md) — packages, injected routes, virtual config, the publish path. For contributors.
