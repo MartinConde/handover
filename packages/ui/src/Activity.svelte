@@ -1,0 +1,291 @@
+<script lang="ts">
+import { ACTIVITY_GROUPS, type ActivityEvent, activityGroupOf } from '@handover/core';
+
+let { role }: { role: 'owner' | 'editor' } = $props();
+
+let events = $state<ActivityEvent[]>([]);
+let cursor = $state<string | null>(null);
+let loading = $state(true);
+let more = $state(false);
+let failure = $state('');
+let people = $state<{ id: string; name: string; email: string }[]>([]);
+
+/** What the list is filtered by. The typed box is separate, so it is applied on change and not
+    on every keystroke. */
+let group = $state('');
+let person = $state('');
+let entry = $state('');
+let typed = $state('');
+const filtered = $derived(Boolean(group || person || entry));
+
+/** A page that is no longer the one being asked for must not land in the list. */
+let asked = 0;
+
+$effect(() => {
+  load();
+});
+// An editor may not call the members route at all, and needs neither of the things it answers:
+// the person filter is not offered, and a role change is never one of their own events.
+$effect(() => {
+  if (role === 'owner') loadPeople();
+});
+
+async function loadPeople() {
+  const res = await fetch('/admin/api/members');
+  if (res.ok) people = ((await res.json()) as { members: typeof people }).members;
+}
+
+async function load(next?: string | null) {
+  const mine = ++asked;
+  const query = new URLSearchParams();
+  if (group) query.set('group', group);
+  if (person) query.set('user', person);
+  if (entry) query.set('entry', entry);
+  if (next) query.set('cursor', next);
+  if (next) more = true;
+  const res = await fetch(`/admin/api/activity?${query}`);
+  if (mine !== asked) return;
+  more = false;
+  loading = false;
+  if (!res.ok) {
+    failure = `Could not load the activity (${res.status}).`;
+    return;
+  }
+  failure = '';
+  const page = (await res.json()) as { events: ActivityEvent[]; cursor: string | null };
+  events = next ? [...events, ...page.events] : page.events;
+  cursor = page.cursor;
+}
+
+function clear() {
+  group = '';
+  person = '';
+  entry = '';
+  typed = '';
+}
+
+// `src/content/<collection>/<locale>/<slug>.yaml` — the only subject shape that is somewhere to
+// go. A user id or a media id is a key, and a key on screen tells nobody anything.
+const ENTRY = /^src\/content\/([\w-]+)\/([\w-]+)\/([\w-]+)\.yaml$/;
+const entryOf = (subject: string | null) => {
+  const found = subject?.match(ENTRY);
+  return found
+    ? { href: `/admin/c/${found[1]}/${found[3]}`, label: found[3] ?? '', locale: found[2] ?? '' }
+    : undefined;
+};
+
+/** `detail` is small json written by whichever route caused the event, so every read of it is a
+    read of one named key and never of the blob. */
+const str = (detail: unknown, key: string): string | undefined => {
+  const value = (detail as Record<string, unknown> | null | undefined)?.[key];
+  return typeof value === 'string' ? value : undefined;
+};
+
+const METHOD: Record<string, string> = {
+  password: 'with a password',
+  link: 'with an email link',
+  github: 'through GitHub',
+};
+const ROLES: Record<string, string> = { owner: 'an owner', editor: 'an editor' };
+const HOW: Record<string, string> = {
+  first: 'set their first password',
+  changed: 'changed their password',
+  reset: 'reset their password',
+};
+const MESSAGE: Record<string, string> = {
+  'sign-in link': 'A sign-in link',
+  invite: 'An invite',
+  'password reset': 'A password reset',
+};
+
+const who = (event: ActivityEvent) =>
+  event.user ? event.user.name || event.user.email || 'A removed member' : 'System';
+/** The subject of an Accounts event is a member id; the list an owner already has gives it a name. */
+const named = (id: string | null) => {
+  const found = people.find((p) => p.id === id);
+  return found ? found.name || found.email : 'a member';
+};
+
+interface Said {
+  lead: string;
+  link?: { href: string; label: string; locale: string };
+}
+
+function said(event: ActivityEvent): Said {
+  const actor = who(event);
+  const d = event.detail;
+  switch (event.kind) {
+    case 'login': {
+      const how = METHOD[str(d, 'method') ?? ''];
+      return { lead: how ? `${actor} signed in ${how}.` : `${actor} signed in.` };
+    }
+    case 'invite':
+      return {
+        lead: `${actor} invited ${str(d, 'email') ?? 'somebody'} as ${ROLES[str(d, 'role') ?? ''] ?? 'a member'}.`,
+      };
+    case 'role-change':
+      return {
+        lead: `${actor} made ${named(event.subject)} ${ROLES[str(d, 'role') ?? ''] ?? 'a member'}.`,
+      };
+    case 'member-removed': {
+      const address = str(d, 'email') ?? 'somebody';
+      return {
+        lead: (d as { pending?: unknown } | null)?.pending
+          ? `${actor} revoked the invite to ${address}.`
+          : `${actor} removed ${address}.`,
+      };
+    }
+    case 'password-set':
+      return { lead: `${actor} ${HOW[str(d, 'how') ?? ''] ?? 'set their password'}.` };
+    case 'publish': {
+      const one = entryOf(event.subject);
+      if (one) return { lead: `${actor} published `, link: one };
+      const files = (d as { files?: unknown } | null)?.files;
+      return { lead: `${actor} published ${typeof files === 'number' ? files : 'several'} files.` };
+    }
+    case 'mail-failed':
+      return { lead: `${MESSAGE[str(d, 'message') ?? ''] ?? 'A message'} could not be sent.` };
+  }
+  // 3.9 onwards add kinds without opening this file. A row whose sentence nobody has written is
+  // still a record of something, so it names the kind rather than throwing or vanishing.
+  const one = entryOf(event.subject);
+  return { lead: one ? `${actor} — ${event.kind} ` : `${actor} — ${event.kind}`, link: one };
+}
+
+const initials = (event: ActivityEvent) =>
+  (event.user?.name || event.user?.email || '')
+    .split(/[\s@.]+/)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join('');
+
+const DATE = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+const EXACT = new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeStyle: 'short' });
+const midnight = (at: number) => {
+  const day = new Date(at);
+  day.setHours(0, 0, 0, 0);
+  return day.getTime();
+};
+
+/**
+ * A week is where a distance stops being an answer: "1 week ago" is not something an audit can
+ * be read off, so anything older is its date. The day buckets count calendar days from local
+ * midnight rather than dividing elapsed milliseconds, because a day is 23 or 25 hours across a
+ * daylight-saving change — 2026-03-29 02:00 local is 25 hours after 2026-03-28 01:00 here.
+ */
+function when(at: number): string {
+  const minutes = Math.floor((Date.now() - at) / 60_000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round((midnight(Date.now()) - midnight(at)) / 86_400_000);
+  if (days <= 1) return 'Yesterday';
+  if (days < 7) return `${days} days ago`;
+  return DATE.format(at);
+}
+</script>
+
+<main class="main">
+  <div class="list-toolbar">
+    <h1>Activity</h1>
+    <span class="spacer"></span>
+    <div class="filters">
+      <!-- Native controls wearing the chip. A select brings its own keyboard, its typeahead and
+           the platform's picker on a phone; the mockup's ▾ button is a drawing of what one of
+           these already does. -->
+      <label class="visually-hidden" for="activity-group">Kind</label>
+      <select class="filter" class:is-on={group} id="activity-group" bind:value={group}>
+        <option value="">All kinds</option>
+        {#each Object.keys(ACTIVITY_GROUPS) as name (name)}
+          <option value={name}>{name}</option>
+        {/each}
+      </select>
+      {#if role === 'owner'}
+        <label class="visually-hidden" for="activity-person">Person</label>
+        <select class="filter" class:is-on={person} id="activity-person" bind:value={person}>
+          <option value="">Everyone</option>
+          {#each people as member (member.id)}
+            <option value={member.id}>{member.name || member.email}</option>
+          {/each}
+        </select>
+      {/if}
+      <!-- The server matches `subject` exactly, and a subject is a file path, so the box takes
+           one. The list suggests the paths on screen; anything older is typed or pasted. -->
+      <label class="visually-hidden" for="activity-entry">Entry</label>
+      <input
+        class="input filter-text"
+        id="activity-entry"
+        type="text"
+        list="activity-entries"
+        placeholder="All pages"
+        bind:value={typed}
+        onchange={() => (entry = typed.trim())}
+      />
+      <datalist id="activity-entries">
+        {#each [...new Set(events.map((e) => e.subject).filter((s) => s && ENTRY.test(s)))] as path (path)}
+          <option value={path}></option>
+        {/each}
+      </datalist>
+      {#if filtered}
+        <button class="btn btn-sm" type="button" onclick={clear}>Clear filters</button>
+      {/if}
+    </div>
+  </div>
+  {#if role !== 'owner'}
+    <p class="list-note">Showing your own activity. Owners see everyone's.</p>
+  {/if}
+  {#if failure}<p class="notice notice-danger" role="alert">{failure}</p>{/if}
+  {#if loading}
+    <p class="placeholder">Loading…</p>
+  {:else if events.length === 0}
+    <div class="empty">
+      <div>
+        {#if filtered}
+          <h2>No activity matches these filters</h2>
+          <p>Nothing in the last 180 days. Anything older is removed automatically.</p>
+          <button class="btn" type="button" onclick={clear}>Clear filters</button>
+        {:else}
+          <h2>Nothing has been recorded yet</h2>
+          <p>Sign-ins, invites and publishes appear here as they happen.</p>
+        {/if}
+      </div>
+    </div>
+  {:else}
+    <ol class="activity">
+      {#each events as event (event.id)}
+        {@const line = said(event)}
+        <li>
+          <div class="activity-row">
+            <span
+              class="avatar avatar-sm"
+              class:is-system={!event.user}
+              class:is-gone={event.user && !event.user.name && !event.user.email}
+              aria-hidden="true">{event.user ? initials(event) || '?' : '⚙'}</span
+            >
+            <p class="said">
+              {line.lead}{#if line.link}<a href={line.link.href}>{line.link.label}</a>
+                <span class="sub">{line.link.locale.toUpperCase()}</span>{/if}
+              {#if event.commitSha}<span class="sub sha">{event.commitSha.slice(0, 7)}</span>{/if}
+            </p>
+            <span class="meta">
+              {#if activityGroupOf(event.kind)}
+                <span class="badge">{activityGroupOf(event.kind)}</span>
+              {/if}
+              <time class="when" datetime={new Date(event.at).toISOString()} title={EXACT.format(event.at)}
+                >{when(event.at)}</time
+              >
+            </span>
+          </div>
+        </li>
+      {/each}
+    </ol>
+    {#if cursor}
+      <div class="load-more">
+        <button class="btn" type="button" disabled={more} onclick={() => load(cursor)}>
+          {more ? 'Loading…' : 'Load more'}
+        </button>
+      </div>
+    {/if}
+  {/if}
+</main>

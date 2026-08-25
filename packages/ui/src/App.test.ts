@@ -20,6 +20,8 @@ const drafts = (...files: string[]) =>
       if (url === '/admin/api/ping')
         return Response.json({ ok: true, collections: ['listings', 'pages'] });
       if (url.startsWith('/admin/api/entries/')) return Response.json({ entries: [] });
+      if (url.startsWith('/admin/api/activity')) return Response.json({ events: [], cursor: null });
+      if (url === '/admin/api/members') return Response.json({ members: [] });
       return Response.json({ files: files.map((path) => ({ path, updated_at: 1755864000000 })) });
     }),
   );
@@ -73,6 +75,16 @@ test('an owner on the members route gets the members screen, not the placeholder
   expect(root.querySelector('main.main .list-toolbar .btn-primary')?.textContent?.trim()).toBe(
     'Invite',
   );
+});
+
+// The activity log is the one Manage screen with no role condition on its branch: an editor
+// sees it, and which events are in it is decided by the server.
+test('an editor on the activity route gets the screen, not the placeholder', () => {
+  drafts();
+  const root = show(session('editor'), '/admin/activity');
+  expect(root.querySelector('main.main')?.textContent).not.toContain('not built yet');
+  expect(root.querySelector('main.main h1')?.textContent).toBe('Activity');
+  expect(root.querySelector('#activity-person')).toBeNull();
 });
 
 test('the signed-in name and role are in the top bar', () => {

@@ -547,13 +547,47 @@ a.btn { text-decoration: none; }
 .session-item .sub { margin-left: auto; }
 
 /* Members — name and email are one cell, so the table keeps the entry list's five columns. An
-   unaccepted invite is not yet a person: it gets a quiet avatar rather than the lime gradient,
-   and is not dimmed with `opacity`, which cannot be contrast-checked. */
+   unaccepted invite is not yet a person, and a cron job never was one; a member the log outlives
+   is one nothing can name. All three get a quiet avatar rather than the lime gradient, and none
+   is dimmed with `opacity`, which cannot be contrast-checked. */
 .avatar-sm { width: 28px; height: 28px; font-size: var(--text-xs); }
-.avatar.is-pending { background: none; box-shadow: inset 0 0 0 1.5px var(--border-strong); color: var(--ink-2); }
+.avatar.is-pending, .avatar.is-gone { background: none; box-shadow: inset 0 0 0 1.5px var(--border-strong); color: var(--ink-2); }
+.avatar.is-system { background: var(--badge-bg); color: var(--badge-ink); font-size: var(--text-lg); }
 .table .td .who { display: grid; min-width: 0; line-height: 1.35; }
 .table .td .who .name { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); font-weight: 500; }
 .menu .menu-note { padding: var(--s-1) var(--s-3) var(--s-2); font-size: var(--text-xs); color: var(--ink-2); }
 .menu hr { border: 0; border-top: 1px solid var(--border); margin: var(--s-2) 0; }
 .dialog p + p { margin-top: var(--s-3); }
 .dialog.is-slim { width: min(380px, 100%); }
+
+/* Activity — a row is a sentence, not a table cell, so it is a list and not `.table`. The kind
+   chip is always the neutral `.badge`: the group is carried by its word, and six tints would be
+   six colours competing with the one accent. The filters are native controls wearing the chip,
+   so a select keeps its own arrow and `.filter`'s ▾ never renders on one. */
+.filters .filter-text { width: 13rem; }
+.list-note { font-size: var(--text-sm); color: var(--ink-2); margin: 0 0 var(--s-4); }
+.activity { display: grid; margin: 0; padding: 0; list-style: none; }
+.activity > li { border-bottom: 1px solid var(--border); }
+.activity > li:last-child { border-bottom: 0; }
+.activity > li:hover { background: var(--surface-2); }
+.activity-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--s-2) var(--s-3); align-items: center; padding: var(--s-3) var(--s-2); }
+.activity-row .said { min-width: 0; }
+.activity-row .said a { color: var(--ink); font-weight: 500; text-decoration: none; }
+.activity-row .said a:hover { text-decoration: underline; }
+.activity-row .said .sub { margin-left: var(--s-1); }
+.activity-row .said .sha { font-family: var(--font-mono); }
+.activity-row .meta { display: flex; align-items: center; gap: var(--s-3); }
+/* Each row is its own grid, so a column cannot align across rows: the time gets a fixed box
+   instead, which is what keeps the chips off a ragged edge down a long list. */
+.activity-row .when { min-width: 5.5rem; text-align: right; font-size: var(--text-sm); color: var(--ink-2); white-space: nowrap; }
+.load-more { display: grid; justify-items: center; padding-top: var(--s-5); }
+@media (max-width: 720px) {
+  .activity-row { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+  .activity-row > .avatar { grid-row: 1 / span 2; }
+  .activity-row .meta { grid-column: 2; }
+  .activity-row .when { min-width: 0; }
+}
+.is-narrow .activity-row { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+.is-narrow .activity-row > .avatar { grid-row: 1 / span 2; }
+.is-narrow .activity-row .meta { grid-column: 2; }
+.is-narrow .activity-row .when { min-width: 0; }

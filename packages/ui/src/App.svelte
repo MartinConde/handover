@@ -1,5 +1,6 @@
 <script lang="ts">
 import Account from './Account.svelte';
+import Activity from './Activity.svelte';
 import Editor from './Editor.svelte';
 import EntryList from './EntryList.svelte';
 import Login, { type LoginMethods } from './Login.svelte';
@@ -182,6 +183,10 @@ const initial = $derived(
       <Account user={session.user} role={session.role} onname={loadSession} />
     {:else if path === '/admin/members' && session.role === 'owner'}
       <Members user={session.user} />
+    {:else if path === '/admin/activity'}
+      <!-- No role condition: the log is an editor's screen as much as an owner's, and which
+           events they see is the server's filter rather than this branch's. -->
+      <Activity role={session.role} />
     {:else if managePage}
       <main class="main">
         <h1>{managePage.label}</h1>

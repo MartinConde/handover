@@ -170,3 +170,16 @@ export async function activityPage(
     cursor: rows.length > PAGE && last ? `${last.at}.${last.id}` : null,
   };
 }
+
+/**
+ * Which group's chip a row wears — the inverse of the table above, with the same `cron-` rule
+ * `groupWhere` applies. Null for a kind nothing claims: a screen must be able to draw a row it
+ * has never heard of rather than throw on it.
+ */
+export function activityGroupOf(kind: string): ActivityGroup | null {
+  if (kind.startsWith('cron-')) return 'System';
+  for (const [group, kinds] of Object.entries(ACTIVITY_GROUPS)) {
+    if ((kinds as readonly string[]).includes(kind)) return group as ActivityGroup;
+  }
+  return null;
+}

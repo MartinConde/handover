@@ -44,6 +44,51 @@ An **editor** sees only their own. That is a filter on the server, not a hidden 
 asking for somebody else's events gets their own back rather than a refusal, so the screen is
 not a way to find out who else has an account.
 
+## The screen
+
+`/admin/activity`, under *Manage* in the sidebar. Both roles are offered it — an editor sees
+their own events, which is the filter above and not a hidden tab.
+
+A row is a sentence, not a table cell:
+
+```
+AB   Anna Berg published mill-house  EN  778cf4c        Publishing    3h ago
+```
+
+The initials belong to whoever did it, the chip names the group, and the time is relative.
+A cron job has no person, so it gets a grey gear; somebody who has been removed since keeps
+their events and gets a quiet ring, because the log outlives the account and drawing them as
+the system would say a person's sign-in was a machine's.
+
+**A time stops counting backwards after a week.** *Just now*, *20 min ago*, *4h ago*,
+*Yesterday*, *3 days ago* — and then the date, `16 Aug 2026`, because "1 week ago" is not
+something an audit can be read off. The day buckets are calendar days, so an event at 23:00
+reads as *Yesterday* from 01:00 and not as *2 days ago*. The exact instant is in the row's
+`<time datetime>` and in the tooltip; it is not spoken by a screen reader, which reads the
+words.
+
+**A `publish` of one file names the entry and links to it.** A commit with more than one file
+in it says how many instead, since there is no single entry to open. Either way the row carries
+the first seven characters of the commit, which is how the log and git are lined up by hand.
+
+Three filters, all of them the server's:
+
+| Filter | Takes |
+|---|---|
+| Kind | One of the six groups. The chip on a row is the same word |
+| Person | A member. **Owners only** — an editor is already looking at one person's events |
+| Entry | A file path, matched exactly. The box suggests the paths on screen and takes a typed or pasted one for anything older |
+
+Because the match is exact and an entry has one file per language, filtering by entry filters by
+*file*: `.../en/mill-house.yaml` and `.../de/mill-house.yaml` are two answers, not one.
+
+Fifty rows at a time; **Load more** adds the next fifty underneath. Changing a filter starts
+again from the newest — the cursor belongs to the query that produced it.
+
+**A kind with no sentence of its own still gets a row.** Kinds arrive with the features that
+write them, and the screen names one it does not recognise rather than throwing:
+*Anna Berg — lock-takeover contact EN*. Adding the sentence is one line beside the others.
+
 ## Reading it from your own code
 
 ```http

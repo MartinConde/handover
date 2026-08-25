@@ -2,7 +2,7 @@ import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/
 import { drizzle } from 'drizzle-orm/d1';
 import { Miniflare } from 'miniflare';
 import { afterAll, beforeAll, beforeEach, expect, test } from 'vitest';
-import { activityPage, logActivity } from './activity.js';
+import { activityGroupOf, activityPage, logActivity } from './activity.js';
 import type { Db } from './db.js';
 import * as tables from './tables.js';
 
@@ -224,4 +224,23 @@ test('a cursor that is not a cursor is ignored rather than obeyed', async () => 
   await seedEvent({ id: 'a', at: 1000, kind: 'login' });
 
   expect(await kindsOf(OWNER, { cursor: "1000' OR 1=1 --" })).toEqual(['login']);
+});
+
+// The inverse of the group table, for the chip a row wears. It is here rather than in the
+// screen because the `cron-` prefix rule is this file's and two copies of it would drift.
+test('a kind is named by the group that holds it', () => {
+  expect(activityGroupOf('login')).toBe('Accounts');
+  expect(activityGroupOf('publish')).toBe('Publishing');
+  expect(activityGroupOf('mail-failed')).toBe('System');
+});
+
+test('every cron job is System, whatever the job is called', () => {
+  expect(activityGroupOf('cron-retention')).toBe('System');
+  expect(activityGroupOf('cron-whatever-3-17-registers')).toBe('System');
+});
+
+// A screen that throws on a kind nobody has claimed yet is a screen that breaks on the next
+// row, so the lookup answers rather than refuses.
+test('a kind no group claims is named by none of them', () => {
+  expect(activityGroupOf('something-phase-9-invents')).toBe(null);
 });

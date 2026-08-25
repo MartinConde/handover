@@ -4,6 +4,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **An Activity screen at `/admin/activity`.** The log now has a page over it, and both roles
+  get it: an owner sees everybody, an editor sees their own, and which is which stays the
+  server's filter rather than the screen's. Each row is a sentence — *Anna Berg published
+  mill-house EN 778cf4c*, *Martin invited lea@example.com as an editor*, *An invite could not be
+  sent* — with the group as a chip, a relative time that **becomes a date once a row is a week
+  old**, and the exact instant in `<time datetime>`. A publish of one file links to the entry;
+  every publish carries its short commit. Filters for kind group, person (owners only, since an
+  editor is already looking at one person) and entry path, and **Load more** for the next fifty.
+  A kind nothing has written a sentence for yet is still drawn, named by its kind, so a screen
+  does not break on the row that adds one ([Activity log](docs/activity.md#the-screen)).
+
 - **An activity log, and the first events in it.** Signing in, being invited, having a role
   changed, setting a first password and publishing each write one row to the `activity` table
   the Phase 3 migration created — no new migration, and nothing to turn on. `GET
