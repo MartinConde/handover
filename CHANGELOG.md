@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Per-field diff.** `diffEntry()` in `@handover/core` says what changed between two states of
+  one entry — the draft against the file in git, or one version against another — as fields
+  rather than as lines, so nothing about the file format reaches the screen. The changes are
+  grouped by language with the values every language shares lifted into a group of their own, a
+  language nothing happened in says so rather than going quiet, and blocks are addressed by
+  `_id`, so a block that moved says it moved instead of arriving as one deletion plus one
+  addition. Nothing in the admin shows it yet; `pnpm --filter @handover/ui fixtures` renders
+  every field type's diff on a page of its own.
+
 - **Background jobs.** One Cron Trigger every five minutes, one `scheduled` handler, and a
   registry that decides what is due: media reconciliation hourly, activity-log retention
   daily. A job that does something or throws writes a `cron-<job>` row in the activity log;

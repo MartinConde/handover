@@ -842,7 +842,7 @@ function rowWords(fields: readonly Field[], data: unknown, found: string[]): voi
 
 // The properties a structured field translates; everything else in one is the same in every
 // language. Getting this wrong is what makes clients retype image URLs.
-const TRANSLATED_PROPS: Partial<Record<Field['type'], readonly string[]>> = {
+export const TRANSLATED_PROPS: Partial<Record<Field['type'], readonly string[]>> = {
   image: ['alt'],
   file: ['name'],
   embed: ['title'],
@@ -850,7 +850,7 @@ const TRANSLATED_PROPS: Partial<Record<Field['type'], readonly string[]>> = {
   seo: ['title', 'description', 'image.alt'],
 };
 
-const isObject = (v: unknown): v is Record<string, unknown> =>
+export const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
 /** Skeleton mode: the rows come from `from`, and `was` says which of `onto`'s are gone. */
@@ -976,7 +976,7 @@ function normalise(text: string): string {
 }
 
 // A row is its `_id`; an array of rows without one — a template's blocks — pairs by position.
-const rowKey = (row: unknown, i: number) =>
+export const rowKey = (row: unknown, i: number) =>
   isObject(row) && typeof row._id === 'string' ? row._id : `#${i}`;
 
 // A row is written to the languages `_locales` names, and to all of them when it names none.

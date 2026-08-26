@@ -78,6 +78,8 @@ export {
   setEntryAddress,
   setEntryLocales,
 } from './db.js';
+export type { Change, DiffGroup, RowAt, WordPart } from './diff.js';
+export { diffEntry } from './diff.js';
 export type { ContentFile, ContentIndex, EntryLocale, IndexEntry, TitleFields } from './entries.js';
 export {
   collectionEntries,

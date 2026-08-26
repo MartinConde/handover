@@ -696,6 +696,24 @@ a.btn { text-decoration: none; }
 .global-card h2 a:hover { text-decoration: underline; }
 .global-card p { font-size: var(--text-sm); color: var(--ink-2); }
 .global-card .meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); font-size: var(--text-xs); color: var(--ink-2); margin-top: var(--s-1); }
+/* Per-field diff — what a publish would take. Fields and not lines, grouped by language, and
+   a block that moved says so rather than arriving as one deletion plus one addition. */
+.diff { display: grid; gap: var(--s-2); font-size: var(--text-sm); }
+.diff .row { padding: var(--s-2) var(--s-3); border-radius: var(--radius-sm); }
+.diff .row small { display: block; font-size: var(--text-xs); font-weight: 500; margin-bottom: 2px; }
+.diff del { background: var(--danger-soft); color: var(--danger-ink); text-decoration: line-through; }
+.diff ins { background: var(--success-soft); color: var(--success-ink); text-decoration: none; }
+/* A word that was replaced puts a deletion straight against an insertion; without this the
+   two colours meet with no seam and read as one word. */
+.diff del + ins, .diff ins + del { margin-left: 2px; }
+.change-diff { padding: var(--s-3) var(--s-4) var(--s-4) 44px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+.change-diff h4 { margin: var(--s-4) 0 var(--s-2); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+.change-diff h4:first-child { margin-top: 0; }
+.change-diff .diff .row { background: var(--surface); }
+.change-diff .diff .row.is-quiet { background: none; color: var(--ink-2); }
+.change-diff .diff .row.is-block { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
+.change-diff .diff .row.is-block small { flex-basis: 100%; margin: 0; }
+.change-diff .diff code { font-family: var(--font-mono); font-size: var(--text-xs); }
 @media (max-width: 720px) {
   .global-list { grid-template-columns: 1fr; }
   .media-card, .picker-body { grid-template-columns: 1fr; }

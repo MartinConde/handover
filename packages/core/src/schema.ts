@@ -99,7 +99,7 @@ function objectFields(root: JsonSchema, node: JsonSchema): Field[] {
   });
 }
 
-const humanise = (key: string) =>
+export const humanise = (key: string) =>
   key
     .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
     .replace(/[_-]+/g, ' ')

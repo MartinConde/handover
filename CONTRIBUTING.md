@@ -26,6 +26,10 @@ pnpm format      # biome, writes
 
 `pnpm --filter <package-name> test` runs one package.
 
+`pnpm --filter @handover/ui fixtures` serves `packages/ui/index.html`: the per-field diff over
+one fixture entry, which is the only way to see that component until the drawer takes it. It is
+a dev server only — the admin bundle's entry is `src/main.ts` and never that page.
+
 ## Tests
 
 Vitest. A new test is seen failing before it counts; a bug fix comes with a regression
