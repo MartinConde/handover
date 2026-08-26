@@ -829,7 +829,15 @@ test('a global takes a draft through the same autosave as an entry', async () =>
   );
 
   expect(res.status).toBe(200);
-  expect(saveDraft.mock.calls[0]?.[3]).toBe('src/content/globals/en/site.yaml');
+  expect(saveDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/globals/en/site.yaml',
+    { footerText: 'Coastal homes since 2009' },
+    // One language, so nothing to keep in step — the same plain write an entry gets.
+    undefined,
+  );
   expect(await res.json()).toEqual({ updated_at: 1755864000000, pending: true, problems: [] });
   delete files['src/content/globals/en/site.yaml'];
 });
