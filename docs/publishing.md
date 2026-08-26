@@ -139,7 +139,9 @@ So the top bar carries the state of the last commit the admin made:
 
 It reads [Workers Builds](deploy.md#building-on-push) and needs `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_WORKER` ([Secrets](deploy.md#secrets)). Without them nothing is drawn and everything
-else works as before.
+else works as before. On a site nobody has published on yet the pill reports **your own last
+deploy** — there is no commit of the admin's to ask about, but the site is serving something and
+a blank top bar would be the wrong reading of it. Nothing offers to revert that one.
 
 Two things worth knowing:
 

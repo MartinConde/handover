@@ -1,6 +1,7 @@
 <script lang="ts">
 import Account from './Account.svelte';
 import Activity from './Activity.svelte';
+import BuildPill, { type Build } from './BuildPill.svelte';
 import Editor from './Editor.svelte';
 import EntryList from './EntryList.svelte';
 import Login, { type LoginMethods } from './Login.svelte';
@@ -57,15 +58,10 @@ let pending = $state<
   }[]
 >([]);
 let indicator = $state<HTMLButtonElement>();
-/** Where the last commit the admin made has got to; null on a site with no build status. */
-let build = $state<{
-  commit_sha: string;
-  state: 'building' | 'live' | 'failed';
-  started_at?: number;
-  live_at?: number;
-  committed_at?: number;
-} | null>(null);
-let now = $state(Date.now());
+/** Where the site's newest commit has got to; null on a site with no build status. */
+let build = $state<(Build & { committed_at?: number }) | null>(null);
+/** Bumped after a revert: the drawer's account of the publish it undid has to go with it. */
+let drawerKey = $state(0);
 /** The commit whose revert is waiting to be confirmed, and where to put focus back. */
 let confirmRevert = $state<string>();
 let returnTo: HTMLElement | undefined;
@@ -90,12 +86,8 @@ const building = $derived(build?.state === 'building');
 // start on its own, and the next publish loads it.
 $effect(() => {
   if (!building) return;
-  const tick = setInterval(() => (now = Date.now()), 1000);
   const poll = setInterval(() => void loadBuild(), 10_000);
-  return () => {
-    clearInterval(tick);
-    clearInterval(poll);
-  };
+  return () => clearInterval(poll);
 });
 $effect(() => {
   if (confirmRevert) revertPanel?.focus();
@@ -133,11 +125,9 @@ async function loadBuild() {
   const res = await fetch('/admin/api/build');
   if (!res.ok) return;
   const body = (await res.json()) as Partial<NonNullable<typeof build>>;
-  build =
-    body.state && body.commit_sha
-      ? { ...body, state: body.state, commit_sha: body.commit_sha }
-      : null;
-  now = Date.now();
+  // No `commit_sha` is a site that has published nothing yet: the pill is then reporting the
+  // worker's newest build, which is still what the site is serving.
+  build = body.state ? { ...body, state: body.state } : null;
 }
 
 function askRevert(sha: string) {
@@ -174,18 +164,11 @@ async function revert() {
     return;
   }
   await Promise.all([loadPending(), loadBuild()]);
+  // The drawer's "Published 1 change" describes a commit that has just been undone, and its
+  // Revert would now be refused. It goes with the publish it was about.
+  drawerKey += 1;
   reload += 1;
 }
-
-const BUILD_LABEL = { building: 'Building…', live: 'Live', failed: 'Build failed' } as const;
-// "Live since 14:02" — when the site last changed, which is more use than that it is up.
-const since = (at: number) =>
-  new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
-// "0m 45s", the way the mockup reads it.
-const elapsed = (from: number) => {
-  const total = Math.max(0, Math.round((now - from) / 1000));
-  return `${Math.floor(total / 60)}m ${String(total % 60).padStart(2, '0')}s`;
-};
 
 async function loadEntry(collection: string, slug: string) {
   const res = await fetch(`/admin/api/entries/${collection}/${slug}`);
@@ -270,22 +253,16 @@ const initial = $derived(
            every second and would say the whole pill again each time. -->
       <span class="build-status" role="status">
         {#if build}
-          <span class="pill pill-{build.state}">
-            <span class="dot" aria-hidden="true"></span>
-            {BUILD_LABEL[build.state]}
-            {#if build.state === 'live' && build.live_at}
-              <span class="detail">since {since(build.live_at)}</span>
-            {/if}
-            {#if build.state === 'building'}
-              <span class="detail" aria-hidden="true">{elapsed(build.started_at ?? build.committed_at ?? now)}</span>
-            {/if}
-            {#if build.state === 'failed'}
+          <BuildPill {build}>
+            <!-- Only over a commit the admin itself made: with none, this pill is reporting the
+                 developer's own deploy and there is nothing here to take back. -->
+            {#if build.state === 'failed' && build.commit_sha}
               <span class="sep" aria-hidden="true">·</span>
               <button class="btn-link" type="button" onclick={() => askRevert(build?.commit_sha ?? '')}>
                 Revert last publish
               </button>
             {/if}
-          </span>
+          </BuildPill>
         {/if}
       </span>
       <div class="user-menu">
@@ -339,6 +316,7 @@ const initial = $derived(
     {/key}
   </div>
   {#if drawer}
+    {#key drawerKey}
     <Pending
       entries={pending}
       {build}
@@ -355,6 +333,7 @@ const initial = $derived(
         reload += 1;
       }}
     />
+    {/key}
   {/if}
   <!-- Not aria-modal: the drawer under it stays where it is, and claiming a trap that is not
        there is worse than not claiming it. Escape is stopped here so it does not also reach

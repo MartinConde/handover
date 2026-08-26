@@ -9,7 +9,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   shell now polls **Workers Builds** and shows *Building… 1m 20s* · *Live since 14:02* · *Build failed*,
   with a banner while a build is running saying the admin may reload briefly under you. It needs
   a read-only `CLOUDFLARE_API_TOKEN` and a `CLOUDFLARE_WORKER` var; without them no pill is
-  drawn and everything else is unchanged ([Deploy](docs/deploy.md#secrets)).
+  drawn and everything else is unchanged ([Deploy](docs/deploy.md#secrets)). Before anyone has
+  published, it reports your own last deploy instead, which is still what the site is serving.
 
 - **One-tap revert.** *Revert last publish* sits in the failed pill and *Revert this publish*
   in the drawer's result panel. It is **not `git revert`** — the trees API has no three-way

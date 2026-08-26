@@ -1,4 +1,6 @@
 <script lang="ts">
+import BuildPill, { type Build } from './BuildPill.svelte';
+
 type Entry = {
   /** `listings/mill-house` — what a publish is of, since the languages go out together. */
   key: string;
@@ -23,7 +25,7 @@ let {
 }: {
   entries: Entry[];
   /** The shell's build status, repeated here beside the commit it is of. */
-  build?: { commit_sha: string; state: 'building' | 'live' | 'failed'; started_at?: number } | null;
+  build?: Build | null;
   onclose: () => void;
   onpublished: () => void;
   /** Undo the commit this drawer just made; the shell owns the confirmation. */
@@ -59,7 +61,6 @@ let discarding = $state(false);
 let toggled = $state<string[]>([]);
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const BUILD_LABEL = { building: 'Building…', live: 'Live', failed: 'Build failed' } as const;
 // The pill belongs to the commit this drawer made, not to whatever the shell is showing: a
 // second publish elsewhere would otherwise put its build beside this one's result.
 const ours = $derived(build && committed && build.commit_sha === committed ? build : undefined);
@@ -203,12 +204,7 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
 
 {#snippet result()}
   <p class="result-actions">
-    {#if ours}
-      <span class="pill pill-{ours.state}">
-        <span class="dot" aria-hidden="true"></span>
-        {BUILD_LABEL[ours.state]}
-      </span>
-    {/if}
+    {#if ours}<BuildPill build={ours} />{/if}
     {#if committed}
       <button class="btn-link" type="button" onclick={() => onrevert(committed)}>
         Revert this publish

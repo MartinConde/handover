@@ -37,7 +37,11 @@ let entries = $state(ENTRIES);
 const published = vi.fn();
 const discarded = vi.fn();
 const reverted = vi.fn();
-let build = $state<{ commit_sha: string; state: 'building' | 'live' | 'failed' } | null>(null);
+let build = $state<{
+  commit_sha: string;
+  state: 'building' | 'live' | 'failed';
+  started_at?: number;
+} | null>(null);
 const show = (initial = ENTRIES) => {
   entries = initial;
   app = mount(Pending, {
@@ -500,11 +504,13 @@ test('the build of that commit is shown beside it, in words as well as colour', 
   const root = show();
   q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.click();
   await tick();
-  build = { commit_sha: 'c0ffee11', state: 'building' };
+  build = { commit_sha: 'c0ffee11', state: 'building', started_at: Date.now() - 45_000 };
   flushSync();
 
   const pill = q(root, '.publish-result .pill');
-  expect(pill?.textContent?.trim()).toBe('Building…');
+  // With the elapsed time, the way the mockup's fourth frame reads it — the shell's pill and
+  // this one are the same component, so they cannot say different things again.
+  expect(pill?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Building… 0m 45s');
   expect(pill?.className).toContain('pill-building');
 });
 

@@ -134,8 +134,8 @@ const {
     overlayRows: vi.fn(async () => [] as { path: string; contents: string }[]),
     // The Workers Builds boundary; the mapping itself runs against a faked API in core's
     // builds.test.ts.
-    commitBuild: vi.fn(async (_cfg: unknown, sha: string) => ({
-      commit_sha: sha,
+    commitBuild: vi.fn(async (_cfg: unknown, sha: string | undefined) => ({
+      ...(sha ? { commit_sha: sha } : {}),
       state: 'building' as string,
       started_at: 1755864100000,
     })),
@@ -3143,7 +3143,7 @@ test('the build endpoint answers where the last commit has got to', async () => 
 // Rule 3 of "your own publish must not look like a conflict": the rows go when the build
 // carrying them is live, and this is the one moment the Worker learns that it is.
 test('the rows a live build carries are cleared when it reports live', async () => {
-  commitBuild.mockImplementationOnce(async (_cfg: unknown, sha: string) => ({
+  commitBuild.mockImplementationOnce(async (_cfg: unknown, sha: string | undefined) => ({
     commit_sha: sha,
     state: 'live',
     started_at: 1755864100000,
@@ -3164,9 +3164,16 @@ test('a site with no Cloudflare token draws no build status at all', async () =>
   expect(commitBuild).not.toHaveBeenCalled();
 });
 
-test('a site that has committed nothing yet has no build status', async () => {
+// No commit of ours to ask about, but the site is serving something: the worker's newest build
+// answers for it, with no commit_sha so nothing offers to revert a developer's own deploy.
+test("a site that has published nothing reads the worker's newest build", async () => {
   lastCommitRow = undefined;
-  expect(await (await GET(ctx('build'))).json()).toEqual({});
+  expect(await (await GET(ctx('build'))).json()).toEqual({
+    state: 'building',
+    started_at: 1755864100000,
+  });
+  expect(commitBuild).toHaveBeenCalledWith(expect.anything(), undefined);
+  expect(clearPublished).not.toHaveBeenCalled();
 });
 
 // An API that cannot be asked is the site's configuration rather than a state the site is in,

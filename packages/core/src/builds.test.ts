@@ -102,3 +102,20 @@ test('an API that refuses is an error rather than a state', async () => {
   const cf = cloudflare([], 'w-403', false);
   await expect(commitBuild(worker('w-403'), SHA, { fetch: cf.fetch })).rejects.toThrow('403');
 });
+
+// A site the admin has never published on: there is no commit of ours to ask about, and a blank
+// top bar is the wrong reading of a perfectly live site.
+test('with no commit named it is the worker’s newest build', async () => {
+  const cf = cloudflare([build({ status: 'running', build_outcome: null }), build()], 'w-newest');
+  expect(await commitBuild(worker('w-newest'), undefined, { fetch: cf.fetch })).toEqual({
+    state: 'building',
+    started_at: Date.parse('2026-08-25T16:36:24.712Z'),
+  });
+});
+
+test('a worker nothing has ever built, asked about no commit, is live', async () => {
+  const cf = cloudflare([], 'w-never');
+  expect(await commitBuild(worker('w-never'), undefined, { fetch: cf.fetch })).toEqual({
+    state: 'live',
+  });
+});

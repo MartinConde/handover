@@ -1307,17 +1307,20 @@ async function discard(collection: string, slug: string): Promise<Response> {
  * so the tab that pressed Publish may be reloaded before the build finishes and whatever it was
  * holding would go with it. Every screen asks this and gets the same answer.
  *
- * `{}` where nothing has been committed or the site has no token — the pill is not drawn at all
- * rather than drawn as an unknown, since a site without build status is an ordinary site.
+ * `{}` where the site has no token — the pill is not drawn at all rather than drawn as an
+ * unknown, since a site without build status is an ordinary site. A site that has **published
+ * nothing yet** does get an answer, from the worker's newest build: there is no commit of ours to
+ * ask about, but the site is still serving something and a blank top bar is the wrong reading of
+ * it. That answer carries no `commit_sha`, so nothing offers to revert a developer's own deploy.
  */
 async function buildStatus(): Promise<Response> {
   const database = db();
   const last = await lastCommit('default', database);
   const builds = workerBuilds();
-  if (!last || !builds) return Response.json({});
+  if (!builds) return Response.json({});
   let status: Awaited<ReturnType<typeof commitBuild>>;
   try {
-    status = await commitBuild(builds, last.sha);
+    status = await commitBuild(builds, last?.sha);
   } catch (err) {
     // A token that cannot ask is the site's configuration, not a state the site is in. It is
     // said once in the log the deploy reads and answered as no pill at all.
@@ -1326,8 +1329,8 @@ async function buildStatus(): Promise<Response> {
   }
   // Rule 3 of "your own publish must not look like a conflict" runs here, because this is the
   // one moment the Worker learns the build went green: the rows go once nobody is in the entry.
-  if (status.state === 'live') await clearPublished('default', database, last.sha);
-  return Response.json({ ...status, committed_at: last.at });
+  if (last && status.state === 'live') await clearPublished('default', database, last.sha);
+  return Response.json(last ? { ...status, committed_at: last.at } : status);
 }
 
 /**

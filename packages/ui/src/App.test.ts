@@ -297,3 +297,49 @@ test('a live build says since when', async () => {
   expect(pill?.className).toContain('pill-live');
   expect(pill?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Live since 02:02 PM');
 });
+
+// The pill on a site that has published nothing is the worker's own deploy: worth showing, but
+// there is no commit of the admin's behind it to take back.
+test('a failed build with no commit of ours offers no revert', async () => {
+  buildBody = { state: 'failed' };
+  drafts();
+  const root = show(session());
+  await settle();
+
+  const pill = root.querySelector('.topbar .pill');
+  expect(pill?.textContent).toContain('Build failed');
+  expect(pill?.querySelector('.btn-link')).toBeNull();
+});
+
+// After a revert the drawer's "Published 1 change" describes a commit that no longer stands, and
+// its Revert would be refused. The panel goes with the publish it was about.
+test("a revert clears the drawer's account of the publish it undid", async () => {
+  buildBody = { commit_sha: 'c0ffee11', state: 'building' };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
+      if (url === '/admin/api/build') return Response.json(buildBody);
+      if (url === '/admin/api/publish')
+        return Response.json({ commit_sha: 'c0ffee11', paths: ['src/content/listings/en/a.yaml'] });
+      if (url === '/admin/api/revert') return Response.json({ commit_sha: 'rev999', paths: [] });
+      void init;
+      return Response.json({ entries: [pendingEntry('listings/a')] });
+    }),
+  );
+  const root = show(session());
+  await settle();
+  root.querySelector<HTMLButtonElement>('.indicator')?.click();
+  flushSync();
+  root.querySelector<HTMLButtonElement>('.drawer-foot .btn-primary')?.click();
+  await settle();
+  expect(root.querySelector('.publish-result')).not.toBeNull();
+
+  root.querySelector<HTMLButtonElement>('.publish-result .btn-link')?.click();
+  flushSync();
+  document.querySelector<HTMLButtonElement>('[aria-labelledby="revert-h"] .btn-danger')?.click();
+  await settle();
+
+  expect(root.querySelector('.publish-result')).toBeNull();
+  expect(root.querySelector('.drawer')).not.toBeNull();
+});
