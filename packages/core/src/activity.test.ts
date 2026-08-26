@@ -2,7 +2,13 @@ import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/
 import { drizzle } from 'drizzle-orm/d1';
 import { Miniflare } from 'miniflare';
 import { afterAll, beforeAll, beforeEach, expect, test } from 'vitest';
-import { activityGroupOf, activityPage, lastCommit, logActivity } from './activity.js';
+import {
+  activityGroupOf,
+  activityPage,
+  expireActivity,
+  lastCommit,
+  logActivity,
+} from './activity.js';
 import type { Db } from './db.js';
 import * as tables from './tables.js';
 
@@ -259,4 +265,16 @@ test('a log with no commit in it has no last commit', async () => {
   await logActivity('default', db, { kind: 'login' });
 
   expect(await lastCommit('default', db)).toBe(undefined);
+});
+
+test('retention deletes rows past 180 days and keeps the day before the cut', async () => {
+  const now = 1_800_000_000_000;
+  const day = 24 * 60 * 60 * 1000;
+  await seedEvent({ id: 'ancient', at: now - 400 * day, kind: 'login' });
+  await seedEvent({ id: 'just-out', at: now - 181 * day, kind: 'publish' });
+  await seedEvent({ id: 'just-in', at: now - 179 * day, kind: 'publish' });
+  await seedEvent({ id: 'today', at: now, kind: 'login' });
+
+  expect(await expireActivity('default', db, now)).toBe(2);
+  expect(await kindsOf(OWNER)).toEqual(['login', 'publish']);
 });

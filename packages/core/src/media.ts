@@ -265,3 +265,81 @@ export async function confirmUpload(
   if (!stored) throw new Error(`the media row for ${upload.hash} was not written`);
   return { media: stored, created: Boolean(written) };
 }
+
+// The bucket's own list of itself, as XML. There is no parser in workerd and the keys this
+// reads are hex and a file extension, so the shapes below are read out rather than parsed.
+const CONTENTS = /<Contents>([\s\S]*?)<\/Contents>/g;
+const tag = (xml: string, name: string) =>
+  xml.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`))?.[1];
+
+/** The key format `mediaKey` writes, and nothing else: an id, and the type its extension names. */
+const OURS = /^(?:media|files)\/([0-9a-f]{64})\.([a-z0-9]+)$/;
+const MIMES: Record<string, string> = Object.fromEntries(
+  Object.entries(EXTENSIONS).map(([mime, ext]) => [ext, mime]),
+);
+
+const listPage = async (store: R2Store, fetch: typeof globalThis.fetch, token?: string) => {
+  const url = new URL(`https://${store.accountId}.r2.cloudflarestorage.com/${store.bucket}`);
+  url.searchParams.set('list-type', '2');
+  if (token) url.searchParams.set('continuation-token', token);
+  const res = await fetch(await signer(store).sign(url.toString(), { method: 'GET' }));
+  if (!res.ok) throw new Error(`R2 LIST ${store.bucket} failed: ${res.status}`);
+  return res.text();
+};
+
+/**
+ * Objects the table has never heard of — an upload whose confirm never arrived, a session that
+ * went away between the PUT and it. They are given rows rather than deleted: the bytes are
+ * somebody's work, and a row is the whole of what makes them visible again.
+ *
+ * `width` and `height` stay null. A listing carries a size and a key carries a type, so neither
+ * costs a request; the dimensions are in the pixels and reading those is not this job's.
+ */
+export async function reconcileMedia(
+  siteId: string,
+  db: Db,
+  store: R2Store | undefined,
+  deps: { fetch?: typeof globalThis.fetch; now?: number } = {},
+): Promise<number> {
+  // A site with no bucket has nothing to reconcile; it is not a failure and writes no row.
+  if (!store) return 0;
+  const { fetch = globalThis.fetch, now = Date.now() } = deps;
+  // One read of the table against one listing of the bucket. `onConflictDoNothing` below is
+  // what makes a second pass harmless; this set is what stops it costing a write per object
+  // per tick, on a table whose size is the bucket's.
+  const known = new Set(
+    (await db.select({ id: media.id }).from(media).where(eq(media.siteId, siteId))).map(
+      (r) => r.id,
+    ),
+  );
+  let token: string | undefined;
+  let recovered = 0;
+  do {
+    const xml = await listPage(store, fetch, token);
+    for (const match of xml.matchAll(CONTENTS)) {
+      const item = match[1] ?? '';
+      const key = tag(item, 'Key') ?? '';
+      const [, id = '', ext = ''] = key.match(OURS) ?? [];
+      // An object nothing here ever wrote is not this table's to claim.
+      if (!id || known.has(id)) continue;
+      known.add(id);
+      const bytes = Number(tag(item, 'Size'));
+      const written = await db
+        .insert(media)
+        .values({
+          id,
+          siteId,
+          r2Key: key,
+          mime: MIMES[ext] ?? null,
+          bytes: Number.isFinite(bytes) ? bytes : null,
+          createdAt: now,
+        })
+        .onConflictDoNothing()
+        .returning({ id: media.id });
+      // The count is rows written, not objects seen: a confirm arriving mid-listing wins.
+      recovered += written.length;
+    }
+    token = tag(xml, 'IsTruncated') === 'true' ? tag(xml, 'NextContinuationToken') : undefined;
+  } while (token);
+  return recovered;
+}

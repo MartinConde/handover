@@ -117,7 +117,7 @@ function workerBuilds(): { worker: string; token: string } | undefined {
  * secrets — an account id and a bucket name — so they sit in wrangler.jsonc beside the two that
  * are, and a site with none of them simply has no media.
  */
-function mediaStore(): R2Store | undefined {
+export function mediaStore(): R2Store | undefined {
   const e = env as Record<string, string | undefined>;
   return e.R2_ACCOUNT_ID && e.R2_BUCKET && e.R2_ACCESS_KEY_ID && e.R2_SECRET_ACCESS_KEY
     ? {
@@ -132,7 +132,7 @@ function mediaStore(): R2Store | undefined {
 const NO_BUCKET =
   'No bucket is configured: set R2_ACCOUNT_ID and R2_BUCKET in wrangler.jsonc, and R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY with `wrangler secret put`';
 
-function db(): Db {
+export function db(): Db {
   return openDb('default', (env as { DB?: Parameters<typeof openDb>[1] }).DB);
 }
 

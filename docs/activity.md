@@ -33,7 +33,7 @@ working credentials for as long as they live, so an `invite` row names the addre
 and stops there, and a `mail-failed` row names only what the message was for. Somebody with a
 copy of the database still cannot sign in with it.
 
-Rows are kept for **180 days** and then deleted by the nightly job. This is the one thing the
+Rows are kept for **180 days** and then deleted by a daily job ([Deploy](deploy.md#the-schedule)). This is the one thing the
 admin ever deletes: it is telemetry about the site, not the site's content, and the git half of
 the story is permanent anyway.
 

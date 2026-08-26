@@ -11,6 +11,7 @@ import {
   mediaList,
   presignUpload,
   type R2Store,
+  reconcileMedia,
   tooSmall,
   type Upload,
   UploadRefusedError,
@@ -330,4 +331,72 @@ test('the library is newest first, and pictures and files are two lists', async 
     (await mediaList('default', db, kind)).map((r) => r.id).filter((id) => mine.includes(id));
   expect(await listed('images')).toEqual(['6'.repeat(64), '4'.repeat(64)]);
   expect(await listed('files')).toEqual(['5'.repeat(64)]);
+});
+
+/** The bucket's own listing, in one page or several. */
+const lister = (pages: { keys: string[]; next?: string }[]) => {
+  const seen: (string | null)[] = [];
+  const fetch = (async (input: Request) => {
+    const url = new URL(input.url);
+    seen.push(url.searchParams.get('continuation-token'));
+    const page = pages[seen.length - 1] ?? { keys: [], next: undefined };
+    return new Response(
+      `<?xml version="1.0" encoding="UTF-8"?><ListBucketResult><Name>${store.bucket}</Name>${page.keys
+        .map((key) => `<Contents><Key>${key}</Key><Size>2048</Size></Contents>`)
+        .join('')}<IsTruncated>${Boolean(page.next)}</IsTruncated>${
+        page.next ? `<NextContinuationToken>${page.next}</NextContinuationToken>` : ''
+      }</ListBucketResult>`,
+    );
+  }) as unknown as typeof globalThis.fetch;
+  return { fetch, seen };
+};
+
+const ORPHAN = '7'.repeat(64);
+
+test('an object with no row is recovered from the listing alone, with no HEAD', async () => {
+  const db = openDb('recover', binding);
+  const { fetch, seen } = lister([{ keys: [`media/${ORPHAN}.webp`] }]);
+
+  expect(await reconcileMedia('recover', db, store, { fetch, now: 1700 })).toBe(1);
+
+  const row = await findMedia('recover', db, ORPHAN);
+  expect(row).toMatchObject({
+    r2Key: `media/${ORPHAN}.webp`,
+    mime: 'image/webp',
+    bytes: 2048,
+    createdAt: 1700,
+    width: null,
+    height: null,
+  });
+  expect(seen).toEqual([null]);
+});
+
+test('an object the table already knows is left alone', async () => {
+  const db = openDb('recover', binding);
+  const again = lister([{ keys: [`media/${ORPHAN}.webp`] }]);
+
+  expect(await reconcileMedia('recover', db, store, { fetch: again.fetch, now: 9900 })).toBe(0);
+  expect(await findMedia('recover', db, ORPHAN)).toMatchObject({ createdAt: 1700 });
+});
+
+test('an object nothing here ever wrote is not claimed', async () => {
+  const db = openDb('foreign', binding);
+  const { fetch } = lister([{ keys: ['backups/2026-08-01.zip', 'media/not-a-hash.webp'] }]);
+
+  expect(await reconcileMedia('foreign', db, store, { fetch, now: 1700 })).toBe(0);
+});
+
+test('a truncated listing is followed to the end', async () => {
+  const db = openDb('paged', binding);
+  const one = `media/${'8'.repeat(64)}.webp`;
+  const two = `files/${'9'.repeat(64)}.pdf`;
+  const { fetch, seen } = lister([{ keys: [one], next: 'page-2' }, { keys: [two] }]);
+
+  expect(await reconcileMedia('paged', db, store, { fetch, now: 1700 })).toBe(2);
+  expect(seen).toEqual([null, 'page-2']);
+  expect(await findMedia('paged', db, '9'.repeat(64))).toMatchObject({ mime: 'application/pdf' });
+});
+
+test('a site with no bucket has nothing to reconcile and does not fail', async () => {
+  expect(await reconcileMedia('nobucket', openDb('nobucket', binding), undefined)).toBe(0);
 });

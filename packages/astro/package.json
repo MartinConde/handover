@@ -16,6 +16,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./cron": {
+      "types": "./dist/cron.d.ts",
+      "import": "./dist/cron.js"
+    },
     "./schema": {
       "types": "./dist/schema.d.ts",
       "import": "./dist/schema.js"

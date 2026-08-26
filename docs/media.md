@@ -149,6 +149,11 @@ Clients reuse pictures, and a picture removed from an entry is still on the publ
 until that entry is published. Handover deletes an object in exactly one case: the one in
 step 4, where what arrived was not what was asked for and no row was ever written.
 
+An upload whose confirm never arrived leaves an object with no row behind it. An hourly job
+lists the bucket and writes a row for anything it finds, so those bytes come back rather than
+sitting there unnamed ([Deploy](deploy.md#the-schedule)). It only ever adds: the width and
+height it cannot read stay empty, and nothing in the bucket is touched.
+
 ## Not yet
 
 The media library screen, with its usage counts, archiving and tags; *moving* the focal point,

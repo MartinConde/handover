@@ -11,7 +11,8 @@ required secrets, and one more per optional feature.
   "name": "your-site",
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "main": "@astrojs/cloudflare/entrypoints/server",
+  "main": "./src/worker.ts",
+  "triggers": { "crons": ["*/5 * * * *"] },
   "assets": { "binding": "ASSETS", "directory": "./dist" },
   "d1_databases": [
     {
@@ -22,6 +23,35 @@ required secrets, and one more per optional feature.
   ]
 }
 ```
+
+`main` is the site's own Worker rather than the adapter's, because Handover has background jobs
+as well as routes:
+
+```ts
+// src/worker.ts
+import handler from '@astrojs/cloudflare/entrypoints/server';
+import { scheduled } from 'astro-handover/cron';
+
+export default { ...handler, scheduled };
+```
+
+## The schedule
+
+One Cron Trigger runs every five minutes and one handler decides what is due: media
+reconciliation hourly, activity-log retention daily. A package upgrade that adds a job
+adds no trigger, so `wrangler.jsonc` is written once.
+
+To fire a tick by hand, build first and ask for one. `--bundle` is not optional — the Astro
+build ships its own, and `--test-scheduled` only reaches a Worker wrangler bundled itself:
+
+```sh
+pnpm build
+npx wrangler dev -c dist/server/wrangler.json --test-scheduled --bundle
+curl 'http://localhost:8787/__scheduled?cron=*/5+*+*+*+*'
+```
+
+What ran is one line on stdout; what a job did is a `cron-<job>` row in the
+[activity log](activity.md).
 
 ## The database
 

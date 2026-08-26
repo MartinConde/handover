@@ -202,3 +202,18 @@ export async function lastCommit(
     .limit(1);
   return row?.sha ? { sha: row.sha, at: row.at, kind: row.kind } : undefined;
 }
+
+/**
+ * How long a row is kept. The one place the never-delete principle does not apply: this is
+ * telemetry about client data rather than client data, and git holds the other half forever.
+ */
+const KEEP = 180 * 24 * 60 * 60 * 1000;
+
+/** Rows older than the window, deleted; the count is what the cron dispatcher logs. */
+export async function expireActivity(siteId: string, db: Db, now = Date.now()): Promise<number> {
+  const gone = await db
+    .delete(activity)
+    .where(and(eq(activity.siteId, siteId), lt(activity.at, now - KEEP)))
+    .returning({ id: activity.id });
+  return gone.length;
+}

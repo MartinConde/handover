@@ -51,6 +51,8 @@ export {
   timestampErrors,
   translatableText,
 } from './content.js';
+export type { CronReport, JobDeps } from './cron.js';
+export { JOB_NAMES, runDue, runJob } from './cron.js';
 export type { Db, Draft } from './db.js';
 export {
   clearPublished,

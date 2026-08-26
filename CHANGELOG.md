@@ -4,6 +4,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Background jobs.** One Cron Trigger every five minutes, one `scheduled` handler, and a
+  registry that decides what is due: media reconciliation hourly, activity-log retention
+  daily. A job that does something or throws writes a `cron-<job>` row in the activity log;
+  a quiet tick writes nothing, and one failing job cannot hold up the others.
+  ⚠️ **A site upgrading to this needs two lines in `wrangler.jsonc`** — `triggers.crons` and
+  a `main` pointing at its own four-line `src/worker.ts` — both in
+  [Deploy](docs/deploy.md#the-schedule). Without them nothing breaks; nothing runs either.
+
 - **Site settings.** The globals a site declares in `cms.config.ts` are editable in the admin,
   above the collections: one card per global, and a form that is the entry editor without the
   parts a file the schema names cannot have — no hide, no rename, no duplicate, no delete.
