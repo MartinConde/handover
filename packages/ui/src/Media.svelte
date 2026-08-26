@@ -53,9 +53,14 @@ const shown = $derived(
 
 // Why this picture cannot go in this field: measured on the crop at the field's ratio, not on
 // the file, so a tall phone photo cannot pass a floor sideways. A field with no floor refuses
-// nothing, and a file has no dimensions to refuse.
-const why = (item: MediaItem) =>
-  item.width && item.height ? tooSmall(preset, item.width, item.height) : undefined;
+// nothing. A row whose size nobody knows — what the reconciliation job recovers, since a HEAD
+// cannot measure a picture — is refused whatever the floor is: the field stores those numbers.
+const why = (item: MediaItem) => {
+  if (kind === 'files') return undefined;
+  if (!item.width || !item.height)
+    return 'This picture’s size is not known yet, so it cannot be chosen for a field';
+  return tooSmall(preset, item.width, item.height);
+};
 
 const name = (item: MediaItem) => item.filename ?? item.src.replace(/^\w+\//, '');
 const extensions = $derived(

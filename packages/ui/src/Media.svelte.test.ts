@@ -121,3 +121,15 @@ test('a picture uploaded into a field too narrow for it is listed, not selected'
   expect(q('.tile .why').textContent).toContain('its widest 16:9 crop is 800 px');
   expect(q<HTMLButtonElement>('.picker-foot .btn-primary').disabled).toBe(true);
 });
+
+// The reconciliation job recovers objects with no row, and a HEAD cannot say how wide a
+// picture is. Such a row must not be insertable: the field stores width and height.
+test('a picture whose size the library does not know cannot be chosen', async () => {
+  await open([item({ width: null, height: null })], { ratio: '16:9', max: 2400 });
+  expect(q('.tile .why').textContent).toBe(
+    'This picture’s size is not known yet, so it cannot be chosen for a field',
+  );
+  q<HTMLInputElement>('.tile input').click();
+  flushSync();
+  expect(q<HTMLButtonElement>('.picker-foot .btn-primary').disabled).toBe(true);
+});

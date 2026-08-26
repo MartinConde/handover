@@ -9,10 +9,15 @@ are stored in is [Structured fields](structured-fields.md).
 A preset belongs to the field, not to the site: the schema knows what it is.
 
 ```ts
+photo: image({ ratio: '3:2', max: 2400, min: 1200 }),
 hero: image({ ratio: '16:9', max: 2400, min: 1600 }),
-avatar: image({ ratio: '1:1', max: 512 }),
-brochure: file({ accept: ['application/pdf', 'application/zip'] }),
+brochure: file(),
 ```
+
+`file({ accept })` narrows what the picker offers and what the file dialog filters by. PDF is
+the only non-image type the pipeline verifies today — the confirm reads an object's first bytes
+back against the type it was uploaded as — so widening `accept` needs that type's signature in
+the package first.
 
 - **`ratio`** is what the field shows — the card, the picker's preview and the crop the site
   renders. Leave it out and the picture is shown as it is
@@ -37,6 +42,10 @@ An `image` or `file` field with nothing in it is a drop zone: drop a file on it,
 picker, which is the library scoped to that field — its types, its preset, its floor on the
 header line. Uploading happens inside the picker, and a picture the site already has is
 reused rather than uploaded again.
+
+A picture the library has no width and height for — what the reconciliation job recovers, since
+a HEAD cannot measure one — is refused by every image field, floor or no floor: the field stores
+those two numbers.
 
 What a translation owns is the alt text of a picture and the display name of a file. Every
 other part is the same in every language, so a language being translated is shown those two

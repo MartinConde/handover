@@ -16,7 +16,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   cropped at, the cap an upload is downscaled to on the way in, and the optional floor the
   picker refuses under. The floor is measured on the *crop* — the widest crop at the field's
   ratio the picture can yield — so a 900 × 1600 phone photo cannot pass a 1600 hero sideways,
-  and the refusal says both numbers. A field without a floor refuses nothing.
+  and the refusal says both numbers. A field without a floor refuses nothing, and a picture the
+  library has no size for is refused by every image field, since the field stores those numbers.
   ⚠️ **Breaking:** `image` and `file` are now functions — `image()` and `file()` where they
   used to be bare schemas.
 
