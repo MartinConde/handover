@@ -4,10 +4,12 @@ import { expect, test } from 'vitest';
 import { parseEntry, staleLocales } from './content.js';
 import {
   DraftConflictError,
+  entryConflict,
   loadDraft,
   openDb,
   pendingDrafts,
   publishDrafts,
+  resolveConflict,
   saveDraft,
 } from './db.js';
 import { createGitClient, RefMovedError } from './git.js';
@@ -558,4 +560,102 @@ test.skipIf(!configured)(
     await dispose();
   },
   120_000,
+);
+
+// The other half of the conflict above: the way out that is not giving up the draft. Both
+// shortcuts are one publish each, against a file the repository moved under them.
+const conflicted = async (name: string) => {
+  const { git, db, parentOf, dispose } = await harness();
+  const path = `src/content/listings/en/${name}.yaml`;
+  const { commit_sha: seeded } = await git.publish([{ path, contents: LISTING(name) }], {
+    base_sha: await git.getHead(),
+    message: `Seed ${name}`,
+  });
+  await settled(git, seeded);
+  // Ours: the price, and a summary nobody else touches.
+  await saveDraft('default', db, git, path, {
+    title: name,
+    summary: 'A restored mill.',
+    price: 400000,
+  });
+  // Theirs: the same price, and a title nobody else touches.
+  const { commit_sha: theirs } = await git.publish(
+    [
+      {
+        path,
+        contents: LISTING(name)
+          .replace('price: 425000', 'price: 450000')
+          .replace(name, `${name} b`),
+      },
+    ],
+    { base_sha: seeded, message: `Edit ${name} in code` },
+  );
+  await settled(git, theirs);
+  await expect(publishing('default', db, git)).rejects.toBeInstanceOf(DraftConflictError);
+  const conflict = await entryConflict('default', db, git, TRANSLATED, { en: path });
+  if (!conflict) throw new Error('the commit above is what makes this a conflict');
+  return { git, db, path, theirs, conflict, parentOf, dispose };
+};
+
+test.skipIf(!configured)(
+  'keeping all mine resolves the conflict and publishes over the code',
+  async () => {
+    const name = `it-mine-${Date.now().toString(36)}`;
+    const { git, db, path, conflict, parentOf, dispose } = await conflicted(name);
+
+    expect(conflict.questions.map((q) => [q.path, q.base])).toEqual([['price', '425000']]);
+    await resolveConflict(
+      'default',
+      db,
+      TRANSLATED,
+      conflict,
+      conflict.questions.map((q) => ({ path: q.path, locale: q.locale, side: 'ours' as const })),
+    );
+    const published = await publishing('default', db, git);
+
+    expect(published?.paths).toEqual([path]);
+    expect(await parentOf(published?.commit_sha ?? '')).toBe(conflict.head);
+    const file = (await git.getFile(path, published?.commit_sha ?? ''))?.contents ?? '';
+    // Ours where both wrote, theirs where only they did, and ours where only we did.
+    expect(file).toContain('price: 400000');
+    expect(file).toContain(`title: "${name} b"`);
+    expect(file).toContain('A restored mill.');
+
+    await git.publish([{ path, contents: null }], {
+      base_sha: published?.commit_sha ?? '',
+      message: `Clean up after ${name}`,
+    });
+    await dispose();
+  },
+  180_000,
+);
+
+test.skipIf(!configured)(
+  'taking all theirs resolves it too, and publishes what is left of the draft',
+  async () => {
+    const name = `it-theirs2-${Date.now().toString(36)}`;
+    const { git, db, path, conflict, parentOf, dispose } = await conflicted(name);
+
+    await resolveConflict(
+      'default',
+      db,
+      TRANSLATED,
+      conflict,
+      conflict.questions.map((q) => ({ path: q.path, locale: q.locale, side: 'theirs' as const })),
+    );
+    const published = await publishing('default', db, git);
+
+    expect(published?.paths).toEqual([path]);
+    expect(await parentOf(published?.commit_sha ?? '')).toBe(conflict.head);
+    const file = (await git.getFile(path, published?.commit_sha ?? ''))?.contents ?? '';
+    expect(file).toContain('price: 450000');
+    expect(file).toContain('A restored mill.');
+
+    await git.publish([{ path, contents: null }], {
+      base_sha: published?.commit_sha ?? '',
+      message: `Clean up after ${name}`,
+    });
+    await dispose();
+  },
+  180_000,
 );

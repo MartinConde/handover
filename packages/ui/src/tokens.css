@@ -714,6 +714,40 @@ a.btn { text-decoration: none; }
 .change-diff .diff .row.is-block { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
 .change-diff .diff .row.is-block small { flex-basis: 100%; margin: 0; }
 .change-diff .diff code { font-family: var(--font-mono); font-size: var(--text-xs); }
+/* Three-way: most fields were only touched by one side, so those are merged and shown as a
+   countable fact rather than a list to read. What is left is one question per field, and each
+   names what both sides started from before it offers the two answers. */
+.resolve { display: grid; gap: var(--s-4); padding: var(--s-4); border-radius: var(--radius-lg); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); }
+.resolve > header { display: grid; gap: var(--s-1); }
+.resolve > header h3 { font-size: var(--text-md); font-weight: 600; }
+.resolve > header p { font-size: var(--text-sm); color: var(--ink-2); }
+.resolve-shortcuts { display: grid; gap: var(--s-2); }
+.resolve-shortcuts .btns { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.resolve-list { display: grid; gap: var(--s-3); margin: 0; padding: 0; list-style: none; }
+.resolve-field { display: grid; gap: var(--s-2); padding: var(--s-3); border-radius: var(--radius); background: var(--surface); }
+.resolve-field .head { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); }
+.resolve-field .head .name { font-size: var(--text-sm); font-weight: 600; }
+.resolve-field .base { font-size: var(--text-xs); color: var(--ink-2); }
+.resolve-field .sides { display: grid; gap: var(--s-2); border: 0; padding: 0; margin: 0; }
+/* A side is three lines, so the single-line `.choice` grows a body and stops centring. */
+.resolve-field .choice { align-items: flex-start; padding: var(--s-2) var(--s-3); min-height: 0; }
+.resolve-field .choice .body { display: grid; gap: 2px; }
+.resolve-field .choice .quote { color: var(--ink-2); }
+.resolve-field .choice small { font-size: var(--text-xs); color: var(--ink-2); }
+.resolve-field .choice ins { background: var(--success-soft); color: var(--success-ink); text-decoration: none; }
+.resolve-field .choice del { background: var(--danger-soft); color: var(--danger-ink); text-decoration: line-through; }
+/* The gate's `.group` disclosure, scoped: `<details class="group">` is also the editor's field
+   group, which this row is not here to restyle. */
+.resolve .group { border-radius: var(--radius-lg); background: var(--surface); padding: var(--s-3) var(--s-4); }
+.resolve .group > summary { display: flex; align-items: center; gap: var(--s-2); list-style: none; font-size: var(--text-sm); font-weight: 500; cursor: pointer; min-height: 30px; }
+.resolve .group > summary::-webkit-details-marker { display: none; }
+.resolve .group > summary::before { content: "▸"; color: var(--ink-3); font-size: var(--text-sm); }
+.resolve .group[open] > summary::before { content: "▾"; }
+.resolve .group > summary .count { margin-left: auto; font-size: var(--text-xs); color: var(--ink-3); font-weight: 400; }
+.merged-list { display: grid; gap: var(--s-1); margin: var(--s-2) 0 0; padding: 0 0 0 var(--s-5); list-style: none; font-size: var(--text-sm); }
+.merged-list .name { font-weight: 500; }
+.resolve > .actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-3); }
+.resolve > .actions .foot-note { flex-basis: 100%; }
 @media (max-width: 720px) {
   .global-list { grid-template-columns: 1fr; }
   .media-card, .picker-body { grid-template-columns: 1fr; }

@@ -3,8 +3,8 @@ import { mount } from 'svelte';
 import Diff from './Diff.svelte';
 import './tokens.css';
 
-// Every shape the form can produce, so the page below shows what each one's diff reads like.
-// There is no other way to look at this component until the drawer takes it in 3.20.
+// Every shape the form can produce, so the page below shows what each one's diff reads like:
+// the drawer shows one entry's, and this is all of them at once.
 const everything: Form = {
   fields: [
     { path: ['title'], label: 'Title', type: 'text', required: true },

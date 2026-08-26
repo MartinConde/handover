@@ -180,7 +180,7 @@ test('an entry changed in the repository takes itself out and the rest still pub
   await refused(root);
 
   expect(q(root, '[role="alert"]')?.textContent).toBe(
-    'Nothing was published. One entry changed in the repository after you opened it. Discard your changes to it to take what is there now.',
+    'Nothing was published. One entry changed in the repository after you opened it. Resolve it to keep what you wrote, or discard your changes to take what is there now.',
   );
   const row = q(root, '.change-row.is-blocked');
   expect(q(row as ParentNode, '.name')?.textContent).toBe('The Mill House');
@@ -271,7 +271,7 @@ test('discarding one of two conflicted entries leaves the other named and says s
   await refused(root);
 
   expect(q(root, '[role="alert"]')?.textContent).toBe(
-    'Nothing was published. 2 entries changed in the repository after you opened them. Discard your changes to them to take what is there now.',
+    'Nothing was published. 2 entries changed in the repository after you opened them. Resolve them to keep what you wrote, or discard your changes to take what is there now.',
   );
   root
     .querySelectorAll<HTMLButtonElement>('.change-row.is-blocked .change-actions .btn')[0]
@@ -291,7 +291,7 @@ test('discarding one of two conflicted entries leaves the other named and says s
 
   expect(fetchMock).toHaveBeenLastCalledWith('/admin/api/drafts/pages/home', { method: 'DELETE' });
   expect(q(root, '[role="alert"]')?.textContent).toBe(
-    'Nothing was published. One entry changed in the repository after you opened it. Discard your changes to it to take what is there now.',
+    'Nothing was published. One entry changed in the repository after you opened it. Resolve it to keep what you wrote, or discard your changes to take what is there now.',
   );
   expect(root.querySelectorAll('.change-row.is-blocked').length).toBe(1);
 });
@@ -377,7 +377,9 @@ test('an entry whose languages have drifted apart is named on its row as that', 
     "Nothing was published. One entry's languages disagree about which blocks it has — the files have to agree before it can go out.",
   );
   expect(q(root, '.change-row.is-blocked .badge-danger')?.textContent).toBe('Languages disagree');
-  expect(q(root, '.change-row.is-blocked .change-actions')).toBe(null);
+  // Discard is the way out of a conflict and not of drift, so the row keeps only the control
+  // every row has — the one that opens what changed.
+  expect(q(root, '.change-row.is-blocked .change-actions .btn-sm')).toBe(null);
   expect(published).not.toHaveBeenCalled();
 });
 
@@ -529,4 +531,88 @@ test('a build of some other commit is not shown as this publish’s', async () =
 
   expect(q(root, '.publish-result .pill')).toBeNull();
   expect(q(root, '.publish-result .result-actions .btn-link')).not.toBeNull();
+});
+
+// What a row opens: the per-field diff of what it would put in the commit, and the address
+// change riding along with it. The diff itself is `Diff.svelte`'s; what the drawer owes is
+// asking for the entry and drawing the rules on top.
+test('opening a row shows what would go out and the redirect riding along', async () => {
+  const fetchMock = vi.fn(async () =>
+    Response.json({
+      groups: [
+        {
+          locale: 'en',
+          changes: [
+            { path: 'price', label: 'Price', kind: 'value', before: '450000', after: '435000' },
+          ],
+        },
+      ],
+      redirects: [{ from: '/listings/mill', to: '/listings/mill-house' }],
+    }),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  const open = Array.from(root.querySelectorAll<HTMLButtonElement>('.change-actions .btn-icon'));
+  open[1]?.click();
+  await tick();
+  flushSync();
+
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/diff/listings/mill-house');
+  expect(open[1]?.getAttribute('aria-expanded')).toBe('true');
+  expect(q(root, '.change-diff .diff .row')?.textContent?.replace(/\s+/g, ' ')).toContain(
+    '450000 → 435000',
+  );
+  expect(q(root, '.change-diff .row.is-block')?.textContent?.replace(/\s+/g, ' ')).toContain(
+    '/listings/mill → /listings/mill-house',
+  );
+});
+
+// The way out of a conflict that is not giving up the draft. It takes the list's place rather
+// than opening over it, and nothing publishes while it is open: the other entries would go out
+// in the same commit as this one.
+test('Resolve opens the three-way view in place of the list, and publishing waits', async () => {
+  const fetchMock = vi.fn(async (url: string) =>
+    url.startsWith('/admin/api/conflict')
+      ? Response.json({ head: 'a1c9f2b', questions: [], merged: [] })
+      : CONFLICT.clone(),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  await refused(root);
+
+  q<HTMLButtonElement>(root, '.change-row.is-blocked .change-title .btn-sm')?.click();
+  await tick();
+  flushSync();
+
+  expect(q(root, '.resolve h3')?.textContent).toBe('Resolve The Mill House');
+  expect(q(root, '.change-list')).toBe(null);
+  expect(q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.disabled).toBe(true);
+  expect(q(root, '.drawer-foot .foot-note')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+    'Publishing waits while a conflict is open: the rest would go out in the same commit, and this entry is not ready to be in it.',
+  );
+});
+
+test('a resolved entry loses the badge and is read again wherever it is open', async () => {
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) =>
+    url.startsWith('/admin/api/conflict')
+      ? Response.json(init?.method === 'POST' ? {} : { head: 'a1c9f2b', questions: [], merged: [] })
+      : CONFLICT.clone(),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  await refused(root);
+  q<HTMLButtonElement>(root, '.change-row.is-blocked .change-title .btn-sm')?.click();
+  await tick();
+  flushSync();
+
+  q<HTMLButtonElement>(root, '.resolve .actions .btn-primary')?.click();
+  await tick();
+  flushSync();
+
+  expect(q(root, '.resolve')).toBe(null);
+  expect(q(root, '.badge-danger')).toBe(null);
+  expect(discarded).toHaveBeenCalled();
+  // And the row can go out with the rest again.
+  expect(boxes(root)[1]?.disabled).toBe(false);
+  expect(q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.disabled).toBe(false);
 });

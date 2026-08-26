@@ -592,7 +592,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     {#if conflicted}
       <p class="subline">
         Somebody changed this in the repository after you opened it. Open Unpublished changes to
-        discard yours and take what is there now.
+        resolve it field by field, or to discard yours and take what is there now.
       </p>
     {/if}
     {#if held}

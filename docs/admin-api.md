@@ -216,6 +216,40 @@ resolved, the drift is simply no longer reported. `409` when a `path` is not one
 currently disagree about, which is the report having moved on since the screen was drawn.
 
 ```
+GET /admin/api/diff/:collection/:slug  →  { "groups", "redirects" }
+```
+
+What one entry would put in the next commit, field by field: the drawer's expanded row.
+`groups` is the [per-field diff](publishing.md#publishing) — one group per language of the
+entry plus one for the values they all share, each with the changes in it — of the draft
+against the file **at HEAD**, not against the commit the draft was loaded from: the question
+a row answers is what is about to go out. `redirects` is the address changes riding along in
+the same commit, `{ "from", "to" }` each. A language with a file and no draft is in `groups`
+with nothing in it, which is how the screen tells "unchanged" from "not loaded". `404` if the
+collection is not configured.
+
+```
+GET  /admin/api/conflict/:collection/:slug  →  { "head", "questions", "merged", "files" }
+POST /admin/api/conflict/:collection/:slug  { "answers": [{ "path", "locale", "side" }] }  →  {}
+```
+
+The three-way view of an entry the repository moved under, and the answers to it
+([Working together](working-together.md#resolving-it-field-by-field)). Every language of the
+entry is read at HEAD and at the commit each draft row was loaded from; `questions` are the
+fields **both** sides changed — `path`, `label`, the `locale` it belongs to or none for a
+value every language shares, the `base` both started from, and `ours` / `theirs` as the same
+change shapes the diff uses — and `merged` are the ones only one side changed, each with the
+`side` that changed it. `files` is the paths that moved, and `head` the commit they are being
+answered against.
+
+The `POST` takes one answer per question, `side` being `"ours"` or `"theirs"`, and `path` and
+`locale` exactly as the question gave them. It writes the merge into the drafts of the files
+that moved and rebases those rows on HEAD, so the next publish is measured against the file
+the answers were given over. Nothing is committed. `409` when nothing of the entry has moved
+— somebody has already settled it — and `409` when the answers are not one per question,
+which is the report having moved on since the screen was drawn.
+
+```
 POST /admin/api/hold/:collection/:slug  { "hold": true }  →  { "held" }
 ```
 
@@ -266,10 +300,22 @@ when a stored draft is not everything its collection schema needs, with the same
 `{ "error", "paths" }` body, and `409` with `{ "error", "paths", "reason": "drift" }` when a
 pending file belongs to an entry whose languages have
 [drifted apart](i18n.md#a-block-one-language-only-has) — `reason` is what tells that from a
-file somebody else changed, since Discard is the way out of one and the entry's own panel is
-the way out of the other. In all
+file somebody else changed, since the three-way view or Discard is the way out of one and
+the entry's own drift panel is the way out of the other. In all
 of those cases nothing was written and no row was cleared. A path no collection owns —
 `redirects.yaml`, a global — has no schema to be held to and is never the reason for a `422`.
+
+```
+POST /admin/api/checks/conflict  →  { "entry", "path", "commit_sha" }
+```
+
+Makes a conflict to look at, on a scratch entry, so the three-way view can be exercised on a
+live site without hand-crafting commits. **Owner only, and it writes to the repository**: it
+publishes a scratch entry — named after the commit it is made against — in the first collection
+whose required fields can be filled in from their types alone, edits its draft, and then commits a different edit to the same file — which
+is what a developer's push does to somebody's open draft. The answer names the entry it made;
+delete that entry when you are done with it. `422` when no collection on the site can be
+filled in that way — a file the site's own content schema rejects would break the next build.
 
 ```
 GET /admin/api/build  →  { "commit_sha", "state", "started_at", "live_at", "committed_at" }

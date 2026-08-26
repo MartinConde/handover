@@ -7,6 +7,7 @@ import {
   createDraft,
   DraftConflictError,
   discardDraft,
+  entryConflict,
   holdEntry,
   loadDraft,
   openDb,
@@ -17,6 +18,7 @@ import {
   recordDelete,
   recordOffer,
   recordRename,
+  resolveConflict,
   resolveDrift,
   revertCommit,
   saveDraft,
@@ -1240,4 +1242,95 @@ test('a row that says a path has gone is not cleared by the build going live', a
 
   expect(await clearPublished('default', db, 'commit-9')).toEqual([]);
   expect((await only(db))?.path).toBe(PATH);
+});
+
+// Three-way resolution: the way out of a file somebody changed in the repository that is not
+// giving up the draft. The report is `resolve.ts`'s; what is proven here is the reading of the
+// three sides out of D1 and git, and the row the answers leave behind.
+const PAGE_FILES = { en: PAGE_EN };
+
+test('a file the repository moved under a draft is one question and one merged change', async () => {
+  const db = await fresh();
+  const repo = fakeHistory({ [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?') });
+  await saveDraft('default', db, repo, PAGE_EN, {
+    title: 'Home again',
+    blocks: [
+      { _type: 'hero', _id: 'k3nf9a2p', heading: 'Move to the coast' },
+      { _type: 'cta', _id: 'q1w2e3r4', heading: 'Ready to move?' },
+    ],
+  });
+  repo.push([{ path: PAGE_EN, contents: page('Homepage', 'Move to the sea', 'Ready to move?') }]);
+
+  const conflict = await entryConflict('default', db, repo, PAGE_FORM, PAGE_FILES);
+
+  expect(conflict?.questions.map((q) => [q.path, q.base])).toEqual([['title', 'Home']]);
+  expect(conflict?.merged.map((m) => [m.label, m.side])).toEqual([
+    ['Move to the sea · Heading', 'theirs'],
+  ]);
+  expect(Object.keys(conflict?.conflicted ?? {})).toEqual(['en']);
+});
+
+test('an entry the repository has not moved has nothing to resolve', async () => {
+  const db = await fresh();
+  const repo = fakeHistory({ [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?') });
+  await saveDraft('default', db, repo, PAGE_EN, {
+    title: 'Home again',
+    blocks: [
+      { _type: 'hero', _id: 'k3nf9a2p', heading: 'Move to the coast' },
+      { _type: 'cta', _id: 'q1w2e3r4', heading: 'Ready to move?' },
+    ],
+  });
+
+  expect(await entryConflict('default', db, repo, PAGE_FORM, PAGE_FILES)).toBe(undefined);
+});
+
+// The row's base has to become the file at HEAD, blob and all: seeded from the merge instead,
+// the row would read as published and leave the drawer without ever being committed.
+test('answering a conflict rebases the row on the file at HEAD and keeps it pending', async () => {
+  const db = await fresh();
+  const repo = fakeHistory({ [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?') });
+  await saveDraft('default', db, repo, PAGE_EN, {
+    title: 'Home again',
+    blocks: [
+      { _type: 'hero', _id: 'k3nf9a2p', heading: 'Move to the coast' },
+      { _type: 'cta', _id: 'q1w2e3r4', heading: 'Ready to move?' },
+    ],
+  });
+  const theirs = page('Homepage', 'Move to the sea', 'Ready to move?');
+  const head = repo.push([{ path: PAGE_EN, contents: theirs }]);
+
+  const conflict = await entryConflict('default', db, repo, PAGE_FORM, PAGE_FILES);
+  if (!conflict) throw new Error('the push above is what makes this a conflict');
+  await resolveConflict('default', db, PAGE_FORM, conflict, [
+    { path: 'title', locale: 'en', side: 'ours' },
+  ]);
+
+  const row = await only(db);
+  expect(row?.contents).toBe(page('Home again', 'Move to the sea', 'Ready to move?'));
+  expect(row?.baseSha).toBe(head);
+  expect(row?.baseBlob).toBe(await blobSha(theirs));
+  expect((await pendingDrafts('default', db)).map((r) => r.path)).toEqual([PAGE_EN]);
+});
+
+test('taking theirs everywhere leaves a row the drawer no longer has anything to publish for', async () => {
+  const db = await fresh();
+  const repo = fakeHistory({ [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?') });
+  await saveDraft('default', db, repo, PAGE_EN, {
+    title: 'Home again',
+    blocks: [
+      { _type: 'hero', _id: 'k3nf9a2p', heading: 'Move to the coast' },
+      { _type: 'cta', _id: 'q1w2e3r4', heading: 'Ready to move?' },
+    ],
+  });
+  const theirs = page('Homepage', 'Move to the coast', 'Ready to move?');
+  repo.push([{ path: PAGE_EN, contents: theirs }]);
+
+  const conflict = await entryConflict('default', db, repo, PAGE_FORM, PAGE_FILES);
+  if (!conflict) throw new Error('the push above is what makes this a conflict');
+  await resolveConflict('default', db, PAGE_FORM, conflict, [
+    { path: 'title', locale: 'en', side: 'theirs' },
+  ]);
+
+  expect((await only(db))?.contents).toBe(theirs);
+  expect(await pendingDrafts('default', db)).toEqual([]);
 });

@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
 import index from 'virtual:handover/index';
 import type {
+  Answer,
   Db,
   EntryLocation,
   Form,
@@ -30,9 +31,11 @@ import {
   deleteEntry,
   deleteLocales,
   demoteOwner,
+  diffEntry,
   discardDraft,
   driftReport,
   entryAddress,
+  entryConflict,
   entryKey,
   entryName,
   entryOffer,
@@ -66,6 +69,7 @@ import {
   recordRename,
   releaseLocks,
   renameEntry,
+  resolveConflict,
   resolveDrift,
   revertCommit,
   saveDraft,
@@ -73,6 +77,7 @@ import {
   setEntryAddress,
   setEntryLocales,
   staleLocales,
+  stringifyEntry,
   syncLocale,
   takeLock,
   translatableText,
@@ -186,6 +191,92 @@ async function testEmail(session: App.Locals['handover']): Promise<Response> {
     // domain above all — and is the whole use of the button.
     return Response.json({ error: (err as Error).message }, { status: 502 });
   }
+}
+
+/**
+ * "Simulate conflict": the sequence from
+ * [drafts-and-publishing.md](../../../docs/publishing.md) run against the real repository on a
+ * scratch entry, so the three-way view can be exercised on a live site without hand-crafting
+ * commits. It publishes an entry, edits the draft, and then commits a different edit to the
+ * same file — which is exactly what a developer's push does to somebody's open draft.
+ *
+ * It writes to the repository, so it is the owner's and it names what it made: delete that
+ * entry when the walk is over. `422` when no collection here can be filled in from its schema
+ * alone — a scratch file the site's own content schema rejects would break the next build.
+ */
+async function simulateConflict(session: App.Locals['handover']): Promise<Response> {
+  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  const git = gitClient();
+  const database = db();
+  for (const [collection, collected] of Object.entries(config.collections)) {
+    const form = formFor(collection, SCRATCH);
+    const values = sampleValues(form.fields);
+    const texts = form.fields.flatMap((f) => (f.type === 'text' ? (f.path[0] ?? []) : []));
+    if (!values || !texts.length || entryProblems(collected.schema, values).length) continue;
+    // Named after the commit it is made against, the way the integration tests name theirs: the
+    // taken-names check reads the built index, which lags the repository by a build, so a plain
+    // `conflict-check` would collide with the last run's entry on a site that has not rebuilt.
+    const head = await git.getHead();
+    const slug = entryName(
+      'default',
+      `${SCRATCH} ${head.slice(0, 7)}`,
+      await takenNames(collection, database),
+    );
+    const path = entryPath(collection, slug, config.i18n.defaultLocale);
+    await createDraft('default', database, git, path, { _version: FORMAT_VERSION, ...values });
+    const seeded = await publishDrafts('default', database, git, sourceOf, [
+      `${collection}/${slug}`,
+    ]);
+    if (!seeded) return new Response('The scratch entry could not be committed', { status: 502 });
+    // Both sides write the first two text fields, so there is a question each and the answers
+    // can differ; the two after them are one-sided, so there is something merged to read beside
+    // them. A collection with fewer text fields than that simply asks fewer questions.
+    const [first = '', second, third, fourth] = texts;
+    const ours = { ...values, [first]: 'Your version' };
+    const theirs = { ...values, [first]: 'The version in the code' };
+    if (second) {
+      ours[second] = 'Yours here too';
+      theirs[second] = 'And the code here too';
+    }
+    if (third) theirs[third] = 'Changed in the code, and only there';
+    if (fourth) ours[fourth] = 'Changed by you, and only you';
+    await saveDraft('default', database, git, path, ours);
+    const { commit_sha } = await git.publish(
+      [{ path, contents: stringifyEntry('default', { _version: FORMAT_VERSION, ...theirs }) }],
+      { base_sha: seeded.commit_sha, message: `Edit ${slug} in code` },
+    );
+    return Response.json({ entry: `${collection}/${slug}`, path, commit_sha });
+  }
+  return new Response(
+    'No collection on this site can be filled in from its schema alone: a scratch entry needs a collection whose required fields are text, numbers, choices or true/false',
+    { status: 422 },
+  );
+}
+
+const SCRATCH = 'Conflict check';
+
+/**
+ * A file a collection's own schema accepts, filled from the field types alone. `undefined`
+ * where the schema requires something no default can stand in for — a picture, a reference —
+ * because the file this makes is committed and the site builds from it.
+ */
+function sampleValues(fields: Form['fields']): Record<string, unknown> | undefined {
+  const out: Record<string, unknown> = {};
+  for (const field of fields) {
+    const key = field.path[0];
+    if (key === undefined) continue;
+    if (field.type === 'group') {
+      const inner = sampleValues(field.fields);
+      if (!inner) return undefined;
+      out[key] = inner;
+    } else if (field.type === 'text') out[key] = SCRATCH;
+    else if (field.type === 'richtext') out[key] = 'A scratch entry, to try a conflict out.';
+    else if (field.type === 'number') out[key] = 0;
+    else if (field.type === 'boolean') out[key] = false;
+    else if (field.type === 'select') out[key] = field.options[0];
+    else if (field.type !== 'unsupported' && field.required) return undefined;
+  }
+  return out;
 }
 
 /**
@@ -1170,6 +1261,108 @@ async function reconcile(collection: string, slug: string, request: Request): Pr
   return Response.json({});
 }
 
+/** Every language of one entry as a path, whether or not it has a file yet. */
+const entryPaths = (collection: string, slug: string) =>
+  Object.fromEntries(
+    config.i18n.locales.map((locale) => [locale, entryPath(collection, slug, locale)]),
+  );
+
+/**
+ * What one entry would put in the next commit, field by field: the drawer's expanded row. The
+ * draft against the file at HEAD and not against the commit it was loaded from — the question
+ * the row answers is what is about to go out, which is measured against what is there now.
+ */
+async function entryDiff(collection: string, slug: string): Promise<Response> {
+  if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
+  const git = gitClient();
+  const database = db();
+  const head = await git.getHead();
+  const read = await Promise.all(
+    Object.entries(entryPaths(collection, slug)).map(async ([locale, path]) => {
+      const [file, row] = await Promise.all([
+        git.getFile(path, head),
+        loadDraft('default', database, path),
+      ]);
+      return file || row ? { locale, file, row } : undefined;
+    }),
+  );
+  const found = read.filter((f) => f !== undefined);
+  const parsed = (contents: string | undefined) => parseEntry('default', contents ?? '');
+  return Response.json({
+    groups: diffEntry(
+      'default',
+      formFor(collection, slug),
+      Object.fromEntries(found.map((f) => [f.locale, parsed(f.file?.contents)])),
+      Object.fromEntries(found.map((f) => [f.locale, parsed(f.row?.contents ?? f.file?.contents)])),
+    ),
+    // The rules an address change owes ride in the same commit, so they belong in the diff and
+    // not in the list: a consequence of this entry, not a file anybody chose.
+    redirects: found
+      .flatMap((f) => f.row?.pendingRedirects ?? [])
+      .map(({ from, to }) => ({ from, to })),
+  });
+}
+
+/**
+ * The three-way view: what both sides started from, what only one of them changed and is
+ * merged without asking, and the fields somebody has to answer. `409` when nothing of the
+ * entry has moved in the repository, which is a drawer asking about a conflict already
+ * settled — the same shape the drift answer's refusal has.
+ */
+async function conflictView(collection: string, slug: string): Promise<Response> {
+  if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
+  const found = await entryConflict(
+    'default',
+    db(),
+    gitClient(),
+    formFor(collection, slug),
+    entryPaths(collection, slug),
+  );
+  if (!found) return new Response(SETTLED, { status: 409 });
+  return Response.json({
+    head: found.head,
+    questions: found.questions,
+    merged: found.merged,
+    files: Object.values(found.conflicted).map((c) => c.path),
+  });
+}
+
+const SETTLED = 'This entry has not changed in the repository since it was opened';
+
+/**
+ * The answers to one entry's conflict, one per question the report asked. Every question is
+ * answered or none of them are: a half-answered entry would be written with the repository's
+ * value in the fields nobody had reached, which is not what leaving a question alone means.
+ */
+async function resolve(collection: string, slug: string, request: Request): Promise<Response> {
+  if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
+  const body = (await request.json().catch(() => undefined)) as { answers?: unknown } | undefined;
+  const answers = (Array.isArray(body?.answers) ? body.answers : []).filter(
+    (answer): answer is Answer =>
+      typeof answer?.path === 'string' &&
+      (answer.side === 'ours' || answer.side === 'theirs') &&
+      (answer.locale === undefined || typeof answer.locale === 'string'),
+  );
+  const form = formFor(collection, slug);
+  const found = await entryConflict(
+    'default',
+    db(),
+    gitClient(),
+    form,
+    entryPaths(collection, slug),
+  );
+  if (!found) return new Response(SETTLED, { status: 409 });
+  const answering = (question: { path: string; locale?: string }) =>
+    answers.filter((a) => a.path === question.path && (a.locale ?? '') === (question.locale ?? ''));
+  if (
+    answers.length !== found.questions.length ||
+    found.questions.some((q) => answering(q).length !== 1)
+  )
+    return new Response('Those are not the fields this entry disagrees about', { status: 409 });
+  await resolveConflict('default', db(), form, found, answers);
+  return Response.json({});
+}
+
 // The titles come from the build, the pending edits from D1. Nothing here touches GitHub:
 // listing a collection through the contents API is one request per file.
 async function listEntries(collection: string): Promise<Response> {
@@ -1463,6 +1656,8 @@ const RENAME = /^entries\/([\w-]+)\/([\w-]+)\/rename$/;
 const LOCALES = /^entries\/([\w-]+)\/([\w-]+)\/locales$/;
 const ADDRESS = /^entries\/([\w-]+)\/([\w-]+)\/address\/([\w-]+)$/;
 const DRIFT = /^drift\/([\w-]+)\/([\w-]+)$/;
+const DIFF = /^diff\/([\w-]+)\/([\w-]+)$/;
+const CONFLICT = /^conflict\/([\w-]+)\/([\w-]+)$/;
 const LOCK = /^locks\/([\w-]+)\/([\w-]+)$/;
 const HOLD = /^hold\/([\w-]+)\/([\w-]+)$/;
 const MEDIA = /^media\/([0-9a-f]{64})$/;
@@ -1498,6 +1693,10 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
   if (params.path === 'build') return buildStatus();
   const held = params.path?.match(LOCK);
   if (held) return lockState(held[1] ?? '', held[2] ?? '', locals.handover, 'read');
+  const changed = params.path?.match(DIFF);
+  if (changed) return answering(() => entryDiff(changed[1] ?? '', changed[2] ?? ''));
+  const against = params.path?.match(CONFLICT);
+  if (against) return answering(() => conflictView(against[1] ?? '', against[2] ?? ''));
   const entry = params.path?.match(ENTRY);
   if (entry) return answering(() => getEntry(entry[1] ?? '', entry[2] ?? ''));
   const list = params.path?.match(ENTRIES);
@@ -1796,6 +1995,7 @@ async function answering(work: () => Promise<Response>): Promise<Response> {
 export const POST: APIRoute = async ({ params, request, url, locals }) => {
   if (mounted(url.pathname)) return createAuth(url, locals.cfContext).handler(request);
   if (params.path === 'checks/email') return testEmail(locals.handover);
+  if (params.path === 'checks/conflict') return answering(() => simulateConflict(locals.handover));
   if (params.path === 'account/set-password')
     return setPassword(request, url, locals.cfContext, locals.handover);
   if (params.path === 'members') return invite(request, url, locals.cfContext, locals.handover);
@@ -1832,6 +2032,8 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
     );
   const offered = params.path?.match(LOCALES);
   if (offered) return answering(() => offering(offered[1] ?? '', offered[2] ?? '', request));
+  const settling = params.path?.match(CONFLICT);
+  if (settling) return answering(() => resolve(settling[1] ?? '', settling[2] ?? '', request));
   const answered = params.path?.match(DRIFT);
   if (answered) return answering(() => reconcile(answered[1] ?? '', answered[2] ?? '', request));
   const renamed = params.path?.match(RENAME);

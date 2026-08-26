@@ -20,6 +20,14 @@ import {
   redirectRule,
   revertRedirects,
 } from './lifecycle.js';
+import {
+  type Answer,
+  applyResolution,
+  conflictReport,
+  type MergedChange,
+  type Question,
+  type ThreeWay,
+} from './resolve.js';
 import type { Form } from './schema.js';
 import { drafts, locks, user } from './tables.js';
 import { machineFilled } from './translate.js';
@@ -109,6 +117,101 @@ export async function saveDraft(
   const [first, ...rest] = writes;
   if (first) await db.batch([first, ...rest]);
   return { updated_at: updatedAt, pending: (await blobSha(contents)) !== loaded.baseBlob };
+}
+
+/** One entry's conflict as it was read: the three sides, and the questions they raise. */
+export interface EntryConflict {
+  head: string;
+  sides: Record<string, ThreeWay>;
+  /** locale → the path and the blob HEAD has it at, for the languages that moved. */
+  conflicted: Record<string, { path: string; blob: string }>;
+  questions: Question[];
+  merged: MergedChange[];
+}
+
+/**
+ * The three sides of one entry, read at the one commit the answer will be written against:
+ * the file each draft row was loaded from, the row itself, and the file at HEAD. A language
+ * with no draft is read too — its file stands for all three — because a value every language
+ * shares is only shared while its files agree.
+ *
+ * `undefined` when no file of the entry has moved in the repository since it was opened, which
+ * is the drawer asking about an entry whose conflict somebody has already settled.
+ */
+export async function entryConflict(
+  siteId: string,
+  db: Db,
+  git: Pick<GitClient, 'getFile' | 'getHead'>,
+  form: Form,
+  files: Record<string, string>,
+): Promise<EntryConflict | undefined> {
+  const head = await git.getHead();
+  const read = await Promise.all(
+    Object.entries(files).map(async ([locale, path]) => {
+      const row = await loadDraft(siteId, db, path);
+      const at = await git.getFile(path, head);
+      const was = row?.baseSha === head ? at : await git.getFile(path, row?.baseSha ?? head);
+      if (!row && !at) return undefined;
+      return {
+        locale,
+        path,
+        blob: at?.blob_sha ?? '',
+        moved: Boolean(row) && (at?.blob_sha ?? '') !== row?.baseBlob,
+        side: {
+          base: parseEntry(siteId, was?.contents ?? ''),
+          ours: parseEntry(siteId, row?.contents ?? at?.contents ?? ''),
+          theirs: parseEntry(siteId, at?.contents ?? ''),
+        },
+      };
+    }),
+  );
+  const found = read.filter((f) => f !== undefined);
+  if (!found.some((f) => f.moved)) return undefined;
+  const sides = Object.fromEntries(found.map((f) => [f.locale, f.side]));
+  return {
+    head,
+    sides,
+    conflicted: Object.fromEntries(
+      found.filter((f) => f.moved).map((f) => [f.locale, { path: f.path, blob: f.blob }]),
+    ),
+    ...conflictReport(siteId, form, sides),
+  };
+}
+
+/**
+ * The answers to one entry's conflict, written to the languages the repository moved under.
+ * **The row's base becomes the file at HEAD** — the commit and that file's blob — because the
+ * whole point of an answer is that the draft is now measured against what is there rather than
+ * against what was there when it was opened. Its contents are the merge, so a resolution that
+ * happens to reproduce the repository's file exactly leaves the drawer on its own.
+ *
+ * It takes the conflict that was read rather than reading it again: holding the answers to the
+ * questions is the caller's, and re-reading git between the two would be a different report.
+ */
+export async function resolveConflict(
+  siteId: string,
+  db: Db,
+  form: Form,
+  conflict: EntryConflict,
+  answers: Answer[],
+): Promise<{ paths: string[] }> {
+  const resolved = applyResolution(siteId, form, conflict.sides, answers);
+  const updatedAt = Date.now();
+  const writes = Object.entries(conflict.conflicted).map(([locale, { path, blob }]) =>
+    db
+      .update(drafts)
+      .set({
+        contents: stringifyEntry(siteId, writtenEntry(siteId, resolved[locale], form.fields)),
+        baseSha: conflict.head,
+        baseBlob: blob,
+        publishedSha: null,
+        updatedAt,
+      })
+      .where(and(eq(drafts.siteId, siteId), eq(drafts.path, path))),
+  );
+  const [first, ...rest] = writes;
+  if (first) await db.batch([first, ...rest]);
+  return { paths: Object.values(conflict.conflicted).map((c) => c.path) };
 }
 
 /**

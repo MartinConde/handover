@@ -319,7 +319,7 @@ test('a file somebody changed in the repository badges the header and names the 
     'Changed in the repository since you opened it',
   );
   expect($(root, '.entry-header .subline')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-    'Somebody changed this in the repository after you opened it. Open Unpublished changes to discard yours and take what is there now.',
+    'Somebody changed this in the repository after you opened it. Open Unpublished changes to resolve it field by field, or to discard yours and take what is there now.',
   );
   vi.unstubAllGlobals();
 });

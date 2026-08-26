@@ -204,7 +204,7 @@ function rowsIn(
         fieldsOf(asRow(row)) ?? [],
         old,
         row,
-        address(at, key),
+        rowAddress(at, key),
         '',
         mode,
         wants,
@@ -215,7 +215,7 @@ function rowsIn(
     if (shown === 'same' && changes.length === 0) continue;
     const above = nowKeys[i + 1];
     rows.push({
-      path: address(at, key),
+      path: rowAddress(at, key),
       label: rowLabel(fieldsOf(asRow(row)) ?? [], row, key),
       kind: 'row',
       ...typeOf(row),
@@ -230,7 +230,7 @@ function rowsIn(
     for (const [key, row] of was)
       if (!now.has(key))
         rows.push({
-          path: address(at, key),
+          path: rowAddress(at, key),
           label: rowLabel(fieldsOf(asRow(row)) ?? [], row, key),
           kind: 'row',
           ...typeOf(row),
@@ -243,7 +243,7 @@ function rowsIn(
 const keyed = (rows: unknown): Map<string, unknown> =>
   new Map(Array.isArray(rows) ? rows.map((row, i) => [rowKey(row, i), row]) : []);
 
-const address = (at: string, key: string) =>
+export const rowAddress = (at: string, key: string) =>
   `${at}[${key.startsWith('#') ? key.slice(1) : `_id=${key}`}]`;
 
 const asRow = (row: unknown): Record<string, unknown> => (isObject(row) ? row : {});

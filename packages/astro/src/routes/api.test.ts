@@ -35,6 +35,8 @@ const {
   pendingDrafts,
   publishDrafts,
   readyDrafts,
+  entryConflict,
+  resolveConflict,
   resolveDrift,
   saveTranslated,
   setEntryAddress,
@@ -130,6 +132,10 @@ const {
       updated_at: 1755864000000,
     })),
     resolveDrift: vi.fn(async () => {}),
+    // The three-way view is core's, proven against a real D1 there; what the route owes is
+    // asking for the entry's files and holding the answers to the questions it came back with.
+    entryConflict: vi.fn(async () => undefined as unknown),
+    resolveConflict: vi.fn(async () => ({ paths: [] })),
     saveTranslated: vi.fn(async () => ({ updated_at: 1755864000000, pending: true })),
     setEntryLocales: vi.fn(async () => {}),
     setEntryAddress: vi.fn(async () => ({ updated_at: 1755864000000, pending: true })),
@@ -191,7 +197,12 @@ const {
 
 // The row GET should overlay, set per test. `rows` is the same thing keyed by path, for an
 // entry whose languages are not all in the same state.
-type Row = { contents: string; baseSha: string; baseBlob: string };
+type Row = {
+  contents: string;
+  baseSha: string;
+  baseBlob: string;
+  pendingRedirects?: { from: string; to: string }[];
+};
 let draft: Row | undefined;
 const rows: Record<string, Row> = {};
 // The languages the site declares, likewise: one and several are different code paths.
@@ -251,9 +262,11 @@ vi.mock('virtual:handover/config', () => ({
     },
     media: { publicBase: 'https://media.example.com' },
     collections: {
+      // Pages first, and its blocks field is required: a scratch entry cannot be filled in
+      // from that schema, which is the collection "Simulate conflict" has to walk past.
+      pages: { schema: page },
       listings: { schema: listing, route: '/listings/[slug]', index: '/listings' },
       presenters: { schema: presenter, titleField: 'name' },
-      pages: { schema: page },
       posts: { schema: article, route: '/blog/[slug]', index: '/blog', localizedSlugs: true },
     },
     globals: { site },
@@ -467,9 +480,11 @@ vi.mock('@handover/core', async (original) => ({
   overlayRows,
   heldDrafts,
   holdEntry,
+  entryConflict,
   pendingDrafts,
   publishDrafts,
   readyDrafts,
+  resolveConflict,
   resolveDrift,
   saveTranslated,
   setEntryAddress,
@@ -526,6 +541,9 @@ afterEach(() => {
   sent.length = 0;
   for (const path of Object.keys(files)) delete files[path];
   for (const path of Object.keys(rows)) delete rows[path];
+  entryConflict.mockClear();
+  entryConflict.mockResolvedValue(undefined);
+  resolveConflict.mockClear();
 });
 
 const ctx = (path: string, request?: Request, locals: Record<string, unknown> = {}) =>
@@ -549,7 +567,7 @@ test('ping returns the collection names and who is signed in', async () => {
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
     ok: true,
-    collections: ['listings', 'presenters', 'pages', 'posts'],
+    collections: ['pages', 'listings', 'presenters', 'posts'],
     globals: true,
     user: session.user,
     role: 'editor',
@@ -3626,4 +3644,169 @@ test('a site that has not been told where its bucket is names all four values', 
   expect(await res.json()).toMatchObject({
     error: expect.stringContaining('R2_ACCOUNT_ID and R2_BUCKET in wrangler.jsonc'),
   });
+});
+
+// The drawer's expanded row: what one entry would put in the next commit, read against the
+// repository as it is now rather than against the commit the draft was loaded from.
+test('the expanded row is the draft against the file at HEAD, redirects riding along', async () => {
+  rows['src/content/listings/en/mill-house.yaml'] = {
+    contents: '_version: 1\ntitle: "The Mill House"\nlocation: "Bakewell"\nrooms: 4\n',
+    baseSha: 'def456',
+    baseBlob: 'abc123',
+    pendingRedirects: [{ from: '/listings/mill', to: '/listings/mill-house' }],
+  };
+
+  const res = await GET(ctx('diff/listings/mill-house'));
+
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as {
+    groups: { locale?: string; changes: { label: string }[] }[];
+    redirects: { from: string; to: string }[];
+  };
+  expect(body.groups.map((g) => g.locale)).toEqual(['en']);
+  expect(body.groups[0]?.changes.map((c) => c.label)).toEqual(['Rooms']);
+  expect(body.redirects).toEqual([{ from: '/listings/mill', to: '/listings/mill-house' }]);
+});
+
+// The three-way view behind Resolve. What the route owes: the entry's files, both languages
+// or one, and a refusal that says the conflict is already settled rather than 404.
+test('the three-way view asks about every language of the entry', async () => {
+  locales = ['en', 'de'];
+  entryConflict.mockResolvedValue({
+    head: 'commit-B',
+    sides: {},
+    conflicted: { en: { path: 'src/content/listings/en/mill-house.yaml', blob: 'b1' } },
+    questions: [{ path: 'rooms', label: 'Rooms', locale: 'en', base: '3' }],
+    merged: [{ label: 'Location', side: 'theirs' }],
+  });
+
+  const res = await GET(ctx('conflict/listings/mill-house'));
+
+  expect(res.status).toBe(200);
+  expect(entryConflict).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    expect.objectContaining({ fields: expect.anything() }),
+    {
+      en: 'src/content/listings/en/mill-house.yaml',
+      de: 'src/content/listings/de/mill-house.yaml',
+    },
+  );
+  expect(await res.json()).toEqual({
+    head: 'commit-B',
+    questions: [{ path: 'rooms', label: 'Rooms', locale: 'en', base: '3' }],
+    merged: [{ label: 'Location', side: 'theirs' }],
+    files: ['src/content/listings/en/mill-house.yaml'],
+  });
+});
+
+test('a conflict somebody has already settled is refused rather than drawn', async () => {
+  const res = await GET(ctx('conflict/listings/mill-house'));
+
+  expect(res.status).toBe(409);
+  expect((await GET(ctx('conflict/nothing/at-all'))).status).toBe(404);
+});
+
+// Every question or none: written half-answered, the fields nobody reached would silently
+// take the repository's value, which is not what leaving a question alone means.
+const conflicted = () => {
+  entryConflict.mockResolvedValue({
+    head: 'commit-B',
+    sides: {},
+    conflicted: { en: { path: 'src/content/listings/en/mill-house.yaml', blob: 'b1' } },
+    questions: [
+      { path: 'rooms', label: 'Rooms', locale: 'en' },
+      { path: 'location', label: 'Location', locale: 'en' },
+    ],
+    merged: [],
+  });
+};
+const answers = (list: unknown) =>
+  post('conflict/listings/mill-house', JSON.stringify({ answers: list }));
+
+test('the answers to a conflict are written for the entry', async () => {
+  conflicted();
+  const list = [
+    { path: 'rooms', locale: 'en', side: 'ours' },
+    { path: 'location', locale: 'en', side: 'theirs' },
+  ];
+
+  const res = await POST(answers(list));
+
+  expect(res.status).toBe(200);
+  expect(resolveConflict).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.objectContaining({ fields: expect.anything() }),
+    expect.objectContaining({ head: 'commit-B' }),
+    list,
+  );
+});
+
+test('a half-answered conflict is refused and nothing is written', async () => {
+  conflicted();
+
+  const res = await POST(answers([{ path: 'rooms', locale: 'en', side: 'ours' }]));
+
+  expect(res.status).toBe(409);
+  expect(resolveConflict).not.toHaveBeenCalled();
+  expect(
+    (
+      await POST(
+        answers([
+          { path: 'nothing', locale: 'en', side: 'ours' },
+          { path: 'rooms', locale: 'en', side: 'ours' },
+        ]),
+      )
+    ).status,
+  ).toBe(409);
+  expect(resolveConflict).not.toHaveBeenCalled();
+});
+
+// "Simulate conflict": the diagnostics button's endpoint. It writes to the repository, so what
+// is proven here is that it only writes where a scratch entry can be made valid — a file the
+// site's own content schema rejects would break the build behind it — and only for an owner.
+test('the simulated conflict is made in a collection its schema can be filled in', async () => {
+  publish.mockClear();
+
+  const res = await POST(ctx('checks/conflict', undefined, { handover: owner }));
+
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as { entry: string; path: string };
+  // Named after the commit it is made against, so a second run does not land on the first
+  // run's entry while the built index still knows nothing about it.
+  expect(body.entry).toBe('listings/conflict-check-head789');
+  expect(createDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    body.path,
+    expect.objectContaining({ title: 'Conflict check', rooms: 0 }),
+  );
+  // The draft says one thing and the commit that follows it says another: that is the conflict.
+  expect(saveDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    body.path,
+    // Two fields both sides write, so the answers can differ from each other.
+    expect.objectContaining({ title: 'Your version', location: 'Yours here too' }),
+  );
+  expect(publish).toHaveBeenCalledWith(
+    [
+      {
+        path: body.path,
+        contents: expect.stringMatching(/The version in the code[\s\S]*And the code here too/),
+      },
+    ],
+    expect.objectContaining({ base_sha: 'def456' }),
+  );
+});
+
+test("simulating a conflict is the owner's, not an editor's", async () => {
+  publish.mockClear();
+
+  expect((await POST(ctx('checks/conflict', undefined, { handover: editor }))).status).toBe(403);
+  expect(publish).not.toHaveBeenCalled();
 });

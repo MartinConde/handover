@@ -59,6 +59,8 @@ export {
   createDraft,
   DraftConflictError,
   discardDraft,
+  type EntryConflict,
+  entryConflict,
   heldDrafts,
   holdEntry,
   loadDraft,
@@ -71,6 +73,7 @@ export {
   recordDelete,
   recordOffer,
   recordRename,
+  resolveConflict,
   resolveDrift,
   revertCommit,
   saveDraft,
@@ -131,6 +134,7 @@ export {
   entryUrl,
 } from './names.js';
 export { filterLive, isLive, newId, RESERVED_KEYS, regenerateIds } from './reserved.js';
+export type { Answer, MergedChange, Question, ThreeWay } from './resolve.js';
 export type { RichtextTier } from './richtext.js';
 export {
   RICHTEXT_CONSTRUCTS,

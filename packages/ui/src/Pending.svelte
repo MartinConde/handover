@@ -1,5 +1,8 @@
 <script lang="ts">
+import type { DiffGroup } from '@handover/core';
 import BuildPill, { type Build } from './BuildPill.svelte';
+import Diff from './Diff.svelte';
+import Resolve from './Resolve.svelte';
 
 type Entry = {
   /** `listings/mill-house` — what a publish is of, since the languages go out together. */
@@ -30,7 +33,10 @@ let {
   onpublished: () => void;
   /** Undo the commit this drawer just made; the shell owns the confirmation. */
   onrevert: (commitSha: string) => void;
-  /** A draft was thrown away: the entry behind it has to be read from the repository again. */
+  /**
+   * A draft was thrown away or written over by a resolution: the entry behind it has to be
+   * read again wherever it is open.
+   */
   ondiscarded: () => void;
 } = $props();
 
@@ -54,6 +60,14 @@ let drifted = $state<string[]>([]);
 /** The entry whose discard is waiting to be confirmed, and whether it is being thrown away. */
 let confirming = $state<Entry>();
 let discarding = $state(false);
+/** The entry whose three-way view is open, which takes the place of the list while it is. */
+let resolving = $state<Entry>();
+/** The entry whose changes are being read, and what came back per entry. */
+let opened = $state('');
+let changes = $state<
+  Record<string, { groups: DiffGroup[]; redirects: { from: string; to: string }[] }>
+>({});
+let reading = $state('');
 // What the client changed their mind about, not what is checked: the default is every entry
 // except the ones on hold, and a row this publish was refused over is off whatever they said.
 // Storing the selection itself would either be recomputed on every reload — losing the refusal
@@ -90,11 +104,12 @@ const summary = $derived(
 );
 
 // What a refusal says. A conflict names its entries, and those rows carry the rest of it; a
-// branch that moved names none, and saying so in the server's words beats guessing.
+// branch that moved names none, and saying so in the server's words beats guessing. Both ways
+// out are named, in the order they are worth taking: Resolve keeps what was written.
 const refusal = (body: string, keys: string[]) => {
   if (!keys.length) return `Nothing was published. ${body}`;
   const [what, them] = keys.length === 1 ? ['One entry', 'it'] : [`${keys.length} entries`, 'them'];
-  return `Nothing was published. ${what} changed in the repository after you opened ${them}. Discard your changes to ${them} to take what is there now.`;
+  return `Nothing was published. ${what} changed in the repository after you opened ${them}. Resolve ${them} to keep what you wrote, or discard your changes to take what is there now.`;
 };
 
 // The other refusal: nothing was taken from anyone, the entry simply is not finished. Unlike a
@@ -189,6 +204,40 @@ async function discard() {
   ondiscarded();
 }
 
+// What one entry would put in the commit. Read when it is first opened and kept, since the
+// list behind it does not move while the drawer is: a second look is the same answer.
+async function open(entry: Entry) {
+  opened = opened === entry.key ? '' : entry.key;
+  if (!opened || changes[entry.key]) return;
+  reading = entry.key;
+  const res = await fetch(`/admin/api/diff/${entry.key}`);
+  reading = '';
+  if (!res.ok) {
+    error = `What changed in ${named(entry)} could not be read (${res.status}).`;
+    opened = '';
+    return;
+  }
+  changes[entry.key] = (await res.json()) as (typeof changes)[string];
+}
+
+// The panel took the focus when it took the list's place, so it hands it back rather than
+// leaving it on the button it just removed.
+function closeResolver() {
+  resolving = undefined;
+  panel?.focus();
+}
+
+// The answers are written and the draft now sits on the file at HEAD, so the badge goes and
+// the row can be published with the rest.
+function resolved(entry: Entry) {
+  closeResolver();
+  conflicts = conflicts.filter((k) => k !== entry.key);
+  error = conflicts.length ? refusal('', conflicts) : '';
+  // What it changed is the merge now, not what was read before it.
+  delete changes[entry.key];
+  ondiscarded();
+}
+
 function toggle(entry: Entry) {
   toggled = toggled.includes(entry.key)
     ? toggled.filter((k) => k !== entry.key)
@@ -200,7 +249,11 @@ const selectAll = () => (toggled = held.map((e) => e.key));
 const selectNone = () => (toggled = ready.map((e) => e.key));
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && (confirming ? (confirming = undefined) : onclose())} />
+<svelte:window
+  onkeydown={(e) =>
+    e.key === 'Escape' &&
+    (confirming ? (confirming = undefined) : resolving ? closeResolver() : onclose())}
+/>
 
 {#snippet result()}
   <p class="result-actions">
@@ -242,6 +295,13 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
         {/if}
         {#if conflicts.includes(entry.key)}
           <span class="badge badge-danger">Changed in the repository since you opened it</span>
+          <button
+            class="btn btn-sm"
+            type="button"
+            disabled={busy || discarding}
+            aria-label="Resolve {named(entry)}"
+            onclick={() => (resolving = entry)}
+          >Resolve</button>
         {:else if unready.includes(entry.key)}
           <span class="badge badge-danger">Not ready to publish</span>
         {:else if drifted.includes(entry.key)}
@@ -253,8 +313,8 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
         <span class="sep" aria-hidden="true">·</span>
         edited {new Date(entry.updated_at).toLocaleString()}
       </div>
-      {#if conflicts.includes(entry.key)}
-        <div class="change-actions">
+      <div class="change-actions">
+        {#if conflicts.includes(entry.key)}
           <button
             class="btn btn-sm"
             type="button"
@@ -262,9 +322,42 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
             aria-label="Discard your changes to {named(entry)}"
             onclick={() => (confirming = entry)}
           >Discard</button>
-        </div>
-      {/if}
+        {/if}
+        <button
+          class="btn btn-ghost btn-icon"
+          type="button"
+          aria-expanded={opened === entry.key}
+          aria-label="What changed in {named(entry)}"
+          onclick={() => open(entry)}
+        >{opened === entry.key ? '▾' : '▸'}</button>
+      </div>
     </div>
+    {#if opened === entry.key}
+      {@const shown = changes[entry.key]}
+      {#if shown}
+        <div class="change-diff">
+          <Diff groups={shown.groups} />
+          {#if shown.redirects.length}
+            <h4>Riding along</h4>
+            <div class="diff">
+              {#each shown.redirects as rule (rule.from)}
+                <div class="row is-block">
+                  <small>Redirect</small>
+                  <code>{rule.from}</code>
+                  <span aria-hidden="true">→</span>
+                  <code>{rule.to}</code>
+                  <span class="sub">— because you changed the web address</span>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {:else}
+        <div class="change-diff"><p class="foot-note" role="status">
+          {reading === entry.key ? 'Reading what changed…' : 'Nothing to show.'}
+        </p></div>
+      {/if}
+    {/if}
   </li>
 {/snippet}
 
@@ -307,7 +400,17 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
       {/if}
     </header>
     <div class="drawer-body">
-      {#if entries.length}
+      {#if resolving}
+        <!-- In place of the list, not over it: the entry is what is being read, and the rows
+             behind it are not answers to anything. -->
+        <Resolve
+          entry={resolving.key}
+          title={named(resolving)}
+          updated={resolving.updated_at}
+          onclose={closeResolver}
+          onresolved={() => resolving && resolved(resolving)}
+        />
+      {:else if entries.length}
         <!-- A publish that left a hold behind does not empty the drawer, so the empty state below
              is not where the commit gets named. Neutral, not green: the commit landed, the site
              has not. -->
@@ -362,14 +465,17 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
           <button
             class="btn btn-primary"
             type="button"
-            disabled={busy || discarding || !selected.length}
+            disabled={busy || discarding || Boolean(resolving) || !selected.length}
             onclick={publish}
           >
             {busy ? 'Publishing…' : selected.length ? `Publish ${plural(selected.length, 'changes')}` : 'Publish'}
           </button>
         </div>
         <p class="foot-note">
-          {#if !ready.length}
+          {#if resolving}
+            Publishing waits while a conflict is open: the rest would go out in the same commit,
+            and this entry is not ready to be in it.
+          {:else if !ready.length}
             Everything still here is on hold. Check one to include it — that releases the hold.
           {:else if !selected.length && ready.every((e) => blocked.includes(e.key))}
             Nothing can go out: every entry here is held back by what is marked on its row.

@@ -103,6 +103,11 @@ lists them with a checkbox each and commits the checked ones:
   owes one says so, `+1 redirect`
 - The commit is the stored bytes, not the form: whatever the drawer lists is exactly what
   lands in the repository
+- **A row opens into what it would put in the commit**, field by field: the draft against
+  the file in the repository as it is now, grouped by language, with the values every
+  language shares in a group of their own and blocks addressed by `_id` so a block that
+  moved says *moved*. The redirect rules riding along are in there too, under *Riding
+  along*, since they are a consequence of the entry rather than a file anybody chose
 - The rows are kept once the commit succeeds and re-seeded on it, which is what makes the
   next publish of an entry somebody is still editing not look like a conflict with this one
   ([Working together](working-together.md#your-own-publish-is-not-a-conflict)). They are
@@ -112,8 +117,9 @@ lists them with a checkbox each and commits the checked ones:
   and fill in what is marked
 - **An entry somebody changed in the repository is refused**, and the whole publish with
   it. That entry then takes itself out of the set — its checkbox goes off and cannot go back
-  on — so pressing Publish again sends the rest. Discard is the way out of the refusal
-  itself ([Working together](working-together.md#a-file-that-changed-in-the-repository))
+  on — so pressing Publish again sends the rest. **Resolve** on that row answers it field by
+  field and keeps what you wrote; Discard gives the entry up whole
+  ([Working together](working-together.md#a-file-that-changed-in-the-repository))
 - **An entry whose languages have drifted apart is refused too**, marked *Languages
   disagree*. Which blocks an entry has is the same in every language
   ([Languages](i18n.md#a-block-one-language-only-has)), so a file that disagrees with its
@@ -271,9 +277,7 @@ Two consequences worth knowing:
 The build pill has no **quota** state: the free plan's monthly build minutes run out, and until
 a site actually hits the ceiling there is nothing to read the Builds API's answer for it against,
 so a build that fails for want of minutes reads as an ordinary failure. The publish rows in the
-[activity log](activity.md) do not expand into what the commit changed — that waits for the
-per-field diff. The drawer
-runs no pre-publish checks and shows no per-field diff of what is about to go out. An entry
-somebody changed in the repository can only be taken whole
-([Working together](working-together.md#not-yet)), and **Publish this entry** does not name
-the redirect rules riding along with it the way the drawer does.
+[activity log](activity.md) do not expand into what the commit changed, though the drawer
+shows the same diff before it goes out. The drawer runs no pre-publish checks, and
+**Publish this entry** does not name the redirect rules riding along with it the way the
+drawer does.

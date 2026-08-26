@@ -4,14 +4,31 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Conflicts are answered field by field.** An entry somebody changed in the repository used
+  to have one way out — throw your draft away and take theirs. The drawer's **Resolve** now
+  opens the entry as two questions rather than two versions: fields only one side changed are
+  merged and counted (*Merged for you 3*), fields both sides changed are asked one at a time,
+  each naming what you both started from, and **Keep all mine** / **Take all theirs** answer
+  them all at once. Blocks are matched by `_id`, so a block added in the code and a block
+  edited in the draft are not a disagreement. Answering writes a new draft over the
+  repository's file and the entry publishes normally; nothing is committed by the answer.
+  [Working together](docs/working-together.md#resolving-it-field-by-field).
+
+- **A drawer row opens into what it would publish.** The per-field diff below is now on every
+  row of the pending-changes drawer, with the redirect rules riding along under *Riding along*.
+
+- **`POST /admin/api/checks/conflict`** makes a conflict to look at on a scratch entry, so the
+  three-way view can be tried on a live site without hand-crafting commits. Owner only, and it
+  commits: [the admin API](docs/admin-api.md#publishing) says what it leaves behind.
+
 - **Per-field diff.** `diffEntry()` in `@handover/core` says what changed between two states of
   one entry — the draft against the file in git, or one version against another — as fields
   rather than as lines, so nothing about the file format reaches the screen. The changes are
   grouped by language with the values every language shares lifted into a group of their own, a
   language nothing happened in says so rather than going quiet, and blocks are addressed by
   `_id`, so a block that moved says it moved instead of arriving as one deletion plus one
-  addition. Nothing in the admin shows it yet; `pnpm --filter @handover/ui fixtures` renders
-  every field type's diff on a page of its own.
+  addition. `pnpm --filter @handover/ui fixtures` renders every field type's diff on a page of
+  its own.
 
 - **Background jobs.** One Cron Trigger every five minutes, one `scheduled` handler, and a
   registry that decides what is due: media reconciliation hourly, activity-log retention
