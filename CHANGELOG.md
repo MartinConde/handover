@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **The endpoints have a page of their own.** `docs/admin-api.md` collects every route the
+  admin drives — entries, drafts, publishing, locks — where they had been split between
+  `publishing.md` and `working-together.md`, and `publishing.md` had become half API listing.
+  Nothing about the routes changed; both pages now point at it.
+
 - **The top bar says whether the site has caught up with the commit.** A publish is a commit and
   a commit is not a live site — there is a one-to-three minute host build behind it — so the
   shell now polls **Workers Builds** and shows *Building… 1m 20s* · *Live since 14:02* · *Build failed*,

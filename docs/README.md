@@ -9,7 +9,7 @@
 - [Field types](field-types.md) — every field type, its schema and how it is stored; groups, arrays and blocks.
 - [Template convention](template-convention.md) — `schemas.ts` and `content.config.ts`, `load()` and `ContentSource`, layouts that take `data` as a prop.
 - [Rendering content](rendering.md) — `<Blocks />`, `<Markdown />`, `<LocaleSwitcher />` and hidden entries.
-- [Drafts and publishing](publishing.md) — autosave into D1, what a draft holds, the pending-changes drawer, publishing in one commit, holding an entry back, the endpoints, the content index.
+- [Drafts and publishing](publishing.md) — autosave into D1, what a draft holds, the pending-changes drawer, publishing in one commit, build status and revert, holding an entry back, the content index.
 - [Working together](working-together.md) — the soft lock on an entry, what "Being edited by…" takes away, taking one over, and a file somebody changed in the repository.
 - [Accounts and signing in](auth.md) — the secrets, `HANDOVER_BASE_URL`, seeding the first owner, the three ways in, the account page, closed sign-up and rate limiting.
 - [Roles and permissions](roles.md) — the two roles, what each may do, and what is behind the session and what is deliberately not.
@@ -17,4 +17,5 @@
 - [Activity log](activity.md) — what is recorded and what is not, who sees whose events, the read endpoint and its filters.
 - [CLI](cli.md) — `handover migrate` for content files, `handover db generate` for the package's tables.
 - [Deploy](deploy.md) — `wrangler.jsonc`, the GitHub App, secrets, building on push.
+- [The admin API](admin-api.md) — the routes the admin drives: entries, drafts, publishing and locks. For debugging, not for building against.
 - [How it works](how-it-works.md) — packages, injected routes, virtual config, the publish path. For contributors.

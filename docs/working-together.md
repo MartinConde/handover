@@ -117,42 +117,8 @@ development: publish, type, publish again, and the second commit sits on the fir
 
 ## The endpoints
 
-```
-POST /admin/api/locks/:collection/:slug  →  { "held_by", "mine", "expires_at", "base" }
-```
-
-The heartbeat. It takes the entry when nobody is editing it and pushes the caller's own
-lock further out when they are, and it is what the editor sends as it opens and again
-while somebody types in it. `held_by` is `{ "id", "name" }` for the person editing it and
-`null` when nobody is, `mine` says whether that is the caller, and `expires_at` is when
-the lock lapses — epoch milliseconds, about two minutes out. `base` is what each of the
-entry's files was loaded against, `{ "src/content/listings/en/seaview-cottage.yaml":
-{ "sha", "blob" } }`, so a tab open across somebody else's publish knows its diff base;
-a language with no draft is not in it. `404` if the collection is not configured.
-
-```
-GET /admin/api/locks/:collection/:slug   →  { "held_by", "mine", "expires_at", "base" }
-```
-
-The same answer, taking nothing. This is what the person waiting polls: an entry changes
-hands when somebody asks for it, never because their tab was watching when the last beat
-lapsed.
-
-```
-POST /admin/api/locks/:collection/:slug  { "take": true }
-```
-
-Take over. The lock moves whatever it says, and the answer is the same shape with
-`"mine": true`. Without the body it is an ordinary beat, so a tab that asks first is still
-not a way to take an entry off somebody.
-
-```
-PUT /admin/api/drafts/:collection/:slug  →  409  { "held_by", "mine", "expires_at" }
-```
-
-What a save looks like once somebody else holds the lock: nothing is written, and the
-answer names them so the screen can say who. Both draft endpoints answer this way — the
-entry's own language and a translation ([Drafts and publishing](publishing.md#the-endpoints)).
+The lock heartbeat, the take-over and the `409` a save gets while somebody else holds the
+entry are in [The admin API](admin-api.md#locks).
 
 ## Not yet
 
@@ -160,5 +126,6 @@ An entry someone changed in the repository can only be taken whole, by discardin
 there is no three-way merge, no per-field *Keep mine* / *Take theirs*, and no way to keep
 your version over theirs. Nor is there any way to see what they changed from inside the
 admin — the refusal names the entry, and the repository is where the change is read.
-Publishing shows no build status either, so what happens to a commit after it lands is not
-reported anywhere.
+What happens to a commit after it lands *is* reported — the top bar carries the build and
+one-tap revert ([Drafts and publishing](publishing.md#when-a-commit-goes-live)) — but a
+build that fails names no entry, so which of a batch broke it is read in the build log.
