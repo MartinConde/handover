@@ -7,9 +7,11 @@ import {
   driftReport,
   entryAt,
   getEntryLocales,
+  globalsAt,
   markTranslation,
   mergeEntry,
   parseEntry,
+  refErrors,
   staleLocales,
   staticSource,
   stringifyEntry,
@@ -38,6 +40,21 @@ test('getCollection keeps only entries under the locale folder', async () => {
 
 test('getEntry returns undefined for a missing id', async () => {
   expect(await source.getEntry('listings', 'fr/mill-house')).toBeUndefined();
+});
+
+test('the globals of one language are keyed by file name, without the locale folder', async () => {
+  const globals = staticSource<{ globals: unknown }>('default', {
+    getEntry: async () => undefined,
+    getCollection: async () => [
+      { id: 'en/site', data: { name: 'Coastal Homes' } },
+      { id: 'en/cta-newsletter', data: { heading: 'Ready to move?' } },
+      { id: 'de/site', data: { name: 'Coastal Homes GmbH' } },
+    ],
+  });
+
+  expect(await globalsAt('default', globals, 'de')).toEqual({
+    site: { name: 'Coastal Homes GmbH' },
+  });
 });
 
 // Astro's glob loader files an entry under a `slug` it finds in the data, which is exactly
@@ -467,6 +484,25 @@ test('a date nested in an array of groups is named by its path', () => {
   expect(dated('slots:\n  - _id: "a1"\n    starts: 2026-07-14\n')).toEqual([
     'src/content/notes/en/one.yaml › slots[0].starts: an unquoted date is a timestamp, not a string. Quote it: "2026-07-14"',
   ]);
+});
+
+const refs = (body: string) =>
+  refErrors('default', 'src/content/pages/en/home.yaml', body, ['site', 'cta-newsletter']);
+
+test('a _ref naming a global the site does not declare is named with its file and its path', () => {
+  expect(
+    refs('blocks:\n  - _type: "cta"\n    _id: "q7r8s9t0"\n    _ref: "globals/newsletter"\n'),
+  ).toEqual([
+    'src/content/pages/en/home.yaml › blocks[0]._ref: no global "newsletter" is declared in cms.config.ts — it has site, cta-newsletter',
+  ]);
+});
+
+test('a _ref naming a declared global passes, however deep it sits', () => {
+  expect(
+    refs(
+      'blocks:\n  - _type: "columns"\n    _id: "a1b2c3d4"\n    columns:\n      - _id: "m3n4o5p6"\n        blocks:\n          - _type: "cta"\n            _id: "q7r8s9t0"\n            _ref: "globals/cta-newsletter"\n',
+    ),
+  ).toEqual([]);
 });
 
 test('a translated field its form left empty goes, rather than coming back', () => {

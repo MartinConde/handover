@@ -4,14 +4,16 @@
 - [Configuration](configuration.md) — `cms.config.ts`: `collections`, `route`, `index`, `load`; how entry filenames are derived.
 - [Languages](i18n.md) — the `i18n` block, why it has to match `astro.config.mjs`, the folder per language, which fields are translated, and the structure every language shares.
 - [Translating](translating.md) — the language switcher, side by side, what a save of a translation writes, making the languages agree, machine translation, staleness.
-- [Content format](content-format.md) — what the YAML files look like, the reserved `_` keys, `_id` on blocks, hiding an entry.
+- [Content format](content-format.md) — what the YAML files look like, the reserved `_` keys, `_id` on blocks.
+- [Entry lifecycle](entry-lifecycle.md) — hiding an entry, creating one, renaming and deleting, and the redirects those write.
 - [Site files](site-files.md) — globals, the `navigation` menus, `redirects.yaml` and `_templates/`.
 - [Media](media.md) — the bucket, its CORS rule and hostname, the four env values, and what an upload does.
 - [Pictures and files in a field](media-fields.md) — a field's preset: the ratio, the cap on the way in, the floor the picker refuses under; the drop zone and the picker.
 - [Field types](field-types.md) — the scalar types, rich text, links and labels.
 - [Structured fields](structured-fields.md) — image, file, embed, seo and reference; groups, arrays and blocks.
 - [Template convention](template-convention.md) — `schemas.ts` and `content.config.ts`, `load()` and `ContentSource`, layouts that take `data` as a prop.
-- [Rendering content](rendering.md) — `<Blocks />`, `<Markdown />`, `<LocaleSwitcher />` and hidden entries.
+- [Blocks](blocks.md) — `<Blocks />`, the component registry, blocks that nest, and `_ref` blocks filled from a global.
+- [Rendering content](rendering.md) — `<Markdown />`, `<LocaleSwitcher />` and hidden entries.
 - [Drafts and publishing](publishing.md) — autosave into D1, what a draft holds, the pending-changes drawer, publishing in one commit, build status and revert, holding an entry back, the content index.
 - [Working together](working-together.md) — the soft lock on an entry, what "Being edited by…" takes away, taking one over, and a file somebody changed in the repository.
 - [Accounts and signing in](auth.md) — the secrets, `HANDOVER_BASE_URL`, seeding the first owner, the three ways in, the account page, closed sign-up and rate limiting.

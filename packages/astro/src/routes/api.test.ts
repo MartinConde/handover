@@ -18,6 +18,7 @@ const {
   presenter,
   page,
   article,
+  site,
   files,
   getFile,
   getHead,
@@ -72,6 +73,13 @@ const {
     presenter: z.object({ name: z.string() }),
     // A collection whose languages each serve their entries at an address of their own.
     article: z.object({ title: z.string(), slug: z.string().optional() }),
+    // A global: the same editor path with no collection behind it, named by its own schema.
+    site: z
+      .object({
+        footerText: z.string(),
+        phone: z.string().optional().meta({ i18n: 'duplicate' }),
+      })
+      .meta({ label: 'Site details', description: 'Contact details and footer text' }),
     // The GitHub boundary: one file in the repo, nothing else.
     getFile: vi.fn(async (path: string) => {
       const stored = files[path];
@@ -248,6 +256,7 @@ vi.mock('virtual:handover/config', () => ({
       pages: { schema: page },
       posts: { schema: article, route: '/blog/[slug]', index: '/blog', localizedSlugs: true },
     },
+    globals: { site },
   },
 }));
 // What the build read out of src/content/, inlined into the Worker bundle.
@@ -288,6 +297,10 @@ vi.mock('virtual:handover/index', () => ({
         id: 'rosa-hale',
         locales: { en: { title: 'Rosa Hale', path: 'src/content/presenters/en/rosa-hale.yaml' } },
       },
+    ],
+    // A global is an entry of the `globals` collection, listed by its file name.
+    globals: [
+      { id: 'site', locales: { en: { title: 'site', path: 'src/content/globals/en/site.yaml' } } },
     ],
   },
 }));
@@ -537,6 +550,7 @@ test('ping returns the collection names and who is signed in', async () => {
   expect(await res.json()).toEqual({
     ok: true,
     collections: ['listings', 'presenters', 'pages', 'posts'],
+    globals: true,
     user: session.user,
     role: 'editor',
     // Where a stored key is served from: the widgets draw thumbnails of keys nothing listed.
@@ -764,6 +778,130 @@ test('an entry the App cannot reach names the repository rather than the entry',
   expect(await res.text()).toBe(message);
 });
 
+// A global is edited through the entry path: `globals` is the collection and the file name the
+// slug. What comes back says so, and carries the name the dev gave it rather than a title field.
+test('a global is served as an entry, in singleton mode and under its own label', async () => {
+  files['src/content/globals/en/site.yaml'] = 'footerText: "Coastal homes since 2009"\n';
+
+  const res = await GET(ctx('entries/globals/site'));
+
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as Record<string, unknown>;
+  expect(body.fields).toEqual([
+    { path: ['footerText'], label: 'Footer text', type: 'text', required: true },
+    { path: ['phone'], label: 'Phone', type: 'text', required: false, i18n: 'duplicate' },
+  ]);
+  expect(body.data).toEqual({ footerText: 'Coastal homes since 2009' });
+  expect(body.singleton).toBe(true);
+  expect(body.label).toBe('Site details');
+  // Nothing a collection's routes are about: a global has no page of its own to link to.
+  expect(body.route).toBeUndefined();
+  expect(body.localizedSlugs).toBeUndefined();
+  delete files['src/content/globals/en/site.yaml'];
+});
+
+test('a key cms.config.ts does not declare is not a global', async () => {
+  expect((await GET(ctx('entries/globals/nope'))).status).toBe(404);
+});
+
+// The subtraction from the other side: a global's file is named by the schema and there is one
+// of it, so the four routes that move an entry around have nothing to do with it.
+test('a global is refused the routes that rename, address, delete or turn off an entry', async () => {
+  files['src/content/globals/en/site.yaml'] = 'footerText: "Coastal homes"\n';
+
+  expect((await POST(post('entries/globals/site/rename', '{"to":"other"}'))).status).toBe(404);
+  expect((await POST(post('entries/globals/site/address/en', '{"address":"x"}'))).status).toBe(404);
+  expect((await POST(post('entries/globals/site/locales', '{"locales":["en"]}'))).status).toBe(404);
+  expect((await DELETE(ctx('entries/globals/site'))).status).toBe(404);
+
+  delete files['src/content/globals/en/site.yaml'];
+});
+
+test('a global takes a draft through the same autosave as an entry', async () => {
+  saveDraft.mockClear();
+  files['src/content/globals/en/site.yaml'] = 'footerText: "Coastal homes"\n';
+
+  const res = await PUT(
+    put(
+      'drafts/globals/site',
+      JSON.stringify({ data: { footerText: 'Coastal homes since 2009' } }),
+    ),
+  );
+
+  expect(res.status).toBe(200);
+  expect(saveDraft.mock.calls[0]?.[3]).toBe('src/content/globals/en/site.yaml');
+  expect(await res.json()).toEqual({ updated_at: 1755864000000, pending: true, problems: [] });
+  delete files['src/content/globals/en/site.yaml'];
+});
+
+// The publish holds every file to a schema, and a global's is its own: without this the one
+// file nothing else validates would be the one that can break the build.
+test('publishing is refused when a global is missing something its schema needs', async () => {
+  publishDrafts.mockClear();
+  readyDrafts.mockImplementationOnce(async () => [
+    {
+      path: 'src/content/globals/en/site.yaml',
+      contents: 'phone: "0100"\n',
+      updatedAt: 1755864000000,
+    },
+  ]);
+
+  const res = await POST(post('publish', ''));
+
+  expect(res.status).toBe(422);
+  expect(await res.json()).toEqual({
+    error: 'src/content/globals/en/site.yaml is missing something the schema needs',
+    paths: ['src/content/globals/en/site.yaml'],
+  });
+  expect(publishDrafts).not.toHaveBeenCalled();
+});
+
+// The site settings list: the cards, in cms.config.ts order. A language with no file is left out
+// rather than listed empty — the dashed chip on the card is what offers to make one.
+test('the globals list names each global and the languages it has a file in', async () => {
+  locales = ['en', 'de'];
+  pendingDrafts.mockImplementationOnce(async () => []);
+
+  const res = await GET(ctx('globals'));
+
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    globals: [
+      {
+        key: 'site',
+        label: 'Site details',
+        description: 'Contact details and footer text',
+        locales: ['en'],
+        pending: false,
+      },
+    ],
+    locales: ['en', 'de'],
+  });
+  locales = ['en'];
+});
+
+test('a global with a draft ahead of the repository carries the pending dot', async () => {
+  locales = ['en', 'de'];
+  const row = {
+    path: 'src/content/globals/de/site.yaml',
+    contents: 'footerText: "Küstenhäuser"\n',
+    updatedAt: 1755864000000,
+  };
+  overlayRows.mockImplementationOnce(async () => [row]);
+  pendingDrafts.mockImplementationOnce(async () => [row]);
+
+  const res = await GET(ctx('globals'));
+
+  const { globals } = (await res.json()) as {
+    globals: { locales: string[]; pending: boolean }[];
+  };
+  const [global] = globals;
+  expect(global?.pending).toBe(true);
+  // The German file is a draft and has never been committed, and the card counts it all the same.
+  expect(global?.locales).toEqual(['en', 'de']);
+  locales = ['en'];
+});
+
 test('an entry with a draft returns the draft data and reports it as pending', async () => {
   draft = {
     contents: 'title: "The Mill House (draft)"\nlocation: "Bakewell"\nrooms: 3\n',
@@ -883,6 +1021,34 @@ test('the pending list is what the drafts hold that the repository does not', as
         collection: 'listings',
         locales: ['en'],
         files: ['src/content/listings/en/mill-house.yaml'],
+        updated_at: 1755864000000,
+        held_by: null,
+      },
+    ],
+  });
+});
+
+// One entry, one name, on every screen: a global has no title field to be read off, so the
+// drawer calls it what the site settings screen calls it rather than by its file name.
+test('a global waiting to be published is listed under its label', async () => {
+  pendingDrafts.mockImplementationOnce(async () => [
+    {
+      path: 'src/content/globals/en/site.yaml',
+      contents: 'footerText: "Coastal homes since 2009"\n',
+      updatedAt: 1755864000000,
+    },
+  ]);
+
+  const res = await GET(ctx('drafts'));
+
+  expect(await res.json()).toEqual({
+    entries: [
+      {
+        key: 'globals/site',
+        title: 'Site details',
+        collection: 'globals',
+        locales: ['en'],
+        files: ['src/content/globals/en/site.yaml'],
         updated_at: 1755864000000,
         held_by: null,
       },

@@ -1,53 +1,8 @@
 # Rendering content
 
 The components the package ships and the helpers a template calls to draw an entry it has
-already loaded. Getting the entry there is [Template convention](template-convention.md).
-
-## Blocks
-
-`<Blocks />` renders a `blocks()` field from the list and a `{ _type: component }` map.
-Each component receives the stored block as `block` and the map as `components`, so a
-block that nests `blocks` renders them by calling `<Blocks />` again with the same map.
-A `_type` with no component throws at build, naming the type; a block with `_ref` is
-skipped until the globals collection exists.
-
-```ts
-// src/blocks/registry.ts
-import type { BlockType } from '../content/schemas';
-import Columns from './Columns.astro';
-import Hero from './Hero.astro';
-
-// A block type with a schema but no component fails typecheck here, not at build.
-export const components = { hero: Hero, columns: Columns } satisfies Record<BlockType, unknown>;
-```
-
-`BlockType` is `keyof` the plain object the schema registry is built from, so in
-`schemas.ts` write `const blockTypes = { hero, columns }`, then
-`export const registry: BlockRegistry = blockTypes` and
-`export type BlockType = keyof typeof blockTypes`.
-
-```astro
----
-// src/blocks/Columns.astro — a block that nests blocks
-import Blocks from 'astro-handover/Blocks.astro';
-import type { z } from 'astro/zod';
-import type { columns } from '../content/schemas';
-import type { components } from './registry';
-
-interface Props {
-  block: z.infer<typeof columns>;
-  components: typeof components;
-}
-
-const { block, components: registry } = Astro.props;
----
-
-<section>
-  {block.columns.map((column) => <div><Blocks blocks={column.blocks} components={registry} /></div>)}
-</section>
-```
-
-The layout renders the top level: `<Blocks blocks={data.blocks} components={components} />`.
+already loaded. Getting the entry there is [Template convention](template-convention.md), and
+the block renderer has a page of its own: [Blocks](blocks.md).
 
 ## Rich text
 

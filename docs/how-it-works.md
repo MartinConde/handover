@@ -57,7 +57,8 @@ still match the file?" a string comparison rather than a fetch.
 `GET /admin/api/entries/:collection` is the entry list and does not touch GitHub at all. It
 reads `virtual:handover/index`, a module the integration's Vite plugin builds by walking
 every `.yaml` under `src/content/` and handing the files to `indexFrom` in core, which
-decides what is an entry — so `_templates/` and `globals/` drop out in one place — and lays
+decides what is an entry — so `_templates/` and `redirects.yaml` drop out in one place, while
+a global is one, filed under `globals` like any other collection — and lays
 the pending draft rows over it with `collectionEntries`. A file that is neither an entry
 nor a site file fails the build through `contentPathErrors`, because a path the CMS cannot
 address would otherwise be missing from a list that claims to hold every entry.

@@ -9,7 +9,8 @@ Conventions across all of them:
 
 - **`:collection` is a key from `cms.config.ts` and `:slug` is an entry's file name.**
   `404` whenever the collection is not configured, and generally when the entry has no
-  file at all
+  file at all. A [global](site-files.md#globals) is addressed the same way, with `globals`
+  as the collection and its file name as the slug
 - **The browser never sends file contents to a publish.** What is committed is what the
   server has stored; a body says only *which* of it
 - **`409` is somebody else's work in the way** — a lock, a file that moved in the
@@ -67,6 +68,23 @@ machine-translate with: false, and none of the buttons that offer it is drawn. `
 and `prefixDefaultLocale` are where the site serves the collection, which is what the editor
 builds a URL out of: the address row, and the URL it names when a language is turned off. A
 collection with no `route` has neither, and both are absent from the response.
+
+```
+GET /admin/api/globals  →  { "globals": [{ "key", "label", "description", "locales", "pending" }], "locales": ["en", "de"] }
+```
+
+The Site settings list: one card per global `cms.config.ts` declares, in that order. `label`
+and `description` come from the schema's own `.meta()` and fall back to the key; `locales` is
+the languages this global has a file in — drafted counts — and `pending` says whether any of
+them is ahead of the repository. The response's `locales` is the languages the site declares.
+Like the entry list it reads the content index and the draft rows, and nothing from GitHub.
+
+A global itself is read and written through the entry routes above: `GET
+/admin/api/entries/globals/site` answers the same body with `singleton: true` and the `label`
+on it, and with no `route`, `index` or `localizedSlugs` — there is no page of its own to link
+to. The drafts, translation, lock, hold and publish routes below take it unchanged. What it is
+refused is what a collection's routes are for: create, rename, delete, address and turning a
+language off all answer `404`.
 
 ```
 POST /admin/api/entries/:collection         { "title": "…" }  →  { "slug" }

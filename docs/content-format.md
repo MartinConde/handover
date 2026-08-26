@@ -68,7 +68,7 @@ Keys starting with `_` belong to Handover. Name your own fields anything else �
 | `_type` | block | The block type, matching a registered block. |
 | `_id` | block, array item | Eight characters from `0-9a-z`, unique in the file, the same across locales. |
 | `_label` | block | An editor-given name, shown in the block list instead of the type. |
-| `_ref` | block | A path such as `globals/cta-newsletter` the block's content will come from. Reserved now; `<Blocks />` skips the block until the globals collection exists. |
+| `_ref` | block | A path such as `globals/cta-newsletter` the block's content comes from. The block carries no fields of its own; `<Blocks />` fills it from that global, per language ([Site files](site-files.md#globals)). |
 | `_locales` | top of file, block, array item | The locales this exists in, e.g. `["de"]`: on a block, the files it is written to; at the top of a file, the languages the entry is offered in ([Translating](translating.md#turning-a-language-off)). Absent means all. Never empty. |
 
 Reading a file checks these: a `_status` other than `hidden`, a malformed `_id`, an empty
@@ -95,64 +95,7 @@ copy, and leaves the original's address behind so the copy is served under its n
 name. Write a template or a fixture with ids of your own, or leave them out — the admin
 fills them in on first save.
 
-## Hiding an entry
+## What happens to a file afterwards
 
-```yaml
-_version: 1
-_status: "hidden"
-title: "Seaview Cottage"
-```
-
-The file stays in the repo and in the admin, and the site ignores it when your loaders
-use `filterLive` (see [Rendering content](rendering.md#hidden-entries)).
-
-## Creating an entry
-
-"New entry" asks for a title and derives the filename from it
-([Configuration](configuration.md#entry-filenames)). The file itself is not written until
-the entry is published for the first time — until then it is a draft in D1, so the
-filename can still change and an abandoned entry leaves nothing behind. After the first
-publish, changing the filename is the rename below.
-
-## Renaming and deleting an entry
-
-The filename is the entry's id across locales, so a rename moves every locale file in one
-commit. Because the URL comes from the filename, the same commit appends a redirect to
-`src/content/redirects.yaml` (created if missing):
-
-```yaml
-_version: 1
-rules:
-  - _id: "m4n5o6p7"
-    from: "/listings/seaview-cottage"
-    to: "/listings/seaview-cottage-devon"
-    status: 301
-    reason: "slug-change"
-    entry: "listings/seaview-cottage-devon"
-    createdAt: "2026-08-20T10:14:00Z"
-```
-
-Renaming twice keeps the oldest URL pointing at the newest name; renaming back removes the
-rule. Deleting an entry removes every locale file in one commit and, when the editor chose
-where visitors should go, appends a `reason: "deleted"` rule with no `entry`; turning off a
-language that has a file removes that one file the same way, with the same rule for the URL
-it served ([Translating](translating.md#turning-a-language-off)). A collection without a
-`route` has no URL and gets no rule.
-
-**One rule per language whose URL moved**, under that language's own segment; a delete's
-target is served under it too, so the German page goes to the German index. On a
-[`localizedSlugs`](configuration.md#localizedslugs) collection that URL is the `slug` in the
-language's own file, so renaming the file writes no rule for a language that has one.
-
-From code, `renameEntry` and `deleteEntry` in `@handover/core` do this through the
-`GitClient`:
-
-```ts
-const i18n = { locales: ['en', 'de'], defaultLocale: 'en' };
-const listings = { collection: 'listings', route: '/listings/[slug]', index: '/', i18n };
-await renameEntry('default', git, listings, 'seaview-cottage', 'seaview-cottage-devon');
-await deleteEntry('default', git, listings, 'mill-house', '/'); // undefined = no redirect
-```
-
-The rule shape, and how the build turns the file into `_redirects`, is in
-[Site files](site-files.md#redirects), together with globals, navigation and templates.
+Hiding an entry, creating one, renaming it and deleting it are the same files under the same
+rules, one step further on: [Entry lifecycle](entry-lifecycle.md).

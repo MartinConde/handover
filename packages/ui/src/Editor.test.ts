@@ -93,6 +93,34 @@ test('renders one labelled input per text field, filled from the entry data', ()
   expect($<HTMLInputElement>(root, 'input#f-seo\\.description')?.value).toBe('Harbour view');
 });
 
+// Singleton mode is a subtraction and nothing else: what a global cannot have is what a
+// collection's routes are about, and everything that makes it editable content stays.
+test('a global is drawn without the status chip, the overflow menu or the tab bar', () => {
+  const root = show({
+    collection: 'globals',
+    slug: 'site',
+    entry: { ...entry, singleton: true, label: 'Site details' },
+  });
+
+  expect($(root, '.status')).toBeNull();
+  expect($(root, '[aria-label="More actions"]')).toBeNull();
+  expect($(root, '[role="tablist"]')).toBeNull();
+  // What stays: the hold toggle and the entry's own Publish.
+  expect($(root, '.hold-toggle')).not.toBeNull();
+  expect($(root, '.btn-primary')?.textContent).toContain('Publish this entry');
+});
+
+test("a global is named by the dev's label, under Site settings", () => {
+  const root = show({
+    collection: 'globals',
+    slug: 'site',
+    entry: { ...entry, singleton: true, label: 'Site details' },
+  });
+
+  expect($(root, 'h1')?.textContent).toBe('Site details');
+  expect($(root, '.crumbs')?.textContent).toContain('Site settings');
+});
+
 test('an unsupported field shows a marker instead of an input', () => {
   const root = show();
   expect($(root, 'input#f-photos')).toBeNull();

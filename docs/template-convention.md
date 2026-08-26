@@ -186,4 +186,4 @@ const { data } = Astro.props;
 ```
 
 Rendering what a loader returned — `<Blocks />`, `<Markdown />`, `<LocaleSwitcher />` and
-hidden entries — is [Rendering content](rendering.md).
+hidden entries — is [Rendering content](rendering.md), and the block renderer is [Blocks](blocks.md).

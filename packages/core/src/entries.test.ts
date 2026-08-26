@@ -94,14 +94,26 @@ test('a content file below the locale folder fails rather than going missing', (
   ]);
 });
 
-test('templates, globals and redirects are not entries', () => {
+test('templates and redirects are not entries', () => {
   expect(
     indexFrom('default', [
       file('src/content/_templates/listings/house.yaml', 'title: "New listing"\n'),
-      file('src/content/globals/en/site.yaml', 'title: "Handover"\n'),
       file('src/content/redirects.yaml', 'rules: []\n'),
     ]),
   ).toEqual({});
+});
+
+// The globals share the entry layout and the CMS edits them through it, so the list of them
+// is answered from the index like any other — a global has no title field, so it lists by key.
+test('a global is an entry of the globals collection, named by its file', () => {
+  expect(
+    indexFrom('default', [file('src/content/globals/en/site.yaml', 'name: "Handover"\n')]).globals,
+  ).toEqual([
+    {
+      id: 'site',
+      locales: { en: { title: 'site', path: 'src/content/globals/en/site.yaml' } },
+    },
+  ]);
 });
 
 const index = indexFrom('default', [

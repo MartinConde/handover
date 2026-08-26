@@ -15,6 +15,7 @@ import {
   parseEntry,
   type RichtextTier,
   redirectsText,
+  refErrors,
   richtextErrors,
   schemaVersionError,
   type TitleFields,
@@ -42,6 +43,7 @@ export {
   entryUrl,
   filterLive,
   getEntryLocales,
+  globalsAt,
   isLive,
   staticSource,
 } from '@handover/core';
@@ -394,19 +396,36 @@ export async function contentFiles(root: URL): Promise<ContentFile[]> {
 }
 
 /**
- * What the build refuses about the content files themselves: a path the CMS cannot address,
- * and a date the two YAML parsers disagree about. Astro's content sync runs before
+ * What the build refuses about the content files themselves: a path the CMS cannot address, a
+ * date the two YAML parsers disagree about, a `_ref` naming a global nothing declares, and a
+ * declared global whose default-language file was never written. Astro's content sync runs before
  * `astro:build:start`, so this has to be `astro:config:done` or the loader gets there first
  * with `Expected type "string", received "object"`.
  */
-export async function contentErrors(root: URL): Promise<string[]> {
+export async function contentErrors(
+  root: URL,
+  globals: Iterable<string> = [],
+  defaultLocale?: string,
+): Promise<string[]> {
   const files = await contentFiles(root);
+  const paths = new Set(files.map((f) => f.path));
   return [
-    ...contentPathErrors(
-      'default',
-      files.map((f) => f.path),
-    ),
-    ...files.flatMap((f) => timestampErrors('default', f.path, f.contents)),
+    ...contentPathErrors('default', paths),
+    ...files.flatMap((f) => [
+      ...timestampErrors('default', f.path, f.contents),
+      ...refErrors('default', f.path, f.contents, globals),
+    ]),
+    // A declared global with no file is a card in Site settings that opens nothing: the admin
+    // edits the file a language has, and only the dev can write the first one.
+    ...(defaultLocale === undefined
+      ? []
+      : [...globals]
+          .map((key) => [key, `src/content/globals/${defaultLocale}/${key}.yaml`] as const)
+          .filter(([, path]) => !paths.has(path))
+          .map(
+            ([key, path]) =>
+              `cms.config.ts › globals.${key}: declared, but ${path} does not exist — write the file the default language reads, or drop the key`,
+          )),
   ];
 }
 
@@ -484,7 +503,11 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
       'astro:config:done': async ({ config }) => {
         root = config.root;
         clientDir = config.build.client;
-        const errors = await contentErrors(root);
+        const errors = await contentErrors(
+          root,
+          Object.keys(cms.globals ?? {}),
+          cms.i18n.defaultLocale,
+        );
         if (errors.length) throw new Error(`\n${errors.join('\n')}`);
       },
       // Deploy applies migrations/ before the new code is live, so a migrations/ that is

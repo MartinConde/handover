@@ -105,7 +105,23 @@ cms.config.ts › collections.posts.localizedSlugs: this collection's schema has
 
 One key per site-wide file under `src/content/globals/<locale>/`, mapping the file name
 to its schema: `globals: { site, navigation }`. Keys are lowercase letters, digits and
-dashes. See [Site files](site-files.md).
+dashes, and the key is the file name.
+
+The admin lists them under **Site settings**, in the order they are declared. What each card
+is called comes from the schema, so the client reads a name rather than a file name:
+
+```ts
+export const site = z
+  .object({ name: z.string(), footerText: z.string() })
+  .meta({
+    label: 'Site details',
+    description: 'The name, contact details and footer line every page carries',
+  });
+```
+
+Without a `label` the card is headed by the key. Every declared global needs its file in the
+default language — the build stops and names the one that is missing, since only you can write
+the first one. See [Site files](site-files.md).
 
 ## `media`
 

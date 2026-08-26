@@ -218,7 +218,7 @@ The draft holds that name and nothing else: a required field is left out rather 
 guessed at, and the editor shows every one of them as a problem until it is filled in.
 
 **Rename** and **delete** are commits of their own, not drafts, because they move files
-rather than change them ([Content format](content-format.md#renaming-and-deleting-an-entry)).
+rather than change them ([Entry lifecycle](entry-lifecycle.md#renaming-and-deleting-an-entry)).
 A rename carries the entry's unpublished edits over to the new path; a delete throws them
 away. Both need the entry to exist in the repository: renaming one that has never been
 published is refused with "publish this entry before renaming it", and deleting one just

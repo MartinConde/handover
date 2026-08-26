@@ -31,6 +31,10 @@ let {
     problems: { path: string; message: string }[];
     /** The field this collection is keyed on, when it is not `title`. */
     titleField?: string;
+    /** A global: one file the schema names, so nothing that renames, hides or copies it. */
+    singleton?: boolean;
+    /** What the dev calls this global — a global has no title field to be named by. */
+    label?: string;
     /** The languages the site declares. */
     locales: string[];
     /** The site's default, which is what says whether a language's URLs carry its segment. */
@@ -144,7 +148,7 @@ const offer = (of: string, on: boolean) =>
 const json = $derived(JSON.stringify(data));
 const missing = $derived(Object.keys(problems));
 const named = $derived(data[entry.titleField ?? 'title']);
-const title = $derived(typeof named === 'string' && named ? named : slug);
+const title = $derived(entry.label ?? (typeof named === 'string' && named ? named : slug));
 // A language other than the one this screen's form saves, already ahead of the repository when
 // the entry was read. It stands until the entry is read again: a false offer costs an empty
 // drawer, a false refusal loses the draft behind a disabled button.
@@ -502,7 +506,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   {/if}
   <header class="entry-header" class:is-held={held}>
     <div class="crumbs">
-      <span>{capitalise(collection)}</span><span class="sep" aria-hidden="true">/</span><span>{title}</span>
+      <span>{entry.singleton ? 'Site settings' : capitalise(collection)}</span><span class="sep" aria-hidden="true">/</span><span>{title}</span>
       <span class="autosave" class:is-saving={saving} class:is-offline={saveFailed}>
         {#if saving}Saving…{:else if saveFailed}Not saved{:else if json !== saved}Unsaved changes{:else}Saved{/if}
       </span>
@@ -510,7 +514,9 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     <div class="title-row">
       <h1>{title}</h1>
       <div class="meta">
-        <span class="status"><span class="dot" aria-hidden="true"></span> Live</span>
+        {#if !entry.singleton}
+          <span class="status"><span class="dot" aria-hidden="true"></span> Live</span>
+        {/if}
         {#if conflicted}
           <span class="badge badge-danger">Changed in the repository since you opened it</span>
         {/if}
@@ -570,7 +576,9 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           onclick={askToPublish}
           bind:this={publishButton}
         >Publish this entry</button>
-        <button class="btn btn-ghost" type="button" disabled aria-label="More actions">⋯</button>
+        {#if !entry.singleton}
+          <button class="btn btn-ghost" type="button" disabled aria-label="More actions">⋯</button>
+        {/if}
       </div>
     </div>
     {#if conflicted}
@@ -598,11 +606,15 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         {/if}
       </p>
     {/if}
-    <div class="tabs" role="tablist" aria-label="Entry sections">
-      <button type="button" role="tab" aria-selected="true">Content</button>
-      <button type="button" role="tab" aria-selected="false" disabled>SEO</button>
-      <button type="button" role="tab" aria-selected="false" disabled>History</button>
-    </div>
+    <!-- A global holds the site-wide SEO defaults rather than having its own, and there is no
+         second version of a file the schema names: no tabs at all rather than three dead ones. -->
+    {#if !entry.singleton}
+      <div class="tabs" role="tablist" aria-label="Entry sections">
+        <button type="button" role="tab" aria-selected="true">Content</button>
+        <button type="button" role="tab" aria-selected="false" disabled>SEO</button>
+        <button type="button" role="tab" aria-selected="false" disabled>History</button>
+      </div>
+    {/if}
   </header>
   <!-- A decision to make, not a form to fill: the panel stands where the form would be, because
        every field on it belongs to a structure the languages have not agreed on yet. -->
@@ -660,9 +672,11 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
                     Create and pre-fill
                   </button>
                 {/if}
-                <p>
-                  Or <button class="btn-link" type="button" disabled={busy || locked} onclick={() => offer(shown, false)}>don't offer this entry in {language(shown)}</button> — no file is written for it.
-                </p>
+                {#if !entry.singleton}
+                  <p>
+                    Or <button class="btn-link" type="button" disabled={busy || locked} onclick={() => offer(shown, false)}>don't offer this entry in {language(shown)}</button> — no file is written for it.
+                  </p>
+                {/if}
               </div>
             {/if}
           </div>
@@ -691,7 +705,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             }}
             {mediaBase}
             onclose={side ? () => leaving(() => (side = false)) : undefined}
-            onturnoff={turnOff}
+            onturnoff={entry.singleton ? undefined : turnOff}
           />
         {/key}
       {/if}

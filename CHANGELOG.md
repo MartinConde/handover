@@ -4,6 +4,28 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Site settings.** The globals a site declares in `cms.config.ts` are editable in the admin,
+  above the collections: one card per global, and a form that is the entry editor without the
+  parts a file the schema names cannot have — no hide, no rename, no duplicate, no delete.
+  Locks, the language switcher, side by side, "Not ready yet" and one-commit publish are that
+  screen's and work unchanged. What a card is called comes from the schema:
+  `.meta({ label, description })`, falling back to the key
+  ([Site files](docs/site-files.md#globals)).
+
+- **`_ref` blocks render.** A block with `_ref: "globals/<key>"` is filled from that global in
+  the language the page is in, so one call to action can be edited once and shown on every page
+  that points at it. `<Blocks />` takes a `globals` map for it — `globalsAt()` builds one — and
+  fills every `_ref` in the tree, so a block component that nests `<Blocks />` is unchanged
+  ([Blocks](docs/blocks.md)). ⚠️ A page whose blocks contain a `_ref` now needs that prop.
+
+- **Two build-time refusals about globals**: a `_ref` naming a global `cms.config.ts` does not
+  declare, and a declared global with no file in the default language. Both name the file and
+  the key, the way an unregistered block type already did.
+
+- Docs: `content-format.md` split — hiding, creating, renaming and deleting an entry are
+  [Entry lifecycle](docs/entry-lifecycle.md); `rendering.md` split — `<Blocks />` and the
+  component registry are [Blocks](docs/blocks.md).
+
 - **`image` and `file` fields are editable.** A filled one is a card — the picture at the
   field's own ratio with its focal dot, or the file's type and size — carrying the alt text or
   the display name, Replace and Remove. An empty one is a drop zone that takes a file dropped

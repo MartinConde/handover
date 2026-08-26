@@ -687,7 +687,17 @@ a.btn { text-decoration: none; }
 .facts > div { display: grid; gap: var(--s-1); }
 .facts dt { font-size: var(--text-sm); font-weight: 500; }
 .facts dd { margin: 0; display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; color: var(--ink-2); }
+/* Site settings — one card per global. Cards, not table rows: each carries a sentence of
+   description, and the two specialised editors sit in the same list as the plain forms. */
+.global-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--s-4); }
+.global-card { display: grid; gap: var(--s-2); padding: var(--s-4); border-radius: var(--radius-lg); background: var(--surface-2); align-content: start; }
+.global-card h2 { font-size: var(--text-md); font-weight: 600; display: flex; align-items: center; gap: var(--s-2); }
+.global-card h2 a { color: var(--ink); text-decoration: none; }
+.global-card h2 a:hover { text-decoration: underline; }
+.global-card p { font-size: var(--text-sm); color: var(--ink-2); }
+.global-card .meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); font-size: var(--text-xs); color: var(--ink-2); margin-top: var(--s-1); }
 @media (max-width: 720px) {
+  .global-list { grid-template-columns: 1fr; }
   .media-card, .picker-body { grid-template-columns: 1fr; }
   .picker-dialog { width: 100%; max-height: none; border-radius: 0; }
   .picker-side { border-left: 0; border-top: 1px solid var(--border); }

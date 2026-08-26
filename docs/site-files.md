@@ -22,6 +22,16 @@ export default defineConfig({
 });
 ```
 
+They are also an ordinary collection in `src/content.config.ts`, so the build can read them.
+One schema for the folder — each file is held to its own by the admin and by the publish:
+
+```ts
+globals: defineCollection({
+  loader: glob({ pattern: '**/*.yaml', base: './src/content/globals', generateId: byPath }),
+  schema: z.looseObject({}),
+}),
+```
+
 ```yaml
 # src/content/globals/en/site.yaml
 _version: 1
@@ -37,8 +47,18 @@ contact:
 footerText: "Coastal homes in Devon since 2009."
 ```
 
-A block with `_ref: "globals/<key>"` takes its content from that global at build time
-([structured fields](structured-fields.md#nesting-group-array-blocks)).
+A block with `_ref: "globals/<key>"` takes its content from that global, in the language the
+page is in ([Blocks](blocks.md)).
+
+Write the default language's file yourself — the build stops on a global that is declared and
+never written, since the admin edits files rather than creating them. The other languages are
+the editor's *Create from English*, like any entry's.
+
+In the admin they are **Site settings**, above the collections: one card per global, and a
+form that is the entry editor without the parts that do not apply — a global cannot be hidden,
+renamed, duplicated or deleted. Everything else is the same screen, locks, unpublished changes
+and one-commit publish included. Not to be confused with the read-only **Settings** screen,
+which is this config as the Worker sees it.
 
 ## Navigation
 
@@ -80,7 +100,7 @@ in every locale; only `label` is translated.
 ## Redirects
 
 `src/content/redirects.yaml` is a flat list of rules. Handover appends to it when an entry
-is renamed or deleted ([content format](content-format.md#renaming-and-deleting-an-entry));
+is renamed or deleted ([entry lifecycle](entry-lifecycle.md#renaming-and-deleting-an-entry));
 you can add rules by hand.
 
 ```yaml

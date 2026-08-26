@@ -541,16 +541,39 @@ const entryFiles = async (git: GitClient, collection: string, slug: string) => {
 };
 
 /**
+ * A global rides the entry path: `globals` is the collection and the file name is the slug, so
+ * one file per language at `src/content/globals/<locale>/<key>.yaml` — the same drafts, locks,
+ * hold and one-commit publish as anything else. What it does not have is what a collection's
+ * routes are about: no address, no rename, no delete, no turning a language off.
+ */
+const globalOf = (collection: string, slug: string) =>
+  collection === 'globals' ? config.globals?.[slug] : undefined;
+
+/** The schema one file of the CMS is held to: its collection's, or the global's own. */
+const schemaOf = (collection: string, slug: string) =>
+  globalOf(collection, slug) ?? config.collections[collection]?.schema;
+
+/** What the site settings list calls a global, and what it says it is for. */
+const globalLabel = (key: string, schema: Parameters<typeof formSchema>[0]) => {
+  const root = formSchema(schema) as { label?: unknown; description?: unknown };
+  return {
+    key,
+    label: typeof root.label === 'string' ? root.label : key,
+    description: typeof root.description === 'string' ? root.description : undefined,
+  };
+};
+
+/**
  * The form the CMS works one collection through. A collection with localized slugs keeps its
  * `slug` out of it: the address is edited in the entry header and not in the form, and a form
  * field would put it in front of the translator, into the staleness hash and into the words a
  * second column can type over. The schema still validates it — this is the form, not the file.
  */
-function formFor(collection: string): Form {
-  const collected = config.collections[collection];
-  if (!collected) throw new Error(`No collection ${collection}`);
-  const form = formOf('default', formSchema(collected.schema));
-  if (!collected.localizedSlugs) return form;
+function formFor(collection: string, slug: string): Form {
+  const schema = schemaOf(collection, slug);
+  if (!schema) throw new Error(`No collection ${collection}`);
+  const form = formOf('default', formSchema(schema));
+  if (!config.collections[collection]?.localizedSlugs) return form;
   return { ...form, fields: form.fields.filter((f) => f.path[0] !== 'slug') };
 }
 
@@ -603,8 +626,10 @@ const localeData = (loaded: Record<string, { data: unknown }>): Record<string, u
 // to the browser: a publish commits the stored bytes and compares the bases server-side.
 async function getEntry(collection: string, slug: string): Promise<Response> {
   const collected = config.collections[collection];
-  if (!collected) return new Response('Not found', { status: 404 });
-  const schema = collected.schema;
+  const global = globalOf(collection, slug);
+  if (!collected && !global) return new Response('Not found', { status: 404 });
+  const schema = global ?? collected?.schema;
+  if (!schema) return new Response('Not found', { status: 404 });
   // Every language in one pass, which is the read the drift, the staleness and the unpublished
   // drafts are all answered from. A site that declares one language reads the one file it
   // always read: it has nothing to have drifted from or been translated ahead of.
@@ -612,7 +637,7 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
   const source = sourceIn(loaded);
   if (!source) return new Response('Not found', { status: 404 });
   const data = loaded[source]?.data;
-  const form = formFor(collection);
+  const form = formFor(collection, slug);
   const offer = offeredIn(data, Object.keys(loaded));
   const languages = localeData(loaded);
   const translations = Object.fromEntries(
@@ -631,7 +656,10 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
     // languages the editor was on, and it holds the whole entry back either way.
     held: Object.values(loaded).some((l) => l.held),
     problems: entryProblems(schema, data),
-    titleField: collected.titleField,
+    titleField: collected?.titleField,
+    // A global is the same screen with the collection half taken out: nothing to hide it from,
+    // no name to change, no second copy of it. The name it is drawn under is the dev's label.
+    ...(global ? { singleton: true, label: globalLabel(slug, global).label } : {}),
     // The languages the site declares, which is what says whether the editor draws any of the
     // controls that are about having more than one, and which of them this response is of.
     locales: config.i18n.locales,
@@ -655,12 +683,12 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
     translator: translator() !== undefined,
     // Where the site serves this entry and what stands above it: what the editor builds the
     // address row from, and what it names when a language that has a file is turned off.
-    route: collected.route,
-    index: collected.index,
+    route: collected?.route,
+    index: collected?.index,
     prefixDefaultLocale: config.i18n.prefixDefaultLocale ?? false,
     // The address each language serves this entry at, empty where it serves it under the file
     // name. Absent on a collection without localized slugs, which draws no address row at all.
-    ...(collected.localizedSlugs
+    ...(collected?.localizedSlugs
       ? {
           localizedSlugs: true,
           addresses: Object.fromEntries(
@@ -690,7 +718,7 @@ async function lockState(
   mode: 'read' | 'beat' | 'take',
 ): Promise<Response> {
   if (!session) return new Response('Unauthorized', { status: 401 });
-  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
   const database = db();
   const entry = `${collection}/${slug}`;
   if (mode === 'take') return Response.json(await takeOver(collection, slug, entry, session));
@@ -753,7 +781,7 @@ async function hold(
   session: App.Locals['handover'],
 ): Promise<Response> {
   if (!session) return new Response('Unauthorized', { status: 401 });
-  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
   const body = (await request.json().catch(() => undefined)) as { hold?: unknown } | undefined;
   const held = body?.hold === true;
   const database = db();
@@ -818,7 +846,7 @@ async function autosave(
   session: App.Locals['handover'],
   locale?: string,
 ): Promise<Response> {
-  const schema = config.collections[collection]?.schema;
+  const schema = schemaOf(collection, slug);
   if (!schema || (locale !== undefined && !config.i18n.locales.includes(locale)))
     return new Response('Not found', { status: 404 });
   // The one write the lock enforces rather than draws, because it is the one that runs on its
@@ -858,7 +886,7 @@ async function autosave(
       entryPath(collection, slug, at),
       data,
       translation || Object.keys(siblings).length
-        ? { form: formFor(collection), locale: at, siblings, translation }
+        ? { form: formFor(collection, slug), locale: at, siblings, translation }
         : undefined,
     );
   } catch (err) {
@@ -880,7 +908,7 @@ async function createTranslation(
   slug: string,
   locale: string,
 ): Promise<Response> {
-  const schema = config.collections[collection]?.schema;
+  const schema = schemaOf(collection, slug);
   if (!schema || !config.i18n.locales.includes(locale))
     return new Response('Not found', { status: 404 });
   const loaded = await entryLocales(collection, slug, config.i18n.locales);
@@ -895,7 +923,7 @@ async function createTranslation(
   if (problems.length) return new Response(problems.join('\n'), { status: 409 });
   if (!offered.includes(locale))
     return new Response(`This entry is not offered in ${locale}`, { status: 409 });
-  const form = formFor(collection);
+  const form = formFor(collection, slug);
   const made = syncLocale('default', form, locale, { before: data, after: data }, {});
   if (offered.length < config.i18n.locales.length) made._locales = offered;
   await createDraft('default', db(), gitClient(), entryPath(collection, slug, locale), made);
@@ -916,7 +944,7 @@ async function machineTranslate(
   locale: string,
   request: Request,
 ): Promise<Response> {
-  const schema = config.collections[collection]?.schema;
+  const schema = schemaOf(collection, slug);
   if (!schema || !config.i18n.locales.includes(locale))
     return new Response('Not found', { status: 404 });
   // Before the entry is read at all: having nothing to translate with is about the site, so it
@@ -934,7 +962,7 @@ async function machineTranslate(
     return new Response('Not found', { status: 404 });
   const body = (await request.json().catch(() => undefined)) as { paths?: unknown } | undefined;
   const named = Array.isArray(body?.paths) ? body.paths.map(String) : undefined;
-  const form = formFor(collection);
+  const form = formFor(collection, slug);
   // What this language has words in already: a pre-fill is for the gaps, and a Translate button
   // names the field it is on whether there is anything there or not.
   const written = new Set(
@@ -1113,7 +1141,7 @@ async function address(
  * again afterwards, and the banner goes because the next report is empty.
  */
 async function reconcile(collection: string, slug: string, request: Request): Promise<Response> {
-  const schema = config.collections[collection]?.schema;
+  const schema = schemaOf(collection, slug);
   if (!schema) return new Response('Not found', { status: 404 });
   const body = (await request.json().catch(() => undefined)) as { choices?: unknown } | undefined;
   const choices = (Array.isArray(body?.choices) ? body.choices : []).filter(
@@ -1122,7 +1150,7 @@ async function reconcile(collection: string, slug: string, request: Request): Pr
       Array.isArray(choice.locales) &&
       choice.locales.every((locale: unknown) => typeof locale === 'string'),
   );
-  const form = formFor(collection);
+  const form = formFor(collection, slug);
   const locales = localeData(await entryLocales(collection, slug, config.i18n.locales));
   const drift = new Set(driftReport('default', form, locales).map((row) => row.path));
   // A row the languages agree about has nothing to answer: the report moved on under the tab.
@@ -1173,6 +1201,35 @@ async function listEntries(collection: string): Promise<Response> {
 }
 
 /**
+ * The site settings screen: one card per global the site declares, in `cms.config.ts` order.
+ * It costs what the entry list costs and nothing more — the built index with the draft rows
+ * over it — because a global is an entry of the `globals` collection.
+ */
+async function globalsList(): Promise<Response> {
+  const database = db();
+  const [rows, waiting] = await Promise.all([
+    overlayRows('default', database, index),
+    pendingDrafts('default', database),
+  ]);
+  const pending = new Set(waiting.map((row) => row.path));
+  const entries = collectionEntries('default', index, 'globals', rows);
+  return Response.json({
+    globals: Object.entries(config.globals ?? {}).map(([key, schema]) => {
+      const found = entries.find((entry) => entry.id === key);
+      const locales = Object.entries(found?.locales ?? {});
+      return {
+        ...globalLabel(key, schema),
+        // Which languages have a file at all: the rest are the dashed chip that offers to make
+        // one, the same answer the editor's own second column gives.
+        locales: config.i18n.locales.filter((locale) => found?.locales[locale]),
+        pending: locales.some(([, file]) => pending.has(file.path)),
+      };
+    }),
+    locales: config.i18n.locales,
+  });
+}
+
+/**
  * The drawer's list: one row per **entry**, never per file. Grouped and named here rather than
  * in the browser because a title comes from the build's content index, which only the Worker
  * can read — handing over paths would mean sending a title with each of them anyway.
@@ -1201,6 +1258,10 @@ async function pendingList(): Promise<Response> {
           Object.values(entry.locales)[0]?.title ||
           entry.id,
       );
+  // A global has no title field to be named by, so it is named the way the site settings screen
+  // names it — one entry, one name, on both screens.
+  for (const [key, schema] of Object.entries(config.globals ?? {}))
+    titles.set(`globals/${key}`, globalLabel(key, schema).label);
   type Row = {
     key: string;
     title: string;
@@ -1329,7 +1390,7 @@ async function remove(collection: string, slug: string): Promise<Response> {
 // The way out of a publish conflict: the entry gives up its draft and is read from the
 // repository again on the next open. Taking theirs whole — picking field by field is later.
 async function discard(collection: string, slug: string): Promise<Response> {
-  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
   const database = db();
   // Every language of it: the others hold the structure this edit gave them.
   for (const locale of config.i18n.locales)
@@ -1420,6 +1481,9 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
     return Response.json({
       ok: true,
       collections: Object.keys(config.collections),
+      // Whether the site declares any site-wide content at all: with none there is nothing for
+      // a Site settings screen to list, so the sidebar does not offer one.
+      globals: Object.keys(config.globals ?? {}).length > 0,
       // The middleware has already asserted a session by the time any of this runs.
       user: locals.handover?.user,
       role: locals.handover?.role,
@@ -1429,6 +1493,7 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
     });
   }
   if (params.path === 'media') return library(url);
+  if (params.path === 'globals') return globalsList();
   if (params.path === 'drafts') return pendingList();
   if (params.path === 'build') return buildStatus();
   const held = params.path?.match(LOCK);
@@ -1454,9 +1519,12 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
   return new Response('Not found', { status: 404 });
 };
 
-// `src/content/<collection>/<locale>/<slug>.yaml`. redirects.yaml and the globals share the
-// prefix and belong to no collection: there is no schema to hold them to.
-const schemaFor = (path: string) => config.collections[path.split('/')[2] ?? '']?.schema;
+// `src/content/<collection>/<locale>/<slug>.yaml`. redirects.yaml belongs to no collection and
+// has no schema to be held to; a global's is its own, keyed by the file name.
+const schemaFor = (path: string) => {
+  const [, collection = '', , slug = ''] = ENTRY_FILE.exec(path) ?? [];
+  return schemaOf(collection, slug);
+};
 
 const ENTRY_FILE = /^src\/content\/([a-z0-9-]+)\/([^/]+)\/([^/]+)\.yaml$/;
 
@@ -1469,11 +1537,15 @@ const ENTRY_FILE = /^src\/content\/([a-z0-9-]+)\/([^/]+)\/([^/]+)\.yaml$/;
  */
 const sourceOf = async (path: string) => {
   const [, collection = '', locale = '', slug = ''] = ENTRY_FILE.exec(path) ?? [];
-  const schema = config.collections[collection]?.schema;
+  const schema = schemaOf(collection, slug);
   if (!schema || !locale || config.i18n.locales.length < 2) return undefined;
   const source = await sourceFor(collection, slug);
   if (!source || source === locale) return undefined;
-  return { locale: source, path: entryPath(collection, slug, source), form: formFor(collection) };
+  return {
+    locale: source,
+    path: entryPath(collection, slug, source),
+    form: formFor(collection, slug),
+  };
 };
 
 /**
@@ -1495,10 +1567,10 @@ async function driftedPaths(paths: string[]): Promise<string[]> {
   const drifted: string[] = [];
   for (const [key, files] of entries) {
     const [collection = '', slug = ''] = key.split('/');
-    // A path no collection owns — a global — has no schema, so no form and no structure.
-    const schema = config.collections[collection]?.schema;
+    // A path nothing owns — redirects.yaml — has no schema, so no form and no structure.
+    const schema = schemaOf(collection, slug);
     if (!schema) continue;
-    const form = formFor(collection);
+    const form = formFor(collection, slug);
     const locales = localeData(await entryLocales(collection, slug, config.i18n.locales));
     if (driftReport('default', form, locales).length) drifted.push(...files);
   }

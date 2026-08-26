@@ -4,12 +4,15 @@ import Activity from './Activity.svelte';
 import BuildPill, { type Build } from './BuildPill.svelte';
 import Editor from './Editor.svelte';
 import EntryList from './EntryList.svelte';
+import Globals from './Globals.svelte';
 import Login, { type LoginMethods } from './Login.svelte';
 import Members from './Members.svelte';
 import Pending from './Pending.svelte';
 
 export interface Session {
   collections: string[];
+  /** Whether the site declares any site-wide content: with none there is no screen to offer. */
+  globals?: boolean;
   /** Where a stored media key is served from, so a widget can draw what a content file names. */
   mediaBase?: string;
   user: { id: string; name: string; email: string };
@@ -33,6 +36,16 @@ let session = $state(signedIn);
 
 const entryRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)\/([\w-]+)$/));
 const listRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)$/));
+// A global is edited on the entry screen, so its route is the entry route under another name:
+// `globals` is the collection and the file name is the slug.
+const globalRoute = $derived(path.match(/^\/admin\/site\/([\w-]+)$/));
+const editing = $derived(
+  globalRoute
+    ? { collection: 'globals', slug: globalRoute[1] ?? '' }
+    : entryRoute
+      ? { collection: entryRoute[1] ?? '', slug: entryRoute[2] ?? '' }
+      : undefined,
+);
 
 // Members and Settings are owner-only in the screen inventory, so an editor's sidebar has
 // neither. The screens themselves land later; until then the shell names the route it is on
@@ -210,6 +223,20 @@ const initial = $derived(
         <a href="/admin" data-icon="dashboard" aria-current={path === '/admin' ? 'page' : undefined}>Dashboard</a>
       </div>
     </nav>
+    {#if session.globals}
+      <!-- Above the collections, and not under Manage: the client thinks of this as "my site",
+           and Manage's Settings is the developer's read-only config. -->
+      <nav class="nav" aria-labelledby="nav-site">
+        <div class="nav-label" id="nav-site">Site</div>
+        <div class="nav-group">
+          <a
+            href="/admin/site"
+            data-icon="site"
+            aria-current={path === '/admin/site' || globalRoute ? 'page' : undefined}
+          >Site settings</a>
+        </div>
+      </nav>
+    {/if}
     <nav class="nav" aria-labelledby="nav-content">
       <div class="nav-label" id="nav-content">Content</div>
       <div class="nav-group">
@@ -279,13 +306,13 @@ const initial = $derived(
       </div>
     </header>
     {#key reload}
-    {#if entryRoute}
-      {#await loadEntry(entryRoute[1] ?? '', entryRoute[2] ?? '')}
+    {#if editing}
+      {#await loadEntry(editing.collection, editing.slug)}
         <main class="main"><p class="placeholder">Loading…</p></main>
       {:then entry}
         <Editor
-          collection={entryRoute[1] ?? ''}
-          slug={entryRoute[2] ?? ''}
+          collection={editing.collection}
+          slug={editing.slug}
           {entry}
           mediaBase={session?.mediaBase ?? ''}
           onchanged={async () => {
@@ -298,6 +325,8 @@ const initial = $derived(
       {/await}
     {:else if listRoute}
       <EntryList collection={listRoute[1] ?? ''} onchanged={loadPending} />
+    {:else if path === '/admin/site'}
+      <Globals />
     {:else if path === '/admin/account'}
       <Account user={session.user} role={session.role} onname={loadSession} />
     {:else if path === '/admin/members' && session.role === 'owner'}

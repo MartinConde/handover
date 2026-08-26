@@ -125,6 +125,56 @@ export async function entryAt<C extends Record<string, unknown>, K extends keyof
   return found.find((e) => entryAddress(siteId, e.data, e.id.slice(locale.length + 1)) === address);
 }
 
+/**
+ * Every `_ref` in a file that names a global `cms.config.ts` does not declare. The build refuses
+ * these the way an unregistered `_type` is refused: the block renders as the global's content,
+ * so a name nothing answers to is a hole in the page and not a value somebody can fill in.
+ */
+export function refErrors(
+  _siteId: string,
+  path: string,
+  contents: string,
+  globals: Iterable<string>,
+): string[] {
+  const declared = [...globals];
+  const errors: string[] = [];
+  const walk = (node: unknown, at: string): void => {
+    if (Array.isArray(node)) {
+      node.forEach((item, i) => {
+        walk(item, `${at}[${i}]`);
+      });
+      return;
+    }
+    if (!node || typeof node !== 'object') return;
+    for (const [key, value] of Object.entries(node)) {
+      const here = at ? `${at}.${key}` : key;
+      if (key === '_ref' && typeof value === 'string') {
+        const name = value.replace(/^globals\//, '');
+        if (!declared.includes(name))
+          errors.push(
+            `${path} › ${here}: no global ${JSON.stringify(name)} is declared in cms.config.ts — it has ${declared.join(', ') || 'none'}`,
+          );
+      } else walk(value, here);
+    }
+  };
+  walk(parse(contents), '');
+  return errors;
+}
+
+/**
+ * The site's globals in one language, keyed by file name — what a `_ref` block is filled from
+ * and what a footer reads its text out of. One read of the collection rather than one per key,
+ * since a page that wants any of them usually wants two.
+ */
+export async function globalsAt<C extends Record<string, unknown>>(
+  _siteId: string,
+  source: ContentSource<C>,
+  locale: string,
+): Promise<Record<string, unknown>> {
+  const found = await source.getCollection('globals' as keyof C & string, locale);
+  return Object.fromEntries(found.map((e) => [e.id.slice(locale.length + 1), e.data]));
+}
+
 export function parseEntry(_siteId: string, contents: string): unknown {
   const data: unknown = parse(contents);
   checkReserved(data);

@@ -23,8 +23,9 @@ export interface ContentFile {
   contents: string;
 }
 
-// Collection names are lowercase, so `_templates/` never matches; `globals/` looks like a
-// collection and is not one. `redirects.yaml` has no locale segment.
+// Collection names are lowercase, so `_templates/` never matches, and `redirects.yaml` has no
+// locale segment. `globals/` does match, and is meant to: a global is edited through the entry
+// path like anything else, so the list of them is answered from the index rather than from git.
 const ENTRY_PATH = /^src\/content\/([a-z0-9-]+)\/([^/]+)\/([^/]+)\.yaml$/;
 
 /**
@@ -69,7 +70,6 @@ function indexFile(siteId: string, { path, contents }: ContentFile, titleFields:
   const found = ENTRY_PATH.exec(path);
   if (!found) return undefined;
   const [, collection = '', locale = '', id = ''] = found;
-  if (collection === 'globals') return undefined;
   const data = parseEntry(siteId, contents) as Record<string, unknown> | null;
   // A collection that declares no title field, or an entry that has not filled it in yet,
   // lists by filename rather than by nothing.

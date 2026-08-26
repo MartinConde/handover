@@ -3,8 +3,9 @@ import { afterEach, expect, test, vi } from 'vitest';
 import App from './App.svelte';
 
 let app: ReturnType<typeof mount>;
-const session = (role: 'owner' | 'editor' = 'owner') => ({
+const session = (role: 'owner' | 'editor' = 'owner', globals = false) => ({
   collections: ['listings', 'pages'],
+  globals,
   user: { id: 'u1', name: 'Martin', email: 'martin@example.com' },
   role,
 });
@@ -176,6 +177,62 @@ test("a collection path renders that collection's entry list", async () => {
   expect(
     root.querySelector('[aria-labelledby="nav-content"] a[aria-current="page"]')?.textContent,
   ).toBe('Listings');
+});
+
+// Site settings is its own group above the collections, and only where the site declares any:
+// with none there is nothing to list, and Manage's Settings is the developer's read-only config.
+test('the sidebar offers Site settings above the collections when the site declares globals', async () => {
+  drafts();
+  const root = show(session('owner', true));
+  await new Promise((r) => setTimeout(r, 0));
+  flushSync();
+  const link = root.querySelector<HTMLAnchorElement>('[aria-labelledby="nav-site"] a');
+  expect([link?.textContent, link?.getAttribute('href')]).toEqual(['Site settings', '/admin/site']);
+});
+
+test('a site with no globals is offered no Site settings at all', async () => {
+  drafts();
+  const root = show(session());
+  await new Promise((r) => setTimeout(r, 0));
+  flushSync();
+  expect(root.querySelector('[aria-labelledby="nav-site"]')).toBeNull();
+});
+
+// A global is edited on the entry screen: /admin/site/site is entries/globals/site, which is
+// the whole of what "the same form path" means.
+test('a global path opens the entry editor on the globals collection', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/entries/globals/site')
+        return Response.json({
+          fields: [{ path: ['footerText'], label: 'Footer text', type: 'text', required: true }],
+          blocks: {},
+          data: { footerText: 'Coastal homes since 2009' },
+          pending: [],
+          problems: [],
+          locales: ['en'],
+          defaultLocale: 'en',
+          sourceLocale: 'en',
+          offered: ['en'],
+          translations: {},
+          stale: [],
+          drift: [],
+          singleton: true,
+          label: 'Site details',
+        });
+      if (url === '/admin/api/build') return Response.json({});
+      return Response.json({ entries: [] });
+    }),
+  );
+  const root = show(session('owner', true), '/admin/site/site');
+  await new Promise((r) => setTimeout(r, 0));
+  flushSync();
+
+  expect(root.querySelector('.entry-header h1')?.textContent).toBe('Site details');
+  expect(root.querySelector<HTMLInputElement>('input#f-footerText')?.value).toBe(
+    'Coastal homes since 2009',
+  );
 });
 
 // The load-bearing half of the way out of a conflict: after the draft is gone the editor must

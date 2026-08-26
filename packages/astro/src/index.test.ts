@@ -12,6 +12,7 @@ import handover, {
   type BlockRegistry,
   blocks,
   buildIndex,
+  contentErrors,
   defineBlock,
   defineConfig,
   embed,
@@ -609,6 +610,47 @@ test('buildIndex fails on a content file below the locale folder, naming it', as
   await expect(buildIndex(root)).rejects.toThrow(
     'src/content/listings/en/devon/seaview.yaml: an entry is src/content/<collection>/<locale>/<name>.yaml',
   );
+});
+
+// A global the site declares and never writes would be a card in Site settings that opens
+// nothing: the admin edits the file a language has, and there is no "new global" — the dev
+// declares them and the first file comes with the declaration.
+test('the build names a declared global that has no file in the default language', async () => {
+  const root = new URL(`${await mkdtemp(join(tmpdir(), 'handover-site-'))}/`, 'file://');
+  await mkdir(new URL('src/content/globals/de/', root), { recursive: true });
+  await writeFile(new URL('src/content/globals/de/site.yaml', root), 'name: "Küstenhäuser"\n');
+
+  expect(await contentErrors(root, ['site', 'navigation'], 'en')).toEqual([
+    'cms.config.ts › globals.site: declared, but src/content/globals/en/site.yaml does not exist — write the file the default language reads, or drop the key',
+    'cms.config.ts › globals.navigation: declared, but src/content/globals/en/navigation.yaml does not exist — write the file the default language reads, or drop the key',
+  ]);
+});
+
+// Only the default language: a global with no German file yet is what "Create from English"
+// is for, and the site renders the language it has.
+test('a global missing in a language other than the default is not a build error', async () => {
+  const root = new URL(`${await mkdtemp(join(tmpdir(), 'handover-site-'))}/`, 'file://');
+  await mkdir(new URL('src/content/globals/en/', root), { recursive: true });
+  await writeFile(new URL('src/content/globals/en/site.yaml', root), 'name: "Coastal Homes"\n');
+
+  expect(await contentErrors(root, ['site'], 'en')).toEqual([]);
+});
+
+// The build-time half of `_ref`: an unregistered `_type` is refused by the block union at
+// content sync, and a name no global answers to has to be refused in the same pass — the block
+// renders as that global's content, so this is a hole in the page, not an empty field.
+test('the build refuses a _ref naming a global cms.config.ts does not declare', async () => {
+  const root = new URL(`${await mkdtemp(join(tmpdir(), 'handover-site-'))}/`, 'file://');
+  await mkdir(new URL('src/content/pages/en/', root), { recursive: true });
+  await writeFile(
+    new URL('src/content/pages/en/home.yaml', root),
+    'blocks:\n  - _type: "cta"\n    _id: "q7r8s9t0"\n    _ref: "globals/newsletter"\n',
+  );
+
+  expect(await contentErrors(root, ['cta-newsletter'])).toEqual([
+    'src/content/pages/en/home.yaml › blocks[0]._ref: no global "newsletter" is declared in cms.config.ts — it has cta-newsletter',
+  ]);
+  expect(await contentErrors(root, ['newsletter'])).toEqual([]);
 });
 
 test('virtual:handover/index is the built index, inlined rather than served', async () => {

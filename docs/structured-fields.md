@@ -117,8 +117,10 @@ blocks:
 ```
 
 A block whose `_type` is not in the registry fails validation. A block with `_ref` (a
-`globals/<key>` path) needs no fields of its own: its content is filled from that global
-at build time. The admin shows such a block read-only; write the `_ref` itself by hand.
+`globals/<key>` path) needs no fields of its own: `<Blocks />` fills it from that global, in
+the language the page is in ([Blocks](blocks.md)). Its `_type` still decides which component
+draws it. The admin shows such a block read-only — the content is edited once under Site
+settings — and the `_ref` itself is written by hand, in the starter content.
 
 ## In the admin
 

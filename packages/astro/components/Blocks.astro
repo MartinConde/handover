@@ -5,12 +5,39 @@ import type { AstroComponentFactory } from 'astro/runtime/server/index.js';
 interface Props {
   blocks: Block[];
   components: Record<string, AstroComponentFactory>;
+  /** This page's language's globals, keyed by file name — `globalsAt()` builds it. */
+  globals?: Record<string, unknown>;
 }
 
-const { blocks, components } = Astro.props;
+const { blocks, components, globals = {} } = Astro.props;
 
-// `_ref` blocks are filled from the globals collection, which does not exist yet.
-const own = blocks.filter((block) => !block._ref);
+/**
+ * A `_ref` block is the global's content under the page's own `_type`, `_id` and `_label`. The
+ * whole tree is filled here, nested blocks included, so a block component that nests `<Blocks />`
+ * passes on `components` and nothing more. The content that replaces a `_ref` is not walked
+ * again: a global holds fields, never a reference to another global.
+ */
+const fill = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(fill);
+  if (!value || typeof value !== 'object') return value;
+  // Anything with a prototype of its own — a Date above all — is a value, not a shape to walk.
+  const proto = Object.getPrototypeOf(value);
+  if (proto !== Object.prototype && proto !== null) return value;
+  const block = value as Block;
+  if (typeof block._ref !== 'string') {
+    return Object.fromEntries(Object.entries(block).map(([key, v]) => [key, fill(v)]));
+  }
+  const key = block._ref.replace(/^globals\//, '');
+  const global = globals[key];
+  if (!global)
+    throw new Error(
+      `No global "${key}" in this language: a _ref block is filled from src/content/globals/<locale>/${key}.yaml`,
+    );
+  const { _ref, ...page } = block;
+  return { ...global, ...page };
+};
+
+const own = fill(blocks) as Block[];
 for (const block of own) {
   if (!(block._type in components)) throw new Error(`No component for block type "${block._type}"`);
 }
