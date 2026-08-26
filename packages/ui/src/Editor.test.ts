@@ -397,6 +397,41 @@ test('an edit is sent as a draft two seconds after the last keystroke', async ()
   vi.useRealTimers();
 });
 
+// The drawer counts entries, not keystrokes: it is stale only while an entry it does not know
+// about has become pending, so the shell is told when that flips and not on every save.
+test('the first save that makes an entry pending tells the shell; the next does not', async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal('fetch', autosaved());
+  const pending = vi.fn();
+  const root = show({ onpending: pending });
+
+  type(root, 'input#f-title', 'Seaview House');
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(pending).toHaveBeenCalledTimes(1);
+
+  type(root, 'input#f-title', 'Seaview Cottage House');
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(pending).toHaveBeenCalledTimes(1);
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+// An entry already ahead of the repository when it opened is already counted, so a save of it
+// tells the shell nothing it does not know.
+test('a save of an entry that was already pending tells the shell nothing', async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal('fetch', autosaved());
+  const pending = vi.fn();
+  const root = show({ entry: { ...entry, pending: ['en'] }, onpending: pending });
+
+  type(root, 'input#f-title', 'Seaview House');
+  await vi.advanceTimersByTimeAsync(2000);
+
+  expect(pending).not.toHaveBeenCalled();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
 test('each keystroke restarts the two seconds, so one pause is one draft write', async () => {
   vi.useFakeTimers();
   const fetchMock = autosaved();

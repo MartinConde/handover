@@ -319,6 +319,7 @@ const initial = $derived(
             await loadPending();
             reload += 1;
           }}
+          onpending={loadPending}
         />
       {:catch error}
         <main class="main"><p class="notice notice-danger" role="alert">{error.message}</p></main>

@@ -235,6 +235,56 @@ test('a global path opens the entry editor on the globals collection', async () 
   );
 });
 
+// The count in the top bar and the entry's own Publish button describe the same fact, so a save
+// that lights one has to move the other: without this the shell says "No unpublished changes"
+// beside a lit Publish until something else reloads it.
+test('a save that makes an entry pending moves the count in the top bar', async () => {
+  vi.useFakeTimers();
+  let waiting: string[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === '/admin/api/entries/listings/mill-house')
+        return Response.json({
+          fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+          blocks: {},
+          data: { title: 'The Mill House' },
+          pending: [],
+          problems: [],
+          locales: ['en'],
+          defaultLocale: 'en',
+          sourceLocale: 'en',
+          offered: ['en'],
+          translations: {},
+          stale: [],
+          drift: [],
+        });
+      if (url === '/admin/api/build') return Response.json({});
+      if (url.startsWith('/admin/api/locks/'))
+        return Response.json({ held_by: null, mine: true, expires_at: 1755864120000, base: {} });
+      if (url.startsWith('/admin/api/drafts/') && init?.method === 'PUT') {
+        waiting = ['listings/mill-house'];
+        return Response.json({ updated_at: 1755864000000, pending: true, problems: [] });
+      }
+      return Response.json({ entries: waiting.map(pendingEntry) });
+    }),
+  );
+  const root = show(session(), '/admin/c/listings/mill-house');
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync();
+  expect(root.querySelector('.indicator')?.textContent?.trim()).toBe('No unpublished changes');
+
+  const input = root.querySelector<HTMLInputElement>('input#f-title');
+  if (!input) throw new Error('no title field');
+  input.value = 'The Mill House, renamed';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  await vi.advanceTimersByTimeAsync(2000);
+  flushSync();
+
+  expect(root.querySelector('.indicator')?.textContent?.trim()).toBe('1 unpublished change');
+  vi.useRealTimers();
+});
+
 // The load-bearing half of the way out of a conflict: after the draft is gone the editor must
 // not keep the values it had, or the next keystroke saves them back over what was taken.
 test('discarding a draft loads the entry again instead of leaving the old one on screen', async () => {

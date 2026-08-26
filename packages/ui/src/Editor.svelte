@@ -14,6 +14,7 @@ let {
   entry,
   mediaBase = '',
   onchanged,
+  onpending,
 }: {
   collection: string;
   slug: string;
@@ -67,6 +68,12 @@ let {
   };
   /** A file of this entry was made, removed or settled: it has to be read again, screen with it. */
   onchanged: () => void;
+  /**
+   * This entry has something waiting to be published that it did not have a moment ago. The
+   * drawer counts entries, so it hears about the save that flips that and about no other —
+   * and unlike `onchanged` nothing on this screen is thrown away, since the person is typing.
+   */
+  onpending?: () => void;
 } = $props();
 
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
@@ -256,6 +263,7 @@ async function autosave() {
     saved = sent;
     // Whether the stored draft differs from the file in git is the server's answer, not ours.
     const body = (await res.json()) as { pending: boolean; problems: Problem[] };
+    if (body.pending !== drafted) onpending?.();
     drafted = body.pending;
     problems = byPath(body.problems);
   }
@@ -698,7 +706,10 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             translator={entry.translator}
             url={localeUrl(shown)}
             redirect={localeIndex(shown)}
-            onsaved={(pending) => (translated = pending)}
+            onsaved={(pending) => {
+              if (pending !== translated) onpending?.();
+              translated = pending;
+            }}
             onrefused={(taken) => {
               lost = true;
               lock = taken as Lock;
