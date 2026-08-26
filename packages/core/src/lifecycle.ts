@@ -24,7 +24,8 @@ export interface EntryLocation {
   localizedSlugs?: boolean;
 }
 
-const REDIRECTS = 'src/content/redirects.yaml';
+/** The one file several entries write into, which is why a publish assembles it. */
+export const REDIRECTS = 'src/content/redirects.yaml';
 const entryPath = (collection: string, locale: string, name: string) =>
   `src/content/${collection}/${locale}/${name}.yaml`;
 
@@ -78,6 +79,35 @@ export async function appendRedirects(
       .map((r) => (r !== rule && r.to === rule.from ? { ...r, to: rule.to, entry: rule.entry } : r))
       .filter((r) => r.from !== r.to);
   return { path: REDIRECTS, contents: stringifyEntry(siteId, { ...doc, rules }) };
+}
+
+/**
+ * `redirects.yaml` with the rules one commit added taken back out. It is **recomputed, not
+ * restored**: rules appended since that commit have to stay, so this is the file as HEAD has it
+ * minus the ids that commit introduced. A `to` the commit rewrote on an older rule stays
+ * rewritten — that URL is the live one, and putting the old one back would send visitors to a
+ * page that has moved on. `undefined` when the commit added no rule, which is most of them.
+ */
+export async function revertRedirects(
+  siteId: string,
+  git: Pick<GitClient, 'getFile'>,
+  at: { commit: string; parent: string; head: string },
+): Promise<PublishFile | undefined> {
+  const doc = async (ref: string) => {
+    const file = await git.getFile(REDIRECTS, ref);
+    return file ? (parseEntry(siteId, file.contents) as { rules?: RedirectRule[] }) : undefined;
+  };
+  const [before, after, head] = await Promise.all([doc(at.parent), doc(at.commit), doc(at.head)]);
+  const was = new Set((before?.rules ?? []).map((r) => r._id));
+  const added = new Set((after?.rules ?? []).flatMap((r) => (was.has(r._id) ? [] : [r._id])));
+  if (!added.size || !head) return undefined;
+  return {
+    path: REDIRECTS,
+    contents: stringifyEntry(siteId, {
+      ...head,
+      rules: (head.rules ?? []).filter((r) => !added.has(r._id)),
+    }),
+  };
 }
 
 const redirectsFile = (

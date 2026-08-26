@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNotNull, isNull, ne } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import {
   applyDrift,
@@ -13,9 +13,15 @@ import {
 } from './content.js';
 import { type ContentFile, type ContentIndex, entryKey, indexHasPath } from './entries.js';
 import { blobSha, type GitClient, type PublishFile } from './git.js';
-import { appendRedirects, type RedirectRule, redirectRule } from './lifecycle.js';
+import {
+  appendRedirects,
+  REDIRECTS,
+  type RedirectRule,
+  redirectRule,
+  revertRedirects,
+} from './lifecycle.js';
 import type { Form } from './schema.js';
-import { drafts, user } from './tables.js';
+import { drafts, locks, user } from './tables.js';
 import { machineFilled } from './translate.js';
 
 type D1Binding = Parameters<typeof drizzle>[0];
@@ -652,4 +658,128 @@ export async function saveTranslated(
   const updatedAt = Date.now();
   await db.batch([upsert(db, siteId, path, contents, loaded, updatedAt)]);
   return { updated_at: updatedAt, pending: (await blobSha(contents)) !== loaded.baseBlob };
+}
+
+/** A file the revert would write has changed since the commit it is undoing. */
+export class RevertConflictError extends Error {
+  override name = 'RevertConflictError';
+  constructor(readonly paths: string[]) {
+    super(
+      paths.length === 1
+        ? `${paths[0]} has changed since that commit, so it cannot be put back`
+        : `${paths.length} files have changed since that commit, so they cannot be put back — ${paths.join(', ')}`,
+    );
+  }
+}
+
+/**
+ * One commit undone, as a commit of its own. **Not `git revert`**: the trees API has no
+ * three-way merge to run, so the inverse is composed here — every entry file the commit touched
+ * goes back to the bytes its blob had at the parent, and a file the commit created is removed.
+ * A rename counts as both of its names, so the old one comes back as the new one goes.
+ *
+ * A file that has **moved on since** is refused rather than overwritten: putting it back would
+ * be undoing somebody else's work as well, and the whole set is refused because the ref update
+ * is all-or-nothing anyway. `redirects.yaml` is the one exception, recomputed rather than
+ * restored ([`revertRedirects`](./lifecycle.ts)) — rules appended since have to stay.
+ *
+ * Every row at a path this writes is rebased on the revert with `published_sha` nulled, so the
+ * changes the commit carried are unpublished again — which is what the confirmation promises.
+ * A row that says a path has **gone** while the revert puts the file back is dropped instead:
+ * the entry reads from the repository again.
+ */
+export async function revertCommit(
+  siteId: string,
+  db: Db,
+  git: Pick<GitClient, 'getCommit' | 'getFile' | 'getHead' | 'publish'>,
+  commitSha: string,
+): Promise<{ commit_sha: string; paths: string[] }> {
+  const commit = await git.getCommit(commitSha);
+  const parent = commit.parent;
+  if (!parent) throw new Error(`${commitSha} has no commit before it to go back to`);
+  const head = await git.getHead();
+  const paths = commit.paths.filter((p) => p !== REDIRECTS);
+  const [then, now, before] = await Promise.all([
+    Promise.all(paths.map((p) => git.getFile(p, commitSha))),
+    Promise.all(paths.map((p) => git.getFile(p, head))),
+    Promise.all(paths.map((p) => git.getFile(p, parent))),
+  ]);
+  const moved = paths.filter((_, i) => (now[i]?.blob_sha ?? '') !== (then[i]?.blob_sha ?? ''));
+  if (moved.length) throw new RevertConflictError(moved);
+  const files: PublishFile[] = paths.map((path, i) => ({
+    path,
+    contents: before[i]?.contents ?? null,
+  }));
+  const rules = await revertRedirects(siteId, git, { commit: commitSha, parent, head });
+  const { commit_sha } = await git.publish(rules ? [...files, rules] : files, {
+    base_sha: head,
+    message: `Revert "${commit.message.split('\n')[0]}"\n\nThis reverts commit ${commit.sha}.`,
+  });
+  const rows = await db
+    .select()
+    .from(drafts)
+    .where(and(eq(drafts.siteId, siteId), inArray(drafts.path, paths)));
+  // The blobs first: a drizzle statement is thenable, so awaiting one inside the map below
+  // would run it there instead of in the batch.
+  const rebased = await Promise.all(
+    rows.map(async (row) => {
+      const restored = files.find((f) => f.path === row.path)?.contents ?? null;
+      return {
+        path: row.path,
+        gone: row.contents === '' && restored !== null,
+        blob: restored === null ? '' : await blobSha(restored),
+      };
+    }),
+  );
+  const writes = rebased.map(({ path, gone, blob }) => {
+    const where = and(eq(drafts.siteId, siteId), eq(drafts.path, path));
+    return gone
+      ? db.delete(drafts).where(where)
+      : db
+          .update(drafts)
+          .set({ baseSha: commit_sha, baseBlob: blob, publishedSha: null })
+          .where(where);
+  });
+  const [first, ...rest] = writes;
+  if (first) await db.batch([first, ...rest]);
+  return { commit_sha, paths: files.map((f) => f.path) };
+}
+
+/**
+ * The rows the build carrying them is now serving, dropped. **Green is not enough**: a row is
+ * also what an open tab publishes against, so an entry somebody is still editing keeps its row
+ * until their lock runs out and the next reading of the build takes it. A row that says a path
+ * has **gone** is not here either — the entry list drops those against the index it can see
+ * ([`overlayRows`](#)), and taking one away before the new bundle is serving would put the
+ * deleted entry back in the list.
+ */
+export async function clearPublished(
+  siteId: string,
+  db: Db,
+  commitSha: string,
+  now = Date.now(),
+): Promise<string[]> {
+  const rows = await db
+    .select({ path: drafts.path })
+    .from(drafts)
+    .where(
+      and(eq(drafts.siteId, siteId), eq(drafts.publishedSha, commitSha), ne(drafts.contents, '')),
+    );
+  if (!rows.length) return [];
+  const editing = new Set(
+    (
+      await db
+        .select({ entry: locks.entry })
+        .from(locks)
+        .where(and(eq(locks.siteId, siteId), gt(locks.expiresAt, now)))
+    ).map((l) => l.entry),
+  );
+  // Rows are paths and locks are entries, so the two only meet through the entry a path is of.
+  const clear = rows.flatMap(({ path }) => {
+    const entry = entryKey(path);
+    return entry && editing.has(entry) ? [] : [path];
+  });
+  if (clear.length)
+    await db.delete(drafts).where(and(eq(drafts.siteId, siteId), inArray(drafts.path, clear)));
+  return clear;
 }

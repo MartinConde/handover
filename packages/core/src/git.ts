@@ -18,6 +18,16 @@ export interface PublishFile {
   contents: string | null;
 }
 
+/** One commit as undoing it needs to know it. */
+export interface GitCommit {
+  sha: string;
+  /** What it was made on. A root commit has none, and no inverse either. */
+  parent?: string;
+  message: string;
+  /** Every path it touched, a rename counting as both of its names. */
+  paths: string[];
+}
+
 export interface GitClient {
   /** Authenticated call against api.github.com; `path` starts with `/`. */
   request(path: string, init?: RequestInit): Promise<Response>;
@@ -27,6 +37,7 @@ export interface GitClient {
    * that is about to **write** names one: see the note on the implementation.
    */
   getFile(path: string, ref?: string): Promise<GitFile | undefined>;
+  getCommit(sha: string): Promise<GitCommit>;
   publish(
     files: PublishFile[],
     opts: { base_sha: string; message: string },
@@ -181,6 +192,29 @@ export function createGitClient(
       const body = (await res.json()) as { sha: string; content: string };
       const bytes = Uint8Array.from(atob(body.content.replace(/\s+/g, '')), (c) => c.charCodeAt(0));
       return { contents: new TextDecoder().decode(bytes), blob_sha: body.sha };
+    },
+
+    async getCommit(sha) {
+      const body = await json<{
+        sha: string;
+        parents: { sha: string }[];
+        commit: { message: string };
+        files?: { filename: string; previous_filename?: string }[];
+      }>(`${repo}/commits/${sha}`, {}, 'read commit');
+      return {
+        sha: body.sha,
+        parent: body.parents[0]?.sha,
+        message: body.commit.message,
+        // A rename is one entry carrying both of its names, and undoing one has to write both.
+        // ⚠️ GitHub stops listing files at 300; a commit the admin made is a handful.
+        paths: [
+          ...new Set(
+            (body.files ?? []).flatMap((f) =>
+              f.previous_filename ? [f.filename, f.previous_filename] : [f.filename],
+            ),
+          ),
+        ],
+      };
     },
 
     // Text goes inline in the tree, so no blob step. base_tree keeps every unlisted file;

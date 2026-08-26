@@ -15,13 +15,19 @@ type Entry = {
 };
 let {
   entries,
+  build,
   onclose,
   onpublished,
+  onrevert,
   ondiscarded,
 }: {
   entries: Entry[];
+  /** The shell's build status, repeated here beside the commit it is of. */
+  build?: { commit_sha: string; state: 'building' | 'live' | 'failed'; started_at?: number } | null;
   onclose: () => void;
   onpublished: () => void;
+  /** Undo the commit this drawer just made; the shell owns the confirmation. */
+  onrevert: (commitSha: string) => void;
   /** A draft was thrown away: the entry behind it has to be read from the repository again. */
   ondiscarded: () => void;
 } = $props();
@@ -35,6 +41,8 @@ $effect(() => (confirmPanel ?? panel)?.focus());
 let busy = $state(false);
 let error = $state('');
 let published = $state(0);
+/** The commit this drawer made, which is what Revert is of. */
+let committed = $state('');
 /** Entries the last publish was refused over; each one is offered the way out. */
 let conflicts = $state<string[]>([]);
 /** Entries whose stored file is not everything their schema needs; fixed where they are edited. */
@@ -51,6 +59,10 @@ let discarding = $state(false);
 let toggled = $state<string[]>([]);
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const BUILD_LABEL = { building: 'Building…', live: 'Live', failed: 'Build failed' } as const;
+// The pill belongs to the commit this drawer made, not to whatever the shell is showing: a
+// second publish elsewhere would otherwise put its build beside this one's result.
+const ours = $derived(build && committed && build.commit_sha === committed ? build : undefined);
 const plural = (n: number, what: string) => `${n} ${n === 1 ? what.replace(/s$/, '') : what}`;
 const named = (entry: Entry) => entry.title;
 
@@ -116,7 +128,8 @@ async function publish() {
   });
   busy = false;
   if (res.ok) {
-    const { paths } = (await res.json()) as { paths: string[] };
+    const { paths, commit_sha } = (await res.json()) as { paths: string[]; commit_sha?: string };
+    committed = commit_sha ?? '';
     // Counted here rather than after the reload: the list is about to be read again without
     // what just went out.
     published = going.filter((e) => e.files.some((f) => paths.includes(f))).length;
@@ -187,6 +200,22 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
 </script>
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && (confirming ? (confirming = undefined) : onclose())} />
+
+{#snippet result()}
+  <p class="result-actions">
+    {#if ours}
+      <span class="pill pill-{ours.state}">
+        <span class="dot" aria-hidden="true"></span>
+        {BUILD_LABEL[ours.state]}
+      </span>
+    {/if}
+    {#if committed}
+      <button class="btn-link" type="button" onclick={() => onrevert(committed)}>
+        Revert this publish
+      </button>
+    {/if}
+  </p>
+{/snippet}
 
 {#snippet change(entry: Entry)}
   <li>
@@ -290,6 +319,7 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
           <div class="publish-result">
             <h3>Published {plural(published, 'changes')}</h3>
             <p>One commit is on its way; the site rebuilds in a minute or two.</p>
+            {@render result()}
           </div>
         {/if}
         <ul class="change-list">
@@ -323,6 +353,7 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
                 ? 'One commit is on its way; the site rebuilds in a minute or two.'
                 : 'Every edit is in the repository.'}
             </p>
+            {#if published}{@render result()}{/if}
           </div>
         </div>
       {/if}

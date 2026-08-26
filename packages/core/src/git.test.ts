@@ -35,7 +35,11 @@ async function verifyJwt(header: string | null): Promise<{ iss: string; exp: num
 // A fake GitHub: mints a token when the JWT verifies, serves one file, records every call.
 // `visible: false` is a repository outside the installation — GitHub 404s every path of it,
 // the repository itself included.
-function fakeGitHub(files: Record<string, string>, visible = true) {
+function fakeGitHub(
+  files: Record<string, string>,
+  visible = true,
+  commits: Record<string, unknown> = {},
+) {
   const calls: string[] = [];
   let minted = 0;
   const fetch = async (url: string, init: RequestInit = {}): Promise<Response> => {
@@ -57,6 +61,13 @@ function fakeGitHub(files: Record<string, string>, visible = true) {
     if (!visible) return new Response('{"message":"Not Found"}', { status: 404 });
     if (url === 'https://api.github.com/repos/acme/site')
       return Response.json({ full_name: 'acme/site' });
+    const commit = url.match(/^https:\/\/api\.github\.com\/repos\/acme\/site\/commits\/(.+)$/)?.[1];
+    if (commit) {
+      const found = commits[commit];
+      return found
+        ? Response.json(found)
+        : new Response('{"message":"Not Found"}', { status: 404 });
+    }
     const m = url.match(
       /^https:\/\/api\.github\.com\/repos\/acme\/site\/contents\/(.+)\?ref=(.+)$/,
     );
@@ -259,4 +270,37 @@ test('blobSha is the git object id of the file contents', async () => {
   expect(await blobSha('')).toBe('e69de29bb2d1d6434b8b29ae775ad8c2e48c5391');
   expect(await blobSha('hello\n')).toBe('ce013625030ba8dba906f756967f9e9ca394464a');
   expect(await blobSha('£')).toBe('3048c9ab8389e833f2b95ef09b7e305a9df2e2b6');
+});
+
+// Undoing a commit has to write every path it touched, and GitHub reports a rename as one entry
+// carrying both of its names: taking `filename` alone would remove the new path and never put
+// the old one back.
+test('getCommit names the parent and both names of a rename', async () => {
+  const gh = fakeGitHub({}, true, {
+    c0ffee11: {
+      sha: 'c0ffee11',
+      parents: [{ sha: 'beef2233' }],
+      commit: { message: 'Rename the Mill House' },
+      files: [
+        {
+          filename: 'src/content/listings/en/mill-house.yaml',
+          status: 'renamed',
+          previous_filename: 'src/content/listings/en/the-mill.yaml',
+        },
+        { filename: 'src/content/redirects.yaml', status: 'modified' },
+      ],
+    },
+  });
+  const git = createGitClient('default', app, { fetch: gh.fetch });
+
+  expect(await git.getCommit('c0ffee11')).toEqual({
+    sha: 'c0ffee11',
+    parent: 'beef2233',
+    message: 'Rename the Mill House',
+    paths: [
+      'src/content/listings/en/mill-house.yaml',
+      'src/content/listings/en/the-mill.yaml',
+      'src/content/redirects.yaml',
+    ],
+  });
 });

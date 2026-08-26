@@ -39,6 +39,9 @@ const {
   setEntryAddress,
   setEntryLocales,
   translate,
+  commitBuild,
+  clearPublished,
+  revertCommit,
 } = await vi.hoisted(async () => {
   const { z } = await import('astro/zod');
   const { blocks, defineBlock } = await import('../index.js');
@@ -129,6 +132,18 @@ const {
     discardDraft: vi.fn(async () => {}),
     // What the entry list lays over the index: the pending drafts plus what a commit left.
     overlayRows: vi.fn(async () => [] as { path: string; contents: string }[]),
+    // The Workers Builds boundary; the mapping itself runs against a faked API in core's
+    // builds.test.ts.
+    commitBuild: vi.fn(async (_cfg: unknown, sha: string) => ({
+      commit_sha: sha,
+      state: 'building' as string,
+      started_at: 1755864100000,
+    })),
+    clearPublished: vi.fn(async () => [] as string[]),
+    revertCommit: vi.fn(async () => ({
+      commit_sha: 'rev999',
+      paths: ['src/content/listings/en/mill-house.yaml'],
+    })),
   };
 });
 
@@ -168,6 +183,14 @@ const fakeMailer: Mailer = async (message) => {
 };
 // And what the Worker holds when the site has no hook of its own.
 let deeplKey: string | undefined;
+// What the log says the last commit was, and what the Worker can ask Cloudflare with.
+let lastCommitRow: { sha: string; at: number; kind: string } | undefined = {
+  sha: 'def456',
+  at: 1755864000000,
+  kind: 'publish',
+};
+let cloudflareToken: string | undefined = 'cf-token';
+let cloudflareWorker: string | undefined = 'acct/handover-demo';
 vi.mock('virtual:handover/config', () => ({
   default: {
     i18n: {
@@ -251,6 +274,12 @@ vi.mock('cloudflare:workers', () => ({
     },
     get EMAIL() {
       return emailBinding;
+    },
+    get CLOUDFLARE_API_TOKEN() {
+      return cloudflareToken;
+    },
+    get CLOUDFLARE_WORKER() {
+      return cloudflareWorker;
     },
     DB: {},
   },
@@ -383,6 +412,10 @@ vi.mock('@handover/core', async (original) => ({
   saveTranslated,
   setEntryAddress,
   setEntryLocales,
+  commitBuild,
+  clearPublished,
+  revertCommit,
+  lastCommit: async () => lastCommitRow,
 }));
 
 afterEach(() => {
@@ -392,6 +425,12 @@ afterEach(() => {
   translator = translate;
   deeplKey = undefined;
   siteMailer = undefined;
+  lastCommitRow = { sha: 'def456', at: 1755864000000, kind: 'publish' };
+  cloudflareToken = 'cf-token';
+  cloudflareWorker = 'acct/handover-demo';
+  commitBuild.mockClear();
+  clearPublished.mockClear();
+  revertCommit.mockClear();
   setPassword = async () => ({ status: true });
   facts = { hasPassword: true, sessions: [] };
   asked = [];
@@ -3088,4 +3127,107 @@ test('a branch that moved under the commit is logged as a failed publish', async
       detail: { files: 1, reason: 'ref-moved' },
     },
   ]);
+});
+
+test('the build endpoint answers where the last commit has got to', async () => {
+  const res = await GET(ctx('build'));
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    commit_sha: 'def456',
+    state: 'building',
+    started_at: 1755864100000,
+    committed_at: 1755864000000,
+  });
+});
+
+// Rule 3 of "your own publish must not look like a conflict": the rows go when the build
+// carrying them is live, and this is the one moment the Worker learns that it is.
+test('the rows a live build carries are cleared when it reports live', async () => {
+  commitBuild.mockImplementationOnce(async (_cfg: unknown, sha: string) => ({
+    commit_sha: sha,
+    state: 'live',
+    started_at: 1755864100000,
+  }));
+  await GET(ctx('build'));
+  expect(clearPublished).toHaveBeenCalledWith('default', expect.anything(), 'def456');
+});
+
+test('a build that is still running clears nothing', async () => {
+  await GET(ctx('build'));
+  expect(clearPublished).not.toHaveBeenCalled();
+});
+
+test('a site with no Cloudflare token draws no build status at all', async () => {
+  cloudflareToken = undefined;
+  const res = await GET(ctx('build'));
+  expect(await res.json()).toEqual({});
+  expect(commitBuild).not.toHaveBeenCalled();
+});
+
+test('a site that has committed nothing yet has no build status', async () => {
+  lastCommitRow = undefined;
+  expect(await (await GET(ctx('build'))).json()).toEqual({});
+});
+
+// An API that cannot be asked is the site's configuration rather than a state the site is in,
+// so the pill goes away instead of claiming something.
+test('an unreachable Workers Builds API answers as no build status', async () => {
+  commitBuild.mockImplementationOnce(async () => {
+    throw new Error('Cloudflare builds failed: 403');
+  });
+  const res = await GET(ctx('build'));
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({});
+});
+
+test('revert undoes the commit the body names and logs it', async () => {
+  const session = { user: { id: 'u1', name: 'Anna', email: 'a@x' }, role: 'editor' };
+  const res = await POST(
+    ctx(
+      'revert',
+      new Request('https://x/admin/api/revert', {
+        method: 'POST',
+        body: JSON.stringify({ commit_sha: 'def456' }),
+      }),
+      { handover: session },
+    ),
+  );
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    commit_sha: 'rev999',
+    paths: ['src/content/listings/en/mill-house.yaml'],
+  });
+  expect(revertCommit).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'def456',
+  );
+  expect(logged.at(-1)).toMatchObject({
+    kind: 'revert',
+    commitSha: 'rev999',
+    detail: { of: 'def456' },
+  });
+});
+
+test('revert with no commit named is refused', async () => {
+  const res = await POST(post('revert', '{}'));
+  expect(res.status).toBe(400);
+  expect(revertCommit).not.toHaveBeenCalled();
+});
+
+// The one thing an inverse composed against HEAD cannot decide on its own; the drawer says so
+// on the panel the button sits on.
+test('revert is 409 naming the file that has moved on since', async () => {
+  const { RevertConflictError } = await import('@handover/core');
+  revertCommit.mockImplementationOnce(async () => {
+    throw new RevertConflictError(['src/content/listings/en/mill-house.yaml']);
+  });
+  const res = await POST(post('revert', JSON.stringify({ commit_sha: 'def456' })));
+  expect(res.status).toBe(409);
+  expect(await res.json()).toEqual({
+    error:
+      'src/content/listings/en/mill-house.yaml has changed since that commit, so it cannot be put back',
+    paths: ['src/content/listings/en/mill-house.yaml'],
+  });
 });

@@ -36,6 +36,8 @@ let app: ReturnType<typeof mount>;
 let entries = $state(ENTRIES);
 const published = vi.fn();
 const discarded = vi.fn();
+const reverted = vi.fn();
+let build = $state<{ commit_sha: string; state: 'building' | 'live' | 'failed' } | null>(null);
 const show = (initial = ENTRIES) => {
   entries = initial;
   app = mount(Pending, {
@@ -44,8 +46,12 @@ const show = (initial = ENTRIES) => {
       get entries() {
         return entries;
       },
+      get build() {
+        return build;
+      },
       onclose: () => {},
       onpublished: published,
+      onrevert: reverted,
       ondiscarded: discarded,
     },
   });
@@ -56,6 +62,8 @@ afterEach(() => {
   unmount(app);
   published.mockClear();
   discarded.mockClear();
+  reverted.mockClear();
+  build = null;
   vi.unstubAllGlobals();
 });
 
@@ -464,4 +472,52 @@ test('a publish that left a hold behind still says what it published', async () 
   expect(q(root, '.publish-result h3')?.textContent).toBe('Published 1 change');
   expect(q(root, '.change-group .group-title')?.textContent).toBe('Still on hold');
   expect(published).toHaveBeenCalled();
+});
+
+// The panel a publish leaves behind is where the build and the way back live — p7d of the
+// mockup. It is neutral rather than green: the commit landed, the site has not.
+const publishing = (body: Record<string, unknown>) =>
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json(body)),
+  );
+
+test('the panel a publish leaves behind offers a revert of that commit', async () => {
+  publishing({ commit_sha: 'c0ffee11', paths: ENTRIES[0]?.files ?? [] });
+  const root = show();
+  q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.click();
+  await tick();
+  flushSync();
+
+  const revert = q<HTMLButtonElement>(root, '.publish-result .result-actions .btn-link');
+  expect(revert?.textContent?.trim()).toBe('Revert this publish');
+  revert?.click();
+  expect(reverted).toHaveBeenCalledWith('c0ffee11');
+});
+
+test('the build of that commit is shown beside it, in words as well as colour', async () => {
+  publishing({ commit_sha: 'c0ffee11', paths: ENTRIES[0]?.files ?? [] });
+  const root = show();
+  q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.click();
+  await tick();
+  build = { commit_sha: 'c0ffee11', state: 'building' };
+  flushSync();
+
+  const pill = q(root, '.publish-result .pill');
+  expect(pill?.textContent?.trim()).toBe('Building…');
+  expect(pill?.className).toContain('pill-building');
+});
+
+// A colleague publishing something else moves the shell's pill on; this panel is about the
+// commit this drawer made and nothing else.
+test('a build of some other commit is not shown as this publish’s', async () => {
+  publishing({ commit_sha: 'c0ffee11', paths: ENTRIES[0]?.files ?? [] });
+  const root = show();
+  q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.click();
+  await tick();
+  build = { commit_sha: 'deadbeef', state: 'building' };
+  flushSync();
+
+  expect(q(root, '.publish-result .pill')).toBeNull();
+  expect(q(root, '.publish-result .result-actions .btn-link')).not.toBeNull();
 });

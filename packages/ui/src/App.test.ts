@@ -21,6 +21,8 @@ const pendingEntry = (key: string) => ({
   files: [`src/content/${key.split('/')[0]}/en/${key.split('/')[1]}.yaml`],
   updated_at: 1755864000000,
 });
+// What the build endpoint answers, per test; `{}` is a site with no build status at all.
+let buildBody: Record<string, unknown> = {};
 const drafts = (...keys: string[]) =>
   vi.stubGlobal(
     'fetch',
@@ -30,11 +32,13 @@ const drafts = (...keys: string[]) =>
       if (url.startsWith('/admin/api/entries/')) return Response.json({ entries: [] });
       if (url.startsWith('/admin/api/activity')) return Response.json({ events: [], cursor: null });
       if (url === '/admin/api/members') return Response.json({ members: [] });
+      if (url === '/admin/api/build') return Response.json(buildBody);
       return Response.json({ entries: keys.map(pendingEntry) });
     }),
   );
 afterEach(() => {
   unmount(app);
+  buildBody = {};
   vi.unstubAllGlobals();
 });
 
@@ -221,4 +225,75 @@ test('discarding a draft loads the entry again instead of leaving the old one on
   await settle();
 
   expect(loads()).toBe(2);
+});
+
+const settle = async () => {
+  await new Promise((r) => setTimeout(r, 0));
+  flushSync();
+};
+
+// A status that only changes colour is not a status: every state says what it is in words, and
+// the live region holds the state rather than the counter that ticks beside it.
+test('a running build says so in words, inside a live region', async () => {
+  buildBody = { commit_sha: 'c0ffee11', state: 'building', started_at: Date.now() - 80_000 };
+  drafts();
+  const root = show(session());
+  await settle();
+
+  const region = root.querySelector('.topbar [role="status"]');
+  expect(region?.querySelector('.pill')?.className).toContain('pill-building');
+  expect(region?.textContent).toContain('Building…');
+  // The elapsed time is out of the live region's reach, or every tick says the pill again.
+  expect(root.querySelector('.topbar .pill .detail')?.getAttribute('aria-hidden')).toBe('true');
+});
+
+test('a build that is still running warns that the admin may reload', async () => {
+  buildBody = { commit_sha: 'c0ffee11', state: 'building' };
+  drafts();
+  const root = show(session());
+  await settle();
+
+  expect(root.querySelector('.banner-info')?.textContent).toContain('may reload briefly');
+});
+
+test('a failed build says so and offers a revert of that commit', async () => {
+  buildBody = { commit_sha: 'c0ffee11', state: 'failed' };
+  drafts();
+  const root = show(session());
+  await settle();
+
+  const pill = root.querySelector('.topbar .pill');
+  expect(pill?.className).toContain('pill-failed');
+  expect(pill?.textContent).toContain('Build failed');
+  pill?.querySelector<HTMLButtonElement>('.btn-link')?.click();
+  flushSync();
+  expect(document.querySelector('[aria-labelledby="revert-h"]')).not.toBeNull();
+  expect(root.querySelector('.banner-info')).toBeNull();
+});
+
+test('a site with no build status draws no pill and no banner', async () => {
+  drafts();
+  const root = show(session());
+  await settle();
+
+  expect(root.querySelector('.topbar .pill')).toBeNull();
+  expect(root.querySelector('.banner-info')).toBeNull();
+  // The live region stays, so the first state to arrive is announced rather than missed.
+  expect(root.querySelector('.topbar [role="status"]')).not.toBeNull();
+});
+
+// The live pill says when the site last changed, not only that it is up — app-shell state 1.
+test('a live build says since when', async () => {
+  buildBody = {
+    commit_sha: 'c0ffee11',
+    state: 'live',
+    live_at: new Date('2026-08-25T14:02:00').getTime(),
+  };
+  drafts();
+  const root = show(session());
+  await settle();
+
+  const pill = root.querySelector('.topbar .pill');
+  expect(pill?.className).toContain('pill-live');
+  expect(pill?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Live since 02:02 PM');
 });

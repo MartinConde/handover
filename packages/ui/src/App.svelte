@@ -57,12 +57,48 @@ let pending = $state<
   }[]
 >([]);
 let indicator = $state<HTMLButtonElement>();
+/** Where the last commit the admin made has got to; null on a site with no build status. */
+let build = $state<{
+  commit_sha: string;
+  state: 'building' | 'live' | 'failed';
+  started_at?: number;
+  live_at?: number;
+  committed_at?: number;
+} | null>(null);
+let now = $state(Date.now());
+/** The commit whose revert is waiting to be confirmed, and where to put focus back. */
+let confirmRevert = $state<string>();
+let returnTo: HTMLElement | undefined;
+let revertPanel = $state<HTMLElement>();
+let reverting = $state(false);
+let revertError = $state('');
 let drawer = $state(false);
 // Bumped when a screen's data has moved under it — the screen is thrown away and made again.
 let reload = $state(0);
 
 $effect(() => {
-  if (session) loadPending();
+  if (session) {
+    loadPending();
+    loadBuild();
+  }
+});
+
+// A boolean rather than the object: an effect that read `build` would be torn down and rebuilt
+// by every poll, and the interval it had just made would never fire again.
+const building = $derived(build?.state === 'building');
+// Only worth asking again while something is happening — a build that has finished does not
+// start on its own, and the next publish loads it.
+$effect(() => {
+  if (!building) return;
+  const tick = setInterval(() => (now = Date.now()), 1000);
+  const poll = setInterval(() => void loadBuild(), 10_000);
+  return () => {
+    clearInterval(tick);
+    clearInterval(poll);
+  };
+});
+$effect(() => {
+  if (confirmRevert) revertPanel?.focus();
 });
 
 // Ping answers 401 until there is a session, so the shell's own data arrives after the login
@@ -88,6 +124,69 @@ async function loadPending() {
   if (res.ok) pending = ((await res.json()) as { entries: typeof pending }).entries;
 }
 
+/**
+ * Build status is the server's: a publish redeploys the Worker serving this page, so the tab
+ * that pressed Publish may be reloaded before the build finishes. `{}` is a site that has
+ * committed nothing yet or has no Cloudflare token — no pill at all rather than an empty one.
+ */
+async function loadBuild() {
+  const res = await fetch('/admin/api/build');
+  if (!res.ok) return;
+  const body = (await res.json()) as Partial<NonNullable<typeof build>>;
+  build =
+    body.state && body.commit_sha
+      ? { ...body, state: body.state, commit_sha: body.commit_sha }
+      : null;
+  now = Date.now();
+}
+
+function askRevert(sha: string) {
+  returnTo = document.activeElement as HTMLElement;
+  revertError = '';
+  confirmRevert = sha;
+}
+
+function closeRevert() {
+  confirmRevert = undefined;
+  returnTo?.focus();
+}
+
+// One button for both the pill's *Revert last publish* and the drawer's *Revert this publish*:
+// it is the same inverse commit either way, over whichever commit the caller names.
+async function revert() {
+  const sha = confirmRevert;
+  if (!sha) return;
+  reverting = true;
+  const res = await fetch('/admin/api/revert', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ commit_sha: sha }),
+  });
+  reverting = false;
+  closeRevert();
+  if (!res.ok) {
+    const body = await res.text();
+    // A file that has moved on since is the server's own sentence, and it names the file.
+    revertError =
+      res.status === 409
+        ? ((JSON.parse(body.startsWith('{') ? body : '{}') as { error?: string }).error ?? body)
+        : `That publish was not reverted (${res.status}). Nothing was changed.`;
+    return;
+  }
+  await Promise.all([loadPending(), loadBuild()]);
+  reload += 1;
+}
+
+const BUILD_LABEL = { building: 'Building…', live: 'Live', failed: 'Build failed' } as const;
+// "Live since 14:02" — when the site last changed, which is more use than that it is up.
+const since = (at: number) =>
+  new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+// "0m 45s", the way the mockup reads it.
+const elapsed = (from: number) => {
+  const total = Math.max(0, Math.round((now - from) / 1000));
+  return `${Math.floor(total / 60)}m ${String(total % 60).padStart(2, '0')}s`;
+};
+
 async function loadEntry(collection: string, slug: string) {
   const res = await fetch(`/admin/api/entries/${collection}/${slug}`);
   if (res.ok) return res.json();
@@ -108,6 +207,17 @@ const initial = $derived(
   <Login {methods} {path} {query} onlogin={loadSession} />
 {:else}
 <div class="shell">
+  <!-- The reload note outlives a page load, so it is a banner and not a toast. It does not
+       announce: the pill beside it is the live region, and two of them would talk over
+       each other about the same thing. -->
+  {#if building}
+    <div class="banner banner-info">
+      Publishing — the admin may reload briefly while the site deploys. Your place is kept.
+    </div>
+  {/if}
+  {#if revertError}
+    <div class="banner banner-warn" role="alert">{revertError}</div>
+  {/if}
   <aside class="sidebar" aria-label="Main" inert={drawer}>
     <div class="site-name"><span class="site-mark" aria-hidden="true">H</span> Handover</div>
     <nav class="nav">
@@ -155,7 +265,29 @@ const initial = $derived(
         {pending.length ? `${pending.length} unpublished change${pending.length === 1 ? '' : 's'}` : 'No unpublished changes'}
       </button>
       <span class="spacer"></span>
-      <span class="pill pill-live"><span class="dot" aria-hidden="true"></span> Live</span>
+      <!-- The live region is in the DOM whether there is a build or not, so the first state to
+           arrive is announced rather than missed. The elapsed time is hidden from it: it ticks
+           every second and would say the whole pill again each time. -->
+      <span class="build-status" role="status">
+        {#if build}
+          <span class="pill pill-{build.state}">
+            <span class="dot" aria-hidden="true"></span>
+            {BUILD_LABEL[build.state]}
+            {#if build.state === 'live' && build.live_at}
+              <span class="detail">since {since(build.live_at)}</span>
+            {/if}
+            {#if build.state === 'building'}
+              <span class="detail" aria-hidden="true">{elapsed(build.started_at ?? build.committed_at ?? now)}</span>
+            {/if}
+            {#if build.state === 'failed'}
+              <span class="sep" aria-hidden="true">·</span>
+              <button class="btn-link" type="button" onclick={() => askRevert(build?.commit_sha ?? '')}>
+                Revert last publish
+              </button>
+            {/if}
+          </span>
+        {/if}
+      </span>
       <div class="user-menu">
         <a class="btn" href="/admin/account" aria-current={path === '/admin/account' ? 'page' : undefined}>
           <span class="avatar" aria-hidden="true">{initial}</span>
@@ -209,16 +341,52 @@ const initial = $derived(
   {#if drawer}
     <Pending
       entries={pending}
+      {build}
+      onrevert={askRevert}
       onclose={() => {
         drawer = false;
         indicator?.focus();
       }}
-      onpublished={loadPending}
+      onpublished={async () => {
+        await Promise.all([loadPending(), loadBuild()]);
+      }}
       ondiscarded={async () => {
         await loadPending();
         reload += 1;
       }}
     />
+  {/if}
+  <!-- Not aria-modal: the drawer under it stays where it is, and claiming a trap that is not
+       there is worse than not claiming it. Escape is stopped here so it does not also reach
+       the drawer's own handler and close two things with one press. -->
+  {#if confirmRevert}
+    <div class="scrim">
+      <div
+        class="dialog"
+        role="dialog"
+        aria-labelledby="revert-h"
+        aria-describedby="revert-p"
+        tabindex="-1"
+        bind:this={revertPanel}
+        onkeydown={(e) => {
+          if (e.key !== 'Escape') return;
+          e.stopPropagation();
+          closeRevert();
+        }}
+      >
+        <h2 id="revert-h">Revert this publish?</h2>
+        <p id="revert-p">
+          The site goes back to how it was before that commit. The changes it carried stay as
+          unpublished changes, so you can fix them and publish again.
+        </p>
+        <div class="actions">
+          <button class="btn" type="button" onclick={closeRevert}>Cancel</button>
+          <button class="btn btn-danger" type="button" disabled={reverting} onclick={revert}>
+            {reverting ? 'Reverting…' : 'Revert'}
+          </button>
+        </div>
+      </div>
+    </div>
   {/if}
 </div>
 {/if}

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, like, lt, or } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, like, lt, or } from 'drizzle-orm';
 import type { Role } from './auth.js';
 import type { Db } from './db.js';
 import { newId } from './reserved.js';
@@ -182,4 +182,23 @@ export function activityGroupOf(kind: string): ActivityGroup | null {
     if ((kinds as readonly string[]).includes(kind)) return group as ActivityGroup;
   }
   return null;
+}
+
+/**
+ * The newest commit the admin made, and when. **This is where the build status reads from**:
+ * a publish redeploys the Worker serving `/admin`, so the drawer that made the commit may not
+ * survive the reload and cannot be what remembers it. The log already carries the sha, so no
+ * column and no state anywhere else is needed for the pill to be right after a reload.
+ */
+export async function lastCommit(
+  siteId: string,
+  db: Db,
+): Promise<{ sha: string; at: number; kind: string } | undefined> {
+  const [row] = await db
+    .select({ sha: activity.commitSha, at: activity.at, kind: activity.kind })
+    .from(activity)
+    .where(and(eq(activity.siteId, siteId), isNotNull(activity.commitSha)))
+    .orderBy(desc(activity.at), desc(activity.id))
+    .limit(1);
+  return row?.sha ? { sha: row.sha, at: row.at, kind: row.kind } : undefined;
 }

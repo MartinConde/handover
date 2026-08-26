@@ -4,6 +4,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **The top bar says whether the site has caught up with the commit.** A publish is a commit and
+  a commit is not a live site — there is a one-to-three minute host build behind it — so the
+  shell now polls **Workers Builds** and shows *Building… 1m 20s* · *Live since 14:02* · *Build failed*,
+  with a banner while a build is running saying the admin may reload briefly under you. It needs
+  a read-only `CLOUDFLARE_API_TOKEN` and a `CLOUDFLARE_WORKER` var; without them no pill is
+  drawn and everything else is unchanged ([Deploy](docs/deploy.md#secrets)).
+
+- **One-tap revert.** *Revert last publish* sits in the failed pill and *Revert this publish*
+  in the drawer's result panel. It is **not `git revert`** — the trees API has no three-way
+  merge, so the inverse is composed: every file the commit touched goes back to its blob at the
+  parent (a rename counting as both of its names), `redirects.yaml` is recomputed rather than
+  restored, and a file that has moved on since is refused rather than overwritten. The changes
+  the commit carried come back as unpublished changes
+  ([Drafts and publishing](docs/publishing.md#when-a-commit-goes-live)).
+
+- **Draft rows are cleared when the build carrying them is live.** Green is not enough: a row is
+  also what an open tab publishes against, so an entry somebody is still editing keeps its row
+  until their lock runs out.
+
+- **`GET /admin/api/build`** answers `{ "commit_sha", "state", "started_at", "live_at", "committed_at" }`,
+  and **`POST /admin/api/revert`** takes `{ "commit_sha" }` and answers the inverse commit, `409`
+  naming a file that has moved on since
+  ([Drafts and publishing](docs/publishing.md#the-endpoints)).
+
 - **The pending-changes drawer picks what goes out.** It lists **entries** rather than files
   now — one row per entry, with its title, the languages of it that are waiting and what its
   address changes owe — and each row has a checkbox. Everything is checked except entries on

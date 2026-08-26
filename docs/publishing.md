@@ -121,7 +121,63 @@ lists them with a checkbox each and commits the checked ones:
   git. Discard is not the way out of this one: open the entry and answer the panel it shows,
   which is where the files are made to agree
 - A commit is not a live site: the site rebuilds afterwards, which takes a minute or two,
-  and the admin itself is redeployed with it
+  and the admin itself is redeployed with it — see below
+
+## When a commit goes live
+
+**A commit is not a live site.** Publishing pushes to `main`, and the host builds and deploys
+from that push; the pages your client just changed are live one to three minutes later. Without
+something saying so, a client presses Publish four times.
+
+So the top bar carries the state of the last commit the admin made:
+
+| | |
+|---|---|
+| `Building… 1m 20s` | the commit is pushed and the host is building it |
+| `Live since 14:02` | the build carrying it is deployed, and when it landed |
+| `Build failed` | it is not going live, and *Revert last publish* sits in the pill |
+
+It reads [Workers Builds](deploy.md#building-on-push) and needs `CLOUDFLARE_API_TOKEN` and
+`CLOUDFLARE_WORKER` ([Secrets](deploy.md#secrets)). Without them nothing is drawn and everything
+else works as before.
+
+Two things worth knowing:
+
+- **The state is the server's, not the tab's.** Publishing rebuilds and redeploys the Worker
+  that serves `/admin`, so the tab that pressed Publish may reload mid-deploy. The commit is read
+  back out of the [activity log](activity.md), which is why the pill is right after a reload and
+  why a colleague's window shows the same thing yours does. While a build is running the shell
+  says so in a banner: *the admin may reload briefly while the site deploys.*
+- **Every publish spends build minutes**, which are a monthly budget on the Workers free plan.
+  A client publishing thirty times a day at two or three minutes each is at the ceiling — the
+  unpublished-changes indicator and the drawer exist partly to encourage batching.
+
+Once the build carrying a publish is live, its draft rows are cleared — but only for entries
+nobody is editing. A row is also what an open tab publishes against, so an entry somebody has
+had open across the whole cycle keeps its row until their lock runs out
+([Working together](working-together.md#your-own-publish-is-not-a-conflict)).
+
+### Reverting a publish
+
+**Revert this publish** is in the drawer beside the result of a publish, and **Revert last
+publish** in the build pill when a build has failed. Either makes one new commit that undoes the
+one it names, and the changes that commit carried come back as unpublished changes, so they can
+be fixed and published again.
+
+It is **not `git revert`**. The GitHub trees API has no three-way merge to run, so the inverse is
+composed:
+
+- Every file the commit touched goes back to the bytes it had at the commit before it. A file the
+  commit **created** is removed; a **rename** counts as both of its names, so the old one comes
+  back as the new one goes
+- A file somebody has **changed since** is refused rather than overwritten — putting it back
+  would undo their work too. The whole revert is refused and it names the file, the same way a
+  publish conflict does
+- `redirects.yaml` is **recomputed, not restored**: it is the file as it stands now minus the
+  rules that commit added, so rules written since are kept. A `to` the commit rewrote on an older
+  rule stays rewritten — that URL is the live one
+
+Reverting makes a commit, so it starts a build of its own.
 
 ## Holding an entry back
 
@@ -354,6 +410,30 @@ resolved, the drift is simply no longer reported. `409` when a `path` is not one
 currently disagree about, which is the report having moved on since the screen was drawn.
 
 ```
+GET /admin/api/build  →  { "commit_sha", "state", "started_at", "live_at", "committed_at" }
+```
+
+Where the last commit the admin made has got to. `state` is `"building"`, `"live"` or
+`"failed"`; `started_at` is when the host started building it, `live_at` when the build that
+carried it finished and `committed_at` when the admin committed it, all epoch milliseconds. `{}` — an empty object, not an error — when the site has
+committed nothing yet, when `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_WORKER` are not both set, or
+when the Cloudflare API cannot be reached; the admin draws no build status at all rather than an
+unknown one. **A commit no build names yet is `"building"`**, since there is a window between the
+push and the build appearing and saying `"live"` in it would be a minute ahead of the site.
+
+Answering `"live"` is also what clears the draft rows that commit published, for the entries
+nobody is editing.
+
+```
+POST /admin/api/revert   { "commit_sha": "…" }  →  { "commit_sha", "paths" }
+```
+
+Undoes that commit with a commit of its own, [as above](#reverting-a-publish). It works over any
+commit the admin made, not only the last one. The answer's `commit_sha` is the new commit and
+`paths` what it wrote. `400` without a `commit_sha`; `409` with `{ "error", "paths" }` when one of
+the files has changed since — nothing is written and the paths are named.
+
+```
 GET /admin/api/drafts  →  { "entries": [{ "key", "title", "collection", "locales", "files", "redirects", "updated_at", "held_by" }] }
 ```
 
@@ -423,8 +503,11 @@ Two consequences worth knowing:
 
 ## Not yet
 
-No build status: a commit is answered for, but what the site does with it afterwards is not
-shown anywhere yet, so "live in 1–3 minutes" is a promise rather than a reading. The drawer
+The build pill has no **quota** state: the free plan's monthly build minutes run out, and until
+a site actually hits the ceiling there is nothing to read the Builds API's answer for it against,
+so a build that fails for want of minutes reads as an ordinary failure. The publish rows in the
+[activity log](activity.md) do not expand into what the commit changed — that waits for the
+per-field diff. The drawer
 runs no pre-publish checks and shows no per-field diff of what is about to go out. An entry
 somebody changed in the repository can only be taken whole
 ([Working together](working-together.md#not-yet)), and **Publish this entry** does not name

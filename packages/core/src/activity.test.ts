@@ -2,7 +2,7 @@ import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/
 import { drizzle } from 'drizzle-orm/d1';
 import { Miniflare } from 'miniflare';
 import { afterAll, beforeAll, beforeEach, expect, test } from 'vitest';
-import { activityGroupOf, activityPage, logActivity } from './activity.js';
+import { activityGroupOf, activityPage, lastCommit, logActivity } from './activity.js';
 import type { Db } from './db.js';
 import * as tables from './tables.js';
 
@@ -243,4 +243,20 @@ test('every cron job is System, whatever the job is called', () => {
 // row, so the lookup answers rather than refuses.
 test('a kind no group claims is named by none of them', () => {
   expect(activityGroupOf('something-phase-9-invents')).toBe(null);
+});
+
+// What the build pill reads after the publish that redeployed the Worker under it.
+test('the last commit is the newest one the log carries', async () => {
+  await logActivity('default', db, { kind: 'publish', commitSha: 'aaa111' });
+  await logActivity('default', db, { kind: 'login' });
+  await logActivity('default', db, { kind: 'revert', commitSha: 'bbb222' });
+  await logActivity('default', db, { kind: 'draft-discard' });
+
+  expect(await lastCommit('default', db)).toMatchObject({ sha: 'bbb222', kind: 'revert' });
+});
+
+test('a log with no commit in it has no last commit', async () => {
+  await logActivity('default', db, { kind: 'login' });
+
+  expect(await lastCommit('default', db)).toBe(undefined);
 });

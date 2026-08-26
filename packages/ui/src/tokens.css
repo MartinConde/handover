@@ -617,3 +617,4 @@ a.btn { text-decoration: none; }
 .is-narrow .activity-row > .avatar { grid-row: 1 / span 2; }
 .is-narrow .activity-row .meta { grid-column: 2; }
 .is-narrow .activity-row .when { min-width: 0; }
+.result-actions { display: flex; align-items: center; gap: var(--s-3); font-size: var(--text-sm); }

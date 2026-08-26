@@ -3,6 +3,7 @@ import { Miniflare } from 'miniflare';
 import { afterAll, beforeAll, expect, test, vi } from 'vitest';
 import { parseEntry, staleLocales } from './content.js';
 import {
+  clearPublished,
   createDraft,
   DraftConflictError,
   discardDraft,
@@ -12,10 +13,12 @@ import {
   overlayRows,
   pendingDrafts,
   publishDrafts,
+  RevertConflictError,
   recordDelete,
   recordOffer,
   recordRename,
   resolveDrift,
+  revertCommit,
   saveDraft,
   saveTranslated,
   setEntryAddress,
@@ -24,6 +27,7 @@ import {
 import { type ContentIndex, collectionEntries, indexFrom } from './entries.js';
 import { blobSha } from './git.js';
 import type { RedirectRule } from './lifecycle.js';
+import { claimLock } from './locks.js';
 import type { Form } from './schema.js';
 import * as tables from './tables.js';
 import { drafts } from './tables.js';
@@ -1066,4 +1070,174 @@ test('a draft records the base blob of the commit it recorded the base sha of', 
   expect(row?.baseBlob).toBe(await blobSha(FILE));
   // And nothing is pending against a file nobody has: the publish that follows goes through.
   expect((await publishDrafts('default', db, repo))?.paths).toEqual([PATH]);
+});
+
+// A repository with a history: an inverse reads the same path at three commits, so the fake
+// above — which answers with whatever the file is now — cannot stand in for one.
+function fakeHistory(initial: Record<string, string>) {
+  const trees: Record<string, Record<string, string>> = { 'commit-0': { ...initial } };
+  const commits: Record<string, { parent?: string; message: string; paths: string[] }> = {};
+  let head = 'commit-0';
+  let n = 0;
+  const commit = (
+    list: { path: string; contents: string | null }[],
+    base: string,
+    message: string,
+  ) => {
+    const tree = { ...trees[base] };
+    for (const f of list) {
+      if (f.contents === null) delete tree[f.path];
+      else tree[f.path] = f.contents;
+    }
+    head = `commit-${++n}`;
+    trees[head] = tree;
+    commits[head] = { parent: base, message, paths: list.map((f) => f.path) };
+    return head;
+  };
+  return {
+    async getHead() {
+      return head;
+    },
+    async getFile(path: string, ref?: string) {
+      const contents = trees[ref ?? head]?.[path];
+      return contents === undefined ? undefined : { contents, blob_sha: await blobSha(contents) };
+    },
+    async getCommit(sha: string) {
+      const found = commits[sha];
+      if (!found) throw new Error(`no commit ${sha}`);
+      return { sha, ...found };
+    },
+    publish: vi.fn(async (list, opts: { base_sha: string; message: string }) => ({
+      commit_sha: commit(list, opts.base_sha, opts.message),
+    })),
+    /** A commit nobody here made: what moves a file on after a publish. */
+    push(list: { path: string; contents: string | null }[]) {
+      return commit(list, head, 'Someone else');
+    },
+    at(sha: string) {
+      return trees[sha] ?? {};
+    },
+    now() {
+      return trees[head] ?? {};
+    },
+  };
+}
+
+test('reverting a publish puts the files back and leaves the changes unpublished', async () => {
+  const db = await fresh();
+  const repo = fakeHistory({ [PATH]: FILE, [OTHER]: OTHER_FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  const published = await publishDrafts('default', db, repo);
+
+  const result = await revertCommit('default', db, repo, published?.commit_sha ?? '');
+
+  expect(repo.now()[PATH]).toBe(FILE);
+  expect(result.paths).toEqual([PATH]);
+  // The confirmation promises the changes stay: the row is in the drawer again, on the revert.
+  const pending = await pendingDrafts('default', db);
+  expect(pending.map((r) => r.path)).toEqual([PATH]);
+  expect(pending[0]?.baseSha).toBe(result.commit_sha);
+  expect(pending[0]?.contents).toBe(FILE.replace('rooms: 3', 'rooms: 4'));
+});
+
+test('reverting a publish that created a file removes it', async () => {
+  const db = await fresh();
+  const repo = fakeHistory({});
+  await createDraft('default', db, repo, PATH, VALUES);
+  const published = await publishDrafts('default', db, repo);
+
+  await revertCommit('default', db, repo, published?.commit_sha ?? '');
+
+  expect(repo.now()[PATH]).toBe(undefined);
+  // Still pending, so publishing again writes the file back.
+  expect((await pendingDrafts('default', db)).map((r) => r.path)).toEqual([PATH]);
+});
+
+test('reverting a rename brings the old name back and takes the new one away', async () => {
+  const db = await fresh();
+  const repo = fakeHistory({ [PATH]: FILE });
+  const renamed = await repo.publish(
+    [
+      { path: PATH, contents: null },
+      { path: RENAMED, contents: FILE },
+    ],
+    { base_sha: 'commit-0', message: 'Rename the Mill House' },
+  );
+
+  await revertCommit('default', db, repo, renamed.commit_sha);
+
+  expect(repo.now()[PATH]).toBe(FILE);
+  expect(repo.now()[RENAMED]).toBe(undefined);
+});
+
+test('reverting is refused when a file has changed since that commit', async () => {
+  const db = await fresh();
+  const repo = fakeHistory({ [PATH]: FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  const published = await publishDrafts('default', db, repo);
+  repo.push([{ path: PATH, contents: `${FILE}note: "hand edited"\n` }]);
+  const before = repo.now()[PATH];
+
+  await expect(revertCommit('default', db, repo, published?.commit_sha ?? '')).rejects.toThrow(
+    new RevertConflictError([PATH]),
+  );
+  expect(repo.now()[PATH]).toBe(before);
+});
+
+// The trees API has no three-way merge, so the inverse of an append is composed: rules added
+// since the commit stay, and only the ones it introduced come out.
+test('reverting recomputes redirects.yaml rather than restoring it', async () => {
+  const db = await fresh();
+  const REDIRECTS = 'src/content/redirects.yaml';
+  const rules = (...ids: string[]) =>
+    `_version: 1\nrules:\n${ids
+      .map((id) => `  - _id: "${id}"\n    from: "/${id}"\n    to: "/new-${id}"\n`)
+      .join('')}`;
+  const [one, two, three] = ['aaaa1111', 'bbbb2222', 'cccc3333'];
+  const repo = fakeHistory({ [REDIRECTS]: rules(one) });
+  const published = await repo.publish([{ path: REDIRECTS, contents: rules(one, two) }], {
+    base_sha: 'commit-0',
+    message: 'Update prices',
+  });
+  repo.push([{ path: REDIRECTS, contents: rules(one, two, three) }]);
+
+  await revertCommit('default', db, repo, published.commit_sha);
+
+  const left = repo.now()[REDIRECTS] ?? '';
+  expect(left).toContain(one);
+  expect(left).toContain(three);
+  expect(left).not.toContain(two);
+});
+
+test('a published row is cleared once the build carrying it is live', async () => {
+  const db = await fresh();
+  const repo = fakeHistory({ [PATH]: FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  const published = await publishDrafts('default', db, repo);
+
+  expect(await clearPublished('default', db, published?.commit_sha ?? '')).toEqual([PATH]);
+  expect(await only(db)).toBe(undefined);
+});
+
+// Green is not enough: the row is also what an open tab publishes against, so it waits for
+// whoever is typing in the entry to let go.
+test('a published row whose entry somebody is editing is kept', async () => {
+  const db = await fresh();
+  const repo = fakeHistory({ [PATH]: FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  const published = await publishDrafts('default', db, repo);
+  await claimLock('default', db, 'listings/mill-house', 'anna');
+
+  expect(await clearPublished('default', db, published?.commit_sha ?? '')).toEqual([]);
+  expect((await only(db))?.path).toBe(PATH);
+});
+
+// The entry list drops those itself, against the index it can see; dropping one here would
+// take it away before the new bundle is serving and the deleted entry would reappear.
+test('a row that says a path has gone is not cleared by the build going live', async () => {
+  const db = await fresh();
+  await recordDelete('default', db, PATH, 'commit-9');
+
+  expect(await clearPublished('default', db, 'commit-9')).toEqual([]);
+  expect((await only(db))?.path).toBe(PATH);
 });

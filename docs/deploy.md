@@ -100,6 +100,7 @@ Optional, each turning on the feature that reads it:
 | Secret | Value |
 |---|---|
 | `GITHUB_BRANCH` | the live branch, if it is not `main` |
+| `CLOUDFLARE_API_TOKEN` | build status and revert in the admin. A **read-only** token: dashboard → My Profile → API Tokens → Create Token → Custom token, permission **Account → Workers Scripts → Read**, scoped to the one account. It needs `CLOUDFLARE_WORKER` beside it (below); without both, no build pill is drawn |
 | `DEEPL_API_KEY` | [machine translation](translating.md#a-machines-first-draft) from the admin — a free key ends in `:fx` and is recognised as one. Without it the translate buttons are not drawn |
 | `RESEND_API_KEY` | sending mail, when `cms.config.ts` says `mailer: { provider: 'resend', … }` ([Sending email](email.md)). Verify the sending domain at `resend.com/domains` and put an address on it in `from` — until you do, Resend only delivers to the address its own account was created with |
 | `SMTP_USER` | the login for `mailer: { provider: 'smtp', … }` — Resend's own relay, for one, wants the literal `resend` |
@@ -121,6 +122,18 @@ emailed sign-in link and GitHub are not offered at all:
 
 It is what an emailed link points at, and it is stated rather than read off the request so a
 forged `Host` cannot decide where a sign-in link goes ([Accounts](auth.md#2-say-where-the-site-is)).
+
+A second var goes with `CLOUDFLARE_API_TOKEN`, for the same reason — an account id is not private:
+
+```jsonc
+// wrangler.jsonc
+"vars": { "CLOUDFLARE_WORKER": "<account-id>/<worker-name>" }
+```
+
+The account id is in the dashboard's sidebar; the worker name is this file's own `name`. ⚠️ The
+Workers Builds API is keyed on the worker's **tag**, not its name, and answers `200` with an
+empty list for a name — which reads as "this commit never built" forever. The name is what you
+put here and the admin looks the tag up, so you never have to find one.
 
 `/admin/api` requests fail with an explicit error naming the missing secret. For local
 `astro dev`, the same names go in `.dev.vars`.

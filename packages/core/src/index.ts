@@ -4,7 +4,13 @@ export type {
   ActivityGroup,
   ActivityQuery,
 } from './activity.js';
-export { ACTIVITY_GROUPS, activityGroupOf, activityPage, logActivity } from './activity.js';
+export {
+  ACTIVITY_GROUPS,
+  activityGroupOf,
+  activityPage,
+  lastCommit,
+  logActivity,
+} from './activity.js';
 export type { AccountFacts, Auth, AuthConfig, Member, MemberApi, Role } from './auth.js';
 export {
   AUTH_BASE_PATH,
@@ -17,6 +23,8 @@ export {
   roleOf,
   userExists,
 } from './auth.js';
+export type { BuildState, BuildStatus, WorkerBuilds } from './builds.js';
+export { commitBuild } from './builds.js';
 export type {
   AstroContent,
   ContentEntry,
@@ -43,6 +51,7 @@ export {
 } from './content.js';
 export type { Db, Draft } from './db.js';
 export {
+  clearPublished,
   createDraft,
   DraftConflictError,
   discardDraft,
@@ -53,11 +62,13 @@ export {
   overlayRows,
   pendingDrafts,
   publishDrafts,
+  RevertConflictError,
   readyDrafts,
   recordDelete,
   recordOffer,
   recordRename,
   resolveDrift,
+  revertCommit,
   saveDraft,
   saveTranslated,
   setEntryAddress,
@@ -71,7 +82,7 @@ export {
   entryOffer,
   indexFrom,
 } from './entries.js';
-export type { GitClient, GitFile, GitHubApp, PublishFile } from './git.js';
+export type { GitClient, GitCommit, GitFile, GitHubApp, PublishFile } from './git.js';
 export { blobSha, createGitClient, RefMovedError, RepoUnreachableError } from './git.js';
 export type { EntryLocation, RedirectRule } from './lifecycle.js';
 export {
@@ -79,9 +90,11 @@ export {
   deleteEntry,
   deleteLocales,
   duplicateEntry,
+  REDIRECTS,
   redirectRule,
   redirectsText,
   renameEntry,
+  revertRedirects,
 } from './lifecycle.js';
 export type { Lock } from './locks.js';
 export { claimLock, heldEntries, LOCK_TTL, lockHolder, releaseLocks, takeLock } from './locks.js';

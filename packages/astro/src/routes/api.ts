@@ -9,7 +9,9 @@ import {
   addressError,
   blobSha,
   claimLock,
+  clearPublished,
   collectionEntries,
+  commitBuild,
   createDraft,
   createGitClient,
   DraftConflictError,
@@ -29,6 +31,7 @@ import {
   heldDrafts,
   heldEntries,
   holdEntry,
+  lastCommit,
   loadDraft,
   lockHolder,
   logActivity,
@@ -41,6 +44,7 @@ import {
   publishDrafts,
   RefMovedError,
   RepoUnreachableError,
+  RevertConflictError,
   readyDrafts,
   recordDelete,
   recordOffer,
@@ -48,6 +52,7 @@ import {
   releaseLocks,
   renameEntry,
   resolveDrift,
+  revertCommit,
   saveDraft,
   saveTranslated,
   setEntryAddress,
@@ -78,6 +83,17 @@ function gitClient(): GitClient {
     repo,
     branch: e.GITHUB_BRANCH,
   });
+}
+
+/**
+ * What the Workers Builds API is asked with, or nothing where the site has not been told: build
+ * status is optional the way DeepL is, and a site without it simply draws no pill.
+ */
+function workerBuilds(): { worker: string; token: string } | undefined {
+  const e = env as Record<string, string | undefined>;
+  return e.CLOUDFLARE_API_TOKEN && e.CLOUDFLARE_WORKER
+    ? { worker: e.CLOUDFLARE_WORKER, token: e.CLOUDFLARE_API_TOKEN }
+    : undefined;
 }
 
 function db(): Db {
@@ -1285,6 +1301,57 @@ async function discard(collection: string, slug: string): Promise<Response> {
   return Response.json({});
 }
 
+/**
+ * Where the last commit the admin made has got to. **The state is the server's**, read from the
+ * activity log rather than kept in the drawer: a publish redeploys the Worker serving `/admin`,
+ * so the tab that pressed Publish may be reloaded before the build finishes and whatever it was
+ * holding would go with it. Every screen asks this and gets the same answer.
+ *
+ * `{}` where nothing has been committed or the site has no token — the pill is not drawn at all
+ * rather than drawn as an unknown, since a site without build status is an ordinary site.
+ */
+async function buildStatus(): Promise<Response> {
+  const database = db();
+  const last = await lastCommit('default', database);
+  const builds = workerBuilds();
+  if (!last || !builds) return Response.json({});
+  let status: Awaited<ReturnType<typeof commitBuild>>;
+  try {
+    status = await commitBuild(builds, last.sha);
+  } catch (err) {
+    // A token that cannot ask is the site's configuration, not a state the site is in. It is
+    // said once in the log the deploy reads and answered as no pill at all.
+    console.error('build status: the Workers Builds API could not be asked', err);
+    return Response.json({});
+  }
+  // Rule 3 of "your own publish must not look like a conflict" runs here, because this is the
+  // one moment the Worker learns the build went green: the rows go once nobody is in the entry.
+  if (status.state === 'live') await clearPublished('default', database, last.sha);
+  return Response.json({ ...status, committed_at: last.at });
+}
+
+/**
+ * One commit undone. `commit_sha` is the body's, so this works over any commit the admin made
+ * and not only the last one; `409` with `{ error, paths }` when one of its files has moved on
+ * since, which is the one thing an inverse composed against HEAD cannot decide on its own.
+ */
+async function revert(request: Request, session: App.Locals['handover']): Promise<Response> {
+  const body = (await request.json().catch(() => undefined)) as
+    | { commit_sha?: unknown }
+    | undefined;
+  const sha = typeof body?.commit_sha === 'string' ? body.commit_sha : '';
+  if (!sha) return new Response('A commit_sha is needed to revert', { status: 400 });
+  const database = db();
+  const result = await revertCommit('default', database, gitClient(), sha);
+  await logActivity('default', database, {
+    userId: session?.user.id,
+    kind: 'revert',
+    detail: { of: sha, files: result.paths.length },
+    commitSha: result.commit_sha,
+  });
+  return Response.json(result);
+}
+
 const MEMBER = /^members\/([\w-]+)$/;
 const MEMBER_ROLE = /^members\/([\w-]+)\/role$/;
 const MEMBER_INVITE = /^members\/([\w-]+)\/invite$/;
@@ -1319,6 +1386,7 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
     });
   }
   if (params.path === 'drafts') return pendingList();
+  if (params.path === 'build') return buildStatus();
   const held = params.path?.match(LOCK);
   if (held) return lockState(held[1] ?? '', held[2] ?? '', locals.handover, 'read');
   const entry = params.path?.match(ENTRY);
@@ -1511,6 +1579,10 @@ async function answering(work: () => Promise<Response>): Promise<Response> {
     // offers each one the way out. A ref that moved has no file to name.
     if (err instanceof DraftConflictError)
       return Response.json({ error: err.message, paths: err.paths }, { status: 409 });
+    // A revert refused over a file that moved names it the same way a publish's conflict does,
+    // and the drawer says so on the panel the button sits on.
+    if (err instanceof RevertConflictError)
+      return Response.json({ error: err.message, paths: err.paths }, { status: 409 });
     if (err instanceof RefMovedError) return new Response(err.message, { status: 409 });
     throw err;
   }
@@ -1527,6 +1599,7 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   const resent = params.path?.match(MEMBER_INVITE);
   if (resent) return resendInvite(resent[1] ?? '', request, url, locals.cfContext, locals.handover);
   if (params.path === 'publish') return answering(() => publish(request, locals.handover));
+  if (params.path === 'revert') return answering(() => revert(request, locals.handover));
   const beat = params.path?.match(LOCK);
   if (beat) {
     const body = (await request.json().catch(() => undefined)) as { take?: unknown } | undefined;
