@@ -107,6 +107,20 @@ One key per site-wide file under `src/content/globals/<locale>/`, mapping the fi
 to its schema: `globals: { site, navigation }`. Keys are lowercase letters, digits and
 dashes. See [Site files](site-files.md).
 
+## `media`
+
+Optional until an entry has a picture in it. `publicBase` is where the site's R2 bucket is
+served from — the custom domain on it, no trailing path — and it is config rather than a
+secret because the build resolves stored keys with it:
+
+```ts
+media: { publicBase: 'https://media.your-site.example' },
+```
+
+A content file stores `media/9f3a….webp` and never a URL, so changing this line moves every
+picture on the site at once. The four env values that let the admin sign an upload are in
+[Media](media.md#4-tell-the-site).
+
 ## `mailer`
 
 Optional, and what the admin sends mail with — the settings screen's test email, and the emailed

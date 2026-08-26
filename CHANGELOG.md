@@ -4,6 +4,32 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Pictures upload to R2.** The browser normalises what was chosen — downscaled to 2400px,
+  re-encoded as WebP, EXIF stripped — hashes it, and asks the admin whether the site already
+  has those bytes; if it does, nothing is uploaded at all. Otherwise it PUTs them straight to
+  the bucket on a URL signed for five minutes, and the Worker reads the object back afterwards:
+  an object that is not the size or the type that was declared is **deleted** and no row is
+  written. Objects are named by the SHA-256 of their own bytes, so the same picture is one
+  object and one row however many times it is chosen. The setup — bucket, CORS rule, hostname,
+  four env values — is [Media](docs/media.md), and the widgets that will call this are next.
+
+- **`POST /admin/api/media`** answers either the asset the site already holds or a presigned
+  PUT for a key it chose, and **`PUT /admin/api/media/:hash`** is the verify-or-delete that
+  turns the object into a row ([The admin API](docs/admin-api.md#media)).
+
+- **`media.publicBase` in `cms.config.ts`** — where the bucket is served from, so content files
+  keep storing `media/…` keys and never URLs ([Configuration](docs/configuration.md#media)).
+  Beside it, `R2_ACCOUNT_ID` and `R2_BUCKET` are vars and `R2_ACCESS_KEY_ID` and
+  `R2_SECRET_ACCESS_KEY` are secrets; without all four the admin refuses uploads and names
+  what is missing ([Deploy](docs/deploy.md#secrets)).
+
+- **`upload` in the activity log**, named by the file it was chosen as. Choosing a picture the
+  site already holds is a reuse rather than an upload, and writes no row.
+
+- **`field-types.md` is two pages.** The scalars, rich text, links and labels stay; `image`,
+  `file`, `embed`, `seo`, `reference` and the three nesting types are now
+  [Structured fields](docs/structured-fields.md).
+
 - **The endpoints have a page of their own.** `docs/admin-api.md` collects every route the
   admin drives — entries, drafts, publishing, locks — where they had been split between
   `publishing.md` and `working-together.md`, and `publishing.md` had become half API listing.

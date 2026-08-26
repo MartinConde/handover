@@ -107,6 +107,8 @@ Optional, each turning on the feature that reads it:
 | `SMTP_PASS` | the password for that login. Without both, the admin treats the site as having no mailer ([Sending email](email.md#smtp)) |
 | `GITHUB_CLIENT_ID` | *Continue with GitHub* on the login. An OAuth app whose callback URL is `<HANDOVER_BASE_URL>/admin/api/auth/callback/github`; one app per origin, so local dev needs its own ([Accounts](auth.md#continue-with-github)) |
 | `GITHUB_CLIENT_SECRET` | the same app's client secret. Without both, GitHub is not offered |
+| `R2_ACCESS_KEY_ID` | uploading pictures. An **R2 API token** with *Object Read & Write* on the one bucket: dashboard → R2 → API → Manage API tokens ([Media](media.md)) |
+| `R2_SECRET_ACCESS_KEY` | the same token's secret. Without both, the admin refuses uploads and names what is missing |
 
 `mailer: { provider: 'cloudflare', … }` has no secret at all: it sends through a `send_email`
 binding in `wrangler.jsonc`, so it is set up in the dashboard rather than here
@@ -129,6 +131,17 @@ A second var goes with `CLOUDFLARE_API_TOKEN`, for the same reason — an accoun
 // wrangler.jsonc
 "vars": { "CLOUDFLARE_WORKER": "<account-id>/<worker-name>" }
 ```
+
+Two more go with the R2 secrets, for the same reason — an account id and a bucket name are not
+private:
+
+```jsonc
+// wrangler.jsonc
+"vars": { "R2_ACCOUNT_ID": "<account-id>", "R2_BUCKET": "your-site-media" }
+```
+
+The bucket also needs a CORS rule and a hostname of its own before anything can be uploaded to
+it; [Media](media.md) is the whole setup in four steps.
 
 The account id is in the dashboard's sidebar; the worker name is this file's own `name`. ⚠️ The
 Workers Builds API is keyed on the worker's **tag**, not its name, and answers `200` with an

@@ -207,10 +207,13 @@ function said(event: ActivityEvent): Said {
         ? { lead: `${actor} took over ${whose}`, link: one }
         : { lead: `${actor} took over an entry.` };
     }
+    case 'upload':
+      // No library to open until Phase 4, so the name it was chosen as is the whole row.
+      return { lead: `${actor} uploaded ${str(d, 'name') ?? 'a file'}.` };
     case 'mail-failed':
       return { lead: `${MESSAGE[str(d, 'message') ?? ''] ?? 'A message'} could not be sent.` };
   }
-  // 3.14 onwards add kinds without opening this file. A row whose sentence nobody has written is
+  // Later kinds arrive without opening this file. A row whose sentence nobody has written is
   // still a record of something, so it names the kind rather than throwing or vanishing.
   const one = entryOf(event.subject);
   return { lead: one ? `${actor} — ${event.kind} ` : `${actor} — ${event.kind}`, link: one };

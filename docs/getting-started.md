@@ -107,7 +107,8 @@ and **Delete** are on the row.
 
 In the editor each field gets the widget for its type ([Field types](field-types.md#in-the-admin));
 the five that need a picker — `image`, `file`, `embed`, `seo` and `reference` — show their
-stored value read-only until it arrives, saying so under the value. Change a value: two
+stored value read-only until it arrives, saying so under the value
+([Structured fields](structured-fields.md)). Change a value: two
 seconds later the edit is saved into D1, and it is still there if you reload — see
 [Drafts and publishing](publishing.md). Click **Publish…**: the pending-changes
 drawer lists every edit waiting to go out, and **Publish 1 file** writes them back as one

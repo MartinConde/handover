@@ -549,3 +549,22 @@ test('a hold released with nobody named still reads', async () => {
 
   expect(sentences(root)).toEqual(['Anna Berg released the hold on about-us EN']);
 });
+
+// 3.14's kind. There is no media library to open until Phase 4, so the row says what happened
+// and stops there.
+test('an upload reads as a sentence, named by the file it was chosen as', async () => {
+  server({
+    events: [
+      ev('upload', { subject: 'a'.repeat(64), detail: { name: 'seaview.jpg', bytes: 128_000 } }),
+      ev('upload', { subject: 'b'.repeat(64) }),
+    ],
+    cursor: null,
+  });
+  const root = await show();
+
+  expect(sentences(root)).toEqual([
+    'Anna Berg uploaded seaview.jpg.',
+    'Anna Berg uploaded a file.',
+  ]);
+  expect(root.querySelector('.said a')).toBe(null);
+});

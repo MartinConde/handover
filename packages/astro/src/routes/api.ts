@@ -1,7 +1,17 @@
 import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
 import index from 'virtual:handover/index';
-import type { Db, EntryLocation, Form, GitClient, Role, Translate } from '@handover/core';
+import type {
+  Db,
+  EntryLocation,
+  Form,
+  GitClient,
+  MediaRow,
+  R2Store,
+  Role,
+  Translate,
+  Upload,
+} from '@handover/core';
 import {
   AUTH_BASE_PATH,
   accountFacts,
@@ -12,6 +22,7 @@ import {
   clearPublished,
   collectionEntries,
   commitBuild,
+  confirmUpload,
   createDraft,
   createGitClient,
   DraftConflictError,
@@ -27,6 +38,7 @@ import {
   entryOffer,
   entryUrl,
   FORMAT_VERSION,
+  findMedia,
   formOf,
   heldDrafts,
   heldEntries,
@@ -35,12 +47,14 @@ import {
   loadDraft,
   lockHolder,
   logActivity,
+  mediaKey,
   memberApi,
   memberList,
   openDb,
   overlayRows,
   parseEntry,
   pendingDrafts,
+  presignUpload,
   publishDrafts,
   RefMovedError,
   RepoUnreachableError,
@@ -61,6 +75,7 @@ import {
   syncLocale,
   takeLock,
   translatableText,
+  UploadRefusedError,
 } from '@handover/core';
 import type { APIRoute } from 'astro';
 import { createAuth, mailer } from '../auth.js';
@@ -95,6 +110,26 @@ function workerBuilds(): { worker: string; token: string } | undefined {
     ? { worker: e.CLOUDFLARE_WORKER, token: e.CLOUDFLARE_API_TOKEN }
     : undefined;
 }
+
+/**
+ * Where the site's uploads live, or nothing where it was never told. Two of the four are not
+ * secrets — an account id and a bucket name — so they sit in wrangler.jsonc beside the two that
+ * are, and a site with none of them simply has no media.
+ */
+function mediaStore(): R2Store | undefined {
+  const e = env as Record<string, string | undefined>;
+  return e.R2_ACCOUNT_ID && e.R2_BUCKET && e.R2_ACCESS_KEY_ID && e.R2_SECRET_ACCESS_KEY
+    ? {
+        accountId: e.R2_ACCOUNT_ID,
+        bucket: e.R2_BUCKET,
+        accessKeyId: e.R2_ACCESS_KEY_ID,
+        secretAccessKey: e.R2_SECRET_ACCESS_KEY,
+      }
+    : undefined;
+}
+
+const NO_BUCKET =
+  'No bucket is configured: set R2_ACCOUNT_ID and R2_BUCKET in wrangler.jsonc, and R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY with `wrangler secret put`';
 
 function db(): Db {
   return openDb('default', (env as { DB?: Parameters<typeof openDb>[1] }).DB);
@@ -1368,6 +1403,7 @@ const ADDRESS = /^entries\/([\w-]+)\/([\w-]+)\/address\/([\w-]+)$/;
 const DRIFT = /^drift\/([\w-]+)\/([\w-]+)$/;
 const LOCK = /^locks\/([\w-]+)\/([\w-]+)$/;
 const HOLD = /^hold\/([\w-]+)\/([\w-]+)$/;
+const MEDIA = /^media\/([0-9a-f]{64})$/;
 const TRANSLATE = /^translate\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 
 // Better Auth owns everything under its base path. Both verbs go straight to its handler:
@@ -1408,6 +1444,8 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
   const draft = params.path?.match(DRAFT);
   if (draft)
     return answering(() => autosave(draft[1] ?? '', draft[2] ?? '', request, locals.handover));
+  const uploaded = params.path?.match(MEDIA);
+  if (uploaded) return answering(() => finishUpload(uploaded[1] ?? '', request, locals.handover));
   return new Response('Not found', { status: 404 });
 };
 
@@ -1570,6 +1608,82 @@ async function publish(request: Request, session: App.Locals['handover']): Promi
   return Response.json(result ?? { paths: [] });
 }
 
+/** What the browser is handed for one asset: the key a content file stores, and where it is served from. */
+function mediaItem(row: MediaRow) {
+  const base = config.media?.publicBase?.replace(/\/$/, '');
+  return {
+    id: row.id,
+    src: row.r2Key,
+    mime: row.mime,
+    bytes: row.bytes,
+    width: row.width,
+    height: row.height,
+    ...(base ? { url: `${base}/${row.r2Key}` } : {}),
+  };
+}
+
+/** The declaration both halves of an upload are made against; the url's hash wins over the body's. */
+function declaredUpload(body: unknown, hash?: string): Upload | undefined {
+  const sent = body as Record<string, unknown> | undefined;
+  const id = hash ?? sent?.hash;
+  if (typeof id !== 'string' || typeof sent?.bytes !== 'number' || typeof sent.mime !== 'string')
+    return undefined;
+  const size = (value: unknown) => (typeof value === 'number' ? value : undefined);
+  return {
+    hash: id,
+    bytes: sent.bytes,
+    mime: sent.mime,
+    filename: typeof sent.filename === 'string' ? sent.filename : undefined,
+    width: size(sent.width),
+    height: size(sent.height),
+  };
+}
+
+/**
+ * "Do you have these bytes?", and where the site does not, the url to put them at. One question
+ * rather than two: the answer to the first is what decides whether the second is worth asking,
+ * and bytes the site already holds cost the client's uplink nothing at all.
+ */
+async function askUpload(request: Request): Promise<Response> {
+  const store = mediaStore();
+  if (!store) return Response.json({ error: NO_BUCKET }, { status: 503 });
+  const upload = declaredUpload(await request.json().catch(() => undefined));
+  if (!upload)
+    return Response.json({ error: 'an upload declares { hash, bytes, mime }' }, { status: 400 });
+  const known = await findMedia('default', db(), upload.hash);
+  if (known) return Response.json({ media: mediaItem(known) });
+  const key = mediaKey(upload);
+  return Response.json({ upload: { key, url: await presignUpload(store, key) } });
+}
+
+/**
+ * The upload is over: what arrived is held to what was declared, and only then is there a row.
+ * The browser is not asked to be honest about any of it — the object is read from the bucket.
+ */
+async function finishUpload(
+  hash: string,
+  request: Request,
+  session: App.Locals['handover'],
+): Promise<Response> {
+  const store = mediaStore();
+  if (!store) return Response.json({ error: NO_BUCKET }, { status: 503 });
+  const upload = declaredUpload(await request.json().catch(() => undefined), hash);
+  if (!upload)
+    return Response.json({ error: 'an upload declares { hash, bytes, mime }' }, { status: 400 });
+  const database = db();
+  const { media, created } = await confirmUpload('default', database, store, upload);
+  // Bytes the site already had are a reuse, not an upload, and a row per re-pick would fill the
+  // log with the same picture.
+  if (created)
+    await logActivity('default', database, {
+      userId: session?.user.id,
+      kind: 'upload',
+      subject: media.id,
+      detail: { name: media.filename, bytes: media.bytes },
+    });
+  return Response.json({ media: mediaItem(media) });
+}
+
 // Every route answers the same way when git refuses, whether it was reading or committing.
 async function answering(work: () => Promise<Response>): Promise<Response> {
   try {
@@ -1587,6 +1701,10 @@ async function answering(work: () => Promise<Response>): Promise<Response> {
     if (err instanceof RevertConflictError)
       return Response.json({ error: err.message, paths: err.paths }, { status: 409 });
     if (err instanceof RefMovedError) return new Response(err.message, { status: 409 });
+    // An upload the site will not take is the chooser's own file rather than somebody else's
+    // work, so it is answered to them, named by the rule it broke.
+    if (err instanceof UploadRefusedError)
+      return Response.json({ error: err.message }, { status: 422 });
     throw err;
   }
 }
@@ -1601,6 +1719,7 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   if (roled) return setMemberRole(roled[1] ?? '', request, url, locals.cfContext, locals.handover);
   const resent = params.path?.match(MEMBER_INVITE);
   if (resent) return resendInvite(resent[1] ?? '', request, url, locals.cfContext, locals.handover);
+  if (params.path === 'media') return answering(() => askUpload(request));
   if (params.path === 'publish') return answering(() => publish(request, locals.handover));
   if (params.path === 'revert') return answering(() => revert(request, locals.handover));
   const beat = params.path?.match(LOCK);

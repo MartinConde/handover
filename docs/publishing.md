@@ -72,7 +72,7 @@ file your own `content.config.ts` would reject and breaking the build behind it.
 
 One case an editor cannot get out of on their own: a **required** `image`, `file`, `embed`,
 `seo` or `reference`, whose widgets are read-only until their pickers ship
-([Field types](field-types.md#in-the-admin)). Deleting the entry is the only
+([Structured fields](structured-fields.md#in-the-admin)). Deleting the entry is the only
 exit from the admin; the fix is `.optional()` in your schema until the editor for it
 arrives.
 

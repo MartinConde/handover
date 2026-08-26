@@ -236,6 +236,12 @@ export interface HandoverConfig {
   /** One schema per file under `src/content/globals/<locale>/`, keyed by file name. */
   globals?: Record<string, z.ZodType>;
   /**
+   * Where the site's bucket is served from — the custom domain on it, no path. Content files
+   * store a `media/…` key and never a url, so this is the one place a CDN move is written down.
+   * The keys that sign uploads are secrets and are never here.
+   */
+  media?: { publicBase: string };
+  /**
    * Who sends the site's mail: one of the three providers the package ships, on the credential
    * the Worker holds, or a function of your own. Without one the admin offers no test email and
    * no emailed link — the same silence as a site with no translator. `from` is config rather

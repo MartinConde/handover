@@ -42,6 +42,8 @@ const {
   commitBuild,
   clearPublished,
   revertCommit,
+  findMedia,
+  confirmUpload,
 } = await vi.hoisted(async () => {
   const { z } = await import('astro/zod');
   const { blocks, defineBlock } = await import('../index.js');
@@ -140,6 +142,36 @@ const {
       started_at: 1755864100000,
     })),
     clearPublished: vi.fn(async () => [] as string[]),
+    // The D1 and R2 boundaries; both run for real in core's own media.test.ts.
+    findMedia: vi.fn<(...args: unknown[]) => Promise<Record<string, unknown> | undefined>>(
+      async () => undefined,
+    ),
+    confirmUpload: vi.fn(
+      async (
+        _site: unknown,
+        _db: unknown,
+        _store: unknown,
+        upload: {
+          hash: string;
+          bytes: number;
+          mime: string;
+          filename?: string;
+          width?: number;
+          height?: number;
+        },
+      ) => ({
+        media: {
+          id: upload.hash,
+          r2Key: `media/${upload.hash}.webp`,
+          filename: upload.filename ?? null,
+          mime: upload.mime,
+          bytes: upload.bytes,
+          width: upload.width ?? null,
+          height: upload.height ?? null,
+        },
+        created: true,
+      }),
+    ),
     revertCommit: vi.fn(async () => ({
       commit_sha: 'rev999',
       paths: ['src/content/listings/en/mill-house.yaml'],
@@ -189,6 +221,8 @@ let lastCommitRow: { sha: string; at: number; kind: string } | undefined = {
   at: 1755864000000,
   kind: 'publish',
 };
+// Whether the site has been told where its bucket is: all four values, or none of them.
+let bucketed = true;
 let cloudflareToken: string | undefined = 'cf-token';
 let cloudflareWorker: string | undefined = 'acct/handover-demo';
 vi.mock('virtual:handover/config', () => ({
@@ -205,6 +239,7 @@ vi.mock('virtual:handover/config', () => ({
     get mailer() {
       return siteMailer;
     },
+    media: { publicBase: 'https://media.example.com' },
     collections: {
       listings: { schema: listing, route: '/listings/[slug]', index: '/listings' },
       presenters: { schema: presenter, titleField: 'name' },
@@ -280,6 +315,18 @@ vi.mock('cloudflare:workers', () => ({
     },
     get CLOUDFLARE_WORKER() {
       return cloudflareWorker;
+    },
+    get R2_ACCOUNT_ID() {
+      return bucketed ? 'acct-1' : undefined;
+    },
+    get R2_BUCKET() {
+      return bucketed ? 'site-media' : undefined;
+    },
+    get R2_ACCESS_KEY_ID() {
+      return bucketed ? 'AKIDEXAMPLE' : undefined;
+    },
+    get R2_SECRET_ACCESS_KEY() {
+      return bucketed ? 'secret' : undefined;
     },
     DB: {},
   },
@@ -415,6 +462,8 @@ vi.mock('@handover/core', async (original) => ({
   commitBuild,
   clearPublished,
   revertCommit,
+  findMedia,
+  confirmUpload,
   lastCommit: async () => lastCommitRow,
 }));
 
@@ -428,6 +477,10 @@ afterEach(() => {
   lastCommitRow = { sha: 'def456', at: 1755864000000, kind: 'publish' };
   cloudflareToken = 'cf-token';
   cloudflareWorker = 'acct/handover-demo';
+  bucketed = true;
+  findMedia.mockClear();
+  findMedia.mockResolvedValue(undefined);
+  confirmUpload.mockClear();
   commitBuild.mockClear();
   clearPublished.mockClear();
   revertCommit.mockClear();
@@ -3236,5 +3289,115 @@ test('revert is 409 naming the file that has moved on since', async () => {
     error:
       'src/content/listings/en/mill-house.yaml has changed since that commit, so it cannot be put back',
     paths: ['src/content/listings/en/mill-house.yaml'],
+  });
+});
+
+const HASH = 'a'.repeat(64);
+const declared = JSON.stringify({
+  hash: HASH,
+  bytes: 12_345,
+  mime: 'image/webp',
+  filename: 'seaview.jpg',
+  width: 2400,
+  height: 1350,
+});
+
+// Step 3 of the upload flow: the free dedupe, and the reason the client hashes before it uploads.
+test('bytes the site already holds are answered from the row, with nothing signed', async () => {
+  findMedia.mockResolvedValueOnce({
+    id: HASH,
+    r2Key: `media/${HASH}.webp`,
+    mime: 'image/webp',
+    bytes: 12_345,
+    width: 2400,
+    height: 1350,
+  });
+  const res = await POST(post('media', declared));
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    media: {
+      id: HASH,
+      src: `media/${HASH}.webp`,
+      mime: 'image/webp',
+      bytes: 12_345,
+      width: 2400,
+      height: 1350,
+      url: `https://media.example.com/media/${HASH}.webp`,
+    },
+  });
+});
+
+test('a hash the site does not have is answered with a presigned PUT to its own key', async () => {
+  const res = await POST(post('media', declared));
+  expect(res.status).toBe(200);
+  const { upload } = (await res.json()) as { upload: { key: string; url: string } };
+  expect(upload.key).toBe(`media/${HASH}.webp`);
+  const url = new URL(upload.url);
+  expect(url.pathname).toBe(`/site-media/media/${HASH}.webp`);
+  expect(url.searchParams.get('X-Amz-Expires')).toBe('300');
+  expect(url.searchParams.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/);
+});
+
+test('a type the bucket does not serve is refused rather than signed', async () => {
+  const res = await POST(
+    post('media', JSON.stringify({ hash: HASH, bytes: 10, mime: 'text/html' })),
+  );
+  expect(res.status).toBe(422);
+  expect(await res.json()).toMatchObject({ error: expect.stringContaining('cannot be uploaded') });
+});
+
+test('a verified upload answers with the asset and is one line in the log', async () => {
+  const res = await PUT(put(`media/${HASH}`, declared));
+  expect(res.status).toBe(200);
+  expect(await res.json()).toMatchObject({ media: { id: HASH, src: `media/${HASH}.webp` } });
+  expect(confirmUpload).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    {
+      accountId: 'acct-1',
+      bucket: 'site-media',
+      accessKeyId: 'AKIDEXAMPLE',
+      secretAccessKey: 'secret',
+    },
+    {
+      hash: HASH,
+      bytes: 12_345,
+      mime: 'image/webp',
+      filename: 'seaview.jpg',
+      width: 2400,
+      height: 1350,
+    },
+  );
+  expect(logged.at(-1)).toMatchObject({
+    kind: 'upload',
+    subject: HASH,
+    detail: { name: 'seaview.jpg', bytes: 12_345 },
+  });
+});
+
+// Bytes the site already had are a reuse, not an upload: the row is answered and nothing is logged.
+test('confirming bytes that were already there writes no second log line', async () => {
+  confirmUpload.mockImplementationOnce(async () => ({
+    media: {
+      id: HASH,
+      r2Key: `media/${HASH}.webp`,
+      filename: 'seaview.jpg',
+      mime: 'image/webp',
+      bytes: 12_345,
+      width: null,
+      height: null,
+    },
+    created: false,
+  }));
+  await PUT(put(`media/${HASH}`, declared));
+  expect(logged.filter((row) => row.kind === 'upload')).toEqual([]);
+});
+
+test('a site that has not been told where its bucket is names all four values', async () => {
+  bucketed = false;
+  const res = await POST(post('media', declared));
+  expect(res.status).toBe(503);
+  expect(await res.json()).toMatchObject({
+    error: expect.stringContaining('R2_ACCOUNT_ID and R2_BUCKET in wrangler.jsonc'),
   });
 });

@@ -38,7 +38,7 @@ footerText: "Coastal homes in Devon since 2009."
 ```
 
 A block with `_ref: "globals/<key>"` takes its content from that global at build time
-([field types](field-types.md)).
+([structured fields](structured-fields.md#nesting-group-array-blocks)).
 
 ## Navigation
 

@@ -51,7 +51,8 @@ next save.
 ## Field types
 
 The form is generated from your Zod schema. Every type and how it is stored is in
-[field-types.md](field-types.md).
+[field-types.md](field-types.md) and, for the ones that hold a shape,
+[structured-fields.md](structured-fields.md).
 
 ## Reserved keys
 

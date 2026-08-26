@@ -6,7 +6,9 @@
 - [Translating](translating.md) — the language switcher, side by side, what a save of a translation writes, making the languages agree, machine translation, staleness.
 - [Content format](content-format.md) — what the YAML files look like, the reserved `_` keys, `_id` on blocks, hiding an entry.
 - [Site files](site-files.md) — globals, the `navigation` menus, `redirects.yaml` and `_templates/`.
-- [Field types](field-types.md) — every field type, its schema and how it is stored; groups, arrays and blocks.
+- [Media](media.md) — the bucket, its CORS rule and hostname, the four env values, and what an upload does.
+- [Field types](field-types.md) — the scalar types, rich text, links and labels.
+- [Structured fields](structured-fields.md) — image, file, embed, seo and reference; groups, arrays and blocks.
 - [Template convention](template-convention.md) — `schemas.ts` and `content.config.ts`, `load()` and `ContentSource`, layouts that take `data` as a prop.
 - [Rendering content](rendering.md) — `<Blocks />`, `<Markdown />`, `<LocaleSwitcher />` and hidden entries.
 - [Drafts and publishing](publishing.md) — autosave into D1, what a draft holds, the pending-changes drawer, publishing in one commit, build status and revert, holding an entry back, the content index.
