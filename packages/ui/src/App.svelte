@@ -59,7 +59,7 @@ let pending = $state<
 >([]);
 let indicator = $state<HTMLButtonElement>();
 /** Where the site's newest commit has got to; null on a site with no build status. */
-let build = $state<(Build & { committed_at?: number }) | null>(null);
+let build = $state<Build | null>(null);
 /** Bumped after a revert: the drawer's account of the publish it undid has to go with it. */
 let drawerKey = $state(0);
 /** The commit whose revert is waiting to be confirmed, and where to put focus back. */

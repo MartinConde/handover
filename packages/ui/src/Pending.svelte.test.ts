@@ -41,6 +41,7 @@ let build = $state<{
   commit_sha: string;
   state: 'building' | 'live' | 'failed';
   started_at?: number;
+  committed_at?: number;
 } | null>(null);
 const show = (initial = ENTRIES) => {
   entries = initial;
@@ -504,7 +505,9 @@ test('the build of that commit is shown beside it, in words as well as colour', 
   const root = show();
   q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.click();
   await tick();
-  build = { commit_sha: 'c0ffee11', state: 'building', started_at: Date.now() - 45_000 };
+  // No `started_at`: the Builds API has no build for the commit for the first half-minute after
+  // a publish, which is exactly when this panel is being looked at.
+  build = { commit_sha: 'c0ffee11', state: 'building', committed_at: Date.now() - 45_000 };
   flushSync();
 
   const pill = q(root, '.publish-result .pill');

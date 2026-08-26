@@ -6,6 +6,8 @@ export type Build = {
   state: 'building' | 'live' | 'failed';
   started_at?: number;
   live_at?: number;
+  /** When the admin made the commit, which is what the counter runs from. */
+  committed_at?: number;
 };
 
 // One pill for the two places that show one — the top bar and the drawer's publish result. They
@@ -23,6 +25,10 @@ $effect(() => {
   return () => clearInterval(id);
 });
 
+// ⚠️ From when the commit was made rather than when the build started: there is a window after
+// a publish where the Builds API has no build for the commit yet, and `started_at` comes off the
+// build. Counting from the click is also what an editor means by "how long has this been going".
+const from = $derived(build.committed_at ?? build.started_at);
 // "0m 45s", the way the mockup reads it.
 const elapsed = (from: number) => {
   const total = Math.max(0, Math.round((now - from) / 1000));
@@ -38,10 +44,10 @@ const since = (at: number) =>
   {LABEL[build.state]}
   {#if build.state === 'live' && build.live_at}
     <span class="detail">since {since(build.live_at)}</span>
-  {:else if build.state === 'building' && build.started_at}
+  {:else if build.state === 'building' && from}
     <!-- Hidden from the live region around it: it ticks every second and would otherwise say
          the whole pill again each time. -->
-    <span class="detail" aria-hidden="true">{elapsed(build.started_at)}</span>
+    <span class="detail" aria-hidden="true">{elapsed(from)}</span>
   {/if}
   {@render children?.()}
 </span>
