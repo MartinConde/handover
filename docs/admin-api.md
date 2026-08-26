@@ -321,21 +321,30 @@ entry's own language and a translation ([above](#drafts)).
 
 ## Media
 
-The upload pipeline, in two calls around a PUT the browser makes straight to the bucket.
-What has to be set up before either answers anything is [Media](media.md).
+The upload pipeline, in two calls around a PUT the browser makes straight to the bucket,
+and the library the picker reads. What has to be set up before any of them answers anything
+is [Media](media.md).
+
+```
+GET /admin/api/media?kind=images|files  →  { "media": [ { "id", "src", "filename", "mime",
+                                                          "bytes", "width", "height", "url?" } ] }
+```
+
+What the picker lists: newest first, archived left out, at most 100. `kind` is the field's —
+`files` is everything that is not a picture, and anything else is the pictures.
 
 ```
 POST /admin/api/media  { "hash", "bytes", "mime", "filename?", "width?", "height?" }
-  →  { "media": { "id", "src", "mime", "bytes", "width", "height", "url?" } }
+  →  { "media": { "id", "src", "filename", "mime", "bytes", "width", "height", "url?" } }
   →  { "upload": { "key", "url" } }
 ```
 
 "Do you have these bytes?" `hash` is the SHA-256 of the file, hex. The first answer is the
 asset the site already holds, and the upload is over before it started — the same picture
 chosen twice is one object and one row. The second is a PUT URL signed for five minutes,
-for a key the server chose: `media/<sha256>.<ext>`. `422` when the type is not one the
-bucket takes or the declared size is over 10MB, `503` when the site has no bucket
-configured.
+for a key the server chose: `media/<sha256>.<ext>`, or `files/<sha256>.<ext>` for anything
+that is not a picture. `422` when the type is not one the bucket takes or the declared size
+is over 10MB, `503` when the site has no bucket configured.
 
 `src` is the key a content file stores; `url` is that key under
 [`media.publicBase`](configuration.md#media) and is absent when the site has not set one.
@@ -347,6 +356,8 @@ PUT /admin/api/media/:hash  { "hash", "bytes", "mime", "filename?", "width?", "h
 
 The upload is over. The Worker reads the object back and holds it to the declaration: an
 object whose size or content type is not what was declared is **deleted** and answered
-`422`, and no row is written. Bytes the site already had are answered from the row without
+`422`, and no row is written. A file is held to two more things: it must have been stored as
+a download (`content-disposition: attachment`), and its first bytes must be the type it was
+uploaded as — a renamed `.html` is deleted rather than served from the CDN domain. Bytes the site already had are answered from the row without
 the bucket being touched at all, which is also what stops a made-up declaration deleting
 somebody else's good object.

@@ -11,6 +11,7 @@ import {
   indexFrom,
   type JsonSchema,
   type Mailer,
+  type Preset,
   parseEntry,
   type RichtextTier,
   redirectsText,
@@ -31,6 +32,7 @@ export type {
   ContentSource,
   LocaleLink,
   Mailer,
+  Preset,
   RichtextTier,
   Translate,
 } from '@handover/core';
@@ -113,26 +115,36 @@ export type RedirectRule = z.infer<typeof redirects>['rules'][number];
 
 // Media is stored as a key under media.publicBase, never a URL: a CDN move must not
 // touch content files.
-export const image = z
-  .object({
-    src: z.string().regex(/^media\//, 'image src must be a media/ key'),
-    alt: z.string().optional(),
-    width: z.number().int().positive(),
-    height: z.number().int().positive(),
-    focal: z.tuple([z.number().min(0).max(1), z.number().min(0).max(1)]).optional(),
-  })
-  .meta({ handover: 'image' });
-export type Image = z.infer<typeof image>;
+const imageValue = z.object({
+  src: z.string().regex(/^media\//, 'image src must be a media/ key'),
+  alt: z.string().optional(),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  focal: z.tuple([z.number().min(0).max(1), z.number().min(0).max(1)]).optional(),
+});
+export type Image = z.infer<typeof imageValue>;
 
-export const file = z
-  .object({
-    src: z.string().regex(/^files\//, 'file src must be a files/ key'),
-    name: z.string(),
-    bytes: z.number().int().nonnegative(),
-    mime: z.string(),
-  })
-  .meta({ handover: 'file' });
-export type File = z.infer<typeof file>;
+/**
+ * A picture, under the field's own preset: the ratio it is shown at, the cap it is downscaled to
+ * on the way in and the optional floor the picker refuses under. The two numbers are measured
+ * differently — the cap is a longest side, the floor the width of the widest crop at the ratio —
+ * so a field capped at 1600 can still be chosen for one that asks for 1600.
+ */
+export const image = (preset: Preset = {}) => imageValue.meta({ handover: 'image', ...preset });
+
+const fileValue = z.object({
+  src: z.string().regex(/^files\//, 'file src must be a files/ key'),
+  // Optional because it is the translatable half: the language a file was chosen in has a name
+  // for it and the others do not until somebody types one, which must not hold up a publish.
+  name: z.string().optional(),
+  bytes: z.number().int().nonnegative(),
+  mime: z.string(),
+});
+export type File = z.infer<typeof fileValue>;
+
+/** A download. `accept` widens what the picker offers; PDF alone where it is left out. */
+export const file = ({ accept }: { accept?: string[] } = {}) =>
+  fileValue.meta({ handover: 'file', ...(accept ? { accept } : {}) });
 
 // Provider + id only; the iframe src is built from a template at render, so no raw HTML
 // can reach the page from a content file.
@@ -153,7 +165,9 @@ export const seo = z
   .object({
     title: z.string().optional(),
     description: z.string().optional(),
-    image: image.optional(),
+    // The one preset a platform fixes rather than a designer: 1.91:1 at 1200 is the 1200 × 630
+    // every social card asks for, so the cap and the floor are the same number.
+    image: image({ ratio: '1.91:1', max: 1200, min: 1200 }).optional(),
     noindex: z.boolean().optional(),
     canonical: z.string().optional(),
   })

@@ -43,6 +43,7 @@ const {
   clearPublished,
   revertCommit,
   findMedia,
+  mediaList,
   confirmUpload,
 } = await vi.hoisted(async () => {
   const { z } = await import('astro/zod');
@@ -146,6 +147,7 @@ const {
     findMedia: vi.fn<(...args: unknown[]) => Promise<Record<string, unknown> | undefined>>(
       async () => undefined,
     ),
+    mediaList: vi.fn<(...args: unknown[]) => Promise<Record<string, unknown>[]>>(async () => []),
     confirmUpload: vi.fn(
       async (
         _site: unknown,
@@ -463,6 +465,7 @@ vi.mock('@handover/core', async (original) => ({
   clearPublished,
   revertCommit,
   findMedia,
+  mediaList,
   confirmUpload,
   lastCommit: async () => lastCommitRow,
 }));
@@ -480,6 +483,7 @@ afterEach(() => {
   bucketed = true;
   findMedia.mockClear();
   findMedia.mockResolvedValue(undefined);
+  mediaList.mockClear();
   confirmUpload.mockClear();
   commitBuild.mockClear();
   clearPublished.mockClear();
@@ -535,6 +539,8 @@ test('ping returns the collection names and who is signed in', async () => {
     collections: ['listings', 'presenters', 'pages', 'posts'],
     user: session.user,
     role: 'editor',
+    // Where a stored key is served from: the widgets draw thumbnails of keys nothing listed.
+    mediaBase: 'https://media.example.com',
   });
 });
 
@@ -3391,6 +3397,52 @@ test('confirming bytes that were already there writes no second log line', async
   }));
   await PUT(put(`media/${HASH}`, declared));
   expect(logged.filter((row) => row.kind === 'upload')).toEqual([]);
+});
+
+// The query is on the url rather than in the path, so this one builds its context by hand.
+const library = (query: string) =>
+  ({
+    params: { path: 'media' },
+    request: undefined,
+    url: new URL(`https://x/admin/api/media${query}`),
+    locals: {},
+  }) as unknown as APIContext;
+
+test('the picker is answered the library of the kind its field takes', async () => {
+  mediaList.mockResolvedValueOnce([
+    {
+      id: HASH,
+      r2Key: `files/${HASH}.pdf`,
+      filename: 'brochure.pdf',
+      mime: 'application/pdf',
+      bytes: 2_481_033,
+      width: null,
+      height: null,
+    },
+  ]);
+  const res = await GET(library('?kind=files'));
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    media: [
+      {
+        id: HASH,
+        src: `files/${HASH}.pdf`,
+        filename: 'brochure.pdf',
+        mime: 'application/pdf',
+        bytes: 2_481_033,
+        width: null,
+        height: null,
+        url: `https://media.example.com/files/${HASH}.pdf`,
+      },
+    ],
+  });
+  expect(mediaList).toHaveBeenCalledWith('default', expect.anything(), 'files');
+});
+
+// An unknown kind is the pictures: a picker that asked for nothing is an image field.
+test('the library defaults to the pictures', async () => {
+  await GET(library(''));
+  expect(mediaList).toHaveBeenCalledWith('default', expect.anything(), 'images');
 });
 
 test('a site that has not been told where its bucket is names all four values', async () => {

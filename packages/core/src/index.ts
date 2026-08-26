@@ -100,13 +100,17 @@ export type { Lock } from './locks.js';
 export { claimLock, heldEntries, LOCK_TTL, lockHolder, releaseLocks, takeLock } from './locks.js';
 export type { EmailSender, Mailer } from './mailer.js';
 export { cloudflareMailer, resendMailer, senderAddress } from './mailer.js';
-export type { MediaRow, R2Store, Upload } from './media.js';
+export type { MediaRow, Preset, R2Store, Upload } from './media.js';
 export {
   confirmUpload,
+  cropWidth,
+  DEFAULT_MAX,
   findMedia,
   MAX_UPLOAD_BYTES,
   mediaKey,
+  mediaList,
   presignUpload,
+  tooSmall,
   UploadRefusedError,
 } from './media.js';
 export type { MigrationStep } from './migrate.js';

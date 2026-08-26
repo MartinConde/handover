@@ -48,6 +48,7 @@ import {
   lockHolder,
   logActivity,
   mediaKey,
+  mediaList,
   memberApi,
   memberList,
   openDb,
@@ -1422,8 +1423,12 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
       // The middleware has already asserted a session by the time any of this runs.
       user: locals.handover?.user,
       role: locals.handover?.role,
+      // Where a media key is served from. The widgets need it for a value the picker did not
+      // hand them — everything already in a content file.
+      mediaBase: config.media?.publicBase?.replace(/\/$/, ''),
     });
   }
+  if (params.path === 'media') return library(url);
   if (params.path === 'drafts') return pendingList();
   if (params.path === 'build') return buildStatus();
   const held = params.path?.match(LOCK);
@@ -1614,12 +1619,19 @@ function mediaItem(row: MediaRow) {
   return {
     id: row.id,
     src: row.r2Key,
+    filename: row.filename,
     mime: row.mime,
     bytes: row.bytes,
     width: row.width,
     height: row.height,
     ...(base ? { url: `${base}/${row.r2Key}` } : {}),
   };
+}
+
+/** The library the picker browses, of the kind the field that opened it takes. */
+async function library(url: URL): Promise<Response> {
+  const kind = url.searchParams.get('kind') === 'files' ? 'files' : 'images';
+  return Response.json({ media: (await mediaList('default', db(), kind)).map(mediaItem) });
 }
 
 /** The declaration both halves of an upload are made against; the url's hash wins over the body's. */

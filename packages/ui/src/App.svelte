@@ -10,6 +10,8 @@ import Pending from './Pending.svelte';
 
 export interface Session {
   collections: string[];
+  /** Where a stored media key is served from, so a widget can draw what a content file names. */
+  mediaBase?: string;
   user: { id: string; name: string; email: string };
   role: 'owner' | 'editor';
 }
@@ -285,6 +287,7 @@ const initial = $derived(
           collection={entryRoute[1] ?? ''}
           slug={entryRoute[2] ?? ''}
           {entry}
+          mediaBase={session?.mediaBase ?? ''}
           onchanged={async () => {
             await loadPending();
             reload += 1;

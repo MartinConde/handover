@@ -4,11 +4,14 @@ import { afterAll, beforeAll, expect, test } from 'vitest';
 import { openDb } from './db.js';
 import {
   confirmUpload,
+  cropWidth,
   findMedia,
   MAX_UPLOAD_BYTES,
   mediaKey,
+  mediaList,
   presignUpload,
   type R2Store,
+  tooSmall,
   type Upload,
   UploadRefusedError,
 } from './media.js';
@@ -32,7 +35,9 @@ const declared: Upload = {
 };
 
 /** The bucket as the S3 API answers for it, and every request that was made of it. */
-function bucket(objects: Record<string, { bytes: number; mime: string }>) {
+function bucket(
+  objects: Record<string, { bytes: number; mime: string; disposition?: string; body?: string }>,
+) {
   const calls: { method: string; key: string }[] = [];
   const fetch = (async (input: Request) => {
     const url = new URL(input.url);
@@ -44,10 +49,18 @@ function bucket(objects: Record<string, { bytes: number; mime: string }>) {
     }
     const found = objects[key];
     if (!found) return new Response(null, { status: 404 });
-    return new Response(null, {
-      status: 200,
-      headers: { 'content-length': String(found.bytes), 'content-type': found.mime },
-    });
+    const headers: Record<string, string> = {
+      'content-length': String(found.bytes),
+      'content-type': found.mime,
+      ...(found.disposition ? { 'content-disposition': found.disposition } : {}),
+    };
+    // A range is answered as one: 206, the bytes asked for, and the whole size in content-range.
+    if (input.method === 'GET')
+      return new Response((found.body ?? '').slice(0, 8), {
+        status: 206,
+        headers: { ...headers, 'content-range': `bytes 0-7/${found.bytes}` },
+      });
+    return new Response(null, { status: 200, headers });
   }) as unknown as typeof globalThis.fetch;
   return { fetch, calls, objects };
 }
@@ -189,4 +202,132 @@ test('a hash the table already knows is answered from the row, and its object is
   expect(media).toMatchObject({ id: hash, bytes: 12_345, mime: 'image/webp' });
   expect(again.calls).toEqual([]);
   expect(again.objects).toHaveProperty(`media/${hash}.webp`);
+});
+
+test('a pdf is stored under files/, an image under media/', () => {
+  const pdf: Upload = { hash: HASH, bytes: 2_481_033, mime: 'application/pdf', filename: 'b.pdf' };
+  expect(mediaKey(pdf)).toBe(`files/${HASH}.pdf`);
+  expect(mediaKey(declared)).toBe(`media/${HASH}.webp`);
+});
+
+test('a file the bucket would render inline is deleted and refused', async () => {
+  const db = openDb('default', binding);
+  const hash = '1'.repeat(64);
+  const r2 = bucket({
+    [`files/${hash}.pdf`]: { bytes: 5, mime: 'application/pdf', body: '%PDF-1.7' },
+  });
+  await expect(
+    confirmUpload(
+      'default',
+      db,
+      store,
+      { hash, bytes: 5, mime: 'application/pdf' },
+      { fetch: r2.fetch },
+    ),
+  ).rejects.toThrow(/download/);
+  expect(r2.objects).toEqual({});
+});
+
+test('bytes that are not the type they were uploaded as are deleted and refused', async () => {
+  const db = openDb('default', binding);
+  const hash = '2'.repeat(64);
+  const r2 = bucket({
+    [`files/${hash}.pdf`]: {
+      bytes: 5,
+      mime: 'application/pdf',
+      disposition: 'attachment',
+      body: '<script>',
+    },
+  });
+  await expect(
+    confirmUpload(
+      'default',
+      db,
+      store,
+      { hash, bytes: 5, mime: 'application/pdf' },
+      { fetch: r2.fetch },
+    ),
+  ).rejects.toThrow(/not a pdf/i);
+  expect(r2.calls.map((c) => c.method)).toEqual(['HEAD', 'GET', 'DELETE']);
+  expect(r2.objects).toEqual({});
+  expect(await findMedia('default', db, hash)).toBeUndefined();
+});
+
+test('a verified pdf writes its row', async () => {
+  const db = openDb('default', binding);
+  const hash = '3'.repeat(64);
+  const r2 = bucket({
+    [`files/${hash}.pdf`]: {
+      bytes: 8,
+      mime: 'application/pdf',
+      disposition: 'attachment',
+      body: '%PDF-1.7',
+    },
+  });
+  const { media } = await confirmUpload(
+    'default',
+    db,
+    store,
+    { hash, bytes: 8, mime: 'application/pdf', filename: 'brochure.pdf' },
+    { fetch: r2.fetch, now: 1755864000000 },
+  );
+  expect(media).toMatchObject({ id: hash, r2Key: `files/${hash}.pdf`, filename: 'brochure.pdf' });
+});
+
+test('the widest crop at a ratio is what a picture is measured by, not its longest side', () => {
+  // A landscape source: the 16:9 crop is limited by the height it has to fill.
+  expect(cropWidth(2400, 1600, '16:9')).toBe(2400);
+  expect(cropWidth(800, 450, '16:9')).toBe(800);
+  // The phone photo the rule exists for: 1600 px tall, and still only a 900 px hero.
+  expect(cropWidth(900, 1600, '16:9')).toBe(900);
+  expect(cropWidth(2000, 1500, '16:9')).toBe(2000);
+  expect(cropWidth(1000, 2000, '1:1')).toBe(1000);
+  // No ratio to crop to: the picture is as wide as it is.
+  expect(cropWidth(900, 1600, undefined)).toBe(900);
+});
+
+test('a source under the field floor is refused in both numbers, naming the crop', () => {
+  const hero = { ratio: '16:9', max: 2400, min: 1600 };
+  expect(tooSmall(hero, 800, 450)).toBe(
+    'Too small for this field — its widest 16:9 crop is 800 px, this field needs 1600',
+  );
+  expect(tooSmall(hero, 900, 1600)).toBe(
+    'Too small for this field — its widest 16:9 crop is 900 px, this field needs 1600',
+  );
+  expect(tooSmall(hero, 2400, 1600)).toBeUndefined();
+  // Exactly the floor is not under it.
+  expect(tooSmall(hero, 1600, 900)).toBeUndefined();
+});
+
+test('a field with no floor refuses nothing, and one with no ratio measures the file', () => {
+  expect(tooSmall({ max: 2400 }, 40, 30)).toBeUndefined();
+  expect(tooSmall({ max: 1600, min: 1600 }, 800, 600)).toBe(
+    'Too small for this field — it is 800 px wide, this field needs 1600',
+  );
+});
+
+test('the library is newest first, and pictures and files are two lists', async () => {
+  const db = openDb('default', binding);
+  const put = async (hash: string, mime: string, now: number) => {
+    const key = mediaKey({ hash, bytes: 8, mime });
+    const r2 = bucket({
+      [key]: { bytes: 8, mime, disposition: 'attachment', body: '%PDF-1.7' },
+    });
+    await confirmUpload(
+      'default',
+      db,
+      store,
+      { hash, bytes: 8, mime, filename: `${hash.slice(0, 3)}` },
+      { fetch: r2.fetch, now },
+    );
+  };
+  await put('4'.repeat(64), 'image/webp', 1_000);
+  await put('5'.repeat(64), 'application/pdf', 2_000);
+  await put('6'.repeat(64), 'image/png', 3_000);
+  // Other tests in this file share the table, so this is about these three rows.
+  const mine = ['4', '5', '6'].map((c) => c.repeat(64));
+  const listed = async (kind: 'images' | 'files') =>
+    (await mediaList('default', db, kind)).map((r) => r.id).filter((id) => mine.includes(id));
+  expect(await listed('images')).toEqual(['6'.repeat(64), '4'.repeat(64)]);
+  expect(await listed('files')).toEqual(['5'.repeat(64)]);
 });

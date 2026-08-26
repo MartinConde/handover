@@ -13,6 +13,7 @@ let {
   source,
   locked = false,
   stale = false,
+  mediaBase = '',
   translator = false,
   url,
   redirect,
@@ -27,6 +28,8 @@ let {
   locale: string;
   fields: readonly Field[];
   blocks: Record<string, Field[]>;
+  /** Where a stored media key is served from; an alt is written beside the picture it describes. */
+  mediaBase?: string;
   /** This language's file as the editor last saw it. */
   data: Data;
   /** The language it was translated from, for the header. */
@@ -218,6 +221,7 @@ const named = (of: string) => {
         {blocks}
         {problems}
         {machine}
+        {mediaBase}
         bind:root={data}
         translating
         ontranslate={translator ? (path) => fill([path]) : undefined}

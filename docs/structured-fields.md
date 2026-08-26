@@ -6,13 +6,12 @@ are [Field types](field-types.md).
 
 ## Media, embeds, SEO and references
 
-`image`, `file`, `embed`, `seo` and `reference` are exported from `astro-handover`. Their
-picker UI comes later; the stored shape is fixed now.
+`image`, `file`, `embed`, `seo` and `reference` are exported from `astro-handover`.
 
 | Field | Schema | Stored as |
 |---|---|---|
-| image | `image` | `{ src, alt?, width, height, focal? }` — `src` is a `media/…` key, never a URL |
-| file | `file` | `{ src, name, bytes, mime }` — `src` is a `files/…` key |
+| image | `image(preset?)` | `{ src, alt?, width, height, focal? }` — `src` is a `media/…` key, never a URL |
+| file | `file({ accept? })` | `{ src, name?, bytes, mime }` — `src` is a `files/…` key |
 | embed | `embed` | `{ provider, id, title?, start? }` — `provider` is `youtube`, `vimeo` or `google-maps`; never HTML |
 | seo | `seo` | `{ title?, description?, image?, noindex?, canonical? }` |
 | reference | `reference('agents')` | `"agents/jane-doe"` — `collection/slug` of the referenced entry |
@@ -21,8 +20,8 @@ picker UI comes later; the stored shape is fixed now.
 import { embed, file, image, reference, seo } from 'astro-handover';
 
 export const listing = z.object({
-  hero: image,
-  brochure: file.optional(),
+  hero: image({ ratio: '16:9', max: 2400, min: 1600 }),
+  brochure: file().optional(),
   video: embed.optional(),
   seo: seo.optional(),
   agent: reference('agents'),
@@ -53,8 +52,15 @@ agent: "agents/jane-doe"
 
 Media keys are resolved against [`media.publicBase`](configuration.md#media) at render, so
 moving the CDN never touches a content file. How bytes get to the bucket in the first
-place, and what has to be set up for them to, is [Media](media.md). An embed is rebuilt from `provider` + `id` by the shipped
-component; an `id` containing `<` or `>` fails validation, as does any extra key.
+place and what has to be set up for it is [Media](media.md); what a field asks of a picture is
+[Pictures and files in a field](media-fields.md).
+An embed is rebuilt from `provider` + `id` by the shipped component; an `id` containing `<`
+or `>` fails validation, as does any extra key.
+
+An image's `alt` and a file's `name` are the halves a translation owns, so both are optional:
+the language a picture was chosen in has them and the others do not until somebody types one,
+which must never hold up a publish. Everything else in the two shapes is the same in every
+language.
 
 ## Nesting: group, array, blocks
 
@@ -75,7 +81,7 @@ import { type Block, type BlockRegistry, blocks, defineBlock, image, link } from
 import { z } from 'astro/zod';
 
 export const registry: BlockRegistry = {
-  hero: defineBlock('hero', { heading: z.string(), image: image.optional() }),
+  hero: defineBlock('hero', { heading: z.string(), image: image({ ratio: '16:9' }).optional() }),
   textSection: defineBlock('textSection', { body: z.string() }),
   cta: defineBlock('cta', { heading: z.string(), button: link }),
   columns: defineBlock('columns', {
@@ -123,9 +129,15 @@ of cards, each headed by its `_label` or `_type`, and Add block offers one butto
 in your registry. Reordering never rewrites an `_id`, so translations and `_machine` paths
 keep pointing at the same block.
 
-`image`, `file`, `embed`, `seo` and `reference` show their stored value as read-only JSON
-until their pickers arrive, under one line naming the release that brings the editor. It is
-read and written back untouched.
+`image` and `file` are a card: the picture at the field's own ratio, or the file's type and
+size, with the translatable half beside it and Replace and Remove under it. An empty one is a
+drop zone that takes a file dropped on it and opens the
+[picker](media-fields.md#choosing-a-picture) otherwise. A language that is being translated gets the alt or the display name and nothing
+else — the picture itself is the same in every language.
+
+`embed`, `seo` and `reference` still show their stored value as read-only JSON until their
+pickers arrive, under one line naming the release that brings the editor. It is read and
+written back untouched.
 
 Make one of those **required** — `agent: reference('agents')` above — and a new entry
 cannot satisfy it from the form until that picker ships. Nothing you type is lost: the

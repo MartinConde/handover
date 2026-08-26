@@ -1,7 +1,10 @@
+import { DEFAULT_MAX } from '@handover/core';
 /** One asset as the admin answers for it: the key a content file stores, and where it is served. */
 export interface MediaItem {
   id: string;
   src: string;
+  /** The name it was uploaded under: what the library lists it by, and a file field's first name. */
+  filename?: string | null;
   url?: string;
   mime?: string | null;
   bytes?: number | null;
@@ -9,8 +12,12 @@ export interface MediaItem {
   height?: number | null;
 }
 
-/** Longest side an upload is stored at, until fields carry presets of their own. */
-export const MAX_DIMENSION = 2400;
+/** A size a client reads rather than a byte count; nothing stored is ever "0 KB". */
+export const fileSize = (bytes?: number | null) => {
+  if (!bytes) return '';
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${Math.round(bytes / 104_857.6) / 10} MB`;
+};
 
 const hex = (buffer: ArrayBuffer) =>
   [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -47,7 +54,12 @@ export async function uploadBlob(
   if (answer.media) return answer.media;
   const put = await fetch(answer.upload?.url ?? '', {
     method: 'PUT',
-    headers: { 'content-type': blob.type },
+    headers: {
+      'content-type': blob.type,
+      // A file the bucket's own domain would render is an XSS vector against that domain, so it
+      // is stored as a download. The confirm below holds the object to it.
+      ...(blob.type.startsWith('image/') ? {} : { 'content-disposition': 'attachment' }),
+    },
     body: blob,
   });
   if (!put.ok) throw new Error(`the bucket would not take the upload (${put.status})`);
@@ -69,7 +81,7 @@ export async function uploadBlob(
  */
 export async function normaliseImage(
   file: File,
-  max = MAX_DIMENSION,
+  max = DEFAULT_MAX,
 ): Promise<{ blob: Blob; width: number; height: number }> {
   const source = await createImageBitmap(file, { imageOrientation: 'from-image' });
   const scale = Math.min(1, max / Math.max(source.width, source.height));
@@ -85,6 +97,14 @@ export async function normaliseImage(
   );
   if (!blob) throw new Error('the image could not be read');
   return { blob, width, height };
+}
+
+/** A file chosen in the admin: hashed and stored as it is, since only a picture is re-encoded. */
+export function uploadFile(
+  file: File,
+  opts: { fetch?: typeof globalThis.fetch } = {},
+): Promise<MediaItem> {
+  return uploadBlob(file, { filename: file.name }, { fetch: opts.fetch });
 }
 
 /** A picture chosen in the admin, normalised and stored. */

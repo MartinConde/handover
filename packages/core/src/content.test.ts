@@ -406,7 +406,7 @@ const listing: Form = {
     { path: ['price'], label: 'Price', type: 'number', required: true, i18n: 'duplicate' },
     { path: ['bedrooms'], label: 'Bedrooms', type: 'number', required: true, i18n: 'duplicate' },
     { path: ['notes'], label: 'Notes', type: 'text', required: false, i18n: false },
-    { path: ['image'], label: 'Image', type: 'image', required: false },
+    { path: ['image'], label: 'Image', type: 'image', required: false, preset: { max: 2400 } },
   ],
   blocks: {},
 };
@@ -486,7 +486,7 @@ const article: Form = {
   blocks: {
     hero: [
       { path: ['heading'], label: 'Heading', type: 'text', required: true },
-      { path: ['image'], label: 'Image', type: 'image', required: false },
+      { path: ['image'], label: 'Image', type: 'image', required: false, preset: { max: 2400 } },
     ],
   },
 };
@@ -650,7 +650,7 @@ const page: Form = {
   blocks: {
     hero: [
       { path: ['heading'], label: 'Heading', type: 'text', required: true },
-      { path: ['image'], label: 'Image', type: 'image', required: false },
+      { path: ['image'], label: 'Image', type: 'image', required: false, preset: { max: 2400 } },
     ],
     cta: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }],
     compliance: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }],

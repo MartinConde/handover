@@ -1,7 +1,9 @@
 <script lang="ts">
-import { type Field, fieldAddress, newId, type Translation } from '@handover/core';
+import { type Field, fieldAddress, newId, type Preset, type Translation } from '@handover/core';
 import Fields from './Fields.svelte';
+import Media from './Media.svelte';
 import RichText from './RichText.svelte';
+import { fileSize, type MediaItem } from './upload.js';
 
 type Data = Record<string, unknown>;
 let {
@@ -16,6 +18,7 @@ let {
   ontranslate,
   inherited = true,
   prefix = 'f',
+  mediaBase = '',
 }: {
   fields: readonly Field[];
   root: Data;
@@ -36,6 +39,8 @@ let {
   inherited?: Translation;
   /** What the field ids start with; two forms on one screen cannot share it. */
   prefix?: string;
+  /** Where a stored media key is served from; without it a thumbnail has no source. */
+  mediaBase?: string;
 } = $props();
 
 const modeOf = (field: Field): Translation => field.i18n ?? inherited;
@@ -43,10 +48,9 @@ const modeOf = (field: Field): Translation => field.i18n ?? inherited;
 // inside it can say otherwise.
 const structural = (field: Field) =>
   field.type === 'group' || field.type === 'array' || field.type === 'blocks';
-// Widgets that only show what is stored. Their translated half — an image's alt, a file's
-// name — has no editor before Phase 3, so the second language is not given a picture of the
-// first language's value it cannot act on.
-const FIXED = new Set(['image', 'file', 'embed', 'seo', 'reference', 'unsupported']);
+// Widgets that only show what is stored. A translation of one has nothing to act on, so the
+// second language is not given a picture of the first language's value it cannot change.
+const FIXED = new Set(['embed', 'seo', 'reference', 'unsupported']);
 const shown = $derived(
   translating
     ? fields.filter((f) => structural(f) || (modeOf(f) !== false && !FIXED.has(f.type)))
@@ -115,13 +119,37 @@ const blockFields = (row: unknown) =>
 
 // A read-only field that says nothing reads as a broken one, so each names the release its
 // editor arrives in.
-const WHEN: Record<'image' | 'file' | 'embed' | 'seo' | 'reference', string> = {
-  image: 'Images can be changed from Phase 3. Shown as stored.',
-  file: 'Files can be changed from Phase 3. Shown as stored.',
+const WHEN: Record<'embed' | 'seo' | 'reference', string> = {
   embed: 'Embeds can be changed from Phase 4. Shown as stored.',
   seo: 'SEO settings can be changed from Phase 4. Shown as stored.',
   reference: 'References can be changed from Phase 2. Shown as stored.',
 };
+
+// The picture as this field will show it: `16:9` is already what `aspect-ratio` wants.
+const aspect = (preset: Preset) => preset.ratio?.replace(':', ' / ') ?? '4 / 3';
+const src = (at: readonly string[]) => `${mediaBase}/${str([...at, 'src'])}`;
+const bytes = (at: readonly string[]) => fileSize(read([...at, 'bytes']) as number | undefined);
+
+/** What the picker hands back, written as the format stores it — and in that order. */
+function picked(at: readonly string[], type: 'image' | 'file', item: MediaItem) {
+  write(
+    at,
+    type === 'image'
+      ? // `alt` is left as a hole rather than an empty string: nothing is written for it until
+        // somebody types one, and it keeps its place in the file when they do.
+        { src: item.src, alt: undefined, width: item.width, height: item.height }
+      : { src: item.src, name: item.filename, bytes: item.bytes, mime: item.mime },
+  );
+  picker = '';
+}
+
+// Files dropped on the field itself: the picker opens with them, so there is one upload path.
+let dropped = $state<File[]>([]);
+function dropOn(id: string, e: DragEvent) {
+  e.preventDefault();
+  dropped = Array.from(e.dataTransfer?.files ?? []);
+  picker = id;
+}
 
 const linkType = (at: readonly string[]) => (read([...at, 'type']) === 'url' ? 'url' : 'entry');
 function setLinkType(at: readonly string[], type: 'url' | 'entry') {
@@ -145,6 +173,14 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     <button class="btn btn-ghost btn-icon" type="button" aria-label="Move {name} down" disabled={i === count - 1} onclick={() => move(at, i, i + 1)}>↓</button>
     <button class="btn btn-ghost btn-icon" type="button" aria-label="Remove {name}" onclick={() => drop(at, i)}>×</button>
   </div>
+{/snippet}
+
+{#snippet altField(id: string, at: readonly string[])}
+  <div class="field"><div class="label-row"><label for="{id}.alt">Alt text</label><span class="mode">Per language</span></div><input class="input" id="{id}.alt" type="text" value={str([...at, 'alt'])} oninput={(e) => write([...at, 'alt'], e.currentTarget.value || undefined)} /></div>
+{/snippet}
+
+{#snippet nameField(id: string, at: readonly string[])}
+  <div class="field"><div class="label-row"><label for="{id}.name">Display name</label><span class="mode">Per language</span></div><input class="input" id="{id}.name" type="text" value={str([...at, 'name'])} oninput={(e) => write([...at, 'name'], e.currentTarget.value || undefined)} /></div>
 {/snippet}
 
 {#snippet labelRow(id: string, field: Field, text: string, at: readonly string[] = [])}
@@ -222,7 +258,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'group'}
       <details class="group" open>
         <summary>{text}<span class="count">{field.fields.length} fields</span></summary>
-        <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} {translating} {machine} {ontranslate} {prefix} inherited={mode} /></div>
+        <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} {translating} {machine} {ontranslate} {prefix} {mediaBase} inherited={mode} /></div>
       </details>
     {:else if field.type === 'array'}
       {@const items = rows(at)}
@@ -231,7 +267,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <div class="list" {id} role="group" aria-labelledby="{id}-l">
         {#each items as row, i ((row as Data)?._id ?? i)}
           <div class="row-card">
-            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {prefix} inherited={mode} /></div>
+            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {prefix} {mediaBase} inherited={mode} /></div>
             {#if !translating}{@render controls(at, i, items.length, `${text} row ${i + 1}`)}{/if}
           </div>
         {:else}
@@ -253,7 +289,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
               {#if !translating}{@render controls(at, i, items.length, name)}{/if}
             </header>
             {#if inner}
-              <div class="form"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {prefix} inherited={mode} /></div>
+              <div class="form"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {prefix} {mediaBase} inherited={mode} /></div>
             {:else}
               <p class="ref-note">{block(row)._ref ?? `No “${block(row)._type}” block in the registry`} — not editable here</p>
             {/if}
@@ -276,7 +312,74 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         </div>
         {/if}
       </div>
-    {:else if field.type === 'image' || field.type === 'file' || field.type === 'embed' || field.type === 'seo' || field.type === 'reference'}
+    {:else if field.type === 'image' && translating}
+      <!-- A translation owns the words and not the picture: the alt, and nothing else. -->
+      {@render groupLabel(id, field, text, at)}
+      <div class="media-card" role="group" aria-labelledby="{id}-l">
+        <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><img src={src(at)} alt="" /><span class="focal" aria-hidden="true"></span></span>
+        <div class="meta">
+          <div><div class="sub">{str([...at, 'src'])}</div></div>
+          {@render altField(id, at)}
+          <p class="hint">The picture is the same in every language.</p>
+        </div>
+      </div>
+    {:else if field.type === 'image' && read(at) !== undefined}
+      {@render groupLabel(id, field, text, at)}
+      <div class="media-card" role="group" aria-labelledby="{id}-l">
+        <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><img src={src(at)} alt="" /><span class="focal" aria-hidden="true"></span></span>
+        <div class="meta">
+          <div><div class="sub">{str([...at, 'src'])} · {num([...at, 'width'])} × {num([...at, 'height'])}</div></div>
+          {@render altField(id, at)}
+          <div class="actions">
+            <button class="btn btn-sm" type="button" disabled title="Moving the focal point ships with the media library in Phase 4">Set focal point</button>
+            <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>Replace</button>
+            <button class="btn btn-sm btn-ghost" type="button" onclick={() => write(at, undefined)}>Remove</button>
+          </div>
+          {#if field.preset.ratio}<p class="hint">Shown at {field.preset.ratio} wherever this field appears.</p>{/if}
+        </div>
+      </div>
+    {:else if field.type === 'image'}
+      {@render groupLabel(id, field, text, at)}
+      <!-- svelte-ignore a11y_no_static_element_interactions -- the button inside is the control; the zone is a drop target -->
+      <div class="dropzone" role="group" aria-labelledby="{id}-l" aria-describedby={says} ondragover={(e) => e.preventDefault()} ondrop={(e) => dropOn(id, e)}>
+        <span>Drop an image or choose from library</span>
+        {#if field.preset.ratio || field.preset.min}<span class="hint">{[field.preset.ratio, field.preset.min && `at least ${field.preset.min} px wide`].filter(Boolean).join(' · ')}</span>{/if}
+        <span class="hint">JPEG, PNG or WebP · saved at up to {field.preset.max ?? 2400} px wide</span>
+        <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>Choose from library</button>
+      </div>
+    {:else if field.type === 'file' && translating}
+      <!-- The download is one file for every language; what it is called is not. -->
+      {@render groupLabel(id, field, text, at)}
+      <div class="media-card is-file" role="group" aria-labelledby="{id}-l">
+        <div class="file-icon" aria-hidden="true">{(str([...at, 'mime']).split('/').pop() ?? '').toUpperCase()}</div>
+        <div class="meta">
+          <div><div class="sub">{str([...at, 'src'])}</div></div>
+          {@render nameField(id, at)}
+          <p class="hint">The same file in every language.</p>
+        </div>
+      </div>
+    {:else if field.type === 'file' && read(at) !== undefined}
+      {@render groupLabel(id, field, text, at)}
+      <div class="media-card is-file" role="group" aria-labelledby="{id}-l">
+        <div class="file-icon" aria-hidden="true">{(str([...at, 'mime']).split('/').pop() ?? '').toUpperCase()}</div>
+        <div class="meta">
+          <div><div class="sub">{str([...at, 'src'])} · {bytes(at)} · {str([...at, 'mime'])}</div></div>
+          {@render nameField(id, at)}
+          <div class="actions">
+            <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>Replace</button>
+            <button class="btn btn-sm btn-ghost" type="button" onclick={() => write(at, undefined)}>Remove</button>
+          </div>
+        </div>
+      </div>
+    {:else if field.type === 'file'}
+      {@render groupLabel(id, field, text, at)}
+      <!-- svelte-ignore a11y_no_static_element_interactions -- the button inside is the control; the zone is a drop target -->
+      <div class="dropzone" role="group" aria-labelledby="{id}-l" aria-describedby={says} ondragover={(e) => e.preventDefault()} ondrop={(e) => dropOn(id, e)}>
+        <span>Drop a file or choose from library</span>
+        <span class="hint">{field.accept.map((m) => (m.split('/').pop() ?? '').toUpperCase()).join(', ')} up to 10 MB</span>
+        <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>Choose from library</button>
+      </div>
+    {:else if field.type === 'embed' || field.type === 'seo' || field.type === 'reference'}
       {@render groupLabel(id, field, text, at)}
       <div class="readonly" {id} role="region" tabindex="-1" aria-labelledby="{id}-l" aria-describedby={err ? `${id}-hint ${id}-err` : `${id}-hint`}><pre>{read(at) === undefined ? 'Nothing here yet' : JSON.stringify(read(at), null, 2)}</pre></div>
       <p class="hint" id="{id}-hint">{WHEN[field.type]}</p>
@@ -285,5 +388,17 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <p class="hint" {id}>Not editable here yet</p>
     {/if}
     {#if err}<p class="error" id="{id}-err">{err}</p>{/if}
+    {#if picker === id && (field.type === 'image' || field.type === 'file')}
+      <Media
+        kind={field.type === 'image' ? 'images' : 'files'}
+        label={text}
+        preset={field.type === 'image' ? field.preset : {}}
+        accept={field.type === 'file' ? field.accept : []}
+        base={mediaBase}
+        {dropped}
+        onpick={(item) => picked(at, field.type as 'image' | 'file', item)}
+        onclose={() => { picker = ''; dropped = []; }}
+      />
+    {/if}
   </div>
 {/each}

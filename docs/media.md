@@ -27,7 +27,7 @@ scheme and host, no path — in `allowed.origins`:
       "allowed": {
         "origins": ["https://your-site.example"],
         "methods": ["PUT"],
-        "headers": ["content-type"]
+        "headers": ["content-type", "content-disposition"]
       },
       "exposeHeaders": ["ETag"],
       "maxAgeSeconds": 3600
@@ -41,6 +41,8 @@ npx wrangler r2 bucket cors set your-site-media --file cors.json
 ```
 
 Add `http://localhost:4321` to `allowed.origins` as well if you upload from `astro dev`.
+`content-disposition` is in the list because a file is stored as a download; leave it out and
+PDFs fail the browser's preflight while pictures keep working.
 
 ## 3. Serve it from its own hostname
 
@@ -92,8 +94,8 @@ Without all four env values the admin refuses uploads with a message naming them
 
 ## What an upload does
 
-1. The browser normalises the picture: decodes it, downscales the longest side to
-   2400px, re-encodes as WebP at quality 0.9. That bakes in the EXIF orientation and
+1. The browser normalises the picture: decodes it, downscales the longest side to the
+   field's cap (2400px unless its preset says otherwise), re-encodes as WebP at quality 0.9. That bakes in the EXIF orientation and
    **strips the rest of the EXIF** — the GPS coordinates of somebody's house must not
    land in a public bucket — reads the width and height the content file needs, and turns
    a phone's HEIC into something every browser can draw. It is not about the delivery
@@ -110,7 +112,14 @@ Step 4 is the size limit. R2 cannot bind a maximum size into a signed URL, so th
 size is checked before anything is signed and the object is checked after it arrives.
 
 The cap is **10MB** per upload and the types are `image/webp`, `image/jpeg`, `image/png`,
-`image/gif` and `image/avif`. Anything else is refused before a signature exists.
+`image/gif`, `image/avif` and `application/pdf`. Anything else is refused before a signature
+exists.
+
+A file skips step 1 — nothing re-encodes a PDF — and gets two checks pictures do not. It is
+PUT with `content-disposition: attachment`, so the bucket's own domain hands it over instead
+of rendering it, and step 4 reads its first bytes back: an object whose signature is not the
+type it was uploaded as is deleted, whatever it was called. A renamed `.html` served from your
+CDN domain would be a cross-site scripting hole, and a name is not evidence.
 
 ## Keys are content-addressed
 
@@ -130,6 +139,10 @@ hero:
   height: 1350
 ```
 
+A file is the same idea under `files/`, named by the type its bytes actually are. What each
+field asks of the picture it takes, and how a client chooses one, is
+[Pictures and files in a field](media-fields.md).
+
 ## Nothing is ever deleted
 
 Clients reuse pictures, and a picture removed from an entry is still on the published site
@@ -138,8 +151,6 @@ step 4, where what arrived was not what was asked for and no row was ever writte
 
 ## Not yet
 
-The picker, the image and file widgets, per-field size presets, the focal point, the media
-library with its usage counts and archiving, and uploads of PDFs and other files. Until
-they ship, `image` and `file` fields show their stored value read-only
-([Structured fields](structured-fields.md)) and the endpoints below are the whole of the feature
-([The admin API](admin-api.md#media)).
+The media library screen, with its usage counts, archiving and tags; *moving* the focal point,
+which is drawn on every preview but set in the library; choosing several pictures at once for
+an array of images; and searching by anything but the file name.

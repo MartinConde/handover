@@ -37,6 +37,30 @@ exports[`the demo schema produces a full descriptor tree 1`] = `
         "required": true,
         "type": "text",
       },
+      {
+        "label": "Photo",
+        "path": [
+          "photo",
+        ],
+        "preset": {
+          "max": 2400,
+          "min": 1200,
+          "ratio": "3:2",
+        },
+        "required": false,
+        "type": "image",
+      },
+      {
+        "accept": [
+          "application/pdf",
+        ],
+        "label": "Brochure",
+        "path": [
+          "brochure",
+        ],
+        "required": false,
+        "type": "file",
+      },
     ],
   },
   "pages": {
@@ -99,6 +123,10 @@ exports[`the demo schema produces a full descriptor tree 1`] = `
           "path": [
             "image",
           ],
+          "preset": {
+            "max": 2400,
+            "ratio": "16:9",
+          },
           "required": false,
           "type": "image",
         },

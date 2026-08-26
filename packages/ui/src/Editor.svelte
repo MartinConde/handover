@@ -12,10 +12,13 @@ let {
   collection,
   slug,
   entry,
+  mediaBase = '',
   onchanged,
 }: {
   collection: string;
   slug: string;
+  /** Where a stored media key is served from; the image and file widgets draw from it. */
+  mediaBase?: string;
   entry: {
     fields: readonly Field[];
     blocks: Record<string, Field[]>;
@@ -618,7 +621,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {#if !alone}
         <form class="form" onsubmit={(e) => e.preventDefault()}>
           <fieldset disabled={locked}>
-            <Fields fields={entry.fields} blocks={entry.blocks} {problems} bind:root={data} />
+            <Fields fields={entry.fields} blocks={entry.blocks} {problems} {mediaBase} bind:root={data} />
           </fieldset>
         </form>
       {/if}
@@ -686,6 +689,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
               lost = true;
               lock = taken as Lock;
             }}
+            {mediaBase}
             onclose={side ? () => leaving(() => (side = false)) : undefined}
             onturnoff={turnOff}
           />

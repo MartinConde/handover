@@ -4,6 +4,40 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **`image` and `file` fields are editable.** A filled one is a card — the picture at the
+  field's own ratio with its focal dot, or the file's type and size — carrying the alt text or
+  the display name, Replace and Remove. An empty one is a drop zone that takes a file dropped
+  on it and opens the picker otherwise. The picker is the library scoped to the field that
+  opened it: upload there or choose what is already stored. A language being translated gets
+  the alt or the display name and nothing else
+  ([Pictures and files in a field](docs/media-fields.md)).
+
+- **A field carries its own preset**, `image({ ratio, max, min })`: the ratio it is shown and
+  cropped at, the cap an upload is downscaled to on the way in, and the optional floor the
+  picker refuses under. The floor is measured on the *crop* — the widest crop at the field's
+  ratio the picture can yield — so a 900 × 1600 phone photo cannot pass a 1600 hero sideways,
+  and the refusal says both numbers. A field without a floor refuses nothing.
+  ⚠️ **Breaking:** `image` and `file` are now functions — `image()` and `file()` where they
+  used to be bare schemas.
+
+- **PDFs and other files upload**, under `files/` keys and through the same pipeline minus the
+  canvas step. A file is stored as a download (`content-disposition: attachment`) and its first
+  bytes are read back on confirm: an object whose signature is not the type it was uploaded as
+  is deleted, so a renamed `.html` never reaches the CDN domain. ⚠️ The bucket's CORS rule needs
+  `content-disposition` in `allowed.headers` or every file upload fails the preflight
+  ([Media](docs/media.md#2-let-the-admins-origin-write-to-it)).
+
+- **A file's display name is optional.** It is the translatable half, so a picture or a PDF
+  chosen in one language no longer leaves another language's file invalid and unpublishable
+  until somebody types a name for it ([Languages](docs/i18n.md)).
+
+- **`GET /admin/api/media?kind=images|files`** is the library the picker reads: newest first,
+  archived left out ([The admin API](docs/admin-api.md#media)).
+
+- **`media.md` is two pages.** The bucket, its setup and what an upload does stay;
+  what a field asks of a picture and how a client chooses one are
+  [Pictures and files in a field](docs/media-fields.md).
+
 - **Pictures upload to R2.** The browser normalises what was chosen — downscaled to 2400px,
   re-encoded as WebP, EXIF stripped — hashes it, and asks the admin whether the site already
   has those bytes; if it does, nothing is uploaded at all. Otherwise it PUTs them straight to

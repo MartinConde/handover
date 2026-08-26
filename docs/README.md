@@ -7,6 +7,7 @@
 - [Content format](content-format.md) — what the YAML files look like, the reserved `_` keys, `_id` on blocks, hiding an entry.
 - [Site files](site-files.md) — globals, the `navigation` menus, `redirects.yaml` and `_templates/`.
 - [Media](media.md) — the bucket, its CORS rule and hostname, the four env values, and what an upload does.
+- [Pictures and files in a field](media-fields.md) — a field's preset: the ratio, the cap on the way in, the floor the picker refuses under; the drop zone and the picker.
 - [Field types](field-types.md) — the scalar types, rich text, links and labels.
 - [Structured fields](structured-fields.md) — image, file, embed, seo and reference; groups, arrays and blocks.
 - [Template convention](template-convention.md) — `schemas.ts` and `content.config.ts`, `load()` and `ContentSource`, layouts that take `data` as a prop.

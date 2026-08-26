@@ -64,16 +64,28 @@ test('link accepts url and ref shapes and rejects a mismatched pair', () => {
 
 test('the structured field types are detected from real Zod output', () => {
   const schema = z.object({
-    hero: image,
-    brochure: file.optional(),
+    hero: image({ ratio: '16:9', max: 2400, min: 1600 }),
+    brochure: file().optional(),
     video: embed,
     seo: seo.optional(),
     agent: reference('agents'),
   });
   const json = z.toJSONSchema(schema, { unrepresentable: 'any' }) as JsonSchema;
   expect(fieldsFrom('default', json)).toEqual([
-    { path: ['hero'], label: 'Hero', type: 'image', required: true },
-    { path: ['brochure'], label: 'Brochure', type: 'file', required: false },
+    {
+      path: ['hero'],
+      label: 'Hero',
+      type: 'image',
+      required: true,
+      preset: { ratio: '16:9', max: 2400, min: 1600 },
+    },
+    {
+      path: ['brochure'],
+      label: 'Brochure',
+      type: 'file',
+      required: false,
+      accept: ['application/pdf'],
+    },
     { path: ['video'], label: 'Video', type: 'embed', required: true },
     { path: ['seo'], label: 'Seo', type: 'seo', required: false },
     { path: ['agent'], label: 'Agent', type: 'reference', required: true, collection: 'agents' },
@@ -82,8 +94,8 @@ test('the structured field types are detected from real Zod output', () => {
 
 test('image and file take media keys, never URLs', () => {
   const hero = { src: 'media/9f3a2c7e.webp', width: 2400, height: 1600 };
-  expect(image.safeParse(hero).success).toBe(true);
-  expect(image.safeParse({ ...hero, src: 'https://cdn.example.com/9f3a.webp' }).success).toBe(
+  expect(image().safeParse(hero).success).toBe(true);
+  expect(image().safeParse({ ...hero, src: 'https://cdn.example.com/9f3a.webp' }).success).toBe(
     false,
   );
   const doc = {
@@ -92,8 +104,11 @@ test('image and file take media keys, never URLs', () => {
     bytes: 1,
     mime: 'application/pdf',
   };
-  expect(file.safeParse(doc).success).toBe(true);
-  expect(file.safeParse({ ...doc, src: 'media/3e8a1b9c.pdf' }).success).toBe(false);
+  expect(file().safeParse(doc).success).toBe(true);
+  // The display name is the translatable half, so a language that has not typed one yet still
+  // has a valid file: a source language adding a PDF must not block that language's publish.
+  expect(file().safeParse({ ...doc, name: undefined }).success).toBe(true);
+  expect(file().safeParse({ ...doc, src: 'media/3e8a1b9c.pdf' }).success).toBe(false);
 });
 
 test('embed takes an allow-listed provider and rejects raw HTML', () => {
@@ -112,7 +127,7 @@ test('reference is a collection/slug string', () => {
 
 // The 1.5 golden's registry: `columns` holds `blocks` again, so the union is recursive.
 const registry: BlockRegistry = {
-  hero: defineBlock('hero', { heading: z.string(), image: image.optional() }),
+  hero: defineBlock('hero', { heading: z.string(), image: image().optional() }),
   textSection: defineBlock('textSection', { body: z.string() }),
   cta: defineBlock('cta', { heading: z.string(), button: link }),
   columns: defineBlock('columns', {
@@ -659,7 +674,10 @@ test('a label names the field, on a plain type and on top of a helper', () => {
 // Mirror of handover-demo/src/content/schemas.ts: the snapshot is the descriptor tree the
 // admin form is built from, and it must hold no unsupported marker.
 test('the demo schema produces a full descriptor tree', () => {
-  const hero = defineBlock('hero', { heading: z.string(), image: image.optional() });
+  const hero = defineBlock('hero', {
+    heading: z.string(),
+    image: image({ ratio: '16:9', max: 2400 }).optional(),
+  });
   const textSection = defineBlock('textSection', { body: z.string() });
   const cta = defineBlock('cta', { heading: z.string(), button: link });
   const columns = defineBlock('columns', {
@@ -672,6 +690,8 @@ test('the demo schema produces a full descriptor tree', () => {
     location: z.string(),
     price: z.string(),
     summary: z.string(),
+    photo: image({ ratio: '3:2', max: 2400, min: 1200 }).optional(),
+    brochure: file().optional(),
   });
   const form = {
     listings: formOf('default', formSchema(listing)),
@@ -711,7 +731,7 @@ test('a field says how it translates through .meta({ i18n })', () => {
     title: z.string(),
     price: z.number().meta({ i18n: 'duplicate' }),
     notes: z.string().optional().meta({ i18n: false }),
-    hero: image.meta({ i18n: 'duplicate' }).optional(),
+    hero: image({ ratio: '16:9' }).meta({ i18n: 'duplicate' }).optional(),
   });
   expect(fieldsFrom('default', formSchema(schema)).map((f) => [f.path[0], f.i18n])).toEqual([
     ['title', undefined],

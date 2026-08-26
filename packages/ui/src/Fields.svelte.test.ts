@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import type { Field } from '@handover/core';
 import { parseEntry, stringifyEntry } from '@handover/core';
 import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import Fields from './Fields.svelte';
 
 // Testing: every widget writes the documented value shape, proven by state → YAML → state
@@ -42,7 +42,10 @@ const show = (
   flushSync();
   return document.body;
 };
-afterEach(() => unmount(app));
+afterEach(() => {
+  unmount(app);
+  vi.unstubAllGlobals();
+});
 
 const golden = (name: string) =>
   readFileSync(resolve(__dirname, `../../core/test/golden/${name}.yaml`), 'utf8');
@@ -293,7 +296,7 @@ test('every control has a label', () => {
       },
       rooms,
       tags,
-      { path: ['hero'], label: 'Hero', type: 'image', required: false },
+      { path: ['hero'], label: 'Hero', type: 'image', required: false, preset: { max: 2400 } },
       { path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: TYPES },
       { path: ['photos'], label: 'Photos', type: 'unsupported' },
     ],
@@ -410,7 +413,13 @@ const TYPES = ['hero', 'textSection', 'cta', 'columns'];
 const registry: Record<string, Field[]> = {
   hero: [
     { path: ['heading'], label: 'Heading', type: 'text', required: true },
-    { path: ['image'], label: 'Image', type: 'image', required: false },
+    {
+      path: ['image'],
+      label: 'Image',
+      type: 'image',
+      required: false,
+      preset: { ratio: '16:9', max: 2400 },
+    },
   ],
   textSection: [{ path: ['body'], label: 'Body', type: 'text', required: true }],
   cta: [
@@ -485,22 +494,16 @@ test('blocks: removing a block drops it and its children', () => {
   expect(left.map((b) => b._id)).toEqual(['k3nf9a2p']);
 });
 
-test('structured types: the stored shape is shown as read-only JSON and left untouched', () => {
+test('an image inside a block draws what is stored and writes the file back unchanged', () => {
   show(pageFields, blocksData(), registry);
-  const pre = q('#f-blocks\\.0\\.image pre').textContent ?? '';
-  expect(JSON.parse(pre)).toEqual({
-    src: 'media/9f3a2c7e.webp',
-    alt: 'Front of the house',
-    width: 2400,
-    height: 1600,
-  });
-  expect(document.querySelector('#f-blocks\\.0\\.image input')).toBeNull();
+  expect(q<HTMLImageElement>('#f-blocks\\.0 .media-card img').getAttribute('src')).toBe(
+    '/media/9f3a2c7e.webp',
+  );
+  expect(q<HTMLInputElement>('input#f-blocks\\.0\\.image\\.alt').value).toBe('Front of the house');
   expect(stringifyEntry('default', snap())).toBe(golden('blocks'));
 });
 
 test.each([
-  ['image', 'Images can be changed from Phase 3. Shown as stored.'],
-  ['file', 'Files can be changed from Phase 3. Shown as stored.'],
   ['embed', 'Embeds can be changed from Phase 4. Shown as stored.'],
   ['seo', 'SEO settings can be changed from Phase 4. Shown as stored.'],
   ['reference', 'References can be changed from Phase 2. Shown as stored.'],
@@ -579,4 +582,113 @@ test('an invalid richtext body is marked on the editable node itself', () => {
   expect(body.getAttribute('aria-invalid')).toBe('true');
   expect(body.getAttribute('aria-describedby')).toBe('f-summary-err');
   expect(q('#f-summary-err').textContent).toBe('Required');
+});
+
+// --- 3.15: the image and file widgets ---
+
+const heroField: Field = {
+  path: ['hero'],
+  label: 'Hero image',
+  type: 'image',
+  required: false,
+  preset: { ratio: '16:9', max: 2400, min: 1600 },
+};
+const brochureField: Field = {
+  path: ['brochure'],
+  label: 'Brochure',
+  type: 'file',
+  required: false,
+  accept: ['application/pdf'],
+};
+const imageData = () => parseEntry('default', golden('image')) as Record<string, unknown>;
+/** The library endpoint the picker opens on, and a turn of the loop for it to arrive. */
+const library = (media: unknown[]) =>
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ media })),
+  );
+const settle = async () => {
+  await new Promise((r) => setTimeout(r));
+  flushSync();
+};
+const fileData = () => parseEntry('default', golden('file')) as Record<string, unknown>;
+
+test('an empty image field offers the library, and its two numbers are two lines', () => {
+  show([heroField], { _version: 1 });
+  const hints = Array.from(document.querySelectorAll('.dropzone .hint')).map((h) => h.textContent);
+  // The floor is what a client can act on while choosing; the cap is what happens on the way in.
+  expect(hints).toEqual([
+    '16:9 · at least 1600 px wide',
+    'JPEG, PNG or WebP · saved at up to 2400 px wide',
+  ]);
+  expect(q('.dropzone button').textContent).toBe('Choose from library');
+});
+
+test('a picked image is written as the format stores it, and Remove empties the field', async () => {
+  library([
+    {
+      id: 'a'.repeat(64),
+      src: 'media/9f3a2c7e.webp',
+      filename: 'front.webp',
+      width: 2400,
+      height: 1600,
+    },
+  ]);
+  show([heroField], { _version: 1 });
+  click('.dropzone button');
+  await settle();
+  click('.tile');
+  click('.picker-foot .btn-primary');
+  expect(stringifyEntry('default', snap())).toBe(
+    `_version: 1
+hero:
+  src: "media/9f3a2c7e.webp"
+  width: 2400
+  height: 1600
+`,
+  );
+  // The alt lands where the format puts it, rather than after the numbers: the widget wrote the
+  // whole shape and left it as a hole until somebody typed one.
+  type('input#f-hero\\.alt', 'Front of the house');
+  expect(stringifyEntry('default', snap())).toBe(
+    `_version: 1
+hero:
+  src: "media/9f3a2c7e.webp"
+  alt: "Front of the house"
+  width: 2400
+  height: 1600
+`,
+  );
+  click('.media-card .btn-ghost');
+  expect(snap().hero).toBeUndefined();
+});
+
+test('the file card names the download, and Remove empties the field', () => {
+  show([brochureField], fileData());
+  expect(q('.media-card .sub').textContent).toBe('files/3e8a1b9c.pdf · 2.4 MB · application/pdf');
+  expect(q<HTMLInputElement>('input#f-brochure\\.name').value).toBe('Seaview Cottage brochure.pdf');
+  click('.media-card .btn-ghost');
+  expect(snap().brochure).toBeUndefined();
+});
+
+test('a translator gets the words and not the picture', () => {
+  root = imageData();
+  app = mount(Fields, {
+    target: document.body,
+    props: {
+      fields: [heroField],
+      translating: true,
+      get root() {
+        return root;
+      },
+      set root(v) {
+        root = v;
+      },
+    },
+  });
+  flushSync();
+  expect(q<HTMLInputElement>('input#f-hero\\.alt').value).toBe('Front of the house');
+  // Nothing that would change the picture itself: that is the source language's.
+  expect(document.querySelector('.media-card .actions')).toBeNull();
+  expect(document.body.textContent).toContain('The picture is the same in every language.');
 });

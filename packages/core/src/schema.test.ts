@@ -82,10 +82,68 @@ test('schemas tagged image, file, embed and seo are fields of that type', () => 
     seo: { type: 'object', properties: {}, handover: 'seo' },
   });
   expect(fieldsFrom('default', schema)).toEqual([
-    { path: ['hero'], label: 'Hero', type: 'image', required: false },
-    { path: ['brochure'], label: 'Brochure', type: 'file', required: false },
+    // A picture always has a cap, whatever the field says; a file always has a type it takes.
+    { path: ['hero'], label: 'Hero', type: 'image', required: false, preset: { max: 2400 } },
+    {
+      path: ['brochure'],
+      label: 'Brochure',
+      type: 'file',
+      required: false,
+      accept: ['application/pdf'],
+    },
     { path: ['video'], label: 'Video', type: 'embed', required: false },
     { path: ['seo'], label: 'Seo', type: 'seo', required: false },
+  ]);
+});
+
+test('an image field carries the ratio, the cap and the floor its schema asked for', () => {
+  const schema = obj({
+    hero: {
+      type: 'object',
+      properties: {},
+      handover: 'image',
+      ratio: '16:9',
+      max: 2400,
+      min: 1600,
+    },
+    logo: { type: 'object', properties: {}, handover: 'image', ratio: '1:1', max: 512 },
+  });
+  expect(fieldsFrom('default', schema)).toEqual([
+    {
+      path: ['hero'],
+      label: 'Hero',
+      type: 'image',
+      required: false,
+      preset: { ratio: '16:9', max: 2400, min: 1600 },
+    },
+    // No floor: this field refuses nothing.
+    {
+      path: ['logo'],
+      label: 'Logo',
+      type: 'image',
+      required: false,
+      preset: { ratio: '1:1', max: 512 },
+    },
+  ]);
+});
+
+test('a file field carries the types it was widened to', () => {
+  const schema = obj({
+    plan: {
+      type: 'object',
+      properties: {},
+      handover: 'file',
+      accept: ['application/pdf', 'application/zip'],
+    },
+  });
+  expect(fieldsFrom('default', schema)).toEqual([
+    {
+      path: ['plan'],
+      label: 'Plan',
+      type: 'file',
+      required: false,
+      accept: ['application/pdf', 'application/zip'],
+    },
   ]);
 });
 

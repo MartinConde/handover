@@ -1,3 +1,4 @@
+import { DEFAULT_MAX, type Preset } from './media.js';
 import type { RichtextTier } from './richtext.js';
 
 // The subset of `z.toJSONSchema()` output the walker reads; anything else is "unsupported".
@@ -27,8 +28,8 @@ type FieldOf =
   | { path: string[]; label: string; type: 'date'; required: boolean }
   | { path: string[]; label: string; type: 'select'; required: boolean; options: string[] }
   | { path: string[]; label: string; type: 'link'; required: boolean }
-  | { path: string[]; label: string; type: 'image'; required: boolean }
-  | { path: string[]; label: string; type: 'file'; required: boolean }
+  | { path: string[]; label: string; type: 'image'; required: boolean; preset: Preset }
+  | { path: string[]; label: string; type: 'file'; required: boolean; accept: string[] }
   | { path: string[]; label: string; type: 'embed'; required: boolean }
   | { path: string[]; label: string; type: 'seo'; required: boolean }
   | { path: string[]; label: string; type: 'reference'; required: boolean; collection: string }
@@ -119,11 +120,35 @@ function fieldOf(root: JsonSchema, path: string[], node: JsonSchema, required: b
     case 'boolean':
     case 'date':
     case 'link':
-    case 'image':
-    case 'file':
     case 'embed':
     case 'seo':
       return [{ path, label, type: child.handover, required }];
+    // The field's preset: the ratio it shows at, the cap an upload is downscaled to on the way in
+    // and the optional floor the picker refuses under. Only the cap has a value where none is set.
+    case 'image':
+      return [
+        {
+          path,
+          label,
+          type: 'image',
+          required,
+          preset: {
+            ...(typeof child.ratio === 'string' ? { ratio: child.ratio } : {}),
+            max: typeof child.max === 'number' ? child.max : DEFAULT_MAX,
+            ...(typeof child.min === 'number' ? { min: child.min } : {}),
+          },
+        },
+      ];
+    case 'file':
+      return [
+        {
+          path,
+          label,
+          type: 'file',
+          required,
+          accept: isStringArray(child.accept) ? child.accept : ['application/pdf'],
+        },
+      ];
     case 'richtext':
       return [
         { path, label, type: 'richtext', required, tier: child.tier === 'full' ? 'full' : 'basic' },
