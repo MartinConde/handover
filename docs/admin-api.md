@@ -29,23 +29,25 @@ Reading a collection and an entry, and the changes that commit rather than draft
 rename, a delete, and turning a language off.
 
 ```
-GET /admin/api/entries                      →  { "entries": [{ "collection", "path", "title", "locales", "urls" }], "locales": ["en", "de"] }
+GET /admin/api/entries                      →  { "entries": [{ "collection", "path", "title", "locales", "urls", "hidden" }], "locales": ["en", "de"] }
 ```
 
 Everything an editor can point at, across every collection the site declares, in config
 order. `path` is `collection/slug` — what a `reference` and an entry `link` store — `locales`
 is the languages that entry has a file in, and `urls` is the address each of them serves it
-at, empty for a collection with no `route`. It is what the page picker lists, wherever the
-picker appears.
+at, empty for a collection with no `route`. `hidden` is whether the entry is off the site,
+which the picker says on the row rather than dropping it. It is what the page picker lists,
+wherever the picker appears.
 
 ```
-GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales" }], "locales": ["en", "de"] }
+GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales" }], "locales": ["en", "de"], "index": "/listings" }
 ```
 
 The collection's entries for the list screen: one row per entry, `id` is the filename and
 `locales` maps each locale to `{ title, path }` plus `status: "hidden"` when it is hidden, and
 `offered` is there when the entry is not offered in every language. The response's own
-`locales` is the languages the site declares, in config order.
+`locales` is the languages the site declares, in config order, and `index` the collection's
+page above them, which is where the hide dialog offers to send a hidden entry's readers.
 Titles come from the field the collection is keyed on — `title`, or its
 [`titleField`](configuration.md#collections); an entry that has not filled it in lists by
 filename. The list is the build's [content index](#the-content-index) with the pending
@@ -53,7 +55,7 @@ drafts laid over it, so an entry you have edited but not published shows what yo
 It reads nothing from GitHub.
 
 ```
-GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, translations, pending, problems, titleField, locales, defaultLocale, sourceLocale, offered, drift, stale, translator, route, index, prefixDefaultLocale }
+GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, translations, pending, problems, hidden, redirects, titleField, locales, defaultLocale, sourceLocale, offered, drift, stale, translator, route, index, prefixDefaultLocale }
 ```
 
 `data` is the draft when there is one, otherwise the file. `pending` is the entry's languages
@@ -61,7 +63,10 @@ whose draft is ahead of the repository, in config order: `[]` when nothing of it
 `["en"]` when `data` is a draft, `["de"]` when a translation is drafted and the default
 language is not — the editor offers **Publish…** whenever it is not empty. It is a list of
 locales here and the `true`/`false` of one file in the draft writes above. `problems` is the
-same list the autosave answers with, so an entry names what is missing the moment it opens. `titleField` is there when the collection declares one, and is the
+same list the autosave answers with, so an entry names what is missing the moment it opens.
+`hidden` is whether the entry is off the site, and `redirects` — present only when it is — maps
+each language to the address its readers are sent to meanwhile, absent for a language whose
+answer was "nowhere". `titleField` is there when the collection declares one, and is the
 field the editor's heading reads. `data` is `sourceLocale`'s file and `translations` the other
 languages the entry has a file in, keyed by locale — what the editor's second column draws.
 `locales` is the languages the site declares, in config order, `defaultLocale` the site's own —
@@ -138,6 +143,29 @@ redirect: the draft is thrown away and the mark is drafted like any other.
 `409` when the entry would be left with no published file — that is deleting the entry, which is
 what `DELETE` is for, and a language whose file is only a draft does not stand in for one that is
 published; `404` when the entry has no file at all.
+
+```
+POST /admin/api/status/:collection   { "entries": ["mill-house"], "hidden": true, "redirect": { "kind": "index" } }  →  {}
+```
+
+On the site or off it, for one entry or for a batch. `_status: hidden` is written into every
+file the entry has — it is the entry's and not one language's — and every entry named takes the
+same answer, which is what a bulk hide is.
+
+`redirect` says where the readers of a page coming off the site go, and the rules it produces
+are **one per language**, from the address that language served: `{ "kind": "index" }` is the
+collection's own page above it, `{ "kind": "entry", "value": "listings/harbour-flat" }` another
+entry — a language that entry has no page in falls back to *its* collection's `index` and then
+to `/` — `{ "kind": "url", "value": "https://…" }` one address for every language, and
+`{ "kind": "none" }` nothing at all. A language with no file in the repository owes nothing:
+nobody has followed an address it never served.
+
+Nothing is committed. The rules wait on the draft rows with the `_status` that made them owed,
+and the publish that takes the entry off the site carries both — so a client who hides and then
+shows an entry again before publishing owes nothing. Showing an entry that was **published**
+hidden takes those rules out of `redirects.yaml` in the commit that puts the page back.
+`hidden: false` needs no `redirect` and ignores one. `400` with no entries named; `404` if the
+collection is not configured.
 
 ```
 POST /admin/api/entries/:collection/:slug/address/:locale   { "address": "…" }  →  {}

@@ -37,23 +37,38 @@ the folder is not an error — the collection is simply empty, and its pages ren
 // src/content.config.ts
 import { glob } from 'astro/loaders';
 import { defineCollection } from 'astro:content';
+import { z } from 'astro/zod';
 import { listing, page } from './content/schemas';
 
 // The id is the file's path and nothing else; Astro's default would file an entry under the
 // `slug` in its data, which is where localizedSlugs keeps an address.
 const byPath = ({ entry }: { entry: string }) => entry.replace(/\.ya?ml$/, '');
 
+// A z.object drops every key it does not declare, and the reserved ones are declared nowhere.
+const withReserved = <T extends z.ZodObject>(schema: T) =>
+  schema.extend({
+    _status: z.literal('hidden').optional(),
+    _locales: z.array(z.string()).optional(),
+  });
+
 export const collections = {
   listings: defineCollection({
     loader: glob({ pattern: '**/*.yaml', base: './src/content/listings', generateId: byPath }),
-    schema: listing,
+    schema: withReserved(listing),
   }),
   pages: defineCollection({
     loader: glob({ pattern: '**/*.yaml', base: './src/content/pages', generateId: byPath }),
-    schema: page,
+    schema: withReserved(page),
   }),
 };
 ```
+
+**The schema Astro is given has to keep the reserved keys**, which is what `withReserved` above
+is for. Astro parses every entry through it and a plain `z.object` throws away what it does not
+declare, so `_status` and `_locales` never reach the built data — and `filterLive` reads
+`undefined` and renders a hidden entry ([Rendering content](rendering.md#hidden-entries)). Your
+own `schemas.ts` stays free of them: they are the file's keys, not fields anybody edits. A
+collection declared `z.looseObject({})` keeps them already and needs nothing.
 
 The collection key is the folder name and the key in `cms.config.ts`; the locale folder inside
 it becomes the first segment of the entry id, which is why `getEntry` takes `locale/slug`.

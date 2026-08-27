@@ -11,6 +11,8 @@ export interface PickEntry {
   locales: string[];
   /** Where each of them serves it; empty for a collection nothing renders. */
   urls: Record<string, string>;
+  /** Off the site: still an answer, but a poor one, and the list says why. */
+  hidden?: boolean;
 }
 export interface Pickable {
   entries: PickEntry[];
@@ -83,6 +85,10 @@ const why = (entry: PickEntry) => {
     ? 'Nothing on the site renders this, so it has no address'
     : `There is no ${locale.toUpperCase()} page to link to`;
 };
+// And what is worth saying about a row that is still pickable. A hidden page has an address
+// and would take the choice; it is just a poor one, so it is said rather than refused.
+const note = (entry: PickEntry) =>
+  entry.hidden ? 'Hidden itself — visitors would land on a page that isn’t there either' : undefined;
 
 const matches = $derived(
   all.entries.filter(
@@ -125,9 +131,10 @@ function step(e: KeyboardEvent) {
       <h4>{group.name}</h4>
       {#each group.rows as row (row.path)}
         {@const no = why(row)}
+        {@const says = no ?? note(row)}
         <!-- Refused with aria-disabled rather than disabled: a disabled button takes no focus,
              so a keyboard would walk past the row and never hear the reason. -->
-        <button type="button" aria-current={row.path === chosen ? 'true' : undefined} aria-disabled={no ? 'true' : undefined} aria-describedby={no ? `${id}-why-${row.path}` : undefined} onclick={() => !no && onpick(row)}>
+        <button type="button" aria-current={row.path === chosen ? 'true' : undefined} aria-disabled={no ? 'true' : undefined} aria-describedby={says ? `${id}-why-${row.path}` : undefined} onclick={() => !no && onpick(row)}>
           <span>{row.title}</span>
           <span class="chips">
             {#each all.locales as of (of)}
@@ -136,7 +143,7 @@ function step(e: KeyboardEvent) {
           </span>
           <span class="path">{locale ? (row.urls[locale] ?? row.path) : row.path}</span>
         </button>
-        {#if no}<p class="why" id="{id}-why-{row.path}">{no}</p>{/if}
+        {#if says}<p class="why" id="{id}-why-{row.path}">{says}</p>{/if}
       {/each}
     {:else}
       <p class="hint">{query ? `Nothing here matches “${query}”` : 'Nothing to choose from yet'}</p>

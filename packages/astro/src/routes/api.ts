@@ -7,6 +7,7 @@ import type {
   EntryLocation,
   Form,
   GitClient,
+  IndexEntry,
   Integration,
   MediaRow,
   R2Store,
@@ -49,6 +50,7 @@ import {
   heldEntries,
   holdEntry,
   INTEGRATIONS,
+  isLive,
   lastCommit,
   loadDraft,
   lockHolder,
@@ -63,6 +65,8 @@ import {
   pendingDrafts,
   presignUpload,
   publishDrafts,
+  REDIRECTS,
+  type RedirectRule,
   RefMovedError,
   RepoUnreachableError,
   RevertConflictError,
@@ -82,6 +86,7 @@ import {
   saveTranslated,
   setEntryAddress,
   setEntryLocales,
+  setEntryStatus,
   settingFacts,
   staleLocales,
   stringifyEntry,
@@ -955,7 +960,19 @@ async function entryLocales(
   collection: string,
   slug: string,
   locales: string[],
-): Promise<Record<string, { data: unknown; pending: boolean; held: boolean; live: boolean }>> {
+): Promise<
+  Record<
+    string,
+    {
+      data: unknown;
+      pending: boolean;
+      held: boolean;
+      live: boolean;
+      url?: string;
+      redirects: RedirectRule[];
+    }
+  >
+> {
   const git = gitClient();
   const database = db();
   const loaded = await Promise.all(
@@ -977,6 +994,18 @@ async function entryLocales(
           // Whether the repository has this language's file: a draft with none behind it is a
           // page only the preview can show.
           live: Boolean(file),
+          // The URL the repository serves it at, which is what a redirect written for this
+          // language says `from` — an address only a draft has was never followed.
+          url: file
+            ? entryUrl(
+                'default',
+                config.i18n,
+                config.collections[collection]?.route,
+                entryAddress('default', parseEntry('default', file.contents), slug),
+                locale,
+              )
+            : undefined,
+          redirects: row?.pendingRedirects ?? [],
         },
       ] as const;
     }),
@@ -987,6 +1016,35 @@ async function entryLocales(
 /** The words alone, for the readers that compare the languages rather than publish them. */
 const localeData = (loaded: Record<string, { data: unknown }>): Record<string, unknown> =>
   Object.fromEntries(Object.entries(loaded).map(([locale, l]) => [locale, l.data]));
+
+/**
+ * Where each language sends its readers while the entry is hidden. The rule is the same one
+ * whether it is still waiting on the draft row or already committed, so both are looked at and
+ * matched to the language by the URL it was written from. Empty where the client answered
+ * "nowhere", which is an answer and not a gap.
+ */
+async function hideTargets(
+  collection: string,
+  slug: string,
+  loaded: Awaited<ReturnType<typeof entryLocales>>,
+): Promise<Record<string, string>> {
+  // The branch tip, which is the ref `entryLocales` read each language's file at: the two
+  // sides of the match below are the same commit, and a display that read two would miss.
+  const file = await gitClient().getFile(REDIRECTS);
+  const committed = file
+    ? ((parseEntry('default', file.contents) as { rules?: RedirectRule[] }).rules ?? [])
+    : [];
+  const key = `${collection}/${slug}`;
+  const rules = [...committed, ...Object.values(loaded).flatMap((l) => l.redirects)].filter(
+    (rule) => rule.reason === 'hidden' && rule.entry === key,
+  );
+  return Object.fromEntries(
+    Object.entries(loaded).flatMap(([locale, l]) => {
+      const to = rules.find((rule) => rule.from === l.url)?.to;
+      return to ? [[locale, to]] : [];
+    }),
+  );
+}
 
 // The draft is what the editor was last looking at, so it wins over the file. No sha goes
 // to the browser: a publish commits the stored bytes and compares the bases server-side.
@@ -1003,6 +1061,7 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
   const source = sourceIn(loaded);
   if (!source) return new Response('Not found', { status: 404 });
   const data = loaded[source]?.data;
+  const hidden = !isLive('default', data);
   const form = formFor(collection, slug);
   const offer = offeredIn(data, Object.keys(loaded));
   const languages = localeData(loaded);
@@ -1022,6 +1081,10 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
     // languages the editor was on, and it holds the whole entry back either way.
     held: Object.values(loaded).some((l) => l.held),
     problems: entryProblems(schema, data),
+    // Off the site, and where its readers go while it is. `_status` is the entry's, so the
+    // language on screen does not come into it.
+    hidden,
+    ...(hidden ? { redirects: await hideTargets(collection, slug, loaded) } : {}),
     titleField: collected?.titleField,
     // A global is the same screen with the collection half taken out: nothing to hide it from,
     // no name to change, no second copy of it. The name it is drawn under is the dev's label.
@@ -1505,6 +1568,101 @@ async function address(
 }
 
 /**
+ * Where visitors to a page that is coming off the site are sent, in one language. The client
+ * picked one answer for the whole entry and the server turns it into that language's own URL:
+ * a German reader sent to an English page cannot read it. A picked entry with no page in a
+ * language falls back to that collection's index and then to the language's front page, which
+ * is what the dialog says it will do.
+ *
+ * A typed web address is one answer for every language — it is an address, not a page.
+ */
+function redirectTarget(
+  target: { kind?: unknown; value?: unknown } | undefined,
+  collected: { index?: string },
+  entries: IndexEntry[] | undefined,
+  locale: string,
+): string | undefined {
+  const value = typeof target?.value === 'string' ? target.value : '';
+  if (target?.kind === 'url') return value || undefined;
+  if (target?.kind === 'index')
+    return entryUrl('default', config.i18n, collected.index, '', locale);
+  if (target?.kind !== 'entry') return undefined;
+  const [name = '', id = ''] = value.split('/');
+  const picked = config.collections[name];
+  if (!picked) return undefined;
+  const found = entries?.find((e) => e.id === id);
+  const address = picked.localizedSlugs ? (found?.locales[locale]?.slug ?? id) : id;
+  return (
+    (found?.locales[locale] && entryUrl('default', config.i18n, picked.route, address, locale)) ||
+    entryUrl('default', config.i18n, picked.index, '', locale) ||
+    entryUrl('default', config.i18n, '/', '', locale)
+  );
+}
+
+/**
+ * On the site or off it, for one entry or for a batch of them. `_status` is the entry's rather
+ * than one language's, so every file it has is written — and the redirects a hide owes are one
+ * per language, from the URL that language **served**, which is the address the repository has
+ * and not an unpublished one nobody could have followed.
+ *
+ * Nothing is committed here: the rules wait on the rows with the `_status` that made them owed,
+ * and the publish that takes the entry off the site carries both.
+ */
+async function setStatus(collection: string, request: Request): Promise<Response> {
+  const collected = config.collections[collection];
+  if (!collected) return new Response('Not found', { status: 404 });
+  const body = (await request.json().catch(() => undefined)) as
+    | { entries?: unknown; hidden?: unknown; redirect?: { kind?: unknown; value?: unknown } }
+    | undefined;
+  const slugs = Array.isArray(body?.entries)
+    ? body.entries.filter((e): e is string => typeof e === 'string')
+    : [];
+  if (!slugs.length) return new Response('Name the entries to hide or show', { status: 400 });
+  const hidden = body?.hidden === true;
+  const database = db();
+  const git = gitClient();
+  // The bulk dialog is answered once, so the entries a rule could point at are read once too.
+  const picked =
+    hidden && body?.redirect?.kind === 'entry'
+      ? collectionEntries(
+          'default',
+          index,
+          String(body.redirect.value ?? '').split('/')[0] ?? '',
+          await overlayRows('default', database, index),
+        )
+      : undefined;
+  // The whole form, `slug` included: the address is not a field anybody types into, but it is a
+  // key the schema declares and rewriting the file has to leave it where the schema puts it.
+  const form = formOf('default', formSchema(collected.schema));
+  for (const slug of slugs) {
+    const files = await entryFiles(git, collection, slug);
+    await setEntryStatus(
+      'default',
+      database,
+      git,
+      form,
+      files.map(({ locale, path, file }) => {
+        // A language with no file in the repository has no URL anybody has followed, so it owes
+        // nothing — a new entry hidden before its first publish writes no rule at all.
+        const was = file
+          ? entryUrl(
+              'default',
+              config.i18n,
+              collected.route,
+              entryAddress('default', parseEntry('default', file.contents), slug),
+              locale,
+            )
+          : undefined;
+        const to = hidden ? redirectTarget(body?.redirect, collected, picked, locale) : undefined;
+        return { path, redirect: was && to && was !== to ? { from: was, to } : undefined };
+      }),
+      hidden,
+    );
+  }
+  return Response.json({});
+}
+
+/**
  * The answers to one entry's structural drift, one per block its languages disagree about.
  * They belong here and not in an autosave: that one carries the default language's values and
  * has no way to say a block comes out of German. Nothing is marked resolved — the entry is read
@@ -1669,6 +1827,8 @@ async function listEntries(collection: string): Promise<Response> {
     entries,
     // Which languages the list draws a column for, and in which order — one language, no column.
     locales: config.i18n.locales,
+    // The page above them, which is where the hide dialog offers to send a row's readers.
+    index: collected.index,
   });
 }
 
@@ -1693,6 +1853,9 @@ async function pickList(): Promise<Response> {
       const locales = Object.keys(entry.locales);
       return {
         collection,
+        // Off the site: still offered, since pointing at it is sometimes right, but the picker
+        // says so — a redirect to a hidden page lands the visitor on another 404.
+        hidden: Object.values(entry.locales).some((l) => l.status === 'hidden'),
         // What a reference or an entry link stores, and what the picker shows under the title.
         path: `${collection}/${entry.id}`,
         title: (entry.locales[config.i18n.defaultLocale] ?? entry.locales[locales[0] ?? ''])?.title,
@@ -1973,6 +2136,7 @@ const DIFF = /^diff\/([\w-]+)\/([\w-]+)$/;
 const CONFLICT = /^conflict\/([\w-]+)\/([\w-]+)$/;
 const LOCK = /^locks\/([\w-]+)\/([\w-]+)$/;
 const HOLD = /^hold\/([\w-]+)\/([\w-]+)$/;
+const STATUS = /^status\/([\w-]+)$/;
 const MEDIA = /^media\/([0-9a-f]{64})$/;
 const CHECK = /^checks\/([\w-]+)$/;
 const SETTING = /^settings\/([\w-]+)$/;
@@ -2349,6 +2513,8 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   }
   const holding = params.path?.match(HOLD);
   if (holding) return hold(holding[1] ?? '', holding[2] ?? '', request, locals.handover);
+  const showing = params.path?.match(STATUS);
+  if (showing) return answering(() => setStatus(showing[1] ?? '', request));
   const filling = params.path?.match(TRANSLATE);
   if (filling)
     return answering(() =>

@@ -1365,3 +1365,59 @@ test('the take-over confirm closes on Escape and hands focus back', async () => 
   expect(document.activeElement).toBe(trigger);
   vi.unstubAllGlobals();
 });
+
+// The header's status control. What one answer becomes — a rule per language — is the route's,
+// and api.test.ts holds it to each of the four; what the header owes is asking before it hides
+// and not asking when it shows.
+const status = () =>
+  vi.fn(async (url: string) =>
+    isLock(url)
+      ? Response.json(HELD)
+      : Response.json({ updated_at: 1755864000000, pending: true, problems: [] }),
+  );
+
+test('hiding from the header asks where its readers go before it writes', async () => {
+  const fetcher = status();
+  vi.stubGlobal('fetch', fetcher);
+  const root = show({ entry: { ...entry, route: '/listings/[slug]', index: '/listings' } });
+
+  $<HTMLButtonElement>(root, '.status')?.click();
+  flushSync();
+  $$<HTMLButtonElement>(root, '.status-menu button')[1]?.click();
+  flushSync();
+  expect($(root, '.dialog h2')?.textContent).toBe('Where should visitors to this page go now?');
+  $<HTMLButtonElement>(root, '.dialog .btn-primary')?.click();
+  await tick();
+
+  expect(wrote(fetcher).at(-1)).toEqual([
+    '/admin/api/status/listings',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        entries: ['seaview-cottage'],
+        hidden: true,
+        redirect: { kind: 'index' },
+      }),
+    },
+  ]);
+  vi.unstubAllGlobals();
+});
+
+test('a hidden entry says in the header where it sends its readers', () => {
+  const root = show({
+    entry: { ...entry, hidden: true, redirects: { en: '/listings' } },
+  });
+
+  expect($(root, '.status')?.textContent).toContain('Hidden');
+  expect($(root, '.subline')?.textContent?.trim()).toBe('Redirecting to /listings while hidden');
+});
+
+// "Nowhere" is an answer, not a gap, and the header says what it means for a visitor.
+test('a hidden entry with no rule says so rather than naming nothing', () => {
+  const root = show({ entry: { ...entry, hidden: true } });
+
+  expect($(root, '.subline')?.textContent?.trim()).toBe(
+    'Off the site — visitors to its old address see “page not found”',
+  );
+});

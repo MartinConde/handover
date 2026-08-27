@@ -3,8 +3,10 @@ import { afterEach, expect, test, vi } from 'vitest';
 import EntryList from './EntryList.svelte';
 
 // Testing: one row per entry with the title the API returned, the derived file name the new
-// entry dialog shows, what create / rename / delete send, and the empty state.
-// Not testing: which collection the sidebar routed here, or the shell around the list.
+// entry dialog shows, what create / rename / delete / hide send, and the empty state.
+// Not testing: which collection the sidebar routed here, the shell around the list, the bulk
+// bar's own markup, or how one answer becomes a rule per language — that is the route's, and
+// api.test.ts holds it to each of the four answers.
 
 const ENTRIES = [
   {
@@ -23,8 +25,12 @@ let app: ReturnType<typeof mount>;
 const changed = vi.fn();
 // Loading the list is a bare GET; every action carries an init, which is what tells them apart.
 const api = (entries: unknown[], reply: Record<string, unknown> = {}, locales = ['en']) => {
-  const fetcher = vi.fn(async (_url: string, init?: RequestInit) =>
-    init ? Response.json(reply) : Response.json({ entries, locales }),
+  const fetcher = vi.fn(async (url: string, init?: RequestInit) =>
+    init
+      ? Response.json(reply)
+      : url === '/admin/api/entries'
+        ? Response.json({ entries: [], locales })
+        : Response.json({ entries, locales, index: '/listings' }),
   );
   vi.stubGlobal('fetch', fetcher);
   return fetcher;
@@ -233,4 +239,95 @@ test('an entry written only in a second language is listed by the words it has',
   await tick();
 
   expect(q(root, '.row .td.title a')?.textContent).toBe('Impressum');
+});
+
+const HIDDEN = [
+  {
+    id: 'mill-house',
+    locales: {
+      en: {
+        title: 'The Mill House',
+        path: 'src/content/listings/en/mill-house.yaml',
+        status: 'hidden',
+      },
+    },
+  },
+  ENTRIES[1],
+];
+
+test('a hidden entry is badged and offers to be shown again', async () => {
+  api(HIDDEN);
+  const root = show();
+  await tick();
+
+  expect(Array.from(root.querySelectorAll('.row .td.title .badge'), (b) => b.textContent)).toEqual([
+    'Hidden',
+  ]);
+  expect(q(root, '.row [aria-label="Show The Mill House"]')).not.toBeNull();
+  expect(q(root, '.row [aria-label="Hide Seaview Cottage"]')).not.toBeNull();
+});
+
+// The one status change with a consequence outside the CMS, so the row never just makes it.
+test('hiding a row asks where its readers go and sends the answer', async () => {
+  const fetcher = api(ENTRIES);
+  const root = show();
+  await tick();
+
+  await click(root, '.row [aria-label="Hide The Mill House"]');
+  expect(q(root, '.dialog h2')?.textContent).toBe('Where should visitors to this page go now?');
+  expect(q(root, '.dialog .choice .desc')?.textContent).toBe('/listings');
+  await click(root, '.dialog .btn-primary');
+
+  expect(fetcher).toHaveBeenCalledWith('/admin/api/status/listings', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ entries: ['mill-house'], hidden: true, redirect: { kind: 'index' } }),
+  });
+  expect(changed).toHaveBeenCalled();
+});
+
+// Nothing goes away, so there is nothing to ask about: the page comes back at its own address.
+test('showing an entry again asks nothing', async () => {
+  const fetcher = api(HIDDEN);
+  const root = show();
+  await tick();
+
+  await click(root, '.row [aria-label="Show The Mill House"]');
+
+  expect(q(root, '.dialog')).toBeNull();
+  expect(fetcher).toHaveBeenCalledWith('/admin/api/status/listings', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ entries: ['mill-house'], hidden: false, redirect: undefined }),
+  });
+});
+
+// Sold listings arrive in batches, so the question is asked once and answered for all of them.
+test('a bulk hide asks once and names every selected entry', async () => {
+  const fetcher = api(ENTRIES);
+  const root = show();
+  await tick();
+
+  for (const box of Array.from(
+    root.querySelectorAll<HTMLInputElement>('.row input[type="checkbox"]'),
+  )) {
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  await tick();
+  expect(q(root, '.bulk-bar')?.textContent).toContain('2 selected');
+
+  await click(root, '.bulk-bar .btn-sm:not(.btn-ghost)');
+  expect(q(root, '.dialog .btn-primary')?.textContent?.trim()).toBe('Hide 2 listings');
+  await click(root, '.dialog .btn-primary');
+
+  expect(fetcher).toHaveBeenCalledWith('/admin/api/status/listings', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      entries: ['mill-house', 'seaview-cottage'],
+      hidden: true,
+      redirect: { kind: 'index' },
+    }),
+  });
 });

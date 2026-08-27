@@ -26,6 +26,7 @@ import {
   saveTranslated,
   setEntryAddress,
   setEntryLocales,
+  setEntryStatus,
 } from './db.js';
 import { type ContentIndex, collectionEntries, indexFrom } from './entries.js';
 import { blobSha } from './git.js';
@@ -938,6 +939,156 @@ test('an address put back the way it was owes nothing', async () => {
 
   expect(repo.read(REDIRECTS)).toBe('');
   expect(repo.read(PAGE_DE)).toBe(page('Startseite', 'Zieh ans Meer', 'Bereit für den Umzug?'));
+});
+
+const HIDE_DE = { from: '/de/home', to: '/de/pages' };
+const HIDE_EN = { from: '/home', to: '/pages' };
+const hidden = (contents: string) =>
+  contents.replace('_version: 1\n', '_version: 1\n_status: "hidden"\n');
+const ruleFor = async (db: ReturnType<typeof openDb>, path: string) =>
+  (await db.select().from(drafts)).find((r) => r.path === path)?.pendingRedirects ?? [];
+
+// `_status` is the entry's and not one language's, so both files carry it or the entry is in a
+// state the format has no way to write down.
+test('hiding an entry writes _status into every language it has', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+
+  await setEntryStatus(
+    'default',
+    db,
+    repo,
+    PAGE_FORM,
+    [
+      { path: PAGE_EN, redirect: HIDE_EN },
+      { path: PAGE_DE, redirect: HIDE_DE },
+    ],
+    true,
+  );
+
+  const rows = (await db.select().from(drafts)).toSorted((a, b) => a.path.localeCompare(b.path));
+  expect(rows.map((r) => r.path)).toEqual([PAGE_DE, PAGE_EN]);
+  expect(rows[1]?.contents).toBe(hidden(page('Home', 'Move to the coast', 'Ready to move?')));
+  expect(rows[0]?.contents).toBe(
+    hidden(page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?')),
+  );
+  expect(rows[0]?.pendingRedirects).toEqual([
+    {
+      _id: expect.stringMatching(/^[0-9a-z]{8}$/),
+      from: '/de/home',
+      to: '/de/pages',
+      status: 301,
+      reason: 'hidden',
+      entry: 'pages/home',
+      createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T[\d:]+Z$/),
+    },
+  ]);
+});
+
+test('unhiding takes the key back out of every file', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+  await setEntryStatus(
+    'default',
+    db,
+    repo,
+    PAGE_FORM,
+    [{ path: PAGE_EN }, { path: PAGE_DE }],
+    true,
+  );
+
+  await setEntryStatus(
+    'default',
+    db,
+    repo,
+    PAGE_FORM,
+    [{ path: PAGE_EN }, { path: PAGE_DE }],
+    false,
+  );
+
+  const rows = await db.select().from(drafts);
+  expect(rows.map((r) => r.contents).toSorted()).toEqual(
+    [
+      page('Home', 'Move to the coast', 'Ready to move?'),
+      page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?'),
+    ].toSorted(),
+  );
+});
+
+// Two rules, one row: the address moved and then the entry came off the site, and each owes its
+// own redirect. Writing the hide over the row would ship the address change with none.
+test('hiding an entry keeps the redirect a moved address already owes', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+  await setEntryAddress('default', db, repo, ADDRESSED, PAGE_DE, 'startseite', REDIRECT);
+
+  await setEntryStatus(
+    'default',
+    db,
+    repo,
+    ADDRESSED,
+    [{ path: PAGE_DE, redirect: HIDE_DE }],
+    true,
+  );
+
+  expect((await ruleFor(db, PAGE_DE)).map((r) => [r.reason, r.from, r.to])).toEqual([
+    ['slug-change', '/de/home', '/de/startseite'],
+    ['hidden', '/de/home', '/de/pages'],
+  ]);
+});
+
+test('unhiding before the publish takes only the hide back out', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+  await setEntryAddress('default', db, repo, ADDRESSED, PAGE_DE, 'startseite', REDIRECT);
+  await setEntryStatus(
+    'default',
+    db,
+    repo,
+    ADDRESSED,
+    [{ path: PAGE_DE, redirect: HIDE_DE }],
+    true,
+  );
+
+  await setEntryStatus('default', db, repo, ADDRESSED, [{ path: PAGE_DE }], false);
+
+  expect((await ruleFor(db, PAGE_DE)).map((r) => r.reason)).toEqual(['slug-change']);
+});
+
+// The other half: the hide was published, so its rules are in the file rather than on the row.
+// The commit that puts the page back takes them out, and leaves every other rule alone.
+test('publishing an unhide takes the committed hide rules out of redirects.yaml', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+  await setEntryStatus(
+    'default',
+    db,
+    repo,
+    PAGE_FORM,
+    [
+      { path: PAGE_EN, redirect: HIDE_EN },
+      { path: PAGE_DE, redirect: HIDE_DE },
+    ],
+    true,
+  );
+  await publishDrafts('default', db, repo);
+  const kept = (parseEntry('default', repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules;
+  expect(kept).toHaveLength(2);
+
+  await setEntryStatus(
+    'default',
+    db,
+    repo,
+    PAGE_FORM,
+    [{ path: PAGE_EN }, { path: PAGE_DE }],
+    false,
+  );
+  await publishDrafts('default', db, repo);
+
+  expect((parseEntry('default', repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules).toEqual(
+    [],
+  );
+  expect(repo.read(PAGE_EN)).toBe(page('Home', 'Move to the coast', 'Ready to move?'));
 });
 
 // "Not ready yet" is the entry's, the way a lock is: it is written to the language the editor

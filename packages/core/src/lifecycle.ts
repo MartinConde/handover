@@ -57,10 +57,13 @@ export const redirectRule = (
 });
 
 /**
- * `redirects.yaml` with these rules appended. Existing rules that pointed at one's `from` now
- * point at its `to`, so a visitor never hops twice; a rule that would then redirect a URL to
- * itself (a rename back) is dropped. A publish carrying an address change appends here rather
- * than committing on its own, so the entry and the redirect for it land in one commit.
+ * `redirects.yaml` with these rules appended and the ones `drop` names taken out. Existing rules
+ * that pointed at one's `from` now point at its `to`, so a visitor never hops twice; a rule that
+ * would then redirect a URL to itself (a rename back) is dropped. A publish carrying an address
+ * change appends here rather than committing on its own, so the entry and the redirect for it
+ * land in one commit.
+ *
+ * `undefined` when there is nothing to write: no file, and nothing to add to one.
  */
 export async function appendRedirects(
   siteId: string,
@@ -68,12 +71,15 @@ export async function appendRedirects(
   added: readonly RedirectRule[],
   /** The commit this is going into, which is the one its existing rules are read from. */
   at: string,
-): Promise<PublishFile> {
+  /** A rule this commit takes back out — an entry it puts back on the site. */
+  drop?: (rule: RedirectRule) => boolean,
+): Promise<PublishFile | undefined> {
   const file = await git.getFile(REDIRECTS, at);
+  if (!file && !added.length) return undefined;
   const doc = (file ? parseEntry(siteId, file.contents) : { _version: 1 }) as {
     rules?: RedirectRule[];
   };
-  let rules = doc.rules ?? [];
+  let rules = (doc.rules ?? []).filter((r) => !drop?.(r));
   for (const rule of added)
     rules = [...rules, rule]
       .map((r) => (r !== rule && r.to === rule.from ? { ...r, to: rule.to, entry: rule.entry } : r))
@@ -110,19 +116,21 @@ export async function revertRedirects(
   };
 }
 
-const redirectsFile = (
+const redirectsFile = async (
   siteId: string,
   git: GitClient,
   rules: Omit<RedirectRule, '_id' | 'createdAt'>[],
   now: () => number,
   at: string,
-) =>
-  appendRedirects(
+): Promise<PublishFile[]> => {
+  const file = await appendRedirects(
     siteId,
     git,
     rules.map((rule) => redirectRule(siteId, rule, now())),
     at,
   );
+  return file ? [file] : [];
+};
 
 /**
  * The URL one language served this file at. The file name is the address only where the
@@ -172,7 +180,7 @@ export async function renameEntry(
       : [];
   });
   if (rules.length)
-    changes.push(await redirectsFile(siteId, git, rules, deps.now ?? Date.now, base_sha));
+    changes.push(...(await redirectsFile(siteId, git, rules, deps.now ?? Date.now, base_sha)));
   return git.publish(changes, { base_sha, message: `Rename ${loc.collection}/${from} to ${to}` });
 }
 
@@ -206,7 +214,7 @@ export async function deleteEntry(
           : [];
       });
   if (rules.length)
-    changes.push(await redirectsFile(siteId, git, rules, deps.now ?? Date.now, base_sha));
+    changes.push(...(await redirectsFile(siteId, git, rules, deps.now ?? Date.now, base_sha)));
   return git.publish(changes, { base_sha, message: `Delete ${loc.collection}/${name}` });
 }
 
@@ -262,7 +270,7 @@ export async function deleteLocales(
           : [];
       });
   if (rules.length)
-    changes.push(await redirectsFile(siteId, git, rules, deps.now ?? Date.now, base_sha));
+    changes.push(...(await redirectsFile(siteId, git, rules, deps.now ?? Date.now, base_sha)));
   const { commit_sha } = await git.publish(changes, {
     base_sha,
     message: `Turn off ${going.join(', ')} for ${loc.collection}/${name}`,

@@ -129,3 +129,20 @@ test('a row hands back the entry it stands for, and Escape hands back nothing', 
   press('Escape');
   expect(closed).toBe(true);
 });
+
+// 3.26 listed a hidden entry with nothing to say about it. Said, not refused: pointing at one
+// is sometimes right, and a list that quietly drops rows is a list nobody trusts.
+test('a hidden entry is offered with the reason it is a poor answer', async () => {
+  await show([{ ...(OFFERED[0] as PickEntry) }, { ...(OFFERED[1] as PickEntry), hidden: true }]);
+
+  const row = rows()[1] as HTMLButtonElement;
+  expect(row.getAttribute('aria-disabled')).toBeNull();
+  // The id carries the entry's path, so it is fetched by id rather than by a selector.
+  expect(document.getElementById(row.getAttribute('aria-describedby') ?? '')?.textContent).toBe(
+    'Hidden itself — visitors would land on a page that isn’t there either',
+  );
+
+  row.click();
+  flushSync();
+  expect(picked?.path).toBe('listings/mill-house');
+});

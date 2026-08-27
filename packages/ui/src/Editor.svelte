@@ -2,6 +2,7 @@
 import { type Drift, entryUrl, type Field, LOCK_TTL } from '@handover/core';
 import DriftPanel from './Drift.svelte';
 import Fields from './Fields.svelte';
+import HideDialog, { type Target } from './Hide.svelte';
 import PreviewPane from './Preview.svelte';
 import Translation from './Translation.svelte';
 
@@ -34,6 +35,10 @@ let {
     published: string[];
     /** Somebody marked it "Not ready yet" — the toggle opens pressed, whoever they were. */
     held?: boolean;
+    /** Off the site. The entry's, not one language's: `_status` is shared across the files. */
+    hidden?: boolean;
+    /** Where each language sends its readers while it is hidden; empty for "nowhere". */
+    redirects?: Record<string, string>;
     /** What the collection schema will not accept yet, by field path. */
     problems: { path: string; message: string }[];
     /** The field this collection is keyed on, when it is not `title`. */
@@ -298,6 +303,36 @@ async function takeOver() {
   onchanged();
 }
 
+// On the site or off it. Hiding has a consequence outside the CMS, so it asks where the page's
+// readers should go before it writes anything; showing it again just writes.
+// svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
+let hidden = $state(entry.hidden === true);
+let statusMenu = $state(false);
+let hiding = $state(false);
+let statusFailed = $state('');
+
+async function setStatus(next: boolean, redirect?: Target) {
+  statusMenu = false;
+  busy = true;
+  statusFailed = '';
+  // Everything on screen goes into the rows first: this write rewrites the same files.
+  if (json !== saved) await autosave();
+  if (pane?.unsaved()) await pane.flush();
+  const res = await fetch(`/admin/api/status/${collection}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ entries: [slug], hidden: next, redirect }),
+  });
+  busy = false;
+  if (!res.ok) {
+    statusFailed = await res.text();
+    return;
+  }
+  hidden = next;
+  hiding = false;
+  onchanged();
+}
+
 // "Not ready yet". The flag lives on the draft rows, so whatever is in the form is stored
 // first — otherwise the entry is held back and the words that made somebody hold it are not.
 async function toggleHold() {
@@ -555,8 +590,32 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     <div class="title-row">
       <h1>{title}</h1>
       <div class="meta">
+        <!-- A global is one file the schema names and nothing lists it: there is nothing to
+             take it off the site from, so it has no status at all. -->
         {#if !entry.singleton}
-          <span class="status"><span class="dot" aria-hidden="true"></span> Live</span>
+          <div class="pop-anchor">
+            <button
+              class="status"
+              class:status-hidden={hidden}
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={statusMenu}
+              disabled={locked || busy}
+              onclick={() => (statusMenu = !statusMenu)}
+            ><span class="dot" aria-hidden="true"></span> {hidden ? 'Hidden' : 'Live'} ▾</button>
+            {#if statusMenu}
+              <div class="menu status-menu" role="menu" aria-label="Status">
+                <button type="button" role="menuitem" aria-current={hidden ? undefined : 'true'} onclick={() => (hidden ? setStatus(false) : (statusMenu = false))}>
+                  <span class="dot dot-live" aria-hidden="true"></span> Live
+                  <span class="sub">{url ? `on the site at ${url}` : 'on the site'}</span>
+                </button>
+                <button type="button" role="menuitem" aria-current={hidden ? 'true' : undefined} onclick={() => { statusMenu = false; if (!hidden) hiding = true; }}>
+                  <span class="dot dot-hidden" aria-hidden="true"></span> Hidden
+                  <span class="sub">off the site, kept here — we’ll ask where visitors should go</span>
+                </button>
+              </div>
+            {/if}
+          </div>
         {/if}
         {#if conflicted}
           <span class="badge badge-danger">Changed in the repository since you opened it</span>
@@ -633,6 +692,12 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     {#if held}
       <p class="subline">On hold — won't be included when others publish</p>
     {/if}
+    {#if hidden}
+      <p class="subline">
+        {#if entry.redirects?.[locale]}Redirecting to {entry.redirects[locale]} while hidden{:else}Off the site — visitors to its old address see “page not found”{/if}
+      </p>
+    {/if}
+    {#if statusFailed}<p class="subline is-bad" role="alert">{statusFailed}</p>{/if}
     {#if addressable}
       <p class="slug-row">
         {#if editing}
@@ -802,6 +867,17 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         </div>
       </div>
     </div>
+  {/if}
+  {#if hiding}
+    <HideDialog
+      what={title}
+      {collection}
+      index={entryUrl('default', routing, entry.index, '', locale) ?? undefined}
+      {busy}
+      error={statusFailed}
+      onhide={(target) => setStatus(true, target)}
+      onclose={() => (hiding = false)}
+    />
   {/if}
   {#if taking}
     <div class="scrim">

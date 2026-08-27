@@ -82,6 +82,7 @@ export {
   saveTranslated,
   setEntryAddress,
   setEntryLocales,
+  setEntryStatus,
 } from './db.js';
 export type { Change, DiffGroup, RowAt, WordPart } from './diff.js';
 export { diffEntry } from './diff.js';

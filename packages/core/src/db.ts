@@ -20,6 +20,7 @@ import {
   redirectRule,
   revertRedirects,
 } from './lifecycle.js';
+import { isLive } from './reserved.js';
 import {
   type Answer,
   applyResolution,
@@ -337,6 +338,67 @@ export async function setEntryAddress(
   return { updated_at: updatedAt, pending: (await blobSha(contents)) !== loaded.baseBlob };
 }
 
+/**
+ * Whether an entry is on the site, written into every file it has: `_status` is the entry's and
+ * not one language's, so hiding it in English and leaving it live in German is not a state the
+ * format has. The files are the only place it can live — the site builds from git alone.
+ *
+ * A hide owes one redirect per language, from the URL that language served. They are **stored
+ * on the rows rather than committed here**, the way an address change stores its own: the page
+ * is still live until this is published, and one commit carries the entry and its rules. Rules
+ * a moved address already owes are left where they are; unhiding takes only the hide's back out.
+ */
+export async function setEntryStatus(
+  siteId: string,
+  db: Db,
+  git: Pick<GitClient, 'getFile' | 'getHead'>,
+  form: Form,
+  files: readonly { path: string; redirect?: { from: string; to: string } }[],
+  hidden: boolean,
+  deps: { now?: () => number } = {},
+): Promise<void> {
+  const found = await Promise.all(
+    files.map(async (file) => {
+      const loaded = await load(siteId, db, git, file.path);
+      return loaded && { ...file, loaded };
+    }),
+  );
+  const updatedAt = deps.now?.() ?? Date.now();
+  const writes = found.flatMap((file) => {
+    if (!file) return [];
+    const entry = { ...(file.loaded.entry as Record<string, unknown>) };
+    if (hidden) entry._status = 'hidden';
+    else delete entry._status;
+    const rules = file.loaded.redirects.filter((rule) => rule.reason !== 'hidden');
+    if (hidden && file.redirect)
+      rules.push(
+        redirectRule(
+          siteId,
+          {
+            ...file.redirect,
+            status: 301,
+            reason: 'hidden',
+            entry: entryKey(file.path),
+          },
+          updatedAt,
+        ),
+      );
+    return [
+      upsert(
+        db,
+        siteId,
+        file.path,
+        stringifyEntry(siteId, writtenEntry(siteId, entry, form.fields)),
+        file.loaded,
+        updatedAt,
+        { pendingRedirects: rules.length ? rules : null },
+      ),
+    ];
+  });
+  const [first, ...rest] = writes;
+  if (first) await db.batch([first, ...rest]);
+}
+
 // A file as the editor has it: its open draft, or the repository when there is none.
 async function load(
   siteId: string,
@@ -351,6 +413,7 @@ async function load(
       baseSha: row.baseSha,
       baseBlob: row.baseBlob,
       entry: parseEntry(siteId, row.contents),
+      redirects: row.pendingRedirects ?? [],
     };
   // The head first and the file at it, rather than both at once: `base_sha` and `base_blob` are
   // one answer about one commit, and taking them from two reads of a moving branch is a conflict
@@ -363,6 +426,7 @@ async function load(
     baseSha: head,
     baseBlob: file.blob_sha,
     entry: parseEntry(siteId, file.contents),
+    redirects: [] as RedirectRule[],
   };
 }
 
@@ -720,7 +784,25 @@ export async function publishDrafts(
   // address was typed: the old URL is live until now, and one commit carries both. The rules of
   // an entry nobody chose are on its own rows and wait there with it.
   const rules = rows.flatMap((r) => r.pendingRedirects ?? []);
-  if (rules.length) files.push(await appendRedirects(siteId, git, rules, base_sha));
+  // An entry this commit puts back on the site takes its hide rules with it: the page answers
+  // at its own URL again, and a redirect off it would send visitors away from the page that is
+  // there. Read off the file the commit is made against and the bytes going in — a row that
+  // was never hidden has nothing to take out, so an ordinary publish reads nothing extra.
+  const back = new Set(
+    rows.flatMap((r, i) =>
+      current[i] &&
+      !isLive(siteId, parseEntry(siteId, current[i]?.contents ?? '')) &&
+      isLive(siteId, parseEntry(siteId, r.contents))
+        ? (entryKey(r.path) ?? [])
+        : [],
+    ),
+  );
+  const undone = (rule: RedirectRule) =>
+    rule.reason === 'hidden' && rule.entry !== undefined && back.has(rule.entry);
+  if (rules.length || back.size) {
+    const file = await appendRedirects(siteId, git, rules, base_sha, undone);
+    if (file) files.push(file);
+  }
   const { commit_sha } = await git.publish(files, { base_sha, message: commitMessage(paths) });
   // The blobs first: a drizzle statement is thenable, so awaiting anything beside one inside
   // the map would run it there instead of in the batch.

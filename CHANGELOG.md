@@ -4,6 +4,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **A listing that is sold comes off the site without being deleted.** The entry header has a
+  status selector — **Live** or **Hidden**, and nothing called "draft" — and every row of the
+  entry list has a **Hide**; checking several rows hides them together. A hidden entry keeps its
+  file, stays in the admin with a badge, and the site stops rendering it.
+  [Entry lifecycle](docs/entry-lifecycle.md#hiding-an-entry).
+
+- **Hiding a page asks where its visitors should go.** The collection's overview, another page
+  picked from the list, a web address, or nowhere — answered once, and for a batch once for all
+  of them. The answer becomes one redirect per language, from the address that language served,
+  and lands in `redirects.yaml` in the same commit as the status. Showing the entry again takes
+  those rules back out in the commit that puts the page back.
+  [Entry lifecycle](docs/entry-lifecycle.md#hiding-an-entry).
+
+- ⚠️ **The schema in `content.config.ts` has to keep the reserved keys** for hidden entries to
+  stay off the site. Astro drops what a `z.object` does not declare, so `_status` never reached
+  the built data and `filterLive` could not see it. Wrap each collection's schema in a
+  `withReserved` helper — [Template convention](docs/template-convention.md#content-configts)
+  has the four lines. A collection declared `z.looseObject({})` needs nothing.
+
+- `POST /admin/api/status/<collection>` hides or shows one entry or a batch, and takes the
+  redirect answer. `GET /admin/api/entries` now says which rows are `hidden`, the entry route
+  answers `hidden` and where it `redirects` while it is, and the list route carries the
+  collection's `index`. [Admin API](docs/admin-api.md#entries).
+
 - **Pointing at a page is a search box now.** A `reference` field, the Page / Entry half of a
   `link` field and the rich text toolbar's link button all open the same list: every entry the
   site has, grouped by collection, searchable by title or path, with a chip per language saying

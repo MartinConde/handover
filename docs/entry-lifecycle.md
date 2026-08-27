@@ -15,6 +15,25 @@ title: "Seaview Cottage"
 The file stays in the repo and in the admin, and the site ignores it when your loaders
 use `filterLive` (see [Rendering content](rendering.md#hidden-entries)).
 
+Hiding is a status selector in the entry header — never a field in the form — and a
+**Hide** action on each row of the entry list, where checking several rows hides them
+together. It is a normal draft-then-publish edit: one commit, like any other.
+
+Because the page has been at its address for months, hiding asks **"Where should visitors
+to this page go now?"** before it writes anything: the collection's overview, another page
+picked from the list, a web address, or nowhere. The answer becomes one redirect rule per
+language, from the address that language served, and it lands in `redirects.yaml` in the
+same commit as `_status` ([Site files](site-files.md#redirectsyaml)). Showing the entry
+again takes those rules back out, in the commit that puts the page back, so the page
+returns to its own address.
+
+One thing hiding does not undo: a rule that already pointed **at** this page — from an
+older slug, say — was rewritten to the hide's target when it was hidden, so that nobody
+following it hops twice, and it stays rewritten. That URL was the live one at the time.
+Point it back at the page yourself if it matters.
+
+"Nowhere" is an honest answer for a page nobody linked to: its address answers 404.
+
 ## Creating an entry
 
 "New entry" asks for a title and derives the filename from it

@@ -41,6 +41,7 @@ const {
   saveTranslated,
   setEntryAddress,
   setEntryLocales,
+  setEntryStatus,
   translate,
   commitBuild,
   clearPublished,
@@ -138,6 +139,7 @@ const {
     resolveConflict: vi.fn(async () => ({ paths: [] })),
     saveTranslated: vi.fn(async () => ({ updated_at: 1755864000000, pending: true })),
     setEntryLocales: vi.fn(async () => {}),
+    setEntryStatus: vi.fn<(...args: unknown[]) => Promise<void>>(async () => {}),
     setEntryAddress: vi.fn(async () => ({ updated_at: 1755864000000, pending: true })),
     // The provider behind the hook: whatever the site configured, seen from the route.
     translate: vi.fn(async (texts: string[], _from: string, to: string) =>
@@ -537,6 +539,7 @@ vi.mock('@handover/core', async (original) => ({
   saveTranslated,
   setEntryAddress,
   setEntryLocales,
+  setEntryStatus,
   commitBuild,
   clearPublished,
   revertCommit,
@@ -595,6 +598,7 @@ afterEach(() => {
   for (const path of Object.keys(rows)) delete rows[path];
   entryConflict.mockClear();
   entryConflict.mockResolvedValue(undefined);
+  setEntryStatus.mockClear();
   resolveConflict.mockClear();
 });
 
@@ -1178,6 +1182,8 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
     pending: [],
     held: false,
     problems: [{ path: 'address', message: 'Required' }],
+    // On the site: `_status` is absent, so no `redirects` key comes with it either.
+    hidden: false,
     locales: ['en'],
     defaultLocale: 'en',
     sourceLocale: 'en',
@@ -1963,6 +1969,7 @@ test('the picker list carries every collection with the address each language se
   expect(body.entries).toEqual([
     {
       collection: 'listings',
+      hidden: false,
       path: 'listings/mill-house',
       title: 'The Mill House',
       locales: ['en'],
@@ -1970,6 +1977,7 @@ test('the picker list carries every collection with the address each language se
     },
     {
       collection: 'listings',
+      hidden: false,
       path: 'listings/seaview-cottage',
       title: 'Seaview Cottage',
       locales: ['en'],
@@ -1977,6 +1985,7 @@ test('the picker list carries every collection with the address each language se
     },
     {
       collection: 'presenters',
+      hidden: false,
       path: 'presenters/rosa-hale',
       title: 'Rosa Hale',
       locales: ['en'],
@@ -1984,6 +1993,7 @@ test('the picker list carries every collection with the address each language se
     },
     {
       collection: 'posts',
+      hidden: false,
       path: 'posts/hello',
       title: 'Hello',
       locales: ['en'],
@@ -1991,12 +2001,28 @@ test('the picker list carries every collection with the address each language se
     },
     {
       collection: 'posts',
+      hidden: false,
       path: 'posts/taken',
       title: 'Taken',
       locales: ['en', 'de'],
       urls: { en: '/blog/taken', de: '/de/blog/belegt' },
     },
   ]);
+});
+
+// 3.26 listed a hidden entry with nothing to say about it; the picker draws the reason from
+// this flag rather than deciding for itself what a status means.
+test('the picker says which of its rows is off the site', async () => {
+  overlayRows.mockResolvedValueOnce([
+    {
+      path: 'src/content/listings/en/mill-house.yaml',
+      contents: '_version: 1\n_status: "hidden"\ntitle: "The Mill House"\n',
+    },
+  ]);
+
+  const body = (await (await GET(ctx('entries'))).json()) as { entries: { hidden: boolean }[] };
+
+  expect(body.entries.map((e) => e.hidden)).toEqual([true, false, false, false, false]);
 });
 
 test('a save of a translation goes to that language and takes only the words it owns', async () => {
@@ -2628,6 +2654,127 @@ test('nothing to translate with outranks the entry having no file in that langua
 
 // A collection with an address per language. The file name stays the entry's id across them;
 // the address is only what a URL is built from.
+// The redirect a hide owes is one per language, and each language's rule is read off the
+// answer the client gave once. `files()` is the repository: a language with no file there was
+// never on the site, so it has no URL anybody could have followed.
+const hide = (body: Record<string, unknown>) =>
+  POST(post('status/posts', JSON.stringify({ entries: ['hello'], hidden: true, ...body })));
+const written = () => {
+  const files = (setEntryStatus.mock.calls[0]?.[4] ?? []) as {
+    path: string;
+    redirect?: { from: string; to: string };
+  }[];
+  return files
+    .filter((f) => f.redirect)
+    .map((f) => [f.path.split('/')[3], f.redirect?.from, f.redirect?.to]);
+};
+
+test('hiding an entry sends each language to the overview under its own segment', async () => {
+  addressed();
+
+  expect((await hide({ redirect: { kind: 'index' } })).status).toBe(200);
+  expect(setEntryStatus.mock.calls[0]?.[5]).toBe(true);
+  expect(written()).toEqual([
+    ['en', '/blog/hello-world', '/blog'],
+    ['de', '/de/blog/hallo', '/de/blog'],
+  ]);
+});
+
+// The page picker answers with an entry, and the entry's address in that language is what the
+// rule is made of — not the English one under a German segment.
+test('a picked page is the address that language serves it at', async () => {
+  addressed();
+
+  await hide({ redirect: { kind: 'entry', value: 'posts/taken' } });
+
+  expect(written()).toEqual([
+    ['en', '/blog/hello-world', '/blog/taken'],
+    ['de', '/de/blog/hallo', '/de/blog/belegt'],
+  ]);
+});
+
+// The case redirects.md spells out: a target with no page in one of the languages sends that
+// language to the target's own collection index instead of to a page it cannot read.
+test('a picked page with no half in a language falls back to that collection overview', async () => {
+  addressed();
+
+  await hide({ redirect: { kind: 'entry', value: 'listings/mill-house' } });
+
+  expect(written()).toEqual([
+    ['en', '/blog/hello-world', '/listings/mill-house'],
+    ['de', '/de/blog/hallo', '/de/listings'],
+  ]);
+});
+
+test('a typed web address is the one answer for every language', async () => {
+  addressed();
+
+  await hide({ redirect: { kind: 'url', value: 'https://example.com/gone' } });
+
+  expect(written()).toEqual([
+    ['en', '/blog/hello-world', 'https://example.com/gone'],
+    ['de', '/de/blog/hallo', 'https://example.com/gone'],
+  ]);
+});
+
+test('"nowhere" hides the entry and writes no rule at all', async () => {
+  addressed();
+
+  await hide({ redirect: { kind: 'none' } });
+
+  expect(written()).toEqual([]);
+  expect(setEntryStatus.mock.calls[0]?.[5]).toBe(true);
+});
+
+// A language whose file is only a draft has never been served, so hiding the entry before its
+// first publish owes nothing: there is no old link for anybody to follow.
+test('a language with no file in the repository owes no redirect', async () => {
+  locales = ['en', 'de'];
+  files['src/content/posts/en/hello.yaml'] = '_version: 1\ntitle: "Hello"\nslug: "hello-world"\n';
+
+  await hide({ redirect: { kind: 'index' } });
+
+  expect(written()).toEqual([['en', '/blog/hello-world', '/blog']]);
+});
+
+test('showing an entry again writes the files and no rules', async () => {
+  addressed();
+
+  const res = await POST(
+    post('status/posts', JSON.stringify({ entries: ['hello'], hidden: false })),
+  );
+
+  expect(res.status).toBe(200);
+  expect(setEntryStatus.mock.calls[0]?.[5]).toBe(false);
+  expect(written()).toEqual([]);
+});
+
+// Bulk hide asks the question once and applies that answer to every entry in the batch.
+test('one answer covers every entry in a bulk hide', async () => {
+  addressed();
+  files['src/content/posts/en/taken.yaml'] = '_version: 1\ntitle: "Taken"\n';
+
+  await POST(
+    post(
+      'status/posts',
+      JSON.stringify({ entries: ['hello', 'taken'], hidden: true, redirect: { kind: 'index' } }),
+    ),
+  );
+
+  expect(setEntryStatus).toHaveBeenCalledTimes(2);
+  expect(
+    setEntryStatus.mock.calls.map((call) =>
+      (call[4] as { path: string; redirect?: { from: string } }[])
+        .filter((f) => f.redirect)
+        .map((f) => f.redirect?.from),
+    ),
+  ).toEqual([['/blog/hello-world', '/de/blog/hallo'], ['/blog/taken']]);
+});
+
+test('a collection the site does not declare has no status route', async () => {
+  expect((await POST(post('status/nope', '{"entries":["x"],"hidden":true}'))).status).toBe(404);
+});
+
 const addressed = () => {
   locales = ['en', 'de'];
   files['src/content/posts/en/hello.yaml'] = '_version: 1\ntitle: "Hello"\nslug: "hello-world"\n';

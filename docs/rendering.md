@@ -98,6 +98,12 @@ An entry with `_status: hidden` in its file stays in the repo but must not rende
 is the same check for one entry. Use them in loaders and in `getStaticPaths`, so a hidden
 entry 404s instead of being reachable by URL.
 
+This only works if `_status` survives the collection schema. Astro parses every entry through
+it, and a plain `z.object` drops the keys it does not declare — so the schema in
+`content.config.ts` has to keep the reserved ones
+([Template convention](template-convention.md#content-configts)). Without that every helper here
+reads `_status: undefined` and a hidden entry renders.
+
 `isLive(siteId, data, locale)` asks the same of one language: a hidden file is not live in any,
 and neither is a language the entry's `_locales` does not offer it in. The switcher does not
 need the third argument — it holds the language's own file, and a language an entry is not
