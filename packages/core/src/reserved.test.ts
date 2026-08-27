@@ -105,6 +105,23 @@ test('regenerateIds gives an array item that never had an _id one of its own', (
   expect(copy.tags).toEqual(['sea', 'devon']);
 });
 
+// `rowKey` pairs rows across languages by `_id`, so a stamped one has to be shared the way a
+// regenerated one is — two locale files of one copy disagreeing about it reads as drift.
+test('a stamped _id is shared across the locale files of one entry too', () => {
+  const ids = new Map<string, string>();
+  const rows = {
+    blocks: [
+      { _type: 'hero', heading: 'Hi' },
+      { _type: 'quote', body: 'Ho' },
+    ],
+  };
+  const en = regenerateIds('default', rows, ids);
+  const de = regenerateIds('default', rows, ids);
+  expect(collectIds(de)).toEqual(collectIds(en));
+  expect(collectIds(en)).toHaveLength(2);
+  expect(new Set(collectIds(en)).size).toBe(2);
+});
+
 test('a shared map gives two locale files the same new ids', () => {
   const ids = new Map<string, string>();
   const en = regenerateIds('default', page, ids);

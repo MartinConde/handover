@@ -359,6 +359,26 @@ test('duplicate leaves the original address behind and falls back to the new fil
   expect(copies[0]?.contents).toBe('_version: 1\ntitle: "Meerblick"\n');
 });
 
+// A file written by hand — a starter, or anything from before the CMS — has no `_id` on its
+// rows. The copy gives them one, and the languages have to agree about it: `rowKey` pairs rows
+// across files by `_id`, so two files inventing their own would read as drift on day one.
+test('a row that never had an _id gets the same new one in every locale', async () => {
+  const block = (heading: string) =>
+    `_version: 1\nblocks:\n  - _type: "hero"\n    heading: "${heading}"\n`;
+  const { git } = fakeGit({
+    'src/content/listings/en/seaview.yaml': block('Seaview'),
+    'src/content/listings/de/seaview.yaml': block('Meerblick'),
+  });
+
+  const copies = await duplicateEntry('default', git, listings, 'seaview', 'seaview-copy');
+
+  const ids = copies.map(
+    (c) => (parse(c.contents) as { blocks: { _id: string }[] }).blocks[0]?._id,
+  );
+  expect(ids[0]).toEqual(ANY_ID);
+  expect(ids[1]).toBe(ids[0]);
+});
+
 // "Duplicate including unpublished changes?": the languages the caller answers yes for are
 // copied from the draft it hands in, and the rest still come from the commit.
 test('duplicate copies the bytes the caller hands it over the committed ones', async () => {

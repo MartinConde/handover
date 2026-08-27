@@ -78,20 +78,23 @@ export function regenerateIds<T>(siteId: string, data: T, ids = new Map<string, 
   return renamed;
 }
 
-function walk(siteId: string, value: unknown, ids: Map<string, string>, item = false): unknown {
-  if (Array.isArray(value)) return value.map((v) => walk(siteId, v, ids, true));
+function walk(siteId: string, value: unknown, ids: Map<string, string>, at = ''): unknown {
+  if (Array.isArray(value)) return value.map((v, i) => walk(siteId, v, ids, `${at}[${i}]`));
   if (!value || typeof value !== 'object') return value;
   const copy = Object.fromEntries(
     Object.entries(value).map(([k, v]) => {
-      if (k !== '_id' || typeof v !== 'string') return [k, walk(siteId, v, ids)];
+      if (k !== '_id' || typeof v !== 'string') return [k, walk(siteId, v, ids, `${at}.${k}`)];
       const next = ids.get(v) ?? newId(siteId);
       ids.set(v, next);
       return [k, next];
     }),
   );
   // The identity the editor keys rows on and `_machine` addresses fields through, which the
-  // form gives every row it adds. `stringifyEntry` sorts it back to the front.
-  if (item && typeof copy._id !== 'string') copy._id = newId(siteId);
+  // form gives every row it adds. Keyed by where it sits, so the languages of one copy agree
+  // about it the way a regenerated one makes them: `rowKey` pairs rows across files by `_id`,
+  // and two files inventing their own would read as drift. `stringifyEntry` sorts it to the front.
+  if (at.endsWith(']') && typeof copy._id !== 'string')
+    copy._id = ids.get(at) ?? ids.set(at, newId(siteId)).get(at);
   return copy;
 }
 
