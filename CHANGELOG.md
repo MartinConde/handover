@@ -4,6 +4,34 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **A delete can be undone.** Every entry list has a **Deleted** tab beside **All**, listing what
+  the admin took away in that collection — the whole entry, or one language of it — with who,
+  when, and **Restore**. The same button is on the row in the activity log. Restoring undoes that
+  commit with a commit of its own: the files come back as they were, the `reason: "deleted"`
+  rules it appended come back out of `redirects.yaml`, and there is nothing left to publish
+  afterwards. It is refused, naming the path, when something is at one of them again.
+  [Entry lifecycle](docs/entry-lifecycle.md#putting-a-deleted-entry-back).
+
+- **Turning a language off can be undone too**, and *Turn German back on* offers it: the German
+  words come back from the repository instead of an empty form. What no commit can carry comes
+  with it — the mark on the files that stayed goes back into their unpublished edits, so the
+  next publish does not write the language straight off again.
+
+- **`locale-off` is an activity kind**, with the languages that went. `entry-delete` now carries
+  those languages too, as `detail.locales`, where it carried a file count.
+  [Activity log](docs/activity.md).
+
+- `POST /admin/api/restore { "commit_sha" }` and `GET /admin/api/deleted/<collection>`.
+  [Admin API](docs/admin-api.md#entries).
+
+- ⚠️ `revertCommit` in `@handover/core` answers with the files it wrote as well as their paths,
+  so that `restoreCommit` beside it can read them. A route that answered with the whole result
+  would now put file contents on the wire; both of ours answer `{ commit_sha, paths }`.
+
+- The activity read, `GET /admin/api/activity`, is documented in
+  [The admin API](docs/admin-api.md#activity) with the other routes rather than on the activity
+  page, which is now about what is recorded and how a row reads.
+
 - **Renaming or deleting an entry waits for the colleague who has it open.** Both actions
   commit every locale file at once, so neither runs under somebody else's edit; while they hold
   the entry it is refused with a sentence naming them. The lock then follows the rename, and a

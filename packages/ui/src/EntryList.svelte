@@ -8,9 +8,29 @@ type Entry = {
   /** The languages it is offered in, absent when that is every language the site declares. */
   offered?: string[];
 };
+/** One thing the CMS took away, as the activity log remembers it. */
+type Deleted = {
+  id: string;
+  at: number;
+  by: string | null;
+  slug: string;
+  /** The languages that went — every one the entry had, or the ones turned off. */
+  locales: string[];
+  whole: boolean;
+  commit_sha: string;
+  /** Why it cannot come back: something is at one of its paths again. */
+  blocked?: string;
+};
 let { collection, onchanged }: { collection: string; onchanged: () => void } = $props();
 
 let entries = $state<Entry[]>([]);
+// Which set is on screen. A tab rather than a filter: the filters all narrow the same list and
+// this one changes which list, because a deleted entry is in neither the index nor the drafts.
+let tab = $state<'all' | 'deleted'>('all');
+let deleted = $state<Deleted[]>([]);
+let deletedLoading = $state(false);
+// The row whose restore is waiting to be confirmed.
+let putting = $state<Deleted>();
 // The languages the site declares, in its own order. One and the column is not drawn at all.
 let locales = $state<string[]>([]);
 // The page above this collection, which is where a hidden entry's readers go by default.
@@ -30,6 +50,10 @@ let field = $state<HTMLInputElement>();
 
 $effect(() => {
   load(collection);
+});
+// Asked for only when it is looked at: an entry list nobody opens the tab on costs no query.
+$effect(() => {
+  if (tab === 'deleted') loadDeleted(collection);
 });
 $effect(() => {
   field?.focus();
@@ -60,6 +84,21 @@ const preview = $derived(
     entries.map((e) => e.id).filter((id) => dialog !== 'rename' || id !== target?.id),
   ),
 );
+
+const WHEN = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'long',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+
+async function loadDeleted(name: string) {
+  deletedLoading = true;
+  const res = await fetch(`/admin/api/deleted/${name}`);
+  deletedLoading = false;
+  if (res.ok) deleted = ((await res.json()) as { deleted: Deleted[] }).deleted;
+  else error = `Could not load what was deleted (${res.status})`;
+}
 
 async function load(name: string) {
   const res = await fetch(`/admin/api/entries/${name}`);
@@ -92,6 +131,7 @@ function open(kind: 'new' | 'rename', entry?: Entry) {
 const close = () => {
   dialog = '';
   offsite = undefined;
+  putting = undefined;
   error = '';
 };
 
@@ -112,9 +152,22 @@ async function send(url: string, init: RequestInit) {
   if (res.ok) return res;
   error =
     res.status === 409 || res.status === 503
-      ? await res.text()
+      ? said(await res.text())
       : `That did not work (${res.status})`;
   return undefined;
+}
+
+// A refused restore names the files it is about in json; everything else answers in words.
+const said = (body: string) =>
+  body.startsWith('{') ? ((JSON.parse(body) as { error?: string }).error ?? body) : body;
+
+// Undoing the commit that took the files away, which is the same inverse a revert is. Both
+// lists move: the entry is back in one and its row can no longer be restored in the other.
+async function restore(row: Deleted) {
+  if (!(await send('/admin/api/restore', json({ commit_sha: row.commit_sha })))) return;
+  close();
+  await Promise.all([load(collection), loadDeleted(collection)]);
+  onchanged();
 }
 
 async function create(event: Event) {
@@ -156,8 +209,90 @@ async function done() {
     <span class="spacer"></span>
     <button class="btn btn-primary" type="button" onclick={() => open('new')}>New {singular}</button>
   </div>
+  <div class="tabs" role="tablist" aria-label="Which {collection}">
+    <button
+      type="button"
+      role="tab"
+      aria-selected={tab === 'all'}
+      onclick={() => (tab = 'all')}>All</button
+    >
+    <button
+      type="button"
+      role="tab"
+      aria-selected={tab === 'deleted'}
+      onclick={() => (tab = 'deleted')}>Deleted</button
+    >
+  </div>
   {#if error && !dialog}<p class="notice notice-danger" role="alert">{error}</p>{/if}
-  {#if loading}
+  {#if tab === 'deleted'}
+    <p class="list-note">
+      A deleted {singular} is in neither the published site nor your unpublished changes, so this is
+      a record of what happened rather than a filter over the list. Kept for 180 days.
+    </p>
+    {#if deletedLoading && !deleted.length}
+      <p class="placeholder">Loading…</p>
+    {:else if deleted.length}
+      <div class="table cols-4" role="table" aria-label="Deleted {collection}">
+        <div class="row-head" role="row">
+          <div class="th" role="columnheader">File name</div>
+          <div class="th" role="columnheader">What went</div>
+          <div class="th" role="columnheader">Deleted</div>
+          <div class="th" role="columnheader"><span class="visually-hidden">Actions</span></div>
+        </div>
+        {#each deleted as row (row.id)}
+          <div class="row" role="row">
+            <div class="td title filename" role="cell">{row.slug}</div>
+            <div class="td" role="cell" data-label="What went">
+              {row.whole ? `The whole ${singular}` : 'One language'}
+              {#if row.locales.length}
+                <span class="chips" aria-label="Languages">
+                  {#each row.locales as locale (locale)}
+                    <span class="chip">{locale.toUpperCase()}</span>
+                  {/each}
+                </span>
+              {/if}
+            </div>
+            <div class="td num" role="cell" data-label="Deleted">
+              {row.by ?? 'System'}
+              <span class="sep" aria-hidden="true">·</span>
+              {WHEN.format(row.at)}
+            </div>
+            <div class="td menu-cell" role="cell">
+              <!-- Greyed with aria-disabled rather than disabled: a disabled button takes no
+                   focus, and a keyboard user would arrow past the reason without hearing it. -->
+              <button
+                class="btn btn-sm"
+                type="button"
+                aria-disabled={Boolean(row.blocked)}
+                aria-describedby={row.blocked ? `why-${row.id}` : undefined}
+                onclick={() => !row.blocked && (putting = row)}
+                >Restore<span class="visually-hidden"> {row.slug}</span></button
+              >
+            </div>
+          </div>
+          {#if row.blocked}
+            <div class="row row-note" role="row">
+              <div class="td" role="cell">
+                <p class="notice notice-warn" id="why-{row.id}">
+                  Can't be restored: {row.blocked} Rename what is there, then try again.
+                </p>
+              </div>
+            </div>
+          {/if}
+        {/each}
+      </div>
+    {:else}
+      <div class="empty">
+        <div>
+          <h2>Nothing has been deleted</h2>
+          <p>
+            Deleted {collection} turn up here for as long as the activity log keeps them — 180 days
+            on this site.
+          </p>
+        </div>
+      </div>
+    {/if}
+  {:else if loading}
     <p class="placeholder">Loading…</p>
   {:else if entries.length}
     <div class="table has-select" class:cols-3={!many} class:cols-4={many} role="table" aria-label={capitalise(collection)}>
@@ -269,6 +404,41 @@ async function done() {
     </div>
   {/if}
 </main>
+
+{#if putting}
+  {@const row = putting}
+  <div class="scrim">
+    <div class="dialog" role="dialog" aria-labelledby="restore-h">
+      <h2 id="restore-h">Restore {row.slug}?</h2>
+      <p>
+        The files come back as they were on {WHEN.format(row.at)}, in a commit of its own — the
+        site has them again as soon as the build is through.
+      </p>
+      <ul class="publish-set">
+        <li>
+          {#if row.locales.length}
+            <span class="chips" aria-hidden="true">
+              {#each row.locales as locale (locale)}<span class="chip">{locale.toUpperCase()}</span
+                >{/each}
+            </span>
+          {/if}
+          {row.whole ? 'Every language file it had' : 'The language file that was turned off'}
+        </li>
+        <li>The redirect that was added when it went is taken back out</li>
+      </ul>
+      <p class="hint">
+        Pictures are never deleted with an entry, so the gallery comes back whole.
+      </p>
+      {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
+      <div class="actions">
+        <button class="btn" type="button" onclick={close}>Cancel</button>
+        <button class="btn btn-primary" type="button" disabled={busy} onclick={() => restore(row)}>
+          {busy ? 'Restoring…' : 'Restore'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 {#if offsite}
   {@const ids = offsite.ids}

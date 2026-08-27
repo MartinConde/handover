@@ -590,3 +590,95 @@ test('a key the client set reads as what happened to it, and never as the key', 
     'Anna Berg changed a key.',
   ]);
 });
+
+// The two commits that take a file away, and the one that puts one back. A delete is named
+// rather than linked: the entry is gone, so the link would be a 404.
+test('the two removals and a restore each read as their own sentence', async () => {
+  server({
+    events: [
+      ev('entry-delete', {
+        subject: 'src/content/listings/en/mill-house.yaml',
+        detail: { locales: ['en', 'de'] },
+        commitSha: 'd1b2c3d4e5f60718',
+      }),
+      ev('locale-off', {
+        subject: 'src/content/listings/en/harbour-flat.yaml',
+        detail: { locales: ['de'] },
+        commitSha: 'e1b2c3d4e5f60718',
+      }),
+      ev('revert', {
+        subject: 'src/content/listings/en/mill-house.yaml',
+        detail: { of: 'd1b2c3d', files: 2, restore: true },
+        commitSha: 'f1b2c3d4e5f60718',
+      }),
+      ev('revert', { detail: { of: 'a1b2c3d', files: 2 }, commitSha: 'a2b2c3d4e5f60718' }),
+    ],
+    cursor: null,
+  });
+  const root = await show();
+
+  expect(sentences(root)).toEqual([
+    'Anna Berg deleted mill-house (EN, DE). d1b2c3d',
+    'Anna Berg turned DE off for harbour-flat EN e1b2c3d',
+    'Anna Berg restored mill-house EN f1b2c3d',
+    'Anna Berg undid a publish. a2b2c3d',
+  ]);
+  expect(root.querySelectorAll('.said a').length).toBe(2);
+});
+
+// The way back is on the row that recorded the removal, and only there: a publish is undone
+// from the drawer, and a row with no commit behind it has nothing to put back.
+test('restore is offered on a removal and sends the commit that row named', async () => {
+  const calls = server({
+    events: [
+      ev('entry-delete', {
+        subject: 'src/content/listings/en/mill-house.yaml',
+        detail: { locales: ['en'] },
+        commitSha: 'd1b2c3d4e5f60718',
+      }),
+      ev('publish', { detail: { files: 1 }, commitSha: 'a1b2c3d4e5f60718' }),
+    ],
+    cursor: null,
+  });
+  const root = await show();
+
+  const buttons = Array.from(root.querySelectorAll('li .meta button'));
+  expect(buttons.map((b) => b.textContent)).toEqual(['Restore']);
+  (buttons[0] as HTMLButtonElement).click();
+  await settle();
+
+  expect(fetch).toHaveBeenCalledWith('/admin/api/restore', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ commit_sha: 'd1b2c3d4e5f60718' }),
+  });
+  // And the list is read again, so the row it was on can say what it says now.
+  expect(activityCalls(calls).length).toBe(2);
+});
+
+// The one case a restore is refused: something is at the path again. The server's own sentence
+// names the file, and nothing was written.
+test('a refused restore says what the server said', async () => {
+  server({
+    events: [
+      ev('entry-delete', {
+        subject: 'src/content/listings/en/mill-house.yaml',
+        detail: { locales: ['en'] },
+        commitSha: 'd1b2c3d4e5f60718',
+      }),
+    ],
+    cursor: null,
+  });
+  const root = await show();
+  vi.mocked(fetch).mockImplementationOnce(
+    async () =>
+      new Response(JSON.stringify({ error: 'mill-house.yaml has changed since that commit' }), {
+        status: 409,
+      }),
+  );
+
+  (root.querySelector('li .meta button') as HTMLButtonElement).click();
+  await settle();
+
+  expect(root.querySelector('.notice-warn')?.textContent).toContain('has changed since');
+});

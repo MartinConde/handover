@@ -141,6 +141,43 @@ async function ask(url: string, init: RequestInit = {}) {
   return res.ok;
 }
 
+/**
+ * The turn-off this language can be brought back from, when the CMS is what turned it off.
+ * Without it *Turn German back on* re-offers the language and hands over an empty form, and the
+ * German words are only in the repository — which is the whole difference between the two.
+ */
+let putBack = $state<{ commit_sha: string; at: number }>();
+$effect(() => {
+  const of = shown;
+  putBack = undefined;
+  // A global has no languages to turn off, and its collection is not one the route knows.
+  if (of && off(of) && !entry.singleton) findRestore(of);
+});
+
+async function findRestore(of: string) {
+  // A nicety, not the way in: if the log cannot be asked, the offer is simply not made and
+  // *Turn German back on* stands where it did.
+  const res = await fetch(`/admin/api/deleted/${collection}`).catch(() => undefined);
+  if (!res?.ok) return;
+  const { deleted } = (await res.json()) as {
+    deleted: {
+      slug: string;
+      locales: string[];
+      whole: boolean;
+      commit_sha: string;
+      at: number;
+      blocked?: string;
+    }[];
+  };
+  const found = deleted.find(
+    (row) => !row.whole && !row.blocked && row.slug === slug && row.locales.includes(of),
+  );
+  // The answer to a language nobody is looking at any more is not this pane's.
+  if (found && of === shown) putBack = found;
+}
+
+const WHEN = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
 const createFrom = (of: string) => ask(`/admin/api/drafts/${collection}/${slug}/${of}`);
 // Create from English and then a machine's first draft of it, as one answer to the offer: the
 // file has to exist before anything can be written into it.
@@ -766,9 +803,31 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
                   This entry is not offered in {language(shown)}. No {language(shown)} file is
                   written and the site does not link to one.
                 </p>
-                <button class="btn" type="button" disabled={busy || locked} onclick={() => offer(shown, true)}>
-                  Turn {language(shown)} back on
-                </button>
+                {#if putBack}
+                  <p>
+                    It was turned off here on {WHEN.format(putBack.at)}, and the {language(shown)}
+                    words are still in the repository.
+                  </p>
+                  <button
+                    class="btn btn-primary"
+                    type="button"
+                    disabled={busy || locked}
+                    onclick={() =>
+                      ask('/admin/api/restore', {
+                        headers: { 'content-type': 'application/json' },
+                        body: JSON.stringify({ commit_sha: putBack?.commit_sha }),
+                      })}
+                  >
+                    Bring the {language(shown)} words back
+                  </button>
+                  <p>
+                    Or <button class="btn-link" type="button" disabled={busy || locked} onclick={() => offer(shown, true)}>turn {language(shown)} back on with an empty form</button>.
+                  </p>
+                {:else}
+                  <button class="btn" type="button" disabled={busy || locked} onclick={() => offer(shown, true)}>
+                    Turn {language(shown)} back on
+                  </button>
+                {/if}
               </div>
             {:else}
               <div class="is-wide">

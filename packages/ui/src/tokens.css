@@ -422,6 +422,8 @@ a.btn { text-decoration: none; }
 .table .td.title a { color: var(--ink); font-weight: 500; text-decoration: none; }
 .table .td.title a:hover { text-decoration: underline; }
 .table .td.num { font-size: var(--text-sm); color: var(--ink-2); white-space: nowrap; }
+/* The reason a row cannot be restored, under the row it is about. */
+.table .row.row-note .td { grid-column: 1 / -1; }
 .table .td.menu-cell { padding-right: var(--s-1); }
 .table input[type="checkbox"] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent-ink); }
 .pdot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-ink); box-shadow: 0 0 0 3px var(--accent-soft); flex: none; }

@@ -105,3 +105,27 @@ await deleteEntry('default', git, listings, 'mill-house', (locale) =>
 
 The rule shape, and how the build turns the file into `_redirects`, is in
 [Site files](site-files.md#redirects), together with globals, navigation and templates.
+
+## Putting a deleted entry back
+
+A delete commits, so it can be undone the way a publish can. Every entry list has a **Deleted**
+tab beside **All** — a record of what the admin took away in that collection rather than a
+filter over the list, because a deleted entry is in neither the built site nor the unpublished
+changes. Each row says what went (the whole entry, or one language of it), who took it away and
+when, and offers **Restore**. The same button is on the row in the [activity log](activity.md),
+which is where a language turned off is undone from as well.
+
+Restoring makes one commit that undoes the delete's: the files come back exactly as the commit
+before it had them, and the `reason: "deleted"` rules that delete appended are taken back out of
+`redirects.yaml` — recomputed, so a rule written since stays. Pictures are never deleted with an
+entry, so the gallery comes back whole. There is nothing left to publish afterwards.
+
+Restoring is **refused rather than forced** when a file it would write is not the one the delete
+left behind — an entry created under the freed name since, or one already put back. Nothing is
+written, and the row says which path is in the way. Rename what is there and try again.
+
+Turning a language off is the same undo: on the entry, *Turn German back on* offers to bring the
+German words back when the CMS is what turned it off, instead of handing over an empty form. It
+puts back the file, the mark on the languages that stayed, and any unpublished edit of theirs —
+which a commit alone cannot do, and which is why the next publish does not write the language
+straight off again.

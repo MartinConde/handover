@@ -31,6 +31,9 @@ const status = $derived(
 
 /** A page that is no longer the one being asked for must not land in the list. */
 let asked = 0;
+/** The removal being put back, and what the server said if it would not be. */
+let putting = $state('');
+let refused = $state('');
 /** Which row has its reason open — one at a time, the way the log reads. */
 let why = $state('');
 
@@ -68,6 +71,32 @@ async function load(next?: string | null) {
   const page = (await res.json()) as { events: ActivityEvent[]; cursor: string | null };
   events = next ? [...events, ...page.events] : page.events;
   cursor = page.cursor;
+}
+
+/**
+ * The delete on this row undone. No confirmation, unlike the entry list's own Restore and unlike
+ * a revert: this only ever puts files back, and the one case where it would write over something
+ * is refused by the server rather than done — so there is nothing here to be sorry about.
+ */
+async function putBack(event: ActivityEvent) {
+  putting = event.id;
+  refused = '';
+  const res = await fetch('/admin/api/restore', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ commit_sha: event.commitSha }),
+  });
+  putting = '';
+  if (!res.ok) {
+    const body = await res.text();
+    // A file that has moved on since is the server's own sentence, and it names the file.
+    refused =
+      res.status === 409
+        ? ((JSON.parse(body.startsWith('{') ? body : '{}') as { error?: string }).error ?? body)
+        : `That was not restored (${res.status}). Nothing was changed.`;
+    return;
+  }
+  await load();
 }
 
 function clear() {
@@ -117,6 +146,9 @@ const MESSAGE: Record<string, string> = {
   'password reset': 'A password reset',
 };
 
+/** The kinds a restore is offered over, which are the two commits that take a file away. */
+const RESTORABLE = ['entry-delete', 'locale-off'];
+
 const who = (event: ActivityEvent) =>
   event.user ? event.user.name || event.user.email || 'A removed member' : 'System';
 /** The subject of an Accounts event is a member id; the list an owner already has gives it a name. */
@@ -145,6 +177,11 @@ const changed = (files: number) =>
 const count = (detail: unknown): number => {
   const value = (detail as { files?: unknown } | null | undefined)?.files;
   return typeof value === 'number' ? value : 0;
+};
+/** The languages a removal took away, as the row that would put them back names them. */
+const went = (detail: unknown): string => {
+  const value = (detail as { locales?: unknown } | null | undefined)?.locales;
+  return Array.isArray(value) ? value.map((l) => String(l).toUpperCase()).join(', ') : '';
 };
 
 function said(event: ActivityEvent): Said {
@@ -219,6 +256,32 @@ function said(event: ActivityEvent): Said {
       const did = HOW_KEY[str(d, 'how') ?? ''] ?? 'changed';
       const key = INTEGRATIONS[event.subject ?? ''];
       return { lead: key ? `${actor} ${did} the ${key}.` : `${actor} ${did} a key.` };
+    }
+    case 'entry-delete': {
+      // Named rather than linked: the entry is gone, and a row pointing at a page that answers
+      // 404 is worse than the file name on its own.
+      const gone = entryOf(event.subject);
+      const langs = went(d);
+      return {
+        lead: `${actor} deleted ${gone?.label ?? 'an entry'}${langs ? ` (${langs})` : ''}.`,
+      };
+    }
+    case 'locale-off': {
+      const one = entryOf(event.subject);
+      const langs = went(d) || 'a language';
+      return one
+        ? { lead: `${actor} turned ${langs} off for `, link: one }
+        : { lead: `${actor} turned ${langs} off for an entry.` };
+    }
+    case 'revert': {
+      // Both are the same inverse commit, so the detail is what tells them apart: one takes a
+      // publish back, the other puts a delete back.
+      const one = entryOf(event.subject);
+      if (!(d as { restore?: unknown } | null)?.restore)
+        return { lead: `${actor} undid a publish.` };
+      return one
+        ? { lead: `${actor} restored `, link: one }
+        : { lead: `${actor} restored ${count(d)} files.` };
     }
     case 'upload':
       // No library to open until Phase 4, so the name it was chosen as is the whole row.
@@ -317,6 +380,7 @@ function when(at: number): string {
     <p class="list-note">Showing your own activity. Owners see everyone's.</p>
   {/if}
   {#if failure}<p class="notice notice-danger" role="alert">{failure}</p>{/if}
+  {#if refused}<p class="notice notice-warn" role="alert">{refused}</p>{/if}
   {#if loading}
     <p class="placeholder">Loading…</p>
   {:else if events.length === 0}
@@ -350,6 +414,18 @@ function when(at: number): string {
               {#if event.commitSha}<span class="sub sha">{event.commitSha.slice(0, 7)}</span>{/if}
             </p>
             <span class="meta">
+              <!-- The way back from the two commits that take a file away, on the row that
+                   recorded one. The entry list's Deleted view is the same undo with the
+                   collection's chrome around it. -->
+              {#if RESTORABLE.includes(event.kind) && event.commitSha}
+                <button
+                  class="btn btn-sm"
+                  type="button"
+                  disabled={putting === event.id}
+                  onclick={() => putBack(event)}
+                  >{putting === event.id ? 'Restoring…' : 'Restore'}</button
+                >
+              {/if}
               {#if activityGroupOf(event.kind)}
                 <span class="badge">{activityGroupOf(event.kind)}</span>
               {/if}

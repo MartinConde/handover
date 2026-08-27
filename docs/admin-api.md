@@ -19,14 +19,14 @@ Conventions across all of them:
 - Times are epoch milliseconds
 
 Accounts, members and the mailer check are not here: they are Better Auth's, and what a site
-has to set up for them is [Accounts and signing in](auth.md). Nor is the activity log's read,
-which is the one route meant to be called from your own code and is documented as such in
-[Activity log](activity.md#reading-it-from-your-own-code).
+has to set up for them is [Accounts and signing in](auth.md). The one exception to *not to be
+built against* is [the activity read](#activity), which is meant to be called from your own
+code; what it records is [Activity log](activity.md).
 
 ## Entries
 
 Reading a collection and an entry, and the changes that commit rather than draft — a
-rename, a delete, and turning a language off.
+rename, a delete, turning a language off, and reading back what was deleted.
 
 ```
 GET /admin/api/entries                      →  { "entries": [{ "collection", "path", "title", "locales", "urls", "hidden" }], "locales": ["en", "de"] }
@@ -182,6 +182,19 @@ the key out and leaves the file name to serve it. `404` on a collection without
 `localizedSlugs`, on a language the site does not declare, and on an entry with no file in
 that language; `422` when the address is not one; `409` when another entry in the collection
 already answers to it in that language, its file name counted.
+
+```
+GET /admin/api/deleted/:collection  →  { "deleted": [ … ] }
+```
+
+What the admin removed from that collection, newest first — the **Deleted** tab's rows, read
+from the activity log rather than from the content index, since a deleted entry is in neither
+the index nor the draft rows. Each is `{ "id", "at", "by", "slug", "locales", "whole",
+"commit_sha" }`: `whole` is `false` for a language turned off, `locales` the languages that
+went, `by` the person's name or `null` for the system. A row that cannot be put back also
+carries `blocked`, a sentence naming the path that is occupied again. Only rows with a commit
+behind them are listed — an entry deleted before it was ever published made none. `404` when
+the collection is not configured.
 
 ## Drafts
 
@@ -393,6 +406,17 @@ commit the admin made, not only the last one. The answer's `commit_sha` is the n
 `paths` what it wrote. `400` without a `commit_sha`; `409` with `{ "error", "paths" }` when one of
 the files has changed since — nothing is written and the paths are named.
 
+```
+POST /admin/api/restore  { "commit_sha": "…" }  →  { "commit_sha", "paths" }
+```
+
+The same inverse, over the commit an `entry-delete` or a `locale-off` row names
+([Entry lifecycle](entry-lifecycle.md#putting-a-deleted-entry-back)). It does what a revert
+cannot: the marks a turn-off wrote into the open drafts of the files that stayed go back to
+what the restored files say, and the rows that were keeping the restored paths off the entry
+list are dropped. Same answer, same `400`, same `409` — and the `409` is the ordinary case of
+somebody having taken the freed name.
+
 ## Locks
 
 The soft lock on an entry, and what it does to a save. What it means for two people
@@ -541,3 +565,55 @@ with DeepL's own refusal if that fails; `detail` is what it translated when it w
 an empty value, `404` for a key outside the two, `503` when `HANDOVER_SETTINGS_KEY` is not set —
 the body names it. Every write is a `setting-changed` row in the [activity log](activity.md),
 carrying the name of the key and never its value.
+
+## Activity
+
+The read behind the [activity log](activity.md), and the one route here meant to be called from
+your own code.
+
+```http
+GET /admin/api/activity
+```
+
+Answers the newest 50 events for whoever is signed in:
+
+```jsonc
+{
+  "events": [
+    {
+      "id": "k3f9d2ab",
+      "at": 1755864000000,          // epoch milliseconds
+      "kind": "publish",
+      "subject": "src/content/listings/en/seaview-cottage.yaml",
+      "detail": { "files": 1 },
+      "commitSha": "def4567",
+      "user": { "id": "usr_1", "name": "Anna Berg", "email": "anna@example.com" }
+    }
+  ],
+  "cursor": "1755863000000.b7x2p1qd"
+}
+```
+
+- `user` is `null` for an event nothing did on somebody's behalf — a failed send, a cron job.
+  A member who has since been removed keeps their events, so `user.name` and `user.email` can
+  be `null` beside an `id` that no longer exists: the log outlives the account.
+- `subject` is whatever the kind is about — an entry path for a `publish` of one file, the
+  member's id for an `invite` or a `role-change`.
+- `detail` is small JSON and differs per kind. Never file contents.
+- `cursor` is `null` on the last page.
+
+Four optional query parameters:
+
+| Parameter | Takes |
+|---|---|
+| `cursor` | The `cursor` from the previous answer. Pass it back for the next 50 |
+| `group` | `Accounts`, `Publishing`, `Entries`, `Media`, `Settings` or `System`. Anything else is ignored |
+| `user` | A member's id. **Only an owner is asked** — an editor's own id is used whatever this says |
+| `entry` | A `subject` to match exactly, which for entry events is the file path |
+
+There is no `limit`: the page size is fixed, because a caller-chosen one is a database scan
+everybody else on the site pays for.
+
+Paging is by cursor rather than by offset. Two events can happen in the same millisecond, so
+the cursor carries the time *and* the row id — an offset would serve one of them twice or skip
+it, and would re-read every row already sent.

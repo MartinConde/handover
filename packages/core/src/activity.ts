@@ -171,6 +171,61 @@ export async function activityPage(
   };
 }
 
+/** The two commits that take a file away, which are the two a restore is offered over. */
+const REMOVALS = ['entry-delete', 'locale-off'];
+
+/**
+ * What the CMS removed from one collection, newest first — the Deleted view's rows. It is a
+ * query against the log rather than a filter over the entry list, because a deleted entry is in
+ * neither the built index nor the draft rows once the build has caught up.
+ *
+ * **Not narrowed to the viewer** the way `activityPage` is. That filter is there so the log is
+ * not a way to find out who else has an account; this list is about the collection rather than
+ * about people, and an editor who could not see a delete could not undo one either — the entry
+ * list already tells them who is holding and who is editing a row.
+ */
+export async function deletedEntries(
+  siteId: string,
+  db: Db,
+  collection: string,
+): Promise<ActivityEvent[]> {
+  const rows = await db
+    .select({
+      id: activity.id,
+      at: activity.at,
+      kind: activity.kind,
+      subject: activity.subject,
+      detail: activity.detail,
+      commitSha: activity.commitSha,
+      userId: activity.userId,
+      name: user.name,
+      email: user.email,
+    })
+    .from(activity)
+    .leftJoin(user, eq(activity.userId, user.id))
+    .where(
+      and(
+        eq(activity.siteId, siteId),
+        inArray(activity.kind, REMOVALS),
+        // Only a row that names a commit can be undone. A delete of an entry that was never
+        // published made none, and there is nothing to put back.
+        isNotNull(activity.commitSha),
+        like(activity.subject, `src/content/${collection}/%`),
+      ),
+    )
+    .orderBy(desc(activity.at), desc(activity.id))
+    .limit(PAGE);
+  return rows.map((row) => ({
+    id: row.id,
+    at: row.at,
+    kind: row.kind,
+    subject: row.subject,
+    detail: row.detail ?? null,
+    commitSha: row.commitSha,
+    user: row.userId ? { id: row.userId, name: row.name, email: row.email } : null,
+  }));
+}
+
 /**
  * Which group's chip a row wears — the inverse of the table above, with the same `cron-` rule
  * `groupWhere` applies. Null for a kind nothing claims: a screen must be able to draw a row it

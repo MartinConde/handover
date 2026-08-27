@@ -5,7 +5,7 @@
 - [Languages](i18n.md) — the `i18n` block, why it has to match `astro.config.mjs`, the folder per language, which fields are translated, and the structure every language shares.
 - [Translating](translating.md) — the language switcher, side by side, what a save of a translation writes, making the languages agree, machine translation, staleness.
 - [Content format](content-format.md) — what the YAML files look like, the reserved `_` keys, `_id` on blocks.
-- [Entry lifecycle](entry-lifecycle.md) — hiding an entry, creating one, renaming and deleting, and the redirects those write.
+- [Entry lifecycle](entry-lifecycle.md) — hiding an entry, creating one, renaming and deleting, the redirects those write, and putting a deleted one back.
 - [Site files](site-files.md) — globals, the `navigation` menus, `redirects.yaml` and `_templates/`.
 - [Media](media.md) — the bucket, its CORS rule and hostname, the four env values, and what an upload does.
 - [Pictures and files in a field](media-fields.md) — a field's preset: the ratio, the cap on the way in, the floor the picker refuses under; the drop zone and the picker.
@@ -21,9 +21,9 @@
 - [Accounts and signing in](auth.md) — the secrets, `HANDOVER_BASE_URL`, seeding the first owner, the three ways in, the account page, closed sign-up and rate limiting.
 - [Roles and permissions](roles.md) — the two roles, what each may do, and what is behind the session and what is deliberately not.
 - [Sending email](email.md) — the `mailer` block, verifying a sending domain, and the check that proves a key.
-- [Activity log](activity.md) — what is recorded and what is not, who sees whose events, the read endpoint and its filters.
+- [Activity log](activity.md) — what is recorded and what is not, who sees whose events, and how a row reads.
 - [CLI](cli.md) — `handover migrate` for content files, `handover db generate` for the package's tables.
 - [Settings — what is connected](diagnostics.md) — the admin's read-only view of your config, the connection checks behind it, and the test email.
 - [Deploy](deploy.md) — `wrangler.jsonc`, the GitHub App, secrets, building on push.
-- [The admin API](admin-api.md) — the routes the admin drives: entries, drafts, publishing and locks. For debugging, not for building against.
+- [The admin API](admin-api.md) — the routes the admin drives: entries, drafts, publishing, locks and the activity read. For debugging, not for building against.
 - [How it works](how-it-works.md) — packages, injected routes, virtual config, the publish path. For contributors.

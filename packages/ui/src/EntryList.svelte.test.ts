@@ -3,10 +3,12 @@ import { afterEach, expect, test, vi } from 'vitest';
 import EntryList from './EntryList.svelte';
 
 // Testing: one row per entry with the title the API returned, the derived file name the new
-// entry dialog shows, what create / rename / delete / hide send, and the empty state.
+// entry dialog shows, what create / rename / delete / hide send, the empty state, and the
+// Deleted view's two rows — the one that can come back and the one that cannot.
 // Not testing: which collection the sidebar routed here, the shell around the list, the bulk
 // bar's own markup, or how one answer becomes a rule per language — that is the route's, and
-// api.test.ts holds it to each of the four answers.
+// api.test.ts holds it to each of the four answers. Which rows the Deleted view gets, and why a
+// row is blocked, are the route's too.
 
 const ENTRIES = [
   {
@@ -355,4 +357,90 @@ test('a bulk hide asks once and names every selected entry', async () => {
       redirect: { kind: 'index' },
     }),
   });
+});
+
+const DELETED = [
+  {
+    id: 'a1',
+    at: Date.UTC(2026, 7, 12, 9, 14),
+    by: 'Martin',
+    slug: 'old-mill-house',
+    locales: ['en', 'de'],
+    whole: true,
+    commit_sha: 'del111',
+  },
+  {
+    id: 'a2',
+    at: Date.UTC(2026, 7, 2, 11, 40),
+    by: 'Anna',
+    slug: 'cliff-road-cabin',
+    locales: ['en'],
+    whole: false,
+    commit_sha: 'off222',
+    blocked:
+      'There is a file at src/content/listings/en/cliff-road-cabin.yaml again, so this cannot be put back over it.',
+  },
+];
+
+// The tab answers from the log rather than from the list, so it is its own request.
+const withDeleted = (reply: Record<string, unknown> = {}) => {
+  const fetcher = vi.fn(async (url: string, init?: RequestInit) =>
+    init
+      ? Response.json(reply)
+      : url === '/admin/api/deleted/listings'
+        ? Response.json({ deleted: DELETED })
+        : Response.json({ entries: ENTRIES, locales: ['en'], index: '/listings' }),
+  );
+  vi.stubGlobal('fetch', fetcher);
+  return fetcher;
+};
+
+test('the deleted view says what went and who took it away', async () => {
+  withDeleted();
+  const root = show();
+  await tick();
+  await click(root, '.tabs button:last-child');
+  await tick();
+
+  const rows = Array.from(root.querySelectorAll('.table .row:not(.row-note)'));
+  expect(q(rows[0] as ParentNode, '.td.title')?.textContent).toBe('old-mill-house');
+  expect(q(rows[0] as ParentNode, '.td:nth-child(2)')?.textContent).toContain('The whole listing');
+  expect(q(rows[0] as ParentNode, '.td.num')?.textContent).toContain('Martin');
+});
+
+// Greyed rather than gone, with the reason under the row: a disabled button takes no focus, and
+// a keyboard user would arrow past the sentence without ever hearing it.
+test('a row whose file is there again keeps its button and says why', async () => {
+  const fetcher = withDeleted();
+  const root = show();
+  await tick();
+  await click(root, '.tabs button:last-child');
+  await tick();
+
+  const blocked = root.querySelectorAll('.table .row:not(.row-note)')[1] as ParentNode;
+  const button = q<HTMLButtonElement>(blocked, 'button');
+  expect(button?.getAttribute('aria-disabled')).toBe('true');
+  expect(q(root, '.row-note .notice')?.textContent).toContain("Can't be restored");
+  button?.click();
+  await tick();
+  expect(q(root, '.dialog')).toBeNull();
+  expect(fetcher).not.toHaveBeenCalledWith('/admin/api/restore', expect.anything());
+});
+
+test('restoring undoes the commit the row names', async () => {
+  const fetcher = withDeleted({ commit_sha: 'res888' });
+  const root = show();
+  await tick();
+  await click(root, '.tabs button:last-child');
+  await tick();
+  await click(root, '.table .row .menu-cell button');
+  expect(q(root, '.dialog h2')?.textContent).toBe('Restore old-mill-house?');
+  await click(root, '.dialog .btn-primary');
+
+  expect(fetcher).toHaveBeenCalledWith('/admin/api/restore', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ commit_sha: 'del111' }),
+  });
+  expect(changed).toHaveBeenCalled();
 });

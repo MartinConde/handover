@@ -1000,6 +1000,50 @@ test('a language with a file is turned off from its own column, through a dialog
   vi.unstubAllGlobals();
 });
 
+// Turning German off deletes the German file, so *Turn German back on* alone hands over an
+// empty form and the words are only in the repository. Where the CMS is what turned it off, the
+// log knows which commit to undo and the offer is to bring them back.
+test('a language the CMS turned off offers the words back rather than an empty form', async () => {
+  const fetchMock = vi.fn(async (url: string, _init?: RequestInit) =>
+    isLock(url)
+      ? Response.json(HELD)
+      : url === '/admin/api/deleted/listings'
+        ? Response.json({
+            deleted: [
+              {
+                id: 'a1',
+                at: Date.UTC(2026, 7, 12),
+                by: 'Martin',
+                slug: 'seaview-cottage',
+                locales: ['de'],
+                whole: false,
+                commit_sha: 'off222',
+              },
+            ],
+          })
+        : Response.json({}),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: { ...missing, offered: ['en'] } });
+  $$<HTMLButtonElement>(root, '[aria-label="Language"] button')[1]?.click();
+  flushSync();
+  await tick();
+  flushSync();
+
+  $(root, '.pane button.btn-primary')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  await tick();
+
+  expect($(root, '.pane .btn-primary')?.textContent).toContain('Bring the German words back');
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/restore', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ commit_sha: 'off222' }),
+  });
+  // The empty form is still there for a language the CMS never had the words for.
+  expect($(root, '.pane button.btn-link')?.textContent).toContain('empty form');
+  vi.unstubAllGlobals();
+});
+
 test('a language turned off is struck through and offers no way to write it', () => {
   const root = show({ entry: { ...missing, offered: ['en'] } });
 

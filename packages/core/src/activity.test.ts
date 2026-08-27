@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from 'vitest';
 import {
   activityGroupOf,
   activityPage,
+  deletedEntries,
   expireActivity,
   lastCommit,
   logActivity,
@@ -62,13 +63,23 @@ async function seedEvent(row: {
   userId?: string | null;
   kind: string;
   subject?: string | null;
+  detail?: unknown;
+  commitSha?: string | null;
 }) {
   await binding
     .prepare(
       `INSERT INTO activity (id, site_id, at, user_id, kind, subject, detail, commit_sha)
-       VALUES (?, 'default', ?, ?, ?, ?, NULL, NULL)`,
+       VALUES (?, 'default', ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(row.id, row.at, row.userId ?? null, row.kind, row.subject ?? null)
+    .bind(
+      row.id,
+      row.at,
+      row.userId ?? null,
+      row.kind,
+      row.subject ?? null,
+      row.detail === undefined ? null : JSON.stringify(row.detail),
+      row.commitSha ?? null,
+    )
     .run();
 }
 
@@ -277,4 +288,53 @@ test('retention deletes rows past 180 days and keeps the day before the cut', as
 
   expect(await expireActivity('default', db, now)).toBe(2);
   expect(await kindsOf(OWNER)).toEqual(['login', 'publish']);
+});
+
+// The Deleted view is a query against the log, so what it asks for is this file's to get right:
+// the two kinds that take a file away, in one collection, and only where there is a commit to
+// undo.
+test('the deleted list is the two removals in one collection, newest first', async () => {
+  const at = 1_800_000_000_000;
+  const gone = 'src/content/listings/en/mill-house.yaml';
+  await seedEvent({ id: 'e1', at, kind: 'entry-delete', subject: gone, commitSha: 'aaa111' });
+  await seedEvent({
+    id: 'e2',
+    at: at + 1000,
+    kind: 'locale-off',
+    subject: 'src/content/listings/en/harbour-flat.yaml',
+    detail: { locales: ['de'] },
+    commitSha: 'bbb222',
+  });
+  await seedEvent({
+    id: 'e3',
+    at: at + 2000,
+    kind: 'entry-rename',
+    subject: gone,
+    commitSha: 'c1',
+  });
+  await seedEvent({
+    id: 'e4',
+    at: at + 3000,
+    kind: 'entry-delete',
+    subject: 'src/content/pages/en/about.yaml',
+    commitSha: 'ddd444',
+  });
+
+  const rows = await deletedEntries('default', db, 'listings');
+
+  expect(rows.map((r) => r.id)).toEqual(['e2', 'e1']);
+  expect(rows[0]?.detail).toEqual({ locales: ['de'] });
+});
+
+// An entry that was never published is deleted without a commit, so there is nothing to put back
+// and no row to offer it on.
+test('a delete that made no commit is not in the deleted list', async () => {
+  await seedEvent({
+    id: 'e1',
+    at: 1_800_000_000_000,
+    kind: 'entry-delete',
+    subject: 'src/content/listings/en/mill-house.yaml',
+  });
+
+  expect(await deletedEntries('default', db, 'listings')).toEqual([]);
 });

@@ -1,7 +1,7 @@
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
 import { Miniflare } from 'miniflare';
 import { afterAll, beforeAll, expect, test, vi } from 'vitest';
-import { parseEntry, staleLocales } from './content.js';
+import { offeredEntry, parseEntry, staleLocales, stringifyEntry } from './content.js';
 import {
   clearPublished,
   createDraft,
@@ -21,6 +21,7 @@ import {
   recordRename,
   resolveConflict,
   resolveDrift,
+  restoreCommit,
   revertCommit,
   saveDraft,
   saveTranslated,
@@ -1362,6 +1363,61 @@ test('reverting recomputes redirects.yaml rather than restoring it', async () =>
   expect(left).toContain(one);
   expect(left).toContain(three);
   expect(left).not.toContain(two);
+});
+
+// The other half of a turn-off: the mark naming the languages that are left goes into the files
+// that stay, and `recordOffer` writes it into their open drafts as well. A restore that touched
+// git alone would leave the draft saying German is off, and the next publish would write it off.
+const MILL_DE = 'src/content/listings/de/mill-house.yaml';
+const MILL_DE_FILE = '_version: 1\ntitle: "Die Muehle"\nprice: "950 GBP pro Woche"\nrooms: 3\n';
+const OFFER = { offered: ['en'], locales: ['en', 'de'], gone: ['de'] };
+const withoutGerman = (contents: string) =>
+  stringifyEntry('default', offeredEntry('default', parseEntry('default', contents), OFFER));
+
+test('restoring a turn-off re-offers the language in the draft that was open', async () => {
+  const db = await fresh();
+  const repo = fakeHistory({ [PATH]: FILE, [MILL_DE]: MILL_DE_FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  // What `offering` commits and then records: the German file gone, the English one marked.
+  const kept = withoutGerman(FILE);
+  const off = await repo.publish(
+    [
+      { path: MILL_DE, contents: null },
+      { path: PATH, contents: kept },
+    ],
+    { base_sha: 'commit-0', message: 'Turn off de for listings/mill-house' },
+  );
+  await recordDelete('default', db, MILL_DE, off.commit_sha);
+  await recordOffer('default', db, PATH, kept, OFFER, off.commit_sha);
+
+  await restoreCommit('default', db, repo, off.commit_sha);
+
+  const row = (await db.select().from(drafts)).find((r) => r.path === PATH);
+  const entry = parseEntry('default', row?.contents ?? '') as Record<string, unknown>;
+  // Absent is what says every language is offered, so the mark goes rather than being rewritten.
+  expect(entry._locales).toBe(undefined);
+  // And the words the editor had typed are still theirs.
+  expect(entry.rooms).toBe(4);
+});
+
+// F15: the row a delete leaves settles only once the built index lacks the path, so a file put
+// back before that build keeps its row — and the entry list goes on hiding the entry for good.
+test('restoring a delete takes away the row that was hiding the path', async () => {
+  const db = await fresh();
+  const repo = fakeHistory({ [PATH]: FILE });
+  const index = indexOf({ [PATH]: FILE });
+  const deleted = await repo.publish([{ path: PATH, contents: null }], {
+    base_sha: 'commit-0',
+    message: 'Delete listings/mill-house',
+  });
+  await recordDelete('default', db, PATH, deleted.commit_sha);
+  expect(await listed(db, index)).toEqual([]);
+
+  await restoreCommit('default', db, repo, deleted.commit_sha);
+
+  expect(repo.now()[PATH]).toBe(FILE);
+  expect(await only(db)).toBe(undefined);
+  expect(await listed(db, index)).toEqual([['mill-house', 'The Mill House']]);
 });
 
 test('a published row is cleared once the build carrying it is live', async () => {

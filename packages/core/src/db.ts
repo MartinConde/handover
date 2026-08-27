@@ -934,7 +934,7 @@ export async function revertCommit(
   db: Db,
   git: Pick<GitClient, 'getCommit' | 'getFile' | 'getHead' | 'publish'>,
   commitSha: string,
-): Promise<{ commit_sha: string; paths: string[] }> {
+): Promise<{ commit_sha: string; paths: string[]; files: PublishFile[] }> {
   const commit = await git.getCommit(commitSha);
   const parent = commit.parent;
   if (!parent) throw new Error(`${commitSha} has no commit before it to go back to`);
@@ -983,7 +983,52 @@ export async function revertCommit(
   });
   const [first, ...rest] = writes;
   if (first) await db.batch([first, ...rest]);
-  return { commit_sha, paths: files.map((f) => f.path) };
+  // ⚠️ `files` carries file contents. It is what `restoreCommit` reads and never what a route
+  // answers with: a response built from this whole object would put a repository on the wire.
+  return { commit_sha, paths: files.map((f) => f.path), files };
+}
+
+/** The `_` keys a turn-off rewrites, which are the ones a restore has to put back. */
+const MARKS = ['_locales', '_i18n'];
+
+/**
+ * A delete undone: the entry's files, or the one language's, as the commit before it had them.
+ * The inverse commit is the whole of git's half — the removed file back, the rules that commit
+ * appended dropped from `redirects.yaml` as HEAD has it, and the row that was hiding the path
+ * gone with it.
+ *
+ * What no commit can carry is the **open draft of a file that stayed**. Turning a language off
+ * writes the mark naming the languages that are left into every other file, and `recordOffer`
+ * writes it into their drafts too; a restore that touched git alone would leave a draft saying
+ * the language is off, based on a commit that no longer says so, and the next publish would
+ * write the language straight back off. The draft keeps its own words and takes the restored
+ * file's marks.
+ */
+export async function restoreCommit(
+  siteId: string,
+  db: Db,
+  git: Pick<GitClient, 'getCommit' | 'getFile' | 'getHead' | 'publish'>,
+  commitSha: string,
+): Promise<{ commit_sha: string; paths: string[] }> {
+  const { commit_sha, paths, files } = await revertCommit(siteId, db, git, commitSha);
+  for (const file of files) {
+    if (file.contents === null) continue;
+    const open = await loadDraft(siteId, db, file.path);
+    if (!open) continue;
+    const entry = writtenEntry(siteId, parseEntry(siteId, open.contents));
+    const restored = parseEntry(siteId, file.contents) as Record<string, unknown>;
+    for (const mark of MARKS) {
+      if (mark in restored) entry[mark] = restored[mark];
+      else delete entry[mark];
+    }
+    const contents = stringifyEntry(siteId, writtenEntry(siteId, entry));
+    if (contents === open.contents) continue;
+    await db
+      .update(drafts)
+      .set({ contents })
+      .where(and(eq(drafts.siteId, siteId), eq(drafts.path, file.path)));
+  }
+  return { commit_sha, paths };
 }
 
 /**

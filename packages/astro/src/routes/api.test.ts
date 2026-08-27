@@ -46,6 +46,8 @@ const {
   commitBuild,
   clearPublished,
   revertCommit,
+  restoreCommit,
+  deletedEntries,
   findMedia,
   mediaList,
   confirmUpload,
@@ -194,6 +196,15 @@ const {
       commit_sha: 'rev999',
       paths: ['src/content/listings/en/mill-house.yaml'],
     })),
+    restoreCommit: vi.fn(async () => ({
+      commit_sha: 'res888',
+      paths: ['src/content/listings/en/mill-house.yaml'],
+    })),
+    // The Deleted view's query. What it selects is proven against a real D1 in core's own
+    // activity.test.ts; what the route owes is what it makes of the rows.
+    deletedEntries: vi.fn<(...args: unknown[]) => Promise<Record<string, unknown>[]>>(
+      async () => [],
+    ),
   };
 });
 
@@ -552,6 +563,8 @@ vi.mock('@handover/core', async (original) => ({
   commitBuild,
   clearPublished,
   revertCommit,
+  restoreCommit,
+  deletedEntries,
   findMedia,
   mediaList,
   confirmUpload,
@@ -580,6 +593,8 @@ afterEach(() => {
   commitBuild.mockClear();
   clearPublished.mockClear();
   revertCommit.mockClear();
+  restoreCommit.mockClear();
+  deletedEntries.mockClear();
   setPassword = async () => ({ status: true });
   facts = { hasPassword: true, sessions: [] };
   asked = [];
@@ -1908,7 +1923,8 @@ test('the lock follows a rename and goes with a delete', async () => {
 });
 
 // The row the deleted list is built from: the path of the language the entry was written in,
-// which the route reads before the commit takes the files away.
+// which the route reads before the commit takes the files away, and the languages that went —
+// which is what a restore would put back.
 test('a delete leaves a log row naming the entry that went', async () => {
   const res = await del('entries/listings/mill-house');
 
@@ -1918,7 +1934,7 @@ test('a delete leaves a log row naming the entry that went', async () => {
       userId: undefined,
       kind: 'entry-delete',
       subject: 'src/content/listings/en/mill-house.yaml',
-      detail: { files: 1 },
+      detail: { locales: ['en'] },
       commitSha: 'def456',
     },
   ]);
@@ -4210,6 +4226,129 @@ test('revert undoes the commit the body names and logs it', async () => {
     commitSha: 'rev999',
     detail: { of: 'def456' },
   });
+});
+
+// The row the Deleted view and the activity log are both built on. `entrySubject` names the
+// language the entry is left written in; the languages that went are the detail, so nothing has
+// to ask git what the commit touched.
+test('turning a language off is a row in the log naming the languages that went', async () => {
+  bilingualPost();
+
+  await POST(post('entries/posts/taken/locales', JSON.stringify({ locales: ['en'] })));
+
+  expect(logged.at(-1)).toMatchObject({
+    kind: 'locale-off',
+    subject: 'src/content/posts/en/taken.yaml',
+    detail: { locales: ['de'] },
+    commitSha: 'def456',
+  });
+});
+
+// The same set the entry list draws, so the two screens never disagree about what exists: an
+// entry whose file is there again is not offered a restore that would write over it.
+test('the deleted list says which rows cannot be put back over what is there now', async () => {
+  deletedEntries.mockImplementationOnce(async () => [
+    {
+      id: 'a2',
+      at: 2,
+      kind: 'locale-off',
+      subject: 'src/content/listings/en/harbour-flat.yaml',
+      detail: { locales: ['de'] },
+      commitSha: 'off222',
+      user: null,
+    },
+    {
+      id: 'a1',
+      at: 1,
+      kind: 'entry-delete',
+      subject: 'src/content/listings/en/mill-house.yaml',
+      detail: { locales: ['en'] },
+      commitSha: 'del111',
+      user: { id: 'u1', name: 'Martin', email: 'm@x' },
+    },
+  ]);
+
+  const body = (await (await GET(ctx('deleted/listings'))).json()) as {
+    deleted: Record<string, unknown>[];
+  };
+
+  expect(body.deleted[0]).toEqual({
+    id: 'a2',
+    at: 2,
+    by: null,
+    slug: 'harbour-flat',
+    locales: ['de'],
+    whole: false,
+    commit_sha: 'off222',
+  });
+  // `mill-house` is in the index and no row says it has gone, so restoring it would write over
+  // whatever is there now.
+  expect(body.deleted[1]).toMatchObject({
+    slug: 'mill-house',
+    by: 'Martin',
+    whole: true,
+    blocked:
+      'There is a file at src/content/listings/en/mill-house.yaml again, so this cannot be put back over it.',
+  });
+});
+
+test('the deleted list is not offered for a collection the site does not declare', async () => {
+  expect((await GET(ctx('deleted/nothing'))).status).toBe(404);
+});
+
+test('restore undoes the commit the body names and says so in the log', async () => {
+  const res = await POST(post('restore', JSON.stringify({ commit_sha: 'del111' })));
+
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    commit_sha: 'res888',
+    paths: ['src/content/listings/en/mill-house.yaml'],
+  });
+  expect(restoreCommit).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'del111',
+  );
+  // The same kind a revert writes — it is the same inverse commit — with what it was over.
+  expect(logged.at(-1)).toMatchObject({
+    kind: 'revert',
+    subject: 'src/content/listings/en/mill-house.yaml',
+    detail: { of: 'del111', restore: true },
+    commitSha: 'res888',
+  });
+});
+
+// A language that stays and has only a draft behind it was never in the turn-off commit — the
+// mark went into its row rather than into a file — so no inverse commit can put it back, and
+// the route has to. It takes three languages to reach at all.
+test('restoring writes the offer back into a language that has only a draft', async () => {
+  locales = ['en', 'de', 'fr'];
+  files['src/content/listings/de/mill-house.yaml'] = '_version: 1\ntitle: "Die Muehle"\n';
+  rows['src/content/listings/fr/mill-house.yaml'] = {
+    contents: '_version: 1\n_locales:\n  - "en"\n  - "fr"\ntitle: "Le Moulin"\n',
+    baseSha: 'head789',
+    baseBlob: '',
+  };
+  setEntryLocales.mockClear();
+
+  await POST(post('restore', JSON.stringify({ commit_sha: 'off222' })));
+
+  // The restored files say every language is offered again, and the draft is brought into line.
+  expect(setEntryLocales).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    ['src/content/listings/fr/mill-house.yaml'],
+    ['en', 'de', 'fr'],
+    ['en', 'de', 'fr'],
+  );
+});
+
+test('restore with no commit named is refused', async () => {
+  const res = await POST(post('restore', '{}'));
+  expect(res.status).toBe(400);
+  expect(restoreCommit).not.toHaveBeenCalled();
 });
 
 test('revert with no commit named is refused', async () => {

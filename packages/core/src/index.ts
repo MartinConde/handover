@@ -8,6 +8,7 @@ export {
   ACTIVITY_GROUPS,
   activityGroupOf,
   activityPage,
+  deletedEntries,
   lastCommit,
   logActivity,
 } from './activity.js';
@@ -77,6 +78,7 @@ export {
   recordRename,
   resolveConflict,
   resolveDrift,
+  restoreCommit,
   revertCommit,
   saveDraft,
   saveTranslated,

@@ -31,6 +31,7 @@ import {
   createGitClient,
   DraftConflictError,
   deeplTranslate,
+  deletedEntries,
   deleteEntry,
   deleteLocales,
   demoteOwner,
@@ -82,6 +83,7 @@ import {
   renameEntry,
   resolveConflict,
   resolveDrift,
+  restoreCommit,
   revertCommit,
   SCHEMA_VERSION,
   saveDraft,
@@ -1436,7 +1438,12 @@ async function machineTranslate(
  * entry has a file in is refused — that is a delete of the entry, and Delete is where the
  * redirect question is asked for all of it at once.
  */
-async function offering(collection: string, slug: string, request: Request): Promise<Response> {
+async function offering(
+  collection: string,
+  slug: string,
+  request: Request,
+  session: App.Locals['handover'],
+): Promise<Response> {
   const collected = config.collections[collection];
   if (!collected) return new Response('Not found', { status: 404 });
   const body = (await request.json().catch(() => undefined)) as { locales?: unknown } | undefined;
@@ -1496,6 +1503,15 @@ async function offering(collection: string, slug: string, request: Request): Pro
         offered,
         config.i18n.locales,
       );
+    // The languages that went, so the Deleted view can say what it would put back without
+    // asking git what the commit touched.
+    await logActivity('default', database, {
+      userId: session?.user.id,
+      kind: 'locale-off',
+      subject: await entrySubject(collection, slug),
+      detail: { locales: going },
+      commitSha: commit_sha,
+    });
     return Response.json({ commit_sha });
   }
   // Nothing that goes is in the repository, so there is nothing to commit and no URL anybody
@@ -2130,7 +2146,7 @@ async function remove(
     userId: session?.user.id,
     kind: 'entry-delete',
     subject,
-    detail: { files: files.filter((f) => f.file).length },
+    detail: { locales: files.filter((f) => f.file).map((f) => f.locale) },
     commitSha: result.commit_sha,
   });
   return Response.json(result);
@@ -2187,10 +2203,7 @@ async function buildStatus(): Promise<Response> {
  * since, which is the one thing an inverse composed against HEAD cannot decide on its own.
  */
 async function revert(request: Request, session: App.Locals['handover']): Promise<Response> {
-  const body = (await request.json().catch(() => undefined)) as
-    | { commit_sha?: unknown }
-    | undefined;
-  const sha = typeof body?.commit_sha === 'string' ? body.commit_sha : '';
+  const sha = await undoing(request);
   if (!sha) return new Response('A commit_sha is needed to revert', { status: 400 });
   const database = db();
   const result = await revertCommit('default', database, gitClient(), sha);
@@ -2200,13 +2213,116 @@ async function revert(request: Request, session: App.Locals['handover']): Promis
     detail: { of: sha, files: result.paths.length },
     commitSha: result.commit_sha,
   });
-  return Response.json(result);
+  // The commit and the paths, never the whole result: it carries the restored file contents.
+  return Response.json({ commit_sha: result.commit_sha, paths: result.paths });
+}
+
+/** Which commit the body names, or the empty string. Both undo routes read the same one key. */
+async function undoing(request: Request): Promise<string> {
+  const body = (await request.json().catch(() => undefined)) as
+    | { commit_sha?: unknown }
+    | undefined;
+  return typeof body?.commit_sha === 'string' ? body.commit_sha : '';
+}
+
+/**
+ * A delete undone, over the commit the log recorded it with. The same inverse a revert is, plus
+ * what only D1 knows: the marks a turn-off wrote into the open drafts of the files that stayed,
+ * and the rows that were keeping the restored paths off the entry list.
+ *
+ * `409` with `{ error, paths }` when a file the restore would write has moved since — a name
+ * somebody has taken again, or an entry already put back — because writing over it would be
+ * undoing somebody else's work in the name of undoing your own.
+ */
+async function restore(request: Request, session: App.Locals['handover']): Promise<Response> {
+  const sha = await undoing(request);
+  if (!sha) return new Response('A commit_sha is needed to restore', { status: 400 });
+  const database = db();
+  const git = gitClient();
+  const result = await restoreCommit('default', database, git, sha);
+  // A language that stays with only a draft behind it was never in the turn-off commit — the
+  // mark went into its row rather than into a file — so the inverse commit cannot put it back.
+  const entry = entryKey(result.paths[0] ?? '');
+  const [collection = '', slug = ''] = entry ? entry.split('/') : [];
+  if (config.collections[collection]) {
+    const loaded = await entryLocales(collection, slug, config.i18n.locales);
+    const written = Object.entries(loaded).filter(([, l]) => l.live);
+    const { offered } = entryOffer(
+      'default',
+      config.i18n.locales,
+      (written[0]?.[1].data as { _locales?: unknown } | undefined)?._locales,
+      written.map(([locale]) => locale),
+    );
+    const drafted = Object.entries(loaded)
+      .filter(([, l]) => !l.live)
+      .map(([locale]) => entryPath(collection, slug, locale));
+    if (drafted.length)
+      await setEntryLocales('default', database, git, drafted, offered, config.i18n.locales);
+  }
+  await logActivity('default', database, {
+    userId: session?.user.id,
+    kind: 'revert',
+    // What was put back, and which the log's own row it undoes. `restore` is what tells the
+    // two apart on screen: both are the same inverse commit.
+    subject: result.paths[0] ?? null,
+    detail: { of: sha, files: result.paths.length, restore: true },
+    commitSha: result.commit_sha,
+  });
+  return Response.json({ commit_sha: result.commit_sha, paths: result.paths });
+}
+
+/**
+ * The Deleted view: what the CMS took away in one collection, newest first, and whether each
+ * row can come back. A query against the activity log rather than a filter over the list —
+ * a deleted entry is in neither the built index nor the draft rows.
+ *
+ * A row whose paths are occupied again keeps its Restore, said in the answer rather than left
+ * to the attempt: restoring would write over whatever is there now. It is the same set the list
+ * itself draws, so the two screens never disagree about what exists.
+ */
+async function deletedList(collection: string): Promise<Response> {
+  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  const database = db();
+  const events = await deletedEntries('default', database, collection);
+  const rows = await overlayRows('default', database, index);
+  const here = new Set(
+    collectionEntries('default', index, collection, rows).flatMap((e) =>
+      Object.values(e.locales).map((l) => l.path),
+    ),
+  );
+  return Response.json({
+    deleted: events.flatMap((event) => {
+      const slug = entryKey(event.subject ?? '')?.split('/')[1];
+      if (!slug) return [];
+      const detail = event.detail as { locales?: unknown } | null;
+      const locales = Array.isArray(detail?.locales) ? detail.locales.map(String) : [];
+      const taken = locales
+        .map((locale) => entryPath(collection, slug, locale))
+        .filter((path) => here.has(path));
+      return [
+        {
+          id: event.id,
+          at: event.at,
+          by: event.user?.name || event.user?.email || null,
+          slug,
+          locales,
+          // The whole entry, or one language of one.
+          whole: event.kind === 'entry-delete',
+          commit_sha: event.commitSha,
+          blocked: taken.length
+            ? `There is a file at ${taken.join(', ')} again, so this cannot be put back over it.`
+            : undefined,
+        },
+      ];
+    }),
+  });
 }
 
 const MEMBER = /^members\/([\w-]+)$/;
 const MEMBER_ROLE = /^members\/([\w-]+)\/role$/;
 const MEMBER_INVITE = /^members\/([\w-]+)\/invite$/;
 const ENTRIES = /^entries\/([\w-]+)$/;
+const DELETED = /^deleted\/([\w-]+)$/;
 const ENTRY = /^entries\/([\w-]+)\/([\w-]+)$/;
 const DRAFT = /^drafts\/([\w-]+)\/([\w-]+)$/;
 const TRANSLATION = /^drafts\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
@@ -2253,6 +2369,8 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
     });
   }
   if (params.path === 'entries') return pickList();
+  const removed = params.path?.match(DELETED);
+  if (removed) return answering(() => deletedList(removed[1] ?? ''));
   if (params.path === 'media') return library(url);
   if (params.path === 'globals') return globalsList();
   if (params.path === 'drafts') return pendingList();
@@ -2583,6 +2701,7 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   if (params.path === 'media') return answering(() => askUpload(request));
   if (params.path === 'publish') return answering(() => publish(request, locals.handover));
   if (params.path === 'revert') return answering(() => revert(request, locals.handover));
+  if (params.path === 'restore') return answering(() => restore(request, locals.handover));
   const beat = params.path?.match(LOCK);
   if (beat) {
     const body = (await request.json().catch(() => undefined)) as { take?: unknown } | undefined;
@@ -2610,7 +2729,8 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
       address(addressed[1] ?? '', addressed[2] ?? '', addressed[3] ?? '', request),
     );
   const offered = params.path?.match(LOCALES);
-  if (offered) return answering(() => offering(offered[1] ?? '', offered[2] ?? '', request));
+  if (offered)
+    return answering(() => offering(offered[1] ?? '', offered[2] ?? '', request, locals.handover));
   const settling = params.path?.match(CONFLICT);
   if (settling) return answering(() => resolve(settling[1] ?? '', settling[2] ?? '', request));
   const answered = params.path?.match(DRIFT);

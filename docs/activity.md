@@ -14,7 +14,7 @@ first sign-in onwards.
 |---|---|
 | Accounts | `login` (by password, by emailed link or through GitHub) · `invite` · `role-change` · `member-removed` · `password-set` (a first one, a change or a reset) |
 | Publishing | `publish`, with the commit it made and how many files were in it · `publish-conflict`, when a file had changed in the repository since it was opened · `publish-failed`, when the repository turned the commit down · `lock-takeover`, naming who the entry was taken from · `hold-released` |
-| Entries | `entry-rename`, with the name it had before · `entry-delete`, with the commit that removed the files and how many there were |
+| Entries | `entry-rename`, with the name it had before · `entry-delete` and `locale-off`, each with the commit that took the files away and the languages that went — which is what a **Restore** on the row puts back ([Entry lifecycle](entry-lifecycle.md#putting-a-deleted-entry-back)) |
 | Media | `upload` — a picture stored, named by the file it was chosen as. Choosing one the site already holds is not an upload and is not a row |
 | Settings | `setting-changed` — one of the client's own [integration keys](diagnostics.md#integrations) set, replaced or removed. The name of the key, never its value |
 | System | `mail-failed` — a message the provider would not take |
@@ -85,6 +85,12 @@ with `detail.from` naming whoever had set it.
 in it says how many instead, since there is no single entry to open. Either way the row carries
 the first seven characters of the commit, which is how the log and git are lined up by hand.
 
+**A delete carries its own way back.** The two rows that take a file away — `entry-delete` and
+`locale-off` — have a **Restore** beside them, which undoes that commit with a commit of its own.
+It is refused, in the server's own words, when something is at one of the paths again; nothing
+is written either way. The entry list's **Deleted** tab is the same undo with a collection's
+chrome around it ([Entry lifecycle](entry-lifecycle.md#putting-a-deleted-entry-back)).
+
 Three filters, all of them the server's:
 
 | Filter | Takes |
@@ -105,52 +111,10 @@ write them, and the screen names one it does not recognise rather than throwing:
 
 ## Reading it from your own code
 
-```http
-GET /admin/api/activity
-```
-
-Answers the newest 50 events for whoever is signed in:
-
-```jsonc
-{
-  "events": [
-    {
-      "id": "k3f9d2ab",
-      "at": 1755864000000,          // epoch milliseconds
-      "kind": "publish",
-      "subject": "src/content/listings/en/seaview-cottage.yaml",
-      "detail": { "files": 1 },
-      "commitSha": "def4567",
-      "user": { "id": "usr_1", "name": "Anna Berg", "email": "anna@example.com" }
-    }
-  ],
-  "cursor": "1755863000000.b7x2p1qd"
-}
-```
-
-- `user` is `null` for an event nothing did on somebody's behalf — a failed send, a cron job.
-  A member who has since been removed keeps their events, so `user.name` and `user.email` can
-  be `null` beside an `id` that no longer exists: the log outlives the account.
-- `subject` is whatever the kind is about — an entry path for a `publish` of one file, the
-  member's id for an `invite` or a `role-change`.
-- `detail` is small JSON and differs per kind. Never file contents.
-- `cursor` is `null` on the last page.
-
-Four optional query parameters:
-
-| Parameter | Takes |
-|---|---|
-| `cursor` | The `cursor` from the previous answer. Pass it back for the next 50 |
-| `group` | `Accounts`, `Publishing`, `Entries`, `Media`, `Settings` or `System`. Anything else is ignored |
-| `user` | A member's id. **Only an owner is asked** — an editor's own id is used whatever this says |
-| `entry` | A `subject` to match exactly, which for entry events is the file path |
-
-There is no `limit`: the page size is fixed, because a caller-chosen one is a database scan
-everybody else on the site pays for.
-
-Paging is by cursor rather than by offset. Two events can happen in the same millisecond, so
-the cursor carries the time *and* the row id — an offset would serve one of them twice or skip
-it, and would re-read every row already sent.
+The one route in the admin API meant to be called from outside the admin, and the one that does
+not change between versions without a line in `CHANGELOG.md`:
+`GET /admin/api/activity` — the newest fifty events for whoever is signed in, its four query
+parameters and its cursor are in [The admin API](admin-api.md#activity).
 
 See also: [Roles and permissions](roles.md) for who is an owner, and
 [Sending email](email.md) for what a `mail-failed` row means.
