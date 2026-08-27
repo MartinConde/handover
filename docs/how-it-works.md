@@ -15,14 +15,19 @@ free to change.
 
 ## Routes
 
-`astro:config:setup` injects two SSR routes and one `pre` middleware:
+`astro:config:setup` injects the SSR routes and one `pre` middleware:
 
 - `/admin/[...path]` serves the SPA shell and its hashed JS/CSS (`/admin/_assets/*`). The
   built assets are inlined into the Worker bundle through a virtual module, so the site's
   own Vite config never knows about them.
 - `/admin/api/[...path]` is the JSON API the SPA talks to. Routes are matched by hand on
   `params.path`.
-- The middleware is the temporary password gate on `/admin/api/*`.
+- `/_preview/[...path]` exists only where the build had `PREVIEW_ENABLED` set. It is the
+  session, the allow-list and the headers so far, and renders nothing. It asks for the
+  session itself rather than leaning on the middleware, because a share link will be an
+  answer "signed in or 401" cannot express.
+- The middleware asserts the admin session on `/admin/api/*`, minus Better Auth's own
+  endpoints, and hands the user and role on in `locals.handover`.
 
 The integration refuses to load without an SSR adapter, because the routes are SSR.
 

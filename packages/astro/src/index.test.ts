@@ -1,12 +1,13 @@
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import process from 'node:process';
 import { pathToFileURL } from 'node:url';
 import { fieldsFrom, formOf, type JsonSchema, parseEntry, SCHEMA_VERSION } from '@handover/core';
 import type { HookParameters } from 'astro';
 import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
-import { expect, expectTypeOf, test, vi } from 'vitest';
+import { beforeEach, expect, expectTypeOf, test, vi } from 'vitest';
 import handover, {
   type Block,
   type BlockRegistry,
@@ -215,6 +216,12 @@ test('group, array and blocks are detected from real Zod output', () => {
 
 type Setup = HookParameters<'astro:config:setup'>;
 
+// The flag is read off the environment at build, so the suite states it rather than inheriting
+// whatever shell it was launched from.
+beforeEach(() => {
+  delete process.env.PREVIEW_ENABLED;
+});
+
 const EN = { locales: ['en'], defaultLocale: 'en' };
 
 function runSetup(
@@ -254,6 +261,22 @@ test('injects the admin shell and API routes as SSR', () => {
     ['/admin/[...path]', false],
     ['/admin/api/[...path]', false],
   ]);
+});
+
+// Preview renders draft content on the client's own domain, so the site that did not ask for
+// it has no such route to reach at all — not a route that answers 404.
+test('the preview route is injected only where the build was told to', () => {
+  const patterns = () =>
+    runSetup({ name: 'fake-adapter', hooks: {} }).injectRoute.mock.calls.map(([r]) => r.pattern);
+  expect(patterns()).not.toContain('/_preview/[...path]');
+  process.env.PREVIEW_ENABLED = '1';
+  expect(patterns()).toEqual(['/admin/[...path]', '/admin/api/[...path]', '/_preview/[...path]']);
+});
+
+test.each(['', '0', 'false'])('PREVIEW_ENABLED=%o is somebody saying no', (value) => {
+  process.env.PREVIEW_ENABLED = value;
+  const { injectRoute } = runSetup({ name: 'fake-adapter', hooks: {} });
+  expect(injectRoute.mock.calls.map(([r]) => r.pattern)).not.toContain('/_preview/[...path]');
 });
 
 test('registers the password-gate middleware before the routes', () => {

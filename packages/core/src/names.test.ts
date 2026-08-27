@@ -6,6 +6,7 @@ import {
   entryAddress,
   entryName,
   entryUrl,
+  previewTarget,
 } from './names.js';
 
 test.each([
@@ -131,6 +132,84 @@ test('prefixDefaultLocale gives the default language a segment too', () => {
 
 test('a collection with no route of its own has no URL', () => {
   expect(entryUrl('default', two, undefined, 'everything', 'de')).toBe(undefined);
+});
+
+// The allow-list in front of preview: a path the site's own routes cannot serve is not a
+// page anybody may render, whoever is asking.
+const site = {
+  listings: { route: '/listings/[slug]', index: '/' },
+  pages: { route: '/[slug]' },
+  samples: {},
+};
+const target = (path: string, i18n = two) => previewTarget('default', i18n, site, path);
+
+test('an entry path resolves to its collection, language and address', () => {
+  expect(target('/listings/mill-house')).toEqual({
+    collection: 'listings',
+    locale: 'en',
+    address: 'mill-house',
+  });
+  expect(target('/de/listings/mill-house')).toEqual({
+    collection: 'listings',
+    locale: 'de',
+    address: 'mill-house',
+  });
+});
+
+test("a collection's index page is a target with no address", () => {
+  expect(target('/')).toEqual({ collection: 'listings', locale: 'en' });
+});
+
+// `/de` is both the German index and, read as a page, the slug "de" in English. Astro serves
+// the first — a static segment beats a dynamic one — so the language is taken off the front
+// before any route is matched.
+test('a language segment is never read as a page slug', () => {
+  expect(target('/de')).toEqual({ collection: 'listings', locale: 'de' });
+});
+
+test('one trailing slash is the same page', () => {
+  expect(target('/de/')).toEqual({ collection: 'listings', locale: 'de' });
+  expect(target('/listings/mill-house/')).toEqual({
+    collection: 'listings',
+    locale: 'en',
+    address: 'mill-house',
+  });
+});
+
+test('with prefixDefaultLocale the default language needs its segment too', () => {
+  const prefixed = { ...two, prefixDefaultLocale: true };
+  expect(target('/en/home', prefixed)).toEqual({
+    collection: 'pages',
+    locale: 'en',
+    address: 'home',
+  });
+  expect(target('/home', prefixed)).toBe(undefined);
+});
+
+// Without it the site builds no /en/ pages at all, so previewing one would be previewing an
+// address the site does not have.
+test("without it the default language's segment is not a path", () => {
+  expect(target('/en/home')).toBe(undefined);
+});
+
+test('a collection with neither a route nor an index is not previewable', () => {
+  expect(previewTarget('default', two, { samples: {} }, '/everything')).toBe(undefined);
+});
+
+test.each([
+  ['a path no route serves', '/listings/mill-house/gallery'],
+  ['a segment that is not an address', '/listings/Mill%20House'],
+  ['a way out of the site', '/listings/../admin'],
+  ['an empty segment', '/de//'],
+  ['nothing at all', ''],
+])('%s is refused', (_name, path) => {
+  expect(target(path)).toBe(undefined);
+});
+
+test('a route with nothing in its slug is not the collection', () => {
+  expect(
+    previewTarget('default', two, { listings: { route: '/listings/[slug]' } }, '/listings/'),
+  ).toBe(undefined);
 });
 
 test('a web address is spelled the way a file name is', () => {

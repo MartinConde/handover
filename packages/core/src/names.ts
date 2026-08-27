@@ -209,6 +209,62 @@ export function entryUrl(
   return prefix + route.replace('[slug]', slug);
 }
 
+export interface PreviewTarget {
+  collection: string;
+  locale: string;
+  /** Absent on a collection's index page, which is the collection rather than one entry. */
+  address?: string;
+}
+
+/**
+ * What a preview path is a preview *of*: the collection the page belongs to, the language it
+ * is read in, and the entry's own address where it has one — an index page is a collection
+ * without one. `undefined` is the whole of the allow-list in front of `/_preview`: a path the
+ * site's own routes could not serve is not a page anybody may render there, which is what
+ * keeps the route from being somewhere to put arbitrary content on the client's domain.
+ *
+ * The path is the site's own, `entryUrl`'s answer read backwards, so the language segment is
+ * where the site puts it and `prefixDefaultLocale` is respected by construction.
+ */
+export function previewTarget(
+  siteId: string,
+  i18n: I18nRouting,
+  collections: Record<string, { route?: string; index?: string }>,
+  path: string,
+): PreviewTarget | undefined {
+  // One trailing slash is the same page, which is Astro's `trailingSlash: 'ignore'`. Nothing
+  // else is tidied up: an allow-list that repairs what it is given ends up allowing more than
+  // it can name.
+  if (!path.startsWith('/') || path.includes('//')) return undefined;
+  const trimmed = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
+  const segments = trimmed === '/' ? [] : trimmed.slice(1).split('/');
+
+  // `/de` is the German index and, read as a page, the slug "de" in English; Astro serves the
+  // first, since a static segment beats a dynamic one. So the language comes off the front
+  // before any route is matched — and only where the site actually puts one there.
+  const first = segments[0];
+  const prefixed =
+    first !== undefined &&
+    i18n.locales.includes(first) &&
+    (first !== i18n.defaultLocale || Boolean(i18n.prefixDefaultLocale));
+  if (!prefixed && i18n.prefixDefaultLocale) return undefined;
+  const locale = prefixed ? (first as string) : i18n.defaultLocale;
+  const rest = `/${(prefixed ? segments.slice(1) : segments).join('/')}`;
+
+  // Indexes before routes, for the same reason: `/blog` is the blog index and not the page
+  // whose address happens to be "blog".
+  for (const [collection, c] of Object.entries(collections))
+    if (c.index === rest) return { collection, locale };
+  for (const [collection, c] of Object.entries(collections)) {
+    if (!c.route) continue;
+    const [head = '', tail = ''] = c.route.split('[slug]');
+    if (!rest.startsWith(head) || !rest.endsWith(tail)) continue;
+    const address = rest.slice(head.length, rest.length - tail.length);
+    if (address && !addressError(siteId, address)) return { collection, locale, address };
+  }
+  return undefined;
+}
+
 const ADDRESS = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**

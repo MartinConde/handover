@@ -1,5 +1,6 @@
 import { appendFile, mkdir, readdir, readFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import {
   type ContentFile,
@@ -539,6 +540,16 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
           entrypoint: new URL('./routes/api.js', import.meta.url),
           prerender: false,
         });
+        // Preview renders draft content on the client's own domain, so a site that did not ask
+        // for it does not get the route at all — the flag is read here, at build, and nothing
+        // downstream can turn it back on. `0` and `false` are somebody saying no.
+        const flag = process.env.PREVIEW_ENABLED;
+        if (flag !== undefined && !['', '0', 'false'].includes(flag))
+          injectRoute({
+            pattern: '/_preview/[...path]',
+            entrypoint: new URL('./routes/preview.js', import.meta.url),
+            prerender: false,
+          });
         addMiddleware({ order: 'pre', entrypoint: new URL('./middleware.js', import.meta.url) });
 
         // The site's own cms.config.ts, so the Worker holds the real Zod objects.

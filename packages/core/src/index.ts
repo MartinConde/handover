@@ -124,7 +124,7 @@ export {
 } from './media.js';
 export type { MigrationStep } from './migrate.js';
 export { MIGRATIONS, migrateDocument, versionOf } from './migrate.js';
-export type { CollectionRoutes, I18nConfig, I18nRouting } from './names.js';
+export type { CollectionRoutes, I18nConfig, I18nRouting, PreviewTarget } from './names.js';
 export {
   addressError,
   checkCollections,
@@ -132,6 +132,7 @@ export {
   entryAddress,
   entryName,
   entryUrl,
+  previewTarget,
 } from './names.js';
 export { filterLive, isLive, newId, RESERVED_KEYS, regenerateIds } from './reserved.js';
 export type { Answer, MergedChange, Question, ThreeWay } from './resolve.js';

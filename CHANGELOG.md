@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Preview has a route and a gate.** `/_preview/<path>` is injected only where
+  `PREVIEW_ENABLED` is set on the build, needs an admin session, serves only addresses the
+  site's own routes serve, and answers `Cache-Control: private, no-store`,
+  `X-Robots-Tag: noindex, nofollow` and `Content-Security-Policy: frame-ancestors 'self'` on
+  every response. It renders nothing yet — an accepted address is `204`.
+  [Preview](docs/preview.md).
+
 - **Conflicts are answered field by field.** An entry somebody changed in the repository used
   to have one way out — throw your draft away and take theirs. The drawer's **Resolve** now
   opens the entry as two questions rather than two versions: fields only one side changed are

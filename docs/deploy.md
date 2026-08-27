@@ -1,8 +1,9 @@
 # Deploy
 
 The site is one Cloudflare Worker: static pages as assets, `/admin` and `/admin/api` as
-SSR routes. Handover needs one binding — a D1 database for unpublished edits — five
-required secrets, and one more per optional feature.
+SSR routes, and `/_preview` where [preview](preview.md) is turned on. Handover needs one
+binding — a D1 database for unpublished edits — five required secrets, and one more per
+optional feature.
 
 ## wrangler.jsonc
 
@@ -173,6 +174,11 @@ private:
 The bucket also needs a CORS rule and a hostname of its own before anything can be uploaded to
 it; [Media](media.md) is the whole setup in four steps.
 
+One value is neither a secret nor a var: `PREVIEW_ENABLED` belongs to the **build**, because
+the integration reads it while it sets up and leaves the `/_preview` route out of the bundle
+where it is unset. Setting it on the deployed Worker does nothing; it goes in the build command
+(below) or in the script that command runs ([Preview](preview.md#turning-it-on)).
+
 The account id is in the dashboard's sidebar; the worker name is this file's own `name`. ⚠️ The
 Workers Builds API is keyed on the worker's **tag**, not its name, and answers `200` with an
 empty list for a name — which reads as "this commit never built" forever. The name is what you
@@ -192,7 +198,8 @@ open.
 Connect the repository to the Worker under **Workers & Pages → your Worker → Settings →
 Builds** so every commit — including the ones Handover makes — rebuilds and deploys:
 
-- Build command: `pnpm build`
+- Build command: `pnpm build` — with `PREVIEW_ENABLED=1` in front of it, or in the script, to
+  ship the preview route ([Preview](preview.md))
 - Deploy command: `npx wrangler d1 migrations apply your-site --remote && npx wrangler deploy`
 
 Migrations run before the new code is live, so a deploy can never reach a database that is
