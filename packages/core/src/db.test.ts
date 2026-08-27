@@ -27,6 +27,7 @@ import {
   setEntryAddress,
   setEntryLocales,
   setEntryStatus,
+  sweepOrphans,
 } from './db.js';
 import { type ContentIndex, collectionEntries, indexFrom } from './entries.js';
 import { blobSha } from './git.js';
@@ -1507,4 +1508,68 @@ test('the draft files are every row as it stands, published ones included', asyn
     { path: OTHER, contents: '' },
     { path: PATH, contents: expect.stringContaining('The Mill House') },
   ]);
+});
+
+// The orphan sweep. Git and D1 cannot share a transaction, so a rename or a delete killed
+// between the commit and the re-key leaves a row pointing at a path the tree no longer has.
+const ORPHAN = 'src/content/listings/en/gone.yaml';
+const DAY = 24 * 60 * 60 * 1000;
+const NOW = 1755864000000;
+const orphanRow = (path: string, extra: Record<string, unknown> = {}) => ({
+  siteId: 'default',
+  path,
+  contents: 'title: "Gone"\n',
+  baseSha: 'commit-A',
+  baseBlob: 'blob-of-the-file-that-was-there',
+  updatedAt: NOW - DAY - 1,
+  ...extra,
+});
+const paths = async (db: ReturnType<typeof openDb>) =>
+  (await db.select().from(drafts)).map((r) => r.path).sort();
+
+test('a draft row whose file the tree no longer has is swept', async () => {
+  const db = await fresh();
+  await db.insert(drafts).values(orphanRow(ORPHAN));
+
+  expect(await sweepOrphans('default', db, git, NOW)).toBe(1);
+  expect(await paths(db)).toEqual([]);
+});
+
+// The normal state of every entry before its first publish: a draft and nothing in git.
+test('an entry that has never been published keeps its draft', async () => {
+  const db = await fresh();
+  await createDraft('default', db, git, ORPHAN, { title: 'Gone' });
+  await db.update(drafts).set({ updatedAt: NOW - DAY - 1 });
+
+  expect(await sweepOrphans('default', db, git, NOW)).toBe(0);
+  expect(await paths(db)).toEqual([ORPHAN]);
+});
+
+// The row a delete leaves is how the entry list knows the path has gone until the build
+// catches up; sweeping it would put the deleted entry back on the screen.
+test('the row a delete left to keep the path off the list stays', async () => {
+  const db = await fresh();
+  await recordDelete('default', db, ORPHAN, 'commit-B');
+  await db.update(drafts).set({ updatedAt: NOW - DAY - 1 });
+
+  expect(await sweepOrphans('default', db, git, NOW)).toBe(0);
+  expect(await paths(db)).toEqual([ORPHAN]);
+});
+
+test('a draft left open for a week whose file is still there stays', async () => {
+  const db = await fresh();
+  await db.insert(drafts).values(orphanRow(PATH, { updatedAt: NOW - 7 * DAY }));
+
+  expect(await sweepOrphans('default', db, git, NOW)).toBe(0);
+  expect(await paths(db)).toEqual([PATH]);
+});
+
+// The age is what keeps the sweep off a rename that is between its commit and its re-key
+// right now — the request the job would be racing.
+test('a row younger than a day is left alone', async () => {
+  const db = await fresh();
+  await db.insert(drafts).values(orphanRow(ORPHAN, { updatedAt: NOW - DAY + 1000 }));
+
+  expect(await sweepOrphans('default', db, git, NOW)).toBe(0);
+  expect(await paths(db)).toEqual([ORPHAN]);
 });

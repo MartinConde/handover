@@ -4,6 +4,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Renaming or deleting an entry waits for the colleague who has it open.** Both actions
+  commit every locale file at once, so neither runs under somebody else's edit; while they hold
+  the entry it is refused with a sentence naming them. The lock then follows the rename, and a
+  delete lets it go. [Entry lifecycle](docs/entry-lifecycle.md#renaming-and-deleting-an-entry).
+
+- **A rename and a delete are in the activity log**, as `entry-rename` (with the name it had
+  before) and `entry-delete` (with the commit that removed the files). [Activity log](docs/activity.md).
+
+- **A third cron job, daily.** Git and the database cannot share a transaction, so a rename or a
+  delete killed between its commit and its database write used to leave a draft row pointing at
+  a file no longer in the repository — which the next publish would have written back. The sweep
+  removes such rows once they are a day old, and leaves alone the two kinds of row that were
+  never files: an entry that has not been published yet, and the row a delete leaves to keep the
+  path off the entry list until the build catches up. No new trigger and no migration.
+  [The schedule](docs/deploy.md#the-schedule).
+
 - **Deleting a page asks where its visitors should go**, in the same dialog hiding uses: the
   collection's overview, another page picked from the list, a web address, or nowhere. The
   answer becomes one `reason: "deleted"` redirect per language, from the address that language

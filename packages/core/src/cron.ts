@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { expireActivity, logActivity } from './activity.js';
-import type { Db } from './db.js';
+import { type Db, sweepOrphans } from './db.js';
+import type { GitClient } from './git.js';
 import { type R2Store, reconcileMedia } from './media.js';
 import { cronState } from './tables.js';
 
@@ -9,6 +10,8 @@ export interface JobDeps {
   db: Db;
   /** Where the site's uploads live, or nothing where it has no bucket at all. */
   store?: R2Store;
+  /** The repository, or nothing where the GitHub App has not been configured. */
+  git?: GitClient;
   fetch?: typeof globalThis.fetch;
   now?: number;
 }
@@ -25,6 +28,7 @@ const JOBS: Record<
 > = {
   reconcile: { every: HOUR, run: (siteId, d) => reconcileMedia(siteId, d.db, d.store, d) },
   retention: { every: 24 * HOUR, run: (siteId, d) => expireActivity(siteId, d.db, d.now) },
+  orphans: { every: 24 * HOUR, run: (siteId, d) => sweepOrphans(siteId, d.db, d.git, d.now) },
 };
 
 /** What this site runs, in the order the dispatcher walks them. */

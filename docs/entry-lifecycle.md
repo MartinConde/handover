@@ -80,6 +80,16 @@ and then to `/de/`. On a
 [`localizedSlugs`](configuration.md#localizedslugs) collection that URL is the `slug` in the
 language's own file, so renaming the file writes no rule for a language that has one.
 
+Both wait for whoever has the entry open. They commit every locale file at once, so a rename or
+a delete under somebody else's edit would take the file they are typing into out from under
+them; while a colleague holds the entry the action is refused and the answer names them.
+
+Both commit first and write to the database second — git and D1 cannot share a transaction, and
+the other order would leave an unpublished edit pointing at a file that was never moved. If the
+request dies between the two, the draft row left at the old path is swept by a daily job
+([Deploy](deploy.md#the-schedule)) once it is a day old, and the entry list already stops
+showing it as soon as the build catches up.
+
 From code, `renameEntry` and `deleteEntry` in `@handover/core` do this through the
 `GitClient`:
 

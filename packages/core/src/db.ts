@@ -1,4 +1,4 @@
-import { and, eq, gt, inArray, isNotNull, isNull, ne } from 'drizzle-orm';
+import { and, eq, gt, inArray, isNotNull, isNull, lt, ne } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import {
   applyDrift,
@@ -607,6 +607,53 @@ export async function overlayRows(
 export async function draftFiles(siteId: string, db: Db): Promise<ContentFile[]> {
   const rows = await db.select().from(drafts).where(eq(drafts.siteId, siteId));
   return rows.map(({ path, contents }) => ({ path, contents }));
+}
+
+/**
+ * How long a row that points at a path the tree does not have is left alone. A rename or a
+ * delete is a commit and then a D1 write, and this must not race the second half of one that
+ * is still running.
+ */
+const ORPHAN_AGE = 24 * 60 * 60 * 1000;
+
+/**
+ * Rows a commit left behind. Git and D1 cannot share a transaction, so a rename or a delete
+ * killed between the commit and the re-key leaves a draft at a path no longer in the tree —
+ * and a draft left there publishes the file back.
+ *
+ * **An empty `base_blob` is what says a row was never a file**, and those are the two rows that
+ * must survive this: an entry that has not been published yet, and the empty row a delete
+ * leaves to keep the path off the entry list until the build catches up. Everything else was
+ * loaded from a file, so the file being gone is the whole of the question.
+ */
+export async function sweepOrphans(
+  siteId: string,
+  db: Db,
+  git: Pick<GitClient, 'getFile' | 'getHead'> | undefined,
+  now = Date.now(),
+): Promise<number> {
+  // A site whose App is not configured cannot be asked what the tree holds, and a sweep that
+  // cannot ask deletes nothing.
+  if (!git) return 0;
+  const rows = await db
+    .select({ path: drafts.path })
+    .from(drafts)
+    .where(
+      and(
+        eq(drafts.siteId, siteId),
+        ne(drafts.baseBlob, ''),
+        lt(drafts.updatedAt, now - ORPHAN_AGE),
+      ),
+    );
+  if (!rows.length) return 0;
+  // One commit for all of them: a tree moving under the sweep would make half the answers
+  // about one repository and half about another.
+  const head = await git.getHead();
+  const gone: string[] = [];
+  for (const { path } of rows) if (!(await git.getFile(path, head))) gone.push(path);
+  if (gone.length)
+    await db.delete(drafts).where(and(eq(drafts.siteId, siteId), inArray(drafts.path, gone)));
+  return gone.length;
 }
 
 /** Throw away the unpublished edits for one path; a deleted entry must not come back. */

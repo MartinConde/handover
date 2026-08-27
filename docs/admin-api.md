@@ -114,14 +114,16 @@ POST /admin/api/entries/:collection/:slug/rename   { "to": "…" }  →  { "slug
 
 One commit moving every locale file, plus one redirect per language whose URL moved. `to`
 goes through the same derivation as a new entry's title, so `slug` in the answer is the name
-that was actually used. `409` if the entry has never been published.
+that was actually used. `409` if the entry has never been published, and `409` naming the
+colleague if somebody else holds its lock.
 
 ```
 DELETE /admin/api/entries/:collection/:slug   { "redirect": { "kind": "index" } }  →  { "commit_sha" }
 ```
 
-One commit removing every locale file, with the entry's draft dropped. The answer is `{}` when
-nothing was committed — the entry existed only as a draft, or not at all.
+One commit removing every locale file, with the entry's draft dropped and its lock let go. The
+answer is `{}` when nothing was committed — the entry existed only as a draft, or not at all.
+`409` naming the colleague if somebody else holds its lock.
 
 `redirect` is the answer to the same question a hide asks, in the same four shapes as the
 status route below, and it becomes one `reason: "deleted"` rule per language **in this commit**

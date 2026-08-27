@@ -39,7 +39,8 @@ export default { ...handler, scheduled };
 ## The schedule
 
 One Cron Trigger runs every five minutes and one handler decides what is due: media
-reconciliation hourly, activity-log retention daily. A package upgrade that adds a job
+reconciliation hourly, activity-log retention daily, and daily a sweep of the draft rows a
+rename or a delete left behind when the request died between its commit and its database write. A package upgrade that adds a job
 adds no trigger, so `wrangler.jsonc` is written once.
 
 To fire a tick by hand, build first and ask for one. `--bundle` is not optional — the Astro

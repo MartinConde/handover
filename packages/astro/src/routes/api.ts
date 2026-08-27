@@ -37,6 +37,7 @@ import {
   diffEntry,
   discardDraft,
   driftReport,
+  dropLock,
   entryAddress,
   entryConflict,
   entryKey,
@@ -59,6 +60,7 @@ import {
   mediaList,
   memberApi,
   memberList,
+  moveLock,
   openDb,
   overlayRows,
   parseEntry,
@@ -101,7 +103,7 @@ import { createAuth, mailer } from '../auth.js';
 import { formSchema } from '../index.js';
 import { entryProblems } from '../problems.js';
 
-function gitClient(): GitClient {
+export function gitClient(): GitClient {
   const e = env as Record<string, string | undefined>;
   const [owner, repo] = (e.GITHUB_REPO ?? '').split('/');
   if (!e.GITHUB_APP_ID || !e.GITHUB_INSTALLATION_ID || !e.GITHUB_PRIVATE_KEY || !owner || !repo) {
@@ -1977,6 +1979,25 @@ async function takenNames(collection: string, database: Db): Promise<string[]> {
   return collectionEntries('default', index, collection, rows).map((e) => e.id);
 }
 
+/**
+ * Step one of the order a rename and a delete are held to: both commit every file of the entry
+ * at once, so neither runs under somebody who has it open. The sentence is the whole answer —
+ * the entry list shows what the server said.
+ */
+async function heldByAnother(
+  collection: string,
+  slug: string,
+  session: App.Locals['handover'],
+  doing: 'renamed' | 'deleted',
+): Promise<Response | undefined> {
+  const holder = await lockHolder('default', db(), `${collection}/${slug}`);
+  if (!holder || holder.userId === session?.user.id) return undefined;
+  return new Response(
+    `${holder.name ?? 'Somebody else'} is editing this entry — it can be ${doing} once they are done`,
+    { status: 409 },
+  );
+}
+
 // An entry is its file in every declared language: a rename or a delete moves all of them.
 const locationOf = (collection: string): EntryLocation => ({
   collection,
@@ -2012,8 +2033,15 @@ async function createEntry(collection: string, request: Request): Promise<Respon
 
 // The new name goes through the same derivation as a new entry's, so a rename can never
 // produce a file name the CMS could not have created.
-async function rename(collection: string, slug: string, request: Request): Promise<Response> {
+async function rename(
+  collection: string,
+  slug: string,
+  request: Request,
+  session: App.Locals['handover'],
+): Promise<Response> {
   if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  const held = await heldByAnother(collection, slug, session, 'renamed');
+  if (held) return held;
   const body = (await request.json().catch(() => undefined)) as { to?: unknown } | undefined;
   const database = db();
   const git = gitClient();
@@ -2035,6 +2063,16 @@ async function rename(collection: string, slug: string, request: Request): Promi
       commit_sha,
     );
   }
+  // Whoever has the entry open still has it: what they are editing is the same entry under
+  // the name it now answers to.
+  await moveLock('default', database, `${collection}/${slug}`, `${collection}/${to}`);
+  await logActivity('default', database, {
+    userId: session?.user.id,
+    kind: 'entry-rename',
+    subject: await entrySubject(collection, to),
+    detail: { from: slug },
+    commitSha: commit_sha,
+  });
   return Response.json({ slug: to, commit_sha });
 }
 
@@ -2047,9 +2085,16 @@ async function rename(collection: string, slug: string, request: Request): Promi
  * commit that takes the files away. No answer at all is the collection's own page above it,
  * which is what the dialog offers first.
  */
-async function remove(collection: string, slug: string, request?: Request): Promise<Response> {
+async function remove(
+  collection: string,
+  slug: string,
+  request: Request | undefined,
+  session: App.Locals['handover'],
+): Promise<Response> {
   const collected = config.collections[collection];
   if (!collected) return new Response('Not found', { status: 404 });
+  const held = await heldByAnother(collection, slug, session, 'deleted');
+  if (held) return held;
   const body = (await request?.json().catch(() => undefined)) as
     | { redirect?: { kind?: unknown; value?: unknown } }
     | undefined;
@@ -2057,10 +2102,15 @@ async function remove(collection: string, slug: string, request?: Request): Prom
   const git = gitClient();
   const database = db();
   const files = await entryFiles(git, collection, slug);
+  const entry = `${collection}/${slug}`;
   if (!files.some((f) => f.file)) {
     for (const { path } of files) await discardDraft('default', database, path);
+    await dropLock('default', database, entry);
     return Response.json({});
   }
+  // Read before the commit: once the files have gone there is no language left to name the
+  // entry by, and this is the row the deleted list is built from.
+  const subject = await entrySubject(collection, slug);
   const picked =
     answer.kind === 'entry'
       ? collectionEntries(
@@ -2075,6 +2125,14 @@ async function remove(collection: string, slug: string, request?: Request): Prom
   );
   for (const { path, file } of files)
     if (file) await recordDelete('default', database, path, result.commit_sha);
+  await dropLock('default', database, entry);
+  await logActivity('default', database, {
+    userId: session?.user.id,
+    kind: 'entry-delete',
+    subject,
+    detail: { files: files.filter((f) => f.file).length },
+    commitSha: result.commit_sha,
+  });
   return Response.json(result);
 }
 
@@ -2558,7 +2616,8 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   const answered = params.path?.match(DRIFT);
   if (answered) return answering(() => reconcile(answered[1] ?? '', answered[2] ?? '', request));
   const renamed = params.path?.match(RENAME);
-  if (renamed) return answering(() => rename(renamed[1] ?? '', renamed[2] ?? '', request));
+  if (renamed)
+    return answering(() => rename(renamed[1] ?? '', renamed[2] ?? '', request, locals.handover));
   const created = params.path?.match(ENTRIES);
   if (created) return answering(() => createEntry(created[1] ?? '', request));
   return new Response('Not found', { status: 404 });
@@ -2572,6 +2631,7 @@ export const DELETE: APIRoute = async ({ params, request, url, locals }) => {
   const draft = params.path?.match(DRAFT);
   if (draft) return discard(draft[1] ?? '', draft[2] ?? '');
   const entry = params.path?.match(ENTRY);
-  if (entry) return answering(() => remove(entry[1] ?? '', entry[2] ?? '', request));
+  if (entry)
+    return answering(() => remove(entry[1] ?? '', entry[2] ?? '', request, locals.handover));
   return new Response('Not found', { status: 404 });
 };

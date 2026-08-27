@@ -98,3 +98,22 @@ export async function takeLock(
     .onConflictDoUpdate({ target: [locks.siteId, locks.entry], set: { userId, expiresAt } });
   return expiresAt;
 }
+
+/**
+ * The lock follows the entry a rename gave a new name: whoever has it open still has it, and
+ * their next beat is about the entry that now exists. The row a free name might still carry
+ * goes first, the way `recordRename` clears the draft at the new path — only a name nothing
+ * holds is ever renamed onto, and a primary key that did collide would throw after the commit.
+ */
+export async function moveLock(siteId: string, db: Db, from: string, to: string): Promise<void> {
+  await db.delete(locks).where(and(eq(locks.siteId, siteId), eq(locks.entry, to)));
+  await db
+    .update(locks)
+    .set({ entry: to })
+    .where(and(eq(locks.siteId, siteId), eq(locks.entry, from)));
+}
+
+/** The entry has gone, so nobody is editing it: what a delete does to its lock. */
+export async function dropLock(siteId: string, db: Db, entry: string): Promise<void> {
+  await db.delete(locks).where(and(eq(locks.siteId, siteId), eq(locks.entry, entry)));
+}

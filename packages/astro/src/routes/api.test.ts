@@ -443,6 +443,9 @@ const released: string[] = [];
 const beats: string[] = [];
 /** And which ones Take over transferred. */
 const taken: string[] = [];
+/** Which entry a rename moved the lock to, and which one a delete let go of. */
+const moved: string[] = [];
+const dropped: string[] = [];
 // Which user and which session the route asked about — the two values that must come from the
 // session and never from the request, or one person could read another's account.
 let asked: unknown[] = [];
@@ -483,6 +486,12 @@ vi.mock('@handover/core', async (original) => ({
   heldEntries: async () => editing,
   releaseLocks: async (_site: string, _db: unknown, userId: string) => {
     released.push(userId);
+  },
+  moveLock: async (_site: string, _db: unknown, from: string, to: string) => {
+    moved.push(`${from} -> ${to}`);
+  },
+  dropLock: async (_site: string, _db: unknown, entry: string) => {
+    dropped.push(entry);
   },
   createGitClient: () => ({ getFile, getHead, publish }),
   openDb: () => {
@@ -583,6 +592,8 @@ afterEach(() => {
   released.length = 0;
   beats.length = 0;
   taken.length = 0;
+  moved.length = 0;
+  dropped.length = 0;
   createUserRefusal = undefined;
   magicLinkRefusal = undefined;
   setRoleRefusal = undefined;
@@ -1856,6 +1867,61 @@ test('deleting commits the removal with a redirect and says the file has gone', 
     'src/content/listings/en/mill-house.yaml',
     'def456',
   );
+});
+
+// Step one of the order a rename and a delete are held to: both commit every file of the entry
+// at once, so neither goes in under whoever has it open.
+test('renaming waits for the editor who has the entry open', async () => {
+  publish.mockClear();
+  holder = { userId: 'someone-else', name: 'Anna Berg', expiresAt: 1755864120000 };
+
+  const res = await POST(
+    post('entries/listings/mill-house/rename', JSON.stringify({ to: 'The Old Mill' })),
+  );
+
+  expect(res.status).toBe(409);
+  expect(await res.text()).toBe(
+    'Anna Berg is editing this entry — it can be renamed once they are done',
+  );
+  expect(publish).not.toHaveBeenCalled();
+});
+
+test('deleting waits for the editor who has the entry open', async () => {
+  publish.mockClear();
+  holder = { userId: 'someone-else', name: 'Anna Berg', expiresAt: 1755864120000 };
+
+  const res = await del('entries/listings/mill-house');
+
+  expect(res.status).toBe(409);
+  expect(await res.text()).toContain('it can be deleted once they are done');
+  expect(publish).not.toHaveBeenCalled();
+});
+
+// The entry is the same entry: whoever has it open still has it, under the name it now answers
+// to. A delete leaves nobody editing anything.
+test('the lock follows a rename and goes with a delete', async () => {
+  await POST(post('entries/listings/mill-house/rename', JSON.stringify({ to: 'The Old Mill' })));
+  expect(moved).toEqual(['listings/mill-house -> listings/the-old-mill']);
+
+  await del('entries/listings/mill-house');
+  expect(dropped).toEqual(['listings/mill-house']);
+});
+
+// The row the deleted list is built from: the path of the language the entry was written in,
+// which the route reads before the commit takes the files away.
+test('a delete leaves a log row naming the entry that went', async () => {
+  const res = await del('entries/listings/mill-house');
+
+  expect(res.status).toBe(200);
+  expect(logged).toEqual([
+    {
+      userId: undefined,
+      kind: 'entry-delete',
+      subject: 'src/content/listings/en/mill-house.yaml',
+      detail: { files: 1 },
+      commitSha: 'def456',
+    },
+  ]);
 });
 
 // The rule a rename or a delete owes is a URL on the site: it carries the language's segment,

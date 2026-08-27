@@ -83,6 +83,7 @@ export {
   setEntryAddress,
   setEntryLocales,
   setEntryStatus,
+  sweepOrphans,
 } from './db.js';
 export type { Change, DiffGroup, RowAt, WordPart } from './diff.js';
 export { diffEntry } from './diff.js';
@@ -109,7 +110,16 @@ export {
   revertRedirects,
 } from './lifecycle.js';
 export type { Lock } from './locks.js';
-export { claimLock, heldEntries, LOCK_TTL, lockHolder, releaseLocks, takeLock } from './locks.js';
+export {
+  claimLock,
+  dropLock,
+  heldEntries,
+  LOCK_TTL,
+  lockHolder,
+  moveLock,
+  releaseLocks,
+  takeLock,
+} from './locks.js';
 export type { EmailSender, Mailer } from './mailer.js';
 export { cloudflareMailer, resendMailer, senderAddress } from './mailer.js';
 export type { MediaRow, Preset, R2Store, Upload } from './media.js';
