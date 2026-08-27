@@ -2,6 +2,63 @@
 
 Installed with the package; run it from the site's root with `npx handover …`.
 
+## `handover init`
+
+Once, on a site that has never had Handover. It creates the Cloudflare resources, writes
+the two files that point at them, generates and applies the migrations, and puts the first
+owner in the database:
+
+```sh
+npx handover init you@example.com
+```
+
+It needs `wrangler`, `drizzle-kit` and `drizzle-orm` installed here first — both bins are
+checked before anything is created, so a missing one costs you nothing:
+
+```sh
+pnpm add -D wrangler drizzle-kit drizzle-orm
+```
+
+The address is the first owner's. Everything is named after the project — `name` in
+`package.json`, or the folder — so `my-site` gets a D1 database called `my-site` and an R2
+bucket called `my-site-media`.
+
+```
+Wrote wrangler.jsonc
+Wrote src/worker.ts
+Wrote drizzle.config.ts
+migrations/handover.json records schema version 1
+you@example.com is an owner. They sign in with an emailed link and set a password on their account page…
+```
+
+In order, it:
+
+1. reads the account from `wrangler whoami`. With more than one, it stops and lists them —
+   set `CLOUDFLARE_ACCOUNT_ID` to the one you want and run it again, rather than have the
+   database created in the wrong account
+2. creates the database and the bucket
+3. writes `wrangler.jsonc` with the `DB` binding and the bucket's two vars, `src/worker.ts`
+   ([the schedule](deploy.md#the-schedule)) and `drizzle.config.ts`
+4. runs [`db generate`](#handover-db-generate) and applies the result with
+   `wrangler d1 migrations apply`, once `--local` and once `--remote`
+5. inserts one `user` row — an owner, no password
+
+A file it would write that is already there is left alone and named on stdout. That
+includes `wrangler.jsonc`: a config file you wrote is yours, so the block to paste into it
+is printed instead. It refuses outright on a project that already has a `migrations/`
+folder, before creating anything, rather than guess how to merge the numbering.
+
+Commit `wrangler.jsonc`, `src/worker.ts`, `drizzle.config.ts` and `migrations/`.
+
+**The first owner has no password.** The row is all there is, so the way in is an emailed
+sign-in link, and they set a password from their account page afterwards — which needs a
+[mailer](email.md) and `HANDOVER_BASE_URL`. On a site with neither, give them a password by
+hand: [Accounts](auth.md#3-create-the-first-account).
+
+What init does not do is the rest of [Deploy](deploy.md): the GitHub App, the secrets, and
+the bucket's [CORS rule and hostname](media.md) are yours, and the site cannot serve
+`/admin` until they are set.
+
 ## `handover migrate`
 
 Every content file under `src/content/` carries `_version` ([content format](content-format.md#reserved-keys)).

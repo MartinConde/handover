@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **`handover init` sets a new site up.** One command creates the D1 database and the R2
+  bucket, writes `wrangler.jsonc` with the `DB` binding and the bucket's vars, `src/worker.ts`
+  and `drizzle.config.ts`, generates and applies the migrations, and puts the first owner in
+  the database. That owner is a `user` row and nothing else — no password for the command to
+  invent — so the first sign-in is an emailed link and the password is set from the account
+  page afterwards. A file that is already there is left alone and named, a config file you
+  wrote gets the block to paste printed instead, and a project that already has `migrations/`
+  is refused before anything is created. [CLI](docs/cli.md#handover-init).
+
 - **Duplicate an entry.** Every entry list row has **Duplicate**, which copies every language of
   the entry under a new file name — pre-filled `<name>-copy` and editable. The copy is one entry
   across its languages: the same block gets the same new `_id` in each of them. It arrives hidden

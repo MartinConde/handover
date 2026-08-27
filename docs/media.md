@@ -9,9 +9,15 @@ afterwards that what arrived is what was declared.
 
 ## 1. Make the bucket
 
+[`handover init`](cli.md#handover-init) creates it, named after the project, and writes its
+two vars into `wrangler.jsonc` (step 4). By hand:
+
 ```sh
 npx wrangler r2 bucket create your-site-media
 ```
+
+The three steps below are yours either way — init sets no CORS rule, because the origin that
+needs one is the deployed site's, which it cannot know.
 
 ## 2. Let the admin's origin write to it
 

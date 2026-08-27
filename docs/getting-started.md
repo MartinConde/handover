@@ -73,6 +73,13 @@ Pages render them through a loader and a layout that takes its data as props —
 
 ## 3. Connect GitHub, the database and the login
 
+One command makes the Cloudflare side of this — the database, the bucket, the bindings, the
+migrations and the first owner ([CLI](cli.md#handover-init)):
+
+```sh
+npx handover init you@example.com
+```
+
 Handover reads and writes through a GitHub App installed on the site's repository. Create
 the App and the secrets as described in [Deploy](deploy.md), then for local development
 put the same values in `.dev.vars` (gitignored):
@@ -86,12 +93,13 @@ GITHUB_REPO=you/your-site
 ```
 
 `BETTER_AUTH_SECRET` signs the sessions. `/admin` has accounts rather than one shared
-password, and nobody can create one — so before you can sign in, insert the first owner:
-[Accounts and signing in](auth.md#3-create-the-first-account).
+password, and nobody can create one — `init` above put the first owner there, and they sign
+in with an emailed link. On a site with no [mailer](email.md) there is no link to send, so
+give them a password by hand: [Accounts and signing in](auth.md#3-create-the-first-account).
 
-Handover keeps edits in D1 until they are published, so create the database, bind it as
-`DB` and apply the migrations before the first deploy — all three steps are in
-[Deploy](deploy.md#the-database).
+Handover keeps edits in D1 until they are published, so the database has to exist, be bound
+as `DB` and have the migrations applied before the first deploy. `init` does all three; by
+hand they are in [Deploy](deploy.md#the-database).
 
 ## 4. Edit and publish
 

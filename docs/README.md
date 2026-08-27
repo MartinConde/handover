@@ -22,7 +22,7 @@
 - [Roles and permissions](roles.md) — the two roles, what each may do, and what is behind the session and what is deliberately not.
 - [Sending email](email.md) — the `mailer` block, verifying a sending domain, and the check that proves a key.
 - [Activity log](activity.md) — what is recorded and what is not, who sees whose events, and how a row reads.
-- [CLI](cli.md) — `handover migrate` for content files, `handover db generate` for the package's tables.
+- [CLI](cli.md) — `handover init` to set a new site up, `handover migrate` for content files, `handover db generate` for the package's tables.
 - [Settings — what is connected](diagnostics.md) — the admin's read-only view of your config, the connection checks behind it, and the test email.
 - [Deploy](deploy.md) — `wrangler.jsonc`, the GitHub App, secrets, building on push.
 - [The admin API](admin-api.md) — the routes the admin drives: entries, drafts, publishing, locks and the activity read. For debugging, not for building against.

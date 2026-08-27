@@ -38,7 +38,7 @@ gets. Passwords and sessions work without it; only what puts a URL in an email n
 
 ## 3. Create the first account
 
-Until `handover init` does this for you, the first owner is a row you insert yourself:
+[`handover init`](cli.md#handover-init) seeds the first owner, and this is the row it writes:
 
 ```sql
 INSERT INTO user (id, name, email, email_verified, role, created_at, updated_at)
@@ -46,8 +46,9 @@ VALUES ('usr_1', 'Your Name', 'you@example.com', 1, 'owner', 0, 0);
 ```
 
 With a mailer and a base URL set that is the whole of it: they sign in with an emailed link and
-set a password from their account page. Otherwise give them a password too, hashed with the same
-function the login verifies against:
+set a password from their account page. A site with no mailer has no way to send that link, so
+give them a password too — insert it yourself, hashed with the same function the login verifies
+against:
 
 ```sh
 node --input-type=module -e "

@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SCHEMA_VERSION } from '@handover/core';
@@ -14,9 +14,25 @@ function site(files: Record<string, string>) {
   return cwd;
 }
 
-async function run(argv: string[], cwd: string, ran: string[][] = []) {
+const WHOAMI = JSON.stringify({ loggedIn: true, accounts: [{ id: 'acc0unt1d', name: 'Yours' }] });
+const D1_LIST = JSON.stringify([{ uuid: 'db-uuid', name: 'my-site' }]);
+
+async function run(
+  argv: string[],
+  cwd: string,
+  ran: string[][] = [],
+  capture = (a: string[]) => (a.includes('whoami') ? WHOAMI : D1_LIST),
+) {
   const out: string[] = [];
-  const code = await main(argv, { cwd, log: (l) => out.push(l), run: (a) => void ran.push(a) });
+  const code = await main(argv, {
+    cwd,
+    log: (l) => out.push(l),
+    run: (a) => void ran.push(a),
+    capture: (a) => {
+      ran.push(a);
+      return capture(a);
+    },
+  });
   return { code, out: out.join('\n') };
 }
 
@@ -107,8 +123,91 @@ test('db generate --check passes when the marker matches', async () => {
   expect(out).toBe(`migrations/ is at schema version ${SCHEMA_VERSION}`);
 });
 
+test('init creates the database and the bucket, wires them up and seeds the owner', async () => {
+  const cwd = site({ 'package.json': '{ "name": "my-site" }' });
+  const ran: string[][] = [];
+  const { code, out } = await run(['init', 'you@example.com'], cwd, ran);
+
+  expect(code).toBe(0);
+  expect(ran.slice(0, 8)).toEqual([
+    ['drizzle-kit', '--version'],
+    ['wrangler', 'whoami', '--json'],
+    ['wrangler', 'd1', 'create', 'my-site'],
+    ['wrangler', 'r2', 'bucket', 'create', 'my-site-media'],
+    ['wrangler', 'd1', 'list', '--json'],
+    ['drizzle-kit', 'generate'],
+    ['wrangler', 'd1', 'migrations', 'apply', 'my-site', '--local'],
+    ['wrangler', 'd1', 'migrations', 'apply', 'my-site', '--remote'],
+  ]);
+
+  const config = readFileSync(join(cwd, 'wrangler.jsonc'), 'utf8');
+  expect(config).toContain('"name": "my-site"');
+  expect(config).toContain('"binding": "DB"');
+  expect(config).toContain('"database_name": "my-site"');
+  expect(config).toContain('"database_id": "db-uuid"');
+  expect(config).toContain('"R2_ACCOUNT_ID": "acc0unt1d"');
+  expect(config).toContain('"R2_BUCKET": "my-site-media"');
+  expect(readFileSync(join(cwd, 'drizzle.config.ts'), 'utf8')).toContain(
+    "schema: './node_modules/astro-handover/dist/schema.js'",
+  );
+  expect(readFileSync(join(cwd, 'src/worker.ts'), 'utf8')).toContain('scheduled');
+  expect(out).toContain('you@example.com is an owner');
+});
+
+test('init seeds one user row and no account row, so the first sign-in is an emailed link', async () => {
+  const cwd = site({ 'package.json': '{ "name": "my-site" }' });
+  const ran: string[][] = [];
+  await run(['init', 'you@example.com'], cwd, ran);
+
+  const seeds = ran.filter((a) => a[2] === 'execute');
+  expect(seeds.map((a) => a.slice(0, 4))).toEqual([
+    ['wrangler', 'd1', 'execute', 'my-site'],
+    ['wrangler', 'd1', 'execute', 'my-site'],
+  ]);
+  expect(seeds.map((a) => a[4])).toEqual(['--local', '--remote']);
+  expect(seeds[0]?.[6]).toMatch(
+    /^INSERT INTO user \(id, name, email, email_verified, role, created_at, updated_at\) VALUES \('[0-9a-f-]{36}', 'you', 'you@example.com', 1, 'owner', 0, 0\)$/,
+  );
+  expect(seeds[0]?.[6]).toBe(seeds[1]?.[6]);
+  expect(ran.some((a) => a.join(' ').includes('INSERT INTO account'))).toBe(false);
+});
+
+test('init refuses a project that already has migrations/, before creating anything', async () => {
+  const cwd = site({ 'package.json': '{ "name": "my-site" }', 'migrations/0000_x.sql': '' });
+  const ran: string[][] = [];
+  const { code, out } = await run(['init', 'you@example.com'], cwd, ran);
+
+  expect(code).toBe(1);
+  expect(ran).toEqual([]);
+  expect(out).toContain('migrations/ is already here');
+});
+
+test('init leaves a wrangler config it did not write alone and prints the block to paste', async () => {
+  const existing = '{ "name": "theirs" }\n';
+  const cwd = site({ 'package.json': '{ "name": "my-site" }', 'wrangler.jsonc': existing });
+  const { code, out } = await run(['init', 'you@example.com'], cwd);
+
+  expect(code).toBe(0);
+  expect(readFileSync(join(cwd, 'wrangler.jsonc'), 'utf8')).toBe(existing);
+  expect(out).toContain('wrangler.jsonc is yours');
+  expect(out).toContain('"database_id": "db-uuid"');
+});
+
+test('init refuses an owner that is not an email address, before creating anything', async () => {
+  const cwd = site({ 'package.json': '{ "name": "my-site" }' });
+  const ran: string[][] = [];
+  const { code, out } = await run(['init', "you'; DROP TABLE user; --"], cwd, ran);
+
+  expect(code).toBe(1);
+  expect(ran).toEqual([]);
+  expect(out).toContain('is not an email address');
+  expect(existsSync(join(cwd, 'wrangler.jsonc'))).toBe(false);
+});
+
 test('an unknown command prints usage and fails', async () => {
   const { code, out } = await run(['frobnicate'], site({}));
   expect(code).toBe(1);
-  expect(out).toContain('Usage: handover <migrate [--dry-run] | db generate [--check]>');
+  expect(out).toContain(
+    'Usage: handover <init <owner-email> | migrate [--dry-run] | db generate [--check]>',
+  );
 });
