@@ -15,6 +15,7 @@ first sign-in onwards.
 | Accounts | `login` (by password, by emailed link or through GitHub) · `invite` · `role-change` · `member-removed` · `password-set` (a first one, a change or a reset) |
 | Publishing | `publish`, with the commit it made and how many files were in it · `publish-conflict`, when a file had changed in the repository since it was opened · `publish-failed`, when the repository turned the commit down · `lock-takeover`, naming who the entry was taken from · `hold-released` |
 | Media | `upload` — a picture stored, named by the file it was chosen as. Choosing one the site already holds is not an upload and is not a row |
+| Settings | `setting-changed` — one of the client's own [integration keys](diagnostics.md#integrations) set, replaced or removed. The name of the key, never its value |
 | System | `mail-failed` — a message the provider would not take |
 
 **Per-field edits are not logged.** Typing in the editor autosaves every couple of seconds; a

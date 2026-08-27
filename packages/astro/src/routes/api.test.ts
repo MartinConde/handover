@@ -236,6 +236,13 @@ const fakeMailer: Mailer = async (message) => {
 };
 // And what the Worker holds when the site has no hook of its own.
 let deeplKey: string | undefined;
+// The settings table as the routes meet it: what is stored, and the secret it is stored under.
+// The encryption itself runs for real against a real D1 in core's own settings.test.ts.
+let settingsSecret: string | undefined = 'c2VjcmV0';
+const stored: Record<
+  string,
+  { value: string; hint: string; updatedAt: number; updatedBy: string | null }
+> = {};
 // What the log says the last commit was, and what the Worker can ask Cloudflare with.
 let lastCommitRow: { sha: string; at: number; kind: string } | undefined = {
   sha: 'def456',
@@ -329,6 +336,9 @@ vi.mock('cloudflare:workers', () => ({
     GITHUB_REPO: 'acme/site',
     get DEEPL_API_KEY() {
       return deeplKey;
+    },
+    get HANDOVER_SETTINGS_KEY() {
+      return settingsSecret;
     },
     get RESEND_API_KEY() {
       return resendKey;
@@ -480,6 +490,34 @@ vi.mock('@handover/core', async (original) => ({
   checkStore: async () => {
     if (storeRefusal) throw storeRefusal;
   },
+  settingFacts: async () =>
+    Object.entries(stored).map(([key, row]) => ({
+      key,
+      hint: row.hint,
+      updatedAt: row.updatedAt,
+      updatedBy: row.updatedBy,
+    })),
+  readSetting: async (_site: string, _db: unknown, secret: string | undefined, key: string) => {
+    if (!stored[key]) return undefined;
+    if (!secret)
+      throw new Error('HANDOVER_SETTINGS_KEY is not set, so a key stored here cannot be read');
+    return stored[key]?.value;
+  },
+  writeSetting: async (
+    _site: string,
+    _db: unknown,
+    secret: string | undefined,
+    key: string,
+    value: string,
+    userId: string | null,
+  ) => {
+    if (!secret)
+      throw new Error('HANDOVER_SETTINGS_KEY is not set: make one with `openssl rand -base64 32`');
+    stored[key] = { value, hint: value.slice(-4), updatedAt: 1755864000000, updatedBy: userId };
+  },
+  removeSetting: async (_site: string, _db: unknown, key: string) => {
+    delete stored[key];
+  },
   loadDraft: async (_site: string, _db: unknown, path: string) => rows[path] ?? draft,
   saveDraft,
   createDraft,
@@ -514,6 +552,8 @@ afterEach(() => {
   locales = ['en'];
   translator = translate;
   deeplKey = undefined;
+  settingsSecret = 'c2VjcmV0';
+  for (const key of Object.keys(stored)) delete stored[key];
   siteMailer = undefined;
   lastCommitRow = { sha: 'def456', at: 1755864000000, kind: 'publish' };
   cloudflareToken = 'cf-token';
@@ -693,7 +733,8 @@ test('a site with no translator says translation is off rather than failing', as
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
     off: true,
-    detail: 'No DEEPL_API_KEY and no translate hook, so the Translate button is hidden.',
+    detail:
+      'No DeepL key in Settings, no DEEPL_API_KEY and no translate hook, so the Translate button is hidden.',
   });
 });
 
@@ -764,6 +805,211 @@ test("every check is the owner's", async () => {
 
 test('a check nobody has heard of is not found', async () => {
   expect((await check('nonsense', owner)).status).toBe(404);
+});
+
+// The one writable section of the settings screen. The encryption is core's and runs against a
+// real D1 there; what these are about is the gate, the order the sources resolve in, what comes
+// back to the browser and what goes into the log.
+const settings = (session?: unknown) => GET(ctx('settings', undefined, { handover: session }));
+const setKey = (key: string, value: unknown, session: unknown = owner) =>
+  PUT(
+    ctx(
+      `settings/${key}`,
+      new Request(`https://x/admin/api/settings/${key}`, {
+        method: 'PUT',
+        body: JSON.stringify({ value }),
+      }),
+      { handover: session },
+    ),
+  );
+const clearKey = (key: string, session: unknown = owner) =>
+  DELETE(
+    ctx(
+      `settings/${key}`,
+      new Request(`https://x/admin/api/settings/${key}`, { method: 'DELETE' }),
+      {
+        handover: session,
+      },
+    ),
+  );
+
+test("the keys the client owns are the owner's, not an editor's", async () => {
+  expect((await settings(editor)).status).toBe(403);
+  expect((await setKey('deepl', 'k', editor)).status).toBe(403);
+  expect((await clearKey('deepl', editor)).status).toBe(403);
+  expect(stored.deepl).toBeUndefined();
+});
+
+test('a key set here is named by its last four and by who set it', async () => {
+  memberRows = [
+    {
+      id: 'u1',
+      name: 'Martin',
+      email: 'martin@example.com',
+      role: 'owner',
+      pending: false,
+      method: 'password',
+      lastSignIn: null,
+      invitedAt: 0,
+    },
+  ];
+  stored.deepl = { value: 'fx-0000-x7Kq', hint: 'x7Kq', updatedAt: 1755864000000, updatedBy: 'u1' };
+  translator = undefined;
+  const res = await settings(owner);
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    integrations: [
+      {
+        key: 'deepl',
+        source: 'settings',
+        // Nothing behind it, so the card can say Remove hides the Translate button rather than
+        // guessing that something else would take over.
+        fallback: 'off',
+        hint: 'x7Kq',
+        updatedAt: 1755864000000,
+        by: 'Martin',
+      },
+      { key: 'assist', source: 'off', fallback: 'off', hint: null, updatedAt: null, by: null },
+    ],
+  });
+});
+
+test("a key only the environment has is named as the site's own", async () => {
+  translator = undefined;
+  deeplKey = 'env-key';
+  const { integrations } = (await (await settings(owner)).json()) as {
+    integrations: { key: string; source: string; hint: string | null }[];
+  };
+  expect(integrations[0]).toEqual({
+    key: 'deepl',
+    source: 'env',
+    fallback: 'env',
+    hint: null,
+    updatedAt: null,
+    by: null,
+  });
+});
+
+test('a key set here says what removing it would fall back to', async () => {
+  translator = undefined;
+  deeplKey = 'env-key';
+  stored.deepl = { value: 'fx-0000-x7Kq', hint: 'x7Kq', updatedAt: 1, updatedBy: null };
+  const { integrations } = (await (await settings(owner)).json()) as {
+    integrations: { source: string; fallback: string }[];
+  };
+  expect(integrations[0]).toMatchObject({ source: 'settings', fallback: 'env' });
+});
+
+test('a site that translates with its own code is not translated by a key pasted here', async () => {
+  stored.deepl = { value: 'fx-0000-x7Kq', hint: 'x7Kq', updatedAt: 1755864000000, updatedBy: null };
+  const res = await settings(owner);
+  const [deepl] = ((await res.json()) as { integrations: { source: string; hint: string }[] })
+    .integrations;
+  // The hook is above both keys in the resolution, so the card cannot claim to be in charge.
+  expect(deepl?.source).toBe('code');
+  expect(deepl?.hint).toBe('x7Kq');
+});
+
+test('a key is tried against DeepL before it is stored, and a refusal stores nothing', async () => {
+  locales = ['en', 'de'];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ message: 'Wrong endpoint' }, { status: 403 })),
+  );
+  const res = await setKey('deepl', 'wrong-key');
+  expect(res.status).toBe(502);
+  expect((await body(res)).error).toContain('403');
+  expect(stored.deepl).toBeUndefined();
+  expect(logged).toEqual([]);
+});
+
+test('a key that answers is stored, and the answer never carries it back', async () => {
+  locales = ['en', 'de'];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ translations: [{ text: 'Hallo' }] })),
+  );
+  const res = await setKey('deepl', '  fx-0000-x7Kq  ');
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ ok: true, detail: 'It translated "Hello" into de.' });
+  // Trimmed: a pasted key carries whitespace, and the service would refuse it later.
+  expect(stored.deepl?.value).toBe('fx-0000-x7Kq');
+});
+
+test('what the log records is the name of the key and what happened to it', async () => {
+  locales = ['en', 'de'];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ translations: [{ text: 'Hallo' }] })),
+  );
+  await setKey('deepl', 'fx-0000-x7Kq');
+  await setKey('deepl', 'fx-1111-9zQp');
+  await clearKey('deepl');
+  expect(logged).toEqual([
+    { userId: 'u1', kind: 'setting-changed', subject: 'deepl', detail: { how: 'set' } },
+    { userId: 'u1', kind: 'setting-changed', subject: 'deepl', detail: { how: 'replaced' } },
+    { userId: 'u1', kind: 'setting-changed', subject: 'deepl', detail: { how: 'removed' } },
+  ]);
+  expect(JSON.stringify(logged)).not.toContain('9zQp');
+});
+
+test('a key outside the allow-list is not found, whatever it is called', async () => {
+  expect((await setKey('github', 'ghp_x')).status).toBe(404);
+  expect((await clearKey('resend')).status).toBe(404);
+  expect(stored.github).toBeUndefined();
+});
+
+test('an empty key is refused before anything is asked or stored', async () => {
+  expect((await setKey('deepl', '   ')).status).toBe(400);
+  expect((await setKey('deepl', 42)).status).toBe(400);
+  expect(stored.deepl).toBeUndefined();
+});
+
+test('a site with no secret to encrypt under names the secret rather than storing it', async () => {
+  settingsSecret = undefined;
+  const res = await setKey('assist', 'ai-key');
+  expect(res.status).toBe(503);
+  expect((await body(res)).error).toContain('HANDOVER_SETTINGS_KEY');
+  expect(stored.assist).toBeUndefined();
+});
+
+test('removing a key takes it out and leaves the other one where it is', async () => {
+  stored.deepl = { value: 'fx-0000-x7Kq', hint: 'x7Kq', updatedAt: 1, updatedBy: 'u1' };
+  stored.assist = { value: 'ai-key', hint: '-key', updatedAt: 1, updatedBy: 'u1' };
+  expect((await clearKey('deepl')).status).toBe(200);
+  expect(stored.deepl).toBeUndefined();
+  expect(stored.assist).toBeDefined();
+});
+
+// The whole point of the section: the key the client pasted is the one that translates.
+test('the key stored here is the one DeepL is called with, over the one on the Worker', async () => {
+  machine();
+  translator = undefined;
+  deeplKey = 'env-key';
+  stored.deepl = { value: 'fx-client-key', hint: '-key', updatedAt: 1, updatedBy: 'u1' };
+  const calls: { init: RequestInit }[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init: RequestInit) => {
+      calls.push({ init });
+      const sent = JSON.parse(String(init.body)) as { text: string[] };
+      return Response.json({ translations: sent.text.map((t) => ({ text: `[de] ${t}` })) });
+    }),
+  );
+
+  expect((await POST(post('translate/pages/home/de', ''))).status).toBe(200);
+  const headers = calls[0]?.init.headers as Record<string, string> | undefined;
+  expect(headers?.authorization).toBe('DeepL-Auth-Key fx-client-key');
+});
+
+test('a stored key the secret can no longer open is a sentence on the settings screen', async () => {
+  translator = undefined;
+  locales = ['en', 'de'];
+  stored.deepl = { value: 'fx-0000-x7Kq', hint: 'x7Kq', updatedAt: 1, updatedBy: 'u1' };
+  settingsSecret = undefined;
+  const res = await check('translation', owner);
+  expect(res.status).toBe(503);
+  expect((await body(res)).error).toContain('HANDOVER_SETTINGS_KEY');
 });
 
 test('an editor cannot send a test email', async () => {

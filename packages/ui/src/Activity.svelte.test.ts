@@ -568,3 +568,25 @@ test('an upload reads as a sentence, named by the file it was chosen as', async 
   ]);
   expect(root.querySelector('.said a')).toBe(null);
 });
+
+// 3.25's kind. The value is never in the row, and never was in the log: what happened to which
+// key is the whole of it.
+test('a key the client set reads as what happened to it, and never as the key', async () => {
+  server({
+    events: [
+      ev('setting-changed', { subject: 'deepl', detail: { how: 'set' } }),
+      ev('setting-changed', { subject: 'deepl', detail: { how: 'replaced' } }),
+      ev('setting-changed', { subject: 'assist', detail: { how: 'removed' } }),
+      ev('setting-changed', { subject: 'unheard-of', detail: {} }),
+    ],
+    cursor: null,
+  });
+  const root = await show();
+
+  expect(sentences(root)).toEqual([
+    'Anna Berg set the DeepL key.',
+    'Anna Berg replaced the DeepL key.',
+    'Anna Berg removed the writing help key.',
+    'Anna Berg changed a key.',
+  ]);
+});

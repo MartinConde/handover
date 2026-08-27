@@ -7,6 +7,7 @@ import type {
   EntryLocation,
   Form,
   GitClient,
+  Integration,
   MediaRow,
   R2Store,
   Role,
@@ -47,6 +48,7 @@ import {
   heldDrafts,
   heldEntries,
   holdEntry,
+  INTEGRATIONS,
   lastCommit,
   loadDraft,
   lockHolder,
@@ -64,11 +66,13 @@ import {
   RefMovedError,
   RepoUnreachableError,
   RevertConflictError,
+  readSetting,
   readyDrafts,
   recordDelete,
   recordOffer,
   recordRename,
   releaseLocks,
+  removeSetting,
   renameEntry,
   resolveConflict,
   resolveDrift,
@@ -78,12 +82,14 @@ import {
   saveTranslated,
   setEntryAddress,
   setEntryLocales,
+  settingFacts,
   staleLocales,
   stringifyEntry,
   syncLocale,
   takeLock,
   translatableText,
   UploadRefusedError,
+  writeSetting,
 } from '@handover/core';
 import type { APIRoute } from 'astro';
 import { createAuth, mailer } from '../auth.js';
@@ -143,12 +149,26 @@ export function db(): Db {
   return openDb('default', (env as { DB?: Parameters<typeof openDb>[1] }).DB);
 }
 
-// What machine-translates a field: the site's own hook, or DeepL on the key the Worker holds.
+/**
+ * The DeepL key in force: the one the client pasted into Settings, and otherwise the one the
+ * developer set on the Worker. A site with neither has no row to read, so nothing here asks for
+ * `HANDOVER_SETTINGS_KEY` on a site that never stored anything under it.
+ */
+async function deeplKey(): Promise<string | undefined> {
+  const e = env as Record<string, string | undefined>;
+  const stored = await readSetting('default', db(), e.HANDOVER_SETTINGS_KEY, 'deepl');
+  return stored ?? e.DEEPL_API_KEY;
+}
+
+// What machine-translates a field: the site's own hook, or DeepL on whichever key is in force.
 // Neither is an ordinary state of a site — the admin draws no translate button at all — so it
-// is a question the entry answers rather than something a route discovers on the way.
-function translator(): Translate | undefined {
-  const key = (env as Record<string, string | undefined>).DEEPL_API_KEY;
-  return config.i18n.translate ?? (key ? deeplTranslate('default', key) : undefined);
+// is a question the entry answers rather than something a route discovers on the way. A stored
+// key that cannot be decrypted is translation off here; the settings screen is where it is a
+// sentence, because that is where somebody can act on it.
+async function translator(): Promise<Translate | undefined> {
+  if (config.i18n.translate) return config.i18n.translate;
+  const key = await deeplKey().catch(() => undefined);
+  return key ? deeplTranslate('default', key) : undefined;
 }
 
 /**
@@ -228,6 +248,118 @@ function diagnostics(session: App.Locals['handover']): Response {
 const unset = (why: string) => Response.json({ error: why }, { status: 503 });
 
 /**
+ * Which of the client's own keys are set and which one is in force, for the one section of the
+ * settings screen that writes. The key itself is never in the answer — a value that can be read
+ * back is a value that leaves in a screenshot — so what comes back is its last four characters,
+ * who put it there and when. Owner only, like the rest of the page.
+ */
+async function integrations(session: App.Locals['handover']): Promise<Response> {
+  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  const database = db();
+  const [facts, members] = await Promise.all([
+    settingFacts('default', database),
+    memberList('default', database),
+  ]);
+  const e = env as Record<string, string | undefined>;
+  // Only DeepL has an environment variable behind it: writing help has no feature to read one
+  // yet, so a key stored for it is in force or nothing.
+  const inEnv = (key: Integration) => (key === 'deepl' ? e.DEEPL_API_KEY : undefined);
+  return Response.json({
+    integrations: INTEGRATIONS.map((key) => {
+      const fact = facts.find((row) => row.key === key);
+      // What would be in force with no row here — which is what Remove does, and the card says
+      // it before the button is pressed rather than after.
+      const fallback =
+        key === 'deepl' && config.i18n.translate ? 'code' : inEnv(key) ? 'env' : 'off';
+      // A site that hands in its own `translate` is translated by that code whatever is stored
+      // here, so the card cannot claim to be in charge while something above it is.
+      const source = fact && fallback !== 'code' ? 'settings' : fallback;
+      return {
+        key,
+        source,
+        fallback,
+        hint: fact?.hint ?? null,
+        updatedAt: fact?.updatedAt ?? null,
+        // An id on screen tells nobody anything, and a member who has since gone leaves the
+        // date standing on its own.
+        by: members.find((member) => member.id === fact?.updatedBy)?.name ?? null,
+      };
+    }),
+  });
+}
+
+/**
+ * Storing one of them. The key is tried against the service before it is written where there is
+ * something to try it against, because the alternative is finding out on the next translation;
+ * a refusal is the provider's own sentence and nothing is stored. The answer never carries the
+ * value back.
+ */
+async function setIntegration(
+  key: string,
+  request: Request,
+  session: App.Locals['handover'],
+): Promise<Response> {
+  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  if (!INTEGRATIONS.includes(key as Integration)) return new Response('Not found', { status: 404 });
+  const body = (await request.json().catch(() => undefined)) as { value?: unknown } | undefined;
+  const value = typeof body?.value === 'string' ? body.value.trim() : '';
+  if (!value) return Response.json({ error: 'Paste the key before saving it.' }, { status: 400 });
+  let detail: string | undefined;
+  if (key === 'deepl') {
+    const to = config.i18n.locales.find((l) => l !== config.i18n.defaultLocale);
+    // A one-language site has nothing to translate into, so there is no call to make with the
+    // key: it is stored untried rather than refused.
+    if (to) {
+      try {
+        await deeplTranslate('default', value)(['Hello'], config.i18n.defaultLocale, to);
+        detail = `It translated "Hello" into ${to}.`;
+      } catch (err) {
+        return Response.json({ error: (err as Error).message }, { status: 502 });
+      }
+    }
+  }
+  const database = db();
+  const replaced = (await settingFacts('default', database)).some((row) => row.key === key);
+  try {
+    await writeSetting(
+      'default',
+      database,
+      (env as Record<string, string | undefined>).HANDOVER_SETTINGS_KEY,
+      key as Integration,
+      value,
+      session.user.id,
+    );
+  } catch (err) {
+    // The one thing that can be missing here is the secret the row is encrypted under, and its
+    // own sentence names it.
+    return unset((err as Error).message);
+  }
+  await logActivity('default', database, {
+    userId: session.user.id,
+    kind: 'setting-changed',
+    // The name of the key and what happened to it. Never the value, and never its hint.
+    subject: key,
+    detail: { how: replaced ? 'replaced' : 'set' },
+  });
+  return Response.json({ ok: true, ...(detail ? { detail } : {}) });
+}
+
+/** Taking one out again. What happens next is the resolution order, and the card says which. */
+async function clearIntegration(key: string, session: App.Locals['handover']): Promise<Response> {
+  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  if (!INTEGRATIONS.includes(key as Integration)) return new Response('Not found', { status: 404 });
+  const database = db();
+  await removeSetting('default', database, key as Integration);
+  await logActivity('default', database, {
+    userId: session.user.id,
+    kind: 'setting-changed',
+    subject: key,
+    detail: { how: 'removed' },
+  });
+  return Response.json({ ok: true });
+}
+
+/**
  * One connection, tried for real. Every answer is a sentence and not a status, because this
  * page is read by the person who forwards it: what refused has to be in the words of the thing
  * that has to change. A check whose thing is optional and absent answers `off` rather than
@@ -273,9 +405,20 @@ async function connection(name: string, session: App.Locals['handover']): Promis
   }
 
   if (name === 'translation') {
-    const translate = translator();
+    let stored: string | undefined;
+    try {
+      stored = config.i18n.translate ? undefined : await deeplKey();
+    } catch (err) {
+      // A key that is stored and cannot be opened: the secret changed under it, and this is
+      // the one screen where that reads as a sentence somebody can act on.
+      return unset((err as Error).message);
+    }
+    const translate =
+      config.i18n.translate ?? (stored ? deeplTranslate('default', stored) : undefined);
     if (!translate)
-      return off('No DEEPL_API_KEY and no translate hook, so the Translate button is hidden.');
+      return off(
+        'No DeepL key in Settings, no DEEPL_API_KEY and no translate hook, so the Translate button is hidden.',
+      );
     const to = config.i18n.locales.find((l) => l !== config.i18n.defaultLocale);
     if (!to) return off('This site has one language, so nothing is translated.');
     try {
@@ -903,7 +1046,7 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
     stale: await staleLocales('default', form, languages),
     // Whether anything can machine-translate: with nothing configured the buttons that offer
     // it are not drawn, the same rule the locale controls follow on a one-language site.
-    translator: translator() !== undefined,
+    translator: (await translator()) !== undefined,
     // Which of its languages are published — the repository has a file for them. The rest are
     // pages the preview can show and the live site has never had, which is what the pane says
     // over a brand-new entry.
@@ -1176,10 +1319,10 @@ async function machineTranslate(
     return new Response('Not found', { status: 404 });
   // Before the entry is read at all: having nothing to translate with is about the site, so it
   // is the answer whatever else would have refused this one.
-  const translate = translator();
+  const translate = await translator();
   if (!translate)
     return new Response(
-      'This site has nothing to translate with: set DEEPL_API_KEY, or an i18n.translate in cms.config.ts',
+      'This site has nothing to translate with: paste a DeepL key in Settings, set DEEPL_API_KEY, or hand in an i18n.translate in cms.config.ts',
       { status: 409 },
     );
   const loaded = await entryLocales(collection, slug, config.i18n.locales);
@@ -1800,6 +1943,7 @@ const LOCK = /^locks\/([\w-]+)\/([\w-]+)$/;
 const HOLD = /^hold\/([\w-]+)\/([\w-]+)$/;
 const MEDIA = /^media\/([0-9a-f]{64})$/;
 const CHECK = /^checks\/([\w-]+)$/;
+const SETTING = /^settings\/([\w-]+)$/;
 const TRANSLATE = /^translate\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 
 // Better Auth owns everything under its base path. Both verbs go straight to its handler:
@@ -1835,6 +1979,7 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
   if (params.path === 'drafts') return pendingList();
   if (params.path === 'build') return buildStatus();
   if (params.path === 'diagnostics') return diagnostics(locals.handover);
+  if (params.path === 'settings') return answering(() => integrations(locals.handover));
   const held = params.path?.match(LOCK);
   if (held) return lockState(held[1] ?? '', held[2] ?? '', locals.handover, 'read');
   const changed = params.path?.match(DIFF);
@@ -1849,6 +1994,8 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
 };
 
 export const PUT: APIRoute = async ({ params, request, locals }) => {
+  const setting = params.path?.match(SETTING);
+  if (setting) return setIntegration(setting[1] ?? '', request, locals.handover);
   const translated = params.path?.match(TRANSLATION);
   if (translated)
     return answering(() =>
@@ -2195,6 +2342,8 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
 };
 
 export const DELETE: APIRoute = async ({ params, request, url, locals }) => {
+  const setting = params.path?.match(SETTING);
+  if (setting) return clearIntegration(setting[1] ?? '', locals.handover);
   const member = params.path?.match(MEMBER);
   if (member) return removeMember(member[1] ?? '', request, url, locals.cfContext, locals.handover);
   const draft = params.path?.match(DRAFT);

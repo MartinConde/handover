@@ -148,6 +148,14 @@ export {
 } from './richtext.js';
 export type { Field, Form, JsonSchema, Translation } from './schema.js';
 export { fieldsFrom, formOf } from './schema.js';
+export type { Integration, SettingFact } from './settings.js';
+export {
+  INTEGRATIONS,
+  readSetting,
+  removeSetting,
+  settingFacts,
+  writeSetting,
+} from './settings.js';
 export {
   account,
   activity,

@@ -105,6 +105,12 @@ const HOW: Record<string, string> = {
   changed: 'changed their password',
   reset: 'reset their password',
 };
+/** The two keys a client owns, as the settings screen names them, and what can happen to one. */
+const INTEGRATIONS: Record<string, string> = {
+  deepl: 'DeepL key',
+  assist: 'writing help key',
+};
+const HOW_KEY: Record<string, string> = { set: 'set', replaced: 'replaced', removed: 'removed' };
 const MESSAGE: Record<string, string> = {
   'sign-in link': 'A sign-in link',
   invite: 'An invite',
@@ -206,6 +212,13 @@ function said(event: ActivityEvent): Said {
       return one
         ? { lead: `${actor} took over ${whose}`, link: one }
         : { lead: `${actor} took over an entry.` };
+    }
+    case 'setting-changed': {
+      // The log holds the name of the key and what happened to it, never the value, so the row
+      // has nothing else to say. An unknown key is still a record of a change.
+      const did = HOW_KEY[str(d, 'how') ?? ''] ?? 'changed';
+      const key = INTEGRATIONS[event.subject ?? ''];
+      return { lead: key ? `${actor} ${did} the ${key}.` : `${actor} ${did} a key.` };
     }
     case 'upload':
       // No library to open until Phase 4, so the name it was chosen as is the whole row.

@@ -4,6 +4,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **The keys the client owns are theirs to change.** Settings gains an **Integrations** section:
+  a DeepL key — and, when there is a version with writing help in it, an AI provider's — can be
+  pasted, replaced or removed by the site's owner without a deploy. Keys are stored encrypted in
+  the site's own database under the new `HANDOVER_SETTINGS_KEY` secret, and are never shown
+  again: each card gives the last four characters, who set it and when, which of the three
+  sources is in force, and what taking it away falls back to. A DeepL key is tried against DeepL
+  before it is stored. Every change is a line in the activity log naming the key and never its
+  value. [Settings](docs/diagnostics.md#integrations).
+
+- **A DeepL key pasted in Settings is the one that translates**, ahead of `DEEPL_API_KEY` on the
+  Worker. A site that hands in its own `i18n.translate` is still translated by that code.
+  [Translating](docs/translating.md#a-machines-first-draft).
+
 - **Settings says what is connected.** The Manage group's Settings is now the owner's read-only
   view of the site: `cms.config.ts` as it came out, and a card per connection — GitHub, the
   bucket, email, translation, build status, the database — each tried for real when the page

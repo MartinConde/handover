@@ -99,7 +99,7 @@ export const settings = sqliteTable(
     /** From the package's fixed allow-list: 'deepl' | 'assist'. */
     key: text('key').notNull(),
     /** AES-256-GCM under HANDOVER_SETTINGS_KEY, IV prepended; never sent to the browser. */
-    ciphertext: blob('ciphertext', { mode: 'buffer' }).notNull(),
+    ciphertext: blob('ciphertext', { mode: 'buffer' }).$type<Uint8Array>().notNull(),
     /** Last 4 characters, so the UI can show which key is set without holding it. */
     hint: text('hint'),
     updatedAt: integer('updated_at').notNull(),

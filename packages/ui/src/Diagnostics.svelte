@@ -12,6 +12,21 @@ interface Config {
   dev: boolean;
 }
 
+/**
+ * One of the client's own keys. Where it is *in force* and what would take over without it are
+ * two different answers, and the card needs both: Remove has to say what happens before it is
+ * pressed. The key itself is never here — a value that can be read back is a value that leaves
+ * in a screenshot.
+ */
+interface Key {
+  key: string;
+  source: 'settings' | 'env' | 'code' | 'off';
+  fallback: 'env' | 'code' | 'off';
+  hint: string | null;
+  updatedAt: number | null;
+  by: string | null;
+}
+
 type State = 'running' | 'ok' | 'off' | 'failed';
 interface Result {
   state: State;
@@ -74,6 +89,16 @@ const BADGE: Record<State, { class: string; label: string }> = {
 let results = $state<Record<string, Result>>({});
 let conflict = $state('');
 let simulating = $state(false);
+let keys = $state<Key[]>([]);
+let keysError = $state('');
+/** Which key is being typed in, if any. Nothing is in the browser until Save. */
+let typing = $state<Key>();
+let typed = $state('');
+let saving = $state(false);
+let keyError = $state('');
+let keySaid = $state('');
+let field = $state<HTMLInputElement>();
+let trigger: HTMLElement | null = null;
 
 // Every check but the one that sends something, once, when the screen opens. Untracked because
 // `run` both reads and writes `results`, and an effect that did would start itself again for
@@ -81,7 +106,11 @@ let simulating = $state(false);
 $effect(() => {
   untrack(() => {
     for (const check of CHECKS) if (!check.sends) void run(check.key);
+    void loadKeys();
   });
+});
+$effect(() => {
+  field?.focus();
 });
 
 async function load(): Promise<Config> {
@@ -115,6 +144,64 @@ async function run(key: string) {
   results[key] = { state: body.off ? 'off' : 'ok', detail, at };
 }
 
+async function loadKeys() {
+  const res = await fetch('/admin/api/settings');
+  if (!res.ok) {
+    keysError = `The keys you own could not be read (${res.status}).`;
+    return;
+  }
+  keys = ((await res.json()) as { integrations: Key[] }).integrations;
+  keysError = '';
+}
+
+function open(row: Key) {
+  // The card's own button, so closing puts focus back where it came from, as the members
+  // screen's dialogs do.
+  trigger = document.activeElement as HTMLElement | null;
+  typing = row;
+  typed = '';
+  keyError = '';
+  keySaid = '';
+}
+
+function close() {
+  typing = undefined;
+  typed = '';
+  keyError = '';
+  trigger?.focus();
+}
+
+async function saveKey(event: SubmitEvent) {
+  event.preventDefault();
+  const row = typing;
+  if (!row) return;
+  saving = true;
+  keyError = '';
+  const res = await fetch(`/admin/api/settings/${row.key}`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ value: typed }),
+  });
+  const body = (await res.json().catch(() => ({}))) as { error?: string; detail?: string };
+  saving = false;
+  // The dialog stays open on a refusal with the key still in it: what refused is nearly always
+  // a typo in the value that is right there.
+  if (!res.ok) {
+    keyError = body.error ?? `The key was not saved (${res.status}).`;
+    return;
+  }
+  close();
+  keySaid = body.detail ?? `The ${NAMES[row.key] ?? row.key} key is stored.`;
+  await loadKeys();
+}
+
+async function removeKey(row: Key) {
+  const res = await fetch(`/admin/api/settings/${row.key}`, { method: 'DELETE' });
+  keySaid = res.ok ? `The ${NAMES[row.key] ?? row.key} key is gone.` : '';
+  if (!res.ok) keysError = `The key was not removed (${res.status}).`;
+  await loadKeys();
+}
+
 async function simulate() {
   simulating = true;
   conflict = '';
@@ -142,6 +229,42 @@ function when(at: number): string {
   if (minutes < 60) return `checked ${minutes} minute${minutes === 1 ? '' : 's'} ago`;
   const hours = Math.floor(minutes / 60);
   return `checked ${hours} hour${hours === 1 ? '' : 's'} ago`;
+}
+
+const NAMES: Record<string, string> = { deepl: 'DeepL', assist: 'Writing help (AI)' };
+const KEY_BADGE: Record<Key['source'], { class: string; label: string }> = {
+  settings: { class: 'badge-success', label: 'Set here' },
+  env: { class: 'badge-info', label: "Coming from the site's settings" },
+  code: { class: 'badge-info', label: "Your site's own code" },
+  off: { class: '', label: 'Not set' },
+};
+const DAY = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+
+/**
+ * What each card says, in the three sources plus the one where the site's own code is above
+ * both of them. A removal names what takes over, because the alternative is finding out after
+ * the button is pressed.
+ */
+function says(row: Key): string {
+  if (row.source === 'code')
+    return 'Your site translates with its own code, handed in by your developer, so a key here would not be used.';
+  if (row.source === 'settings') {
+    const who = row.updatedAt
+      ? ` · set ${row.by ? `by ${row.by} ` : ''}on ${DAY.format(row.updatedAt)}`
+      : '';
+    const next =
+      row.fallback === 'env'
+        ? " Removing it falls back to the key in your site's settings."
+        : row.key === 'deepl'
+          ? ' Removing it hides the Translate button everywhere.'
+          : ' Removing it takes the key back out.';
+    return `Ends in …${row.hint}${who}.${next}`;
+  }
+  if (row.source === 'env')
+    return "Set in your site's own settings by your developer. Setting one here would override it.";
+  return row.key === 'deepl'
+    ? "Nothing set here and nothing in your site's settings, so the Translate button is hidden everywhere."
+    : 'Nothing set here — and there is no writing help in this version yet, so a key stored here waits for one.';
 }
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -283,6 +406,48 @@ const MAILERS: Record<string, string> = {
           {/each}
         </ul>
       </section>
+      <section class="settings-section" aria-labelledby="integ">
+        <header>
+          <h2 id="integ">Integrations</h2>
+          <p>
+            The only thing on this page you can change. Keys are stored encrypted and are never
+            shown again — to check one, replace it.
+          </p>
+        </header>
+        {#if keysError}<p class="notice notice-danger" role="alert">{keysError}</p>{/if}
+        {#if keySaid}<p class="notice notice-info" role="status">{keySaid}</p>{/if}
+        <ul class="check-list">
+          {#each keys as row (row.key)}
+            <li class="check-card">
+              <div class="head">
+                <span class="name">{NAMES[row.key] ?? row.key}</span>
+                <span class="badge {KEY_BADGE[row.source].class}">{KEY_BADGE[row.source].label}</span>
+              </div>
+              <p class="what">{says(row)}</p>
+              <div class="actions">
+                <!-- Nothing to press where the site's own code is in charge: a control that
+                     cannot change what happens is worse than none. -->
+                {#if row.source === 'settings'}
+                  <button class="btn btn-sm" type="button" onclick={() => open(row)}>
+                    Replace<span class="visually-hidden"> the {NAMES[row.key] ?? row.key} key</span>
+                  </button>
+                  <button class="btn btn-ghost btn-sm" type="button" onclick={() => removeKey(row)}>
+                    Remove<span class="visually-hidden"> the {NAMES[row.key] ?? row.key} key</span>
+                  </button>
+                {:else if row.source !== 'code'}
+                  <button class="btn btn-sm" type="button" onclick={() => open(row)}>
+                    {row.source === 'env' ? 'Set a key here' : 'Add a key'}<span
+                      class="visually-hidden"
+                    >
+                      for {NAMES[row.key] ?? row.key}</span
+                    >
+                  </button>
+                {/if}
+              </div>
+            </li>
+          {/each}
+        </ul>
+      </section>
       {#if config.dev}
         <section class="settings-section" aria-labelledby="dev">
           <header>
@@ -298,6 +463,49 @@ const MAILERS: Record<string, string> = {
         </section>
       {/if}
     </div>
+    <!-- Inside the loaded block rather than beside <main>, where every other dialog sits,
+         because whether the key is tried before it is stored is the site's language count. -->
+    {#if typing}
+      {@const name = NAMES[typing.key] ?? typing.key}
+      {@const tried = typing.key === 'deepl' && config.locales.length > 1}
+      <div class="scrim">
+        <div class="dialog" role="dialog" aria-labelledby="key-h">
+          <h2 id="key-h">{typing.hint ? `Replace the ${name} key` : `Add the ${name} key`}</h2>
+          <form onsubmit={saveKey}>
+            <p>
+              The key is stored encrypted and is never shown again.
+              {#if typing.hint}
+                The one ending …{typing.hint} stops working as soon as this is saved.
+              {/if}
+            </p>
+            <div class="field">
+              <div class="label-row">
+                <label for="key-value">{typing.hint ? `New ${name} key` : `${name} key`}</label>
+              </div>
+              <input
+                class="input"
+                id="key-value"
+                type="password"
+                autocomplete="off"
+                bind:value={typed}
+                bind:this={field}
+                aria-describedby={tried ? 'key-tried' : undefined}
+              />
+              {#if tried}
+                <p class="hint" id="key-tried">We try it against DeepL before saving it.</p>
+              {/if}
+            </div>
+            {#if keyError}<div class="notice notice-danger" role="alert">{keyError}</div>{/if}
+            <div class="actions">
+              <button class="btn" type="button" onclick={close}>Cancel</button>
+              <button class="btn btn-primary" type="submit" disabled={saving}>
+                {saving ? 'Saving…' : tried ? 'Save and test' : 'Save'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    {/if}
   {:catch error}
     <p class="notice notice-danger" role="alert">{error.message}</p>
   {/await}

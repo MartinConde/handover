@@ -473,3 +473,27 @@ not one of these.
 The test email is [`POST /admin/api/checks/email`](email.md#prove-it-before-anything-depends-on-it), which sends
 something and so is never run on its own, and *Simulate a conflict* is
 [`POST /admin/api/checks/conflict`](#publishing) above.
+
+## Integration keys
+
+The keys the client owns rather than the developer ([Settings](diagnostics.md#integrations)).
+Owner only, like the rest of that screen.
+
+```
+GET    /admin/api/settings          →  { "integrations": [ { "key", "source", "fallback",
+                                                             "hint", "updatedAt", "by" } ] }
+PUT    /admin/api/settings/:key        { "value": "…" }   →  { "ok": true, "detail"? }
+DELETE /admin/api/settings/:key                           →  { "ok": true }
+```
+
+`key` is `deepl` or `assist` and nothing else — anything the admin needs to run itself stays in
+the environment. `source` is where that key is **in force** — `settings`, `env`, `code` (the
+site handed in its own `i18n.translate`) or `off` — and `fallback` is what would be in force
+without the row, so *Remove* can say what happens before it is pressed. `hint` is the last four
+characters of the key. **The key itself is never in an answer**: to check one, replace it.
+
+A `PUT` of a DeepL key translates one word with it before storing anything, and answers `502`
+with DeepL's own refusal if that fails; `detail` is what it translated when it worked. `400` for
+an empty value, `404` for a key outside the two, `503` when `HANDOVER_SETTINGS_KEY` is not set —
+the body names it. Every write is a `setting-changed` row in the [activity log](activity.md),
+carrying the name of the key and never its value.

@@ -125,6 +125,10 @@ one stamps `_i18n` below. **Configuring it** is one secret, `DEEPL_API_KEY`
 ([Deploying](deploy.md#secrets)); another provider goes in `i18n.translate`
 ([Configuration](configuration.md#i18n)). With neither, none of the buttons above is drawn.
 
+The site's owner can paste a DeepL key of their own into **Settings** without a deploy, and that
+one is used ahead of `DEEPL_API_KEY` ([Integrations](diagnostics.md#integrations)). A site that
+hands in its own `i18n.translate` is translated by that code whatever is stored there.
+
 ## When the source language moves on
 
 A translation is made from the entry's own language as it stood at some moment, and writes that

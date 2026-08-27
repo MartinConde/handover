@@ -34,6 +34,35 @@ whoever holds the credentials.
 
 The failures are counted at the top of the page, with what stops working while they stand.
 
+## Integrations
+
+The one section of this page that writes. Two keys belong to whoever owns the site rather than to
+whoever built it — **DeepL** and, when there is a version with writing help in it, the AI
+provider's — and swapping one should not be a support ticket. Everything else the admin runs on
+stays in the environment: a wrong GitHub App key or bucket credential would lock you out of the
+screen that fixes it.
+
+A key is stored **encrypted** in the site's own database, under `HANDOVER_SETTINGS_KEY`
+([Deploying](deploy.md#secrets)). Without that secret there is nowhere to put one, and the page
+says so rather than failing.
+
+Each card says where the key it names is coming from, and what happens if you take it away:
+
+| The card says | What it means |
+|---|---|
+| **Set here** | A key was pasted into this page. It ends in the four characters shown, with who set it and when |
+| **Coming from the site's settings** | Your developer set it in the site's environment. Setting one here overrides it, and removing yours falls back to theirs |
+| **Your site's own code** | The site was handed its own translation function, which is used whatever is stored here |
+| **Not set** | Nothing anywhere, and the card says what is switched off as a result |
+
+**The value is never shown again** — not in the page, not in the API answer. The last four
+characters are enough to answer "is this the one I pasted?", and to check anything more you
+replace it. A DeepL key is tried against DeepL before it is stored: a key that was pasted wrong
+is refused here, in DeepL's own words, rather than at the next translation.
+
+Every change is a line in the [activity log](activity.md) naming the key and what happened to
+it — set, replaced or removed — and never the key.
+
 ## Sending a test email
 
 The one check with a side effect, so it never runs on its own. It goes to the address of
