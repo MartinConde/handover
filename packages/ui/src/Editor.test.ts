@@ -18,6 +18,7 @@ const entry = {
   blocks: {},
   data: { title: 'Seaview Cottage', seo: { description: 'Harbour view' }, photos: [] },
   pending: [] as string[],
+  published: ['en'],
   problems: [] as { path: string; message: string }[],
   locales: ['en'],
   defaultLocale: 'en',
@@ -163,6 +164,35 @@ const withProblems = (problems: { path: string; message: string }[]) => {
   });
   return document.body;
 };
+
+// Preview is a page on the site, so an entry nothing renders — every global, and any collection
+// without a route — has nowhere to open and is not offered the button.
+test('Preview is offered only where the site has a page to show', () => {
+  expect($(show(), 'button.btn-preview')).toBeNull();
+  unmount(app);
+  const root = show({ entry: { ...entry, route: '/listings/[slug]' } });
+  expect($<HTMLButtonElement>(root, 'button.btn-preview')?.getAttribute('aria-pressed')).toBe(
+    'false',
+  );
+});
+
+test('pressing Preview puts the page beside the form, at the address this language serves it', () => {
+  const root = show({
+    entry: { ...entry, route: '/listings/[slug]', published: [] },
+    preview: true,
+  });
+
+  $<HTMLButtonElement>(root, 'button.btn-preview')?.click();
+  flushSync();
+
+  expect($<HTMLIFrameElement>(root, '.pane.is-preview iframe')?.getAttribute('src')).toContain(
+    '/_preview/listings/seaview-cottage',
+  );
+  // The entry has never been published, so the pane says the address is one it will get.
+  expect($(root, '.preview-banner')?.textContent).toContain('Not published yet');
+  // And the form it is beside is still there: previewing is not a second screen.
+  expect($(root, 'input#f-title')).not.toBeNull();
+});
 
 test('the header shows the entry title; Publish is disabled until something changes', () => {
   const root = show();
@@ -727,6 +757,32 @@ test('side by side edits the second language and saves it to its own file', asyn
       },
     }),
   });
+  vi.unstubAllGlobals();
+});
+
+// The pane renders what is stored, and the second column stores its own file: a save there is
+// as much a reason to draw the page again as a save on this one.
+test('a save in the second language asks the preview for the page again', async () => {
+  vi.stubGlobal('fetch', autosaved());
+  const root = show({
+    entry: { ...bilingual, route: '/listings/[slug]', published: ['en', 'de'] },
+    preview: true,
+  });
+
+  $$<HTMLButtonElement>(root, '.entry-header .seg button')[1]?.click();
+  flushSync();
+  $<HTMLButtonElement>(root, 'button.btn-preview')?.click();
+  flushSync();
+  const before = $<HTMLIFrameElement>(root, '.pane.is-preview iframe')?.getAttribute('src');
+  type(root, 'input#t-title', 'Seeblick-Häuschen');
+  // Publishing flushes the column's draft, which is the settled save without waiting two seconds.
+  $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
+  await tick();
+  flushSync();
+
+  expect($<HTMLIFrameElement>(root, '.pane.is-preview iframe')?.getAttribute('src')).not.toBe(
+    before,
+  );
   vi.unstubAllGlobals();
 });
 

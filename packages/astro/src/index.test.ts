@@ -700,8 +700,24 @@ test('virtual:handover/index is the built index, inlined rather than served', as
   expect(await plugin.load('other')).toBeUndefined();
   const module = await plugin.load('\0virtual:handover/index');
   expect(module).toBe(
-    `export default JSON.parse(${JSON.stringify(JSON.stringify(await buildIndex(fixture)))});`,
+    `export default JSON.parse(${JSON.stringify(JSON.stringify(await buildIndex(fixture)))});
+export const preview = false;`,
   );
+});
+
+// The admin cannot read a build flag, and a Preview button that opens a 404 is worse than one
+// that says why it is not there — so the same read that decides the route rides to the Worker
+// on the one module the build already hands it.
+test('the index module carries whether this build has a preview route', async () => {
+  const source = async () => {
+    const { updateConfig } = runSetup({ name: 'fake-adapter', hooks: {} }, fixture);
+    return (await updateConfig.mock.calls[0]?.[0].vite.plugins[1].load(
+      '\0virtual:handover/index',
+    )) as string;
+  };
+  expect(await source()).toContain('export const preview = false;');
+  process.env.PREVIEW_ENABLED = '1';
+  expect(await source()).toContain('export const preview = true;');
 });
 
 test('the index is built with the title field each collection declares', async () => {
@@ -724,7 +740,10 @@ test('the index is built with the title field each collection declares', async (
       },
     ],
   };
-  expect(module).toBe(`export default JSON.parse(${JSON.stringify(JSON.stringify(listed))});`);
+  expect(module).toBe(
+    `export default JSON.parse(${JSON.stringify(JSON.stringify(listed))});
+export const preview = false;`,
+  );
 });
 
 test('formSchema maps z.date() to a date field and a transform to its input type', () => {

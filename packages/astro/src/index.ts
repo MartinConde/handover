@@ -559,7 +559,8 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
         // for it does not get the route at all — the flag is read here, at build, and nothing
         // downstream can turn it back on. `0` and `false` are somebody saying no.
         const flag = process.env.PREVIEW_ENABLED;
-        if (flag !== undefined && !['', '0', 'false'].includes(flag))
+        const preview = flag !== undefined && !['', '0', 'false'].includes(flag);
+        if (preview)
           injectRoute({
             pattern: '/_preview/[...path]',
             entrypoint: new URL('../components/Preview.astro', import.meta.url),
@@ -580,12 +581,15 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
               // The index goes into the Worker bundle rather than the static assets: served
               // as an asset it would be a public list of every entry's title, hidden ones
               // included. Rebuilt on a content change so the dev server does not go stale.
+              // The preview flag rides with it: it is read here, at build, and the admin has
+              // to know whether there is a route to open before it offers to open one.
               {
                 name: 'handover-index',
                 resolveId: (id) => (id === VIRTUAL_INDEX ? `\0${VIRTUAL_INDEX}` : undefined),
                 load: async (id) =>
                   id === `\0${VIRTUAL_INDEX}`
-                    ? `export default JSON.parse(${JSON.stringify(JSON.stringify(await buildIndex(config.root, titleFields)))});`
+                    ? `export default JSON.parse(${JSON.stringify(JSON.stringify(await buildIndex(config.root, titleFields)))});
+export const preview = ${preview};`
                     : undefined,
                 configureServer(server: ViteDevServer) {
                   server.watcher.on('all', (_event, file) => {

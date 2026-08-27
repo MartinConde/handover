@@ -28,6 +28,8 @@ free to change.
   leaning on the middleware, because a share link will be an answer "signed in or 401"
   cannot express. The site's `src/loaders/*.ts` reach it as `virtual:handover/loaders`,
   keyed by each collection's `load` — the one place the package imports the site's `src/`.
+  Whether the flag was set rides to the Worker on `virtual:handover/index`, so `/admin/api/ping`
+  can tell the editor whether there is a preview to open at all.
 - The middleware asserts the admin session on `/admin/api/*`, minus Better Auth's own
   endpoints, and hands the user and role on in `locals.handover`.
 

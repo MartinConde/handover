@@ -6,6 +6,8 @@ declare module 'virtual:handover/config' {
 declare module 'virtual:handover/index' {
   const index: import('@handover/core').ContentIndex;
   export default index;
+  /** Whether this build was told to serve `/_preview`, which is what the admin draws from. */
+  export const preview: boolean;
 }
 
 declare module 'virtual:handover/loaders' {

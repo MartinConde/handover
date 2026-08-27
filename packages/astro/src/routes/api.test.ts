@@ -274,6 +274,7 @@ vi.mock('virtual:handover/config', () => ({
 }));
 // What the build read out of src/content/, inlined into the Worker bundle.
 vi.mock('virtual:handover/index', () => ({
+  preview: true,
   default: {
     listings: [
       {
@@ -573,6 +574,9 @@ test('ping returns the collection names and who is signed in', async () => {
     role: 'editor',
     // Where a stored key is served from: the widgets draw thumbnails of keys nothing listed.
     mediaBase: 'https://media.example.com',
+    // Whether this build has a preview route at all: without one the pane says so rather than
+    // drawing a frame around a 404.
+    preview: true,
   });
 });
 
@@ -774,6 +778,9 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
     route: '/listings/[slug]',
     index: '/listings',
     prefixDefaultLocale: false,
+    // Which of its languages the repository already has a file for: the rest are pages the
+    // preview can show and the live site cannot.
+    published: ['en'],
   });
 });
 
@@ -1355,9 +1362,11 @@ test('an entry that exists only as a draft opens from it', async () => {
   draft = { contents: 'title: "Strandhaus Nord"\nrooms: 0\n', baseSha: 'head789', baseBlob: '' };
   const res = await GET(ctx('entries/listings/strandhaus-nord'));
   expect(res.status).toBe(200);
-  const body = (await res.json()) as { data: unknown; pending: unknown };
+  const body = (await res.json()) as { data: unknown; pending: unknown; published: unknown };
   expect(body.data).toEqual({ title: 'Strandhaus Nord', rooms: 0 });
   expect(body.pending).toEqual(['en']);
+  // Nothing of it is in the repository, so its preview is the only place this page exists.
+  expect(body.published).toEqual([]);
   draft = undefined;
 });
 

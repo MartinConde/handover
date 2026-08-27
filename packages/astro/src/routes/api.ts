@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
-import index from 'virtual:handover/index';
+import index, { preview } from 'virtual:handover/index';
 import type {
   Answer,
   Db,
@@ -687,7 +687,7 @@ async function entryLocales(
   collection: string,
   slug: string,
   locales: string[],
-): Promise<Record<string, { data: unknown; pending: boolean; held: boolean }>> {
+): Promise<Record<string, { data: unknown; pending: boolean; held: boolean; live: boolean }>> {
   const git = gitClient();
   const database = db();
   const loaded = await Promise.all(
@@ -702,7 +702,14 @@ async function entryLocales(
       const pending = row ? (await blobSha(row.contents)) !== file?.blob_sha : false;
       return [
         locale,
-        { data: parseEntry('default', contents), pending, held: Boolean(row?.heldBy) },
+        {
+          data: parseEntry('default', contents),
+          pending,
+          held: Boolean(row?.heldBy),
+          // Whether the repository has this language's file: a draft with none behind it is a
+          // page only the preview can show.
+          live: Boolean(file),
+        },
       ] as const;
     }),
   );
@@ -772,6 +779,10 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
     // Whether anything can machine-translate: with nothing configured the buttons that offer
     // it are not drawn, the same rule the locale controls follow on a one-language site.
     translator: translator() !== undefined,
+    // Which of its languages are published — the repository has a file for them. The rest are
+    // pages the preview can show and the live site has never had, which is what the pane says
+    // over a brand-new entry.
+    published: config.i18n.locales.filter((locale) => loaded[locale]?.live),
     // Where the site serves this entry and what stands above it: what the editor builds the
     // address row from, and what it names when a language that has a file is turned off.
     route: collected?.route,
@@ -1687,6 +1698,10 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
       // Where a media key is served from. The widgets need it for a value the picker did not
       // hand them — everything already in a content file.
       mediaBase: config.media?.publicBase?.replace(/\/$/, ''),
+      // Whether this build has a `/_preview` route at all. The flag is read at build and the
+      // route simply does not exist without it, so the editor asks here rather than framing
+      // a page that would answer 404.
+      preview,
     });
   }
   if (params.path === 'media') return library(url);

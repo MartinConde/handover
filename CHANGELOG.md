@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **The editor previews the page.** **Preview** in the entry header opens the page beside the
+  form, in the language on screen: it follows the autosave, refreshes on demand, opens in a tab
+  and can be read at three widths. An entry the site has never published previews at the address
+  it will get, with a banner saying so, and a draft the schema still refuses is a card naming
+  each field instead of half a page. A build without `PREVIEW_ENABLED` says so in the pane
+  rather than framing a 404. [Preview](docs/preview.md).
+
 - **Preview renders the page.** `/_preview/<path>` now calls the `load()` your own loader
   exports, over a source that lays the D1 drafts on the build's content, and renders the
   component that loader names — so an unpublished edit shows in the real templates, and the

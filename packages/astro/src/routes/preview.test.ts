@@ -146,6 +146,17 @@ test("an index renders the collection's index component with the drafts in the l
   });
 });
 
+// Tier 2: the entry has never been built, so the site has no route to it and `getEntry` on the
+// build has nothing to answer with — the row is the whole page.
+test('an entry the build has never seen renders from its draft alone', async () => {
+  rows.push({ path: 'src/content/listings/en/barn.yaml', contents: 'title: "The Barn"\n' });
+
+  expect((await get('listings/barn')).result).toEqual({
+    Component: Page,
+    props: { data: { title: 'The Barn' }, locale: 'en' },
+  });
+});
+
 test('an address the loader has no entry for is not found', async () => {
   expect(((await get('listings/no-such-house')).result as Response).status).toBe(404);
 });

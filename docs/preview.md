@@ -91,8 +91,28 @@ An address the site could serve but has no entry at is `404`, the same answer th
 would give. A collection with no `load`, or a loader that exports no component, is `500` saying
 which line to write: those are the site's own wiring, and only preview reads it.
 
-## Not yet
+## The pane in the editor
 
-Nothing in the admin opens a preview: the address is one you type or link to yourself until the
-pane lands. A brand-new entry that has no address yet cannot be previewed, and a link inside a
-preview goes to the live page rather than to its preview.
+**Preview** in the entry header opens the page beside the form, in the language on screen. It
+renders what is *stored*, so it follows the autosave rather than the keystrokes: every settled
+save asks the site for the page again, and **Refresh** asks for the same address whenever you
+want it. **Open in new tab** is the address on its own, and the three width buttons letterbox
+the page inside the pane rather than resizing it.
+
+The pane is offered where the site has a page to show — a collection with a `route` and a
+[loader](loaders.md). A global has neither, so its editor has no Preview button: what changing
+a global looks like is seen by previewing a page that reads it.
+
+Two things the pane says that the site does not, above the frame:
+
+- **Not published yet — previewing at `/listings/harbour-loft`.** The repository has no file
+  for this language of this entry, so the pane is the only place the page exists and the
+  address is the one it will get. A brand-new entry previews like any other: the draft is the
+  whole page, and it appears in the collection's index preview too.
+- **Not everything you have typed is saved.** An autosave did not land, so what is rendered is
+  the last version that did.
+
+A draft the schema still refuses is a card in place of the frame, one line per field with a
+button back to it — the same refusal the route answers `422` with, said before the request.
+
+A link inside a preview goes to the live page rather than to its preview.

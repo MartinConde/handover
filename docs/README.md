@@ -17,7 +17,7 @@
 - [Rendering content](rendering.md) — `<Markdown />`, `<LocaleSwitcher />` and hidden entries.
 - [Drafts and publishing](publishing.md) — autosave into D1, what a draft holds, the pending-changes drawer, publishing in one commit, build status and revert, holding an entry back, the content index.
 - [Working together](working-together.md) — the soft lock on an entry, what "Being edited by…" takes away, taking one over, and a file somebody changed in the repository.
-- [Preview](preview.md) — the client seeing a page before it goes out: turning it on at build, what is behind the gate, and the address to preview.
+- [Preview](preview.md) — the client seeing a page before it goes out: turning it on at build, what is behind the gate, the address to preview, and the pane in the editor.
 - [Accounts and signing in](auth.md) — the secrets, `HANDOVER_BASE_URL`, seeding the first owner, the three ways in, the account page, closed sign-up and rate limiting.
 - [Roles and permissions](roles.md) — the two roles, what each may do, and what is behind the session and what is deliberately not.
 - [Sending email](email.md) — the `mailer` block, verifying a sending domain, and the check that proves a key.

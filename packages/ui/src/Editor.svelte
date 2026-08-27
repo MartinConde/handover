@@ -2,6 +2,7 @@
 import { type Drift, entryUrl, type Field, LOCK_TTL } from '@handover/core';
 import DriftPanel from './Drift.svelte';
 import Fields from './Fields.svelte';
+import PreviewPane from './Preview.svelte';
 import Translation from './Translation.svelte';
 
 type Data = Record<string, unknown>;
@@ -13,6 +14,7 @@ let {
   slug,
   entry,
   mediaBase = '',
+  preview = false,
   onchanged,
   onpending,
 }: {
@@ -20,12 +22,16 @@ let {
   slug: string;
   /** Where a stored media key is served from; the image and file widgets draw from it. */
   mediaBase?: string;
+  /** This build serves `/_preview`: without it the pane says so rather than framing a 404. */
+  preview?: boolean;
   entry: {
     fields: readonly Field[];
     blocks: Record<string, Field[]>;
     data: Data;
     /** The languages whose file this entry has a draft ahead of in git. */
     pending: string[];
+    /** The languages the repository already has a file for; the rest are only in the preview. */
+    published: string[];
     /** Somebody marked it "Not ready yet" — the toggle opens pressed, whoever they were. */
     held?: boolean;
     /** What the collection schema will not accept yet, by field path. */
@@ -96,6 +102,9 @@ let problems = $state(byPath(entry.problems));
 // svelte-ignore state_referenced_locally -- the language the entry is written in is where it opens
 let locale = $state(entry.sourceLocale);
 let side = $state(false);
+// The pane is one thing at a time: the preview, or the second language.
+let previewing = $state(false);
+let savedAt = $state(0);
 let pane = $state<ReturnType<typeof Translation>>();
 // A second language stored ahead of the repository. It lives here rather than in the column,
 // which is thrown away whenever the screen changes and would take the fact with it.
@@ -261,6 +270,9 @@ async function autosave() {
     // a beat: the lock it would push out is not ours any more.
     if (Date.now() - beatAt >= 45000) void beat(true);
     saved = sent;
+    // What the preview renders is the stored draft, so a settled save is when it is worth
+    // asking the site to draw the page again.
+    savedAt = Date.now();
     // Whether the stored draft differs from the file in git is the server's answer, not ours.
     const body = (await res.json()) as { pending: boolean; problems: Problem[] };
     if (body.pending !== drafted) onpending?.();
@@ -307,11 +319,12 @@ async function toggleHold() {
 }
 
 // Scrolling there is not enough on its own: the count is a button, so it has to land somewhere.
-function goToFirst() {
-  const field = document.getElementById(`f-${missing[0]}`);
+function goTo(path: string | undefined) {
+  const field = document.getElementById(`f-${path}`);
   field?.scrollIntoView({ block: 'center' });
   field?.focus();
 }
+const goToFirst = () => goTo(missing[0]);
 
 // Publishing is the drawer's job, over every draft at once; the entry's own edit only has
 // to be in D1 before it opens, so a click inside the autosave window is not lost.
@@ -437,6 +450,26 @@ async function turnOff(): Promise<boolean> {
 const localeUrl = (of: string) =>
   entryUrl('default', routing, entry.route, entry.addresses?.[of] || slug, of) ?? undefined;
 const localeIndex = (of: string) => entryUrl('default', routing, entry.index, '', of) ?? undefined;
+
+// What the preview pane is offered for: a collection with no route renders nowhere, so there is
+// no page to frame — which is every global, and is why Preview is absent rather than refusing.
+const previewable = $derived(Boolean(entry.route));
+// The languages it can be previewed in are the ones it has a file in: a language with none is an
+// offer to create one, not a page.
+const previewLocales = $derived(
+  entry.locales
+    .filter((of) => of === entry.sourceLocale || !untranslated(of))
+    .map((of) => ({ locale: of, label: language(of), url: localeUrl(of) ?? '' })),
+);
+// A field's own label, so the card says "Price" and not "price". Nested paths answer under the
+// field they are inside, which is where the form scrolls to anyway.
+const labelOf = (path: string) => {
+  const head = path.split('.')[0] ?? path;
+  return entry.fields.find((f) => f.path.join('.') === head)?.label ?? head;
+};
+const previewProblems = $derived(
+  missing.map((path) => ({ path, label: labelOf(path), message: problems[path] ?? '' })),
+);
 
 function editAddress() {
   typed = address;
@@ -567,7 +600,9 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           {/if}
           <button class="btn btn-sbs" type="button" aria-pressed={side} onclick={() => leaving(() => (side = !side))}>Side by side</button>
         {/if}
-        <button class="btn btn-preview" type="button" disabled title="Preview is not available yet">Preview</button>
+        {#if previewable}
+          <button class="btn btn-preview" type="button" aria-pressed={previewing} onclick={() => leaving(() => (previewing = !previewing))}>Preview</button>
+        {/if}
         <button
           class="btn btn-primary"
           type="button"
@@ -626,7 +661,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   </header>
   <!-- A decision to make, not a form to fill: the panel stands where the form would be, because
        every field on it belongs to a structure the languages have not agreed on yet. -->
-  <div class="entry-body" class:has-pane={!entry.drift.length && !alone}>
+  <div class="entry-body" class:has-pane={!entry.drift.length && (!alone || previewing)}>
     {#if entry.drift.length}
       <DriftPanel
         {collection}
@@ -645,9 +680,13 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           </fieldset>
         </form>
       {/if}
-      {#if shown === undefined}
+      <!-- The pane holds one thing: the preview, or the second language. Previewing beside a
+           translation keeps that column, since it is the only form on screen. -->
+      {#if previewing && !alone}
+        {@render previewPane()}
+      {:else if shown === undefined}
         <aside class="pane" aria-label="Right pane">
-          <div><strong>Right pane</strong>Preview or a second language, later.</div>
+          <div><strong>Right pane</strong>Preview to see the page, or Side by side for another language.</div>
         </aside>
       {:else if untranslated(shown)}
         <!-- An empty form here would autosave a file nobody asked for, so the language with no
@@ -709,6 +748,9 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             onsaved={(pending) => {
               if (pending !== translated) onpending?.();
               translated = pending;
+              // This column has its own file and its own autosave, and the preview renders
+              // whichever language is on screen: a save here is a page to draw again too.
+              savedAt = Date.now();
             }}
             onrefused={(taken) => {
               lost = true;
@@ -719,6 +761,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             onturnoff={entry.singleton ? undefined : turnOff}
           />
         {/key}
+        {#if previewing}{@render previewPane()}{/if}
       {/if}
     {/if}
   </div>
@@ -777,3 +820,21 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     </div>
   {/if}
 </main>
+
+<!-- The pane, wherever it lands: beside the source form, or beside a translation being edited
+     on its own. Its language is the one on screen, and choosing another moves the whole screen
+     rather than only the frame — one entry, one language at a time. -->
+{#snippet previewPane()}
+  <PreviewPane
+    url={localeUrl(locale) ?? ''}
+    {locale}
+    locales={previewLocales}
+    onlocale={(of) => leaving(() => (locale = of))}
+    enabled={preview}
+    published={entry.published.includes(locale)}
+    stale={saveFailed}
+    problems={previewProblems}
+    ongo={goTo}
+    {savedAt}
+  />
+{/snippet}

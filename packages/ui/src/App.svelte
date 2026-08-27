@@ -15,6 +15,8 @@ export interface Session {
   globals?: boolean;
   /** Where a stored media key is served from, so a widget can draw what a content file names. */
   mediaBase?: string;
+  /** This build serves `/_preview`, so the editor can offer to show the page before it is live. */
+  preview?: boolean;
   user: { id: string; name: string; email: string };
   role: 'owner' | 'editor';
 }
@@ -315,6 +317,7 @@ const initial = $derived(
           slug={editing.slug}
           {entry}
           mediaBase={session?.mediaBase ?? ''}
+          preview={session?.preview ?? false}
           onchanged={async () => {
             await loadPending();
             reload += 1;
