@@ -1673,6 +1673,38 @@ async function listEntries(collection: string): Promise<Response> {
 }
 
 /**
+ * Everything an editor can point at: one row per entry in every collection the site declares,
+ * with the address each of its languages serves it at. One answer feeds the page picker
+ * wherever it appears — a `reference`, a `link`, a rich text link — because they all choose
+ * from the same set and only differ in what they store afterwards.
+ */
+async function pickList(): Promise<Response> {
+  const rows = await overlayRows('default', db(), index);
+  const entries = Object.entries(config.collections).flatMap(([collection, collected]) =>
+    collectionEntries('default', index, collection, rows, collected.titleField).map((entry) => {
+      const urls: Record<string, string> = {};
+      for (const [locale, info] of Object.entries(entry.locales)) {
+        // The same address the entry's own language serves it at: its `slug` where the
+        // collection has localized slugs, its file name where it has none.
+        const address = collected.localizedSlugs ? (info.slug ?? entry.id) : entry.id;
+        const url = entryUrl('default', config.i18n, collected.route, address, locale);
+        if (url) urls[locale] = url;
+      }
+      const locales = Object.keys(entry.locales);
+      return {
+        collection,
+        // What a reference or an entry link stores, and what the picker shows under the title.
+        path: `${collection}/${entry.id}`,
+        title: (entry.locales[config.i18n.defaultLocale] ?? entry.locales[locales[0] ?? ''])?.title,
+        locales,
+        urls,
+      };
+    }),
+  );
+  return Response.json({ entries, locales: config.i18n.locales });
+}
+
+/**
  * The site settings screen: one card per global the site declares, in `cms.config.ts` order.
  * It costs what the entry list costs and nothing more — the built index with the draft rows
  * over it — because a global is an entry of the `globals` collection.
@@ -1974,6 +2006,7 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
       preview,
     });
   }
+  if (params.path === 'entries') return pickList();
   if (params.path === 'media') return library(url);
   if (params.path === 'globals') return globalsList();
   if (params.path === 'drafts') return pendingList();

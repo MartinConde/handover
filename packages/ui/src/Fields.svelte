@@ -1,7 +1,15 @@
 <script lang="ts">
-import { type Field, fieldAddress, newId, type Preset, type Translation } from '@handover/core';
+import {
+  type Field,
+  fieldAddress,
+  newId,
+  type Preset,
+  type Translation,
+  unsafeLinkScheme,
+} from '@handover/core';
 import Fields from './Fields.svelte';
 import Media from './Media.svelte';
+import PagePicker, { type Pickable, readPickable } from './PagePicker.svelte';
 import RichText from './RichText.svelte';
 import { fileSize, type MediaItem } from './upload.js';
 
@@ -19,6 +27,7 @@ let {
   inherited = true,
   prefix = 'f',
   mediaBase = '',
+  locale = '',
 }: {
   fields: readonly Field[];
   root: Data;
@@ -41,6 +50,8 @@ let {
   prefix?: string;
   /** Where a stored media key is served from; without it a thumbnail has no source. */
   mediaBase?: string;
+  /** The language this column writes: what a link typed into rich text has to point at. */
+  locale?: string;
 } = $props();
 
 const modeOf = (field: Field): Translation => field.i18n ?? inherited;
@@ -48,8 +59,9 @@ const modeOf = (field: Field): Translation => field.i18n ?? inherited;
 // inside it can say otherwise.
 const structural = (field: Field) =>
   field.type === 'group' || field.type === 'array' || field.type === 'blocks';
-// Widgets that only show what is stored. A translation of one has nothing to act on, so the
-// second language is not given a picture of the first language's value it cannot change.
+// Widgets a translation has nothing to act on: `embed` and `seo` only show what is stored,
+// and a `reference` points at the same entry in every language. Neither is given to the
+// second language as a picture of the first language's value it cannot change.
 const FIXED = new Set(['embed', 'seo', 'reference', 'unsupported']);
 const shown = $derived(
   translating
@@ -119,11 +131,18 @@ const blockFields = (row: unknown) =>
 
 // A read-only field that says nothing reads as a broken one, so each names the release its
 // editor arrives in.
-const WHEN: Record<'embed' | 'seo' | 'reference', string> = {
+const WHEN: Record<'embed' | 'seo', string> = {
   embed: 'Embeds can be changed from Phase 4. Shown as stored.',
   seo: 'SEO settings can be changed from Phase 4. Shown as stored.',
-  reference: 'References can be changed from Phase 2. Shown as stored.',
 };
+
+// A stored reference names an entry this form never picked, so the list is read for its
+// title and the languages it has. Only where there is something on screen that needs one.
+let known = $state<Pickable>({ entries: [], locales: [] });
+$effect(() => {
+  if (fields.some((f) => f.type === 'reference' || f.type === 'link'))
+    readPickable().then((p) => (known = p));
+});
 
 // The picture as this field will show it: `16:9` is already what `aspect-ratio` wants.
 const aspect = (preset: Preset) => preset.ratio?.replace(':', ' / ') ?? '4 / 3';
@@ -181,6 +200,29 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
 
 {#snippet nameField(id: string, at: readonly string[])}
   <div class="field"><div class="label-row"><label for="{id}.name">Display name</label><span class="mode">Per language</span></div><input class="input" id="{id}.name" type="text" value={str([...at, 'name'])} oninput={(e) => write([...at, 'name'], e.currentTarget.value || undefined)} /></div>
+{/snippet}
+
+{#snippet chosenEntry(id: string, labelId: string, says: string | undefined, ref: string, open: () => void)}
+  {@const found = known.entries.find((e) => e.path === ref)}
+  <div class="ref-list" {id} role="group" aria-labelledby={labelId} aria-describedby={says}>
+    <div class="ref-item">
+      <span class="title">{found?.title ?? ref}</span>
+      {#if found}
+        <span class="chips">
+          {#each known.locales as of (of)}<span class="chip" class:chip-missing={!found.locales.includes(of)}>{of.toUpperCase()}</span>{/each}
+        </span>
+      {/if}
+      <span class="path">{ref}</span>
+      <button class="btn btn-ghost btn-sm remove" type="button" onclick={open}>Change</button>
+    </div>
+  </div>
+{/snippet}
+
+{#snippet noEntry(id: string, labelId: string, says: string | undefined, text: string, open: () => void)}
+  <div class="list-empty" {id} role="group" aria-labelledby={labelId} aria-describedby={says}>
+    <span>Nothing chosen yet</span>
+    <button class="btn btn-sm" type="button" onclick={open}>Choose {text}</button>
+  </div>
 {/snippet}
 
 {#snippet labelRow(id: string, field: Field, text: string, at: readonly string[] = [])}
@@ -246,19 +288,28 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         <button type="button" aria-pressed={linkType(at) === 'url'} onclick={() => setLinkType(at, 'url')}>URL</button>
       </div>
       {#if linkType(at) === 'url'}
-        <div class="field"><div class="label-row"><label for="{id}.href">URL</label></div><input class="input" id="{id}.href" type="url" value={str([...at, 'href'])} oninput={(e) => { write([...at, 'type'], 'url'); write([...at, 'href'], e.currentTarget.value); }} /></div>
+        {@const scheme = unsafeLinkScheme('default', str([...at, 'href']))}
+        <div class="field" class:is-invalid={scheme}>
+          <div class="label-row"><label for="{id}.href">URL</label></div>
+          <input class="input" id="{id}.href" type="url" aria-invalid={scheme ? 'true' : undefined} aria-describedby={scheme ? `${id}.href-err` : undefined} value={str([...at, 'href'])} oninput={(e) => { write([...at, 'type'], 'url'); write([...at, 'href'], e.currentTarget.value); }} />
+          {#if scheme}<p class="error" id="{id}.href-err">{scheme}: links are not allowed</p>{/if}
+        </div>
+      {:else if picker === id}
+        <PagePicker {id} label={text} labelId="{id}-l" chosen={str([...at, 'ref'])} onpick={(e) => { write([...at, 'type'], 'entry'); write([...at, 'ref'], e.path); picker = ''; }} onclose={() => (picker = '')} />
+      {:else if str([...at, 'ref'])}
+        {@render chosenEntry(`${id}.ref`, `${id}-l`, says, str([...at, 'ref']), () => (picker = id))}
       {:else}
-        <div class="field"><div class="label-row"><label for="{id}.ref">Page or entry</label></div><input class="input" id="{id}.ref" type="text" placeholder="listings/mill-house" value={str([...at, 'ref'])} oninput={(e) => { write([...at, 'type'], 'entry'); write([...at, 'ref'], e.currentTarget.value); }} /></div>
+        {@render noEntry(`${id}.ref`, `${id}-l`, says, 'a page or entry', () => (picker = id))}
       {/if}
       <div class="field"><div class="label-row"><label for="{id}.label">Label</label></div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
       <label class="check" for="{id}.newTab"><input type="checkbox" id="{id}.newTab" checked={read([...at, 'newTab']) === true} onchange={(e) => write([...at, 'newTab'], e.currentTarget.checked || undefined)} /><span>Open in new tab</span></label>
     {:else if field.type === 'richtext'}
       {@render groupLabel(id, field, text, at)}
-      <RichText {id} labelId="{id}-l" tier={field.tier} invalid={!!err} describedby={says} value={str(at)} onchange={(md) => write(at, md)} />
+      <RichText {id} labelId="{id}-l" {locale} tier={field.tier} invalid={!!err} describedby={says} value={str(at)} onchange={(md) => write(at, md)} />
     {:else if field.type === 'group'}
       <details class="group" open>
         <summary>{text}<span class="count">{field.fields.length} fields</span></summary>
-        <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} {translating} {machine} {ontranslate} {prefix} {mediaBase} inherited={mode} /></div>
+        <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} {translating} {machine} {ontranslate} {prefix} {mediaBase} {locale} inherited={mode} /></div>
       </details>
     {:else if field.type === 'array'}
       {@const items = rows(at)}
@@ -267,7 +318,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <div class="list" {id} role="group" aria-labelledby="{id}-l">
         {#each items as row, i ((row as Data)?._id ?? i)}
           <div class="row-card">
-            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {prefix} {mediaBase} inherited={mode} /></div>
+            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {prefix} {mediaBase} {locale} inherited={mode} /></div>
             {#if !translating}{@render controls(at, i, items.length, `${text} row ${i + 1}`)}{/if}
           </div>
         {:else}
@@ -289,7 +340,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
               {#if !translating}{@render controls(at, i, items.length, name)}{/if}
             </header>
             {#if inner}
-              <div class="form"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {prefix} {mediaBase} inherited={mode} /></div>
+              <div class="form"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {prefix} {mediaBase} {locale} inherited={mode} /></div>
             {:else}
               <p class="ref-note">{block(row)._ref ?? `No “${block(row)._type}” block in the registry`} — not editable here</p>
             {/if}
@@ -379,7 +430,16 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         <span class="hint">{field.accept.map((m) => (m.split('/').pop() ?? '').toUpperCase()).join(', ')} up to 10 MB</span>
         <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>Choose from library</button>
       </div>
-    {:else if field.type === 'embed' || field.type === 'seo' || field.type === 'reference'}
+    {:else if field.type === 'reference'}
+      {@render groupLabel(id, field, text, at)}
+      {#if picker === id}
+        <PagePicker {id} label={text} labelId="{id}-l" collection={field.collection} chosen={str(at)} onpick={(e) => { write(at, e.path); picker = ''; }} onclose={() => (picker = '')} />
+      {:else if str(at)}
+        {@render chosenEntry(id, `${id}-l`, says, str(at), () => (picker = id))}
+      {:else}
+        {@render noEntry(id, `${id}-l`, says, text, () => (picker = id))}
+      {/if}
+    {:else if field.type === 'embed' || field.type === 'seo'}
       {@render groupLabel(id, field, text, at)}
       <div class="readonly" {id} role="region" tabindex="-1" aria-labelledby="{id}-l" aria-describedby={err ? `${id}-hint ${id}-err` : `${id}-hint`}><pre>{read(at) === undefined ? 'Nothing here yet' : JSON.stringify(read(at), null, 2)}</pre></div>
       <p class="hint" id="{id}-hint">{WHEN[field.type]}</p>

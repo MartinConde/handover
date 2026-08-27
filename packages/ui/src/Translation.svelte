@@ -222,6 +222,7 @@ const named = (of: string) => {
         {problems}
         {machine}
         {mediaBase}
+        {locale}
         bind:root={data}
         translating
         ontranslate={translator ? (path) => fill([path]) : undefined}

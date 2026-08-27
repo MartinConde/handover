@@ -676,7 +676,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {#if !alone}
         <form class="form" onsubmit={(e) => e.preventDefault()}>
           <fieldset disabled={locked}>
-            <Fields fields={entry.fields} blocks={entry.blocks} {problems} {mediaBase} bind:root={data} />
+            <Fields fields={entry.fields} blocks={entry.blocks} {problems} {mediaBase} {locale} bind:root={data} />
           </fieldset>
         </form>
       {/if}

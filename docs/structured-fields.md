@@ -137,13 +137,19 @@ drop zone that takes a file dropped on it and opens the
 [picker](media-fields.md#choosing-a-picture) otherwise. A language that is being translated gets the alt or the display name and nothing
 else — the picture itself is the same in every language.
 
-`embed`, `seo` and `reference` still show their stored value as read-only JSON until their
-pickers arrive, under one line naming the release that brings the editor. It is read and
-written back untouched.
+`reference` is a search box over the collection its schema names, one row per entry with
+the languages that entry has a file in. Choosing one stores `collection/slug`; the chosen
+row shows the entry's title beside the path it stores, and Change reopens the search. A
+language that is being translated is not shown the field at all — an entry points at the
+same entry in every language.
 
-Make one of those **required** — `agent: reference('agents')` above — and a new entry
-cannot satisfy it from the form until that picker ships. Nothing you type is lost: the
-draft is stored anyway and the field is marked as a problem. What you cannot do is publish
-that entry, so keep a field required only when your site really cannot render without it,
-and use `.optional()` while the editor for it is still to come
+`embed` and `seo` still show their stored value as read-only JSON until their pickers
+arrive, under one line naming the release that brings the editor. It is read and written
+back untouched.
+
+Make one of those **required** — `video: embed` — and a new entry cannot satisfy it from
+the form until that picker ships. Nothing you type is lost: the draft is stored anyway and
+the field is marked as a problem. What you cannot do is publish that entry, so keep a field
+required only when your site really cannot render without it, and use `.optional()` while
+the editor for it is still to come
 ([Drafts and publishing](publishing.md#fields-the-schema-is-not-happy-with)).

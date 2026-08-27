@@ -16,12 +16,14 @@ import { Text } from '@tiptap/extension-text';
 import { UndoRedo } from '@tiptap/extensions';
 import { Markdown } from '@tiptap/markdown';
 import { onMount } from 'svelte';
+import PagePicker from './PagePicker.svelte';
 
 let {
   id,
   labelId,
   tier,
   value,
+  locale = '',
   invalid = false,
   describedby,
   onchange,
@@ -30,6 +32,8 @@ let {
   labelId: string;
   tier: RichtextTier;
   value: string;
+  /** The language being written: a link to an entry points at the page that language serves. */
+  locale?: string;
   /** The schema will not accept what is in here; the message sits under the field. */
   invalid?: boolean;
   describedby?: string;
@@ -76,11 +80,17 @@ const FULL = [
 // svelte-ignore state_referenced_locally -- the tier is fixed per field
 const buttons = tier === 'full' ? [...BASIC, ...FULL] : BASIC;
 
+// Where a link points is chosen in the page picker, so a target the site would refuse is
+// refused while it is being typed rather than on the way to the repository.
+let linking = $state(false);
 function toggleLink(e: Editor) {
   if (e.isActive('link')) return e.chain().focus().unsetLink().run();
-  const href = window.prompt('Link to (https://…)', 'https://');
-  if (!href || href === 'https://') return false;
-  return e.chain().focus().setLink({ href }).run();
+  linking = true;
+  return true;
+}
+function linkTo(href: string) {
+  linking = false;
+  editor?.chain().focus().setLink({ href }).run();
 }
 
 let element = $state<HTMLDivElement>();
@@ -156,5 +166,8 @@ const active = (b: { mark: string; attrs?: Record<string, unknown> }) =>
       {/each}
     </div>
     <div bind:this={element}></div>
+    {#if linking}
+      <PagePicker id="{id}-link" label="pages and entries to link to" labelId={labelId} {locale} onpick={(entry) => linkTo(entry.urls[locale] ?? '')} onurl={linkTo} onclose={() => (linking = false)} />
+    {/if}
   </div>
 {/if}

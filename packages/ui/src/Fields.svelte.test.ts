@@ -31,6 +31,8 @@ const show = (
       fields,
       blocks,
       problems,
+      // The form is showing English: what a link typed into rich text has to point at.
+      locale: 'en',
       get root() {
         return root;
       },
@@ -49,6 +51,64 @@ afterEach(() => {
 
 const golden = (name: string) =>
   readFileSync(resolve(__dirname, `../../core/test/golden/${name}.yaml`), 'utf8');
+
+// Everything the admin offers a picker, as `/admin/api/entries` answers it. Jane and James
+// are in a collection nothing renders, so neither has an address to link to.
+const OFFERED = [
+  {
+    collection: 'pages',
+    path: 'pages/contact',
+    title: 'Contact',
+    locales: ['en', 'de'],
+    urls: { en: '/contact', de: '/de/kontakt' },
+  },
+  {
+    collection: 'listings',
+    path: 'listings/mill-house',
+    title: 'Old Mill House',
+    locales: ['en'],
+    urls: { en: '/listings/mill-house' },
+  },
+  {
+    collection: 'agents',
+    path: 'agents/jane-doe',
+    title: 'Jane Doe',
+    locales: ['en', 'de'],
+    urls: {},
+  },
+  {
+    collection: 'agents',
+    path: 'agents/james-hartley',
+    title: 'James Hartley',
+    locales: ['en'],
+    urls: {},
+  },
+];
+/** The picker's one read, answered before the field that opens it is mounted. */
+const offering = () =>
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ entries: OFFERED, locales: ['en', 'de'] })),
+  );
+const rows = () => Array.from(document.querySelectorAll<HTMLButtonElement>('.picker-list button'));
+/** A link is applied to the selection, so a test that leaves a bare cursor marks nothing. */
+const selectAll = (sel: string) => {
+  const body = q<HTMLElement>(sel);
+  body.focus();
+  const range = document.createRange();
+  range.selectNodeContents(body);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  document.dispatchEvent(new Event('selectionchange'));
+  flushSync();
+};
+const pickRow = (path: string) => {
+  const row = rows().find((b) => b.querySelector('.path')?.textContent === path);
+  if (!row) throw new Error(`no row for ${path}`);
+  row.click();
+  flushSync();
+};
 const roundTrip = () => parseEntry('default', stringifyEntry('default', $state.snapshot(root)));
 
 const q = <T extends Element>(sel: string) => {
@@ -165,7 +225,8 @@ test('select: more than five options is a dropdown; Choose… removes the key', 
   expect(root).toEqual({ _version: 1 });
 });
 
-test('link: URL and entry modes write the two shapes from the link golden', () => {
+test('link: URL and entry modes write the two shapes from the link golden', async () => {
+  offering();
   show(
     [
       { path: ['button'], label: 'Button', type: 'link', required: true },
@@ -181,11 +242,30 @@ test('link: URL and entry modes write the two shapes from the link golden', () =
   fire('input#f-button\\.newTab', 'change', (el) => {
     el.checked = true;
   });
-  type('input#f-more\\.ref', 'listings/mill-house');
+  q<HTMLButtonElement>('#f-more\\.ref button').click();
+  await settle();
+  pickRow('listings/mill-house');
   expect(stringifyEntry('default', $state.snapshot(root))).toBe(golden('link'));
 });
 
-test('link: switching type drops the other target; new tab off leaves no key', () => {
+test('link: the chosen entry is named, not left as the path it stores', async () => {
+  offering();
+  show([{ path: ['more'], label: 'More', type: 'link', required: false }], {
+    _version: 1,
+    more: { type: 'entry', ref: 'listings/mill-house' },
+  });
+  await settle();
+  expect(q('.ref-item .title').textContent).toBe('Old Mill House');
+  expect(q('.ref-item .path').textContent).toBe('listings/mill-house');
+  // English has a file and German has none: the entry an editor is about to point at says so.
+  expect(Array.from(document.querySelectorAll('.ref-item .chip')).map((c) => c.className)).toEqual([
+    'chip',
+    'chip chip-missing',
+  ]);
+});
+
+test('link: switching type drops the other target; new tab off leaves no key', async () => {
+  offering();
   show([{ path: ['button'], label: 'Button', type: 'link', required: true }], {
     _version: 1,
     button: { type: 'url', href: 'https://example.com', newTab: true },
@@ -198,8 +278,68 @@ test('link: switching type drops the other target; new tab off leaves no key', (
   });
   q<HTMLButtonElement>('.seg button:nth-child(1)').click();
   flushSync();
-  type('input#f-button\\.ref', 'pages/contact');
+  q<HTMLButtonElement>('#f-button\\.ref button').click();
+  await settle();
+  pickRow('pages/contact');
   expect(roundTrip()).toEqual({ _version: 1, button: { type: 'entry', ref: 'pages/contact' } });
+});
+
+// The allow-list is 1.20c's, and it is the schema's own: the widget refuses what a save
+// would refuse, so nobody types a target that only fails two screens later.
+test('link: a scheme the site will not accept is named under the URL as it is typed', () => {
+  show([{ path: ['button'], label: 'Button', type: 'link', required: true }], {
+    _version: 1,
+    button: { type: 'url' },
+  });
+  type('input#f-button\\.href', 'javascript:alert(1)');
+  expect(q('#f-button\\.href-err').textContent).toBe('javascript: links are not allowed');
+  expect(q('input#f-button\\.href').getAttribute('aria-invalid')).toBe('true');
+  type('input#f-button\\.href', 'https://example.com');
+  expect(document.querySelector('#f-button\\.href-err')).toBeNull();
+});
+
+test('reference: the picker writes the collection/slug the reference golden holds', async () => {
+  offering();
+  show(
+    [
+      {
+        path: ['agent'],
+        label: 'Agent',
+        type: 'reference',
+        required: false,
+        collection: 'agents',
+      },
+    ],
+    { _version: 1 },
+  );
+  expect(q('#f-agent button').textContent).toBe('Choose Agent');
+  q<HTMLButtonElement>('#f-agent button').click();
+  await settle();
+  pickRow('agents/jane-doe');
+  expect(stringifyEntry('default', $state.snapshot(root))).toBe(golden('reference'));
+  expect(q('.ref-item .title').textContent).toBe('Jane Doe');
+});
+
+test('reference: only the collection the schema names is offered', async () => {
+  offering();
+  show(
+    [
+      {
+        path: ['agent'],
+        label: 'Agent',
+        type: 'reference',
+        required: false,
+        collection: 'agents',
+      },
+    ],
+    { _version: 1 },
+  );
+  q<HTMLButtonElement>('#f-agent button').click();
+  await settle();
+  expect(rows().map((b) => b.querySelector('.path')?.textContent)).toEqual([
+    'agents/jane-doe',
+    'agents/james-hartley',
+  ]);
 });
 
 test('group: fields nest under the group key and the object is created on first edit', () => {
@@ -262,6 +402,67 @@ test('richtext: a body outside the tier is shown read-only and left untouched', 
   expect(q('[role="region"] pre#f-summary').textContent).toBe(body);
   expect(q('#f-summary-hint').textContent).toContain('edited in code');
   expect(roundTrip()).toEqual({ _version: 1, summary: body });
+});
+
+// The toolbar's link button opened a `window.prompt` until 3.26; the picker is where a
+// target is chosen now, and both halves of it answer here.
+test('rich text: a link points at the address the language being written serves', async () => {
+  offering();
+  show(
+    [{ path: ['summary'], label: 'Summary', type: 'richtext', required: false, tier: 'basic' }],
+    {
+      _version: 1,
+      summary: 'Two bedrooms.',
+    },
+  );
+  selectAll('#f-summary');
+  q<HTMLButtonElement>('[aria-label="Link"]').click();
+  await settle();
+  pickRow('/listings/mill-house');
+  expect(roundTrip()).toEqual({
+    _version: 1,
+    summary: '[Two bedrooms.](/listings/mill-house)',
+  });
+});
+
+test('rich text: an entry the language cannot serve is listed with the reason and picks nothing', async () => {
+  offering();
+  show(
+    [{ path: ['summary'], label: 'Summary', type: 'richtext', required: false, tier: 'basic' }],
+    {
+      _version: 1,
+      summary: 'Two bedrooms.',
+    },
+  );
+  selectAll('#f-summary');
+  q<HTMLButtonElement>('[aria-label="Link"]').click();
+  await settle();
+  const jane = rows().find((b) => b.querySelector('.path')?.textContent === 'agents/jane-doe');
+  expect(jane?.getAttribute('aria-disabled')).toBe('true');
+  expect(q(`#${CSS.escape(jane?.getAttribute('aria-describedby') ?? '')}`).textContent).toBe(
+    'Nothing on the site renders this, so it has no address',
+  );
+  jane?.click();
+  flushSync();
+  expect(roundTrip()).toEqual({ _version: 1, summary: 'Two bedrooms.' });
+});
+
+test('rich text: a scheme the site will not accept is refused where it is typed', async () => {
+  offering();
+  show(
+    [{ path: ['summary'], label: 'Summary', type: 'richtext', required: false, tier: 'basic' }],
+    {
+      _version: 1,
+      summary: 'Two bedrooms.',
+    },
+  );
+  selectAll('#f-summary');
+  q<HTMLButtonElement>('[aria-label="Link"]').click();
+  await settle();
+  type('#f-summary-link-url', 'javascript:alert(1)');
+  expect(q('#f-summary-link-url-err').textContent).toBe('javascript: links are not allowed');
+  expect(q<HTMLButtonElement>('.picker .actions .btn-primary').disabled).toBe(true);
+  expect(roundTrip()).toEqual({ _version: 1, summary: 'Two bedrooms.' });
 });
 
 test('every control has a label', () => {
@@ -506,7 +707,6 @@ test('an image inside a block draws what is stored and writes the file back unch
 test.each([
   ['embed', 'Embeds can be changed from Phase 4. Shown as stored.'],
   ['seo', 'SEO settings can be changed from Phase 4. Shown as stored.'],
-  ['reference', 'References can be changed from Phase 2. Shown as stored.'],
 ] as const)('structured types: %s says why it is read-only', (type, sentence) => {
   show([{ path: ['thing'], label: 'Thing', type, required: false } as Field], {});
   const hint = q('#f-thing-hint');
@@ -535,6 +735,21 @@ test('a field the schema refuses is marked, described and still editable', () =>
 // saying what is wrong is all the screen can do — and it must not lose the hint that says so.
 test('a read-only structured field keeps its hint next to the error', () => {
   show(
+    [{ path: ['tour'], label: 'Tour', type: 'embed', required: true }],
+    {},
+    {},
+    {
+      tour: 'Required',
+    },
+  );
+  expect(q('#f-tour').getAttribute('aria-describedby')).toBe('f-tour-hint f-tour-err');
+  expect(q('#f-tour-err').textContent).toBe('Required');
+});
+
+// A reference has a picker now, so what an empty required one owes is the message and a way
+// to fill it in — not a hint about a release that has arrived.
+test('a required reference nobody has filled in says so on the box that opens the picker', () => {
+  show(
     [
       {
         path: ['presenter'],
@@ -546,14 +761,11 @@ test('a read-only structured field keeps its hint next to the error', () => {
     ],
     {},
     {},
-    {
-      presenter: 'Required',
-    },
+    { presenter: 'Required' },
   );
-  expect(q('#f-presenter').getAttribute('aria-describedby')).toBe(
-    'f-presenter-hint f-presenter-err',
-  );
+  expect(q('#f-presenter').getAttribute('aria-describedby')).toBe('f-presenter-err');
   expect(q('#f-presenter-err').textContent).toBe('Required');
+  expect(q('#f-presenter button').textContent).toBe('Choose Presenter');
 });
 
 test('a field inside a block is marked by its own path, not the block’s', () => {

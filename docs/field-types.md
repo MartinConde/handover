@@ -44,9 +44,10 @@ so a paste that brings one in is caught before it is saved. Render the field wit
 [`<Markdown />`](rendering.md#rich-text).
 
 A link inside rich text may point at `http`, `https`, `mailto`, `tel` or a path on this
-site. Anything else — `javascript:` and `data:` above all — fails validation
-(`javascript: links are not allowed (line 2)`), and if a file written by hand carries one
-anyway, `<Markdown />` renders the link's text without the link.
+site. Anything else — `javascript:` and `data:` above all — is refused in the toolbar as it
+is typed and fails validation too (`javascript: links are not allowed (line 2)`), and if a
+file written by hand carries one anyway, `<Markdown />` renders the link's text without the
+link.
 
 ```yaml
 body: |-
@@ -97,10 +98,14 @@ export const listing = z.object({
 Every scalar type has a widget: text is an input (a textarea once it holds line breaks or
 more than 80 characters), number a numeric input, boolean a switch, date a native date
 input, select radios for five options or fewer and a dropdown above that, link a Page /
-Entry · URL toggle with label and "Open in new tab". Rich text is a TipTap editor whose
-toolbar has exactly the tier's constructs; a value that already contains something outside
-the tier (edited in code) is shown read-only rather than rewritten. Leaving an optional
-field empty removes the key from the file.
+Entry · URL toggle with label and "Open in new tab". Page / Entry is a search box over
+every entry the site has, grouped by collection and showing which languages each one is
+written in; URL is typed, and a scheme the site will not accept is refused under the box
+rather than on save. Rich text is a TipTap editor whose toolbar has exactly the tier's
+constructs; its link button opens the same search box, and points at the address the
+language being written serves. A value that already contains something outside the tier
+(edited in code) is shown read-only rather than rewritten. Leaving an optional field empty
+removes the key from the file.
 
 A `z.date()` is edited as a date and a transform by its input type. A `z.custom()` gets a
 widget when you name one: `.meta({ handover: 'text' })` (`number`, `boolean` or `date`

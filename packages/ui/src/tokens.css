@@ -655,7 +655,29 @@ a.btn { text-decoration: none; }
 .dropzone.is-over { border-color: var(--accent-ink); background: var(--accent-soft); color: var(--accent-ink); }
 .dropzone .btn { margin-top: var(--s-1); }
 
-/* The picker is the library in a modal, scoped by the field that opened it. */
+/* The page picker: a panel inside the field rather than a modal, since what it chooses is
+   one value and the form around it stays readable. The drawing marks the rows up as a
+   listbox of options; they are buttons here, because an option cannot be a button and a
+   listbox would owe an active descendant nothing on the page maintains. */
+.picker { display: grid; gap: var(--s-2); padding: var(--s-2); border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); }
+.picker > .actions { display: flex; justify-content: flex-end; gap: var(--s-2); }
+.picker-list { display: grid; gap: 2px; max-height: 190px; overflow: auto; }
+.picker-list button { display: flex; align-items: center; gap: var(--s-2); min-width: 0; min-height: 34px; padding: 0 var(--s-3); border: 0; border-radius: var(--radius-sm); background: transparent; text-align: left; color: var(--ink); cursor: pointer; }
+.picker-list button:hover { background: var(--surface-2); }
+.picker-list button[aria-current="true"] { background: var(--accent-soft); }
+.picker-list button[aria-disabled="true"] { color: var(--ink-3); cursor: default; }
+.picker-list .path { margin-left: auto; white-space: nowrap; font-size: var(--text-xs); color: var(--ink-3); font-family: var(--font-mono); }
+.picker-list .chips { margin-left: var(--s-1); }
+.picker-list h4 { padding: var(--s-2) var(--s-3) var(--s-1); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.picker-list .why { padding: 0 var(--s-3) var(--s-2); font-size: var(--text-xs); color: var(--warn-ink); }
+.ref-list { display: grid; gap: var(--s-2); }
+.ref-item { display: flex; align-items: center; gap: var(--s-3); min-height: 38px; padding: 0 var(--s-2) 0 var(--s-3); border-radius: var(--radius); background: var(--surface-2); }
+.ref-item .title { font-weight: 500; white-space: nowrap; }
+.ref-item .path { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-3); }
+.ref-item .remove { margin-left: auto; }
+.list-empty { padding: var(--s-5); border: 1.5px dashed var(--border-strong); border-radius: var(--radius-lg); text-align: center; color: var(--ink-2); font-size: var(--text-sm); display: grid; gap: var(--s-2); justify-items: center; }
+
+/* The media picker is the library in a modal, scoped by the field that opened it. */
 .picker-dialog { width: min(1060px, 100%); max-height: 100%; padding: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; text-align: left; }
 .picker-head { display: grid; gap: var(--s-3); padding: var(--s-5) var(--s-5) var(--s-4); border-bottom: 1px solid var(--border); }
 .picker-head .head-row { display: flex; align-items: baseline; gap: var(--s-3); flex-wrap: wrap; }

@@ -1949,6 +1949,56 @@ test('the entry list says which languages the site declares', async () => {
   expect(body.locales).toEqual(['en', 'de']);
 });
 
+// The page picker's one read. `presenters` renders nowhere, so it has entries and no
+// addresses; `posts` has localized slugs, so the German file's own `slug` is its address.
+test('the picker list carries every collection with the address each language serves', async () => {
+  locales = ['en', 'de'];
+
+  const body = (await (await GET(ctx('entries'))).json()) as {
+    entries: unknown[];
+    locales: unknown;
+  };
+
+  expect(body.locales).toEqual(['en', 'de']);
+  expect(body.entries).toEqual([
+    {
+      collection: 'listings',
+      path: 'listings/mill-house',
+      title: 'The Mill House',
+      locales: ['en'],
+      urls: { en: '/listings/mill-house' },
+    },
+    {
+      collection: 'listings',
+      path: 'listings/seaview-cottage',
+      title: 'Seaview Cottage',
+      locales: ['en'],
+      urls: { en: '/listings/seaview-cottage' },
+    },
+    {
+      collection: 'presenters',
+      path: 'presenters/rosa-hale',
+      title: 'Rosa Hale',
+      locales: ['en'],
+      urls: {},
+    },
+    {
+      collection: 'posts',
+      path: 'posts/hello',
+      title: 'Hello',
+      locales: ['en'],
+      urls: { en: '/blog/hello' },
+    },
+    {
+      collection: 'posts',
+      path: 'posts/taken',
+      title: 'Taken',
+      locales: ['en', 'de'],
+      urls: { en: '/blog/taken', de: '/de/blog/belegt' },
+    },
+  ]);
+});
+
 test('a save of a translation goes to that language and takes only the words it owns', async () => {
   drifted();
   saveDraft.mockClear();

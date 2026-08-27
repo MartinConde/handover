@@ -1,6 +1,7 @@
 import { diffEntry, type Form } from '@handover/core';
 import { mount } from 'svelte';
 import Diff from './Diff.svelte';
+import PagePicker, { type PickEntry } from './PagePicker.svelte';
 import './tokens.css';
 
 // Every shape the form can produce, so the page below shows what each one's diff reads like:
@@ -150,4 +151,90 @@ for (const { name, groups } of cases) {
   const host = document.createElement('div');
   root.append(heading, host);
   mount(Diff, { target: host, props: { groups } });
+}
+
+// The picker in the three shapes the package opens it in. There is no admin behind this page,
+// so its one request is answered here.
+const OFFERED: PickEntry[] = [
+  {
+    collection: 'pages',
+    path: 'pages/listings',
+    title: 'Listings overview',
+    locales: ['en', 'de'],
+    urls: { en: '/listings', de: '/de/angebote' },
+  },
+  {
+    collection: 'pages',
+    path: 'pages/contact',
+    title: 'Contact',
+    locales: ['en', 'de'],
+    urls: { en: '/contact', de: '/de/kontakt' },
+  },
+  {
+    collection: 'listings',
+    path: 'listings/seaview-cottage',
+    title: 'Seaview Cottage',
+    locales: ['en', 'de'],
+    urls: { en: '/listings/seaview-cottage', de: '/de/angebote/seaview-cottage' },
+  },
+  {
+    collection: 'listings',
+    path: 'listings/mill-house',
+    title: 'Old Mill House',
+    locales: ['en'],
+    urls: { en: '/listings/mill-house' },
+  },
+  {
+    collection: 'agents',
+    path: 'agents/jane-doe',
+    title: 'Jane Doe',
+    locales: ['en', 'de'],
+    urls: {},
+  },
+  {
+    collection: 'agents',
+    path: 'agents/james-hartley',
+    title: 'James Hartley',
+    locales: ['en'],
+    urls: {},
+  },
+];
+window.fetch = async () => Response.json({ entries: OFFERED, locales: ['en', 'de'] });
+
+const pickers = [
+  {
+    name: 'Everything, as a link field opens it',
+    props: { collection: undefined, locale: undefined, onurl: undefined },
+  },
+  {
+    name: 'Locked to one collection, as a reference field opens it',
+    props: { collection: 'agents', locale: undefined, onurl: undefined },
+  },
+  {
+    name: 'Addresses in German, as the rich text toolbar opens it — with a web address of its own',
+    props: {
+      collection: undefined,
+      locale: 'de',
+      onurl: (href: string) => console.log('url', href),
+    },
+  },
+];
+for (const { name, props } of pickers) {
+  const heading = document.createElement('h2');
+  heading.id = `pick-${props.collection ?? props.locale ?? 'all'}`;
+  heading.textContent = name;
+  const host = document.createElement('div');
+  root.append(heading, host);
+  mount(PagePicker, {
+    target: host,
+    props: {
+      id: heading.id,
+      label: 'pages and entries',
+      labelId: heading.id,
+      chosen: 'listings/mill-house',
+      onpick: (entry: PickEntry) => console.log('picked', entry.path),
+      onclose: () => {},
+      ...props,
+    },
+  });
 }

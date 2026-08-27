@@ -4,6 +4,21 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Pointing at a page is a search box now.** A `reference` field, the Page / Entry half of a
+  `link` field and the rich text toolbar's link button all open the same list: every entry the
+  site has, grouped by collection, searchable by title or path, with a chip per language saying
+  which ones that entry is written in. A `reference` was read-only JSON until now, and a link
+  target was a path typed from memory. [Field types](docs/field-types.md#in-the-admin),
+  [Structured fields](docs/structured-fields.md#in-the-admin).
+
+- **A link the site would refuse is refused where it is typed.** `javascript:` and anything else
+  outside `http`, `https`, `mailto`, `tel` and paths on the site is named under the box as it is
+  typed, in the toolbar and in a `link` field's URL, instead of failing on save.
+  [Field types](docs/field-types.md#rich-text).
+
+- `GET /admin/api/entries` answers every collection's entries with the address each language
+  serves them at. [Admin API](docs/admin-api.md#entries).
+
 - **The keys the client owns are theirs to change.** Settings gains an **Integrations** section:
   a DeepL key — and, when there is a version with writing help in it, an AI provider's — can be
   pasted, replaced or removed by the site's owner without a deploy. Keys are stored encrypted in

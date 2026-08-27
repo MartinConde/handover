@@ -27,8 +27,9 @@ pnpm format      # biome, writes
 `pnpm --filter <package-name> test` runs one package.
 
 `pnpm --filter @handover/ui fixtures` serves `packages/ui/index.html`: the per-field diff over
-one fixture entry, which is the only way to see that component until the drawer takes it. It is
-a dev server only — the admin bundle's entry is `src/main.ts` and never that page.
+one fixture entry, and the page picker in the shapes the fields open it in — the only way to see
+either component outside the admin. It is a dev server only — the admin bundle's entry is
+`src/main.ts` and never that page.
 
 ## Tests
 

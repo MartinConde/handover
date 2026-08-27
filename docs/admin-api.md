@@ -29,6 +29,16 @@ Reading a collection and an entry, and the changes that commit rather than draft
 rename, a delete, and turning a language off.
 
 ```
+GET /admin/api/entries                      →  { "entries": [{ "collection", "path", "title", "locales", "urls" }], "locales": ["en", "de"] }
+```
+
+Everything an editor can point at, across every collection the site declares, in config
+order. `path` is `collection/slug` — what a `reference` and an entry `link` store — `locales`
+is the languages that entry has a file in, and `urls` is the address each of them serves it
+at, empty for a collection with no `route`. It is what the page picker lists, wherever the
+picker appears.
+
+```
 GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales" }], "locales": ["en", "de"] }
 ```
 
