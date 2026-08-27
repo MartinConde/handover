@@ -1,0 +1,15 @@
+---
+// The injected `/_preview/[...path]` route. It is an `.astro` file because it renders the
+// site's own components; every decision behind it is `preview()`, which is where the tests are.
+import { getCollection, getEntry } from 'astro:content';
+import { preview } from '../dist/routes/preview.js';
+
+const result = await preview(Astro, {
+  getEntry: async (collection, id) => getEntry(collection, id),
+  getCollection: (collection) => getCollection(collection),
+});
+if (result instanceof Response) return result;
+const { Component, props } = result;
+---
+
+<Component {...props} />

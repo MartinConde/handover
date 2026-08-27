@@ -61,9 +61,38 @@ language segment sits exactly where the site puts it. With the demo's `i18n` blo
 With `prefixDefaultLocale: true` the default language carries its segment in both, so it is
 `/_preview/en/listings/mill-house` and `/_preview/listings/mill-house` is `404`.
 
+## What it renders
+
+Your own pages. The route resolves the address to a collection, calls the `load()` that
+collection's [loader](loaders.md) exports with a source that reads the drafts, and renders the
+component the same file names — the identical component tree the static page renders, from the
+bytes the editor last typed. An entry nobody is drafting renders from the build, so a page is
+whole: the listing being edited, and beside it the four that are not.
+
+That is the whole of what a site does to be previewable, and it is the
+[template convention](template-convention.md) either way:
+
+- the collection names its loader — `{ route: '/listings/[slug]', load: 'listing' }`
+- `src/loaders/listing.ts` exports `load` and the component that renders what it returns,
+  `Page`; a collection with an `index` exports `loadIndex` and `Index` beside them
+- nothing in `src/pages/` changes between a preview-on and a preview-off build
+
+## When a draft cannot be rendered
+
+The bytes go through the collection's own Zod schema first, so a draft that no longer satisfies
+it is `422` naming the file and the field — never half a page:
+
+```
+This draft cannot be rendered:
+src/content/listings/en/mill-house.yaml › location: Invalid input: expected string, received undefined
+```
+
+An address the site could serve but has no entry at is `404`, the same answer the page itself
+would give. A collection with no `load`, or a loader that exports no component, is `500` saying
+which line to write: those are the site's own wiring, and only preview reads it.
+
 ## Not yet
 
-The route answers the gate and nothing else: an address it accepts comes back `204` with an
-empty body, because nothing renders the page yet. Reading the draft and rendering it through
-your `load()` is the next piece; until it lands there is nothing in the admin that opens a
-preview, and turning the flag on is only worth doing to see the gate answer.
+Nothing in the admin opens a preview: the address is one you type or link to yourself until the
+pane lands. A brand-new entry that has no address yet cannot be previewed, and a link inside a
+preview goes to the live page rather than to its preview.

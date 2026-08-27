@@ -23,9 +23,11 @@ free to change.
 - `/admin/api/[...path]` is the JSON API the SPA talks to. Routes are matched by hand on
   `params.path`.
 - `/_preview/[...path]` exists only where the build had `PREVIEW_ENABLED` set. It is the
-  session, the allow-list and the headers so far, and renders nothing. It asks for the
-  session itself rather than leaning on the middleware, because a share link will be an
-  answer "signed in or 401" cannot express.
+  session, the allow-list and the headers, and then the site's own page: an `.astro` route
+  whose every decision is `preview()` beside it. It asks for the session itself rather than
+  leaning on the middleware, because a share link will be an answer "signed in or 401"
+  cannot express. The site's `src/loaders/*.ts` reach it as `virtual:handover/loaders`,
+  keyed by each collection's `load` — the one place the package imports the site's `src/`.
 - The middleware asserts the admin session on `/admin/api/*`, minus Better Auth's own
   endpoints, and hands the user and role on in `locals.handover`.
 

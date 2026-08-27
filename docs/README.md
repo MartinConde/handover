@@ -11,7 +11,8 @@
 - [Pictures and files in a field](media-fields.md) — a field's preset: the ratio, the cap on the way in, the floor the picker refuses under; the drop zone and the picker.
 - [Field types](field-types.md) — the scalar types, rich text, links and labels.
 - [Structured fields](structured-fields.md) — image, file, embed, seo and reference; groups, arrays and blocks.
-- [Template convention](template-convention.md) — `schemas.ts` and `content.config.ts`, `load()` and `ContentSource`, layouts that take `data` as a prop.
+- [Template convention](template-convention.md) — the three rules, `schemas.ts` and `content.config.ts`.
+- [Loaders and pages](loaders.md) — `load()` and `ContentSource`, what a loader returns and what renders it, an address per language, layouts that take their data as props.
 - [Blocks](blocks.md) — `<Blocks />`, the component registry, blocks that nest, and `_ref` blocks filled from a global.
 - [Rendering content](rendering.md) — `<Markdown />`, `<LocaleSwitcher />` and hidden entries.
 - [Drafts and publishing](publishing.md) — autosave into D1, what a draft holds, the pending-changes drawer, publishing in one commit, build status and revert, holding an entry back, the content index.

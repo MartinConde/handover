@@ -536,6 +536,15 @@ export async function overlayRows(
   return rows.filter((r) => !settled.includes(r)).map(({ path, contents }) => ({ path, contents }));
 }
 
+/**
+ * Every draft row as a file. What preview reads: a render is a GET, so it takes the rows as they
+ * stand rather than through `overlayRows`, which tidies settled ones away as it goes.
+ */
+export async function draftFiles(siteId: string, db: Db): Promise<ContentFile[]> {
+  const rows = await db.select().from(drafts).where(eq(drafts.siteId, siteId));
+  return rows.map(({ path, contents }) => ({ path, contents }));
+}
+
 /** Throw away the unpublished edits for one path; a deleted entry must not come back. */
 export async function discardDraft(siteId: string, db: Db, path: string): Promise<void> {
   await db.delete(drafts).where(and(eq(drafts.siteId, siteId), eq(drafts.path, path)));

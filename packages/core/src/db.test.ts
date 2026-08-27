@@ -7,6 +7,7 @@ import {
   createDraft,
   DraftConflictError,
   discardDraft,
+  draftFiles,
   entryConflict,
   holdEntry,
   loadDraft,
@@ -1333,4 +1334,26 @@ test('taking theirs everywhere leaves a row the drawer no longer has anything to
 
   expect((await only(db))?.contents).toBe(theirs);
   expect(await pendingDrafts('default', db)).toEqual([]);
+});
+
+// What preview reads. Unlike the entry list's overlay this takes the rows as they stand: a
+// settled row is still what the editor last saw, and a render must not write.
+test('the draft files are every row as it stands, published ones included', async () => {
+  const db = await fresh();
+  await saveDraft('default', db, git, PATH, VALUES);
+  await db.insert(drafts).values({
+    siteId: 'default',
+    path: OTHER,
+    contents: '',
+    baseSha: 'commit-A',
+    baseBlob: await blobSha(OTHER_FILE),
+    updatedAt: 1,
+    publishedSha: 'commit-B',
+  });
+
+  const files = (await draftFiles('default', db)).sort((a, b) => a.path.localeCompare(b.path));
+  expect(files).toEqual([
+    { path: OTHER, contents: '' },
+    { path: PATH, contents: expect.stringContaining('The Mill House') },
+  ]);
 });

@@ -32,7 +32,7 @@ digits and dashes.
 | `schema` | yes | The collection's Zod object from `src/content/schemas.ts`. |
 | `route` | no | The detail page's path with `[slug]` exactly once, e.g. `'/blog/[slug]'`. `[slug]` is the entry's filename without `.yaml`. Two collections cannot share a route. |
 | `index` | no | The listing page, a fixed path with no `[...]` segment, e.g. `'/blog'`. Used wherever something links to "the blog" as a whole rather than to one entry. |
-| `load` | no | The loader's name: `'post'` means `src/loaders/post.ts` ([Template convention](template-convention.md)). |
+| `load` | no | The loader's name: `'post'` means `src/loaders/post.ts` ([Loaders and pages](loaders.md)). Preview needs it. |
 | `titleField` | no | The field the entry list shows, when the collection is not keyed on `title`: `titleField: 'name'`. It is also the field "New entry" writes the name you type into, so it has to be a text field of this collection's schema — the build says so if it is not. |
 | `localizedSlugs` | no | Each language may serve this collection's entries at a web address of its own. See below. |
 
@@ -96,7 +96,7 @@ cms.config.ts › collections.posts.localizedSlugs: this collection's schema has
   ([Template convention](template-convention.md#contentconfigts))
 - Your own route resolves through `entryAt()` rather than by id, or — if it is prerendered —
   builds its paths from `entryAddress()`
-  ([Template convention](template-convention.md#a-page-with-an-address-per-language))
+  ([Loaders and pages](loaders.md#a-page-with-an-address-per-language))
 - Publishing a change to an address that was live writes one `slug-change` redirect, for that
   language only ([Publishing](publishing.md#creating-renaming-and-deleting)) — the other languages' URLs did not move
 - Off, a `slug` in a file is an ordinary field of that collection's schema like any other

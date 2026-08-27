@@ -1,4 +1,5 @@
 import { Document, isMap, isScalar, isSeq, parse, parseDocument, visit } from 'yaml';
+import type { ContentFile } from './entries.js';
 import { blobSha } from './git.js';
 import { entryAddress, entryUrl, type I18nRouting } from './names.js';
 import { checkReserved, isLive, RESERVED_KEYS } from './reserved.js';
@@ -49,6 +50,50 @@ export function staticSource<C extends Record<string, unknown>>(
       return all.filter((e) => e.id.startsWith(`${locale}/`)) as ContentEntry<
         C[typeof collection]
       >[];
+    },
+  };
+}
+
+/**
+ * What preview reads: the build's snapshot with the draft rows laid over it. A row wins for the
+ * file it names, an emptied one is an entry that has gone, and everything else is the snapshot —
+ * so a page rendered through this is the page as it would be published, not only the entry being
+ * edited. The bytes are held to the collection's own schema, which lives in the site's
+ * `cms.config.ts`, so `validate` is passed in: a draft the schema refuses is that error and never
+ * half an entry.
+ */
+export function draftSource<C extends Record<string, unknown>>(
+  siteId: string,
+  built: ContentSource<C>,
+  rows: readonly ContentFile[],
+  validate: (collection: string, data: unknown, path: string) => unknown,
+): ContentSource<C> {
+  const pathOf = (collection: string, id: string) => `src/content/${collection}/${id}.yaml`;
+  const read = <K extends keyof C & string>(collection: K, id: string, contents: string) => {
+    const path = pathOf(collection, id);
+    return { id, data: validate(collection, parseEntry(siteId, contents), path) as C[K] };
+  };
+  return {
+    getEntry: async (collection, id) => {
+      const row = rows.find((r) => r.path === pathOf(collection, id));
+      if (!row) return built.getEntry(collection, id);
+      return row.contents ? read(collection, id, row.contents) : undefined;
+    },
+    getCollection: async (collection, locale) => {
+      const prefix = `src/content/${collection}/${locale}/`;
+      const mine = rows.flatMap((r) => {
+        const name = r.path.startsWith(prefix) ? r.path.slice(prefix.length, -'.yaml'.length) : '';
+        return name && !name.includes('/') ? [{ id: `${locale}/${name}`, row: r }] : [];
+      });
+      const snapshot = await built.getCollection(collection, locale);
+      const kept = snapshot.flatMap((e) => {
+        const drafted = mine.find((m) => m.id === e.id);
+        if (!drafted) return [e];
+        return drafted.row.contents ? [read(collection, e.id, drafted.row.contents)] : [];
+      });
+      // An entry the snapshot has never seen is new since the build, so it goes at the end.
+      const added = mine.filter((m) => m.row.contents && !snapshot.some((e) => e.id === m.id));
+      return [...kept, ...added.map((m) => read(collection, m.id, m.row.contents))];
     },
   };
 }

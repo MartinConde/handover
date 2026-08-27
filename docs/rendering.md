@@ -1,7 +1,7 @@
 # Rendering content
 
 The components the package ships and the helpers a template calls to draw an entry it has
-already loaded. Getting the entry there is [Template convention](template-convention.md), and
+already loaded. Getting the entry there is [Loaders and pages](loaders.md), and
 the block renderer has a page of its own: [Blocks](blocks.md).
 
 ## Rich text

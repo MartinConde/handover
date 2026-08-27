@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { expect, test } from 'vitest';
 import {
   applyDrift,
+  draftSource,
   driftReport,
   entryAt,
   getEntryLocales,
@@ -1334,4 +1335,97 @@ test('the switcher links each language at the address that language serves', asy
     { locale: 'en', url: '/home' },
     { locale: 'de', url: '/de/startseite' },
   ]);
+});
+
+// draftSource — what preview reads: the build's snapshot with the D1 rows laid over it. The
+// bytes go through the collection's own schema, which is the site's, so `validate` is passed in.
+const built = staticSource<{ listings: { title: string } }>('default', {
+  getEntry: async (_c, id) =>
+    [
+      { id: 'en/mill-house', data: { title: 'Mill House' } },
+      { id: 'en/coast', data: { title: 'Coast' } },
+      { id: 'de/mill-house', data: { title: 'Mühlenhaus' } },
+    ].find((e) => e.id === id),
+  getCollection: async () => [
+    { id: 'en/mill-house', data: { title: 'Mill House' } },
+    { id: 'en/coast', data: { title: 'Coast' } },
+    { id: 'de/mill-house', data: { title: 'Mühlenhaus' } },
+  ],
+});
+
+const drafted = (rows: { path: string; contents: string }[]) =>
+  draftSource('default', built, rows, (_collection, data) => data);
+
+test('a drafted entry is read from its row and not from the build', async () => {
+  const source = drafted([
+    { path: 'src/content/listings/en/mill-house.yaml', contents: 'title: The Mill\n' },
+  ]);
+
+  expect(await source.getEntry('listings', 'en/mill-house')).toEqual({
+    id: 'en/mill-house',
+    data: { title: 'The Mill' },
+  });
+});
+
+test('an entry no row mentions is the one the build holds', async () => {
+  const source = drafted([
+    { path: 'src/content/listings/en/mill-house.yaml', contents: 'title: The Mill\n' },
+  ]);
+
+  expect(await source.getEntry('listings', 'en/coast')).toEqual({
+    id: 'en/coast',
+    data: { title: 'Coast' },
+  });
+});
+
+// An emptied row is how a delete is written down before the build catches up: the entry is
+// gone from the preview even though the snapshot still has the file.
+test('an emptied row is an entry that has gone', async () => {
+  const source = drafted([{ path: 'src/content/listings/en/coast.yaml', contents: '' }]);
+
+  expect(await source.getEntry('listings', 'en/coast')).toBe(undefined);
+  expect((await source.getCollection('listings', 'en')).map((e) => e.id)).toEqual([
+    'en/mill-house',
+  ]);
+});
+
+test('a drafted entry keeps its place in the collection and a new one is appended', async () => {
+  const source = drafted([
+    { path: 'src/content/listings/en/mill-house.yaml', contents: 'title: The Mill\n' },
+    { path: 'src/content/listings/en/barn.yaml', contents: 'title: The Barn\n' },
+  ]);
+
+  expect(await source.getCollection('listings', 'en')).toEqual([
+    { id: 'en/mill-house', data: { title: 'The Mill' } },
+    { id: 'en/coast', data: { title: 'Coast' } },
+    { id: 'en/barn', data: { title: 'The Barn' } },
+  ]);
+});
+
+test('rows for another language, another collection or another site file are not this list', async () => {
+  const source = drafted([
+    { path: 'src/content/listings/de/barn.yaml', contents: 'title: Die Scheune\n' },
+    { path: 'src/content/pages/en/barn.yaml', contents: 'title: A page\n' },
+    { path: 'src/content/redirects.yaml', contents: 'rules: []\n' },
+  ]);
+
+  expect((await source.getCollection('listings', 'en')).map((e) => e.id)).toEqual([
+    'en/mill-house',
+    'en/coast',
+  ]);
+});
+
+test('a draft the collection refuses is the schema error and not half an entry', async () => {
+  const source = draftSource(
+    'default',
+    built,
+    [{ path: 'src/content/listings/en/mill-house.yaml', contents: 'title: 3\n' }],
+    (collection, _data, path) => {
+      throw new Error(`${path}: ${collection} wants a string title`);
+    },
+  );
+
+  await expect(source.getEntry('listings', 'en/mill-house')).rejects.toThrow(
+    'src/content/listings/en/mill-house.yaml: listings wants a string title',
+  );
 });

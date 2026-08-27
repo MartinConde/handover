@@ -4,6 +4,19 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Preview renders the page.** `/_preview/<path>` now calls the `load()` your own loader
+  exports, over a source that lays the D1 drafts on the build's content, and renders the
+  component that loader names — so an unpublished edit shows in the real templates, and the
+  page around it is whole. A draft its collection's schema refuses is `422` naming the field.
+  For that, a loader exports its component beside its `load` (`Page`, and `loadIndex`/`Index`
+  for a collection index), and every page's data-gathering — globals included — is in the
+  loader rather than in the layout.
+  [Preview](docs/preview.md), [Loaders and pages](docs/loaders.md).
+
+- **`Template convention` is two pages.** The rules and the two schema files stay in
+  [Template convention](docs/template-convention.md); loaders, pages and layouts are
+  [Loaders and pages](docs/loaders.md).
+
 - **The build pill stops counting on an old commit.** The host's build list can only be asked
   for a worker's recent builds — there is no commit filter — so a commit that had scrolled off
   it read as *Building…* for as long as the admin was open, and the draft rows that build was
@@ -15,7 +28,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `PREVIEW_ENABLED` is set on the build, needs an admin session, serves only addresses the
   site's own routes serve, and answers `Cache-Control: private, no-store`,
   `X-Robots-Tag: noindex, nofollow` and `Content-Security-Policy: frame-ancestors 'self'` on
-  every response. It renders nothing yet — an accepted address is `204`.
+  every response.
   [Preview](docs/preview.md).
 
 - **Conflicts are answered field by field.** An entry somebody changed in the repository used

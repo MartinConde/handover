@@ -8,6 +8,11 @@ declare module 'virtual:handover/index' {
   export default index;
 }
 
+declare module 'virtual:handover/loaders' {
+  const loaders: Record<string, import('./routes/preview.js').PageModule>;
+  export default loaders;
+}
+
 declare module 'virtual:handover/ui' {
   const assets: Record<string, string>;
   export default assets;

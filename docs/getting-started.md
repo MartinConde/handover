@@ -67,8 +67,8 @@ uses one fixed shape — strings double-quoted, multi-line text as a `|-` block,
 starting with `_` first, empty keys left out — so the first publish normalises the file
 and every later edit is a diff of just the lines that changed.
 
-Pages render them through a loader and a layout that takes `data` as a prop — see
-[Template convention](template-convention.md). Each collection can also declare its
+Pages render them through a loader and a layout that takes its data as props — see
+[Loaders and pages](loaders.md). Each collection can also declare its
 `route`, `index` and `load` — see [Configuration](configuration.md).
 
 ## 3. Connect GitHub, the database and the login

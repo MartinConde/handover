@@ -36,6 +36,7 @@ export type {
 } from './content.js';
 export {
   applyDrift,
+  draftSource,
   driftReport,
   entryAt,
   FORMAT_VERSION,
@@ -59,6 +60,7 @@ export {
   createDraft,
   DraftConflictError,
   discardDraft,
+  draftFiles,
   type EntryConflict,
   entryConflict,
   heldDrafts,

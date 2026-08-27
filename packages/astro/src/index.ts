@@ -346,6 +346,21 @@ export const NO_ADAPTER_MESSAGE =
 const VIRTUAL_CONFIG = 'virtual:handover/config';
 const VIRTUAL_UI = 'virtual:handover/ui';
 const VIRTUAL_INDEX = 'virtual:handover/index';
+const VIRTUAL_LOADERS = 'virtual:handover/loaders';
+
+/**
+ * `virtual:handover/loaders`: the site's own `src/loaders/<name>.ts`, keyed by the name a
+ * collection's `load` gives it. Preview renders a page by calling the loader that page's own
+ * route calls, so this is the only place the package reaches into the site's `src/`.
+ */
+export function loadersModule(root: URL, collections: HandoverConfig['collections']): string {
+  const names = [...new Set(Object.values(collections).flatMap((c) => (c.load ? [c.load] : [])))];
+  const at = (name: string) => JSON.stringify(fileURLToPath(new URL(`src/loaders/${name}`, root)));
+  return [
+    ...names.map((name, i) => `import * as m${i} from ${at(name)};`),
+    `export default { ${names.map((name, i) => `${JSON.stringify(name)}: m${i}`).join(', ')} };`,
+  ].join('\n');
+}
 
 // The pre-built SPA (packages/ui → dist/ui) is inlined into the Worker bundle because a
 // Worker has no filesystem and the site's own build config must not know about it.
@@ -547,7 +562,7 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
         if (flag !== undefined && !['', '0', 'false'].includes(flag))
           injectRoute({
             pattern: '/_preview/[...path]',
-            entrypoint: new URL('./routes/preview.js', import.meta.url),
+            entrypoint: new URL('../components/Preview.astro', import.meta.url),
             prerender: false,
           });
         addMiddleware({ order: 'pre', entrypoint: new URL('./middleware.js', import.meta.url) });
@@ -586,6 +601,17 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
                 load: (id) =>
                   id === `\0${VIRTUAL_UI}`
                     ? uiAssetsModule(fileURLToPath(new URL('./ui/', import.meta.url)))
+                    : undefined,
+              },
+              // The site's own `src/loaders/*.ts`, keyed by the name each collection's `load`
+              // gives it: the preview route calls the page's own loader and renders the
+              // component it names, which is the whole of the template convention's seam.
+              {
+                name: 'handover-loaders',
+                resolveId: (id) => (id === VIRTUAL_LOADERS ? `\0${VIRTUAL_LOADERS}` : undefined),
+                load: (id) =>
+                  id === `\0${VIRTUAL_LOADERS}`
+                    ? loadersModule(config.root, cms.collections)
                     : undefined,
               },
             ],

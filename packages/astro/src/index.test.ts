@@ -22,6 +22,7 @@ import handover, {
   formSchema,
   image,
   link,
+  loadersModule,
   NO_ADAPTER_MESSAGE,
   navigation,
   redirects,
@@ -277,6 +278,20 @@ test.each(['', '0', 'false'])('PREVIEW_ENABLED=%o is somebody saying no', (value
   process.env.PREVIEW_ENABLED = value;
   const { injectRoute } = runSetup({ name: 'fake-adapter', hooks: {} });
   expect(injectRoute.mock.calls.map(([r]) => r.pattern)).not.toContain('/_preview/[...path]');
+});
+
+// The one place the package reaches into the site's own src/: preview calls the page's loader.
+test('the loaders module imports each named loader once, from the site itself', () => {
+  const schema = z.object({ title: z.string() });
+  const source = loadersModule(new URL('file:///site/'), {
+    listings: { schema, route: '/listings/[slug]', index: '/', load: 'listing' },
+    pages: { schema, route: '/[slug]', load: 'listing' },
+    samples: { schema },
+  });
+
+  expect(source).toBe(
+    'import * as m0 from "/site/src/loaders/listing";\nexport default { "listing": m0 };',
+  );
 });
 
 test('registers the password-gate middleware before the routes', () => {
