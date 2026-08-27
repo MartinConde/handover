@@ -101,7 +101,7 @@ entry 404s instead of being reachable by URL.
 This only works if `_status` survives the collection schema. Astro parses every entry through
 it, and a plain `z.object` drops the keys it does not declare — so the schema in
 `content.config.ts` has to keep the reserved ones
-([Template convention](template-convention.md#content-configts)). Without that every helper here
+([Template convention](template-convention.md#contentconfigts)). Without that every helper here
 reads `_status: undefined` and a hidden entry renders.
 
 `isLive(siteId, data, locale)` asks the same of one language: a hidden file is not live in any,

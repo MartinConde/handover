@@ -45,7 +45,7 @@ export async function load(source: Source, { locale, slug }: { locale: string; s
 missing, a schema a file no longer satisfies — reaches the visitor as a 404 with nothing said.
 
 `slug` is the address in the URL. Point `cms.config.ts` at the file with
-[`load`](configuration.md#load), which is the name without the folder or the extension:
+[`load`](configuration.md#collections), which is the name without the folder or the extension:
 `{ route: '/listings/[slug]', load: 'listing' }`.
 
 ## A page
@@ -65,7 +65,7 @@ if (!listing) return new Response('Not found', { status: 404 });
 
 ## The index of a collection
 
-A collection whose `cms.config.ts` entry has an [`index`](configuration.md#index) has a second
+A collection whose `cms.config.ts` entry has an [`index`](configuration.md#collections) has a second
 pair in the same file — `loadIndex(source, { locale })` and the component it names — because
 that page is the collection rather than one entry. The prerendered routes build their paths
 from it, so nothing lists the folder twice.

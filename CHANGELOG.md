@@ -12,7 +12,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   command to invent — so the first sign-in is an emailed link and the password is set from the
   account page afterwards. A file that is already there is left alone and named, a config file
   you wrote gets the block to paste printed instead, and a project that already has
-  `migrations/` is refused before anything is created. [CLI](docs/cli.md#handover-init).
+  `migrations/` is refused before anything is created. [Setting a site up](docs/init.md).
 
 - **What it scaffolds.** A project with no `src/content.config.ts` gets a starter that builds
   and renders as it stands — `schemas.ts` and `content.config.ts`, a `pages` collection with
@@ -21,7 +21,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   all of them. A project that
   already has a `content.config.ts` keeps it: its collections are read out of it and only
   `cms.config.ts` is written. Either way the languages come from `astro.config.mjs`, because the
-  build stops when the two disagree. [CLI](docs/cli.md#what-it-writes).
+  build stops when the two disagree. [What it writes](docs/init.md#what-it-writes).
+
+- **`handover init` has a page of its own**, [Setting a site up](docs/init.md); `cli.md` keeps
+  `migrate` and `db generate`. `README.md` says what the package does today rather than what it
+  did at 0.1.
 
 - **Duplicate an entry.** Every entry list row has **Duplicate**, which copies every language of
   the entry under a new file name — pre-filled `<name>-copy` and editable. The copy is one entry
@@ -109,7 +113,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - ⚠️ **The schema in `content.config.ts` has to keep the reserved keys** for hidden entries to
   stay off the site. Astro drops what a `z.object` does not declare, so `_status` never reached
   the built data and `filterLive` could not see it. Wrap each collection's schema in a
-  `withReserved` helper — [Template convention](docs/template-convention.md#content-configts)
+  `withReserved` helper — [Template convention](docs/template-convention.md#contentconfigts)
   has the four lines. A collection declared `z.looseObject({})` needs nothing.
 
 - `POST /admin/api/status/<collection>` hides or shows one entry or a batch, and takes the
@@ -837,7 +841,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   from it — collisions included — and opens the entry; the entry is a **draft until its
   first publish**, so an abandoned one never reaches the repository and its filename can
   still change. **Rename** and **Delete** are per row and are one commit each, with the
-  redirect the [content format](docs/content-format.md#renaming-and-deleting-an-entry)
+  redirect the [content format](docs/entry-lifecycle.md#renaming-and-deleting-an-entry)
   describes; a rename carries the entry's unpublished edits to the new path and a delete
   discards them. New endpoints: `POST /admin/api/entries/:collection`,
   `POST /admin/api/entries/:collection/:slug/rename` and

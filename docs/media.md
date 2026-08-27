@@ -9,7 +9,7 @@ afterwards that what arrived is what was declared.
 
 ## 1. Make the bucket
 
-[`handover init`](cli.md#handover-init) creates it, named after the project, and writes its
+[`handover init`](init.md) creates it, named after the project, and writes its
 two vars into `wrangler.jsonc` (step 4). By hand:
 
 ```sh

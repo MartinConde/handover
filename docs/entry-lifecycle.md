@@ -23,7 +23,7 @@ Because the page has been at its address for months, hiding asks **"Where should
 to this page go now?"** before it writes anything: the collection's overview, another page
 picked from the list, a web address, or nowhere. The answer becomes one redirect rule per
 language, from the address that language served, and it lands in `redirects.yaml` in the
-same commit as `_status` ([Site files](site-files.md#redirectsyaml)). Showing the entry
+same commit as `_status` ([Site files](site-files.md#redirects)). Showing the entry
 again takes those rules back out, in the commit that puts the page back, so the page
 returns to its own address.
 

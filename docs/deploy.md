@@ -7,7 +7,7 @@ optional feature.
 
 ## wrangler.jsonc
 
-[`handover init`](cli.md#handover-init) writes this file and `src/worker.ts` below. Where a
+[`handover init`](init.md) writes this file and `src/worker.ts` below. Where a
 config file already exists it is left alone, and the `d1_databases` binding and the bucket's
 `vars` are printed to paste in.
 
@@ -62,7 +62,7 @@ What ran is one line on stdout; what a job did is a `cron-<job>` row in the
 ## The database
 
 Edits are held in D1 until they are published, so the admin survives a refresh, a crash
-and a change of device. [`handover init`](cli.md#handover-init) does the whole of this
+and a change of device. [`handover init`](init.md) does the whole of this
 section on a new site — the steps below are what it runs, and what to do by hand on a site
 it could not finish. Create the database and take the id from the output:
 

@@ -36,7 +36,7 @@ export default defineConfig({
 
 One command makes the Cloudflare side — the database, the bucket, the bindings, the
 migrations and the first owner — and writes the site's own files, `cms.config.ts` included
-([CLI](cli.md#handover-init)):
+([`handover init`](init.md)):
 
 ```sh
 npx handover init you@example.com
@@ -44,7 +44,7 @@ npx handover init you@example.com
 
 On a project that has no `src/content.config.ts` yet, what it leaves behind is a site that
 builds and renders as it stands: one `pages` collection with blocks, its schema, layout,
-loader and route, and a first entry to open ([what it writes](cli.md#what-it-writes)). On a
+loader and route, and a first entry to open ([what it writes](init.md#what-it-writes)). On a
 project that already has content, your `content.config.ts` is read and left alone and only
 `cms.config.ts` is written.
 

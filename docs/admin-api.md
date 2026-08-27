@@ -50,7 +50,7 @@ The collection's entries for the list screen: one row per entry, `id` is the fil
 page above them, which is where the hide dialog offers to send a hidden entry's readers.
 Titles come from the field the collection is keyed on — `title`, or its
 [`titleField`](configuration.md#collections); an entry that has not filled it in lists by
-filename. The list is the build's [content index](#the-content-index) with the pending
+filename. The list is the build's [content index](publishing.md#the-content-index) with the pending
 drafts laid over it, so an entry you have edited but not published shows what you typed.
 It reads nothing from GitHub. `pending` is there on an entry that has unpublished changes,
 which is what the duplicate dialog asks its question about, and `templates` names the
@@ -357,7 +357,7 @@ when it owes none; `redirects.yaml` itself is assembled at publish and is never 
 read once per entry rather than per file, since the hold is the entry's.
 
 Grouping happens here rather than in the browser because a title comes from the build's
-[content index](#the-content-index), which nothing outside the Worker can read.
+[content index](publishing.md#the-content-index), which nothing outside the Worker can read.
 
 ```
 POST /admin/api/publish   { "entries": ["listings/mill-house"] }  →  { "commit_sha", "paths", "released" }
@@ -423,7 +423,7 @@ nobody is editing.
 POST /admin/api/revert   { "commit_sha": "…" }  →  { "commit_sha", "paths" }
 ```
 
-Undoes that commit with a commit of its own, [as above](#reverting-a-publish). It works over any
+Undoes that commit with a commit of its own, [as above](publishing.md#reverting-a-publish). It works over any
 commit the admin made, not only the last one. The answer's `commit_sha` is the new commit and
 `paths` what it wrote. `400` without a `commit_sha`; `409` with `{ "error", "paths" }` when one of
 the files has changed since — nothing is written and the paths are named.

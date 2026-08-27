@@ -38,7 +38,7 @@ gets. Passwords and sessions work without it; only what puts a URL in an email n
 
 ## 3. Create the first account
 
-[`handover init`](cli.md#handover-init) seeds the first owner, and this is the row it writes:
+[`handover init`](init.md) seeds the first owner, and this is the row it writes:
 
 ```sql
 INSERT INTO user (id, name, email, email_verified, role, created_at, updated_at)
