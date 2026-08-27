@@ -323,11 +323,19 @@ GET /admin/api/build  →  { "commit_sha", "state", "started_at", "live_at", "co
 
 Where the last commit the admin made has got to. `state` is `"building"`, `"live"` or
 `"failed"`; `started_at` is when the host started building it, `live_at` when the build that
-carried it finished and `committed_at` when the admin committed it, all epoch milliseconds. `{}` — an empty object, not an error — when the site has
-committed nothing yet, when `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_WORKER` are not both set, or
-when the Cloudflare API cannot be reached; the admin draws no build status at all rather than an
-unknown one. **A commit no build names yet is `"building"`**, since there is a window between the
-push and the build appearing and saying `"live"` in it would be a minute ahead of the site.
+carried it finished and `committed_at` when the admin committed it, all epoch milliseconds.
+**A commit no build names yet is `"building"`**, since there is a window between the push and
+the build appearing and saying `"live"` in it would be a minute ahead of the site.
+
+**`commit_sha` and `committed_at` are absent where the answer is about no commit of yours**, and
+the rest of it is the worker's newest build — what the site is serving. That happens on a site
+nobody has published on yet, and once ten minutes have gone by without a build naming the commit:
+the host's build list takes no commit filter, so a commit older than the builds on it can no
+longer be asked about.
+
+`{}` — an empty object, not an error — when `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_WORKER` are
+not both set, or when the Cloudflare API cannot be reached; the admin draws no build status at
+all rather than an unknown one.
 
 Answering `"live"` is also what clears the draft rows that commit published, for the entries
 nobody is editing.

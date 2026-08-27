@@ -10,6 +10,10 @@ import { commitBuild } from './builds.js';
 const ACCOUNT = '2e4dff78a4af5223c7940d6b41d7c9a7';
 const TAG = '1ccd6a35aa294a8fab84992db9f7fcce';
 const SHA = '0147c1defa9dd84b07a80bf5bbfcc2ee488d9017';
+// When the admin pressed Publish: what the window a commit may go unnamed for runs from.
+const AT = Date.parse('2026-08-25T16:36:00.000Z');
+const commit = (at = AT) => ({ sha: SHA, at });
+const HOUR = 60 * 60 * 1000;
 
 type Build = {
   status: string;
@@ -44,7 +48,7 @@ const worker = (name: string) => ({ worker: `${ACCOUNT}/${name}`, token: 'cf-tok
 
 test('a commit whose build succeeded is live', async () => {
   const cf = cloudflare([build()], 'w-live');
-  expect(await commitBuild(worker('w-live'), SHA, { fetch: cf.fetch })).toEqual({
+  expect(await commitBuild(worker('w-live'), commit(), { fetch: cf.fetch })).toEqual({
     commit_sha: SHA,
     state: 'live',
     started_at: Date.parse('2026-08-25T16:36:24.712Z'),
@@ -55,12 +59,16 @@ test('a commit whose build succeeded is live', async () => {
 
 test('a build that is still running is building', async () => {
   const cf = cloudflare([build({ status: 'running', build_outcome: null })], 'w-running');
-  expect((await commitBuild(worker('w-running'), SHA, { fetch: cf.fetch })).state).toBe('building');
+  expect((await commitBuild(worker('w-running'), commit(), { fetch: cf.fetch })).state).toBe(
+    'building',
+  );
 });
 
 test('a build that stopped without succeeding has failed', async () => {
   const cf = cloudflare([build({ build_outcome: 'fail' })], 'w-failed');
-  expect((await commitBuild(worker('w-failed'), SHA, { fetch: cf.fetch })).state).toBe('failed');
+  expect((await commitBuild(worker('w-failed'), commit(), { fetch: cf.fetch })).state).toBe(
+    'failed',
+  );
 });
 
 // The window between the ref update and the build appearing: the commit is not live, and saying
@@ -70,12 +78,14 @@ test('a commit no build has been made for yet is building', async () => {
     [build({ build_trigger_metadata: { commit_hash: 'f'.repeat(40) } })],
     'w-none',
   );
-  expect((await commitBuild(worker('w-none'), SHA, { fetch: cf.fetch })).state).toBe('building');
+  expect(
+    await commitBuild(worker('w-none'), commit(), { fetch: cf.fetch, now: AT + 60_000 }),
+  ).toEqual({ commit_sha: SHA, state: 'building' });
 });
 
 test("the builds are asked for by the worker's tag, which its name is looked up for", async () => {
   const cf = cloudflare([build()], 'w-tag');
-  await commitBuild(worker('w-tag'), SHA, { fetch: cf.fetch });
+  await commitBuild(worker('w-tag'), commit(), { fetch: cf.fetch });
   expect(cf.calls).toEqual([
     `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/workers/services/w-tag`,
     `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT}/builds/workers/${TAG}/builds?per_page=10`,
@@ -84,8 +94,8 @@ test("the builds are asked for by the worker's tag, which its name is looked up 
 
 test('the tag is looked up once, however often the build is polled', async () => {
   const cf = cloudflare([build()], 'w-once');
-  await commitBuild(worker('w-once'), SHA, { fetch: cf.fetch });
-  await commitBuild(worker('w-once'), SHA, { fetch: cf.fetch });
+  await commitBuild(worker('w-once'), commit(), { fetch: cf.fetch });
+  await commitBuild(worker('w-once'), commit(), { fetch: cf.fetch });
   expect(cf.calls.filter((u) => u.includes('/workers/services/'))).toHaveLength(1);
 });
 
@@ -95,12 +105,12 @@ test('an abbreviated commit hash still matches the commit', async () => {
     [build({ build_trigger_metadata: { commit_hash: SHA.slice(0, 12) } })],
     'w-short',
   );
-  expect((await commitBuild(worker('w-short'), SHA, { fetch: cf.fetch })).state).toBe('live');
+  expect((await commitBuild(worker('w-short'), commit(), { fetch: cf.fetch })).state).toBe('live');
 });
 
 test('an API that refuses is an error rather than a state', async () => {
   const cf = cloudflare([], 'w-403', false);
-  await expect(commitBuild(worker('w-403'), SHA, { fetch: cf.fetch })).rejects.toThrow('403');
+  await expect(commitBuild(worker('w-403'), commit(), { fetch: cf.fetch })).rejects.toThrow('403');
 });
 
 // A site the admin has never published on: there is no commit of ours to ask about, and a blank
@@ -118,4 +128,33 @@ test('a worker nothing has ever built, asked about no commit, is live', async ()
   expect(await commitBuild(worker('w-never'), undefined, { fetch: cf.fetch })).toEqual({
     state: 'live',
   });
+});
+
+// The defect 3.21's walk found. The list endpoint takes no commit filter — asking for one is
+// ignored, `total_count` does not move — so one page of ten is all there is, and a commit that
+// has scrolled off it matched nothing and read as **Building… 1012m** through every reload.
+// Past the window a commit may reasonably go unnamed for, the answer is the worker's newest
+// build instead, and it names no commit: the pill's counter runs from `committed_at`.
+test('a commit older than the window no build names it reads as the newest build', async () => {
+  const cf = cloudflare(
+    [build({ build_trigger_metadata: { commit_hash: 'f'.repeat(40) } })],
+    'w-stale',
+  );
+  expect(
+    await commitBuild(worker('w-stale'), commit(), { fetch: cf.fetch, now: AT + 16 * HOUR }),
+  ).toEqual({
+    state: 'live',
+    started_at: Date.parse('2026-08-25T16:36:24.712Z'),
+    live_at: Date.parse('2026-08-25T16:37:51.781Z'),
+  });
+});
+
+// Falling through to the newest build where there is none would answer `live` about a commit
+// that plainly is not: nothing has ever been built here. It stays building, and with no build to
+// take a `started_at` off and no commit named the pill draws no counter beside it.
+test('a stale commit on a worker nothing has ever built is building, and bare', async () => {
+  const cf = cloudflare([], 'w-stale-never');
+  expect(
+    await commitBuild(worker('w-stale-never'), commit(), { fetch: cf.fetch, now: AT + 16 * HOUR }),
+  ).toEqual({ state: 'building' });
 });

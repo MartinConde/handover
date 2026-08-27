@@ -145,9 +145,14 @@ So the top bar carries the state of the last commit the admin made:
 
 It reads [Workers Builds](deploy.md#building-on-push) and needs `CLOUDFLARE_API_TOKEN` and
 `CLOUDFLARE_WORKER` ([Secrets](deploy.md#secrets)). Without them nothing is drawn and everything
-else works as before. On a site nobody has published on yet the pill reports **your own last
-deploy** — there is no commit of the admin's to ask about, but the site is serving something and
-a blank top bar would be the wrong reading of it. Nothing offers to revert that one.
+else works as before.
+
+In two cases the pill reports **your worker's newest deploy** rather than a commit, and offers to
+revert neither: on a site nobody has published on yet, where there is no commit of the admin's to
+ask about but the site is serving something all the same; and once ten minutes have gone by
+without a build naming the commit, since the host's build list takes no commit filter and a
+commit older than the builds on it can no longer be asked about. So an admin left open overnight
+reads *Live since 08:04* rather than counting the hours since yesterday's publish.
 
 Two things worth knowing:
 

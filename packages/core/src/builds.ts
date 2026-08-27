@@ -64,23 +64,35 @@ interface Build {
 }
 
 /**
+ * ⚠️ How long a commit no build names may still read as `building`. It covers the build row
+ * **appearing** — half a minute on the deployed demo — and not the build running, which the row
+ * itself then reports. Past it the commit has not gone unbuilt: it has scrolled off the one page
+ * that can be asked for, and a pill that keeps counting is how one reached sixteen hours.
+ */
+const NAMED_WITHIN = 10 * 60 * 1000;
+
+/**
  * What the host has done with one commit. **A commit no build names yet is `building`**, not
  * unknown and certainly not live: there is a window between the ref update and the build
- * appearing, and a pill that says Live in it is a minute ahead of the site.
+ * appearing, and a pill that says Live in it is a minute ahead of the site. That window is
+ * `NAMED_WITHIN` long — the list endpoint takes no commit filter, so a commit older than the ten
+ * builds asked for cannot be told from one nothing has built yet, and past the window the
+ * likelier of the two is the one the site is already serving.
  *
- * With **no commit named** it is the worker's newest build instead — what the site is serving on
- * a site the admin has never published on, where there is no commit of ours to ask about and a
- * blank top bar would be the only reading of a perfectly live site.
+ * With **no commit named**, and past the window, it is the worker's newest build instead — what
+ * the site is serving on a site the admin has never published on, where there is no commit of
+ * ours to ask about and a blank top bar would be the only reading of a perfectly live site. The
+ * answer carries no `commit_sha` then, which is what stops the counter running from the commit.
  *
  * Throws when the account cannot be asked at all — that is the site's configuration and not a
  * state the site is in, so it is not one of the three.
  */
 export async function commitBuild(
   builds: WorkerBuilds,
-  commitSha: string | undefined,
-  deps: { fetch?: typeof globalThis.fetch } = {},
+  commit: { sha: string; at: number } | undefined,
+  deps: { fetch?: typeof globalThis.fetch; now?: number } = {},
 ): Promise<BuildStatus> {
-  const { fetch = globalThis.fetch } = deps;
+  const { fetch = globalThis.fetch, now = Date.now() } = deps;
   const [account = '', name = ''] = builds.worker.split('/');
   const tag = await tagOf(account, name, builds.token, fetch);
   const { result } = await json<Build[]>(
@@ -89,22 +101,27 @@ export async function commitBuild(
     fetch,
     'builds',
   );
-  const sha = commitSha?.toLowerCase();
+  const sha = commit?.sha.toLowerCase();
   // The deployed worker answers with all forty characters; the API's own example abbreviates,
-  // so the shorter of the two decides. Newest first, so with no commit named the first is it.
-  const found = sha
+  // so the shorter of the two decides.
+  const matched = sha
     ? result.find((b) => {
         const hash = b.build_trigger_metadata?.commit_hash?.toLowerCase() ?? '';
         return hash !== '' && (hash.startsWith(sha) || sha.startsWith(hash));
       })
-    : result[0];
+    : undefined;
+  // Whether the answer is still about the commit. Once it is not, it is the newest build —
+  // first in the list — the same one a site that has published nothing gets.
+  const named = !!commit && (!!matched || now - commit.at <= NAMED_WITHIN);
+  const found = named ? matched : result[0];
   const started = found?.created_on ? Date.parse(found.created_on) : undefined;
   // `status` is where the build got to and `build_outcome` is what it decided; only both
   // together are green. Everything the API can be running is one word to an editor.
   // With no commit named there is nothing waiting on a build, so a worker that has never been
-  // built at all is live rather than building.
+  // built at all is live rather than building — but one asked about a commit is not: falling
+  // through to a build that does not exist would call a commit live that nothing has built.
   const state: BuildState =
-    !found && !sha
+    !found && !commit
       ? 'live'
       : found?.status !== 'stopped'
         ? 'building'
@@ -113,7 +130,7 @@ export async function commitBuild(
           : 'failed';
   const stopped = state === 'live' && found?.stopped_on ? Date.parse(found.stopped_on) : undefined;
   return {
-    ...(commitSha ? { commit_sha: commitSha } : {}),
+    ...(named && commit ? { commit_sha: commit.sha } : {}),
     state,
     ...(started ? { started_at: started } : {}),
     ...(stopped ? { live_at: stopped } : {}),

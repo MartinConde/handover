@@ -151,8 +151,8 @@ const {
     overlayRows: vi.fn(async () => [] as { path: string; contents: string }[]),
     // The Workers Builds boundary; the mapping itself runs against a faked API in core's
     // builds.test.ts.
-    commitBuild: vi.fn(async (_cfg: unknown, sha: string | undefined) => ({
-      ...(sha ? { commit_sha: sha } : {}),
+    commitBuild: vi.fn(async (_cfg: unknown, commit: { sha: string } | undefined) => ({
+      ...(commit ? { commit_sha: commit.sha } : {}),
       state: 'building' as string,
       started_at: 1755864100000,
     })),
@@ -3394,13 +3394,31 @@ test('the build endpoint answers where the last commit has got to', async () => 
 // Rule 3 of "your own publish must not look like a conflict": the rows go when the build
 // carrying them is live, and this is the one moment the Worker learns that it is.
 test('the rows a live build carries are cleared when it reports live', async () => {
-  commitBuild.mockImplementationOnce(async (_cfg: unknown, sha: string | undefined) => ({
-    commit_sha: sha,
-    state: 'live',
-    started_at: 1755864100000,
-  }));
+  commitBuild.mockImplementationOnce(
+    async (_cfg: unknown, commit: { sha: string } | undefined) => ({
+      commit_sha: commit?.sha,
+      state: 'live',
+      started_at: 1755864100000,
+    }),
+  );
   await GET(ctx('build'));
   expect(clearPublished).toHaveBeenCalledWith('default', expect.anything(), 'def456');
+});
+
+// `committed_at` is what the pill's counter runs from, so an answer that is no longer about
+// the commit must not carry it — 3.21 found a pill counting sixteen hours from a day-old
+// publish. The build the answer *is* about brings its own `started_at`.
+test('an answer that names no commit carries no committed_at', async () => {
+  commitBuild.mockImplementationOnce(async () => ({
+    state: 'live',
+    started_at: 1755864100000,
+    live_at: 1755864200000,
+  }));
+  expect(await (await GET(ctx('build'))).json()).toEqual({
+    state: 'live',
+    started_at: 1755864100000,
+    live_at: 1755864200000,
+  });
 });
 
 test('a build that is still running clears nothing', async () => {

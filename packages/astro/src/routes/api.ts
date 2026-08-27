@@ -1610,7 +1610,7 @@ async function buildStatus(): Promise<Response> {
   if (!builds) return Response.json({});
   let status: Awaited<ReturnType<typeof commitBuild>>;
   try {
-    status = await commitBuild(builds, last?.sha);
+    status = await commitBuild(builds, last);
   } catch (err) {
     // A token that cannot ask is the site's configuration, not a state the site is in. It is
     // said once in the log the deploy reads and answered as no pill at all.
@@ -1620,7 +1620,9 @@ async function buildStatus(): Promise<Response> {
   // Rule 3 of "your own publish must not look like a conflict" runs here, because this is the
   // one moment the Worker learns the build went green: the rows go once nobody is in the entry.
   if (last && status.state === 'live') await clearPublished('default', database, last.sha);
-  return Response.json(last ? { ...status, committed_at: last.at } : status);
+  // Only where the answer is still about that commit: `committed_at` is what the pill counts
+  // from, and hanging it on the worker's newest build is a counter running from another commit.
+  return Response.json(last && status.commit_sha ? { ...status, committed_at: last.at } : status);
 }
 
 /**

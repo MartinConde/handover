@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **The build pill stops counting on an old commit.** The host's build list can only be asked
+  for a worker's recent builds — there is no commit filter — so a commit that had scrolled off
+  it read as *Building…* for as long as the admin was open, and the draft rows that build was
+  carrying were never cleared. Ten minutes without a build naming a commit is now as long as
+  the pill waits; past that it reports the worker's newest deploy.
+  [When a commit goes live](docs/publishing.md#when-a-commit-goes-live).
+
 - **Preview has a route and a gate.** `/_preview/<path>` is injected only where
   `PREVIEW_ENABLED` is set on the build, needs an admin session, serves only addresses the
   site's own routes serve, and answers `Cache-Control: private, no-store`,
