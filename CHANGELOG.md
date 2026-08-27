@@ -4,6 +4,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Settings says what is connected.** The Manage group's Settings is now the owner's read-only
+  view of the site: `cms.config.ts` as it came out, and a card per connection — GitHub, the
+  bucket, email, translation, build status, the database — each tried for real when the page
+  opens and again on **Test**. A check the site never configured reads *Not in use* rather than
+  failing; one that was configured and refused shows the refusal itself, which is the sentence to
+  forward. The failures are counted at the top with what stops working while they stand.
+  [Settings](docs/diagnostics.md).
+
+- **Send a test email has a button.** It is the one check that never runs on its own, and it goes
+  to the address of whoever is signed in. **Simulate a conflict** has one too, under *Developer
+  tools*, while the site is running in development. [Settings](docs/diagnostics.md).
+
+- **An invite the mailer refused points at Settings.** The notice on the Members screen said to
+  ask your developer; it now names the screen where the mailer's own sentence says which
+  credential is missing.
+
 - **The editor previews the page.** **Preview** in the entry header opens the page beside the
   form, in the language on screen: it follows the autosave, refreshes on demand, opens in a tab
   and can be read at three widths. An entry the site has never published previews at the address

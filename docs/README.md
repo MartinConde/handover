@@ -23,6 +23,7 @@
 - [Sending email](email.md) — the `mailer` block, verifying a sending domain, and the check that proves a key.
 - [Activity log](activity.md) — what is recorded and what is not, who sees whose events, the read endpoint and its filters.
 - [CLI](cli.md) — `handover migrate` for content files, `handover db generate` for the package's tables.
+- [Settings — what is connected](diagnostics.md) — the admin's read-only view of your config, the connection checks behind it, and the test email.
 - [Deploy](deploy.md) — `wrangler.jsonc`, the GitHub App, secrets, building on push.
 - [The admin API](admin-api.md) — the routes the admin drives: entries, drafts, publishing and locks. For debugging, not for building against.
 - [How it works](how-it-works.md) — packages, injected routes, virtual config, the publish path. For contributors.

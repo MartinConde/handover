@@ -244,6 +244,9 @@ let lastCommitRow: { sha: string; at: number; kind: string } | undefined = {
 };
 // Whether the site has been told where its bucket is: all four values, or none of them.
 let bucketed = true;
+// The R2 and D1 boundaries as the checks meet them: both run for real in core's own tests.
+let storeRefusal: Error | undefined;
+let dbRefusal: Error | undefined;
 let cloudflareToken: string | undefined = 'cf-token';
 let cloudflareWorker: string | undefined = 'acct/handover-demo';
 vi.mock('virtual:handover/config', () => ({
@@ -470,7 +473,13 @@ vi.mock('@handover/core', async (original) => ({
     released.push(userId);
   },
   createGitClient: () => ({ getFile, getHead, publish }),
-  openDb: () => ({}),
+  openDb: () => {
+    if (dbRefusal) throw dbRefusal;
+    return { query: { drafts: { findFirst: async () => undefined } } };
+  },
+  checkStore: async () => {
+    if (storeRefusal) throw storeRefusal;
+  },
   loadDraft: async (_site: string, _db: unknown, path: string) => rows[path] ?? draft,
   saveDraft,
   createDraft,
@@ -510,6 +519,8 @@ afterEach(() => {
   cloudflareToken = 'cf-token';
   cloudflareWorker = 'acct/handover-demo';
   bucketed = true;
+  storeRefusal = undefined;
+  dbRefusal = undefined;
   findMedia.mockClear();
   findMedia.mockResolvedValue(undefined);
   mediaList.mockClear();
@@ -597,6 +608,162 @@ test('a test email goes to the signed-in owner and answers with the id it was gi
   // Nobody else can be named: the recipient is the session's, not the request's.
   expect(sent).toHaveLength(1);
   expect(sent[0]?.to).toBe('martin@example.com');
+});
+
+// The diagnostics screen's own endpoints: the configuration it reads back, and one check per
+// connection. Every one of them is the owner's — the payload names the repository, the sending
+// address and the media host, and a hidden sidebar item is not a gate.
+const check = (name: string, session?: unknown) =>
+  POST(
+    ctx(`checks/${name}`, new Request(`https://x/admin/api/checks/${name}`, { method: 'POST' }), {
+      handover: session,
+    }),
+  );
+const body = async (res: Response) => (await res.json()) as Record<string, string>;
+
+test('the diagnostics page reads the configuration back as the site resolved it', async () => {
+  siteMailer = { provider: 'resend', from: 'Handover <hello@example.com>' };
+  locales = ['en', 'de'];
+  const res = await GET(ctx('diagnostics', undefined, { handover: owner }));
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    collections: [
+      { name: 'pages' },
+      { name: 'listings', route: '/listings/[slug]' },
+      { name: 'presenters' },
+      { name: 'posts', route: '/blog/[slug]' },
+    ],
+    locales: ['en', 'de'],
+    defaultLocale: 'en',
+    mediaBase: 'https://media.example.com',
+    mailer: { provider: 'resend', from: 'Handover <hello@example.com>' },
+    preview: true,
+    // What the build mode is, and under vitest that is development — the flag is what decides
+    // whether the screen offers "Simulate conflict", which commits to the repository.
+    dev: true,
+  });
+});
+
+test('a mailer the site handed in itself is named as its own rather than as a provider', async () => {
+  siteMailer = async () => ({ id: 'x' });
+  expect(
+    (await body(await GET(ctx('diagnostics', undefined, { handover: owner })))).mailer,
+  ).toEqual({ provider: 'custom' });
+});
+
+test("the configuration is the owner's, not an editor's", async () => {
+  expect((await GET(ctx('diagnostics', undefined, { handover: editor }))).status).toBe(403);
+});
+
+test('the repository check names the repository and the commit it read', async () => {
+  getHead.mockResolvedValueOnce('15db5481068f69ac8e283707ec6ddb7f4d59744a');
+  const res = await check('github', owner);
+  expect(res.status).toBe(200);
+  // Shortened: the whole forty characters is noise on a page somebody reads out loud.
+  expect(await res.json()).toEqual({
+    ok: true,
+    detail: 'acme/site — the app minted a token and read 15db548.',
+  });
+});
+
+test('a bucket the site was never told about answers with the four values to set', async () => {
+  bucketed = false;
+  const res = await check('storage', owner);
+  expect(res.status).toBe(503);
+  expect((await body(res)).error).toContain('R2_ACCOUNT_ID');
+});
+
+test('a bucket that refuses the round trip answers with what refused it', async () => {
+  storeRefusal = new Error('The bucket refused the upload (403)');
+  const res = await check('storage', owner);
+  expect(res.status).toBe(502);
+  expect((await body(res)).error).toBe('The bucket refused the upload (403)');
+});
+
+test('a bucket that takes the round trip says an upload would work', async () => {
+  const res = await check('storage', owner);
+  expect(res.status).toBe(200);
+  expect((await body(res)).detail).toContain('site-media');
+});
+
+test('a site with no translator says translation is off rather than failing', async () => {
+  translator = undefined;
+  locales = ['en', 'de'];
+  const res = await check('translation', owner);
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    off: true,
+    detail: 'No DEEPL_API_KEY and no translate hook, so the Translate button is hidden.',
+  });
+});
+
+test("a translator is checked by translating a word into the site's other language", async () => {
+  locales = ['en', 'de'];
+  const res = await check('translation', owner);
+  expect(res.status).toBe(200);
+  expect((await body(res)).detail).toBe('It translated "Hello" into de.');
+  expect(translate).toHaveBeenCalledWith(['Hello'], 'en', 'de');
+});
+
+test('a one-language site has nothing to translate into and says that instead', async () => {
+  const res = await check('translation', owner);
+  expect(await res.json()).toEqual({
+    off: true,
+    detail: 'This site has one language, so nothing is translated.',
+  });
+});
+
+test('a site with no Cloudflare token says the build pill is off, not broken', async () => {
+  cloudflareToken = undefined;
+  const res = await check('build', owner);
+  expect(res.status).toBe(200);
+  expect((await body(res)).off).toBe(true);
+  expect(commitBuild).not.toHaveBeenCalled();
+});
+
+test('the build check asks the host about the worker rather than about a commit', async () => {
+  const res = await check('build', owner);
+  expect(res.status).toBe(200);
+  expect((await body(res)).detail).toContain('acct/handover-demo');
+  // No commit: what is being checked is the token, and a commit nothing built would read as
+  // a broken token.
+  expect(commitBuild).toHaveBeenCalledWith(
+    { worker: 'acct/handover-demo', token: 'cf-token' },
+    undefined,
+  );
+});
+
+test('a token the host refuses is a failing check and says so', async () => {
+  commitBuild.mockRejectedValueOnce(new Error('Cloudflare builds failed: 403'));
+  const res = await check('build', owner);
+  expect(res.status).toBe(502);
+  expect((await body(res)).error).toBe('Cloudflare builds failed: 403');
+});
+
+test('the database check answers with the schema version the tables are at', async () => {
+  const res = await check('database', owner);
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    ok: true,
+    detail: "The database answered — the admin's tables are there. Schema version 2.",
+  });
+});
+
+test('a site with no D1 binding answers with the binding to add', async () => {
+  dbRefusal = new Error('The D1 binding DB is not configured: add a d1_databases entry');
+  const res = await check('database', owner);
+  expect(res.status).toBe(503);
+  expect((await body(res)).error).toContain('d1_databases');
+});
+
+test("every check is the owner's", async () => {
+  for (const name of ['github', 'storage', 'translation', 'build', 'database']) {
+    expect((await check(name, editor)).status).toBe(403);
+  }
+});
+
+test('a check nobody has heard of is not found', async () => {
+  expect((await check('nonsense', owner)).status).toBe(404);
 });
 
 test('an editor cannot send a test email', async () => {

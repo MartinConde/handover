@@ -125,8 +125,7 @@ async function invite(event: SubmitEvent) {
   // resend from.
   // A mailer that is not wired is the same thing to the person at the keyboard as one that
   // refused, and `missingMailer()` names env vars and a wrangler command at them. The words
-  // that name the missing credential are the developer's, and they live on the diagnostics
-  // screen 3.24 builds.
+  // that name the missing credential are the developer's, and they are on Settings.
   if (res.status === 502 || res.status === 503) {
     close();
     notice = '';
@@ -144,10 +143,10 @@ async function invite(event: SubmitEvent) {
   await load();
 }
 
-// Named rather than linked: Settings › Diagnostics is where this belongs and that screen does
-// not exist yet, so the copy points at the person who can fix it instead of at a dead page.
-const mailerFailure =
-  "Couldn't send the invite — email isn't set up correctly on this site. Ask your developer to check the mailer settings, then resend.";
+// Settings is where the mailer says which credential is missing, so the notice sends them
+// there rather than describing the problem twice. The link is markup: the notice is one
+// interpolated string everywhere else, and an anchor inside it would be escaped.
+const mailerFailure = "Couldn't send the invite — email isn't set up correctly on this site.";
 
 async function resend(member: Member) {
   open = '';
@@ -194,7 +193,14 @@ async function remove() {
     <button class="btn btn-primary" type="button" onclick={() => start('invite')}>Invite</button>
   </div>
   {#if notice}<p class="notice notice-success" role="status">{notice}</p>{/if}
-  {#if failure}<p class="notice notice-danger" role="alert">{failure}</p>{/if}
+  {#if failure}
+    <p class="notice notice-danger" role="alert">
+      {failure}
+      {#if failure === mailerFailure}
+        <a href="/admin/settings">Settings</a> says which credential is missing. Fix it and resend.
+      {/if}
+    </p>
+  {/if}
   {#if loading}
     <p class="placeholder">Loading…</p>
   {:else}

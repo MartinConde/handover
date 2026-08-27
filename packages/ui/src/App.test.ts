@@ -71,14 +71,20 @@ test('an editor is offered neither Members nor Settings', () => {
   expect(Array.from(links, (a) => a.textContent)).toEqual(['Media', 'Activity']);
 });
 
-// A Manage destination whose screen has not been built yet must say so: the shell serves the
-// same HTML for every /admin path, so falling through would show a page headed Dashboard.
-// Members was this test's subject until its screen was built; Settings is 3.25's.
-test('a Manage route with no screen yet names itself', () => {
+// Settings was the last Manage destination with no screen behind it, so the shell's "not built
+// yet" placeholder went with it. An editor who types the route is not shown the screen: the
+// shell serves the same HTML for every /admin path, so the branch is the gate the sidebar is not.
+test('an owner on the settings route gets the diagnostics screen', () => {
   drafts();
   const root = show(session('owner'), '/admin/settings');
   expect(root.querySelector('main.main h1')?.textContent).toBe('Settings');
-  expect(root.querySelector('main.main')?.textContent).toContain('This screen is not built yet');
+  expect(root.querySelector('main.main .list-note')?.textContent).toContain('cms.config.ts');
+});
+
+test('an editor who types the settings route is not shown it', () => {
+  drafts();
+  const root = show(session('editor'), '/admin/settings');
+  expect(root.querySelector('main.main h1')?.textContent).toBe('Dashboard');
 });
 
 test('an owner on the members route gets the members screen, not the placeholder', () => {

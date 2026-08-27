@@ -113,6 +113,7 @@ export type { EmailSender, Mailer } from './mailer.js';
 export { cloudflareMailer, resendMailer, senderAddress } from './mailer.js';
 export type { MediaRow, Preset, R2Store, Upload } from './media.js';
 export {
+  checkStore,
   confirmUpload,
   cropWidth,
   DEFAULT_MAX,

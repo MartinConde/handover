@@ -105,7 +105,9 @@ mailer: async ({ to, subject, text, html }) => {
 
 ## Prove it before anything depends on it
 
-An **owner** posts to the check, and the admin mails them at their own account's address:
+**Send a test email** on the admin's [Settings](diagnostics.md) screen is the button for this.
+Under it is one route — an **owner** posts to the check, and the admin mails them at their own
+account's address:
 
 ```sh
 curl -X POST https://your-site.example/admin/api/checks/email -b cookies.txt

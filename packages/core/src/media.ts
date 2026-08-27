@@ -176,6 +176,51 @@ export async function presignUpload(store: R2Store, key: string): Promise<string
   return signed.url;
 }
 
+/**
+ * That the bucket is really there and these credentials may write to it: one small object put,
+ * read back and deleted again, which is an upload's whole path through R2. Whichever step
+ * refused is what it throws, in R2's own status, because that is what the person holding the
+ * keys can act on.
+ *
+ * The key is deliberately not `mediaKey`'s shape: the reconciliation job adopts stray objects
+ * that look like uploads, and this one is litter rather than somebody's work.
+ */
+export async function checkStore(
+  store: R2Store,
+  deps: { fetch?: typeof globalThis.fetch } = {},
+): Promise<void> {
+  const { fetch = globalThis.fetch } = deps;
+  const url = objectUrl(store, CHECK_KEY);
+  const aws = signer(store);
+  const put = await fetch(await aws.sign(url, { method: 'PUT', body: CHECK_BODY }));
+  if (!put.ok)
+    throw new Error(`The bucket refused the upload (${put.status})${advice(store, put.status)}`);
+  const read = await fetch(await aws.sign(url, { method: 'GET' }));
+  const back = read.ok ? await read.text() : '';
+  // Deleted whatever the read said: a check that leaves its own object behind is worse than
+  // no check, and the bucket that failed the read is the one still holding it.
+  const gone = await fetch(await aws.sign(url, { method: 'DELETE' }));
+  if (!read.ok) throw new Error(`The bucket would not read the object back (${read.status})`);
+  if (back !== CHECK_BODY)
+    throw new Error('The bucket read back something other than what was written');
+  if (!gone.ok) throw new Error(`The bucket would not delete the object again (${gone.status})`);
+}
+
+/**
+ * Which of the four values to look at. R2's two refusals say different things — 403 is the
+ * credential and 404 is the bucket this site was pointed at — and a status on its own leaves
+ * whoever holds the keys guessing between them.
+ */
+const advice = (store: R2Store, status: number) =>
+  status === 403
+    ? `: check R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY, and that the token has Object Read & Write on ${store.bucket}`
+    : status === 404
+      ? `: check R2_ACCOUNT_ID and R2_BUCKET — nothing answers for ${store.bucket} on this account`
+      : '';
+
+const CHECK_KEY = 'checks/connection.txt';
+const CHECK_BODY = 'handover';
+
 const object = async (
   store: R2Store,
   key: string,

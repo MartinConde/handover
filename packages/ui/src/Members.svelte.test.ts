@@ -149,9 +149,9 @@ test('the invite dialog sends the address and the role that were chosen', async 
   expect(text(root)).toContain('Invite sent to lea@example.com.');
 });
 
-// The screen this failure would send somebody to is 3.24 and does not exist yet, so the copy
-// names the person who can fix it instead of linking to a page that is not there.
-test('an invite the mailer refused names the developer and links nowhere', async () => {
+// Settings is where the mailer's own sentence names the credential that is missing, so the
+// notice sends them there rather than describing the problem a second time.
+test('an invite the mailer refused sends the owner to Settings', async () => {
   server([row('u1', 'martin@example.com', { role: 'owner' })], {
     '/admin/api/members': Response.json({ error: 'invite-not-sent' }, { status: 502 }),
   });
@@ -167,9 +167,9 @@ test('an invite the mailer refused names the developer and links nowhere', async
 
   const failure = root.querySelector('.notice-danger') as HTMLElement;
   expect(text(failure)).toBe(
-    "Couldn't send the invite — email isn't set up correctly on this site. Ask your developer to check the mailer settings, then resend.",
+    "Couldn't send the invite — email isn't set up correctly on this site. Settings says which credential is missing. Fix it and resend.",
   );
-  expect(failure.querySelector('a')).toBe(null);
+  expect(failure.querySelector('a')?.getAttribute('href')).toBe('/admin/settings');
 });
 
 test('the only owner is offered neither a role change nor a removal, and is told why', async () => {
@@ -402,6 +402,7 @@ test('a site with no mailer gets the same sentence as one whose mailer refused',
   await settle();
 
   const failure = text(root.querySelector('.notice-danger') as HTMLElement);
-  expect(failure).toContain('Ask your developer to check the mailer settings');
+  expect(failure).toContain('Settings says which credential is missing');
+  // The developer's own sentence is on Settings and not here: this screen is the owner's.
   expect(failure).not.toContain('RESEND_API_KEY');
 });

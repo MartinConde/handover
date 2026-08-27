@@ -19,6 +19,7 @@ import {
   activityPage,
   addressError,
   blobSha,
+  checkStore,
   claimLock,
   clearPublished,
   collectionEntries,
@@ -72,6 +73,7 @@ import {
   resolveConflict,
   resolveDrift,
   revertCommit,
+  SCHEMA_VERSION,
   saveDraft,
   saveTranslated,
   setEntryAddress,
@@ -191,6 +193,129 @@ async function testEmail(session: App.Locals['handover']): Promise<Response> {
     // domain above all — and is the whole use of the button.
     return Response.json({ error: (err as Error).message }, { status: 502 });
   }
+}
+
+/**
+ * What the site's config came out as, for a screen that has to be readable by somebody who will
+ * forward it rather than act on it. **Owner only**: it names the sending address, the
+ * repository's media host and what this build serves, and a sidebar item an editor never sees
+ * is not a gate.
+ */
+function diagnostics(session: App.Locals['handover']): Response {
+  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  const configured = config.mailer;
+  return Response.json({
+    collections: Object.entries(config.collections).map(([name, collected]) => ({
+      name,
+      ...(collected.route ? { route: collected.route } : {}),
+    })),
+    locales: config.i18n.locales,
+    defaultLocale: config.i18n.defaultLocale,
+    mediaBase: config.media?.publicBase,
+    mailer: !configured
+      ? null
+      : typeof configured === 'function'
+        ? { provider: 'custom' }
+        : { provider: configured.provider, from: configured.from },
+    preview,
+    // "Simulate conflict" commits to the repository, so it is offered to somebody developing
+    // the site and not to somebody living on it.
+    dev: import.meta.env.DEV,
+  });
+}
+
+/** Something the site was never told, rather than something that refused: a different sentence. */
+const unset = (why: string) => Response.json({ error: why }, { status: 503 });
+
+/**
+ * One connection, tried for real. Every answer is a sentence and not a status, because this
+ * page is read by the person who forwards it: what refused has to be in the words of the thing
+ * that has to change. A check whose thing is optional and absent answers `off` rather than
+ * failing — a site with no DeepL key is not broken.
+ */
+async function connection(name: string, session: App.Locals['handover']): Promise<Response> {
+  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  const e = env as Record<string, string | undefined>;
+  const ok = (detail: string) => Response.json({ ok: true, detail });
+  const off = (detail: string) => Response.json({ off: true, detail });
+  const refused = (err: unknown) =>
+    Response.json({ error: (err as Error).message }, { status: 502 });
+
+  if (name === 'github') {
+    let git: GitClient;
+    // `gitClient()` writes its own sentence naming every value that has to be set, and that
+    // sentence is the one this screen exists to show.
+    try {
+      git = gitClient();
+    } catch (err) {
+      return unset((err as Error).message);
+    }
+    try {
+      const head = await git.getHead();
+      return ok(`${e.GITHUB_REPO} — the app minted a token and read ${head.slice(0, 7)}.`);
+    } catch (err) {
+      return refused(err);
+    }
+  }
+
+  if (name === 'storage') {
+    const store = mediaStore();
+    if (!store) return unset(NO_BUCKET);
+    const started = Date.now();
+    try {
+      await checkStore(store);
+    } catch (err) {
+      return refused(err);
+    }
+    return ok(
+      `Wrote, read back and deleted a test object on ${store.bucket} in ${Date.now() - started}ms.`,
+    );
+  }
+
+  if (name === 'translation') {
+    const translate = translator();
+    if (!translate)
+      return off('No DEEPL_API_KEY and no translate hook, so the Translate button is hidden.');
+    const to = config.i18n.locales.find((l) => l !== config.i18n.defaultLocale);
+    if (!to) return off('This site has one language, so nothing is translated.');
+    try {
+      await translate(['Hello'], config.i18n.defaultLocale, to);
+      return ok(`It translated "Hello" into ${to}.`);
+    } catch (err) {
+      return refused(err);
+    }
+  }
+
+  if (name === 'build') {
+    const builds = workerBuilds();
+    if (!builds)
+      return off(
+        'No CLOUDFLARE_API_TOKEN and CLOUDFLARE_WORKER, so the admin cannot say whether a publish reached the site.',
+      );
+    try {
+      // No commit named: what is checked here is the token, and a commit nothing has built
+      // would read as a token that does not work.
+      await commitBuild(builds, undefined);
+      return ok(`Cloudflare answered for ${builds.worker} — the token works.`);
+    } catch (err) {
+      return refused(err);
+    }
+  }
+
+  if (name === 'database') {
+    try {
+      await db().query.drafts.findFirst();
+    } catch (err) {
+      // `openDb` names the binding to add; anything past it is the database itself refusing.
+      const why = (err as Error).message;
+      return why.includes('binding') ? unset(why) : refused(err);
+    }
+    return ok(
+      `The database answered — the admin's tables are there. Schema version ${SCHEMA_VERSION}.`,
+    );
+  }
+
+  return new Response('Not found', { status: 404 });
 }
 
 /**
@@ -1674,6 +1799,7 @@ const CONFLICT = /^conflict\/([\w-]+)\/([\w-]+)$/;
 const LOCK = /^locks\/([\w-]+)\/([\w-]+)$/;
 const HOLD = /^hold\/([\w-]+)\/([\w-]+)$/;
 const MEDIA = /^media\/([0-9a-f]{64})$/;
+const CHECK = /^checks\/([\w-]+)$/;
 const TRANSLATE = /^translate\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 
 // Better Auth owns everything under its base path. Both verbs go straight to its handler:
@@ -1708,6 +1834,7 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
   if (params.path === 'globals') return globalsList();
   if (params.path === 'drafts') return pendingList();
   if (params.path === 'build') return buildStatus();
+  if (params.path === 'diagnostics') return diagnostics(locals.handover);
   const held = params.path?.match(LOCK);
   if (held) return lockState(held[1] ?? '', held[2] ?? '', locals.handover, 'read');
   const changed = params.path?.match(DIFF);
@@ -2011,8 +2138,15 @@ async function answering(work: () => Promise<Response>): Promise<Response> {
 
 export const POST: APIRoute = async ({ params, request, url, locals }) => {
   if (mounted(url.pathname)) return createAuth(url, locals.cfContext).handler(request);
-  if (params.path === 'checks/email') return testEmail(locals.handover);
-  if (params.path === 'checks/conflict') return answering(() => simulateConflict(locals.handover));
+  const checked = params.path?.match(CHECK);
+  if (checked) {
+    const name = checked[1] ?? '';
+    if (name === 'email') return testEmail(locals.handover);
+    if (name === 'conflict') return answering(() => simulateConflict(locals.handover));
+    // Not `answering`: every branch of the check catches for itself, because the whole use of
+    // this page is the sentence the thing that refused wrote.
+    return connection(name, locals.handover);
+  }
   if (params.path === 'account/set-password')
     return setPassword(request, url, locals.cfContext, locals.handover);
   if (params.path === 'members') return invite(request, url, locals.cfContext, locals.handover);

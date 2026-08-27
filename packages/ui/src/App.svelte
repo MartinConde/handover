@@ -2,6 +2,7 @@
 import Account from './Account.svelte';
 import Activity from './Activity.svelte';
 import BuildPill, { type Build } from './BuildPill.svelte';
+import Diagnostics from './Diagnostics.svelte';
 import Editor from './Editor.svelte';
 import EntryList from './EntryList.svelte';
 import Globals from './Globals.svelte';
@@ -50,8 +51,7 @@ const editing = $derived(
 );
 
 // Members and Settings are owner-only in the screen inventory, so an editor's sidebar has
-// neither. The screens themselves land later; until then the shell names the route it is on
-// rather than quietly showing the dashboard under a Manage heading.
+// neither.
 const MANAGE = [
   { path: '/admin/media', icon: 'media', label: 'Media', ownerOnly: false },
   { path: '/admin/activity', icon: 'activity', label: 'Activity', ownerOnly: false },
@@ -59,7 +59,6 @@ const MANAGE = [
   { path: '/admin/settings', icon: 'settings', label: 'Settings', ownerOnly: true },
 ];
 const manage = $derived(MANAGE.filter((item) => !item.ownerOnly || session?.role === 'owner'));
-const managePage = $derived(manage.find((item) => item.path === path));
 
 const collections = $derived(session?.collections ?? []);
 let pending = $state<
@@ -339,11 +338,8 @@ const initial = $derived(
       <!-- No role condition: the log is an editor's screen as much as an owner's, and which
            events they see is the server's filter rather than this branch's. -->
       <Activity role={session.role} />
-    {:else if managePage}
-      <main class="main">
-        <h1>{managePage.label}</h1>
-        <p class="placeholder">This screen is not built yet.</p>
-      </main>
+    {:else if path === '/admin/settings' && session.role === 'owner'}
+      <Diagnostics />
     {:else}
       <main class="main">
         <h1>Dashboard</h1>

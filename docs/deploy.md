@@ -185,7 +185,8 @@ empty list for a name — which reads as "this commit never built" forever. The 
 put here and the admin looks the tag up, so you never have to find one.
 
 `/admin/api` requests fail with an explicit error naming the missing secret. For local
-`astro dev`, the same names go in `.dev.vars`.
+`astro dev`, the same names go in `.dev.vars`. Once the site is up, **Settings** in the admin
+checks every one of them and says which is missing ([Settings](diagnostics.md)).
 
 A repository the App was never installed on answers `404` on every path, which looks the
 same to GitHub's API as a file that does not exist. The admin tells them apart: it says
