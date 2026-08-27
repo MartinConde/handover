@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
-import index, { preview } from 'virtual:handover/index';
+import index, { preview, templates } from 'virtual:handover/index';
 import type {
   Answer,
   Db,
@@ -39,6 +39,7 @@ import {
   discardDraft,
   driftReport,
   dropLock,
+  duplicateEntry,
   entryAddress,
   entryConflict,
   entryKey,
@@ -78,6 +79,7 @@ import {
   recordDelete,
   recordOffer,
   recordRename,
+  regenerateIds,
   releaseLocks,
   removeSetting,
   renameEntry,
@@ -1825,7 +1827,14 @@ async function resolve(collection: string, slug: string, request: Request): Prom
 async function listEntries(collection: string): Promise<Response> {
   const collected = config.collections[collection];
   if (!collected) return new Response('Not found', { status: 404 });
-  const rows = await overlayRows('default', db(), index);
+  const database = db();
+  const [rows, waiting] = await Promise.all([
+    overlayRows('default', database, index),
+    pendingDrafts('default', database),
+  ]);
+  // What "duplicate including unpublished changes?" is asked over: without it the dialog would
+  // offer a choice about an entry that has nothing unpublished to choose.
+  const unpublished = new Set(waiting.map((row) => row.path));
   // The same reading of `_locales` the editor does, so a language with a file is never struck
   // through in the list and typed in on the next screen.
   const entries = collectionEntries('default', index, collection, rows, collected.titleField).map(
@@ -1840,6 +1849,7 @@ async function listEntries(collection: string): Promise<Response> {
       return {
         ...entry,
         offered: offered.length === config.i18n.locales.length ? undefined : offered,
+        pending: Object.values(entry.locales).some((l) => unpublished.has(l.path)) || undefined,
       };
     },
   );
@@ -1849,6 +1859,8 @@ async function listEntries(collection: string): Promise<Response> {
     locales: config.i18n.locales,
     // The page above them, which is where the hide dialog offers to send a row's readers.
     index: collected.index,
+    // The starters this collection ships, which the New entry dialog offers beside Blank.
+    templates: (templates[collection] ?? []).map((t) => t.name),
   });
 }
 
@@ -2022,23 +2034,41 @@ const locationOf = (collection: string): EntryLocation => ({
   localizedSlugs: config.collections[collection]?.localizedSlugs,
 });
 
+// What a starter hands the new entry, and what it does not: the identity keys are the entry's
+// own, and a template that carried them would put every entry made from it at one address.
+const startedFrom = (collection: string, name: string): Record<string, unknown> | undefined => {
+  const found = templates[collection]?.find((t) => t.name === name);
+  if (!found) return undefined;
+  const values = regenerateIds('default', found.data) as Record<string, unknown>;
+  for (const key of ['_i18n', '_locales', '_status', 'slug']) delete values[key];
+  return values;
+};
+
 /**
  * A new entry is a draft, not a commit: nothing is in the repository until it is published,
  * which is what lets the file name stay editable and keeps an abandoned entry out of git.
  * It starts empty apart from its title — a field the schema requires is left absent rather
- * than guessed at, and the editor is shown what is still missing until the publish.
+ * than guessed at, and the editor is shown what is still missing until the publish — or from
+ * one of the collection's starters, whose blocks are given ids on the way through.
  */
 async function createEntry(collection: string, request: Request): Promise<Response> {
   const collected = config.collections[collection];
   if (!collected) return new Response('Not found', { status: 404 });
-  const body = (await request.json().catch(() => undefined)) as { title?: unknown } | undefined;
+  const body = (await request.json().catch(() => undefined)) as
+    | { title?: unknown; template?: unknown }
+    | undefined;
   const title = typeof body?.title === 'string' ? body.title : '';
+  const starter =
+    typeof body?.template === 'string' && body.template
+      ? startedFrom(collection, body.template)
+      : {};
+  if (!starter) return new Response('No such template', { status: 404 });
   const database = db();
   const slug = entryName('default', title, await takenNames(collection, database));
   const { fields } = formOf('default', formSchema(collected.schema));
   // The field the collection lists by is the one the title typed into the dialog belongs in.
   const named = collected.titleField ?? 'title';
-  const values: Record<string, unknown> = { _version: FORMAT_VERSION };
+  const values: Record<string, unknown> = { ...starter, _version: FORMAT_VERSION };
   if (fields.some((f) => f.path[0] === named && f.type === 'text')) values[named] = title;
   // The site's default language, and the one place it is still an entry's: a brand-new entry has
   // no file to be written in any other, so it starts in the language the site is written in.
@@ -2090,6 +2120,59 @@ async function rename(
     commitSha: commit_sha,
   });
   return Response.json({ slug: to, commit_sha });
+}
+
+/**
+ * A copy of the entry under a new name, as drafts: nothing is in the repository until somebody
+ * publishes it, so the copy can be abandoned the way a new entry can. It comes out hidden —
+ * a half-edited copy going live because somebody published something else is the accident this
+ * feature would otherwise introduce — and without the staleness marks, which were made against
+ * the original's translations and say nothing about the copy's.
+ *
+ * `drafts` is the answer to "duplicate including unpublished changes?": with it the languages
+ * that have unpublished bytes are copied from those instead of from the commit.
+ */
+async function duplicate(
+  collection: string,
+  slug: string,
+  request: Request,
+  session: App.Locals['handover'],
+): Promise<Response> {
+  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  const body = (await request.json().catch(() => undefined)) as
+    | { to?: unknown; drafts?: unknown }
+    | undefined;
+  const database = db();
+  const git = gitClient();
+  const files = await entryFiles(git, collection, slug);
+  // The same refusal a rename gives, for the same reason: what is copied is what the
+  // repository has, and an entry that was never published has nothing there to copy.
+  if (!files.some((f) => f.file))
+    return new Response('Publish this entry before duplicating it', { status: 409 });
+  const wanted = typeof body?.to === 'string' && body.to ? body.to : `${slug}-copy`;
+  const to = entryName('default', wanted, await takenNames(collection, database));
+  const drafted: Record<string, string> = {};
+  if (body?.drafts === true)
+    for (const { locale, path } of files) {
+      const row = await loadDraft('default', database, path);
+      if (row?.contents) drafted[locale] = row.contents;
+    }
+  const copies = await duplicateEntry('default', git, locationOf(collection), slug, to, drafted);
+  for (const copy of copies) {
+    const values = parseEntry('default', copy.contents) as Record<string, unknown>;
+    delete values._i18n;
+    values._status = 'hidden';
+    await createDraft('default', database, git, copy.path, values);
+  }
+  await logActivity('default', database, {
+    userId: session?.user.id,
+    kind: 'entry-duplicate',
+    // The first language the copy has, which is the file the log would open — read off the
+    // copies rather than asked for, since nothing of the copy is in the repository yet.
+    subject: copies[0]?.path ?? null,
+    detail: { from: slug },
+  });
+  return Response.json({ slug: to });
 }
 
 /**
@@ -2327,6 +2410,7 @@ const ENTRY = /^entries\/([\w-]+)\/([\w-]+)$/;
 const DRAFT = /^drafts\/([\w-]+)\/([\w-]+)$/;
 const TRANSLATION = /^drafts\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 const RENAME = /^entries\/([\w-]+)\/([\w-]+)\/rename$/;
+const DUPLICATE = /^entries\/([\w-]+)\/([\w-]+)\/duplicate$/;
 const LOCALES = /^entries\/([\w-]+)\/([\w-]+)\/locales$/;
 const ADDRESS = /^entries\/([\w-]+)\/([\w-]+)\/address\/([\w-]+)$/;
 const DRIFT = /^drift\/([\w-]+)\/([\w-]+)$/;
@@ -2738,6 +2822,9 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   const renamed = params.path?.match(RENAME);
   if (renamed)
     return answering(() => rename(renamed[1] ?? '', renamed[2] ?? '', request, locals.handover));
+  const copied = params.path?.match(DUPLICATE);
+  if (copied)
+    return answering(() => duplicate(copied[1] ?? '', copied[2] ?? '', request, locals.handover));
   const created = params.path?.match(ENTRIES);
   if (created) return answering(() => createEntry(created[1] ?? '', request));
   return new Response('Not found', { status: 404 });

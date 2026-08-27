@@ -7,6 +7,8 @@ type Entry = {
   locales: Record<string, { title: string; path: string; status?: 'hidden' }>;
   /** The languages it is offered in, absent when that is every language the site declares. */
   offered?: string[];
+  /** Whether it has unpublished changes, which is what a duplicate can be asked to carry. */
+  pending?: boolean;
 };
 /** One thing the CMS took away, as the activity log remembers it. */
 type Deleted = {
@@ -35,8 +37,13 @@ let putting = $state<Deleted>();
 let locales = $state<string[]>([]);
 // The page above this collection, which is where a hidden entry's readers go by default.
 let index = $state<string>();
+// The starters this collection ships, and which one New entry is set to — '' is Blank.
+let templates = $state<string[]>([]);
+let starter = $state('');
+// Whether a duplicate carries the unpublished changes as well as the published file.
+let withDrafts = $state(false);
 let loading = $state(true);
-let dialog = $state<'' | 'new' | 'rename'>('');
+let dialog = $state<'' | 'new' | 'rename' | 'duplicate'>('');
 // The rows the bulk bar is about; checking any one of them reveals the column for all.
 let chosen = $state<string[]>([]);
 // What the redirect question is open over: hiding one row or the whole selection, or deleting
@@ -84,6 +91,8 @@ const preview = $derived(
     entries.map((e) => e.id).filter((id) => dialog !== 'rename' || id !== target?.id),
   ),
 );
+// `house` → `House`, which is all a file name has to say to be picked from a list of two.
+const starterLabel = (name: string) => capitalise(name.replace(/-/g, ' '));
 
 const WHEN = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
@@ -103,10 +112,16 @@ async function loadDeleted(name: string) {
 async function load(name: string) {
   const res = await fetch(`/admin/api/entries/${name}`);
   if (res.ok) {
-    const body = (await res.json()) as { entries: Entry[]; locales?: string[]; index?: string };
+    const body = (await res.json()) as {
+      entries: Entry[];
+      locales?: string[];
+      index?: string;
+      templates?: string[];
+    };
     entries = body.entries;
     locales = body.locales ?? [];
     index = body.index;
+    templates = body.templates ?? [];
   } else error = `Could not load the list (${res.status})`;
   loading = false;
 }
@@ -122,10 +137,12 @@ async function status(ids: string[], hidden: boolean, redirect?: Target) {
   await done();
 }
 
-function open(kind: 'new' | 'rename', entry?: Entry) {
+function open(kind: 'new' | 'rename' | 'duplicate', entry?: Entry) {
   dialog = kind;
   target = entry;
-  text = kind === 'rename' ? (entry?.id ?? '') : '';
+  text = kind === 'new' ? '' : kind === 'rename' ? (entry?.id ?? '') : `${entry?.id ?? ''}-copy`;
+  starter = '';
+  withDrafts = false;
   error = '';
 }
 const close = () => {
@@ -172,7 +189,21 @@ async function restore(row: Deleted) {
 
 async function create(event: Event) {
   event.preventDefault();
-  const res = await send(`/admin/api/entries/${collection}`, json({ title: text }));
+  const res = await send(
+    `/admin/api/entries/${collection}`,
+    json({ title: text, ...(starter ? { template: starter } : {}) }),
+  );
+  if (!res) return;
+  const { slug } = (await res.json()) as { slug: string };
+  location.assign(`/admin/c/${collection}/${slug}`);
+}
+
+// The copy is a draft like a new entry, so it opens the same way — its own lock, nothing in
+// the repository until somebody publishes it.
+async function duplicate(event: Event) {
+  event.preventDefault();
+  const url = `/admin/api/entries/${collection}/${target?.id}/duplicate`;
+  const res = await send(url, json({ to: text, ...(withDrafts ? { drafts: true } : {}) }));
   if (!res) return;
   const { slug } = (await res.json()) as { slug: string };
   location.assign(`/admin/c/${collection}/${slug}`);
@@ -364,6 +395,12 @@ async function done() {
             <button
               class="btn btn-sm"
               type="button"
+              aria-label="Duplicate {titleOf(entry)}"
+              onclick={() => open('duplicate', entry)}>Duplicate</button
+            >
+            <button
+              class="btn btn-sm"
+              type="button"
               aria-label="Rename {titleOf(entry)}"
               onclick={() => open('rename', entry)}>Rename</button
             >
@@ -488,6 +525,39 @@ async function done() {
             </button>
           </div>
         </form>
+      {:else if dialog === 'duplicate'}
+        <h2 id="entry-dialog-h">Duplicate {titleOf(target as Entry)}</h2>
+        <form onsubmit={duplicate}>
+          <div class="field">
+            <div class="label-row"><label for="copy-to">File name</label></div>
+            <input
+              class="input filename"
+              id="copy-to"
+              type="text"
+              bind:value={text}
+              bind:this={field}
+              aria-describedby="copy-hint"
+            />
+            <p class="hint" id="copy-hint">
+              Saved as <span class="filename">{preview}</span>.
+              {#if many}Every language comes with it, and the{:else}The{/if} copy is hidden until
+              you show it.
+            </p>
+          </div>
+          {#if target?.pending}
+            <label class="choice">
+              <input type="checkbox" bind:checked={withDrafts} />
+              Duplicate including unpublished changes
+            </label>
+          {/if}
+          {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
+          <div class="actions">
+            <button class="btn" type="button" onclick={close}>Cancel</button>
+            <button class="btn btn-primary" type="submit" disabled={busy}>
+              {busy ? 'Duplicating…' : 'Duplicate'}
+            </button>
+          </div>
+        </form>
       {:else}
         <h2 id="entry-dialog-h">New {singular}</h2>
         <form onsubmit={create}>
@@ -505,6 +575,20 @@ async function done() {
               Saved as <span class="filename">{preview}</span>. This becomes the web address.
             </p>
           </div>
+          {#if templates.length}
+            <fieldset>
+              <legend>Start from</legend>
+              <label class="choice">
+                <input type="radio" name="starter" value="" bind:group={starter} /> Blank
+              </label>
+              {#each templates as name (name)}
+                <label class="choice">
+                  <input type="radio" name="starter" value={name} bind:group={starter} />
+                  {starterLabel(name)} <span class="desc">template</span>
+                </label>
+              {/each}
+            </fieldset>
+          {/if}
           {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
           <div class="actions">
             <button class="btn" type="button" onclick={close}>Cancel</button>

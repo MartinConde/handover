@@ -3,8 +3,8 @@ import { afterEach, expect, test, vi } from 'vitest';
 import EntryList from './EntryList.svelte';
 
 // Testing: one row per entry with the title the API returned, the derived file name the new
-// entry dialog shows, what create / rename / delete / hide send, the empty state, and the
-// Deleted view's two rows — the one that can come back and the one that cannot.
+// entry dialog shows, what create / duplicate / rename / delete / hide send, which entries are
+// offered the unpublished-changes question, the empty state, and the Deleted view's two rows — the one that can come back and the one that cannot.
 // Not testing: which collection the sidebar routed here, the shell around the list, the bulk
 // bar's own markup, or how one answer becomes a rule per language — that is the route's, and
 // api.test.ts holds it to each of the four answers. Which rows the Deleted view gets, and why a
@@ -26,13 +26,18 @@ const ENTRIES = [
 let app: ReturnType<typeof mount>;
 const changed = vi.fn();
 // Loading the list is a bare GET; every action carries an init, which is what tells them apart.
-const api = (entries: unknown[], reply: Record<string, unknown> = {}, locales = ['en']) => {
+const api = (
+  entries: unknown[],
+  reply: Record<string, unknown> = {},
+  locales = ['en'],
+  templates: string[] = [],
+) => {
   const fetcher = vi.fn(async (url: string, init?: RequestInit) =>
     init
       ? Response.json(reply)
       : url === '/admin/api/entries'
         ? Response.json({ entries: [], locales })
-        : Response.json({ entries, locales, index: '/listings' }),
+        : Response.json({ entries, locales, index: '/listings', templates }),
   );
   vi.stubGlobal('fetch', fetcher);
   return fetcher;
@@ -126,6 +131,73 @@ test('creating sends the title and opens the entry the server named', async () =
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ title: 'Café & Bar / 2026' }),
+  });
+});
+
+test("the collection's starters are offered beside Blank, and the chosen one is sent", async () => {
+  const fetcher = api(ENTRIES, { slug: 'strandhaus-nord' }, ['en'], ['house', 'flat-by-the-sea']);
+  const root = show();
+  await tick();
+  await click(root, '.list-toolbar .btn-primary');
+
+  expect(
+    Array.from(root.querySelectorAll('.dialog fieldset .choice'), (c) =>
+      c.textContent?.replace(/\s+/g, ' ').trim(),
+    ),
+  ).toEqual(['Blank', 'House template', 'Flat by the sea template']);
+
+  type(root, '.dialog input#new-title', 'Strandhaus Nord');
+  await click(root, '.dialog input[value="house"]');
+  await click(root, '.dialog .btn-primary');
+
+  expect(fetcher).toHaveBeenCalledWith('/admin/api/entries/listings', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ title: 'Strandhaus Nord', template: 'house' }),
+  });
+});
+
+// A collection that ships none has nothing to choose between, so the question is not asked.
+test('a collection with no starters has no Start from choice', async () => {
+  api(ENTRIES);
+  const root = show();
+  await tick();
+  await click(root, '.list-toolbar .btn-primary');
+  expect(q(root, '.dialog fieldset')).toBeNull();
+});
+
+test('duplicating sends the pre-filled copy name and opens the copy', async () => {
+  const fetcher = api(ENTRIES, { slug: 'mill-house-copy' });
+  const root = show();
+  await tick();
+  await click(root, '.row [aria-label="Duplicate The Mill House"]');
+  expect(input(root, '.dialog input#copy-to').value).toBe('mill-house-copy');
+  await click(root, '.dialog .btn-primary');
+
+  expect(fetcher).toHaveBeenCalledWith('/admin/api/entries/listings/mill-house/duplicate', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ to: 'mill-house-copy' }),
+  });
+});
+
+// The question only makes sense about an entry that has something unpublished to carry.
+test('only an entry with unpublished changes is asked whether to include them', async () => {
+  const fetcher = api([{ ...ENTRIES[0], pending: true }, ENTRIES[1]], { slug: 'x' });
+  const root = show();
+  await tick();
+  await click(root, '.row [aria-label="Duplicate Seaview Cottage"]');
+  expect(q(root, '.dialog input[type="checkbox"]')).toBeNull();
+  await click(root, '.dialog .btn:not(.btn-primary)');
+
+  await click(root, '.row [aria-label="Duplicate The Mill House"]');
+  await click(root, '.dialog input[type="checkbox"]');
+  await click(root, '.dialog .btn-primary');
+
+  expect(fetcher).toHaveBeenCalledWith('/admin/api/entries/listings/mill-house/duplicate', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ to: 'mill-house-copy', drafts: true }),
   });
 });
 

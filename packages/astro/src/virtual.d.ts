@@ -10,6 +10,8 @@ declare module 'virtual:handover/index' {
   export default index;
   /** Whether this build was told to serve `/_preview`, which is what the admin draws from. */
   export const preview: boolean;
+  /** The starters each collection ships under `src/content/_templates/`, by collection. */
+  export const templates: Record<string, import('@handover/core').Template[]>;
 }
 
 declare module 'virtual:handover/loaders' {

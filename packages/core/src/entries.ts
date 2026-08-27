@@ -38,11 +38,11 @@ export const entryKey = (path: string): string | undefined => {
   return found ? `${found[1]}/${found[3]}` : undefined;
 };
 
+/** A starter for new entries: one file per collection folder, outside every glob. */
+const TEMPLATE_PATH = /^src\/content\/_templates\/([a-z0-9-]+)\/([^/]+)\.yaml$/;
+
 // The site files that are not entries; globals already share the entry layout.
-const OTHER_PATHS = [
-  /^src\/content\/redirects\.yaml$/,
-  /^src\/content\/_templates\/[a-z0-9-]+\/[^/]+\.yaml$/,
-];
+const OTHER_PATHS = [/^src\/content\/redirects\.yaml$/, TEMPLATE_PATH];
 
 /**
  * Why a `.yaml` file under `src/content/` is neither an entry nor one of the site files —
@@ -179,4 +179,32 @@ export function entryOffer(
         `_locales says this entry is not offered in ${locale}, and it has a file in ${locale}`,
       );
   return { offered, problems };
+}
+
+/** One starter, as the New entry dialog offers it and the create route reads it. */
+export interface Template {
+  name: string;
+  data: unknown;
+}
+
+/**
+ * The starters each collection ships, read at build time with everything else under
+ * `src/content/`: they are the site's own files, so the admin has them without a git listing.
+ */
+export function templatesFrom(
+  siteId: string,
+  files: Iterable<ContentFile>,
+): Record<string, Template[]> {
+  const found = new Map<string, Template[]>();
+  for (const { path, contents } of files) {
+    const parts = TEMPLATE_PATH.exec(path);
+    if (!parts) continue;
+    const [, collection = '', name = ''] = parts;
+    const list = found.get(collection) ?? [];
+    found.set(collection, list);
+    list.push({ name, data: parseEntry(siteId, contents) });
+  }
+  return Object.fromEntries(
+    [...found].map(([c, list]) => [c, list.sort((a, b) => a.name.localeCompare(b.name))]),
+  );
 }

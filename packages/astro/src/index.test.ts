@@ -13,6 +13,7 @@ import handover, {
   type BlockRegistry,
   blocks,
   buildIndex,
+  buildTemplates,
   contentErrors,
   defineBlock,
   defineConfig,
@@ -621,6 +622,16 @@ test('buildIndex lists an entry per locale file and leaves _templates/ out', asy
   });
 });
 
+// The same file the loader and the index both skip is the one the New entry dialog offers,
+// which is why it is read here rather than listed out of git at run time.
+test('buildTemplates reads the starters the site ships', async () => {
+  expect(await buildTemplates(fixture)).toEqual({
+    listings: [
+      { name: 'house', data: { _version: 1, location: 'Devon', price: 'Price on application' } },
+    ],
+  });
+});
+
 test('buildIndex titles an entry by the field its collection declares', async () => {
   const root = new URL(`${await mkdtemp(join(tmpdir(), 'handover-site-'))}/`, 'file://');
   await mkdir(new URL('src/content/presenters/en/', root), { recursive: true });
@@ -701,7 +712,8 @@ test('virtual:handover/index is the built index, inlined rather than served', as
   const module = await plugin.load('\0virtual:handover/index');
   expect(module).toBe(
     `export default JSON.parse(${JSON.stringify(JSON.stringify(await buildIndex(fixture)))});
-export const preview = false;`,
+export const preview = false;
+export const templates = JSON.parse(${JSON.stringify(JSON.stringify(await buildTemplates(fixture)))});`,
   );
 });
 
@@ -742,7 +754,8 @@ test('the index is built with the title field each collection declares', async (
   };
   expect(module).toBe(
     `export default JSON.parse(${JSON.stringify(JSON.stringify(listed))});
-export const preview = false;`,
+export const preview = false;
+export const templates = JSON.parse(${JSON.stringify(JSON.stringify(await buildTemplates(fixture)))});`,
   );
 });
 

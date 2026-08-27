@@ -32,11 +32,20 @@ const entryPath = (collection: string, locale: string, name: string) =>
 // `at` is the commit these files are read from, which is the one the caller is about to commit
 // against: a rename that carried bytes from a different commit would put somebody else's work
 // back, and the ref update would not refuse it (git.ts, `getFile`).
-async function localeFiles(git: GitClient, loc: EntryLocation, name: string, at: string) {
+async function localeFiles(
+  git: GitClient,
+  loc: EntryLocation,
+  name: string,
+  at: string,
+  // What the caller has that the commit does not: a duplicate can be asked for the unpublished
+  // bytes instead, language by language.
+  drafted: Record<string, string> = {},
+) {
   const found: { locale: string; contents: string }[] = [];
   for (const locale of loc.i18n.locales) {
-    const file = await git.getFile(entryPath(loc.collection, locale, name), at);
-    if (file) found.push({ locale, contents: file.contents });
+    const contents =
+      drafted[locale] ?? (await git.getFile(entryPath(loc.collection, locale, name), at))?.contents;
+    if (contents) found.push({ locale, contents });
   }
   if (found.length === 0)
     throw new Error(
@@ -290,7 +299,8 @@ export const redirectsText = (_siteId: string, rules: RedirectRule[]): string =>
  *
  * The address stays with the entry that had it — two entries answering to one URL is what the
  * address route refuses — so the copy falls back to its new file name until somebody gives it
- * one of its own.
+ * one of its own. `drafted` is the answer to "duplicate including unpublished changes?": the
+ * languages it names are copied from those bytes instead of from the commit.
  */
 export async function duplicateEntry(
   siteId: string,
@@ -298,10 +308,11 @@ export async function duplicateEntry(
   loc: EntryLocation,
   from: string,
   to: string,
+  drafted: Record<string, string> = {},
 ): Promise<ContentFile[]> {
   // One commit for the whole entry, the way a rename reads it: a copy made of an English from
   // one commit and a German from another is an entry whose languages never agreed.
-  const files = await localeFiles(git, loc, from, await git.getHead());
+  const files = await localeFiles(git, loc, from, await git.getHead(), drafted);
   const ids = new Map<string, string>();
   return files.map(({ locale, contents }) => {
     const copy = writtenEntry(siteId, regenerateIds(siteId, parseEntry(siteId, contents), ids));

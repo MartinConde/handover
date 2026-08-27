@@ -1,7 +1,7 @@
 # Entry lifecycle
 
 What happens to an entry's files after they exist: hiding it from the site, creating one,
-renaming it and deleting it. The shape of the files themselves is
+copying it, renaming it and deleting it. The shape of the files themselves is
 [Content format](content-format.md).
 
 ## Hiding an entry
@@ -41,6 +41,24 @@ Point it back at the page yourself if it matters.
 the entry is published for the first time — until then it is a draft in D1, so the
 filename can still change and an abandoned entry leaves nothing behind. After the first
 publish, changing the filename is the rename below.
+
+It can also start from one of the collection's
+[starters](site-files.md#templates) instead of empty.
+
+## Duplicating an entry
+
+**Duplicate** on an entry list row copies every language file of the entry under a new
+filename — `<name>-copy` by default, and editable in the dialog. The copy is one entry
+across its languages: the same block gets the same new `_id` in each file, so the two
+languages keep a matching skeleton. What does not come with it is what belongs to the
+original alone — its address, and the translation staleness marks.
+
+The copy arrives `_status: "hidden"` so a half-finished copy cannot go live on somebody
+else's publish, and it is a draft like a new entry, so nothing is in the repository until
+you publish it. An entry with unpublished changes is asked whether to copy those too;
+without that the copy is made from the published files, which is also why an entry that
+has never been published cannot be duplicated. Pictures are referenced by key, so the copy
+shares the original's images with no upload.
 
 ## Renaming and deleting an entry
 

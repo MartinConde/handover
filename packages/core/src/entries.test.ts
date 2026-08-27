@@ -1,5 +1,11 @@
 import { expect, test } from 'vitest';
-import { collectionEntries, contentPathErrors, entryOffer, indexFrom } from './entries.js';
+import {
+  collectionEntries,
+  contentPathErrors,
+  entryOffer,
+  indexFrom,
+  templatesFrom,
+} from './entries.js';
 
 const file = (path: string, body: string) => ({ path, contents: `_version: 1\n${body}` });
 const listing = (locale: string, name: string, body: string) =>
@@ -101,6 +107,26 @@ test('templates and redirects are not entries', () => {
       file('src/content/redirects.yaml', 'rules: []\n'),
     ]),
   ).toEqual({});
+});
+
+// The same files the index throws away are the ones the New entry dialog offers: they are
+// read once, at build, and told apart by the folder they sit in.
+test('the starters under _templates are listed per collection, by name', () => {
+  expect(
+    templatesFrom('default', [
+      file('src/content/_templates/listings/house.yaml', 'title: "New listing"\n'),
+      file('src/content/_templates/pages/landing.yaml', 'title: "New page"\n'),
+      file('src/content/_templates/listings/flat.yaml', 'title: "New flat"\n'),
+      listing('en', 'mill-house', 'title: "The Mill House"\n'),
+      file('src/content/redirects.yaml', 'rules: []\n'),
+    ]),
+  ).toEqual({
+    listings: [
+      { name: 'flat', data: { _version: 1, title: 'New flat' } },
+      { name: 'house', data: { _version: 1, title: 'New listing' } },
+    ],
+    pages: [{ name: 'landing', data: { _version: 1, title: 'New page' } }],
+  });
 });
 
 // The globals share the entry layout and the CMS edits them through it, so the list of them

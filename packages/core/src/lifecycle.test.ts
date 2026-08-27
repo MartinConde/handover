@@ -359,6 +359,22 @@ test('duplicate leaves the original address behind and falls back to the new fil
   expect(copies[0]?.contents).toBe('_version: 1\ntitle: "Meerblick"\n');
 });
 
+// "Duplicate including unpublished changes?": the languages the caller answers yes for are
+// copied from the draft it hands in, and the rest still come from the commit.
+test('duplicate copies the bytes the caller hands it over the committed ones', async () => {
+  const { git } = fakeGit({
+    'src/content/listings/en/seaview.yaml': '_version: 1\ntitle: "Seaview"\n',
+    'src/content/listings/de/seaview.yaml': '_version: 1\ntitle: "Meerblick"\n',
+  });
+
+  const copies = await duplicateEntry('default', git, listings, 'seaview', 'seaview-copy', {
+    en: '_version: 1\ntitle: "Seaview, edited"\n',
+  });
+
+  expect(copies[0]?.contents).toBe('_version: 1\ntitle: "Seaview, edited"\n');
+  expect(copies[1]?.contents).toBe('_version: 1\ntitle: "Meerblick"\n');
+});
+
 // A file from before Handover has no `_version`, and every write stamps it — not the editor's
 // save alone (F3 in 02-i18n.md).
 test('duplicate stamps the version onto a file that has none', async () => {

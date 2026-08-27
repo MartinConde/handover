@@ -64,8 +64,9 @@ export function checkReserved(value: unknown, path = ''): void {
 const isStringArray = (v: unknown): v is string[] =>
   Array.isArray(v) && v.every((s) => typeof s === 'string');
 
-// Deep copy with a fresh `_id` on every block and array item. Pass the same `ids` map for
-// each locale file of an entry so the copies keep one shared skeleton.
+// Deep copy with a fresh `_id` on every block and array item, and one on an array item that
+// never had it — a hand-written template is the file that arrives without any. Pass the same
+// `ids` map for each locale file of an entry so the copies keep one shared skeleton.
 export function regenerateIds<T>(siteId: string, data: T, ids = new Map<string, string>()): T {
   const renamed = walk(siteId, data, ids) as T;
   const machine = (renamed as { _machine?: string[] })._machine;
@@ -77,10 +78,10 @@ export function regenerateIds<T>(siteId: string, data: T, ids = new Map<string, 
   return renamed;
 }
 
-function walk(siteId: string, value: unknown, ids: Map<string, string>): unknown {
-  if (Array.isArray(value)) return value.map((v) => walk(siteId, v, ids));
+function walk(siteId: string, value: unknown, ids: Map<string, string>, item = false): unknown {
+  if (Array.isArray(value)) return value.map((v) => walk(siteId, v, ids, true));
   if (!value || typeof value !== 'object') return value;
-  return Object.fromEntries(
+  const copy = Object.fromEntries(
     Object.entries(value).map(([k, v]) => {
       if (k !== '_id' || typeof v !== 'string') return [k, walk(siteId, v, ids)];
       const next = ids.get(v) ?? newId(siteId);
@@ -88,6 +89,10 @@ function walk(siteId: string, value: unknown, ids: Map<string, string>): unknown
       return [k, next];
     }),
   );
+  // The identity the editor keys rows on and `_machine` addresses fields through, which the
+  // form gives every row it adds. `stringifyEntry` sorts it back to the front.
+  if (item && typeof copy._id !== 'string') copy._id = newId(siteId);
+  return copy;
 }
 
 /**

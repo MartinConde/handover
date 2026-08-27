@@ -298,6 +298,31 @@ vi.mock('virtual:handover/config', () => ({
 // What the build read out of src/content/, inlined into the Worker bundle.
 vi.mock('virtual:handover/index', () => ({
   preview: true,
+  // No `_id` anywhere: a hand-written starter is the file that arrives without any.
+  templates: {
+    listings: [
+      {
+        name: 'house',
+        data: {
+          _version: 1,
+          title: 'New house',
+          location: 'Devon',
+          rooms: 4,
+          address: { street: 'Somewhere' },
+        },
+      },
+    ],
+    pages: [
+      {
+        name: 'landing',
+        data: {
+          _version: 1,
+          title: 'New page',
+          blocks: [{ _type: 'hero', heading: 'Move to the coast' }],
+        },
+      },
+    ],
+  },
   default: {
     listings: [
       {
@@ -1689,7 +1714,8 @@ test('the entry list is the built index with the pending drafts over it', async 
   ]);
   const res = await GET(ctx('entries/listings'));
   expect(res.status).toBe(200);
-  expect(((await res.json()) as { entries: unknown }).entries).toEqual([
+  const listed = (await res.json()) as { entries: unknown; templates: unknown };
+  expect(listed.entries).toEqual([
     {
       id: 'mill-house',
       locales: {
@@ -1698,6 +1724,8 @@ test('the entry list is the built index with the pending drafts over it', async 
           path: 'src/content/listings/en/mill-house.yaml',
         },
       },
+      // Which rows the duplicate dialog can offer "including unpublished changes?" about.
+      pending: true,
     },
     {
       id: 'seaview-cottage',
@@ -1709,6 +1737,8 @@ test('the entry list is the built index with the pending drafts over it', async 
       },
     },
   ]);
+  // The starters the New entry dialog offers beside Blank, read at build with the index.
+  expect(listed.templates).toEqual(['house']);
 });
 
 test('opening an entry names the field its collection is keyed on', async () => {
@@ -1813,6 +1843,121 @@ test('an entry that exists only as a draft opens from it', async () => {
   // Nothing of it is in the repository, so its preview is the only place this page exists.
   expect(body.published).toEqual([]);
   draft = undefined;
+});
+
+// decap-cms#7371 / payload#14491 at the route: the copy is one entry across its languages,
+// hidden so a half-edited copy never rides out on somebody else's publish, and without the
+// staleness marks, which were made about the original's translations.
+test('duplicating drafts a hidden copy of every language, ids regenerated together', async () => {
+  createDraft.mockClear();
+  publish.mockClear();
+  locales = ['en', 'de'];
+  files['src/content/pages/en/home.yaml'] =
+    '_version: 1\n_i18n:\n  sourceLocale: "en"\ntitle: "Home"\nblocks:\n  - _type: "hero"\n    _id: "k3nf9a2p"\n    heading: "Hi"\n';
+  files['src/content/pages/de/home.yaml'] =
+    '_version: 1\ntitle: "Startseite"\nblocks:\n  - _type: "hero"\n    _id: "k3nf9a2p"\n    heading: "Hallo"\n';
+
+  const res = await POST(post('entries/pages/home/duplicate', JSON.stringify({})));
+
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ slug: 'home-copy' });
+  const written = createDraft.mock.calls.map((call) => [call[3], call[4]]) as [
+    string,
+    Record<string, unknown>,
+  ][];
+  expect(written.map(([path]) => path)).toEqual([
+    'src/content/pages/en/home-copy.yaml',
+    'src/content/pages/de/home-copy.yaml',
+  ]);
+  const ids = written.map(([, values]) => (values.blocks as { _id: string }[])[0]?._id);
+  expect(ids[0]).toMatch(/^[0-9a-z]{8}$/);
+  expect(ids[0]).not.toBe('k3nf9a2p');
+  expect(ids[1]).toBe(ids[0]);
+  for (const [, values] of written) {
+    expect(values._status).toBe('hidden');
+    expect(values).not.toHaveProperty('_i18n');
+  }
+  // Nothing is in the repository until somebody publishes the copy.
+  expect(publish).not.toHaveBeenCalled();
+  expect(logged).toEqual([
+    {
+      userId: undefined,
+      kind: 'entry-duplicate',
+      subject: 'src/content/pages/en/home-copy.yaml',
+      detail: { from: 'home' },
+    },
+  ]);
+});
+
+test('duplicating including unpublished changes copies the draft bytes', async () => {
+  createDraft.mockClear();
+  files['src/content/pages/en/home.yaml'] = '_version: 1\ntitle: "Home"\n';
+  rows['src/content/pages/en/home.yaml'] = {
+    contents: '_version: 1\ntitle: "Home, rewritten"\n',
+    baseSha: 'head789',
+    baseBlob: 'blob-src/content/pages/en/home.yaml',
+  };
+
+  await POST(post('entries/pages/home/duplicate', JSON.stringify({ drafts: true })));
+
+  expect(createDraft.mock.calls[0]?.[4]).toEqual({
+    _version: 1,
+    _status: 'hidden',
+    title: 'Home, rewritten',
+  });
+});
+
+test('the copy takes the file name it is given, through the same derivation as a new entry', async () => {
+  createDraft.mockClear();
+  files['src/content/pages/en/home.yaml'] = '_version: 1\ntitle: "Home"\n';
+
+  const res = await POST(
+    post('entries/pages/home/duplicate', JSON.stringify({ to: 'Zweites Zuhause' })),
+  );
+
+  expect(await res.json()).toEqual({ slug: 'zweites-zuhause' });
+  expect(createDraft.mock.calls[0]?.[3]).toBe('src/content/pages/en/zweites-zuhause.yaml');
+});
+
+// What is copied is what the repository has, so an entry that has never been in it has
+// nothing to copy — the same sentence, and the same reason, as a rename's.
+test('an entry that was never published cannot be duplicated', async () => {
+  createDraft.mockClear();
+  const res = await POST(post('entries/listings/strandhaus-nord/duplicate', JSON.stringify({})));
+  expect(res.status).toBe(409);
+  expect(await res.text()).toBe('Publish this entry before duplicating it');
+  expect(createDraft).not.toHaveBeenCalled();
+});
+
+test('duplicating in an unknown collection is 404', async () => {
+  expect((await POST(post('entries/nope/home/duplicate', JSON.stringify({})))).status).toBe(404);
+});
+
+// A starter is a file with no ids in it: the form gives every row it adds one, so an entry
+// made from that file owes its rows the same.
+test('creating from a template fills the entry from it and gives its blocks ids', async () => {
+  createDraft.mockClear();
+  const res = await POST(
+    post('entries/pages', JSON.stringify({ title: 'Move to Devon', template: 'landing' })),
+  );
+
+  expect(await res.json()).toEqual({ slug: 'move-to-devon' });
+  const values = createDraft.mock.calls[0]?.[4] as Record<string, unknown>;
+  const [block] = values.blocks as { _type: string; _id: string; heading: string }[];
+  expect(block?._id).toMatch(/^[0-9a-z]{8}$/);
+  expect(block?.heading).toBe('Move to the coast');
+  // The title typed into the dialog, not the one the starter carries.
+  expect(values.title).toBe('Move to Devon');
+  expect(values._version).toBe(1);
+});
+
+test('creating from a template no collection declares is 404', async () => {
+  createDraft.mockClear();
+  const res = await POST(
+    post('entries/listings', JSON.stringify({ title: 'Strandhaus', template: 'palace' })),
+  );
+  expect(res.status).toBe(404);
+  expect(createDraft).not.toHaveBeenCalled();
 });
 
 test('renaming moves the entry in one commit and takes its unpublished edits with it', async () => {

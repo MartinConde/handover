@@ -19,8 +19,10 @@ import {
   refErrors,
   richtextErrors,
   schemaVersionError,
+  type Template,
   type TitleFields,
   type Translate,
+  templatesFrom,
   timestampErrors,
   unsafeLinkScheme,
 } from '@handover/core';
@@ -459,6 +461,14 @@ export async function buildIndex(root: URL, titleFields: TitleFields = {}): Prom
   return indexFrom('default', files, titleFields);
 }
 
+/**
+ * The starters the New entry dialog offers. They sit under `src/content/` and are read with
+ * everything else there, so the admin needs no git listing to know what a collection ships.
+ */
+export async function buildTemplates(root: URL): Promise<Record<string, Template[]>> {
+  return templatesFrom('default', await contentFiles(root));
+}
+
 // Astro's own i18n block, as `astro:config:setup` resolves it. A locale is either the
 // folder name or `{ path, codes }`, where the path is the folder and the URL segment.
 type AstroI18n = {
@@ -589,7 +599,8 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
                 load: async (id) =>
                   id === `\0${VIRTUAL_INDEX}`
                     ? `export default JSON.parse(${JSON.stringify(JSON.stringify(await buildIndex(config.root, titleFields)))});
-export const preview = ${preview};`
+export const preview = ${preview};
+export const templates = JSON.parse(${JSON.stringify(JSON.stringify(await buildTemplates(config.root)))});`
                     : undefined,
                 configureServer(server: ViteDevServer) {
                   server.watcher.on('all', (_event, file) => {

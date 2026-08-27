@@ -90,6 +90,21 @@ test('regenerateIds rewrites _machine paths to the new ids', () => {
   ]);
 });
 
+// A hand-written template arrives with no `_id` anywhere — the form gives every row it adds
+// one, so an entry made from that file owes its rows the same.
+test('regenerateIds gives an array item that never had an _id one of its own', () => {
+  const copy = regenerateIds('default', {
+    title: 'New listing',
+    blocks: [{ _type: 'hero', heading: 'Move to the coast' }],
+    tags: ['sea', 'devon'],
+  });
+  const [id, ...rest] = collectIds(copy);
+  expect(id).toMatch(/^[0-9a-z]{8}$/);
+  expect(rest).toEqual([]);
+  // A scalar has nothing to hang an id on, and gets none.
+  expect(copy.tags).toEqual(['sea', 'devon']);
+});
+
 test('a shared map gives two locale files the same new ids', () => {
   const ids = new Map<string, string>();
   const en = regenerateIds('default', page, ids);

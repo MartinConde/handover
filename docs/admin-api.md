@@ -40,7 +40,7 @@ which the picker says on the row rather than dropping it. It is what the page pi
 wherever the picker appears.
 
 ```
-GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales" }], "locales": ["en", "de"], "index": "/listings" }
+GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales", "pending" }], "locales": ["en", "de"], "index": "/listings", "templates": ["house"] }
 ```
 
 The collection's entries for the list screen: one row per entry, `id` is the filename and
@@ -52,7 +52,9 @@ Titles come from the field the collection is keyed on — `title`, or its
 [`titleField`](configuration.md#collections); an entry that has not filled it in lists by
 filename. The list is the build's [content index](#the-content-index) with the pending
 drafts laid over it, so an entry you have edited but not published shows what you typed.
-It reads nothing from GitHub.
+It reads nothing from GitHub. `pending` is there on an entry that has unpublished changes,
+which is what the duplicate dialog asks its question about, and `templates` names the
+[starters](site-files.md#templates) this collection ships.
 
 ```
 GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, translations, pending, problems, hidden, redirects, titleField, locales, defaultLocale, sourceLocale, offered, drift, stale, translator, route, index, prefixDefaultLocale }
@@ -102,11 +104,16 @@ refused is what a collection's routes are for: create, rename, delete, address a
 language off all answer `404`.
 
 ```
-POST /admin/api/entries/:collection         { "title": "…" }  →  { "slug" }
+POST /admin/api/entries/:collection         { "title": "…", "template": "house" }  →  { "slug" }
 ```
 
 Creates an entry as a draft. `slug` is the derived filename, which is what the admin opens
 next. Nothing is committed. `404` if the collection is not configured.
+
+`template` is optional and names one of the collection's [starters](site-files.md#templates);
+without it the entry starts empty apart from its title. The starter's values are copied in, its
+blocks and array rows are given fresh `_id`s, and the title typed into the dialog wins over the
+one the starter carries. `404` if the collection ships no starter under that name.
 
 ```
 POST /admin/api/entries/:collection/:slug/rename   { "to": "…" }  →  { "slug", "commit_sha" }
@@ -129,6 +136,21 @@ answer is `{}` when nothing was committed — the entry existed only as a draft,
 status route below, and it becomes one `reason: "deleted"` rule per language **in this commit**
 — a delete does not wait for a publish. No body at all is `{ "kind": "index" }`, the
 collection's own page above it.
+
+```
+POST /admin/api/entries/:collection/:slug/duplicate   { "to": "…", "drafts": true }  →  { "slug" }
+```
+
+Copies every locale file of the entry under a new name, as drafts — nothing is committed, so
+the copy can be abandoned the way a new entry can. Every `_id` is regenerated with one map
+shared across the languages, so the copy is still one entry with a matching skeleton; the
+staleness marks are dropped and the copy is written `_status: "hidden"`, so it cannot go live
+by accident. The address stays with the original, and the copy answers at its own filename.
+
+`to` is optional and defaults to `<slug>-copy`; it goes through the same derivation as a new
+entry's title, so `slug` in the answer is the name that was actually used. `drafts: true` copies
+the unpublished bytes of every language that has them instead of the committed file. `409` if
+the entry has never been published — there is nothing in the repository to copy.
 
 ```
 POST /admin/api/entries/:collection/:slug/locales  { "locales": ["en"] }  →  {}

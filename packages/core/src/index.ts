@@ -89,13 +89,21 @@ export {
 } from './db.js';
 export type { Change, DiffGroup, RowAt, WordPart } from './diff.js';
 export { diffEntry } from './diff.js';
-export type { ContentFile, ContentIndex, EntryLocale, IndexEntry, TitleFields } from './entries.js';
+export type {
+  ContentFile,
+  ContentIndex,
+  EntryLocale,
+  IndexEntry,
+  Template,
+  TitleFields,
+} from './entries.js';
 export {
   collectionEntries,
   contentPathErrors,
   entryKey,
   entryOffer,
   indexFrom,
+  templatesFrom,
 } from './entries.js';
 export type { GitClient, GitCommit, GitFile, GitHubApp, PublishFile } from './git.js';
 export { blobSha, createGitClient, RefMovedError, RepoUnreachableError } from './git.js';

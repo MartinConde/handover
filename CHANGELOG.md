@@ -4,6 +4,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Duplicate an entry.** Every entry list row has **Duplicate**, which copies every language of
+  the entry under a new file name — pre-filled `<name>-copy` and editable. The copy is one entry
+  across its languages: the same block gets the same new `_id` in each of them. It arrives hidden
+  and without the staleness marks, and it is a draft, so nothing is in the repository until you
+  publish it. An entry with unpublished changes is asked whether to copy those too.
+  [`POST /admin/api/entries/:collection/:slug/duplicate`](docs/admin-api.md).
+
+- **New entry can start from a template.** A file under `src/content/_templates/<collection>/`
+  is offered in the dialog beside Blank, named after the file. Its values are copied into the new
+  draft and its blocks are given ids, so the starter itself needs none.
+  [Templates](docs/site-files.md#templates).
+
 - **A delete can be undone.** Every entry list has a **Deleted** tab beside **All**, listing what
   the admin took away in that collection — the whole entry, or one language of it — with who,
   when, and **Restore**. The same button is on the row in the activity log. Restoring undoes that
