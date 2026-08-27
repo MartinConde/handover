@@ -14,7 +14,7 @@ pnpm add ../handover/packages/astro   # or a tarball from `pnpm pack` in that fo
 ## 1. Add the integration
 
 It takes your `cms.config.ts` — step 2 writes it — and needs the SSR adapter; without one
-it throws at startup.
+it throws at startup. The `i18n` block is read by step 2, so set your languages here first.
 
 ```js
 // astro.config.mjs
@@ -32,9 +32,26 @@ export default defineConfig({
 });
 ```
 
-## 2. Describe your content
+## 2. Run `init`
 
-Schemas are plain Zod in `src/content/schemas.ts`, shared by Astro's `content.config.ts`
+One command makes the Cloudflare side — the database, the bucket, the bindings, the
+migrations and the first owner — and writes the site's own files, `cms.config.ts` included
+([CLI](cli.md#handover-init)):
+
+```sh
+npx handover init you@example.com
+```
+
+On a project that has no `src/content.config.ts` yet, what it leaves behind is a site that
+builds and renders as it stands: one `pages` collection with blocks, its schema, layout,
+loader and route, and a first entry to open ([what it writes](cli.md#what-it-writes)). On a
+project that already has content, your `content.config.ts` is read and left alone and only
+`cms.config.ts` is written.
+
+## 3. Describe your content
+
+These are the files `init` wrote, and what to change to make the site yours. Schemas are
+plain Zod in `src/content/schemas.ts`, shared by Astro's `content.config.ts`
 ([what that file looks like](template-convention.md#contentconfigts)) and Handover's
 `cms.config.ts` at the project root:
 
@@ -71,18 +88,12 @@ Pages render them through a loader and a layout that takes its data as props —
 [Loaders and pages](loaders.md). Each collection can also declare its
 `route`, `index` and `load` — see [Configuration](configuration.md).
 
-## 3. Connect GitHub, the database and the login
+## 4. Connect GitHub and the login
 
-One command makes the Cloudflare side of this — the database, the bucket, the bindings, the
-migrations and the first owner ([CLI](cli.md#handover-init)):
-
-```sh
-npx handover init you@example.com
-```
-
-Handover reads and writes through a GitHub App installed on the site's repository. Create
-the App and the secrets as described in [Deploy](deploy.md), then for local development
-put the same values in `.dev.vars` (gitignored):
+Handover reads and writes through a GitHub App installed on the site's repository, and this
+whole step is the checklist `init` printed when it finished. Create the App and the secrets
+as described in [Deploy](deploy.md), then for local development put the same values in
+`.dev.vars` (gitignored):
 
 ```ini
 BETTER_AUTH_SECRET=paste-the-output-of-openssl-rand-base64-32
@@ -101,13 +112,13 @@ Handover keeps edits in D1 until they are published, so the database has to exis
 as `DB` and have the migrations applied before the first deploy. `init` does all three; by
 hand they are in [Deploy](deploy.md#the-database).
 
-## 4. Edit and publish
+## 5. Edit and publish
 
 ```sh
 pnpm astro dev
 ```
 
-Open `http://localhost:4321/admin` and sign in with the password. Each collection is a
+Open `http://localhost:4321/admin` and sign in as the owner `init` seeded. Each collection is a
 link in the sidebar; **Listings** lists every entry with its title, and each row opens the
 editor. **New listing** asks for a title, shows the filename it derives from it and opens
 the new entry — which is a draft until you publish it, so nothing is in git yet. **Rename**

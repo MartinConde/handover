@@ -4,14 +4,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
-- **`handover init` sets a new site up.** One command creates the D1 database and the R2
-  bucket, writes `wrangler.jsonc` with the `DB` binding and the bucket's vars, `src/worker.ts`
-  and `drizzle.config.ts`, generates and applies the migrations, and puts the first owner in
-  the database. That owner is a `user` row and nothing else — no password for the command to
-  invent — so the first sign-in is an emailed link and the password is set from the account
-  page afterwards. A file that is already there is left alone and named, a config file you
-  wrote gets the block to paste printed instead, and a project that already has `migrations/`
-  is refused before anything is created. [CLI](docs/cli.md#handover-init).
+- **`handover init` sets a new site up.** One command scaffolds the site's own files, creates
+  the D1 database and the R2 bucket, writes `wrangler.jsonc` with the `DB` binding and the
+  bucket's vars, `src/worker.ts` and `drizzle.config.ts`, generates and applies the migrations,
+  puts the first owner in the database, and prints what is left: the GitHub App, its install
+  link and every secret. That owner is a `user` row and nothing else — no password for the
+  command to invent — so the first sign-in is an emailed link and the password is set from the
+  account page afterwards. A file that is already there is left alone and named, a config file
+  you wrote gets the block to paste printed instead, and a project that already has
+  `migrations/` is refused before anything is created. [CLI](docs/cli.md#handover-init).
+
+- **What it scaffolds.** A project with no `src/content.config.ts` gets a starter that builds
+  and renders as it stands — `schemas.ts` and `content.config.ts`, a `pages` collection with
+  blocks, the block registry and two block components, `Page.astro`, `src/loaders/page.ts`, a
+  route per language that calls it, a first entry in the default language and the site global in
+  all of them. A project that
+  already has a `content.config.ts` keeps it: its collections are read out of it and only
+  `cms.config.ts` is written. Either way the languages come from `astro.config.mjs`, because the
+  build stops when the two disagree. [CLI](docs/cli.md#what-it-writes).
 
 - **Duplicate an entry.** Every entry list row has **Duplicate**, which copies every language of
   the entry under a new file name — pre-filled `<name>-copy` and editable. The copy is one entry

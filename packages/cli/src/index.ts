@@ -12,6 +12,7 @@ import {
   timestampErrors,
   versionOf,
 } from '@handover/core';
+import { CHECKLIST, cmsConfig, collectionsOf, i18nOf, starter } from './scaffold.js';
 
 const USAGE = 'Usage: handover <init <owner-email> | migrate [--dry-run] | db generate [--check]>';
 
@@ -91,6 +92,9 @@ function init(env: Env, email: string): number {
   // died on a missing dependency are what a second `init` then trips over.
   env.capture(['drizzle-kit', '--version']);
   const name = siteName(env.cwd);
+  // Local files first, by the same argument as the probe above: a scaffold that throws after
+  // the database exists leaves one the retry then trips over.
+  scaffold(env);
   const account = accountId(env);
   env.run(['wrangler', 'd1', 'create', name]);
   env.run(['wrangler', 'r2', 'bucket', 'create', `${name}-media`]);
@@ -120,7 +124,46 @@ function init(env: Env, email: string): number {
   env.log(
     `${email} is an owner. They sign in with an emailed link and set a password on their account page, which needs a mailer and HANDOVER_BASE_URL; a site with neither gives them a password by hand instead (docs/auth.md).`,
   );
+  env.log(`\n${CHECKLIST}`);
   return 0;
+}
+
+/**
+ * The site's own files. A project with no `content.config.ts` has no content either, so it gets
+ * the starter the template convention describes; one that has content keeps every file it wrote
+ * and gets `cms.config.ts` read off it — including the languages, which the two configs have to
+ * agree on.
+ */
+function scaffold(env: Env): void {
+  const i18n = i18nOf(env.cwd);
+  const theirs = join(env.cwd, 'src/content.config.ts');
+  if (!existsSync(theirs)) {
+    for (const [path, text] of Object.entries(starter(i18n))) put(env, path, text);
+    const pages = { name: 'pages', schema: 'page', extra: `, route: '/[slug]', load: 'page'` };
+    put(env, 'cms.config.ts', cmsConfig(i18n, [pages], true));
+    return;
+  }
+
+  const collections = collectionsOf(readFileSync(theirs, 'utf8'));
+  const inline = collections.filter((c) => !c.schema).map((c) => c.name);
+  env.log(
+    'src/content.config.ts is yours; its collections are read out of it and it is left alone',
+  );
+  if (inline.length)
+    env.log(
+      `${inline.join(', ')}: the schema is written inline there, so cms.config.ts cannot import it. Move it into src/content/schemas.ts and add the collection to cms.config.ts (docs/template-convention.md).`,
+    );
+  const named = collections.flatMap((c) => (c.schema ? [{ name: c.name, schema: c.schema }] : []));
+  if (!named.length) {
+    env.log(
+      'No collection left to write, so no cms.config.ts. Write it by hand: docs/getting-started.md',
+    );
+    return;
+  }
+  put(env, 'cms.config.ts', cmsConfig(i18n, named, false));
+  env.log(
+    'Nothing in it has a route, an index or a load yet, and a collection without them is listed in the admin but renders nowhere: docs/configuration.md.',
+  );
 }
 
 function siteName(cwd: string): string {

@@ -211,3 +211,166 @@ test('an unknown command prints usage and fails', async () => {
     'Usage: handover <init <owner-email> | migrate [--dry-run] | db generate [--check]>',
   );
 });
+
+const CONTENT_CONFIG = `import { glob } from 'astro/loaders';
+import { defineCollection } from 'astro:content';
+import { z } from 'astro/zod';
+import { listing } from './content/schemas';
+
+export const collections = {
+  listings: defineCollection({
+    loader: glob({ pattern: '**/*.yaml', base: './src/content/listings' }),
+    schema: withReserved(listing),
+  }),
+  'field-notes': defineCollection({
+    loader: glob({ pattern: '**/*.yaml', base: './src/content/field-notes' }),
+    schema: z.object({ title: z.string() }),
+  }),
+  globals: defineCollection({
+    loader: glob({ pattern: '**/*.yaml', base: './src/content/globals' }),
+    schema: z.looseObject({}),
+  }),
+};
+`;
+
+test('init scaffolds a starter site whose globals key owes a file in the default language', async () => {
+  const cwd = site({ 'package.json': '{ "name": "my-site" }' });
+  const { code, out } = await run(['init', 'you@example.com'], cwd);
+
+  expect(code).toBe(0);
+  expect(readFileSync(join(cwd, 'cms.config.ts'), 'utf8')).toBe(
+    [
+      "import { defineConfig } from 'astro-handover';",
+      "import { page, site } from './src/content/schemas';",
+      '',
+      'export default defineConfig({',
+      '  // The same block is in astro.config.mjs; the build stops if the two disagree.',
+      "  i18n: { locales: ['en'], defaultLocale: 'en' },",
+      '  collections: {',
+      "    pages: { schema: page, route: '/[slug]', load: 'page' },",
+      '  },',
+      '  // Site-wide content the client owns: one file per language under src/content/globals/.',
+      '  globals: { site },',
+      '});',
+      '',
+    ].join('\n'),
+  );
+  for (const path of [
+    'src/content/schemas.ts',
+    'src/content.config.ts',
+    'src/blocks/registry.ts',
+    'src/blocks/Hero.astro',
+    'src/blocks/TextSection.astro',
+    'src/layouts/Page.astro',
+    'src/loaders/page.ts',
+    'src/pages/[slug].astro',
+    'src/content/pages/en/home.yaml',
+    'src/content/globals/en/site.yaml',
+  ])
+    expect([path, existsSync(join(cwd, path))]).toEqual([path, true]);
+  expect(out).toContain('Wrote src/content/globals/en/site.yaml');
+});
+
+test('init takes the languages from astro.config.mjs rather than writing a second answer', async () => {
+  const cwd = site({
+    'package.json': '{ "name": "my-site" }',
+    'astro.config.mjs': [
+      "import { defineConfig } from 'astro/config';",
+      'export default defineConfig({',
+      "  i18n: { locales: ['en', 'de'], defaultLocale: 'de' },",
+      '});',
+      '',
+    ].join('\n'),
+  });
+  const { code } = await run(['init', 'you@example.com'], cwd);
+
+  expect(code).toBe(0);
+  expect(readFileSync(join(cwd, 'cms.config.ts'), 'utf8')).toContain(
+    "i18n: { locales: ['en', 'de'], defaultLocale: 'de' },",
+  );
+  // A global with no file in a language throws when a page in it renders, so both get one;
+  // the entry is a translation and is the client's to make in the admin.
+  expect(existsSync(join(cwd, 'src/content/globals/de/site.yaml'))).toBe(true);
+  expect(existsSync(join(cwd, 'src/content/globals/en/site.yaml'))).toBe(true);
+  expect(existsSync(join(cwd, 'src/content/pages/de/home.yaml'))).toBe(true);
+  expect(existsSync(join(cwd, 'src/content/pages/en/home.yaml'))).toBe(false);
+  expect(readFileSync(join(cwd, 'src/pages/[slug].astro'), 'utf8')).toContain("locale: 'de'");
+  expect(readFileSync(join(cwd, 'src/pages/en/[slug].astro'), 'utf8')).toContain("locale: 'en'");
+});
+
+test('init reads the languages past a routing block nested in the i18n one', async () => {
+  const cwd = site({
+    'package.json': '{ "name": "my-site" }',
+    'astro.config.mjs': [
+      'export default defineConfig({',
+      "  i18n: { locales: ['en', 'de'], routing: { prefixDefaultLocale: true }, defaultLocale: 'de' },",
+      '});',
+      '',
+    ].join('\n'),
+  });
+  await run(['init', 'you@example.com'], cwd);
+
+  expect(readFileSync(join(cwd, 'cms.config.ts'), 'utf8')).toContain(
+    "i18n: { locales: ['en', 'de'], defaultLocale: 'de' },",
+  );
+});
+
+test('init writes cms.config.ts from an existing content.config.ts and scaffolds nothing else', async () => {
+  const cwd = site({
+    'package.json': '{ "name": "my-site" }',
+    'src/content.config.ts': CONTENT_CONFIG,
+  });
+  const { code, out } = await run(['init', 'you@example.com'], cwd);
+
+  expect(code).toBe(0);
+  expect(readFileSync(join(cwd, 'src/content.config.ts'), 'utf8')).toBe(CONTENT_CONFIG);
+  const config = readFileSync(join(cwd, 'cms.config.ts'), 'utf8');
+  expect(config).toContain("import { listing } from './src/content/schemas';");
+  expect(config).toContain('    listings: { schema: listing },');
+  expect(config).not.toContain('globals');
+  expect(existsSync(join(cwd, 'src/content/schemas.ts'))).toBe(false);
+  expect(existsSync(join(cwd, 'src/layouts/Page.astro'))).toBe(false);
+  // The inline one cannot be imported, so it is named rather than guessed at.
+  expect(out).toContain('field-notes');
+  expect(out).toContain('src/content/schemas.ts');
+});
+
+test('init prints the App link and the secrets that are still owed', async () => {
+  const cwd = site({ 'package.json': '{ "name": "my-site" }' });
+  const { out } = await run(['init', 'you@example.com'], cwd);
+
+  expect(out).toContain('https://github.com/settings/apps/new');
+  for (const secret of [
+    'BETTER_AUTH_SECRET',
+    'GITHUB_APP_ID',
+    'GITHUB_INSTALLATION_ID',
+    'GITHUB_PRIVATE_KEY',
+    'GITHUB_REPO',
+    'HANDOVER_BASE_URL',
+  ])
+    expect(out).toContain(secret);
+});
+
+test('init scaffolds before it creates anything, so a nothing is left behind to trip over', async () => {
+  const cwd = site({ 'package.json': '{ "name": "my-site" }' });
+  const order: string[] = [];
+  const note = (a: string[]) => {
+    order.push(a.join(' '));
+    if (a[2] === 'create') order.push(`scaffolded=${existsSync(join(cwd, 'cms.config.ts'))}`);
+  };
+  await main(['init', 'you@example.com'], {
+    cwd,
+    log: () => {},
+    run: note,
+    capture: (a) => {
+      note(a);
+      return a.includes('whoami') ? WHOAMI : D1_LIST;
+    },
+  });
+  expect(
+    order.slice(
+      order.indexOf('wrangler d1 create my-site'),
+      2 + order.indexOf('wrangler d1 create my-site'),
+    ),
+  ).toEqual(['wrangler d1 create my-site', 'scaffolded=true']);
+});
