@@ -185,17 +185,18 @@ export async function renameEntry(
 }
 
 /**
- * `redirectTo` is the route on this site the client picked in the dialog; `undefined` means
- * "nowhere". It is a route rather than a URL, so it is served under each language's own
- * segment too: a German page that goes away sends its visitors to the German index and not to
- * an English page they cannot read.
+ * `redirectTo` answers, for one language, where the client's choice in the dialog sends that
+ * language's readers; `undefined` — for a language or for all of them — means "nowhere". It is
+ * asked per language rather than given as one route, because a German page that goes away
+ * sends its visitors to the German page that was picked and not to an English one they cannot
+ * read, and a language the choice resolves to nothing in owes no rule at all.
  */
 export async function deleteEntry(
   siteId: string,
   git: GitClient,
   loc: EntryLocation,
   name: string,
-  redirectTo: string | undefined,
+  redirectTo: ((locale: string) => string | undefined) | undefined,
   deps: { now?: () => number } = {},
 ): Promise<{ commit_sha: string }> {
   const base_sha = await git.getHead();
@@ -208,7 +209,7 @@ export async function deleteEntry(
     ? []
     : files.flatMap((file) => {
         const was = urlOf(siteId, loc, file, name);
-        const to = entryUrl(siteId, loc.i18n, redirectTo, '', file.locale);
+        const to = redirectTo(file.locale);
         return was && to && was !== to
           ? [{ from: was, to, status: 301 as const, reason: 'deleted' as const }]
           : [];
@@ -234,7 +235,7 @@ export async function deleteLocales(
   name: string,
   going: string[],
   offered: string[],
-  redirectTo: string | undefined,
+  redirectTo: ((locale: string) => string | undefined) | undefined,
   deps: { now?: () => number } = {},
 ): Promise<{ commit_sha: string; kept: ContentFile[] }> {
   const base_sha = await git.getHead();
@@ -264,7 +265,7 @@ export async function deleteLocales(
     ? []
     : gone.flatMap((file) => {
         const was = urlOf(siteId, loc, file, name);
-        const to = entryUrl(siteId, loc.i18n, redirectTo, '', file.locale);
+        const to = redirectTo(file.locale);
         return was && to && was !== to
           ? [{ from: was, to, status: 301 as const, reason: 'deleted' as const }]
           : [];

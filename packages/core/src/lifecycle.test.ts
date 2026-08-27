@@ -28,6 +28,8 @@ function fakeGit(files: Record<string, string>) {
 const i18n = { locales: ['en', 'de', 'fr'], defaultLocale: 'en' };
 const listings = { collection: 'listings', route: '/listings/[slug]', i18n };
 const now = () => Date.parse('2026-08-22T09:30:00Z');
+// The front page under each language's own segment: what "the overview" resolves to per locale.
+const index = (locale: string) => (locale === i18n.defaultLocale ? '/' : `/${locale}/`);
 const redirects = (files: PublishFile[]) =>
   parse(files.find((f) => f.path === 'src/content/redirects.yaml')?.contents ?? '');
 const ANY_ID = expect.stringMatching(/^[0-9a-z]{8}$/);
@@ -213,7 +215,7 @@ test('delete removes every locale file and sends each language to its own index'
     'src/content/listings/fr/seaview.yaml': '_version: 1\n',
   });
 
-  await deleteEntry('default', git, listings, 'seaview', '/', { now });
+  await deleteEntry('default', git, listings, 'seaview', index, { now });
 
   expect(published).toHaveLength(1);
   expect(published[0]?.message).toBe('Delete listings/seaview');
@@ -250,7 +252,7 @@ test('delete redirects the address a language served, not the file name', async 
   });
   const pages = { collection: 'pages', route: '/[slug]', i18n, localizedSlugs: true };
 
-  await deleteEntry('default', git, pages, 'seaview', '/', { now });
+  await deleteEntry('default', git, pages, 'seaview', index, { now });
 
   expect(redirects(published[0]?.files ?? []).rules).toEqual([
     {
@@ -264,6 +266,40 @@ test('delete redirects the address a language served, not the file name', async 
   ]);
 });
 
+test('delete sends each language to the target it was given, and none where it was given none', async () => {
+  const { git, published } = fakeGit({
+    'src/content/listings/en/seaview.yaml': '_version: 1\n',
+    'src/content/listings/de/seaview.yaml': '_version: 1\n',
+    'src/content/listings/fr/seaview.yaml': '_version: 1\n',
+  });
+  // One page picked in the dialog, resolved to the URL each language serves it at — and to
+  // nothing at all in the language that has no page for it.
+  const picked: Record<string, string> = {
+    en: '/listings/harbour-flat',
+    de: '/de/listings/hafenwohnung',
+  };
+
+  await deleteEntry('default', git, listings, 'seaview', (locale) => picked[locale], { now });
+
+  expect(redirects(published[0]?.files ?? []).rules).toEqual([
+    {
+      _id: ANY_ID,
+      from: '/listings/seaview',
+      to: '/listings/harbour-flat',
+      status: 301,
+      reason: 'deleted',
+      createdAt: '2026-08-22T09:30:00Z',
+    },
+    {
+      _id: ANY_ID,
+      from: '/de/listings/seaview',
+      to: '/de/listings/hafenwohnung',
+      status: 301,
+      reason: 'deleted',
+      createdAt: '2026-08-22T09:30:00Z',
+    },
+  ]);
+});
 test('delete with no redirect target touches only the entry files', async () => {
   const { git, published } = fakeGit({ 'src/content/listings/en/seaview.yaml': '_version: 1\n' });
 

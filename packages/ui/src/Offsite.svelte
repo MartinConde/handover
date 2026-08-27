@@ -9,15 +9,18 @@ export type Target =
   | { kind: 'none' };
 
 let {
+  action,
   what,
   many = false,
   collection,
   index,
   busy = false,
   error = '',
-  onhide,
+  onconfirm,
   onclose,
 }: {
+  /** Hiding keeps the files and waits for a publish; deleting removes them in a commit now. */
+  action: 'hide' | 'delete';
   /** What is coming off the site: one entry's title, or "4 listings" for a batch. */
   what: string;
   /** Whether `what` is a batch, which is only the difference between two verbs. */
@@ -28,11 +31,12 @@ let {
   index?: string;
   busy?: boolean;
   error?: string;
-  onhide: (target: Target) => void;
+  onconfirm: (target: Target) => void;
   onclose: () => void;
 } = $props();
 
 const singular = $derived(collection.replace(/s$/, ''));
+const verb = $derived(action === 'delete' ? 'Delete' : 'Hide');
 
 // The overview is the default where the collection has one; without it the honest default is
 // nowhere, since there is no page above this one to send anybody to.
@@ -53,62 +57,75 @@ const ready = $derived(kind === 'entry' ? Boolean(picked) : kind !== 'url' || ur
 <svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
 
 <div class="scrim">
-  <div class="dialog is-wide" role="dialog" aria-labelledby="hide-h">
-    <h2 id="hide-h">Where should visitors to this page go now?</h2>
-    <form onsubmit={(e) => { e.preventDefault(); onhide(target()); }}>
+  <div class="dialog is-wide" role="dialog" aria-labelledby="offsite-h">
+    <h2 id="offsite-h">Where should visitors to this page go now?</h2>
+    <form onsubmit={(e) => { e.preventDefault(); onconfirm(target()); }}>
       <p>
         <strong>{what}</strong>
-        {many ? 'come' : 'comes'} off the site the next time you publish. Anyone following an old link —
-        a bookmark, an email, a search result — has to land somewhere.
+        {#if action === 'delete'}
+          leaves the repository in one commit, and its unpublished changes go with it.
+        {:else}
+          {many ? 'come' : 'comes'} off the site the next time you publish.
+        {/if}
+        Anyone following an old link — a bookmark, an email, a search result — has to land
+        somewhere.
       </p>
       <fieldset>
         <legend class="visually-hidden">Where to send them</legend>
         {#if index}
           <label class="choice">
-            <input type="radio" name="hide-to" value="index" bind:group={kind} />
+            <input type="radio" name="offsite-to" value="index" bind:group={kind} />
             The {collection} overview <span class="desc">{index}</span>
           </label>
         {/if}
         <label class="choice">
-          <input type="radio" name="hide-to" value="entry" bind:group={kind} />
+          <input type="radio" name="offsite-to" value="entry" bind:group={kind} />
           Another page…
         </label>
         {#if kind === 'entry'}
           <PagePicker
-            id="hide-pick"
+            id="offsite-pick"
             label="pages and entries"
-            labelId="hide-h"
+            labelId="offsite-h"
             chosen={picked?.path}
             onpick={(entry) => (picked = entry)}
             onclose={() => (kind = index ? 'index' : 'none')}
           />
         {/if}
         <label class="choice">
-          <input type="radio" name="hide-to" value="url" bind:group={kind} />
+          <input type="radio" name="offsite-to" value="url" bind:group={kind} />
           A web address…
         </label>
         {#if kind === 'url'}
           <div class="field">
-            <div class="label-row"><label for="hide-url">Web address</label></div>
-            <input class="input" id="hide-url" type="url" placeholder="https://example.com" bind:value={url} />
+            <div class="label-row"><label for="offsite-url">Web address</label></div>
+            <input class="input" id="offsite-url" type="url" placeholder="https://example.com" bind:value={url} />
           </div>
         {/if}
         <label class="choice">
-          <input type="radio" name="hide-to" value="none" bind:group={kind} />
+          <input type="radio" name="offsite-to" value="none" bind:group={kind} />
           Nowhere — show “page not found” <span class="desc">404</span>
         </label>
       </fieldset>
       <!-- One answer, several rules: the server writes each language's from the address that
            language serves, which is why the dialog asks once however many languages there are. -->
       <p class="hint">
-        The rule is written when you publish, once per language, from the address each of them
-        serves at.
+        The rule is written {action === 'delete' ? 'in the same commit' : 'when you publish'}, once
+        per language, from the address each of them serves at.
       </p>
       {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
       <div class="actions">
         <button class="btn" type="button" onclick={onclose}>Cancel</button>
-        <button class="btn btn-primary" type="submit" disabled={busy || !ready}>
-          {busy ? 'Hiding…' : many ? `Hide ${what}` : `Hide this ${singular}`}
+        <button
+          class="btn {action === 'delete' ? 'btn-danger' : 'btn-primary'}"
+          type="submit"
+          disabled={busy || !ready}
+        >
+          {#if busy}
+            {action === 'delete' ? 'Deleting…' : 'Hiding…'}
+          {:else}
+            {verb} {many ? what : `this ${singular}`}
+          {/if}
         </button>
       </div>
     </form>

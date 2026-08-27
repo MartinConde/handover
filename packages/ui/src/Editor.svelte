@@ -2,7 +2,7 @@
 import { type Drift, entryUrl, type Field, LOCK_TTL } from '@handover/core';
 import DriftPanel from './Drift.svelte';
 import Fields from './Fields.svelte';
-import HideDialog, { type Target } from './Hide.svelte';
+import OffsiteDialog, { type Target } from './Offsite.svelte';
 import PreviewPane from './Preview.svelte';
 import Translation from './Translation.svelte';
 
@@ -869,13 +869,14 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     </div>
   {/if}
   {#if hiding}
-    <HideDialog
+    <OffsiteDialog
+      action="hide"
       what={title}
       {collection}
       index={entryUrl('default', routing, entry.index, '', locale) ?? undefined}
       {busy}
       error={statusFailed}
-      onhide={(target) => setStatus(true, target)}
+      onconfirm={(target: Target) => setStatus(true, target)}
       onclose={() => (hiding = false)}
     />
   {/if}

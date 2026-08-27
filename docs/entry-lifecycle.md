@@ -61,14 +61,22 @@ rules:
 ```
 
 Renaming twice keeps the oldest URL pointing at the newest name; renaming back removes the
-rule. Deleting an entry removes every locale file in one commit and, when the editor chose
-where visitors should go, appends a `reason: "deleted"` rule with no `entry`; turning off a
-language that has a file removes that one file the same way, with the same rule for the URL
-it served ([Translating](translating.md#turning-a-language-off)). A collection without a
-`route` has no URL and gets no rule.
+rule.
+
+Deleting asks the same question hiding does — **"Where should visitors to this page go
+now?"** — because the page has been at its address just as long: the collection's overview,
+another page picked from the list, a web address, or nowhere. The delete commits now rather
+than at the next publish, so the answer becomes `reason: "deleted"` rules with no `entry` in
+the commit that removes the files. Turning off a language that has a file removes that one
+file the same way and sends its readers to the collection's overview without asking — the
+entry is not going anywhere, only that language's half of it
+([Translating](translating.md#turning-a-language-off)). A collection without a `route` has no
+URL and gets no rule.
 
 **One rule per language whose URL moved**, under that language's own segment; a delete's
-target is served under it too, so the German page goes to the German index. On a
+target is resolved per language too, so the German page goes to the German page that was
+picked — or, where the picked page has no German half, to that collection's German overview
+and then to `/de/`. On a
 [`localizedSlugs`](configuration.md#localizedslugs) collection that URL is the `slug` in the
 language's own file, so renaming the file writes no rule for a language that has one.
 
@@ -79,7 +87,10 @@ From code, `renameEntry` and `deleteEntry` in `@handover/core` do this through t
 const i18n = { locales: ['en', 'de'], defaultLocale: 'en' };
 const listings = { collection: 'listings', route: '/listings/[slug]', index: '/', i18n };
 await renameEntry('default', git, listings, 'seaview-cottage', 'seaview-cottage-devon');
-await deleteEntry('default', git, listings, 'mill-house', '/'); // undefined = no redirect
+// Where each language's readers go; `undefined` for a language, or for the argument, is nowhere.
+await deleteEntry('default', git, listings, 'mill-house', (locale) =>
+  locale === 'en' ? '/listings' : `/${locale}/listings`,
+);
 ```
 
 The rule shape, and how the build turns the file into `_redirects`, is in

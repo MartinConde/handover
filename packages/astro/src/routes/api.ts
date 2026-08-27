@@ -1468,7 +1468,9 @@ async function offering(collection: string, slug: string, request: Request): Pro
       slug,
       going,
       offered,
-      collected.index,
+      // Not asked about: one language going is not the entry going, and the entry-wide question
+      // is Delete's. Its readers go to the collection's page above it under their own segment.
+      (locale) => entryUrl('default', config.i18n, collected.index, '', locale),
     );
     for (const { locale, path, file } of files) {
       if (!going.includes(locale)) continue;
@@ -2036,11 +2038,22 @@ async function rename(collection: string, slug: string, request: Request): Promi
   return Response.json({ slug: to, commit_sha });
 }
 
-// An entry that was never published has nothing to remove from the repository and no URL
-// anyone could have followed, so it goes without a commit and without a redirect.
-async function remove(collection: string, slug: string): Promise<Response> {
+/**
+ * An entry that was never published has nothing to remove from the repository and no URL anyone
+ * could have followed, so it goes without a commit and without a redirect.
+ *
+ * `redirect` is the same answer the hide dialog gives, resolved to the URL each language sends
+ * its readers to. A delete commits now rather than at the next publish, so the rules go into the
+ * commit that takes the files away. No answer at all is the collection's own page above it,
+ * which is what the dialog offers first.
+ */
+async function remove(collection: string, slug: string, request?: Request): Promise<Response> {
   const collected = config.collections[collection];
   if (!collected) return new Response('Not found', { status: 404 });
+  const body = (await request?.json().catch(() => undefined)) as
+    | { redirect?: { kind?: unknown; value?: unknown } }
+    | undefined;
+  const answer = body?.redirect ?? { kind: 'index' };
   const git = gitClient();
   const database = db();
   const files = await entryFiles(git, collection, slug);
@@ -2048,7 +2061,18 @@ async function remove(collection: string, slug: string): Promise<Response> {
     for (const { path } of files) await discardDraft('default', database, path);
     return Response.json({});
   }
-  const result = await deleteEntry('default', git, locationOf(collection), slug, collected.index);
+  const picked =
+    answer.kind === 'entry'
+      ? collectionEntries(
+          'default',
+          index,
+          String(answer.value ?? '').split('/')[0] ?? '',
+          await overlayRows('default', database, index),
+        )
+      : undefined;
+  const result = await deleteEntry('default', git, locationOf(collection), slug, (locale) =>
+    redirectTarget(answer, collected, picked, locale),
+  );
   for (const { path, file } of files)
     if (file) await recordDelete('default', database, path, result.commit_sha);
   return Response.json(result);
@@ -2548,6 +2572,6 @@ export const DELETE: APIRoute = async ({ params, request, url, locals }) => {
   const draft = params.path?.match(DRAFT);
   if (draft) return discard(draft[1] ?? '', draft[2] ?? '');
   const entry = params.path?.match(ENTRY);
-  if (entry) return answering(() => remove(entry[1] ?? '', entry[2] ?? ''));
+  if (entry) return answering(() => remove(entry[1] ?? '', entry[2] ?? '', request));
   return new Response('Not found', { status: 404 });
 };

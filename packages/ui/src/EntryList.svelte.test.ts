@@ -145,18 +145,43 @@ test('renaming sends the new file name and reloads the list', async () => {
   expect(q(root, '.dialog')).toBeNull();
 });
 
-test('deleting names the entry it is about and sends one DELETE', async () => {
+// A delete takes a page off the site the way a hide does, so it asks the same question — and
+// answers it in the commit that removes the files rather than at the next publish.
+test('deleting asks where its readers go and sends the answer with the DELETE', async () => {
   const fetcher = api(ENTRIES);
   const root = show();
   await tick();
   await click(root, '.row [aria-label="Delete The Mill House"]');
-  expect(q(root, '.dialog h2')?.textContent).toBe('Delete The Mill House?');
+  expect(q(root, '.dialog h2')?.textContent).toBe('Where should visitors to this page go now?');
+  expect(q(root, '.dialog .btn-danger')?.textContent?.trim()).toBe('Delete this listing');
   await click(root, '.dialog .btn-danger');
 
   expect(fetcher).toHaveBeenCalledWith('/admin/api/entries/listings/mill-house', {
     method: 'DELETE',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ redirect: { kind: 'index' } }),
   });
   expect(changed).toHaveBeenCalled();
+});
+
+// "Nowhere" is one of the four answers, and the only one that leaves the old URL a 404.
+test('a delete answered "nowhere" says so in the body', async () => {
+  const fetcher = api(ENTRIES);
+  const root = show();
+  await tick();
+  await click(root, '.row [aria-label="Delete The Mill House"]');
+  const nowhere = Array.from(
+    root.querySelectorAll<HTMLInputElement>('.dialog input[type="radio"]'),
+  ).at(-1);
+  nowhere?.click();
+  await tick();
+  await click(root, '.dialog .btn-danger');
+
+  expect(fetcher).toHaveBeenCalledWith('/admin/api/entries/listings/mill-house', {
+    method: 'DELETE',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ redirect: { kind: 'none' } }),
+  });
 });
 
 test('a refused rename says so and keeps the dialog open', async () => {

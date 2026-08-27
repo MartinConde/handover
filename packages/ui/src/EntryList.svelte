@@ -1,6 +1,6 @@
 <script lang="ts">
 import { entryName } from '@handover/core';
-import HideDialog, { type Target } from './Hide.svelte';
+import OffsiteDialog, { type Target } from './Offsite.svelte';
 
 type Entry = {
   id: string;
@@ -16,11 +16,12 @@ let locales = $state<string[]>([]);
 // The page above this collection, which is where a hidden entry's readers go by default.
 let index = $state<string>();
 let loading = $state(true);
-let dialog = $state<'' | 'new' | 'rename' | 'delete'>('');
+let dialog = $state<'' | 'new' | 'rename'>('');
 // The rows the bulk bar is about; checking any one of them reveals the column for all.
 let chosen = $state<string[]>([]);
-// Which entries the hide dialog is open over — one from a row menu, or the whole selection.
-let hiding = $state<string[]>([]);
+// What the redirect question is open over: hiding one row or the whole selection, or deleting
+// one entry. Both take a page off the site, so both ask it.
+let offsite = $state<{ action: 'hide' | 'delete'; ids: string[] }>();
 let target = $state<Entry>();
 let text = $state('');
 let busy = $state(false);
@@ -78,12 +79,11 @@ async function status(ids: string[], hidden: boolean, redirect?: Target) {
     json({ entries: ids, hidden, redirect }),
   );
   if (!res) return;
-  hiding = [];
   chosen = [];
   await done();
 }
 
-function open(kind: 'new' | 'rename' | 'delete', entry?: Entry) {
+function open(kind: 'new' | 'rename', entry?: Entry) {
   dialog = kind;
   target = entry;
   text = kind === 'rename' ? (entry?.id ?? '') : '';
@@ -91,7 +91,7 @@ function open(kind: 'new' | 'rename' | 'delete', entry?: Entry) {
 }
 const close = () => {
   dialog = '';
-  hiding = [];
+  offsite = undefined;
   error = '';
 };
 
@@ -132,9 +132,11 @@ async function rename(event: Event) {
   await done();
 }
 
-async function remove() {
-  const url = `/admin/api/entries/${collection}/${target?.id}`;
-  if (!(await send(url, { method: 'DELETE' }))) return;
+// The answer travels with the DELETE: a delete commits now, so the rules go into the commit
+// that takes the files away rather than waiting on a publish the way a hide's do.
+async function remove(id: string, redirect: Target) {
+  const url = `/admin/api/entries/${collection}/${id}`;
+  if (!(await send(url, { ...json({ redirect }), method: 'DELETE' }))) return;
   await done();
 }
 
@@ -219,7 +221,9 @@ async function done() {
               disabled={busy}
               aria-label="{isHidden(entry) ? 'Show' : 'Hide'} {titleOf(entry)}"
               onclick={() =>
-                isHidden(entry) ? status([entry.id], false) : (hiding = [entry.id])}
+                isHidden(entry)
+                  ? status([entry.id], false)
+                  : (offsite = { action: 'hide', ids: [entry.id] })}
               >{isHidden(entry) ? 'Show' : 'Hide'}</button
             >
             <button
@@ -232,7 +236,7 @@ async function done() {
               class="btn btn-sm"
               type="button"
               aria-label="Delete {titleOf(entry)}"
-              onclick={() => open('delete', entry)}>Delete</button
+              onclick={() => (offsite = { action: 'delete', ids: [entry.id] })}>Delete</button
             >
           </div>
         </div>
@@ -243,7 +247,12 @@ async function done() {
         {chosen.length} selected
         <span class="spacer"></span>
         <button class="btn btn-ghost btn-sm" type="button" onclick={() => (chosen = [])}>Clear</button>
-        <button class="btn btn-sm" type="button" disabled={busy} onclick={() => (hiding = chosen)}>
+        <button
+          class="btn btn-sm"
+          type="button"
+          disabled={busy}
+          onclick={() => (offsite = { action: 'hide', ids: chosen })}
+        >
           Hide {chosen.length} {chosen.length === 1 ? singular : collection}
         </button>
       </div>
@@ -261,15 +270,19 @@ async function done() {
   {/if}
 </main>
 
-{#if hiding.length}
-  <HideDialog
-    what={named(hiding) ? titleOf(named(hiding) as Entry) : `${hiding.length} ${collection}`}
-    many={hiding.length > 1}
+{#if offsite}
+  {@const ids = offsite.ids}
+  {@const action = offsite.action}
+  <OffsiteDialog
+    {action}
+    what={named(ids) ? titleOf(named(ids) as Entry) : `${ids.length} ${collection}`}
+    many={ids.length > 1}
     {collection}
     {index}
     {busy}
     {error}
-    onhide={(target) => status(hiding, true, target)}
+    onconfirm={(target) =>
+      action === 'delete' ? remove(ids[0] ?? '', target) : status(ids, true, target)}
     onclose={close}
   />
 {/if}
@@ -279,20 +292,7 @@ async function done() {
 {#if dialog}
   <div class="scrim">
     <div class="dialog" role="dialog" aria-labelledby="entry-dialog-h">
-      {#if dialog === 'delete'}
-        <h2 id="entry-dialog-h">Delete {titleOf(target as Entry)}?</h2>
-        <p>
-          The file leaves the repository in one commit and its old address redirects to the
-          {singular} list. Unpublished changes to it are dropped.
-        </p>
-        {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
-        <div class="actions">
-          <button class="btn" type="button" onclick={close}>Cancel</button>
-          <button class="btn btn-danger" type="button" disabled={busy} onclick={remove}>
-            {busy ? 'Deleting…' : 'Delete'}
-          </button>
-        </div>
-      {:else if dialog === 'rename'}
+      {#if dialog === 'rename'}
         <h2 id="entry-dialog-h">Rename {titleOf(target as Entry)}</h2>
         <form onsubmit={rename}>
           <div class="field">

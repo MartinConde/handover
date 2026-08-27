@@ -151,7 +151,7 @@ test.skipIf(!configured)(
       newRules: 1,
     });
 
-    const { commit_sha: deleted } = await deleteEntry('default', git, loc, `${name}-b`, '/');
+    const { commit_sha: deleted } = await deleteEntry('default', git, loc, `${name}-b`, () => '/');
 
     expect(await compare(renamed, deleted)).toEqual({
       commits: 1,

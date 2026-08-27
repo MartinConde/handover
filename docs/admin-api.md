@@ -117,12 +117,16 @@ goes through the same derivation as a new entry's title, so `slug` in the answer
 that was actually used. `409` if the entry has never been published.
 
 ```
-DELETE /admin/api/entries/:collection/:slug        →  { "commit_sha" }
+DELETE /admin/api/entries/:collection/:slug   { "redirect": { "kind": "index" } }  →  { "commit_sha" }
 ```
 
-One commit removing every locale file, with a redirect per language to that language's copy
-of the collection's `index` when it has one, and the entry's draft dropped. The answer is `{}`
-when nothing was committed — the entry existed only as a draft, or not at all.
+One commit removing every locale file, with the entry's draft dropped. The answer is `{}` when
+nothing was committed — the entry existed only as a draft, or not at all.
+
+`redirect` is the answer to the same question a hide asks, in the same four shapes as the
+status route below, and it becomes one `reason: "deleted"` rule per language **in this commit**
+— a delete does not wait for a publish. No body at all is `{ "kind": "index" }`, the
+collection's own page above it.
 
 ```
 POST /admin/api/entries/:collection/:slug/locales  { "locales": ["en"] }  →  {}

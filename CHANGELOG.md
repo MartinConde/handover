@@ -4,6 +4,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Deleting a page asks where its visitors should go**, in the same dialog hiding uses: the
+  collection's overview, another page picked from the list, a web address, or nowhere. The
+  answer becomes one `reason: "deleted"` redirect per language, from the address that language
+  served, in the very commit that removes the files. Until now every delete sent every language
+  to the collection's overview. [Entry lifecycle](docs/entry-lifecycle.md#renaming-and-deleting-an-entry).
+
+- `DELETE /admin/api/entries/<collection>/<slug>` takes that answer as `{ "redirect": … }`, in
+  the four shapes the status route already takes. No body is still the collection's overview.
+  [Admin API](docs/admin-api.md#entries).
+
+- ⚠️ `deleteEntry` and `deleteLocales` in `@handover/core` take **a function** for the redirect
+  target — `(locale) => string | undefined` — where they took one route for every language. A
+  picked page has a different address in each language, and some languages none at all.
+
 - **A listing that is sold comes off the site without being deleted.** The entry header has a
   status selector — **Live** or **Hidden**, and nothing called "draft" — and every row of the
   entry list has a **Hide**; checking several rows hides them together. A hidden entry keeps its

@@ -1826,10 +1826,21 @@ test('renaming an entry that has never been published says so rather than failin
   expect(publish).not.toHaveBeenCalled();
 });
 
+const del = (path: string, body?: unknown) =>
+  DELETE(
+    ctx(
+      path,
+      new Request(`https://x/admin/api/${path}`, {
+        method: 'DELETE',
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      }),
+    ),
+  );
+
 test('deleting commits the removal with a redirect and says the file has gone', async () => {
   publish.mockClear();
   recordDelete.mockClear();
-  const res = await DELETE(ctx('entries/listings/mill-house'));
+  const res = await del('entries/listings/mill-house');
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({ commit_sha: 'def456' });
   const [files] = (publish.mock.calls[0] ?? []) as unknown as [PublishFile[]];
@@ -1856,7 +1867,7 @@ test('deleting a bilingual entry sends each language its own URL to its own inde
   files['src/content/posts/de/hello.yaml'] = '_version: 1\ntitle: "Hallo"\nslug: "hallo"\n';
   publish.mockClear();
 
-  const res = await DELETE(ctx('entries/posts/hello'));
+  const res = await del('entries/posts/hello');
 
   expect(res.status).toBe(200);
   const [written] = (publish.mock.calls[0] ?? []) as unknown as [PublishFile[]];
@@ -1865,10 +1876,40 @@ test('deleting a bilingual entry sends each language its own URL to its own inde
   expect(rules).toContain('from: "/de/blog/hallo"\n    to: "/de/blog"');
 });
 
+// The same question hide asks, and the same answer shape: the client picked one page and the
+// server turns it into the URL each language serves that page at.
+test('deleting sends each language to the page the dialog picked', async () => {
+  locales = ['en', 'de'];
+  files['src/content/posts/en/hello.yaml'] = '_version: 1\ntitle: "Hello"\nslug: "hello-world"\n';
+  files['src/content/posts/de/hello.yaml'] = '_version: 1\ntitle: "Hallo"\nslug: "hallo"\n';
+  publish.mockClear();
+
+  const res = await del('entries/posts/hello', {
+    redirect: { kind: 'entry', value: 'posts/taken' },
+  });
+
+  expect(res.status).toBe(200);
+  const [written] = (publish.mock.calls[0] ?? []) as unknown as [PublishFile[]];
+  const rules = written.find((f) => f.path === 'src/content/redirects.yaml')?.contents ?? '';
+  expect(rules).toContain('from: "/blog/hello-world"\n    to: "/blog/taken"');
+  expect(rules).toContain('from: "/de/blog/hallo"\n    to: "/de/blog/belegt"');
+});
+
+// "Nowhere" is an answer: the page is gone and its old links are honestly 404s.
+test('deleting with "nowhere" removes the files and writes no rule', async () => {
+  publish.mockClear();
+
+  const res = await del('entries/listings/mill-house', { redirect: { kind: 'none' } });
+
+  expect(res.status).toBe(200);
+  const [written] = (publish.mock.calls[0] ?? []) as unknown as [PublishFile[]];
+  expect(written.map((f) => f.path)).toEqual(['src/content/listings/en/mill-house.yaml']);
+});
+
 test('deleting an entry that was never published makes no commit', async () => {
   publish.mockClear();
   discardDraft.mockClear();
-  const res = await DELETE(ctx('entries/listings/strandhaus-nord'));
+  const res = await del('entries/listings/strandhaus-nord');
   expect(res.status).toBe(200);
   expect(publish).not.toHaveBeenCalled();
   expect(discardDraft).toHaveBeenCalledWith(
