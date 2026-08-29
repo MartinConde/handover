@@ -276,6 +276,29 @@ test('each row wears the chip of the group its kind belongs to, and an unclaimed
   ).toEqual(['Accounts', 'Publishing', 'System', '']);
 });
 
+// A cron row is a sentence like every other, not the job's internal name with a dash in it.
+test('a cron row says what the job did, or why it did not', async () => {
+  server({
+    events: [
+      ev('cron-reconcile', { user: null, detail: { done: 2 } }),
+      ev('cron-retention', { user: null, detail: { done: 1 } }),
+      ev('cron-orphans', { user: null, detail: { done: 3 } }),
+      ev('cron-orphans', { user: null, detail: { error: 'the repository could not be reached' } }),
+      ev('cron-later', { user: null, detail: { done: 1 } }),
+    ],
+    cursor: null,
+  });
+  const root = await show();
+
+  expect(sentences(root)).toEqual([
+    'The hourly media check recorded 2 uploads the library had missed.',
+    'The daily clean-up removed 1 activity row older than 180 days.',
+    'The daily clean-up discarded 3 drafts whose file is no longer in the repository.',
+    'The daily draft clean-up failed: the repository could not be reached.',
+    'The later job ran and did 1 thing.',
+  ]);
+});
+
 // "Yesterday" is not an audit record, so a row stops counting backwards once it is a week old.
 // The buckets are calendar days from local midnight, not elapsed milliseconds, because a day is
 // 23 or 25 hours across a daylight-saving change.

@@ -320,13 +320,22 @@ test('a key the service refuses keeps the dialog open and says what refused it',
   expect(requests.filter((url) => url === '/admin/api/settings')).toHaveLength(1);
 });
 
-test('removing a key asks the route to and reads the list again', async () => {
+// A key is not re-typeable from memory, so taking one away asks first — with the card's own
+// sentence about what takes over, since that is the whole of what is being decided.
+test('removing a key asks first, then asks the route to and reads the list again', async () => {
   const root = await show(
     { '/admin/api/settings/deepl': Response.json({ ok: true }) },
     {},
     SET_HERE,
   );
   press(cardOr(root, 'DeepL'), 'Remove');
+  await settle();
+
+  expect(sent.find((call) => call.init?.method === 'DELETE')).toBeUndefined();
+  const dialog = root.querySelector('.dialog') as HTMLElement;
+  expect(dialog.querySelector('h2')?.textContent).toBe('Remove the DeepL key?');
+  expect(text(dialog)).toContain('Removing it hides the Translate button everywhere.');
+  press(dialog, 'Remove');
   await settle();
 
   const gone = sent.find((call) => call.init?.method === 'DELETE');

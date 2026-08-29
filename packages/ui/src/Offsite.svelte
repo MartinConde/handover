@@ -17,6 +17,7 @@ let {
   busy = false,
   error = '',
   onconfirm,
+  onhide,
   onclose,
 }: {
   /** Hiding keeps the files and waits for a publish; deleting removes them in a commit now. */
@@ -32,6 +33,8 @@ let {
   busy?: boolean;
   error?: string;
   onconfirm: (target: Target) => void;
+  /** Deleting only: the way out the dialog leads with, since the client will want it back. */
+  onhide?: () => void;
   onclose: () => void;
 } = $props();
 
@@ -60,6 +63,12 @@ const ready = $derived(kind === 'entry' ? Boolean(picked) : kind !== 'url' || ur
   <div class="dialog is-wide" role="dialog" aria-labelledby="offsite-h">
     <h2 id="offsite-h">Where should visitors to this page go now?</h2>
     <form onsubmit={(e) => { e.preventDefault(); onconfirm(target()); }}>
+      {#if action === 'delete' && onhide}
+        <p class="lead">
+          <strong>Hide it instead?</strong> Hidden entries come off the site but can be brought
+          back.
+        </p>
+      {/if}
       <p>
         <strong>{what}</strong>
         {#if action === 'delete'}
@@ -116,6 +125,9 @@ const ready = $derived(kind === 'entry' ? Boolean(picked) : kind !== 'url' || ur
       {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
       <div class="actions">
         <button class="btn" type="button" onclick={onclose}>Cancel</button>
+        {#if action === 'delete' && onhide}
+          <button class="btn btn-primary" type="button" onclick={onhide}>Hide instead</button>
+        {/if}
         <button
           class="btn {action === 'delete' ? 'btn-danger' : 'btn-primary'}"
           type="submit"

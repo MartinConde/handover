@@ -362,8 +362,7 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
 {/snippet}
 
 <div class="scrim is-right">
-  <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
-  <aside
+  <div
     class="drawer"
     role="dialog"
     aria-modal="true"
@@ -490,7 +489,7 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
         </p>
       </footer>
     {/if}
-  </aside>
+  </div>
 </div>
 
 <!-- Not aria-modal: the drawer under it is not inert, and claiming a trap that is not there

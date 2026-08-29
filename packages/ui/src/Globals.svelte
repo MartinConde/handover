@@ -6,6 +6,8 @@ type Global = {
   /** The languages this global has a file in; the rest are the dashed chip. */
   locales: string[];
   pending: boolean;
+  /** Who has it open right now. */
+  editing?: { id: string; name: string | null };
 };
 
 let globals = $state<Global[]>([]);
@@ -50,6 +52,7 @@ async function load() {
             <a href="/admin/site/{global.key}">{global.label}</a>
           </h2>
           {#if global.description}<p>{global.description}</p>{/if}
+          {#if global.editing}<span class="badge">Being edited by {global.editing.name || 'somebody'}</span>{/if}
           {#if locales.length > 1}
             <div class="meta">
               <span class="chips" aria-label="Languages">

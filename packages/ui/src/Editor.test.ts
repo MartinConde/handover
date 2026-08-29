@@ -1508,3 +1508,107 @@ test('a hidden entry with no rule says so rather than naming nothing', () => {
     'Off the site — visitors to its old address see “page not found”',
   );
 });
+
+// The header's overflow menu: what the list row offers, from inside the entry. Hide comes
+// before Delete because it is the answer the delete dialog leads with.
+const menuItems = (root: ParentNode) =>
+  $$(root, '[role="menu"][aria-label="More actions"] [role="menuitem"]').map((b) =>
+    b.textContent?.trim(),
+  );
+
+test('the header menu offers Rename, Hide and Delete, in that order', async () => {
+  vi.stubGlobal('fetch', autosaved());
+  const root = show();
+  await tick();
+  $<HTMLButtonElement>(root, '[aria-label="More actions"]')?.click();
+  flushSync();
+
+  expect(menuItems(root)).toEqual(['Rename', 'Hide', 'Delete']);
+  vi.unstubAllGlobals();
+});
+
+test('renaming from the header sends the new file name', async () => {
+  const fetchMock = autosaved();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  await tick();
+  $<HTMLButtonElement>(root, '[aria-label="More actions"]')?.click();
+  flushSync();
+  $$<HTMLButtonElement>(root, '[role="menuitem"]')
+    .find((b) => b.textContent?.trim() === 'Rename')
+    ?.click();
+  flushSync();
+
+  expect($(root, '.dialog h2')?.textContent).toBe('Rename Seaview Cottage');
+  expect($<HTMLInputElement>(root, '.dialog input#rename-to')?.value).toBe('seaview-cottage');
+  type(root, '.dialog input#rename-to', 'Seaview House');
+  $<HTMLButtonElement>(root, '.dialog .btn-primary')?.click();
+  await tick();
+
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/entries/listings/seaview-cottage/rename', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ to: 'Seaview House' }),
+  });
+  vi.unstubAllGlobals();
+});
+
+test('deleting from the header leads with Hide it instead?, and Hide instead asks the hide question', async () => {
+  const fetchMock = autosaved();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  await tick();
+  $<HTMLButtonElement>(root, '[aria-label="More actions"]')?.click();
+  flushSync();
+  $$<HTMLButtonElement>(root, '[role="menuitem"]')
+    .find((b) => b.textContent?.trim() === 'Delete')
+    ?.click();
+  flushSync();
+
+  expect($(root, '.dialog p')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+    'Hide it instead? Hidden entries come off the site but can be brought back.',
+  );
+  $$<HTMLButtonElement>(root, '.dialog button')
+    .find((b) => b.textContent?.trim() === 'Hide instead')
+    ?.click();
+  flushSync();
+
+  expect($(root, '.dialog p')?.textContent).not.toContain('Hide it instead?');
+  expect($(root, '.dialog .btn-primary')?.textContent?.trim()).toBe('Hide this listing');
+  expect(wrote(fetchMock).some((call) => (call[1] as RequestInit)?.method === 'DELETE')).toBe(
+    false,
+  );
+  vi.unstubAllGlobals();
+});
+
+test('a delete from the header sends where its readers go with the DELETE', async () => {
+  const fetchMock = autosaved();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  await tick();
+  $<HTMLButtonElement>(root, '[aria-label="More actions"]')?.click();
+  flushSync();
+  $$<HTMLButtonElement>(root, '[role="menuitem"]')
+    .find((b) => b.textContent?.trim() === 'Delete')
+    ?.click();
+  flushSync();
+  $<HTMLButtonElement>(root, '.dialog .btn-danger')?.click();
+  await tick();
+
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/entries/listings/seaview-cottage', {
+    method: 'DELETE',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ redirect: { kind: 'none' } }),
+  });
+  vi.unstubAllGlobals();
+});
+
+test('the header menu is closed while somebody else holds the entry', async () => {
+  vi.stubGlobal('fetch', heldBy());
+  const root = show();
+  await tick();
+  flushSync();
+
+  expect($<HTMLButtonElement>(root, '[aria-label="More actions"]')?.disabled).toBe(true);
+  vi.unstubAllGlobals();
+});

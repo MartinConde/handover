@@ -43,7 +43,7 @@ stays in the environment: a wrong GitHub App key or bucket credential would lock
 screen that fixes it.
 
 A key is stored **encrypted** in the site's own database, under `HANDOVER_SETTINGS_KEY`
-([Deploying](deploy.md#secrets)). Without that secret there is nowhere to put one, and the page
+([Deploying](secrets.md)). Without that secret there is nowhere to put one, and the page
 says so rather than failing.
 
 Each card says where the key it names is coming from, and what happens if you take it away:

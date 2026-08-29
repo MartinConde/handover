@@ -9,6 +9,8 @@ type Entry = {
   offered?: string[];
   /** Whether it has unpublished changes, which is what a duplicate can be asked to carry. */
   pending?: boolean;
+  /** Who has it open right now. */
+  editing?: { id: string; name: string | null };
 };
 /** One thing the CMS took away, as the activity log remembers it. */
 type Deleted = {
@@ -360,6 +362,7 @@ async function done() {
           <div class="td title" role="cell">
             <a href="/admin/c/{collection}/{entry.id}">{titleOf(entry)}</a>
             {#if isHidden(entry)}<span class="badge">Hidden</span>{/if}
+            {#if entry.editing}<span class="badge">Being edited by {entry.editing.name || 'somebody'}</span>{/if}
           </div>
           {#if many}
             <div class="td" role="cell" data-label="Languages">
@@ -490,6 +493,7 @@ async function done() {
     {error}
     onconfirm={(target) =>
       action === 'delete' ? remove(ids[0] ?? '', target) : status(ids, true, target)}
+    onhide={() => (offsite = { action: 'hide', ids })}
     onclose={close}
   />
 {/if}

@@ -475,3 +475,49 @@ test('a property inside a structured field is named by every step down to it', (
     },
   ]);
 });
+
+// A language that was there and is not any more is one event, not one deletion per field:
+// "the German version was removed" is what happened, and the shared group must not read the
+// missing file as every shared value having gone either.
+test('a language present before and absent after is one removal, not a deletion per field', () => {
+  const en = { title: 'Mill House', price: 450000 };
+  const de = { title: 'Mühlenhaus', summary: 'Am Fluss', price: 450000 };
+
+  const groups = diffEntry('default', listing, { en, de }, { en });
+
+  expect(groups).toEqual([
+    { changes: [] },
+    { locale: 'en', changes: [] },
+    { locale: 'de', removed: true, changes: [] },
+  ]);
+});
+
+// A row with nothing to say for itself is named by where it stood, never by its `_id`: the id
+// is the file's bookkeeping and reads as noise to the person who deleted the row.
+test('a removed row with no words of its own is named by its place, not its id', () => {
+  const opening: Form = {
+    fields: [
+      {
+        path: ['hours'],
+        label: 'Hours',
+        type: 'array',
+        required: false,
+        item: [{ path: ['open'], label: 'Open', type: 'number', required: true }],
+      },
+    ],
+    blocks: {},
+  };
+  const first = { _id: 'k3nf9a2p', open: 9 };
+  const second = { _id: 'q8zt1m4c', open: 10 };
+
+  const groups = diffEntry(
+    'default',
+    opening,
+    { en: { hours: [first, second] } },
+    { en: { hours: [first] } },
+  );
+
+  expect(changesIn(groups, 'en')).toEqual([
+    { path: 'hours[_id=q8zt1m4c]', label: 'Row 2', kind: 'row', at: 'removed', changes: [] },
+  ]);
+});

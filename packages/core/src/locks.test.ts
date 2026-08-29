@@ -3,7 +3,15 @@ import { drizzle } from 'drizzle-orm/d1';
 import { Miniflare } from 'miniflare';
 import { afterAll, beforeAll, beforeEach, expect, test } from 'vitest';
 import type { Db } from './db.js';
-import { claimLock, heldEntries, LOCK_TTL, lockHolder, releaseLocks, takeLock } from './locks.js';
+import {
+  claimLock,
+  heldEntries,
+  LOCK_TTL,
+  lockHolder,
+  lockHolders,
+  releaseLocks,
+  takeLock,
+} from './locks.js';
 import * as tables from './tables.js';
 
 // The same harness `activity.test.ts` uses: a real D1 behind the real generated schema, since
@@ -97,6 +105,17 @@ test('what somebody is editing leaves out the entries their beat has run out on'
   await claimLock('default', db, 'pages/about', 'u2', 'tab', NOW - LOCK_TTL);
   expect(await heldEntries('default', db, NOW)).toEqual({
     u1: ['listings/seaview-cottage', 'pages/home'],
+  });
+});
+
+// The list's badge: every entry somebody is in, by name, with the ones whose beat ran out gone.
+test('who is editing what names each held entry by the person on it', async () => {
+  await claimLock('default', db, 'listings/seaview-cottage', 'u1', 'tab', NOW);
+  await claimLock('default', db, 'globals/site', 'u2', 'tab', NOW);
+  await claimLock('default', db, 'pages/about', 'u2', 'tab', NOW - LOCK_TTL);
+  expect(await lockHolders('default', db, NOW)).toEqual({
+    'listings/seaview-cottage': { id: 'u1', name: 'Anna Berg' },
+    'globals/site': { id: 'u2', name: 'Martin' },
   });
 });
 

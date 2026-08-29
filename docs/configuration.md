@@ -56,7 +56,7 @@ i18n: {
 }
 ```
 
-Without it, `DEEPL_API_KEY` ([Deploying](deploy.md#secrets)) is what translates; without
+Without it, `DEEPL_API_KEY` ([Deploying](secrets.md)) is what translates; without
 either, the admin offers no machine translation at all.
 
 ## `localizedSlugs`

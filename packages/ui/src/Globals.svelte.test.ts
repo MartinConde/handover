@@ -73,3 +73,12 @@ test('a site with one language draws no chips at all', async () => {
 
   expect(all(root, '.chip')).toEqual([]);
 });
+
+test('a global somebody has open carries their name on the card', async () => {
+  const root = show([{ ...GLOBALS[0], editing: { id: 'u2', name: 'Anna Berg' } }, GLOBALS[1]]);
+  await loaded();
+
+  const [site, cta] = all(root, '.global-card');
+  expect(site?.querySelector('.badge')?.textContent).toBe('Being edited by Anna Berg');
+  expect(cta?.querySelector('.badge')).toBeNull();
+});

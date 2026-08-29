@@ -22,7 +22,9 @@ const shown = $derived(groups.filter((g) => g.locale !== undefined || g.changes.
   {#each shown as group (group.locale ?? '')}
     <h4>{group.locale ? named(group.locale) : languages === 2 ? 'Both languages' : 'All languages'}</h4>
     <div class="diff">
-      {#if group.changes.length === 0}
+      {#if group.removed}
+        <div class="row is-block"><del>The {named(group.locale ?? '')} version was removed</del></div>
+      {:else if group.changes.length === 0}
         <div class="row is-quiet"><small>Everything else</small>unchanged</div>
       {:else}
         {@render rows(group.changes, '')}

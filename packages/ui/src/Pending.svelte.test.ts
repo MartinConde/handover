@@ -616,3 +616,10 @@ test('a resolved entry loses the badge and is read again wherever it is open', a
   expect(boxes(root)[1]?.disabled).toBe(false);
   expect(q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.disabled).toBe(false);
 });
+
+// axe: `aria-allowed-role` — an aside is a landmark and a dialog is not, so the drawer is a div.
+test('the drawer is a div with the dialog role, not an aside', () => {
+  const root = show();
+
+  expect(root.querySelector('.drawer')?.tagName).toBe('DIV');
+});

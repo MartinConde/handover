@@ -162,5 +162,5 @@ the repository's move is reported as merged rather than asked about. A block the
 removed goes even where you edited something inside it.
 
 What happens to a commit after it lands *is* reported — the top bar carries the build and
-one-tap revert ([Drafts and publishing](publishing.md#when-a-commit-goes-live)) — but a
+one-tap revert ([Pending changes](pending-changes.md#when-a-commit-goes-live)) — but a
 build that fails names no entry, so which of a batch broke it is read in the build log.

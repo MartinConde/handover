@@ -174,8 +174,8 @@ const changed = (files: number) =>
     ? 'That file had changed in the repository after it was opened. Nothing was written: discard the draft in the pending-changes drawer, then publish again.'
     : `${files} files had changed in the repository after they were opened. Nothing was written: discard those drafts in the pending-changes drawer, then publish again.`;
 /** How many files a Publishing event was about, as its route wrote it down. */
-const count = (detail: unknown): number => {
-  const value = (detail as { files?: unknown } | null | undefined)?.files;
+const count = (detail: unknown, key: 'files' | 'done' = 'files'): number => {
+  const value = (detail as Record<string, unknown> | null | undefined)?.[key];
   return typeof value === 'number' ? value : 0;
 };
 /** The languages a removal took away, as the row that would put them back names them. */
@@ -184,9 +184,33 @@ const went = (detail: unknown): string => {
   return Array.isArray(value) ? value.map((l) => String(l).toUpperCase()).join(', ') : '';
 };
 
+/** What each cron job did, in the words of the screen it did it to. */
+const JOB_DID: Record<string, (n: number) => string> = {
+  reconcile: (n) =>
+    `The hourly media check recorded ${n} upload${n === 1 ? '' : 's'} the library had missed.`,
+  retention: (n) =>
+    `The daily clean-up removed ${n} activity row${n === 1 ? '' : 's'} older than 180 days.`,
+  orphans: (n) =>
+    `The daily clean-up discarded ${n} draft${n === 1 ? '' : 's'} whose file is no longer in the repository.`,
+};
+const JOB_NAME: Record<string, string> = {
+  reconcile: 'hourly media check',
+  retention: 'daily activity clean-up',
+  orphans: 'daily draft clean-up',
+};
+
 function said(event: ActivityEvent): Said {
   const actor = who(event);
   const d = event.detail;
+  if (event.kind.startsWith('cron-')) {
+    const job = event.kind.slice('cron-'.length);
+    const failed = str(d, 'error');
+    if (failed) return { lead: `The ${JOB_NAME[job] ?? `${job} job`} failed: ${failed}.` };
+    const n = count(d, 'done');
+    return {
+      lead: JOB_DID[job]?.(n) ?? `The ${job} job ran and did ${n} thing${n === 1 ? '' : 's'}.`,
+    };
+  }
   switch (event.kind) {
     case 'login': {
       const how = METHOD[str(d, 'method') ?? ''];

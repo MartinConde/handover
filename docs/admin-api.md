@@ -301,7 +301,7 @@ GET /admin/api/diff/:collection/:slug  →  { "groups", "redirects" }
 ```
 
 What one entry would put in the next commit, field by field: the drawer's expanded row.
-`groups` is the [per-field diff](publishing.md#publishing) — one group per language of the
+`groups` is the [per-field diff](pending-changes.md#the-drawer) — one group per language of the
 entry plus one for the values they all share, each with the changes in it — of the draft
 against the file **at HEAD**, not against the commit the draft was loaded from: the question
 a row answers is what is about to go out. `redirects` is the address changes riding along in
@@ -425,7 +425,7 @@ nobody is editing.
 POST /admin/api/revert   { "commit_sha": "…" }  →  { "commit_sha", "paths" }
 ```
 
-Undoes that commit with a commit of its own, [as above](publishing.md#reverting-a-publish). It works over any
+Undoes that commit with a commit of its own, [Reverting a publish](pending-changes.md#reverting-a-publish). It works over any
 commit the admin made, not only the last one. The answer's `commit_sha` is the new commit and
 `paths` what it wrote. `400` without a `commit_sha`; `409` with `{ "error", "paths" }` when one of
 the files has changed since — nothing is written and the paths are named.

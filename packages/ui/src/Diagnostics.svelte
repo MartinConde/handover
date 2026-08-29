@@ -195,7 +195,12 @@ async function saveKey(event: SubmitEvent) {
   await loadKeys();
 }
 
+// Asked first: a key cannot be typed back from memory, and the card's own sentence about what
+// takes over is the whole of what is being decided.
+let removing = $state<Key>();
+
 async function removeKey(row: Key) {
+  removing = undefined;
   const res = await fetch(`/admin/api/settings/${row.key}`, { method: 'DELETE' });
   keySaid = res.ok ? `The ${NAMES[row.key] ?? row.key} key is gone.` : '';
   if (!res.ok) keysError = `The key was not removed (${res.status}).`;
@@ -431,7 +436,7 @@ const MAILERS: Record<string, string> = {
                   <button class="btn btn-sm" type="button" onclick={() => open(row)}>
                     Replace<span class="visually-hidden"> the {NAMES[row.key] ?? row.key} key</span>
                   </button>
-                  <button class="btn btn-ghost btn-sm" type="button" onclick={() => removeKey(row)}>
+                  <button class="btn btn-ghost btn-sm" type="button" onclick={() => (removing = row)}>
                     Remove<span class="visually-hidden"> the {NAMES[row.key] ?? row.key} key</span>
                   </button>
                 {:else if row.source !== 'code'}
@@ -465,6 +470,20 @@ const MAILERS: Record<string, string> = {
     </div>
     <!-- Inside the loaded block rather than beside <main>, where every other dialog sits,
          because whether the key is tried before it is stored is the site's language count. -->
+    {#if removing}
+      {@const name = NAMES[removing.key] ?? removing.key}
+      {@const row = removing}
+      <div class="scrim">
+        <div class="dialog" role="dialog" aria-labelledby="remove-h">
+          <h2 id="remove-h">Remove the {name} key?</h2>
+          <p>{says(row)}</p>
+          <div class="actions">
+            <button class="btn" type="button" onclick={() => (removing = undefined)}>Cancel</button>
+            <button class="btn btn-danger" type="button" onclick={() => removeKey(row)}>Remove</button>
+          </div>
+        </div>
+      </div>
+    {/if}
     {#if typing}
       {@const name = NAMES[typing.key] ?? typing.key}
       {@const tried = typing.key === 'deepl' && config.locales.length > 1}

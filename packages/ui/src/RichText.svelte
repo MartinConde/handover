@@ -88,9 +88,17 @@ function toggleLink(e: Editor) {
   linking = true;
   return true;
 }
-function linkTo(href: string) {
+// With nothing selected there are no words to link, so the page's title becomes them.
+function linkTo(href: string, text = href) {
   linking = false;
-  editor?.chain().focus().setLink({ href }).run();
+  if (!editor) return;
+  if (editor.state.selection.empty)
+    editor
+      .chain()
+      .focus()
+      .insertContent({ type: 'text', text, marks: [{ type: 'link', attrs: { href } }] })
+      .run();
+  else editor.chain().focus().setLink({ href }).run();
 }
 
 let element = $state<HTMLDivElement>();
@@ -167,7 +175,7 @@ const active = (b: { mark: string; attrs?: Record<string, unknown> }) =>
     </div>
     <div bind:this={element}></div>
     {#if linking}
-      <PagePicker id="{id}-link" label="pages and entries to link to" labelId={labelId} {locale} onpick={(entry) => linkTo(entry.urls[locale] ?? '')} onurl={linkTo} onclose={() => (linking = false)} />
+      <PagePicker id="{id}-link" label="pages and entries to link to" labelId={labelId} {locale} onpick={(entry) => linkTo(entry.urls[locale] ?? '', entry.title)} onurl={linkTo} onclose={() => (linking = false)} />
     {/if}
   </div>
 {/if}

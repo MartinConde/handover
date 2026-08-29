@@ -106,7 +106,7 @@ it is left out and named on stdout — move it into `src/content/schemas.ts`
 
 The last thing it prints is the checklist, because none of it is Cloudflare's: the
 [GitHub App](deploy.md#the-github-app) with the link to create one, the five required
-[secrets](deploy.md#secrets) and the `HANDOVER_BASE_URL` var, the optional secrets and what
+[secrets](secrets.md) and the `HANDOVER_BASE_URL` var, the optional secrets and what
 each turns on, and the bucket's [CORS rule and hostname](media.md). The origin the last two
 want is the deployed site's, which `init` cannot know. The site cannot serve `/admin` until
 the required secrets are set, and once it can, **Settings** says which of the rest are

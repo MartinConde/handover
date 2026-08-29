@@ -15,7 +15,8 @@
 - [Loaders and pages](loaders.md) — `load()` and `ContentSource`, what a loader returns and what renders it, an address per language, layouts that take their data as props.
 - [Blocks](blocks.md) — `<Blocks />`, the component registry, blocks that nest, and `_ref` blocks filled from a global.
 - [Rendering content](rendering.md) — `<Markdown />`, `<LocaleSwitcher />` and hidden entries.
-- [Drafts and publishing](publishing.md) — autosave into D1, what a draft holds, the pending-changes drawer, publishing in one commit, build status and revert, holding an entry back, the content index.
+- [Drafts and publishing](publishing.md) — autosave into D1, what a draft holds, publishing an entry on its own, creating, renaming and deleting, the content index.
+- [Pending changes and build status](pending-changes.md) — the drawer, what it refuses, holding an entry back, build status after a commit, reverting a publish.
 - [Working together](working-together.md) — the soft lock on an entry, what "Being edited by…" takes away, taking one over, and a file somebody changed in the repository.
 - [Preview](preview.md) — the client seeing a page before it goes out: turning it on at build, what is behind the gate, the address to preview, and the pane in the editor.
 - [Accounts and signing in](auth.md) — the secrets, `HANDOVER_BASE_URL`, seeding the first owner, the three ways in, the account page, closed sign-up and rate limiting.
@@ -25,6 +26,7 @@
 - [Setting a site up](init.md) — `handover init`: the Cloudflare resources, the files it scaffolds, and the checklist it leaves you.
 - [CLI](cli.md) — `handover migrate` for content files, `handover db generate` for the package's tables.
 - [Settings — what is connected](diagnostics.md) — the admin's read-only view of your config, the connection checks behind it, and the test email.
-- [Deploy](deploy.md) — `wrangler.jsonc`, the GitHub App, secrets, building on push.
+- [Deploy](deploy.md) — `wrangler.jsonc`, the schedule, the database, the GitHub App, building on push.
+- [Secrets](secrets.md) — the five required secrets, the vars beside them, and one more per optional feature.
 - [The admin API](admin-api.md) — the routes the admin drives: entries, drafts, publishing, locks and the activity read. For debugging, not for building against.
 - [How it works](how-it-works.md) — packages, injected routes, virtual config, the publish path. For contributors.

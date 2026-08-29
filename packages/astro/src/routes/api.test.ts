@@ -475,6 +475,7 @@ const demoted: string[] = [];
 // D1 in core's own `locks.test.ts`.
 let holder: { userId: string; name: string; expiresAt: number; tab?: string } | undefined;
 let editing: Record<string, string[]> = {};
+let holders: Record<string, { id: string; name: string | null }> = {};
 const released: string[] = [];
 const beats: string[] = [];
 /** And which ones Take over transferred. */
@@ -522,6 +523,7 @@ vi.mock('@handover/core', async (original) => ({
   },
   lockHolder: async () => holder && { tab: '', ...holder },
   heldEntries: async () => editing,
+  lockHolders: async () => holders,
   releaseLocks: async (_site: string, _db: unknown, userId: string) => {
     released.push(userId);
   },
@@ -1417,6 +1419,16 @@ test('a global with a draft ahead of the repository carries the pending dot', as
   locales = ['en'];
 });
 
+test('a global somebody has open says who', async () => {
+  holders = { 'globals/site': { id: 'u2', name: 'Anna Berg' } };
+
+  const res = await GET(ctx('globals'));
+
+  const { globals } = (await res.json()) as { globals: { editing?: unknown }[] };
+  expect(globals[0]?.editing).toEqual({ id: 'u2', name: 'Anna Berg' });
+  holders = {};
+});
+
 // A file with nothing in it is still a file: the language is published and opens empty, rather
 // than reading as a language the entry does not have.
 test('a language whose file is empty opens as an empty entry', async () => {
@@ -1764,6 +1776,20 @@ test('the entry list is the built index with the pending drafts over it', async 
   ]);
   // The starters the New entry dialog offers beside Blank, read at build with the index.
   expect(listed.templates).toEqual(['house']);
+});
+
+// The badge on the row: the same answer the members screen gives, seen from the entry's side.
+test('the entry list says who is editing a row, and nothing on the rows nobody is in', async () => {
+  holders = { 'listings/mill-house': { id: 'u2', name: 'Anna Berg' } };
+
+  const res = await GET(ctx('entries/listings'));
+
+  const { entries } = (await res.json()) as { entries: { id: string; editing?: unknown }[] };
+  expect(entries.map((e) => [e.id, e.editing])).toEqual([
+    ['mill-house', { id: 'u2', name: 'Anna Berg' }],
+    ['seaview-cottage', undefined],
+  ]);
+  holders = {};
 });
 
 test('opening an entry names the field its collection is keyed on', async () => {

@@ -57,6 +57,7 @@ import {
   lastCommit,
   loadDraft,
   lockHolder,
+  lockHolders,
   logActivity,
   mediaKey,
   mediaList,
@@ -1858,9 +1859,10 @@ async function listEntries(collection: string): Promise<Response> {
   const collected = config.collections[collection];
   if (!collected) return new Response('Not found', { status: 404 });
   const database = db();
-  const [rows, waiting] = await Promise.all([
+  const [rows, waiting, editing] = await Promise.all([
     overlayRows('default', database, index),
     pendingDrafts('default', database),
+    lockHolders('default', database),
   ]);
   // What "duplicate including unpublished changes?" is asked over: without it the dialog would
   // offer a choice about an entry that has nothing unpublished to choose.
@@ -1880,6 +1882,7 @@ async function listEntries(collection: string): Promise<Response> {
         ...entry,
         offered: offered.length === config.i18n.locales.length ? undefined : offered,
         pending: Object.values(entry.locales).some((l) => unpublished.has(l.path)) || undefined,
+        editing: editing[`${collection}/${entry.id}`],
       };
     },
   );
@@ -1936,9 +1939,10 @@ async function pickList(): Promise<Response> {
  */
 async function globalsList(): Promise<Response> {
   const database = db();
-  const [rows, waiting] = await Promise.all([
+  const [rows, waiting, editing] = await Promise.all([
     overlayRows('default', database, index),
     pendingDrafts('default', database),
+    lockHolders('default', database),
   ]);
   const pending = new Set(waiting.map((row) => row.path));
   const entries = collectionEntries('default', index, 'globals', rows);
@@ -1952,6 +1956,7 @@ async function globalsList(): Promise<Response> {
         // one, the same answer the editor's own second column gives.
         locales: config.i18n.locales.filter((locale) => found?.locales[locale]),
         pending: locales.some(([, file]) => pending.has(file.path)),
+        editing: editing[`globals/${key}`],
       };
     }),
     locales: config.i18n.locales,

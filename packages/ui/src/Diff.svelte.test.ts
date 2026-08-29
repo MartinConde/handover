@@ -52,3 +52,14 @@ test('a block that moved is one row, not a deletion and an addition', () => {
   expect(body.querySelector('del')).toBe(null);
   expect(body.querySelector('ins')).toBe(null);
 });
+
+test('a language that went is one line, not a deletion per field', () => {
+  const root = show([
+    { changes: [] },
+    { locale: 'en', changes: [] },
+    { locale: 'de', removed: true, changes: [] },
+  ]);
+
+  const german = Array.from(root.querySelectorAll('h4')).find((h) => h.textContent === 'German');
+  expect(german?.nextElementSibling?.textContent?.trim()).toBe('The German version was removed');
+});

@@ -425,6 +425,24 @@ test('rich text: a link points at the address the language being written serves'
   });
 });
 
+// Nothing selected is the common case — the cursor is where the link should go — and a link
+// with no words is nothing to click, so the page's own title is the text.
+test("rich text: Link with nothing selected inserts the picked page's title as the link text", async () => {
+  offering();
+  show(
+    [{ path: ['summary'], label: 'Summary', type: 'richtext', required: false, tier: 'basic' }],
+    { _version: 1, summary: '' },
+  );
+  q<HTMLElement>('#f-summary').focus();
+  q<HTMLButtonElement>('[aria-label="Link"]').click();
+  await settle();
+  pickRow('/listings/mill-house');
+  expect(roundTrip()).toEqual({
+    _version: 1,
+    summary: '[Old Mill House](/listings/mill-house)',
+  });
+});
+
 test('rich text: an entry the language cannot serve is listed with the reason and picks nothing', async () => {
   offering();
   show(

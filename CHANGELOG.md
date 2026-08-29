@@ -4,6 +4,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Rename and Delete are in the entry header's ⋯ menu** as well as on the list row, with
+  Hide between them. The delete dialog now leads with *Hide it instead?* and a **Hide
+  instead** button, since a hidden entry can be brought back and a deleted one only by a
+  restore ([Entry lifecycle](docs/entry-lifecycle.md)).
+- **The list row and the Site-settings card say who is editing an entry** — *Being edited by
+  Anna Berg* — so the walker sees their own open entry from the list in another tab
+  ([Working together](docs/working-together.md)).
+- **Link with nothing selected inserts the picked page's title** as the link text in rich
+  text, instead of marking nothing.
+- **The diff reads a language that went as one line** — *The German version was removed* —
+  rather than a deletion per field, and a removed row with no words of its own is *Row 2*,
+  not its id.
+- **Remove on an integration key asks first**, with the card's own sentence about what takes
+  over ([Settings](docs/diagnostics.md#integrations)).
+- **A `cron-` row in the activity log reads as a sentence** — *The hourly media check
+  recorded 2 uploads the library had missed.* — instead of *System — cron-reconcile*
+  ([Activity log](docs/activity.md)).
+- The pending-changes drawer is a `<div role="dialog">`, which axe no longer flags.
+- Docs: [Drafts and publishing](docs/publishing.md) is two pages — the drawer, holds, build
+  status and revert are on [Pending changes and build status](docs/pending-changes.md); the
+  secrets table is [Secrets](docs/secrets.md), out of [Deploy](docs/deploy.md). The bucket's
+  CORS rule in [Media](docs/media.md) reads `GET, PUT`. The build-minute quota pill is not
+  planned, not pending.
+
 - **The lock is per tab.** Each editor tab beats the lock with a token of its own, so the same
   person opening an entry twice meets *You have this open in another tab* in the second one
   instead of both tabs writing the same draft. Saves carry the token; a save without the
@@ -209,7 +233,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   it read as *Building…* for as long as the admin was open, and the draft rows that build was
   carrying were never cleared. Ten minutes without a build naming a commit is now as long as
   the pill waits; past that it reports the worker's newest deploy.
-  [When a commit goes live](docs/publishing.md#when-a-commit-goes-live).
+  [When a commit goes live](docs/pending-changes.md#when-a-commit-goes-live).
 
 - **Preview has a route and a gate.** `/_preview/<path>` is injected only where
   `PREVIEW_ENABLED` is set on the build, needs an admin session, serves only addresses the
@@ -326,7 +350,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   keep storing `media/…` keys and never URLs ([Configuration](docs/configuration.md#media)).
   Beside it, `R2_ACCOUNT_ID` and `R2_BUCKET` are vars and `R2_ACCESS_KEY_ID` and
   `R2_SECRET_ACCESS_KEY` are secrets; without all four the admin refuses uploads and names
-  what is missing ([Deploy](docs/deploy.md#secrets)).
+  what is missing ([Deploy](docs/secrets.md)).
 
 - **`upload` in the activity log**, named by the file it was chosen as. Choosing a picture the
   site already holds is a reuse rather than an upload, and writes no row.
@@ -345,7 +369,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   shell now polls **Workers Builds** and shows *Building… 1m 20s* · *Live since 14:02* · *Build failed*,
   with a banner while a build is running saying the admin may reload briefly under you. It needs
   a read-only `CLOUDFLARE_API_TOKEN` and a `CLOUDFLARE_WORKER` var; without them no pill is
-  drawn and everything else is unchanged ([Deploy](docs/deploy.md#secrets)). Before anyone has
+  drawn and everything else is unchanged ([Deploy](docs/secrets.md)). Before anyone has
   published, it reports your own last deploy instead, which is still what the site is serving.
 
 - **One-tap revert.** *Revert last publish* sits in the failed pill and *Revert this publish*
@@ -354,7 +378,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   parent (a rename counting as both of its names), `redirects.yaml` is recomputed rather than
   restored, and a file that has moved on since is refused rather than overwritten. The changes
   the commit carried come back as unpublished changes
-  ([Drafts and publishing](docs/publishing.md#when-a-commit-goes-live)).
+  ([Drafts and publishing](docs/pending-changes.md#when-a-commit-goes-live)).
 
 - **Draft rows are cleared when the build carrying them is live.** Green is not enough: a row is
   also what an open tab publishes against, so an entry somebody is still editing keeps its row
@@ -436,7 +460,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   rather than a permission — anybody can take it off, which is logged as `hold-released` — and it
   is cleared with the draft when the entry publishes or is discarded.
   `POST /admin/api/hold/:collection/:slug` takes `{ "hold": true }`
-  ([Drafts and publishing](docs/publishing.md#holding-an-entry-back)).
+  ([Drafts and publishing](docs/pending-changes.md#holding-an-entry-back)).
 
 - **Two people can no longer type over each other.** Opening an entry takes a soft lock on it
   — every language at once, since they share a structure — and the lock is held by typing: the
@@ -500,7 +524,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   byte, since a session that starts in plaintext and is refused its upgrade would hand the
   server your password in the clear. Cloudflare sending to anyone but yourself needs the Workers
   Paid plan, and the refusal says so in as many words ([Sending email](docs/email.md),
-  [Configuration](docs/configuration.md#mailer), [Deploy](docs/deploy.md#secrets)).
+  [Configuration](docs/configuration.md#mailer), [Deploy](docs/secrets.md)).
 
 - **Three ways into `/admin`, and an account page.** The login now offers an emailed sign-in
   link and *Continue with GitHub* beside the password, and *Forgot password?* mails a link to a
@@ -519,7 +543,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   turn on GitHub; the callback URL is `<HANDOVER_BASE_URL>/admin/api/auth/callback/github`. The
   trip to GitHub and back has five minutes on it, and running out of them now comes back to the
   login rather than to Better Auth's own error page
-  ([Accounts and signing in](docs/auth.md), [Deploy](docs/deploy.md#secrets)).
+  ([Accounts and signing in](docs/auth.md), [Deploy](docs/secrets.md)).
 
 - `docs/auth.md` split three ways as it grew: [Accounts and signing in](docs/auth.md) is the ways
   in, [Roles and permissions](docs/roles.md) is who may do what, and [Sending email](docs/email.md)

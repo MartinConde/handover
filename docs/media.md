@@ -32,7 +32,7 @@ scheme and host, no path — in `allowed.origins`:
     {
       "allowed": {
         "origins": ["https://your-site.example"],
-        "methods": ["PUT"],
+        "methods": ["GET", "PUT"],
         "headers": ["content-type", "content-disposition"]
       },
       "exposeHeaders": ["ETag"],
@@ -46,7 +46,9 @@ scheme and host, no path — in `allowed.origins`:
 npx wrangler r2 bucket cors set your-site-media --file cors.json
 ```
 
-Add `http://localhost:4321` to `allowed.origins` as well if you upload from `astro dev`.
+Add `http://localhost:4321` to `allowed.origins` as well if you upload from `astro dev`. `GET`
+is there so the admin can read a stored file back, not only `<img>` it — a fetch of a media URL
+from the admin's origin is refused without it, and the error names nothing.
 `content-disposition` is in the list because a file is stored as a download; leave it out and
 PDFs fail the browser's preflight while pictures keep working.
 

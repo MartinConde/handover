@@ -1,5 +1,5 @@
 <script lang="ts">
-import { type Drift, entryUrl, type Field, LOCK_TTL } from '@handover/core';
+import { type Drift, entryName, entryUrl, type Field, LOCK_TTL } from '@handover/core';
 import DriftPanel from './Drift.svelte';
 import Fields from './Fields.svelte';
 import OffsiteDialog, { type Target } from './Offsite.svelte';
@@ -396,6 +396,58 @@ async function setStatus(next: boolean, redirect?: Target) {
   onchanged();
 }
 
+// The overflow menu: what the list row offers, from inside the entry. A rename opens the entry
+// under its new name and a delete goes back to the list, so neither needs the screen after.
+let moreMenu = $state(false);
+let renaming = $state(false);
+let deleting = $state(false);
+let newName = $state('');
+let actionFailed = $state('');
+const willBe = $derived(entryName('default', newName, []));
+
+function openRename() {
+  moreMenu = false;
+  newName = slug;
+  actionFailed = '';
+  renaming = true;
+}
+
+// A 409 is the server's own sentence — "publish this first", "somebody else has it" — and
+// reads better than anything this screen could say about it.
+async function act(url: string, init: RequestInit) {
+  busy = true;
+  actionFailed = '';
+  const res = await fetch(url, init);
+  busy = false;
+  if (res.ok) return res;
+  actionFailed =
+    res.status === 409 || res.status === 503
+      ? await res.text()
+      : `That did not work (${res.status})`;
+  return undefined;
+}
+
+async function rename(event: Event) {
+  event.preventDefault();
+  const res = await act(`/admin/api/entries/${collection}/${slug}/rename`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ to: newName }),
+  });
+  if (!res) return;
+  const { slug: to } = (await res.json()) as { slug: string };
+  location.assign(`/admin/c/${collection}/${to}`);
+}
+
+async function remove(redirect: Target) {
+  const res = await act(`/admin/api/entries/${collection}/${slug}`, {
+    method: 'DELETE',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ redirect }),
+  });
+  if (res) location.assign(`/admin/c/${collection}`);
+}
+
 // "Not ready yet". The flag lives on the draft rows, so whatever is in the form is stored
 // first — otherwise the entry is held back and the words that made somebody hold it are not.
 async function toggleHold() {
@@ -750,7 +802,26 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           bind:this={publishButton}
         >Publish this entry</button>
         {#if !entry.singleton}
-          <button class="btn btn-ghost" type="button" disabled aria-label="More actions">⋯</button>
+          <div class="pop-anchor">
+            <button
+              class="btn btn-ghost"
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={moreMenu}
+              aria-label="More actions"
+              disabled={locked || busy}
+              onclick={() => (moreMenu = !moreMenu)}
+            >⋯</button>
+            {#if moreMenu}
+              <div class="menu" role="menu" aria-label="More actions">
+                <button type="button" role="menuitem" onclick={openRename}>Rename</button>
+                <button type="button" role="menuitem" onclick={() => { moreMenu = false; if (hidden) setStatus(false); else hiding = true; }}>
+                  {hidden ? 'Show' : 'Hide'}
+                </button>
+                <button type="button" role="menuitem" onclick={() => { moreMenu = false; actionFailed = ''; deleting = true; }}>Delete</button>
+              </div>
+            {/if}
+          </div>
         {/if}
       </div>
     </div>
@@ -972,6 +1043,41 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       error={statusFailed}
       onconfirm={(target: Target) => setStatus(true, target)}
       onclose={() => (hiding = false)}
+    />
+  {/if}
+  {#if renaming}
+    <div class="scrim">
+      <div class="dialog" role="dialog" aria-labelledby="rename-h">
+        <h2 id="rename-h">Rename {title}</h2>
+        <form onsubmit={rename}>
+          <div class="field">
+            <div class="label-row"><label for="rename-to">File name</label></div>
+            <input class="input filename" id="rename-to" type="text" bind:value={newName} aria-describedby="rename-hint" />
+            <p class="hint" id="rename-hint">
+              Saved as <span class="filename">{willBe}</span>. The old address redirects to the new
+              one.
+            </p>
+          </div>
+          {#if actionFailed}<div class="notice notice-danger" role="alert">{actionFailed}</div>{/if}
+          <div class="actions">
+            <button class="btn" type="button" onclick={() => (renaming = false)}>Cancel</button>
+            <button class="btn btn-primary" type="submit" disabled={busy}>{busy ? 'Renaming…' : 'Rename'}</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  {/if}
+  {#if deleting}
+    <OffsiteDialog
+      action="delete"
+      what={title}
+      {collection}
+      index={entryUrl('default', routing, entry.index, '', locale) ?? undefined}
+      {busy}
+      error={actionFailed}
+      onconfirm={remove}
+      onhide={() => { deleting = false; hiding = true; }}
+      onclose={() => (deleting = false)}
     />
   {/if}
   {#if taking}

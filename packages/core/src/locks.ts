@@ -79,6 +79,20 @@ export async function heldEntries(
   return held;
 }
 
+/** Who is in each entry right now, entry → person: the badge on the list row and the card. */
+export async function lockHolders(
+  siteId: string,
+  db: Db,
+  now = Date.now(),
+): Promise<Record<string, { id: string; name: string | null }>> {
+  const rows = await db
+    .select({ entry: locks.entry, id: locks.userId, name: user.name })
+    .from(locks)
+    .leftJoin(user, eq(user.id, locks.userId))
+    .where(and(eq(locks.siteId, siteId), gt(locks.expiresAt, now)));
+  return Object.fromEntries(rows.map((row) => [row.entry, { id: row.id, name: row.name }]));
+}
+
 /** Everything one member is holding, let go at once: what removing them does to their locks. */
 export async function releaseLocks(siteId: string, db: Db, userId: string): Promise<void> {
   await db.delete(locks).where(and(eq(locks.siteId, siteId), eq(locks.userId, userId)));

@@ -25,6 +25,8 @@ export type Change = { path: string; label: string } & (
 export interface DiffGroup {
   /** Absent on the group of fields every language holds the same value in. */
   locale?: string;
+  /** The whole language went: one event, not a deletion per field. */
+  removed?: true;
   changes: Change[];
 }
 
@@ -49,28 +51,35 @@ export function diffEntry(
   before: Record<string, unknown>,
   after: Record<string, unknown>,
 ): DiffGroup[] {
-  const locales = [...Object.keys(after), ...Object.keys(before).filter((l) => !(l in after))];
+  const gone = Object.keys(before).filter((l) => !(l in after));
+  const locales = [...Object.keys(after), ...gone];
   if (locales.length === 0) return [];
   const shared = locales.length > 1;
   const groups: DiffGroup[] = [];
   if (shared) {
     // Every file is read, not only the first: a shared value is only shared while the files agree,
     // and one that moved in the German file alone is exactly what a conflict view exists to catch.
+    // A file that went is not read at all: its shared values are still in the files that stayed.
     const seen = new Set<string>();
     const changes: Change[] = [];
     for (const locale of locales)
-      for (const change of walk(form, before[locale], after[locale], (m) => m === 'duplicate'))
-        if (!seen.has(change.path)) {
-          seen.add(change.path);
-          changes.push(change);
-        }
+      if (!gone.includes(locale))
+        for (const change of walk(form, before[locale], after[locale], (m) => m === 'duplicate'))
+          if (!seen.has(change.path)) {
+            seen.add(change.path);
+            changes.push(change);
+          }
     groups.push({ changes });
   }
   for (const locale of locales)
-    groups.push({
-      locale,
-      changes: walk(form, before[locale], after[locale], (m) => !shared || m !== 'duplicate'),
-    });
+    groups.push(
+      gone.includes(locale)
+        ? { locale, removed: true, changes: [] }
+        : {
+            locale,
+            changes: walk(form, before[locale], after[locale], (m) => !shared || m !== 'duplicate'),
+          },
+    );
   return groups;
 }
 
@@ -216,22 +225,22 @@ function rowsIn(
     const above = nowKeys[i + 1];
     rows.push({
       path: rowAddress(at, key),
-      label: rowLabel(fieldsOf(asRow(row)) ?? [], row, key),
+      label: rowLabel(fieldsOf(asRow(row)) ?? [], row, i),
       kind: 'row',
       ...typeOf(row),
       at: shown,
       ...(shown !== 'same' && above !== undefined
-        ? { above: rowLabel(fieldsOf(asRow(now.get(above))) ?? [], now.get(above), above) }
+        ? { above: rowLabel(fieldsOf(asRow(now.get(above))) ?? [], now.get(above), i + 1) }
         : {}),
       changes,
     });
   }
   if (wants(mode))
-    for (const [key, row] of was)
+    for (const [i, [key, row]] of [...was].entries())
       if (!now.has(key))
         rows.push({
           path: rowAddress(at, key),
-          label: rowLabel(fieldsOf(asRow(row)) ?? [], row, key),
+          label: rowLabel(fieldsOf(asRow(row)) ?? [], row, i),
           kind: 'row',
           ...typeOf(row),
           at: 'removed',
@@ -252,17 +261,20 @@ const typeOf = (row: unknown) =>
   isObject(row) && typeof row._type === 'string' ? { type: humanise(row._type) } : {};
 
 /** What a row is called: the first words it says, falling back to its type or its place. */
-function rowLabel(fields: readonly Field[], row: unknown, key: string): string {
+function rowLabel(fields: readonly Field[], row: unknown, index: number): string {
+  return firstWords(fields, row) ?? typeOf(row).type ?? `Row ${index + 1}`;
+}
+
+function firstWords(fields: readonly Field[], row: unknown): string | undefined {
   for (const field of fields) {
     const value = isObject(row) ? row[field.path[0] ?? ''] : undefined;
     if (field.type === 'group') {
-      const inner = rowLabel(field.fields, value, '');
+      const inner = firstWords(field.fields, value);
       if (inner) return inner;
     } else if ((field.type === 'text' || field.type === 'richtext') && typeof value === 'string')
       return value;
   }
-  if (isObject(row) && typeof row._type === 'string') return humanise(row._type);
-  return key.startsWith('#') ? `Row ${Number(key.slice(1)) + 1}` : key;
+  return undefined;
 }
 
 /**

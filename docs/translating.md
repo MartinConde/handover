@@ -122,7 +122,7 @@ Those fields are badged **Machine translated** in the form, and the badge comes 
 a time: the first save after somebody types in one takes its path out of the list. Nothing about
 it blocks anything — a machine-filled translation publishes like any other file, and publishing
 one stamps `_i18n` below. **Configuring it** is one secret, `DEEPL_API_KEY`
-([Deploying](deploy.md#secrets)); another provider goes in `i18n.translate`
+([Deploying](secrets.md)); another provider goes in `i18n.translate`
 ([Configuration](configuration.md#i18n)). With neither, none of the buttons above is drawn.
 
 The site's owner can paste a DeepL key of their own into **Settings** without a deploy, and that

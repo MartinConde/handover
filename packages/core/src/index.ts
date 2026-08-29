@@ -126,6 +126,7 @@ export {
   heldEntries,
   LOCK_TTL,
   lockHolder,
+  lockHolders,
   moveLock,
   releaseLocks,
   takeLock,

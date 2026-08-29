@@ -238,6 +238,30 @@ test('deleting asks where its readers go and sends the answer with the DELETE', 
   expect(changed).toHaveBeenCalled();
 });
 
+// Principle #5: the client will want it back. The dialog says so before the question.
+test('the delete dialog leads with Hide it instead?, and Hide instead asks the hide question', async () => {
+  const fetcher = api(ENTRIES);
+  const root = show();
+  await tick();
+  await click(root, '.row [aria-label="Delete The Mill House"]');
+  expect(q(root, '.dialog p')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+    'Hide it instead? Hidden entries come off the site but can be brought back.',
+  );
+  Array.from(root.querySelectorAll<HTMLButtonElement>('.dialog button'))
+    .find((b) => b.textContent?.trim() === 'Hide instead')
+    ?.click();
+  await tick();
+
+  expect(q(root, '.dialog p')?.textContent).not.toContain('Hide it instead?');
+  expect(q(root, '.dialog .btn-primary')?.textContent?.trim()).toBe('Hide this listing');
+  await click(root, '.dialog .btn-primary');
+  expect(fetcher).toHaveBeenCalledWith('/admin/api/status/listings', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ entries: ['mill-house'], hidden: true, redirect: { kind: 'index' } }),
+  });
+});
+
 // "Nowhere" is one of the four answers, and the only one that leaves the old URL a 404.
 test('a delete answered "nowhere" says so in the body', async () => {
   const fetcher = api(ENTRIES);
@@ -353,6 +377,20 @@ const HIDDEN = [
   },
   ENTRIES[1],
 ];
+
+// The walker's own open entry, seen from the list in another tab: the badge names the holder.
+test('a row somebody has open says who is editing it', async () => {
+  api([{ ...ENTRIES[0], editing: { id: 'u2', name: 'Anna Berg' } }, ENTRIES[1] as object]);
+  const root = show();
+  await tick();
+
+  expect(
+    Array.from(
+      root.querySelectorAll('.row .td.title'),
+      (td) => td.querySelector('.badge')?.textContent,
+    ),
+  ).toEqual(['Being edited by Anna Berg', undefined]);
+});
 
 test('a hidden entry is badged and offers to be shown again', async () => {
   api(HIDDEN);
