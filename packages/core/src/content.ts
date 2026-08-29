@@ -34,8 +34,16 @@ export function staticSource<C extends Record<string, unknown>>(
   astro: AstroContent<keyof C & string>,
 ): ContentSource<C> {
   return {
-    getEntry: (collection, id) =>
-      astro.getEntry(collection, id) as Promise<ContentEntry<C[typeof collection]> | undefined>,
+    // The collection is asked whether the id exists before the entry is asked for by name:
+    // Astro's `getEntry` logs "Entry listings → de/coast was not found" on a miss, and an
+    // untranslated entry would miss once per language on every page that draws the switcher.
+    getEntry: async (collection, id) => {
+      const all = await astro.getCollection(collection);
+      if (!all.some((e) => e.id === id)) return undefined;
+      return astro.getEntry(collection, id) as Promise<
+        ContentEntry<C[typeof collection]> | undefined
+      >;
+    },
     getCollection: async (collection, locale) => {
       const all = await astro.getCollection(collection);
       // Astro's glob loader files an entry under a `slug` it finds in the data, which is where

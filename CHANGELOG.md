@@ -4,6 +4,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **The lock is per tab.** Each editor tab beats the lock with a token of its own, so the same
+  person opening an entry twice meets *You have this open in another tab* in the second one
+  instead of both tabs writing the same draft. Saves carry the token; a save without the
+  holder's is refused. The `locks` table gains a `tab` column — **schema version 3**, so run
+  `npx handover db generate` and commit `migrations/` after upgrading
+  ([Working together](docs/working-together.md), [`handover db generate`](docs/cli.md#handover-db-generate)).
+- **An open entry is blocked for everyone else.** Hide, Show and Restore now refuse while
+  another person holds the entry, with the sentence Rename and Delete already answer.
+- **`/admin/impersonate-user` is switched off.** Nothing in the admin asked for it, and an
+  owner acting as somebody else would have been logged as that person.
+- **`/_preview` sends `Referrer-Policy: no-referrer`**, so a link followed off a draft page
+  does not hand the preview's address to the site it points at ([Preview](docs/preview.md)).
+- Deleting an entry also discards the draft of a language that had no file yet — before,
+  the drawer kept offering it. A language whose file is empty opens as an empty entry rather
+  than reading as a language the entry does not have.
+- `getEntryLocales` no longer makes Astro log *Entry … was not found* once per untranslated
+  language on every page: the collection is asked whether the id exists before the entry is
+  asked for by name.
+
 - **`handover init` sets a new site up.** One command scaffolds the site's own files, creates
   the D1 database and the R2 bucket, writes `wrangler.jsonc` with the `DB` binding and the
   bucket's vars, `src/worker.ts` and `drizzle.config.ts`, generates and applies the migrations,

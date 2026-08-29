@@ -178,7 +178,8 @@ POST /admin/api/status/:collection   { "entries": ["mill-house"], "hidden": true
 
 On the site or off it, for one entry or for a batch. `_status: hidden` is written into every
 file the entry has — it is the entry's and not one language's — and every entry named takes the
-same answer, which is what a bulk hide is.
+same answer, which is what a bulk hide is. `409` naming the colleague if somebody else holds
+the lock on any of them, before anything is written.
 
 `redirect` says where the readers of a page coming off the site go, and the rules it produces
 are **one per language**, from the address that language served: `{ "kind": "index" }` is the
@@ -225,21 +226,22 @@ Everything an editor types goes through these, and none of them commits — see
 than the form, is [Drafts and publishing](publishing.md#what-autosave-stores).
 
 ```
-PUT /admin/api/drafts/:collection/:slug  { "data": { … } }  →  { "updated_at", "pending", "problems" }
+PUT /admin/api/drafts/:collection/:slug  { "data": { … }, "tab": "…" }  →  { "updated_at", "pending", "problems" }
 ```
 
-Merges `data` into the entry and stores the result. `pending` is false when the stored
+Merges `data` into the entry and stores the result. `tab` is the token the tab beats the
+lock with ([Locks](#locks)); a save without the holder's token is refused. `pending` is false when the stored
 bytes are identical to the file in git — an autosave that changed nothing. `problems` is
 what the collection schema will not accept, `[{ "path": "body.1.heading", "message":
 "Required" }]`, empty when it accepts all of it; the draft is stored either way. Keys
 beginning with `_` are ignored: they belong to the file, not to the form. `400` if `data`
 is not an object or holds a shape the serialiser cannot write back (a nested array), with
 the reason as the body; `404` if the collection or the file does not exist. `409` with
-`{ "held_by", "mine", "expires_at" }` when somebody else is editing the entry
-([Working together](working-together.md#take-over)).
+`{ "held_by", "mine", "expires_at" }` when another tab holds the entry — somebody else's, or
+the same person's ([Working together](working-together.md#take-over)).
 
 ```
-PUT /admin/api/drafts/:collection/:slug/:locale  { "data": { … } }  →  { "updated_at", "pending", "problems" }
+PUT /admin/api/drafts/:collection/:slug/:locale  { "data": { … }, "tab": "…" }  →  { "updated_at", "pending", "problems" }
 ```
 
 The same, for a language the entry is translated into
@@ -437,7 +439,7 @@ The same inverse, over the commit an `entry-delete` or a `locale-off` row names
 cannot: the marks a turn-off wrote into the open drafts of the files that stayed go back to
 what the restored files say, and the rows that were keeping the restored paths off the entry
 list are dropped. Same answer, same `400`, same `409` — and the `409` is the ordinary case of
-somebody having taken the freed name.
+somebody having taken the freed name, or naming the colleague who has the entry open again.
 
 ## Locks
 
@@ -445,20 +447,22 @@ The soft lock on an entry, and what it does to a save. What it means for two peo
 working at once is [Working together](working-together.md).
 
 ```
-POST /admin/api/locks/:collection/:slug  →  { "held_by", "mine", "expires_at", "base" }
+POST /admin/api/locks/:collection/:slug  { "tab": "…" }  →  { "held_by", "mine", "expires_at", "base" }
 ```
 
 The heartbeat. It takes the entry when nobody is editing it and pushes the caller's own
 lock further out when they are, and it is what the editor sends as it opens and again
-while somebody types in it. `held_by` is `{ "id", "name" }` for the person editing it and
-`null` when nobody is, `mine` says whether that is the caller, and `expires_at` is when
+while somebody types in it. `tab` is a token the tab made up once — the lock is the tab's,
+so the same person's second tab is refused like anybody else's and reads `held_by` as
+themselves with `mine` false. `held_by` is `{ "id", "name" }` for the person editing it and
+`null` when nobody is, `mine` says whether that is the caller's tab, and `expires_at` is when
 the lock lapses — epoch milliseconds, about two minutes out. `base` is what each of the
 entry's files was loaded against, `{ "src/content/listings/en/seaview-cottage.yaml":
 { "sha", "blob" } }`, so a tab open across somebody else's publish knows its diff base;
 a language with no draft is not in it. `404` if the collection is not configured.
 
 ```
-GET /admin/api/locks/:collection/:slug   →  { "held_by", "mine", "expires_at", "base" }
+GET /admin/api/locks/:collection/:slug?tab=…   →  { "held_by", "mine", "expires_at", "base" }
 ```
 
 The same answer, taking nothing. This is what the person waiting polls: an entry changes
@@ -466,7 +470,7 @@ hands when somebody asks for it, never because their tab was watching when the l
 lapsed.
 
 ```
-POST /admin/api/locks/:collection/:slug  { "take": true }
+POST /admin/api/locks/:collection/:slug  { "take": true, "tab": "…" }
 ```
 
 Take over. The lock moves whatever it says, and the answer is the same shape with

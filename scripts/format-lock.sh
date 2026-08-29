@@ -16,6 +16,14 @@ case "$base" in
     ;;
 esac
 
+# A base the checkout does not have is a commit that was amended and force-pushed over: the
+# push event still names the SHA it replaced. The commit before HEAD is what it was amended
+# from, so that is what the diff is against, and the log says so.
+if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+  echo "format-lock: $base is not in this checkout (amended and pushed over?); comparing against $head~1 instead."
+  base="$head~1"
+fi
+
 # --no-renames so a rename carrying an edit shows up as a delete plus an add, not as an R
 # the MD filter would let through.
 changed=$(git diff --name-only --no-renames --diff-filter=MD "$base...$head" -- packages/core/test/golden)

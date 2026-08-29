@@ -115,6 +115,8 @@ test.each([
   expect(headers.get('cache-control')).toBe('private, no-store');
   expect(headers.get('x-robots-tag')).toBe('noindex, nofollow');
   expect(headers.get('content-security-policy')).toBe("frame-ancestors 'self'");
+  // A draft page's links would otherwise tell every site they point at the preview's address.
+  expect(headers.get('referrer-policy')).toBe('no-referrer');
 });
 
 test('a rendered page carries the gate too', async () => {
@@ -122,6 +124,7 @@ test('a rendered page carries the gate too', async () => {
   expect(response.headers.get('cache-control')).toBe('private, no-store');
   expect(response.headers.get('x-robots-tag')).toBe('noindex, nofollow');
   expect(response.headers.get('content-security-policy')).toBe("frame-ancestors 'self'");
+  expect(response.headers.get('referrer-policy')).toBe('no-referrer');
 });
 
 // The row is what the editor has typed and not published; the build still holds "Mill House".

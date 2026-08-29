@@ -1437,7 +1437,7 @@ test('a published row whose entry somebody is editing is kept', async () => {
   const repo = fakeHistory({ [PATH]: FILE });
   await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
   const published = await publishDrafts('default', db, repo);
-  await claimLock('default', db, 'listings/mill-house', 'anna');
+  await claimLock('default', db, 'listings/mill-house', 'anna', 'tab');
 
   expect(await clearPublished('default', db, published?.commit_sha ?? '')).toEqual([]);
   expect((await only(db))?.path).toBe(PATH);

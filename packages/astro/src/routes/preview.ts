@@ -15,13 +15,15 @@ import { createAuth } from '../auth.js';
 /**
  * The gate every preview response carries, rendered or refused. An SSR route putting draft
  * content on the client's own domain is a phishing primitive, so: never in a shared cache,
- * never in an index, and framed only by the admin that opened it — `'self'`, since the admin
- * is a route on this same site.
+ * never in an index, framed only by the admin that opened it — `'self'`, since the admin is a
+ * route on this same site — and never named as the referrer of a link somebody follows off it.
  */
 export const GATE = {
   'cache-control': 'private, no-store',
   'x-robots-tag': 'noindex, nofollow',
   'content-security-policy': "frame-ancestors 'self'",
+  // A draft page's links would otherwise hand the preview's address to every site they point at.
+  'referrer-policy': 'no-referrer',
 };
 
 const answer = (status: number, body: string) =>

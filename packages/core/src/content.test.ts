@@ -1272,6 +1272,26 @@ test('a language the entry has no file in is not offered by the switcher', async
   ]);
 });
 
+// Astro's `getEntry` logs "Entry listings → de/coast was not found" for every miss, and an
+// untranslated entry misses once per language on every page: the switcher asks the collection
+// which ids exist rather than probing each language by name.
+test('the switcher never asks by name for a language the entry has no file in', async () => {
+  const asked: string[] = [];
+  const source = staticSource<{ listings: unknown }>('default', {
+    getEntry: async (_c, id) => {
+      asked.push(id);
+      return files[id] ? { id, data: files[id] } : undefined;
+    },
+    getCollection: async () => Object.entries(files).map(([id, data]) => ({ id, data })),
+  });
+
+  expect(await getEntryLocales('default', source, site, 'listings', 'coast')).toEqual([
+    { locale: 'en', url: '/listings/coast' },
+    { locale: 'de', url: '/de/listings/coast' },
+  ]);
+  expect(asked).toEqual(['en/coast', 'de/coast']);
+});
+
 test('a hidden file is skipped', async () => {
   expect(await getEntryLocales('default', switcherSource, site, 'listings', 'hidden')).toEqual([
     { locale: 'de', url: '/de/listings/hidden' },

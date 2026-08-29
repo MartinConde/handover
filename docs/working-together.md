@@ -29,7 +29,10 @@ that has gone home are different decisions, and the banner is where the differen
 What the lock takes away is everything that writes to any of the entry's files: the form,
 the second language's column, the web address, **Publish…**, and the two answers to a
 language with no file yet. Reading it, switching language and opening it side by side are
-not edits and still work.
+not edits and still work. The same rule holds outside the editor — **an open entry is
+blocked for everyone else**: Rename, Delete, Hide and Show on the list, and Restore from
+the Deleted view or the Activity log, all answer *Anna Berg is editing this entry — it can
+be renamed once they are done* rather than writing under her.
 
 When the lock runs out while somebody is waiting on it, the banner says so and offers
 **Reload**, which opens the entry with the lock theirs.
@@ -69,9 +72,11 @@ A take-over is logged as `lock-takeover`, with the name it was taken from
 
 Two things worth knowing:
 
-- **The lock is per person, not per tab.** The same person with one entry open twice is
-  not two editors: both tabs write the same draft row and the later save wins, with no
-  warning in either.
+- **The lock is per tab, not per person.** The same person with one entry open twice is
+  two tabs on one draft row, so the second is refused like anybody else's and told *You have
+  this open in another tab*; **Edit here instead** moves the lock, and the first tab's next
+  save is refused with a note saying where the work went. A tab keeps its token while it
+  moves between entries, so coming back to an entry in the same tab is not a second tab.
 - **The saves are the half the server enforces.** `PUT /admin/api/drafts/...` refuses a
   write from anybody who does not hold the lock — that is what makes a take-over safe to
   lose, since the tab that lost the entry is typing into a form nobody told yet. The rest

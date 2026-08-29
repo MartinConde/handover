@@ -11,6 +11,8 @@ export const LOCK_TTL = 120_000;
 /** Who is editing an entry, and when the beat that took it runs out. */
 export interface Lock {
   userId: string;
+  /** The tab it is held from — the same person in a second tab is not the holder. */
+  tab: string;
   /** Null where the account has gone since — the row outlives it until it expires. */
   name: string | null;
   expiresAt: number;
@@ -18,7 +20,9 @@ export interface Lock {
 
 /**
  * Take the lock on one entry, or push the one we already hold further out. The expiry it now
- * carries, or `undefined` when somebody else is editing it — `lockHolder` names them.
+ * carries, or `undefined` when another tab is editing it — `lockHolder` names them. The lock is
+ * the tab's and not the person's: the same person in a second tab is refused too, since two
+ * tabs on one draft row is the overwrite the lock exists to stop.
  *
  * One statement: the update only fires for our own row or an expired one, so two tabs asking
  * at once cannot both be told they have it.
@@ -28,16 +32,17 @@ export async function claimLock(
   db: Db,
   entry: string,
   userId: string,
+  tab: string,
   now = Date.now(),
 ): Promise<number | undefined> {
   const expiresAt = now + LOCK_TTL;
   const [taken] = await db
     .insert(locks)
-    .values({ siteId, entry, userId, expiresAt })
+    .values({ siteId, entry, userId, tab, expiresAt })
     .onConflictDoUpdate({
       target: [locks.siteId, locks.entry],
-      set: { userId, expiresAt },
-      setWhere: or(eq(locks.userId, userId), lte(locks.expiresAt, now)),
+      set: { userId, tab, expiresAt },
+      setWhere: or(and(eq(locks.userId, userId), eq(locks.tab, tab)), lte(locks.expiresAt, now)),
     })
     .returning();
   return taken ? expiresAt : undefined;
@@ -51,7 +56,7 @@ export async function lockHolder(
   now = Date.now(),
 ): Promise<Lock | undefined> {
   const [row] = await db
-    .select({ userId: locks.userId, name: user.name, expiresAt: locks.expiresAt })
+    .select({ userId: locks.userId, tab: locks.tab, name: user.name, expiresAt: locks.expiresAt })
     .from(locks)
     .leftJoin(user, eq(user.id, locks.userId))
     .where(and(eq(locks.siteId, siteId), eq(locks.entry, entry), gt(locks.expiresAt, now)))
@@ -89,13 +94,14 @@ export async function takeLock(
   db: Db,
   entry: string,
   userId: string,
+  tab: string,
   now = Date.now(),
 ): Promise<number> {
   const expiresAt = now + LOCK_TTL;
   await db
     .insert(locks)
-    .values({ siteId, entry, userId, expiresAt })
-    .onConflictDoUpdate({ target: [locks.siteId, locks.entry], set: { userId, expiresAt } });
+    .values({ siteId, entry, userId, tab, expiresAt })
+    .onConflictDoUpdate({ target: [locks.siteId, locks.entry], set: { userId, tab, expiresAt } });
   return expiresAt;
 }
 

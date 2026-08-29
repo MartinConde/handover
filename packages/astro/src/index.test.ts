@@ -798,12 +798,15 @@ test('the demo schema produces a full descriptor tree', () => {
   const registry: BlockRegistry = { hero, textSection, cta, columns };
   const page = z.object({ title: z.string(), blocks: blocks(() => registry) });
   const listing = z.object({
+    slug: z.string().optional(),
     title: z.string(),
     location: z.string(),
     price: z.string(),
     summary: z.string(),
     photo: image({ ratio: '3:2', max: 2400, min: 1200 }).optional(),
     brochure: file().optional(),
+    phone: z.string().optional().meta({ i18n: 'duplicate' }),
+    internalNote: z.string().optional().meta({ i18n: false }),
   });
   const form = {
     listings: formOf('default', formSchema(listing)),

@@ -65,6 +65,8 @@ export const locks = sqliteTable(
     /** collection/slug — locale-agnostic, so both languages of an entry lock together. */
     entry: text('entry').notNull(),
     userId: text('user_id').notNull(),
+    /** Which of that person's tabs holds it: a random id the tab made up and beats with. */
+    tab: text('tab').notNull().default(''),
     /** Epoch milliseconds, pushed ~2 min ahead by each heartbeat. */
     expiresAt: integer('expires_at').notNull(),
   },
@@ -129,7 +131,7 @@ export const cronState = sqliteTable(
  * `migrations/handover.json`; the build refuses to go out with a stale one, so a package
  * upgrade that forgot to generate fails there rather than at the first query.
  */
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 const GENERATE = 'run `npx handover db generate` and commit migrations/';
 

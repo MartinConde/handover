@@ -6,6 +6,14 @@ exports[`the demo schema produces a full descriptor tree 1`] = `
     "blocks": {},
     "fields": [
       {
+        "label": "Slug",
+        "path": [
+          "slug",
+        ],
+        "required": false,
+        "type": "text",
+      },
+      {
         "label": "Title",
         "path": [
           "title",
@@ -60,6 +68,24 @@ exports[`the demo schema produces a full descriptor tree 1`] = `
         ],
         "required": false,
         "type": "file",
+      },
+      {
+        "i18n": "duplicate",
+        "label": "Phone",
+        "path": [
+          "phone",
+        ],
+        "required": false,
+        "type": "text",
+      },
+      {
+        "i18n": false,
+        "label": "Internal note",
+        "path": [
+          "internalNote",
+        ],
+        "required": false,
+        "type": "text",
       },
     ],
   },

@@ -69,7 +69,7 @@ installed package, so an upgrade that forgot this step fails in the build log ra
 on the first request:
 
 ```
-astro-handover's tables are at schema version 2 but migrations/ was generated for 1: run `npx handover db generate` and commit migrations/
+astro-handover's tables are at schema version 3 but migrations/ was generated for 2: run `npx handover db generate` and commit migrations/
 ```
 
 `npx handover db generate --check` runs the same check on its own, for a CI step.

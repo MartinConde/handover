@@ -473,7 +473,7 @@ const demoted: string[] = [];
 // The locks table, per test: who is editing the entry a request is about, what everybody is
 // editing, and whose locks a removal let go of. The statements themselves run against a real
 // D1 in core's own `locks.test.ts`.
-let holder: { userId: string; name: string; expiresAt: number } | undefined;
+let holder: { userId: string; name: string; expiresAt: number; tab?: string } | undefined;
 let editing: Record<string, string[]> = {};
 const released: string[] = [];
 const beats: string[] = [];
@@ -509,16 +509,18 @@ vi.mock('@handover/core', async (original) => ({
     asked = _args.slice(2);
     return facts;
   },
-  claimLock: async (_site: string, _db: unknown, entry: string, userId: string) => {
+  claimLock: async (_site: string, _db: unknown, entry: string, userId: string, tab: string) => {
     beats.push(entry);
-    return holder && holder.userId !== userId ? undefined : 1755864120000;
+    return holder && !(holder.userId === userId && (holder.tab ?? '') === tab)
+      ? undefined
+      : 1755864120000;
   },
   takeLock: async (_site: string, _db: unknown, entry: string) => {
     taken.push(entry);
     holder = undefined;
     return 1755864120000;
   },
-  lockHolder: async () => holder,
+  lockHolder: async () => holder && { tab: '', ...holder },
   heldEntries: async () => editing,
   releaseLocks: async (_site: string, _db: unknown, userId: string) => {
     released.push(userId);
@@ -529,7 +531,17 @@ vi.mock('@handover/core', async (original) => ({
   dropLock: async (_site: string, _db: unknown, entry: string) => {
     dropped.push(entry);
   },
-  createGitClient: () => ({ getFile, getHead, publish }),
+  // What a restore asks before it undoes anything: which entry the commit is about.
+  createGitClient: () => ({
+    getFile,
+    getHead,
+    publish,
+    getCommit: async (sha: string) => ({
+      sha,
+      message: 'Delete The Mill House',
+      paths: ['src/content/listings/en/mill-house.yaml', 'src/content/redirects.yaml'],
+    }),
+  }),
   openDb: () => {
     if (dbRefusal) throw dbRefusal;
     return { query: { drafts: { findFirst: async () => undefined } } };
@@ -841,7 +853,7 @@ test('the database check answers with the schema version the tables are at', asy
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
     ok: true,
-    detail: "The database answered — the admin's tables are there. Schema version 2.",
+    detail: "The database answered — the admin's tables are there. Schema version 3.",
   });
 });
 
@@ -1403,6 +1415,19 @@ test('a global with a draft ahead of the repository carries the pending dot', as
   // The German file is a draft and has never been committed, and the card counts it all the same.
   expect(global?.locales).toEqual(['en', 'de']);
   locales = ['en'];
+});
+
+// A file with nothing in it is still a file: the language is published and opens empty, rather
+// than reading as a language the entry does not have.
+test('a language whose file is empty opens as an empty entry', async () => {
+  locales = ['en', 'de'];
+  files['src/content/listings/de/mill-house.yaml'] = '';
+
+  const res = await GET(ctx('entries/listings/mill-house'));
+  const body = (await res.json()) as { translations: unknown; published: unknown };
+
+  expect(body.translations).toEqual({ de: {} });
+  expect(body.published).toEqual(['en', 'de']);
 });
 
 test('an entry with a draft returns the draft data and reports it as pending', async () => {
@@ -2143,6 +2168,28 @@ test('deleting an entry that was never published makes no commit', async () => {
     'default',
     expect.anything(),
     'src/content/listings/en/strandhaus-nord.yaml',
+  );
+});
+
+// A language drafted from English and never published has a row and no file: the commit
+// cannot take it away, so the delete has to, or the drawer offers a draft of an entry that
+// has gone.
+test('deleting discards the draft of a language that has no file', async () => {
+  locales = ['en', 'de'];
+  discardDraft.mockClear();
+  rows['src/content/listings/de/mill-house.yaml'] = {
+    contents: 'title: "Die Muehle"\n',
+    baseSha: 'head789',
+    baseBlob: '',
+  };
+
+  const res = await del('entries/listings/mill-house', { redirect: { kind: 'none' } });
+
+  expect(res.status).toBe(200);
+  expect(discardDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    'src/content/listings/de/mill-house.yaml',
   );
 });
 
@@ -4067,6 +4114,71 @@ test('a beat is not a take-over, whatever else the body carries', async () => {
   expect(await res.json()).toMatchObject({ mine: false });
   expect(taken).toEqual([]);
   expect(logged).toEqual([]);
+});
+
+// The lock is the tab's: the same person opening the entry twice is told so in the second tab,
+// and the first tab's next save is kept rather than written over.
+test('a second tab of the same person is refused and the first tab keeps saving', async () => {
+  holder = { userId: 'u2', name: 'Anna', expiresAt: 1755864060000, tab: 'tab-1' };
+  const save = (tab: string) =>
+    PUT(
+      ctx(
+        'drafts/listings/mill-house',
+        new Request('https://x/admin/api/drafts', {
+          method: 'PUT',
+          body: JSON.stringify({
+            data: { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } },
+            tab,
+          }),
+        }),
+        { handover: editor },
+      ),
+    );
+
+  const second = await POST(
+    ctx(
+      'locks/listings/mill-house',
+      new Request('https://x/admin/api/locks', {
+        method: 'POST',
+        body: JSON.stringify({ tab: 'tab-2' }),
+      }),
+      { handover: editor },
+    ),
+  );
+  expect(await second.json()).toMatchObject({ held_by: { id: 'u2', name: 'Anna' }, mine: false });
+
+  expect((await save('tab-2')).status).toBe(409);
+  expect((await save('tab-1')).status).toBe(200);
+});
+
+// The rest of what writes to an entry's files waits on the lock the way Rename and Delete do:
+// an open entry is blocked for everyone else.
+test('hiding waits for the editor who has the entry open', async () => {
+  setEntryStatus.mockClear();
+  holder = { userId: 'someone-else', name: 'Anna Berg', expiresAt: 1755864120000 };
+
+  const res = await POST(
+    post('status/listings', JSON.stringify({ entries: ['mill-house'], hidden: true })),
+  );
+
+  expect(res.status).toBe(409);
+  expect(await res.text()).toBe(
+    'Anna Berg is editing this entry — it can be hidden once they are done',
+  );
+  expect(setEntryStatus).not.toHaveBeenCalled();
+});
+
+test('restoring waits for the editor who has the entry open', async () => {
+  restoreCommit.mockClear();
+  holder = { userId: 'someone-else', name: 'Anna Berg', expiresAt: 1755864120000 };
+
+  const res = await POST(post('restore', JSON.stringify({ commit_sha: 'del111' })));
+
+  expect(res.status).toBe(409);
+  expect(await res.text()).toBe(
+    'Anna Berg is editing this entry — it can be restored once they are done',
+  );
+  expect(restoreCommit).not.toHaveBeenCalled();
 });
 
 test('a hold is written to every language the entry could have', async () => {

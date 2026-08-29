@@ -7,6 +7,7 @@ let {
   collection,
   slug,
   locale,
+  tab = '',
   fields,
   blocks,
   data: loaded,
@@ -26,6 +27,8 @@ let {
   slug: string;
   /** The language this column is of — never the one the entry's structure is edited in. */
   locale: string;
+  /** The editor's tab token: the lock is the tab's, and this column's saves are its saves. */
+  tab?: string;
   fields: readonly Field[];
   blocks: Record<string, Field[]>;
   /** Where a stored media key is served from; an alt is written beside the picture it describes. */
@@ -118,7 +121,7 @@ async function save() {
   const res = await fetch(`/admin/api/drafts/${collection}/${slug}/${locale}`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ data }),
+    body: JSON.stringify({ data, tab }),
   });
   saving = false;
   if (res.status === 409) {

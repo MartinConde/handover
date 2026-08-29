@@ -892,9 +892,9 @@ test('a session opened since the last login event is the newer of the two', asyn
   expect((await memberList('default', db))[0]?.lastSignIn).toBe(9_000);
 });
 
-// The admin plugin mounts `impersonate-user` and an owner may call it. The session it creates
-// belongs to somebody who did not sign in, so a `login` row for them would be a false record.
-test('an owner impersonating somebody is not a sign-in by that person', async () => {
+// The admin plugin mounts `impersonate-user`, which would let an owner act as anybody with no
+// record of it: the path is switched off, so an owner asking gets what a stranger gets.
+test('an owner cannot impersonate anybody', async () => {
   await seed('owner@example.com', 'correct-horse-battery', 'owner');
   await seedUser('anna@example.com', 'editor');
   const signed = await call('/sign-in/email', {
@@ -902,12 +902,13 @@ test('an owner impersonating somebody is not a sign-in by that person', async ()
     password: 'correct-horse-battery',
   });
 
-  await call(
+  const res = await call(
     '/admin/impersonate-user',
     { userId: 'usr_anna@example.com' },
     { cookie: cookiesOf(signed) },
   );
 
+  expect(res.status).toBe(404);
   expect((await activityRows()).map((r) => r.user_id)).toEqual(['usr_owner@example.com']);
 });
 

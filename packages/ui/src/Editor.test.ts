@@ -137,6 +137,9 @@ const type = (root: ParentNode, sel: string, value: string) => {
   flushSync();
 };
 const tick = () => new Promise((r) => setTimeout(r, 0));
+// The token the editor sends with every beat and save is per browser tab and kept in session
+// storage, so pinning it there is what makes the bodies below literal.
+sessionStorage.setItem('handover-tab', 'tab-1');
 // Every editor takes the entry's lock as it opens, so a stub answers that route too — an answer
 // of any other shape reads as somebody else holding it, and the screen would go read-only.
 const HELD = { held_by: null, mine: true, expires_at: 1755864120000, base: {} };
@@ -239,6 +242,7 @@ test('Publish stores the edit as a draft before it asks to commit it', async () 
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       data: { title: 'Seaview House', seo: { description: 'Harbour view' }, photos: [] },
+      tab: 'tab-1',
     }),
   });
   // The title it names is the one that was just typed, not the one the entry was loaded with.
@@ -376,6 +380,7 @@ test('a key no descriptor mentions is written back, not dropped', async () => {
         photos: [],
         subtitle: 'By the harbour',
       },
+      tab: 'tab-1',
     }),
   });
   vi.unstubAllGlobals();
@@ -420,6 +425,7 @@ test('an edit is sent as a draft two seconds after the last keystroke', async ()
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       data: { title: 'Seaview House', seo: { description: 'Harbour view' }, photos: [] },
+      tab: 'tab-1',
     }),
   });
   expect($(root, '.autosave')?.textContent).toBe('Saved');
@@ -517,6 +523,39 @@ test('an entry somebody else is editing reads, and says who has it', async () =>
   vi.unstubAllGlobals();
 });
 
+// The lock is the tab's, so the same person's second tab is refused too — and told it is their
+// own other tab rather than "Being edited by" themselves.
+test('the same person in a second tab is told it is open in another tab', async () => {
+  vi.stubGlobal('fetch', heldBy({ held_by: { id: 'u2', name: 'Anna' } }));
+  const root = show({ userId: 'u2' });
+  await tick();
+  flushSync();
+
+  expect($(root, '.lock-banner')?.textContent).toContain('You have this open in another tab');
+  expect($(root, '.lock-banner')?.textContent).not.toContain('Being edited by');
+  expect($<HTMLFieldSetElement>(root, '.form > fieldset')?.disabled).toBe(true);
+  vi.unstubAllGlobals();
+});
+
+// What tells the tabs apart: a token this tab made up, on every beat and on every save.
+test('the beat and the save carry the same tab token', async () => {
+  vi.useFakeTimers();
+  const fetchMock = autosaved();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  type(root, 'input#f-title', 'Seaview House');
+  await vi.advanceTimersByTimeAsync(2000);
+
+  const sent = (call: unknown[]) =>
+    (JSON.parse((call[1] as { body: string }).body) as { tab?: string }).tab;
+  const beat = fetchMock.mock.calls.find((call) => isLock(call[0]));
+  const save = wrote(fetchMock)[0];
+  expect(sent(beat ?? [])).toMatch(/\S/);
+  expect(sent(save ?? [])).toBe(sent(beat ?? []));
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
 // The whole of the decision the banner is there for: a lock held by somebody who has stopped
 // typing is a minute from freeing itself, and one held by somebody mid-sentence is not.
 test('the banner says how long ago the holder last typed', async () => {
@@ -549,9 +588,10 @@ test('the entry this screen opened is taken as it opens', async () => {
   show();
   await tick();
 
-  expect(fetchMock).toHaveBeenCalledWith('/admin/api/locks/listings/seaview-cottage', {
-    method: 'POST',
-  });
+  expect(fetchMock).toHaveBeenCalledWith(
+    '/admin/api/locks/listings/seaview-cottage',
+    expect.objectContaining({ method: 'POST', body: expect.stringContaining('"tab":') }),
+  );
   vi.unstubAllGlobals();
 });
 
@@ -589,12 +629,14 @@ test('a draft that matches the published file again leaves nothing to publish', 
   // The server owns the answer: it compares the stored bytes against the file in git.
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (_url: string, init: { body: string }) =>
-      Response.json({
-        updated_at: 1755864000000,
-        pending: !init.body.includes('"title":"Seaview Cottage"'),
-        problems: [],
-      }),
+    vi.fn(async (url: string, init: { body: string }) =>
+      isLock(url)
+        ? Response.json(HELD)
+        : Response.json({
+            updated_at: 1755864000000,
+            pending: !init.body.includes('"title":"Seaview Cottage"'),
+            problems: [],
+          }),
     ),
   );
   const root = show();
@@ -755,6 +797,7 @@ test('side by side edits the second language and saves it to its own file', asyn
         price: '£1,200 per week',
         body: [{ _type: 'hero', _id: 'k3nf9a2p', heading: 'Über dem Hafen' }],
       },
+      tab: 'tab-1',
     }),
   });
   vi.unstubAllGlobals();
@@ -839,6 +882,7 @@ test('closing the second column stores what was typed in it', async () => {
           price: '£1,200 per week',
           body: [{ _type: 'hero', _id: 'k3nf9a2p', heading: 'Über dem Hafen' }],
         },
+        tab: 'tab-1',
       }),
     }),
   );
@@ -1327,11 +1371,10 @@ test('Take over asks first, and reads the entry again once it is yours', async (
   $<HTMLButtonElement>(root, '.dialog .btn-primary')?.click();
   await tick();
   flushSync();
-  expect(fetchMock).toHaveBeenCalledWith('/admin/api/locks/listings/seaview-cottage', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ take: true }),
-  });
+  expect(fetchMock).toHaveBeenCalledWith(
+    '/admin/api/locks/listings/seaview-cottage',
+    expect.objectContaining({ method: 'POST', body: expect.stringContaining('"take":true') }),
+  );
   expect(changed).toHaveBeenCalled();
   vi.unstubAllGlobals();
 });

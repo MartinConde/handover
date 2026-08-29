@@ -989,12 +989,14 @@ async function entryLocales(
         loadDraft('default', database, path),
       ]);
       const contents = row?.contents || file?.contents;
-      if (!contents) return undefined;
+      // A file with nothing in it is still the language's file: it opens as an empty entry
+      // rather than reading as a language the entry does not have.
+      if (!contents && !file) return undefined;
       const pending = row ? (await blobSha(row.contents)) !== file?.blob_sha : false;
       return [
         locale,
         {
-          data: parseEntry('default', contents),
+          data: contents ? parseEntry('default', contents) : {},
           pending,
           held: Boolean(row?.heldBy),
           // Whether the repository has this language's file: a draft with none behind it is a
@@ -1155,18 +1157,21 @@ async function lockState(
   slug: string,
   session: App.Locals['handover'],
   mode: 'read' | 'beat' | 'take',
+  tab: string,
 ): Promise<Response> {
   if (!session) return new Response('Unauthorized', { status: 401 });
   if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
   const database = db();
   const entry = `${collection}/${slug}`;
-  if (mode === 'take') return Response.json(await takeOver(collection, slug, entry, session));
+  if (mode === 'take') return Response.json(await takeOver(collection, slug, entry, session, tab));
   const taken =
-    mode === 'beat' ? await claimLock('default', database, entry, session.user.id) : undefined;
+    mode === 'beat' ? await claimLock('default', database, entry, session.user.id, tab) : undefined;
   const holder = taken ? undefined : await lockHolder('default', database, entry);
   return Response.json({
     held_by: holder ? { id: holder.userId, name: holder.name } : null,
-    mine: taken !== undefined || holder?.userId === session.user.id,
+    // The lock is the tab's: the same person's other tab reads `held_by` as themselves and
+    // `mine` false, which is how the editor knows to say "in another tab".
+    mine: taken !== undefined || isHolder(holder, session, tab),
     expires_at: taken ?? holder?.expiresAt ?? null,
     base: await entryBases(collection, slug),
   });
@@ -1182,10 +1187,11 @@ async function takeOver(
   slug: string,
   entry: string,
   session: NonNullable<App.Locals['handover']>,
+  tab: string,
 ) {
   const database = db();
   const holder = await lockHolder('default', database, entry);
-  const expiresAt = await takeLock('default', database, entry, session.user.id);
+  const expiresAt = await takeLock('default', database, entry, session.user.id, tab);
   if (holder && holder.userId !== session.user.id) {
     await logActivity('default', database, {
       userId: session.user.id,
@@ -1201,6 +1207,19 @@ async function takeOver(
     base: await entryBases(collection, slug),
   };
 }
+
+// Whether the lock is this tab's. A request with no token is its own tab, so a hand-made call
+// on a held entry is refused the way a second tab is.
+const isHolder = (
+  holder: { userId: string; tab: string } | undefined,
+  session: App.Locals['handover'],
+  tab: string,
+) => holder?.userId === session?.user.id && holder?.tab === tab;
+
+const tabOf = (body: unknown) => {
+  const tab = (body as { tab?: unknown } | undefined)?.tab;
+  return typeof tab === 'string' ? tab : '';
+};
 
 // Which file an event about the whole entry names: the one the entry is written in, so the log
 // links to the language somebody would open.
@@ -1292,7 +1311,10 @@ async function autosave(
   // own: after a take-over the tab that lost the entry keeps typing, and this is where it finds
   // out. The answer is the lock, so the screen can name who has it.
   const holder = await lockHolder('default', db(), `${collection}/${slug}`);
-  if (holder && holder.userId !== session?.user.id)
+  const body = (await request.json().catch(() => undefined)) as
+    | { data?: unknown; tab?: unknown }
+    | undefined;
+  if (holder && !isHolder(holder, session, tabOf(body)))
     return Response.json(
       {
         held_by: { id: holder.userId, name: holder.name },
@@ -1301,7 +1323,6 @@ async function autosave(
       },
       { status: 409 },
     );
-  const body = (await request.json().catch(() => undefined)) as { data?: unknown } | undefined;
   const data = editable(body?.data);
   if (!data) return new Response('Bad request', { status: 400 });
   // Which file this is a save of: the second column names its language, and the form on screen
@@ -1630,7 +1651,11 @@ function redirectTarget(
  * Nothing is committed here: the rules wait on the rows with the `_status` that made them owed,
  * and the publish that takes the entry off the site carries both.
  */
-async function setStatus(collection: string, request: Request): Promise<Response> {
+async function setStatus(
+  collection: string,
+  request: Request,
+  session: App.Locals['handover'],
+): Promise<Response> {
   const collected = config.collections[collection];
   if (!collected) return new Response('Not found', { status: 404 });
   const body = (await request.json().catch(() => undefined)) as
@@ -1641,6 +1666,11 @@ async function setStatus(collection: string, request: Request): Promise<Response
     : [];
   if (!slugs.length) return new Response('Name the entries to hide or show', { status: 400 });
   const hidden = body?.hidden === true;
+  // Before any of them is written: a batch half hidden is worse than one refused.
+  for (const slug of slugs) {
+    const held = await heldByAnother(collection, slug, session, hidden ? 'hidden' : 'shown');
+    if (held) return held;
+  }
   const database = db();
   const git = gitClient();
   // The bulk dialog is answered once, so the entries a rule could point at are read once too.
@@ -2008,15 +2038,16 @@ async function takenNames(collection: string, database: Db): Promise<string[]> {
 }
 
 /**
- * Step one of the order a rename and a delete are held to: both commit every file of the entry
- * at once, so neither runs under somebody who has it open. The sentence is the whole answer —
- * the entry list shows what the server said.
+ * Step one of the order every write to a whole entry is held to — a rename, a delete, a hide, a
+ * restore — so none of them runs under somebody who has it open. The sentence is the whole
+ * answer: the entry list shows what the server said. Per person rather than per tab: the same
+ * person's other tab is not "somebody else".
  */
 async function heldByAnother(
   collection: string,
   slug: string,
   session: App.Locals['handover'],
-  doing: 'renamed' | 'deleted',
+  doing: 'renamed' | 'deleted' | 'hidden' | 'shown' | 'restored',
 ): Promise<Response | undefined> {
   const holder = await lockHolder('default', db(), `${collection}/${slug}`);
   if (!holder || holder.userId === session?.user.id) return undefined;
@@ -2222,8 +2253,11 @@ async function remove(
   const result = await deleteEntry('default', git, locationOf(collection), slug, (locale) =>
     redirectTarget(answer, collected, picked, locale),
   );
+  // A language with a draft and no file is not in the commit, so its row goes here — left, it
+  // would be a draft of an entry that no longer exists.
   for (const { path, file } of files)
     if (file) await recordDelete('default', database, path, result.commit_sha);
+    else await discardDraft('default', database, path);
   await dropLock('default', database, entry);
   await logActivity('default', database, {
     userId: session?.user.id,
@@ -2322,6 +2356,14 @@ async function restore(request: Request, session: App.Locals['handover']): Promi
   if (!sha) return new Response('A commit_sha is needed to restore', { status: 400 });
   const database = db();
   const git = gitClient();
+  // Which entry the commit took away, asked before anything is undone: somebody may have it open
+  // again under the same name, and a restore would write over what they are typing.
+  const about = entryKey((await git.getCommit(sha)).paths.find((p) => entryKey(p)) ?? '');
+  if (about) {
+    const [collection = '', slug = ''] = about.split('/');
+    const held = await heldByAnother(collection, slug, session, 'restored');
+    if (held) return held;
+  }
   const result = await restoreCommit('default', database, git, sha);
   // A language that stays with only a draft behind it was never in the turn-off commit — the
   // mark went into its row rather than into a file — so the inverse commit cannot put it back.
@@ -2462,7 +2504,14 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
   if (params.path === 'diagnostics') return diagnostics(locals.handover);
   if (params.path === 'settings') return answering(() => integrations(locals.handover));
   const held = params.path?.match(LOCK);
-  if (held) return lockState(held[1] ?? '', held[2] ?? '', locals.handover, 'read');
+  if (held)
+    return lockState(
+      held[1] ?? '',
+      held[2] ?? '',
+      locals.handover,
+      'read',
+      url.searchParams.get('tab') ?? '',
+    );
   const changed = params.path?.match(DIFF);
   if (changed) return answering(() => entryDiff(changed[1] ?? '', changed[2] ?? ''));
   const against = params.path?.match(CONFLICT);
@@ -2794,12 +2843,13 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
       beat[2] ?? '',
       locals.handover,
       body?.take === true ? 'take' : 'beat',
+      tabOf(body),
     );
   }
   const holding = params.path?.match(HOLD);
   if (holding) return hold(holding[1] ?? '', holding[2] ?? '', request, locals.handover);
   const showing = params.path?.match(STATUS);
-  if (showing) return answering(() => setStatus(showing[1] ?? '', request));
+  if (showing) return answering(() => setStatus(showing[1] ?? '', request, locals.handover));
   const filling = params.path?.match(TRANSLATE);
   if (filling)
     return answering(() =>

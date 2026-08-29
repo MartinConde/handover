@@ -317,6 +317,7 @@ const initial = $derived(
           {entry}
           mediaBase={session?.mediaBase ?? ''}
           preview={session?.preview ?? false}
+          userId={session?.user.id}
           onchanged={async () => {
             await loadPending();
             reload += 1;

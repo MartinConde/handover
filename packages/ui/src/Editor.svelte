@@ -16,11 +16,14 @@ let {
   entry,
   mediaBase = '',
   preview = false,
+  userId = '',
   onchanged,
   onpending,
 }: {
   collection: string;
   slug: string;
+  /** Who is signed in, so a lock held by the same person reads as their other tab. */
+  userId?: string;
   /** Where a stored media key is served from; the image and file widgets draw from it. */
   mediaBase?: string;
   /** This build serves `/_preview`: without it the pane says so rather than framing a 404. */
@@ -235,6 +238,20 @@ type Lock = {
   expires_at: number | null;
 };
 let lock = $state<Lock>();
+// The lock is the tab's, not the person's, and this is what tells the tabs apart: a token made
+// up once per browser tab and sent with every beat and every save. Session storage is per tab
+// and survives moving between entries, so a tab that comes back to an entry is still itself.
+const tab = (() => {
+  try {
+    const kept = sessionStorage.getItem('handover-tab');
+    if (kept) return kept;
+    const made = crypto.randomUUID();
+    sessionStorage.setItem('handover-tab', made);
+    return made;
+  } catch {
+    return crypto.randomUUID();
+  }
+})();
 // A save came back refused: somebody took the entry over while this tab had it. Its own state
 // rather than the lock's, because the two banners say different things about the same fact.
 let lost = $state(false);
@@ -255,6 +272,8 @@ let asked = $state(0);
 let beatAt = 0;
 const locked = $derived(lock !== undefined && !lock.mine);
 const holder = $derived(lock?.held_by?.name || 'Somebody else');
+// The holder is this same person, in another tab.
+const otherTab = $derived(lock?.held_by?.id !== undefined && lock?.held_by?.id === userId);
 // How long ago the holder last typed: the lock is taken by a beat and beats ride on the
 // autosave, so the expiry it carries is that keystroke plus one lifetime.
 const idle = $derived(lock?.expires_at ? asked - (lock.expires_at - LOCK_TTL) : 0);
@@ -273,9 +292,16 @@ $effect(() => {
 });
 
 async function beat(claim: boolean) {
-  const res = await fetch(`/admin/api/locks/${collection}/${slug}`, {
-    method: claim ? 'POST' : 'GET',
-  }).catch(() => undefined);
+  const res = await fetch(
+    `/admin/api/locks/${collection}/${slug}${claim ? '' : `?tab=${tab}`}`,
+    claim
+      ? {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ tab }),
+        }
+      : { method: 'GET' },
+  ).catch(() => undefined);
   if (!res?.ok) return;
   lock = (await res.json()) as Lock;
   asked = Date.now();
@@ -295,7 +321,7 @@ async function autosave() {
   const res = await fetch(`/admin/api/drafts/${collection}/${slug}`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ data }),
+    body: JSON.stringify({ data, tab }),
   });
   saving = false;
   // Somebody pressed Take over. The words are not lost — they are in the shared draft the new
@@ -331,7 +357,7 @@ async function takeOver() {
   const res = await fetch(`/admin/api/locks/${collection}/${slug}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ take: true }),
+    body: JSON.stringify({ take: true, tab }),
   });
   busy = false;
   taking = false;
@@ -591,13 +617,21 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     <!-- Leads with where the work went, because the fear is that it is gone: the draft rows are
          in D1 and the new holder carries on from them, so "lost" is never true of the words. -->
     <div class="lock-banner is-lost">
-      {holder} took over this entry. Everything you wrote is in the shared draft — {holder} is carrying
-      on from it.
+      {#if otherTab}
+        Your other tab has this entry now. Everything you wrote is in the shared draft — that tab is
+        carrying on from it.
+      {:else}
+        {holder} took over this entry. Everything you wrote is in the shared draft — {holder} is carrying
+        on from it.
+      {/if}
       <button class="btn-link" type="button" onclick={onchanged}>Reload</button>
     </div>
   {:else if locked}
     <div class="lock-banner">
-      {#if lock?.held_by}
+      {#if otherTab}
+        You have this open in another tab
+        <button class="btn-link" type="button" bind:this={takeTrigger} onclick={() => (taking = true)}>Edit here instead</button>
+      {:else if lock?.held_by}
         Being edited by {lock.held_by.name || 'somebody else'}
         <span class="when">
           {idle >= 60000
@@ -860,6 +894,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             {collection}
             {slug}
             locale={shown}
+            {tab}
             fields={entry.fields}
             blocks={entry.blocks}
             data={entry.translations[shown] ?? {}}

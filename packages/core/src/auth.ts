@@ -75,9 +75,8 @@ export interface AuthConfig {
  * Read out of a real instance rather than recalled: `path` is the endpoint's own path and not
  * the mounted URL, and a social callback is the *pattern* with the provider in `params`.
  *
- * A path that is not one of these is deliberately not a login. `/admin/impersonate-user` is
- * the one that matters: it creates a session for somebody who did not sign in, and a row
- * saying they did would be a false record rather than a missing one.
+ * A path that is not one of these is deliberately not a login — `/admin/impersonate-user`
+ * would create a session for somebody who did not sign in, and it is switched off below.
  */
 const SIGN_IN_METHOD: Record<string, string> = {
   '/sign-in/email': 'password',
@@ -136,6 +135,9 @@ export function authOptions(siteId: string, db: Db, config: AuthConfig): BetterA
     // left to read it out of. Without this the person ends on Better Auth's own error page;
     // with it they end on the login, which says the one thing every refusal here says.
     onAPIError: { errorURL: '/admin' },
+    // The admin plugin's impersonation would let an owner act as anybody, with the log saying
+    // it was that person. Switched off rather than guarded: nothing in the admin asks for it.
+    disabledPaths: ['/admin/impersonate-user'],
     advanced: {
       // Which bucket an attempt is counted against. The default reads `x-forwarded-for`, whose
       // first entry the caller writes — behind Cloudflare that is a limit anyone can walk

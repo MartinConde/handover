@@ -39,10 +39,11 @@ brand's real hostname. So:
   `cms.config.ts` — a collection's `route` with an address in the `[slug]` place, or its
   `index` — under the language segment the site itself uses. Anything else is `404`, so the
   route cannot be pointed at content it did not draw.
-- **Never cached, never indexed, never framed.** Every answer carries
-  `Cache-Control: private, no-store`, `X-Robots-Tag: noindex, nofollow` and
-  `Content-Security-Policy: frame-ancestors 'self'` — the admin frames the preview, and
-  nothing else can.
+- **Never cached, never indexed, never framed, never the referrer.** Every answer carries
+  `Cache-Control: private, no-store`, `X-Robots-Tag: noindex, nofollow`,
+  `Content-Security-Policy: frame-ancestors 'self'` and `Referrer-Policy: no-referrer` — the
+  admin frames the preview, nothing else can, and a link followed off a draft page does not
+  hand its address to the site it points at.
 
 ## The address to preview
 
