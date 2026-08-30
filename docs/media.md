@@ -162,8 +162,21 @@ lists the bucket and writes a row for anything it finds, so those bytes come bac
 sitting there unnamed ([Deploy](deploy.md#the-schedule)). It only ever adds: the width and
 height it cannot read stay empty, and nothing in the bucket is touched.
 
+## The library
+
+`/admin/media` is everything in the bucket as the table sees it: a grid of pictures, a list of
+files, and a panel for whichever one is open. Search matches the file name and the tags, and it
+is the table that searches — a name past the hundredth row is still found.
+
+Under every picture is where it is used, read from a scan the build made of every content file
+with today's unpublished changes laid over it. It counts **entries**, so a listing carrying the
+same picture in English and German is *used in 1 place*, and the panel expands the count into
+the entries themselves. A picture nothing uses says *not used yet*.
+
+The panel is also where an asset is given tags and a default alt text. The default is what a
+page falls back to: a page that writes its own alt, in its own language, keeps it.
+
 ## Not yet
 
-The media library screen, with its usage counts, archiving and tags; *moving* the focal point,
-which is drawn on every preview but set in the library; choosing several pictures at once for
-an array of images; and searching by anything but the file name.
+Archiving and the gated delete; *moving* the focal point, which is drawn on every preview but
+set in the library; and cropping a region into a new asset.

@@ -782,6 +782,24 @@ test('blocks: moving a block keeps every nested _id and moving back restores the
   expect(stringifyEntry('default', snap())).toBe(golden('blocks'));
 });
 
+test('blocks: a collapsed block keeps its header, shows its first words and stays put on a move', async () => {
+  laidOut();
+  show(pageFields, blocksData(), registry);
+  const fold = () => q<HTMLButtonElement>('#f-blocks\\.0 > header .fold');
+  expect(fold().getAttribute('aria-expanded')).toBe('true');
+  click('#f-blocks\\.0 > header .fold');
+  expect(fold().getAttribute('aria-expanded')).toBe('false');
+  expect(document.querySelector('input#f-blocks\\.0\\.heading')).toBeNull();
+  expect(q('#f-blocks\\.0 > header .excerpt').textContent).toBe('Move to the coast');
+  // The fold belongs to the block, not to its slot: after the move it is the second card.
+  await keyMove('hero', 1);
+  expect(q('#f-blocks\\.1 > header .fold').getAttribute('aria-expanded')).toBe('false');
+  expect(q('#f-blocks\\.0 > header .fold').getAttribute('aria-expanded')).toBe('true');
+  click('#f-blocks\\.1 > header .fold');
+  expect(q<HTMLInputElement>('input#f-blocks\\.1\\.heading').value).toBe('Move to the coast');
+  expect(stringifyEntry('default', snap())).not.toBe(golden('blocks'));
+});
+
 test('blocks: the picker lists the registry types and adds one with a fresh _id', () => {
   show(pageFields, { _version: 1, title: 'Home' }, registry);
   expect(document.querySelector('.block-picker')).toBeNull();
@@ -979,6 +997,39 @@ hero:
   );
   click('.media-card .btn-ghost');
   expect(snap().hero).toBeUndefined();
+});
+
+// An array whose row is the picture: the picker takes several at once and each becomes a row,
+// so a client fills a gallery in one pass rather than Add-then-choose per picture.
+test('a gallery field inserts every picked image as a row of its own', async () => {
+  const galleryField: Field = {
+    path: ['gallery'],
+    label: 'Gallery',
+    type: 'array',
+    required: false,
+    item: [{ path: [], label: 'Gallery', type: 'image', required: true, preset: { ratio: '4:3' } }],
+  };
+  library([
+    { id: 'a'.repeat(64), src: 'media/a.webp', filename: 'harbour.jpg', width: 2400, height: 1800 },
+    { id: 'b'.repeat(64), src: 'media/b.webp', filename: 'garden.jpg', width: 2000, height: 1500 },
+  ]);
+  show([galleryField], { _version: 1 });
+  click('.list .add');
+  await settle();
+  click(`.tile input[value="${'b'.repeat(64)}"]`);
+  click(`.tile input[value="${'a'.repeat(64)}"]`);
+  click('.picker-foot .btn-primary');
+  expect(stringifyEntry('default', snap())).toBe(
+    `_version: 1
+gallery:
+  - src: "media/b.webp"
+    width: 2000
+    height: 1500
+  - src: "media/a.webp"
+    width: 2400
+    height: 1800
+`,
+  );
 });
 
 test('the file card names the download, and Remove empties the field', () => {

@@ -1,6 +1,9 @@
 import { AwsClient } from 'aws4fetch';
-import { and, desc, eq, like, not } from 'drizzle-orm';
+import { type AnyColumn, and, desc, eq, like, not, or, sql } from 'drizzle-orm';
+import { parseEntry } from './content.js';
 import type { Db } from './db.js';
+import type { ContentFile } from './entries.js';
+import { entryKey } from './entries.js';
 import { media } from './tables.js';
 
 /**
@@ -128,25 +131,128 @@ export function findMedia(siteId: string, db: Db, id: string): Promise<MediaRow 
     .then(([row]) => row);
 }
 
+/** Which slice of the library to read: the picker's is narrower than the library's own. */
+export interface MediaQuery {
+  /** Pictures or downloads. A `file` field has no business seeing the photographs. */
+  kind: 'images' | 'files';
+  /** Matched anywhere in the file name or in one of the tags. */
+  q?: string;
+  /** The library shows what it has put away, with the flag on it; the picker never offers it. */
+  withArchived?: boolean;
+}
+
+// `%` and `_` are LIKE's own, and a client typing `IMG_2041` means the underscore.
+const contains = (column: AnyColumn, q: string) =>
+  sql`${column} like ${`%${q.replace(/[\\%_]/g, '\\$&')}%`} escape '\\'`;
+
 /**
- * What the picker browses, newest first. Two lists rather than one filtered in the browser,
- * because a `file` field has no business seeing the photographs. No index: a site's library is
- * hundreds of rows, and the limit is what keeps the read small.
+ * What the library and the picker browse, newest first. The search is in the query rather than
+ * in the browser: a name past the hundredth row would otherwise be a match nobody could find.
+ * No index: a site's library is hundreds of rows, and the limit is what keeps the read small.
  */
-export function mediaList(siteId: string, db: Db, kind: 'images' | 'files'): Promise<MediaRow[]> {
+export function mediaList(siteId: string, db: Db, query: MediaQuery): Promise<MediaRow[]> {
   const pictures = like(media.mime, 'image/%');
+  const q = query.q?.trim();
   return db
     .select()
     .from(media)
     .where(
       and(
         eq(media.siteId, siteId),
-        eq(media.archived, 0),
-        kind === 'images' ? pictures : not(pictures),
+        query.withArchived ? undefined : eq(media.archived, 0),
+        query.kind === 'images' ? pictures : not(pictures),
+        // Tags are stored as their own json, so the text of the array is what is searched:
+        // the alternative is a join table for a column holding three words.
+        q ? or(contains(media.filename, q), contains(media.tags, q)) : undefined,
       ),
     )
     .orderBy(desc(media.createdAt))
     .limit(100);
+}
+
+/**
+ * The library's own words about an asset: the tags it is found by and the alt text a page falls
+ * back to. Neither is content — they are the client's account of the picture rather than of a
+ * page, so they live on the row and are never committed.
+ */
+export async function setMediaDetails(
+  siteId: string,
+  db: Db,
+  id: string,
+  details: { tags?: string[]; alt?: string },
+): Promise<MediaRow | undefined> {
+  const [row] = await db
+    .update(media)
+    .set({
+      ...(details.tags ? { tags: details.tags } : {}),
+      // An alt somebody has emptied is no default at all, and null is what the column says that in.
+      ...(details.alt === undefined ? {} : { alt: details.alt || null }),
+    })
+    .where(and(eq(media.siteId, siteId), eq(media.id, id)))
+    .returning();
+  return row;
+}
+
+/** The key `mediaKey` writes, wherever a content file names one. */
+const STORED = /^(?:media|files)\/[0-9a-f]{64}\.[a-z0-9]+$/;
+
+/** Which assets each content file names, by the file's path. */
+export type MediaUses = Record<string, string[]>;
+
+function keysIn(node: unknown, found: Set<string>) {
+  if (typeof node === 'string') {
+    if (STORED.test(node)) found.add(node);
+  } else if (Array.isArray(node)) for (const row of node) keysIn(row, found);
+  else if (node && typeof node === 'object') for (const v of Object.values(node)) keysIn(v, found);
+}
+
+/**
+ * Every stored key each content file names. Built with the entry index rather than read per
+ * request, because a usage count is a repo-wide scan and git is slow to list — the same reason
+ * the titles are read at build time.
+ */
+export function mediaUsesFrom(siteId: string, files: Iterable<ContentFile>): MediaUses {
+  const uses: MediaUses = {};
+  for (const file of files) {
+    // Entries only, the way the index is built: a starter under `_templates/` and
+    // `redirects.yaml` name no entry, so whatever they hold could never be counted anyway.
+    if (!entryKey(file.path)) continue;
+    const found = new Set<string>();
+    keysIn(parseEntry(siteId, file.contents), found);
+    if (found.size) uses[file.path] = [...found].sort();
+  }
+  return uses;
+}
+
+/**
+ * Which entries each asset is used in, drafts laid over the built map: a picture pulled out of
+ * an entry this morning is not still used there, and one dropped in is, before either is
+ * published. An entry counts once however many of its languages carry the picture — an asset is
+ * locale-agnostic, and *used in 2 places* for one listing in two languages is a lie.
+ */
+export function mediaUsage(
+  siteId: string,
+  uses: MediaUses,
+  drafts: readonly ContentFile[],
+): Record<string, string[]> {
+  const files: MediaUses = { ...uses };
+  // The empty contents of a deleted file parse to nothing, which is the right answer for it:
+  // that path names no asset until the build catches up.
+  for (const draft of drafts) {
+    const found = new Set<string>();
+    keysIn(parseEntry(siteId, draft.contents), found);
+    files[draft.path] = [...found];
+  }
+  const used: Record<string, Set<string>> = {};
+  for (const [path, keys] of Object.entries(files)) {
+    const entry = entryKey(path);
+    if (!entry) continue;
+    for (const key of keys) {
+      used[key] ??= new Set();
+      used[key].add(entry);
+    }
+  }
+  return Object.fromEntries(Object.entries(used).map(([key, set]) => [key, [...set].sort()]));
 }
 
 const objectUrl = (store: R2Store, key: string) =>

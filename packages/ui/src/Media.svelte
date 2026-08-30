@@ -9,6 +9,7 @@ let {
   accept = ['application/pdf'],
   base = '',
   dropped = [],
+  many = false,
   onpick,
   onclose,
 }: {
@@ -24,32 +25,47 @@ let {
   base?: string;
   /** Files dropped on the field itself: the picker opens with them already going up. */
   dropped?: File[];
-  onpick: (item: MediaItem) => void;
+  /** An array of pictures takes as many as are ticked, in the order they were ticked. */
+  many?: boolean;
+  onpick: (items: MediaItem[]) => void;
   onclose: () => void;
 } = $props();
 
 let items = $state<MediaItem[]>([]);
-let chosen = $state<MediaItem>();
+/** In the order they were ticked: that is the order a gallery inserts them in. */
+let chosen = $state<MediaItem[]>([]);
 let query = $state('');
 let queue = $state<{ name: string; state: string; failed?: boolean }[]>([]);
 let over = $state(false);
 let panel = $state<HTMLElement>();
 let chooser = $state<HTMLInputElement>();
 
-// The library, and then anything the client dropped on the field to get here.
 $effect(() => {
   panel?.focus();
-  load().then(() => take(dropped));
 });
 
-async function load() {
-  const res = await fetch(`/admin/api/media?kind=${kind}`);
+let opened = false;
+// The library, and then anything the client dropped on the field to get here. The search is the
+// table's rather than this list's — tags are not in what was loaded, and a name past the
+// hundredth row would be a match nobody could find — so searching is the same load with the
+// words on it, and emptying the box is the load with none.
+$effect(() => {
+  const q = query;
+  // Opening waits for nothing, and what was dropped on the field goes up once.
+  if (!opened) {
+    opened = true;
+    load('').then(() => take(dropped));
+    return;
+  }
+  // A client typing a word should not spend a request per letter on it.
+  const wait = setTimeout(() => load(q), 200);
+  return () => clearTimeout(wait);
+});
+
+async function load(q: string) {
+  const res = await fetch(`/admin/api/media?kind=${kind}&q=${encodeURIComponent(q)}`);
   if (res.ok) items = ((await res.json()) as { media: MediaItem[] }).media;
 }
-
-const shown = $derived(
-  items.filter((i) => !query || (i.filename ?? i.src).toLowerCase().includes(query.toLowerCase())),
-);
 
 // Why this picture cannot go in this field: measured on the crop at the field's ratio, not on
 // the file, so a tall phone photo cannot pass a floor sideways. A field with no floor refuses
@@ -68,6 +84,8 @@ const extensions = $derived(
 );
 /** `aspect-ratio` takes the preset's own words: `16:9` is already the CSS value. */
 const aspect = $derived(preset.ratio?.replace(':', ' / ') ?? '4 / 3');
+/** The one picture a single-value field is about, which is the whole of what its panel shows. */
+const one = $derived(chosen[0]);
 
 async function take(files: File[]) {
   for (const file of files) {
@@ -85,12 +103,23 @@ async function take(files: File[]) {
       items = [media, ...items.filter((i) => i.id !== media.id)];
       // Uploading is not choosing: a picture the field is too narrow for is listed with its
       // reason like any other, rather than selected because it arrived last.
-      if (!why(media)) chosen = media;
+      if (!why(media)) chosen = many ? [...chosen, media] : [media];
     } catch (err) {
       row.state = err instanceof Error ? err.message : 'The upload failed';
       row.failed = true;
     }
   }
+}
+
+/** One at a time replaces; a gallery adds to the end and un-ticking takes it back out. */
+function choose(item: MediaItem) {
+  if (!many) {
+    chosen = [item];
+    return;
+  }
+  chosen = chosen.some((i) => i.id === item.id)
+    ? chosen.filter((i) => i.id !== item.id)
+    : [...chosen, item];
 }
 
 function drop(e: DragEvent) {
@@ -107,7 +136,7 @@ function drop(e: DragEvent) {
   <div class="dialog picker-dialog" role="dialog" aria-labelledby="picker-h" tabindex="-1" bind:this={panel}>
     <div class="picker-head">
       <div class="head-row">
-        <h2 id="picker-h">Choose {kind === 'images' ? 'an image' : 'a file'} for “{label}”</h2>
+        <h2 id="picker-h">Choose {many ? 'images' : kind === 'images' ? 'an image' : 'a file'} for “{label}”</h2>
         <span class="preset">
           {#if kind === 'files'}Allowed: {extensions}
           {:else if preset.ratio && preset.min}{preset.ratio} · at least {preset.min} px wide
@@ -118,7 +147,7 @@ function drop(e: DragEvent) {
       <div class="picker-tools">
         <div class="field search">
           <label class="visually-hidden" for="picker-q">Search media</label>
-          <input class="input" id="picker-q" type="search" placeholder="Search by file name" bind:value={query} />
+          <input class="input" id="picker-q" type="search" placeholder="Search by file name or tag" bind:value={query} />
         </div>
       </div>
     </div>
@@ -131,6 +160,7 @@ function drop(e: DragEvent) {
             {#if kind === 'images'}JPEG, PNG, WebP or HEIC · saved at up to {preset.max ?? 2400} px wide
             {:else}{extensions} up to 10 MB{/if}
           </span>
+          <label class="visually-hidden" for="picker-file">Files to upload</label>
           <input class="visually-hidden" type="file" id="picker-file" multiple accept={kind === 'images' ? 'image/*' : accept.join(',')} bind:this={chooser} onchange={(e) => { take(Array.from(e.currentTarget.files ?? [])); e.currentTarget.value = ''; }} />
           <button class="btn btn-sm" type="button" onclick={() => chooser?.click()}>Choose from your computer</button>
         </div>
@@ -150,12 +180,12 @@ function drop(e: DragEvent) {
         <fieldset class="picker-group">
           <legend>{kind === 'images' ? 'All images' : 'All files'}</legend>
           <div class="media-grid">
-            {#each shown as item (item.id)}
+            {#each items as item (item.id)}
               {@const refused = why(item)}
               <label class="tile">
-                <!-- Refused with aria-disabled rather than disabled: a disabled radio takes no
+                <!-- Refused with aria-disabled rather than disabled: a disabled control takes no
                      focus, so a keyboard would arrow past the tile and never hear the reason. -->
-                <input type="radio" name="picker-pick" value={item.id} checked={chosen?.id === item.id} aria-disabled={refused ? 'true' : undefined} aria-describedby={refused ? `why-${item.id}` : undefined} onchange={() => { if (!refused) chosen = item; }} />
+                <input type={many ? 'checkbox' : 'radio'} name="picker-pick" value={item.id} checked={chosen.some((i) => i.id === item.id)} aria-disabled={refused ? 'true' : undefined} aria-describedby={refused ? `why-${item.id}` : undefined} onchange={() => { if (!refused) choose(item); }} />
                 {#if kind === 'images'}
                   <span class="thumb"><img src={item.url} alt="" /></span>
                 {:else}
@@ -166,38 +196,56 @@ function drop(e: DragEvent) {
                 {#if refused}<span class="why" id="why-{item.id}">{refused}</span>{/if}
               </label>
             {:else}
-              <p class="hint">Nothing here yet — drop {kind === 'images' ? 'a picture' : 'a file'} on the box above.</p>
+              <p class="hint">{query ? 'Nothing here matches that.' : `Nothing here yet — drop ${kind === 'images' ? 'a picture' : 'a file'} on the box above.`}</p>
             {/each}
           </div>
         </fieldset>
       </div>
       <div class="picker-side">
-        <p class="side-title">Selected</p>
-        {#if !chosen}
-          <p class="empty-side">Nothing chosen yet. Upload {kind === 'images' ? 'a picture' : 'a file'}, or drag one onto the box.</p>
+        {#if many}
+          <p class="side-title">{chosen.length ? `${chosen.length} chosen — they go in this order` : 'Nothing chosen yet'}</p>
+          <!-- Taking one back out is × on its row here, not un-ticking it across a grid of forty. -->
+          <ul class="upload-queue">
+            {#each chosen as item (item.id)}
+              <li class="upload-row">
+                <span class="name">{name(item)}</span>
+                <span class="state">{item.width ? `${item.width} × ${item.height}` : fileSize(item.bytes)}</span>
+                <span class="actions"><button class="btn btn-icon btn-sm" type="button" aria-label="Remove {name(item)}" onclick={() => choose(item)}>×</button></span>
+              </li>
+            {/each}
+          </ul>
+          <p class="hint">Each picture keeps its own focal point once it is in {label}.</p>
         {:else}
-          {#if kind === 'images'}
-            <div class="ratio-preview" style="aspect-ratio: {aspect}">
-              <img src={chosen.url} alt="" />
-              <span class="focal" aria-hidden="true"></span>
-            </div>
-            <p class="hint">The dot is where the crop holds. It is saved with this field, not with the picture, and it is the same in every language.</p>
-          {/if}
-          <dl class="facts">
-            <div><dt>{name(chosen)}</dt><dd>{chosen.width ? `${chosen.width} × ${chosen.height} · ` : ''}{fileSize(chosen.bytes)}</dd></div>
-            <div><dt>Stored as</dt><dd class="sub">{chosen.src}</dd></div>
-          </dl>
-          {#if kind === 'images'}
-            <button class="btn btn-sm" type="button" disabled title="Moving the focal point ships with the media library in Phase 4">Set focal point</button>
+          <p class="side-title">Selected</p>
+          {#if !one}
+            <p class="empty-side">Nothing chosen yet. Upload {kind === 'images' ? 'a picture' : 'a file'}, or drag one onto the box.</p>
+          {:else}
+            {#if kind === 'images'}
+              <div class="ratio-preview" style="aspect-ratio: {aspect}">
+                <img src={one.url} alt="" />
+                <span class="focal" aria-hidden="true"></span>
+              </div>
+              <p class="hint">The dot is where the crop holds. It is saved with this field, not with the picture, and it is the same in every language.</p>
+            {/if}
+            <dl class="facts">
+              <div><dt>{name(one)}</dt><dd>{one.width ? `${one.width} × ${one.height} · ` : ''}{fileSize(one.bytes)}</dd></div>
+              <div><dt>Stored as</dt><dd class="sub">{one.src}</dd></div>
+            </dl>
+            {#if kind === 'images'}
+              <button class="btn btn-sm" type="button" disabled title="Moving the focal point ships with the media library in Phase 4">Set focal point</button>
+            {/if}
           {/if}
         {/if}
       </div>
     </div>
     <div class="picker-foot">
+      <a href="/admin/media">Manage in Media library</a>
       <span class="spacer"></span>
-      <span class="count">{chosen ? '1 selected' : 'Nothing selected'}</span>
+      <span class="count">{chosen.length ? `${chosen.length} selected` : 'Nothing selected'}</span>
       <button class="btn" type="button" onclick={onclose}>Cancel</button>
-      <button class="btn btn-primary" type="button" disabled={!chosen} onclick={() => chosen && onpick(chosen)}>Insert</button>
+      <button class="btn btn-primary" type="button" disabled={!chosen.length} onclick={() => onpick(chosen)}>
+        {many && chosen.length > 1 ? `Insert ${chosen.length} images` : 'Insert'}
+      </button>
     </div>
   </div>
 </div>

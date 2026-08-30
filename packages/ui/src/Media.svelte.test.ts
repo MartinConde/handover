@@ -12,7 +12,8 @@ vi.mock('./upload.js', async (original) => ({
 }));
 
 // Testing: the floor a field sets, applied to the crop rather than to the file — which picture
-// is refused, in what words, and that a refused one cannot be inserted.
+// is refused, in what words, and that a refused one cannot be inserted; and an array of images
+// taking several at once, in the order they were ticked.
 // Not testing: uploading through the component (jsdom has no canvas; upload.ts is unit-tested)
 // or styling.
 
@@ -27,12 +28,18 @@ const item = (over: Partial<MediaItem>): MediaItem => ({
 });
 
 let app: ReturnType<typeof mount>;
-let picked: MediaItem | undefined;
-const open = async (media: MediaItem[], preset: Record<string, unknown> = {}) => {
+let picked: MediaItem[] | undefined;
+/** Every library read the picker made, newest last. */
+let asked: string[] = [];
+const open = async (media: MediaItem[], preset: Record<string, unknown> = {}, many = false) => {
   picked = undefined;
+  asked = [];
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () => Response.json({ media })),
+    vi.fn(async (url: string) => {
+      asked.push(url);
+      return Response.json({ media });
+    }),
   );
   app = mount(Media, {
     target: document.body,
@@ -41,7 +48,8 @@ const open = async (media: MediaItem[], preset: Record<string, unknown> = {}) =>
       label: 'Hero image',
       preset,
       base: 'https://cdn.example.com',
-      onpick: (m: MediaItem) => {
+      many,
+      onpick: (m: MediaItem[]) => {
         picked = m;
       },
       onclose: () => {},
@@ -102,7 +110,7 @@ test('a field with no floor refuses nothing, and Insert hands back the asset', a
   q<HTMLInputElement>('.tile input').click();
   flushSync();
   q<HTMLButtonElement>('.picker-foot .btn-primary').click();
-  expect(picked?.src).toBe('media/a.webp');
+  expect(picked?.map((i) => i.src)).toEqual(['media/a.webp']);
 });
 
 // Uploading is not choosing: the picture is in the library either way, but a field it is too
@@ -132,4 +140,52 @@ test('a picture whose size the library does not know cannot be chosen', async ()
   q<HTMLInputElement>('.tile input').click();
   flushSync();
   expect(q<HTMLButtonElement>('.picker-foot .btn-primary').disabled).toBe(true);
+});
+
+// An array of `image` is the same picker with checkboxes: the order is the order they were
+// ticked, and un-ticking one takes it back out rather than starting again.
+test('a gallery field takes several pictures, in the order they were ticked', async () => {
+  await open(
+    [
+      item({ id: 'a'.repeat(64), filename: 'harbour.jpg' }),
+      item({ id: 'b'.repeat(64), src: 'media/b.webp', filename: 'garden.jpg' }),
+      item({ id: 'c'.repeat(64), src: 'media/c.webp', filename: 'kitchen.jpg' }),
+    ],
+    { ratio: '4:3' },
+    true,
+  );
+  const tick = (id: string) => {
+    q<HTMLInputElement>(`input[value="${id.repeat(64)}"]`).click();
+    flushSync();
+  };
+  expect(q<HTMLInputElement>('.tile input').type).toBe('checkbox');
+  tick('c');
+  tick('a');
+  tick('b');
+  expect(
+    Array.from(document.querySelectorAll('.picker-side .upload-row .name'), (n) => n.textContent),
+  ).toEqual(['kitchen.jpg', 'harbour.jpg', 'garden.jpg']);
+  // Un-ticking is × on the row here, not hunting the tile down again in a grid of forty.
+  q<HTMLButtonElement>('[aria-label="Remove harbour.jpg"]').click();
+  flushSync();
+  expect(q('.picker-foot .btn-primary').textContent?.trim()).toBe('Insert 2 images');
+  q<HTMLButtonElement>('.picker-foot .btn-primary').click();
+  expect(picked?.map((i) => i.src)).toEqual(['media/c.webp', 'media/b.webp']);
+});
+
+// The search is the table's, so emptying the box has to ask again: before this it filtered the
+// list in the browser, where clearing restored it for free.
+test('clearing the search asks for the whole library again', async () => {
+  await open([item({})]);
+  const box = q<HTMLInputElement>('#picker-q');
+  const search = async (words: string) => {
+    box.value = words;
+    box.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise((r) => setTimeout(r, 250));
+    flushSync();
+  };
+  await search('seaview');
+  expect(asked.at(-1)).toBe('/admin/api/media?kind=images&q=seaview');
+  await search('');
+  expect(asked.at(-1)).toBe('/admin/api/media?kind=images&q=');
 });

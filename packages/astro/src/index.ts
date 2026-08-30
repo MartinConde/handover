@@ -12,6 +12,8 @@ import {
   indexFrom,
   type JsonSchema,
   type Mailer,
+  type MediaUses,
+  mediaUsesFrom,
   type Preset,
   parseEntry,
   type RichtextTier,
@@ -469,6 +471,14 @@ export async function buildTemplates(root: URL): Promise<Record<string, Template
   return templatesFrom('default', await contentFiles(root));
 }
 
+/**
+ * Which assets every content file names, so the library can say where a picture is used without
+ * reading the repository per page load. The drafts are laid over it in the Worker.
+ */
+export async function buildMediaUses(root: URL): Promise<MediaUses> {
+  return mediaUsesFrom('default', await contentFiles(root));
+}
+
 // Astro's own i18n block, as `astro:config:setup` resolves it. A locale is either the
 // folder name or `{ path, codes }`, where the path is the folder and the URL segment.
 type AstroI18n = {
@@ -600,7 +610,8 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
                   id === `\0${VIRTUAL_INDEX}`
                     ? `export default JSON.parse(${JSON.stringify(JSON.stringify(await buildIndex(config.root, titleFields)))});
 export const preview = ${preview};
-export const templates = JSON.parse(${JSON.stringify(JSON.stringify(await buildTemplates(config.root)))});`
+export const templates = JSON.parse(${JSON.stringify(JSON.stringify(await buildTemplates(config.root)))});
+export const uses = JSON.parse(${JSON.stringify(JSON.stringify(await buildMediaUses(config.root)))});`
                     : undefined,
                 configureServer(server: ViteDevServer) {
                   server.watcher.on('all', (_event, file) => {

@@ -525,6 +525,13 @@ a.btn { text-decoration: none; }
 .block-card > header { display: flex; align-items: center; gap: var(--s-2); padding: var(--s-3) var(--s-3) var(--s-3) var(--s-4); border-bottom: 1px solid var(--border); }
 .block-card > header .label { font-weight: 600; }
 .block-card > header .type { font-size: var(--text-xs); color: var(--ink-3); font-family: var(--font-mono); }
+.block-card > header .row-controls { margin-left: auto; }
+.block-card > header .fold { margin-left: calc(-1 * var(--s-2)); }
+.block-card > header .excerpt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-sm); color: var(--ink-2); }
+.block-card.is-folded > header { border-bottom: 0; }
+.block-card > .form { padding: var(--s-4); max-width: none; }
+/* A block inside a block sits on white, so the nesting reads at a glance. */
+.block-card .block-card { background: var(--surface); box-shadow: var(--shadow-chip); }
 /* Reordering: the handle is the only part of a card that drags. dnd-kit floats the card itself
    and parks a copy in the gap the others have made for it; the copy is drawn as that gap. */
 .handle { cursor: grab; touch-action: none; letter-spacing: -0.25em; }
@@ -865,4 +872,69 @@ a.btn { text-decoration: none; }
   .pane.is-preview .seg[aria-label="Screen width"] { display: none; }
   .preview-stage { padding: var(--s-2); }
   .preview-frame, .preview-frame.is-tablet, .preview-frame.is-phone { max-width: none; }
+}
+/* Media library (4.0d) — the picker's grid, rows and side panel taken out of the modal and put on
+   the page. A tile stops being a radio and becomes a card with a stretched link: there is nothing
+   to choose here, only something to open. Archived and recovered are a flag on the picture, never
+   a wash over the whole tile. */
+.file-rows { display: grid; gap: var(--s-2); border: 0; margin: 0; padding: 0; }
+.file-row { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-3); border-radius: var(--radius); background: var(--surface-2); }
+.file-row:hover { background: var(--badge-bg); }
+.file-row .file-icon { width: 32px; height: 40px; font-size: 10px; }
+.file-row .who { display: grid; min-width: 0; line-height: 1.35; }
+.file-row .who .name { font-weight: 500; color: inherit; }
+.file-row .sub { font-size: var(--text-xs); color: var(--ink-2); }
+.file-row .usage { margin-left: auto; white-space: nowrap; }
+.file-row.is-link { position: relative; }
+.file-row .tile-link::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius); }
+.file-row:has(.tile-link:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.file-row.is-selected { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent-ink); }
+.lib-tabs { margin-bottom: var(--s-5); border-bottom: 1px solid var(--border); }
+.lib-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--s-6); align-items: start; }
+.lib-main { display: grid; gap: var(--s-5); align-content: start; min-width: 0; }
+.lib-main .dropzone.is-big { padding: var(--s-12) var(--s-6); }
+.lib-main .media-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+.tile .tile-link { border: 0; background: none; padding: 0; text-align: left; color: inherit; text-decoration: none; cursor: pointer; }
+.tile .tile-link::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius-lg); }
+.tile:has(.tile-link:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.tile.is-selected { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent-ink); }
+.tile .thumb { position: relative; }
+.tile .flag { position: absolute; top: var(--s-2); left: var(--s-2); }
+.tile.is-archived .thumb { filter: grayscale(0.7); }
+/* The side panel is the picker's, made sticky so the facts follow a long grid. A tint says
+   "recovered", with the sentence that explains it; nothing on it destroys, and Delete is the
+   quietest control there is. */
+.lib-side { position: sticky; top: calc(var(--topbar-h) + var(--s-6)); display: grid; gap: var(--s-4); align-content: start; min-width: 0; padding: var(--s-5); border-radius: var(--radius-lg); background: var(--surface-2); }
+.lib-side .side-title { font-size: var(--text-sm); font-weight: 600; }
+.lib-side .preview { position: relative; aspect-ratio: 3 / 2; border-radius: var(--radius); overflow: hidden; background: var(--badge-bg); }
+.lib-side .preview img { width: 100%; height: 100%; object-fit: cover; }
+.lib-side .file-icon.is-big { width: 64px; height: 78px; font-size: var(--text-sm); }
+.lib-side .sub { font-family: var(--font-mono); overflow-wrap: anywhere; }
+.lib-side .actions { display: flex; flex-wrap: wrap; gap: var(--s-2); }
+.lib-side .empty-side { font-size: var(--text-sm); color: var(--ink-2); }
+.lib-side .field { gap: var(--s-1); }
+.lib-side .textarea { min-height: 72px; }
+.lib-side .notice { font-size: var(--text-sm); background: var(--warn-soft); color: var(--warn-ink); }
+.lib-side > .hint { font-size: var(--text-xs); color: var(--ink-2); }
+.lib-side.is-recovered { background: var(--warn-soft); }
+.lib-side.is-recovered .tag-row, .lib-side.is-recovered .textarea { background: var(--surface); }
+.btn-quiet-danger { color: var(--danger-ink); }
+.btn-quiet-danger:hover { background: var(--danger-soft); color: var(--danger-ink); }
+.usage-list { display: grid; gap: var(--s-1); margin: var(--s-2) 0 0; padding: 0; list-style: none; font-size: var(--text-sm); }
+.usage-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); }
+.usage-list .where { font-size: var(--text-xs); color: var(--ink-2); }
+.usage details > summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: var(--s-2); }
+.usage details > summary::-webkit-details-marker { display: none; }
+.usage details > summary::after { content: "▸"; color: var(--ink-3); font-size: var(--text-xs); }
+.usage details[open] > summary::after { content: "▾"; }
+/* Tags read as chips and are typed into the same box, so adding one is not a second control. */
+.tag-row { display: flex; flex-wrap: wrap; gap: var(--s-1); align-items: center; min-height: var(--control-h); padding: var(--s-1) var(--s-2); border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); }
+.tag-row .badge { display: inline-flex; align-items: center; gap: var(--s-1); }
+.tag-row .badge button { border: 0; background: none; padding: 0; color: inherit; cursor: pointer; font-size: var(--text-sm); line-height: 1; }
+.tag-row input { flex: 1; min-width: 80px; border: 0; background: none; padding: 0 var(--s-1); font-size: var(--text-sm); }
+.tag-row input:focus { outline: none; }
+.tag-row:has(input:focus) { border-color: var(--accent); outline: 3px solid var(--accent-soft); }
+@media (max-width: 720px) {
+  .lib-body { grid-template-columns: minmax(0, 1fr); }
+  .lib-side { position: static; }
 }

@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
-import index, { preview, templates } from 'virtual:handover/index';
+import index, { preview, templates, uses } from 'virtual:handover/index';
 import type {
   Answer,
   Db,
@@ -37,6 +37,7 @@ import {
   demoteOwner,
   diffEntry,
   discardDraft,
+  draftFiles,
   driftReport,
   dropLock,
   duplicateEntry,
@@ -61,6 +62,7 @@ import {
   logActivity,
   mediaKey,
   mediaList,
+  mediaUsage,
   memberApi,
   memberList,
   moveLock,
@@ -94,6 +96,7 @@ import {
   setEntryAddress,
   setEntryLocales,
   setEntryStatus,
+  setMediaDetails,
   settingFacts,
   staleLocales,
   stringifyEntry,
@@ -2548,6 +2551,14 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
   return new Response('Not found', { status: 404 });
 };
 
+// The one verb that changes an asset without changing its bytes: what the library calls the
+// picture, never the picture itself, which is immutable and named by its own hash.
+export const PATCH: APIRoute = async ({ params, request }) => {
+  const asset = params.path?.match(MEDIA);
+  if (asset) return describeMedia(asset[1] ?? '', request);
+  return new Response('Not found', { status: 404 });
+};
+
 // `src/content/<collection>/<locale>/<slug>.yaml`. redirects.yaml belongs to no collection and
 // has no schema to be held to; a global's is its own, keyed by the file name.
 const schemaFor = (path: string) => {
@@ -2729,10 +2740,76 @@ function mediaItem(row: MediaRow) {
   };
 }
 
-/** The library the picker browses, of the kind the field that opened it takes. */
+/**
+ * The same asset as the library knows it: what it is called, where it is used, and whether it
+ * has been put away. An upload's answer is the asset alone — none of this is known yet, and the
+ * field that asked has no use for it.
+ */
+function libraryItem(row: MediaRow, used: readonly string[] = []) {
+  return {
+    ...mediaItem(row),
+    alt: row.alt,
+    tags: row.tags ?? [],
+    archived: row.archived === 1,
+    createdAt: row.createdAt,
+    // One row per entry, addressed the way the sidebar addresses it, so the client can go from
+    // the picture to the page it is on.
+    uses: used.map((entry) => ({ entry, title: entryTitle(entry), href: entryHref(entry) })),
+  };
+}
+
+/** Where the admin edits this entry — a global is the entry screen under its own address. */
+function entryHref(entry: string): string {
+  const [collection = '', slug = ''] = entry.split('/');
+  return collection === 'globals' ? `/admin/site/${slug}` : `/admin/c/${collection}/${slug}`;
+}
+
+/**
+ * The library the picker browses, of the kind the field that opened it takes. The usage counts
+ * come from the map the build wrote with the entry index, with today's drafts over it: a picture
+ * taken out of an entry this morning is not still used there.
+ */
 async function library(url: URL): Promise<Response> {
+  const database = db();
   const kind = url.searchParams.get('kind') === 'files' ? 'files' : 'images';
-  return Response.json({ media: (await mediaList('default', db(), kind)).map(mediaItem) });
+  // Only the library shows what has been put away; a field is never offered it.
+  const withArchived = url.searchParams.get('archived') === '1';
+  const [rows, drafts] = await Promise.all([
+    mediaList('default', database, {
+      kind,
+      q: url.searchParams.get('q') ?? undefined,
+      withArchived,
+    }),
+    draftFiles('default', database),
+  ]);
+  const used = mediaUsage('default', uses, drafts);
+  return Response.json({ media: rows.map((row) => libraryItem(row, used[row.r2Key])) });
+}
+
+/**
+ * The library's own words about a picture: the tags it is found by and the alt text a page falls
+ * back to. Neither is content — they are the client's account of the asset, so they are written
+ * to the row and not committed.
+ */
+async function describeMedia(id: string, request: Request): Promise<Response> {
+  const body = (await request.json().catch(() => undefined)) as
+    | { tags?: unknown; alt?: unknown }
+    | undefined;
+  const tags = Array.isArray(body?.tags)
+    ? [
+        ...new Set(
+          body.tags
+            .filter((t): t is string => typeof t === 'string' && !!t.trim())
+            .map((t) => t.trim()),
+        ),
+      ]
+    : undefined;
+  const alt = typeof body?.alt === 'string' ? body.alt.trim() : undefined;
+  if (tags === undefined && alt === undefined)
+    return Response.json({ error: 'send { tags } or { alt }' }, { status: 400 });
+  const row = await setMediaDetails('default', db(), id, { tags, alt });
+  if (!row) return new Response('Not found', { status: 404 });
+  return Response.json({ media: libraryItem(row) });
 }
 
 /** The declaration both halves of an upload are made against; the url's hash wins over the body's. */

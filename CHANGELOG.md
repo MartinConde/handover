@@ -4,10 +4,27 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **The media library screen.** *Media* in the sidebar now opens everything in the bucket:
+  a grid of pictures, a list of files, and a panel for whichever one is open. Search matches
+  the file name **and the tags**, and the table does the searching, so a picture past the
+  hundredth row is still found ([Media](docs/media.md)).
+- **Every asset says where it is used.** *used in 3 places* under each tile, expanding in the
+  panel to the entries themselves, each linking to its editor. It counts entries rather than
+  files, so a listing carrying the same picture in two languages is one place, and unpublished
+  changes are counted as they stand rather than as the last build left them.
+- **Tags and a default alt text** are typed into the library's panel. The default is what a page
+  falls back to; a page that writes its own alt, in its own language, keeps it.
+- **An array of `image` takes several pictures at once.** *Add to Gallery* opens the picker with
+  checkboxes; the panel beside the grid is the order they will be inserted in, and each ticked
+  picture becomes a row of its own.
 - **Rows and blocks are reordered by dragging.** The ↑ ↓ buttons on array rows and block
   cards are one ⋮⋮ handle: drag it with the mouse, or focus it and press Space, move with the
   arrow keys, Space again to drop (Escape puts it back). The other cards make room as the
   card passes, with a dashed gap where it will land. Either way writes the same file.
+- **Blocks fold.** The ▾ at the start of a block's header collapses it to one line that
+  keeps the block's first words, so a long page can be read as a list; the fold travels with
+  the block when it is moved. A block inside a block now sits on white, with its form
+  indented, so the nesting is visible.
 - **You can no longer change your own role.** An owner beside another owner could demote
   themselves and be locked out of Members and Settings; the route now refuses it the way it
   already refused self-removal. Your own row has no ⋯ menu, since nothing in it would be

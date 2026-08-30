@@ -133,7 +133,7 @@ export {
 } from './locks.js';
 export type { EmailSender, Mailer } from './mailer.js';
 export { cloudflareMailer, resendMailer, senderAddress } from './mailer.js';
-export type { MediaRow, Preset, R2Store, Upload } from './media.js';
+export type { MediaQuery, MediaRow, MediaUses, Preset, R2Store, Upload } from './media.js';
 export {
   checkStore,
   confirmUpload,
@@ -143,7 +143,10 @@ export {
   MAX_UPLOAD_BYTES,
   mediaKey,
   mediaList,
+  mediaUsage,
+  mediaUsesFrom,
   presignUpload,
+  setMediaDetails,
   tooSmall,
   UploadRefusedError,
 } from './media.js';

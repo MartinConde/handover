@@ -12,6 +12,8 @@ declare module 'virtual:handover/index' {
   export const preview: boolean;
   /** The starters each collection ships under `src/content/_templates/`, by collection. */
   export const templates: Record<string, import('@handover/core').Template[]>;
+  /** Which stored media keys each content file names, for the library's usage counts. */
+  export const uses: import('@handover/core').MediaUses;
 }
 
 declare module 'virtual:handover/loaders' {

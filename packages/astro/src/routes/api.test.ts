@@ -11,7 +11,7 @@ import {
 import type { APIContext } from 'astro';
 import { afterEach, expect, test, vi } from 'vitest';
 import { formSchema, type HandoverConfig } from '../index.js';
-import { DELETE, GET, POST, PUT } from './api.js';
+import { DELETE, GET, PATCH, POST, PUT } from './api.js';
 
 const {
   listing,
@@ -50,6 +50,8 @@ const {
   deletedEntries,
   findMedia,
   mediaList,
+  draftFiles,
+  setMediaDetails,
   confirmUpload,
 } = await vi.hoisted(async () => {
   const { z } = await import('astro/zod');
@@ -166,6 +168,26 @@ const {
       async () => undefined,
     ),
     mediaList: vi.fn<(...args: unknown[]) => Promise<Record<string, unknown>[]>>(async () => []),
+    // The library lays these over the built scan; the overlay itself runs for real.
+    draftFiles: vi.fn<(...args: unknown[]) => Promise<{ path: string; contents: string }[]>>(
+      async () => [],
+    ),
+    setMediaDetails: vi.fn<(...args: unknown[]) => Promise<Record<string, unknown> | undefined>>(
+      async (...args: unknown[]) => ({
+        id: args[2] as string,
+        r2Key: `media/${args[2] as string}.webp`,
+        filename: 'seaview.jpg',
+        mime: 'image/webp',
+        bytes: 12,
+        width: 2400,
+        height: 1600,
+        alt: null,
+        tags: null,
+        archived: 0,
+        createdAt: 1_755_000_000_000,
+        ...(args[3] as Record<string, unknown>),
+      }),
+    ),
     confirmUpload: vi.fn(
       async (
         _site: unknown,
@@ -298,6 +320,13 @@ vi.mock('virtual:handover/config', () => ({
 // What the build read out of src/content/, inlined into the Worker bundle.
 vi.mock('virtual:handover/index', () => ({
   preview: true,
+  // The scan the build wrote: the mill house carries the photo in both its languages and the
+  // cottage carries the same one, so the picture is used in two places and not three.
+  uses: {
+    'src/content/listings/en/mill-house.yaml': [`media/${'a'.repeat(64)}.webp`],
+    'src/content/listings/de/mill-house.yaml': [`media/${'a'.repeat(64)}.webp`],
+    'src/content/listings/en/seaview-cottage.yaml': [`media/${'a'.repeat(64)}.webp`],
+  },
   // No `_id` anywhere: a hand-written starter is the file that arrives without any.
   templates: {
     listings: [
@@ -606,6 +635,8 @@ vi.mock('@handover/core', async (original) => ({
   deletedEntries,
   findMedia,
   mediaList,
+  draftFiles,
+  setMediaDetails,
   confirmUpload,
   lastCommit: async () => lastCommitRow,
 }));
@@ -628,6 +659,9 @@ afterEach(() => {
   findMedia.mockClear();
   findMedia.mockResolvedValue(undefined);
   mediaList.mockClear();
+  draftFiles.mockClear();
+  draftFiles.mockResolvedValue([]);
+  setMediaDetails.mockClear();
   confirmUpload.mockClear();
   commitBuild.mockClear();
   clearPublished.mockClear();
@@ -678,6 +712,11 @@ const post = (path: string, body: string) =>
   ctx(path, new Request(`https://x/admin/api/${path}`, { method: 'POST', body }));
 const put = (path: string, body: string) =>
   ctx(path, new Request(`https://x/admin/api/${path}`, { method: 'PUT', body }));
+const patch = (path: string, body: unknown) =>
+  ctx(
+    path,
+    new Request(`https://x/admin/api/${path}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  );
 
 test('ping returns the collection names and who is signed in', async () => {
   const session = {
@@ -4791,6 +4830,10 @@ test('the picker is answered the library of the kind its field takes', async () 
       bytes: 2_481_033,
       width: null,
       height: null,
+      alt: null,
+      tags: null,
+      archived: 0,
+      createdAt: 1_755_000_000_000,
     },
   ]);
   const res = await GET(library('?kind=files'));
@@ -4805,17 +4848,107 @@ test('the picker is answered the library of the kind its field takes', async () 
         bytes: 2_481_033,
         width: null,
         height: null,
+        alt: null,
+        tags: [],
+        archived: false,
+        createdAt: 1_755_000_000_000,
+        uses: [],
         url: `https://media.example.com/files/${HASH}.pdf`,
       },
     ],
   });
-  expect(mediaList).toHaveBeenCalledWith('default', expect.anything(), 'files');
+  expect(mediaList).toHaveBeenCalledWith('default', expect.anything(), {
+    kind: 'files',
+    q: undefined,
+    withArchived: false,
+  });
 });
 
 // An unknown kind is the pictures: a picker that asked for nothing is an image field.
 test('the library defaults to the pictures', async () => {
   await GET(library(''));
-  expect(mediaList).toHaveBeenCalledWith('default', expect.anything(), 'images');
+  expect(mediaList).toHaveBeenCalledWith('default', expect.anything(), {
+    kind: 'images',
+    q: undefined,
+    withArchived: false,
+  });
+});
+
+// The search is the table's, not the browser's, and only the library sees what it put away.
+test('a search and the archived are handed to the query, not filtered after it', async () => {
+  await GET(library('?q=seaview&archived=1'));
+  expect(mediaList).toHaveBeenCalledWith('default', expect.anything(), {
+    kind: 'images',
+    q: 'seaview',
+    withArchived: true,
+  });
+});
+
+const PHOTO = 'a'.repeat(64);
+const asset = (id: string) => ({
+  id,
+  r2Key: `media/${id}.webp`,
+  filename: 'front-of-house.jpg',
+  mime: 'image/webp',
+  bytes: 612_000,
+  width: 2400,
+  height: 1600,
+  alt: null,
+  tags: null,
+  archived: 0,
+});
+
+test('a picture says which entries it is used in, one row per entry', async () => {
+  mediaList.mockResolvedValueOnce([asset(PHOTO)]);
+  const { media } = (await (await GET(library(''))).json()) as {
+    media: { uses: { entry: string; title: string; href: string }[] }[];
+  };
+  // Two entries, though three files name the key: the German mill house is the same listing.
+  expect(media[0]?.uses).toEqual([
+    { entry: 'listings/mill-house', title: 'The Mill House', href: '/admin/c/listings/mill-house' },
+    {
+      entry: 'listings/seaview-cottage',
+      title: 'Seaview Cottage',
+      href: '/admin/c/listings/seaview-cottage',
+    },
+  ]);
+});
+
+test('an unpublished change is what the count reads, not the last build', async () => {
+  mediaList.mockResolvedValueOnce([asset(PHOTO)]);
+  draftFiles.mockResolvedValueOnce([
+    { path: 'src/content/listings/en/mill-house.yaml', contents: 'title: "The Mill House"\n' },
+    { path: 'src/content/listings/de/mill-house.yaml', contents: 'title: "The Mill House"\n' },
+  ]);
+  const { media } = (await (await GET(library(''))).json()) as {
+    media: { uses: { entry: string }[] }[];
+  };
+  expect(media[0]?.uses.map((u) => u.entry)).toEqual(['listings/seaview-cottage']);
+});
+
+test('tags and a default alt are written to the row, and the empty alt is no default', async () => {
+  const res = await PATCH(
+    patch(`media/${PHOTO}`, {
+      tags: ['exterior', ' seaview ', '', 'exterior'],
+      alt: ' Front of the house ',
+    }),
+  );
+  expect(res.status).toBe(200);
+  expect(setMediaDetails).toHaveBeenCalledWith('default', expect.anything(), PHOTO, {
+    tags: ['exterior', 'seaview'],
+    alt: 'Front of the house',
+  });
+  expect((await PATCH(patch(`media/${PHOTO}`, { alt: '  ' }))).status).toBe(200);
+  expect(setMediaDetails).toHaveBeenLastCalledWith('default', expect.anything(), PHOTO, {
+    tags: undefined,
+    alt: '',
+  });
+});
+
+test('a write with neither tags nor an alt is refused, and an unknown asset is a 404', async () => {
+  expect((await PATCH(patch(`media/${PHOTO}`, { archived: true }))).status).toBe(400);
+  setMediaDetails.mockResolvedValueOnce(undefined);
+  expect((await PATCH(patch(`media/${PHOTO}`, { tags: ['x'] }))).status).toBe(404);
 });
 
 test('a site that has not been told where its bucket is names all four values', async () => {

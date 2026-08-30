@@ -6,6 +6,7 @@ import Diagnostics from './Diagnostics.svelte';
 import Editor from './Editor.svelte';
 import EntryList from './EntryList.svelte';
 import Globals from './Globals.svelte';
+import Library from './Library.svelte';
 import Login, { type LoginMethods } from './Login.svelte';
 import Members from './Members.svelte';
 import { navigate } from './navigate';
@@ -359,6 +360,8 @@ const initial = $derived(
       <EntryList collection={listRoute[1] ?? ''} onchanged={loadPending} />
     {:else if path === '/admin/site'}
       <Globals />
+    {:else if path === '/admin/media'}
+      <Library base={session?.mediaBase ?? ''} />
     {:else if path === '/admin/account'}
       <Account user={session.user} role={session.role} onname={loadSession} />
     {:else if path === '/admin/members' && session.role === 'owner'}

@@ -10,6 +10,8 @@ import {
   MAX_UPLOAD_BYTES,
   mediaKey,
   mediaList,
+  mediaUsage,
+  mediaUsesFrom,
   presignUpload,
   type R2Store,
   reconcileMedia,
@@ -329,7 +331,7 @@ test('the library is newest first, and pictures and files are two lists', async 
   // Other tests in this file share the table, so this is about these three rows.
   const mine = ['4', '5', '6'].map((c) => c.repeat(64));
   const listed = async (kind: 'images' | 'files') =>
-    (await mediaList('default', db, kind)).map((r) => r.id).filter((id) => mine.includes(id));
+    (await mediaList('default', db, { kind })).map((r) => r.id).filter((id) => mine.includes(id));
   expect(await listed('images')).toEqual(['6'.repeat(64), '4'.repeat(64)]);
   expect(await listed('files')).toEqual(['5'.repeat(64)]);
 });
@@ -351,6 +353,88 @@ const lister = (pages: { keys: string[]; next?: string }[]) => {
   }) as unknown as typeof globalThis.fetch;
   return { fetch, seen };
 };
+
+test('the library searches the file name and the tags, and only it sees the archived', async () => {
+  const db = openDb('search', binding);
+  const rows = [
+    {
+      id: 'a1'.repeat(32),
+      filename: 'IMG_2041.jpg',
+      tags: ['exterior', 'seaview'],
+      archived: 0,
+      createdAt: 3,
+    },
+    { id: 'b2'.repeat(32), filename: 'kitchen.jpg', tags: ['interior'], archived: 0, createdAt: 2 },
+    {
+      id: 'c3'.repeat(32),
+      filename: 'old-banner.jpg',
+      tags: ['seaview'],
+      archived: 1,
+      createdAt: 1,
+    },
+    { id: 'd4'.repeat(32), filename: 'IMGx2041.jpg', tags: [], archived: 0, createdAt: 0 },
+  ];
+  for (const row of rows)
+    await db
+      .insert(tables.media)
+      .values({ ...row, siteId: 'search', r2Key: `media/${row.id}.webp`, mime: 'image/webp' });
+  const found = async (query: Parameters<typeof mediaList>[2]) =>
+    (await mediaList('search', db, query)).map((r) => r.filename);
+  expect(await found({ kind: 'images', q: 'seaview' })).toEqual(['IMG_2041.jpg']);
+  expect(await found({ kind: 'images', q: 'seaview', withArchived: true })).toEqual([
+    'IMG_2041.jpg',
+    'old-banner.jpg',
+  ]);
+  expect(await found({ kind: 'images', q: 'kitchen' })).toEqual(['kitchen.jpg']);
+  // The underscore is the client's, not LIKE's: it matches itself and not the file beside it.
+  expect(await found({ kind: 'images', q: 'IMG_2041' })).toEqual(['IMG_2041.jpg']);
+});
+
+const PHOTO = `media/${'1'.repeat(64)}.webp`;
+const BROCHURE = `files/${'2'.repeat(64)}.pdf`;
+const yaml = (...keys: string[]) =>
+  `title: "Mill House"\nphoto:\n  src: "${keys[0] ?? PHOTO}"\nblocks:\n  - _type: "hero"\n    _id: "k3nf9a2p"\n    image:\n      src: "${keys[1] ?? PHOTO}"\n`;
+
+test('a scan finds a stored key wherever it sits, and nothing that is not one', () => {
+  const uses = mediaUsesFrom('default', [
+    { path: 'src/content/listings/en/mill-house.yaml', contents: yaml(PHOTO, BROCHURE) },
+    {
+      path: 'src/content/pages/en/home.yaml',
+      contents: 'title: "Home"\nsummary: "media/not-a-hash.webp"\n',
+    },
+    // Neither names an entry, so a key in one could never be counted against anything.
+    { path: 'src/content/_templates/listings/holiday-let.yaml', contents: yaml() },
+    { path: 'src/content/redirects.yaml', contents: yaml() },
+  ]);
+  expect(uses).toEqual({ 'src/content/listings/en/mill-house.yaml': [BROCHURE, PHOTO] });
+});
+
+test('an entry is one place however many of its languages carry the picture', () => {
+  const uses = mediaUsesFrom('default', [
+    { path: 'src/content/listings/en/mill-house.yaml', contents: yaml() },
+    { path: 'src/content/listings/de/mill-house.yaml', contents: yaml() },
+    { path: 'src/content/pages/en/home.yaml', contents: yaml() },
+  ]);
+  expect(mediaUsage('default', uses, [])).toEqual({
+    [PHOTO]: ['listings/mill-house', 'pages/home'],
+  });
+});
+
+test('a draft is what the entry uses now — the picture it dropped and the one it took', () => {
+  const uses = mediaUsesFrom('default', [
+    { path: 'src/content/listings/en/mill-house.yaml', contents: yaml() },
+  ]);
+  const swapped = mediaUsage('default', uses, [
+    { path: 'src/content/listings/en/mill-house.yaml', contents: yaml(BROCHURE, BROCHURE) },
+  ]);
+  expect(swapped).toEqual({ [BROCHURE]: ['listings/mill-house'] });
+  // An empty draft is a file the client has deleted: it names nothing at all.
+  expect(
+    mediaUsage('default', uses, [
+      { path: 'src/content/listings/en/mill-house.yaml', contents: '' },
+    ]),
+  ).toEqual({});
+});
 
 const ORPHAN = '7'.repeat(64);
 

@@ -155,9 +155,13 @@ function ended(at: readonly string[], event: Parameters<Handlers['onDragEnd']>[0
   move(list(at), source.index, origin);
 }
 // The handle is the only thing that drags: the row's inputs keep their pointer and keyboard.
-const sortable = (id: string, index: () => number) =>
+// Both arguments are read lazily: an eager read would remake the sortable on every reorder,
+// and a sortable born at its new index has no move to animate.
+const sortable = (id: () => string, index: () => number) =>
   createSortable({
-    id,
+    get id() {
+      return id();
+    },
     get index() {
       return index();
     },
@@ -168,6 +172,16 @@ const sortable = (id: string, index: () => number) =>
 
 const block = (row: unknown) =>
   row as { _type?: string; _id?: string; _label?: string; _ref?: string };
+// Folded blocks, by the block's own key, so a fold rides along when the block is moved.
+let folded = $state<Record<string, boolean>>({});
+// A folded card still says what is in it: the first words it holds, in the order its form shows.
+function excerpt(row: unknown, inner: Field[] | undefined): string {
+  for (const f of inner ?? []) {
+    const v = f.path.reduce<unknown>((node, key) => (node as Data | undefined)?.[key], row);
+    if (typeof v === 'string' && v.trim()) return v.length > 80 ? `${v.slice(0, 79)}…` : v;
+  }
+  return '';
+}
 // A `_ref` block's content lives in a global, and an unknown `_type` has no fields to show;
 // both are the same read-only card.
 const blockName = (row: unknown) => block(row)._label || block(row)._type || '';
@@ -194,16 +208,29 @@ const aspect = (preset: Preset) => preset.ratio?.replace(':', ' / ') ?? '4 / 3';
 const src = (at: readonly string[]) => `${mediaBase}/${str([...at, 'src'])}`;
 const bytes = (at: readonly string[]) => fileSize(read([...at, 'bytes']) as number | undefined);
 
-/** What the picker hands back, written as the format stores it — and in that order. */
-function picked(at: readonly string[], type: 'image' | 'file', item: MediaItem) {
-  write(
-    at,
-    type === 'image'
-      ? // `alt` is left as a hole rather than an empty string: nothing is written for it until
-        // somebody types one, and it keeps its place in the file when they do.
-        { src: item.src, alt: undefined, width: item.width, height: item.height }
-      : { src: item.src, name: item.filename, bytes: item.bytes, mime: item.mime },
-  );
+/** One picked asset as the format stores it — and in that order. */
+const stored = (type: 'image' | 'file', item: MediaItem) =>
+  type === 'image'
+    ? // `alt` is left as a hole rather than an empty string: nothing is written for it until
+      // somebody types one, and it keeps its place in the file when they do.
+      { src: item.src, alt: undefined, width: item.width, height: item.height }
+    : { src: item.src, name: item.filename, bytes: item.bytes, mime: item.mime };
+
+function picked(at: readonly string[], type: 'image' | 'file', items: MediaItem[]) {
+  write(at, stored(type, items[0] as MediaItem));
+  picker = '';
+}
+
+// A gallery is an array whose row *is* the picture, so the picker takes several at once and each
+// one is a row of its own, in the order they were ticked.
+const gallery = (field: Field) =>
+  field.type === 'array' &&
+  field.item.length === 1 &&
+  field.item[0]?.path.length === 0 &&
+  field.item[0]?.type === 'image';
+
+function pickedInto(at: readonly string[], items: MediaItem[]) {
+  for (const item of items) add(at, stored('image', item));
   picker = '';
 }
 
@@ -358,11 +385,12 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'array'}
       {@const items = rows(at)}
       {@const scalar = field.item.length === 1 && field.item[0]?.path.length === 0}
+      {@const isGallery = gallery(field)}
       {@render groupLabel(id, field, text, at)}
       <div class="list" {id} role="group" aria-labelledby="{id}-l">
         <DragDropProvider onDragStart={begun} onDragOver={(e) => over(at, e)} onDragEnd={(e) => ended(at, e)}>
         {#each items as row, i (keyOf(items, i))}
-          {@const s = sortable(keyOf(items, i), () => i)}
+          {@const s = sortable(() => keyOf(items, i), () => i)}
           <div class="row-card" class:is-dragging={s.isDragging} {@attach s.attach}>
             <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {prefix} {mediaBase} {locale} inherited={mode} /></div>
             {#if !translating}{@render controls(at, i, `${text} row ${i + 1}`, s.attachHandle)}{/if}
@@ -371,8 +399,21 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           <p class="hint">Nothing here yet</p>
         {/each}
         </DragDropProvider>
-        {#if !translating}<button class="btn btn-sm add" type="button" onclick={() => add(at, scalar ? '' : { _id: newId('default') })}>Add to {text}</button>{/if}
+        {#if !translating}
+          <button class="btn btn-sm add" type="button" onclick={() => (isGallery ? (picker = id) : add(at, scalar ? '' : { _id: newId('default') }))}>Add to {text}</button>
+        {/if}
       </div>
+      {#if isGallery && picker === id}
+        <Media
+          kind="images"
+          label={text}
+          preset={field.item[0]?.type === 'image' ? field.item[0].preset : {}}
+          base={mediaBase}
+          many
+          onpick={(items) => pickedInto(at, items)}
+          onclose={() => (picker = '')}
+        />
+      {/if}
     {:else if field.type === 'blocks'}
       {@const items = rows(at)}
       {@render groupLabel(id, field, text, at)}
@@ -381,17 +422,22 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {#each items as row, i (keyOf(items, i))}
           {@const name = blockName(row)}
           {@const inner = blockFields(row)}
-          {@const s = sortable(keyOf(items, i), () => i)}
-          <article class="block-card" id="{id}.{i}" aria-labelledby="{id}.{i}-h" class:is-dragging={s.isDragging} {@attach s.attach}>
+          {@const s = sortable(() => keyOf(items, i), () => i)}
+          {@const shut = folded[keyOf(items, i)] === true}
+          <article class="block-card" id="{id}.{i}" aria-labelledby="{id}.{i}-h" class:is-dragging={s.isDragging} class:is-folded={shut} {@attach s.attach}>
             <header>
+              <button class="btn btn-ghost btn-icon fold" type="button" aria-expanded={!shut} aria-controls="{id}.{i}-b" aria-label="{shut ? 'Expand' : 'Collapse'} {name}" onclick={() => (folded[keyOf(items, i)] = !shut)}>{shut ? '▸' : '▾'}</button>
               <span class="label" id="{id}.{i}-h">{name}</span>
               <span class="type">{block(row)._type} · {block(row)._id}</span>
+              {#if shut}<span class="excerpt">{excerpt(row, inner)}</span>{/if}
               {#if !translating}{@render controls(at, i, name, s.attachHandle)}{/if}
             </header>
-            {#if inner}
-              <div class="form"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {prefix} {mediaBase} {locale} inherited={mode} /></div>
+            {#if shut}
+              <!-- folded: the header is the whole card -->
+            {:else if inner}
+              <div class="form" id="{id}.{i}-b"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {prefix} {mediaBase} {locale} inherited={mode} /></div>
             {:else}
-              <p class="ref-note">{block(row)._ref ?? `No “${block(row)._type}” block in the registry`} — not editable here</p>
+              <p class="ref-note" id="{id}.{i}-b">{block(row)._ref ?? `No “${block(row)._type}” block in the registry`} — not editable here</p>
             {/if}
           </article>
         {:else}
@@ -506,7 +552,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         accept={field.type === 'file' ? field.accept : []}
         base={mediaBase}
         {dropped}
-        onpick={(item) => picked(at, field.type as 'image' | 'file', item)}
+        onpick={(items) => picked(at, field.type as 'image' | 'file', items)}
         onclose={() => { picker = ''; dropped = []; }}
       />
     {/if}

@@ -12,6 +12,15 @@ export interface MediaItem {
   height?: number | null;
 }
 
+/** The same asset as the library screen knows it: what it is called, and where it is used. */
+export interface LibraryItem extends MediaItem {
+  alt?: string | null;
+  tags?: string[];
+  archived?: boolean;
+  createdAt?: number;
+  uses?: { entry: string; title: string; href: string }[];
+}
+
 /** A size a client reads rather than a byte count; nothing stored is ever "0 KB". */
 export const fileSize = (bytes?: number | null) => {
   if (!bytes) return '';

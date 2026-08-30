@@ -47,6 +47,10 @@ A picture the library has no width and height for — what the reconciliation jo
 a HEAD cannot measure one — is refused by every image field, floor or no floor: the field stores
 those two numbers.
 
+An **array of `image`** — a gallery — is the one field the picker takes several pictures for at
+once. *Add to …* opens it with checkboxes rather than radio buttons, the panel beside the grid is
+the order they will go in, and each ticked picture becomes a row of its own.
+
 What a translation owns is the alt text of a picture and the display name of a file. Every
 other part is the same in every language, so a language being translated is shown those two
 and nothing else: no picker, no Replace, no Remove.

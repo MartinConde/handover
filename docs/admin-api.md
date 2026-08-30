@@ -492,12 +492,22 @@ and the library the picker reads. What has to be set up before any of them answe
 is [Media](media.md).
 
 ```
-GET /admin/api/media?kind=images|files  →  { "media": [ { "id", "src", "filename", "mime",
-                                                          "bytes", "width", "height", "url?" } ] }
+GET /admin/api/media?kind=images|files&q=&archived=1
+  →  { "media": [ { "id", "src", "filename", "mime", "bytes", "width", "height", "url?",
+                    "alt", "tags", "archived", "createdAt",
+                    "uses": [ { "entry", "title", "href" } ] } ] }
 ```
 
-What the picker lists: newest first, archived left out, at most 100. `kind` is the field's —
-`files` is everything that is not a picture, and anything else is the pictures.
+What the library and the picker list: newest first, at most 100. `kind` is the field's —
+`files` is everything that is not a picture, and anything else is the pictures. `q` matches
+anywhere in the file name or in one of the tags, and it is matched in the query rather than in
+the browser, so a name past the hundredth row is still found. `archived=1` includes what has
+been put away; without it archived assets are left out, which is what a field's picker asks for.
+
+`uses` is one row per **entry** the asset is used in — not per file, so a listing that carries
+the same picture in both its languages is one place. It is read from a scan the build wrote,
+with today's drafts laid over it: a picture taken out of an entry this morning is not still
+used there. `href` is where the admin edits that entry.
 
 ```
 POST /admin/api/media  { "hash", "bytes", "mime", "filename?", "width?", "height?" }
@@ -513,7 +523,19 @@ that is not a picture. `422` when the type is not one the bucket takes or the de
 is over 10MB, `503` when the site has no bucket configured.
 
 `src` is the key a content file stores; `url` is that key under
-[`media.publicBase`](configuration.md#media) and is absent when the site has not set one.
+[`media.publicBase`](configuration.md#media) and is absent when the site has not set one. An
+upload's answer is the asset alone — none of the library's own columns are known yet.
+
+```
+PATCH /admin/api/media/:hash  { "tags?": [ "…" ], "alt?": "…" }
+  →  { "media": { … } }
+```
+
+What the library calls an asset: the tags the search finds it by, and the alt text a page falls
+back to when it sets none of its own. Neither is content and neither is committed — they are the
+client's account of the picture, and they live on the row. Tags are trimmed and de-duplicated;
+an alt emptied here is no default at all. `400` when the body carries neither, `404` when the
+site has no such asset.
 
 ```
 PUT /admin/api/media/:hash  { "hash", "bytes", "mime", "filename?", "width?", "height?" }
