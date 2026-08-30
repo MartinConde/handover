@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => ({
   // Tests mount components in jsdom, so svelte must resolve to its browser build there;
   // leave the build's default conditions alone or the bundle gets the server build too.
   ...(mode === 'test' ? { resolve: { conditions: ['browser'] } } : {}),
-  test: { environment: 'jsdom' },
+  test: { environment: 'jsdom', setupFiles: ['vitest.setup.ts'] },
   build: {
     outDir: '../astro/dist/ui',
     emptyOutDir: true,

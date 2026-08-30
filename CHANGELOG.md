@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Rows and blocks are reordered by dragging.** The ↑ ↓ buttons on array rows and block
+  cards are one ⋮⋮ handle: drag it with the mouse, or focus it and press Space, move with the
+  arrow keys, Space again to drop (Escape puts it back). Either way writes the same file.
 - **You can no longer change your own role.** An owner beside another owner could demote
   themselves and be locked out of Members and Settings; the route now refuses it the way it
   already refused self-removal. Your own row has no ⋯ menu, since nothing in it would be

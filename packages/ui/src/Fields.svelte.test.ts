@@ -47,6 +47,7 @@ const show = (
 afterEach(() => {
   unmount(app);
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 const golden = (name: string) =>
@@ -561,12 +562,69 @@ const click = (sel: string) => {
   flushSync();
 };
 
-test('array: moving a row emits the reordered YAML and both _ids survive', () => {
-  show([rooms, tags], arrayData());
-  expect(document.querySelectorAll('#f-rooms .row-card')).toHaveLength(2);
-  click('[aria-label="Move Rooms row 1 down"]');
-  expect(stringifyEntry('default', snap())).toBe(
-    `_version: 1
+// jsdom lays nothing out, and dnd-kit finds the row under the pointer by its box: cards are
+// stacked 100 px tall in DOM order, and everything else is as wide as the viewport. A card
+// being dragged floats by the translate dnd-kit gives it; the copy parked in its place holds
+// the slot.
+const CARD = '.row-card, .block-card';
+const laidOut = () =>
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    const found = this.closest(CARD);
+    const card = found?.hasAttribute('data-dnd-placeholder') ? found.previousElementSibling : found;
+    if (!card?.parentElement) return new DOMRect(0, 0, 1024, 4096);
+    const cards = Array.from(card.parentElement.children).filter(
+      (el) => el.matches(CARD) && !el.hasAttribute('data-dnd-placeholder'),
+    );
+    const floated =
+      this === card ? (card as HTMLElement).style.getPropertyValue('--dnd-translate') : '';
+    return new DOMRect(
+      0,
+      cards.indexOf(card) * 100 + (parseFloat(floated.split(' ')[1] ?? '') || 0),
+      400,
+      100,
+    );
+  });
+// A fetch answers, a sensor takes its frame: whatever is a step behind the event lands first.
+const settle = async () => {
+  await new Promise((r) => setTimeout(r, 40));
+  flushSync();
+};
+const key = async (target: Element | Document, code: string) => {
+  target.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true, cancelable: true }));
+  await settle();
+};
+/** Grab a handle with Space, press the arrow `steps` times, let go with Space. */
+const keyMove = async (name: string, steps: number) => {
+  await key(q(`[aria-label="Reorder ${name}"]`), 'Space');
+  for (let n = 0; n < Math.abs(steps); n++)
+    await key(document, steps > 0 ? 'ArrowDown' : 'ArrowUp');
+  await key(document, 'Space');
+};
+const pointer = async (target: Element | Document, type: string, y: number) => {
+  target.dispatchEvent(
+    new PointerEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      isPrimary: true,
+      pointerId: 1,
+      button: 0,
+      pointerType: 'mouse',
+      clientX: 20,
+      clientY: y,
+    }),
+  );
+  await settle();
+};
+/** Press the handle, drag it `by` pixels down the page, release. */
+const mouseMove = async (name: string, by: number) => {
+  const handle = q(`[aria-label="Reorder ${name}"]`);
+  const y = handle.getBoundingClientRect().y + 50;
+  await pointer(handle, 'pointerdown', y);
+  await pointer(document, 'pointermove', y + by / 2);
+  await pointer(document, 'pointermove', y + by);
+  await pointer(document, 'pointerup', y + by);
+};
+const MOVED = `_version: 1
 rooms:
   - _id: "f4a8c3d6"
     name: "Master bedroom"
@@ -577,18 +635,34 @@ rooms:
 tags:
   - "coastal"
   - "garden"
-`,
-  );
-  click('[aria-label="Move Rooms row 2 up"]');
+`;
+
+test('array: reordering by keyboard emits the reordered YAML and both _ids survive', async () => {
+  laidOut();
+  show([rooms, tags], arrayData());
+  expect(document.querySelectorAll('#f-rooms .row-card')).toHaveLength(2);
+  await keyMove('Rooms row 1', 1);
+  expect(stringifyEntry('default', snap())).toBe(MOVED);
+  await keyMove('Rooms row 2', -1);
   expect(stringifyEntry('default', snap())).toBe(golden('array'));
 });
 
-test('array: the first row cannot move up and the last cannot move down', () => {
-  show([rooms], arrayData());
-  expect(q<HTMLButtonElement>('[aria-label="Move Rooms row 1 up"]').disabled).toBe(true);
-  expect(q<HTMLButtonElement>('[aria-label="Move Rooms row 1 down"]').disabled).toBe(false);
-  expect(q<HTMLButtonElement>('[aria-label="Move Rooms row 2 up"]').disabled).toBe(false);
-  expect(q<HTMLButtonElement>('[aria-label="Move Rooms row 2 down"]').disabled).toBe(true);
+test('array: reordering by mouse emits the same YAML as the keyboard', async () => {
+  laidOut();
+  show([rooms, tags], arrayData());
+  await mouseMove('Rooms row 1', 100);
+  expect(stringifyEntry('default', snap())).toBe(MOVED);
+  await mouseMove('Rooms row 2', -100);
+  expect(stringifyEntry('default', snap())).toBe(golden('array'));
+});
+
+test('array: Escape puts a picked-up row back where it was', async () => {
+  laidOut();
+  show([rooms, tags], arrayData());
+  await key(q('[aria-label="Reorder Rooms row 1"]'), 'Space');
+  await key(document, 'ArrowDown');
+  await key(document, 'Escape');
+  expect(stringifyEntry('default', snap())).toBe(golden('array'));
 });
 
 test('array: an added row gets a fresh _id and its own inputs', () => {
@@ -679,14 +753,13 @@ test('blocks: a _ref block is read-only instead of an empty form', () => {
   expect(document.querySelector(`${at} input`)).toBeNull();
 });
 
-test('blocks: moving a block keeps every nested _id and moving back restores the file', () => {
+test('blocks: moving a block keeps every nested _id and moving back restores the file', async () => {
+  laidOut();
   show(pageFields, blocksData(), registry);
-  expect(q<HTMLButtonElement>('[aria-label="Move hero up"]').disabled).toBe(true);
-  expect(q<HTMLButtonElement>('[aria-label="Move Two columns down"]').disabled).toBe(true);
-  click('[aria-label="Move hero down"]');
+  await keyMove('hero', 1);
   const order = (snap() as unknown as { blocks: { _type: string; _id: string }[] }).blocks;
   expect(order.map((b) => `${b._type} ${b._id}`)).toEqual(['columns a1b2c3d4', 'hero k3nf9a2p']);
-  click('[aria-label="Move hero up"]');
+  await mouseMove('hero', -100);
   expect(stringifyEntry('default', snap())).toBe(golden('blocks'));
 });
 
@@ -837,10 +910,6 @@ const library = (media: unknown[]) =>
     'fetch',
     vi.fn(async () => Response.json({ media })),
   );
-const settle = async () => {
-  await new Promise((r) => setTimeout(r));
-  flushSync();
-};
 const fileData = () => parseEntry('default', golden('file')) as Record<string, unknown>;
 
 test('an empty image field offers the library, and its two numbers are two lines', () => {

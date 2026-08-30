@@ -11,6 +11,7 @@
     "typecheck": "svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {
+    "@dnd-kit/svelte": "^0.5.0",
     "@handover/core": "workspace:*",
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
     "@tiptap/core": "^3.30.2",

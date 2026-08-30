@@ -1,4 +1,6 @@
 <script lang="ts">
+import { type DragDropEventHandlers, DragDropProvider } from '@dnd-kit/svelte';
+import { createSortable, isSortable } from '@dnd-kit/svelte/sortable';
 import {
   type Field,
   fieldAddress,
@@ -115,11 +117,30 @@ function add(at: readonly string[], item: unknown) {
   if (Array.isArray(read(at))) list(at).push(item);
   else write(at, [item]);
 }
-function move(at: readonly string[], from: number, to: number) {
-  const items = list(at);
-  items.splice(to, 0, ...items.splice(from, 1));
-}
 const drop = (at: readonly string[], index: number) => list(at).splice(index, 1);
+// A row is reordered once, where it is let go: the list itself never moves while a drag is
+// on, so a dropped-nowhere or an Escape leaves the file as it was.
+function reorder(
+  at: readonly string[],
+  event: Parameters<NonNullable<DragDropEventHandlers['onDragEnd']>>[0],
+) {
+  const { source, target } = event.operation;
+  if (event.canceled || !isSortable(source) || !isSortable(target) || source.index === target.index)
+    return;
+  const items = list(at);
+  items.splice(target.index, 0, ...items.splice(source.index, 1));
+}
+// The handle is the only thing that drags: the row's inputs keep their pointer and keyboard.
+const sortable = (id: string | number, index: () => number) =>
+  createSortable({
+    id,
+    get index() {
+      return index();
+    },
+    get disabled() {
+      return translating;
+    },
+  });
 
 const block = (row: unknown) =>
   row as { _type?: string; _id?: string; _label?: string; _ref?: string };
@@ -186,10 +207,9 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   <div class="label-row"><span id="{id}-l">{text}{#if 'required' in field && field.required}<span class="req" aria-hidden="true">*</span>{/if}</span>{#if prose(field)}{@render machineMark(address(at), text)}{/if}</div>
 {/snippet}
 
-{#snippet controls(at: readonly string[], i: number, count: number, name: string)}
+{#snippet controls(at: readonly string[], i: number, name: string, handle: (node: HTMLElement) => () => void)}
   <div class="row-controls">
-    <button class="btn btn-ghost btn-icon" type="button" aria-label="Move {name} up" disabled={i === 0} onclick={() => move(at, i, i - 1)}>↑</button>
-    <button class="btn btn-ghost btn-icon" type="button" aria-label="Move {name} down" disabled={i === count - 1} onclick={() => move(at, i, i + 1)}>↓</button>
+    <button class="btn btn-ghost btn-icon handle" type="button" aria-label="Reorder {name}" {@attach handle}>⋮⋮</button>
     <button class="btn btn-ghost btn-icon" type="button" aria-label="Remove {name}" onclick={() => drop(at, i)}>×</button>
   </div>
 {/snippet}
@@ -316,28 +336,33 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       {@const scalar = field.item.length === 1 && field.item[0]?.path.length === 0}
       {@render groupLabel(id, field, text, at)}
       <div class="list" {id} role="group" aria-labelledby="{id}-l">
+        <DragDropProvider onDragEnd={(e) => reorder(at, e)}>
         {#each items as row, i ((row as Data)?._id ?? i)}
-          <div class="row-card">
+          {@const s = sortable(((row as Data)?._id as string | undefined) ?? i, () => i)}
+          <div class="row-card" class:is-dragging={s.isDragging} class:is-drop-target={s.isDropTarget} {@attach s.attach}>
             <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {prefix} {mediaBase} {locale} inherited={mode} /></div>
-            {#if !translating}{@render controls(at, i, items.length, `${text} row ${i + 1}`)}{/if}
+            {#if !translating}{@render controls(at, i, `${text} row ${i + 1}`, s.attachHandle)}{/if}
           </div>
         {:else}
           <p class="hint">Nothing here yet</p>
         {/each}
+        </DragDropProvider>
         {#if !translating}<button class="btn btn-sm add" type="button" onclick={() => add(at, scalar ? '' : { _id: newId('default') })}>Add to {text}</button>{/if}
       </div>
     {:else if field.type === 'blocks'}
       {@const items = rows(at)}
       {@render groupLabel(id, field, text, at)}
       <div class="list" {id} role="group" aria-labelledby="{id}-l">
+        <DragDropProvider onDragEnd={(e) => reorder(at, e)}>
         {#each items as row, i (block(row)._id ?? i)}
           {@const name = blockName(row)}
           {@const inner = blockFields(row)}
-          <article class="block-card" id="{id}.{i}" aria-labelledby="{id}.{i}-h">
+          {@const s = sortable(block(row)._id ?? i, () => i)}
+          <article class="block-card" id="{id}.{i}" aria-labelledby="{id}.{i}-h" class:is-dragging={s.isDragging} class:is-drop-target={s.isDropTarget} {@attach s.attach}>
             <header>
               <span class="label" id="{id}.{i}-h">{name}</span>
               <span class="type">{block(row)._type} · {block(row)._id}</span>
-              {#if !translating}{@render controls(at, i, items.length, name)}{/if}
+              {#if !translating}{@render controls(at, i, name, s.attachHandle)}{/if}
             </header>
             {#if inner}
               <div class="form"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {prefix} {mediaBase} {locale} inherited={mode} /></div>
@@ -348,6 +373,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {:else}
           <p class="hint">Nothing here yet</p>
         {/each}
+        </DragDropProvider>
         {#if !translating}
         <div class="pop-anchor">
           <button class="btn btn-sm add" type="button" aria-expanded={picker === id} onclick={() => (picker = picker === id ? '' : id)}>Add block</button>
