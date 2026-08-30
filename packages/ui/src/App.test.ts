@@ -456,3 +456,45 @@ test("a revert clears the drawer's account of the publish it undid", async () =>
   expect(root.querySelector('.publish-result')).toBeNull();
   expect(root.querySelector('.drawer')).not.toBeNull();
 });
+
+// The shell is a single page: a sidebar click swaps the screen in place rather than fetching
+// the document again, and the address bar follows so a reload or a shared link still lands.
+test('a sidebar click swaps the screen without a page load', () => {
+  drafts();
+  history.replaceState({}, '', '/admin');
+  const root = show(session('owner'));
+  const link = Array.from(root.querySelectorAll<HTMLAnchorElement>('nav a')).find(
+    (a) => a.textContent === 'Settings',
+  );
+  const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+  link?.dispatchEvent(event);
+  flushSync();
+  expect(event.defaultPrevented).toBe(true);
+  expect(location.pathname).toBe('/admin/settings');
+  expect(root.querySelector('main.main h1')?.textContent).toBe('Settings');
+  expect(link?.getAttribute('aria-current')).toBe('page');
+});
+
+test('a modifier-click on a sidebar link is left to the browser', () => {
+  drafts();
+  history.replaceState({}, '', '/admin');
+  const root = show(session('owner'));
+  const link = Array.from(root.querySelectorAll<HTMLAnchorElement>('nav a')).find(
+    (a) => a.textContent === 'Settings',
+  );
+  const event = new MouseEvent('click', { bubbles: true, cancelable: true, metaKey: true });
+  link?.dispatchEvent(event);
+  flushSync();
+  expect(event.defaultPrevented).toBe(false);
+  expect(location.pathname).toBe('/admin');
+});
+
+test('back and forward move the screen with the address', () => {
+  drafts();
+  history.replaceState({}, '', '/admin/settings');
+  const root = show(session('owner'), '/admin/settings');
+  history.replaceState({}, '', '/admin/activity');
+  window.dispatchEvent(new PopStateEvent('popstate'));
+  flushSync();
+  expect(root.querySelector('main.main h1')?.textContent).toBe('Activity');
+});

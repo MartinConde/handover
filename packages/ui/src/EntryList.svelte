@@ -1,5 +1,6 @@
 <script lang="ts">
 import { entryName } from '@handover/core';
+import { navigate } from './navigate';
 import OffsiteDialog, { type Target } from './Offsite.svelte';
 
 type Entry = {
@@ -197,7 +198,7 @@ async function create(event: Event) {
   );
   if (!res) return;
   const { slug } = (await res.json()) as { slug: string };
-  location.assign(`/admin/c/${collection}/${slug}`);
+  navigate(`/admin/c/${collection}/${slug}`);
 }
 
 // The copy is a draft like a new entry, so it opens the same way — its own lock, nothing in
@@ -208,7 +209,7 @@ async function duplicate(event: Event) {
   const res = await send(url, json({ to: text, ...(withDrafts ? { drafts: true } : {}) }));
   if (!res) return;
   const { slug } = (await res.json()) as { slug: string };
-  location.assign(`/admin/c/${collection}/${slug}`);
+  navigate(`/admin/c/${collection}/${slug}`);
 }
 
 async function rename(event: Event) {

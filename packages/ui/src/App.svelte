@@ -8,6 +8,7 @@ import EntryList from './EntryList.svelte';
 import Globals from './Globals.svelte';
 import Login, { type LoginMethods } from './Login.svelte';
 import Members from './Members.svelte';
+import { navigate } from './navigate';
 import Pending from './Pending.svelte';
 
 export interface Session {
@@ -24,7 +25,7 @@ export interface Session {
 
 let {
   session: signedIn,
-  path,
+  path: landedAt,
   query = '',
   methods = { emailLink: false, github: false },
 }: {
@@ -36,6 +37,9 @@ let {
 // svelte-ignore state_referenced_locally -- the prop is the initial value on purpose; the
 // shell reloads it itself after a sign-in or a sign-out
 let session = $state(signedIn);
+// svelte-ignore state_referenced_locally -- the prop is where the page loaded; the shell
+// moves itself from there
+let path = $state(landedAt);
 
 const entryRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)\/([\w-]+)$/));
 const listRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)$/));
@@ -94,6 +98,28 @@ $effect(() => {
     loadBuild();
   }
 });
+
+// The shell is a single page: an admin link swaps the screen in place and the address follows,
+// so back, forward, reload and a shared link all still land. Anything that is not a plain click
+// on an admin route — a new tab, the API, the preview — is the browser's.
+$effect(() => {
+  const moved = () => {
+    path = location.pathname;
+    if (session) loadPending();
+  };
+  addEventListener('popstate', moved);
+  return () => removeEventListener('popstate', moved);
+});
+
+function follow(event: MouseEvent) {
+  if (event.defaultPrevented || event.button !== 0) return;
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  const a = (event.target as Element).closest('a');
+  if (!a || a.target || a.origin !== location.origin) return;
+  if (!/^\/admin(\/(?!api\/)|$)/.test(a.pathname)) return;
+  event.preventDefault();
+  navigate(a.pathname + a.search);
+}
 
 // A boolean rather than the object: an effect that read `build` would be torn down and rebuilt
 // by every poll, and the interval it had just made would never fire again.
@@ -205,7 +231,9 @@ const initial = $derived(
 {#if !session}
   <Login {methods} {path} {query} onlogin={loadSession} />
 {:else}
-<div class="shell">
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -- it only
+     hears clicks the links inside already make keyboard-reachable -->
+<div class="shell" onclick={follow}>
   <!-- The reload note outlives a page load, so it is a banner and not a toast. It does not
        announce: the pill beside it is the live region, and two of them would talk over
        each other about the same thing. -->
@@ -306,7 +334,7 @@ const initial = $derived(
         <button class="btn" type="button" onclick={signOut}>Sign out</button>
       </div>
     </header>
-    {#key reload}
+    {#key `${path}#${reload}`}
     {#if editing}
       {#await loadEntry(editing.collection, editing.slug)}
         <main class="main"><p class="placeholder">Loading…</p></main>

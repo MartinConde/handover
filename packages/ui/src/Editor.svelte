@@ -2,6 +2,7 @@
 import { type Drift, entryName, entryUrl, type Field, LOCK_TTL } from '@handover/core';
 import DriftPanel from './Drift.svelte';
 import Fields from './Fields.svelte';
+import { navigate } from './navigate';
 import OffsiteDialog, { type Target } from './Offsite.svelte';
 import PreviewPane from './Preview.svelte';
 import Translation from './Translation.svelte';
@@ -436,7 +437,7 @@ async function rename(event: Event) {
   });
   if (!res) return;
   const { slug: to } = (await res.json()) as { slug: string };
-  location.assign(`/admin/c/${collection}/${to}`);
+  navigate(`/admin/c/${collection}/${to}`);
 }
 
 async function remove(redirect: Target) {
@@ -445,7 +446,7 @@ async function remove(redirect: Target) {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ redirect }),
   });
-  if (res) location.assign(`/admin/c/${collection}`);
+  if (res) navigate(`/admin/c/${collection}`);
 }
 
 // "Not ready yet". The flag lives on the draft rows, so whatever is in the form is stored

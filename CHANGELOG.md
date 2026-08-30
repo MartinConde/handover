@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Moving between admin screens no longer reloads the page.** Sidebar links, opening an
+  entry and the list's New / Duplicate / Rename swap the screen in place; the address bar,
+  back and forward still follow.
 - **Rename and Delete are in the entry header's ⋯ menu** as well as on the list row, with
   Hide between them. The delete dialog now leads with *Hide it instead?* and a **Hide
   instead** button, since a hidden entry can be brought back and a deleted one only by a
