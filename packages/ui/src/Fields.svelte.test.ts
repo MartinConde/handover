@@ -1061,3 +1061,88 @@ test('a translator gets the words and not the picture', () => {
   expect(document.querySelector('.media-card .actions')).toBeNull();
   expect(document.body.textContent).toContain('The picture is the same in every language.');
 });
+
+// --- 4.4: the focal point on the field ---
+
+// The dot a page sets is this page's, and it wins over the library's default for it. The middle
+// is not a choice: a page cropping around the centre is a page saying nothing about the crop.
+test('the dot a page moves is written after the numbers, and centring it takes the key out', async () => {
+  show([heroField], imageData());
+  click('.media-card .actions .btn-sm');
+  await settle();
+  expect(q<HTMLInputElement>('input#focal-y').value).toBe('35');
+  type('input#focal-y', '60');
+  click('.focal-dialog .btn-primary');
+  expect(stringifyEntry('default', snap())).toBe(
+    `_version: 1
+hero:
+  src: "media/9f3a2c7e.webp"
+  alt: "Front of the house"
+  width: 2400
+  height: 1600
+  focal:
+    - 0.5
+    - 0.6
+`,
+  );
+  click('.media-card .actions .btn-sm');
+  await settle();
+  type('input#focal-y', '50');
+  click('.focal-dialog .btn-primary');
+  expect(stringifyEntry('default', snap())).toBe(
+    `_version: 1
+hero:
+  src: "media/9f3a2c7e.webp"
+  alt: "Front of the house"
+  width: 2400
+  height: 1600
+`,
+  );
+});
+
+// The row's own dot comes with the picture: a client who framed it in the library does not
+// frame it again on every page that uses it.
+test('a picked picture brings the library’s dot with it, unless it is the middle', async () => {
+  library([
+    {
+      id: 'a'.repeat(64),
+      src: 'media/9f3a2c7e.webp',
+      filename: 'front.webp',
+      width: 2400,
+      height: 1600,
+      focal: [0.42, 0.3],
+    },
+  ]);
+  show([heroField], { _version: 1 });
+  click('.dropzone button');
+  await settle();
+  click('.tile');
+  click('.picker-foot .btn-primary');
+  expect(snap().hero).toMatchObject({ focal: [0.42, 0.3] });
+  unmount(app);
+
+  library([
+    {
+      id: 'b'.repeat(64),
+      src: 'media/b.webp',
+      filename: 'garden.webp',
+      width: 2400,
+      height: 1600,
+      focal: [0.5, 0.5],
+    },
+  ]);
+  show([heroField], { _version: 1 });
+  click('.dropzone button');
+  await settle();
+  click('.tile');
+  click('.picker-foot .btn-primary');
+  // The key is a hole like `alt`, so what it is written as is what the file says: nothing.
+  expect(stringifyEntry('default', snap())).toBe(
+    `_version: 1
+hero:
+  src: "media/b.webp"
+  width: 2400
+  height: 1600
+`,
+  );
+});

@@ -51,6 +51,14 @@ An **array of `image`** — a gallery — is the one field the picker takes seve
 once. *Add to …* opens it with checkboxes rather than radio buttons, the panel beside the grid is
 the order they will go in, and each ticked picture becomes a row of its own.
 
+## The focal point on a field
+
+A picture inserted into a field brings the library's dot with it, and *Set focal point* on the
+card moves it for this page alone — over this field's own shape, previewed as the site will crop
+it. It is written as `focal` on the value and wins over the picture's own default wherever that
+page renders it; a dot left in the middle is written as nothing. Moving the default for every
+page that did not set one is the library's ([Media](media.md#the-focal-point)).
+
 What a translation owns is the alt text of a picture and the display name of a file. Every
 other part is the same in every language, so a language being translated is shown those two
 and nothing else: no picker, no Replace, no Remove.

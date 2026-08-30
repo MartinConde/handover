@@ -55,6 +55,7 @@ import {
   heldEntries,
   holdEntry,
   INTEGRATIONS,
+  imagePresets,
   isLive,
   lastCommit,
   loadDraft,
@@ -2502,6 +2503,15 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
       // Where a media key is served from. The widgets need it for a value the picker did not
       // hand them — everything already in a content file.
       mediaBase: config.media?.publicBase?.replace(/\/$/, ''),
+      // Every ratio the site shows a picture at, which is what the focal picker previews: one
+      // dot, and under it what that dot does to each crop the site really renders. Read here
+      // rather than per screen — it is the site's shape, and it cannot change while a tab is open.
+      presets: imagePresets(
+        [
+          ...Object.values(config.collections).map((c) => c.schema),
+          ...Object.values(config.globals ?? {}),
+        ].map((schema) => formOf('default', formSchema(schema))),
+      ),
       // Whether this build has a `/_preview` route at all. The flag is read at build and the
       // route simply does not exist without it, so the editor asks here rather than framing
       // a page that would answer 404.
@@ -2738,6 +2748,9 @@ function mediaItem(row: MediaRow) {
     bytes: row.bytes,
     width: row.width,
     height: row.height,
+    // Centre is what a picture nobody has framed looks like, and it is also what the column
+    // defaults to — the two are one answer on purpose: a crop holds in the middle either way.
+    focal: [row.focalX ?? 0.5, row.focalY ?? 0.5],
     ...(base ? { url: `${base}/${row.r2Key}` } : {}),
   };
 }
@@ -2803,7 +2816,7 @@ async function describeMedia(
   session: App.Locals['handover'],
 ): Promise<Response> {
   const body = (await request.json().catch(() => undefined)) as
-    | { tags?: unknown; alt?: unknown; archived?: unknown }
+    | { tags?: unknown; alt?: unknown; archived?: unknown; focal?: unknown }
     | undefined;
   const tags = Array.isArray(body?.tags)
     ? [
@@ -2816,10 +2829,25 @@ async function describeMedia(
     : undefined;
   const alt = typeof body?.alt === 'string' ? body.alt.trim() : undefined;
   const archived = typeof body?.archived === 'boolean' ? body.archived : undefined;
-  if (tags === undefined && alt === undefined && archived === undefined)
-    return Response.json({ error: 'send { tags }, { alt } or { archived }' }, { status: 400 });
+  // Two fractions of the picture's own width and height. A number outside them would frame a
+  // crop off the edge of the photograph, so it is refused rather than clamped into something
+  // nobody asked for.
+  const point = body?.focal;
+  const focal =
+    Array.isArray(point) &&
+    point.length === 2 &&
+    point.every((n) => typeof n === 'number' && n >= 0 && n <= 1)
+      ? ([point[0], point[1]] as [number, number])
+      : undefined;
+  if (point !== undefined && !focal)
+    return Response.json({ error: 'a focal point is [x, y], each 0 to 1' }, { status: 400 });
+  if (tags === undefined && alt === undefined && archived === undefined && focal === undefined)
+    return Response.json(
+      { error: 'send { tags }, { alt }, { archived } or { focal }' },
+      { status: 400 },
+    );
   const database = db();
-  const row = await setMediaDetails('default', database, id, { tags, alt, archived });
+  const row = await setMediaDetails('default', database, id, { tags, alt, archived, focal });
   if (!row) return new Response('Not found', { status: 404 });
   // What an asset is called is the client's own business; putting one away is a decision about
   // what the site offers, and that is what the log is for.
@@ -2904,6 +2932,12 @@ function declaredUpload(body: unknown, hash?: string): Upload | undefined {
     filename: typeof sent.filename === 'string' ? sent.filename : undefined,
     width: size(sent.width),
     height: size(sent.height),
+    // The picture a crop was taken out of. It names an asset rather than a shape, so it is held
+    // to the same 64 hex characters every id is; the row it points at is the client's own.
+    derivedFrom:
+      typeof sent.derivedFrom === 'string' && /^[0-9a-f]{64}$/.test(sent.derivedFrom)
+        ? sent.derivedFrom
+        : undefined,
   };
 }
 

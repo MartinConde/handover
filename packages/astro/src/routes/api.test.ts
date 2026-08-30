@@ -57,7 +57,7 @@ const {
   confirmUpload,
 } = await vi.hoisted(async () => {
   const { z } = await import('astro/zod');
-  const { blocks, defineBlock } = await import('../index.js');
+  const { blocks, defineBlock, image } = await import('../index.js');
   // Every file the repository holds beyond the one below, path → contents; filled per test.
   const files: Record<string, string> = {};
   return {
@@ -79,7 +79,10 @@ const {
       address: z.object({ street: z.string() }),
     }),
     // A collection keyed on something other than `title`.
-    presenter: z.object({ name: z.string() }),
+    presenter: z.object({
+      name: z.string(),
+      portrait: image({ ratio: '1:1', max: 512 }).optional(),
+    }),
     // A collection whose languages each serve their entries at an address of their own.
     article: z.object({ title: z.string(), slug: z.string().optional() }),
     // A global: the same editor path with no collection behind it, named by its own schema.
@@ -746,6 +749,9 @@ test('ping returns the collection names and who is signed in', async () => {
     role: 'editor',
     // Where a stored key is served from: the widgets draw thumbnails of keys nothing listed.
     mediaBase: 'https://media.example.com',
+    // Every ratio the site's own fields show a picture at, which is what the focal picker
+    // previews: one dot, and what it does to each crop the site really renders.
+    presets: [{ label: 'Portrait', preset: { ratio: '1:1', max: 512 } }],
     // Whether this build has a preview route at all: without one the pane says so rather than
     // drawing a frame around a 404.
     preview: true,
@@ -4753,6 +4759,8 @@ test('bytes the site already holds are answered from the row, with nothing signe
       bytes: 12_345,
       width: 2400,
       height: 1350,
+      // The picker draws the dot before anything is inserted, so the answer carries it.
+      focal: [0.5, 0.5],
       url: `https://media.example.com/media/${HASH}.webp`,
     },
   });
@@ -4861,6 +4869,7 @@ test('the picker is answered the library of the kind its field takes', async () 
         bytes: 2_481_033,
         width: null,
         height: null,
+        focal: [0.5, 0.5],
         alt: null,
         tags: [],
         archived: false,
@@ -5276,4 +5285,44 @@ test("simulating a conflict is the owner's, not an editor's", async () => {
 
   expect((await POST(ctx('checks/conflict', undefined, { handover: editor }))).status).toBe(403);
   expect(publish).not.toHaveBeenCalled();
+});
+
+// The dot the library sets is the picture's own default, and a page that set its own keeps it.
+// Anything but two fractions is not a dot: a number outside the picture would crop off it.
+test('a focal point is two fractions on the row, and anything else is refused', async () => {
+  const res = await PATCH(patch(`media/${PHOTO}`, { focal: [0.42, 0.3] }));
+  expect(res.status).toBe(200);
+  expect(setMediaDetails).toHaveBeenCalledWith('default', expect.anything(), PHOTO, {
+    tags: undefined,
+    alt: undefined,
+    focal: [0.42, 0.3],
+  });
+  expect((await PATCH(patch(`media/${PHOTO}`, { focal: [0.5, 1.4] }))).status).toBe(400);
+  expect((await PATCH(patch(`media/${PHOTO}`, { focal: [0.5] }))).status).toBe(400);
+});
+
+test('the browser is handed the picture’s focal point, centred where nobody set one', async () => {
+  mediaList.mockResolvedValueOnce([{ ...asset(PHOTO), focalX: 0.42, focalY: 0.3 }]);
+  const { media } = (await (await GET(library(''))).json()) as { media: { focal: number[] }[] };
+  expect(media[0]?.focal).toEqual([0.42, 0.3]);
+  mediaList.mockResolvedValueOnce([{ ...asset(PHOTO), focalX: null, focalY: null }]);
+  const { media: never } = (await (await GET(library(''))).json()) as {
+    media: { focal: number[] }[];
+  };
+  expect(never[0]?.focal).toEqual([0.5, 0.5]);
+});
+
+// A crop is a new picture with a line back to the one it came from, and that line is declared
+// like the rest of the upload — the row is written from what the object is held to.
+test('a cropped copy declares the picture it came from', async () => {
+  const crop = 'b'.repeat(64);
+  const parent = { hash: crop, bytes: 4, mime: 'image/webp', derivedFrom: PHOTO };
+  await POST(post('media', JSON.stringify(parent)));
+  await PUT(put(`media/${crop}`, JSON.stringify(parent)));
+  expect(confirmUpload).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    expect.objectContaining({ hash: crop, derivedFrom: PHOTO }),
+  );
 });

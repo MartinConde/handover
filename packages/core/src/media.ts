@@ -29,6 +29,8 @@ export interface Upload {
   filename?: string;
   width?: number;
   height?: number;
+  /** The picture this one was cropped out of; an ordinary upload came from nothing. */
+  derivedFrom?: string;
 }
 
 export type MediaRow = typeof media.$inferSelect;
@@ -49,7 +51,8 @@ export interface Preset {
 /** Longest side an upload is stored at where its field asks for nothing narrower. */
 export const DEFAULT_MAX = 2400;
 
-const ratioOf = (ratio: string | undefined) => {
+/** `'16:9'` as the number a crop is measured with; nothing for a field that shows a picture whole. */
+export const ratioOf = (ratio: string | undefined) => {
   const [w, h] = (ratio ?? '').split(':').map(Number);
   return w && h ? w / h : undefined;
 };
@@ -179,7 +182,7 @@ export async function setMediaDetails(
   siteId: string,
   db: Db,
   id: string,
-  details: { tags?: string[]; alt?: string; archived?: boolean },
+  details: { tags?: string[]; alt?: string; archived?: boolean; focal?: [number, number] },
 ): Promise<MediaRow | undefined> {
   const [row] = await db
     .update(media)
@@ -190,6 +193,9 @@ export async function setMediaDetails(
       // Archiving is never gated on usage: a picture that is still used stays used, and putting
       // it away only takes it out of the picker.
       ...(details.archived === undefined ? {} : { archived: details.archived ? 1 : 0 }),
+      // Where every crop of this picture holds, as a fraction of its width and of its height.
+      // It is a default: a page that set its own dot keeps it.
+      ...(details.focal ? { focalX: details.focal[0], focalY: details.focal[1] } : {}),
     })
     .where(and(eq(media.siteId, siteId), eq(media.id, id)))
     .returning();
@@ -430,6 +436,7 @@ export async function confirmUpload(
       bytes: upload.bytes,
       width: upload.width ?? null,
       height: upload.height ?? null,
+      derivedFrom: upload.derivedFrom ?? null,
       createdAt: now,
     })
     .onConflictDoNothing()

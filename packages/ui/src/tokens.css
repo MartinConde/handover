@@ -669,8 +669,8 @@ a.btn { text-decoration: none; }
 .media-card.is-file { grid-template-columns: 48px minmax(0, 1fr); align-items: start; }
 .media-card .thumb { align-self: start; position: relative; overflow: hidden; border-radius: var(--radius); background: var(--badge-bg); }
 .thumb img, .ratio-preview img { display: block; width: 100%; height: 100%; object-fit: cover; }
-/* The dot is where the crop holds. Moving it is the media library's, in Phase 4. */
-.media-card .thumb .focal, .ratio-preview .focal { position: absolute; left: 50%; top: 35%; width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 2px solid var(--surface); border-radius: 50%; background: var(--accent-ink); box-shadow: 0 0 0 2px var(--accent-ink); }
+/* The dot is where the crop holds; the element carries its own place, since that is the value. */
+.media-card .thumb .focal, .ratio-preview .focal, .lib-side .preview .focal { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 2px solid var(--surface); border-radius: 50%; background: var(--accent-ink); box-shadow: 0 0 0 2px var(--accent-ink); }
 .media-card .meta { display: grid; gap: var(--s-3); align-content: start; min-width: 0; }
 .media-card .meta .name { font-weight: 500; display: flex; gap: var(--s-2); align-items: center; flex-wrap: wrap; }
 .media-card .meta .sub { font-size: var(--text-xs); color: var(--ink-2); font-family: var(--font-mono); overflow-wrap: anywhere; }
@@ -937,4 +937,35 @@ a.btn { text-decoration: none; }
 @media (max-width: 720px) {
   .lib-body { grid-template-columns: minmax(0, 1fr); }
   .lib-side { position: static; }
+}
+
+/* ---------- the focal point and the crop, both dialogs over one picture (4.4) ---------- */
+.focal-dialog { width: min(880px, 100%); display: grid; gap: var(--s-4); }
+.focal-dialog .actions { margin-top: 0; }
+.focal-stage { position: relative; aspect-ratio: 3 / 2; border-radius: var(--radius); overflow: hidden; background: var(--badge-bg); touch-action: none; }
+.focal-stage img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.focal-handle { position: absolute; width: 28px; height: 28px; margin: -14px 0 0 -14px; border: 2px solid var(--surface); border-radius: 50%; background: var(--accent-ink); box-shadow: 0 0 0 2px var(--accent-ink), 0 4px 12px rgba(23, 26, 33, 0.35); pointer-events: none; }
+.focal-dialog .dialog-cols { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: var(--s-5); align-items: start; }
+.focal-dialog .side-note { display: grid; gap: var(--s-3); font-size: var(--text-sm); color: var(--ink-2); }
+.focal-dialog .side-note b { color: var(--ink); }
+/* Two sliders rather than one handle: a dot on a picture is two values, and each is a number
+   somebody can reach with a keyboard and hear read out. */
+.focal-sliders, .crop-sliders { display: flex; flex-wrap: wrap; gap: var(--s-4); margin-top: var(--s-3); }
+.focal-sliders .field, .crop-sliders .field { flex: 1 1 140px; gap: var(--s-1); }
+.variant-title { font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+.ratio-strip { display: flex; flex-wrap: wrap; gap: var(--s-5); align-items: flex-start; }
+.ratio-item { display: grid; gap: var(--s-1); }
+.ratio-item .ratio-preview { height: 124px; width: auto; }
+.ratio-item .lbl { font-size: var(--text-sm); font-weight: 500; }
+.ratio-item .sub { font-size: var(--text-xs); color: var(--ink-2); }
+.crop-box { position: absolute; border: 2px solid var(--surface); box-shadow: 0 0 0 9999px rgba(23, 26, 33, 0.45); cursor: move; }
+.crop-handle { position: absolute; width: 12px; height: 12px; border-radius: 2px; background: var(--surface); box-shadow: 0 0 0 1px var(--border-strong); }
+.crop-handle.h-nw { left: -7px; top: -7px; cursor: nwse-resize; }
+.crop-handle.h-ne { right: -7px; top: -7px; cursor: nesw-resize; }
+.crop-handle.h-sw { left: -7px; bottom: -7px; cursor: nesw-resize; }
+.crop-handle.h-se { right: -7px; bottom: -7px; cursor: nwse-resize; }
+.crop-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); font-size: var(--text-sm); color: var(--ink-2); }
+.crop-meta .seg { margin-left: auto; }
+@media (max-width: 720px) {
+  .focal-dialog .dialog-cols { grid-template-columns: minmax(0, 1fr); }
 }

@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **A focal point instead of a crop tool.** *Set focal point* in the library puts a dot on the
+  picture and previews every shape this site's own fields crop to around it; move it once and all
+  of them move. The same dialog opens from an image field for that page alone, and writes `focal`
+  into the entry. Nothing is written to the picture — the crops are delivery transformations of
+  the one stored original ([Media](docs/media.md#the-focal-point)).
+- **Crop a copy.** The library's *Crop* takes a region of a picture and makes a **new asset** from
+  it, linked to the one it came from; the original is untouched and stays wherever it is used. The
+  crop is made in the browser, so the bucket's CORS rule needs `GET` as well as `PUT`
+  ([Media](docs/media.md#cropping-a-copy)).
 - **Archive a picture instead of deleting it.** The library's panel has an Archive button: the
   picture leaves every field's picker, keeps its bytes, and every page that already uses it goes
   on working. The same button puts it back ([Media](docs/media.md)).

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { fieldsFrom, formOf, type JsonSchema } from './schema.js';
+import { fieldsFrom, formOf, imagePresets, type JsonSchema } from './schema.js';
 
 // Hand-written `z.toJSONSchema()` output: core never holds a Zod object.
 const obj = (properties: Record<string, JsonSchema>, required: string[] = []): JsonSchema => ({
@@ -430,4 +430,25 @@ test('a nested property carries its own mode, whatever its group says', () => {
 test('a mode that is not one of the three is ignored', () => {
   const schema = obj({ price: { type: 'number', i18n: 'duplicated' } });
   expect(fieldsFrom('default', schema)[0]?.i18n).toBeUndefined();
+});
+
+// The focal picker previews every crop the site renders, so it needs the ratios the site's
+// own fields ask for — wherever they sit, and each ratio once however many fields want it.
+test('the site’s image ratios are collected from every depth, once each', () => {
+  const listing = formOf(
+    'default',
+    obj({
+      hero: { handover: 'image', ratio: '16:9', max: 2400, label: 'Hero image' },
+      gallery: { type: 'array', items: { handover: 'image', ratio: '4:3', max: 1600 } },
+      agent: obj({ portrait: { handover: 'image', ratio: '1:1', max: 512, label: 'Portrait' } }),
+      // A picture with no ratio is shown as it is, so it has no crop to preview.
+      logo: { handover: 'image', max: 800 },
+    }),
+  );
+  const page = formOf('default', obj({ banner: { handover: 'image', ratio: '16:9', max: 2400 } }));
+  expect(imagePresets([listing, page])).toEqual([
+    { label: 'Hero image', preset: { ratio: '16:9', max: 2400 } },
+    { label: 'Gallery', preset: { ratio: '4:3', max: 1600 } },
+    { label: 'Portrait', preset: { ratio: '1:1', max: 512 } },
+  ]);
 });

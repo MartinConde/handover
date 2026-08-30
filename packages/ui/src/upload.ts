@@ -10,6 +10,8 @@ export interface MediaItem {
   bytes?: number | null;
   width?: number | null;
   height?: number | null;
+  /** Where every crop of this picture holds, as a fraction of its width and of its height. */
+  focal?: [number, number] | null;
 }
 
 /** The same asset as the library screen knows it: what it is called, and where it is used. */
@@ -47,7 +49,7 @@ const refusal = async (res: Response, what: string) => {
  */
 export async function uploadBlob(
   blob: Blob,
-  about: { filename?: string; width?: number; height?: number },
+  about: { filename?: string; width?: number; height?: number; derivedFrom?: string },
   deps: { fetch?: typeof globalThis.fetch } = {},
 ): Promise<MediaItem> {
   const { fetch = globalThis.fetch } = deps;

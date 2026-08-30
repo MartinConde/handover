@@ -1,4 +1,5 @@
 <script lang="ts">
+import type { Preset } from '@handover/core';
 import Account from './Account.svelte';
 import Activity from './Activity.svelte';
 import BuildPill, { type Build } from './BuildPill.svelte';
@@ -18,6 +19,8 @@ export interface Session {
   globals?: boolean;
   /** Where a stored media key is served from, so a widget can draw what a content file names. */
   mediaBase?: string;
+  /** Every shape this site crops a picture to, which is what the focal picker previews. */
+  presets?: { label: string; preset: Preset }[];
   /** This build serves `/_preview`, so the editor can offer to show the page before it is live. */
   preview?: boolean;
   user: { id: string; name: string; email: string };
@@ -361,7 +364,7 @@ const initial = $derived(
     {:else if path === '/admin/site'}
       <Globals />
     {:else if path === '/admin/media'}
-      <Library base={session?.mediaBase ?? ''} />
+      <Library base={session?.mediaBase ?? ''} presets={session?.presets ?? []} />
     {:else if path === '/admin/account'}
       <Account user={session.user} role={session.role} onname={loadSession} />
     {:else if path === '/admin/members' && session.role === 'owner'}

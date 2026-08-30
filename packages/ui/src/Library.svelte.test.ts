@@ -52,9 +52,14 @@ const server = () => {
   );
 };
 
+/** The site's own shapes, as `ping` hands them to the screen; most tests need none. */
+let presets: { label: string; preset: { ratio?: string; max?: number } }[] = [];
 const show = async () => {
   server();
-  app = mount(Library, { target: document.body, props: { base: 'https://cdn.example.com' } });
+  app = mount(Library, {
+    target: document.body,
+    props: { base: 'https://cdn.example.com', presets },
+  });
   await settle();
   return document.body;
 };
@@ -71,6 +76,7 @@ afterEach(() => {
   media = [];
   saved = undefined;
   refusal = undefined;
+  presets = [];
 });
 
 const q = <T extends Element>(sel: string) => {
@@ -242,4 +248,57 @@ test('the delete dialog takes focus and hands it back on cancel', async () => {
   expect(document.activeElement?.textContent).toBe('Cancel');
   click('.dialog .btn');
   expect(document.activeElement).toBe(del);
+});
+
+// --- 4.4: the focal point and the crop ---
+
+const setFocal = '.lib-side .actions button:nth-child(1)';
+const cropButton = '.lib-side .actions button:nth-child(2)';
+
+// The dot is the picture's own default: every page that did not set one crops around it, so it
+// is written to the row and not to any file.
+test('the dot moved in the dialog is saved to the row, and the panel draws it where it lands', async () => {
+  media = [item()];
+  saved = item({ focal: [0.42, 0.3] });
+  await show();
+  click('.tile .tile-link');
+  click(setFocal);
+  flushSync();
+  const across = q<HTMLInputElement>('input#focal-x');
+  across.value = '42';
+  across.dispatchEvent(new Event('input', { bubbles: true }));
+  const down = q<HTMLInputElement>('input#focal-y');
+  down.value = '30';
+  down.dispatchEvent(new Event('input', { bubbles: true }));
+  click('.focal-dialog .btn-primary');
+  await settle();
+  expect(asked.at(-1)).toMatchObject({
+    url: `/admin/api/media/${'a'.repeat(64)}`,
+    method: 'PATCH',
+    body: { focal: [0.42, 0.3] },
+  });
+  expect(q<HTMLElement>('.lib-side .preview .focal').style.left).toBe('42%');
+});
+
+// A row the reconciliation job wrote has no dimensions, and a crop is a rectangle of pixels
+// nobody has counted. The dot still works on it: that one is a fraction of whatever it is.
+test('a picture nobody measured cannot be cropped', async () => {
+  media = [item({ width: null, height: null })];
+  await show();
+  click('.tile .tile-link');
+  expect(q<HTMLButtonElement>(cropButton).disabled).toBe(true);
+  expect(q<HTMLButtonElement>(setFocal).disabled).toBe(false);
+});
+
+test('the crop opens locked to the site’s own shape, and Free is the whole picture', async () => {
+  media = [item()];
+  presets = [{ label: 'Hero image', preset: { ratio: '16:9', max: 2400 } }];
+  await show();
+  click('.tile .tile-link');
+  click(cropButton);
+  flushSync();
+  expect(q('.crop-meta span').textContent).toBe('2400 × 1350 px of 2400 × 1600');
+  expect(q('.crop-meta code').textContent).toBe('front-of-house-crop.webp');
+  click('.crop-meta .seg button:nth-child(1)');
+  expect(q('.crop-meta span').textContent).toBe('2400 × 1600 px of 2400 × 1600');
 });

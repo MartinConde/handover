@@ -201,7 +201,32 @@ The panel is also where an asset is given tags and a default alt text, where it 
 where the gated Delete is. The alt default is what a page falls back to: a page that writes its
 own alt, in its own language, keeps it.
 
-## Not yet
+## The focal point
 
-*Moving* the focal point, which is drawn on every preview but set in the library; and cropping a
-region into a new asset.
+Nothing is written to a picture. Every crop the site renders is a delivery transformation of the
+one stored original, framed around a **focal point** — two fractions saying where in the picture
+the crop has to hold. *Set focal point* in the library's panel opens the dot over the picture,
+with every shape this site's own fields crop to previewed live beside it: move it once and all of
+them move. Drag the dot, or use the two sliders under it — a place in a photograph is two numbers,
+and each one is a slider a keyboard can reach.
+
+The dot in the library is the picture's **default**. A page can move it for itself: the same
+dialog opens from *Set focal point* on the image field, over that field's own shape, and writes
+`focal` into the entry. That value wins for that page, and it is the same in every language.
+Cropping around the middle is not a choice — a centred dot is written as nothing at all, on the
+row and in the file.
+
+## Cropping a copy
+
+The secondary action, and the only one in the library that makes a new thing. *Crop* opens a box
+over the picture, locked to one of the site's own shapes or free, moved and resized with the
+pointer or with the sliders under it. *Create cropped copy* writes a **new asset**: its own bytes,
+its own row, its own key, with `derived_from` pointing at the picture it came from. **The original
+is untouched** and stays wherever it is used — which is the whole reason cropping is offered at
+all.
+
+The crop is made in the browser, so it reads the original back out of the bucket: this is the one
+thing beyond the upload itself that needs `GET` in the bucket's [CORS rule](#2-let-the-admins-origin-write-to-it).
+Without it the crop refuses and says so. A picture the library has no width and height for — what
+the reconciliation job recovers — cannot be cropped, since a region is measured in pixels nobody
+has counted; its focal point still works, being a fraction of whatever it is.

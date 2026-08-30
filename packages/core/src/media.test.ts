@@ -609,3 +609,42 @@ test('a delete takes the row before the object, and both are gone', async () => 
   expect(objects[key]).toBeUndefined();
   expect(order).toEqual(['r2 DELETE']);
 });
+
+// The dot is what every crop holds on to, and it is the row's default rather than a page's:
+// a page that set its own keeps it. Centre is what "nobody has set one" looks like.
+test('the focal point is two numbers on the row, and centring it is saying nothing', async () => {
+  const db = openDb('focal', binding);
+  const id = 'a7'.repeat(32);
+  await db.insert(tables.media).values({
+    id,
+    siteId: 'focal',
+    r2Key: `media/${id}.webp`,
+    mime: 'image/webp',
+    createdAt: 1,
+  });
+
+  const moved = await setMediaDetails('focal', db, id, { focal: [0.42, 0.3] });
+  expect([moved?.focalX, moved?.focalY]).toEqual([0.42, 0.3]);
+  // The words are not the dot: writing one leaves the other where it was.
+  const named = await setMediaDetails('focal', db, id, { alt: 'A mill' });
+  expect([named?.focalX, named?.focalY]).toEqual([0.42, 0.3]);
+  const back = await setMediaDetails('focal', db, id, { focal: [0.5, 0.5] });
+  expect([back?.focalX, back?.focalY]).toEqual([0.5, 0.5]);
+});
+
+// A crop is a new picture made from an old one: its own bytes, its own row, and a line back to
+// the parent. The original is not touched, which is the whole of why cropping is allowed at all.
+test('a crop is confirmed as its own row, pointing at the picture it came from', async () => {
+  const db = openDb('default', binding);
+  const parent = 'b8'.repeat(32);
+  const hash = 'c9'.repeat(32);
+  const r2 = bucket({ [`media/${hash}.webp`]: { bytes: 12_345, mime: 'image/webp' } });
+  const { media } = await confirmUpload(
+    'default',
+    db,
+    store,
+    { ...declared, hash, filename: 'seaview-crop.webp', derivedFrom: parent },
+    { fetch: r2.fetch },
+  );
+  expect(media).toMatchObject({ id: hash, filename: 'seaview-crop.webp', derivedFrom: parent });
+});

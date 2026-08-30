@@ -10,6 +10,7 @@ import {
   unsafeLinkScheme,
 } from '@handover/core';
 import Fields from './Fields.svelte';
+import Focal from './Focal.svelte';
 import Media from './Media.svelte';
 import PagePicker, { type Pickable, readPickable } from './PagePicker.svelte';
 import RichText from './RichText.svelte';
@@ -206,15 +207,36 @@ $effect(() => {
 // The picture as this field will show it: `16:9` is already what `aspect-ratio` wants.
 const aspect = (preset: Preset) => preset.ratio?.replace(':', ' / ') ?? '4 / 3';
 const src = (at: readonly string[]) => `${mediaBase}/${str([...at, 'src'])}`;
+/** This page's own dot, in percentages; the middle is what a page that set none crops around. */
+const point = (at: readonly string[]): [number, number] => {
+  const stored = read([...at, 'focal']);
+  const [x, y] = Array.isArray(stored) ? (stored as unknown[]) : [];
+  return [typeof x === 'number' ? x : 0.5, typeof y === 'number' ? y : 0.5];
+};
+const dot = (at: readonly string[]) => point(at).map((n) => n * 100);
+/** Which image field has the focal dialog open, by the same id its widget is drawn under. */
+let framing = $state('');
 const bytes = (at: readonly string[]) => fileSize(read([...at, 'bytes']) as number | undefined);
 
 /** One picked asset as the format stores it — and in that order. */
 const stored = (type: 'image' | 'file', item: MediaItem) =>
   type === 'image'
     ? // `alt` is left as a hole rather than an empty string: nothing is written for it until
-      // somebody types one, and it keeps its place in the file when they do.
-      { src: item.src, alt: undefined, width: item.width, height: item.height }
+      // somebody types one, and it keeps its place in the file when they do. The dot comes with
+      // the picture — it is the library's default, and only where somebody moved it off centre:
+      // a page saying "crop around the middle" is the same page saying nothing.
+      {
+        src: item.src,
+        alt: undefined,
+        width: item.width,
+        height: item.height,
+        focal: centred(item.focal) ? undefined : item.focal,
+      }
     : { src: item.src, name: item.filename, bytes: item.bytes, mime: item.mime };
+
+/** Nothing to write down: the middle is where a crop holds when no page and no row says otherwise. */
+const centred = (focal?: [number, number] | null) =>
+  !focal || (focal[0] === 0.5 && focal[1] === 0.5);
 
 function picked(at: readonly string[], type: 'image' | 'file', items: MediaItem[]) {
   write(at, stored(type, items[0] as MediaItem));
@@ -463,7 +485,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <!-- A translation owns the words and not the picture: the alt, and nothing else. -->
       {@render groupLabel(id, field, text, at)}
       <div class="media-card" role="group" aria-labelledby="{id}-l">
-        <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><img src={src(at)} alt="" /><span class="focal" aria-hidden="true"></span></span>
+        <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><img src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></span>
         <div class="meta">
           <div><div class="sub">{str([...at, 'src'])}</div></div>
           {@render altField(id, at)}
@@ -473,12 +495,12 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'image' && read(at) !== undefined}
       {@render groupLabel(id, field, text, at)}
       <div class="media-card" role="group" aria-labelledby="{id}-l">
-        <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><img src={src(at)} alt="" /><span class="focal" aria-hidden="true"></span></span>
+        <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><img src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></span>
         <div class="meta">
           <div><div class="sub">{str([...at, 'src'])} · {num([...at, 'width'])} × {num([...at, 'height'])}</div></div>
           {@render altField(id, at)}
           <div class="actions">
-            <button class="btn btn-sm" type="button" disabled title="Moving the focal point ships with the media library in Phase 4">Set focal point</button>
+            <button class="btn btn-sm" type="button" onclick={() => (framing = id)}>Set focal point</button>
             <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>Replace</button>
             <button class="btn btn-sm btn-ghost" type="button" onclick={() => write(at, undefined)}>Remove</button>
           </div>
@@ -544,6 +566,18 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <p class="hint" {id}>Not editable here yet</p>
     {/if}
     {#if err}<p class="error" id="{id}-err">{err}</p>{/if}
+    {#if framing === id && field.type === 'image'}
+      <!-- The page's own dot, over the field's own shape. It wins over the library's default
+           for this page, and it is the same picture in every language. -->
+      <Focal
+        name={text}
+        url={src(at)}
+        focal={point(at)}
+        presets={[{ label: text, preset: field.preset }]}
+        onsave={(moved) => { write([...at, 'focal'], centred(moved) ? undefined : moved); framing = ''; }}
+        onclose={() => (framing = '')}
+      />
+    {/if}
     {#if picker === id && (field.type === 'image' || field.type === 'file')}
       <Media
         kind={field.type === 'image' ? 'images' : 'files'}

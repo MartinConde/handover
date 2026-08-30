@@ -221,19 +221,17 @@ function drop(e: DragEvent) {
             <p class="empty-side">Nothing chosen yet. Upload {kind === 'images' ? 'a picture' : 'a file'}, or drag one onto the box.</p>
           {:else}
             {#if kind === 'images'}
+              {@const dot = [(one.focal?.[0] ?? 0.5) * 100, (one.focal?.[1] ?? 0.5) * 100]}
               <div class="ratio-preview" style="aspect-ratio: {aspect}">
-                <img src={one.url} alt="" />
-                <span class="focal" aria-hidden="true"></span>
+                <img src={one.url} alt="" style="object-position: {dot[0]}% {dot[1]}%" />
+                <span class="focal" style="left: {dot[0]}%; top: {dot[1]}%" aria-hidden="true"></span>
               </div>
-              <p class="hint">The dot is where the crop holds. It is saved with this field, not with the picture, and it is the same in every language.</p>
+              <p class="hint">The dot is where the crop holds. It comes from the library, and this field can move it once the picture is in — where it is saved with the field, the same in every language.</p>
             {/if}
             <dl class="facts">
               <div><dt>{name(one)}</dt><dd>{one.width ? `${one.width} × ${one.height} · ` : ''}{fileSize(one.bytes)}</dd></div>
               <div><dt>Stored as</dt><dd class="sub">{one.src}</dd></div>
             </dl>
-            {#if kind === 'images'}
-              <button class="btn btn-sm" type="button" disabled title="Moving the focal point ships with the media library in Phase 4">Set focal point</button>
-            {/if}
           {/if}
         {/if}
       </div>

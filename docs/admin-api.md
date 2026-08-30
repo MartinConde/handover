@@ -493,7 +493,7 @@ is [Media](media.md).
 
 ```
 GET /admin/api/media?kind=images|files&q=&archived=1
-  →  { "media": [ { "id", "src", "filename", "mime", "bytes", "width", "height", "url?",
+  →  { "media": [ { "id", "src", "filename", "mime", "bytes", "width", "height", "focal", "url?",
                     "alt", "tags", "archived", "createdAt",
                     "uses": [ { "entry", "title", "href" } ] } ] }
 ```
@@ -510,8 +510,9 @@ with today's drafts laid over it: a picture taken out of an entry this morning i
 used there. `href` is where the admin edits that entry.
 
 ```
-POST /admin/api/media  { "hash", "bytes", "mime", "filename?", "width?", "height?" }
-  →  { "media": { "id", "src", "filename", "mime", "bytes", "width", "height", "url?" } }
+POST /admin/api/media  { "hash", "bytes", "mime", "filename?", "width?", "height?",
+                         "derivedFrom?" }
+  →  { "media": { "id", "src", "filename", "mime", "bytes", "width", "height", "focal", "url?" } }
   →  { "upload": { "key", "url" } }
 ```
 
@@ -522,20 +523,27 @@ for a key the server chose: `media/<sha256>.<ext>`, or `files/<sha256>.<ext>` fo
 that is not a picture. `422` when the type is not one the bucket takes or the declared size
 is over 10MB, `503` when the site has no bucket configured.
 
+`focal` is the two fractions every crop of the picture holds around, `[0.5, 0.5]` for one nobody
+has framed. `derivedFrom` is the id of the picture a crop was taken out of, and is written to the
+new row by the confirm below; an ordinary upload came from nothing and leaves it out.
+
 `src` is the key a content file stores; `url` is that key under
 [`media.publicBase`](configuration.md#media) and is absent when the site has not set one. An
 upload's answer is the asset alone — none of the library's own columns are known yet.
 
 ```
-PATCH /admin/api/media/:hash  { "tags?": [ "…" ], "alt?": "…", "archived?": true }
+PATCH /admin/api/media/:hash  { "tags?": [ "…" ], "alt?": "…", "archived?": true,
+                                "focal?": [ 0.42, 0.3 ] }
   →  { "media": { … } }
 ```
 
-What the library calls an asset, and whether it has been put away. None of it is content and none
+What the library calls an asset, where its crops hold, and whether it has been put away. None of it is content and none
 of it is committed — it is the client's account of the picture, and it lives on the row. Tags are
 trimmed and de-duplicated; an alt emptied here is no default at all. **`archived` is never gated
 on usage**: it takes the asset out of every field's picker and keeps the bytes, so a page that
-names it goes on working; `false` puts it back. `400` when the body carries none of the three,
+names it goes on working; `false` puts it back. `focal` is two fractions of the picture's own width and height — the
+default every page that has not set its own crops around; anything else is `400` rather than
+clamped into a frame nobody asked for. `400` when the body carries none of the four,
 `404` when the site has no such asset.
 
 ```
@@ -559,7 +567,8 @@ entries in `uses`.
 could not be made is never read as *nothing uses it*. `404` when the site has no such asset.
 
 ```
-PUT /admin/api/media/:hash  { "hash", "bytes", "mime", "filename?", "width?", "height?" }
+PUT /admin/api/media/:hash  { "hash", "bytes", "mime", "filename?", "width?", "height?",
+                              "derivedFrom?" }
   →  { "media": { … } }
 ```
 

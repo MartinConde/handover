@@ -52,6 +52,32 @@ export function fieldsFrom(_siteId: string, schema: JsonSchema): Field[] {
   return objectFields(schema, schema);
 }
 
+/**
+ * Every ratio a picture is shown at on this site, once each, named by the first field asking for
+ * it. The focal picker previews these: one dot, and under it what that dot does to each crop the
+ * site actually renders. A field with no ratio crops nothing and has nothing to preview.
+ */
+export function imagePresets(forms: Iterable<Form>): { label: string; preset: Preset }[] {
+  const found = new Map<string, { label: string; preset: Preset }>();
+  // An array of pictures labels its item with nothing, so the row is named after the field it
+  // is a row of — *Gallery*, which is what the client called it.
+  const walk = (fields: Field[], within: string) => {
+    for (const field of fields) {
+      const label = field.label || within;
+      if (field.type === 'image') {
+        if (field.preset.ratio && !found.has(field.preset.ratio))
+          found.set(field.preset.ratio, { label, preset: field.preset });
+      } else if (field.type === 'group') walk(field.fields, label);
+      else if (field.type === 'array') walk(field.item, label);
+    }
+  };
+  for (const form of forms) {
+    walk(form.fields, '');
+    for (const fields of Object.values(form.blocks)) walk(fields, '');
+  }
+  return [...found.values()];
+}
+
 export function formOf(_siteId: string, schema: JsonSchema): Form {
   const blocks: Record<string, Field[]> = {};
   const seen = new Set<JsonSchema>();

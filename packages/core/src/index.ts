@@ -148,6 +148,7 @@ export {
   mediaUsesFrom,
   namedBy,
   presignUpload,
+  ratioOf,
   setMediaDetails,
   tooSmall,
   UploadRefusedError,
@@ -174,7 +175,7 @@ export {
   unsafeLinkScheme,
 } from './richtext.js';
 export type { Field, Form, JsonSchema, Translation } from './schema.js';
-export { fieldsFrom, formOf } from './schema.js';
+export { fieldsFrom, formOf, imagePresets } from './schema.js';
 export type { Integration, SettingFact } from './settings.js';
 export {
   INTEGRATIONS,

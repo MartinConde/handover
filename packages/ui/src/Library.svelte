@@ -1,7 +1,18 @@
 <script lang="ts">
+import type { Preset } from '@handover/core';
+import Crop from './Crop.svelte';
+import Focal from './Focal.svelte';
 import { fileSize, type LibraryItem, uploadFile, uploadImage } from './upload.js';
 
-let { base = '' }: { /** Where a stored key is served from. */ base?: string } = $props();
+let {
+  base = '',
+  presets = [],
+}: {
+  /** Where a stored key is served from. */
+  base?: string;
+  /** Every shape this site crops a picture to: what the focal picker previews and Crop offers. */
+  presets?: { label: string; preset: Preset }[];
+} = $props();
 
 let kind = $state<'images' | 'files'>('images');
 let query = $state('');
@@ -15,6 +26,9 @@ let queue = $state<{ name: string; state: string; failed?: boolean }[]>([]);
 let over = $state(false);
 let chooser = $state<HTMLInputElement>();
 let confirming = $state(false);
+/** The two dialogs the panel opens, and neither is open until a picture is. */
+let framing = $state(false);
+let cropping = $state(false);
 /** Cancel, where the answer is no; and the button that opened the dialog, to give focus back. */
 let opening = $state<HTMLElement>();
 let trigger: HTMLElement | undefined;
@@ -54,6 +68,8 @@ const count = (item: LibraryItem) => {
 // A row the reconciliation job wrote: an object that was in the bucket with nothing to say
 // what it is. A picture whose size nobody measured is the shape that takes.
 const recovered = (item: LibraryItem) => kind === 'images' && !(item.width && item.height);
+/** Where the crops of this picture hold, in the percentages the dot and `object-position` want. */
+const dot = (item: LibraryItem) => [(item.focal?.[0] ?? 0.5) * 100, (item.focal?.[1] ?? 0.5) * 100];
 const when = (at?: number) =>
   at ? new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'long' }) : '';
 
@@ -76,7 +92,12 @@ function closeDialog() {
 }
 
 /** Tags and the default alt are the library's own words, so they are saved as they are typed. */
-async function describe(details: { tags?: string[]; alt?: string; archived?: boolean }) {
+async function describe(details: {
+  tags?: string[];
+  alt?: string;
+  archived?: boolean;
+  focal?: [number, number];
+}) {
   const item = chosen;
   if (!item) return;
   const res = await fetch(`/admin/api/media/${item.id}`, {
@@ -245,7 +266,10 @@ function show(next: 'images' | 'files') {
       <aside class="lib-side" class:is-recovered={recovered(chosen)} aria-labelledby="lib-side-h">
         <p class="side-title" id="lib-side-h">{name(chosen)}</p>
         {#if kind === 'images'}
-          <div class="preview"><img src={chosen.url} alt="" /></div>
+          <div class="preview">
+            <img src={chosen.url} alt="" />
+            <span class="focal" style="left: {dot(chosen)[0]}%; top: {dot(chosen)[1]}%" aria-hidden="true"></span>
+          </div>
         {:else}
           <span class="file-icon is-big" aria-hidden="true">{extension(chosen)}</span>
         {/if}
@@ -294,9 +318,15 @@ function show(next: 'images' | 'files') {
             <span class="hint">Each page can override this — and its own alt text, in its own language, wins there.</span>
           </div>
         {/if}
+        {#if kind === 'images'}
+          <p class="hint">The dot is this picture's default focal point. A page that set its own keeps it.</p>
+        {/if}
         <div class="actions">
           {#if kind === 'images'}
-            <button class="btn btn-sm" type="button" disabled title="The focal point and cropping ship with 4.4">Set focal point</button>
+            <button class="btn btn-sm" type="button" onclick={() => (framing = true)}>Set focal point</button>
+            <!-- A picture nobody measured cannot be cropped: the region is in pixels the row
+                 does not have. The reconciliation job's rows are the ones this is about. -->
+            <button class="btn btn-sm" type="button" disabled={!(chosen.width && chosen.height)} onclick={() => (cropping = true)}>Crop</button>
           {/if}
           <button class="btn btn-sm archive" type="button" onclick={() => describe({ archived: !chosen?.archived })}>{chosen.archived ? 'Unarchive' : 'Archive'}</button>
           <button class="btn btn-sm" type="button" onclick={() => chosen && copyUrl(chosen)}>{copied === chosen.id ? 'Copied' : 'Copy URL'}</button>
@@ -313,6 +343,32 @@ function show(next: 'images' | 'files') {
     {/if}
   </div>
 </main>
+
+{#if framing && chosen}
+  <Focal
+    name={name(chosen)}
+    url={chosen.url ?? `${base}/${chosen.src}`}
+    focal={chosen.focal ?? [0.5, 0.5]}
+    {presets}
+    onsave={(point) => { describe({ focal: point }); framing = false; }}
+    onclose={() => (framing = false)}
+  />
+{/if}
+
+{#if cropping && chosen}
+  <Crop
+    item={chosen}
+    ratios={presets.map((p) => p.preset.ratio ?? '').filter(Boolean)}
+    onmade={(made) => {
+      cropping = false;
+      // The copy is a picture of its own: it goes to the front of the library and the panel
+      // moves to it, which is also how the client sees that the original is still there.
+      items = [{ ...made, tags: [], uses: [] }, ...items.filter((i) => i.id !== made.id)];
+      chosen = items[0];
+    }}
+    onclose={() => (cropping = false)}
+  />
+{/if}
 
 <!-- Not aria-modal: the shell behind stays reachable, as it does on Members and the entry
      list, and claiming a focus trap that is not there is worse than not claiming one. -->
