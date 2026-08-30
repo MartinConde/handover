@@ -79,7 +79,7 @@ const aspect = (preset: Preset) => preset.ratio?.replace(':', ' / ') ?? '4 / 3';
       </div>
       <div class="side-note">
         <p><b>Every crop, framed around the dot.</b> These are the shapes this site renders; nothing is written to the picture itself.</p>
-        <p>A page that set its own focal point for this image keeps it. This dot is what the others fall back to.</p>
+        <p>This dot is what a page starts with when this picture is put on it. A page that has its own keeps it — moving this one does not go back and change those.</p>
       </div>
     </div>
     {#if presets.length}

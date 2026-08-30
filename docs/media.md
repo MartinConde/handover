@@ -210,11 +210,27 @@ with every shape this site's own fields crop to previewed live beside it: move i
 them move. Drag the dot, or use the two sliders under it — a place in a photograph is two numbers,
 and each one is a slider a keyboard can reach.
 
-The dot in the library is the picture's **default**. A page can move it for itself: the same
-dialog opens from *Set focal point* on the image field, over that field's own shape, and writes
-`focal` into the entry. That value wins for that page, and it is the same in every language.
-Cropping around the middle is not a choice — a centred dot is written as nothing at all, on the
-row and in the file.
+The dot in the library is what a picture is **inserted with**: choosing it for a field copies the
+two numbers into that entry, and moving the library's dot afterwards does not go back and change
+the pages that already have it. A page moves its own from *Set focal point* on the image field,
+over that field's own shape, and it is the same in every language. Cropping around the middle is
+not a choice — a centred dot is written as nothing at all, on the row and in the file.
+
+The numbers reach the page through the content file, so a template is what turns them into a
+crop — `focal` is `[x, y]` beside `src`, and Cloudflare's transformation takes it as `gravity`:
+
+```astro
+---
+import cms from '../../cms.config';
+const { src, alt, focal = [0.5, 0.5] } = entry.data.photo;
+const crop = `width=1200,height=675,fit=cover,gravity=${focal[0]}x${focal[1]}`;
+---
+<img src={`${cms.media.publicBase}/cdn-cgi/image/${crop}/${src}`} alt={alt} width="1200" height="675" />
+```
+
+Image transformations have to be on for the zone the bucket's hostname is on (Cloudflare
+dashboard → Images → Transformations). Without them that url answers 404 and the plain
+`publicBase/src` still serves the uncropped original.
 
 ## Cropping a copy
 

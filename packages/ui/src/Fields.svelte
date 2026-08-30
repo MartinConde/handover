@@ -573,7 +573,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         name={text}
         url={src(at)}
         focal={point(at)}
-        presets={[{ label: text, preset: field.preset }]}
+        presets={field.preset.ratio ? [{ label: text, preset: field.preset }] : []}
         onsave={(moved) => { write([...at, 'focal'], centred(moved) ? undefined : moved); framing = ''; }}
         onclose={() => (framing = '')}
       />
