@@ -765,8 +765,10 @@ async function resendInvite(
 }
 
 /**
- * Owner ↔ editor. The last owner may not be demoted, which is a rule of this site's and not
- * Better Auth's: `setRole` will happily leave a site with nobody who can manage it.
+ * Owner ↔ editor. Two rules are this site's and not Better Auth's: nobody changes their own
+ * role, since an owner who demotes themselves has just locked themselves out of the screen that
+ * could undo it, and the last owner may not be demoted, since `setRole` will happily leave a
+ * site with nobody who can manage it.
  */
 async function setMemberRole(
   id: string,
@@ -776,6 +778,8 @@ async function setMemberRole(
   session: App.Locals['handover'],
 ): Promise<Response> {
   if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  if (id === session.user.id)
+    return Response.json({ error: 'You cannot change your own role' }, { status: 400 });
   const role = roleIn(await request.json().catch(() => ({})));
   if (!role) return Response.json({ error: 'That is not a role' }, { status: 400 });
   const database = db();

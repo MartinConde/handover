@@ -188,7 +188,7 @@ test('the only owner is offered neither a role change nor a removal, and is told
   expect(button(menu, 'Remove').getAttribute('aria-disabled')).toBe('true');
 });
 
-test('an owner beside another owner is offered both, and is still not offered themselves', async () => {
+test('an owner beside another owner is offered neither on their own row, and both on the other', async () => {
   server([
     row('u1', 'martin@example.com', { role: 'owner' }),
     row('u2', 'anna@example.com', { role: 'owner' }),
@@ -196,8 +196,10 @@ test('an owner beside another owner is offered both, and is still not offered th
   const root = await show();
 
   const mine = actions(root, 'martin@example.com');
-  expect(text(mine.querySelector('.menu-note') as HTMLElement)).toBe('You cannot remove yourself.');
-  expect(button(mine, 'Change role').getAttribute('aria-disabled')).toBe(null);
+  expect(text(mine.querySelector('.menu-note') as HTMLElement)).toBe(
+    'You cannot change your own access.',
+  );
+  expect(button(mine, 'Change role').getAttribute('aria-disabled')).toBe('true');
   expect(button(mine, 'Remove').getAttribute('aria-disabled')).toBe('true');
 
   const theirs = actions(root, 'anna@example.com');

@@ -3690,12 +3690,13 @@ test('an invite is only resent to somebody who has never signed in', async () =>
 });
 
 test('the last owner cannot be demoted', async () => {
+  // Somebody else's row: the caller's own would trip the self-change rule before the count.
   memberRows = [
-    member('u1', 'martin@example.com', 'owner'),
-    member('u2', 'anna@example.com', 'editor'),
+    member('u2', 'anna@example.com', 'owner'),
+    member('u3', 'ben@example.com', 'editor'),
   ];
 
-  const res = await memberPost('members/u1/role', { role: 'editor' }, owner);
+  const res = await memberPost('members/u2/role', { role: 'editor' }, owner);
 
   expect(res.status).toBe(400);
   expect(((await res.json()) as { error: string }).error).toBe('There must be at least one owner');
@@ -3713,6 +3714,20 @@ test('demoting an owner goes through the statement that holds the rule', async (
   expect(res.status).toBe(200);
   expect(demoted).toEqual(['u2']);
   // Not `setRole`: it would write the column behind a count another request can change.
+  expect(calls.setRole).toEqual([]);
+});
+
+test('an owner cannot change their own role, even when they are not the last one', async () => {
+  memberRows = [
+    member('u1', 'martin@example.com', 'owner'),
+    member('u2', 'anna@example.com', 'owner'),
+  ];
+
+  const res = await memberPost('members/u1/role', { role: 'editor' }, owner);
+
+  expect(res.status).toBe(400);
+  expect(((await res.json()) as { error: string }).error).toBe('You cannot change your own role');
+  expect(demoted).toEqual([]);
   expect(calls.setRole).toEqual([]);
 });
 

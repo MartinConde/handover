@@ -51,10 +51,13 @@ If the mail cannot be sent the row is still made, so the invite is there to rese
 
 ### Changing a role
 
-Owner ↔ editor, from the row's menu. **The last owner cannot be demoted** — a site with no owner
-has nobody who can invite, change a role or reach Settings, and nothing in the admin could undo
-it. The rule and the write are one database statement, so two owners demoting each other at the
-same instant end with one of them refused rather than both going through.
+Owner ↔ editor, from the row's menu. Two changes are refused by the server, not just hidden.
+**You cannot change your own role** — an owner who made themselves an editor would be locked
+out of this screen and of Settings, and only a colleague could let them back in. **The last
+owner cannot be demoted** — a site with no owner has nobody who can invite, change a role or
+reach Settings, and nothing in the admin could undo it. That rule and the write are one
+database statement, so two owners demoting each other at the same instant end with one of them
+refused rather than both going through.
 
 ### Taking access away
 
@@ -70,7 +73,8 @@ who took it away, which is the only record left once the row is gone.
 
 Two removals are refused by the server, not just hidden: **you cannot remove yourself**, and the
 last owner stays — an owner is taken out of the count by the same statement that checks it, and
-only then deleted. Getting a colleague to remove you is the way out of the first.
+only then deleted. Getting a colleague to remove you, or to change your role, is the way out of
+the first.
 
 ### How somebody signs in
 

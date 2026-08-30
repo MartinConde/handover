@@ -256,13 +256,15 @@ async function remove() {
                   {#if lastOwner(member)}
                     <p class="menu-note">There must be at least one owner.</p>
                   {:else if member.id === user.id}
-                    <p class="menu-note">You cannot remove yourself.</p>
+                    <p class="menu-note">You cannot change your own access.</p>
                   {/if}
                   <button
                     type="button"
-                    class:is-disabled={lastOwner(member)}
-                    aria-disabled={lastOwner(member) || undefined}
-                    onclick={() => !lastOwner(member) && start('role', member)}>Change role</button
+                    class:is-disabled={lastOwner(member) || member.id === user.id}
+                    aria-disabled={lastOwner(member) || member.id === user.id || undefined}
+                    onclick={() =>
+                      !lastOwner(member) && member.id !== user.id && start('role', member)}
+                    >Change role</button
                   >
                   {#if member.pending}
                     <button type="button" disabled={busy} onclick={() => resend(member)}>
