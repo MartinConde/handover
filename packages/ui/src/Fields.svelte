@@ -117,21 +117,45 @@ function add(at: readonly string[], item: unknown) {
   if (Array.isArray(read(at))) list(at).push(item);
   else write(at, [item]);
 }
-const drop = (at: readonly string[], index: number) => list(at).splice(index, 1);
-// A row is reordered once, where it is let go: the list itself never moves while a drag is
-// on, so a dropped-nowhere or an Escape leaves the file as it was.
-function reorder(
-  at: readonly string[],
-  event: Parameters<NonNullable<DragDropEventHandlers['onDragEnd']>>[0],
-) {
+// A scalar row has no `_id`, so its card is keyed by a name of its own that moves with it;
+// otherwise a reorder leaves the cards where they are and swaps the words in them.
+const names = new WeakMap<object, string[]>();
+function keyOf(items: unknown[], i: number): string {
+  const row = items[i] as Data | undefined;
+  if (typeof row?._id === 'string') return row._id;
+  const keys = names.get(items) ?? [];
+  names.set(items, keys);
+  while (keys.length < items.length) keys.push(newId('default'));
+  return keys[i] as string;
+}
+function move(items: unknown[], from: number, to: number) {
+  items.splice(to, 0, ...items.splice(from, 1));
+  names.get(items)?.splice(to, 0, ...(names.get(items)?.splice(from, 1) ?? []));
+}
+function drop(at: readonly string[], index: number) {
+  list(at).splice(index, 1);
+  names.get(list(at))?.splice(index, 1);
+}
+type Handlers = Required<DragDropEventHandlers>;
+// The list is rewritten as the card passes over each place it could land, so the others make
+// room under it; a drag that is escaped puts the card back where it was picked up.
+let origin = -1;
+function begun(event: Parameters<Handlers['onDragStart']>[0]) {
+  const { source } = event.operation;
+  origin = isSortable(source) ? source.index : -1;
+}
+function over(at: readonly string[], event: Parameters<Handlers['onDragOver']>[0]) {
   const { source, target } = event.operation;
-  if (event.canceled || !isSortable(source) || !isSortable(target) || source.index === target.index)
-    return;
-  const items = list(at);
-  items.splice(target.index, 0, ...items.splice(source.index, 1));
+  if (!isSortable(source) || !isSortable(target) || source.index === target.index) return;
+  move(list(at), source.index, target.index);
+}
+function ended(at: readonly string[], event: Parameters<Handlers['onDragEnd']>[0]) {
+  const { source } = event.operation;
+  if (!event.canceled || !isSortable(source) || origin < 0 || source.index === origin) return;
+  move(list(at), source.index, origin);
 }
 // The handle is the only thing that drags: the row's inputs keep their pointer and keyboard.
-const sortable = (id: string | number, index: () => number) =>
+const sortable = (id: string, index: () => number) =>
   createSortable({
     id,
     get index() {
@@ -336,10 +360,10 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       {@const scalar = field.item.length === 1 && field.item[0]?.path.length === 0}
       {@render groupLabel(id, field, text, at)}
       <div class="list" {id} role="group" aria-labelledby="{id}-l">
-        <DragDropProvider onDragEnd={(e) => reorder(at, e)}>
-        {#each items as row, i ((row as Data)?._id ?? i)}
-          {@const s = sortable(((row as Data)?._id as string | undefined) ?? i, () => i)}
-          <div class="row-card" class:is-dragging={s.isDragging} class:is-drop-target={s.isDropTarget} {@attach s.attach}>
+        <DragDropProvider onDragStart={begun} onDragOver={(e) => over(at, e)} onDragEnd={(e) => ended(at, e)}>
+        {#each items as row, i (keyOf(items, i))}
+          {@const s = sortable(keyOf(items, i), () => i)}
+          <div class="row-card" class:is-dragging={s.isDragging} {@attach s.attach}>
             <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {prefix} {mediaBase} {locale} inherited={mode} /></div>
             {#if !translating}{@render controls(at, i, `${text} row ${i + 1}`, s.attachHandle)}{/if}
           </div>
@@ -353,12 +377,12 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       {@const items = rows(at)}
       {@render groupLabel(id, field, text, at)}
       <div class="list" {id} role="group" aria-labelledby="{id}-l">
-        <DragDropProvider onDragEnd={(e) => reorder(at, e)}>
-        {#each items as row, i (block(row)._id ?? i)}
+        <DragDropProvider onDragStart={begun} onDragOver={(e) => over(at, e)} onDragEnd={(e) => ended(at, e)}>
+        {#each items as row, i (keyOf(items, i))}
           {@const name = blockName(row)}
           {@const inner = blockFields(row)}
-          {@const s = sortable(block(row)._id ?? i, () => i)}
-          <article class="block-card" id="{id}.{i}" aria-labelledby="{id}.{i}-h" class:is-dragging={s.isDragging} class:is-drop-target={s.isDropTarget} {@attach s.attach}>
+          {@const s = sortable(keyOf(items, i), () => i)}
+          <article class="block-card" id="{id}.{i}" aria-labelledby="{id}.{i}-h" class:is-dragging={s.isDragging} {@attach s.attach}>
             <header>
               <span class="label" id="{id}.{i}-h">{name}</span>
               <span class="type">{block(row)._type} · {block(row)._id}</span>

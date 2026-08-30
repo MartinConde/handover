@@ -656,6 +656,25 @@ test('array: reordering by mouse emits the same YAML as the keyboard', async () 
   expect(stringifyEntry('default', snap())).toBe(golden('array'));
 });
 
+test('array: the rows make room while the card is still in the air', async () => {
+  laidOut();
+  show([rooms, tags], arrayData());
+  await key(q('[aria-label="Reorder Rooms row 1"]'), 'Space');
+  await key(document, 'ArrowDown');
+  expect(stringifyEntry('default', snap())).toBe(MOVED);
+  expect(document.querySelector('#f-rooms [data-dnd-placeholder]')).not.toBeNull();
+  await key(document, 'Space');
+  expect(stringifyEntry('default', snap())).toBe(MOVED);
+});
+
+test('array of scalars: a row moves as a card, and its words go with it', async () => {
+  laidOut();
+  show([tags], { _version: 1, tags: ['coastal', 'garden', 'quiet'] });
+  await keyMove('Tags row 3', -2);
+  expect(roundTrip()).toEqual({ _version: 1, tags: ['quiet', 'coastal', 'garden'] });
+  expect(q<HTMLInputElement>('input#f-tags\\.0').value).toBe('quiet');
+});
+
 test('array: Escape puts a picked-up row back where it was', async () => {
   laidOut();
   show([rooms, tags], arrayData());
