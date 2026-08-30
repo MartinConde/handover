@@ -527,15 +527,36 @@ is over 10MB, `503` when the site has no bucket configured.
 upload's answer is the asset alone — none of the library's own columns are known yet.
 
 ```
-PATCH /admin/api/media/:hash  { "tags?": [ "…" ], "alt?": "…" }
+PATCH /admin/api/media/:hash  { "tags?": [ "…" ], "alt?": "…", "archived?": true }
   →  { "media": { … } }
 ```
 
-What the library calls an asset: the tags the search finds it by, and the alt text a page falls
-back to when it sets none of its own. Neither is content and neither is committed — they are the
-client's account of the picture, and they live on the row. Tags are trimmed and de-duplicated;
-an alt emptied here is no default at all. `400` when the body carries neither, `404` when the
-site has no such asset.
+What the library calls an asset, and whether it has been put away. None of it is content and none
+of it is committed — it is the client's account of the picture, and it lives on the row. Tags are
+trimmed and de-duplicated; an alt emptied here is no default at all. **`archived` is never gated
+on usage**: it takes the asset out of every field's picker and keeps the bytes, so a page that
+names it goes on working; `false` puts it back. `400` when the body carries none of the three,
+`404` when the site has no such asset.
+
+```
+DELETE /admin/api/media/:hash
+  →  { "deleted": "<hash>" }
+  →  409 { "error": "…", "uses": [ "listings/mill-house" ] }
+```
+
+The bytes and the row, gone. **An asset any file names cannot be deleted**, and this does not
+read the `uses` above to decide it: that count comes from the scan the last build made, and a
+commit pushed since is not in it. This reads `src/content/` out of GitHub at the moment it is
+asked.
+
+There are two `409`s, and they say different things. An asset the entries use *now* — the drafts
+over the tree, as the badge reads it — is refused as *used in N places*. An asset only the tree
+still names is refused as *the published site still uses this*: the change that takes it out has
+not been published, and the live page is asking for those bytes until it is. Both name the
+entries in `uses`.
+
+`503` when the site has no bucket, or when the repository cannot be read at all — a check that
+could not be made is never read as *nothing uses it*. `404` when the site has no such asset.
 
 ```
 PUT /admin/api/media/:hash  { "hash", "bytes", "mime", "filename?", "width?", "height?" }

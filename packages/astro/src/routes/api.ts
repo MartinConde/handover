@@ -34,6 +34,7 @@ import {
   deletedEntries,
   deleteEntry,
   deleteLocales,
+  deleteMedia,
   demoteOwner,
   diffEntry,
   discardDraft,
@@ -66,6 +67,7 @@ import {
   memberApi,
   memberList,
   moveLock,
+  namedBy,
   openDb,
   overlayRows,
   parseEntry,
@@ -2553,9 +2555,9 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
 
 // The one verb that changes an asset without changing its bytes: what the library calls the
 // picture, never the picture itself, which is immutable and named by its own hash.
-export const PATCH: APIRoute = async ({ params, request }) => {
+export const PATCH: APIRoute = async ({ params, request, locals }) => {
   const asset = params.path?.match(MEDIA);
-  if (asset) return describeMedia(asset[1] ?? '', request);
+  if (asset) return describeMedia(asset[1] ?? '', request, locals.handover);
   return new Response('Not found', { status: 404 });
 };
 
@@ -2787,13 +2789,21 @@ async function library(url: URL): Promise<Response> {
 }
 
 /**
- * The library's own words about a picture: the tags it is found by and the alt text a page falls
- * back to. Neither is content — they are the client's account of the asset, so they are written
- * to the row and not committed.
+ * The library's own words about a picture: the tags it is found by, the alt text a page falls
+ * back to, and whether it has been put away. None of it is content — it is the client's account
+ * of the asset, so it is written to the row and not committed.
+ *
+ * **Archiving is never gated on usage.** It hides the picture from every field's picker and
+ * keeps the bytes, so a page that names it goes on working; it is the answer to "get rid of it"
+ * that deleting is not.
  */
-async function describeMedia(id: string, request: Request): Promise<Response> {
+async function describeMedia(
+  id: string,
+  request: Request,
+  session: App.Locals['handover'],
+): Promise<Response> {
   const body = (await request.json().catch(() => undefined)) as
-    | { tags?: unknown; alt?: unknown }
+    | { tags?: unknown; alt?: unknown; archived?: unknown }
     | undefined;
   const tags = Array.isArray(body?.tags)
     ? [
@@ -2805,11 +2815,79 @@ async function describeMedia(id: string, request: Request): Promise<Response> {
       ]
     : undefined;
   const alt = typeof body?.alt === 'string' ? body.alt.trim() : undefined;
-  if (tags === undefined && alt === undefined)
-    return Response.json({ error: 'send { tags } or { alt }' }, { status: 400 });
-  const row = await setMediaDetails('default', db(), id, { tags, alt });
+  const archived = typeof body?.archived === 'boolean' ? body.archived : undefined;
+  if (tags === undefined && alt === undefined && archived === undefined)
+    return Response.json({ error: 'send { tags }, { alt } or { archived }' }, { status: 400 });
+  const database = db();
+  const row = await setMediaDetails('default', database, id, { tags, alt, archived });
   if (!row) return new Response('Not found', { status: 404 });
+  // What an asset is called is the client's own business; putting one away is a decision about
+  // what the site offers, and that is what the log is for.
+  if (archived !== undefined)
+    await logActivity('default', database, {
+      userId: session?.user.id,
+      kind: 'media-archive',
+      subject: id,
+      detail: { archived, name: row.filename },
+    });
   return Response.json({ media: libraryItem(row) });
+}
+
+const places = (uses: readonly string[]) =>
+  uses.length === 1 ? '1 place' : `${uses.length} places`;
+
+/**
+ * The one deletion a person asks for, and the whole of *never delete*: an asset any file names
+ * cannot go, and nothing here reads the library's badge to decide it. **That number is the scan
+ * the last build made** — a commit somebody pushed since is not in it — so the tree is read from
+ * git at delete time and the drafts are added to it rather than laid over it: a picture an editor
+ * took out of a listing this morning is on the published site until that listing is published.
+ *
+ * A read that cannot be made is not an answer. `answering` turns a repository out of reach into
+ * a 503, and the asset stays.
+ */
+async function deleteAsset(id: string, session: App.Locals['handover']): Promise<Response> {
+  const store = mediaStore();
+  if (!store) return Response.json({ error: NO_BUCKET }, { status: 503 });
+  const database = db();
+  const row = await findMedia('default', database, id);
+  if (!row) return new Response('Not found', { status: 404 });
+  const [tree, drafts] = await Promise.all([
+    gitClient().contentFiles(),
+    draftFiles('default', database),
+  ]);
+  // Two readings of the same files, because the two refusals are different sentences. What the
+  // entries say *now* is the drafts over the tree, as the badge reads it; what the published
+  // site asks for is the tree alone. A picture taken out of a listing this morning is only in
+  // the second, and telling that client it is "used in 1 place" would name the very page they
+  // have just fixed.
+  const drafted = new Set(drafts.map((d) => d.path));
+  const now = namedBy(row.r2Key, [...tree.filter((f) => !drafted.has(f.path)), ...drafts]);
+  const live = namedBy(row.r2Key, tree);
+  if (now.length)
+    return Response.json(
+      {
+        error: `This is used in ${places(now)} and cannot be deleted. Archive it instead — that hides it from the picker and keeps every page working.`,
+        uses: now,
+      },
+      { status: 409 },
+    );
+  if (live.length)
+    return Response.json(
+      {
+        error: `The published site still uses this in ${places(live)}. Publish the change that takes it out, and then it can be deleted.`,
+        uses: live,
+      },
+      { status: 409 },
+    );
+  await deleteMedia('default', database, store, row);
+  await logActivity('default', database, {
+    userId: session?.user.id,
+    kind: 'media-delete',
+    subject: id,
+    detail: { name: row.filename, bytes: row.bytes },
+  });
+  return Response.json({ deleted: id });
 }
 
 /** The declaration both halves of an upload are made against; the url's hash wins over the body's. */
@@ -2973,6 +3051,8 @@ export const DELETE: APIRoute = async ({ params, request, url, locals }) => {
   if (member) return removeMember(member[1] ?? '', request, url, locals.cfContext, locals.handover);
   const draft = params.path?.match(DRAFT);
   if (draft) return discard(draft[1] ?? '', draft[2] ?? '');
+  const asset = params.path?.match(MEDIA);
+  if (asset) return answering(() => deleteAsset(asset[1] ?? '', locals.handover));
   const entry = params.path?.match(ENTRY);
   if (entry)
     return answering(() => remove(entry[1] ?? '', entry[2] ?? '', request, locals.handover));

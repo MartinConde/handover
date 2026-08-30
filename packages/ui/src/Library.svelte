@@ -14,6 +14,14 @@ let tag = $state('');
 let queue = $state<{ name: string; state: string; failed?: boolean }[]>([]);
 let over = $state(false);
 let chooser = $state<HTMLInputElement>();
+let confirming = $state(false);
+/** Cancel, where the answer is no; and the button that opened the dialog, to give focus back. */
+let opening = $state<HTMLElement>();
+let trigger: HTMLElement | undefined;
+
+$effect(() => {
+  opening?.focus();
+});
 
 // The search is the table's: a name past the hundredth row is a match nobody could otherwise
 // find. The wait is so a client typing a word does not spend a request per letter on it.
@@ -53,10 +61,22 @@ function pick(item: LibraryItem) {
   chosen = item;
   tag = '';
   copied = '';
+  closeDialog();
+}
+
+function ask() {
+  trigger = (document.activeElement as HTMLElement | null) ?? undefined;
+  confirming = true;
+}
+
+function closeDialog() {
+  const back = confirming ? trigger : undefined;
+  confirming = false;
+  back?.focus();
 }
 
 /** Tags and the default alt are the library's own words, so they are saved as they are typed. */
-async function describe(details: { tags?: string[]; alt?: string }) {
+async function describe(details: { tags?: string[]; alt?: string; archived?: boolean }) {
   const item = chosen;
   if (!item) return;
   const res = await fetch(`/admin/api/media/${item.id}`, {
@@ -81,6 +101,26 @@ function addTag() {
   }
   describe({ tags: [...(chosen?.tags ?? []), word] });
   tag = '';
+}
+
+/**
+ * The gate is the server's: this button is off while the count says the picture is used, and the
+ * request is refused anyway if the count was a build behind what the repository holds.
+ */
+async function remove() {
+  const item = chosen;
+  if (!item) return;
+  const res = await fetch(`/admin/api/media/${item.id}`, { method: 'DELETE' });
+  confirming = false;
+  // Not `closeDialog`: the tile the button belonged to is about to go with the picture.
+  if (!res.ok) {
+    const body = (await res.json().catch(() => undefined)) as { error?: string } | undefined;
+    failure = body?.error ?? `That picture was not deleted (${res.status}).`;
+    return;
+  }
+  failure = '';
+  items = items.filter((i) => i.id !== item.id);
+  chosen = undefined;
 }
 
 async function copyUrl(item: LibraryItem) {
@@ -258,12 +298,36 @@ function show(next: 'images' | 'files') {
           {#if kind === 'images'}
             <button class="btn btn-sm" type="button" disabled title="The focal point and cropping ship with 4.4">Set focal point</button>
           {/if}
-          <button class="btn btn-sm" type="button" disabled title="Archiving ships with 4.3">Archive</button>
+          <button class="btn btn-sm archive" type="button" onclick={() => describe({ archived: !chosen?.archived })}>{chosen.archived ? 'Unarchive' : 'Archive'}</button>
           <button class="btn btn-sm" type="button" onclick={() => chosen && copyUrl(chosen)}>{copied === chosen.id ? 'Copied' : 'Copy URL'}</button>
-          <button class="btn btn-ghost btn-quiet-danger" type="button" disabled title="Deleting ships with 4.3">Delete</button>
+          <button class="btn btn-ghost btn-quiet-danger delete" type="button" disabled={!!chosen.uses?.length} onclick={ask}>Delete</button>
         </div>
-        <p class="hint">Nothing here is ever deleted on its own. Archiving hides a picture from the picker and keeps every page that uses it working.</p>
+        <p class="hint delete-hint">
+          {#if chosen.uses?.length}
+            Delete is off while this {kind === 'images' ? 'picture' : 'file'} is {count(chosen)}. Archiving hides it from the picker and keeps every page working.
+          {:else}
+            Not used anywhere, so Delete is available. It asks first — and archiving keeps the {kind === 'images' ? 'picture' : 'file'} instead.
+          {/if}
+        </p>
       </aside>
     {/if}
   </div>
 </main>
+
+<!-- Not aria-modal: the shell behind stays reachable, as it does on Members and the entry
+     list, and claiming a focus trap that is not there is worse than not claiming one. -->
+{#if confirming && chosen}
+  <div class="scrim">
+    <div class="dialog" role="alertdialog" aria-labelledby="del-h" aria-describedby="del-d">
+      <h2 id="del-h">Delete “{name(chosen)}” permanently?</h2>
+      <div id="del-d">
+        <p>Nothing on the site uses it. This removes the file from storage and cannot be undone.</p>
+        <p>If you might want it back, archive it instead — an archived {kind === 'images' ? 'picture' : 'file'} costs nothing and never appears in the picker.</p>
+      </div>
+      <div class="actions">
+        <button class="btn" type="button" bind:this={opening} onclick={closeDialog}>Cancel</button>
+        <button class="btn btn-danger" type="button" onclick={remove}>Delete permanently</button>
+      </div>
+    </div>
+  </div>
+{/if}

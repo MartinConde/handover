@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Archive a picture instead of deleting it.** The library's panel has an Archive button: the
+  picture leaves every field's picker, keeps its bytes, and every page that already uses it goes
+  on working. The same button puts it back ([Media](docs/media.md)).
+- **Delete is gated on where the picture is used.** It is off while anything names the asset, and
+  the API refuses whatever the screen thought — it reads `src/content/` out of GitHub at delete
+  time and adds every unpublished draft to it, rather than trusting the usage count, which is
+  only as new as the last build. A repository it cannot read refuses the delete rather than
+  allowing it. When it does go, the row goes before the bytes, so a bucket that refuses leaves a
+  picture the hourly job recovers rather than a broken one.
 - **The media library screen.** *Media* in the sidebar now opens everything in the bucket:
   a grid of pictures, a list of files, and a panel for whichever one is open. Search matches
   the file name **and the tags**, and the table does the searching, so a picture past the

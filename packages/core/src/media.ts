@@ -179,7 +179,7 @@ export async function setMediaDetails(
   siteId: string,
   db: Db,
   id: string,
-  details: { tags?: string[]; alt?: string },
+  details: { tags?: string[]; alt?: string; archived?: boolean },
 ): Promise<MediaRow | undefined> {
   const [row] = await db
     .update(media)
@@ -187,6 +187,9 @@ export async function setMediaDetails(
       ...(details.tags ? { tags: details.tags } : {}),
       // An alt somebody has emptied is no default at all, and null is what the column says that in.
       ...(details.alt === undefined ? {} : { alt: details.alt || null }),
+      // Archiving is never gated on usage: a picture that is still used stays used, and putting
+      // it away only takes it out of the picker.
+      ...(details.archived === undefined ? {} : { archived: details.archived ? 1 : 0 }),
     })
     .where(and(eq(media.siteId, siteId), eq(media.id, id)))
     .returning();
@@ -253,6 +256,26 @@ export function mediaUsage(
     }
   }
   return Object.fromEntries(Object.entries(used).map(([key, set]) => [key, [...set].sort()]));
+}
+
+/**
+ * Which entries name this key, read from the files themselves. **This is the delete gate**, and
+ * it is deliberately not `mediaUsage`: that one is the badge, built from a scan the last build
+ * made, and a commit somebody pushed since is not in it. Here the caller hands over the tree as
+ * git has it now, plus every draft — added to the tree rather than laid over it, because a
+ * picture an editor took out of a listing this morning is still on the published site until that
+ * listing is published, and the bytes are what the live page is asking for.
+ *
+ * The text is searched rather than the parsed file: a stored key is 64 hex characters and a file
+ * naming one anywhere — in a comment, in a field no schema knows — is a file that names it. Four
+ * hundred entries is also four hundred YAML parses, which is not what ten milliseconds of CPU is
+ * for.
+ */
+export function namedBy(key: string, files: Iterable<ContentFile>): string[] {
+  const found = new Set<string>();
+  for (const file of files)
+    if (file.contents.includes(key)) found.add(entryKey(file.path) ?? file.path);
+  return [...found].sort();
 }
 
 const objectUrl = (store: R2Store, key: string) =>
@@ -415,6 +438,29 @@ export async function confirmUpload(
   const stored = written ?? (await findMedia(siteId, db, upload.hash));
   if (!stored) throw new Error(`the media row for ${upload.hash} was not written`);
   return { media: stored, created: Boolean(written) };
+}
+
+/**
+ * The one deletion that is somebody's decision rather than a rejected upload. Whether it is
+ * allowed is `namedBy`'s answer and the caller's to ask; this is what carrying it out is.
+ *
+ * **The row goes first.** An object left in the bucket with no row is exactly what the hourly
+ * reconciliation job is for, so a failed second half comes back as *Recovered* within the hour;
+ * a row left pointing at bytes that are gone is a broken picture nothing ever repairs.
+ */
+export async function deleteMedia(
+  siteId: string,
+  db: Db,
+  store: R2Store,
+  row: { id: string; r2Key: string },
+  deps: { fetch?: typeof globalThis.fetch } = {},
+): Promise<void> {
+  const { fetch = globalThis.fetch } = deps;
+  await db.delete(media).where(and(eq(media.siteId, siteId), eq(media.id, row.id)));
+  const gone = await object(store, row.r2Key, 'DELETE', fetch);
+  // R2 answers 204 for a key it never had, so anything else is the bucket refusing.
+  if (!gone.ok && gone.status !== 404)
+    throw new Error(`R2 DELETE ${row.r2Key} failed: ${gone.status}`);
 }
 
 // The bucket's own list of itself, as XML. There is no parser in workerd and the keys this

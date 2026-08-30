@@ -304,3 +304,82 @@ test('getCommit names the parent and both names of a rename', async () => {
     ],
   });
 });
+
+// A fake GraphQL endpoint that answers the nested tree query from a flat map of paths, so a
+// test states the repository as paths and the walk is what is under test.
+function fakeGraphQL(files: Record<string, string | null>, opts: { truncated?: string } = {}) {
+  const queries: string[] = [];
+  // The query asks three levels deep, so a folder below that comes back as neither — which is
+  // what GraphQL answers when a node matches none of the fragments asked for.
+  const tree = (prefix: string, depth = 3): unknown => {
+    if (depth === 0) return {};
+    const names = new Set<string>();
+    for (const path of Object.keys(files))
+      if (path.startsWith(prefix)) names.add(path.slice(prefix.length).split('/')[0] ?? '');
+    return {
+      entries: [...names].map((name) => {
+        const at = `${prefix}${name}`;
+        return {
+          name,
+          object:
+            at in files
+              ? { text: files[at], isTruncated: opts.truncated === at }
+              : tree(`${at}/`, depth - 1),
+        };
+      }),
+    };
+  };
+  const fetch = async (url: string, init: RequestInit = {}): Promise<Response> => {
+    if (url.endsWith('/access_tokens'))
+      return Response.json({ token: 'ghs_1', expires_at: '2099-01-01T00:00:00Z' }, { status: 201 });
+    if (url === 'https://api.github.com/graphql') {
+      queries.push(JSON.parse(String(init.body)).query);
+      return Response.json({ data: { repository: { object: tree('src/content/') } } });
+    }
+    return new Response('{"message":"Not Found"}', { status: 404 });
+  };
+  return { fetch: fetch as unknown as typeof globalThis.fetch, queries };
+}
+
+test('contentFiles reads every yaml under src/content in one request', async () => {
+  const gh = fakeGraphQL({
+    'src/content/redirects.yaml': 'rules: []\n',
+    'src/content/listings/en/mill-house.yaml': 'title: The Mill House\n',
+    'src/content/listings/de/mill-house.yaml': 'title: Mühlenhaus\n',
+    'src/content/_templates/listings/holiday-let.yaml': 'title: New let\n',
+    'src/content/schemas.ts': 'export const x = 1\n',
+  });
+  const git = createGitClient('default', app, { fetch: gh.fetch });
+
+  const files = await git.contentFiles();
+
+  expect(files.sort((a, b) => a.path.localeCompare(b.path))).toEqual([
+    { path: 'src/content/_templates/listings/holiday-let.yaml', contents: 'title: New let\n' },
+    { path: 'src/content/listings/de/mill-house.yaml', contents: 'title: Mühlenhaus\n' },
+    { path: 'src/content/listings/en/mill-house.yaml', contents: 'title: The Mill House\n' },
+    { path: 'src/content/redirects.yaml', contents: 'rules: []\n' },
+  ]);
+  expect(gh.queries).toHaveLength(1);
+});
+
+// Whatever this is read for is a decision about the whole tree, so half a file is not an
+// answer: it is refused rather than reported as a file that happens not to say anything.
+// The build refuses a content file deeper than this, so a repository that builds has nothing
+// below what the query asks for — and a folder the walk cannot see into is refused rather than
+// stepped over, because a file nobody read is a file nobody counted.
+test('contentFiles refuses a folder deeper than an entry may live at', async () => {
+  const gh = fakeGraphQL({ 'src/content/listings/en/deeper/nope.yaml': 'title: No\n' });
+  const git = createGitClient('default', app, { fetch: gh.fetch });
+
+  await expect(git.contentFiles()).rejects.toThrow(/deeper/);
+});
+
+test('contentFiles refuses a file GitHub would only answer in part', async () => {
+  const gh = fakeGraphQL(
+    { 'src/content/listings/en/mill-house.yaml': 'title: The' },
+    { truncated: 'src/content/listings/en/mill-house.yaml' },
+  );
+  const git = createGitClient('default', app, { fetch: gh.fetch });
+
+  await expect(git.contentFiles()).rejects.toThrow(/mill-house\.yaml/);
+});

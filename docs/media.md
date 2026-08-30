@@ -151,16 +151,40 @@ A file is the same idea under `files/`, named by the type its bytes actually are
 field asks of the picture it takes, and how a client chooses one, is
 [Pictures and files in a field](media-fields.md).
 
-## Nothing is ever deleted
+## Nothing is deleted on its own
 
 Clients reuse pictures, and a picture removed from an entry is still on the published site
-until that entry is published. Handover deletes an object in exactly one case: the one in
-step 4, where what arrived was not what was asked for and no row was ever written.
+until that entry is published. Nothing here ever tidies up after an edit. Handover deletes an
+object by itself in exactly one case: the one in step 4, where what arrived was not what was
+asked for and no row was ever written.
 
 An upload whose confirm never arrived leaves an object with no row behind it. An hourly job
 lists the bucket and writes a row for anything it finds, so those bytes come back rather than
 sitting there unnamed ([Deploy](deploy.md#the-schedule)). It only ever adds: the width and
 height it cannot read stay empty, and nothing in the bucket is touched.
+
+## Archive, and the one delete somebody asks for
+
+**Archive** is the answer to *get rid of it*: the picture leaves every field's picker and keeps
+its bytes, so every page that already names it goes on working. It stays in the library, flagged,
+and the same button puts it back. Nothing about archiving depends on where the picture is used.
+
+**Delete** is the exception, and it is gated. An asset any file names cannot be deleted — the
+panel's Delete is off with the count beside it, and the API refuses whatever the screen thought.
+The check is not the usage badge: that number comes from a scan the last build made, and a commit
+pushed since is not in it. At delete time the site reads `src/content/` out of GitHub as it
+stands.
+
+A picture an editor took out of a listing this morning is still refused, and the refusal says
+why: *the published site still uses this* — the live page is asking for those bytes until that
+listing is published. A repository that cannot be read is not an answer either: the delete is
+refused rather than allowed.
+
+What a delete does not check is the rest of the repository. A key written into a template or a
+component by hand is not a content file and is not seen.
+
+Deleting takes the row first and the object second. If the bucket refuses, the hourly job finds
+the object without a row and brings it back as *Recovered* within the hour.
 
 ## The library
 
@@ -173,10 +197,11 @@ with today's unpublished changes laid over it. It counts **entries**, so a listi
 same picture in English and German is *used in 1 place*, and the panel expands the count into
 the entries themselves. A picture nothing uses says *not used yet*.
 
-The panel is also where an asset is given tags and a default alt text. The default is what a
-page falls back to: a page that writes its own alt, in its own language, keeps it.
+The panel is also where an asset is given tags and a default alt text, where it is archived, and
+where the gated Delete is. The alt default is what a page falls back to: a page that writes its
+own alt, in its own language, keeps it.
 
 ## Not yet
 
-Archiving and the gated delete; *moving* the focal point, which is drawn on every preview but
-set in the library; and cropping a region into a new asset.
+*Moving* the focal point, which is drawn on every preview but set in the library; and cropping a
+region into a new asset.

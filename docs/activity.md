@@ -15,7 +15,7 @@ first sign-in onwards.
 | Accounts | `login` (by password, by emailed link or through GitHub) · `invite` · `role-change` · `member-removed` · `password-set` (a first one, a change or a reset) |
 | Publishing | `publish`, with the commit it made and how many files were in it · `publish-conflict`, when a file had changed in the repository since it was opened · `publish-failed`, when the repository turned the commit down · `lock-takeover`, naming who the entry was taken from · `hold-released` |
 | Entries | `entry-rename`, with the name it had before · `entry-delete` and `locale-off`, each with the commit that took the files away and the languages that went — which is what a **Restore** on the row puts back ([Entry lifecycle](entry-lifecycle.md#putting-a-deleted-entry-back)) |
-| Media | `upload` — a picture stored, named by the file it was chosen as. Choosing one the site already holds is not an upload and is not a row |
+| Media | `upload` — a picture stored, named by the file it was chosen as. Choosing one the site already holds is not an upload and is not a row · `media-archive` — put away or taken back out · `media-delete` — bytes and row gone, which only happens when nothing names them |
 | Settings | `setting-changed` — one of the client's own [integration keys](diagnostics.md#integrations) set, replaced or removed. The name of the key, never its value |
 | System | `mail-failed` — a message the provider would not take |
 

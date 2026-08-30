@@ -592,6 +592,32 @@ test('an upload reads as a sentence, named by the file it was chosen as', async 
   expect(root.querySelector('.said a')).toBe(null);
 });
 
+// 4.3's two. Archiving and unarchiving are the same kind and are told apart by the flag, so
+// each is its own sentence; a delete says where the file went, because it is the only row in
+// the log about bytes that are gone.
+test('putting a picture away, taking it back and deleting it each read as themselves', async () => {
+  server({
+    events: [
+      ev('media-archive', { subject: 'a'.repeat(64), detail: { archived: true, name: 'old.jpg' } }),
+      ev('media-archive', {
+        subject: 'a'.repeat(64),
+        detail: { archived: false, name: 'old.jpg' },
+      }),
+      ev('media-delete', { subject: 'a'.repeat(64), detail: { name: 'old.jpg', bytes: 900 } }),
+      ev('media-delete', { subject: 'b'.repeat(64) }),
+    ],
+    cursor: null,
+  });
+  const root = await show();
+
+  expect(sentences(root)).toEqual([
+    'Anna Berg archived old.jpg.',
+    'Anna Berg took old.jpg out of the archive.',
+    'Anna Berg deleted old.jpg from storage.',
+    'Anna Berg deleted a file from storage.',
+  ]);
+});
+
 // 3.25's kind. The value is never in the row, and never was in the log: what happened to which
 // key is the whole of it.
 test('a key the client set reads as what happened to it, and never as the key', async () => {

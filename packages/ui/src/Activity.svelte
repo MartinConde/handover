@@ -308,8 +308,17 @@ function said(event: ActivityEvent): Said {
         : { lead: `${actor} restored ${count(d)} files.` };
     }
     case 'upload':
-      // No library to open until Phase 4, so the name it was chosen as is the whole row.
       return { lead: `${actor} uploaded ${str(d, 'name') ?? 'a file'}.` };
+    case 'media-archive': {
+      const what = str(d, 'name') ?? 'a file';
+      return {
+        lead: (d as { archived?: unknown } | null)?.archived
+          ? `${actor} archived ${what}.`
+          : `${actor} took ${what} out of the archive.`,
+      };
+    }
+    case 'media-delete':
+      return { lead: `${actor} deleted ${str(d, 'name') ?? 'a file'} from storage.` };
     case 'mail-failed':
       return { lead: `${MESSAGE[str(d, 'message') ?? ''] ?? 'A message'} could not be sent.` };
   }

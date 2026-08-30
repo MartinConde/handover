@@ -1,3 +1,5 @@
+import type { ContentFile } from './entries.js';
+
 export interface GitHubApp {
   appId: string;
   privateKey: string; // PKCS#8 PEM; GitHub's download is PKCS#1, convert with `openssl pkcs8 -topk8 -nocrypt`
@@ -37,6 +39,12 @@ export interface GitClient {
    * that is about to **write** names one: see the note on the implementation.
    */
   getFile(path: string, ref?: string): Promise<GitFile | undefined>;
+  /**
+   * Every `.yaml` under `src/content/` at the branch tip, contents and all, in **one** request.
+   * A file at a time is a subrequest at a time, and the Free plan allows fifty of those per
+   * request — a site with two hundred listings would have run out long before the answer.
+   */
+  contentFiles(): Promise<ContentFile[]>;
   getCommit(sha: string): Promise<GitCommit>;
   publish(
     files: PublishFile[],
@@ -56,6 +64,37 @@ export class RepoUnreachableError extends Error {
 }
 
 const API = 'https://api.github.com';
+
+interface TreeNode {
+  entries?: { name: string; object?: TreeNode & { text?: string | null; isTruncated?: boolean } }[];
+}
+
+// One level of the GraphQL tree walk: a blob's own text, or the entries below it.
+const BLOB = '...on Blob{text isTruncated}';
+const level = (depth: number): string =>
+  `entries{name object{${BLOB}${depth > 1 ? `...on Tree{${level(depth - 1)}}` : ''}}}`;
+
+function collect(node: TreeNode | undefined, prefix: string, found: ContentFile[]) {
+  for (const entry of node?.entries ?? []) {
+    const path = `${prefix}${entry.name}`;
+    const object = entry.object;
+    if (object?.entries) {
+      collect(object, `${path}/`, found);
+      continue;
+    }
+    // Neither a folder this walk asked into nor a file it can read — which is a folder below the
+    // depth an entry may live at. Skipping it would be a file nobody saw, and the whole use of
+    // this is deciding something about every file.
+    if (!object || !('text' in object))
+      throw new Error(`${path} is deeper than src/content/<collection>/<locale>/<name>.yaml`);
+    if (!path.endsWith('.yaml')) continue;
+    // Half a file is not an answer either: one that was cut off reads as one that happens to
+    // say nothing.
+    if (typeof object.text !== 'string' || object.isTruncated)
+      throw new Error(`GitHub would not answer ${path} in full`);
+    found.push({ path, contents: object.text });
+  }
+}
 
 // A git object id is a pure function of the bytes: sha1("blob <length>\0" + bytes). Two
 // of these decide whether a draft still matches the file it was loaded from, with no
@@ -192,6 +231,41 @@ export function createGitClient(
       const body = (await res.json()) as { sha: string; content: string };
       const bytes = Uint8Array.from(atob(body.content.replace(/\s+/g, '')), (c) => c.charCodeAt(0));
       return { contents: new TextDecoder().decode(bytes), blob_sha: body.sha };
+    },
+
+    /**
+     * The GraphQL API is what makes this one request rather than one per file: REST answers a
+     * tree without contents, and then it is a blob at a time. The nesting is three deep because
+     * `src/content/<collection>/<locale>/<name>.yaml` is as deep as a content file may be — the
+     * build refuses anything else ([`contentPathErrors`](entries.ts)) — so a repository that
+     * builds has nothing below what this walks.
+     */
+    async contentFiles() {
+      const res = await request('/graphql', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          query: `query($owner:String!,$name:String!,$expr:String!){repository(owner:$owner,name:$name){object(expression:$expr){...on Tree{${level(3)}}}}}`,
+          variables: {
+            owner: app.owner,
+            name: app.repo,
+            expr: `${app.branch ?? 'main'}:src/content`,
+          },
+        }),
+      });
+      if (!res.ok) throw new Error(`GitHub read content failed: ${res.status}`);
+      const body = (await res.json()) as {
+        data?: { repository?: { object?: TreeNode | null } | null };
+        errors?: { message: string }[];
+      };
+      if (body.errors?.length)
+        throw new Error(`GitHub read content failed: ${body.errors[0]?.message}`);
+      // A repository outside the installation resolves to nothing, exactly as a repository with
+      // no `src/content/` does, so the two are told apart the same way every other read does it.
+      if (!body.data?.repository) await assertRepoReachable();
+      const found: ContentFile[] = [];
+      collect(body.data?.repository?.object ?? undefined, 'src/content/', found);
+      return found;
     },
 
     async getCommit(sha) {

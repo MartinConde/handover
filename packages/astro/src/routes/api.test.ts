@@ -22,6 +22,7 @@ const {
   files,
   getFile,
   getHead,
+  contentFiles,
   publish,
   saveDraft,
   createDraft,
@@ -51,6 +52,7 @@ const {
   findMedia,
   mediaList,
   draftFiles,
+  deleteMedia,
   setMediaDetails,
   confirmUpload,
 } = await vi.hoisted(async () => {
@@ -99,6 +101,9 @@ const {
       return undefined;
     }),
     getHead: vi.fn(async () => 'head789'),
+    // The one-request read of src/content the delete gate is made on; the walk itself runs
+    // against a faked GraphQL endpoint in core's own git.test.ts.
+    contentFiles: vi.fn<() => Promise<{ path: string; contents: string }[]>>(async () => []),
     publish: vi.fn(async (_files: unknown, opts: { base_sha: string }) => {
       if (opts.base_sha === 'stale') {
         const { RefMovedError } = await import('@handover/core');
@@ -172,6 +177,8 @@ const {
     draftFiles: vi.fn<(...args: unknown[]) => Promise<{ path: string; contents: string }[]>>(
       async () => [],
     ),
+    // The D1-and-R2 boundary of a delete; the order it does the two in is core's own test.
+    deleteMedia: vi.fn(async () => {}),
     setMediaDetails: vi.fn<(...args: unknown[]) => Promise<Record<string, unknown> | undefined>>(
       async (...args: unknown[]) => ({
         id: args[2] as string,
@@ -566,6 +573,7 @@ vi.mock('@handover/core', async (original) => ({
   createGitClient: () => ({
     getFile,
     getHead,
+    contentFiles,
     publish,
     getCommit: async (sha: string) => ({
       sha,
@@ -636,6 +644,7 @@ vi.mock('@handover/core', async (original) => ({
   findMedia,
   mediaList,
   draftFiles,
+  deleteMedia,
   setMediaDetails,
   confirmUpload,
   lastCommit: async () => lastCommitRow,
@@ -662,7 +671,10 @@ afterEach(() => {
   draftFiles.mockClear();
   draftFiles.mockResolvedValue([]);
   setMediaDetails.mockClear();
+  deleteMedia.mockClear();
   confirmUpload.mockClear();
+  contentFiles.mockClear();
+  contentFiles.mockResolvedValue([]);
   commitBuild.mockClear();
   clearPublished.mockClear();
   revertCommit.mockClear();
@@ -712,10 +724,11 @@ const post = (path: string, body: string) =>
   ctx(path, new Request(`https://x/admin/api/${path}`, { method: 'POST', body }));
 const put = (path: string, body: string) =>
   ctx(path, new Request(`https://x/admin/api/${path}`, { method: 'PUT', body }));
-const patch = (path: string, body: unknown) =>
+const patch = (path: string, body: unknown, locals: Record<string, unknown> = {}) =>
   ctx(
     path,
     new Request(`https://x/admin/api/${path}`, { method: 'PATCH', body: JSON.stringify(body) }),
+    locals,
   );
 
 test('ping returns the collection names and who is signed in', async () => {
@@ -4945,10 +4958,150 @@ test('tags and a default alt are written to the row, and the empty alt is no def
   });
 });
 
-test('a write with neither tags nor an alt is refused, and an unknown asset is a 404', async () => {
-  expect((await PATCH(patch(`media/${PHOTO}`, { archived: true }))).status).toBe(400);
+test('a write with nothing the row holds is refused, and an unknown asset is a 404', async () => {
+  expect((await PATCH(patch(`media/${PHOTO}`, { focal: 0.5 }))).status).toBe(400);
   setMediaDetails.mockResolvedValueOnce(undefined);
   expect((await PATCH(patch(`media/${PHOTO}`, { tags: ['x'] }))).status).toBe(404);
+});
+
+// Archiving is the answer to "get rid of it" and is never gated on usage: the bytes stay, every
+// page that names them keeps working, and the picker stops offering it.
+test('archiving is a write to the row, and unarchiving is the same write back', async () => {
+  const res = await PATCH(patch(`media/${PHOTO}`, { archived: true }, { handover: owner }));
+  expect(res.status).toBe(200);
+  expect(setMediaDetails).toHaveBeenCalledWith('default', expect.anything(), PHOTO, {
+    tags: undefined,
+    alt: undefined,
+    archived: true,
+  });
+  expect(logged.at(-1)).toMatchObject({ kind: 'media-archive', subject: PHOTO, userId: 'u1' });
+  await PATCH(patch(`media/${PHOTO}`, { archived: false }));
+  expect(setMediaDetails).toHaveBeenLastCalledWith('default', expect.anything(), PHOTO, {
+    tags: undefined,
+    alt: undefined,
+    archived: false,
+  });
+});
+
+test('renaming the tags is not an archive line in the log', async () => {
+  await PATCH(patch(`media/${PHOTO}`, { tags: ['x'] }));
+  expect(logged.filter((row) => row.kind === 'media-archive')).toEqual([]);
+});
+
+const deleteAsset = (id: string) =>
+  DELETE(
+    ctx(`media/${id}`, new Request(`https://x/admin/api/media/${id}`, { method: 'DELETE' }), {
+      handover: owner,
+    }),
+  );
+
+// The gate is not the badge. The badge is the scan the last build made, and a commit pushed
+// since is not in it — so the tree is read at delete time, and the file that names the picture
+// is the one that stops it going.
+test('a picture a file in the repository names cannot be deleted', async () => {
+  findMedia.mockResolvedValueOnce({
+    id: PHOTO,
+    r2Key: `media/${PHOTO}.webp`,
+    filename: 'front.jpg',
+  });
+  contentFiles.mockResolvedValueOnce([
+    {
+      path: 'src/content/pages/en/about.yaml',
+      contents: `title: "About"\nphoto:\n  src: "media/${PHOTO}.webp"\n`,
+    },
+  ]);
+
+  const res = await deleteAsset(PHOTO);
+
+  expect(res.status).toBe(409);
+  expect(await res.json()).toMatchObject({
+    error: expect.stringContaining('used in 1 place'),
+    uses: ['pages/about'],
+  });
+  expect(deleteMedia).not.toHaveBeenCalled();
+});
+
+// A picture an editor dropped into a draft this morning is used, though no commit says so yet.
+test('a picture only a draft names cannot be deleted either', async () => {
+  findMedia.mockResolvedValueOnce({ id: PHOTO, r2Key: `media/${PHOTO}.webp` });
+  contentFiles.mockResolvedValueOnce([]);
+  draftFiles.mockResolvedValueOnce([
+    { path: 'src/content/pages/en/home.yaml', contents: `image: "media/${PHOTO}.webp"\n` },
+  ]);
+
+  expect((await deleteAsset(PHOTO)).status).toBe(409);
+  expect(deleteMedia).not.toHaveBeenCalled();
+});
+
+// The commonest refusal, and the one that must not read as "you did not remove it": the client
+// took the picture out this morning, the badge agrees, and the bytes are still what the live
+// page is asking for until that listing is published.
+test('a picture only the published site still uses says so in those words', async () => {
+  findMedia.mockResolvedValueOnce({ id: PHOTO, r2Key: `media/${PHOTO}.webp` });
+  contentFiles.mockResolvedValueOnce([
+    {
+      path: 'src/content/pages/en/about.yaml',
+      contents: `title: "About"\nphoto:\n  src: "media/${PHOTO}.webp"\n`,
+    },
+  ]);
+  // The same file, with the picture taken out of it and not yet published.
+  draftFiles.mockResolvedValueOnce([
+    { path: 'src/content/pages/en/about.yaml', contents: 'title: "About"\n' },
+  ]);
+
+  const res = await deleteAsset(PHOTO);
+
+  expect(res.status).toBe(409);
+  expect(await res.json()).toMatchObject({
+    error: expect.stringContaining('The published site still uses this in 1 place'),
+    uses: ['pages/about'],
+  });
+  expect(deleteMedia).not.toHaveBeenCalled();
+});
+
+test('a picture nothing names is deleted, bytes and row, and says so in the log', async () => {
+  findMedia.mockResolvedValueOnce({
+    id: PHOTO,
+    r2Key: `media/${PHOTO}.webp`,
+    filename: 'front.jpg',
+  });
+  contentFiles.mockResolvedValueOnce([
+    { path: 'src/content/pages/en/about.yaml', contents: 'title: "About"\n' },
+  ]);
+
+  const res = await deleteAsset(PHOTO);
+
+  expect(res.status).toBe(200);
+  expect(deleteMedia).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.objectContaining({ bucket: 'site-media' }),
+    expect.objectContaining({ id: PHOTO, r2Key: `media/${PHOTO}.webp` }),
+  );
+  expect(logged.at(-1)).toMatchObject({
+    kind: 'media-delete',
+    subject: PHOTO,
+    detail: { name: 'front.jpg' },
+  });
+});
+
+// The one thing a gate must never do is read "I could not check" as "nothing uses it".
+test('a repository that cannot be read refuses the delete rather than allowing it', async () => {
+  findMedia.mockResolvedValueOnce({ id: PHOTO, r2Key: `media/${PHOTO}.webp` });
+  contentFiles.mockImplementationOnce(async () => {
+    const { RepoUnreachableError } = await import('@handover/core');
+    throw new RepoUnreachableError('The GitHub App cannot see acme/site.');
+  });
+
+  const res = await deleteAsset(PHOTO);
+
+  expect(res.status).toBe(503);
+  expect(deleteMedia).not.toHaveBeenCalled();
+});
+
+test('an asset the site does not have is a 404, and nothing is read to answer it', async () => {
+  expect((await deleteAsset(PHOTO)).status).toBe(404);
+  expect(contentFiles).not.toHaveBeenCalled();
 });
 
 test('a site that has not been told where its bucket is names all four values', async () => {

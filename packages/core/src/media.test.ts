@@ -6,15 +6,18 @@ import {
   checkStore,
   confirmUpload,
   cropWidth,
+  deleteMedia,
   findMedia,
   MAX_UPLOAD_BYTES,
   mediaKey,
   mediaList,
   mediaUsage,
   mediaUsesFrom,
+  namedBy,
   presignUpload,
   type R2Store,
   reconcileMedia,
+  setMediaDetails,
   tooSmall,
   type Upload,
   UploadRefusedError,
@@ -535,4 +538,74 @@ test('a bucket that stores something other than what was written says so', async
   );
   // The object still goes: a check that leaves its own litter behind is worse than no check.
   expect(r2.calls.map((c) => c.method)).toEqual(['PUT', 'GET', 'DELETE']);
+});
+
+test('the gate counts a file that names the key, whichever file it is', () => {
+  const files = [
+    { path: 'src/content/listings/en/mill-house.yaml', contents: yaml() },
+    { path: 'src/content/listings/de/mill-house.yaml', contents: yaml() },
+    { path: 'src/content/pages/en/home.yaml', contents: yaml(BROCHURE, BROCHURE) },
+    // Neither names an entry, and a starter that names a picture still names it.
+    { path: 'src/content/_templates/listings/holiday-let.yaml', contents: yaml() },
+  ];
+  expect(namedBy(PHOTO, files)).toEqual([
+    'listings/mill-house',
+    'src/content/_templates/listings/holiday-let.yaml',
+  ]);
+  expect(namedBy(BROCHURE, files)).toEqual(['pages/home']);
+  expect(namedBy(`media/${'9'.repeat(64)}.webp`, files)).toEqual([]);
+});
+
+// The badge lays drafts *over* the files, because it is about what the entry says now. The gate
+// adds them instead: a picture pulled out of a listing this morning is on the published site
+// until that listing is published, and deleting it would break the page that is live.
+test('the gate adds the drafts to the tree rather than laying them over it', () => {
+  const tree = [{ path: 'src/content/listings/en/mill-house.yaml', contents: yaml() }];
+  const dropped = { path: 'src/content/listings/en/mill-house.yaml', contents: 'title: "Mill"\n' };
+  const took = { path: 'src/content/pages/en/home.yaml', contents: yaml(BROCHURE, BROCHURE) };
+  expect(namedBy(PHOTO, [...tree, dropped])).toEqual(['listings/mill-house']);
+  expect(namedBy(BROCHURE, [...tree, took])).toEqual(['pages/home']);
+});
+
+test('archiving is a flag on the row, and unarchiving takes it off again', async () => {
+  const db = openDb('archive', binding);
+  const id = 'e5'.repeat(32);
+  await db.insert(tables.media).values({
+    id,
+    siteId: 'archive',
+    r2Key: `media/${id}.webp`,
+    mime: 'image/webp',
+    createdAt: 1,
+  });
+
+  expect((await setMediaDetails('archive', db, id, { archived: true }))?.archived).toBe(1);
+  expect((await setMediaDetails('archive', db, id, { archived: false }))?.archived).toBe(0);
+  // A change to the words is not a change to the flag.
+  await setMediaDetails('archive', db, id, { archived: true });
+  expect((await setMediaDetails('archive', db, id, { alt: 'A mill' }))?.archived).toBe(1);
+});
+
+// The row goes first. An object left in the bucket with no row is what the hourly job exists
+// for and comes back as *Recovered* within the hour; a row pointing at bytes that are gone is
+// a broken picture nothing ever repairs.
+test('a delete takes the row before the object, and both are gone', async () => {
+  const db = openDb('delete', binding);
+  const id = 'f6'.repeat(32);
+  const key = `media/${id}.webp`;
+  const order: string[] = [];
+  await db
+    .insert(tables.media)
+    .values({ id, siteId: 'delete', r2Key: key, mime: 'image/webp', createdAt: 1 });
+  const objects = { [key]: { bytes: 8, mime: 'image/webp' } };
+  const r2 = bucket(objects);
+  const fetch = (async (input: Request) => {
+    order.push(`r2 ${input.method}`);
+    return r2.fetch(input);
+  }) as unknown as typeof globalThis.fetch;
+
+  await deleteMedia('delete', db, store, { id, r2Key: key }, { fetch });
+
+  expect(await findMedia('delete', db, id)).toBeUndefined();
+  expect(objects[key]).toBeUndefined();
+  expect(order).toEqual(['r2 DELETE']);
 });
