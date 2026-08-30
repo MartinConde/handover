@@ -172,38 +172,29 @@ test('an invite the mailer refused sends the owner to Settings', async () => {
   expect(failure.querySelector('a')?.getAttribute('href')).toBe('/admin/settings');
 });
 
-test('the only owner is offered neither a role change nor a removal, and is told why', async () => {
+test('the viewer has no actions menu on their own row, whether or not there is another owner', async () => {
   server([
     row('u1', 'martin@example.com', { role: 'owner' }),
     row('u2', 'anna@example.com', { role: 'editor' }),
   ]);
   const root = await show();
 
-  const menu = actions(root, 'martin@example.com');
-
-  expect(text(menu.querySelector('.menu-note') as HTMLElement)).toBe(
-    'There must be at least one owner.',
-  );
-  expect(button(menu, 'Change role').getAttribute('aria-disabled')).toBe('true');
-  expect(button(menu, 'Remove').getAttribute('aria-disabled')).toBe('true');
+  // Nothing in it would be allowed: not a role change, not a removal. The server refuses both.
+  expect(root.querySelector('button[aria-label="Actions for martin@example.com"]')).toBe(null);
+  expect(root.querySelector('button[aria-label="Actions for anna@example.com"]')).not.toBe(null);
 });
 
-test('an owner beside another owner is offered neither on their own row, and both on the other', async () => {
+test('an owner beside another owner is offered both on the other row', async () => {
   server([
     row('u1', 'martin@example.com', { role: 'owner' }),
     row('u2', 'anna@example.com', { role: 'owner' }),
   ]);
   const root = await show();
 
-  const mine = actions(root, 'martin@example.com');
-  expect(text(mine.querySelector('.menu-note') as HTMLElement)).toBe(
-    'You cannot change your own access.',
-  );
-  expect(button(mine, 'Change role').getAttribute('aria-disabled')).toBe('true');
-  expect(button(mine, 'Remove').getAttribute('aria-disabled')).toBe('true');
-
+  expect(root.querySelector('button[aria-label="Actions for martin@example.com"]')).toBe(null);
   const theirs = actions(root, 'anna@example.com');
   expect(theirs.querySelector('.menu-note')).toBe(null);
+  expect(button(theirs, 'Change role').getAttribute('aria-disabled')).toBe(null);
   expect(button(theirs, 'Remove').getAttribute('aria-disabled')).toBe(null);
 });
 

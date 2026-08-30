@@ -27,8 +27,8 @@ server as well; a screen that only filters the nav is not protected.
 ## Members — `/admin/members`
 
 Owner-only, and the only place an account is made or unmade. Every route behind it asserts the
-role on the server; the two rules the screen greys out are refused there as well, because a
-disabled menu item is a drawing of a rule and not the rule.
+role on the server. Your own row has no actions menu, because nothing in it would be allowed —
+and the server refuses both anyway, since a missing menu is a drawing of a rule and not the rule.
 
 ### Inviting somebody
 

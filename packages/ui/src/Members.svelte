@@ -39,9 +39,6 @@ $effect(() => {
   opening?.focus();
 });
 
-const owners = $derived(members.filter((m) => m.role === 'owner').length);
-/** The rule the greyed-out item draws. The route applies it; this only says why. */
-const lastOwner = (member: Member) => member.role === 'owner' && owners < 2;
 const initials = (member: Member) =>
   (member.name || member.email)
     .split(/[\s@.]+/)
@@ -240,50 +237,36 @@ async function remove() {
             {member.method ? METHODS[member.method] : '—'}
           </div>
           <div class="td menu-cell" role="cell">
-            <!-- A disclosure, not a menu: `role="menu"` promises arrow keys, typeahead and a
-                 roving tabindex, and three buttons in DOM order need none of it. Escape and a
-                 click outside close it; Tab walks the items as it would anywhere. -->
-            <div class="row-menu">
-              <button
-                class="btn btn-ghost btn-sm"
-                type="button"
-                aria-expanded={open === member.id}
-                aria-label="Actions for {member.name || member.email}"
-                onclick={() => (open = open === member.id ? '' : member.id)}>⋯</button
-              >
-              {#if open === member.id}
-                <div class="menu">
-                  {#if lastOwner(member)}
-                    <p class="menu-note">There must be at least one owner.</p>
-                  {:else if member.id === user.id}
-                    <p class="menu-note">You cannot change your own access.</p>
-                  {/if}
-                  <button
-                    type="button"
-                    class:is-disabled={lastOwner(member) || member.id === user.id}
-                    aria-disabled={lastOwner(member) || member.id === user.id || undefined}
-                    onclick={() =>
-                      !lastOwner(member) && member.id !== user.id && start('role', member)}
-                    >Change role</button
-                  >
-                  {#if member.pending}
-                    <button type="button" disabled={busy} onclick={() => resend(member)}>
-                      Resend invite
+            <!-- Your own row has no menu: the server refuses both a self role change and a
+                 self removal, and the last owner is always the viewer. A disclosure, not a
+                 menu: `role="menu"` promises arrow keys, typeahead and a roving tabindex, and
+                 three buttons in DOM order need none of it. Escape and a click outside close
+                 it; Tab walks the items as it would anywhere. -->
+            {#if member.id !== user.id}
+              <div class="row-menu">
+                <button
+                  class="btn btn-ghost btn-sm"
+                  type="button"
+                  aria-expanded={open === member.id}
+                  aria-label="Actions for {member.name || member.email}"
+                  onclick={() => (open = open === member.id ? '' : member.id)}>⋯</button
+                >
+                {#if open === member.id}
+                  <div class="menu">
+                    <button type="button" onclick={() => start('role', member)}>Change role</button>
+                    {#if member.pending}
+                      <button type="button" disabled={busy} onclick={() => resend(member)}>
+                        Resend invite
+                      </button>
+                    {/if}
+                    <hr />
+                    <button type="button" onclick={() => start('remove', member)}>
+                      {member.pending ? 'Revoke invite' : 'Remove'}
                     </button>
-                  {/if}
-                  <hr />
-                  <button
-                    type="button"
-                    class:is-disabled={lastOwner(member) || member.id === user.id}
-                    aria-disabled={lastOwner(member) || member.id === user.id || undefined}
-                    onclick={() =>
-                      !lastOwner(member) && member.id !== user.id && start('remove', member)}
-                  >
-                    {member.pending ? 'Revoke invite' : 'Remove'}
-                  </button>
-                </div>
-              {/if}
-            </div>
+                  </div>
+                {/if}
+              </div>
+            {/if}
           </div>
         </div>
       {/each}

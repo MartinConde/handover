@@ -6,7 +6,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **You can no longer change your own role.** An owner beside another owner could demote
   themselves and be locked out of Members and Settings; the route now refuses it the way it
-  already refused self-removal, and the row's menu says so ([Roles](docs/roles.md)).
+  already refused self-removal. Your own row has no ⋯ menu, since nothing in it would be
+  allowed ([Roles](docs/roles.md)).
 - **Moving between admin screens no longer reloads the page.** Sidebar links, opening an
   entry and the list's New / Duplicate / Rename swap the screen in place; the address bar,
   back and forward still follow.
