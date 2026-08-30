@@ -1,6 +1,7 @@
 import { diffEntry, type Form } from '@handover/core';
 import { mount } from 'svelte';
 import Diff from './Diff.svelte';
+import Fields from './Fields.svelte';
 import PagePicker, { type PickEntry } from './PagePicker.svelte';
 import './tokens.css';
 
@@ -235,6 +236,35 @@ for (const { name, props } of pickers) {
       onpick: (entry: PickEntry) => console.log('picked', entry.path),
       onclose: () => {},
       ...props,
+    },
+  });
+}
+
+// The form itself, first: what a drag does to rows and blocks is only visible with a layout.
+{
+  const heading = document.createElement('h2');
+  heading.textContent = 'Fields';
+  const host = document.createElement('div');
+  root.prepend(heading, host);
+  let data = $state({
+    ...before,
+    viewings: [
+      { _id: 'v1', note: 'Sat 10:00' },
+      { _id: 'v2', note: 'Sun 14:00' },
+      { _id: 'v3', note: 'Mon 09:00' },
+    ],
+  });
+  mount(Fields, {
+    target: host,
+    props: {
+      fields: everything.fields,
+      blocks: everything.blocks,
+      get root() {
+        return data;
+      },
+      set root(v) {
+        data = v;
+      },
     },
   });
 }
