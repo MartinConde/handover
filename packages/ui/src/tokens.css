@@ -661,9 +661,10 @@ a.btn { text-decoration: none; }
 .picker { display: grid; gap: var(--s-2); padding: var(--s-2); border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); }
 .picker > .actions { display: flex; justify-content: flex-end; gap: var(--s-2); }
 .picker-list { display: grid; gap: 2px; max-height: 190px; overflow: auto; }
+.picker-list [role='group'] { display: grid; gap: 2px; }
 .picker-list button { display: flex; align-items: center; gap: var(--s-2); min-width: 0; min-height: 34px; padding: 0 var(--s-3); border: 0; border-radius: var(--radius-sm); background: transparent; text-align: left; color: var(--ink); cursor: pointer; }
 .picker-list button:hover { background: var(--surface-2); }
-.picker-list button[aria-current="true"] { background: var(--accent-soft); }
+.picker-list button[aria-selected="true"] { background: var(--accent-soft); }
 .picker-list button[aria-disabled="true"] { color: var(--ink-3); cursor: default; }
 .picker-list .path { margin-left: auto; white-space: nowrap; font-size: var(--text-xs); color: var(--ink-3); font-family: var(--font-mono); }
 .picker-list .chips { margin-left: var(--s-1); }
@@ -938,6 +939,7 @@ a.btn { text-decoration: none; }
 .nav-add .picker-list button { flex-wrap: wrap; padding: var(--s-2) var(--s-3); }
 .nav-add .picker-list .path { flex-basis: 100%; margin-left: 0; }
 .nav-add .hint { font-size: var(--text-xs); color: var(--ink-2); }
+.nav-scrim { display: none; }
 .nav-main { display: grid; gap: var(--s-4); align-content: start; min-width: 0; }
 .nav-main .side-title { font-size: var(--text-lg); font-weight: 600; letter-spacing: var(--tracking-tight); }
 .nav-main .form { max-width: 520px; }
@@ -1071,6 +1073,9 @@ a.btn { text-decoration: none; }
 .field .label-row label { margin-right: auto; }
 .field .meter { font-size: var(--text-xs); color: var(--ink-2); text-align: right; }
 .field .meter.is-over { color: var(--danger-ink); font-weight: 500; }
+.field .gauge { height: 4px; border-radius: 2px; background: var(--badge-bg); overflow: hidden; }
+.field .gauge > span { display: block; height: 100%; background: var(--success-ink); }
+.field .gauge.is-long > span { background: var(--warn-ink); }
 .field .error::before { content: "!"; display: inline-grid; place-items: center; width: 14px; height: 14px; margin-right: var(--s-1); border-radius: 50%; background: var(--danger-ink); color: var(--on-danger); font-size: 10px; line-height: 1; }
 .field.is-invalid .picker { border-color: var(--danger); }
 .input.is-focus { border-color: var(--accent); outline: 3px solid var(--accent-soft); outline-offset: 0; }
@@ -1179,13 +1184,20 @@ input[type="date"].input { padding-right: var(--s-3); }
 .ratio-preview.is-1x1 { aspect-ratio: 1; }
 .ratio-preview.is-social { aspect-ratio: 1200 / 630; }
 /* SEO panel: the page as a search result and as a shared card. */
-.previews { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-5); align-items: start; }
+/* minmax(0), or the search preview's one-word domain sets the track's floor and the phone
+   scrolls sideways: a bare 1fr cannot go below its content's min-content. */
+.previews { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-5); align-items: start; }
 .preview-box { display: grid; gap: var(--s-2); }
 .preview-box > .variant-title { margin: 0; }
+/* min-width: 0, or the two boxes' automatic minimum props the domain's one-word width up
+   through the tracks and the phone scrolls sideways. */
+.snippet, .social-card { min-width: 0; }
 .snippet { padding: var(--s-4); border-radius: var(--radius-lg); background: var(--surface-2); font-family: Arial, sans-serif; }
 .snippet .url { font-size: var(--text-sm); color: var(--ink-2); display: flex; align-items: center; gap: var(--s-2); min-width: 0; }
 .snippet .url .fav { flex: none; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); display: inline-grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--on-accent); }
-.snippet .url .crumbs { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* min-width breaks the crumbs' own length out of the min-content chain: without it a long
+   address widens every grid track above it and the phone scrolls sideways. */
+.snippet .url .crumbs { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .snippet .title { font-size: 18px; color: var(--info-ink); margin-top: var(--s-1); line-height: 1.3; }
 .snippet .desc { font-size: var(--text-md); color: var(--ink-2); margin-top: var(--s-1); }
 .social-card { border-radius: var(--radius-lg); overflow: hidden; background: var(--surface-2); max-width: 420px; }
@@ -1365,6 +1377,7 @@ input[type="date"].input { padding-right: var(--s-3); }
   .nav-add { display: none; }
   .nav-add.is-open { display: grid; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; max-height: 85vh; overflow: auto; border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: var(--surface); box-shadow: var(--shadow-toast); }
   .nav-add .nav-add-close { display: inline-flex; justify-self: end; }
+  .nav-scrim { display: block; position: fixed; inset: 0; z-index: 29; background: rgba(23, 26, 33, 0.38); }
   /* Narrow: the entry list's card rule keys off `.table`, which `.cols-7` outranks, so the seven
      columns have to be collapsed by name. From and To lead the card; everything else is a labelled
      line under them, and the actions sit top right where the row menu was. */
@@ -1377,7 +1390,7 @@ input[type="date"].input { padding-right: var(--s-3); }
   :root .table.cols-7 .row .td[data-label]::before { content: attr(data-label) " "; flex: none; color: var(--ink-3); font-family: var(--font-sans); font-size: var(--text-xs); }
   :root .table.cols-7 .row .td.path { flex-wrap: wrap; }
   :root .table.cols-7 .row-menu { display: flex; gap: var(--s-1); }
-  .previews { grid-template-columns: 1fr; }
+  .previews { grid-template-columns: minmax(0, 1fr); }
   /* A block header three levels down has less room than its own words; let it wrap. */
   .block-card > header { flex-wrap: wrap; }
 }

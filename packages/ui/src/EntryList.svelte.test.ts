@@ -106,6 +106,39 @@ test('the list is one row per entry, titled and linked by file name', async () =
   );
 });
 
+// The heading's number is the collection's size everywhere else in the admin, so a filter
+// narrows it to "1 of 2" rather than replacing it: what the list shows, of what there is.
+test('under the Status filter the heading counts what is shown, of the total', async () => {
+  api([
+    ...ENTRIES,
+    {
+      id: 'old-barn',
+      locales: {
+        en: {
+          title: 'The Old Barn',
+          path: 'src/content/listings/en/old-barn.yaml',
+          status: 'hidden',
+        },
+      },
+    },
+  ]);
+  const root = show();
+  await tick();
+  expect(q(root, '.list-toolbar .count')?.textContent).toBe('3');
+
+  const filter = q<HTMLSelectElement>(root, '#list-status');
+  if (!filter) throw new Error('no filter');
+  filter.value = 'hidden';
+  filter.dispatchEvent(new Event('change'));
+  flushSync();
+  expect(q(root, '.list-toolbar .count')?.textContent).toBe('1 of 3');
+
+  filter.value = 'all';
+  filter.dispatchEvent(new Event('change'));
+  flushSync();
+  expect(q(root, '.list-toolbar .count')?.textContent).toBe('3');
+});
+
 test('a collection with no entries offers the one action that makes sense', async () => {
   api([]);
   const root = show();

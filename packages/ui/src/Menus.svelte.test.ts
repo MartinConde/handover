@@ -419,6 +419,18 @@ test('Add to menu opens the add pane as a sheet, focus lands in it, and Escape g
   expect(document.activeElement).toBe(open);
 });
 
+test('a tap outside the sheet lands on the scrim, which closes it', async () => {
+  show(three());
+  q<HTMLButtonElement>('.nav-add-open').click();
+  await loaded();
+  expect(q('#f-menus-add').classList.contains('is-open')).toBe(true);
+
+  q<HTMLElement>('.nav-scrim').click();
+  flushSync();
+  expect(q('#f-menus-add').classList.contains('is-open')).toBe(false);
+  expect(document.activeElement).toBe(q('.nav-add-open'));
+});
+
 test('Done closes the sheet and gives focus back to the button that opened it', async () => {
   show(three());
   q<HTMLButtonElement>('.nav-add-open').click();

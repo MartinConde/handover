@@ -480,6 +480,10 @@ function walkTabs(event: KeyboardEvent) {
     {/if}
     {#if !translating}
       <button class="btn btn-primary nav-add-open" type="button" aria-expanded={adding} aria-controls="{id}-add" bind:this={addButton} onclick={openAdd}>Add to menu</button>
+      {#if adding}
+        <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -- Escape is the keyboard's way out; the scrim is the pointer's -->
+        <div class="nav-scrim" aria-hidden="true" onclick={closeAdd}></div>
+      {/if}
       <div class="nav-add" class:is-open={adding} id="{id}-add">
         <h2 class="side-title" id="{id}-add-h" tabindex="-1">Add to menu</h2>
         <PagePicker id="{id}-pick" label="pages and entries" labelId="{id}-add-h" onpick={addEntry} />

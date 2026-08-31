@@ -504,13 +504,15 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
 {#snippet seoWords(id: string, at: readonly string[], key: string, label: string, limit: number, placeholder: string, hint: string)}
   {@const value = str([...at, key])}
   {@const described = [`${id}.${key}-meter`, hint ? `${id}.${key}-hint` : ''].filter(Boolean).join(' ')}
+  {@const over = value.trim().length > limit}
   <div class="field">
-    <div class="label-row"><label for="{id}.{key}">{label}</label><span class="mode" id="{id}.{key}-meter">{seoMeter(value, limit)}</span></div>
+    <div class="label-row"><label for="{id}.{key}">{label}</label><span class="meter" class:is-over={over} id="{id}.{key}-meter">{seoMeter(value, limit)}</span></div>
     {#if key === 'description'}
       <textarea class="input textarea" id="{id}.{key}" {placeholder} aria-describedby={described} {value} oninput={(e) => seoWrite(at, key, e.currentTarget.value || undefined)}></textarea>
     {:else}
       <input class="input" id="{id}.{key}" type="text" {placeholder} aria-describedby={described} {value} oninput={(e) => seoWrite(at, key, e.currentTarget.value || undefined)} />
     {/if}
+    <div class="gauge" class:is-long={over} aria-hidden="true"><span style="width: {Math.min(100, Math.round((value.trim().length / limit) * 100))}%"></span></div>
     {#if hint}<p class="hint" id="{id}.{key}-hint">{hint}</p>{/if}
   </div>
 {/snippet}

@@ -129,18 +129,19 @@ function step(e: KeyboardEvent) {
 <div class="picker" role="group" aria-labelledby={labelId} onkeydown={step}>
   <label class="visually-hidden" for="{id}-q">Search {label}</label>
   <input class="input" id="{id}-q" type="search" placeholder="Search pages and entries" bind:value={query} bind:this={box} />
-  <div class="picker-list" bind:this={list}>
+  <div class="picker-list" bind:this={list} role="listbox" aria-label={label}>
     {#each groups as group (group.name)}
       <!-- The collection's name is what the rows under it have in common, not a step in the
            page's outline: a heading here reads as one level below whatever opened the picker,
            and the picker opens under a different level on every screen. -->
-      <p class="group-name">{group.name}</p>
+      <div role="group" aria-labelledby="{id}-g-{group.name}">
+      <p class="group-name" id="{id}-g-{group.name}" role="presentation">{group.name}</p>
       {#each group.rows as row (row.path)}
         {@const no = why(row)}
         {@const says = no ?? note(row)}
         <!-- Refused with aria-disabled rather than disabled: a disabled button takes no focus,
              so a keyboard would walk past the row and never hear the reason. -->
-        <button type="button" aria-current={row.path === chosen ? 'true' : undefined} aria-disabled={no ? 'true' : undefined} aria-describedby={says ? `${id}-why-${row.path}` : undefined} onclick={() => !no && onpick(row)}>
+        <button type="button" role="option" aria-selected={row.path === chosen ? 'true' : 'false'} aria-disabled={no ? 'true' : undefined} aria-describedby={says ? `${id}-why-${row.path}` : undefined} onclick={() => !no && onpick(row)}>
           <span>{row.title}</span>
           <span class="chips">
             {#each all.locales as of (of)}
@@ -151,15 +152,19 @@ function step(e: KeyboardEvent) {
         </button>
         {#if says}<p class="why" id="{id}-why-{row.path}">{says}</p>{/if}
       {/each}
+      </div>
     {:else}
       <p class="hint">{query ? `Nothing here matches “${query}”` : 'Nothing to choose from yet'}</p>
     {/each}
   </div>
   {#if onurl}
-    <div class="field">
-      <div class="label-row"><label for="{id}-url">Or a web address</label></div>
-      <input class="input" id="{id}-url" type="url" placeholder="https://example.com" bind:value={typed} aria-invalid={refused ? 'true' : undefined} aria-describedby={refused ? `${id}-url-err` : undefined} />
-      {#if refused}<p class="error" id="{id}-url-err">{refused}: links are not allowed</p>{/if}
+    <div class="custom-link">
+      <h3 class="side-title">Custom link</h3>
+      <div class="field">
+        <div class="label-row"><label for="{id}-url">Address</label></div>
+        <input class="input" id="{id}-url" type="url" placeholder="/contact or https://…" bind:value={typed} aria-invalid={refused ? 'true' : undefined} aria-describedby={refused ? `${id}-url-err` : undefined} />
+        {#if refused}<p class="error" id="{id}-url-err">{refused}: links are not allowed</p>{/if}
+      </div>
     </div>
   {/if}
   {#if onclose || onurl}

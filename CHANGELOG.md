@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Small admin fixes.** The entry list's heading reads *2 of 14* under the Status filter
+  instead of keeping the collection's total; the navigation builder's phone sheet has a scrim,
+  so a tap outside closes it; the SEO panel draws the mockup's slim gauge under each counted
+  box; the page picker's list is a `listbox` of options with the chosen row marked selected,
+  and its typed-address box is a *Custom link* form with an *Address* label; a long address in
+  the search preview no longer scrolls the SEO tab sideways on a phone.
 - **A check found in several languages opens the default language.** The pre-publish drawer's
   *Go to field* on a merged line (DE · EN) used to open whichever file the checks listed first;
   it now prefers the language the entry is written in. `GET /admin/api/drafts` carries

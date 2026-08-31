@@ -1022,6 +1022,22 @@ test('seo: the meters count what is typed and say when it will be cut off', () =
   );
 });
 
+// The bar under the box is the meter drawn: how much of the room is used, in the warning
+// colour once it is over — the same state the words beside the label carry.
+test('seo: the gauge fills with what is typed and marks over-length', () => {
+  show([seoField], { _version: 1 });
+  type('input#f-seo\\.title', 'x'.repeat(30));
+  const gauge = q('.field .gauge');
+  expect(gauge.querySelector('span')?.style.width).toBe('50%');
+  expect(gauge.classList.contains('is-long')).toBe(false);
+  expect(q('#f-seo\\.title-meter').classList.contains('is-over')).toBe(false);
+
+  type('input#f-seo\\.title', 'x'.repeat(61));
+  expect(gauge.querySelector('span')?.style.width).toBe('100%');
+  expect(gauge.classList.contains('is-long')).toBe(true);
+  expect(q('#f-seo\\.title-meter').classList.contains('is-over')).toBe(true);
+});
+
 // The panel fills a hole rather than appending: a client who writes the canonical first and the
 // search title last must not leave a file whose keys are in the order they were typed in.
 test('seo: a panel filled out of order writes the format’s order', () => {

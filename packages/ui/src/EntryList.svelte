@@ -252,7 +252,7 @@ async function done() {
 
 <main class="main">
   <div class="list-toolbar">
-    <h1>{capitalise(collection)} <span class="count">{entries.length}</span></h1>
+    <h1>{capitalise(collection)} <span class="count">{showing === 'all' ? entries.length : `${shown.length} of ${entries.length}`}</span></h1>
     <span class="spacer"></span>
     <div class="filters">
       <label class="visually-hidden" for="list-status">Status</label>

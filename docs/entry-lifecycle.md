@@ -18,7 +18,8 @@ use `filterLive` (see [Rendering content](rendering.md#hidden-entries)).
 Hiding is a status selector in the entry header — never a field in the form — and a
 **Hide** action on each row of the entry list, where checking several rows hides them
 together. It is a normal draft-then-publish edit: one commit, like any other. The list's
-**Status** filter shows the hidden rows on their own, or only the live ones.
+**Status** filter shows the hidden rows on their own, or only the live ones; the heading
+then counts what is shown, of the total (*2 of 14*).
 
 Because the page has been at its address for months, hiding asks **"Where should visitors
 to this page go now?"** before it writes anything: the collection's overview, another page

@@ -35,7 +35,7 @@ let app: ReturnType<typeof mount>;
 let picked: PickEntry | undefined;
 let closed = false;
 
-const show = async (entries: PickEntry[] = OFFERED) => {
+const show = async (entries: PickEntry[] = OFFERED, extra: Record<string, unknown> = {}) => {
   picked = undefined;
   closed = false;
   vi.stubGlobal(
@@ -54,6 +54,7 @@ const show = async (entries: PickEntry[] = OFFERED) => {
       onclose: () => {
         closed = true;
       },
+      ...extra,
     },
   });
   await new Promise((r) => setTimeout(r));
@@ -145,4 +146,25 @@ test('a hidden entry is offered with the reason it is a poor answer', async () =
   row.click();
   flushSync();
   expect(picked?.path).toBe('listings/mill-house');
+});
+
+// The mockup's roles, which the shipped component never had: the rows are options of one
+// listbox, grouped under the collection names, and the chosen one says so.
+test('the list is a listbox of options, and the chosen row is the selected one', async () => {
+  await show(OFFERED, { chosen: 'pages/contact' });
+
+  const list = q('.picker-list');
+  expect(list.getAttribute('role')).toBe('listbox');
+  expect(list.getAttribute('aria-label')).toBe('pages and entries');
+  expect(list.querySelectorAll('[role="group"]')).toHaveLength(2);
+  expect(rows().map((b) => b.getAttribute('role'))).toEqual(['option', 'option', 'option']);
+  expect(rows().map((b) => b.getAttribute('aria-selected'))).toEqual(['true', 'false', 'false']);
+});
+
+test('a typed address is its own Custom link form, not an afterthought under the list', async () => {
+  await show(OFFERED, { onurl: () => {} });
+
+  expect(q('.picker .custom-link .side-title').textContent).toBe('Custom link');
+  expect(q<HTMLLabelElement>('label[for="p-url"]').textContent).toBe('Address');
+  expect(q<HTMLInputElement>('#p-url').placeholder).toBe('/contact or https://…');
 });

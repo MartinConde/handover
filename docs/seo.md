@@ -117,8 +117,8 @@ Two things worth knowing:
 ## In the admin
 
 The `seo` field is a tab of its own beside Content and History, and it draws a panel rather
-than a row of boxes: a search title and a description, each with a line saying how much of it
-a search engine will show; the social image, under a fixed 1.91:1 preset at 1200 px, which is
+than a row of boxes: a search title and a description, each with a line and a slim bar
+saying how much of it a search engine will show; the social image, under a fixed 1.91:1 preset at 1200 px, which is
 the 1200 × 630 every network asks for; a switch reading *Hide this page from search engines*;
 and the canonical URL folded away, since almost no page has one.
 
