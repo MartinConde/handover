@@ -740,7 +740,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         <div class="field">
           <label class="switch" for="{id}.noindex"><input type="checkbox" role="switch" id="{id}.noindex" checked={hiding} onchange={(e) => seoWrite(at, 'noindex', e.currentTarget.checked)} /><span>Hide this page from search engines</span></label>
           {#if hiding}
-            <p class="notice notice-warn">Search engines are asked not to list this page. It stays on the site: anybody with the link can still open it, and it can take a few weeks to drop out of results.</p>
+            <p class="notice notice-warn">This page is left out of the sitemap and search engines are asked not to list it. It stays on the site: anybody with the link can still open it, and it can take a few weeks to drop out of results.</p>
           {/if}
         </div>
         <details class="group">

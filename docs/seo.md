@@ -88,6 +88,32 @@ Two things it needs and will otherwise leave out rather than guess:
 A page that is not an entry — a listing index, say — passes `defaults` and a `title` and
 nothing else.
 
+## Sitemap and robots.txt
+
+`astro build` writes them into the site's static assets: one `sitemap-<locale>.xml` per
+language, a `sitemap-index.xml` naming them, and a `robots.txt` pointing at that. They are
+files rather than routes, so a crawler reading them never wakes the Worker. Nothing is written
+by `astro dev`.
+
+A page is in the sitemap when it is one a visitor can reach — an entry in a collection with a
+`route`, in each language it has a file for. Left out are entries that are
+[hidden](entry-lifecycle.md), the languages an entry is not offered in, and every page whose
+`seo.noindex` is on: that is the same switch `<Seo />` writes as `robots: noindex`, read by
+that key, so a page asking to stay out of search is out of both. A collection's `index` page
+is listed once per language, and every URL names its other languages as `hreflang` alternates.
+
+`robots.txt` disallows `/admin` and `/_preview`. A `robots.txt` of your own in `public/` is
+left exactly as it is — the build writes one only where there is none.
+
+Two things worth knowing:
+
+- **`site` in `astro.config.mjs`, again.** A sitemap holds absolute addresses. Without it no
+  sitemap is written at all and `robots.txt` goes out without its `Sitemap:` line; the build
+  says so as it goes past.
+- **The addresses are written the way your site serves them** — with the trailing slash under
+  the default `build.format: 'directory'`, without it under `trailingSlash: 'never'`. A sitemap
+  full of URLs that redirect is a hop per page for every crawler.
+
 ## In the admin
 
 The `seo` field is a tab of its own beside Content and History, and it draws a panel rather

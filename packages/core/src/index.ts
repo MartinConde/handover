@@ -216,6 +216,13 @@ export {
   settingFacts,
   writeSetting,
 } from './settings.js';
+export type { SitemapPage, SitemapSite } from './sitemap.js';
+export {
+  robotsText,
+  sitemapFrom,
+  sitemapIndexXml,
+  sitemapXml,
+} from './sitemap.js';
 export {
   account,
   activity,

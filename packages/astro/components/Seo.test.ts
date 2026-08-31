@@ -1,3 +1,4 @@
+import { parseEntry, type SeoValue, sitemapFrom } from '@handover/core';
 import { experimental_AstroContainer as AstroContainer } from 'astro/container';
 import { expect, test } from 'vitest';
 import Seo from './Seo.astro';
@@ -171,4 +172,33 @@ test('<Seo /> escapes what a hand-edited file put in the title', async () => {
   const html = await render({ ...base, seo: { title: 'a" onload="alert(1)' } });
   expect(html).toContain('content="a&quot; onload=&quot;alert(1)"');
   expect(html).not.toContain('onload="alert(1)">');
+});
+
+// The two readings of one switch: the tag this component writes and the URL the build leaves
+// out of the sitemap. Asserted together, off the same file, because a page that says `noindex`
+// and is still offered to a crawler is the same defect as an hreflang pointing at a redirect.
+const crawl = {
+  i18n: { locales: ['en'], defaultLocale: 'en' },
+  collections: { listings: { route: '/listings/[slug]' } },
+  base: 'https://coastalhomes.example',
+  slash: true,
+};
+const entryFile = (contents: string) => [
+  { path: 'src/content/listings/en/seaview-cottage.yaml', contents },
+];
+const seoOf = (contents: string) => (parseEntry('default', contents) as { seo?: SeoValue }).seo;
+const listed = (contents: string) =>
+  (sitemapFrom('default', entryFile(contents), crawl).en ?? []).map((p) => p.loc);
+
+test('the page <Seo /> marks noindex is the page the sitemap leaves out', async () => {
+  const hidden = 'title: "Seaview Cottage"\nseo:\n  noindex: true\n';
+  const shown = 'title: "Seaview Cottage"\n';
+
+  expect(await render({ ...base, seo: seoOf(hidden) })).toContain(
+    '<meta name="robots" content="noindex">',
+  );
+  expect(listed(hidden)).toEqual([]);
+
+  expect(await render({ ...base, seo: seoOf(shown) })).not.toContain('name="robots"');
+  expect(listed(shown)).toEqual(['https://coastalhomes.example/listings/seaview-cottage/']);
 });

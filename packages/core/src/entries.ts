@@ -28,14 +28,24 @@ export interface ContentFile {
 // path like anything else, so the list of them is answered from the index rather than from git.
 const ENTRY_PATH = /^src\/content\/([a-z0-9-]+)\/([^/]+)\/([^/]+)\.yaml$/;
 
+/** The three things an entry's path names, and nothing for a file that is not an entry. */
+export const entryParts = (
+  path: string,
+): { collection: string; locale: string; name: string } | undefined => {
+  const found = ENTRY_PATH.exec(path);
+  return found
+    ? { collection: found[1] ?? '', locale: found[2] ?? '', name: found[3] ?? '' }
+    : undefined;
+};
+
 /**
  * `src/content/listings/en/mill-house.yaml` → `listings/mill-house`, and nothing for a file
  * that is not an entry. The key a lock and a hold are on: both are the entry's, since its
  * languages share a structure and are published together.
  */
 export const entryKey = (path: string): string | undefined => {
-  const found = ENTRY_PATH.exec(path);
-  return found ? `${found[1]}/${found[3]}` : undefined;
+  const parts = entryParts(path);
+  return parts && `${parts.collection}/${parts.name}`;
 };
 
 /** A starter for new entries: one file per collection folder, outside every glob. */

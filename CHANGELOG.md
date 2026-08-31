@@ -22,6 +22,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **The starter carries all three.** `handover init` scaffolds a `seo` field on `page`,
   `defaultSeo` on the `site` global and `<Seo />` in the layout, and its checklist names the
   `site` key `astro.config.mjs` needs for the canonical and the alternates.
+- **A sitemap and a robots.txt at build.** `astro build` writes `sitemap-index.xml`, one
+  `sitemap-<locale>.xml` per language and `robots.txt` into the static assets. The sitemap holds
+  every entry in a collection with a `route`, per language, minus the hidden ones, the languages
+  an entry is not offered in and anything whose `seo.noindex` is on, with `hreflang` alternates
+  on each URL; `robots.txt` points at the index and disallows `/admin` and `/_preview`, unless
+  the site ships a `robots.txt` of its own in `public/` ([Search and sharing](docs/seo.md#sitemap-and-robotstxt)).
 - **An SEO field's words are translated.** The second language gets the search title, the
   description and the picture's alt text; the picture itself, the switch and the canonical read
   the same in every language.

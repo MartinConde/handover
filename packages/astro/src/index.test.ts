@@ -27,6 +27,7 @@ import handover, {
   defineConfig,
   embed,
   emitRedirects,
+  emitSitemap,
   file,
   formSchema,
   image,
@@ -616,6 +617,99 @@ test('emitRedirects fails the build on a bad rule, naming the path', async () =>
   );
   await expect(emitRedirects(root, root)).rejects.toThrow(
     'src/content/redirects.yaml › rules[0].from: a path starting with "/"',
+  );
+});
+
+const crawl = {
+  i18n: { locales: ['en', 'de'], defaultLocale: 'en' },
+  collections: { listings: { route: '/listings/[slug]', index: '/' } },
+  base: 'https://coastalhomes.example',
+  slash: true,
+};
+
+const clientDir = async () =>
+  new URL(`${await mkdtemp(join(tmpdir(), 'handover-client-'))}/`, 'file://');
+
+test('emitSitemap writes one sitemap per language, an index and robots.txt', async () => {
+  const client = await clientDir();
+  expect(await emitSitemap(fixture, client, crawl)).toEqual([
+    'sitemap-en.xml',
+    'sitemap-de.xml',
+    'sitemap-index.xml',
+    'robots.txt',
+  ]);
+  const read = (name: string) => readFile(new URL(name, client), 'utf8');
+  expect(await read('sitemap-en.xml')).toContain(
+    '<loc>https://coastalhomes.example/listings/seaview-cottage/</loc>',
+  );
+  // The German index is a page the site serves; the English entry has no German file.
+  expect(await read('sitemap-de.xml')).toContain('<loc>https://coastalhomes.example/de/</loc>');
+  expect(await read('sitemap-de.xml')).not.toContain('seaview-cottage');
+  expect(await read('sitemap-index.xml')).toContain(
+    '<sitemap><loc>https://coastalhomes.example/sitemap-en.xml</loc></sitemap>',
+  );
+  expect(await read('robots.txt')).toContain(
+    'Sitemap: https://coastalhomes.example/sitemap-index.xml',
+  );
+});
+
+test('a site that has not said where it is served gets robots.txt and no sitemap', async () => {
+  const client = await clientDir();
+  expect(await emitSitemap(fixture, client, undefined)).toEqual(['robots.txt']);
+  expect(await readFile(new URL('robots.txt', client), 'utf8')).not.toContain('Sitemap:');
+  await expect(readFile(new URL('sitemap-index.xml', client), 'utf8')).rejects.toThrow();
+});
+
+test('a robots.txt the site ships itself is left where it is', async () => {
+  const client = await clientDir();
+  await writeFile(new URL('robots.txt', client), 'User-agent: *\nDisallow: /\n');
+  expect(await emitSitemap(fixture, client, crawl)).toEqual([
+    'sitemap-en.xml',
+    'sitemap-de.xml',
+    'sitemap-index.xml',
+  ]);
+  expect(await readFile(new URL('robots.txt', client), 'utf8')).toBe(
+    'User-agent: *\nDisallow: /\n',
+  );
+});
+
+type Done = HookParameters<'astro:config:done'>;
+type BuildDone = HookParameters<'astro:build:done'>;
+
+// The two hooks that write the crawler's files, against the fixture project: `astro:config:done`
+// is where the site's own address and URL form are read off Astro's resolved config.
+async function runBuild(astro: Record<string, unknown> = {}) {
+  const client = await clientDir();
+  const cms: Parameters<typeof handover>[0] = {
+    collections: {
+      listings: { schema: z.object({ title: z.string() }), ...crawl.collections.listings },
+    },
+    i18n: crawl.i18n,
+  };
+  const hooks = handover(cms).hooks;
+  await (hooks['astro:config:done'] as (o: Done) => Promise<void>)({
+    config: {
+      root: fixture,
+      site: crawl.base,
+      build: { client, format: 'directory' },
+      ...astro,
+    },
+  } as unknown as Done);
+  const info = vi.fn();
+  await (hooks['astro:build:done'] as (o: BuildDone) => Promise<void>)({
+    logger: { info },
+  } as unknown as BuildDone);
+  return { read: (name: string) => readFile(new URL(name, client), 'utf8').catch(() => '') };
+}
+
+test('the sitemap is written in the form the site’s own pages answer at', async () => {
+  const directory = await runBuild();
+  expect(await directory.read('sitemap-en.xml')).toContain(
+    '<loc>https://coastalhomes.example/listings/seaview-cottage/</loc>',
+  );
+  const never = await runBuild({ trailingSlash: 'never' });
+  expect(await never.read('sitemap-en.xml')).toContain(
+    '<loc>https://coastalhomes.example/listings/seaview-cottage</loc>',
   );
 });
 

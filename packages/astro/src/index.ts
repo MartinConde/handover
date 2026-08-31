@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readdir, readFile } from 'node:fs/promises';
+import { appendFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
@@ -20,7 +20,12 @@ import {
   redirectsText,
   refErrors,
   richtextErrors,
+  robotsText,
+  type SitemapSite,
   schemaVersionError,
+  sitemapFrom,
+  sitemapIndexXml,
+  sitemapXml,
   type Template,
   type TitleFields,
   type Translate,
@@ -435,6 +440,43 @@ export async function emitRedirects(root: URL, clientDir: URL): Promise<number> 
 }
 
 /**
+ * `sitemap-<locale>.xml` per language, the `sitemap-index.xml` naming them and a `robots.txt`
+ * pointing at that — static files beside `_redirects`, so a crawler reading them never wakes
+ * the Worker. Without `site` in `astro.config.mjs` there is no absolute address to write, and
+ * a sitemap of relative ones is not a sitemap: robots.txt goes out on its own.
+ *
+ * A `robots.txt` the site ships in `public/` is left exactly as it is. It is the one file here
+ * a developer may have written by hand, and overwriting it would take out whatever it says.
+ */
+export async function emitSitemap(
+  root: URL,
+  clientDir: URL,
+  site: SitemapSite | undefined,
+): Promise<string[]> {
+  await mkdir(clientDir, { recursive: true });
+  const written: string[] = [];
+  if (site) {
+    const pages = sitemapFrom('default', await contentFiles(root), site);
+    for (const locale of site.i18n.locales) {
+      const name = `sitemap-${locale}.xml`;
+      await writeFile(new URL(name, clientDir), sitemapXml('default', pages[locale] ?? []));
+      written.push(name);
+    }
+    const index = new URL('sitemap-index.xml', clientDir);
+    const locs = written.map((name) => new URL(name, site.base).href);
+    await writeFile(index, sitemapIndexXml('default', locs));
+    written.push('sitemap-index.xml');
+  }
+  const own = await readFile(new URL('robots.txt', clientDir), 'utf8').catch(() => undefined);
+  if (own === undefined) {
+    const sitemap = site && new URL('sitemap-index.xml', site.base).href;
+    await writeFile(new URL('robots.txt', clientDir), robotsText('default', sitemap || undefined));
+    written.push('robots.txt');
+  }
+  return written;
+}
+
+/**
  * Every `.yaml` under `src/content/`, not just the two levels an entry lives at, because a
  * file anywhere else is a mistake the build should name rather than a row the list would
  * quietly be missing.
@@ -570,12 +612,27 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
   );
   let root: URL;
   let clientDir: URL;
+  let crawl: SitemapSite | undefined;
   return {
     name: 'astro-handover',
     hooks: {
       'astro:config:done': async ({ config }) => {
         root = config.root;
         clientDir = config.build.client;
+        // The form the site's own pages answer at. `directory` writes `/page/index.html`, which
+        // the asset server sends the bare address to; a sitemap of URLs that redirect is one
+        // more hop per page, and the same mistake as an hreflang pointing at one.
+        const slash =
+          config.trailingSlash === 'always' ||
+          (config.trailingSlash !== 'never' && config.build.format === 'directory');
+        crawl = config.site
+          ? {
+              i18n: cms.i18n,
+              collections: cms.collections,
+              base: String(config.site),
+              slash,
+            }
+          : undefined;
         const errors = await contentErrors(
           root,
           Object.keys(cms.globals ?? {}),
@@ -595,6 +652,11 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
       'astro:build:done': async ({ logger }) => {
         const n = await emitRedirects(root, clientDir);
         if (n) logger.info(`Wrote ${n} redirect${n === 1 ? '' : 's'} to _redirects`);
+        if (!crawl)
+          logger.warn(
+            "No sitemap: astro.config.mjs has no `site`, so there is no address to write one in. Add site: 'https://example.com'.",
+          );
+        logger.info(`Wrote ${(await emitSitemap(root, clientDir, crawl)).join(', ')}`);
       },
       'astro:config:setup': ({ config, logger, injectRoute, addMiddleware, updateConfig }) => {
         if (!config.adapter) throw new Error(NO_ADAPTER_MESSAGE);
