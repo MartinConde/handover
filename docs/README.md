@@ -15,7 +15,8 @@
 - [Template convention](template-convention.md) — the three rules, `schemas.ts` and `content.config.ts`.
 - [Loaders and pages](loaders.md) — `load()` and `ContentSource`, what a loader returns and what renders it, an address per language, layouts that take their data as props.
 - [Blocks](blocks.md) — `<Blocks />`, the component registry, blocks that nest, and `_ref` blocks filled from a global.
-- [Rendering content](rendering.md) — `<Markdown />`, `<LocaleSwitcher />`, `<Nav />` and hidden entries.
+- [Rendering content](rendering.md) — `<Markdown />`, `<Embed />`, `<Seo />` and hidden entries.
+- [The language switcher](language-switcher.md) — `getEntryLocales()`, `<LocaleSwitcher />`, and a URL per language for a page that is not an entry.
 - [Drafts and publishing](publishing.md) — autosave into D1, what a draft holds, publishing an entry on its own, creating, renaming and deleting, the content index.
 - [The dashboard](dashboard.md) — the `/admin` landing page: what is waiting, the build, who edited what, and how far behind the translations are.
 - [Pending changes and build status](pending-changes.md) — the drawer, what it refuses, holding an entry back, build status after a commit, reverting a publish.

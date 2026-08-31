@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Docs: Rendering content slimmed to its components** — the language switcher has
+  [a page of its own](docs/language-switcher.md), and `<Nav />` / `menusAt()` moved onto
+  [Navigation menus](docs/navigation.md#rendering-the-menus); inbound links repointed.
 - **Docs: Site files is three pages instead of one 190-line page** — [the hub](docs/site-files.md)
   with globals and templates, [Navigation menus](docs/navigation.md) and
   [Redirects](docs/redirects.md); inbound links repointed.
@@ -206,7 +209,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   it stands ([Navigation menus](docs/navigation.md)).
 - **`<Nav />` and `menusAt()`.** The menu one language renders: every `ref` resolved to the
   address that language serves, and every item it cannot show dropped — with its children — so a
-  menu never links to a page that is not there ([Rendering content](docs/rendering.md#navigation-menus)).
+  menu never links to a page that is not there ([Rendering content](docs/navigation.md#rendering-the-menus)).
 - **Menu labels translate; the tree does not.** Which items a menu has, in which order and
   pointing where is the same in every language — moving one moves it in all of them — and each
   language keeps its own words for the rows. A translation's column draws that tree as one box

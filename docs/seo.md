@@ -74,7 +74,7 @@ const { data, site, locale, locales } = Astro.props;
 
 It emits `<title>`, the meta description, `og:*`, `twitter:card`, `robots: noindex` where the
 entry asks for it, a canonical link, and one `hreflang` alternate per language the entry can be
-read in — `locales` is what [`getEntryLocales()`](rendering.md#the-language-switcher) already handed
+read in — `locales` is what [`getEntryLocales()`](language-switcher.md) already handed
 your loader for the switcher, so a language the entry is not live in is not listed.
 
 Two things it needs and will otherwise leave out rather than guess:
