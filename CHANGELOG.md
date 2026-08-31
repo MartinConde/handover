@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Docs: Version history is its own page** — [Version history](docs/history.md), out of
+  [Drafts and publishing](docs/publishing.md); and that page no longer claims the drawer runs
+  no pre-publish checks, which it has since they shipped.
 - **Docs: Rendering content slimmed to its components** — the language switcher has
   [a page of its own](docs/language-switcher.md), and `<Nav />` / `menusAt()` moved onto
   [Navigation menus](docs/navigation.md#rendering-the-menus); inbound links repointed.
@@ -179,14 +182,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   language files is one version, with a chip per language and the person who published it from
   the activity log — git records the App that makes the commit, not them. Choosing a version
   shows what it says that the live site does not, in the drawer's per-field diff; ticking two
-  compares them with each other ([Publishing](docs/publishing.md#version-history)).
+  compares them with each other ([Publishing](docs/history.md)).
 - **Restore an old version.** *Restore this version* on the version you are reading puts it back
   as unpublished changes, in every language that version has a file for; the entry opens on it,
   and publishing is the ordinary forward commit. Git is never rewritten, so the version you
   restored stays in the list. The entry's web address, whether it is on the site and the
   languages it is offered in are the ones it has now, not the version's — each of those is
   changed from its own control, which writes the redirects that go with it
-  ([Publishing](docs/publishing.md#version-history)).
+  ([Publishing](docs/history.md)).
 - **The entry tabs are addresses.** Content and History are links, so the back button, a reload
   and a shared link all land where they should; the entry itself is not loaded again when the
   tab changes.

@@ -18,6 +18,7 @@
 - [Rendering content](rendering.md) — `<Markdown />`, `<Embed />`, `<Seo />` and hidden entries.
 - [The language switcher](language-switcher.md) — `getEntryLocales()`, `<LocaleSwitcher />`, and a URL per language for a page that is not an entry.
 - [Drafts and publishing](publishing.md) — autosave into D1, what a draft holds, publishing an entry on its own, creating, renaming and deleting, the content index.
+- [Version history](history.md) — the History tab: one version per commit, comparing two, and restoring one as unpublished changes.
 - [The dashboard](dashboard.md) — the `/admin` landing page: what is waiting, the build, who edited what, and how far behind the translations are.
 - [Pending changes and build status](pending-changes.md) — the drawer, what it refuses, holding an entry back, build status after a commit, reverting a publish.
 - [Working together](working-together.md) — the soft lock on an entry, what "Being edited by…" takes away, taking one over, and a file somebody changed in the repository.
