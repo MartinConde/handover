@@ -1,5 +1,5 @@
 <script lang="ts">
-import { type Field, keptMachine } from '@handover/core';
+import { type Field, keptMachine, type ResolvedSeo } from '@handover/core';
 import Fields from './Fields.svelte';
 
 type Data = Record<string, unknown>;
@@ -15,6 +15,7 @@ let {
   locked = false,
   stale = false,
   mediaBase = '',
+  inheritedSeo,
   translator = false,
   url,
   redirect,
@@ -33,6 +34,8 @@ let {
   blocks: Record<string, Field[]>;
   /** Where a stored media key is served from; an alt is written beside the picture it describes. */
   mediaBase?: string;
+  /** What this language's page would say with nothing typed into the SEO panel. */
+  inheritedSeo?: ResolvedSeo;
   /** This language's file as the editor last saw it. */
   data: Data;
   /** The language it was translated from, for the header. */
@@ -225,6 +228,7 @@ const named = (of: string) => {
         {problems}
         {machine}
         {mediaBase}
+        {inheritedSeo}
         {locale}
         bind:root={data}
         translating

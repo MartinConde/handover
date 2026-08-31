@@ -977,6 +977,28 @@ const offeredIn = (data: unknown, written: string[]) =>
     written,
   );
 
+/**
+ * The site's own SEO defaults, per language, for the panel to show greyed behind what nobody
+ * has typed. Found by the `defaultSeo` key rather than by a config option: the shape is the
+ * package's (`seoDefaults`), and a site that spreads it into a global has said where it is.
+ *
+ * Read here and not on `ping`: this is content a client edits in another tab, and a stale
+ * pattern behind an empty box is a client typing against a site name that has changed.
+ */
+async function siteSeoDefaults(): Promise<Record<string, unknown>> {
+  const key = Object.entries(config.globals ?? {}).find(([, schema]) =>
+    formOf('default', formSchema(schema)).fields.some((f) => f.path[0] === 'defaultSeo'),
+  )?.[0];
+  if (!key) return {};
+  const loaded = await entryLocales('globals', key, config.i18n.locales);
+  return Object.fromEntries(
+    Object.entries(loaded).map(([locale, file]) => [
+      locale,
+      (file.data as { defaultSeo?: unknown } | null)?.defaultSeo ?? {},
+    ]),
+  );
+}
+
 // One entry as the editor has it, language by language: its draft where there is one, the
 // repository where there is not, and no key at all for a language it has no file in. Each
 // language also says whether what the editor has is ahead of the repository, which is what
@@ -1106,6 +1128,9 @@ async function getEntry(collection: string, slug: string): Promise<Response> {
     // languages the editor was on, and it holds the whole entry back either way.
     held: Object.values(loaded).some((l) => l.held),
     problems: entryProblems(schema, data),
+    // The site's defaults behind the SEO panel, only for an entry that has one to draw: every
+    // other entry would be paying a read of the globals for a panel it never opens.
+    ...(form.fields.some((f) => f.type === 'seo') ? { seoDefaults: await siteSeoDefaults() } : {}),
     // Off the site, and where its readers go while it is. `_status` is the entry's, so the
     // language on screen does not come into it.
     hidden,

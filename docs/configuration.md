@@ -123,6 +123,10 @@ Without a `label` the card is headed by the key. Every declared global needs its
 default language — the build stops and names the one that is missing, since only you can write
 the first one. See [Site files](site-files.md).
 
+A global that spreads `seoDefaults` under the key `defaultSeo` is where every page's search
+title, description and social card fall back to — that key is how the package finds them
+([Search and sharing](seo.md#site-defaults)).
+
 ## `media`
 
 Optional until an entry has a picture in it. `publicBase` is where the site's R2 bucket is

@@ -10,6 +10,10 @@ import {
   newId,
   type Preset,
   parseEmbedUrl,
+  type ResolvedSeo,
+  SEO_DESCRIPTION_LIMIT,
+  SEO_TITLE_LIMIT,
+  seoMeter,
   type Translation,
   unsafeLinkScheme,
 } from '@handover/core';
@@ -37,6 +41,7 @@ let {
   prefix = 'f',
   mediaBase = '',
   locale = '',
+  inheritedSeo,
 }: {
   fields: readonly Field[];
   root: Data;
@@ -61,6 +66,12 @@ let {
   mediaBase?: string;
   /** The language this column writes: what a link typed into rich text has to point at. */
   locale?: string;
+  /**
+   * What this page would say with nothing typed in the panel — the site's defaults resolved by
+   * the same `resolveSeo` the build runs, so the greyed value and the emitted tag agree. Not
+   * handed down the recursion: it belongs to the entry's own `seo` field, which is a tab.
+   */
+  inheritedSeo?: ResolvedSeo;
 } = $props();
 
 const modeOf = (field: Field): Translation => field.i18n ?? inherited;
@@ -68,10 +79,10 @@ const modeOf = (field: Field): Translation => field.i18n ?? inherited;
 // inside it can say otherwise.
 const structural = (field: Field) =>
   field.type === 'group' || field.type === 'array' || field.type === 'blocks';
-// Widgets a translation has nothing to act on: `seo` only shows what is stored, and a
-// `reference` points at the same entry in every language. Neither is given to the second
+// Widgets a translation has nothing to act on: a `reference` points at the same entry in every
+// language, and an unsupported field has no value to show. Neither is given to the second
 // language as a picture of the first language's value it cannot change.
-const FIXED = new Set(['seo', 'reference', 'unsupported']);
+const FIXED = new Set(['reference', 'unsupported']);
 const shown = $derived(
   translating
     ? fields.filter((f) => structural(f) || (modeOf(f) !== false && !FIXED.has(f.type)))
@@ -250,6 +261,22 @@ function pasteEmbed(at: readonly string[], id: string, input: HTMLInputElement) 
   pasting = '';
   focusOn(`${id}-change`);
 }
+// The format's order, every key a hole: a description typed before a search title must not put
+// itself above it in the file. Assigning to a key an object already has keeps its place, so the
+// shape is laid down the first time each key is written and nothing is stored for the rest.
+const SEO_SHAPE = {
+  title: undefined,
+  description: undefined,
+  image: undefined,
+  noindex: undefined,
+  canonical: undefined,
+};
+function seoWrite(at: readonly string[], key: string, value: unknown) {
+  const held = read(at) as Record<string, unknown> | undefined;
+  if (held === undefined || !(key in held)) write(at, { ...SEO_SHAPE, ...held });
+  write([...at, key], value);
+}
+
 const bytes = (at: readonly string[]) => fileSize(read([...at, 'bytes']) as number | undefined);
 
 /** One picked asset as the format stores it — and in that order. */
@@ -332,6 +359,20 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
 
 {#snippet titleField(id: string, at: readonly string[])}
   <div class="field"><div class="label-row"><label for="{id}.title">Title</label><span class="mode">Per language</span></div><input class="input" id="{id}.title" type="text" value={str([...at, 'title'])} oninput={(e) => write([...at, 'title'], e.currentTarget.value || undefined)} /></div>
+{/snippet}
+
+{#snippet seoWords(id: string, at: readonly string[], key: string, label: string, limit: number, placeholder: string, hint: string)}
+  {@const value = str([...at, key])}
+  {@const described = [`${id}.${key}-meter`, hint ? `${id}.${key}-hint` : ''].filter(Boolean).join(' ')}
+  <div class="field">
+    <div class="label-row"><label for="{id}.{key}">{label}</label><span class="mode" id="{id}.{key}-meter">{seoMeter(value, limit)}</span></div>
+    {#if key === 'description'}
+      <textarea class="input textarea" id="{id}.{key}" {placeholder} aria-describedby={described} {value} oninput={(e) => seoWrite(at, key, e.currentTarget.value || undefined)}></textarea>
+    {:else}
+      <input class="input" id="{id}.{key}" type="text" {placeholder} aria-describedby={described} {value} oninput={(e) => seoWrite(at, key, e.currentTarget.value || undefined)} />
+    {/if}
+    {#if hint}<p class="hint" id="{id}.{key}-hint">{hint}</p>{/if}
+  </div>
 {/snippet}
 
 {#snippet nameField(id: string, at: readonly string[])}
@@ -649,10 +690,68 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           </div>
         </div>
       {/if}
-    {:else if field.type === 'seo'}
+    {:else if field.type === 'seo' && translating}
+      <!-- A translation owns the words a page is found by and nothing else: the search title,
+           the description, and what the picture is of. -->
       {@render groupLabel(id, field, text, at)}
-      <div class="readonly" {id} role="region" tabindex="-1" aria-labelledby="{id}-l" aria-describedby={err ? `${id}-hint ${id}-err` : `${id}-hint`}><pre>{read(at) === undefined ? 'Nothing here yet' : JSON.stringify(read(at), null, 2)}</pre></div>
-      <p class="hint" id="{id}-hint">SEO settings can be changed from Phase 4. Shown as stored.</p>
+      <div class="form" {id} role="group" aria-labelledby="{id}-l" aria-describedby={says}>
+        {@render seoWords(id, at, 'title', 'Search title', SEO_TITLE_LIMIT, inheritedSeo?.title ?? '', 'Leave empty to use the page title.')}
+        {@render seoWords(id, at, 'description', 'Description', SEO_DESCRIPTION_LIMIT, inheritedSeo?.description ?? '', '')}
+        {#if read([...at, 'image']) !== undefined}
+          <div class="media-card">
+            <span class="thumb" style="aspect-ratio: 1.91 / 1"><img src={src([...at, 'image'])} alt="" /></span>
+            <div class="meta">
+              {@render altField(`${id}.image`, [...at, 'image'])}
+              <p class="hint">The same picture in every language.</p>
+            </div>
+          </div>
+        {/if}
+      </div>
+    {:else if field.type === 'seo'}
+      {@const image = [...at, 'image']}
+      {@const hiding = read([...at, 'noindex']) === true}
+      {@render groupLabel(id, field, text, at)}
+      <div class="form" {id} role="group" aria-labelledby="{id}-l" aria-describedby={says}>
+        {@render seoWords(id, at, 'title', 'Search title', SEO_TITLE_LIMIT, inheritedSeo?.title ?? '', 'Leave empty to use the page title and the site’s own pattern.')}
+        {@render seoWords(id, at, 'description', 'Description', SEO_DESCRIPTION_LIMIT, inheritedSeo?.description ?? '', '')}
+        <div class="field">
+          <div class="label-row"><span id="{id}.image-l">Social image</span><span class="mode">Same in every language</span></div>
+          {#if read(image) !== undefined}
+            <div class="media-card" role="group" aria-labelledby="{id}.image-l">
+              <span class="thumb" style="aspect-ratio: 1.91 / 1"><img src={src(image)} alt="" /></span>
+              <div class="meta">
+                <div><div class="sub">{str([...image, 'src'])} · {num([...image, 'width'])} × {num([...image, 'height'])}</div></div>
+                {@render altField(`${id}.image`, image)}
+                <div class="actions">
+                  <button class="btn btn-sm" type="button" onclick={() => (picker = `${id}.image`)}>Replace</button>
+                  <button class="btn btn-sm btn-ghost" type="button" onclick={() => write(image, undefined)}>{inheritedSeo?.image ? 'Use the site’s default' : 'Remove'}</button>
+                </div>
+              </div>
+            </div>
+          {:else}
+            <!-- svelte-ignore a11y_no_static_element_interactions -- the button inside is the control; the zone is a drop target -->
+            <div class="dropzone" role="group" aria-labelledby="{id}.image-l" ondragover={(e) => e.preventDefault()} ondrop={(e) => dropOn(`${id}.image`, e)}>
+              <span>{inheritedSeo?.image ? 'The site’s own card is shared for this page' : 'Drop an image or choose from library'}</span>
+              <span class="hint">1.91:1 · at least 1200 px wide</span>
+              <button class="btn btn-sm" type="button" onclick={() => (picker = `${id}.image`)}>Choose from library</button>
+            </div>
+          {/if}
+        </div>
+        <div class="field">
+          <label class="switch" for="{id}.noindex"><input type="checkbox" role="switch" id="{id}.noindex" checked={hiding} onchange={(e) => seoWrite(at, 'noindex', e.currentTarget.checked)} /><span>Hide this page from search engines</span></label>
+          {#if hiding}
+            <p class="notice notice-warn">Search engines are asked not to list this page. It stays on the site: anybody with the link can still open it, and it can take a few weeks to drop out of results.</p>
+          {/if}
+        </div>
+        <details class="group">
+          <summary>Canonical URL{#if str([...at, 'canonical'])}<span class="count">{str([...at, 'canonical'])}</span>{/if}</summary>
+          <div class="field">
+            <div class="label-row"><label for="{id}.canonical">Canonical URL</label></div>
+            <input class="input" id="{id}.canonical" type="url" aria-describedby="{id}.canonical-hint" value={str([...at, 'canonical'])} oninput={(e) => seoWrite(at, 'canonical', e.currentTarget.value || undefined)} />
+            <p class="hint" id="{id}.canonical-hint">Only set this when the same page lives at another address.</p>
+          </div>
+        </details>
+      </div>
     {:else}
       <div class="label-row"><label for={id}>{text}</label></div>
       <p class="hint" {id}>Not editable here yet</p>
@@ -668,6 +767,19 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         presets={field.preset.ratio ? [{ label: text, preset: field.preset }] : []}
         onsave={(moved) => { write([...at, 'focal'], centred(moved) ? undefined : moved); framing = ''; }}
         onclose={() => (framing = '')}
+      />
+    {/if}
+    {#if picker === `${id}.image` && field.type === 'seo'}
+      <!-- The one preset a platform fixes rather than a designer: 1.91:1 at 1200 is the
+           1200 × 630 every social card asks for. -->
+      <Media
+        kind="images"
+        label="Social image"
+        preset={{ ratio: '1.91:1', max: 1200, min: 1200 }}
+        base={mediaBase}
+        {dropped}
+        onpick={(items) => { seoWrite(at, 'image', stored('image', items[0] as MediaItem)); picker = ''; dropped = []; }}
+        onclose={() => { picker = ''; dropped = []; }}
       />
     {/if}
     {#if picker === id && (field.type === 'image' || field.type === 'file')}

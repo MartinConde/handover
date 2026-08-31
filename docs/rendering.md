@@ -146,6 +146,12 @@ video begins at. The frame is named by the field's own `title`, which is transla
 provider's name where this language has none yet. A field with no value draws nothing. Style
 `.handover-embed` — the component sets nothing but the box.
 
+## Search and sharing
+
+`<Seo />` writes the title, description, `og:*`, `twitter:card`, canonical and `hreflang`
+alternates for a page, from the entry's own `seo` field over the site's defaults. It has a
+page of its own: [Search and sharing](seo.md).
+
 ## Hidden entries
 
 An entry with `_status: hidden` in its file stays in the repo but must not render.

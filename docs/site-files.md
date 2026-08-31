@@ -6,7 +6,8 @@ the [content format](content-format.md).
 
 ## Globals
 
-Site-wide singletons — name, logo, contact details, footer text, default SEO — live one
+Site-wide singletons — name, logo, contact details, footer text, default SEO
+([Search and sharing](seo.md#site-defaults)) — live one
 file per locale under `src/content/globals/<locale>/<key>.yaml`. Each key is declared
 with its schema in `cms.config.ts`; the key is the file name (lowercase letters, digits
 and dashes):

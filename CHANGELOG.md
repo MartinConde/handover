@@ -4,6 +4,25 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **A search and sharing panel.** A `seo` field is now a tab of its own beside Content and
+  History, drawing a search title and a description with a line saying how much of each a search
+  engine shows, the social image under a fixed 1.91:1 preset at 1200 px, a *Hide this page from
+  search engines* switch and the canonical URL folded away. The lines are guidance and never
+  validation — nothing on the panel can refuse a save — and an empty box is greyed with what the
+  site would say instead ([Search and sharing](docs/seo.md#in-the-admin)).
+- **Site-wide SEO defaults.** `seoDefaults` spread into a global under the key `defaultSeo` gives
+  every page a title pattern (`%s · Coastal Homes`), a description, a social card and an X handle
+  to fall back to, per language. `resolveSeo()` is the field → global → nothing resolution, and
+  the admin and the build run the same one ([Search and sharing](docs/seo.md#site-defaults)).
+- **`<Seo />`.** `astro-handover/Seo.astro` emits the title, meta description, `og:*`,
+  `twitter:card`, `robots: noindex`, a canonical link and one `hreflang` alternate per language
+  the entry can be read in. It needs `site` in `astro.config.mjs`: without one there is no
+  canonical, no `og:url` and no alternates, because a relative address is not one
+  ([Search and sharing](docs/seo.md#seo-)).
+- **An SEO field's words are translated.** The second language gets the search title, the
+  description and the picture's alt text; the picture itself, the switch and the canonical read
+  the same in every language.
+
 - **An embed field you can fill in.** Paste a YouTube, Vimeo or Google Maps link and it becomes a
   card with the provider's name, the id that was stored and — for YouTube — the provider's own
   still, with the frame's title and the second the video starts at under it. The URL itself is

@@ -502,6 +502,48 @@ test('back and forward move the screen with the address', () => {
   expect(root.querySelector('main.main h1')?.textContent).toBe('Activity');
 });
 
+// The SEO tab is the third address of the same entry, and reached the same way.
+test('the seo tab is an address of the same entry', async () => {
+  const fetchMock = vi.fn(async (url: string) => {
+    if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
+    if (url === '/admin/api/drafts') return Response.json({ entries: [] });
+    if (url === '/admin/api/build') return Response.json({});
+    if (url.startsWith('/admin/api/locks/'))
+      return Response.json({ held_by: null, mine: true, expires_at: 1755864120000, base: {} });
+    return Response.json({
+      fields: [{ path: ['seo'], label: 'SEO', type: 'seo', required: false }],
+      blocks: {},
+      data: { title: 'The Mill House' },
+      seoDefaults: { en: { titlePattern: '%s · Handover demo' } },
+      pending: [],
+      published: ['en'],
+      problems: [],
+      locales: ['en'],
+      defaultLocale: 'en',
+      sourceLocale: 'en',
+      offered: ['en'],
+      translations: {},
+      stale: [],
+      drift: [],
+    });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const settle = async () => {
+    for (let i = 0; i < 3; i++) {
+      await new Promise((r) => setTimeout(r, 0));
+      flushSync();
+    }
+  };
+
+  const root = show(session(), '/admin/c/listings/mill-house');
+  await settle();
+  root.querySelector<HTMLAnchorElement>('.tabs a[href$="/seo"]')?.click();
+  await settle();
+
+  expect(location.pathname).toBe('/admin/c/listings/mill-house/seo');
+  expect(root.querySelector('input#f-seo\\.title')).not.toBeNull();
+});
+
 // An entry's tabs are addresses of the same entry: moving between them must not re-read the
 // entry, or everything the person has typed and every switch they have set goes with it.
 test('the history tab is an address of the same entry, not a second load of it', async () => {

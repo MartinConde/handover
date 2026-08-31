@@ -201,6 +201,13 @@ export {
 } from './richtext.js';
 export type { Field, Form, JsonSchema, Translation } from './schema.js';
 export { fieldsFrom, formOf, imagePresets } from './schema.js';
+export type { ResolvedSeo, SeoDefaultsValue, SeoImage, SeoValue } from './seo.js';
+export {
+  resolveSeo,
+  SEO_DESCRIPTION_LIMIT,
+  SEO_TITLE_LIMIT,
+  seoMeter,
+} from './seo.js';
 export type { Integration, SettingFact } from './settings.js';
 export {
   INTEGRATIONS,

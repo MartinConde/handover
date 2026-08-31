@@ -44,7 +44,7 @@ let session = $state(signedIn);
 // moves itself from there
 let path = $state(landedAt);
 
-const entryRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)\/([\w-]+)(?:\/(history))?$/));
+const entryRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)\/([\w-]+)(?:\/(history|seo))?$/));
 const listRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)$/));
 // A global is edited on the entry screen, so its route is the entry route under another name:
 // `globals` is the collection and the file name is the slug. Redirects live under the same

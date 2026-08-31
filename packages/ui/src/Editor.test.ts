@@ -1612,3 +1612,61 @@ test('the header menu is closed while somebody else holds the entry', async () =
   expect($<HTMLButtonElement>(root, '[aria-label="More actions"]')?.disabled).toBe(true);
   vi.unstubAllGlobals();
 });
+
+// The SEO panel is a tab of its own: the field is drawn there and nowhere else, so one screen
+// never carries two boxes with the same id.
+const withSeo = {
+  ...entry,
+  fields: [
+    { path: ['title'], label: 'Title', type: 'text', required: true },
+    { path: ['seo'], label: 'SEO', type: 'seo', required: false },
+  ] satisfies Field[],
+  data: { title: 'Seaview Cottage', seo: {} },
+  seoDefaults: { en: { titlePattern: '%s · Coastal Homes' } },
+};
+
+test('an entry with no seo field gets no SEO tab', () => {
+  const root = show();
+  expect($$(root, '.tabs a, .tabs button').map((t) => t.textContent)).toEqual([
+    'Content',
+    'History',
+  ]);
+});
+
+test('the SEO tab is an address, and its field is off the Content form', () => {
+  const root = show({ entry: withSeo });
+  expect($(root, '.tabs a[href="/admin/c/listings/seaview-cottage/seo"]')?.textContent).toBe('SEO');
+  expect($(root, 'input#f-title')).not.toBeNull();
+  expect($(root, 'input#f-seo\\.title')).toBeNull();
+});
+
+test('the SEO tab draws the panel and nothing the Content tab draws', () => {
+  const root = show({ entry: withSeo, section: 'seo' });
+  expect($(root, '.tabs a[aria-current="page"]')?.textContent).toBe('SEO');
+  expect($(root, 'input#f-seo\\.title')).not.toBeNull();
+  expect($(root, 'input#f-title')).toBeNull();
+});
+
+// The site's pattern resolved by the same function the build runs, so the greyed value a client
+// types against is the tag the page will really carry.
+test('the panel greys the site\u2019s own default behind an empty search title', () => {
+  const root = show({ entry: withSeo, section: 'seo' });
+  expect($(root, 'input#f-seo\\.title')?.getAttribute('placeholder')).toBe(
+    'Seaview Cottage · Coastal Homes',
+  );
+});
+
+// A count that names a field on the other tab has to take the reader there, or the jump lands
+// nowhere and reads as a broken button.
+test('the problem count jumps to the SEO tab for a problem the panel owns', async () => {
+  const root = show({
+    entry: { ...withSeo, problems: [{ path: 'seo.title', message: 'Required' }] },
+  });
+  expect($(root, 'input#f-seo\\.title')).toBeNull();
+
+  $<HTMLButtonElement>(root, 'button.problems')?.click();
+  await tick();
+  flushSync();
+
+  expect(location.pathname).toBe('/admin/c/listings/seaview-cottage/seo');
+});

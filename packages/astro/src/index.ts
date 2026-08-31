@@ -195,6 +195,29 @@ export const seo = z
   .meta({ handover: 'seo' });
 export type Seo = z.infer<typeof seo>;
 
+/**
+ * The site's own SEO defaults, spread into the global that holds them — the package finds them
+ * by the `defaultSeo` key, so a site names that key and nothing else has to be configured.
+ *
+ * Not tagged `handover: 'seo'`: a default is a title *pattern* and has no `noindex` and no
+ * canonical of its own, so the walker draws it as the ordinary group it is.
+ */
+export const seoDefaults = z
+  .object({
+    titlePattern: z
+      .string()
+      .optional()
+      .meta({ label: 'Default search title', description: '%s becomes the page’s own title' }),
+    description: z.string().optional(),
+    image: image({ ratio: '1.91:1', max: 1200, min: 1200 })
+      .optional()
+      .meta({ label: 'Default social image' }),
+    // One account for the site, written the way X wants it read: `@name`.
+    twitter: z.string().optional().meta({ i18n: 'duplicate', label: 'X (Twitter) handle' }),
+  })
+  .meta({ label: 'Search and sharing' });
+export type SeoDefaults = z.infer<typeof seoDefaults>;
+
 // Stored as `collection/slug`; the collection name lets the picker list the right entries.
 export const reference = (collection: string) =>
   z

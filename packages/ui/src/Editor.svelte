@@ -1,5 +1,14 @@
 <script lang="ts">
-import { type Drift, entryName, entryUrl, type Field, LOCK_TTL } from '@handover/core';
+import {
+  type Drift,
+  entryName,
+  entryUrl,
+  type Field,
+  LOCK_TTL,
+  resolveSeo,
+  type SeoDefaultsValue,
+} from '@handover/core';
+import { tick } from 'svelte';
 import DriftPanel from './Drift.svelte';
 import Fields from './Fields.svelte';
 import History from './History.svelte';
@@ -49,6 +58,8 @@ let {
     problems: { path: string; message: string }[];
     /** The field this collection is keyed on, when it is not `title`. */
     titleField?: string;
+    /** The site's own SEO defaults per language; absent for an entry with no `seo` field. */
+    seoDefaults?: Record<string, SeoDefaultsValue>;
     /** A global: one file the schema names, so nothing that renames, hides or copies it. */
     singleton?: boolean;
     /** What the dev calls this global — a global has no title field to be named by. */
@@ -215,6 +226,30 @@ const json = $derived(JSON.stringify(data));
 const missing = $derived(Object.keys(problems));
 const named = $derived(data[entry.titleField ?? 'title']);
 const title = $derived(entry.label ?? (typeof named === 'string' && named ? named : slug));
+// The SEO panel is a tab of its own, so the field is taken out of the form the Content tab
+// draws: one `seo` field, one set of ids on the screen. A `seo` field nested inside a group is
+// an ordinary widget there — the tab is the entry's own.
+// A global has no tab bar, so its panel stays in its one form rather than behind a tab nothing
+// draws.
+const seoField = $derived(!entry.singleton && entry.fields.some((f) => f.type === 'seo'));
+/** The key the seo field sits under, which is what a problem on it is named by. */
+const seoAt = $derived(entry.fields.find((f) => f.type === 'seo')?.path[0]);
+const fields = $derived(
+  !seoField
+    ? entry.fields
+    : section === 'seo'
+      ? entry.fields.filter((f) => f.type === 'seo')
+      : entry.fields.filter((f) => f.type !== 'seo'),
+);
+/** What one language's page would say with nothing typed: the build's own resolution, run here. */
+const inherited = (of: string, values: Data) =>
+  entry.fields.some((f) => f.type === 'seo')
+    ? resolveSeo(
+        undefined,
+        entry.seoDefaults?.[of],
+        String(values[entry.titleField ?? 'title'] ?? ''),
+      )
+    : undefined;
 // A language other than the one this screen's form saves, already ahead of the repository when
 // the entry was read. It stands until the entry is read again: a false offer costs an empty
 // drawer, a false refusal loses the draft behind a disabled button.
@@ -474,10 +509,21 @@ async function toggleHold() {
 }
 
 // Scrolling there is not enough on its own: the count is a button, so it has to land somewhere.
-function goTo(path: string | undefined) {
-  const field = document.getElementById(`f-${path}`);
+function land(field: HTMLElement | null) {
   field?.scrollIntoView({ block: 'center' });
   field?.focus();
+}
+function goTo(path: string | undefined) {
+  const field = document.getElementById(`f-${path}`);
+  // A field the other tab draws is not on screen at all, and a jump that lands nowhere reads as
+  // a broken count. Go to the tab that has it, then land on it once — and once only: a second
+  // miss is a field nothing draws, and looking again would never stop.
+  if (!field && path && seoField && path.split('.')[0] === seoAt) {
+    navigate(`/admin/c/${collection}/${slug}/seo`);
+    void tick().then(() => land(document.getElementById(`f-${path}`)));
+    return;
+  }
+  land(field);
 }
 const goToFirst = () => goTo(missing[0]);
 
@@ -869,7 +915,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     {#if !entry.singleton}
       <nav class="tabs" aria-label="Entry sections">
         <a href="/admin/c/{collection}/{slug}" aria-current={section === '' ? 'page' : undefined}>Content</a>
-        <button type="button" disabled>SEO</button>
+        {#if seoField}<a href="/admin/c/{collection}/{slug}/seo" aria-current={section === 'seo' ? 'page' : undefined}>SEO</a>{/if}
         <a href="/admin/c/{collection}/{slug}/history" aria-current={section === 'history' ? 'page' : undefined}>History</a>
       </nav>
     {/if}
@@ -905,7 +951,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {#if !alone}
         <form class="form" onsubmit={(e) => e.preventDefault()}>
           <fieldset disabled={locked}>
-            <Fields fields={entry.fields} blocks={entry.blocks} {problems} {mediaBase} {locale} bind:root={data} />
+            <Fields {fields} blocks={entry.blocks} {problems} {mediaBase} {locale} inheritedSeo={inherited(locale, data)} bind:root={data} />
           </fieldset>
         </form>
       {/if}
@@ -988,9 +1034,10 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             {slug}
             locale={shown}
             {tab}
-            fields={entry.fields}
+            {fields}
             blocks={entry.blocks}
             data={entry.translations[shown] ?? {}}
+            inheritedSeo={inherited(shown, entry.translations[shown] ?? {})}
             source={entry.sourceLocale}
             {locked}
             stale={entry.stale.includes(shown)}

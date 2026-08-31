@@ -126,9 +126,8 @@ and **Delete** are on the row.
 
 In the editor each field gets the widget for its type ([Field types](field-types.md#in-the-admin)).
 An `image` or `file` field opens the media picker ([Pictures and files in a field](media-fields.md));
-an `embed` field takes a pasted YouTube, Vimeo or Google Maps link; `seo` still shows its stored
-value read-only until its own panel arrives, saying so under the value
-([Structured fields](structured-fields.md)). Change a value: two
+an `embed` field takes a pasted YouTube, Vimeo or Google Maps link; a `seo` field is a tab of
+its own with the search and sharing panel on it ([Search and sharing](seo.md)). Change a value: two
 seconds later the edit is saved into D1, and it is still there if you reload — see
 [Drafts and publishing](publishing.md). Click **Publish…**: the pending-changes
 drawer lists every edit waiting to go out, and **Publish 1 file** writes them back as one

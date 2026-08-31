@@ -11,6 +11,7 @@
 - [Pictures and files in a field](media-fields.md) — a field's preset: the ratio, the cap on the way in, the floor the picker refuses under; the drop zone and the picker.
 - [Field types](field-types.md) — the scalar types, rich text, links and labels.
 - [Structured fields](structured-fields.md) — image, file, embed, seo and reference; groups, arrays and blocks.
+- [Search and sharing](seo.md) — the `seo` field, the site's defaults and `<Seo />`.
 - [Template convention](template-convention.md) — the three rules, `schemas.ts` and `content.config.ts`.
 - [Loaders and pages](loaders.md) — `load()` and `ContentSource`, what a loader returns and what renders it, an address per language, layouts that take their data as props.
 - [Blocks](blocks.md) — `<Blocks />`, the component registry, blocks that nest, and `_ref` blocks filled from a global.

@@ -60,7 +60,7 @@ const {
   confirmUpload,
 } = await vi.hoisted(async () => {
   const { z } = await import('astro/zod');
-  const { blocks, defineBlock, image } = await import('../index.js');
+  const { blocks, defineBlock, image, seo, seoDefaults } = await import('../index.js');
   // Every file the repository holds beyond the one below, path → contents; filled per test.
   const files: Record<string, string> = {};
   const commitLog: Record<
@@ -91,13 +91,16 @@ const {
       name: z.string(),
       portrait: image({ ratio: '1:1', max: 512 }).optional(),
     }),
-    // A collection whose languages each serve their entries at an address of their own.
-    article: z.object({ title: z.string(), slug: z.string().optional() }),
-    // A global: the same editor path with no collection behind it, named by its own schema.
+    // A collection whose languages each serve their entries at an address of their own, and the
+    // one that carries the SEO panel.
+    article: z.object({ title: z.string(), slug: z.string().optional(), seo: seo.optional() }),
+    // A global: the same editor path with no collection behind it, named by its own schema. It
+    // is also where the site's SEO defaults live, which is how the package finds them.
     site: z
       .object({
         footerText: z.string(),
         phone: z.string().optional().meta({ i18n: 'duplicate' }),
+        defaultSeo: seoDefaults.optional(),
       })
       .meta({ label: 'Site details', description: 'Contact details and footer text' }),
     // The GitHub boundary: one file in the repo, nothing else.
@@ -786,7 +789,11 @@ test('ping returns the collection names and who is signed in', async () => {
     mediaBase: 'https://media.example.com',
     // Every ratio the site's own fields show a picture at, which is what the focal picker
     // previews: one dot, and what it does to each crop the site really renders.
-    presets: [{ label: 'Portrait', preset: { ratio: '1:1', max: 512 } }],
+    presets: [
+      { label: 'Portrait', preset: { ratio: '1:1', max: 512 } },
+      // The site's default social card: the one preset a platform fixes rather than a designer.
+      { label: 'Default social image', preset: { ratio: '1.91:1', max: 1200, min: 1200 } },
+    ],
     // Whether this build has a preview route at all: without one the pane says so rather than
     // drawing a frame around a 404.
     preview: true,
@@ -1392,6 +1399,32 @@ test('a global is served as an entry, in singleton mode and under its own label'
   expect(body.fields).toEqual([
     { path: ['footerText'], label: 'Footer text', type: 'text', required: true },
     { path: ['phone'], label: 'Phone', type: 'text', required: false, i18n: 'duplicate' },
+    // The site's SEO defaults are an ordinary group: a pattern, a description, a card and a
+    // handle, each edited by the widget its own type already has.
+    {
+      path: ['defaultSeo'],
+      label: 'Search and sharing',
+      type: 'group',
+      required: false,
+      fields: [
+        { path: ['titlePattern'], label: 'Default search title', type: 'text', required: false },
+        { path: ['description'], label: 'Description', type: 'text', required: false },
+        {
+          path: ['image'],
+          label: 'Default social image',
+          type: 'image',
+          required: false,
+          preset: { ratio: '1.91:1', max: 1200, min: 1200 },
+        },
+        {
+          path: ['twitter'],
+          label: 'X (Twitter) handle',
+          type: 'text',
+          required: false,
+          i18n: 'duplicate',
+        },
+      ],
+    },
   ]);
   expect(body.data).toEqual({ footerText: 'Coastal homes since 2009' });
   expect(body.singleton).toBe(true);
@@ -1400,6 +1433,36 @@ test('a global is served as an entry, in singleton mode and under its own label'
   expect(body.route).toBeUndefined();
   expect(body.localizedSlugs).toBeUndefined();
   delete files['src/content/globals/en/site.yaml'];
+});
+
+// The panel greys the site's own defaults behind an empty box, and they are per language, so
+// they are read with the entry rather than handed over once when the tab opened.
+test('an entry with a seo field is served the site’s defaults, per language', async () => {
+  locales = ['en', 'de'];
+  files['src/content/posts/en/hello.yaml'] = 'title: Hello\n';
+  files['src/content/globals/en/site.yaml'] =
+    'footerText: "x"\ndefaultSeo:\n  titlePattern: "%s · Coastal Homes"\n';
+  files['src/content/globals/de/site.yaml'] =
+    'footerText: "x"\ndefaultSeo:\n  titlePattern: "%s · Küstenhäuser"\n';
+
+  const body = (await (await GET(ctx('entries/posts/hello'))).json()) as Record<string, unknown>;
+
+  expect(body.seoDefaults).toEqual({
+    en: { titlePattern: '%s · Coastal Homes' },
+    de: { titlePattern: '%s · Küstenhäuser' },
+  });
+  delete files['src/content/posts/en/hello.yaml'];
+  delete files['src/content/globals/en/site.yaml'];
+  delete files['src/content/globals/de/site.yaml'];
+});
+
+// Every other entry would be paying a read of the globals for a panel it never opens.
+test('an entry with no seo field is served no defaults at all', async () => {
+  const body = (await (await GET(ctx('entries/listings/mill-house'))).json()) as Record<
+    string,
+    unknown
+  >;
+  expect(body.seoDefaults).toBeUndefined();
 });
 
 test('a key cms.config.ts does not declare is not a global', async () => {
@@ -3225,7 +3288,7 @@ test('the address is not a field of the form and comes beside it instead', async
     route: string;
   };
 
-  expect(body.fields.map((f) => f.path[0])).toEqual(['title']);
+  expect(body.fields.map((f) => f.path[0])).toEqual(['title', 'seo']);
   expect(body.addresses).toEqual({ en: 'hello-world', de: 'hallo' });
   expect(body.localizedSlugs).toBe(true);
   expect(body.route).toBe('/blog/[slug]');
@@ -5798,7 +5861,7 @@ test('a restore writes the address where the schema puts it', async () => {
   await restoring('history/posts/hello/restore', { commit_sha: 'abc1234' });
 
   const form = restoreDraft.mock.calls[0]?.[3] as { fields: { path: string[] }[] };
-  expect(form.fields.map((f) => f.path[0])).toEqual(['title', 'slug']);
+  expect(form.fields.map((f) => f.path[0])).toEqual(['title', 'slug', 'seo']);
 });
 
 test('a restore of a collection the site does not declare is a 404', async () => {

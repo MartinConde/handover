@@ -1,0 +1,78 @@
+---
+import { type LocaleLink, resolveSeo, type SeoDefaultsValue, type SeoValue } from '@handover/core';
+
+interface Props {
+  /** The entry's own `seo` field, where it has one. */
+  seo?: SeoValue;
+  /** What the global holding `defaultSeo` says in this language. */
+  defaults?: SeoDefaultsValue;
+  /** The page's own heading — what a search title nobody typed falls back to. */
+  title?: string;
+  /** The site's name, for `og:site_name`. */
+  siteName?: string;
+  /** The language being rendered. */
+  locale?: string;
+  /** The languages this entry can be read in: `getEntryLocales()`'s answer. */
+  locales?: LocaleLink[];
+  /** Where a stored media key is served from — `media.publicBase`. */
+  mediaBase?: string;
+  /**
+   * Where the site is served. `Astro.site` by default; without one there is no canonical, no
+   * `og:url` and no alternates, because a relative address is not one and the build host is
+   * whatever machine ran the build.
+   */
+  site?: URL | string;
+}
+
+const {
+  seo,
+  defaults,
+  title = '',
+  siteName,
+  locale,
+  locales = [],
+  mediaBase,
+  site = Astro.site,
+} = Astro.props;
+
+const tags = resolveSeo(seo, defaults, title);
+const at = (path: string) => (site ? new URL(path, site).href : undefined);
+const canonical = tags.canonical ?? at(Astro.url.pathname);
+// One page has one address. This page's own path carries whichever convention the site builds
+// under, so the alternates are written the same way: otherwise this page's own hreflang is a
+// second URL for it, and every other one points at the redirect the site answers with.
+const slashed = Astro.url.pathname.endsWith('/');
+const like = (path: string) => {
+  if (path === '/') return path;
+  const bare = path.replace(/\/+$/, '');
+  return slashed ? `${bare}/` : bare;
+};
+// A key, never a URL, is what a content file holds; without a base there is nothing to serve it
+// from, so the card goes out small rather than pointing at a path no crawler can fetch.
+const image =
+  tags.image && mediaBase ? `${mediaBase.replace(/\/$/, '')}/${tags.image.src}` : undefined;
+// One language is nothing to alternate between, the rule <LocaleSwitcher /> follows.
+const alternates = site && locales.length > 1 ? locales : [];
+---
+
+<title>{tags.title}</title>
+{tags.description && <meta name="description" content={tags.description} />}
+{tags.noindex && <meta name="robots" content="noindex" />}
+{canonical && <link rel="canonical" href={canonical} />}
+{alternates.map(({ locale: of, url }) => (
+  <link rel="alternate" hreflang={of} href={at(like(url))} />
+))}
+
+<meta property="og:type" content="website" />
+<meta property="og:title" content={tags.title} />
+{tags.description && <meta property="og:description" content={tags.description} />}
+{canonical && <meta property="og:url" content={canonical} />}
+{siteName && <meta property="og:site_name" content={siteName} />}
+{locale && <meta property="og:locale" content={locale} />}
+{image && <meta property="og:image" content={image} />}
+{image && tags.image?.alt && <meta property="og:image:alt" content={tags.image.alt} />}
+{image && <meta property="og:image:width" content={String(tags.image?.width)} />}
+{image && <meta property="og:image:height" content={String(tags.image?.height)} />}
+
+<meta name="twitter:card" content={image ? 'summary_large_image' : 'summary'} />
+{tags.twitter && <meta name="twitter:site" content={tags.twitter} />}

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { Field } from '@handover/core';
+import type { Field, ResolvedSeo } from '@handover/core';
 import { parseEntry, stringifyEntry } from '@handover/core';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -23,6 +23,7 @@ const show = (
   data: Record<string, unknown>,
   blocks: Record<string, Field[]> = {},
   problems: Record<string, string> = {},
+  inheritedSeo?: ResolvedSeo,
 ) => {
   root = data;
   app = mount(Fields, {
@@ -31,6 +32,7 @@ const show = (
       fields,
       blocks,
       problems,
+      inheritedSeo,
       // The form is showing English: what a link typed into rich text has to point at.
       locale: 'en',
       get root() {
@@ -939,12 +941,144 @@ test('embed: a translation is offered the title and nothing else', () => {
   });
 });
 
-test('seo says why it is read-only', () => {
-  show([{ path: ['thing'], label: 'Thing', type: 'seo', required: false } as Field], {});
-  expect(q('#f-thing-hint').textContent).toBe(
-    'SEO settings can be changed from Phase 4. Shown as stored.',
+const seoField: Field = { path: ['seo'], label: 'SEO', type: 'seo', required: false };
+const seoData = () => parseEntry('default', golden('seo')) as Record<string, unknown>;
+// What the site says for a page that types nothing: the same resolution the build runs.
+const INHERITED: ResolvedSeo = {
+  title: 'Seaview Cottage · Coastal Homes',
+  description: 'Coastal homes in Devon.',
+  image: { src: 'media/site-card.webp', width: 1200, height: 630 },
+  noindex: false,
+};
+
+test('seo: the panel draws what is stored and writes the file back unchanged', () => {
+  show([seoField], seoData());
+  expect(q<HTMLInputElement>('input#f-seo\\.title').value).toBe('Move to the coast');
+  expect(q<HTMLTextAreaElement>('textarea#f-seo\\.description').value).toBe(
+    'Coastal homes in Devon.',
   );
-  expect(q('#f-thing').getAttribute('aria-describedby')).toBe('f-thing-hint');
+  expect(q('#f-seo .media-card .sub').textContent).toBe('media/9f3a2c7e.webp · 2400 × 1600');
+  expect(q<HTMLInputElement>('input#f-seo\\.image\\.alt').value).toBe('Front of the house');
+  expect(q<HTMLInputElement>('input#f-seo\\.noindex').checked).toBe(false);
+  expect(q<HTMLInputElement>('input#f-seo\\.canonical').value).toBe(
+    'https://example.com/listings/seaview-cottage',
+  );
+  expect(stringifyEntry('default', snap())).toBe(golden('seo'));
+});
+
+// Guidance, never validation: the line says what is typed against the length Google cuts at,
+// and nothing on this panel can refuse a save.
+test('seo: the meters count what is typed and say when it will be cut off', () => {
+  show([seoField], { _version: 1 });
+  expect(q('#f-seo\\.title-meter').textContent).toBe('Up to about 60 characters');
+  type('input#f-seo\\.title', 'Move to the coast');
+  expect(q('#f-seo\\.title-meter').textContent).toBe('About 17 of ≈60 characters');
+  type('textarea#f-seo\\.description', 'x'.repeat(160));
+  expect(q('#f-seo\\.description-meter').textContent).toBe(
+    'About 160 of ≈155 characters — may be cut off',
+  );
+  expect(q('textarea#f-seo\\.description').getAttribute('aria-describedby')).toBe(
+    'f-seo.description-meter',
+  );
+});
+
+// The panel fills a hole rather than appending: a client who writes the canonical first and the
+// search title last must not leave a file whose keys are in the order they were typed in.
+test('seo: a panel filled out of order writes the format’s order', () => {
+  show([seoField], { _version: 1 });
+  type('input#f-seo\\.canonical', 'https://example.com/listings/seaview-cottage');
+  fire('input#f-seo\\.noindex', 'change', (el) => {
+    el.checked = false;
+  });
+  type('textarea#f-seo\\.description', 'Coastal homes in Devon.');
+  type('input#f-seo\\.title', 'Move to the coast');
+  expect(stringifyEntry('default', snap())).toBe(
+    '_version: 1\nseo:\n  title: "Move to the coast"\n' +
+      '  description: "Coastal homes in Devon."\n  noindex: false\n' +
+      '  canonical: "https://example.com/listings/seaview-cottage"\n',
+  );
+});
+
+// Empty is not blank: a client typing a title has to be able to see the site name being
+// appended, or they will type it themselves and get it twice.
+test('seo: an empty box is greyed with what the site says instead', () => {
+  show([seoField], { _version: 1 }, {}, {}, INHERITED);
+  expect(q('input#f-seo\\.title').getAttribute('placeholder')).toBe(
+    'Seaview Cottage · Coastal Homes',
+  );
+  expect(q('textarea#f-seo\\.description').getAttribute('placeholder')).toBe(
+    'Coastal homes in Devon.',
+  );
+  expect(q('#f-seo .dropzone span').textContent).toBe(
+    'The site’s own card is shared for this page',
+  );
+});
+
+test('seo: taking the picture away hands the page back to the site’s card', () => {
+  show([seoField], seoData(), {}, {}, INHERITED);
+  const [, fallback] = Array.from(document.querySelectorAll('#f-seo .media-card .actions button'));
+  expect(fallback?.textContent).toBe('Use the site’s default');
+  (fallback as HTMLButtonElement).click();
+  flushSync();
+  expect((snap() as unknown as { seo: Record<string, unknown> }).seo.image).toBeUndefined();
+  expect(q('#f-seo .dropzone')).toBeTruthy();
+});
+
+// With no site default there is nothing to fall back to, so the button says what it does.
+test('seo: with no site card the same button is a plain Remove', () => {
+  show([seoField], seoData());
+  const [, fallback] = Array.from(document.querySelectorAll('#f-seo .media-card .actions button'));
+  expect(fallback?.textContent).toBe('Remove');
+});
+
+test('seo: hiding a page from search says what that does and what it does not', () => {
+  show([seoField], { _version: 1 });
+  expect(document.querySelector('#f-seo .notice')).toBeNull();
+  fire('input#f-seo\\.noindex', 'change', (el) => {
+    el.checked = true;
+  });
+  expect(root.seo).toEqual({ noindex: true });
+  expect(q('#f-seo .notice').textContent).toContain('anybody with the link can still open it');
+});
+
+test('seo: the canonical URL is folded away under what it is set to', () => {
+  show([seoField], seoData());
+  expect(q('#f-seo details summary .count').textContent).toBe(
+    'https://example.com/listings/seaview-cottage',
+  );
+  type('input#f-seo\\.canonical', '');
+  expect((snap() as unknown as { seo: Record<string, unknown> }).seo.canonical).toBeUndefined();
+});
+
+// A translation owns the words a page is found by, and nothing that would move the page or
+// take it off the site.
+test('seo: the second language writes the words and is offered nothing else', () => {
+  root = seoData();
+  app = mount(Fields, {
+    target: document.body,
+    props: {
+      fields: [seoField],
+      translating: true,
+      locale: 'de',
+      get root() {
+        return root;
+      },
+      set root(v) {
+        root = v;
+      },
+    },
+  });
+  flushSync();
+  type('input#f-seo\\.title', 'Ans Meer ziehen');
+  type('input#f-seo\\.image\\.alt', 'Vorderseite des Hauses');
+  expect((snap() as unknown as { seo: Record<string, unknown> }).seo).toMatchObject({
+    title: 'Ans Meer ziehen',
+    image: { alt: 'Vorderseite des Hauses' },
+  });
+  expect(document.querySelector('input#f-seo\\.noindex')).toBeNull();
+  expect(document.querySelector('input#f-seo\\.canonical')).toBeNull();
+  expect(document.querySelector('#f-seo .dropzone')).toBeNull();
+  expect(document.querySelector('#f-seo .actions')).toBeNull();
 });
 
 test('a field the schema refuses is marked, described and still editable', () => {
@@ -964,9 +1098,9 @@ test('a field the schema refuses is marked, described and still editable', () =>
   expect(root).toEqual({ title: 'Morning Drift' });
 });
 
-// The one an editor cannot fix from the form: the widget is read-only until its phase, so
-// saying what is wrong is all the screen can do — and it must not lose the hint that says so.
-test('a read-only structured field keeps its hint next to the error', () => {
+// A structured field is a group of boxes, and what the schema refuses is refused about the
+// whole of it: the message is named on the panel rather than left beside it.
+test('a structured field the schema refuses names the message on its panel', () => {
   show(
     [{ path: ['tour'], label: 'Tour', type: 'seo', required: true }],
     {},
@@ -975,7 +1109,7 @@ test('a read-only structured field keeps its hint next to the error', () => {
       tour: 'Required',
     },
   );
-  expect(q('#f-tour').getAttribute('aria-describedby')).toBe('f-tour-hint f-tour-err');
+  expect(q('#f-tour').getAttribute('aria-describedby')).toBe('f-tour-err');
   expect(q('#f-tour-err').textContent).toBe('Required');
 });
 

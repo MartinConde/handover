@@ -28,7 +28,8 @@
     "./Embed.astro": "./components/Embed.astro",
     "./LocaleSwitcher.astro": "./components/LocaleSwitcher.astro",
     "./Markdown.astro": "./components/Markdown.astro",
-    "./Nav.astro": "./components/Nav.astro"
+    "./Nav.astro": "./components/Nav.astro",
+    "./Seo.astro": "./components/Seo.astro"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

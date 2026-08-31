@@ -14,6 +14,7 @@ are [Field types](field-types.md).
 | file | `file({ accept? })` | `{ src, name?, bytes, mime }` — `src` is a `files/…` key |
 | embed | `embed` | `{ provider, id, title?, start? }` — `provider` is `youtube`, `vimeo` or `google-maps`; never HTML |
 | seo | `seo` | `{ title?, description?, image?, noindex?, canonical? }` |
+| site defaults | `seoDefaults` | `{ titlePattern?, description?, image?, twitter? }` — in a global, under `defaultSeo` |
 | reference | `reference('agents')` | `"agents/jane-doe"` — `collection/slug` of the referenced entry |
 
 ```ts
@@ -152,12 +153,10 @@ nothing is stored until one parses. A language that is being translated gets the
 nothing else — the video is the same in every language. What the page does with the value is
 [`<Embed />`](rendering.md#videos-and-maps).
 
-`seo` still shows its stored value as read-only JSON until its panel arrives, under one line
-naming the release that brings the editor. It is read and written back untouched.
+`seo` is a tab of its own rather than a row in the form, and what it draws is described in
+[Search and sharing](seo.md#in-the-admin) along with the `<Seo />` that renders it.
 
-Make it **required** — `seo: seo` — and a new entry cannot satisfy it from
-the form until that panel ships. Nothing you type is lost: the draft is stored anyway and
-the field is marked as a problem. What you cannot do is publish that entry, so keep a field
-required only when your site really cannot render without it, and use `.optional()` while
-the editor for it is still to come
+Make a structured field **required** and a new entry cannot be published until it is filled in.
+Nothing typed is lost: the draft is stored anyway and the field is marked as a problem. Keep a
+field required only when your site really cannot render without it
 ([Drafts and publishing](publishing.md#fields-the-schema-is-not-happy-with)).
