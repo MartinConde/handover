@@ -30,5 +30,5 @@
 - [Settings — what is connected](diagnostics.md) — the admin's read-only view of your config, the connection checks behind it, and the test email.
 - [Deploy](deploy.md) — `wrangler.jsonc`, the schedule, the database, the GitHub App, building on push.
 - [Secrets](secrets.md) — the five required secrets, the vars beside them, and one more per optional feature.
-- [The admin API](admin-api.md) — the routes the admin drives: entries, drafts, publishing, locks and the activity read. For debugging, not for building against.
+- [The admin API](admin-api.md) — the routes the admin drives, one page each: [entries](admin-api-entries.md), [entry lifecycle](admin-api-lifecycle.md), [drafts](admin-api-drafts.md), [publishing](admin-api-publishing.md), [media](admin-api-media.md), [settings](admin-api-settings.md), with locks and the activity read on the first. For debugging, not for building against.
 - [How it works](how-it-works.md) — packages, injected routes, virtual config, the publish path. For contributors.

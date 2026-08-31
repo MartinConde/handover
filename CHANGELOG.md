@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Docs: the admin API is seven pages instead of one 800-line page** — [the hub](docs/admin-api.md)
+  with the conventions, locks and the activity read, and a page each for entries, entry lifecycle,
+  drafts, publishing, media and settings.
 - **One ⋯ per row in the entry list.** Duplicate, Rename, Hide (or Show) and Delete are behind
   one button per row, as on Members, instead of four buttons that had to wrap onto a row of
   their own on a phone.
