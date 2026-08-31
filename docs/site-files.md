@@ -140,6 +140,11 @@ hops twice. A rule the client adds is **committed as it is added** rather than w
 publish drawer: this file is assembled at publish out of the rules of the selected entries, so a
 rule belonging to no entry has nowhere to wait. It reaches visitors after the build.
 
+**Test** on a row asks the live site for the old address, from the browser, and says what came
+back rather than what the file says: *Working* (it forwards where the rule points), *Not there
+yet* (a 404 — the rule is unpublished or the site is still building) or *Not what this rule says*
+(a page answers at the old address, or it forwards somewhere else).
+
 A rule with `reason: hidden` belongs to the entry that is hidden — showing that entry again
 removes the rule in the same commit — so the table draws it but neither edits nor deletes it.
 

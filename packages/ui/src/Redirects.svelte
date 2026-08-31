@@ -149,6 +149,81 @@ async function save() {
       : { field: 'from', message: body.error ?? `That was not saved (${res.status}).` };
 }
 
+/** What the live site said about one rule's old address; no verdict while it is being asked. */
+type Verdict = { kind: 'ok' | 'wait' | 'bad'; line: string; text: string };
+const VERDICT = { ok: 'Working', wait: 'Not there yet', bad: 'Not what this rule says' };
+let tested = $state<{ id: string; verdict?: Verdict }>();
+const trimmed = (path: string) => path.replace(/\/+$/, '');
+const lands = (rule: Rule, at: string) => {
+  const to = new URL(rule.to, location.origin);
+  const there = new URL(at);
+  return there.origin === to.origin && trimmed(there.pathname) === trimmed(to.pathname);
+};
+
+// Asked of the live site, from the browser: the file is not the answer, since a rule is live
+// only after a publish and a build, and between the two the table is right while the site is
+// not. The redirect is followed and where it ended up is the verdict — a status code alone would
+// not say whether the rule ran, and the browser cache is bypassed so a rule changed today is not
+// answered by the 301 it cached last week.
+async function probe(rule: Rule): Promise<Verdict> {
+  let res: Response;
+  try {
+    res = await fetch(rule.from, { cache: 'no-store' });
+  } catch {
+    // Following a redirect off this site is a request to another origin, which the browser
+    // will not show this page. For a rule that points off the site, that is the rule working.
+    return rule.to.startsWith('/')
+      ? {
+          kind: 'wait',
+          line: `${rule.from} → no answer`,
+          text: 'The site could not be reached just now. Try again in a moment.',
+        }
+      : {
+          kind: 'ok',
+          line: `${rule.from} → ${rule.to}`,
+          text: 'Asked the live site just now: the old address sends visitors off this site, where this rule points.',
+        };
+  }
+  if (res.redirected) {
+    const landed = new URL(res.url);
+    const shown = landed.origin === location.origin ? landed.pathname : landed.href;
+    if (!lands(rule, res.url))
+      return {
+        kind: 'bad',
+        line: `${rule.from} → ${shown}`,
+        text: "The old address forwards, but somewhere else. Another rule may cover it, or the site's own routing does.",
+      };
+    if (res.status >= 400)
+      return {
+        kind: 'bad',
+        line: `${rule.from} → ${shown} → ${res.status}`,
+        text: `Visitors are sent where this rule says, but that page answers ${res.status}. Point the rule at a page that exists.`,
+      };
+    return {
+      kind: 'ok',
+      line: `${rule.from} → ${shown}`,
+      text: 'Asked the live site just now and followed it. Visitors on the old address land where this rule points.',
+    };
+  }
+  if (res.status === 404)
+    return {
+      kind: 'wait',
+      line: `${rule.from} → 404`,
+      text: 'This rule has not been published, or the site is still building. Try again when the build finishes.',
+    };
+  return {
+    kind: 'bad',
+    line: `${rule.from} → ${res.status} (no redirect)`,
+    text: 'A real page answers at this address, so the redirect never runs. That usually means a page was added at the old address after the rule was written.',
+  };
+}
+
+async function test(rule: Rule) {
+  tested = { id: rule._id };
+  const verdict = await probe(rule);
+  if (tested?.id === rule._id) tested = { id: rule._id, verdict };
+}
+
 async function remove() {
   const rule = dropping;
   if (!rule) return;
@@ -164,6 +239,8 @@ async function remove() {
   await load();
 }
 </script>
+
+<svelte:window onkeydown={(e) => e.key === 'Escape' && tested && (tested = undefined)} />
 
 <main class="main main-editor">
   <header class="entry-header">
@@ -228,6 +305,7 @@ async function remove() {
             <div class="th" role="columnheader"><span class="visually-hidden">Actions</span></div>
           </div>
           {#each shown as rule (rule._id)}
+            {@const asking = tested?.id === rule._id}
             <div class="row" class:is-managed={managed(rule)} role="row">
               <div class="td path" role="cell" data-label="From">
                 {rule.from}
@@ -254,27 +332,49 @@ async function remove() {
                 {WHEN.format(Date.parse(rule.createdAt))}
               </div>
               <div class="td menu-cell" role="cell">
-                <!-- Greyed with aria-disabled rather than disabled: a disabled button takes no
-                     focus, so a keyboard would walk past the reason without hearing it. -->
-                <button
-                  class="btn btn-sm"
-                  type="button"
-                  aria-disabled={managed(rule) ? 'true' : undefined}
-                  aria-describedby={managed(rule) ? `owns-${rule._id}` : undefined}
-                  onclick={() => !managed(rule) && open(rule)}
-                  >Edit<span class="visually-hidden"> {rule.from}</span></button
-                >
-                <button
-                  class="btn btn-sm"
-                  type="button"
-                  aria-disabled={managed(rule) ? 'true' : undefined}
-                  aria-describedby={managed(rule) ? `owns-${rule._id}` : undefined}
-                  onclick={() => {
-                    if (managed(rule)) return;
-                    trigger = document.activeElement as HTMLElement;
-                    dropping = rule;
-                  }}>Delete<span class="visually-hidden"> {rule.from}</span></button
-                >
+                <div class="row-menu">
+                  <button
+                    class="btn btn-sm btn-test"
+                    type="button"
+                    disabled={asking && !tested?.verdict}
+                    onclick={() => test(rule)}
+                    >{asking && !tested?.verdict ? 'Testing…' : 'Test'}<span class="visually-hidden">
+                      {rule.from}</span
+                    ></button
+                  >
+                  {#if asking && tested?.verdict}
+                    <div class="popover test-pop" role="status">
+                      <p class="verdict is-{tested.verdict.kind}">{VERDICT[tested.verdict.kind]}</p>
+                      <p class="line">{tested.verdict.line}</p>
+                      <p>{tested.verdict.text}</p>
+                      <div class="actions">
+                        <button class="btn btn-sm" type="button" onclick={() => test(rule)}>Test again</button>
+                        <button class="btn btn-ghost btn-sm" type="button" onclick={() => (tested = undefined)}>Close</button>
+                      </div>
+                    </div>
+                  {/if}
+                  <!-- Greyed with aria-disabled rather than disabled: a disabled button takes no
+                       focus, so a keyboard would walk past the reason without hearing it. -->
+                  <button
+                    class="btn btn-sm"
+                    type="button"
+                    aria-disabled={managed(rule) ? 'true' : undefined}
+                    aria-describedby={managed(rule) ? `owns-${rule._id}` : undefined}
+                    onclick={() => !managed(rule) && open(rule)}
+                    >Edit<span class="visually-hidden"> {rule.from}</span></button
+                  >
+                  <button
+                    class="btn btn-sm"
+                    type="button"
+                    aria-disabled={managed(rule) ? 'true' : undefined}
+                    aria-describedby={managed(rule) ? `owns-${rule._id}` : undefined}
+                    onclick={() => {
+                      if (managed(rule)) return;
+                      trigger = document.activeElement as HTMLElement;
+                      dropping = rule;
+                    }}>Delete<span class="visually-hidden"> {rule.from}</span></button
+                  >
+                </div>
               </div>
             </div>
           {/each}

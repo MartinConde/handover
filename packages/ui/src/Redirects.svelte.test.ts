@@ -3,7 +3,8 @@ import { afterEach, expect, test, vi } from 'vitest';
 import Redirects from './Redirects.svelte';
 
 // Testing: what a row says about a rule and who owns it, the search and the reason filter, the
-// three writes and the sentence each refusal carries, and the age warning on a delete.
+// three writes and the sentence each refusal carries, the age warning on a delete, and the three
+// verdicts Test reads off the live site.
 // Not testing: the route branch that mounts this screen, or the page picker, which has its own.
 
 type Rule = {
@@ -33,6 +34,12 @@ let app: ReturnType<typeof mount>;
 let asked: { url: string; method: string; body: unknown }[] = [];
 let rules: Rule[] = [];
 let refusal: { status: number; body: unknown } | undefined;
+/** What fetching the old address answers: the fields the verdict reads, or a network failure. */
+let live: { status: number; redirected: boolean; url: string } | Error = {
+  status: 404,
+  redirected: false,
+  url: `${location.origin}/summer-offer`,
+};
 
 const show = async () => {
   asked = [];
@@ -46,6 +53,11 @@ const show = async () => {
       });
       if (url === '/admin/api/entries')
         return Response.json({ entries: [], locales: ['en', 'de'], defaultLocale: 'en' });
+      // The old address itself, asked of the site: what the asset server answers with today.
+      if (!url.startsWith('/admin/')) {
+        if (live instanceof Error) throw live;
+        return live as unknown as Response;
+      }
       if (init?.method && init.method !== 'GET')
         return refusal
           ? Response.json(refusal.body, { status: refusal.status })
@@ -69,6 +81,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   rules = [];
   refusal = undefined;
+  live = { status: 404, redirected: false, url: `${location.origin}/summer-offer` };
 });
 
 const q = <T extends Element>(sel: string) => {
@@ -138,8 +151,10 @@ test('a hidden entry’s rule is locked, and both buttons say why', async () => 
   await show();
 
   expect(q('.table .row').classList.contains('is-managed')).toBe(true);
-  const buttons = all('.menu-cell button') as HTMLButtonElement[];
+  // Test stays live: a managed rule is still one a client wants to know is working.
+  const buttons = all('.menu-cell button:not(.btn-test)') as HTMLButtonElement[];
   expect(buttons.map((b) => b.getAttribute('aria-disabled'))).toEqual(['true', 'true']);
+  expect(q<HTMLButtonElement>('.menu-cell .btn-test').disabled).toBe(false);
   const why = q(`#${buttons[0]?.getAttribute('aria-describedby')}`);
   expect(why.textContent).toContain('managed by The Mill House');
 });
@@ -245,4 +260,68 @@ test('a rule older than a year is deleted without the warning', async () => {
 
   expect(q('.dialog')).toBeTruthy();
   expect(document.body.querySelector('.dialog .notice-warn')).toBe(null);
+});
+
+// Test asks the live site, from the browser, for the old address — the file is not the answer,
+// since a rule is live only after a publish and a build. Three verdicts: it works, it is not
+// there yet, or something else is answering.
+const verdict = async () => {
+  click('.menu-cell .btn-test');
+  await settle();
+  const pop = q('.test-pop');
+  return {
+    kind: q('.test-pop .verdict').className.replace('verdict', '').trim(),
+    line: q('.test-pop .line').textContent?.replace(/\s+/g, ' ').trim(),
+    text: pop.textContent ?? '',
+  };
+};
+
+test('Test reads Working when the old address lands where the rule points', async () => {
+  rules = [rule()];
+  live = { status: 200, redirected: true, url: `${location.origin}/listings/` };
+  await show();
+
+  const seen = await verdict();
+  expect(seen.kind).toBe('is-ok');
+  expect(seen.line).toBe('/summer-offer → /listings/');
+  expect(asked.at(-1)).toMatchObject({ url: '/summer-offer', method: 'GET' });
+  expect(q('.test-pop').getAttribute('role')).toBe('status');
+});
+
+test('Test reads Not there yet on a 404, naming the build', async () => {
+  rules = [rule()];
+  await show();
+
+  const seen = await verdict();
+  expect(seen.kind).toBe('is-wait');
+  expect(seen.line).toBe('/summer-offer → 404');
+  expect(seen.text).toContain('still building');
+});
+
+test('Test reads a mismatch when a page answers or the address forwards elsewhere', async () => {
+  rules = [rule()];
+  live = { status: 200, redirected: false, url: `${location.origin}/summer-offer` };
+  await show();
+  const page = await verdict();
+  expect(page.kind).toBe('is-bad');
+  expect(page.line).toBe('/summer-offer → 200 (no redirect)');
+  expect(page.text).toContain('A real page answers at this address');
+
+  live = { status: 200, redirected: true, url: `${location.origin}/de/` };
+  const elsewhere = await verdict();
+  expect(elsewhere.kind).toBe('is-bad');
+  expect(elsewhere.line).toBe('/summer-offer → /de/');
+  expect(elsewhere.text).toContain('somewhere else');
+});
+
+// A rule pointing off this site: following it is a request to another origin, which the browser
+// will not show this page. That failure is the rule doing its job.
+test('Test on a rule pointing off the site counts a refused cross-origin follow as Working', async () => {
+  rules = [rule({ to: 'https://example.com/brochure.pdf' })];
+  live = new TypeError('Failed to fetch');
+  await show();
+
+  const seen = await verdict();
+  expect(seen.kind).toBe('is-ok');
+  expect(seen.text).toContain('off this site');
 });

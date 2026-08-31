@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Test on a redirect.** Every row of Site settings → Redirects has a **Test** button that asks
+  the live site for the old address and reports what actually came back — *Working*, *Not there
+  yet* while the rule is unpublished or the build is running, or *Not what this rule says* when a
+  page answers there or it forwards elsewhere ([Site files](docs/site-files.md#redirects)).
 - **Redirects answer both forms of the old address.** `_redirects` used to carry each rule's
   `from` bare, while the pages themselves answer with the trailing slash under Astro's default
   `build.format`, so `/listings/old-name/` — the form the site's own links, canonicals and

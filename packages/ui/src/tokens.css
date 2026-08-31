@@ -432,8 +432,15 @@ a.btn { text-decoration: none; }
 .empty h2 { font-size: var(--text-lg); letter-spacing: var(--tracking-tight); }
 .empty p { color: var(--ink-2); font-size: var(--text-sm); }
 .empty .btn { margin-top: var(--s-2); }
-.row-menu { position: relative; }
+.row-menu { position: relative; display: flex; gap: var(--s-1); align-items: center; }
 .row-menu .menu { top: calc(100% + 4px); }
+.row-menu .test-pop { left: auto; right: 0; }
+.test-pop { min-width: 320px; display: grid; gap: var(--s-2); font-size: var(--text-sm); }
+.test-pop .line { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-2); }
+.test-pop .verdict { font-weight: 600; }
+.test-pop .verdict.is-ok { color: var(--success-ink); }
+.test-pop .verdict.is-wait { color: var(--info-ink); }
+.test-pop .verdict.is-bad { color: var(--danger-ink); }
 .menu hr { border: 0; border-top: 1px solid var(--border); margin: var(--s-2) 0; }
 
 /* The card rule above keys off `.table`, which `.cols-7` outranks, so the seven columns have to
