@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **A row inside a block reads full width on a phone.** Under 720px the row's ⋮⋮ × controls sit
+  above its fields instead of beside them — beside, a second-level row gave its fields 133px of
+  a 375px screen.
 - **The navigation builder nests by drag.** Carry a row right to make it a sub-item: a hairline
   marks a sibling slot, a tinted well names the parent it would go inside ("Add inside Listings,
   after Sold"), and a slot past three levels refuses in place. During a keyboard drag, ↑ ↓ walk
