@@ -23,6 +23,8 @@ const {
   getFile,
   getHead,
   contentFiles,
+  commitLog,
+  fileCommits,
   publish,
   saveDraft,
   createDraft,
@@ -60,8 +62,13 @@ const {
   const { blocks, defineBlock, image } = await import('../index.js');
   // Every file the repository holds beyond the one below, path → contents; filled per test.
   const files: Record<string, string> = {};
+  const commitLog: Record<
+    string,
+    { sha: string; date: string; message: string; author?: string }[]
+  > = {};
   return {
     files,
+    commitLog,
     // A collection with blocks in it: what two languages of one entry can disagree about.
     page: z.object({
       title: z.string(),
@@ -93,7 +100,10 @@ const {
       })
       .meta({ label: 'Site details', description: 'Contact details and footer text' }),
     // The GitHub boundary: one file in the repo, nothing else.
-    getFile: vi.fn(async (path: string) => {
+    getFile: vi.fn(async (path: string, ref?: string) => {
+      // `<ref>:<path>` is the file as one commit has it, which is what a version diff reads.
+      const atRef = ref === undefined ? undefined : files[`${ref}:${path}`];
+      if (atRef !== undefined) return { contents: atRef, blob_sha: `blob-${ref}-${path}` };
       const stored = files[path];
       if (stored !== undefined) return { contents: stored, blob_sha: `blob-${path}` };
       if (path === 'src/content/listings/en/mill-house.yaml')
@@ -104,6 +114,11 @@ const {
       return undefined;
     }),
     getHead: vi.fn(async () => 'head789'),
+    // Every commit that touched one path, newest first; filled per test.
+    fileCommits: vi.fn(
+      async (path: string, { perPage = 30, page = 1 }: { perPage?: number; page?: number } = {}) =>
+        (commitLog[path] ?? []).slice((page - 1) * perPage, page * perPage),
+    ),
     // The one-request read of src/content the delete gate is made on; the walk itself runs
     // against a faked GraphQL endpoint in core's own git.test.ts.
     contentFiles: vi.fn<() => Promise<{ path: string; contents: string }[]>>(async () => []),
@@ -506,6 +521,8 @@ let memberRows: MemberRow[] = [];
 // The D1 boundary again: what each route asked to be written, and what it asked the reader
 // for. The reader's own filter runs against a real D1 in core's `activity.test.ts`.
 const logged: Record<string, unknown>[] = [];
+/** Who the log says made a commit, which is the half of a version's author git cannot answer. */
+const committedBy: Record<string, string> = {};
 let read: unknown[] = [];
 /** Which rows the routes took out of the owner count, in order. */
 const demoted: string[] = [];
@@ -541,6 +558,12 @@ vi.mock('@handover/core', async (original) => ({
   logActivity: async (_site: string, _db: unknown, event: Record<string, unknown>) => {
     logged.push(event);
   },
+  // The real one is a join against the log; against a real D1 it is proven in core's own
+  // activity.test.ts. What the route owes is asking it and preferring its answer to git's.
+  commitAuthors: async (_site: string, _db: unknown, shas: string[]) =>
+    Object.fromEntries(
+      shas.filter((sha) => sha in committedBy).map((sha) => [sha, committedBy[sha]]),
+    ),
   activityPage: async (..._args: unknown[]) => {
     read = _args.slice(2);
     return { events: [], cursor: null };
@@ -577,6 +600,7 @@ vi.mock('@handover/core', async (original) => ({
     getFile,
     getHead,
     contentFiles,
+    fileCommits,
     publish,
     getCommit: async (sha: string) => ({
       sha,
@@ -709,6 +733,8 @@ afterEach(() => {
   smtpRefusal = undefined;
   sent.length = 0;
   for (const path of Object.keys(files)) delete files[path];
+  for (const path of Object.keys(commitLog)) delete commitLog[path];
+  for (const sha of Object.keys(committedBy)) delete committedBy[sha];
   for (const path of Object.keys(rows)) delete rows[path];
   entryConflict.mockClear();
   entryConflict.mockResolvedValue(undefined);
@@ -5544,4 +5570,132 @@ test('a rule that is not in the file is a 404 rather than a commit', async () =>
     404,
   );
   expect(publish).not.toHaveBeenCalled();
+});
+
+// The query is on the url rather than in the path, so these build their context by hand.
+const history = (path: string, query = '') =>
+  ({
+    params: { path },
+    request: undefined,
+    url: new URL(`https://x/admin/api/${path}${query}`),
+    locals: {},
+  }) as unknown as APIContext;
+
+const EN = 'src/content/listings/en/mill-house.yaml';
+const DE = 'src/content/listings/de/mill-house.yaml';
+
+// The entry is one thing to the client even where it is a file per language, so a commit that
+// wrote both is one version — and who made it is the log's answer where git only has the App.
+test('history merges the language files into one list and names who published', async () => {
+  locales = ['en', 'de'];
+  commitLog[EN] = [
+    { sha: 'aaa111', date: '2026-08-30T10:00:00Z', message: 'Update price\n\n- two files' },
+    { sha: 'ccc333', date: '2026-08-20T10:00:00Z', message: 'Create The Mill House' },
+  ];
+  commitLog[DE] = [
+    { sha: 'aaa111', date: '2026-08-30T10:00:00Z', message: 'Update price\n\n- two files' },
+    { sha: 'bbb222', date: '2026-08-25T10:00:00Z', message: 'Translate', author: 'Martin Conde' },
+  ];
+  committedBy.aaa111 = 'Anna Weber';
+
+  const res = await GET(history('history/listings/mill-house'));
+
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    versions: [
+      {
+        sha: 'aaa111',
+        date: '2026-08-30T10:00:00Z',
+        summary: 'Update price',
+        locales: ['en', 'de'],
+        author: 'Anna Weber',
+      },
+      {
+        sha: 'bbb222',
+        date: '2026-08-25T10:00:00Z',
+        summary: 'Translate',
+        locales: ['de'],
+        author: 'Martin Conde',
+      },
+      {
+        sha: 'ccc333',
+        date: '2026-08-20T10:00:00Z',
+        summary: 'Create The Mill House',
+        locales: ['en'],
+      },
+    ],
+    more: false,
+  });
+});
+
+// Nothing published is not an error: it is the sentence the tab says while it waits.
+test('an entry with no commits has an empty history', async () => {
+  const res = await GET(history('history/listings/mill-house'));
+
+  expect(await res.json()).toEqual({ versions: [], more: false });
+});
+
+test('history refuses a collection the site does not declare', async () => {
+  expect((await GET(history('history/nope/mill-house'))).status).toBe(404);
+});
+
+// A page is one request per language file, and the page after it is read from the top again:
+// the merge cuts the list, so a per-path cursor would start below the cut.
+test('a second page of history reads both files twice and reaches the older commit', async () => {
+  commitLog[EN] = Array.from({ length: 31 }, (_, i) => ({
+    sha: `en${i}`,
+    date: new Date(Date.UTC(2026, 7, 31, 0, 0, 0) - i * 3_600_000).toISOString(),
+    message: `Edit ${i}`,
+  }));
+
+  const first = (await (await GET(history('history/listings/mill-house'))).json()) as {
+    versions: { sha: string }[];
+    more: boolean;
+  };
+  expect(first.versions).toHaveLength(30);
+  expect(first.more).toBe(true);
+
+  const second = (await (await GET(history('history/listings/mill-house', '?page=2'))).json()) as {
+    versions: { sha: string }[];
+    more: boolean;
+  };
+  expect(second.versions).toHaveLength(31);
+  expect(second.more).toBe(false);
+  expect(fileCommits).toHaveBeenCalledWith(EN, { perPage: 30, page: 2 });
+});
+
+// What is marked is what restoring this version would change, so the version is the *after*
+// side and what is live now is the before.
+test('a version is diffed against what is live now', async () => {
+  files[`abc1234:${EN}`] = 'title: The Mill House\nlocation: Bakewell\nrooms: 2\n';
+  files[EN] = 'title: The Mill House\nlocation: Bakewell\nrooms: 3\n';
+
+  const res = await GET(history('history/listings/mill-house/diff', '?to=abc1234'));
+
+  expect(res.status).toBe(200);
+  const { groups } = (await res.json()) as {
+    groups: { locale?: string; changes: { label: string; before?: string; after?: string }[] }[];
+  };
+  expect(groups.flatMap((g) => g.changes)).toEqual([
+    { path: 'rooms', label: 'Rooms', kind: 'value', before: '3', after: '2' },
+  ]);
+  expect(getFile).toHaveBeenCalledWith(EN, 'head789');
+});
+
+test('two versions are diffed against each other rather than against the branch', async () => {
+  getHead.mockClear();
+  files[`abc1234:${EN}`] = 'title: The Mill House\nlocation: Bakewell\nrooms: 2\n';
+  files[`def5678:${EN}`] = 'title: The Mill House\nlocation: Bakewell\nrooms: 4\n';
+
+  const res = await GET(history('history/listings/mill-house/diff', '?from=abc1234&to=def5678'));
+
+  const { groups } = (await res.json()) as { groups: { changes: { after?: string }[] }[] };
+  expect(groups.flatMap((g) => g.changes.map((c) => c.after))).toEqual(['4']);
+  expect(getHead).not.toHaveBeenCalled();
+});
+
+test('a version diff of something that is not a commit is refused', async () => {
+  const res = await GET(history('history/listings/mill-house/diff', '?to=../../etc'));
+
+  expect(res.status).toBe(400);
 });

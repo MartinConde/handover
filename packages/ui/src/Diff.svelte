@@ -20,7 +20,9 @@ const shown = $derived(groups.filter((g) => g.locale !== undefined || g.changes.
 
 <div class="change-diff">
   {#each shown as group (group.locale ?? '')}
-    <h4>{group.locale ? named(group.locale) : languages === 2 ? 'Both languages' : 'All languages'}</h4>
+    <!-- h3 and not the mockup's h4: this sits directly under the drawer's own h2 and under the
+         history pane's, and a level nobody has is a level a screen reader reports as missing. -->
+    <h3>{group.locale ? named(group.locale) : languages === 2 ? 'Both languages' : 'All languages'}</h3>
     <div class="diff">
       {#if group.removed}
         <div class="row is-block"><del>The {named(group.locale ?? '')} version was removed</del></div>

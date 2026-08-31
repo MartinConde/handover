@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, expect, test } from 'vitest';
 import {
   activityGroupOf,
   activityPage,
+  commitAuthors,
   deletedEntries,
   expireActivity,
   lastCommit,
@@ -337,4 +338,21 @@ test('a delete that made no commit is not in the deleted list', async () => {
   });
 
   expect(await deletedEntries('default', db, 'listings')).toEqual([]);
+});
+
+// Git records the installation rather than the person, so this lookup is the only thing that
+// can put a name against a version the admin committed.
+test('commit authors are the people the log recorded against those commits', async () => {
+  await seedUser('u1', 'Anna Weber', 'anna@example.com');
+  await seedUser('u2', '', 'martin@example.com');
+  await seedEvent({ id: 'e1', at: 1, userId: 'u1', kind: 'publish', commitSha: 'aaa111' });
+  await seedEvent({ id: 'e2', at: 2, userId: 'u1', kind: 'hold-released', commitSha: 'aaa111' });
+  await seedEvent({ id: 'e3', at: 3, userId: 'u2', kind: 'entry-rename', commitSha: 'bbb222' });
+  await seedEvent({ id: 'e4', at: 4, userId: null, kind: 'publish', commitSha: 'ccc333' });
+
+  // The name and never the email: this list is not narrowed to the person reading it, so an
+  // email here would be a way to find out who else has an account.
+  expect(await commitAuthors('default', db, ['aaa111', 'bbb222', 'ccc333', 'ddd444'])).toEqual({
+    aaa111: 'Anna Weber',
+  });
 });

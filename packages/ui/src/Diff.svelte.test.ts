@@ -21,7 +21,7 @@ test('a language nothing happened in says so, because silence reads as not loade
     { locale: 'de', changes: [] },
   ]);
 
-  expect(Array.from(body.querySelectorAll('h4')).map((h) => h.textContent)).toEqual([
+  expect(Array.from(body.querySelectorAll('h3')).map((h) => h.textContent)).toEqual([
     'English',
     'German',
   ]);
@@ -60,6 +60,6 @@ test('a language that went is one line, not a deletion per field', () => {
     { locale: 'de', removed: true, changes: [] },
   ]);
 
-  const german = Array.from(root.querySelectorAll('h4')).find((h) => h.textContent === 'German');
+  const german = Array.from(root.querySelectorAll('h3')).find((h) => h.textContent === 'German');
   expect(german?.nextElementSibling?.textContent?.trim()).toBe('The German version was removed');
 });

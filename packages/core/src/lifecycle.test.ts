@@ -22,6 +22,7 @@ function fakeGit(files: Record<string, string>) {
     getHead: async () => 'commit-A',
     getCommit: () => Promise.reject(new Error('not used')),
     contentFiles: () => Promise.reject(new Error('not used')),
+    fileCommits: () => Promise.reject(new Error('not used')),
     getFile: async (path, at) => {
       read.push({ path, at });
       const contents = files[path];

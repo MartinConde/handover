@@ -2,6 +2,7 @@
 import { type Drift, entryName, entryUrl, type Field, LOCK_TTL } from '@handover/core';
 import DriftPanel from './Drift.svelte';
 import Fields from './Fields.svelte';
+import History from './History.svelte';
 import { navigate } from './navigate';
 import OffsiteDialog, { type Target } from './Offsite.svelte';
 import PreviewPane from './Preview.svelte';
@@ -15,6 +16,7 @@ let {
   collection,
   slug,
   entry,
+  section = '',
   mediaBase = '',
   preview = false,
   userId = '',
@@ -81,6 +83,8 @@ let {
     /** Whether the default language's URLs carry its segment. */
     prefixDefaultLocale?: boolean;
   };
+  /** Which of the entry's tabs the address is on; empty is the form itself. */
+  section?: string;
   /** A file of this entry was made, removed or settled: it has to be read again, screen with it. */
   onchanged: () => void;
   /**
@@ -859,14 +863,20 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     {/if}
     <!-- A global holds the site-wide SEO defaults rather than having its own, and there is no
          second version of a file the schema names: no tabs at all rather than three dead ones. -->
+    <!-- Links and not a `role="tablist"`, which the mockup draws: each of these is an address
+         the browser's back button and a shared link both have to land on, and a tab that
+         navigates is not the widget that role claims. 4.16 must not port the roles back. -->
     {#if !entry.singleton}
-      <div class="tabs" role="tablist" aria-label="Entry sections">
-        <button type="button" role="tab" aria-selected="true">Content</button>
-        <button type="button" role="tab" aria-selected="false" disabled>SEO</button>
-        <button type="button" role="tab" aria-selected="false" disabled>History</button>
-      </div>
+      <nav class="tabs" aria-label="Entry sections">
+        <a href="/admin/c/{collection}/{slug}" aria-current={section === '' ? 'page' : undefined}>Content</a>
+        <button type="button" disabled>SEO</button>
+        <a href="/admin/c/{collection}/{slug}/history" aria-current={section === 'history' ? 'page' : undefined}>History</a>
+      </nav>
     {/if}
   </header>
+  {#if section === 'history'}
+    <History {collection} {slug} locales={entry.locales} />
+  {:else}
   <!-- A decision to make, not a form to fill: the panel stands where the form would be, because
        every field on it belongs to a structure the languages have not agreed on yet. -->
   <div class="entry-body" class:has-pane={!entry.drift.length && (!alone || previewing)}>
@@ -996,6 +1006,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {/if}
     {/if}
   </div>
+  {/if}
   <!-- It commits, so it confirms — and it names everything that goes with the entry, which is
        every language file. What it never offers is a choice of what to include: an entry
        publishes whole or not at all, and picking is what the drawer is for. -->

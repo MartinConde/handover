@@ -111,6 +111,27 @@ where that language served the entry to where it serves it now — and one only,
 times the address was changed before publishing. The other languages' URLs did not move, so
 nothing is written for them, and an entry that has never been published owes nothing at all.
 
+## Version history
+
+Every entry has a **History** tab (`/admin/c/<collection>/<entry>/history`) — the git log of
+that entry, read from GitHub when the tab is opened and stored nowhere. A commit that wrote
+several of the entry's language files is **one version**: the entry is one thing, and the row
+wears a chip per language it touched. A site with more than one language can narrow the list to
+one of them.
+
+- **Who made a version** is the person who pressed the button, taken from the [activity
+  log](activity.md) row that carries the same commit. Commits the admin makes are the GitHub
+  App's, so git records the App and not them; a commit somebody pushed themselves keeps the
+  name git has. Past the log's 180-day window a version simply has no name against it.
+- **Choosing a version** shows what it says that the live site does not, field by field, in the
+  same per-field diff the [pending-changes drawer](pending-changes.md) uses — so what is marked
+  is what restoring that version would change. **Ticking two** compares them with each other
+  instead; a third is not offered.
+- The list is paged at 30 versions; **Show older versions** reads the next page.
+- An entry that has never been published has no history, and the tab says so.
+
+Restoring a version is not built yet: history is read-only, and git is never rewritten.
+
 ## The endpoints
 
 The routes behind all of this — the draft writes, the publish, the build status and the
@@ -145,6 +166,8 @@ without a restart.
 The build pill has no **quota** state and none is planned: the Builds API carries no usage
 against the free plan's monthly build minutes, so a build that fails for want of them reads as
 an ordinary failure. The publish rows in the [activity log](activity.md) do not expand into
-what the commit changed, though the drawer shows the same diff before it goes out. The drawer
+what the commit changed, though the drawer shows the same diff before it goes out. History has
+no **Restore this version**, and it cannot follow an entry through a rename — the addresses it
+reads are the ones the entry has now. The drawer
 runs no pre-publish checks, and **Publish this entry** does not name the redirect rules riding
 along with it the way the drawer does.

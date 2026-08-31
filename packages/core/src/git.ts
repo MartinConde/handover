@@ -20,6 +20,54 @@ export interface PublishFile {
   contents: string | null;
 }
 
+/** One commit as a history list needs to know it. */
+export interface FileCommit {
+  sha: string;
+  /** When it was authored, ISO 8601 as GitHub writes it. */
+  date: string;
+  message: string;
+  /** Who git records; absent where the App committed on somebody's behalf. */
+  author?: string;
+}
+
+/** One language file's page of commits, and whether GitHub still had older ones. */
+export interface CommitPage {
+  locale: string;
+  commits: FileCommit[];
+  more: boolean;
+}
+
+/** A commit of one entry: the same commit however many of its language files it touched. */
+export interface EntryVersion extends FileCommit {
+  locales: string[];
+}
+
+/**
+ * One entry's versions out of its languages' commit lists. An entry is one thing to the client
+ * even where it is a file per language, so a commit is one version and carries the languages
+ * it touched.
+ *
+ * **The list is cut where the shallowest unfinished page ends.** The pages are read per path
+ * and are independent, so a commit that touched only the German file can sit between two pages
+ * of the English one; showing past the newest of those ends would leave a hole nobody could
+ * see, and the next page is read from the top again rather than from where this one stopped.
+ */
+export function mergeFileCommits(pages: CommitPage[]): { versions: EntryVersion[]; more: boolean } {
+  const found = new Map<string, EntryVersion>();
+  for (const page of pages)
+    for (const commit of page.commits) {
+      const seen = found.get(commit.sha);
+      if (seen) seen.locales.push(page.locale);
+      else found.set(commit.sha, { ...commit, locales: [page.locale] });
+    }
+  const at = (date: string | undefined) => Date.parse(date ?? '') || 0;
+  const versions = [...found.values()].sort((a, b) => at(b.date) - at(a.date));
+  const ends = pages.filter((p) => p.more).map((p) => at(p.commits.at(-1)?.date));
+  if (ends.length === 0) return { versions, more: false };
+  const floor = Math.max(...ends);
+  return { versions: versions.filter((v) => at(v.date) >= floor), more: true };
+}
+
 /** One commit as undoing it needs to know it. */
 export interface GitCommit {
   sha: string;
@@ -45,6 +93,11 @@ export interface GitClient {
    * request — a site with two hundred listings would have run out long before the answer.
    */
   contentFiles(): Promise<ContentFile[]>;
+  /**
+   * The commits that touched one path, newest first, one page at a time. A caller merging
+   * several paths asks each of them for the same depth — see `mergeFileCommits`.
+   */
+  fileCommits(path: string, opts?: { perPage?: number; page?: number }): Promise<FileCommit[]>;
   getCommit(sha: string): Promise<GitCommit>;
   publish(
     files: PublishFile[],
@@ -266,6 +319,33 @@ export function createGitClient(
       const found: ContentFile[] = [];
       collect(body.data?.repository?.object ?? undefined, 'src/content/', found);
       return found;
+    },
+
+    async fileCommits(path, { perPage = 30, page = 1 } = {}) {
+      const query = new URLSearchParams({
+        path,
+        sha: app.branch ?? 'main',
+        per_page: String(perPage),
+        page: String(page),
+      });
+      const body = await json<
+        {
+          sha: string;
+          commit: { message: string; author?: { name?: string; date?: string } };
+          author: { type?: string } | null;
+        }[]
+      >(`${repo}/commits?${query}`, {}, 'list commits');
+      return body.map((c) => ({
+        sha: c.sha,
+        date: c.commit.author?.date ?? '',
+        message: c.commit.message,
+        // A commit the App made carries the App's own name, which is nobody the client has
+        // ever met. Only a person who pushed themselves is named here; who pressed Publish is
+        // the log's answer, not git's.
+        ...(c.author?.type && c.author.type !== 'Bot' && c.commit.author?.name
+          ? { author: c.commit.author.name }
+          : {}),
+      }));
     },
 
     async getCommit(sha) {

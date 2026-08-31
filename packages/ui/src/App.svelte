@@ -44,7 +44,7 @@ let session = $state(signedIn);
 // moves itself from there
 let path = $state(landedAt);
 
-const entryRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)\/([\w-]+)$/));
+const entryRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)\/([\w-]+)(?:\/(history))?$/));
 const listRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)$/));
 // A global is edited on the entry screen, so its route is the entry route under another name:
 // `globals` is the collection and the file name is the slug. Redirects live under the same
@@ -56,9 +56,24 @@ const editing = $derived(
   globalRoute
     ? { collection: 'globals', slug: globalRoute[1] ?? '' }
     : entryRoute
-      ? { collection: entryRoute[1] ?? '', slug: entryRoute[2] ?? '' }
+      ? { collection: entryRoute[1] ?? '', slug: entryRoute[2] ?? '', section: entryRoute[3] ?? '' }
       : undefined,
 );
+/**
+ * Which entry the screen is on, as one string. Everything below turns on *this* rather than on
+ * `editing`, which is a new object on every address change: an entry's tabs are addresses of
+ * the same entry, and re-reading it on a tab click would throw away what is typed, which
+ * language the switcher is on and whether the second column is open.
+ */
+const editingAt = $derived(editing ? `${editing.collection}/${editing.slug}` : '');
+const openEntry = $derived.by(() => {
+  // Read on purpose: `reload` is the entry's files having moved under it, and that is the one
+  // thing besides the entry itself that has to be read again.
+  void reload;
+  if (!editingAt) return undefined;
+  const [collection = '', slug = ''] = editingAt.split('/');
+  return loadEntry(collection, slug);
+});
 
 // Members and Settings are owner-only in the screen inventory, so an editor's sidebar has
 // neither.
@@ -339,14 +354,16 @@ const initial = $derived(
         <button class="btn" type="button" onclick={signOut}>Sign out</button>
       </div>
     </header>
-    {#key `${path}#${reload}`}
+    <!-- Keyed on the entry rather than on the address, for the reason `editingAt` gives. -->
+    {#key `${editingAt || path}#${reload}`}
     {#if editing}
-      {#await loadEntry(editing.collection, editing.slug)}
+      {#await openEntry}
         <main class="main"><p class="placeholder">Loading…</p></main>
       {:then entry}
         <Editor
           collection={editing.collection}
           slug={editing.slug}
+          section={editing.section ?? ''}
           {entry}
           mediaBase={session?.mediaBase ?? ''}
           preview={session?.preview ?? false}

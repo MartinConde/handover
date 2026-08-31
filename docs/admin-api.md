@@ -219,6 +219,33 @@ carries `blocked`, a sentence naming the path that is occupied again. Only rows 
 behind them are listed — an entry deleted before it was ever published made none. `404` when
 the collection is not configured.
 
+```
+GET /admin/api/history/:collection/:slug?page=1  →  { "versions": [ … ], "more": false }
+```
+
+The entry's git log, merged across its language files: one entry of `{ "sha", "date",
+"summary", "locales", "author" }` per commit, newest first, with `locales` the languages that
+commit touched and `summary` the commit's first line. `author` is the person the [activity
+log](activity.md) recorded against that commit, falling back to git's own author and absent
+where the commit is the GitHub App's — the App is what makes them, so git names it rather than
+the editor. Nothing is stored: every open is a read of GitHub.
+
+Paged at 30 per language file. `more` says GitHub still had older ones; the next page is read
+from the top again rather than carried on, because the merge cuts the list where the shallowest
+page ends — a commit that touched only the German file can sit between two pages of the English
+one. `page` is capped at 10. `404` when the collection is not configured; `503` when the
+repository is out of reach.
+
+```
+GET /admin/api/history/:collection/:slug/diff?to=<sha>&from=<sha>  →  { "groups": [ … ] }
+```
+
+What the version named by `to` says that the one named by `from` does not, in the same
+[per-field diff](pending-changes.md) the drawer draws. Without `from` the other side is the
+branch as it is now, so what is marked is what restoring `to` would change. Both are read at
+the addresses the entry has **now**: a version from before a rename is not followed. `400`
+when either is not a commit.
+
 ## Redirects
 
 The table over `src/content/redirects.yaml` ([Site files](site-files.md#redirects)). These

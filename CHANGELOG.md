@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Version history on every entry.** A **History** tab beside Content shows that entry's git
+  log, read from GitHub on open and stored nowhere: a commit that wrote several of the entry's
+  language files is one version, with a chip per language and the person who published it from
+  the activity log — git records the App that makes the commit, not them. Choosing a version
+  shows what it says that the live site does not, in the drawer's per-field diff; ticking two
+  compares them with each other ([Publishing](docs/publishing.md#version-history)).
+- **The entry tabs are addresses.** Content and History are links, so the back button, a reload
+  and a shared link all land where they should; the entry itself is not loaded again when the
+  tab changes.
 - **A redirects manager.** *Site settings → Redirects* is a table over `src/content/redirects.yaml`:
   every rule the pipeline wrote — a rename, a hide, a delete — beside the ones the client adds by
   hand, searchable and filtered by reason. Add, edit and delete a rule; picking the destination

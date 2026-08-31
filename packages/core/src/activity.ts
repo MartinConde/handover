@@ -260,6 +260,34 @@ export async function lastCommit(
 }
 
 /**
+ * Who the log says made each of these commits. Git cannot answer it: a commit the admin makes
+ * is the installation's, so the person who pressed the button survives here and nowhere else —
+ * and only for as long as the retention window below keeps the row. Older than that, and a
+ * version simply has no name against it.
+ */
+export async function commitAuthors(
+  siteId: string,
+  db: Db,
+  shas: readonly string[],
+): Promise<Record<string, string>> {
+  // An entry with no commits yet is the common way in here; it costs no read.
+  if (shas.length === 0) return {};
+  const rows = await db
+    .select({ sha: activity.commitSha, name: user.name })
+    .from(activity)
+    .innerJoin(user, eq(activity.userId, user.id))
+    .where(and(eq(activity.siteId, siteId), inArray(activity.commitSha, [...shas])));
+  const found: Record<string, string> = {};
+  // The name and never the email: the log is deliberately not a way to find out who else has an
+  // account, and this list — unlike the activity page — is not narrowed to the person reading it.
+  // A member who has not set a name has no name against their versions.
+  // A commit can carry more than one event — a publish releases the holds it went through —
+  // and they are the same person, so the first row to name one wins.
+  for (const row of rows) if (row.sha && row.name && !(row.sha in found)) found[row.sha] = row.name;
+  return found;
+}
+
+/**
  * How long a row is kept. The one place the never-delete principle does not apply: this is
  * telemetry about client data rather than client data, and git holds the other half forever.
  */

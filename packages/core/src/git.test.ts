@@ -1,5 +1,11 @@
 import { expect, test } from 'vitest';
-import { blobSha, createGitClient, RefMovedError, RepoUnreachableError } from './git.js';
+import {
+  blobSha,
+  createGitClient,
+  mergeFileCommits,
+  RefMovedError,
+  RepoUnreachableError,
+} from './git.js';
 
 // A real key pair so the fake token endpoint can verify the JWT the client signs.
 const keys = await crypto.subtle.generateKey(
@@ -39,6 +45,7 @@ function fakeGitHub(
   files: Record<string, string>,
   visible = true,
   commits: Record<string, unknown> = {},
+  log: Record<string, unknown[]> = {},
 ) {
   const calls: string[] = [];
   let minted = 0;
@@ -61,6 +68,14 @@ function fakeGitHub(
     if (!visible) return new Response('{"message":"Not Found"}', { status: 404 });
     if (url === 'https://api.github.com/repos/acme/site')
       return Response.json({ full_name: 'acme/site' });
+    const listed = url.match(/^https:\/\/api\.github\.com\/repos\/acme\/site\/commits\?(.+)$/)?.[1];
+    if (listed) {
+      const query = new URLSearchParams(listed);
+      const per = Number(query.get('per_page'));
+      const page = Number(query.get('page'));
+      const all = (log[query.get('path') ?? ''] ?? []) as unknown[];
+      return Response.json(all.slice((page - 1) * per, page * per));
+    }
     const commit = url.match(/^https:\/\/api\.github\.com\/repos\/acme\/site\/commits\/(.+)$/)?.[1];
     if (commit) {
       const found = commits[commit];
@@ -382,4 +397,100 @@ test('contentFiles refuses a file GitHub would only answer in part', async () =>
   const git = createGitClient('default', app, { fetch: gh.fetch });
 
   await expect(git.contentFiles()).rejects.toThrow(/mill-house\.yaml/);
+});
+
+const logged = (
+  sha: string,
+  date: string,
+  message: string,
+  who?: { name: string; bot?: true },
+) => ({
+  sha,
+  commit: { message, author: { name: who?.name ?? 'handover[bot]', date } },
+  author: who && !who.bot ? { type: 'User' } : { type: 'Bot' },
+});
+
+test('fileCommits reads one path of the branch and names only a person', async () => {
+  const gh = fakeGitHub(
+    {},
+    true,
+    {},
+    {
+      'src/content/listings/en/mill-house.yaml': [
+        logged('aaa', '2026-08-30T10:00:00Z', 'Update price\n\n- one file', {
+          name: 'Martin Conde',
+        }),
+        logged('bbb', '2026-08-29T10:00:00Z', 'Update listings/en/mill-house'),
+      ],
+    },
+  );
+  const git = createGitClient('default', app, { fetch: gh.fetch });
+
+  const commits = await git.fileCommits('src/content/listings/en/mill-house.yaml');
+
+  expect(commits).toEqual([
+    {
+      sha: 'aaa',
+      date: '2026-08-30T10:00:00Z',
+      message: 'Update price\n\n- one file',
+      author: 'Martin Conde',
+    },
+    { sha: 'bbb', date: '2026-08-29T10:00:00Z', message: 'Update listings/en/mill-house' },
+  ]);
+  expect(gh.calls.at(-1)).toContain(
+    'commits?path=src%2Fcontent%2Flistings%2Fen%2Fmill-house.yaml&sha=main&per_page=30&page=1',
+  );
+});
+
+const page = (locale: string, commits: { sha: string; date: string }[], more = false) => ({
+  locale,
+  commits: commits.map((c) => ({ ...c, message: `Update ${c.sha}` })),
+  more,
+});
+
+// One commit that wrote both language files is one version of the entry, and it says so.
+test('mergeFileCommits makes one version of a commit both languages carry', () => {
+  const merged = mergeFileCommits([
+    page('en', [
+      { sha: 'aaa', date: '2026-08-30T10:00:00Z' },
+      { sha: 'ccc', date: '2026-08-28T10:00:00Z' },
+    ]),
+    page('de', [{ sha: 'aaa', date: '2026-08-30T10:00:00Z' }]),
+  ]);
+
+  expect(merged.versions.map((v) => [v.sha, v.locales])).toEqual([
+    ['aaa', ['en', 'de']],
+    ['ccc', ['en']],
+  ]);
+  expect(merged.more).toBe(false);
+});
+
+// The pages are read per path, so the German file's own commits are not in the English page at
+// all: merging past where a still-unfinished page ends would leave a hole nobody could see.
+test('mergeFileCommits cuts the list where the shallowest unfinished page ends', () => {
+  const merged = mergeFileCommits([
+    page(
+      'en',
+      [
+        { sha: 'aaa', date: '2026-08-30T10:00:00Z' },
+        { sha: 'bbb', date: '2026-08-20T10:00:00Z' },
+      ],
+      true,
+    ),
+    page('de', [{ sha: 'ddd', date: '2026-08-25T10:00:00Z' }], true),
+  ]);
+
+  expect(merged.versions.map((v) => v.sha)).toEqual(['aaa', 'ddd']);
+  expect(merged.more).toBe(true);
+});
+
+// A German-only commit older than every English one is still this entry's history, and nothing
+// is left to fetch that could push it out of place.
+test('mergeFileCommits keeps a commit only one language has when every page is finished', () => {
+  const merged = mergeFileCommits([
+    page('en', [{ sha: 'aaa', date: '2026-08-30T10:00:00Z' }]),
+    page('de', [{ sha: 'ddd', date: '2026-07-01T10:00:00Z' }]),
+  ]);
+
+  expect(merged.versions.map((v) => v.sha)).toEqual(['aaa', 'ddd']);
 });

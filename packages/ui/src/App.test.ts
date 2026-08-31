@@ -501,3 +501,53 @@ test('back and forward move the screen with the address', () => {
   flushSync();
   expect(root.querySelector('main.main h1')?.textContent).toBe('Activity');
 });
+
+// An entry's tabs are addresses of the same entry: moving between them must not re-read the
+// entry, or everything the person has typed and every switch they have set goes with it.
+test('the history tab is an address of the same entry, not a second load of it', async () => {
+  const fetchMock = vi.fn(async (url: string) => {
+    if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
+    if (url === '/admin/api/drafts') return Response.json({ entries: [] });
+    if (url === '/admin/api/build') return Response.json({});
+    if (url.startsWith('/admin/api/history/')) return Response.json({ versions: [], more: false });
+    if (url.startsWith('/admin/api/locks/'))
+      return Response.json({ held_by: null, mine: true, expires_at: 1755864120000, base: {} });
+    return Response.json({
+      fields: [],
+      blocks: {},
+      data: { title: 'The Mill House' },
+      pending: [],
+      published: ['en'],
+      problems: [],
+      locales: ['en'],
+      defaultLocale: 'en',
+      sourceLocale: 'en',
+      offered: ['en'],
+      translations: {},
+      stale: [],
+      drift: [],
+    });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const settle = async () => {
+    for (let i = 0; i < 3; i++) {
+      await new Promise((r) => setTimeout(r, 0));
+      flushSync();
+    }
+  };
+  const loads = () =>
+    fetchMock.mock.calls.filter(([url]) => url === '/admin/api/entries/listings/mill-house').length;
+
+  const root = show(session(), '/admin/c/listings/mill-house');
+  await settle();
+  expect(loads()).toBe(1);
+  expect(root.querySelector('.form')).not.toBeNull();
+
+  root.querySelector<HTMLAnchorElement>('.tabs a[href$="/history"]')?.click();
+  await settle();
+
+  expect(location.pathname).toBe('/admin/c/listings/mill-house/history');
+  expect(root.querySelector('.history')).not.toBeNull();
+  expect(root.querySelector('.form')).toBeNull();
+  expect(loads()).toBe(1);
+});

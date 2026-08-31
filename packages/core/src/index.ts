@@ -8,6 +8,7 @@ export {
   ACTIVITY_GROUPS,
   activityGroupOf,
   activityPage,
+  commitAuthors,
   deletedEntries,
   lastCommit,
   logActivity,
@@ -107,8 +108,23 @@ export {
   indexFrom,
   templatesFrom,
 } from './entries.js';
-export type { GitClient, GitCommit, GitFile, GitHubApp, PublishFile } from './git.js';
-export { blobSha, createGitClient, RefMovedError, RepoUnreachableError } from './git.js';
+export type {
+  CommitPage,
+  EntryVersion,
+  FileCommit,
+  GitClient,
+  GitCommit,
+  GitFile,
+  GitHubApp,
+  PublishFile,
+} from './git.js';
+export {
+  blobSha,
+  createGitClient,
+  mergeFileCommits,
+  RefMovedError,
+  RepoUnreachableError,
+} from './git.js';
 export type { EntryLocation, RedirectRule, RedirectSite } from './lifecycle.js';
 export {
   appendRedirects,

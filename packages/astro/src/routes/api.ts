@@ -5,6 +5,7 @@ import type {
   Answer,
   Db,
   EntryLocation,
+  FileCommit,
   Form,
   GitClient,
   IndexEntry,
@@ -26,6 +27,7 @@ import {
   clearPublished,
   collapseRedirects,
   collectionEntries,
+  commitAuthors,
   commitBuild,
   confirmUpload,
   createDraft,
@@ -69,6 +71,7 @@ import {
   mediaUsage,
   memberApi,
   memberList,
+  mergeFileCommits,
   moveLock,
   namedBy,
   openDb,
@@ -1804,6 +1807,99 @@ async function entryDiff(collection: string, slug: string): Promise<Response> {
   });
 }
 
+const HISTORY_PAGE = 30;
+const SHA = /^[0-9a-f]{7,40}$/;
+
+/**
+ * One language file's commits down to the page asked for, and whether GitHub still had older
+ * ones. The pages are read from the top each time rather than carried on from where the last
+ * one stopped, because the merge across languages cuts the list and a per-path cursor would
+ * then start below the cut — see `mergeFileCommits`.
+ */
+async function commitsFor(git: GitClient, path: string, pages: number) {
+  const commits: FileCommit[] = [];
+  let more = false;
+  for (let page = 1; page <= pages; page++) {
+    const got = await git.fileCommits(path, { perPage: HISTORY_PAGE, page });
+    commits.push(...got);
+    more = got.length === HISTORY_PAGE;
+    if (!more) break;
+  }
+  return { commits, more };
+}
+
+/**
+ * One entry's versions: the commits of every language file it has, merged, newest first. A read
+ * of the branch and nothing else — nothing this derived is written down, so history costs the
+ * same on every open.
+ *
+ * **Who made a version is the log's answer, not git's.** A commit the admin makes is the
+ * installation's, so git names the App; the person who pressed Publish is in the activity row
+ * that carries the same sha, and a commit somebody pushed themselves keeps the name git has.
+ */
+async function entryHistory(collection: string, slug: string, url: URL): Promise<Response> {
+  if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
+  const asked = Number(url.searchParams.get('page') ?? 1);
+  // Every page is one request per language file, so the depth is capped rather than trusted:
+  // fifty subrequests is what the Free plan allows a request in total.
+  const pages = Math.min(Math.max(Number.isSafeInteger(asked) ? asked : 1, 1), 10);
+  const git = gitClient();
+  const read = await Promise.all(
+    Object.entries(entryPaths(collection, slug)).map(async ([locale, path]) => ({
+      locale,
+      ...(await commitsFor(git, path, pages)),
+    })),
+  );
+  const { versions, more } = mergeFileCommits(read);
+  const authors = await commitAuthors(
+    'default',
+    db(),
+    versions.map((v) => v.sha),
+  );
+  return Response.json({
+    versions: versions.map((version) => {
+      const author = authors[version.sha] ?? version.author;
+      return {
+        sha: version.sha,
+        date: version.date,
+        // The first line only: a commit body is the list of files it wrote, and the row beside
+        // it already says which languages those were.
+        summary: version.message.split('\n')[0] ?? '',
+        locales: version.locales,
+        ...(author ? { author } : {}),
+      };
+    }),
+    more,
+  });
+}
+
+/**
+ * What one version says that another does not, field by field, in the drawer's own diff.
+ * `from` is what is live now unless the caller names a commit, so the fields marked are the
+ * ones restoring this version would change — which is the question somebody reading a version
+ * is asking.
+ */
+async function versionDiff(collection: string, slug: string, url: URL): Promise<Response> {
+  if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
+  const to = url.searchParams.get('to') ?? '';
+  const asked = url.searchParams.get('from');
+  if (!SHA.test(to) || (asked !== null && !SHA.test(asked)))
+    return Response.json({ error: 'a version is named by its commit' }, { status: 400 });
+  const git = gitClient();
+  const from = asked ?? (await git.getHead());
+  const at = async (ref: string) => {
+    const read = await Promise.all(
+      Object.entries(entryPaths(collection, slug)).map(async ([locale, path]) => {
+        const file = await git.getFile(path, ref);
+        return file ? ([locale, parseEntry('default', file.contents)] as const) : undefined;
+      }),
+    );
+    return Object.fromEntries(read.filter((f) => f !== undefined));
+  };
+  const [before, after] = await Promise.all([at(from), at(to)]);
+  return Response.json({ groups: diffEntry('default', formFor(collection, slug), before, after) });
+}
+
 /**
  * The three-way view: what both sides started from, what only one of them changed and is
  * merged without asking, and the fields somebody has to answer. `409` when nothing of the
@@ -2631,6 +2727,8 @@ const LOCALES = /^entries\/([\w-]+)\/([\w-]+)\/locales$/;
 const ADDRESS = /^entries\/([\w-]+)\/([\w-]+)\/address\/([\w-]+)$/;
 const DRIFT = /^drift\/([\w-]+)\/([\w-]+)$/;
 const DIFF = /^diff\/([\w-]+)\/([\w-]+)$/;
+const HISTORY = /^history\/([\w-]+)\/([\w-]+)$/;
+const VERSION = /^history\/([\w-]+)\/([\w-]+)\/diff$/;
 const CONFLICT = /^conflict\/([\w-]+)\/([\w-]+)$/;
 const LOCK = /^locks\/([\w-]+)\/([\w-]+)$/;
 const HOLD = /^hold\/([\w-]+)\/([\w-]+)$/;
@@ -2696,6 +2794,10 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
     );
   const changed = params.path?.match(DIFF);
   if (changed) return answering(() => entryDiff(changed[1] ?? '', changed[2] ?? ''));
+  const version = params.path?.match(VERSION);
+  if (version) return answering(() => versionDiff(version[1] ?? '', version[2] ?? '', url));
+  const past = params.path?.match(HISTORY);
+  if (past) return answering(() => entryHistory(past[1] ?? '', past[2] ?? '', url));
   const against = params.path?.match(CONFLICT);
   if (against) return answering(() => conflictView(against[1] ?? '', against[2] ?? ''));
   const entry = params.path?.match(ENTRY);
