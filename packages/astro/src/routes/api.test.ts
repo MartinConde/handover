@@ -1777,6 +1777,7 @@ test('the pending list is what the drafts hold that the repository does not', as
   const res = await GET(ctx('drafts'));
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
+    defaultLocale: 'en',
     entries: [
       {
         key: 'listings/mill-house',
@@ -1910,6 +1911,7 @@ test('a global waiting to be published is listed under its label', async () => {
   const res = await GET(ctx('drafts'));
 
   expect(await res.json()).toEqual({
+    defaultLocale: 'en',
     entries: [
       {
         key: 'globals/site',
@@ -1943,6 +1945,7 @@ test('the pending list is one row per entry, whatever languages of it are waitin
   }));
   const res = await GET(ctx('drafts'));
   expect(await res.json()).toEqual({
+    defaultLocale: 'en',
     entries: [
       {
         key: 'listings/mill-house',
@@ -4781,6 +4784,7 @@ test('the drawer reads the hold as the entry\u2019s, whichever of its files carr
   const res = await GET(ctx('drafts'));
 
   expect(await res.json()).toEqual({
+    defaultLocale: 'en',
     entries: [
       {
         key: 'listings/mill-house',

@@ -70,7 +70,8 @@ the collection schema is not done with, and languages that have drifted apart.
   no SEO defaults gets two on every entry it publishes
 - Every item but the machine-translation note carries **Go to field**, which opens the entry
   with that field focused — on its SEO tab for a search field, and with the language the result
-  is about open beside the form when it is not the one the entry is written in
+  is about open beside the form when it is not the one the entry is written in. A problem found
+  in several languages is one line, and its link opens the site's default language
 - A pass that could not be run says so and holds nothing back: a lint nobody could run is not
   a reason to stop you publishing your own site
 - A rule that is noise on a particular site is turned off in `cms.config.ts` —

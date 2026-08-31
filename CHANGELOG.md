@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **A check found in several languages opens the default language.** The pre-publish drawer's
+  *Go to field* on a merged line (DE · EN) used to open whichever file the checks listed first;
+  it now prefers the language the entry is written in. `GET /admin/api/drafts` carries
+  `defaultLocale` beside `entries` for it.
 - **A row inside a block reads full width on a phone.** Under 720px the row's ⋮⋮ × controls sit
   above its fields instead of beside them — beside, a second-level row gave its fields 133px of
   a 375px screen.

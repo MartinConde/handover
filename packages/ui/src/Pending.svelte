@@ -30,6 +30,7 @@ type CheckItem = {
 
 let {
   entries,
+  defaultLocale = '',
   build,
   onclose,
   onpublished,
@@ -37,6 +38,9 @@ let {
   ondiscarded,
 }: {
   entries: Entry[];
+  /** The site's default language: the one an entry's structure is written in, and the one a
+   * check found in several files opens. */
+  defaultLocale?: string;
   /** The shell's build status, repeated here beside the commit it is of. */
   build?: Build | null;
   onclose: () => void;
@@ -167,7 +171,9 @@ const verdict = $derived(
 // lands after its block has been moved. A global is edited on the site screen and has no tabs.
 const goTo = (item: CheckItem & { locales: string[] }) => {
   const [collection = '', slug = ''] = item.entry.split('/');
-  const [locale] = item.locales;
+  // The default language when the line covers it — the language the fix is written in —
+  // rather than whichever file the checks happened to list first.
+  const locale = item.locales.find((l) => l === defaultLocale) ?? item.locales[0];
   const query = new URLSearchParams({ field: item.fieldPath, ...(locale ? { locale } : {}) });
   if (collection === 'globals') return `/admin/site/${slug}?${query}`;
   return `/admin/c/${collection}/${slug}${item.fieldPath.startsWith('seo') ? '/seo' : ''}?${query}`;

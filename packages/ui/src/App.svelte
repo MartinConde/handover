@@ -102,6 +102,7 @@ let pending = $state<
     held_by?: { id: string; name: string | null } | null;
   }[]
 >([]);
+let defaultLocale = $state('');
 let indicator = $state<HTMLButtonElement>();
 /** Where the site's newest commit has got to; null on a site with no build status. */
 let build = $state<Build | null>(null);
@@ -200,7 +201,10 @@ async function loadPending() {
   const res = await fetch('/admin/api/drafts');
   // `?? []` so a body without the key leaves an empty list rather than nothing: the indicator
   // reads the list to say how old the oldest change is, and there is no shape for "unknown".
-  if (res.ok) pending = ((await res.json()) as { entries?: typeof pending }).entries ?? [];
+  if (!res.ok) return;
+  const body = (await res.json()) as { entries?: typeof pending; defaultLocale?: string };
+  pending = body.entries ?? [];
+  defaultLocale = body.defaultLocale ?? '';
 }
 
 /**
@@ -479,6 +483,7 @@ const initial = $derived(
     {#key drawerKey}
     <Pending
       entries={pending}
+      {defaultLocale}
       {build}
       onrevert={askRevert}
       onclose={() => {

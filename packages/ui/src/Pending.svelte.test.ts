@@ -43,11 +43,12 @@ let build = $state<{
   started_at?: number;
   committed_at?: number;
 } | null>(null);
-const show = (initial = ENTRIES) => {
+const show = (initial = ENTRIES, defaultLocale = '') => {
   entries = initial;
   app = mount(Pending, {
     target: document.body,
     props: {
+      defaultLocale,
       get entries() {
         return entries;
       },
@@ -680,6 +681,41 @@ const settled = async () => {
 
 const messages = (root: ParentNode) =>
   Array.from(root.querySelectorAll('.check-group .notice .msg'), (n) => n.textContent);
+
+// The same problem in both files is one line, and its link opens the language the fix is
+// written in — the site's default — not whichever file the checks happened to list first.
+test('a merged check line links to the default language, not the first it lists', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({
+        results: [
+          {
+            check: 'image-alt',
+            entry: 'pages/home',
+            path: 'src/content/pages/de/home.yaml',
+            fieldPath: 'photo.alt',
+            severity: 'warn',
+            message: 'Photo has no alt text',
+          },
+          {
+            check: 'image-alt',
+            entry: 'pages/home',
+            path: 'src/content/pages/en/home.yaml',
+            fieldPath: 'photo.alt',
+            severity: 'warn',
+            message: 'Photo has no alt text',
+          },
+        ],
+      }),
+    ),
+  );
+  const root = show([ENTRIES[0] as (typeof ENTRIES)[0]], 'en');
+  await settled();
+
+  const link = q<HTMLAnchorElement>(root, '.check-group .notice a');
+  expect(link?.getAttribute('href')).toBe('/admin/c/pages/home?field=photo.alt&locale=en');
+});
 
 test('the checks are grouped under the entry they are about, worst first', async () => {
   vi.stubGlobal('fetch', checking());

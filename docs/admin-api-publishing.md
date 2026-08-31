@@ -8,7 +8,7 @@ What is waiting, committing it, and what the host has done with the commit since
 flow these serve is [Drafts and publishing](publishing.md#publishing).
 
 ```
-GET /admin/api/drafts  →  { "entries": [{ "key", "title", "collection", "locales", "files", "redirects", "updated_at", "held_by" }] }
+GET /admin/api/drafts  →  { "entries": [{ "key", "title", "collection", "locales", "files", "redirects", "updated_at", "held_by" }], "defaultLocale" }
 ```
 
 What is waiting to be published — the drawer's list, **one row per entry** and never per

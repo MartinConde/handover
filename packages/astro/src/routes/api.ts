@@ -2583,7 +2583,8 @@ async function pendingList(): Promise<Response> {
   }
   for (const entry of entries)
     entry.locales = config.i18n.locales.filter((l) => entry.locales.includes(l));
-  return Response.json({ entries });
+  // For the drawer's check lines: a problem found in several languages opens the default one.
+  return Response.json({ entries, defaultLocale: config.i18n.defaultLocale });
 }
 
 /** Every name the collection already uses, published or only drafted. */
