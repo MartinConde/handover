@@ -81,7 +81,7 @@ const press = (key: string) => {
 test('the list is grouped under the collection each entry belongs to, in the order it arrives', async () => {
   await show();
   expect(
-    Array.from(document.querySelectorAll('.picker-list h4')).map((h) => h.textContent),
+    Array.from(document.querySelectorAll('.picker-list .group-name')).map((h) => h.textContent),
   ).toEqual(['pages', 'listings']);
   expect(titles()).toEqual(['Contact', 'Old Mill House', 'Harbour Flat']);
 });

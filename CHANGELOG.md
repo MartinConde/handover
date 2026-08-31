@@ -13,7 +13,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   address that language serves, and every item it cannot show dropped — with its children — so a
   menu never links to a page that is not there ([Rendering content](docs/rendering.md#navigation-menus)).
 - The menus are the same tree in every language until their labels translate: an edit in one
-  language carries the whole tree into the others, and the second column does not offer it.
+  language carries the whole tree into the others, and the second column says so instead of
+  drawing a copy of it.
 - **A focal point instead of a crop tool.** *Set focal point* in the library puts a dot on the
   picture and previews every shape this site's own fields crop to around it; move it once and all
   of them move. The same dialog opens from an image field for that page alone, and writes `focal`

@@ -960,6 +960,39 @@ test('an empty image field offers the library, and its two numbers are two lines
   expect(q('.dropzone button').textContent).toBe('Choose from library');
 });
 
+// The menus are one tree for the whole site: the language being translated is told so rather
+// than shown a copy of it that would only move the other language's.
+test('menus: the translated column says the tree is shared instead of drawing a second one', () => {
+  const field: Field = {
+    path: ['menus'],
+    label: 'Menus',
+    type: 'menus',
+    required: true,
+    i18n: 'duplicate',
+  };
+  show([field], { _version: 1, menus: [{ _id: 'menu0aaa', key: 'header', items: [] }] });
+  expect(document.querySelector('#f-menus.nav-build')).not.toBeNull();
+
+  unmount(app);
+  app = mount(Fields, {
+    target: document.body,
+    props: {
+      fields: [field],
+      translating: true,
+      locale: 'de',
+      get root() {
+        return root;
+      },
+      set root(v) {
+        root = v;
+      },
+    },
+  });
+  flushSync();
+  expect(document.querySelector('.nav-build')).toBeNull();
+  expect(q('#f-menus').textContent).toContain('The same menus in every language');
+});
+
 test('a picked image is written as the format stores it, and Remove empties the field', async () => {
   library([
     {

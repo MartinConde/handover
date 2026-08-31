@@ -101,13 +101,17 @@ const navItem: z.ZodType<NavItem> = z.lazy(() =>
     children: z.array(navItem).optional(),
   }),
 );
-export const navigation = z.object({
-  // One editor for the whole tree, and the same tree in every language: the skeleton is shared
-  // by the format, and until labels translate (4.6) there is nothing in it one language owns.
-  menus: z
-    .array(z.object({ _id: z.string(), key: z.string(), items: z.array(navItem) }))
-    .meta({ handover: 'menus', i18n: 'duplicate' }),
-});
+export const navigation = z
+  .object({
+    // One editor for the whole tree, and the same tree in every language: the skeleton is shared
+    // by the format, and until labels translate (4.6) there is nothing in it one language owns.
+    menus: z
+      .array(z.object({ _id: z.string(), key: z.string(), items: z.array(navItem) }))
+      .meta({ handover: 'menus', i18n: 'duplicate' }),
+  })
+  // What the client sees on the Site settings card and above the editor; a global with no label
+  // of its own is listed under its key, and `navigation` is the package's own to name.
+  .meta({ label: 'Navigation', description: 'The menus the site renders' });
 export type Navigation = z.infer<typeof navigation>;
 
 // `src/content/redirects.yaml`; the build emits it as `_redirects`, see emitRedirects.

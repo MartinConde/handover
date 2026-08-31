@@ -64,10 +64,9 @@ const modeOf = (field: Field): Translation => field.i18n ?? inherited;
 const structural = (field: Field) =>
   field.type === 'group' || field.type === 'array' || field.type === 'blocks';
 // Widgets a translation has nothing to act on: `embed` and `seo` only show what is stored,
-// a `reference` points at the same entry in every language, and a menu is one tree shared by
-// all of them until its labels translate. None is given to the second language as a picture of
-// the first language's value it cannot change.
-const FIXED = new Set(['embed', 'menus', 'seo', 'reference', 'unsupported']);
+// and a `reference` points at the same entry in every language. Neither is given to the
+// second language as a picture of the first language's value it cannot change.
+const FIXED = new Set(['embed', 'seo', 'reference', 'unsupported']);
 const shown = $derived(
   translating
     ? fields.filter((f) => structural(f) || (modeOf(f) !== false && !FIXED.has(f.type)))
@@ -336,7 +335,16 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   {@const bad = err ? 'true' : undefined}
   {@const says = err ? `${id}-err` : undefined}
   <div class="field" class:is-invalid={err}>
-    {#if translating && mode === 'duplicate' && !structural(field)}
+    {#if field.type === 'menus'}
+      {@render groupLabel(id, field, text, at)}
+      {#if translating}
+        <!-- The tree is one skeleton for the whole site, so the second language is told rather
+             than shown a copy of it it cannot move. -->
+        <p class="hint" {id}>The same menus in every language. Their labels get a column of their own in a later release.</p>
+      {:else}
+        <Menus {id} labelId="{id}-l" menus={rows(at) as Menu[]} {locale} />
+      {/if}
+    {:else if translating && mode === 'duplicate' && !structural(field)}
       {@render groupLabel(id, field, text, at)}
       <div class="readonly" {id} role="region" tabindex="-1" aria-labelledby="{id}-l">{read(at) ?? ''}</div>
       <p class="hint">Same in every language</p>
@@ -559,9 +567,6 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       {:else}
         {@render noEntry(id, `${id}-l`, says, text, () => (picker = id))}
       {/if}
-    {:else if field.type === 'menus'}
-      {@render groupLabel(id, field, text, at)}
-      <Menus {id} labelId="{id}-l" menus={rows(at) as Menu[]} {locale} />
     {:else if field.type === 'embed' || field.type === 'seo'}
       {@render groupLabel(id, field, text, at)}
       <div class="readonly" {id} role="region" tabindex="-1" aria-labelledby="{id}-l" aria-describedby={err ? `${id}-hint ${id}-err` : `${id}-hint`}><pre>{read(at) === undefined ? 'Nothing here yet' : JSON.stringify(read(at), null, 2)}</pre></div>

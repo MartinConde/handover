@@ -129,7 +129,10 @@ function step(e: KeyboardEvent) {
   <input class="input" id="{id}-q" type="search" placeholder="Search pages and entries" bind:value={query} bind:this={box} />
   <div class="picker-list" bind:this={list}>
     {#each groups as group (group.name)}
-      <h4>{group.name}</h4>
+      <!-- The collection's name is what the rows under it have in common, not a step in the
+           page's outline: a heading here reads as one level below whatever opened the picker,
+           and the picker opens under a different level on every screen. -->
+      <p class="group-name">{group.name}</p>
       {#each group.rows as row (row.path)}
         {@const no = why(row)}
         {@const says = no ?? note(row)}
