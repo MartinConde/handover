@@ -7,6 +7,7 @@ import {
   LOCK_TTL,
   resolveSeo,
   type SeoDefaultsValue,
+  syncLocale,
 } from '@handover/core';
 import { tick } from 'svelte';
 import DriftPanel from './Drift.svelte';
@@ -212,8 +213,11 @@ async function createFilled(of: string) {
   busy = false;
   if (made.ok) onchanged();
 }
-const offer = (of: string, on: boolean) =>
-  ask(`/admin/api/entries/${collection}/${slug}/locales`, {
+// Through `act` rather than `ask`: a turn-off the server refuses — the last published language,
+// say — refuses with a sentence, and that sentence is the answer the screen shows.
+async function offer(of: string, on: boolean) {
+  const res = await act(`/admin/api/entries/${collection}/${slug}/locales`, {
+    method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       locales: on
@@ -221,6 +225,9 @@ const offer = (of: string, on: boolean) =>
         : entry.offered.filter((l) => l !== of),
     }),
   });
+  if (res) onchanged();
+  return res !== undefined;
+}
 
 const json = $derived(JSON.stringify(data));
 const missing = $derived(Object.keys(problems));
@@ -322,14 +329,21 @@ $effect(() => {
   void beat(true);
 });
 
-// While somebody else has it, the banner has to age and the lock has to be seen running out.
 // The poll only reads: an entry changes hands when somebody presses Take over, not because a
-// tab was watching when the last beat lapsed.
+// tab was watching when the last beat lapsed. It runs on both sides — the reader's banner has
+// to age and see the lock run out, and the holder has to hear of a take-over without typing,
+// which used to be the one way never to hear of it. A tab that has lost the entry has nothing
+// left to ask.
 $effect(() => {
-  if (!locked) return;
-  const timer = setInterval(() => beat(false), 30000);
+  if (lost) return;
+  const timer = setInterval(() => beat(false), 15000);
   return () => clearInterval(timer);
 });
+// Coming back to the front is the moment somebody is about to type again, so the answer is
+// wanted now rather than at the next tick.
+const recheck = () => {
+  if (lock?.mine && !lost && document.visibilityState === 'visible') void beat(false);
+};
 
 async function beat(claim: boolean) {
   const res = await fetch(
@@ -343,10 +357,29 @@ async function beat(claim: boolean) {
       : { method: 'GET' },
   ).catch(() => undefined);
   if (!res?.ok) return;
+  const had = lock?.mine === true;
   lock = (await res.json()) as Lock;
   asked = Date.now();
   if (lock.mine) beatAt = asked;
+  else if (had && !claim) {
+    // The lock this tab held is somebody else's now, or nobody's: a take-over is the lost
+    // banner, and a lock that merely lapsed while this tab sat here is taken back.
+    if (lock.held_by) lost = true;
+    else void beat(true);
+  }
 }
+
+// The skeleton is one edit to every language. The save carries it into the stored rows of the
+// others (`siblings`, server side); this is the same walk made at once for the column on
+// screen, from the entry as it opened to the form as it is, over whatever that column holds now.
+$effect(() => {
+  const column = pane;
+  const of = shown;
+  if (!column || of === undefined || untranslated(of)) return;
+  const after = JSON.parse(json) as Data;
+  const form = { fields: [...entry.fields], blocks: entry.blocks };
+  column.sync((target) => syncLocale('default', form, of, { before: entry.data, after }, target));
+});
 
 // Autosave. The wait restarts on every keystroke, so a burst of typing is one write.
 $effect(() => {
@@ -641,9 +674,11 @@ const before = $derived(entryUrl('default', routing, entry.route, '', locale) ??
 // Turning a language off commits, and the screen is read again afterwards: whatever is in the
 // other form goes into its row first, the way an address change stores everything before it
 // writes. The column's own draft is not flushed — it goes with the file.
-async function turnOff(): Promise<boolean> {
+// The refusal, for the column's dialog to show; nothing when the language went.
+async function turnOff(): Promise<string | undefined> {
   if (json !== saved) await autosave();
-  return shown !== undefined && (await offer(shown, false));
+  if (shown === undefined || (await offer(shown, false))) return undefined;
+  return actionFailed;
 }
 
 // What the second column's Turn-off dialog names: the URL that language serves this entry at,
@@ -707,7 +742,9 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     if (confirming) closePublish();
     else if (taking) cancelTake();
   }}
+  onfocus={recheck}
 />
+<svelte:document onvisibilitychange={recheck} />
 
 <main class="main main-editor">
   {#each entry.offerProblems ?? [] as problem (problem)}
@@ -1022,6 +1059,9 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
                   </p>
                 {/if}
               </div>
+            {/if}
+            {#if actionFailed}
+              <div class="notice notice-danger" role="alert">{actionFailed}</div>
             {/if}
           </div>
         </section>

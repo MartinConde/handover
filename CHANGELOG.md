@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Side by side mirrors the structure at once.** A block moved, added or removed in the entry's
+  own language used to reach the second column on its next open; it moves there as you do it now,
+  and a shared value reads there as it is typed ([Translating](docs/translating.md#side-by-side)).
+- **The tab that loses an entry to Take over hears about it without typing.** It asks about its
+  lock every fifteen seconds and when it comes back to the front, so a tab left open at lunch
+  reads *took over this entry* on return rather than on its next keystroke
+  ([Working together](docs/working-together.md#take-over)).
+- **A refused turn-off says why.** Turning a language off when it is the entry's last published
+  one used to close the dialog and do nothing; the dialog now stays open with the server's reason.
 - **A stale marker per field, in side-by-side editing.** A translation the source language has
   moved on from used to say so once, in the second column's header; each field the source has
   actually changed now carries an amber marker of its own. Opening one shows that field's source

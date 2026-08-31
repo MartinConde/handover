@@ -829,6 +829,104 @@ test('a save in the second language asks the preview for the page again', async 
   vi.unstubAllGlobals();
 });
 
+// The skeleton is one edit to every language. The server has always mirrored a move into the
+// other language's stored row; the second column used to keep the copy it was opened with and
+// show the new order on the next open — Phase 3's W1.
+const twoBlocks = {
+  ...bilingual,
+  blocks: {
+    hero: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }],
+    cta: [{ path: ['label'], label: 'Label', type: 'text', required: true }],
+  } as Record<string, Field[]>,
+  data: {
+    ...bilingual.data,
+    body: [
+      { _type: 'hero', _id: 'k3nf9a2p', heading: 'Above the harbour' },
+      { _type: 'cta', _id: 'c7t2a9x1', label: 'Book a viewing' },
+    ],
+  },
+  translations: {
+    de: {
+      ...bilingual.translations.de,
+      body: [
+        { _type: 'hero', _id: 'k3nf9a2p', heading: 'Über dem Hafen' },
+        { _type: 'cta', _id: 'c7t2a9x1', label: 'Besichtigung buchen' },
+      ],
+    },
+  },
+};
+const CARD = '.row-card, .block-card';
+// dnd-kit reads the cards' boxes to know where a key press lands; jsdom has none, so each card
+// is a 100px band in the order it sits in — the same stub the Fields tests use.
+const laidOut = () =>
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    const found = this.closest(CARD);
+    const card = found?.hasAttribute('data-dnd-placeholder') ? found.previousElementSibling : found;
+    if (!card?.parentElement) return new DOMRect(0, 0, 1024, 4096);
+    const cards = Array.from(card.parentElement.children).filter(
+      (el) => el.matches(CARD) && !el.hasAttribute('data-dnd-placeholder'),
+    );
+    return new DOMRect(0, cards.indexOf(card) * 100, 400, 100);
+  });
+const press = async (target: Element, code: string) => {
+  target.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true, cancelable: true }));
+  await new Promise((r) => setTimeout(r, 40));
+  flushSync();
+};
+const germanBlocks = (root: ParentNode) =>
+  $$<HTMLElement>(root, '.pane.is-locale .block-card .label').map((el) => el.textContent);
+
+test('a block moved in the source column moves in the second column at once', async () => {
+  laidOut();
+  const fetchMock = autosaved();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: twoBlocks });
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  expect(germanBlocks(root)).toEqual(['hero', 'cta']);
+
+  const handle = $<HTMLButtonElement>(root, '[aria-label="Reorder hero"]');
+  if (!handle) throw new Error('no handle');
+  await press(handle, 'Space');
+  await press(document.body, 'ArrowDown');
+  await press(document.body, 'Space');
+
+  expect(germanBlocks(root)).toEqual(['cta', 'hero']);
+  // Its words went with it: the German heading is still the hero's.
+  expect($<HTMLInputElement>(root, 'input#t-body\\.1\\.heading')?.value).toBe('Über dem Hafen');
+  expect(wrote(fetchMock)).toHaveLength(0);
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
+test('a shared value typed in the source column reads in the second column as it is typed', () => {
+  vi.stubGlobal('fetch', autosaved());
+  const root = show({ entry: bilingual });
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+
+  type(root, 'input#f-price', '£1,300 per week');
+
+  expect($(root, '.pane.is-locale')?.textContent).toContain('£1,300 per week');
+  vi.unstubAllGlobals();
+});
+
+// The mirror runs as the column opens too, so it has to agree that nothing has moved: a save
+// on open would make every side-by-side look an unpublished change.
+test('opening the second column on an untouched entry writes nothing', async () => {
+  vi.useFakeTimers();
+  const fetchMock = autosaved();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: twoBlocks });
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  await vi.advanceTimersByTimeAsync(5000);
+
+  expect(wrote(fetchMock)).toHaveLength(0);
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
 test('the second language shows a shared field without offering to change it', () => {
   const root = show({ entry: bilingual });
 
@@ -1041,6 +1139,41 @@ test('a language with a file is turned off from its own column, through a dialog
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ locales: ['en'] }),
   });
+  vi.unstubAllGlobals();
+});
+
+// The server refuses a turn-off that would leave the entry with no published file, and the
+// sentence it refuses with is the one worth reading: the dialog stays open and shows it.
+test('a turn-off the server refuses keeps the dialog open with its reason', async () => {
+  const reason =
+    'Turning de off would leave this entry with no published file: publish en first, or Delete the entry';
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) =>
+      isLock(url)
+        ? Response.json(HELD)
+        : init?.method === 'POST'
+          ? new Response(reason, { status: 409 })
+          : Response.json({}),
+    ),
+  );
+  const changed = vi.fn();
+  const root = show({
+    entry: { ...bilingual, route: '/listings/[slug]', index: '/listings' },
+    onchanged: changed,
+  });
+
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  $<HTMLButtonElement>(root, '.pane-head button.btn-off')?.click();
+  flushSync();
+  $<HTMLButtonElement>(root, '.dialog button.btn-danger')?.click();
+  await tick();
+  flushSync();
+
+  expect($(root, '.dialog [role="alert"]')?.textContent).toContain('publish en first');
+  expect($<HTMLButtonElement>(root, '.dialog button.btn-danger')?.disabled).toBe(false);
+  expect(changed).not.toHaveBeenCalled();
   vi.unstubAllGlobals();
 });
 
@@ -1351,6 +1484,82 @@ test('a refused save does not push the lock back out', async () => {
   flushSync();
 
   expect(fetchMock.mock.calls.filter((call) => isLock(call[0])).length).toBe(before);
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+// Sitting still was the one way never to find out: the holder's tab only heard of a take-over
+// from the save it made next. Now it asks on its own, and again when it comes back to the front.
+const takenMeanwhile = () =>
+  vi.fn(async (url: string, init?: RequestInit) =>
+    !isLock(url)
+      ? Response.json({})
+      : init?.method === 'POST'
+        ? Response.json(HELD)
+        : Response.json({
+            held_by: { id: 'u1', name: 'Anna Berg' },
+            mine: false,
+            expires_at: Date.now() + LOCK_TTL,
+          }),
+  );
+
+test('a holder who types nothing still learns of a take-over within the poll', async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal('fetch', takenMeanwhile());
+  const root = show();
+  await vi.advanceTimersByTimeAsync(1000);
+  flushSync();
+  expect($(root, '.lock-banner')).toBeNull();
+
+  await vi.advanceTimersByTimeAsync(15_000);
+  flushSync();
+
+  expect($(root, '.lock-banner.is-lost')?.textContent).toContain('Anna Berg took over this entry');
+  expect($<HTMLFieldSetElement>(root, '.form > fieldset')?.disabled).toBe(true);
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+test('a tab coming back to the front asks about its lock at once', async () => {
+  vi.useFakeTimers();
+  const fetchMock = takenMeanwhile();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  await vi.advanceTimersByTimeAsync(1000);
+  const reads = () =>
+    fetchMock.mock.calls.filter((call) => isLock(call[0]) && call[1]?.method !== 'POST').length;
+  expect(reads()).toBe(0);
+
+  window.dispatchEvent(new Event('focus'));
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync();
+
+  expect(reads()).toBe(1);
+  expect($(root, '.lock-banner.is-lost')).not.toBeNull();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+// A lock that lapsed with nobody after it is not a take-over: the tab is still here, so it takes
+// its own lock back rather than telling the person somebody else has the entry.
+test('a lapsed lock nobody took is claimed again by the tab that had it', async () => {
+  vi.useFakeTimers();
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) =>
+    !isLock(url)
+      ? Response.json({})
+      : init?.method === 'POST'
+        ? Response.json(HELD)
+        : Response.json({ held_by: null, mine: false, expires_at: null }),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  await vi.advanceTimersByTimeAsync(16_000);
+  flushSync();
+
+  const claims = fetchMock.mock.calls.filter((c) => isLock(c[0]) && c[1]?.method === 'POST');
+  expect(claims).toHaveLength(2);
+  expect($(root, '.lock-banner')).toBeNull();
+  expect($<HTMLFieldSetElement>(root, '.form > fieldset')?.disabled).toBe(false);
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });

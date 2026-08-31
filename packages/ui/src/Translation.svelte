@@ -59,8 +59,9 @@ let {
   onrefused?: (lock: unknown) => void;
   /** Close the second column; nothing when it is the only one on screen. */
   onclose?: () => void;
-  /** Turn this language off for the entry, which deletes its file; true when it happened. */
-  onturnoff?: () => Promise<boolean>;
+  /** Turn this language off for the entry, which deletes its file; the server's refusal when
+      it did not happen, for the dialog to show. */
+  onturnoff?: () => Promise<string | undefined>;
 } = $props();
 
 // svelte-ignore state_referenced_locally -- the loaded file is the initial value on purpose
@@ -162,6 +163,35 @@ async function save() {
   problems = Object.fromEntries(body.problems.map((p) => [p.path, p.message]));
 }
 
+// Key order is the file's; two objects that differ only in it are the same words.
+const canon = (v: unknown): string =>
+  JSON.stringify(v, (_k, value) =>
+    isPlain(value)
+      ? Object.fromEntries(
+          Object.keys(value)
+            .sort()
+            .map((k) => [k, value[k]]),
+        )
+      : value,
+  );
+const isPlain = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/**
+ * The source language's structure, carried into this column as it changes there: a block
+ * moved, added or dropped in the other column moves here now rather than on the next open, and
+ * a shared value reads here as it is typed. `reshape` is the entry's walk over this column's
+ * own data, so words typed here and not yet saved are kept.
+ */
+export function sync(reshape: (target: Data) => Data): void {
+  const target = $state.snapshot(data) as Data;
+  const next = reshape(target);
+  // The walk stamps the format version; a file the form was handed without one does not gain
+  // one here — that is the save's business, and a key added on open would be a save on open.
+  if (!('_version' in target)) delete next._version;
+  if (canon(next) !== canon(target)) data = next;
+}
+
 /** Whether this language holds an edit the drafts table has not got yet. */
 export function unsaved(): boolean {
   return json !== saved;
@@ -181,6 +211,7 @@ export async function flush(): Promise<boolean> {
 // is about, which is also where focus comes back to.
 let asking = $state(false);
 let offing = $state(false);
+let refused = $state('');
 let trigger = $state<HTMLButtonElement>();
 let panel = $state<HTMLElement>();
 $effect(() => {
@@ -188,13 +219,15 @@ $effect(() => {
 });
 function stopAsking() {
   asking = false;
+  refused = '';
   trigger?.focus();
 }
+// A refusal keeps the dialog open with the sentence in it: it says what to do instead, and
+// closing over it would leave the person pressing the same button again.
 async function turnOff() {
   offing = true;
-  const done = await onturnoff?.();
+  refused = (await onturnoff?.()) ?? '';
   offing = false;
-  if (!done) stopAsking();
 }
 
 const LANGUAGES = new Intl.DisplayNames(['en'], { type: 'language' });
@@ -282,6 +315,7 @@ const named = (of: string) => {
         {/if}
         Unpublished changes to {named(locale)} are dropped.
       </p>
+      {#if refused}<div class="notice notice-danger" role="alert">{refused}</div>{/if}
       <div class="actions">
         <button class="btn" type="button" onclick={stopAsking}>Cancel</button>
         <button class="btn btn-danger" type="button" disabled={offing} onclick={turnOff}>

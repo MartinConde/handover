@@ -54,8 +54,9 @@ Both halves of that are true because there is only ever **one draft row per file
 over transfers the lock and re-reads the entry, so the form opens on what the other person
 had typed, down to their last autosave. Nothing is copied, merged or thrown away.
 
-The person it was taken from finds out **when the save their tab makes next is refused** —
-not from a poll, so a tab nobody is typing in keeps its banner and changes nothing else:
+The person it was taken from finds out **within about fifteen seconds**: their tab asks about
+its lock every fifteen seconds while the entry is open and again the moment it comes back to the
+front, and a save it makes in between is refused on the spot:
 
 ```
 Anna Berg took over this entry. Everything you wrote is in the shared draft —

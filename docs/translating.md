@@ -46,7 +46,8 @@ the second column's header offers **Turn German off**, and confirming it commits
 the repository, the mark goes into the files that stay, the URL that language served redirects to
 the collection's listing page under its own language segment, and unpublished changes to it go
 with it. Where the collection has no listing page the dialog says so before you press — the old
-URL will 404.
+URL will 404. A turn-off the CMS refuses — on the last language the entry is published in, say —
+keeps the dialog open with the reason (*publish en first, or Delete the entry*).
 
 **The last language an entry has a published file in cannot be turned off**: that is deleting the
 entry, and Delete asks where its readers should go for all of it at once. A language whose file is
@@ -65,6 +66,8 @@ code the site does not declare is named the same way; both are fixed in the repo
 the chosen one on the right. They are separate files and separate saves — each column autosaves
 its own, and publishing takes both. Which language is on the right and whether the column is open
 are two different things: with the entry's own language chosen, it shows the first of the others.
+A block moved, added or removed on the left moves on the right at once, and a shared value reads on
+the right as it is typed — the same walk the save makes into the other language's stored draft.
 
 ## What a save of a translation writes
 
