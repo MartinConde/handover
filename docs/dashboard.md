@@ -46,7 +46,7 @@ gap ([i18n.md](i18n.md)).
 index. Judging one language against another needs every file of the entry, which would be a
 git read per entry per page load, so the count is the last build's: a translation you have
 fixed but not published is still in it. The per-entry warning in the editor is live, and it
-is the one to act on ([translating.md](translating.md#staleness)).
+is the one to act on ([translating.md](machine-translation.md#when-the-source-language-moves-on)).
 
 ## What is not on it
 

@@ -62,7 +62,7 @@ this entry is offered in — the rest are turned off for it. `drift` is the bloc
 languages disagree about, `[{ "path": "blocks[_id=z9y8x7w6]", "type": "quote", "in": ["de"],
 "expected": ["en", "de"], "values": { "de": ["Ein seltener Fund."] } }]`, and `stale` the
 languages whose translation was made from a source language that has moved on since
-([Translating](translating.md#when-the-source-language-moves-on)). Both are empty on a site with
+([Translating](machine-translation.md#when-the-source-language-moves-on)). Both are empty on a site with
 one language, which reads nothing for them. `translator` is whether the site has anything to
 machine-translate with: false, and none of the buttons that offer it is drawn. `route`, `index`
 and `prefixDefaultLocale` are where the site serves the collection, which is what the editor

@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Docs: machine translation and staleness are their own page** —
+  [Machine translation and staleness](docs/machine-translation.md), out of
+  [Translating](docs/translating.md); two links that pointed at anchors that no longer existed
+  (`#staleness`, `#translation-staleness`) land there too.
 - **Docs: Version history is its own page** — [Version history](docs/history.md), out of
   [Drafts and publishing](docs/publishing.md); and that page no longer claims the drawer runs
   no pre-publish checks, which it has since they shipped.
@@ -94,7 +98,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   actually changed now carries an amber marker of its own. Opening one shows that field's source
   as it read when somebody translated it and as it reads now, with the words that went and the
   words that arrived marked, and offers **Re-translate** for that one field
-  ([Translating](docs/translating.md#translation-staleness)). New route:
+  ([Translating](docs/machine-translation.md#when-the-source-language-moves-on)). New route:
   `GET /admin/api/source/:collection/:slug/:locale` ([Admin API](docs/admin-api.md)).
 - **The admin is styled.** The rich-text editor, the boolean switch, the block picker, array and
   group rows, the pre-publish check list, the page picker, the upload rows and the media cards
@@ -450,7 +454,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **A DeepL key pasted in Settings is the one that translates**, ahead of `DEEPL_API_KEY` on the
   Worker. A site that hands in its own `i18n.translate` is still translated by that code.
-  [Translating](docs/translating.md#a-machines-first-draft).
+  [Translating](docs/machine-translation.md#a-machines-first-draft).
 
 - **Settings says what is connected.** The Manage group's Settings is now the owner's read-only
   view of the site: `cms.config.ts` as it came out, and a card per connection — GitHub, the

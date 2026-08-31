@@ -45,7 +45,7 @@ stops if the two disagree — the keys, the error and the folder layout are in
 [Languages](i18n.md).
 
 `translate` is optional and only for using something other than DeepL to
-[machine-translate](translating.md#a-machines-first-draft): given the texts and the two
+[machine-translate](machine-translation.md#a-machines-first-draft): given the texts and the two
 language codes, hand back the same texts translated, in the same order.
 
 ```ts

@@ -50,7 +50,7 @@ POST /admin/api/translate/:collection/:slug/:locale  { "paths": ["title"] }  →
 ```
 
 Machine-translates that language from the one the entry is written in and stores the answers in
-its draft ([Translating](translating.md#a-machines-first-draft)). `paths` names the fields to translate
+its draft ([Translating](machine-translation.md#a-machines-first-draft)). `paths` names the fields to translate
 and is optional: without it, every field this language has nothing in yet is filled. Only prose
 is sent. The paths a machine wrote go into the file's `_machine`; `data` is the file as the
 fill leaves it, which is what the second column redraws from. `404` for the language the entry
@@ -64,7 +64,7 @@ GET /admin/api/source/:collection/:slug/:locale  →  { "from", "translatedAt", 
 
 What that language's source has said since somebody translated it, field by field — the marker a
 target-language field carries beside its label in side-by-side editing
-([Translating](translating.md#translation-staleness)). The entry response's `stale` says *which*
+([Translating](machine-translation.md#when-the-source-language-moves-on)). The entry response's `stale` says *which*
 languages are behind, off one hash over the whole file; this says which of their fields. The older
 source is fetched by the blob id the translation itself wrote down, so it survives however many
 commits later somebody asks.
