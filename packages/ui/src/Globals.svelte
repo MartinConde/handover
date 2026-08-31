@@ -40,7 +40,13 @@ async function load() {
   {#if error}<p class="notice notice-danger" role="alert">{error}</p>{/if}
   {#if loading}
     <p class="placeholder">Loading…</p>
-  {:else if globals.length}
+  {:else}
+    {#if !globals.length}
+      <p class="list-note">
+        No site-wide content yet. Each one is a file under <code>src/content/globals/</code>,
+        declared as <code>globals</code> in <code>cms.config.ts</code>.
+      </p>
+    {/if}
     <div class="global-list">
       {#each globals as global (global.key)}
         <div class="global-card">
@@ -70,15 +76,13 @@ async function load() {
           {/if}
         </div>
       {/each}
-    </div>
-  {:else}
-    <div class="empty">
-      <div>
-        <h2>No site settings yet</h2>
-        <p>
-          Each one is a file under <code>src/content/globals/</code>, declared as
-          <code>globals</code> in <code>cms.config.ts</code>.
-        </p>
+      <!-- In the list rather than in the sidebar: to the client this is a thing the site has,
+           the way the menus are, and not a different kind of thing. Every site has one, so it
+           is here whether or not the dev declared any globals. -->
+      <div class="global-card">
+        <h2><a href="/admin/site/redirects">Redirects</a></h2>
+        <p>Old addresses that forward to new ones</p>
+        <div class="meta"><span class="sub">One list, no languages</span></div>
       </div>
     </div>
   {/if}

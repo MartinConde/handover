@@ -61,6 +61,7 @@ export const ACTIVITY_GROUPS = {
   ],
   Entries: ['entry-rename', 'entry-delete', 'locale-off', 'entry-duplicate', 'template-saved'],
   Media: ['upload', 'media-archive', 'media-delete'],
+  Site: ['redirect-added', 'redirect-changed', 'redirect-deleted'],
   Settings: ['setting-changed'],
   System: ['mail-failed'],
 } as const;

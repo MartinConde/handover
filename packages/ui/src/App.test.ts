@@ -3,9 +3,8 @@ import { afterEach, expect, test, vi } from 'vitest';
 import App from './App.svelte';
 
 let app: ReturnType<typeof mount>;
-const session = (role: 'owner' | 'editor' = 'owner', globals = false) => ({
+const session = (role: 'owner' | 'editor' = 'owner') => ({
   collections: ['listings', 'pages'],
-  globals,
   user: { id: 'u1', name: 'Martin', email: 'martin@example.com' },
   role,
 });
@@ -187,21 +186,25 @@ test("a collection path renders that collection's entry list", async () => {
 
 // Site settings is its own group above the collections, and only where the site declares any:
 // with none there is nothing to list, and Manage's Settings is the developer's read-only config.
-test('the sidebar offers Site settings above the collections when the site declares globals', async () => {
+test('the sidebar offers Site settings above the collections', async () => {
   drafts();
-  const root = show(session('owner', true));
+  const root = show(session('owner'));
   await new Promise((r) => setTimeout(r, 0));
   flushSync();
   const link = root.querySelector<HTMLAnchorElement>('[aria-labelledby="nav-site"] a');
   expect([link?.textContent, link?.getAttribute('href')]).toEqual(['Site settings', '/admin/site']);
 });
 
-test('a site with no globals is offered no Site settings at all', async () => {
+// Every site has redirects, and they are listed on that screen, so it is offered even where
+// the developer declared no globals at all.
+test('Site settings is offered on a site that declares no globals', async () => {
   drafts();
-  const root = show(session());
+  const root = show(session(), '/admin/site/redirects');
   await new Promise((r) => setTimeout(r, 0));
   flushSync();
-  expect(root.querySelector('[aria-labelledby="nav-site"]')).toBeNull();
+  expect(root.querySelector('[aria-labelledby="nav-site"] a')?.getAttribute('aria-current')).toBe(
+    'page',
+  );
 });
 
 // A global is edited on the entry screen: /admin/site/site is entries/globals/site, which is

@@ -4,6 +4,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **A redirects manager.** *Site settings → Redirects* is a table over `src/content/redirects.yaml`:
+  every rule the pipeline wrote — a rename, a hide, a delete — beside the ones the client adds by
+  hand, searchable and filtered by reason. Add, edit and delete a rule; picking the destination
+  from the page list writes that page's address in the language the old one was in
+  ([Site files](docs/site-files.md#redirects)).
+- **A manual rule commits as it is added.** It is not an unpublished change waiting in the drawer:
+  `redirects.yaml` is assembled at publish out of the rules of the *selected* entries, so a rule
+  with no entry to ride on has nowhere to wait. The site serves it after the next build, the way a
+  rename or a delete does.
+- **Redirects can be 302.** `status` was `301` only; a rule can now say *just for now*.
+- **A hidden entry's rule stays the entry's.** It is drawn on this screen but neither edited nor
+  deleted here — showing the entry again removes it in the same commit.
 - **A navigation menu builder.** The `navigation` global now opens as a menu editor rather than
   a read-only value: pages and entries on the left, the tree on the right, three levels deep,
   reordered by dragging a row's handle or with the up, down, indent and outdent buttons on it.

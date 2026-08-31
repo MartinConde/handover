@@ -584,7 +584,9 @@ test('the redirects golden parses; from must be a path and to a path or absolute
   expect(file({ ...rule, from: 'https://example.com/old' })).toBe(false);
   expect(file({ ...rule, from: 'old' })).toBe(false);
   expect(file({ ...rule, to: 'new' })).toBe(false);
-  expect(file({ ...rule, status: 302 })).toBe(false);
+  // 302 is the manual rule's "just for now"; nothing else is a code this format has.
+  expect(file({ ...rule, status: 302 })).toBe(true);
+  expect(file({ ...rule, status: 307 })).toBe(false);
   expect(file({ ...rule, reason: 'moved' })).toBe(false);
 });
 

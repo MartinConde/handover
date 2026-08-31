@@ -18,6 +18,8 @@ export interface Pickable {
   entries: PickEntry[];
   /** The languages the site declares, in config order: what the chips are drawn for. */
   locales: string[];
+  /** The one whose URLs carry no segment of their own, unless the site asked for one. */
+  defaultLocale?: string;
 }
 
 const NOTHING: Pickable = { entries: [], locales: [] };

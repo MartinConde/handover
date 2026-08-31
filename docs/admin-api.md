@@ -29,7 +29,7 @@ Reading a collection and an entry, and the changes that commit rather than draft
 rename, a delete, turning a language off, and reading back what was deleted.
 
 ```
-GET /admin/api/entries                      →  { "entries": [{ "collection", "path", "title", "locales", "urls", "hidden" }], "locales": ["en", "de"] }
+GET /admin/api/entries                      →  { "entries": [{ "collection", "path", "title", "locales", "urls", "hidden" }], "locales": ["en", "de"], "defaultLocale": "en" }
 ```
 
 Everything an editor can point at, across every collection the site declares, in config
@@ -218,6 +218,35 @@ went, `by` the person's name or `null` for the system. A row that cannot be put 
 carries `blocked`, a sentence naming the path that is occupied again. Only rows with a commit
 behind them are listed — an entry deleted before it was ever published made none. `404` when
 the collection is not configured.
+
+## Redirects
+
+The table over `src/content/redirects.yaml` ([Site files](site-files.md#redirects)). These
+three **commit as they are called**: the file is assembled at publish out of the rules of the
+selected entries, so a rule belonging to no entry has nowhere to wait.
+
+```
+GET /admin/api/redirects  →  { "rules": [{ "_id", "from", "to", "status", "reason", "entry", "createdAt", "title", "pending" }] }
+```
+
+The file's rules in the order it holds them — which is the order `_redirects` serves them in —
+and after them the rules waiting on an entry's draft, each with `pending: true`. `title` is what
+the entry named by `entry` is called, resolved here because a title comes from the build's
+content index. `503` when the repository is out of reach.
+
+```
+POST   /admin/api/redirects        { "from", "to", "status" }  →  { "rule" }
+PUT    /admin/api/redirects/:id    { "from", "to", "status" }  →  {}
+DELETE /admin/api/redirects/:id                                →  { "deleted": "<id>" }
+```
+
+`status` is `301` unless the body says `302`. `422` with `{ "field", "message" }` — the box the
+sentence belongs under — when `from` is not a path, when it is a page the site already serves,
+when `to` is neither a path nor an absolute URL, when the two are the same, or when another rule
+already forwards that address. A rule whose `reason` is `hidden` belongs to the entry that is
+hidden: `409` on both the edit and the delete. `404` when the file holds no rule with that id.
+Adding a rule re-points any existing rule that pointed at its `from`, so a visitor never hops
+twice, and drops one that would then send an address to itself.
 
 ## Drafts
 

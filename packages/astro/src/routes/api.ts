@@ -24,6 +24,7 @@ import {
   checkStore,
   claimLock,
   clearPublished,
+  collapseRedirects,
   collectionEntries,
   commitBuild,
   confirmUpload,
@@ -42,6 +43,7 @@ import {
   driftReport,
   dropLock,
   duplicateEntry,
+  editRedirects,
   entryAddress,
   entryConflict,
   entryKey,
@@ -75,16 +77,18 @@ import {
   pendingDrafts,
   presignUpload,
   publishDrafts,
-  REDIRECTS,
   type RedirectRule,
   RefMovedError,
   RepoUnreachableError,
   RevertConflictError,
+  readRedirects,
   readSetting,
   readyDrafts,
   recordDelete,
   recordOffer,
   recordRename,
+  redirectError,
+  redirectRule,
   regenerateIds,
   releaseLocks,
   removeSetting,
@@ -1049,10 +1053,7 @@ async function hideTargets(
 ): Promise<Record<string, string>> {
   // The branch tip, which is the ref `entryLocales` read each language's file at: the two
   // sides of the match below are the same commit, and a display that read two would miss.
-  const file = await gitClient().getFile(REDIRECTS);
-  const committed = file
-    ? ((parseEntry('default', file.contents) as { rules?: RedirectRule[] }).rules ?? [])
-    : [];
+  const committed = await readRedirects('default', gitClient());
   const key = `${collection}/${slug}`;
   const rules = [...committed, ...Object.values(loaded).flatMap((l) => l.redirects)].filter(
     (rule) => rule.reason === 'hidden' && rule.entry === key,
@@ -1914,8 +1915,18 @@ async function listEntries(collection: string): Promise<Response> {
  * from the same set and only differ in what they store afterwards.
  */
 async function pickList(): Promise<Response> {
+  return Response.json({
+    entries: await pickable(),
+    locales: config.i18n.locales,
+    // Which language a typed path is in is read off its own segment, and the default one has
+    // none: a picker asked for an address needs both halves of that to name a language.
+    defaultLocale: config.i18n.defaultLocale,
+  });
+}
+
+async function pickable() {
   const rows = await overlayRows('default', db(), index);
-  const entries = Object.entries(config.collections).flatMap(([collection, collected]) =>
+  return Object.entries(config.collections).flatMap(([collection, collected]) =>
     collectionEntries('default', index, collection, rows, collected.titleField).map((entry) => {
       const urls: Record<string, string> = {};
       for (const [locale, info] of Object.entries(entry.locales)) {
@@ -1939,7 +1950,155 @@ async function pickList(): Promise<Response> {
       };
     }),
   );
-  return Response.json({ entries, locales: config.i18n.locales });
+}
+
+/**
+ * Every URL the site serves now, by the name of whatever answers it: each entry's address in
+ * each language it has a file in, and each collection's index under each language's segment.
+ * This is what a `from` is held against — a redirect over a page that exists takes that page
+ * off the site, and a client would never diagnose that from a 404.
+ */
+function sitePages(entries: Awaited<ReturnType<typeof pickable>>): Record<string, string> {
+  const pages: Record<string, string> = {};
+  for (const [collection, collected] of Object.entries(config.collections))
+    for (const locale of config.i18n.locales) {
+      const url = entryUrl('default', config.i18n, collected.index, '', locale);
+      // An entry beats an index that answers at the same address, because it is the more
+      // specific thing to be named in the refusal.
+      if (url) pages[url] = `the ${collection} index`;
+    }
+  for (const entry of entries)
+    for (const url of Object.values(entry.urls)) pages[url] = entry.title || entry.path;
+  return pages;
+}
+
+/**
+ * The redirects table: the file's rules in the order the file has them — which is the order
+ * `_redirects` serves them in — and after them the rules waiting on an entry's draft, flagged.
+ * Those are the only unpublished ones there are: a rule the client adds here is committed as
+ * it is added, since `redirects.yaml` never gets a draft row of its own.
+ */
+async function redirectList(): Promise<Response> {
+  const database = db();
+  const [committed, waiting, entries] = await Promise.all([
+    readRedirects('default', gitClient()),
+    pendingDrafts('default', database),
+    pickable(),
+  ]);
+  const titles = new Map(entries.map((e) => [e.path, e.title || e.path]));
+  // One hide owes a rule per language and writes each on that language's row, so the same rule
+  // is never on two rows — but a row read twice would still double it.
+  const pending = new Map(
+    waiting.flatMap((row) => (row.pendingRedirects ?? []).map((rule) => [rule._id, rule] as const)),
+  );
+  const named = (rule: RedirectRule, unpublished?: true) => ({
+    ...rule,
+    ...(rule.entry ? { title: titles.get(rule.entry) ?? rule.entry } : {}),
+    ...(unpublished ? { pending: true } : {}),
+  });
+  return Response.json({
+    rules: [
+      ...committed.map((rule) => named(rule)),
+      ...[...pending.values()].map((rule) => named(rule, true)),
+    ],
+  });
+}
+
+/** A rule the entry owns: hiding wrote it and showing the entry again takes it back out. */
+const MANAGED =
+  'This redirect belongs to the entry that is hidden. Show that entry again and the redirect goes with it.';
+
+/** `from`, `to` and how permanent it is, as the dialog sends them. */
+const typedRule = async (request: Request) => {
+  const body = (await request.json().catch(() => undefined)) as
+    | { from?: unknown; to?: unknown; status?: unknown }
+    | undefined;
+  return {
+    from: typeof body?.from === 'string' ? body.from.trim() : '',
+    to: typeof body?.to === 'string' ? body.to.trim() : '',
+    status: body?.status === 302 ? (302 as const) : (301 as const),
+  };
+};
+
+/**
+ * A rule the client writes by hand. It is committed as it is added rather than waiting in the
+ * drawer: the file is assembled at publish out of the rules of the *selected* entries
+ * ([drafts-and-publishing.md](../../../../docs/features/drafts-and-publishing.md)), so a rule
+ * with no entry to ride on has nowhere to wait. The same is true of a rename and a delete.
+ */
+async function addRedirect(request: Request, session: App.Locals['handover']): Promise<Response> {
+  const typed = await typedRule(request);
+  const git = gitClient();
+  const [rules, entries] = await Promise.all([readRedirects('default', git), pickable()]);
+  const bad = redirectError('default', typed, { pages: sitePages(entries), rules });
+  if (bad) return Response.json(bad, { status: 422 });
+  const rule = redirectRule('default', { ...typed, reason: 'manual' }, Date.now());
+  const { commit_sha } = await editRedirects('default', git, `Add redirect ${rule.from}`, (all) =>
+    collapseRedirects(all, [rule]),
+  );
+  await logActivity('default', db(), {
+    userId: session?.user.id,
+    kind: 'redirect-added',
+    subject: rule._id,
+    commitSha: commit_sha,
+    detail: { from: rule.from, to: rule.to },
+  });
+  return Response.json({ rule });
+}
+
+/** One rule rewritten. A hidden entry's is refused here for the reason it is refused a delete. */
+async function changeRedirect(
+  id: string,
+  request: Request,
+  session: App.Locals['handover'],
+): Promise<Response> {
+  const typed = await typedRule(request);
+  const git = gitClient();
+  const [rules, entries] = await Promise.all([readRedirects('default', git), pickable()]);
+  const found = rules.find((rule) => rule._id === id);
+  if (!found) return new Response('Not found', { status: 404 });
+  if (found.reason === 'hidden') return Response.json({ error: MANAGED }, { status: 409 });
+  const bad = redirectError('default', typed, { pages: sitePages(entries), rules }, id);
+  if (bad) return Response.json(bad, { status: 422 });
+  const { commit_sha } = await editRedirects('default', git, `Edit redirect ${found.from}`, (all) =>
+    all.map((rule) => (rule._id === id ? { ...rule, ...typed } : rule)),
+  );
+  await logActivity('default', db(), {
+    userId: session?.user.id,
+    kind: 'redirect-changed',
+    subject: id,
+    commitSha: commit_sha,
+    detail: { from: typed.from, to: typed.to },
+  });
+  return Response.json({});
+}
+
+/**
+ * One rule taken out. Deleting a redirect is allowed — it is a rule and not the client's
+ * content — and the dialog warns about a young one rather than refusing it. The one refusal is
+ * the entry's own rule: unhiding removes it in the same commit, so taking it out from here
+ * would leave the pair inconsistent and the rule would come back at the next publish.
+ */
+async function removeRedirect(id: string, session: App.Locals['handover']): Promise<Response> {
+  const git = gitClient();
+  const rules = await readRedirects('default', git);
+  const found = rules.find((rule) => rule._id === id);
+  if (!found) return new Response('Not found', { status: 404 });
+  if (found.reason === 'hidden') return Response.json({ error: MANAGED }, { status: 409 });
+  const { commit_sha } = await editRedirects(
+    'default',
+    git,
+    `Delete redirect ${found.from}`,
+    (all) => all.filter((rule) => rule._id !== id),
+  );
+  await logActivity('default', db(), {
+    userId: session?.user.id,
+    kind: 'redirect-deleted',
+    subject: id,
+    commitSha: commit_sha,
+    detail: { from: found.from, to: found.to },
+  });
+  return Response.json({ deleted: id });
 }
 
 /**
@@ -2479,6 +2638,7 @@ const STATUS = /^status\/([\w-]+)$/;
 const MEDIA = /^media\/([0-9a-f]{64})$/;
 const CHECK = /^checks\/([\w-]+)$/;
 const SETTING = /^settings\/([\w-]+)$/;
+const REDIRECT = /^redirects\/([\w-]+)$/;
 const TRANSLATE = /^translate\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 
 // Better Auth owns everything under its base path. Both verbs go straight to its handler:
@@ -2494,9 +2654,6 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
     return Response.json({
       ok: true,
       collections: Object.keys(config.collections),
-      // Whether the site declares any site-wide content at all: with none there is nothing for
-      // a Site settings screen to list, so the sidebar does not offer one.
-      globals: Object.keys(config.globals ?? {}).length > 0,
       // The middleware has already asserted a session by the time any of this runs.
       user: locals.handover?.user,
       role: locals.handover?.role,
@@ -2523,6 +2680,7 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
   if (removed) return answering(() => deletedList(removed[1] ?? ''));
   if (params.path === 'media') return library(url);
   if (params.path === 'globals') return globalsList();
+  if (params.path === 'redirects') return answering(() => redirectList());
   if (params.path === 'drafts') return pendingList();
   if (params.path === 'build') return buildStatus();
   if (params.path === 'diagnostics') return diagnostics(locals.handover);
@@ -2560,6 +2718,8 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
     return answering(() => autosave(draft[1] ?? '', draft[2] ?? '', request, locals.handover));
   const uploaded = params.path?.match(MEDIA);
   if (uploaded) return answering(() => finishUpload(uploaded[1] ?? '', request, locals.handover));
+  const rule = params.path?.match(REDIRECT);
+  if (rule) return answering(() => changeRedirect(rule[1] ?? '', request, locals.handover));
   return new Response('Not found', { status: 404 });
 };
 
@@ -3030,6 +3190,7 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   const resent = params.path?.match(MEMBER_INVITE);
   if (resent) return resendInvite(resent[1] ?? '', request, url, locals.cfContext, locals.handover);
   if (params.path === 'media') return answering(() => askUpload(request));
+  if (params.path === 'redirects') return answering(() => addRedirect(request, locals.handover));
   if (params.path === 'publish') return answering(() => publish(request, locals.handover));
   if (params.path === 'revert') return answering(() => revert(request, locals.handover));
   if (params.path === 'restore') return answering(() => restore(request, locals.handover));
@@ -3087,6 +3248,8 @@ export const DELETE: APIRoute = async ({ params, request, url, locals }) => {
   if (draft) return discard(draft[1] ?? '', draft[2] ?? '');
   const asset = params.path?.match(MEDIA);
   if (asset) return answering(() => deleteAsset(asset[1] ?? '', locals.handover));
+  const rule = params.path?.match(REDIRECT);
+  if (rule) return answering(() => removeRedirect(rule[1] ?? '', locals.handover));
   const entry = params.path?.match(ENTRY);
   if (entry)
     return answering(() => remove(entry[1] ?? '', entry[2] ?? '', request, locals.handover));

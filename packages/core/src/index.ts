@@ -109,13 +109,17 @@ export {
 } from './entries.js';
 export type { GitClient, GitCommit, GitFile, GitHubApp, PublishFile } from './git.js';
 export { blobSha, createGitClient, RefMovedError, RepoUnreachableError } from './git.js';
-export type { EntryLocation, RedirectRule } from './lifecycle.js';
+export type { EntryLocation, RedirectRule, RedirectSite } from './lifecycle.js';
 export {
   appendRedirects,
+  collapseRedirects,
   deleteEntry,
   deleteLocales,
   duplicateEntry,
+  editRedirects,
   REDIRECTS,
+  readRedirects,
+  redirectError,
   redirectRule,
   redirectsText,
   renameEntry,

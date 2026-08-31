@@ -43,16 +43,21 @@ test('one card per global, named and described by the schema', async () => {
   const root = show();
   await loaded();
 
+  // Redirects is last and is not a global: every site has one, so the card is drawn whatever
+  // the developer declared.
   expect(all(root, '.global-card h2 a').map((a) => a.textContent)).toEqual([
     'Site details',
     'Newsletter call-to-action',
+    'Redirects',
   ]);
   expect(all(root, '.global-card h2 a').map((a) => a.getAttribute('href'))).toEqual([
     '/admin/site/site',
     '/admin/site/cta-newsletter',
+    '/admin/site/redirects',
   ]);
   expect(all(root, '.global-card > p').map((p) => p.textContent)).toEqual([
     'Contact details and footer text',
+    'Old addresses that forward to new ones',
   ]);
 });
 

@@ -115,7 +115,7 @@ developer's: they are declared in this file, and the client fills them.
 
 `src/content/redirects.yaml` is a flat list of rules. Handover appends to it when an entry
 is renamed or deleted ([entry lifecycle](entry-lifecycle.md#renaming-and-deleting-an-entry));
-you can add rules by hand.
+the client adds their own under **Site settings → Redirects**, and you can edit the file by hand.
 
 ```yaml
 _version: 1
@@ -128,9 +128,19 @@ rules:
     createdAt: "2026-08-21T08:00:00Z"
 ```
 
-`from` is a path starting with `/`; `to` is a path or an absolute URL; `status` is `301`;
-`reason` is one of `slug-change`, `hidden`, `deleted`, `manual`. Exact matches only — no
+`from` is a path starting with `/`; `to` is a path or an absolute URL; `status` is `301` or
+`302`; `reason` is one of `slug-change`, `hidden`, `deleted`, `manual`. Exact matches only — no
 wildcards.
+
+The admin's table refuses a `from` that is a page the site already serves — that redirect would
+take the page off the site — and a second rule from an address that already has one. A rule
+pointing at an address a new rule claims is re-pointed at its destination, so a visitor never
+hops twice. A rule the client adds is **committed as it is added** rather than waiting in the
+publish drawer: this file is assembled at publish out of the rules of the selected entries, so a
+rule belonging to no entry has nowhere to wait. It reaches visitors after the build.
+
+A rule with `reason: hidden` belongs to the entry that is hidden — showing that entry again
+removes the rule in the same commit — so the table draws it but neither edits nor deletes it.
 
 At build time the integration writes every rule as a line of `_redirects` in the output
 directory (`/brochure https://example.com/files/brochure.pdf 301`), which Cloudflare

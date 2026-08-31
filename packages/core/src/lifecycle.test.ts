@@ -1,7 +1,16 @@
 import { expect, test } from 'vitest';
 import { parse } from 'yaml';
 import type { GitClient, PublishFile } from './git.js';
-import { deleteEntry, duplicateEntry, redirectsText, renameEntry } from './lifecycle.js';
+import {
+  collapseRedirects,
+  deleteEntry,
+  duplicateEntry,
+  editRedirects,
+  readRedirects,
+  redirectError,
+  redirectsText,
+  renameEntry,
+} from './lifecycle.js';
 
 // An in-memory repo: serves files, records every publish call and every read that named a
 // commit rather than the branch.
@@ -420,4 +429,149 @@ test('a rename reads every file it moves at the commit it is made against', asyn
   expect(read.every((r) => r.at === 'commit-A')).toBe(true);
   // redirects.yaml is in the commit too, so the rules it is appended to are that commit's.
   expect(read).toContainEqual({ path: 'src/content/redirects.yaml', at: 'commit-A' });
+});
+
+const RULE = { _id: 'aaaaaaaa', status: 301 as const, createdAt: '2026-01-01T00:00:00Z' };
+const manual = (from: string, to: string, _id = 'bbbbbbbb') => ({
+  ...RULE,
+  _id,
+  from,
+  to,
+  reason: 'manual' as const,
+});
+
+test('a rule appended re-points the rule that led to its old address', () => {
+  const collapsed = collapseRedirects(
+    [manual('/a', '/b', 'first')],
+    [manual('/b', '/c', 'second')],
+  );
+
+  expect(collapsed).toEqual([manual('/a', '/c', 'first'), manual('/b', '/c', 'second')]);
+});
+
+test('a rule appended that sends an address back to itself drops the rule that moved it', () => {
+  const collapsed = collapseRedirects([manual('/a', '/b', 'first')], [manual('/b', '/a', 'back')]);
+
+  expect(collapsed).toEqual([manual('/b', '/a', 'back')]);
+});
+
+// A hidden entry's rule is dropped again by its `entry`, so a manual rule re-pointing it must
+// not take that link off: the entry would come back on the site with its redirect left behind.
+test('a re-pointed rule keeps the entry it belongs to when the new rule names none', () => {
+  const hidden = {
+    ...RULE,
+    _id: 'hidden01',
+    from: '/listings/mill',
+    to: '/listings',
+    reason: 'hidden' as const,
+    entry: 'listings/mill',
+  };
+
+  const collapsed = collapseRedirects([hidden], [manual('/listings', '/homes', 'second')]);
+
+  expect(collapsed[0]).toEqual({ ...hidden, to: '/homes', entry: 'listings/mill' });
+});
+
+test('reading redirects from a repository that has never written one is no rules', async () => {
+  const { git } = fakeGit({});
+
+  expect(await readRedirects('default', git)).toEqual([]);
+});
+
+test('one rule taken out is a commit of redirects.yaml alone', async () => {
+  const { git, published } = fakeGit({
+    'src/content/redirects.yaml':
+      '_version: 1\nrules:\n  - _id: "aaaaaaaa"\n    from: "/old"\n    to: "/new"\n    status: 301\n    reason: "manual"\n    createdAt: "2026-01-01T00:00:00Z"\n  - _id: "bbbbbbbb"\n    from: "/gone"\n    to: "/"\n    status: 302\n    reason: "manual"\n    createdAt: "2026-01-02T00:00:00Z"\n',
+  });
+
+  const result = await editRedirects('default', git, 'Delete redirect /gone', (rules) =>
+    rules.filter((r) => r._id !== 'bbbbbbbb'),
+  );
+
+  expect(result).toEqual({ commit_sha: 'commit-B' });
+  expect(published[0]?.message).toBe('Delete redirect /gone');
+  expect(published[0]?.files.map((f) => f.path)).toEqual(['src/content/redirects.yaml']);
+  expect(redirects(published[0]?.files ?? []).rules).toEqual([
+    {
+      _id: 'aaaaaaaa',
+      from: '/old',
+      to: '/new',
+      status: 301,
+      reason: 'manual',
+      createdAt: '2026-01-01T00:00:00Z',
+    },
+  ]);
+});
+
+const site = {
+  pages: { '/listings/harbour-flat': 'Harbour Flat' },
+  rules: [manual('/summer-offer', '/listings', 'taken')],
+};
+
+test('an empty box is asked for rather than corrected', () => {
+  expect(redirectError('default', { from: '  ', to: '/listings' }, site)).toEqual({
+    field: 'from',
+    message: 'An old address is needed.',
+  });
+  expect(redirectError('default', { from: '/a', to: '' }, site)).toEqual({
+    field: 'to',
+    message: 'A destination is needed.',
+  });
+});
+
+test('an old address that is not a path says so with the path it meant', () => {
+  expect(redirectError('default', { from: 'summer-offer', to: '/listings' }, site)).toEqual({
+    field: 'from',
+    message: 'An address has to start with "/" — did you mean "/summer-offer"?',
+  });
+});
+
+test('an old address given as a full web address is refused as one', () => {
+  expect(
+    redirectError('default', { from: 'https://example.com/x', to: '/listings' }, site)?.message,
+  ).toBe('An old address is a path on this site, like "/summer-offer", not a full web address.');
+});
+
+test('an old address that is a real page names the page it would hide', () => {
+  expect(
+    redirectError('default', { from: '/listings/harbour-flat', to: '/listings' }, site),
+  ).toEqual({
+    field: 'from',
+    message: 'This is a real page. A redirect here would hide Harbour Flat from visitors.',
+  });
+});
+
+test('a rule that sends an address to itself is refused on the destination', () => {
+  expect(redirectError('default', { from: '/a', to: '/a' }, site)).toEqual({
+    field: 'to',
+    message: 'This sends visitors back where they came from. Pick somewhere else.',
+  });
+});
+
+test('a second rule from an address that already has one is refused', () => {
+  expect(redirectError('default', { from: '/summer-offer', to: '/other' }, site)?.message).toBe(
+    'There is already a redirect from this address.',
+  );
+});
+
+// Editing a rule reads its own `from` back, which is not a clash with itself.
+test('a rule keeping its own old address is not refused as a duplicate', () => {
+  expect(
+    redirectError('default', { from: '/summer-offer', to: '/other' }, site, 'taken'),
+  ).toBeUndefined();
+});
+
+test('a destination that is neither a path nor a web address is refused', () => {
+  expect(redirectError('default', { from: '/a', to: 'listings' }, site)).toEqual({
+    field: 'to',
+    message:
+      'A destination is a path on this site or a full web address — did you mean "/listings"?',
+  });
+});
+
+test('a path and an absolute destination are both accepted', () => {
+  expect(redirectError('default', { from: '/a', to: '/b' }, site)).toBeUndefined();
+  expect(
+    redirectError('default', { from: '/a', to: 'https://example.com/b.pdf' }, site),
+  ).toBeUndefined();
 });

@@ -8,7 +8,8 @@ export interface RedirectRule {
   _id: string;
   from: string;
   to: string;
-  status: 301;
+  /** Moved for good, or only for now: the one thing a manual rule asks the client. */
+  status: 301 | 302;
   reason: 'slug-change' | 'hidden' | 'deleted' | 'manual';
   entry?: string;
   createdAt: string;
@@ -88,12 +89,110 @@ export async function appendRedirects(
   const doc = (file ? parseEntry(siteId, file.contents) : { _version: 1 }) as {
     rules?: RedirectRule[];
   };
-  let rules = (doc.rules ?? []).filter((r) => !drop?.(r));
-  for (const rule of added)
-    rules = [...rules, rule]
-      .map((r) => (r !== rule && r.to === rule.from ? { ...r, to: rule.to, entry: rule.entry } : r))
-      .filter((r) => r.from !== r.to);
+  const rules = collapseRedirects(
+    (doc.rules ?? []).filter((r) => !drop?.(r)),
+    added,
+  );
   return { path: REDIRECTS, contents: stringifyEntry(siteId, { ...doc, rules }) };
+}
+
+/**
+ * These rules appended to those. An existing rule that pointed at one's `from` is pointed at its
+ * `to` instead, so a visitor never hops twice, and a rule that would then send a URL to itself —
+ * a rename back — is dropped. The entry a rewritten rule belongs to stays its own where the new
+ * rule names none: a rule the client added by hand is nobody's, and losing that link would leave
+ * a hidden entry's rule behind when the entry is put back.
+ */
+export function collapseRedirects(
+  rules: readonly RedirectRule[],
+  added: readonly RedirectRule[],
+): RedirectRule[] {
+  let all = [...rules];
+  for (const rule of added)
+    all = [...all, rule]
+      .map((r) =>
+        r !== rule && r.to === rule.from ? { ...r, to: rule.to, entry: rule.entry ?? r.entry } : r,
+      )
+      .filter((r) => r.from !== r.to);
+  return all;
+}
+
+/** The rules `redirects.yaml` holds, or none where the site has never written one. */
+export async function readRedirects(
+  siteId: string,
+  git: Pick<GitClient, 'getFile'>,
+  at?: string,
+): Promise<RedirectRule[]> {
+  const file = await git.getFile(REDIRECTS, at);
+  if (!file) return [];
+  return ((parseEntry(siteId, file.contents) as { rules?: RedirectRule[] }).rules ?? []).slice();
+}
+
+/**
+ * One commit that is nothing but `redirects.yaml`: the rules the client adds, changes and takes
+ * out by hand. It commits on its own rather than waiting in the drawer, the way a rename and a
+ * delete do — the file never gets a draft row of its own, so there is nowhere for an ownerless
+ * rule to wait ([drafts-and-publishing.md](../../../docs/features/drafts-and-publishing.md)).
+ */
+export async function editRedirects(
+  siteId: string,
+  git: GitClient,
+  message: string,
+  change: (rules: RedirectRule[]) => RedirectRule[],
+): Promise<{ commit_sha: string }> {
+  const base_sha = await git.getHead();
+  const file = await git.getFile(REDIRECTS, base_sha);
+  const doc = (file ? parseEntry(siteId, file.contents) : { _version: 1 }) as {
+    rules?: RedirectRule[];
+  };
+  const contents = stringifyEntry(siteId, { ...doc, rules: change(doc.rules ?? []) });
+  return git.publish([{ path: REDIRECTS, contents }], { base_sha, message });
+}
+
+/** Every page the site serves now, by the URL it answers at, so a `from` can be told it shadows one. */
+export interface RedirectSite {
+  pages: Record<string, string>;
+  rules: readonly RedirectRule[];
+}
+
+/**
+ * Why this rule cannot be written, said as the consequence rather than the rule — a client who
+ * is told "invalid path" learns nothing, and the one refusal that matters is the second: a
+ * redirect over a page that exists takes that page off the site, and nobody diagnoses that from
+ * a 404. `field` is the box the sentence belongs under.
+ */
+export function redirectError(
+  _siteId: string,
+  rule: { from: string; to: string },
+  site: RedirectSite,
+  /** The rule being changed, whose own `from` is not a clash with itself. */
+  id?: string,
+): { field: 'from' | 'to'; message: string } | undefined {
+  const from = rule.from.trim();
+  const to = rule.to.trim();
+  const at = (field: 'from' | 'to', message: string) => ({ field, message });
+  if (!from) return at('from', 'An old address is needed.');
+  if (/^[a-z][a-z0-9+.-]*:/i.test(from))
+    return at(
+      'from',
+      'An old address is a path on this site, like "/summer-offer", not a full web address.',
+    );
+  if (!from.startsWith('/'))
+    return at('from', `An address has to start with "/" — did you mean "/${from}"?`);
+  if (!to) return at('to', 'A destination is needed.');
+  if (!/^(\/|https?:\/\/)/.test(to))
+    return at(
+      'to',
+      `A destination is a path on this site or a full web address — did you mean "/${to.replace(/^\/+/, '')}"?`,
+    );
+  if (from === to)
+    return at('to', 'This sends visitors back where they came from. Pick somewhere else.');
+  const page = site.pages[from];
+  if (page)
+    return at('from', `This is a real page. A redirect here would hide ${page} from visitors.`);
+  if (site.rules.some((r) => r.from === from && r._id !== id))
+    return at('from', 'There is already a redirect from this address.');
+  return undefined;
 }
 
 /**

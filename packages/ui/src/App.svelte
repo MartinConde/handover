@@ -12,11 +12,10 @@ import Login, { type LoginMethods } from './Login.svelte';
 import Members from './Members.svelte';
 import { navigate } from './navigate';
 import Pending from './Pending.svelte';
+import Redirects from './Redirects.svelte';
 
 export interface Session {
   collections: string[];
-  /** Whether the site declares any site-wide content: with none there is no screen to offer. */
-  globals?: boolean;
   /** Where a stored media key is served from, so a widget can draw what a content file names. */
   mediaBase?: string;
   /** Every shape this site crops a picture to, which is what the focal picker previews. */
@@ -48,8 +47,11 @@ let path = $state(landedAt);
 const entryRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)\/([\w-]+)$/));
 const listRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)$/));
 // A global is edited on the entry screen, so its route is the entry route under another name:
-// `globals` is the collection and the file name is the slug.
-const globalRoute = $derived(path.match(/^\/admin\/site\/([\w-]+)$/));
+// `globals` is the collection and the file name is the slug. Redirects live under the same
+// prefix and are a screen of their own, so they are taken out before the match: a site that
+// happened to declare a global called `redirects` would otherwise reach neither.
+const redirectRoute = $derived(path === '/admin/site/redirects');
+const globalRoute = $derived(redirectRoute ? null : path.match(/^\/admin\/site\/([\w-]+)$/));
 const editing = $derived(
   globalRoute
     ? { collection: 'globals', slug: globalRoute[1] ?? '' }
@@ -256,20 +258,19 @@ const initial = $derived(
         <a href="/admin" data-icon="dashboard" aria-current={path === '/admin' ? 'page' : undefined}>Dashboard</a>
       </div>
     </nav>
-    {#if session.globals}
-      <!-- Above the collections, and not under Manage: the client thinks of this as "my site",
-           and Manage's Settings is the developer's read-only config. -->
-      <nav class="nav" aria-labelledby="nav-site">
-        <div class="nav-label" id="nav-site">Site</div>
-        <div class="nav-group">
-          <a
-            href="/admin/site"
-            data-icon="site"
-            aria-current={path === '/admin/site' || globalRoute ? 'page' : undefined}
-          >Site settings</a>
-        </div>
-      </nav>
-    {/if}
+    <!-- Above the collections, and not under Manage: the client thinks of this as "my site",
+         and Manage's Settings is the developer's read-only config. Always there, even on a site
+         that declares no globals: every site has redirects, and they are listed on that screen. -->
+    <nav class="nav" aria-labelledby="nav-site">
+      <div class="nav-label" id="nav-site">Site</div>
+      <div class="nav-group">
+        <a
+          href="/admin/site"
+          data-icon="site"
+          aria-current={path.startsWith('/admin/site') ? 'page' : undefined}
+        >Site settings</a>
+      </div>
+    </nav>
     <nav class="nav" aria-labelledby="nav-content">
       <div class="nav-label" id="nav-content">Content</div>
       <div class="nav-group">
@@ -361,6 +362,8 @@ const initial = $derived(
       {/await}
     {:else if listRoute}
       <EntryList collection={listRoute[1] ?? ''} onchanged={loadPending} />
+    {:else if redirectRoute}
+      <Redirects />
     {:else if path === '/admin/site'}
       <Globals />
     {:else if path === '/admin/media'}

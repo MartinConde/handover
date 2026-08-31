@@ -10,6 +10,7 @@ import {
 } from '@handover/core';
 import type { APIContext } from 'astro';
 import { afterEach, expect, test, vi } from 'vitest';
+import { parse } from 'yaml';
 import { formSchema, type HandoverConfig } from '../index.js';
 import { DELETE, GET, PATCH, POST, PUT } from './api.js';
 
@@ -712,6 +713,10 @@ afterEach(() => {
   for (const path of Object.keys(rows)) delete rows[path];
   entryConflict.mockClear();
   entryConflict.mockResolvedValue(undefined);
+  // A `…Once` nobody consumed outlives its test and is handed to the next caller: reset puts
+  // the implementation the mock was made with back.
+  pendingDrafts.mockReset();
+  publish.mockClear();
   setEntryStatus.mockClear();
   resolveConflict.mockClear();
 });
@@ -744,7 +749,6 @@ test('ping returns the collection names and who is signed in', async () => {
   expect(await res.json()).toEqual({
     ok: true,
     collections: ['pages', 'listings', 'presenters', 'posts'],
-    globals: true,
     user: session.user,
     role: 'editor',
     // Where a stored key is served from: the widgets draw thumbnails of keys nothing listed.
@@ -5325,4 +5329,219 @@ test('a cropped copy declares the picture it came from', async () => {
     expect.anything(),
     expect.objectContaining({ hash: crop, derivedFrom: PHOTO }),
   );
+});
+
+// ── Redirects ────────────────────────────────────────────────────────────────────────────
+// The manual rules UI over redirects.yaml. A rule the client adds is committed as it is added:
+// the file is assembled at publish out of the *selected* entries' rules, so an ownerless rule
+// has nowhere to wait.
+
+const RULES = (...rules: string[]) => `_version: 1\nrules:\n${rules.join('')}`;
+const yamlRule = (id: string, from: string, to: string, reason = 'manual', entry?: string) =>
+  `  - _id: "${id}"\n    from: "${from}"\n    to: "${to}"\n    status: 301\n    reason: "${reason}"\n${entry ? `    entry: "${entry}"\n` : ''}    createdAt: "2026-01-01T00:00:00Z"\n`;
+const committed = () =>
+  parse(
+    ((publish.mock.calls.at(-1)?.[0] ?? []) as { path: string; contents: string }[]).find(
+      (f) => f.path === 'src/content/redirects.yaml',
+    )?.contents ?? '',
+  ) as { rules: { _id: string; from: string; to: string; status: number }[] };
+
+test('the redirects table is the file, and a rule waiting on a draft is flagged', async () => {
+  files['src/content/redirects.yaml'] = RULES(
+    yamlRule('aaaaaaaa', '/old-mill', '/listings/mill-house', 'slug-change', 'listings/mill-house'),
+  );
+  pendingDrafts.mockImplementationOnce(async () => [
+    {
+      path: 'src/content/listings/en/mill-house.yaml',
+      contents: '',
+      updatedAt: 1,
+      pendingRedirects: [
+        {
+          _id: 'bbbbbbbb',
+          from: '/listings/mill-house',
+          to: '/listings',
+          status: 301,
+          reason: 'hidden',
+          entry: 'listings/mill-house',
+          createdAt: '2026-08-30T00:00:00Z',
+        },
+      ],
+    },
+  ]);
+
+  const res = await GET(ctx('redirects', undefined, { handover: owner }));
+
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({
+    rules: [
+      {
+        _id: 'aaaaaaaa',
+        from: '/old-mill',
+        to: '/listings/mill-house',
+        status: 301,
+        reason: 'slug-change',
+        entry: 'listings/mill-house',
+        createdAt: '2026-01-01T00:00:00Z',
+        // Resolved here, because a title comes from the build's index and nothing in the
+        // browser can read that.
+        title: 'The Mill House',
+      },
+      {
+        _id: 'bbbbbbbb',
+        from: '/listings/mill-house',
+        to: '/listings',
+        status: 301,
+        reason: 'hidden',
+        entry: 'listings/mill-house',
+        createdAt: '2026-08-30T00:00:00Z',
+        title: 'The Mill House',
+        pending: true,
+      },
+    ],
+  });
+});
+
+test('a manual rule is committed as it is added, on its own', async () => {
+  files['src/content/redirects.yaml'] = RULES(yamlRule('aaaaaaaa', '/old', '/new'));
+
+  const res = await POST(
+    post('redirects', JSON.stringify({ from: '/summer-offer', to: '/listings', status: 302 })),
+  );
+
+  expect(res.status).toBe(200);
+  expect(publish).toHaveBeenCalledTimes(1);
+  expect(publish.mock.calls[0]?.[1]).toEqual({
+    base_sha: 'head789',
+    message: 'Add redirect /summer-offer',
+  });
+  expect(((publish.mock.calls[0]?.[0] ?? []) as { path: string }[]).map((f) => f.path)).toEqual([
+    'src/content/redirects.yaml',
+  ]);
+  expect(committed().rules.at(-1)).toEqual({
+    _id: expect.stringMatching(/^[0-9a-z]{8}$/),
+    from: '/summer-offer',
+    to: '/listings',
+    status: 302,
+    reason: 'manual',
+    createdAt: expect.stringMatching(/Z$/),
+  });
+});
+
+// The refusal that matters: a redirect over a page that exists takes that page off the site,
+// and a client would never diagnose that from a 404.
+test('a rule over a page the site serves is refused by the page it would hide', async () => {
+  const res = await POST(
+    post('redirects', JSON.stringify({ from: '/listings/mill-house', to: '/listings' })),
+  );
+
+  expect(res.status).toBe(422);
+  expect(await res.json()).toEqual({
+    field: 'from',
+    message: 'This is a real page. A redirect here would hide The Mill House from visitors.',
+  });
+  expect(publish).not.toHaveBeenCalled();
+});
+
+test("a rule over a collection's index is refused by the index it would hide", async () => {
+  const res = await POST(post('redirects', JSON.stringify({ from: '/listings', to: '/' })));
+
+  expect(res.status).toBe(422);
+  expect((await res.json()).message).toBe(
+    'This is a real page. A redirect here would hide the listings index from visitors.',
+  );
+});
+
+test('adding a rule from an address that already forwards points the old rule at the new one', async () => {
+  files['src/content/redirects.yaml'] = RULES(yamlRule('aaaaaaaa', '/a', '/b'));
+
+  expect((await POST(post('redirects', JSON.stringify({ from: '/b', to: '/c' })))).status).toBe(
+    200,
+  );
+
+  expect(committed().rules.map((r) => [r._id, r.from, r.to])).toEqual([
+    ['aaaaaaaa', '/a', '/c'],
+    [expect.stringMatching(/^[0-9a-z]{8}$/), '/b', '/c'],
+  ]);
+});
+
+test('a rule is edited in place and the commit says which one', async () => {
+  files['src/content/redirects.yaml'] = RULES(yamlRule('aaaaaaaa', '/old', '/new'));
+
+  const res = await PUT(
+    put('redirects/aaaaaaaa', JSON.stringify({ from: '/old', to: '/newer', status: 302 })),
+  );
+
+  expect(res.status).toBe(200);
+  expect(publish.mock.calls[0]?.[1]).toEqual({
+    base_sha: 'head789',
+    message: 'Edit redirect /old',
+  });
+  expect(committed().rules).toEqual([
+    {
+      _id: 'aaaaaaaa',
+      from: '/old',
+      to: '/newer',
+      status: 302,
+      reason: 'manual',
+      createdAt: '2026-01-01T00:00:00Z',
+    },
+  ]);
+});
+
+test('a rule is deleted and the deletion is logged against the commit', async () => {
+  files['src/content/redirects.yaml'] = RULES(
+    yamlRule('aaaaaaaa', '/old', '/new'),
+    yamlRule('bbbbbbbb', '/gone', '/'),
+  );
+
+  const res = await DELETE(ctx('redirects/bbbbbbbb', undefined, { handover: owner }));
+
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ deleted: 'bbbbbbbb' });
+  expect(committed().rules.map((r) => r._id)).toEqual(['aaaaaaaa']);
+  expect(logged).toEqual([
+    {
+      userId: 'u1',
+      kind: 'redirect-deleted',
+      subject: 'bbbbbbbb',
+      commitSha: 'def456',
+      detail: { from: '/gone', to: '/' },
+    },
+  ]);
+});
+
+// Unhiding the entry removes its rule in the same commit, so taking it out from here would
+// leave the pair inconsistent and the rule would come back at the next publish.
+test('a hidden entry’s rule is not deleted from this screen', async () => {
+  files['src/content/redirects.yaml'] = RULES(
+    yamlRule('cccccccc', '/listings/mill-house', '/listings', 'hidden', 'listings/mill-house'),
+  );
+
+  const res = await DELETE(ctx('redirects/cccccccc', undefined, { handover: owner }));
+
+  expect(res.status).toBe(409);
+  expect((await res.json()).error).toBe(
+    'This redirect belongs to the entry that is hidden. Show that entry again and the redirect goes with it.',
+  );
+  expect(publish).not.toHaveBeenCalled();
+});
+
+test('a hidden entry’s rule is not edited from this screen either', async () => {
+  files['src/content/redirects.yaml'] = RULES(
+    yamlRule('cccccccc', '/listings/mill-house', '/listings', 'hidden', 'listings/mill-house'),
+  );
+
+  const res = await PUT(
+    put('redirects/cccccccc', JSON.stringify({ from: '/listings/mill-house', to: '/' })),
+  );
+
+  expect(res.status).toBe(409);
+  expect(publish).not.toHaveBeenCalled();
+});
+
+test('a rule that is not in the file is a 404 rather than a commit', async () => {
+  expect((await DELETE(ctx('redirects/nosuchid', undefined, { handover: owner }))).status).toBe(
+    404,
+  );
+  expect(publish).not.toHaveBeenCalled();
 });

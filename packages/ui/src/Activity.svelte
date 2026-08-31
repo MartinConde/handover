@@ -319,6 +319,14 @@ function said(event: ActivityEvent): Said {
     }
     case 'media-delete':
       return { lead: `${actor} deleted ${str(d, 'name') ?? 'a file'} from storage.` };
+    // A rule is named by the address it covers, which is the half a client recognises; where it
+    // sends them is the other column of the screen it was written on.
+    case 'redirect-added':
+      return { lead: `${actor} added a redirect from ${str(d, 'from') ?? 'an address'}.` };
+    case 'redirect-changed':
+      return { lead: `${actor} changed the redirect from ${str(d, 'from') ?? 'an address'}.` };
+    case 'redirect-deleted':
+      return { lead: `${actor} deleted the redirect from ${str(d, 'from') ?? 'an address'}.` };
     case 'mail-failed':
       return { lead: `${MESSAGE[str(d, 'message') ?? ''] ?? 'A message'} could not be sent.` };
   }
