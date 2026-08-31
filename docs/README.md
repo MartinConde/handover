@@ -7,7 +7,7 @@
 - [Content format](content-format.md) — what the YAML files look like, the reserved `_` keys, `_id` on blocks.
 - [Entry lifecycle](entry-lifecycle.md) — hiding an entry, creating one, renaming and deleting, the redirects those write, and putting a deleted one back.
 - [Site files](site-files.md) — globals, the `navigation` menus, `redirects.yaml` and `_templates/`.
-- [Media](media.md) — the bucket, its CORS rule and hostname, the four env values, what an upload does, and the library screen with its search, usage counts and tags.
+- [Media](media.md) — the bucket, its CORS rule and hostname, the four env values; then [Uploads](media-uploads.md) — what an upload does and why a key is a hash — and [The media library](media-library.md) — archive, the gated delete, the library screen, the focal point, cropping a copy.
 - [Pictures and files in a field](media-fields.md) — a field's preset: the ratio, the cap on the way in, the floor the picker refuses under; the drop zone and the picker.
 - [Field types](field-types.md) — the scalar types, rich text, links and labels.
 - [Structured fields](structured-fields.md) — image, file, embed, seo and reference; groups, arrays and blocks.

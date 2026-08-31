@@ -22,7 +22,7 @@ the package first.
 - **`ratio`** is what the field shows — the card, the picker's preview and the crop the site
   renders. Leave it out and the picture is shown as it is
 - **`max`** is the cap, in longest side, applied once on the way *in*. It is what the browser
-  downscales to before a byte leaves it ([step 1](media.md#what-an-upload-does))
+  downscales to before a byte leaves it ([step 1](media-uploads.md#what-an-upload-does))
 - **`min`** is the floor, in width, applied every time a picture is *chosen*. It is optional:
   a field without one refuses nothing
 
@@ -57,7 +57,7 @@ A picture inserted into a field brings the library's dot with it, and *Set focal
 card moves it for this page alone — over this field's own shape, previewed as the site will crop
 it. It is written as `focal` on the value and wins over the picture's own default wherever that
 page renders it; a dot left in the middle is written as nothing. Moving the default for every
-page that did not set one is the library's ([Media](media.md#the-focal-point)).
+page that did not set one is the library's ([The media library](media-library.md#the-focal-point)).
 
 What a translation owns is the alt text of a picture and the display name of a file. Every
 other part is the same in every language, so a language being translated is shown those two

@@ -4,13 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Docs: Media is three pages instead of one 250-line page** — [the setup](docs/media.md) with the
+  four steps, [Uploads](docs/media-uploads.md) and [The media library](docs/media-library.md).
 - **The navigation builder on a phone** keeps the tree as the screen and opens *Add to menu* as a
   sheet over it, instead of stacking the whole add pane above the tree.
 - **The SEO panel previews the page** as a search result and as a shared card, per language and
   under the address that language serves it at. They need `site` in `astro.config.mjs`; without
   it the greyed boxes stand alone, as before ([SEO](docs/seo.md#in-the-admin)).
 - **Media library filters.** *Archived*, *Recovered* and *Unused* narrow the grid, and an archived
-  tile has its own **Unarchive** button ([Media](docs/media.md#the-library)).
+  tile has its own **Unarchive** button ([The media library](docs/media-library.md#the-library)).
 - **The entry list says who last touched each row** — *Edited by Anna 2h ago*, or *Published by
   Martin yesterday* — the line the dashboard and Site settings already carry, and it has a
   **Status** filter: all rows, the live ones, or the hidden ones
@@ -190,11 +192,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   picture and previews every shape this site's own fields crop to around it; move it once and all
   of them move. The same dialog opens from an image field for that page alone, and writes `focal`
   into the entry. Nothing is written to the picture — the crops are delivery transformations of
-  the one stored original ([Media](docs/media.md#the-focal-point)).
+  the one stored original ([The media library](docs/media-library.md#the-focal-point)).
 - **Crop a copy.** The library's *Crop* takes a region of a picture and makes a **new asset** from
   it, linked to the one it came from; the original is untouched and stays wherever it is used. The
   crop is made in the browser, so the bucket's CORS rule needs `GET` as well as `PUT`
-  ([Media](docs/media.md#cropping-a-copy)).
+  ([The media library](docs/media-library.md#cropping-a-copy)).
 - **Archive a picture instead of deleting it.** The library's panel has an Archive button: the
   picture leaves every field's picker, keeps its bytes, and every page that already uses it goes
   on working. The same button puts it back ([Media](docs/media.md)).
