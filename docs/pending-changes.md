@@ -25,7 +25,7 @@ ones. What autosave stores and how an entry is published on its own are on
   along*, since they are a consequence of the entry rather than a file anybody chose
 - The rows are kept once the commit succeeds and re-seeded on it, which is what makes the
   next publish of an entry somebody is still editing not look like a conflict with this one
-  ([Working together](working-together.md#your-own-publish-is-not-a-conflict)). They are
+  ([Publish conflicts](conflicts.md#your-own-publish-is-not-a-conflict)). They are
   cleared later, when the build carrying them is live
 - **An entry the schema is not done with is refused the same way**, marked *Not ready to
   publish*, and likewise takes itself out. It has no button in the drawer: open the entry
@@ -34,7 +34,7 @@ ones. What autosave stores and how an entry is published on its own are on
   it. That entry then takes itself out of the set — its checkbox goes off and cannot go back
   on — so pressing Publish again sends the rest. **Resolve** on that row answers it field by
   field and keeps what you wrote; Discard gives the entry up whole
-  ([Working together](working-together.md#a-file-that-changed-in-the-repository))
+  ([Publish conflicts](conflicts.md#a-file-that-changed-in-the-repository))
 - **An entry whose languages have drifted apart is refused too**, marked *Languages
   disagree*. Which blocks an entry has is the same in every language
   ([Languages](i18n.md#a-block-one-language-only-has)), so a file that disagrees with its
@@ -143,7 +143,7 @@ Two things worth knowing:
 Once the build carrying a publish is live, its draft rows are cleared — but only for entries
 nobody is editing. A row is also what an open tab publishes against, so an entry somebody has
 had open across the whole cycle keeps its row until their lock runs out
-([Working together](working-together.md#your-own-publish-is-not-a-conflict)).
+([Publish conflicts](conflicts.md#your-own-publish-is-not-a-conflict)).
 
 ### Reverting a publish
 

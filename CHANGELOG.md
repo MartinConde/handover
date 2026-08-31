@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Docs: publish conflicts are their own page** — [Publish conflicts](docs/conflicts.md), out
+  of [Working together](docs/working-together.md), which keeps the lock and the take-over.
 - **Docs: machine translation and staleness are their own page** —
   [Machine translation and staleness](docs/machine-translation.md), out of
   [Translating](docs/translating.md); two links that pointed at anchors that no longer existed
@@ -514,7 +516,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   them all at once. Blocks are matched by `_id`, so a block added in the code and a block
   edited in the draft are not a disagreement. Answering writes a new draft over the
   repository's file and the entry publishes normally; nothing is committed by the answer.
-  [Working together](docs/working-together.md#resolving-it-field-by-field).
+  [Publish conflicts](docs/conflicts.md#resolving-it-field-by-field).
 
 - **A drawer row opens into what it would publish.** The per-field diff below is now on every
   row of the pending-changes drawer, with the redirect rules riding along under *Riding along*.
@@ -667,7 +669,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   or one the schema is not done with, takes itself out of the checked set and says why on its
   own row, so pressing Publish again sends the rest. Taking theirs whole with Discard is still
   the only way out of a conflict — there is no three-way merge
-  ([Working together](docs/working-together.md#a-file-that-changed-in-the-repository)).
+  ([Publish conflicts](docs/conflicts.md#a-file-that-changed-in-the-repository)).
 
 - **`GET /admin/api/drafts` answers entries, not files.** `{ "entries": [{ "key", "title",
   "collection", "locales", "files", "redirects", "updated_at", "held_by" }] }`. The grouping is
@@ -681,7 +683,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   change at all and the publish quietly wrote over it — the ref update had nothing to refuse,
   since the parent was current. A publish, an autosave's first read of a file, and a rename,
   delete or language-off now read every file at the one commit they are made against, and
-  `getFile` takes that commit ([Working together](docs/working-together.md#a-file-that-changed-in-the-repository)).
+  `getFile` takes that commit ([Publish conflicts](docs/conflicts.md#a-file-that-changed-in-the-repository)).
 
 - **A publish can be of one entry or a chosen set.** `POST /admin/api/publish` now takes
   `{ "entries": ["listings/mill-house"] }` and commits those entries — every language of each,
@@ -697,7 +699,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   entry after publishing it and the next publish goes through; a commit somebody *else* made is
   still caught. Rows are kept until the build carrying them is live, so a title you published
   reads right in the entry list straight away
-  ([Working together](docs/working-together.md#your-own-publish-is-not-a-conflict)).
+  ([Publish conflicts](docs/conflicts.md#your-own-publish-is-not-a-conflict)).
 
 - **A publish that made no commit is in the activity log.** `publish-conflict` when a file had
   changed in the repository since it was opened, `publish-failed` when the repository turned the

@@ -22,7 +22,8 @@
 - [Version history](history.md) — the History tab: one version per commit, comparing two, and restoring one as unpublished changes.
 - [The dashboard](dashboard.md) — the `/admin` landing page: what is waiting, the build, who edited what, and how far behind the translations are.
 - [Pending changes and build status](pending-changes.md) — the drawer, what it refuses, holding an entry back, build status after a commit, reverting a publish.
-- [Working together](working-together.md) — the soft lock on an entry, what "Being edited by…" takes away, taking one over, and a file somebody changed in the repository.
+- [Working together](working-together.md) — the soft lock on an entry, what "Being edited by…" takes away, and taking one over.
+- [Publish conflicts](conflicts.md) — a file somebody changed in the repository: the refusal, resolving it field by field, Discard.
 - [Preview](preview.md) — the client seeing a page before it goes out: turning it on at build, what is behind the gate, the address to preview, and the pane in the editor.
 - [Accounts and signing in](auth.md) — the secrets, `HANDOVER_BASE_URL`, seeding the first owner, the three ways in, the account page, closed sign-up and rate limiting.
 - [Roles and permissions](roles.md) — the two roles, what each may do, and what is behind the session and what is deliberately not.

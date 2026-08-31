@@ -75,7 +75,7 @@ Under **Developer tools**, and only while the site is running in development. It
 scratch entry, edits its draft and then commits a different edit to the same file — which is
 what a colleague's push does to somebody's open draft — so the three-way view in the
 pending-changes drawer can be exercised without hand-crafting commits
-([Working together](working-together.md#resolving-it-field-by-field)).
+([Publish conflicts](conflicts.md#resolving-it-field-by-field)).
 
 It writes to your repository. The result names the entry it made: delete that entry when you
 are done with it.

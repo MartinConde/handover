@@ -81,7 +81,7 @@ DELETE /admin/api/drafts/:collection/:slug  →  {}
 Throws the entry's stored draft away; the next open reads the file in the repository
 instead. Nothing is committed and the published page is untouched. This is what the
 drawer's **Discard** does with a file a publish was refused over
-([Working together](working-together.md#a-file-that-changed-in-the-repository)). `404` if
+([Publish conflicts](conflicts.md#a-file-that-changed-in-the-repository)). `404` if
 the collection is not configured.
 
 ```
@@ -114,7 +114,7 @@ POST /admin/api/conflict/:collection/:slug  { "answers": [{ "path", "locale", "s
 ```
 
 The three-way view of an entry the repository moved under, and the answers to it
-([Working together](working-together.md#resolving-it-field-by-field)). Every language of the
+([Publish conflicts](conflicts.md#resolving-it-field-by-field)). Every language of the
 entry is read at HEAD and at the commit each draft row was loaded from; `questions` are the
 fields **both** sides changed — `path`, `label`, the `locale` it belongs to or none for a
 value every language shares, the `base` both started from, and `ours` / `theirs` as the same
