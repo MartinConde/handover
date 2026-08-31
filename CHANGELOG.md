@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **The entry editor no longer scrolls sideways on a phone** at the demo home page's deepest block
+  nesting: a list of blocks sizes to its own width rather than to the widest card's words, and a
+  block header three levels down wraps instead.
 - **Docs: Media is three pages instead of one 250-line page** — [the setup](docs/media.md) with the
   four steps, [Uploads](docs/media-uploads.md) and [The media library](docs/media-library.md).
 - **The navigation builder on a phone** keeps the tree as the screen and opens *Add to menu* as a

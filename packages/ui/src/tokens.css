@@ -1116,7 +1116,9 @@ input[type="date"].input { padding-right: var(--s-3); }
 .row-controls { display: flex; gap: 2px; }
 .row-controls .btn-icon { width: 30px; }
 .row-controls .grip { display: inline-grid; place-items: center; width: 30px; min-height: 30px; color: var(--ink-3); cursor: grab; font-size: var(--text-md); }
-.list { display: grid; gap: var(--s-3); }
+/* One track that is the list's own width: an implicit `auto` track grows to the widest card's
+   min-content, which at the demo's deepest nesting was two pixels past a phone's edge. */
+.list { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-3); }
 .list .add { justify-self: start; }
 .group { border-radius: var(--radius-lg); background: var(--surface-2); padding: var(--s-3) var(--s-4); }
 .group > summary { display: flex; align-items: center; gap: var(--s-2); list-style: none; font-weight: 500; cursor: pointer; min-height: 30px; }
@@ -1361,4 +1363,6 @@ input[type="date"].input { padding-right: var(--s-3); }
   :root .table.cols-7 .row .td.path { flex-wrap: wrap; }
   :root .table.cols-7 .row-menu { display: flex; gap: var(--s-1); }
   .previews { grid-template-columns: 1fr; }
+  /* A block header three levels down has less room than its own words; let it wrap. */
+  .block-card > header { flex-wrap: wrap; }
 }
