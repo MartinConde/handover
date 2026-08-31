@@ -2021,7 +2021,19 @@ async function restoreVersion(
   // The whole form, `slug` included: `formFor` takes the address out of what the client types
   // into, but it is a key the schema declares and the file writes it where it says.
   const form = formOf('default', formSchema(schema));
-  const { paths } = await restoreDraft('default', db(), git, form, files);
+  const database = db();
+  const pending = await pendingLocales(collection, slug, database);
+  const { paths } = await restoreDraft('default', database, git, form, files);
+  // The lock only refuses somebody editing right now; a draft typed yesterday and closed goes
+  // with this write, so the log says whose words a version was put over.
+  const went = pending.filter((locale) => paths.includes(entryPath(collection, slug, locale)));
+  if (went.length)
+    await logActivity('default', database, {
+      userId: session?.user.id,
+      kind: 'draft-discard',
+      subject: await entrySubject(collection, slug),
+      detail: { locales: went, restore: sha },
+    });
   return Response.json({ paths });
 }
 
@@ -2806,13 +2818,40 @@ async function remove(
 
 // The way out of a publish conflict: the entry gives up its draft and is read from the
 // repository again on the next open. Taking theirs whole — picking field by field is later.
-async function discard(collection: string, slug: string): Promise<Response> {
+async function discard(
+  collection: string,
+  slug: string,
+  session: App.Locals['handover'],
+): Promise<Response> {
   if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
   const database = db();
+  // Read before the rows go: an entry that only ever existed as a draft has no file to name it
+  // by afterwards.
+  const [subject, went] = await Promise.all([
+    entrySubject(collection, slug),
+    pendingLocales(collection, slug, database),
+  ]);
   // Every language of it: the others hold the structure this edit gave them.
   for (const locale of config.i18n.locales)
     await discardDraft('default', database, entryPath(collection, slug, locale));
+  // Somebody's words went, which typing never records and this does: the same row a version
+  // restored over a draft writes. Nothing pending is nothing thrown away.
+  if (went.length)
+    await logActivity('default', database, {
+      userId: session?.user.id,
+      kind: 'draft-discard',
+      subject,
+      detail: { locales: went },
+    });
   return Response.json({});
+}
+
+/** The languages of one entry with unpublished changes — what a discard or a restore throws away. */
+async function pendingLocales(collection: string, slug: string, database: Db): Promise<string[]> {
+  const rows = await pendingDrafts('default', database);
+  return Object.entries(entryPaths(collection, slug))
+    .filter(([, path]) => rows.some((row) => row.path === path))
+    .map(([locale]) => locale);
 }
 
 /**
@@ -3725,7 +3764,7 @@ export const DELETE: APIRoute = async ({ params, request, url, locals }) => {
   const member = params.path?.match(MEMBER);
   if (member) return removeMember(member[1] ?? '', request, url, locals.cfContext, locals.handover);
   const draft = params.path?.match(DRAFT);
-  if (draft) return discard(draft[1] ?? '', draft[2] ?? '');
+  if (draft) return discard(draft[1] ?? '', draft[2] ?? '', locals.handover);
   const asset = params.path?.match(MEDIA);
   if (asset) return answering(() => deleteAsset(asset[1] ?? '', locals.handover));
   const rule = params.path?.match(REDIRECT);

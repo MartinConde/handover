@@ -165,6 +165,14 @@ export function said(event: ActivityEvent, people: Person[] = []): Said {
         reason: changed(one ? 1 : files),
       };
     }
+    case 'draft-discard': {
+      // One kind, two writers: the drawer's Discard, and a version restored over the draft.
+      const one = entryOf(event.subject);
+      const lead = (d as { restore?: unknown } | null)?.restore
+        ? `${actor} restored an older version over the unpublished changes to `
+        : `${actor} discarded the unpublished changes to `;
+      return one ? { lead, link: one } : { lead: `${lead}an entry.` };
+    }
     case 'hold-released': {
       const one = entryOf(event.subject);
       const from = str(d, 'from');

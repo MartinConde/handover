@@ -580,6 +580,29 @@ test('a take-over and a released hold read as sentences, and neither expands', a
   expect(root.querySelector('.activity-detail')).toBe(null);
 });
 
+// One kind, two writers: the drawer's Discard and a version restored over unpublished changes.
+test('a discard reads as a sentence, and a restore over a draft says which it was', async () => {
+  server({
+    events: [
+      ev('draft-discard', {
+        subject: 'src/content/pages/en/contact.yaml',
+        detail: { locales: ['en', 'de'] },
+      }),
+      ev('draft-discard', {
+        subject: 'src/content/pages/en/about-us.yaml',
+        detail: { locales: ['en'], restore: 'abc1234' },
+      }),
+    ],
+    cursor: null,
+  });
+  const root = await show();
+
+  expect(sentences(root)).toEqual([
+    'Anna Berg discarded the unpublished changes to contact EN',
+    'Anna Berg restored an older version over the unpublished changes to about-us EN',
+  ]);
+});
+
 // The hold toggle writes no name, so the sentence has to read without one.
 test('a hold released with nobody named still reads', async () => {
   server({

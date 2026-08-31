@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Throwing away somebody's unpublished changes is logged.** Discard in the drawer, and a version
+  restored over an open draft, each write a `draft-discard` row naming the entry and the languages
+  that went; a restore's row also names the commit it restored
+  ([Activity log](docs/activity.md#what-is-recorded-and-what-is-deliberately-not)).
 - **Test on a redirect.** Every row of Site settings → Redirects has a **Test** button that asks
   the live site for the old address and reports what actually came back — *Working*, *Not there
   yet* while the rule is unpublished or the build is running, or *Not what this rule says* when a

@@ -2443,6 +2443,35 @@ test('the lock follows a rename and goes with a delete', async () => {
   expect(dropped).toEqual(['listings/mill-house']);
 });
 
+// Discarding is the one thing besides a restore that throws a colleague's unpublished words
+// away, and it used to leave no trace: the kind has been in the log's list since Phase 3 with
+// nothing writing it.
+test("discarding an entry's changes leaves a draft-discard row naming the languages", async () => {
+  const res = await DELETE(
+    ctx(
+      'drafts/listings/mill-house',
+      new Request('https://x/admin/api/drafts/listings/mill-house', { method: 'DELETE' }),
+      { handover: editor },
+    ),
+  );
+
+  expect(res.status).toBe(200);
+  expect(logged).toEqual([
+    {
+      userId: 'u2',
+      kind: 'draft-discard',
+      subject: 'src/content/listings/en/mill-house.yaml',
+      detail: { locales: ['en'] },
+    },
+  ]);
+});
+
+test('discarding an entry with nothing pending writes no row', async () => {
+  pendingDrafts.mockResolvedValueOnce([]);
+  await del('drafts/listings/mill-house');
+  expect(logged).toEqual([]);
+});
+
 // The row the deleted list is built from: the path of the language the entry was written in,
 // which the route reads before the commit takes the files away, and the languages that went —
 // which is what a restore would put back.
@@ -6066,6 +6095,36 @@ test('restoring a version hands core the entry as that commit had it, language b
     { path: EN, entry: { _version: 1, title: 'The Mill House', location: 'Bakewell', rooms: 2 } },
     { path: DE, entry: { _version: 1, title: 'Das Mühlenhaus', rooms: 2 } },
   ]);
+});
+
+// A restore writes over whatever unpublished changes the entry had — a colleague's draft typed
+// yesterday and closed, which the lock does not guard — so that is the moment the log records,
+// as the same kind the drawer's Discard writes. A restore over nothing pending is a draft edit
+// like typing and no row.
+test('restoring a version over unpublished changes leaves a draft-discard row', async () => {
+  files[`abc1234:${EN}`] = 'title: The Mill House\n';
+  restoreDraft.mockResolvedValueOnce({ paths: [EN] });
+
+  await restoring('history/listings/mill-house/restore', { commit_sha: 'abc1234' });
+
+  expect(logged).toEqual([
+    {
+      userId: 'u2',
+      kind: 'draft-discard',
+      subject: EN,
+      detail: { locales: ['en'], restore: 'abc1234' },
+    },
+  ]);
+});
+
+test('restoring a version over nothing pending writes no row', async () => {
+  files[`abc1234:${EN}`] = 'title: The Mill House\n';
+  pendingDrafts.mockResolvedValueOnce([]);
+  restoreDraft.mockResolvedValueOnce({ paths: [EN] });
+
+  await restoring('history/listings/mill-house/restore', { commit_sha: 'abc1234' });
+
+  expect(logged).toEqual([]);
 });
 
 // A language the version has no file for is not in the hand-over at all: what happens to it is
