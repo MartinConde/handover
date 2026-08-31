@@ -20,7 +20,7 @@ which the picker says on the row rather than dropping it. It is what the page pi
 wherever the picker appears.
 
 ```
-GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales", "pending" }], "locales": ["en", "de"], "index": "/listings", "templates": ["house"] }
+GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales", "pending", "edited" }], "locales": ["en", "de"], "index": "/listings", "templates": ["house"] }
 ```
 
 The collection's entries for the list screen: one row per entry, `id` is the filename and
@@ -34,7 +34,10 @@ filename. The list is the build's [content index](publishing.md#the-content-inde
 drafts laid over it, so an entry you have edited but not published shows what you typed.
 It reads nothing from GitHub. `pending` is there on an entry that has unpublished changes,
 which is what the duplicate dialog asks its question about, and `templates` names the
-[starters](site-files.md#templates) this collection ships.
+[starters](site-files.md#templates) this collection ships. `edited` is who last touched the
+entry — `{ at, by, kind }`, where `kind` is `"edit"` for a draft nobody has published and
+`"publish"` for the commit that carried the last one out — and `null` when the activity log
+goes back no further.
 
 ```
 GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, translations, pending, problems, hidden, redirects, titleField, locales, defaultLocale, sourceLocale, offered, drift, stale, translator, route, index, prefixDefaultLocale }

@@ -1,5 +1,6 @@
 <script lang="ts">
 import { entryName } from '@handover/core';
+import { EXACT, when } from './activity-line';
 import { navigate } from './navigate';
 import OffsiteDialog, { type Target } from './Offsite.svelte';
 
@@ -12,6 +13,8 @@ type Entry = {
   pending?: boolean;
   /** Who has it open right now. */
   editing?: { id: string; name: string | null };
+  /** Who last touched it and how — the draft's editor, or the publish that carried it out. */
+  edited?: { at: number; by: string | null; kind: 'edit' | 'publish' } | null;
 };
 /** One thing the CMS took away, as the activity log remembers it. */
 type Deleted = {
@@ -84,6 +87,11 @@ const many = $derived(locales.length > 1);
 const offered = (entry: Entry, locale: string) => entry.offered?.includes(locale) ?? true;
 // `_status` is the entry's rather than one language's, so any file of it saying so is the answer.
 const isHidden = (entry: Entry) => Object.values(entry.locales).some((l) => l.status === 'hidden');
+// The one filter the toolbar has: the rows the site shows, the ones it does not, or every row.
+let showing = $state<'all' | 'live' | 'hidden'>('all');
+const shown = $derived(
+  showing === 'all' ? entries : entries.filter((e) => isHidden(e) === (showing === 'hidden')),
+);
 const named = (ids: string[]) =>
   ids.length === 1 ? (entries.find((e) => e.id === ids[0]) ?? undefined) : undefined;
 
@@ -246,6 +254,14 @@ async function done() {
   <div class="list-toolbar">
     <h1>{capitalise(collection)} <span class="count">{entries.length}</span></h1>
     <span class="spacer"></span>
+    <div class="filters">
+      <label class="visually-hidden" for="list-status">Status</label>
+      <select class="input" id="list-status" bind:value={showing}>
+        <option value="all">All</option>
+        <option value="live">Live</option>
+        <option value="hidden">Hidden</option>
+      </select>
+    </div>
     <button class="btn btn-primary" type="button" onclick={() => open('new')}>New {singular}</button>
   </div>
   <div class="tabs" role="tablist" aria-label="Which {collection}">
@@ -334,8 +350,12 @@ async function done() {
     {/if}
   {:else if loading}
     <p class="placeholder">Loading…</p>
+  {:else if entries.length && !shown.length}
+    <p class="placeholder">No {showing} {collection}.</p>
   {:else if entries.length}
-    <div class="table has-select" class:cols-3={!many} class:cols-4={many} role="table" aria-label={capitalise(collection)}>
+    <!-- The languages column is the one that comes and goes; without it the grid is the
+         stylesheet's five-column `has-select.cols-4`, with it the six-column default. -->
+    <div class="table has-select" class:cols-4={!many} role="table" aria-label={capitalise(collection)}>
       <!-- The header cells need a row of their own, and every cell a role: `role="table"`
            with `columnheader` children and nothing between them is aria-required-parent. Both
            wrappers are `display: contents`, so the grid is unchanged. -->
@@ -344,16 +364,17 @@ async function done() {
           <input
             type="checkbox"
             aria-label="Select all"
-            checked={chosen.length === entries.length && entries.length > 0}
-            onchange={(e) => (chosen = e.currentTarget.checked ? entries.map((x) => x.id) : [])}
+            checked={chosen.length === shown.length && shown.length > 0}
+            onchange={(e) => (chosen = e.currentTarget.checked ? shown.map((x) => x.id) : [])}
           />
         </div>
         <div class="th" role="columnheader">Title</div>
         {#if many}<div class="th" role="columnheader">Languages</div>{/if}
+        <div class="th" role="columnheader">Edited</div>
         <div class="th" role="columnheader">File name</div>
         <div class="th" role="columnheader"><span class="visually-hidden">Actions</span></div>
       </div>
-      {#each entries as entry (entry.id)}
+      {#each shown as entry (entry.id)}
         <div class="row" role="row" class:is-selected={chosen.includes(entry.id)}>
           <div class="td" role="cell">
             <input
@@ -390,6 +411,16 @@ async function done() {
               </span>
             </div>
           {/if}
+          <div class="td edited" role="cell" data-label="Edited">
+            {#if entry.edited}
+              <span class="sub"
+                >{entry.edited.kind === 'edit' ? 'Edited' : 'Published'}{#if entry.edited.by}{` by ${entry.edited.by}`}{/if}{' '}<time
+                  datetime={new Date(entry.edited.at).toISOString()}
+                  title={EXACT.format(entry.edited.at)}>{when(entry.edited.at).toLowerCase()}</time
+                ></span
+              >
+            {/if}
+          </div>
           <div class="td num filename" role="cell" data-label="File name">{entry.id}</div>
           <div class="td menu-cell" role="cell">
             <div class="row-menu">

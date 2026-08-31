@@ -418,6 +418,44 @@ test('a row somebody has open says who is editing it', async () => {
   ).toEqual(['Being edited by Anna Berg', undefined]);
 });
 
+// The dashboard's line, on the row itself: who typed the draft, or who published the last one.
+test('each row says who last touched it, and with which verb', async () => {
+  const now = Date.now();
+  api([
+    { ...ENTRIES[0], edited: { at: now - 2 * 3_600_000, by: 'Anna Berg', kind: 'edit' } },
+    { ...ENTRIES[1], edited: { at: now - 30 * 60_000, by: null, kind: 'publish' } },
+  ]);
+  const root = show();
+  await tick();
+
+  expect(
+    Array.from(root.querySelectorAll('.row .td.edited'), (td) =>
+      td.textContent?.replace(/\s+/g, ' ').trim(),
+    ),
+  ).toEqual(['Edited by Anna Berg 2h ago', 'Published 30 min ago']);
+});
+
+const titles = (root: ParentNode) =>
+  Array.from(root.querySelectorAll('.row .td.title a'), (a) => a.textContent);
+
+test('the status filter narrows the list to the hidden rows, or to the live ones', async () => {
+  api(HIDDEN);
+  const root = show();
+  await tick();
+  const status = q<HTMLSelectElement>(root, 'select#list-status');
+  if (!status) throw new Error('status filter missing');
+
+  status.value = 'hidden';
+  status.dispatchEvent(new Event('change'));
+  await tick();
+  expect(titles(root)).toEqual(['The Mill House']);
+
+  status.value = 'live';
+  status.dispatchEvent(new Event('change'));
+  await tick();
+  expect(titles(root)).toEqual(['Seaview Cottage']);
+});
+
 test('a hidden entry is badged and offers to be shown again', async () => {
   api(HIDDEN);
   const root = show();

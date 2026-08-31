@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **The entry list says who last touched each row** — *Edited by Anna 2h ago*, or *Published by
+  Martin yesterday* — the line the dashboard and Site settings already carry, and it has a
+  **Status** filter: all rows, the live ones, or the hidden ones
+  ([Entry lifecycle](docs/entry-lifecycle.md#hiding-an-entry)).
 - **Go to field lands on the field.** A pre-publish check's link opens the entry with that
   control focused — after the block has been moved, too, since the link names the field the way
   the file does — and, for a result about a translation, with that language open beside the form

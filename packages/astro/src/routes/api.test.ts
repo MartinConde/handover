@@ -2088,6 +2088,8 @@ test('the entry list is the built index with the pending drafts over it', async 
       },
       // Which rows the duplicate dialog can offer "including unpublished changes?" about.
       pending: true,
+      // The draft row is the last touch; nobody is signed in on this request, so no name.
+      edited: { key: 'listings/mill-house', at: 1755864000000, by: null, kind: 'edit' },
     },
     {
       id: 'seaview-cottage',
@@ -2097,10 +2099,35 @@ test('the entry list is the built index with the pending drafts over it', async 
           path: 'src/content/listings/en/seaview-cottage.yaml',
         },
       },
+      edited: null,
     },
   ]);
   // The starters the New entry dialog offers beside Blank, read at build with the index.
   expect(listed.templates).toEqual(['house']);
+});
+
+// The dashboard's line, on every row: the draft's editor where there is a draft, the publish
+// that carried the last one out where there is not.
+test('the entry list says who last touched each row, and whether that is out yet', async () => {
+  publishes = [{ entry: 'listings/seaview-cottage', at: 1755950000000, by: 'Martin Conde' }];
+  editors = { 'src/content/listings/en/mill-house.yaml': 'Anna Berg' };
+
+  const { entries } = (await (await GET(ctx('entries/listings'))).json()) as {
+    entries: { id: string; edited: unknown }[];
+  };
+
+  expect(entries.map((e) => [e.id, e.edited])).toEqual([
+    [
+      'mill-house',
+      { key: 'listings/mill-house', at: 1755864000000, by: 'Anna Berg', kind: 'edit' },
+    ],
+    [
+      'seaview-cottage',
+      { key: 'listings/seaview-cottage', at: 1755950000000, by: 'Martin Conde', kind: 'publish' },
+    ],
+  ]);
+  publishes = [];
+  editors = {};
 });
 
 // The badge on the row: the same answer the members screen gives, seen from the entry's side.
@@ -2144,10 +2171,12 @@ test('a collection keyed on another field lists its drafts by that field', async
       locales: {
         en: { title: 'Ada Fenwick', path: 'src/content/presenters/en/ada-fenwick.yaml' },
       },
+      edited: null,
     },
     {
       id: 'rosa-hale',
       locales: { en: { title: 'Rosa Hale', path: 'src/content/presenters/en/rosa-hale.yaml' } },
+      edited: null,
     },
   ]);
 });
