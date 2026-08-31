@@ -1,7 +1,7 @@
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
 import { Miniflare } from 'miniflare';
 import { afterAll, beforeAll, expect, test, vi } from 'vitest';
-import { offeredEntry, parseEntry, staleLocales, stringifyEntry } from './content.js';
+import { driftReport, offeredEntry, parseEntry, staleLocales, stringifyEntry } from './content.js';
 import {
   clearPublished,
   createDraft,
@@ -22,6 +22,7 @@ import {
   resolveConflict,
   resolveDrift,
   restoreCommit,
+  restoreDraft,
   revertCommit,
   saveDraft,
   saveTranslated,
@@ -1628,4 +1629,107 @@ test('a row younger than a day is left alone', async () => {
 
   expect(await sweepOrphans('default', db, git, NOW)).toBe(0);
   expect(await paths(db)).toEqual([ORPHAN]);
+});
+
+// Testing: what a restore writes, the keys it refuses to take from the version, the languages
+// it leaves alone, and that the publish after it is an ordinary forward commit.
+// Not testing: reading the version out of GitHub, which is the route's.
+const VERSION_FORM: Form = {
+  fields: [
+    { path: ['title'], label: 'Title', type: 'text', required: true },
+    { path: ['price'], label: 'Price', type: 'text', required: false },
+    { path: ['rooms'], label: 'Rooms', type: 'number', required: true },
+  ],
+  blocks: {},
+};
+const PATH_DE = 'src/content/listings/de/mill-house.yaml';
+const FILE_DE = '_version: 1\n_status: "hidden"\ntitle: "Das Mühlenhaus"\nrooms: 3\n';
+const OLD_EN = { _version: 1, title: 'The Mill House', price: '£800 per week', rooms: 2 };
+const OLD_DE = { _version: 1, title: 'Das Muehlenhaus', rooms: 2 };
+
+test('restoring a version writes its bytes as the draft of every language it has', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE, [PATH_DE]: FILE_DE });
+
+  const { paths } = await restoreDraft('default', db, repo, VERSION_FORM, [
+    { path: PATH, entry: OLD_EN },
+    { path: PATH_DE, entry: OLD_DE },
+  ]);
+
+  expect(paths.toSorted()).toEqual([PATH_DE, PATH].toSorted());
+  const row = (await db.select().from(drafts)).find((r) => r.path === PATH);
+  expect(row?.contents).toBe(
+    '_version: 1\n_status: "hidden"\ntitle: "The Mill House"\nprice: "£800 per week"\nrooms: 2\n',
+  );
+});
+
+// The version says what the page said, not where it lived or whether it was on the site: an old
+// `slug`, `_status` or `_locales` would move the address, hide the page or turn a language back
+// on, and each of those owes redirect rules a draft write has no way to make.
+test('a restore keeps the address, the status and the languages the entry has now', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+
+  await restoreDraft('default', db, repo, VERSION_FORM, [
+    { path: PATH, entry: { ...OLD_EN, slug: 'the-mill', _status: 'live', _locales: ['en'] } },
+  ]);
+
+  const entry = parseEntry('default', (await only(db))?.contents ?? '') as Record<string, unknown>;
+  expect(entry._status).toBe('hidden');
+  expect(entry.slug).toBe(undefined);
+  expect(entry._locales).toBe(undefined);
+});
+
+// Publishing a restore is the point of it: the row keeps the base the file has now, so the
+// commit goes on top of HEAD rather than being refused as somebody else's work.
+test('publishing a restored version is an ordinary forward commit', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+
+  await restoreDraft('default', db, repo, VERSION_FORM, [{ path: PATH, entry: OLD_EN }]);
+  const published = await publishDrafts('default', db, repo);
+
+  expect(published?.paths).toEqual([PATH]);
+  expect(repo.read(PATH)).toContain('rooms: 2');
+});
+
+// Restoring across a structural change is just a draft: the languages now disagree about the
+// blocks, which is the drift the editor asks about before the publish goes out. This restore
+// makes it rather than resolving it, and nothing here refuses.
+test('restoring one language across a structural change leaves the languages in drift', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({
+    [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?'),
+    [PAGE_DE]: page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?'),
+  });
+  const oneBlock = {
+    _version: 1,
+    title: 'Home',
+    blocks: [{ _type: 'hero', _id: 'k3nf9a2p', heading: 'Move to the coast' }],
+  };
+
+  await restoreDraft('default', db, repo, PAGE_FORM, [{ path: PAGE_EN, entry: oneBlock }]);
+
+  const rows = await db.select().from(drafts);
+  const files = {
+    en: parseEntry('default', rows.find((r) => r.path === PAGE_EN)?.contents ?? ''),
+    de: parseEntry('default', repo.read(PAGE_DE)),
+  };
+  expect(driftReport('default', PAGE_FORM, files).map((d) => d.path)).toEqual([
+    'blocks[_id=q1w2e3r4]',
+  ]);
+});
+
+// Bringing a deleted language file back is Create from English and a turn-on, both of which
+// commit rules of their own; a restore that recreated the path would skip all of that.
+test('a language whose file has gone since is not brought back', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+
+  const { paths } = await restoreDraft('default', db, repo, VERSION_FORM, [
+    { path: PATH, entry: OLD_EN },
+    { path: PATH_DE, entry: OLD_DE },
+  ]);
+
+  expect(paths).toEqual([PATH]);
 });

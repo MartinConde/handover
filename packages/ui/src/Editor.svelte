@@ -875,7 +875,18 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     {/if}
   </header>
   {#if section === 'history'}
-    <History {collection} {slug} locales={entry.locales} />
+    <History
+      {collection}
+      {slug}
+      locales={entry.locales}
+      drafted={entry.pending.length > 0}
+      onrestored={() => {
+        // The Content tab and a fresh read of the entry: the address changes first so the
+        // reload lands on the form the restore has just rewritten.
+        navigate(`/admin/c/${collection}/${slug}`);
+        onchanged();
+      }}
+    />
   {:else}
   <!-- A decision to make, not a form to fill: the panel stands where the form would be, because
        every field on it belongs to a structure the languages have not agreed on yet. -->

@@ -21,13 +21,23 @@ let asked: string[] = [];
 let versions: Version[] = [];
 let more = false;
 let refusal: number | undefined;
+/** What a restore sent, and what the server said to it. */
+let restored: string[] = [];
+let restoreRefusal: string | undefined;
+let handedOff = 0;
 
-const show = async (locales = ['en', 'de']) => {
+const show = async (locales = ['en', 'de'], drafted = false) => {
   asked = [];
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (url: string) => {
+    vi.fn(async (url: string, init?: RequestInit) => {
       asked.push(url);
+      if (url.endsWith('/restore')) {
+        restored.push(String(init?.body));
+        return restoreRefusal
+          ? new Response(restoreRefusal, { status: 409 })
+          : Response.json({ paths: ['src/content/listings/en/mill-house.yaml'] });
+      }
       if (refusal) return new Response('nope', { status: refusal });
       if (url.includes('/diff?')) return Response.json({ groups: [] });
       return Response.json({ versions, more });
@@ -35,7 +45,15 @@ const show = async (locales = ['en', 'de']) => {
   );
   app = mount(History, {
     target: document.body,
-    props: { collection: 'listings', slug: 'mill-house', locales },
+    props: {
+      collection: 'listings',
+      slug: 'mill-house',
+      locales,
+      drafted,
+      onrestored: () => {
+        handedOff += 1;
+      },
+    },
   });
   await settle();
   return document.body;
@@ -53,6 +71,9 @@ afterEach(() => {
   versions = [];
   more = false;
   refusal = undefined;
+  restored = [];
+  restoreRefusal = undefined;
+  handedOff = 0;
 });
 
 const q = <T extends Element>(sel: string) => {
@@ -210,4 +231,108 @@ test('older versions are asked for by page', async () => {
   await click(q('.load-more button'));
 
   expect(asked.at(-1)).toBe('/admin/api/history/listings/mill-house?page=2');
+});
+
+const VERSION: Version = {
+  sha: 'aaa111bbb222',
+  date: ago(50),
+  summary: 'Rewrite summary',
+  locales: ['en', 'de'],
+  author: 'Martin',
+};
+
+const openRestore = async () => {
+  versions = [VERSION, { sha: 'ccc333', date: ago(90), summary: 'Create', locales: ['en'] }];
+  const body = await show(['en', 'de'], true);
+  await click(q('.version-row .summary'));
+  await click(q('.version-head .actions button'));
+  return body;
+};
+
+// The primary action is on the version being looked at, and it is a draft write: the dialog
+// says the two things a client needs — what it replaces, and that nothing goes live yet.
+test('restoring the version being read posts that commit and hands off to the editor', async () => {
+  await openRestore();
+
+  const actions = all('.dialog .actions button');
+  await click(actions[1] as Element);
+
+  expect(asked.at(-1)).toBe('/admin/api/history/listings/mill-house/restore');
+  expect(restored).toEqual([JSON.stringify({ commit_sha: 'aaa111bbb222' })]);
+  expect(handedOff).toBe(1);
+  expect(all('.dialog')).toHaveLength(0);
+});
+
+test('the confirmation names the version, who published it and the languages it writes', async () => {
+  await openRestore();
+
+  expect(q('#rs-h').textContent).toBe('Restore the version from 2 days ago?');
+  expect(q('#rs-d p').textContent?.replace(/\s+/g, ' ').trim()).toContain(
+    'This replaces your unpublished changes to this entry with what Martin published on',
+  );
+  expect(q('#rs-d p').textContent?.replace(/\s+/g, ' ')).toContain('in English and German');
+});
+
+// With nothing unpublished there is nothing of the client's to replace, and saying there is
+// would be a warning about a loss that cannot happen.
+test('an entry with no unpublished changes is not warned about losing them', async () => {
+  versions = [VERSION];
+  await show(['en', 'de'], false);
+  await click(q('.version-row .summary'));
+  await click(q('.version-head .actions button'));
+
+  expect(q('#rs-d p').textContent).not.toContain('replaces your unpublished changes');
+  expect(q('#rs-d p').textContent?.replace(/\s+/g, ' ')).toContain('as unpublished changes');
+});
+
+// Restore restores the version being looked at, and a pair is neither of them.
+test('a pair chosen to compare offers no restore', async () => {
+  versions = [VERSION, { sha: 'ccc333', date: ago(90), summary: 'Create', locales: ['en'] }];
+  await show();
+  const boxes = all('.version-row input') as HTMLInputElement[];
+
+  boxes[0]?.click();
+  await settle();
+  boxes[1]?.click();
+  await settle();
+
+  expect(all('.version-head .actions')).toHaveLength(0);
+});
+
+test('Escape closes the confirmation and gives focus back to Restore', async () => {
+  await openRestore();
+
+  dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  await settle();
+
+  expect(all('.dialog')).toHaveLength(0);
+  expect(document.activeElement).toBe(q('.version-head .actions button'));
+  expect(restored).toEqual([]);
+});
+
+// A refusal is the server's own sentence — somebody holding the entry, or a version this
+// package cannot read — and the dialog stays open so it is read next to the button.
+test('a refused restore says what the server said', async () => {
+  restoreRefusal = 'Anna is editing this entry — it can be restored once they are done';
+  await openRestore();
+
+  await click(all('.dialog .actions button')[1] as Element);
+
+  expect(q('.dialog .notice-danger').textContent).toBe(
+    'Anna is editing this entry — it can be restored once they are done',
+  );
+  expect(handedOff).toBe(0);
+});
+
+// The refusal belongs to the attempt, not to the version: leaving it up would follow the
+// client to the next version they open and describe something that did not happen there.
+test('cancelling clears the refusal', async () => {
+  restoreRefusal = 'Anna is editing this entry — it can be restored once they are done';
+  await openRestore();
+  await click(all('.dialog .actions button')[1] as Element);
+
+  await click(q('.dialog .actions button'));
+  await click(q('.version-head .actions button'));
+
+  expect(all('.notice-danger')).toHaveLength(0);
 });

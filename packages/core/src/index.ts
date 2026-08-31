@@ -82,6 +82,7 @@ export {
   resolveConflict,
   resolveDrift,
   restoreCommit,
+  restoreDraft,
   revertCommit,
   saveDraft,
   saveTranslated,

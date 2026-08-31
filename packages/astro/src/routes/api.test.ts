@@ -45,6 +45,7 @@ const {
   setEntryAddress,
   setEntryLocales,
   setEntryStatus,
+  restoreDraft,
   translate,
   commitBuild,
   clearPublished,
@@ -167,6 +168,9 @@ const {
     saveTranslated: vi.fn(async () => ({ updated_at: 1755864000000, pending: true })),
     setEntryLocales: vi.fn(async () => {}),
     setEntryStatus: vi.fn<(...args: unknown[]) => Promise<void>>(async () => {}),
+    restoreDraft: vi.fn<(...args: unknown[]) => Promise<{ paths: string[] }>>(async () => ({
+      paths: [],
+    })),
     setEntryAddress: vi.fn(async () => ({ updated_at: 1755864000000, pending: true })),
     // The provider behind the hook: whatever the site configured, seen from the route.
     translate: vi.fn(async (texts: string[], _from: string, to: string) =>
@@ -663,6 +667,7 @@ vi.mock('@handover/core', async (original) => ({
   setEntryAddress,
   setEntryLocales,
   setEntryStatus,
+  restoreDraft,
   commitBuild,
   clearPublished,
   revertCommit,
@@ -706,6 +711,7 @@ afterEach(() => {
   clearPublished.mockClear();
   revertCommit.mockClear();
   restoreCommit.mockClear();
+  restoreDraft.mockClear();
   deletedEntries.mockClear();
   setPassword = async () => ({ status: true });
   facts = { hasPassword: true, sessions: [] };
@@ -5698,4 +5704,105 @@ test('a version diff of something that is not a commit is refused', async () => 
   const res = await GET(history('history/listings/mill-house/diff', '?to=../../etc'));
 
   expect(res.status).toBe(400);
+});
+
+// Restoring is a draft write and never a rewrite of git: what the version says goes into the
+// rows, and the publish after it is the ordinary forward commit.
+const restoring = (path: string, body: unknown, session: unknown = editor) =>
+  POST(
+    ctx(
+      path,
+      new Request(`https://x/admin/api/${path}`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+      { handover: session },
+    ),
+  );
+
+test('restoring a version hands core the entry as that commit had it, language by language', async () => {
+  locales = ['en', 'de'];
+  files[`abc1234:${EN}`] = 'title: The Mill House\nlocation: Bakewell\nrooms: 2\n';
+  files[`abc1234:${DE}`] = 'title: Das Mühlenhaus\nrooms: 2\n';
+  restoreDraft.mockResolvedValueOnce({ paths: [EN, DE] });
+
+  const res = await restoring('history/listings/mill-house/restore', { commit_sha: 'abc1234' });
+
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ paths: [EN, DE] });
+  expect(restoreDraft.mock.calls[0]?.[4]).toEqual([
+    { path: EN, entry: { _version: 1, title: 'The Mill House', location: 'Bakewell', rooms: 2 } },
+    { path: DE, entry: { _version: 1, title: 'Das Mühlenhaus', rooms: 2 } },
+  ]);
+});
+
+// A language the version has no file for is not in the hand-over at all: what happens to it is
+// core's business, and there is nothing of it to restore.
+test('a language the version has no file for is not restored', async () => {
+  locales = ['en', 'de'];
+  files[`abc1234:${EN}`] = 'title: The Mill House\nrooms: 2\n';
+
+  await restoring('history/listings/mill-house/restore', { commit_sha: 'abc1234' });
+
+  expect(restoreDraft.mock.calls[0]?.[4]).toEqual([
+    { path: EN, entry: { _version: 1, title: 'The Mill House', rooms: 2 } },
+  ]);
+});
+
+test('restoring a version of an entry that commit does not have is refused', async () => {
+  const res = await restoring('history/listings/barn/restore', { commit_sha: 'abc1234' });
+
+  expect(res.status).toBe(409);
+  expect(restoreDraft).not.toHaveBeenCalled();
+});
+
+test('a restore of something that is not a commit is refused', async () => {
+  const res = await restoring('history/listings/mill-house/restore', { commit_sha: '../../etc' });
+
+  expect(res.status).toBe(400);
+  expect(restoreDraft).not.toHaveBeenCalled();
+});
+
+// The one write on this screen, so it owes the same refusal every other entry-wide write gives:
+// a restore under somebody who has the entry open writes over what they are typing.
+test('a restore is refused while somebody else has the entry open', async () => {
+  files[`abc1234:${EN}`] = 'title: The Mill House\nrooms: 2\n';
+  holder = { userId: 'u9', name: 'Anna', expiresAt: 1755864120000 };
+
+  const res = await restoring('history/listings/mill-house/restore', { commit_sha: 'abc1234' });
+
+  expect(res.status).toBe(409);
+  expect(await res.text()).toBe(
+    'Anna is editing this entry — it can be restored once they are done',
+  );
+  expect(restoreDraft).not.toHaveBeenCalled();
+});
+
+// A file written by a newer package than this one is migrated forward by nobody, so the restore
+// says so rather than putting a shape the editor cannot draw into the draft.
+test('a version this package cannot read is refused with the reason', async () => {
+  files[`abc1234:${EN}`] = '_version: 99\ntitle: The Mill House\nrooms: 2\n';
+
+  const res = await restoring('history/listings/mill-house/restore', { commit_sha: 'abc1234' });
+
+  expect(res.status).toBe(409);
+  expect(await res.text()).toContain('newer than this package knows');
+  expect(restoreDraft).not.toHaveBeenCalled();
+});
+
+// `formFor` takes the address out of the form the client types into, so a restore given that
+// form writes `slug` after every field the schema declares instead of where the file has it.
+test('a restore writes the address where the schema puts it', async () => {
+  files['abc1234:src/content/posts/en/hello.yaml'] = 'title: Hello\nslug: hallo\n';
+
+  await restoring('history/posts/hello/restore', { commit_sha: 'abc1234' });
+
+  const form = restoreDraft.mock.calls[0]?.[3] as { fields: { path: string[] }[] };
+  expect(form.fields.map((f) => f.path[0])).toEqual(['title', 'slug']);
+});
+
+test('a restore of a collection the site does not declare is a 404', async () => {
+  expect(
+    (await restoring('history/nope/mill-house/restore', { commit_sha: 'abc1234' })).status,
+  ).toBe(404);
 });

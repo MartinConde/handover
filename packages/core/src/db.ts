@@ -399,6 +399,55 @@ export async function setEntryStatus(
   if (first) await db.batch([first, ...rest]);
 }
 
+/**
+ * The keys a restore takes from the entry as it stands rather than from the version. Each of
+ * them is owned by a route that commits redirect rules beside it — an address change, a hide, a
+ * language turned off — so an old value here would move the page, take it off the site or put a
+ * language back without any of the rules that owe it.
+ */
+const KEPT_ON_RESTORE = ['slug', '_status', '_locales'] as const;
+
+/**
+ * One version of an entry as unpublished changes. `files` are that commit's own parsed entries,
+ * one per language it has a file in; a language it has none for is left where it stands, and a
+ * language whose file has gone since is not brought back — recreating a path is Create from
+ * English and a turn-on, both of which commit rules of their own.
+ *
+ * The base stays where the row had it, or where git has it now for a language nobody has open,
+ * so the publish that follows is an ordinary forward commit: git is never rewritten.
+ */
+export async function restoreDraft(
+  siteId: string,
+  db: Db,
+  git: Pick<GitClient, 'getFile' | 'getHead'>,
+  form: Form,
+  files: readonly { path: string; entry: Record<string, unknown> }[],
+): Promise<{ paths: string[] }> {
+  const found = await Promise.all(
+    files.map(async (file) => {
+      const loaded = await load(siteId, db, git, file.path);
+      return loaded && { ...file, loaded };
+    }),
+  );
+  const updatedAt = Date.now();
+  const writes = found.flatMap((file) => {
+    if (!file) return [];
+    const now = (file.loaded.entry ?? {}) as Record<string, unknown>;
+    // Assigned in place rather than deleted and re-added, so a key the version also had keeps
+    // the position the file gave it.
+    const entry = { ...file.entry };
+    for (const key of KEPT_ON_RESTORE) {
+      if (key in now) entry[key] = now[key];
+      else delete entry[key];
+    }
+    const contents = stringifyEntry(siteId, writtenEntry(siteId, entry, form.fields));
+    return [upsert(db, siteId, file.path, contents, file.loaded, updatedAt)];
+  });
+  const [first, ...rest] = writes;
+  if (first) await db.batch([first, ...rest]);
+  return { paths: found.filter((f) => f !== undefined).map((f) => f.path) };
+}
+
 // A file as the editor has it: its open draft, or the repository when there is none.
 async function load(
   siteId: string,

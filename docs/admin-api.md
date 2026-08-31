@@ -246,6 +246,25 @@ branch as it is now, so what is marked is what restoring `to` would change. Both
 the addresses the entry has **now**: a version from before a rename is not followed. `400`
 when either is not a commit.
 
+```
+POST /admin/api/history/:collection/:slug/restore   { "commit_sha" }  →  { "paths": [ … ] }
+```
+
+That version back as unpublished changes, one draft row per language it has a file in. **Git is
+never rewritten**: the rows go into the editor and publishing them is the ordinary forward
+commit, so the version being restored — and everything after it — stays in the list.
+
+Three keys are the entry's as it stands now rather than the version's: `slug`, `_status` and
+`_locales`. Each of them is set by a route that commits redirect rules beside it, so an old
+value here would move the page's address, take it off the site or put a language back with none
+of the rules that owes. A language the version has no file for is left alone, and one whose file
+has gone since is not brought back. A restored version whose `_version` is older than this
+package's is migrated in memory on the way.
+
+`400` when `commit_sha` is not a commit; `409` when that version has no file of the entry, when
+somebody else has the entry open, or when the file was written by a newer package than this one;
+`404` when the collection is not configured.
+
 ## Redirects
 
 The table over `src/content/redirects.yaml` ([Site files](site-files.md#redirects)). These

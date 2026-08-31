@@ -10,6 +10,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the activity log — git records the App that makes the commit, not them. Choosing a version
   shows what it says that the live site does not, in the drawer's per-field diff; ticking two
   compares them with each other ([Publishing](docs/publishing.md#version-history)).
+- **Restore an old version.** *Restore this version* on the version you are reading puts it back
+  as unpublished changes, in every language that version has a file for; the entry opens on it,
+  and publishing is the ordinary forward commit. Git is never rewritten, so the version you
+  restored stays in the list. The entry's web address, whether it is on the site and the
+  languages it is offered in are the ones it has now, not the version's — each of those is
+  changed from its own control, which writes the redirects that go with it
+  ([Publishing](docs/publishing.md#version-history)).
 - **The entry tabs are addresses.** Content and History are links, so the back button, a reload
   and a shared link all land where they should; the entry itself is not loaded again when the
   tab changes.

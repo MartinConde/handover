@@ -72,6 +72,7 @@ import {
   memberApi,
   memberList,
   mergeFileCommits,
+  migrateDocument,
   moveLock,
   namedBy,
   openDb,
@@ -99,6 +100,7 @@ import {
   resolveConflict,
   resolveDrift,
   restoreCommit,
+  restoreDraft,
   revertCommit,
   SCHEMA_VERSION,
   saveDraft,
@@ -1901,6 +1903,56 @@ async function versionDiff(collection: string, slug: string, url: URL): Promise<
 }
 
 /**
+ * One version of an entry back as unpublished changes. Never a rewrite of git: the version's
+ * files go into the draft rows the editor is already working through, and publishing them is
+ * the ordinary forward commit every other edit makes — the version being restored stays in the
+ * list, and so does everything after it.
+ *
+ * A file older than the format this package reads is migrated in memory on the way past, so a
+ * pre-migration version never reaches the editor unmigrated; one written by a newer package is
+ * refused with the reason rather than drawn as a shape the form does not know.
+ */
+async function restoreVersion(
+  collection: string,
+  slug: string,
+  request: Request,
+  session: App.Locals['handover'],
+): Promise<Response> {
+  const schema = schemaOf(collection, slug);
+  if (!schema) return new Response('Not found', { status: 404 });
+  const sha = await undoing(request);
+  if (!SHA.test(sha)) return new Response('A commit_sha is needed to restore', { status: 400 });
+  const held = await heldByAnother(collection, slug, session, 'restored');
+  if (held) return held;
+  const git = gitClient();
+  const read = await Promise.all(
+    Object.values(entryPaths(collection, slug)).map(async (path) => {
+      const file = await git.getFile(path, sha);
+      const entry = file ? parseEntry('default', file.contents) : undefined;
+      // An empty file at that commit parses to nothing, which is not a version of anything.
+      return entry && typeof entry === 'object' && !Array.isArray(entry)
+        ? { path, entry: entry as Record<string, unknown> }
+        : undefined;
+    }),
+  );
+  const found = read.filter((f) => f !== undefined);
+  if (!found.length) return new Response('That version has no file of this entry', { status: 409 });
+  let files: typeof found;
+  try {
+    files = found.map((f) => ({ ...f, entry: migrateDocument('default', f.entry) }));
+  } catch (err) {
+    return new Response(err instanceof Error ? err.message : 'That version cannot be read', {
+      status: 409,
+    });
+  }
+  // The whole form, `slug` included: `formFor` takes the address out of what the client types
+  // into, but it is a key the schema declares and the file writes it where it says.
+  const form = formOf('default', formSchema(schema));
+  const { paths } = await restoreDraft('default', db(), git, form, files);
+  return Response.json({ paths });
+}
+
+/**
  * The three-way view: what both sides started from, what only one of them changed and is
  * merged without asking, and the fields somebody has to answer. `409` when nothing of the
  * entry has moved in the repository, which is a drawer asking about a conflict already
@@ -2728,6 +2780,7 @@ const ADDRESS = /^entries\/([\w-]+)\/([\w-]+)\/address\/([\w-]+)$/;
 const DRIFT = /^drift\/([\w-]+)\/([\w-]+)$/;
 const DIFF = /^diff\/([\w-]+)\/([\w-]+)$/;
 const HISTORY = /^history\/([\w-]+)\/([\w-]+)$/;
+const RESTORE_VERSION = /^history\/([\w-]+)\/([\w-]+)\/restore$/;
 const VERSION = /^history\/([\w-]+)\/([\w-]+)\/diff$/;
 const CONFLICT = /^conflict\/([\w-]+)\/([\w-]+)$/;
 const LOCK = /^locks\/([\w-]+)\/([\w-]+)$/;
@@ -3326,6 +3379,11 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   const offered = params.path?.match(LOCALES);
   if (offered)
     return answering(() => offering(offered[1] ?? '', offered[2] ?? '', request, locals.handover));
+  const restored = params.path?.match(RESTORE_VERSION);
+  if (restored)
+    return answering(() =>
+      restoreVersion(restored[1] ?? '', restored[2] ?? '', request, locals.handover),
+    );
   const settling = params.path?.match(CONFLICT);
   if (settling) return answering(() => resolve(settling[1] ?? '', settling[2] ?? '', request));
   const answered = params.path?.match(DRIFT);

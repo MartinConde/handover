@@ -130,7 +130,17 @@ one of them.
 - The list is paged at 30 versions; **Show older versions** reads the next page.
 - An entry that has never been published has no history, and the tab says so.
 
-Restoring a version is not built yet: history is read-only, and git is never rewritten.
+**Restore this version** puts that version back as unpublished changes — the entry opens on it,
+and publishing is the ordinary forward commit every other edit makes. Git is never rewritten:
+the version you restored stays in the list, and so does everything after it. With unpublished
+changes already on the entry, the confirmation says so — they are what the restore replaces.
+
+Three things are the entry's as it stands rather than the version's: its **web address**,
+whether it is **on the site**, and the **languages it is offered in**. Each of those is changed
+from its own control, which writes the redirects that go with it; an old value coming back here
+would move the page or take it away with nothing forwarding visitors. A language the version has
+no file for is left where it stands — which, if the structure has changed since, is the
+languages disagreeing, and the editor asks about it before the publish goes out.
 
 ## The endpoints
 
@@ -166,8 +176,7 @@ without a restart.
 The build pill has no **quota** state and none is planned: the Builds API carries no usage
 against the free plan's monthly build minutes, so a build that fails for want of them reads as
 an ordinary failure. The publish rows in the [activity log](activity.md) do not expand into
-what the commit changed, though the drawer shows the same diff before it goes out. History has
-no **Restore this version**, and it cannot follow an entry through a rename — the addresses it
+what the commit changed, though the drawer shows the same diff before it goes out. History cannot follow an entry through a rename — the addresses it
 reads are the ones the entry has now. The drawer
 runs no pre-publish checks, and **Publish this entry** does not name the redirect rules riding
 along with it the way the drawer does.

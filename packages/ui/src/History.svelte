@@ -18,11 +18,17 @@ let {
   collection,
   slug,
   locales = [],
+  drafted = false,
+  onrestored,
 }: {
   collection: string;
   slug: string;
   /** The languages the site declares; with one there is nothing to filter by. */
   locales?: string[];
+  /** Whether the entry has unpublished changes a restore would write over. */
+  drafted?: boolean;
+  /** The version is in the drafts now: the editor reloads and the Content tab takes over. */
+  onrestored: () => void;
 } = $props();
 
 let versions = $state<Version[]>([]);
@@ -38,6 +44,16 @@ let chosen = $state<Version[]>([]);
 let groups = $state<DiffGroup[]>([]);
 let reading = $state(false);
 let diffError = $state('');
+/** The version the confirmation is about, and Cancel, which is where the answer is no. */
+let confirming = $state<Version>();
+let opening = $state<HTMLElement>();
+let restoreButton = $state<HTMLElement>();
+let restoring = $state(false);
+let restoreError = $state('');
+
+$effect(() => {
+  opening?.focus();
+});
 
 $effect(() => {
   load(1);
@@ -80,6 +96,34 @@ async function readDiff(to: string, from?: string) {
     return;
   }
   groups = ((await res.json()) as { groups?: DiffGroup[] }).groups ?? [];
+}
+
+function closeConfirm() {
+  confirming = undefined;
+  restoreError = '';
+  restoreButton?.focus();
+}
+
+/**
+ * The version into the entry's drafts. Never a rewrite of git: the editor opens on it and
+ * publishing it is the ordinary forward commit, which is what the dialog says in words.
+ */
+async function restore() {
+  if (!confirming) return;
+  restoring = true;
+  const res = await fetch(`/admin/api/history/${collection}/${slug}/restore`, {
+    method: 'POST',
+    body: JSON.stringify({ commit_sha: confirming.sha }),
+  });
+  restoring = false;
+  if (!res.ok) {
+    // The server's own sentence: somebody holding the entry, or a version it cannot read.
+    restoreError = (await res.text()) || 'That version could not be restored.';
+    return;
+  }
+  confirming = undefined;
+  restoreError = '';
+  onrestored();
 }
 
 function open(version: Version) {
@@ -133,6 +177,9 @@ function when(iso: string): string {
   if (days < 7) return `${days} days ago`;
   return DATE.format(at);
 }
+
+/** Which languages a version writes, where the entry has more than the one. */
+const spoken = (of: string[]) => (of.length > 1 ? `, in ${of.map(language).join(' and ')}` : '');
 
 const initials = (name: string) =>
   name
@@ -250,6 +297,14 @@ const initials = (name: string) =>
     {:else if selected}
       <div class="version-head">
         <h2>Version from {when(selected.date)}</h2>
+        <div class="actions">
+          <button
+            class="btn btn-primary"
+            type="button"
+            bind:this={restoreButton}
+            onclick={() => (confirming = selected)}
+          >Restore this version</button>
+        </div>
         <p class="by">
           {selected.author ? `Published by ${selected.author}, ` : ''}{EXACT.format(
             Date.parse(selected.date),
@@ -257,6 +312,8 @@ const initials = (name: string) =>
         </p>
       </div>
       <Diff {groups} />
+    <!-- No Restore here: it restores the version being looked at, and a pair is neither of
+         them. Ticking a second box is what takes the button away. -->
     {:else if chosen.length === 2}
       {@const pair = [...chosen].sort((a, b) => Date.parse(a.date) - Date.parse(b.date))}
       <div class="version-head">
@@ -278,3 +335,33 @@ const initials = (name: string) =>
     {/if}
   </div>
 </div>
+
+<svelte:window onkeydown={(e) => { if (e.key === 'Escape' && confirming) closeConfirm(); }} />
+
+<!-- Not aria-modal: the shell behind stays reachable, as it does on the library and on Members,
+     and claiming a focus trap that is not there is worse than not claiming one. -->
+{#if confirming}
+  <div class="scrim">
+    <div class="dialog is-slim" role="dialog" aria-labelledby="rs-h" aria-describedby="rs-d">
+      <h2 id="rs-h">Restore the version from {when(confirming.date)}?</h2>
+      <div id="rs-d">
+        <p>
+          {drafted
+            ? 'This replaces your unpublished changes to this entry with'
+            : 'This puts, as unpublished changes,'}
+          what {confirming.author ?? 'somebody'} published on {EXACT.format(
+            Date.parse(confirming.date),
+          )}{spoken(confirming.locales)}. Nothing is published until you publish.
+        </p>
+        <p>The version you have now stays in this list — restoring is a step forward, never a rewind.</p>
+      </div>
+      {#if restoreError}<p class="notice notice-danger" role="alert">{restoreError}</p>{/if}
+      <div class="actions">
+        <button class="btn" type="button" bind:this={opening} onclick={closeConfirm}>Cancel</button>
+        <button class="btn btn-primary" type="button" disabled={restoring} onclick={restore}>
+          {restoring ? 'Restoring…' : 'Restore as unpublished changes'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
