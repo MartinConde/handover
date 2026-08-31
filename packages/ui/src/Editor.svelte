@@ -33,6 +33,7 @@ let {
   userId = '',
   onchanged,
   onpending,
+  site,
 }: {
   collection: string;
   slug: string;
@@ -98,6 +99,8 @@ let {
   };
   /** Which of the entry's tabs the address is on; empty is the form itself. */
   section?: string;
+  /** The site's origin, for the SEO previews; none, and the panel draws none. */
+  site?: string;
   /** A file of this entry was made, removed or settled: it has to be read again, screen with it. */
   onchanged: () => void;
   /**
@@ -1017,7 +1020,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {#if !alone}
         <form class="form" onsubmit={(e) => e.preventDefault()}>
           <fieldset disabled={locked}>
-            <Fields {fields} blocks={entry.blocks} {problems} {mediaBase} {locale} inheritedSeo={inherited(locale, data)} bind:root={data} />
+            <Fields {fields} blocks={entry.blocks} {problems} {mediaBase} {locale} inheritedSeo={inherited(locale, data)} {site} servedAt={localeUrl(locale)} bind:root={data} />
           </fieldset>
         </form>
       {/if}
@@ -1112,6 +1115,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             stale={entry.stale.includes(shown)}
             translator={entry.translator}
             url={localeUrl(shown)}
+            {site}
             redirect={localeIndex(shown)}
             onsaved={(pending) => {
               if (pending !== translated) onpending?.();

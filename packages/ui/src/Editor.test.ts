@@ -1880,6 +1880,36 @@ test('the problem count jumps to the SEO tab for a problem the panel owns', asyn
   expect(location.pathname).toBe('/admin/c/listings/seaview-cottage/seo');
 });
 
+// Each language's preview is under the address that language serves the entry at, so the
+// German column shows the German address and not the English one with a flag on it.
+test('the SEO previews carry the address each language serves this entry at', async () => {
+  const root = show({
+    entry: {
+      ...withSeo,
+      locales: ['en', 'de'],
+      offered: ['en', 'de'],
+      translations: { de: { title: 'Seeblick-Häuschen', seo: {} } },
+      seoDefaults: {
+        en: { titlePattern: '%s · Coastal Homes' },
+        de: { titlePattern: '%s · Coastal Homes' },
+      },
+      localizedSlugs: true,
+      addresses: { en: '', de: 'seeblick-haeuschen' },
+      route: '/listings/[slug]',
+    },
+    section: 'seo',
+    site: 'https://coastalhomes.example',
+  });
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  await tick();
+  flushSync();
+
+  expect($$(root, '.snippet .crumbs').map((c) => c.textContent)).toEqual([
+    'coastalhomes.example › listings › seaview-cottage',
+    'coastalhomes.example › de › listings › seeblick-haeuschen',
+  ]);
+});
+
 // The drawer's *Go to field* names the field the way `_machine` does — by the ids of the rows
 // above it — so the address still lands after the block has been moved, and the form draws
 // it by its position: the two are read together here.

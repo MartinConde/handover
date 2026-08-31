@@ -24,6 +24,8 @@ export interface Session {
   presets?: { label: string; preset: Preset }[];
   /** This build serves `/_preview`, so the editor can offer to show the page before it is live. */
   preview?: boolean;
+  /** `site` from astro.config, which the SEO panel's previews print each language's address under. */
+  site?: string;
   user: { id: string; name: string; email: string };
   role: 'owner' | 'editor';
 }
@@ -434,6 +436,7 @@ const initial = $derived(
           {entry}
           mediaBase={session?.mediaBase ?? ''}
           preview={session?.preview ?? false}
+          site={session?.site}
           userId={session?.user.id}
           onchanged={async () => {
             await loadPending();

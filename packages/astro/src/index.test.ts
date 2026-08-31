@@ -859,6 +859,7 @@ test('virtual:handover/index is the built index, inlined rather than served', as
   expect(module).toBe(
     `export default JSON.parse(${JSON.stringify(JSON.stringify(await buildIndex(fixture)))});
 export const preview = false;
+export const site = "";
 export const templates = JSON.parse(${JSON.stringify(JSON.stringify(await buildTemplates(fixture)))});
 export const uses = JSON.parse(${JSON.stringify(JSON.stringify(await buildMediaUses(fixture)))});
 export const stale = JSON.parse("{}");`,
@@ -903,6 +904,7 @@ test('the index is built with the title field each collection declares', async (
   expect(module).toBe(
     `export default JSON.parse(${JSON.stringify(JSON.stringify(listed))});
 export const preview = false;
+export const site = "";
 export const templates = JSON.parse(${JSON.stringify(JSON.stringify(await buildTemplates(fixture)))});
 export const uses = JSON.parse(${JSON.stringify(JSON.stringify(await buildMediaUses(fixture)))});
 export const stale = JSON.parse("{}");`,

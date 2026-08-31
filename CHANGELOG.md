@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **The SEO panel previews the page** as a search result and as a shared card, per language and
+  under the address that language serves it at. They need `site` in `astro.config.mjs`; without
+  it the greyed boxes stand alone, as before ([SEO](docs/seo.md#in-the-admin)).
 - **Media library filters.** *Archived*, *Recovered* and *Unused* narrow the grid, and an archived
   tile has its own **Unarchive** button ([Media](docs/media.md#the-library)).
 - **The entry list says who last touched each row** — *Edited by Anna 2h ago*, or *Published by

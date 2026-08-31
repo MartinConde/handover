@@ -376,6 +376,7 @@ vi.mock('virtual:handover/config', () => ({
 // What the build read out of src/content/, inlined into the Worker bundle.
 vi.mock('virtual:handover/index', () => ({
   preview: true,
+  site: 'https://coastalhomes.example',
   // The other scan the build wrote: which languages were translated from a source that has moved
   // on since. Only `posts/taken` has two languages here, so it is the only one that can be in it.
   stale: { 'posts/taken': ['de'] },
@@ -835,6 +836,8 @@ test('ping returns the collection names and who is signed in', async () => {
     // Whether this build has a preview route at all: without one the pane says so rather than
     // drawing a frame around a 404.
     preview: true,
+    // `site` from astro.config, which is what the SEO panel's previews print addresses under.
+    site: 'https://coastalhomes.example',
   });
 });
 

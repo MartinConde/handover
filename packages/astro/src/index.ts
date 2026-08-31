@@ -762,6 +762,7 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
                   id === `\0${VIRTUAL_INDEX}`
                     ? `export default JSON.parse(${JSON.stringify(JSON.stringify(await buildIndex(config.root, titleFields)))});
 export const preview = ${preview};
+export const site = ${JSON.stringify(String(config.site ?? '').replace(/\/$/, ''))};
 export const templates = JSON.parse(${JSON.stringify(JSON.stringify(await buildTemplates(config.root)))});
 export const uses = JSON.parse(${JSON.stringify(JSON.stringify(await buildMediaUses(config.root)))});
 export const stale = JSON.parse(${JSON.stringify(JSON.stringify(await buildStale(config.root, cms)))});`

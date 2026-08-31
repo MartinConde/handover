@@ -24,6 +24,7 @@ const show = (
   blocks: Record<string, Field[]> = {},
   problems: Record<string, string> = {},
   inheritedSeo?: ResolvedSeo,
+  over: Record<string, unknown> = {},
 ) => {
   root = data;
   app = mount(Fields, {
@@ -33,6 +34,7 @@ const show = (
       blocks,
       problems,
       inheritedSeo,
+      ...over,
       // The form is showing English: what a link typed into rich text has to point at.
       locale: 'en',
       get root() {
@@ -964,6 +966,44 @@ test('seo: the panel draws what is stored and writes the file back unchanged', (
     'https://example.com/listings/seaview-cottage',
   );
   expect(stringifyEntry('default', snap())).toBe(golden('seo'));
+});
+
+// The two previews are the page as a search result and as a shared card, under the address this
+// language serves it at: what is typed where something is, the site's own words where not.
+const AT = {
+  site: 'https://coastalhomes.example',
+  servedAt: '/listings/seaview-cottage',
+  mediaBase: 'https://media.example.com',
+};
+test('seo: the previews draw the address, the typed words and the picture', () => {
+  show([seoField], seoData(), {}, {}, INHERITED, AT);
+  expect(q('.snippet .crumbs').textContent).toBe(
+    'coastalhomes.example › listings › seaview-cottage',
+  );
+  expect(q('.snippet .title').textContent).toBe('Move to the coast');
+  expect(q('.snippet .desc').textContent).toBe('Coastal homes in Devon.');
+  expect(q<HTMLImageElement>('.social-card .thumb img').src).toBe(
+    'https://media.example.com/media/9f3a2c7e.webp',
+  );
+  expect(q('.social-card .domain').textContent).toBe('coastalhomes.example');
+  expect(q('.social-card .title').textContent).toBe('Move to the coast');
+});
+
+test('seo: with nothing typed the previews say what the site would, and follow the typing', () => {
+  show([seoField], { _version: 1 }, {}, {}, INHERITED, AT);
+  expect(q('.snippet .title').textContent).toBe('Seaview Cottage · Coastal Homes');
+  expect(q<HTMLImageElement>('.social-card .thumb img').src).toBe(
+    'https://media.example.com/media/site-card.webp',
+  );
+  type('input#f-seo\\.title', 'Move to the coast');
+  expect(q('.snippet .title').textContent).toBe('Move to the coast');
+});
+
+// Without `site` in astro.config there is no address to print, and a preview under a made-up
+// one would be a lie: the greyed boxes stand on their own.
+test('seo: without a site origin there are no previews', () => {
+  show([seoField], seoData(), {}, {}, INHERITED, { servedAt: '/listings/seaview-cottage' });
+  expect(document.body.querySelector('.previews')).toBeNull();
 });
 
 // Guidance, never validation: the line says what is typed against the length Google cuts at,

@@ -10,6 +10,8 @@ declare module 'virtual:handover/index' {
   export default index;
   /** Whether this build was told to serve `/_preview`, which is what the admin draws from. */
   export const preview: boolean;
+  /** `site` from astro.config without its trailing slash, or empty: what an address is printed under. */
+  export const site: string;
   /** The starters each collection ships under `src/content/_templates/`, by collection. */
   export const templates: Record<string, import('@handover/core').Template[]>;
   /** Which stored media keys each content file names, for the library's usage counts. */

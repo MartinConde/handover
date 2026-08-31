@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
-import index, { preview, stale, templates, uses } from 'virtual:handover/index';
+import index, { preview, site, stale, templates, uses } from 'virtual:handover/index';
 import type {
   Answer,
   CheckEntry,
@@ -3085,6 +3085,9 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
       // route simply does not exist without it, so the editor asks here rather than framing
       // a page that would answer 404.
       preview,
+      // `site` from astro.config, for the SEO panel to print each language's address under.
+      // Absent rather than guessed: without one the panel draws no preview at all.
+      site: site || undefined,
     });
   }
   if (params.path === 'entries') return pickList();

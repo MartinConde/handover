@@ -18,6 +18,7 @@ let {
   inheritedSeo,
   translator = false,
   url,
+  site,
   redirect,
   onsaved,
   onrefused,
@@ -49,6 +50,8 @@ let {
   translator?: boolean;
   /** The URL this language serves the entry at, for the dialog that offers to take it away. */
   url?: string;
+  /** The site's origin, for the SEO previews; none, and the panel draws none. */
+  site?: string;
   /** Where its readers go once it has: nothing when the collection has nowhere to send them. */
   redirect?: string;
   /** A save landed: whether this language's file is now ahead of the repository. The entry
@@ -291,6 +294,8 @@ const named = (of: string) => {
         sourceLabel={named(source)}
         translatedAt={behind.translatedAt ?? ''}
         prefix="t"
+        {site}
+        servedAt={url}
       />
     </fieldset>
   </form>

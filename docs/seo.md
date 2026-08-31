@@ -122,6 +122,10 @@ a search engine will show; the social image, under a fixed 1.91:1 preset at 1200
 the 1200 × 630 every network asks for; a switch reading *Hide this page from search engines*;
 and the canonical URL folded away, since almost no page has one.
 
+Under the boxes are two previews per language — the page as a search result and as a shared
+card, under the address that language serves it at — drawn only when `site` is set in
+`astro.config.mjs`, since without it there is no address to print them under.
+
 The lines beside the labels are **guidance and never validation** — nothing on this panel can
 refuse a save. An empty box is greyed with what the site would say instead, resolved by the
 same `resolveSeo` the build runs, so what a client is shown while typing is what the page will

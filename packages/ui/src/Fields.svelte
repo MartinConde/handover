@@ -47,6 +47,8 @@ let {
   mediaBase = '',
   locale = '',
   inheritedSeo,
+  site,
+  servedAt,
 }: {
   fields: readonly Field[];
   root: Data;
@@ -88,6 +90,10 @@ let {
    * handed down the recursion: it belongs to the entry's own `seo` field, which is a tab.
    */
   inheritedSeo?: ResolvedSeo;
+  /** The site's origin, for the SEO previews; none, and the panel draws none. */
+  site?: string;
+  /** The path this language serves the entry at, which the previews print under the origin. */
+  servedAt?: string;
 } = $props();
 
 const modeOf = (field: Field): Translation => field.i18n ?? inherited;
@@ -145,6 +151,18 @@ const address = (at: readonly string[]) => fieldAddress('default', at, root);
 // Not conditional on having a machine: the stale marker and the machine badge are worth having
 // on a site with nothing to translate with, and only the Translate button is the machine's.
 const prose = (field: Field) => translating && (field.type === 'text' || field.type === 'richtext');
+// `coastalhomes.example › listings › seaview-cottage`: the address the way a search result prints
+// it. The host is read out of `site`, and a `site` that is not an address prints nothing.
+const host = $derived.by(() => {
+  try {
+    return site ? new URL(site).host : '';
+  } catch {
+    return '';
+  }
+});
+const crumbs = $derived(
+  [host, ...(servedAt ?? '').split('/').filter(Boolean).map(decodeURIComponent)].join(' › '),
+);
 
 function read(at: readonly string[]): unknown {
   return at.reduce<unknown>((node, key) => (node as Data | undefined)?.[key], root);
@@ -457,6 +475,32 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   <div class="field"><div class="label-row"><label for="{id}.title">Title</label><span class="mode">Per language</span></div><input class="input" id="{id}.title" type="text" value={str([...at, 'title'])} oninput={(e) => write([...at, 'title'], e.currentTarget.value || undefined)} /></div>
 {/snippet}
 
+{#snippet previews(at: readonly string[])}
+  {@const title = str([...at, 'title']) || inheritedSeo?.title || ''}
+  {@const said = str([...at, 'description']) || inheritedSeo?.description || ''}
+  {@const desc = said.length > SEO_DESCRIPTION_LIMIT ? `${said.slice(0, SEO_DESCRIPTION_LIMIT).trimEnd()} …` : said}
+  {@const own = read([...at, 'image']) !== undefined}
+  {@const picture = own ? src([...at, 'image']) : inheritedSeo?.image ? `${mediaBase}/${inheritedSeo.image.src}` : ''}
+  {@const of = locale.toUpperCase()}
+  <div class="previews">
+    <div class="preview-box">
+      <p class="variant-title">Search preview · {of}</p>
+      <div class="snippet" aria-label="Search result preview">
+        <div class="url"><span class="fav" aria-hidden="true">{host.charAt(0).toUpperCase()}</span><span class="crumbs">{crumbs}</span></div>
+        <div class="title">{title}</div>
+        <div class="desc">{desc}</div>
+      </div>
+    </div>
+    <div class="preview-box">
+      <p class="variant-title">Social card · {of}</p>
+      <div class="social-card" aria-label="Social card preview">
+        <div class="thumb">{#if picture}<img src={picture} alt="" />{/if}</div>
+        <div class="body"><div class="domain">{host}</div><div class="title">{title}</div><div class="desc">{desc}</div></div>
+      </div>
+    </div>
+  </div>
+{/snippet}
+
 {#snippet seoWords(id: string, at: readonly string[], key: string, label: string, limit: number, placeholder: string, hint: string)}
   {@const value = str([...at, key])}
   {@const described = [`${id}.${key}-meter`, hint ? `${id}.${key}-hint` : ''].filter(Boolean).join(' ')}
@@ -586,7 +630,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'group'}
       <details class="group" open>
         <summary>{text}<span class="count">{field.fields.length} fields</span></summary>
-        <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} inherited={mode} /></div>
+        <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {site} {servedAt} inherited={mode} /></div>
       </details>
     {:else if field.type === 'array'}
       {@const items = rows(at)}
@@ -598,7 +642,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {#each items as row, i (keyOf(items, i))}
           {@const s = sortable(() => keyOf(items, i), () => i)}
           <div class="row-card" class:is-dragging={s.isDragging} {@attach s.attach}>
-            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} inherited={mode} /></div>
+            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {site} {servedAt} inherited={mode} /></div>
             {#if !translating}{@render controls(at, i, `${text} row ${i + 1}`, s.attachHandle)}{/if}
           </div>
         {:else}
@@ -641,7 +685,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
             {#if shut}
               <!-- folded: the header is the whole card -->
             {:else if inner}
-              <div class="form" id="{id}.{i}-b"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} inherited={mode} /></div>
+              <div class="form" id="{id}.{i}-b"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {site} {servedAt} inherited={mode} /></div>
             {:else}
               <p class="ref-note" id="{id}.{i}-b">{block(row)._ref ?? `No “${block(row)._type}” block in the registry`} — not editable here</p>
             {/if}
@@ -803,6 +847,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
             </div>
           </div>
         {/if}
+        {#if host}{@render previews(at)}{/if}
       </div>
     {:else if field.type === 'seo'}
       {@const image = [...at, 'image']}
@@ -840,6 +885,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
             <p class="notice notice-warn">This page is left out of the sitemap and search engines are asked not to list it. It stays on the site: anybody with the link can still open it, and it can take a few weeks to drop out of results.</p>
           {/if}
         </div>
+        {#if host}{@render previews(at)}{/if}
         <details class="group">
           <summary>Canonical URL{#if str([...at, 'canonical'])}<span class="count">{str([...at, 'canonical'])}</span>{/if}</summary>
           <div class="field">
