@@ -82,7 +82,7 @@ nothing else — whatever else you or anybody else has been working on stays unp
 waiting ("3 unpublished changes"); the button opens the **pending-changes drawer**, which
 lists them with a checkbox each and commits the checked ones. What the drawer shows, what it
 refuses, holding an entry back, and what happens after the commit — build status and revert —
-are on [Pending changes and build status](pending-changes.md).
+are on [Pending changes](pending-changes.md).
 
 ## Creating, renaming and deleting
 

@@ -125,7 +125,7 @@ nobody is editing.
 POST /admin/api/revert   { "commit_sha": "…" }  →  { "commit_sha", "paths" }
 ```
 
-Undoes that commit with a commit of its own, [Reverting a publish](pending-changes.md#reverting-a-publish). It works over any
+Undoes that commit with a commit of its own, [Reverting a publish](build-status.md#reverting-a-publish). It works over any
 commit the admin made, not only the last one. The answer's `commit_sha` is the new commit and
 `paths` what it wrote. `400` without a `commit_sha`; `409` with `{ "error", "paths" }` when one of
 the files has changed since — nothing is written and the paths are named.

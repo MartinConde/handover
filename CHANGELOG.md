@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Docs: build status and revert are their own page** —
+  [Build status and revert](docs/build-status.md), out of
+  [Pending changes](docs/pending-changes.md), which keeps the drawer, the checks and the hold.
 - **Docs: publish conflicts are their own page** — [Publish conflicts](docs/conflicts.md), out
   of [Working together](docs/working-together.md), which keeps the lock and the take-over.
 - **Docs: machine translation and staleness are their own page** —
@@ -499,7 +502,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   it read as *Building…* for as long as the admin was open, and the draft rows that build was
   carrying were never cleared. Ten minutes without a build naming a commit is now as long as
   the pill waits; past that it reports the worker's newest deploy.
-  [When a commit goes live](docs/pending-changes.md#when-a-commit-goes-live).
+  [When a commit goes live](docs/build-status.md).
 
 - **Preview has a route and a gate.** `/_preview/<path>` is injected only where
   `PREVIEW_ENABLED` is set on the build, needs an admin session, serves only addresses the
@@ -644,7 +647,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   parent (a rename counting as both of its names), `redirects.yaml` is recomputed rather than
   restored, and a file that has moved on since is refused rather than overwritten. The changes
   the commit carried come back as unpublished changes
-  ([Drafts and publishing](docs/pending-changes.md#when-a-commit-goes-live)).
+  ([Drafts and publishing](docs/build-status.md)).
 
 - **Draft rows are cleared when the build carrying them is live.** Green is not enough: a row is
   also what an open tab publishes against, so an entry somebody is still editing keeps its row

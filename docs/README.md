@@ -21,7 +21,8 @@
 - [Drafts and publishing](publishing.md) — autosave into D1, what a draft holds, publishing an entry on its own, creating, renaming and deleting, the content index.
 - [Version history](history.md) — the History tab: one version per commit, comparing two, and restoring one as unpublished changes.
 - [The dashboard](dashboard.md) — the `/admin` landing page: what is waiting, the build, who edited what, and how far behind the translations are.
-- [Pending changes and build status](pending-changes.md) — the drawer, what it refuses, holding an entry back, build status after a commit, reverting a publish.
+- [Pending changes](pending-changes.md) — the drawer, what it refuses, the pre-publish checks, holding an entry back.
+- [Build status and revert](build-status.md) — the pill after a commit, when it reports the newest deploy instead, and the commit that undoes a publish.
 - [Working together](working-together.md) — the soft lock on an entry, what "Being edited by…" takes away, and taking one over.
 - [Publish conflicts](conflicts.md) — a file somebody changed in the repository: the refusal, resolving it field by field, Discard.
 - [Preview](preview.md) — the client seeing a page before it goes out: turning it on at build, what is behind the gate, the address to preview, and the pane in the editor.

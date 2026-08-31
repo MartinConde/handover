@@ -96,5 +96,5 @@ entry are in [The admin API](admin-api.md#locks).
 ## Not yet
 
 What happens to a commit after it lands *is* reported — the top bar carries the build and
-one-tap revert ([Pending changes](pending-changes.md#when-a-commit-goes-live)) — but a
+one-tap revert ([Build status](build-status.md)) — but a
 build that fails names no entry, so which of a batch broke it is read in the build log.
