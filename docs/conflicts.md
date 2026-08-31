@@ -69,7 +69,7 @@ development: publish, type, publish again, and the second commit sits on the fir
 ## The endpoints
 
 The `409` a publish gets, and the answer that settles it, are in
-[The admin API](admin-api-drafts.md#resolving-a-conflict).
+[The admin API](admin-api-drafts.md).
 
 ## Not yet
 

@@ -369,7 +369,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   [Activity log](docs/activity.md).
 
 - `POST /admin/api/restore { "commit_sha" }` and `GET /admin/api/deleted/<collection>`.
-  [Admin API](docs/admin-api.md#entries).
+  [Admin API](docs/admin-api-entries.md).
 
 - ⚠️ `revertCommit` in `@handover/core` answers with the files it wrote as well as their paths,
   so that `restoreCommit` beside it can read them. A route that answered with the whole result
@@ -403,7 +403,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `DELETE /admin/api/entries/<collection>/<slug>` takes that answer as `{ "redirect": … }`, in
   the four shapes the status route already takes. No body is still the collection's overview.
-  [Admin API](docs/admin-api.md#entries).
+  [Admin API](docs/admin-api-entries.md).
 
 - ⚠️ `deleteEntry` and `deleteLocales` in `@handover/core` take **a function** for the redirect
   target — `(locale) => string | undefined` — where they took one route for every language. A
@@ -431,7 +431,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `POST /admin/api/status/<collection>` hides or shows one entry or a batch, and takes the
   redirect answer. `GET /admin/api/entries` now says which rows are `hidden`, the entry route
   answers `hidden` and where it `redirects` while it is, and the list route carries the
-  collection's `index`. [Admin API](docs/admin-api.md#entries).
+  collection's `index`. [Admin API](docs/admin-api-entries.md).
 
 - **Pointing at a page is a search box now.** A `reference` field, the Page / Entry half of a
   `link` field and the rich text toolbar's link button all open the same list: every entry the
@@ -446,7 +446,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   [Field types](docs/field-types.md#rich-text).
 
 - `GET /admin/api/entries` answers every collection's entries with the address each language
-  serves them at. [Admin API](docs/admin-api.md#entries).
+  serves them at. [Admin API](docs/admin-api-entries.md).
 
 - **The keys the client owns are theirs to change.** Settings gains an **Integrations** section:
   a DeepL key — and, when there is a version with writing help in it, an AI provider's — can be
@@ -526,7 +526,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`POST /admin/api/checks/conflict`** makes a conflict to look at on a scratch entry, so the
   three-way view can be tried on a live site without hand-crafting commits. Owner only, and it
-  commits: [the admin API](docs/admin-api.md#publishing) says what it leaves behind.
+  commits: [the admin API](docs/admin-api-publishing.md) says what it leaves behind.
 
 - **Per-field diff.** `diffEntry()` in `@handover/core` says what changed between two states of
   one entry — the draft against the file in git, or one version against another — as fields
@@ -596,7 +596,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   until somebody types a name for it ([Languages](docs/i18n.md)).
 
 - **`GET /admin/api/media?kind=images|files`** is the library the picker reads: newest first,
-  archived left out ([The admin API](docs/admin-api.md#media)).
+  archived left out ([The admin API](docs/admin-api-media.md)).
 
 - **`media.md` is two pages.** The bucket, its setup and what an upload does stay;
   what a field asks of a picture and how a client chooses one are
@@ -613,7 +613,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **`POST /admin/api/media`** answers either the asset the site already holds or a presigned
   PUT for a key it chose, and **`PUT /admin/api/media/:hash`** is the verify-or-delete that
-  turns the object into a row ([The admin API](docs/admin-api.md#media)).
+  turns the object into a row ([The admin API](docs/admin-api-media.md)).
 
 - **`media.publicBase` in `cms.config.ts`** — where the bucket is served from, so content files
   keep storing `media/…` keys and never URLs ([Configuration](docs/configuration.md#media)).
