@@ -147,6 +147,8 @@ test('unchecking an entry leaves it out of the publish and out of the count', as
 });
 
 test('with nothing checked there is nothing to publish and the button says so', () => {
+  const fetchMock = vi.fn(async () => Response.json({ results: [] }));
+  vi.stubGlobal('fetch', fetchMock);
   const root = show();
   for (const box of boxes(root)) box.click();
   flushSync();
@@ -157,6 +159,9 @@ test('with nothing checked there is nothing to publish and the button says so', 
   expect(q(root, '.drawer-foot .foot-note')?.textContent?.trim()).toBe(
     'Nothing is selected. Check what you want to publish.',
   );
+  // The pass the drawer opened with, and none for the empty set it is left in: there is
+  // nothing for the checks to read.
+  expect(fetchMock.mock.calls.flat()).toEqual(['/admin/api/publish/checks', expect.anything()]);
 });
 
 const CONFLICT = Response.json(
@@ -174,7 +179,7 @@ const refused = async (root: ParentNode) => {
 };
 
 test('an entry changed in the repository takes itself out and the rest still publish', async () => {
-  const fetchMock = vi.fn(async () => CONFLICT.clone());
+  const fetchMock = vi.fn(async (_url: string) => CONFLICT.clone());
   vi.stubGlobal('fetch', fetchMock);
   const root = show();
   await refused(root);
@@ -194,13 +199,17 @@ test('an entry changed in the repository takes itself out and the rest still pub
   expect(button?.disabled).toBe(false);
   expect(button?.textContent).toBe('Publish 1 change');
 
-  fetchMock.mockImplementationOnce(async () =>
-    Response.json({ commit_sha: 'def4567890', paths: ENTRIES[0]?.files }),
+  // URL by URL from here: the publish is preceded by the checks pass, which must not eat the
+  // answer this one is about.
+  fetchMock.mockImplementation(async (url: string) =>
+    url === '/admin/api/publish'
+      ? Response.json({ commit_sha: 'def4567890', paths: ENTRIES[0]?.files })
+      : Response.json({ results: [] }),
   );
   button?.click();
   await tick();
 
-  expect(fetchMock).toHaveBeenLastCalledWith(
+  expect(fetchMock).toHaveBeenCalledWith(
     '/admin/api/publish',
     expect.objectContaining({ body: JSON.stringify({ entries: ['pages/home'] }) }),
   );
@@ -222,7 +231,7 @@ test('discarding the conflicted entry asks first, then drops that draft alone', 
   await tick();
   flushSync();
 
-  expect(fetchMock).toHaveBeenLastCalledWith('/admin/api/drafts/listings/mill-house', {
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/drafts/listings/mill-house', {
     method: 'DELETE',
   });
   expect(discarded).toHaveBeenCalled();
@@ -289,7 +298,7 @@ test('discarding one of two conflicted entries leaves the other named and says s
   await tick();
   flushSync();
 
-  expect(fetchMock).toHaveBeenLastCalledWith('/admin/api/drafts/pages/home', { method: 'DELETE' });
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/drafts/pages/home', { method: 'DELETE' });
   expect(q(root, '[role="alert"]')?.textContent).toBe(
     'Nothing was published. One entry changed in the repository after you opened it. Resolve it to keep what you wrote, or discard your changes to take what is there now.',
   );
@@ -622,4 +631,207 @@ test('the drawer is a div with the dialog role, not an aside', () => {
   const root = show();
 
   expect(root.querySelector('.drawer')?.tagName).toBe('DIV');
+});
+
+// ---------------------------------------------------------------------------
+// Pre-publish checks. The rules are the server's; what the drawer owes is running them over
+// what is selected, grouping them under the entry they are about, and letting an error stop a
+// publish that warnings never do.
+
+const CHECKS = {
+  results: [
+    {
+      check: 'seo-description',
+      entry: 'pages/home',
+      path: 'src/content/pages/en/home.yaml',
+      fieldPath: 'seo.description',
+      severity: 'info',
+      message: 'No search description — a search engine will quote whatever sentence it likes',
+    },
+    {
+      check: 'image-alt',
+      entry: 'pages/home',
+      path: 'src/content/pages/de/home.yaml',
+      fieldPath: 'photo.alt',
+      severity: 'warn',
+      message: 'Photo has no alt text — a reader using a screen reader is told nothing',
+    },
+    {
+      check: 'media-missing',
+      entry: 'listings/mill-house',
+      path: 'src/content/listings/en/mill-house.yaml',
+      fieldPath: 'photo.src',
+      severity: 'error',
+      message: 'Photo has nothing behind it any more — the page would show a broken image',
+    },
+  ],
+};
+
+/** The checks answer, and whatever the publish that follows it should get. */
+const checking = (publishing: () => Response = () => Response.json({ paths: [] })) =>
+  vi.fn(async (url: string) =>
+    url === '/admin/api/publish/checks' ? Response.json(CHECKS) : publishing(),
+  );
+
+const settled = async () => {
+  await tick();
+  flushSync();
+};
+
+const messages = (root: ParentNode) =>
+  Array.from(root.querySelectorAll('.check-group .notice .msg'), (n) => n.textContent);
+
+test('the checks are grouped under the entry they are about, worst first', async () => {
+  vi.stubGlobal('fetch', checking());
+  const root = show();
+  await settled();
+
+  expect(
+    Array.from(root.querySelectorAll('.check-group h4'), (n) => n.textContent?.trim()),
+  ).toEqual(['The Mill House Listings', 'Home Pages']);
+  expect(messages(root)).toEqual([
+    'Photo has nothing behind it any more — the page would show a broken image',
+    'Photo has no alt text — a reader using a screen reader is told nothing',
+    'No search description — a search engine will quote whatever sentence it likes',
+  ]);
+  expect(Array.from(root.querySelectorAll('.check-group .sev'), (n) => n.textContent)).toEqual([
+    'Error',
+    'Warning',
+    'Note',
+  ]);
+  expect(q(root, '.checks-sum')?.textContent?.replace(/\s+/g, ' ')).toBe(
+    '1 error · 1 warning · 1 note. The error has to go first. Checked over the 2 entries you have selected, and again when you press Publish.',
+  );
+  // The field is opened where it is edited: the entry, and the SEO panel for a search field.
+  expect(
+    Array.from(root.querySelectorAll('.check-group .notice a'), (a) => a.getAttribute('href')),
+  ).toEqual(['/admin/c/listings/mill-house', '/admin/c/pages/home', '/admin/c/pages/home/seo']);
+});
+
+test('an error stops the publish and warnings never do', async () => {
+  const fetchMock = checking();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  await settled();
+
+  const button = q<HTMLButtonElement>(root, '.drawer-foot .btn-primary');
+  expect(button?.disabled).toBe(true);
+  expect(button?.textContent?.trim()).toBe('Fix 1 error to publish');
+
+  // The entry the error is about, unchecked: its checks go with it, and what is left is a
+  // warning and a note, which the client publishes anyway.
+  boxes(root)[1]?.click();
+  await settled();
+
+  expect(messages(root)).toEqual([
+    'Photo has no alt text — a reader using a screen reader is told nothing',
+    'No search description — a search engine will quote whatever sentence it likes',
+  ]);
+  expect(button?.disabled).toBe(false);
+  expect(button?.textContent?.trim()).toBe('Publish anyway (1 warning)');
+  expect(fetchMock).toHaveBeenLastCalledWith('/admin/api/publish/checks', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ entries: ['pages/home'] }),
+  });
+});
+
+// One picture in a field every language shares is one problem, and the client's edit is one
+// edit: two identical lines would only send them looking for the difference.
+test('the same problem in two languages is one line naming both', async () => {
+  const both = {
+    results: [{ ...CHECKS.results[1], path: 'src/content/pages/en/home.yaml' }, CHECKS.results[1]],
+  };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      url === '/admin/api/publish/checks' ? Response.json(both) : Response.json({ paths: [] }),
+    ),
+  );
+  const root = show();
+  await settled();
+
+  expect(messages(root)).toEqual([
+    'Photo has no alt text — a reader using a screen reader is told nothing',
+  ]);
+  expect(
+    Array.from(root.querySelectorAll('.check-group .notice .chip'), (n) => n.textContent),
+  ).toEqual(['EN', 'DE']);
+  // And it is counted the way it is read: one problem, not two files.
+  expect(q(root, '.checks-sum')?.textContent?.replace(/\s+/g, ' ')).toContain('1 warning');
+});
+
+// The drawer may have been open a while: the picture the error is about could have been
+// deleted in another tab since, and the button that says nothing is in the way is stale.
+test('Publish runs the checks again and an error stops the commit', async () => {
+  let answer = { results: [] as (typeof CHECKS)['results'] };
+  const fetchMock = vi.fn(async (url: string) =>
+    url === '/admin/api/publish/checks'
+      ? Response.json(answer)
+      : Response.json({ commit_sha: 'def4567890', paths: [] }),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  await settled();
+  expect(q(root, '.checks')).toBeNull();
+
+  answer = CHECKS;
+  q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.click();
+  await settled();
+
+  expect(fetchMock).toHaveBeenLastCalledWith('/admin/api/publish/checks', expect.anything());
+  expect(published).not.toHaveBeenCalled();
+  expect(q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.textContent?.trim()).toBe(
+    'Fix 1 error to publish',
+  );
+  // A button that goes disabled says nothing and drops the focus that pressed it.
+  expect(q(root, '[role="alert"]')?.textContent).toBe(
+    'Nothing was published. The checks found something in the way just now — it is listed above.',
+  );
+  expect(document.activeElement).toBe(q(root, '.drawer'));
+});
+
+// The pass before the commit is a round trip, and the press is what the client thinks started
+// the publish: a live button through it commits the same set twice.
+test('a second press while the checks are running commits nothing twice', async () => {
+  const fetchMock = vi.fn(async (url: string) =>
+    url === '/admin/api/publish/checks'
+      ? Response.json({ results: [] })
+      : Response.json({ commit_sha: 'def4567890', paths: [] }),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  await settled();
+
+  const button = q<HTMLButtonElement>(root, '.drawer-foot .btn-primary');
+  button?.click();
+  flushSync();
+  expect(button?.disabled).toBe(true);
+  button?.click();
+  await settled();
+
+  expect(fetchMock.mock.calls.filter(([url]) => url === '/admin/api/publish')).toHaveLength(1);
+});
+
+// A lint that cannot be run is not a refusal: the publish it could not read is still the
+// client's to make.
+test('checks that could not be run leave the publish where it was', async () => {
+  const fetchMock = vi.fn(async (url: string) =>
+    url === '/admin/api/publish/checks'
+      ? new Response('nope', { status: 500 })
+      : Response.json({ commit_sha: 'def4567890', paths: [] }),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  await settled();
+
+  expect(q(root, '.checks-sum')?.textContent).toBe(
+    'The checks could not be run this time, so nothing on this list has been looked at.',
+  );
+  const button = q<HTMLButtonElement>(root, '.drawer-foot .btn-primary');
+  expect(button?.disabled).toBe(false);
+  button?.click();
+  await settled();
+
+  expect(published).toHaveBeenCalled();
 });

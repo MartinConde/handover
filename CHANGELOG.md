@@ -4,6 +4,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Pre-publish checks in the drawer.** The pending-changes drawer runs the checks over the
+  entries that are **selected** and lists what they found above the list, grouped under the
+  entry it is about and worst first, each item carrying *Go to field*. An **error** — a picture
+  with nothing behind it any more — disables Publish with *Fix 1 error to publish*; warnings and
+  notes never do, and the button reads *Publish anyway (2 warnings)*. The pass runs again when
+  Publish is pressed, and a pass that could not be run holds nothing back
+  ([Pending changes](docs/pending-changes.md#checks-before-a-publish)).
+- **`checks.ignore` in `cms.config.ts`.** The check ids a site does not want, for a rule that is
+  noise there rather than everywhere; a name that is not a check id fails the build
+  ([Configuration](docs/configuration.md#checks)).
 - **Pre-publish checks, the engine.** `runChecks()` lints the drafts a publish is about to
   commit — internal links to pages that are not there, pictures with no bytes behind them or
   archived in the library, empty alt text, a required translation left blank, a translation

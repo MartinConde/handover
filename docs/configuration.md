@@ -167,6 +167,22 @@ mailer: async ({ to, subject, text, html }) => {
 },
 ```
 
+## `checks`
+
+Optional. The [pre-publish checks](pending-changes.md#checks-before-a-publish) this site does
+not want, by id — a rule that is noise here rather than everywhere:
+
+```ts
+checks: { ignore: ['seo-description', 'seo-image'] },
+```
+
+A site with no SEO defaults gets *No search description* on every page it publishes, which is
+the one people turn off on day one. The ids are `media-missing`, `link-target`, `link-locale`,
+`media-archived`, `image-alt`, `menu-target`, `translation-empty`, `translation-stale`,
+`translation-machine`, `seo-title`, `seo-description` and `seo-image`; a name that is none of
+them fails the build rather than turning nothing off. There is nothing else to configure: a
+check is on or it is not, and the client never turns one off from the admin.
+
 ## Entry filenames
 
 "New entry" derives the filename from the name you type — the collection's `titleField`

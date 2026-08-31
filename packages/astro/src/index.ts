@@ -3,6 +3,8 @@ import { join, relative, sep } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import {
+  CHECKS,
+  type CheckName,
   type ContentFile,
   type ContentIndex,
   checkCollections,
@@ -317,6 +319,11 @@ export interface HandoverConfig {
     | { provider: 'smtp'; from: string; host: string; port?: number }
     /** Cloudflare Email Sending, through a `send_email` binding named `EMAIL`. */
     | { provider: 'cloudflare'; from: string };
+  /**
+   * The pre-publish checks this site has turned off, by id: a rule that is noise here rather
+   * than everywhere. Nothing else is configurable about them — a check is on or it is not.
+   */
+  checks?: { ignore?: readonly CheckName[] };
   /** Required, a one-language site too: the files live in a locale folder either way. */
   i18n: {
     /** The folder names under `src/content/<collection>/`: `'en'`, `'de'`, `'pt-br'`. */
@@ -382,6 +389,13 @@ export function defineConfig(config: HandoverConfig): HandoverConfig {
         `${at}"slug" is required in this collection's schema — make it optional, since an empty address falls back to the file name`,
       );
   }
+  // A misspelled id is a check the site believes it turned off: the drawer would go on
+  // reporting it and nothing would ever say why.
+  for (const id of config.checks?.ignore ?? [])
+    if (!(id in CHECKS))
+      errors.push(
+        `cms.config.ts › checks.ignore: ${JSON.stringify(id)} is not one of the checks — ${Object.keys(CHECKS).join(', ')}`,
+      );
   if (errors.length) throw new Error(errors.join('\n'));
   return config;
 }

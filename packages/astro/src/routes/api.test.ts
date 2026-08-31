@@ -18,6 +18,7 @@ const {
   presenter,
   page,
   article,
+  notice,
   site,
   files,
   getFile,
@@ -60,7 +61,7 @@ const {
   confirmUpload,
 } = await vi.hoisted(async () => {
   const { z } = await import('astro/zod');
-  const { blocks, defineBlock, image, seo, seoDefaults } = await import('../index.js');
+  const { blocks, defineBlock, image, link, seo, seoDefaults } = await import('../index.js');
   // Every file the repository holds beyond the one below, path → contents; filled per test.
   const files: Record<string, string> = {};
   const commitLog: Record<
@@ -94,6 +95,9 @@ const {
     // A collection whose languages each serve their entries at an address of their own, and the
     // one that carries the SEO panel.
     article: z.object({ title: z.string(), slug: z.string().optional(), seo: seo.optional() }),
+    // The collection with a link in it: what the pre-publish checks follow to a page that is
+    // there or is not.
+    notice: z.object({ title: z.string(), cta: link.optional() }),
     // A global: the same editor path with no collection behind it, named by its own schema. It
     // is also where the site's SEO defaults live, which is how the package finds them.
     site: z
@@ -143,7 +147,9 @@ const {
     ]),
     // What a publish will write: `pendingDrafts` minus the entries somebody is holding back.
     // The filter itself runs against a real D1 in core's `db.test.ts`.
-    readyDrafts: vi.fn(async () => [
+    readyDrafts: vi.fn<
+      (...args: unknown[]) => Promise<{ path: string; contents: string; updatedAt: number }[]>
+    >(async () => [
       {
         path: 'src/content/listings/en/mill-house.yaml',
         contents: 'title: "The Mill House"\nrooms: 3\naddress:\n  street: "Mill Lane"\n',
@@ -316,6 +322,8 @@ let lastCommitRow: { sha: string; at: number; kind: string } | undefined = {
   at: 1755864000000,
   kind: 'publish',
 };
+// The checks this site has turned off, which is `checks.ignore` in cms.config.ts.
+let siteChecks: { ignore?: string[] } | undefined;
 // Whether the site has been told where its bucket is: all four values, or none of them.
 let bucketed = true;
 // The R2 and D1 boundaries as the checks meet them: both run for real in core's own tests.
@@ -345,8 +353,12 @@ vi.mock('virtual:handover/config', () => ({
       listings: { schema: listing, route: '/listings/[slug]', index: '/listings' },
       presenters: { schema: presenter, titleField: 'name' },
       posts: { schema: article, route: '/blog/[slug]', index: '/blog', localizedSlugs: true },
+      notices: { schema: notice, route: '/notices/[slug]' },
     },
     globals: { site },
+    get checks() {
+      return siteChecks;
+    },
   },
 }));
 // What the build read out of src/content/, inlined into the Worker bundle.
@@ -698,6 +710,7 @@ afterEach(() => {
   cloudflareToken = 'cf-token';
   cloudflareWorker = 'acct/handover-demo';
   bucketed = true;
+  siteChecks = undefined;
   storeRefusal = undefined;
   dbRefusal = undefined;
   findMedia.mockClear();
@@ -782,7 +795,7 @@ test('ping returns the collection names and who is signed in', async () => {
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
     ok: true,
-    collections: ['pages', 'listings', 'presenters', 'posts'],
+    collections: ['pages', 'listings', 'presenters', 'posts', 'notices'],
     user: session.user,
     role: 'editor',
     // Where a stored key is served from: the widgets draw thumbnails of keys nothing listed.
@@ -841,6 +854,7 @@ test('the diagnostics page reads the configuration back as the site resolved it'
       { name: 'listings', route: '/listings/[slug]' },
       { name: 'presenters' },
       { name: 'posts', route: '/blog/[slug]' },
+      { name: 'notices', route: '/notices/[slug]' },
     ],
     locales: ['en', 'de'],
     defaultLocale: 'en',
@@ -5868,4 +5882,115 @@ test('a restore of a collection the site does not declare is a 404', async () =>
   expect(
     (await restoring('history/nope/mill-house/restore', { commit_sha: 'abc1234' })).status,
   ).toBe(404);
+});
+
+// ---------------------------------------------------------------------------
+// Pre-publish checks: the lint the drawer runs over the set it is about to commit. The rules
+// themselves are core's, proven against a real D1 in its own checks.test.ts; what the route
+// owes is the set it hands over — which entries, which languages, and which site the links are
+// resolved against.
+
+const checking = (entries?: string[]) =>
+  POST(
+    ctx(
+      'publish/checks',
+      new Request('https://x/admin/api/publish/checks', {
+        method: 'POST',
+        ...(entries ? { body: JSON.stringify({ entries }) } : {}),
+      }),
+      { handover: owner },
+    ),
+  );
+
+const results = async (res: Response) =>
+  ((await res.json()) as { results: { check: string; entry: string; message: string }[] }).results;
+
+test('a link to a page this site has none of is reported, named by its entry', async () => {
+  readyDrafts.mockImplementationOnce(async () => [
+    {
+      path: 'src/content/notices/en/opening.yaml',
+      contents: 'title: Opening times\ncta:\n  type: url\n  href: /listings/no-such-house\n',
+      updatedAt: 1755864000000,
+    },
+  ]);
+
+  const found = await results(await checking(['notices/opening']));
+
+  expect(found).toEqual([
+    {
+      check: 'link-target',
+      entry: 'notices/opening',
+      path: 'src/content/notices/en/opening.yaml',
+      fieldPath: 'cta.href',
+      severity: 'warn',
+      message:
+        'Cta links to /listings/no-such-house, where this site has no page — the link is a 404',
+    },
+  ]);
+});
+
+// The whole reason the selection is sent rather than filtered in the browser: what a link
+// resolves against is the site as *this* publish would leave it.
+test('a link to a page only an unselected draft would create is reported', async () => {
+  const drafts = [
+    {
+      path: 'src/content/notices/en/opening.yaml',
+      contents: 'title: Opening times\ncta:\n  type: url\n  href: /listings/new-barn\n',
+      updatedAt: 1755864000000,
+    },
+    {
+      path: 'src/content/listings/en/new-barn.yaml',
+      contents: 'title: The New Barn\nrooms: 2\naddress:\n  street: Barn Lane\n',
+      updatedAt: 1755864000000,
+    },
+  ];
+  readyDrafts.mockImplementationOnce(async (...args: unknown[]) => {
+    const chosen = args[2] as string[] | undefined;
+    return drafts.filter((d) => chosen?.some((key) => d.path.includes(key.split('/')[1] ?? '')));
+  });
+
+  expect(await results(await checking(['notices/opening']))).toHaveLength(1);
+
+  readyDrafts.mockImplementationOnce(async () => drafts);
+
+  expect(await results(await checking(['notices/opening', 'listings/new-barn']))).toEqual([]);
+});
+
+test('a check the site turned off is not reported', async () => {
+  readyDrafts.mockImplementationOnce(async () => [
+    {
+      path: 'src/content/notices/en/opening.yaml',
+      contents: 'title: Opening times\ncta:\n  type: url\n  href: /listings/no-such-house\n',
+      updatedAt: 1755864000000,
+    },
+  ]);
+  siteChecks = { ignore: ['link-target'] };
+
+  expect(await results(await checking(['notices/opening']))).toEqual([]);
+});
+
+// A language that is not going out is still read, since a translation is judged stale against
+// the file it was made from — and it is never itself reported on.
+test('the languages going out are the ones reported on', async () => {
+  locales = ['en', 'de'];
+  files['src/content/listings/de/mill-house.yaml'] = 'title: ""\nrooms: 3\naddress:\n  street: x\n';
+  readyDrafts.mockImplementationOnce(async () => [
+    {
+      path: 'src/content/listings/en/mill-house.yaml',
+      contents: 'title: The Mill House\nrooms: 3\naddress:\n  street: Mill Lane\n',
+      updatedAt: 1755864000000,
+    },
+  ]);
+
+  expect(await results(await checking(['listings/mill-house']))).toEqual([]);
+});
+
+// A rename and a delete write an empty row at the path they took the file from, and a file
+// that is not there says nothing about what its page needs.
+test('a file this publish removes is not linted', async () => {
+  readyDrafts.mockImplementationOnce(async () => [
+    { path: 'src/content/posts/en/hello.yaml', contents: '', updatedAt: 1755864000000 },
+  ]);
+
+  expect(await results(await checking(['posts/hello']))).toEqual([]);
 });

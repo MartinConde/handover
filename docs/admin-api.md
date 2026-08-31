@@ -462,6 +462,23 @@ of those cases nothing was written and no row was cleared. A path no collection 
 `redirects.yaml`, a global — has no schema to be held to and is never the reason for a `422`.
 
 ```
+POST /admin/api/publish/checks   { "entries": ["listings/mill-house"] }  →  { "results": [{ "check", "entry", "path", "fieldPath", "severity", "message" }] }
+```
+
+The [pre-publish checks](pending-changes.md#checks-before-a-publish) over the entries the body
+names — the same body `POST /admin/api/publish` takes, and the same set it would commit. What a
+link resolves against is the built content index with **those** drafts laid over it and no
+others, so a link to a page that only an unselected draft would create is reported. `severity`
+is `error`, `warn` or `info`; `entry` is the key the drawer groups under and `fieldPath`
+addresses the field the way `_machine` does (`blocks[_id=b1x2y3z4].link.ref`), so it survives a
+block being moved.
+
+**It refuses nothing, and nothing refuses because of it.** The lint is a request of its own so
+that it has its own CPU: a publish too heavily cross-linked to read in one pass costs a check
+result rather than the commit. `POST /admin/api/publish` does not run it, and an error is only
+a stop in the drawer, whose Publish button is disabled while one stands.
+
+```
 POST /admin/api/checks/conflict  →  { "entry", "path", "commit_sha" }
 ```
 

@@ -18,6 +18,16 @@ type Entry = {
   /** Somebody marked it "Not ready yet"; null where nobody has. */
   held_by?: { id: string; name: string | null } | null;
 };
+/** One thing the checks found, named by the entry as well as by the file it is in. */
+type CheckItem = {
+  check: string;
+  entry: string;
+  path: string;
+  fieldPath: string;
+  severity: 'error' | 'warn' | 'info';
+  message: string;
+};
+
 let {
   entries,
   build,
@@ -53,6 +63,13 @@ let published = $state(0);
 let committed = $state('');
 /** Entries the last publish was refused over; each one is offered the way out. */
 let conflicts = $state<string[]>([]);
+/** What the pre-publish checks found over the selected set, newest answer wins. */
+let checks = $state<CheckItem[]>([]);
+/** The pass could not be run at all — which holds nothing back: it is a lint, not a gate. */
+let checksFailed = $state(false);
+// What the results on screen were asked for. Plain, not state: it decides which answer to keep
+// and nothing draws it.
+let asked = '';
 /** Entries whose stored file is not everything their schema needs; fixed where they are edited. */
 let unready = $state<string[]>([]);
 /** Entries whose languages disagree about their structure; nothing here can settle that. */
@@ -90,6 +107,68 @@ const checked = (entry: Entry) =>
 const ready = $derived(entries.filter((e) => !e.held_by));
 const held = $derived(entries.filter((e) => e.held_by));
 const selected = $derived(entries.filter(checked));
+
+// The results of the set as it stands. Filtered here as well as sent to the server, so
+// unchecking an entry takes its checks off the screen before the next answer arrives.
+const found = $derived(checks.filter((c) => selected.some((e) => e.key === c.entry)));
+const WORST = { error: 0, warn: 1, info: 2 };
+const SEVERITY = { error: 'Error', warn: 'Warning', info: 'Note' };
+const TINT = { error: 'danger', warn: 'warn', info: 'info' };
+// The languages of one entry share their structure, so the same field in each of them is the
+// same problem said twice — one line naming both, since the client's edit is one edit.
+const LOCALE = /^src\/content\/[^/]+\/([^/]+)\//;
+function merged(items: CheckItem[]) {
+  const lines: (CheckItem & { locales: string[] })[] = [];
+  for (const item of items) {
+    const locale = LOCALE.exec(item.path)?.[1] ?? '';
+    const same = lines.find(
+      (l) => l.check === item.check && l.fieldPath === item.fieldPath && l.message === item.message,
+    );
+    if (same) same.locales.push(locale);
+    else lines.push({ ...item, locales: [locale] });
+  }
+  return lines.sort((a, b) => WORST[a.severity] - WORST[b.severity]);
+}
+
+// Grouped by entry and each group worst first, the groups themselves worst first: *which page
+// is this about* is the first question, and "no alt text" means nothing without it.
+const groups = $derived(
+  entries
+    .filter((entry) => found.some((c) => c.entry === entry.key))
+    .map((entry) => ({ entry, items: merged(found.filter((c) => c.entry === entry.key)) }))
+    .sort((a, b) => WORST[a.items[0]?.severity ?? 'info'] - WORST[b.items[0]?.severity ?? 'info']),
+);
+// Counted as the client reads them: one line is one problem, however many files it is in.
+const lines = $derived(groups.flatMap((g) => g.items));
+const errors = $derived(lines.filter((c) => c.severity === 'error'));
+const warnings = $derived(lines.filter((c) => c.severity === 'warn'));
+const notes = $derived(lines.filter((c) => c.severity === 'info'));
+const counted = $derived(
+  [
+    errors.length ? plural(errors.length, 'errors') : '',
+    warnings.length ? plural(warnings.length, 'warnings') : '',
+    notes.length ? plural(notes.length, 'notes') : '',
+  ]
+    .filter(Boolean)
+    .join(' · '),
+);
+// Severity is a word before it is a colour, and the worst word present is also what the button
+// says: only an error stops a publish, and the rest is the client's call.
+const verdict = $derived(
+  errors.length
+    ? '. The error has to go first.'
+    : warnings.length
+      ? '. Warnings never stop a publish.'
+      : ' — nothing is in the way.',
+);
+
+// Where a result is answered: the entry it is in, and the panel that field is edited on. A
+// global is edited on the site screen and has no tabs.
+const goTo = (item: CheckItem) => {
+  const [collection = '', slug = ''] = item.entry.split('/');
+  if (collection === 'globals') return `/admin/site/${slug}`;
+  return `/admin/c/${collection}/${slug}${item.fieldPath.startsWith('seo') ? '/seo' : ''}`;
+};
 
 // "3 pages · 2 listings · +1 redirect" — the collections behind the entries, in the order they
 // first appear, and what their address changes owe.
@@ -131,12 +210,60 @@ const adrift = (keys: string[]) =>
 const entriesOf = (paths: string[]) =>
   entries.filter((e) => e.files.some((f) => paths.includes(f))).map((e) => e.key);
 
+// The pass runs over what is selected rather than over everything pending: a link is checked
+// against the site as *this* publish would leave it, so a page only an unselected draft would
+// create is a page that is not there.
+$effect(() => {
+  void lint(selected.map((e) => e.key));
+});
+
+/**
+ * The lint, in a request of its own. It refuses nothing and holds nothing back — an answer that
+ * never comes leaves the publish exactly where it was, because a check nobody could run is not
+ * a reason to stop a client publishing their own site.
+ */
+async function lint(keys: string[]): Promise<void> {
+  const of = keys.join(' ');
+  asked = of;
+  // Nothing chosen is nothing to read: an empty set has no answer worth a round trip.
+  if (!keys.length) {
+    checks = [];
+    checksFailed = false;
+    return;
+  }
+  const res = await fetch('/admin/api/publish/checks', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ entries: keys }),
+  }).catch(() => undefined);
+  // A selection that moved on while this was in flight: the answer is about a set nobody is
+  // looking at any more.
+  if (asked !== of) return;
+  checksFailed = !res?.ok;
+  checks = (res?.ok && ((await res.json()) as { results?: CheckItem[] }).results) || [];
+}
+
 async function publish() {
   const going = selected;
+  // Busy from the press and not from the commit: the pass below is a round trip, and a button
+  // still live through it publishes the same set twice — the second answer being a conflict
+  // with the first, which is the one sentence in this drawer nobody could diagnose.
   busy = true;
   error = '';
   unready = [];
   drifted = [];
+  // Again, over exactly what is going out: the drawer may have been open a while, and a picture
+  // somebody deleted in another tab since is what the error would be about.
+  await lint(going.map((e) => e.key));
+  if (errors.length) {
+    busy = false;
+    // The button goes disabled and the list above changes; neither says anything, and a
+    // disabled button drops the focus that pressed it.
+    error =
+      'Nothing was published. The checks found something in the way just now — it is listed above.';
+    panel?.focus();
+    return;
+  }
   const res = await fetch('/admin/api/publish', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -420,6 +547,44 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
             {@render result()}
           </div>
         {/if}
+        {#if checksFailed || groups.length}
+          <section class="checks" aria-labelledby="checks-h">
+            <h3 class="group-title" id="checks-h">Checks</h3>
+            {#if checksFailed}
+              <p class="checks-sum" role="status">
+                The checks could not be run this time, so nothing on this list has been looked at.
+              </p>
+            {:else}
+              <p class="checks-sum">
+                {counted}{verdict} Checked over
+                {selected.length === 1 ? 'the entry' : `the ${selected.length} entries`} you have
+                selected, and again when you press Publish.
+              </p>
+              {#each groups as group (group.entry.key)}
+                <div class="check-group">
+                  <h4>{named(group.entry)} <span class="badge">{capitalise(group.entry.collection)}</span></h4>
+                  {#each group.items as item (item.path + item.fieldPath + item.check)}
+                    <div class="notice notice-{TINT[item.severity]}">
+                      <span class="sev">{SEVERITY[item.severity]}</span>
+                      {#if group.entry.locales.length > 1}
+                        <span class="visually-hidden">Languages:</span>
+                        <span class="chips">
+                          {#each item.locales as of (of)}<span class="chip">{of.toUpperCase()}</span>{/each}
+                        </span>
+                      {/if}
+                      <span class="msg">{item.message}</span>
+                      <!-- The machine-translation note is about a field the client has read and
+                           not about a mistake in it, so it is the one with nowhere to go. -->
+                      {#if item.fieldPath && item.check !== 'translation-machine'}
+                        <a class="btn-link" href={goTo(item)} onclick={onclose}>Go to field</a>
+                      {/if}
+                    </div>
+                  {/each}
+                </div>
+              {/each}
+            {/if}
+          </section>
+        {/if}
         <ul class="change-list">
           {#each ready as entry (entry.key)}{@render change(entry)}{/each}
         </ul>
@@ -464,10 +629,14 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
           <button
             class="btn btn-primary"
             type="button"
-            disabled={busy || discarding || Boolean(resolving) || !selected.length}
+            disabled={busy || discarding || Boolean(resolving) || !selected.length || errors.length > 0}
             onclick={publish}
           >
-            {busy ? 'Publishing…' : selected.length ? `Publish ${plural(selected.length, 'changes')}` : 'Publish'}
+            {#if busy}Publishing…
+            {:else if errors.length}Fix {plural(errors.length, 'errors')} to publish
+            {:else if !selected.length}Publish
+            {:else if warnings.length}Publish anyway ({plural(warnings.length, 'warnings')})
+            {:else}Publish {plural(selected.length, 'changes')}{/if}
           </button>
         </div>
         <p class="foot-note">

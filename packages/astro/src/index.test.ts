@@ -1003,3 +1003,24 @@ test('a field says how it translates through .meta({ i18n })', () => {
     ['hero', 'duplicate'],
   ]);
 });
+
+// A typo in checks.ignore is a check the site thinks it turned off and did not, which nothing
+// else would ever say out loud.
+test('defineConfig fails when checks.ignore names no check', () => {
+  expect(() =>
+    defineConfig({
+      i18n: EN,
+      collections: { posts: { schema: z.object({}) } },
+      checks: { ignore: ['seo-descriptions'] as never },
+    }),
+  ).toThrow(
+    'cms.config.ts › checks.ignore: "seo-descriptions" is not one of the checks — media-missing, link-target, link-locale, media-archived, image-alt, menu-target, translation-empty, translation-stale, translation-machine, seo-title, seo-description, seo-image',
+  );
+  expect(() =>
+    defineConfig({
+      i18n: EN,
+      collections: { posts: { schema: z.object({}) } },
+      checks: { ignore: ['seo-description'] },
+    }),
+  ).not.toThrow();
+});

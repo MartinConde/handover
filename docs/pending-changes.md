@@ -44,6 +44,35 @@ ones. What autosave stores and how an entry is published on its own are on
 - A commit is not a live site: the site rebuilds afterwards, which takes a minute or two,
   and the admin itself is redeployed with it — see below
 
+## Checks before a publish
+
+Above the list, the drawer runs a lint over the entries that are **selected** — the things
+that build fine and look broken — and lists what it found grouped under the entry it is
+about, worst first:
+
+| | |
+|---|---|
+| **Error** | the visitor sees the page broken. One check is an error: a picture or a download whose bytes are not in the bucket and not in the library any more |
+| **Warning** | the page says something nobody meant — a link to a page this site has none of, a link to a page that has no file in this language, a picture that has been archived, alt text left empty, a required translation standing blank, a menu item pointing at a page that is gone |
+| **Note** | worth reading before the words go out — a translation made from a version somebody has changed since, a value machine translation filled in that nobody has read, a search title over the length Google shows, no search description, no sharing image |
+
+**Only an error stops a publish.** With one in the list the button is disabled and reads
+*Fix 1 error to publish*; with warnings it reads *Publish anyway (2 warnings)* and commits
+exactly as it always did. The other two things that stop a publish are not checks: a draft
+the collection schema is not done with, and languages that have drifted apart.
+
+- **The set is what is selected.** Unchecking an entry takes its checks with it, and what a
+  link is checked against is the site as *this* publish would leave it — so a link to a page
+  that only an unselected draft would create is reported, and one to a page a selected draft
+  creates is not
+- The pass runs again when Publish is pressed, since the drawer may have been open a while
+- Every item but the machine-translation note carries **Go to field**, which opens the entry
+  where that field is edited
+- A pass that could not be run says so and holds nothing back: a lint nobody could run is not
+  a reason to stop you publishing your own site
+- A rule that is noise on a particular site is turned off in `cms.config.ts` —
+  `checks: { ignore: ['seo-description'] }` ([Configuration](configuration.md#checks))
+
 ## Holding an entry back
 
 Drafts are shared, so publishing everything pending means publishing everybody's pending —

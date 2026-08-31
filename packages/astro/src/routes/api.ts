@@ -3,6 +3,8 @@ import config from 'virtual:handover/config';
 import index, { preview, templates, uses } from 'virtual:handover/index';
 import type {
   Answer,
+  CheckEntry,
+  ContentIndex,
   Db,
   EntryLocation,
   FileCommit,
@@ -13,6 +15,7 @@ import type {
   MediaRow,
   R2Store,
   Role,
+  SeoDefaultsValue,
   Translate,
   Upload,
 } from '@handover/core';
@@ -102,6 +105,7 @@ import {
   restoreCommit,
   restoreDraft,
   revertCommit,
+  runChecks,
   SCHEMA_VERSION,
   saveDraft,
   saveTranslated,
@@ -2970,6 +2974,90 @@ async function driftedPaths(paths: string[]): Promise<string[]> {
 }
 
 /**
+ * The lint the drawer runs over the set it is about to commit: the entries the body names, or
+ * everything pending that is not on hold — the same body and the same set `POST
+ * /admin/api/publish` reads.
+ *
+ * **A request of its own on purpose.** The pass then has its own ten milliseconds of CPU, so a
+ * publish too heavily cross-linked to read in one go costs a check result and never the commit;
+ * and nothing here refuses anything, since the drawer's Publish button is where an error stops
+ * somebody ([pre-publish-checks.md](../../../docs/pending-changes.md)).
+ */
+async function prepublishChecks(request: Request): Promise<Response> {
+  const database = db();
+  const body = (await request.json().catch(() => undefined)) as { entries?: unknown } | undefined;
+  const chosen = Array.isArray(body?.entries)
+    ? body.entries.filter((e): e is string => typeof e === 'string')
+    : undefined;
+  const rows = await readyDrafts('default', database, chosen);
+  // The built index with **these** drafts over it and no others: what a link is checked against
+  // is the site as this publish would leave it, and a draft nobody selected is not going out.
+  // Overlaying the rest would call a link to a page only an unselected draft creates good.
+  const overlay = rows.map(({ path, contents }) => ({ path, contents }));
+  const overlaid: ContentIndex = Object.fromEntries(
+    Object.keys(config.collections).map((name) => [
+      name,
+      collectionEntries('default', index, name, overlay, config.collections[name]?.titleField),
+    ]),
+  );
+  const going = new Map<string, Record<string, string>>();
+  for (const row of rows) {
+    const [, collection = '', locale = '', slug = ''] = ENTRY_FILE.exec(row.path) ?? [];
+    // A file this publish removes is not a file to lint; the overlay above has already taken
+    // the page it was off the index.
+    if (!collection || !row.contents || !schemaOf(collection, slug)) continue;
+    const files = going.get(`${collection}/${slug}`) ?? {};
+    files[locale] = row.contents;
+    going.set(`${collection}/${slug}`, files);
+  }
+  const git = gitClient();
+  const entries: CheckEntry[] = await Promise.all(
+    [...going].map(async ([key, drafted]) => {
+      const [collection = '', slug = ''] = key.split('/');
+      // The languages this publish is not committing are read from the repository: a
+      // translation is judged stale against the file it was made from, which is often one of
+      // them, and a file that is not going out is never reported on.
+      const rest = await Promise.all(
+        config.i18n.locales
+          .filter((locale) => !(locale in drafted))
+          .map(async (locale) => {
+            const path = entryPath(collection, slug, locale);
+            const file = await git.getFile(path);
+            return file ? ([locale, { path, contents: file.contents }] as const) : undefined;
+          }),
+      );
+      return {
+        key,
+        form: formFor(collection, slug),
+        publishing: Object.keys(drafted),
+        files: {
+          ...Object.fromEntries(rest.filter((l) => l !== undefined)),
+          ...Object.fromEntries(
+            Object.entries(drafted).map(([locale, contents]) => [
+              locale,
+              { path: entryPath(collection, slug, locale), contents },
+            ]),
+          ),
+        },
+      };
+    }),
+  );
+  const results = await runChecks('default', database, {
+    entries,
+    site: { i18n: config.i18n, collections: config.collections },
+    index: overlaid,
+    seoDefaults: (await siteSeoDefaults()) as Record<string, SeoDefaultsValue>,
+    store: mediaStore(),
+    ignore: config.checks?.ignore,
+  });
+  // Named by the entry as well as by the file: the drawer lists entries, and which of an
+  // entry's languages a result is about is the file it carries.
+  return Response.json({
+    results: results.map((result) => ({ ...result, entry: entryKey(result.path) ?? result.path })),
+  });
+}
+
+/**
  * One commit, of every draft that differs from the repository or of the entries the body names.
  * The rows it committed are re-seeded on it rather than deleted, so an editor who carries on
  * typing is measured against what was published and not against whatever HEAD is by then.
@@ -3371,6 +3459,7 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   if (resent) return resendInvite(resent[1] ?? '', request, url, locals.cfContext, locals.handover);
   if (params.path === 'media') return answering(() => askUpload(request));
   if (params.path === 'redirects') return answering(() => addRedirect(request, locals.handover));
+  if (params.path === 'publish/checks') return answering(() => prepublishChecks(request));
   if (params.path === 'publish') return answering(() => publish(request, locals.handover));
   if (params.path === 'revert') return answering(() => revert(request, locals.handover));
   if (params.path === 'restore') return answering(() => restore(request, locals.handover));
