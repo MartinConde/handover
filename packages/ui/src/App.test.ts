@@ -234,7 +234,7 @@ test('a global path opens the entry editor on the globals collection', async () 
       return Response.json({ entries: [] });
     }),
   );
-  const root = show(session('owner', true), '/admin/site/site');
+  const root = show(session('owner'), '/admin/site/site');
   await new Promise((r) => setTimeout(r, 0));
   flushSync();
 

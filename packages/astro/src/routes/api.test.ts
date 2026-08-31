@@ -5446,7 +5446,7 @@ test("a rule over a collection's index is refused by the index it would hide", a
   const res = await POST(post('redirects', JSON.stringify({ from: '/listings', to: '/' })));
 
   expect(res.status).toBe(422);
-  expect((await res.json()).message).toBe(
+  expect(((await res.json()) as { message: string }).message).toBe(
     'This is a real page. A redirect here would hide the listings index from visitors.',
   );
 });
@@ -5520,7 +5520,7 @@ test('a hidden entry’s rule is not deleted from this screen', async () => {
   const res = await DELETE(ctx('redirects/cccccccc', undefined, { handover: owner }));
 
   expect(res.status).toBe(409);
-  expect((await res.json()).error).toBe(
+  expect(((await res.json()) as { error: string }).error).toBe(
     'This redirect belongs to the entry that is hidden. Show that entry again and the redirect goes with it.',
   );
   expect(publish).not.toHaveBeenCalled();
