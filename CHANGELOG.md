@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **The navigation builder nests by drag.** Carry a row right to make it a sub-item: a hairline
+  marks a sibling slot, a tinted well names the parent it would go inside ("Add inside Listings,
+  after Sold"), and a slot past three levels refuses in place. During a keyboard drag, ↑ ↓ walk
+  the slots and → ← change level; the arrow buttons on each row still do every move
+  ([Site files](docs/site-files.md#navigation)).
 - **The entry editor no longer scrolls sideways on a phone** at the demo home page's deepest block
   nesting: a list of blocks sizes to its own width rather than to the widest card's words, and a
   block header three levels down wraps instead.

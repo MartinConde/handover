@@ -106,8 +106,9 @@ language owns ([Languages](i18n.md#the-structure-is-shared)). Moving an item in 
 moves it in all of them, and the German file keeps its German words while it happens.
 
 The client edits this file in **Site settings → Navigation**: pages and entries on the left,
-the tree on the right, dragged by the handle or moved with each row's buttons (up, down, indent,
-outdent), three levels deep. The second language's column draws the same tree as one box a row,
+the tree on the right. Rows move by dragging the handle — a hairline marks a slot between
+siblings, a tinted well names the parent a drop would go inside, and a slot past three levels
+refuses in place — or with each row's buttons (up, down, indent, outdent). The second language's column draws the same tree as one box a row,
 for the labels alone. A row pointing at something this language cannot show is flagged
 there and dropped by [`<Nav />`](rendering.md#navigation-menus). Which menus a site has is the
 developer's: they are declared in this file, and the client fills them.

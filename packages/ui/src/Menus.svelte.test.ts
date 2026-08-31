@@ -295,25 +295,26 @@ test('a site with several menus edits one at a time, and the arrow keys walk the
 });
 
 // jsdom lays nothing out, and dnd-kit finds the row under the pointer by its box: rows are
-// stacked 60 px tall in DOM order. The same helpers the array cards are dragged by at 4.1.
+// stacked 60 px tall in document order, the way the flattened tree reads. The carried card is
+// the overlay, so the rows themselves stay where they are while a drag is live.
 const ROW = '.menu-item';
 const laidOut = () =>
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
-    const found = this.closest(ROW);
-    const row = found?.hasAttribute('data-dnd-placeholder') ? found.previousElementSibling : found;
-    const list = row?.parentElement?.parentElement;
-    if (!row || !list) return new DOMRect(0, 0, 1024, 4096);
-    const rows = Array.from(list.querySelectorAll(ROW)).filter(
-      (el) => !el.hasAttribute('data-dnd-placeholder'),
-    );
-    const floated =
-      this === row ? (row as HTMLElement).style.getPropertyValue('--dnd-translate') : '';
-    return new DOMRect(
-      0,
-      rows.indexOf(row) * 60 + (parseFloat(floated.split(' ')[1] ?? '') || 0),
-      400,
-      60,
-    );
+    // The carried card is the drag's shape, and dnd-kit places it through its own custom
+    // properties — so its box is wherever the drag has moved it.
+    const overlay = this.closest('[data-dnd-overlay]');
+    if (overlay instanceof HTMLElement) {
+      const at = (prop: string) => parseFloat(overlay.style.getPropertyValue(prop)) || 0;
+      const [tx = 0, ty = 0] = overlay.style
+        .getPropertyValue('--dnd-translate')
+        .split(' ')
+        .map((v) => parseFloat(v) || 0);
+      return new DOMRect(at('--dnd-left') + tx, at('--dnd-top') + ty, 400, 60);
+    }
+    const row = this.closest(ROW);
+    if (!row) return new DOMRect(0, 0, 1024, 4096);
+    const rows = Array.from(document.querySelectorAll(ROW));
+    return new DOMRect(0, rows.indexOf(row) * 60, 400, 60);
   });
 const settle = async () => {
   await new Promise((r) => setTimeout(r, 40));
@@ -331,7 +332,7 @@ const keyMove = async (name: string, steps: number) => {
     await key(document, steps > 0 ? 'ArrowDown' : 'ArrowUp');
   await key(document, 'Space');
 };
-const pointer = async (target: Element | Document, type: string, y: number) => {
+const pointer = async (target: Element | Document, type: string, y: number, x = 20) => {
   target.dispatchEvent(
     new PointerEvent(type, {
       bubbles: true,
@@ -340,7 +341,7 @@ const pointer = async (target: Element | Document, type: string, y: number) => {
       pointerId: 1,
       button: 0,
       pointerType: 'mouse',
-      clientX: 20,
+      clientX: x,
       clientY: y,
     }),
   );
@@ -403,8 +404,8 @@ test('Done closes the sheet and gives focus back to the button that opened it', 
   expect(document.activeElement).toBe(q('.nav-add-open'));
 });
 
-// Each level is its own sortable list, so a sub-item dragged inside its own branch must not
-// reach for a place in the level above it.
+// One provider spans the tree now, but a drag that keeps its own indent stays in its own
+// branch: the slot's depth follows the pointer, and the pointer has not moved sideways.
 test('a sub-item is dragged within its own branch', async () => {
   laidOut();
   show([
@@ -422,6 +423,149 @@ test('a sub-item is dragged within its own branch', async () => {
   expect(labels()).toEqual(['Listings', 'Sold', 'For sale']);
   expect(menus[0]?.items).toHaveLength(1);
   expect(menus[0]?.items[0]?.children?.map((c) => c.label)).toEqual(['Sold', 'For sale']);
+});
+
+const nested = () => [
+  item({
+    label: 'Listings',
+    link: { type: 'url', href: '/listings' },
+    children: [
+      item({ _id: 'b2c3d4e5', label: 'For sale', link: { type: 'url', href: '/sale' } }),
+      item({ _id: 'c3d4e5f6', label: 'Sold', link: { type: 'url', href: '/sold' } }),
+    ],
+  }),
+  item({ _id: 'd4e5f6a7', label: 'Contact', link: { type: 'url', href: '/contact' } }),
+];
+
+// One DragDropProvider spans the whole tree, so a drag can land on another level. Nothing moves
+// while the drag is live: the slot it would land in is drawn instead — a hairline between
+// siblings, a tinted well that names its parent, a refusal at the position that is over the cap.
+test('carried right over a sub-menu, the well names the slot and the drop nests the row', async () => {
+  laidOut();
+  show(nested());
+
+  await pointer(grip('Contact'), 'pointerdown', 210);
+  await pointer(document, 'pointermove', 180, 40);
+  await pointer(document, 'pointermove', 150, 56);
+
+  expect(q('[data-dnd-overlay] .drag-proxy').textContent).toContain('Contact');
+  expect(q('.drop-into').textContent).toBe('Add inside Listings, after Sold');
+
+  await pointer(document, 'pointerup', 150, 56);
+
+  expect(document.querySelector('.drop-into')).toBeNull();
+  expect(menus[0]?.items).toHaveLength(1);
+  expect(menus[0]?.items[0]?.children?.map((c) => c.label)).toEqual([
+    'For sale',
+    'Sold',
+    'Contact',
+  ]);
+});
+
+test('a sibling slot is a hairline, and the drop lands the row there', async () => {
+  laidOut();
+  show(three());
+
+  await pointer(grip('Home'), 'pointerdown', 30);
+  await pointer(document, 'pointermove', 70);
+  await pointer(document, 'pointermove', 95);
+
+  expect(document.querySelectorAll('.drop-line')).toHaveLength(1);
+  expect(document.querySelector('.drop-into')).toBeNull();
+
+  await pointer(document, 'pointerup', 95);
+
+  expect(labels()).toEqual(['Listings', 'Home', 'Contact']);
+});
+
+test('one level too deep is refused at the position, in so many words', async () => {
+  laidOut();
+  show([
+    item({
+      label: 'Listings',
+      link: { type: 'url', href: '/listings' },
+      children: [
+        item({
+          _id: 'b2c3d4e5',
+          label: 'For sale',
+          link: { type: 'url', href: '/sale' },
+          children: [
+            item({ _id: 'd4e5f6a7', label: 'Devon', link: { type: 'url', href: '/devon' } }),
+          ],
+        }),
+      ],
+    }),
+    item({ _id: 'c3d4e5f6', label: 'Contact', link: { type: 'url', href: '/contact' } }),
+  ]);
+  const start = written();
+
+  await pointer(grip('Contact'), 'pointerdown', 210);
+  await pointer(document, 'pointermove', 180, 60);
+  await pointer(document, 'pointermove', 150, 128);
+
+  expect(q('.drop-blocked').textContent).toBe(
+    "Can't go here — three levels is as deep as a menu goes",
+  );
+
+  await pointer(document, 'pointerup', 150, 128);
+
+  expect(document.querySelector('.drop-blocked')).toBeNull();
+  expect(written()).toBe(start);
+});
+
+test('an escaped drag leaves the menu untouched and takes the indicator with it', async () => {
+  laidOut();
+  show(three());
+  const start = written();
+
+  await key(grip('Home'), 'Space');
+  await key(document, 'ArrowDown');
+  expect(document.querySelector('.drop-line')).not.toBeNull();
+
+  await key(document, 'Escape');
+
+  expect(document.querySelector('.drop-line')).toBeNull();
+  expect(written()).toBe(start);
+});
+
+test('a keyboard drag crosses into a sub-menu: the slot between two of its rows', async () => {
+  laidOut();
+  show(nested());
+
+  await key(grip('Contact'), 'Space');
+  await key(document, 'ArrowUp');
+  await key(document, 'Space');
+
+  expect(menus[0]?.items).toHaveLength(1);
+  expect(menus[0]?.items[0]?.children?.map((c) => c.label)).toEqual([
+    'For sale',
+    'Contact',
+    'Sold',
+  ]);
+});
+
+test('→ during a keyboard drag asks for one level deeper, ← brings it back', async () => {
+  laidOut();
+  show([
+    item({ label: 'Home' }),
+    item({ _id: 'b2c3d4e5', label: 'Listings', link: { type: 'url', href: '/listings' } }),
+  ]);
+
+  await key(grip('Home'), 'Space');
+  await key(document, 'ArrowDown');
+  expect(document.querySelector('.drop-line')).not.toBeNull();
+
+  await key(document, 'ArrowRight');
+  expect(q('.drop-into').textContent).toBe('Add inside Listings');
+
+  await key(document, 'ArrowLeft');
+  expect(document.querySelector('.drop-line')).not.toBeNull();
+
+  await key(document, 'ArrowRight');
+  await key(document, 'Space');
+
+  expect(menus[0]?.items.map((i) => i.label)).toEqual(['Listings']);
+  expect(menus[0]?.items[0]?.children?.map((c) => c.label)).toEqual(['Home']);
 });
 
 test('the parsed file survives the round trip through the tree', () => {
