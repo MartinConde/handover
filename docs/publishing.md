@@ -63,9 +63,9 @@ something: nothing is committed, and those rows are marked *Not ready to publish
 the entry and press Publish again. This is what keeps a blank new entry from committing a
 file your own `content.config.ts` would reject and breaking the build behind it.
 
-One case an editor cannot get out of on their own: a **required** `image`, `file`, `embed`,
-`seo` or `reference` whose widget is read-only until its picker ships ([Structured
-fields](structured-fields.md#in-the-admin)) — make it `.optional()` in your schema until then.
+One case an editor cannot get out of on their own: a **required** `seo`, whose widget is
+read-only until its panel ships ([Structured fields](structured-fields.md#in-the-admin)) —
+make it `.optional()` in your schema until then.
 
 A draft also keeps keys your schema no longer declares. Rename a field in `schemas.ts` and
 the old key is still written back on the next save, so the value is there for

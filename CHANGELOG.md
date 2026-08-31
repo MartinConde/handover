@@ -4,6 +4,20 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **An embed field you can fill in.** Paste a YouTube, Vimeo or Google Maps link and it becomes a
+  card with the provider's name, the id that was stored and — for YouTube — the provider's own
+  still, with the frame's title and the second the video starts at under it. The URL itself is
+  never stored: the file holds `{ provider, id, title?, start? }` and the page builds the frame's
+  address back from the provider's own template. A link from anywhere else is refused with the
+  list of what is accepted, and **Change** keeps the video you had until a new link is recognised
+  ([Structured fields](docs/structured-fields.md#media-embeds-seo-and-references)).
+- **`<Embed />`.** `astro-handover/Embed.astro` draws one lazy-loaded `<iframe>` in a fixed 16:9
+  box — `youtube-nocookie.com`, Vimeo with `dnt=1`, the Google Maps embed endpoint — named by the
+  field's own title ([Rendering](docs/rendering.md#videos-and-maps)).
+- **An embed's title is translated.** The second language gets the title and nothing else: the
+  provider, the id and the start time are the same in every language, and a save from that column
+  cannot change them.
+
 - **Version history on every entry.** A **History** tab beside Content shows that entry's git
   log, read from GitHub on open and stored nowhere: a commit that wrote several of the entry's
   language files is one version, with a chip per language and the person who published it from

@@ -124,6 +124,28 @@ the labels are each language's own — so an item nobody has translated is named
 points at, in that language. Style it, or read `menus.header` — `{ label, href, newTab?, children }`, an item with
 no `label` of its own already named by the page it points at — and write your own markup.
 
+## Videos and maps
+
+An `embed` field holds a provider and an id — never a URL, never markup. `<Embed />` builds the
+frame's address back from the provider's own template, so nothing a client pasted into the admin
+can point a frame anywhere else:
+
+```astro
+---
+import Embed from 'astro-handover/Embed.astro';
+const { entry } = Astro.props;
+---
+
+<Embed value={entry.data.video} />
+```
+
+It draws a `<div class="handover-embed">` holding one lazy-loaded `<iframe>` in a fixed 16:9 box,
+so the frame does not move the page when it arrives. YouTube is served from `youtube-nocookie.com`,
+Vimeo with `dnt=1`, Google Maps from the embed endpoint; a `start` in the file becomes the time the
+video begins at. The frame is named by the field's own `title`, which is translated, and by the
+provider's name where this language has none yet. A field with no value draws nothing. Style
+`.handover-embed` — the component sets nothing but the box.
+
 ## Hidden entries
 
 An entry with `_status: hidden` in its file stays in the repo but must not render.

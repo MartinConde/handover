@@ -2,13 +2,18 @@
 import { type DragDropEventHandlers, DragDropProvider } from '@dnd-kit/svelte';
 import { createSortable, isSortable } from '@dnd-kit/svelte/sortable';
 import {
+  EMBED_LABELS,
+  type EmbedValue,
+  embedThumb,
   type Field,
   fieldAddress,
   newId,
   type Preset,
+  parseEmbedUrl,
   type Translation,
   unsafeLinkScheme,
 } from '@handover/core';
+import { tick } from 'svelte';
 import Fields from './Fields.svelte';
 import Focal from './Focal.svelte';
 import Media from './Media.svelte';
@@ -63,10 +68,10 @@ const modeOf = (field: Field): Translation => field.i18n ?? inherited;
 // inside it can say otherwise.
 const structural = (field: Field) =>
   field.type === 'group' || field.type === 'array' || field.type === 'blocks';
-// Widgets a translation has nothing to act on: `embed` and `seo` only show what is stored,
-// and a `reference` points at the same entry in every language. Neither is given to the
-// second language as a picture of the first language's value it cannot change.
-const FIXED = new Set(['embed', 'seo', 'reference', 'unsupported']);
+// Widgets a translation has nothing to act on: `seo` only shows what is stored, and a
+// `reference` points at the same entry in every language. Neither is given to the second
+// language as a picture of the first language's value it cannot change.
+const FIXED = new Set(['seo', 'reference', 'unsupported']);
 const shown = $derived(
   translating
     ? fields.filter((f) => structural(f) || (modeOf(f) !== false && !FIXED.has(f.type)))
@@ -190,13 +195,6 @@ const blockName = (row: unknown) => block(row)._label || block(row)._type || '';
 const blockFields = (row: unknown) =>
   block(row)._ref === undefined ? blocks[block(row)._type ?? ''] : undefined;
 
-// A read-only field that says nothing reads as a broken one, so each names the release its
-// editor arrives in.
-const WHEN: Record<'embed' | 'seo', string> = {
-  embed: 'Embeds can be changed from Phase 4. Shown as stored.',
-  seo: 'SEO settings can be changed from Phase 4. Shown as stored.',
-};
-
 // A stored reference names an entry this form never picked, so the list is read for its
 // title and the languages it has. Only where there is something on screen that needs one.
 let known = $state<Pickable>({ entries: [], locales: [] });
@@ -217,6 +215,41 @@ const point = (at: readonly string[]): [number, number] => {
 const dot = (at: readonly string[]) => point(at).map((n) => n * 100);
 /** Which image field has the focal dialog open, by the same id its widget is drawn under. */
 let framing = $state('');
+/** Which embed field has the paste box open over a value it already holds. */
+let pasting = $state('');
+/** The last paste that was not a link we know, and the field it was made in. */
+let refused = $state({ id: '', why: '' });
+
+// A control that replaces itself takes the reader's place with it, so the focus follows the eye:
+// onto the box that Change opened, and back onto Change when the box closes. Ids carry dots.
+const focusOn = (elementId: string) =>
+  void tick().then(() => document.getElementById(elementId)?.focus());
+
+// A hand-edited file can hold anything under an embed key, and a card drawn from half a value
+// is worse than the paste box.
+function embedValue(at: readonly string[]): EmbedValue | undefined {
+  const v = read(at) as EmbedValue | undefined;
+  return v && typeof v.id === 'string' && v.provider in EMBED_LABELS ? v : undefined;
+}
+
+// A link that is not recognised leaves the value alone: a mistyped one must never empty the
+// field. A recognised one replaces the whole value, title included — it named the old video.
+function pasteEmbed(at: readonly string[], id: string, input: HTMLInputElement) {
+  refused = { id: '', why: '' };
+  if (!input.value.trim()) return;
+  const parsed = parseEmbedUrl(input.value);
+  if ('refused' in parsed) {
+    refused = { id, why: parsed.refused };
+    return;
+  }
+  const { provider, id: chosen, start } = parsed.embed;
+  // The format's own order, with `title` and `start` left as holes: nothing is written for
+  // either until somebody types one, and each keeps its place in the file when they do.
+  write(at, { provider, id: chosen, title: undefined, start });
+  input.value = '';
+  pasting = '';
+  focusOn(`${id}-change`);
+}
 const bytes = (at: readonly string[]) => fileSize(read([...at, 'bytes']) as number | undefined);
 
 /** One picked asset as the format stores it — and in that order. */
@@ -290,6 +323,15 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
 
 {#snippet altField(id: string, at: readonly string[])}
   <div class="field"><div class="label-row"><label for="{id}.alt">Alt text</label><span class="mode">Per language</span></div><input class="input" id="{id}.alt" type="text" value={str([...at, 'alt'])} oninput={(e) => write([...at, 'alt'], e.currentTarget.value || undefined)} /></div>
+{/snippet}
+
+{#snippet embedThumbnail(value: EmbedValue)}
+  {@const still = embedThumb(value)}
+  <span class="thumb" style="aspect-ratio: 16 / 9">{#if still}<img src={still} alt="" loading="lazy" />{/if}</span>
+{/snippet}
+
+{#snippet titleField(id: string, at: readonly string[])}
+  <div class="field"><div class="label-row"><label for="{id}.title">Title</label><span class="mode">Per language</span></div><input class="input" id="{id}.title" type="text" value={str([...at, 'title'])} oninput={(e) => write([...at, 'title'], e.currentTarget.value || undefined)} /></div>
 {/snippet}
 
 {#snippet nameField(id: string, at: readonly string[])}
@@ -561,10 +603,56 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       {:else}
         {@render noEntry(id, `${id}-l`, says, text, () => (picker = id))}
       {/if}
-    {:else if field.type === 'embed' || field.type === 'seo'}
+    {:else if field.type === 'embed' && translating}
+      {@const value = embedValue(at)}
+      <!-- A translation owns the words and not the video: the title, and nothing else. -->
+      {@render groupLabel(id, field, text, at)}
+      {#if value}
+        <div class="media-card" {id} role="group" aria-labelledby="{id}-l">
+          {@render embedThumbnail(value)}
+          <div class="meta">
+            <div><div class="name"><span class="badge badge-info">{EMBED_LABELS[value.provider]}</span> <span class="sub">{value.id}</span></div></div>
+            {@render titleField(id, at)}
+            <p class="hint">The same video in every language.</p>
+          </div>
+        </div>
+      {:else}
+        <p class="hint" {id}>Nothing here yet</p>
+      {/if}
+    {:else if field.type === 'embed'}
+      {@const value = embedValue(at)}
+      {#if value && pasting !== id}
+        {@render groupLabel(id, field, text, at)}
+      {:else}
+        <div class="label-row"><label for={id} id="{id}-l">{text}{#if field.required}<span class="req" aria-hidden="true">*</span>{/if}</label></div>
+        <input class="input" {id} type="url" placeholder="Paste a YouTube, Vimeo or Google Maps link" aria-invalid={refused.id === id ? 'true' : bad} aria-describedby={[refused.id === id ? `${id}-paste` : '', value ? `${id}-keep` : '', says].filter(Boolean).join(' ') || undefined} oninput={(e) => pasteEmbed(at, id, e.currentTarget)} />
+        {#if refused.id === id}<p class="error" id="{id}-paste">{refused.why}</p>{/if}
+        {#if value}<p class="hint" id="{id}-keep">Still showing the video below until a new link is recognised.</p>{/if}
+      {/if}
+      {#if value}
+        <div class="media-card" id={pasting === id ? undefined : id} role="group" aria-labelledby="{id}-l" aria-describedby={pasting === id ? undefined : says}>
+          {@render embedThumbnail(value)}
+          <div class="meta">
+            <div><div class="name"><span class="badge badge-info">{EMBED_LABELS[value.provider]}</span> <span class="sub">{value.id}</span></div></div>
+            {#if pasting === id}
+              <div class="actions"><button class="btn btn-sm btn-ghost" type="button" onclick={() => { pasting = ''; refused = { id: '', why: '' }; focusOn(`${id}-change`); }}>Keep this one</button></div>
+            {:else}
+              {@render titleField(id, at)}
+              {#if value.provider !== 'google-maps'}
+                <div class="field"><div class="label-row"><label for="{id}.start">Start at</label></div><input class="input" id="{id}.start" type="number" min="0" step="1" aria-describedby="{id}.start-hint" value={num([...at, 'start'])} oninput={(e) => write([...at, 'start'], e.currentTarget.value === '' ? undefined : e.currentTarget.valueAsNumber)} /><p class="hint" id="{id}.start-hint">Seconds, optional</p></div>
+              {/if}
+              <div class="actions">
+                <button class="btn btn-sm" id="{id}-change" type="button" onclick={() => { pasting = id; focusOn(id); }}>Change</button>
+                <button class="btn btn-sm btn-ghost" type="button" onclick={() => { write(at, undefined); pasting = ''; focusOn(id); }}>Remove</button>
+              </div>
+            {/if}
+          </div>
+        </div>
+      {/if}
+    {:else if field.type === 'seo'}
       {@render groupLabel(id, field, text, at)}
       <div class="readonly" {id} role="region" tabindex="-1" aria-labelledby="{id}-l" aria-describedby={err ? `${id}-hint ${id}-err` : `${id}-hint`}><pre>{read(at) === undefined ? 'Nothing here yet' : JSON.stringify(read(at), null, 2)}</pre></div>
-      <p class="hint" id="{id}-hint">{WHEN[field.type]}</p>
+      <p class="hint" id="{id}-hint">SEO settings can be changed from Phase 4. Shown as stored.</p>
     {:else}
       <div class="label-row"><label for={id}>{text}</label></div>
       <p class="hint" {id}>Not editable here yet</p>

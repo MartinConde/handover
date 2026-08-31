@@ -430,6 +430,28 @@ const listing: Form = {
   blocks: {},
 };
 
+// The second column draws an embed as a card with one input in it, and the browser is not
+// trusted with the rest: a request that also names another video is a request to change what
+// every language points at, which is not a translation's to make.
+test('a translated save of an embed writes the title and leaves the video alone', () => {
+  const form: Form = {
+    fields: [{ path: ['video'], label: 'Video', type: 'embed', required: false }],
+    blocks: {},
+  };
+  const de = {
+    _version: 1,
+    video: { provider: 'youtube', id: 'dQw4w9WgXcQ', title: 'Rundgang', start: 42 },
+  };
+  const values = {
+    video: { provider: 'vimeo', id: '76979871', title: 'Rundgang durchs Haus', start: 7 },
+  };
+
+  expect(mergeEntry('default', de, values, form)).toEqual({
+    _version: 1,
+    video: { provider: 'youtube', id: 'dQw4w9WgXcQ', title: 'Rundgang durchs Haus', start: 42 },
+  });
+});
+
 test('a save of a translated entry keeps the fields its form does not show', () => {
   const de = {
     _version: 1,

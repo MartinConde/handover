@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Field } from '@handover/core';
 import { parseEntry, stringifyEntry } from '@handover/core';
-import { flushSync, mount, unmount } from 'svelte';
+import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Fields from './Fields.svelte';
 
@@ -832,13 +832,118 @@ test('an image inside a block draws what is stored and writes the file back unch
   expect(stringifyEntry('default', snap())).toBe(golden('blocks'));
 });
 
-test.each([
-  ['embed', 'Embeds can be changed from Phase 4. Shown as stored.'],
-  ['seo', 'SEO settings can be changed from Phase 4. Shown as stored.'],
-] as const)('structured types: %s says why it is read-only', (type, sentence) => {
-  show([{ path: ['thing'], label: 'Thing', type, required: false } as Field], {});
-  const hint = q('#f-thing-hint');
-  expect(hint.textContent).toBe(sentence);
+const embedFields: Field[] = [
+  { path: ['video'], label: 'Video', type: 'embed', required: false },
+  { path: ['map'], label: 'Map', type: 'embed', required: false },
+];
+const embedData = () => parseEntry('default', golden('embed')) as Record<string, unknown>;
+
+test('embed: a pasted link and a typed title round-trip through the embed golden', () => {
+  show(embedFields, { _version: 1 });
+  type('input#f-video', 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=42');
+  expect(q('#f-video .badge').textContent).toBe('YouTube');
+  expect(q('#f-video .sub').textContent).toBe('dQw4w9WgXcQ');
+  // The still comes straight from the provider: no thumbnail fetch through the Worker.
+  expect(q('#f-video .thumb img').getAttribute('src')).toBe(
+    'https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg',
+  );
+  type('input#f-video\\.title', 'Walkthrough video');
+  type('input#f-map', 'https://www.google.com/maps/place/Seaview+Cottage,+Devon/@50.5,-4.8,17z');
+  expect(q('#f-map .badge').textContent).toBe('Google Maps');
+  expect(stringifyEntry('default', snap())).toBe(golden('embed'));
+});
+
+// The URL is never what is stored, so a link nobody can read must not empty a field that is
+// already filled: the client would have to find the old video again.
+test('embed: a link we do not recognise is refused under the box and the video is kept', () => {
+  show([embedFields[0] as Field], embedData());
+  click('#f-video .actions button');
+  type('input#f-video', 'https://www.dailymotion.com/video/x8abc');
+  expect(q('#f-video-paste').textContent).toBe(
+    'We don’t recognise this link. Supported: YouTube, Vimeo, Google Maps.',
+  );
+  expect(q('input#f-video').getAttribute('aria-describedby')).toBe('f-video-paste f-video-keep');
+  expect(root.video).toEqual({
+    provider: 'youtube',
+    id: 'dQw4w9WgXcQ',
+    title: 'Walkthrough video',
+    start: 42,
+  });
+  expect(q('.media-card .badge').textContent).toBe('YouTube');
+  click('.media-card .actions button');
+  expect(document.querySelector('#f-video-paste')).toBeNull();
+  expect(q('#f-video .badge').textContent).toBe('YouTube');
+});
+
+test('embed: a recognised link replaces the whole value, title and all', () => {
+  show([embedFields[0] as Field], embedData());
+  click('#f-video .actions button');
+  type('input#f-video', 'https://vimeo.com/76979871');
+  expect(root.video).toEqual({ provider: 'vimeo', id: '76979871' });
+  expect(q('#f-video .badge').textContent).toBe('Vimeo');
+  expect(document.querySelector('#f-video .thumb img')).toBeNull();
+});
+
+// axe scores nothing on this: a control that replaces itself takes the reader's place with it,
+// so a keyboard is left on the body in the middle of a long form.
+test('embed: Change takes the focus into the box and Keep this one gives it back', async () => {
+  show([embedFields[0] as Field], embedData());
+  click('#f-video-change');
+  await tick();
+  await tick();
+  expect(document.activeElement?.id).toBe('f-video');
+  click('.media-card .actions button');
+  await tick();
+  await tick();
+  expect(document.activeElement?.id).toBe('f-video-change');
+});
+
+test('embed: Remove empties the field', () => {
+  show([embedFields[0] as Field], embedData());
+  click('#f-video .actions button:last-of-type');
+  expect(snap().video).toBeUndefined();
+  expect(q('input#f-video').getAttribute('placeholder')).toBe(
+    'Paste a YouTube, Vimeo or Google Maps link',
+  );
+});
+
+// The provider and the id are the same in every language; the title is what the shipped
+// `<Embed />` puts on the iframe for a screen reader, so it is the half a translation owns.
+test('embed: a translation is offered the title and nothing else', () => {
+  root = embedData();
+  app = mount(Fields, {
+    target: document.body,
+    props: {
+      fields: [embedFields[0] as Field],
+      translating: true,
+      locale: 'de',
+      get root() {
+        return root;
+      },
+      set root(v) {
+        root = v;
+      },
+    },
+  });
+  flushSync();
+  expect(q('#f-video .badge').textContent).toBe('YouTube');
+  expect(document.querySelector('input#f-video')).toBeNull();
+  expect(document.querySelector('#f-video .actions')).toBeNull();
+  expect(document.querySelector('input#f-video\\.start')).toBeNull();
+  type('input#f-video\\.title', 'Rundgang');
+  expect(root.video).toEqual({
+    provider: 'youtube',
+    id: 'dQw4w9WgXcQ',
+    title: 'Rundgang',
+    start: 42,
+  });
+});
+
+test('seo says why it is read-only', () => {
+  show([{ path: ['thing'], label: 'Thing', type: 'seo', required: false } as Field], {});
+  expect(q('#f-thing-hint').textContent).toBe(
+    'SEO settings can be changed from Phase 4. Shown as stored.',
+  );
   expect(q('#f-thing').getAttribute('aria-describedby')).toBe('f-thing-hint');
 });
 
@@ -863,7 +968,7 @@ test('a field the schema refuses is marked, described and still editable', () =>
 // saying what is wrong is all the screen can do — and it must not lose the hint that says so.
 test('a read-only structured field keeps its hint next to the error', () => {
   show(
-    [{ path: ['tour'], label: 'Tour', type: 'embed', required: true }],
+    [{ path: ['tour'], label: 'Tour', type: 'seo', required: true }],
     {},
     {},
     {

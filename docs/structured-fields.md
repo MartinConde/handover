@@ -143,12 +143,20 @@ row shows the entry's title beside the path it stores, and Change reopens the se
 language that is being translated is not shown the field at all — an entry points at the
 same entry in every language.
 
-`embed` and `seo` still show their stored value as read-only JSON until their pickers
-arrive, under one line naming the release that brings the editor. It is read and written
-back untouched.
+`embed` is one box: paste a YouTube, Vimeo or Google Maps link and it becomes a card with
+the provider's name, the id that was stored and — for YouTube — the provider's own still.
+Under it are the `title` the frame is named by and the second the video starts at. **Change**
+puts the box back with the card still under it, so a link that is not recognised leaves the
+video you had; a link from anywhere else is refused with the list of what is accepted, and
+nothing is stored until one parses. A language that is being translated gets the title and
+nothing else — the video is the same in every language. What the page does with the value is
+[`<Embed />`](rendering.md#videos-and-maps).
 
-Make one of those **required** — `video: embed` — and a new entry cannot satisfy it from
-the form until that picker ships. Nothing you type is lost: the draft is stored anyway and
+`seo` still shows its stored value as read-only JSON until its panel arrives, under one line
+naming the release that brings the editor. It is read and written back untouched.
+
+Make it **required** — `seo: seo` — and a new entry cannot satisfy it from
+the form until that panel ships. Nothing you type is lost: the draft is stored anyway and
 the field is marked as a problem. What you cannot do is publish that entry, so keep a field
 required only when your site really cannot render without it, and use `.optional()` while
 the editor for it is still to come
