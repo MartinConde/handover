@@ -1,5 +1,11 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { deeplTranslate, fieldAddress, keptMachine, machineFilled } from './translate.js';
+import {
+  deeplTranslate,
+  fieldAddress,
+  fieldPosition,
+  keptMachine,
+  machineFilled,
+} from './translate.js';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -121,4 +127,25 @@ test('a fill makes the group it needs, and names no path it could not write', ()
   });
   expect(filled.seo).toEqual({ description: 'Ein Haus' });
   expect(filled._machine).toEqual(['seo.description']);
+});
+
+test('an address is read back to where the form draws the field, wherever its row now sits', () => {
+  expect(fieldPosition('default', 'blocks[_id=q1w2e3r4].body', page)).toEqual([
+    'blocks',
+    '1',
+    'body',
+  ]);
+  const moved = { ...page, blocks: [page.blocks[1], page.blocks[0]] };
+  expect(fieldPosition('default', 'blocks[_id=q1w2e3r4].body', moved)).toEqual([
+    'blocks',
+    '0',
+    'body',
+  ]);
+  expect(fieldPosition('default', 'tags[2]', { tags: ['a', 'b', 'c'] })).toEqual(['tags', '2']);
+});
+
+test('an address whose row is gone has no position', () => {
+  expect(
+    fieldPosition('default', 'blocks[_id=q1w2e3r4].body', { ...page, blocks: [page.blocks[0]] }),
+  ).toBeUndefined();
 });

@@ -162,12 +162,15 @@ const verdict = $derived(
       : ' — nothing is in the way.',
 );
 
-// Where a result is answered: the entry it is in, and the panel that field is edited on. A
-// global is edited on the site screen and has no tabs.
-const goTo = (item: CheckItem) => {
+// Where a result is answered: the entry it is in, the panel that field is edited on, and the
+// field itself for the editor to land on — addressed the way the check names it, so it still
+// lands after its block has been moved. A global is edited on the site screen and has no tabs.
+const goTo = (item: CheckItem & { locales: string[] }) => {
   const [collection = '', slug = ''] = item.entry.split('/');
-  if (collection === 'globals') return `/admin/site/${slug}`;
-  return `/admin/c/${collection}/${slug}${item.fieldPath.startsWith('seo') ? '/seo' : ''}`;
+  const [locale] = item.locales;
+  const query = new URLSearchParams({ field: item.fieldPath, ...(locale ? { locale } : {}) });
+  if (collection === 'globals') return `/admin/site/${slug}?${query}`;
+  return `/admin/c/${collection}/${slug}${item.fieldPath.startsWith('seo') ? '/seo' : ''}?${query}`;
 };
 
 // "3 pages · 2 listings · +1 redirect" — the collections behind the entries, in the order they

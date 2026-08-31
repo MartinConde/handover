@@ -256,4 +256,10 @@ export {
   verification,
 } from './tables.js';
 export type { Translate } from './translate.js';
-export { deeplTranslate, fieldAddress, keptMachine, machineFilled } from './translate.js';
+export {
+  deeplTranslate,
+  fieldAddress,
+  fieldPosition,
+  keptMachine,
+  machineFilled,
+} from './translate.js';

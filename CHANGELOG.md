@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Go to field lands on the field.** A pre-publish check's link opens the entry with that
+  control focused — after the block has been moved, too, since the link names the field the way
+  the file does — and, for a result about a translation, with that language open beside the form
+  ([Pending changes](docs/pending-changes.md#checks-before-a-publish)).
 - **Docs: the admin API is seven pages instead of one 800-line page** — [the hub](docs/admin-api.md)
   with the conventions, locks and the activity read, and a page each for entries, entry lifecycle,
   drafts, publishing, media and settings.

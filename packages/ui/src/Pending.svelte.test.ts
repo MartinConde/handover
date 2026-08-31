@@ -702,10 +702,15 @@ test('the checks are grouped under the entry they are about, worst first', async
   expect(q(root, '.checks-sum')?.textContent?.replace(/\s+/g, ' ')).toBe(
     '1 error · 1 warning · 1 note. The error has to go first. Checked over the 2 entries you have selected, and again when you press Publish.',
   );
-  // The field is opened where it is edited: the entry, and the SEO panel for a search field.
+  // The field is opened where it is edited: the entry, the SEO panel for a search field, and
+  // the address and language of the field itself for the editor to land on.
   expect(
     Array.from(root.querySelectorAll('.check-group .notice a'), (a) => a.getAttribute('href')),
-  ).toEqual(['/admin/c/listings/mill-house', '/admin/c/pages/home', '/admin/c/pages/home/seo']);
+  ).toEqual([
+    '/admin/c/listings/mill-house?field=photo.src&locale=en',
+    '/admin/c/pages/home?field=photo.alt&locale=de',
+    '/admin/c/pages/home/seo?field=seo.description&locale=en',
+  ]);
 });
 
 // A site with no SEO defaults gets two notes on every entry it publishes, and twenty entries

@@ -107,6 +107,33 @@ export function fieldAddress(_siteId: string, path: readonly string[], root: unk
   return out;
 }
 
+/**
+ * `fieldAddress` read back: where the form draws the field that address names, as the steps
+ * down the data — `['blocks', '1', 'heading']` — with each row looked up by its id where it
+ * sits *now*. A row the data no longer has ends the walk.
+ */
+export function fieldPosition(
+  _siteId: string,
+  address: string,
+  root: unknown,
+): string[] | undefined {
+  let node: unknown = root;
+  const out: string[] = [];
+  for (const { row, key } of stepsOf(address)) {
+    if (row !== undefined) {
+      if (!Array.isArray(node)) return undefined;
+      const i = node.findIndex((r, n) => rowKey(r, n) === row);
+      if (i < 0) return undefined;
+      out.push(String(i));
+      node = node[i];
+    } else {
+      out.push(key ?? '');
+      node = isObject(node) ? node[key ?? ''] : undefined;
+    }
+  }
+  return out;
+}
+
 // `blocks[_id=k3nf9a2p].heading` split into the steps a walk takes: a key, or a row of the
 // array under the key before it.
 const STEPS = /\[(?:_id=)?([^\]]+)\]|([^.[\]]+)/g;

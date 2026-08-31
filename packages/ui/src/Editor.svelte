@@ -4,12 +4,13 @@ import {
   entryName,
   entryUrl,
   type Field,
+  fieldPosition,
   LOCK_TTL,
   resolveSeo,
   type SeoDefaultsValue,
   syncLocale,
 } from '@handover/core';
-import { tick } from 'svelte';
+import { onMount, tick } from 'svelte';
 import DriftPanel from './Drift.svelte';
 import Fields from './Fields.svelte';
 import History from './History.svelte';
@@ -560,6 +561,33 @@ function goTo(path: string | undefined) {
 }
 const goToFirst = () => goTo(missing[0]);
 
+// The drawer's *Go to field*: `?field=blocks[_id=k3nf9a2p].heading&locale=de`. The address
+// names the rows by id, the form draws them by position, and a German file is edited in the
+// second column — so the column is opened first and the control looked for once it is drawn.
+// Read when the entry opens and whenever the address moves under it, since the drawer links
+// to the entry that is already on screen as readily as to another.
+function fromAddress() {
+  const query = new URLSearchParams(location.search);
+  const field = query.get('field');
+  if (!field) return;
+  const of = query.get('locale') || entry.sourceLocale;
+  const inColumn = of !== entry.sourceLocale && entry.locales.includes(of) && !untranslated(of);
+  if (inColumn && shown !== of) {
+    leaving(() => {
+      locale = of;
+      side = true;
+    });
+  } else if (!inColumn && alone) {
+    leaving(() => {
+      locale = entry.sourceLocale;
+    });
+  }
+  const at = fieldPosition('default', field, inColumn ? (entry.translations[of] ?? {}) : data);
+  if (!at) return;
+  void tick().then(() => land(document.getElementById(`${inColumn ? 't' : 'f'}-${at.join('.')}`)));
+}
+onMount(fromAddress);
+
 // Publishing is the drawer's job, over every draft at once; the entry's own edit only has
 // to be in D1 before it opens, so a click inside the autosave window is not lost.
 // The header's half of publishing: this entry, whole, and nothing else anybody has been
@@ -743,6 +771,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     else if (taking) cancelTake();
   }}
   onfocus={recheck}
+  onpopstate={fromAddress}
 />
 <svelte:document onvisibilitychange={recheck} />
 

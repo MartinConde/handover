@@ -1879,3 +1879,51 @@ test('the problem count jumps to the SEO tab for a problem the panel owns', asyn
 
   expect(location.pathname).toBe('/admin/c/listings/seaview-cottage/seo');
 });
+
+// The drawer's *Go to field* names the field the way `_machine` does — by the ids of the rows
+// above it — so the address still lands after the block has been moved, and the form draws
+// it by its position: the two are read together here.
+const movedBlock = {
+  ...bilingual,
+  data: {
+    ...bilingual.data,
+    body: [
+      { _type: 'hero', _id: 'a1b2c3d4', heading: 'First' },
+      { _type: 'hero', _id: 'k3nf9a2p', heading: 'Above the harbour' },
+    ],
+  },
+};
+const at = (address: string) => history.replaceState({}, '', address);
+afterEach(() => at('/admin/c/listings/seaview-cottage'));
+
+test('the field the address names is focused when the entry opens, wherever its row now sits', async () => {
+  at('/admin/c/listings/seaview-cottage?field=body%5B_id%3Dk3nf9a2p%5D.heading');
+  show({ entry: movedBlock });
+  await tick();
+  flushSync();
+
+  expect(document.activeElement?.id).toBe('f-body.1.heading');
+});
+
+test('a result about another language opens that language beside the form and lands in it', async () => {
+  at('/admin/c/listings/seaview-cottage?field=body%5B_id%3Dk3nf9a2p%5D.heading&locale=de');
+  const root = show({ entry: movedBlock });
+  await tick();
+  flushSync();
+
+  expect($(root, 'input#f-title')).not.toBeNull();
+  expect(document.activeElement?.id).toBe('t-body.0.heading');
+});
+
+test('the field is landed on when the address changes under an open entry', async () => {
+  show({ entry: movedBlock });
+  await tick();
+  expect(document.activeElement?.id).not.toBe('f-title');
+
+  history.pushState({}, '', '/admin/c/listings/seaview-cottage?field=title');
+  dispatchEvent(new PopStateEvent('popstate'));
+  await tick();
+  flushSync();
+
+  expect(document.activeElement?.id).toBe('f-title');
+});
