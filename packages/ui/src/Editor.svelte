@@ -1120,7 +1120,8 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         {#if many && going.length}
           <ul class="publish-set">
             <li>
-              <span class="chips" aria-label="Languages">
+              <span class="visually-hidden">Languages:</span>
+              <span class="chips">
                 {#each going as of (of)}<span class="chip">{of.toUpperCase()}</span>{/each}
               </span>
               {going.length === 1

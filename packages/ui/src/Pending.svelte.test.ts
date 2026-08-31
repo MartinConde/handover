@@ -708,6 +708,23 @@ test('the checks are grouped under the entry they are about, worst first', async
   ).toEqual(['/admin/c/listings/mill-house', '/admin/c/pages/home', '/admin/c/pages/home/seo']);
 });
 
+// A site with no SEO defaults gets two notes on every entry it publishes, and twenty entries
+// make forty lines nobody reads past. A note is worth a read, not a wall: they fold under a
+// count, and what stops or changes a publish stays on the page.
+test('notes fold under a count while errors and warnings stay listed', async () => {
+  vi.stubGlobal('fetch', checking());
+  const root = show();
+  await settled();
+
+  expect(
+    Array.from(root.querySelectorAll('.check-group > .notice .sev'), (n) => n.textContent),
+  ).toEqual(['Error', 'Warning']);
+  const fold = q<HTMLDetailsElement>(root, '.check-group details.check-notes');
+  expect(fold?.open).toBe(false);
+  expect(fold?.querySelector('summary')?.textContent?.replace(/\s+/g, ' ').trim()).toBe('1 note');
+  expect(fold?.querySelectorAll('.notice-info')).toHaveLength(1);
+});
+
 test('an error stops the publish and warnings never do', async () => {
   const fetchMock = checking();
   vi.stubGlobal('fetch', fetchMock);

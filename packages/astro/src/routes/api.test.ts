@@ -4288,7 +4288,12 @@ test('promoting somebody is a role-change event', async () => {
   await memberPost('members/u2/role', { role: 'owner' }, owner);
 
   expect(logged).toEqual([
-    { userId: 'u1', kind: 'role-change', subject: 'u2', detail: { role: 'owner' } },
+    {
+      userId: 'u1',
+      kind: 'role-change',
+      subject: 'u2',
+      detail: { role: 'owner', name: 'anna@example.com' },
+    },
   ]);
 });
 
@@ -4303,7 +4308,12 @@ test('demoting an owner is a role-change event too', async () => {
   await memberPost('members/u2/role', { role: 'editor' }, owner);
 
   expect(logged).toEqual([
-    { userId: 'u1', kind: 'role-change', subject: 'u2', detail: { role: 'editor' } },
+    {
+      userId: 'u1',
+      kind: 'role-change',
+      subject: 'u2',
+      detail: { role: 'editor', name: 'kim@example.com' },
+    },
   ]);
 });
 

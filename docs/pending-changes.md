@@ -66,6 +66,8 @@ the collection schema is not done with, and languages that have drifted apart.
   that only an unselected draft would create is reported, and one to a page a selected draft
   creates is not
 - The pass runs again when Publish is pressed, since the drawer may have been open a while
+- Errors and warnings are always listed; notes fold under *N notes* per entry, since a site with
+  no SEO defaults gets two on every entry it publishes
 - Every item but the machine-translation note carries **Go to field**, which opens the entry
   where that field is edited
 - A pass that could not be run says so and holds nothing back: a lint nobody could run is not

@@ -1224,6 +1224,11 @@ input[type="date"].input { padding-right: var(--s-3); }
 .checks-sum { padding: 0 var(--s-2); font-size: var(--text-xs); color: var(--ink-2); }
 .check-group { display: grid; gap: var(--s-2); }
 .check-group > h4 { margin: var(--s-2) 0 0; padding: 0 var(--s-2); font-size: var(--text-sm); font-weight: 600; }
+.check-notes { display: grid; gap: var(--s-2); }
+.check-notes > summary { display: flex; align-items: center; gap: var(--s-2); padding: 0 var(--s-2); min-height: 30px; list-style: none; cursor: pointer; font-size: var(--text-sm); color: var(--ink-2); }
+.check-notes > summary::-webkit-details-marker { display: none; }
+.check-notes > summary::before { content: "▸"; color: var(--ink-3); }
+.check-notes[open] > summary::before { content: "▾"; }
 .check-group > h4 .badge { margin-left: var(--s-1); vertical-align: 1px; }
 .checks .notice .sev { font-weight: 600; }
 .checks .notice code { font-family: var(--font-mono); font-size: var(--text-xs); }

@@ -75,7 +75,8 @@ async function load() {
           {/if}
           {#if locales.length > 1}
             <div class="meta">
-              <span class="chips" aria-label="Languages">
+              <span class="visually-hidden">Languages:</span>
+              <span class="chips">
                 {#each locales as locale (locale)}
                   <span
                     class="chip"

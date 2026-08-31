@@ -331,6 +331,18 @@ test('a row says which languages it has been written in', async () => {
 
 // A language somebody turned off for the entry has no file and never will: struck through
 // rather than listed as one still to write.
+// A bare span may not carry an aria-label; the word is in the sentence instead, as History
+// already had it, and axe stops flagging every row.
+test('the language chips are introduced by a word, not labelled on a span', async () => {
+  api(ENTRIES, {}, ['en', 'de']);
+  const root = show();
+  await tick();
+
+  const chips = q(root, '.row .chips');
+  expect(chips?.hasAttribute('aria-label')).toBe(false);
+  expect(chips?.previousElementSibling?.textContent).toBe('Languages:');
+});
+
 test('a language turned off for an entry is struck through, not counted as missing', async () => {
   api([{ ...ENTRIES[0], offered: ['en'] }], {}, ['en', 'de']);
   const root = show();

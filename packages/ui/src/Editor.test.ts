@@ -294,7 +294,7 @@ test('Publish this entry names the language files it is about to commit', async 
 
   expect($(root, '.dialog h2')?.textContent).toBe('Publish Seaview Cottage?');
   expect($(root, '.dialog .publish-set')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-    'ENDE All 2 language files',
+    'Languages: ENDE All 2 language files',
   );
   vi.unstubAllGlobals();
 });

@@ -123,6 +123,18 @@ test('a role change names the member it was about rather than their id', async (
   expect(sentences(await show())).toEqual(['Anna Berg made Jonas Weber an owner.']);
 });
 
+// The dashboard draws the same rows with no member list — an owner-only read it does not
+// make — so the row carries the name it was about at the time, and a member since renamed or
+// removed is still named.
+test('a role change names the member from the row itself when there is no member list', async () => {
+  server({
+    events: [ev('role-change', { subject: 'u9', detail: { role: 'owner', name: 'Jonas Weber' } })],
+    cursor: null,
+  });
+
+  expect(sentences(await show())).toEqual(['Anna Berg made Jonas Weber an owner.']);
+});
+
 test('a role change about somebody since removed still prints no id', async () => {
   server({
     events: [ev('role-change', { subject: 'u9', detail: { role: 'owner' } })],

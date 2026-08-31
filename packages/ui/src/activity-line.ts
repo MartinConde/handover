@@ -52,9 +52,11 @@ const MESSAGE: Record<string, string> = {
 export const who = (event: ActivityEvent) =>
   event.user ? event.user.name || event.user.email || 'A removed member' : 'System';
 /** The subject of an Accounts event is a member id; the list an owner already has gives it a name. */
-const named = (id: string | null, people: Person[]) => {
+// The member list first, where the screen has one; then the name the row was written with, so
+// the dashboard and an editor's own view name people too; a row with neither says nothing.
+const named = (id: string | null, people: Person[], written?: string) => {
   const found = people.find((p) => p.id === id);
-  return found ? found.name || found.email : 'a member';
+  return found ? found.name || found.email : written || 'a member';
 };
 
 /** Whoever this admin knows about, which only an owner is given: an editor names nobody. */
@@ -129,7 +131,7 @@ export function said(event: ActivityEvent, people: Person[] = []): Said {
       };
     case 'role-change':
       return {
-        lead: `${actor} made ${named(event.subject, people)} ${ROLES[str(d, 'role') ?? ''] ?? 'a member'}.`,
+        lead: `${actor} made ${named(event.subject, people, str(d, 'name'))} ${ROLES[str(d, 'role') ?? ''] ?? 'a member'}.`,
       };
     case 'member-removed': {
       const address = str(d, 'email') ?? 'somebody';

@@ -279,7 +279,8 @@ async function done() {
             <div class="td" role="cell" data-label="What went">
               {row.whole ? `The whole ${singular}` : 'One language'}
               {#if row.locales.length}
-                <span class="chips" aria-label="Languages">
+                <span class="visually-hidden">Languages:</span>
+                <span class="chips">
                   {#each row.locales as locale (locale)}
                     <span class="chip">{locale.toUpperCase()}</span>
                   {/each}
@@ -367,7 +368,8 @@ async function done() {
           </div>
           {#if many}
             <div class="td" role="cell" data-label="Languages">
-              <span class="chips" aria-label="Languages">
+              <span class="visually-hidden">Languages:</span>
+              <span class="chips">
                 {#each locales as locale (locale)}
                   <span
                     class="chip"

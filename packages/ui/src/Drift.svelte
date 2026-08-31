@@ -137,7 +137,8 @@ async function apply() {
         <header>
           <span class="label" id="drift-{i}-h">{row.type ?? 'Row'}</span>
           <span class="type">{row.path}</span>
-          <span class="chips" aria-label="Languages">
+          <span class="visually-hidden">Languages:</span>
+          <span class="chips">
             {#each shown(row) as locale (locale)}
               <span class="chip" class:chip-missing={!row.in.includes(locale)}>
                 {locale.toUpperCase()}

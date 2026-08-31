@@ -4,6 +4,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Notes fold in the drawer.** The pre-publish checks list errors and warnings as before and put
+  the notes of each entry under *N notes*, opened on demand — a site with no SEO defaults gets two
+  per entry, and twenty entries made forty lines ([Pending changes](docs/pending-changes.md#checks-before-a-publish)).
+- **A role change names the member in the row itself**, so the dashboard's activity tile — which
+  has no member list — reads *made Jonas Weber an owner* rather than *made a member an owner*.
+- The language chips in the entry list, the drawer, the editor, Site settings, the drift panel and
+  the conflict view are introduced by a hidden *Languages:* word instead of an `aria-label` on a
+  plain `<span>`, which assistive technology is allowed to ignore.
 - **Throwing away somebody's unpublished changes is logged.** Discard in the drawer, and a version
   restored over an open draft, each write a `draft-discard` row naming the entry and the languages
   that went; a restore's row also names the commit it restored

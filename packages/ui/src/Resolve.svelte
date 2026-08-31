@@ -192,7 +192,7 @@ const said = (change: Change): string => {
           <div class="head">
             <span class="name">{q.label}</span>
             {#if q.locale}
-              <span class="chips" aria-label="Language"><span class="chip">{q.locale.toUpperCase()}</span></span>
+              <span class="visually-hidden">Language:</span><span class="chips"><span class="chip">{q.locale.toUpperCase()}</span></span>
             {:else}
               <span class="badge">Same in every language</span>
             {/if}

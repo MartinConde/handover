@@ -825,11 +825,13 @@ async function setMemberRole(
       return refused(err);
     }
   }
+  // Named in the row as well as by id: the dashboard draws these without the member list, which
+  // only an owner is given, and a member since renamed or removed still reads as themselves.
   await logActivity('default', database, {
     userId: session.user.id,
     kind: 'role-change',
     subject: id,
-    detail: { role },
+    detail: { role, name: member.name || member.email },
   });
   return Response.json({ ok: true });
 }

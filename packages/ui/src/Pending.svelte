@@ -376,6 +376,25 @@ const selectAll = () => (toggled = held.map((e) => e.key));
 const selectNone = () => (toggled = ready.map((e) => e.key));
 </script>
 
+<!-- One line of the checks: what is wrong, in which languages, and where it is edited. -->
+{#snippet found_(entry: Entry, item: CheckItem & { locales: string[] })}
+  <div class="notice notice-{TINT[item.severity]}">
+    <span class="sev">{SEVERITY[item.severity]}</span>
+    {#if entry.locales.length > 1}
+      <span class="visually-hidden">Languages:</span>
+      <span class="chips">
+        {#each item.locales as of (of)}<span class="chip">{of.toUpperCase()}</span>{/each}
+      </span>
+    {/if}
+    <span class="msg">{item.message}</span>
+    <!-- The machine-translation note is about a field the client has read and not about a
+         mistake in it, so it is the one with nowhere to go. -->
+    {#if item.fieldPath && item.check !== 'translation-machine'}
+      <a class="btn-link" href={goTo(item)} onclick={onclose}>Go to field</a>
+    {/if}
+  </div>
+{/snippet}
+
 <svelte:window
   onkeydown={(e) =>
     e.key === 'Escape' &&
@@ -410,7 +429,8 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
         <span class="name">{named(entry)}</span>
         <span class="badge">{capitalise(entry.collection)}</span>
         {#if entry.locales.length}
-          <span class="chips" aria-label="Languages">
+          <span class="visually-hidden">Languages:</span>
+          <span class="chips">
             {#each entry.locales as of (of)}<span class="chip">{of.toUpperCase()}</span>{/each}
           </span>
         {/if}
@@ -561,25 +581,22 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
                 selected, and again when you press Publish.
               </p>
               {#each groups as group (group.entry.key)}
+                {@const notes = group.items.filter((item) => item.severity === 'info')}
                 <div class="check-group">
                   <h4>{named(group.entry)} <span class="badge">{capitalise(group.entry.collection)}</span></h4>
-                  {#each group.items as item (item.path + item.fieldPath + item.check)}
-                    <div class="notice notice-{TINT[item.severity]}">
-                      <span class="sev">{SEVERITY[item.severity]}</span>
-                      {#if group.entry.locales.length > 1}
-                        <span class="visually-hidden">Languages:</span>
-                        <span class="chips">
-                          {#each item.locales as of (of)}<span class="chip">{of.toUpperCase()}</span>{/each}
-                        </span>
-                      {/if}
-                      <span class="msg">{item.message}</span>
-                      <!-- The machine-translation note is about a field the client has read and
-                           not about a mistake in it, so it is the one with nowhere to go. -->
-                      {#if item.fieldPath && item.check !== 'translation-machine'}
-                        <a class="btn-link" href={goTo(item)} onclick={onclose}>Go to field</a>
-                      {/if}
-                    </div>
+                  {#each group.items.filter((item) => item.severity !== 'info') as item (item.path + item.fieldPath + item.check)}
+                    {@render found_(group.entry, item)}
                   {/each}
+                  <!-- A note is worth a read, not a wall: a site with no SEO defaults gets two
+                       on every entry, and what stops or changes a publish has to stay in view. -->
+                  {#if notes.length}
+                    <details class="check-notes">
+                      <summary>{plural(notes.length, 'notes')}</summary>
+                      {#each notes as item (item.path + item.fieldPath + item.check)}
+                        {@render found_(group.entry, item)}
+                      {/each}
+                    </details>
+                  {/if}
                 </div>
               {/each}
             {/if}

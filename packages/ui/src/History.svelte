@@ -266,9 +266,7 @@ const initials = (name: string) =>
               >{version.summary}</button>
               <span class="sub">
                 <span>{when(version.date)}{version.author ? ` · ${version.author}` : ''}</span>
-                <!-- A bare span may not carry an aria-label, so the word is in the sentence.
-                     The seven other screens still label the wrapper; that is one fix for all
-                     of them, not this row's. -->
+                <!-- A bare span may not carry an aria-label, so the word is in the sentence. -->
                 <span class="visually-hidden">Languages:</span>
                 <span class="chips">
                   {#each version.locales as of (of)}
