@@ -1326,6 +1326,10 @@ input[type="date"].input { padding-right: var(--s-3); }
      These take the entry editor from ~190px of sideways overflow at 390px down to about 2, which
      the deepest nesting on the demo's home page still has — noted, not chased further. */
   :root .row-card .row-fields { grid-template-columns: minmax(0, 1fr); }
+  /* A second-level row squeezes its fields to ~133px beside the controls; on a phone the
+     controls go above the fields instead, the way the entry list's row menu moved. */
+  :root .row-card { grid-template-columns: minmax(0, 1fr); }
+  :root .row-card > .row-controls { order: -1; justify-content: flex-end; }
   :root .block-picker { min-width: 0; }
   :root .list, :root .pop-anchor { min-width: 0; }
   :root .list-toolbar .search { max-width: none; }

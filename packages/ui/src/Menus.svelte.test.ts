@@ -326,11 +326,37 @@ const key = async (target: Element | Document, code: string) => {
 };
 const grip = (name: string) =>
   q<HTMLButtonElement>(`[aria-label="Reorder ${name} — press space, then the arrow keys"]`);
+const lifted = () => !!document.querySelector('[data-dnd-overlay] .drag-proxy');
+const marked = () => !!document.querySelector('.drop-line, .drop-into, .drop-blocked');
+const until = async (ready: () => boolean, what: string) => {
+  for (let n = 0; n < 150; n++) {
+    if (ready()) return;
+    await new Promise((r) => setTimeout(r, 10));
+    flushSync();
+  }
+  throw new Error(`never ${what}`);
+};
+// The lift crosses a requestAnimationFrame and ↑ ↓ resolve their target in a promise, so on a
+// slow machine a keydown can land in the gap and be dropped. Walk on state, not on time: wait
+// for the lift, and press again if a press fell before the drag was ready to hear it.
+const arrow = async (dir: 'ArrowUp' | 'ArrowDown') => {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await key(document, dir);
+    for (let n = 0; n < 30; n++) {
+      if (marked()) return;
+      await new Promise((r) => setTimeout(r, 10));
+      flushSync();
+    }
+  }
+  throw new Error(`no slot after ${dir}`);
+};
 const keyMove = async (name: string, steps: number) => {
+  await until(() => !lifted(), 'settled from the drag before');
   await key(grip(name), 'Space');
-  for (let n = 0; n < Math.abs(steps); n++)
-    await key(document, steps > 0 ? 'ArrowDown' : 'ArrowUp');
+  await until(lifted, 'lifted');
+  for (let n = 0; n < Math.abs(steps); n++) await arrow(steps > 0 ? 'ArrowDown' : 'ArrowUp');
   await key(document, 'Space');
+  await until(() => !lifted(), 'dropped');
 };
 const pointer = async (target: Element | Document, type: string, y: number, x = 20) => {
   target.dispatchEvent(
@@ -519,7 +545,8 @@ test('an escaped drag leaves the menu untouched and takes the indicator with it'
   const start = written();
 
   await key(grip('Home'), 'Space');
-  await key(document, 'ArrowDown');
+  await until(lifted, 'lifted');
+  await arrow('ArrowDown');
   expect(document.querySelector('.drop-line')).not.toBeNull();
 
   await key(document, 'Escape');
@@ -533,7 +560,8 @@ test('a keyboard drag crosses into a sub-menu: the slot between two of its rows'
   show(nested());
 
   await key(grip('Contact'), 'Space');
-  await key(document, 'ArrowUp');
+  await until(lifted, 'lifted');
+  await arrow('ArrowUp');
   await key(document, 'Space');
 
   expect(menus[0]?.items).toHaveLength(1);
@@ -552,7 +580,8 @@ test('→ during a keyboard drag asks for one level deeper, ← brings it back',
   ]);
 
   await key(grip('Home'), 'Space');
-  await key(document, 'ArrowDown');
+  await until(lifted, 'lifted');
+  await arrow('ArrowDown');
   expect(document.querySelector('.drop-line')).not.toBeNull();
 
   await key(document, 'ArrowRight');
