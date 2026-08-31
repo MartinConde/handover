@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Pre-publish checks, the engine.** `runChecks()` lints the drafts a publish is about to
+  commit — internal links to pages that are not there, pictures with no bytes behind them or
+  archived in the library, empty alt text, a required translation left blank, a translation
+  made from an older source, machine-filled values nobody has read, thin SEO and menu items
+  pointing at pages that are gone — as `{ check, path, fieldPath, severity, message }`, warnings
+  and notes rather than refusals. Nothing calls it yet: the results are drawn in the
+  pending-changes drawer next.
 - **A search and sharing panel.** A `seo` field is now a tab of its own beside Content and
   History, drawing a search title and a description with a line saying how much of each a search
   engine shows, the social image under a fixed 1.91:1 preset at 1200 px, a *Hide this page from

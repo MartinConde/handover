@@ -365,6 +365,20 @@ const object = async (
 ) => fetch(await signer(store).sign(objectUrl(store, key), { method, headers }));
 
 /**
+ * Whether the bucket still has these bytes. Asked only for a key the table has no row for —
+ * an object with no row is what the reconciliation job recovers within the hour, and a key
+ * with neither is a picture the page would draw as a broken image.
+ */
+export async function objectExists(
+  store: R2Store,
+  key: string,
+  deps: { fetch?: typeof globalThis.fetch } = {},
+): Promise<boolean> {
+  const { fetch = globalThis.fetch } = deps;
+  return (await object(store, key, 'HEAD', fetch)).ok;
+}
+
+/**
  * Step 6: what arrived, against what was declared. A browser holds an unsigned PUT for five
  * minutes, so this is the only thing standing between the bucket and 12MB of anything — an
  * object that is not what was asked for is deleted rather than left for the reconciliation job,

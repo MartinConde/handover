@@ -28,6 +28,15 @@ export {
 export type { BuildState, BuildStatus, WorkerBuilds } from './builds.js';
 export { commitBuild } from './builds.js';
 export type {
+  CheckEntry,
+  CheckInput,
+  CheckName,
+  CheckResult,
+  CheckSeverity,
+  CheckSite,
+} from './checks.js';
+export { CHECKS, runChecks } from './checks.js';
+export type {
   AstroContent,
   ContentEntry,
   ContentSource,
@@ -172,6 +181,7 @@ export {
   mediaUsage,
   mediaUsesFrom,
   namedBy,
+  objectExists,
   presignUpload,
   ratioOf,
   setMediaDetails,
@@ -197,6 +207,7 @@ export {
   RICHTEXT_CONSTRUCTS,
   renderRichtext,
   richtextErrors,
+  richtextLinks,
   unsafeLinkScheme,
 } from './richtext.js';
 export type { Field, Form, JsonSchema, Translation } from './schema.js';

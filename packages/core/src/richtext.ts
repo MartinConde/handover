@@ -77,6 +77,25 @@ export function richtextErrors(_siteId: string, markdown: string, tier: Richtext
   return errors;
 }
 
+/**
+ * Every link target in a richtext value, read with the parser the page is rendered with — so
+ * the pre-publish link check sees the links the site sees and not what a regular expression
+ * makes of the markdown.
+ */
+export function richtextLinks(_siteId: string, markdown: string): string[] {
+  const tree = fromMarkdown(markdown, {
+    extensions: [gfm()],
+    mdastExtensions: [gfmFromMarkdown()],
+  });
+  const found: string[] = [];
+  const visit = (node: Nodes) => {
+    if (node.type === 'link') found.push(node.url);
+    if ('children' in node) for (const child of node.children) visit(child);
+  };
+  visit(tree);
+  return found;
+}
+
 const escapeHtml = (text: string) =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
