@@ -180,6 +180,54 @@ test('archiving is one button, and an archived picture is offered the way back',
   expect(q('.lib-side .actions .archive').textContent?.trim()).toBe('Unarchive');
 });
 
+const names = () =>
+  Array.from(document.body.querySelectorAll('.tile .name'), (n) => n.textContent?.trim());
+
+// The three toggles are over what is already loaded: the list carries the archived rows, and
+// recovered and unused are things the row itself says.
+test('the filters narrow the grid to the archived, the recovered and the unused', async () => {
+  media = [
+    item({ uses: [{ entry: 'pages/home', title: 'Home', href: '/admin/c/pages/home' }] }),
+    item({ id: 'b'.repeat(64), filename: 'old-banner.jpg', archived: true }),
+    item({ id: 'c'.repeat(64), filename: 'lighthouse.jpg', width: undefined, height: undefined }),
+  ];
+  await show();
+  expect(names()).toEqual(['front-of-house.jpg', 'old-banner.jpg', 'lighthouse.jpg']);
+
+  click('.filters [aria-pressed]:nth-of-type(1)');
+  expect(q('.filters [aria-pressed]:nth-of-type(1)').getAttribute('aria-pressed')).toBe('true');
+  expect(names()).toEqual(['old-banner.jpg']);
+  click('.filters [aria-pressed]:nth-of-type(1)');
+
+  click('.filters [aria-pressed]:nth-of-type(2)');
+  expect(names()).toEqual(['lighthouse.jpg']);
+  click('.filters [aria-pressed]:nth-of-type(2)');
+
+  click('.filters [aria-pressed]:nth-of-type(3)');
+  expect(names()).toEqual(['old-banner.jpg', 'lighthouse.jpg']);
+  expect(q('.list-toolbar .count').textContent?.trim()).toBe('2 unused images');
+});
+
+// The panel already has the button; the tile has it too, so a client clearing out the archive
+// need not open every picture to bring one back.
+test('an archived tile offers Unarchive on the tile itself', async () => {
+  media = [item({ archived: true })];
+  saved = item({ archived: false });
+  await show();
+  expect(q('.tile .tile-actions button').textContent?.trim()).toBe('Unarchive front-of-house.jpg');
+
+  click('.tile .tile-actions button');
+  await settle();
+
+  expect(asked.at(-1)).toMatchObject({
+    url: `/admin/api/media/${'a'.repeat(64)}`,
+    method: 'PATCH',
+    body: { archived: false },
+  });
+  expect(document.body.querySelector('.tile.is-archived')).toBeNull();
+  expect(document.body.querySelector('.tile .tile-actions')).toBeNull();
+});
+
 test('delete is off while the picture is used, and the line says by how many', async () => {
   media = [item({ uses: [{ entry: 'pages/home', title: 'Home', href: '/admin/c/pages/home' }] })];
   await show();

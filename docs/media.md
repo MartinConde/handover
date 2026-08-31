@@ -190,7 +190,9 @@ the object without a row and brings it back as *Recovered* within the hour.
 
 `/admin/media` is everything in the bucket as the table sees it: a grid of pictures, a list of
 files, and a panel for whichever one is open. Search matches the file name and the tags, and it
-is the table that searches — a name past the hundredth row is still found.
+is the table that searches — a name past the hundredth row is still found. Three toggles narrow
+the grid: **Archived**, **Recovered** (an object the hourly job found in the bucket with no
+record) and **Unused**; an archived tile carries its own **Unarchive** button.
 
 Under every picture is where it is used, read from a scan the build made of every content file
 with today's unpublished changes laid over it. It counts **entries**, so a listing carrying the

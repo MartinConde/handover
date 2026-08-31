@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Media library filters.** *Archived*, *Recovered* and *Unused* narrow the grid, and an archived
+  tile has its own **Unarchive** button ([Media](docs/media.md#the-library)).
 - **The entry list says who last touched each row** — *Edited by Anna 2h ago*, or *Published by
   Martin yesterday* — the line the dashboard and Site settings already carry, and it has a
   **Status** filter: all rows, the live ones, or the hidden ones

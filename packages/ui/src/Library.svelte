@@ -68,6 +68,25 @@ const count = (item: LibraryItem) => {
 // A row the reconciliation job wrote: an object that was in the bucket with nothing to say
 // what it is. A picture whose size nobody measured is the shape that takes.
 const recovered = (item: LibraryItem) => kind === 'images' && !(item.width && item.height);
+// Toggles over what is loaded: the list already carries the archived rows, and recovered and
+// unused are things the row itself says. On together they narrow together.
+let only = $state({ archived: false, recovered: false, unused: false });
+const shown = $derived(
+  items.filter(
+    (i) =>
+      (!only.archived || i.archived) &&
+      (!only.recovered || recovered(i)) &&
+      (!only.unused || !i.uses?.length),
+  ),
+);
+const filtering = $derived(only.archived || only.recovered || only.unused);
+const heading = $derived(
+  [
+    shown.length,
+    ...(['archived', 'recovered', 'unused'] as const).filter((f) => only[f]),
+    kind === 'images' ? 'images' : 'files',
+  ].join(' '),
+);
 /** Where the crops of this picture hold, in the percentages the dot and `object-position` want. */
 const dot = (item: LibraryItem) => [(item.focal?.[0] ?? 0.5) * 100, (item.focal?.[1] ?? 0.5) * 100];
 const when = (at?: number) =>
@@ -92,13 +111,15 @@ function closeDialog() {
 }
 
 /** Tags and the default alt are the library's own words, so they are saved as they are typed. */
-async function describe(details: {
-  tags?: string[];
-  alt?: string;
-  archived?: boolean;
-  focal?: [number, number];
-}) {
-  const item = chosen;
+async function describe(
+  details: {
+    tags?: string[];
+    alt?: string;
+    archived?: boolean;
+    focal?: [number, number];
+  },
+  item = chosen,
+) {
   if (!item) return;
   const res = await fetch(`/admin/api/media/${item.id}`, {
     method: 'PATCH',
@@ -111,7 +132,7 @@ async function describe(details: {
   }
   const saved = ((await res.json()) as { media: LibraryItem }).media;
   items = items.map((i) => (i.id === saved.id ? { ...i, ...saved } : i));
-  chosen = { ...item, ...saved };
+  if (chosen?.id === item.id) chosen = { ...item, ...saved };
 }
 
 function addTag() {
@@ -183,8 +204,15 @@ function show(next: 'images' | 'files') {
 
 <main class="main">
   <div class="list-toolbar">
-    <h1>Media <span class="count">{items.length} {kind === 'images' ? 'images' : 'files'}</span></h1>
+    <h1>Media <span class="count">{heading}</span></h1>
     <span class="spacer"></span>
+    <div class="filters">
+      <button class="filter" class:is-on={only.archived} type="button" aria-pressed={only.archived} onclick={() => (only.archived = !only.archived)}>Archived</button>
+      {#if kind === 'images'}
+        <button class="filter" class:is-on={only.recovered} type="button" aria-pressed={only.recovered} onclick={() => (only.recovered = !only.recovered)}>Recovered</button>
+      {/if}
+      <button class="filter" class:is-on={only.unused} type="button" aria-pressed={only.unused} onclick={() => (only.unused = !only.unused)}>Unused</button>
+    </div>
     <div class="field search">
       <label class="visually-hidden" for="lib-q">Search media</label>
       <input class="input" id="lib-q" type="search" placeholder="Search by file name or tag" bind:value={query} />
@@ -222,7 +250,7 @@ function show(next: 'images' | 'files') {
         <p class="placeholder">Loading…</p>
       {:else if kind === 'images'}
         <div class="media-grid">
-          {#each items as item (item.id)}
+          {#each shown as item (item.id)}
             <article class="tile" class:is-archived={item.archived} class:is-selected={chosen?.id === item.id}>
               <span class="thumb">
                 <img src={item.url} alt="" />
@@ -235,14 +263,18 @@ function show(next: 'images' | 'files') {
                 <span>{item.width ? `${item.width} × ${item.height}` : fileSize(item.bytes)}</span>
                 <span class="badge">{count(item)}</span>
               </span>
+              <!-- Above the stretched link, so both are reachable. -->
+              {#if item.archived}
+                <span class="tile-actions"><button class="btn btn-sm" type="button" onclick={() => describe({ archived: false }, item)}>Unarchive<span class="visually-hidden">{` ${name(item)}`}</span></button></span>
+              {/if}
             </article>
           {:else}
-            <p class="hint">{query ? 'Nothing here matches that.' : 'Nothing here yet — drop a picture on the box above.'}</p>
+            <p class="hint">{query || filtering ? 'Nothing here matches that.' : 'Nothing here yet — drop a picture on the box above.'}</p>
           {/each}
         </div>
       {:else}
         <div class="file-rows">
-          {#each items as item (item.id)}
+          {#each shown as item (item.id)}
             <div class="file-row is-link" class:is-selected={chosen?.id === item.id}>
               <span class="file-icon" aria-hidden="true">{extension(item)}</span>
               <span class="who">
@@ -252,7 +284,7 @@ function show(next: 'images' | 'files') {
               <span class="usage"><span class="badge">{count(item)}</span></span>
             </div>
           {:else}
-            <p class="hint">{query ? 'Nothing here matches that.' : 'Nothing here yet — drop a file on the box above.'}</p>
+            <p class="hint">{query || filtering ? 'Nothing here matches that.' : 'Nothing here yet — drop a file on the box above.'}</p>
           {/each}
         </div>
       {/if}
