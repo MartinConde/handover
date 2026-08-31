@@ -4,6 +4,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **A navigation menu builder.** The `navigation` global now opens as a menu editor rather than
+  a read-only value: pages and entries on the left, the tree on the right, three levels deep,
+  reordered by dragging a row's handle or with the up, down, indent and outdent buttons on it.
+  An item pointing at a page this language does not have, or at a hidden one, is flagged where
+  it stands ([Site files](docs/site-files.md#navigation)).
+- **`<Nav />` and `menusAt()`.** The menu one language renders: every `ref` resolved to the
+  address that language serves, and every item it cannot show dropped — with its children — so a
+  menu never links to a page that is not there ([Rendering content](docs/rendering.md#navigation-menus)).
+- The menus are the same tree in every language until their labels translate: an edit in one
+  language carries the whole tree into the others, and the second column does not offer it.
 - **A focal point instead of a crop tool.** *Set focal point* in the library puts a dot on the
   picture and previews every shape this site's own fields crop to around it; move it once and all
   of them move. The same dialog opens from an image field for that page alone, and writes `focal`

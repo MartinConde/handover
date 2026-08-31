@@ -32,6 +32,9 @@ type FieldOf =
   | { path: string[]; label: string; type: 'file'; required: boolean; accept: string[] }
   | { path: string[]; label: string; type: 'embed'; required: boolean }
   | { path: string[]; label: string; type: 'seo'; required: boolean }
+  // The `navigation` global's menus, whole: a tree of items nesting through `children`, which
+  // is recursive and so has no fields the walker could flatten.
+  | { path: string[]; label: string; type: 'menus'; required: boolean }
   | { path: string[]; label: string; type: 'reference'; required: boolean; collection: string }
   // `fields` and `item` are relative to the group / one array item; `item` is `[]` for a scalar.
   | { path: string[]; label: string; type: 'group'; required: boolean; fields: Field[] }
@@ -147,6 +150,7 @@ function fieldOf(root: JsonSchema, path: string[], node: JsonSchema, required: b
     case 'date':
     case 'link':
     case 'embed':
+    case 'menus':
     case 'seo':
       return [{ path, label, type: child.handover, required }];
     // The field's preset: the ratio it shows at, the cap an upload is downscaled to on the way in

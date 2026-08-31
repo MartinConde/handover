@@ -115,7 +115,7 @@ export interface LocaleLink {
 /** As much of `cms.config.ts` as a link needs: the languages and the collections' routes. */
 export interface LocaleSite {
   i18n: I18nRouting;
-  collections: Record<string, { route?: string; localizedSlugs?: boolean }>;
+  collections: Record<string, { route?: string; localizedSlugs?: boolean; titleField?: string }>;
 }
 
 /**
@@ -152,6 +152,90 @@ export async function getEntryLocales<C extends Record<string, unknown>>(
     }),
   );
   return found.filter((l) => l !== undefined);
+}
+
+/** One menu item as a page renders it: an address, and the items under it. */
+export interface NavLink {
+  label: string;
+  href: string;
+  newTab?: boolean;
+  children: NavLink[];
+}
+
+/**
+ * The `navigation` global's menus in one language, keyed by menu, ready to render.
+ *
+ * The tree is the same in every language; what it can point at is not. An item whose entry has
+ * no file in this language, or whose file is hidden, is **dropped**, and its children with it —
+ * a menu is the most-clicked thing on a site and must never be the way a reader finds a 404.
+ * The editor flags those items so somebody tidies the menu; this is what keeps the site right
+ * until they do.
+ *
+ * An item with no `label` is named by the page it points at, so renaming a page moves the menu
+ * with it. The whole tree is walked defensively: it is content, and a hand edit is not a crash.
+ */
+export async function menusAt<C extends Record<string, unknown>>(
+  siteId: string,
+  source: ContentSource<C>,
+  site: LocaleSite,
+  navigation: unknown,
+  locale: string,
+): Promise<Record<string, NavLink[]>> {
+  const menus = isObject(navigation) && Array.isArray(navigation.menus) ? navigation.menus : [];
+  const out: Record<string, NavLink[]> = {};
+  for (const menu of menus) {
+    if (!isObject(menu) || typeof menu.key !== 'string') continue;
+    out[menu.key] = await navLinks(siteId, source, site, menu.items, locale);
+  }
+  return out;
+}
+
+async function navLinks<C extends Record<string, unknown>>(
+  siteId: string,
+  source: ContentSource<C>,
+  site: LocaleSite,
+  items: unknown,
+  locale: string,
+): Promise<NavLink[]> {
+  const links: NavLink[] = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    if (!isObject(item)) continue;
+    if (Array.isArray(item._locales) && !item._locales.includes(locale)) continue;
+    const target = await href(siteId, source, site, item.link, locale);
+    if (!target) continue;
+    links.push({
+      label: (typeof item.label === 'string' && item.label) || target.name,
+      href: target.href,
+      ...(item.newTab === true ? { newTab: true } : {}),
+      children: await navLinks(siteId, source, site, item.children, locale),
+    });
+  }
+  return links;
+}
+
+/** Where one item points in this language, and what the page it points at is called. */
+async function href<C extends Record<string, unknown>>(
+  siteId: string,
+  source: ContentSource<C>,
+  site: LocaleSite,
+  link: unknown,
+  locale: string,
+): Promise<{ href: string; name: string } | undefined> {
+  if (!isObject(link)) return undefined;
+  if (link.type === 'url')
+    return typeof link.href === 'string' ? { href: link.href, name: link.href } : undefined;
+  if (typeof link.ref !== 'string') return undefined;
+  const cut = link.ref.indexOf('/');
+  const collection = link.ref.slice(0, cut);
+  const name = link.ref.slice(cut + 1);
+  if (cut < 1 || !name) return undefined;
+  const entry = await source.getEntry(collection as keyof C & string, `${locale}/${name}`);
+  if (!entry || !isLive(siteId, entry.data)) return undefined;
+  const of = site.collections[collection];
+  const address = of?.localizedSlugs ? entryAddress(siteId, entry.data, name) : name;
+  const url = entryUrl(siteId, site.i18n, of?.route, address, locale);
+  const titled = isObject(entry.data) ? entry.data[of?.titleField ?? 'title'] : undefined;
+  return url ? { href: url, name: typeof titled === 'string' ? titled : name } : undefined;
 }
 
 /**

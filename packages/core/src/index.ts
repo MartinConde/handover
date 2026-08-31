@@ -34,6 +34,7 @@ export type {
   DriftChoice,
   LocaleLink,
   LocaleSite,
+  NavLink,
 } from './content.js';
 export {
   applyDrift,
@@ -43,6 +44,7 @@ export {
   FORMAT_VERSION,
   getEntryLocales,
   globalsAt,
+  menusAt,
   mergeEntry,
   parseEntry,
   refErrors,

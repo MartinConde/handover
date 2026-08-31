@@ -91,6 +91,37 @@ const locales = cms.i18n.locales.map((locale) => ({
 <LocaleSwitcher locales={locales} current="en" />
 ```
 
+## Navigation menus
+
+`menusAt()` resolves the [`navigation` global](site-files.md#navigation) for one language:
+every menu by its key, every item's `ref` turned into the address that language serves, and
+everything that language cannot show **dropped** — an entry with no file in it, a hidden one,
+and an item whose `_locales` names another language. A dropped item takes its children with it,
+so a menu never becomes the way a reader finds a 404. Resolve it in the loader, like everything
+else a page needs:
+
+```ts
+// src/loaders/globals.ts — the global is read, then resolved
+const globals = await globalsAt('default', source, locale);
+const menus = await menusAt('default', source, cms, globals.navigation, locale);
+```
+
+```astro
+---
+import Nav from 'astro-handover/Nav.astro';
+const { menus } = Astro.props;
+---
+
+<Nav menu="header" menus={menus} current={Astro.url.pathname} />
+```
+
+`<Nav />` draws a `<nav aria-label="Main">` with nested `<ul>`s — one `<a>` per item,
+`aria-current="page"` on the one the reader is on (a trailing slash is the same page), and
+`target="_blank" rel="noopener noreferrer"` where the item asks for a new tab. A menu with
+nothing left in this language draws **nothing**. `label` names the landmark where a page has
+two menus. Style it, or read `menus.header` — `{ label, href, newTab?, children }`, an item with
+no `label` of its own already named by the page it points at — and write your own markup.
+
 ## Hidden entries
 
 An entry with `_status: hidden` in its file stays in the repo but must not render.

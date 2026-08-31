@@ -63,7 +63,8 @@ let {
   onpick: (entry: PickEntry) => void;
   /** Given when a typed web address is an answer too; without it the list is the only way. */
   onurl?: (href: string) => void;
-  onclose: () => void;
+  /** Absent where the list is the pane itself: what stands open all the time has no Cancel. */
+  onclose?: () => void;
 } = $props();
 
 let all = $state<Pickable>({ entries: [], locales: [] });
@@ -111,7 +112,7 @@ const refused = $derived(typed ? unsafeLinkScheme('default', typed) : undefined)
 // Arrow keys walk the rows from the search box down, and wrap; every row is a button, so
 // Tab reaches them all whether or not this runs.
 function step(e: KeyboardEvent) {
-  if (e.key === 'Escape') return onclose();
+  if (e.key === 'Escape') return onclose?.();
   if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
   const rows = Array.from(list?.querySelectorAll('button') ?? []);
   if (!rows.length) return;
@@ -156,10 +157,12 @@ function step(e: KeyboardEvent) {
       {#if refused}<p class="error" id="{id}-url-err">{refused}: links are not allowed</p>{/if}
     </div>
   {/if}
-  <div class="actions">
-    <button class="btn btn-sm" type="button" onclick={onclose}>Cancel</button>
-    {#if onurl}
-      <button class="btn btn-sm btn-primary" type="button" disabled={!typed || !!refused} onclick={() => onurl?.(typed)}>Use this address</button>
-    {/if}
-  </div>
+  {#if onclose || onurl}
+    <div class="actions">
+      {#if onclose}<button class="btn btn-sm" type="button" onclick={onclose}>Cancel</button>{/if}
+      {#if onurl}
+        <button class="btn btn-sm btn-primary" type="button" disabled={!typed || !!refused} onclick={() => onurl?.(typed)}>Use this address</button>
+      {/if}
+    </div>
+  {/if}
 </div>

@@ -502,6 +502,13 @@ test('the navigation golden parses: menus[].items[] nest through children', asyn
   expect(result.data?.menus[0]?.items[0]?.children?.[0]?.label).toBe('For sale');
 });
 
+test('the navigation global is one menus field: the walker stops at the shape it owns', () => {
+  const { fields } = formOf('default', formSchema(navigation));
+  expect(fields).toEqual([
+    { path: ['menus'], label: 'Menus', type: 'menus', required: true, i18n: 'duplicate' },
+  ]);
+});
+
 test('a menu item link is a bare target: no label or newTab inside it', () => {
   const item = { _id: 'a1b2c3d4', label: 'Listings', link: { type: 'url', href: '/listings' } };
   const menu = (i: unknown) => ({ menus: [{ _id: '7h2kq9sd', key: 'header', items: [i] }] });

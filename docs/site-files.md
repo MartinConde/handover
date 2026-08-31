@@ -95,7 +95,14 @@ menus:
 ```
 
 `newTab` sits on the item, not inside `link`. Every menu and item has an `_id`, the same
-in every locale; only `label` is translated.
+in every locale. A `label` left empty is not a mistake: the item is then named by the page it
+points at, so renaming that page moves the menu with it.
+
+The client edits this file in **Site settings → Navigation**: pages and entries on the left,
+the tree on the right, dragged by the handle or moved with each row's buttons (up, down, indent,
+outdent), three levels deep. A row pointing at something this language cannot show is flagged
+there and dropped by [`<Nav />`](rendering.md#navigation-menus). Which menus a site has is the
+developer's: they are declared in this file, and the client fills them.
 
 ## Redirects
 

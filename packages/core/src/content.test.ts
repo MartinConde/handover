@@ -10,6 +10,7 @@ import {
   getEntryLocales,
   globalsAt,
   markTranslation,
+  menusAt,
   mergeEntry,
   parseEntry,
   refErrors,
@@ -1448,4 +1449,87 @@ test('a draft the collection refuses is the schema error and not half an entry',
   await expect(source.getEntry('listings', 'en/mill-house')).rejects.toThrow(
     'src/content/listings/en/mill-house.yaml: listings wants a string title',
   );
+});
+
+// The menu one language renders: what the tree points at, resolved through the site's own
+// routes, with everything that language cannot show dropped.
+const menu = (items: unknown[]) => ({ menus: [{ _id: 'm1', key: 'header', items }] });
+const item = (over: Record<string, unknown>) => ({ _id: 'i1', label: '', ...over });
+const resolved = (nav: unknown, locale: string) =>
+  menusAt('default', switcherSource, site, nav, locale);
+
+test('a menu item points at the address its own language serves', async () => {
+  const nav = menu([
+    item({ label: 'Start', link: { type: 'page', ref: 'pages/home' } }),
+    item({
+      _id: 'i2',
+      label: '',
+      link: { type: 'url', href: 'https://example.com' },
+      newTab: true,
+    }),
+  ]);
+
+  expect(await resolved(nav, 'en')).toEqual({
+    header: [
+      { label: 'Start', href: '/home', children: [] },
+      { label: 'https://example.com', href: 'https://example.com', newTab: true, children: [] },
+    ],
+  });
+  // `pages` has localized slugs, so the German menu links the address German serves.
+  expect((await resolved(nav, 'de')).header?.[0]).toEqual({
+    label: 'Start',
+    href: '/de/startseite',
+    children: [],
+  });
+});
+
+test('an item with no label of its own is named by the page it points at', async () => {
+  const nav = menu([item({ link: { type: 'entry', ref: 'listings/coast' } })]);
+
+  expect((await resolved(nav, 'en')).header?.[0]?.label).toBe('Coast');
+  expect((await resolved(nav, 'de')).header?.[0]?.label).toBe('Küste');
+});
+
+test('a page this language does not have takes its children with it', async () => {
+  const nav = menu([
+    item({
+      label: 'Offers',
+      link: { type: 'entry', ref: 'listings/nothing' },
+      children: [item({ _id: 'i2', label: 'Under it', link: { type: 'url', href: '/under' } })],
+    }),
+    item({ _id: 'i3', label: 'Hidden', link: { type: 'entry', ref: 'listings/hidden' } }),
+    item({
+      _id: 'i4',
+      label: 'German only',
+      link: { type: 'url', href: '/de/x' },
+      _locales: ['de'],
+    }),
+    item({ _id: 'i5', label: 'Kept', link: { type: 'url', href: '/kept' } }),
+  ]);
+
+  expect(await resolved(nav, 'en')).toEqual({
+    header: [{ label: 'Kept', href: '/kept', children: [] }],
+  });
+});
+
+test('the tree keeps its shape: children are resolved under their parent', async () => {
+  const nav = menu([
+    item({
+      label: 'Listings',
+      link: { type: 'url', href: '/listings' },
+      children: [
+        item({ _id: 'i2', label: 'Coast', link: { type: 'entry', ref: 'listings/coast' } }),
+        item({ _id: 'i3', label: 'Sold', link: { type: 'url', href: '/sold' } }),
+      ],
+    }),
+  ]);
+
+  expect((await resolved(nav, 'en')).header?.[0]?.children).toEqual([
+    { label: 'Coast', href: '/listings/coast', children: [] },
+    { label: 'Sold', href: '/sold', children: [] },
+  ]);
+});
+
+test('a site with no navigation global renders no menus rather than throwing', async () => {
+  expect(await resolved(undefined, 'en')).toEqual({});
 });

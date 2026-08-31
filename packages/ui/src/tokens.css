@@ -966,6 +966,60 @@ a.btn { text-decoration: none; }
 .crop-handle.h-se { right: -7px; bottom: -7px; cursor: nwse-resize; }
 .crop-meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); font-size: var(--text-sm); color: var(--ink-2); }
 .crop-meta .seg { margin-left: auto; }
+
+/* The menu builder, ported from nav-menu-builder/mockup.html: add on the left, the menu on the
+   right. The tree is nested lists of real buttons and not role="tree", so every move has a
+   button behind it whether or not a pointer is in play. */
+.nav-build { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: var(--s-6); align-items: start; min-width: 0; }
+.nav-build .tabs.is-menus { grid-column: 1 / -1; }
+.nav-add { display: grid; gap: var(--s-4); align-content: start; min-width: 0; padding: var(--s-5); border-radius: var(--radius-lg); background: var(--surface-2); }
+.nav-add .side-title { font-size: var(--text-sm); font-weight: 600; }
+.nav-add .picker { gap: var(--s-3); }
+.nav-add .picker-list { max-height: 340px; }
+/* The pane is 360px, not the 520px the picker was drawn in, so the address drops to its own
+   line instead of colliding with the title. */
+.nav-add .picker-list button { flex-wrap: wrap; padding: var(--s-2) var(--s-3); }
+.nav-add .picker-list .path { flex-basis: 100%; margin-left: 0; }
+.nav-add .hint { font-size: var(--text-xs); color: var(--ink-2); }
+.nav-main { display: grid; gap: var(--s-4); align-content: start; min-width: 0; }
+.nav-main .side-title { font-size: var(--text-lg); font-weight: 600; letter-spacing: var(--tracking-tight); }
+.nav-main .form { max-width: 520px; }
+.nav-main .form > .actions { display: flex; gap: var(--s-2); }
+.custom-link { display: grid; gap: var(--s-3); padding-top: var(--s-4); border-top: 1px solid var(--border); }
+/* An item's link, summarised: a name, where it goes, and the way back to the picker. */
+.link-summary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); padding: var(--s-3); border-radius: var(--radius); background: var(--surface-2); }
+.link-summary .name { font-weight: 500; }
+.link-summary .sub { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); flex-basis: 100%; font-size: var(--text-xs); color: var(--ink-2); }
+.link-summary code { font-family: var(--font-mono); }
+.link-summary > .btn { margin-left: auto; }
+.menu-tree { position: relative; display: grid; gap: var(--s-2); min-width: 0; }
+.branch { display: grid; gap: var(--s-1); margin: 0; padding: 0; list-style: none; min-width: 0; }
+.branch .branch { margin: var(--s-1) 0 var(--s-1) var(--s-5); padding-left: var(--s-4); border-left: 1px solid var(--border); }
+.menu-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px var(--s-3); align-items: center; padding: var(--s-2) var(--s-3); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-chip); }
+.menu-item .grip { grid-row: 1 / span 2; display: inline-grid; place-items: center; width: 28px; min-height: 28px; padding: 0; border: 0; border-radius: var(--radius-sm); background: none; color: var(--ink-3); cursor: grab; }
+.menu-item .grip:hover { background: var(--badge-bg); color: var(--ink); }
+.menu-item .lbl { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); min-width: 0; font-weight: 500; }
+.menu-item .lbl .default-label { font-weight: 400; color: var(--ink-3); }
+.menu-item .target { grid-column: 2; display: flex; align-items: center; gap: var(--s-1) var(--s-2); min-width: 0; font-size: var(--text-xs); color: var(--ink-2); }
+/* The address gives way, not the row: when the move buttons open they take the width they need
+   and the path ellipses rather than wrapping the row under the cursor. */
+.menu-item .target code { font-family: var(--font-mono); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-item .target .badge { flex: none; }
+.menu-item .item-actions { grid-row: 1 / span 2; grid-column: 3; display: flex; align-items: center; gap: var(--s-1); }
+.menu-item .move-controls { display: none; align-items: center; gap: var(--s-1); padding-right: var(--s-2); margin-right: var(--s-1); border-right: 1px solid var(--border); }
+.menu-item:hover .move-controls, .menu-item:focus-within .move-controls { display: flex; }
+.menu-item.is-lifted { background: var(--surface-2); box-shadow: none; border: 1.5px dashed var(--border-strong); color: var(--ink-2); }
+.menu-item.is-lifted .lbl { color: var(--ink-2); }
+.menu-item.is-flagged { background: var(--warn-soft); box-shadow: none; }
+.menu-item.is-flagged .target { flex-wrap: wrap; color: var(--warn-ink); }
+.menu-item.is-flagged .target .badge { flex-basis: 100%; }
+.tree-empty { min-height: 220px; }
+.tree-note { font-size: var(--text-xs); color: var(--ink-2); }
+
 @media (max-width: 720px) {
   .focal-dialog .dialog-cols { grid-template-columns: minmax(0, 1fr); }
+  .nav-build { grid-template-columns: minmax(0, 1fr); }
+  .branch .branch { margin-left: var(--s-3); padding-left: var(--s-3); }
+  .menu-item { grid-template-columns: auto minmax(0, 1fr); }
+  .menu-item .item-actions { grid-row: 3; grid-column: 2; justify-content: flex-start; }
 }

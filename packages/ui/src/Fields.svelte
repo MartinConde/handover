@@ -12,6 +12,7 @@ import {
 import Fields from './Fields.svelte';
 import Focal from './Focal.svelte';
 import Media from './Media.svelte';
+import Menus, { type Menu } from './Menus.svelte';
 import PagePicker, { type Pickable, readPickable } from './PagePicker.svelte';
 import RichText from './RichText.svelte';
 import { fileSize, type MediaItem } from './upload.js';
@@ -63,9 +64,10 @@ const modeOf = (field: Field): Translation => field.i18n ?? inherited;
 const structural = (field: Field) =>
   field.type === 'group' || field.type === 'array' || field.type === 'blocks';
 // Widgets a translation has nothing to act on: `embed` and `seo` only show what is stored,
-// and a `reference` points at the same entry in every language. Neither is given to the
-// second language as a picture of the first language's value it cannot change.
-const FIXED = new Set(['embed', 'seo', 'reference', 'unsupported']);
+// a `reference` points at the same entry in every language, and a menu is one tree shared by
+// all of them until its labels translate. None is given to the second language as a picture of
+// the first language's value it cannot change.
+const FIXED = new Set(['embed', 'menus', 'seo', 'reference', 'unsupported']);
 const shown = $derived(
   translating
     ? fields.filter((f) => structural(f) || (modeOf(f) !== false && !FIXED.has(f.type)))
@@ -557,6 +559,9 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       {:else}
         {@render noEntry(id, `${id}-l`, says, text, () => (picker = id))}
       {/if}
+    {:else if field.type === 'menus'}
+      {@render groupLabel(id, field, text, at)}
+      <Menus {id} labelId="{id}-l" menus={rows(at) as Menu[]} {locale} />
     {:else if field.type === 'embed' || field.type === 'seo'}
       {@render groupLabel(id, field, text, at)}
       <div class="readonly" {id} role="region" tabindex="-1" aria-labelledby="{id}-l" aria-describedby={err ? `${id}-hint ${id}-err` : `${id}-hint`}><pre>{read(at) === undefined ? 'Nothing here yet' : JSON.stringify(read(at), null, 2)}</pre></div>

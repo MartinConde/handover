@@ -26,7 +26,8 @@
     },
     "./Blocks.astro": "./components/Blocks.astro",
     "./LocaleSwitcher.astro": "./components/LocaleSwitcher.astro",
-    "./Markdown.astro": "./components/Markdown.astro"
+    "./Markdown.astro": "./components/Markdown.astro",
+    "./Nav.astro": "./components/Nav.astro"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
