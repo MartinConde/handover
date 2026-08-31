@@ -61,8 +61,9 @@ const data = await load(staticSource, { locale: 'de', slug });
 ```
 
 The links come from the collection's `route` with the language's segment applied, so
-`prefixDefaultLocale` is honoured and no template hardcodes `/de/`. The language being read is
-a `<span aria-current="true">`, not a link.
+`prefixDefaultLocale` is honoured and no template hardcodes `/de/`. They are written the way the
+page being read is — with the trailing slash or without — so none is a hop through a redirect.
+The language being read is a `<span aria-current="true">`, not a link.
 
 An entry that can be read in one language draws **nothing** — a single button says nothing and
 goes nowhere — so a site that declares one language never draws a switcher.
@@ -116,7 +117,9 @@ const { menus } = Astro.props;
 ```
 
 `<Nav />` draws a `<nav aria-label="Main">` with nested `<ul>`s — one `<a>` per item,
-`aria-current="page"` on the one the reader is on (a trailing slash is the same page), and
+`aria-current="page"` on the one the reader is on (a trailing slash is the same page), every
+`href` written the way `current` is — with the slash or without, so no link is a hop through a
+redirect — and
 `target="_blank" rel="noopener noreferrer"` where the item asks for a new tab. A menu with
 nothing left in this language draws **nothing**. `label` names the landmark where a page has
 two menus. The words come from the file of the language being rendered — the tree is shared and

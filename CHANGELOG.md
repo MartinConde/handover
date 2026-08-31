@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Redirects answer both forms of the old address.** `_redirects` used to carry each rule's
+  `from` bare, while the pages themselves answer with the trailing slash under Astro's default
+  `build.format`, so `/listings/old-name/` — the form the site's own links, canonicals and
+  sitemap use — was a 404 after a rename, hide or delete. Every `from` is now written both ways,
+  and `to` in the site's own form, so visitors land in one hop
+  ([Site files](docs/site-files.md#redirects)). `<LocaleSwitcher />` and `<Nav />` write their
+  links the same way, following the page being read, as `<Seo />`'s alternates already did.
 - **Side by side mirrors the structure at once.** A block moved, added or removed in the entry's
   own language used to reach the second column on its next open; it moves there as you do it now,
   and a shared value reads there as it is typed ([Translating](docs/translating.md#side-by-side)).

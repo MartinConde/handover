@@ -1,5 +1,5 @@
 ---
-import type { LocaleLink } from '@handover/core';
+import { type LocaleLink, withSlash } from '@handover/core';
 
 interface Props {
   /** What `getEntryLocales()` answered: the languages this entry can be read in, and where. */
@@ -12,6 +12,9 @@ const { locales, current } = Astro.props;
 // One language is not a switcher: an entry that exists in one, and a site that declares one,
 // both draw nothing rather than a button that goes where the reader already is.
 const many = locales.length > 1;
+// The addresses come bare; this page's own path carries the form the site builds under, and a
+// link written the other way is a hop through the redirect the site answers with.
+const slashed = Astro.url.pathname.endsWith('/');
 ---
 
 {many && (
@@ -21,7 +24,7 @@ const many = locales.length > 1;
         <li>
           {locale === current
             ? <span aria-current="true">{locale.toUpperCase()}</span>
-            : <a href={url} hreflang={locale}>{locale.toUpperCase()}</a>}
+            : <a href={withSlash(url, slashed)} hreflang={locale}>{locale.toUpperCase()}</a>}
         </li>
       ))}
     </ul>

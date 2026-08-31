@@ -1,5 +1,5 @@
 ---
-import type { NavLink } from '@handover/core';
+import { type NavLink, withSlash } from '@handover/core';
 import Nav from './Nav.astro';
 
 interface Props {
@@ -25,6 +25,10 @@ const Tag = items ? Fragment : 'nav';
 // and the reader is on one page either way.
 const bare = (path: string) => path.replace(/\/+$/, '');
 const here = (link: NavLink) => current !== undefined && bare(link.href) === bare(current);
+// The links are written the way the page being read is, so none of them is a hop through the
+// redirect the site answers the other form with; without `current` they are left as stored.
+const href = (link: NavLink) =>
+  current === undefined ? link.href : withSlash(link.href, current.endsWith('/'));
 ---
 
 {list.length > 0 && (
@@ -33,7 +37,7 @@ const here = (link: NavLink) => current !== undefined && bare(link.href) === bar
       {list.map((link) => (
         <li>
           <a
-            href={link.href}
+            href={href(link)}
             aria-current={here(link) ? 'page' : undefined}
             target={link.newTab ? '_blank' : undefined}
             rel={link.newTab ? 'noopener noreferrer' : undefined}

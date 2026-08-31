@@ -1,5 +1,11 @@
 ---
-import { type LocaleLink, resolveSeo, type SeoDefaultsValue, type SeoValue } from '@handover/core';
+import {
+  type LocaleLink,
+  resolveSeo,
+  type SeoDefaultsValue,
+  type SeoValue,
+  withSlash,
+} from '@handover/core';
 
 interface Props {
   /** The entry's own `seo` field, where it has one. */
@@ -42,11 +48,7 @@ const canonical = tags.canonical ?? at(Astro.url.pathname);
 // under, so the alternates are written the same way: otherwise this page's own hreflang is a
 // second URL for it, and every other one points at the redirect the site answers with.
 const slashed = Astro.url.pathname.endsWith('/');
-const like = (path: string) => {
-  if (path === '/') return path;
-  const bare = path.replace(/\/+$/, '');
-  return slashed ? `${bare}/` : bare;
-};
+const like = (path: string) => withSlash(path, slashed);
 // A key, never a URL, is what a content file holds; without a base there is nothing to serve it
 // from, so the card goes out small rather than pointing at a path no crawler can fetch.
 const image =

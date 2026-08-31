@@ -322,15 +322,23 @@ test('delete with no redirect target touches only the entry files', async () => 
   ]);
 });
 
-test('redirectsText is one "/from /to status" line per rule', () => {
+// A visitor arrives with whichever form the page had when they bookmarked it, and the asset
+// server matches a redirect exactly: one line per form of `from`. `to` is written the way the
+// site's pages answer, so the visitor lands in one hop rather than through a second redirect.
+test("redirectsText writes each from both ways and to in the site's own form", () => {
   const rule = { _id: 'aaaaaaaa', status: 301 as const, createdAt: '2026-01-01T00:00:00Z' };
-  expect(
-    redirectsText('default', [
-      { ...rule, from: '/old', to: '/new', reason: 'slug-change', entry: 'pages/new' },
-      { ...rule, from: '/brochure', to: 'https://example.com/b.pdf', reason: 'manual' },
-    ]),
-  ).toBe('/old /new 301\n/brochure https://example.com/b.pdf 301\n');
-  expect(redirectsText('default', [])).toBe('');
+  const rules = [
+    { ...rule, from: '/old', to: '/new', reason: 'slug-change' as const, entry: 'pages/new' },
+    { ...rule, from: '/brochure', to: 'https://example.com/b.pdf', reason: 'manual' as const },
+    { ...rule, from: '/gone/', to: '/', reason: 'deleted' as const },
+  ];
+  expect(redirectsText('default', rules, true)).toBe(
+    '/old /new/ 301\n/old/ /new/ 301\n/brochure https://example.com/b.pdf 301\n/brochure/ https://example.com/b.pdf 301\n/gone / 301\n/gone/ / 301\n',
+  );
+  expect(redirectsText('default', rules.slice(0, 1), false)).toBe(
+    '/old /new 301\n/old/ /new 301\n',
+  );
+  expect(redirectsText('default', [], true)).toBe('');
 });
 
 // decap-cms#7371 / payload#14491: duplicating an entry copies the default locale and

@@ -209,6 +209,20 @@ export function entryUrl(
   return prefix + route.replace('[slug]', slug);
 }
 
+/**
+ * `path` written the way this site's pages answer — with the trailing slash under Astro's
+ * default `build.format: 'directory'`, without it otherwise. A link, an alternate or a
+ * redirect target written the other way is a hop through the redirect the asset server
+ * answers with. The root, a query, a hash and an address on another site are left as they are.
+ */
+export function withSlash(path: string, slash: boolean): string {
+  if (!path.startsWith('/')) return path;
+  const cut = path.search(/[?#]/);
+  const [bare, rest] = cut < 0 ? [path, ''] : [path.slice(0, cut), path.slice(cut)];
+  const trimmed = bare.replace(/\/+$/, '');
+  return `${trimmed}${slash || !trimmed ? '/' : ''}${rest}`;
+}
+
 export interface PreviewTarget {
   collection: string;
   locale: string;

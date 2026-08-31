@@ -1,7 +1,7 @@
 import { offeredEntry, parseEntry, stringifyEntry, writtenEntry } from './content.js';
 import type { ContentFile } from './entries.js';
 import type { GitClient, PublishFile } from './git.js';
-import { entryAddress, entryUrl, type I18nRouting } from './names.js';
+import { entryAddress, entryUrl, type I18nRouting, withSlash } from './names.js';
 import { newId, regenerateIds } from './reserved.js';
 
 export interface RedirectRule {
@@ -387,9 +387,20 @@ export async function deleteLocales(
   return { commit_sha, kept };
 }
 
-// The `_redirects` format Workers Static Assets serves: one `/from /to status` per line.
-export const redirectsText = (_siteId: string, rules: RedirectRule[]): string =>
-  rules.map((r) => `${r.from} ${r.to} ${r.status}\n`).join('');
+/**
+ * The `_redirects` format Workers Static Assets serves: `/from /to status` per line. The asset
+ * server matches `from` exactly and a visitor arrives with whichever form the page had when
+ * they bookmarked it, so every `from` is written with the trailing slash and without; `to` is
+ * written the way the site's pages answer (`slash`), so they land in one hop.
+ */
+export const redirectsText = (_siteId: string, rules: RedirectRule[], slash: boolean): string =>
+  rules
+    .flatMap((r) => {
+      const to = withSlash(r.to, slash);
+      const forms = new Set([withSlash(r.from, false), withSlash(r.from, true)]);
+      return [...forms].map((from) => `${from} ${to} ${r.status}\n`);
+    })
+    .join('');
 
 /**
  * Every locale file of an entry copied under a new name, ready to be written as drafts: one

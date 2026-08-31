@@ -437,7 +437,7 @@ export async function uiAssetsModule(dir: string): Promise<string> {
 
 // Workers Static Assets serves `_redirects` from the client output; the Cloudflare adapter's
 // own hook runs after this one and appends Astro's config redirects to the same file.
-export async function emitRedirects(root: URL, clientDir: URL): Promise<number> {
+export async function emitRedirects(root: URL, clientDir: URL, slash: boolean): Promise<number> {
   const path = 'src/content/redirects.yaml';
   const source = await readFile(new URL(path, root), 'utf8').catch(() => undefined);
   if (source === undefined) return 0;
@@ -452,7 +452,10 @@ export async function emitRedirects(root: URL, clientDir: URL): Promise<number> 
     );
   }
   await mkdir(clientDir, { recursive: true });
-  await appendFile(new URL('_redirects', clientDir), redirectsText('default', parsed.data.rules));
+  await appendFile(
+    new URL('_redirects', clientDir),
+    redirectsText('default', parsed.data.rules, slash),
+  );
   return parsed.data.rules.length;
 }
 
@@ -662,6 +665,7 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
   let root: URL;
   let clientDir: URL;
   let crawl: SitemapSite | undefined;
+  let slash = true;
   return {
     name: 'astro-handover',
     hooks: {
@@ -671,7 +675,7 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
         // The form the site's own pages answer at. `directory` writes `/page/index.html`, which
         // the asset server sends the bare address to; a sitemap of URLs that redirect is one
         // more hop per page, and the same mistake as an hreflang pointing at one.
-        const slash =
+        slash =
           config.trailingSlash === 'always' ||
           (config.trailingSlash !== 'never' && config.build.format === 'directory');
         crawl = config.site
@@ -699,7 +703,7 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
         if (error) throw new Error(error);
       },
       'astro:build:done': async ({ logger }) => {
-        const n = await emitRedirects(root, clientDir);
+        const n = await emitRedirects(root, clientDir, slash);
         if (n) logger.info(`Wrote ${n} redirect${n === 1 ? '' : 's'} to _redirects`);
         if (!crawl)
           logger.warn(

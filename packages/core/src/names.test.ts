@@ -7,6 +7,7 @@ import {
   entryName,
   entryUrl,
   previewTarget,
+  withSlash,
 } from './names.js';
 
 test.each([
@@ -247,4 +248,16 @@ test('localizedSlugs is true or false and says so when it is not', () => {
   expect(checkCollections('default', { pages: { localizedSlugs: 'yes' } })).toEqual([
     'cms.config.ts › collections.pages.localizedSlugs: expected true or false, got "yes"',
   ]);
+});
+
+// One page has one address on a site, and the site decides which: a link, an alternate or a
+// redirect written the other way is a hop through the redirect the site answers with.
+test('withSlash writes a path the way the site serves it and leaves the rest alone', () => {
+  expect(withSlash('/listings/coast', true)).toBe('/listings/coast/');
+  expect(withSlash('/listings/coast/', false)).toBe('/listings/coast');
+  expect(withSlash('/', true)).toBe('/');
+  expect(withSlash('/', false)).toBe('/');
+  expect(withSlash('/listings?status=sale', true)).toBe('/listings/?status=sale');
+  expect(withSlash('/de/#top', false)).toBe('/de#top');
+  expect(withSlash('https://example.com/b.pdf', true)).toBe('https://example.com/b.pdf');
 });

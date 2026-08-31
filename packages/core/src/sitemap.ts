@@ -4,7 +4,7 @@
 
 import { parseEntry } from './content.js';
 import { type ContentFile, entryParts } from './entries.js';
-import { entryAddress, entryUrl, type I18nRouting } from './names.js';
+import { entryAddress, entryUrl, type I18nRouting, withSlash } from './names.js';
 import { isLive } from './reserved.js';
 
 /** One page: where it is served, and the same page in the other languages. */
@@ -26,11 +26,8 @@ export interface SitemapSite {
   slash: boolean;
 }
 
-const href = (site: SitemapSite, path: string) => {
-  const shaped =
-    path === '/' ? path : site.slash ? `${path.replace(/\/+$/, '')}/` : path.replace(/\/+$/, '');
-  return new URL(shaped, site.base).href;
-};
+const href = (site: SitemapSite, path: string) =>
+  new URL(withSlash(path, site.slash), site.base).href;
 
 /**
  * Every address the site serves, by language. An entry is in it once per language it is

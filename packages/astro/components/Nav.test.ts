@@ -34,7 +34,10 @@ test('<Nav /> draws the menu it is asked for, nested, and marks the page being r
 // The site links `/listings/` and the menu stores `/listings`: one page, one mark.
 test('<Nav /> marks the page being read whichever way its address ends', async () => {
   const html = await render({ menu: 'header', menus, current: '/listings/' });
-  expect(html).toContain('<a href="/listings" aria-current="page">Listings</a>');
+  // And the links follow the page's own form, so none of them is a hop through a redirect.
+  expect(html).toContain('<a href="/listings/" aria-current="page">Listings</a>');
+  expect(html).toContain('<a href="/listings/?status=sale">For sale</a>');
+  expect(html).toContain('href="https://example.com/pdf"');
 });
 
 test('<Nav /> opens an item marked for a new tab in one, and lets nothing back through', async () => {

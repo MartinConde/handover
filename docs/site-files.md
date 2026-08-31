@@ -143,9 +143,18 @@ rule belonging to no entry has nowhere to wait. It reaches visitors after the bu
 A rule with `reason: hidden` belongs to the entry that is hidden — showing that entry again
 removes the rule in the same commit — so the table draws it but neither edits nor deletes it.
 
-At build time the integration writes every rule as a line of `_redirects` in the output
-directory (`/brochure https://example.com/files/brochure.pdf 301`), which Cloudflare
-serves without any Worker code. A rule that fails validation fails the build, naming it:
+At build time the integration writes every rule into `_redirects` in the output directory,
+which Cloudflare serves without any Worker code. Each `from` is written twice — with the trailing
+slash and without, since a visitor arrives with whichever form the page had when they bookmarked
+it — and `to` the way your pages answer (`trailingSlash` and `build.format`), so they land in one
+hop:
+
+```
+/brochure https://example.com/files/brochure.pdf 301
+/brochure/ https://example.com/files/brochure.pdf 301
+```
+
+A rule that fails validation fails the build, naming it:
 `src/content/redirects.yaml › rules[0].from: a path starting with "/"`. Redirects from
 `astro.config` still work; the adapter adds them to the same file.
 

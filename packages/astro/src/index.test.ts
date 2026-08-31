@@ -593,18 +593,18 @@ test('the redirects golden parses; from must be a path and to a path or absolute
 
 const fixture = new URL('../test/fixture/', import.meta.url);
 
-test('emitRedirects appends one _redirects line per rule to the client dir', async () => {
+test("emitRedirects appends every rule to the client dir, in the site's form", async () => {
   const client = new URL(`${await mkdtemp(join(tmpdir(), 'handover-client-'))}/`, 'file://');
   await writeFile(new URL('_redirects', client), '/a /b 301\n');
-  expect(await emitRedirects(fixture, client)).toBe(2);
+  expect(await emitRedirects(fixture, client, true)).toBe(2);
   expect(await readFile(new URL('_redirects', client), 'utf8')).toBe(
-    '/a /b 301\n/listings/seaview-cottage /listings/seaview-cottage-devon 301\n/brochure https://example.com/files/brochure.pdf 301\n',
+    '/a /b 301\n/listings/seaview-cottage /listings/seaview-cottage-devon/ 301\n/listings/seaview-cottage/ /listings/seaview-cottage-devon/ 301\n/brochure https://example.com/files/brochure.pdf 301\n/brochure/ https://example.com/files/brochure.pdf 301\n',
   );
 });
 
 test('emitRedirects writes nothing for a site without redirects.yaml', async () => {
   const client = new URL(`${await mkdtemp(join(tmpdir(), 'handover-client-'))}/`, 'file://');
-  expect(await emitRedirects(new URL('file:///nowhere/'), client)).toBe(0);
+  expect(await emitRedirects(new URL('file:///nowhere/'), client, true)).toBe(0);
   await expect(readFile(new URL('_redirects', client), 'utf8')).rejects.toThrow();
 });
 
@@ -615,7 +615,7 @@ test('emitRedirects fails the build on a bad rule, naming the path', async () =>
     new URL('src/content/redirects.yaml', root),
     '_version: 1\nrules:\n  - _id: "aaaaaaaa"\n    from: "old"\n    to: "/new"\n    status: 301\n    reason: "manual"\n    createdAt: "2026-01-01T00:00:00Z"\n',
   );
-  await expect(emitRedirects(root, root)).rejects.toThrow(
+  await expect(emitRedirects(root, root, true)).rejects.toThrow(
     'src/content/redirects.yaml › rules[0].from: a path starting with "/"',
   );
 });
