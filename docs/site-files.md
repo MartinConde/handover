@@ -1,8 +1,9 @@
 # Site files
 
-Besides collections, `src/content/` holds a few files with a fixed place and shape:
-globals, the navigation menus, redirects and entry templates. All of them are written in
-the [content format](content-format.md).
+Besides collections, `src/content/` holds a few files with a fixed place and shape, all
+written in the [content format](content-format.md): globals and entry templates on this
+page, and two with pages of their own — [Navigation menus](navigation.md) and
+[Redirects](redirects.md).
 
 ## Globals
 
@@ -60,109 +61,6 @@ form that is the entry editor without the parts that do not apply — a global c
 renamed, duplicated or deleted. Everything else is the same screen, locks, unpublished changes
 and one-commit publish included. Not to be confused with the read-only **Settings** screen,
 which is this config as the Worker sees it.
-
-## Navigation
-
-`navigation` from `astro-handover` is the schema for `src/content/globals/<locale>/navigation.yaml`:
-several menus in one file, each a tree of items. An item is a label and a link; `children`
-nests items. The link points at an entry or page by its filename id, or at a URL — never
-at a locale-prefixed path.
-
-```yaml
-_version: 1
-menus:
-  - _id: "7h2kq9sd"
-    key: "header"
-    items:
-      - _id: "a1b2c3d4"
-        label: "Listings"
-        link:
-          type: "entry"
-          ref: "listings/seaview-cottage"
-        children:
-          - _id: "e5f6g7h8"
-            label: "For sale"
-            link:
-              type: "url"
-              href: "/listings?status=sale"
-            newTab: false
-      - _id: "i9j0k1l2"
-        _locales:
-          - "de"
-        label: "Impressum"
-        link:
-          type: "page"
-          ref: "pages/impressum"
-```
-
-`newTab` sits on the item, not inside `link`. Every menu and item has an `_id`, the same
-in every locale. A `label` left empty is not a mistake: the item is then named by the page it
-points at, so renaming that page moves the menu with it — in each language by that language's
-title.
-
-**The tree is shared, the labels are not.** Which items a menu has, in which order, what each
-points at and where it opens is the same in every language's file; `label` is the one key a
-language owns ([Languages](i18n.md#the-structure-is-shared)). Moving an item in one language
-moves it in all of them, and the German file keeps its German words while it happens.
-
-The client edits this file in **Site settings → Navigation**: pages and entries on the left,
-the tree on the right. Rows move by dragging the handle — a hairline marks a slot between
-siblings, a tinted well names the parent a drop would go inside, and a slot past three levels
-refuses in place — or with each row's buttons (up, down, indent, outdent). The second language's column draws the same tree as one box a row,
-for the labels alone. A row pointing at something this language cannot show is flagged
-there and dropped by [`<Nav />`](rendering.md#navigation-menus). Which menus a site has is the
-developer's: they are declared in this file, and the client fills them.
-
-## Redirects
-
-`src/content/redirects.yaml` is a flat list of rules. Handover appends to it when an entry
-is renamed or deleted ([entry lifecycle](entry-lifecycle.md#renaming-and-deleting-an-entry));
-the client adds their own under **Site settings → Redirects**, and you can edit the file by hand.
-
-```yaml
-_version: 1
-rules:
-  - _id: "q8r9s0t1"
-    from: "/brochure"
-    to: "https://example.com/files/brochure.pdf"
-    status: 301
-    reason: "manual"
-    createdAt: "2026-08-21T08:00:00Z"
-```
-
-`from` is a path starting with `/`; `to` is a path or an absolute URL; `status` is `301` or
-`302`; `reason` is one of `slug-change`, `hidden`, `deleted`, `manual`. Exact matches only — no
-wildcards.
-
-The admin's table refuses a `from` that is a page the site already serves — that redirect would
-take the page off the site — and a second rule from an address that already has one. A rule
-pointing at an address a new rule claims is re-pointed at its destination, so a visitor never
-hops twice. A rule the client adds is **committed as it is added** rather than waiting in the
-publish drawer: this file is assembled at publish out of the rules of the selected entries, so a
-rule belonging to no entry has nowhere to wait. It reaches visitors after the build.
-
-**Test** on a row asks the live site for the old address, from the browser, and says what came
-back rather than what the file says: *Working* (it forwards where the rule points), *Not there
-yet* (a 404 — the rule is unpublished or the site is still building) or *Not what this rule says*
-(a page answers at the old address, or it forwards somewhere else).
-
-A rule with `reason: hidden` belongs to the entry that is hidden — showing that entry again
-removes the rule in the same commit — so the table draws it but neither edits nor deletes it.
-
-At build time the integration writes every rule into `_redirects` in the output directory,
-which Cloudflare serves without any Worker code. Each `from` is written twice — with the trailing
-slash and without, since a visitor arrives with whichever form the page had when they bookmarked
-it — and `to` the way your pages answer (`trailingSlash` and `build.format`), so they land in one
-hop:
-
-```
-/brochure https://example.com/files/brochure.pdf 301
-/brochure/ https://example.com/files/brochure.pdf 301
-```
-
-A rule that fails validation fails the build, naming it:
-`src/content/redirects.yaml › rules[0].from: a path starting with "/"`. Redirects from
-`astro.config` still work; the adapter adds them to the same file.
 
 ## Templates
 

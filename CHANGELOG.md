@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Docs: Site files is three pages instead of one 190-line page** — [the hub](docs/site-files.md)
+  with globals and templates, [Navigation menus](docs/navigation.md) and
+  [Redirects](docs/redirects.md); inbound links repointed.
 - **Small admin fixes.** The entry list's heading reads *2 of 14* under the Status filter
   instead of keeping the collection's total; the navigation builder's phone sheet has a scrim,
   so a tap outside closes it; the SEO panel draws the mockup's slim gauge under each counted
@@ -21,7 +24,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   marks a sibling slot, a tinted well names the parent it would go inside ("Add inside Listings,
   after Sold"), and a slot past three levels refuses in place. During a keyboard drag, ↑ ↓ walk
   the slots and → ← change level; the arrow buttons on each row still do every move
-  ([Site files](docs/site-files.md#navigation)).
+  ([Navigation menus](docs/navigation.md)).
 - **The entry editor no longer scrolls sideways on a phone** at the demo home page's deepest block
   nesting: a list of blocks sizes to its own width rather than to the widest card's words, and a
   block header three levels down wraps instead.
@@ -63,13 +66,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Test on a redirect.** Every row of Site settings → Redirects has a **Test** button that asks
   the live site for the old address and reports what actually came back — *Working*, *Not there
   yet* while the rule is unpublished or the build is running, or *Not what this rule says* when a
-  page answers there or it forwards elsewhere ([Site files](docs/site-files.md#redirects)).
+  page answers there or it forwards elsewhere ([Redirects](docs/redirects.md)).
 - **Redirects answer both forms of the old address.** `_redirects` used to carry each rule's
   `from` bare, while the pages themselves answer with the trailing slash under Astro's default
   `build.format`, so `/listings/old-name/` — the form the site's own links, canonicals and
   sitemap use — was a 404 after a rename, hide or delete. Every `from` is now written both ways,
   and `to` in the site's own form, so visitors land in one hop
-  ([Site files](docs/site-files.md#redirects)). `<LocaleSwitcher />` and `<Nav />` write their
+  ([Redirects](docs/redirects.md)). `<LocaleSwitcher />` and `<Nav />` write their
   links the same way, following the page being read, as `<Seo />`'s alternates already did.
 - **Side by side mirrors the structure at once.** A block moved, added or removed in the entry's
   own language used to reach the second column on its next open; it moves there as you do it now,
@@ -188,7 +191,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   every rule the pipeline wrote — a rename, a hide, a delete — beside the ones the client adds by
   hand, searchable and filtered by reason. Add, edit and delete a rule; picking the destination
   from the page list writes that page's address in the language the old one was in
-  ([Site files](docs/site-files.md#redirects)).
+  ([Redirects](docs/redirects.md)).
 - **A manual rule commits as it is added.** It is not an unpublished change waiting in the drawer:
   `redirects.yaml` is assembled at publish out of the rules of the *selected* entries, so a rule
   with no entry to ride on has nowhere to wait. The site serves it after the next build, the way a
@@ -200,7 +203,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   a read-only value: pages and entries on the left, the tree on the right, three levels deep,
   reordered by dragging a row's handle or with the up, down, indent and outdent buttons on it.
   An item pointing at a page this language does not have, or at a hidden one, is flagged where
-  it stands ([Site files](docs/site-files.md#navigation)).
+  it stands ([Navigation menus](docs/navigation.md)).
 - **`<Nav />` and `menusAt()`.** The menu one language renders: every `ref` resolved to the
   address that language serves, and every item it cannot show dropped — with its children — so a
   menu never links to a page that is not there ([Rendering content](docs/rendering.md#navigation-menus)).

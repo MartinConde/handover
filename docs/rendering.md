@@ -94,7 +94,7 @@ const locales = cms.i18n.locales.map((locale) => ({
 
 ## Navigation menus
 
-`menusAt()` resolves the [`navigation` global](site-files.md#navigation) for one language:
+`menusAt()` resolves the [`navigation` global](navigation.md) for one language:
 every menu by its key, every item's `ref` turned into the address that language serves, and
 everything that language cannot show **dropped** — an entry with no file in it, a hidden one,
 and an item whose `_locales` names another language. A dropped item takes its children with it,

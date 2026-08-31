@@ -103,7 +103,7 @@ the collection is not configured.
 
 ## Redirects
 
-The table over `src/content/redirects.yaml` ([Site files](site-files.md#redirects)). These
+The table over `src/content/redirects.yaml` ([Redirects](redirects.md)). These
 three **commit as they are called**: the file is assembled at publish out of the rules of the
 selected entries, so a rule belonging to no entry has nowhere to wait.
 
