@@ -973,6 +973,8 @@ a.btn { text-decoration: none; }
 .tree-empty { min-height: 220px; }
 .tree-note { font-size: var(--text-xs); color: var(--ink-2); }
 .nav-build.is-labels { grid-template-columns: minmax(0, 1fr); }
+/* The phone's way into the add pane, and its way out: neither exists wider than a phone. */
+.nav-add-open, .nav-add .nav-add-close { display: none; }
 .menu-item.is-label { grid-template-columns: minmax(0, 1fr); gap: var(--s-1); }
 .menu-item.is-label .lbl { font-size: var(--text-sm); color: var(--ink-2); }
 
@@ -1341,6 +1343,11 @@ input[type="date"].input { padding-right: var(--s-3); }
      strip the narrow rule hides — so this one stays. */
   :root .tabs.is-menus { display: flex; }
   :root .nav-add { position: static; }
+  /* The add pane is a sheet over the tree, opened from the button above it. */
+  .nav-add-open { display: inline-flex; justify-self: start; }
+  .nav-add { display: none; }
+  .nav-add.is-open { display: grid; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; max-height: 85vh; overflow: auto; border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: var(--surface); box-shadow: var(--shadow-toast); }
+  .nav-add .nav-add-close { display: inline-flex; justify-self: end; }
   /* Narrow: the entry list's card rule keys off `.table`, which `.cols-7` outranks, so the seven
      columns have to be collapsed by name. From and To lead the card; everything else is a labelled
      line under them, and the actions sit top right where the row menu was. */

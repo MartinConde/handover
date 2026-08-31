@@ -28,6 +28,7 @@ function heightOf(item: MenuItem): number {
 import { type DragDropEventHandlers, DragDropProvider } from '@dnd-kit/svelte';
 import { createSortable, isSortable } from '@dnd-kit/svelte/sortable';
 import { newId, unsafeLinkScheme } from '@handover/core';
+import { tick } from 'svelte';
 import PagePicker, { type Pickable, type PickEntry, readPickable } from './PagePicker.svelte';
 
 let {
@@ -60,6 +61,20 @@ let trigger: HTMLElement | undefined;
 /** The item form's picker is open over the link summary. */
 let changing = $state(false);
 let custom = $state({ label: '', href: '', newTab: false });
+// On a phone the tree is the screen and the add pane is a sheet opened from a button; wider
+// than that the stylesheet hides the button and the pane is simply there. One disclosure
+// either way, so nothing here asks how wide the screen is.
+let adding = $state(false);
+let addButton = $state<HTMLButtonElement>();
+async function openAdd() {
+  adding = true;
+  await tick();
+  document.getElementById(`${id}-add-h`)?.focus();
+}
+function closeAdd() {
+  adding = false;
+  addButton?.focus();
+}
 
 const menu = $derived(menus[tab]);
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -312,7 +327,7 @@ function walkTabs(event: KeyboardEvent) {
   </ul>
 {/snippet}
 
-<svelte:window onkeydown={(e) => { if (e.key === 'Escape' && removing) { removing = undefined; trigger?.focus(); } }} />
+<svelte:window onkeydown={(e) => { if (e.key !== 'Escape') return; if (removing) { removing = undefined; trigger?.focus(); } else if (adding) closeAdd(); }} />
 
 <div class="nav-build" class:is-labels={translating} {id} role="group" aria-labelledby={labelId}>
   {#if !menu}
@@ -334,8 +349,9 @@ function walkTabs(event: KeyboardEvent) {
       </div>
     {/if}
     {#if !translating}
-      <div class="nav-add">
-        <h2 class="side-title" id="{id}-add-h">Add to menu</h2>
+      <button class="btn btn-primary nav-add-open" type="button" aria-expanded={adding} aria-controls="{id}-add" bind:this={addButton} onclick={openAdd}>Add to menu</button>
+      <div class="nav-add" class:is-open={adding} id="{id}-add">
+        <h2 class="side-title" id="{id}-add-h" tabindex="-1">Add to menu</h2>
         <PagePicker id="{id}-pick" label="pages and entries" labelId="{id}-add-h" onpick={addEntry} />
         <p class="hint">Choosing one puts it at the bottom of the menu; move it from there.</p>
         <div class="custom-link">
@@ -352,6 +368,7 @@ function walkTabs(event: KeyboardEvent) {
           <label class="choice" for="{id}-cl-tab"><input type="checkbox" id="{id}-cl-tab" bind:checked={custom.newTab} /><span>Open in a new tab</span></label>
           <button class="btn btn-sm" type="button" disabled={!custom.href || !!scheme} onclick={addCustom}>Add to menu</button>
         </div>
+        <button class="btn nav-add-close" type="button" onclick={closeAdd}>Done</button>
       </div>
     {/if}
     <div class="nav-main" id="{id}-menu" role={menus.length > 1 ? 'tabpanel' : undefined} aria-labelledby={menus.length > 1 ? `${id}-tab-${tab}` : undefined}>

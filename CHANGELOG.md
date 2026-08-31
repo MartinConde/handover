@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **The navigation builder on a phone** keeps the tree as the screen and opens *Add to menu* as a
+  sheet over it, instead of stacking the whole add pane above the tree.
 - **The SEO panel previews the page** as a search result and as a shared card, per language and
   under the address that language serves it at. They need `site` in `astro.config.mjs`; without
   it the greyed boxes stand alone, as before ([SEO](docs/seo.md#in-the-admin)).

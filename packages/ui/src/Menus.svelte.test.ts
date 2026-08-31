@@ -371,6 +371,38 @@ test('reordering by keyboard and by mouse write the same menu', async () => {
   expect(written()).toBe(moved);
 });
 
+// On a phone the tree is the screen and the add pane is a sheet opened from a button; the
+// stylesheet hides the button wider than that, and the pane is a plain pane. One disclosure
+// either way, so the button's state and the focus contract are what is tested here.
+test('Add to menu opens the add pane as a sheet, focus lands in it, and Escape gives it back', async () => {
+  show(three());
+  const open = q<HTMLButtonElement>('.nav-add-open');
+  expect(open.getAttribute('aria-expanded')).toBe('false');
+  expect(open.getAttribute('aria-controls')).toBe('f-menus-add');
+
+  open.click();
+  await loaded();
+  expect(q('#f-menus-add').classList.contains('is-open')).toBe(true);
+  expect(open.getAttribute('aria-expanded')).toBe('true');
+  expect(document.activeElement?.id).toBe('f-menus-add-h');
+
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  flushSync();
+  expect(q('#f-menus-add').classList.contains('is-open')).toBe(false);
+  expect(document.activeElement).toBe(open);
+});
+
+test('Done closes the sheet and gives focus back to the button that opened it', async () => {
+  show(three());
+  q<HTMLButtonElement>('.nav-add-open').click();
+  await loaded();
+
+  q<HTMLButtonElement>('.nav-add .nav-add-close').click();
+  flushSync();
+  expect(q('#f-menus-add').classList.contains('is-open')).toBe(false);
+  expect(document.activeElement).toBe(q('.nav-add-open'));
+});
+
 // Each level is its own sortable list, so a sub-item dragged inside its own branch must not
 // reach for a place in the level above it.
 test('a sub-item is dragged within its own branch', async () => {
