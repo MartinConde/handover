@@ -793,7 +793,7 @@ const hashOf = async (form: Form, data: unknown) =>
  * what the file says. Shared and source-language-only fields are left out — a price nobody
  * retypes is not a reason to retranslate.
  */
-function translatedValues(form: Form, data: unknown): [string, string][] {
+export function translatedValues(form: Form, data: unknown): [string, string][] {
   const found: [string, string][] = [];
   valuesIn(form, form.fields, data, '', true, found);
   return found.sort(([a], [b]) => (a < b ? -1 : 1));

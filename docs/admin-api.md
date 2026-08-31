@@ -351,6 +351,22 @@ that one is about the site rather than the entry, so it comes before the entry i
 and `404` for an entry with no file in either language comes after it.
 
 ```
+GET /admin/api/source/:collection/:slug/:locale  →  { "from", "translatedAt", "changed": { "<field>": [{ "text", "mark" }] } }
+```
+
+What that language's source has said since somebody translated it, field by field — the marker a
+target-language field carries beside its label in side-by-side editing
+([Translating](translating.md#translation-staleness)). The entry response's `stale` says *which*
+languages are behind, off one hash over the whole file; this says which of their fields. The older
+source is fetched by the blob id the translation itself wrote down, so it survives however many
+commits later somebody asks.
+
+Keys are the address `_machine` uses (`blocks[_id=k3nf9a2p].heading`), and each value is the same
+word diff the drawer draws: `mark` is `del` for what went, `ins` for what arrived, absent for what
+stayed. `{ "changed": {} }` and no `from` wherever there is nothing to compare — the language has
+no translation mark, or git no longer holds those bytes. `404` for an entry no collection has.
+
+```
 DELETE /admin/api/drafts/:collection/:slug  →  {}
 ```
 

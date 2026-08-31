@@ -21,6 +21,7 @@ function fakeGit(files: Record<string, string>) {
     request: () => Promise.reject(new Error('not used')),
     getHead: async () => 'commit-A',
     getCommit: () => Promise.reject(new Error('not used')),
+    getBlob: () => Promise.reject(new Error('not used')),
     contentFiles: () => Promise.reject(new Error('not used')),
     fileCommits: () => Promise.reject(new Error('not used')),
     getFile: async (path, at) => {

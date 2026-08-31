@@ -4,6 +4,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **A stale marker per field, in side-by-side editing.** A translation the source language has
+  moved on from used to say so once, in the second column's header; each field the source has
+  actually changed now carries an amber marker of its own. Opening one shows that field's source
+  as it read when somebody translated it and as it reads now, with the words that went and the
+  words that arrived marked, and offers **Re-translate** for that one field
+  ([Translating](docs/translating.md#translation-staleness)). New route:
+  `GET /admin/api/source/:collection/:slug/:locale` ([Admin API](docs/admin-api.md)).
+- **The admin is styled.** The rich-text editor, the boolean switch, the block picker, array and
+  group rows, the pre-publish check list, the page picker, the upload rows and the media cards
+  were rendering with no styles of their own; they now carry the ones the design set has always
+  had for them.
+- **The admin works on a phone.** Every narrow-viewport rule is in force below 720px — the entry
+  list and the redirects table as cards, the drawer full width, the change rows stacked, the auth
+  card and the entry header. The sidebar opens from a menu button in the top bar rather than being
+  unreachable, and the account menu is a real menu with name, email, role, Account and Sign out.
+- **The top bar's unpublished-changes indicator says more than a count**: how long the oldest
+  change has been waiting, and how many entries are held back.
+
 - **A dashboard at `/admin`.** The landing page is a state-of-the-site view instead of the
   first collection's list: what is waiting to be published and how old it is, the build pill
   with who published last and a Revert, the last eight entries anybody edited with the lock

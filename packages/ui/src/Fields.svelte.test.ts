@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { Field, ResolvedSeo } from '@handover/core';
+import type { Field, ResolvedSeo, WordPart } from '@handover/core';
 import { parseEntry, stringifyEntry } from '@handover/core';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -1422,4 +1422,114 @@ hero:
   height: 1600
 `,
   );
+});
+
+// Per-field staleness. `stale` on the column says the file is behind; this says which fields,
+// and opening one shows the source language before and after.
+const stalePane = (
+  changed: Record<string, WordPart[]>,
+  onretranslate?: (path: string) => void,
+  // A default would swallow an explicit `undefined`, which is the case worth testing.
+  translator = true,
+) => {
+  root = { title: 'Seaview Cottage', summary: 'Über dem Hafen.' };
+  app = mount(Fields, {
+    target: document.body,
+    props: {
+      fields: [
+        { path: ['title'], label: 'Title', type: 'text', required: true },
+        { path: ['summary'], label: 'Summary', type: 'text', required: false },
+      ] as Field[],
+      translating: true,
+      locale: 'de',
+      ontranslate: translator ? () => {} : undefined,
+      onretranslate,
+      sourceChanged: changed,
+      sourceLabel: 'English',
+      translatedAt: '2026-08-20T10:14:00Z',
+      get root() {
+        return root;
+      },
+      set root(v) {
+        root = v;
+      },
+    },
+  });
+  flushSync();
+  return document.body;
+};
+
+const CHANGED: Record<string, WordPart[]> = {
+  summary: [
+    { text: 'Above the ' },
+    { text: 'harbour', mark: 'del' },
+    { text: 'fish market', mark: 'ins' },
+    { text: '.' },
+  ],
+};
+
+test('only the fields the source has moved on from carry the marker', () => {
+  stalePane(CHANGED);
+  expect(document.querySelectorAll('.stale')).toHaveLength(1);
+  expect(q('.stale').textContent).toBe('English changed since this was translated');
+  expect(document.querySelector('#f-title')?.closest('.field')?.querySelector('.stale')).toBeNull();
+});
+
+test('the marker opens the source language as it was and as it reads now', () => {
+  stalePane(CHANGED);
+  click('.stale');
+  const rows = document.querySelectorAll('.popover .diff .row');
+  expect(rows).toHaveLength(2);
+  // The stamp is the reader's own clock; what is pinned here is the sentence on either side.
+  expect(rows[0]?.querySelector('small')?.textContent).toMatch(
+    /^English, when translated · \d+ Aug, \d\d:\d\d$/,
+  );
+  expect(rows[0]?.textContent?.replace(/^.*\d\d:\d\d/, '')).toBe('Above the harbour.');
+  expect(rows[1]?.textContent).toBe('English, nowAbove the fish market.');
+  expect(q('.stale').getAttribute('aria-expanded')).toBe('true');
+});
+
+// It says `role="dialog"`; a dialog that takes no focus and gives none back is one a keyboard
+// cannot reach or leave.
+test('the marker hands focus to the popover and takes it back on Escape', () => {
+  stalePane(CHANGED);
+  click('.stale');
+  expect(document.activeElement).toBe(q('.popover'));
+
+  q('.popover').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  flushSync();
+  expect(document.querySelector('.popover')).toBeNull();
+  expect(document.activeElement).toBe(q('.stale'));
+});
+
+test('Dismiss takes the marker off the field it was on', () => {
+  stalePane(CHANGED);
+  click('.stale');
+  click('.popover .actions button:last-of-type');
+  expect(document.querySelector('.stale')).toBeNull();
+  expect(document.querySelector('.popover')).toBeNull();
+});
+
+// Re-translate is the one-field fill the Translate button already makes — the same route, named
+// for the reason somebody is pressing it here.
+test('Re-translate asks for the one field the marker is on', () => {
+  const asked: string[] = [];
+  stalePane(CHANGED, (path) => asked.push(path));
+  click('.stale');
+  click('.popover .actions button');
+  expect(asked).toEqual(['summary']);
+  expect(document.querySelector('.popover')).toBeNull();
+});
+
+// Regression: the marker hung off the same condition as the Translate button, so a site with
+// nothing configured to translate with — which is most of them — never saw it at all.
+test('a site with no translator still gets the marker, with Dismiss alone', () => {
+  stalePane(CHANGED, undefined, false);
+  expect(document.querySelector('.btn-translate')).toBeNull();
+  expect(document.querySelectorAll('.stale')).toHaveLength(1);
+
+  click('.stale');
+  const actions = document.querySelectorAll('.popover .actions button');
+  expect(actions).toHaveLength(1);
+  expect(actions[0]?.textContent?.trim()).toBe('Dismiss');
 });

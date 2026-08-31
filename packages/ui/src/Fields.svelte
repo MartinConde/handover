@@ -16,6 +16,7 @@ import {
   seoMeter,
   type Translation,
   unsafeLinkScheme,
+  type WordPart,
 } from '@handover/core';
 import { tick } from 'svelte';
 import Fields from './Fields.svelte';
@@ -37,6 +38,10 @@ let {
   translating = false,
   machine = [],
   ontranslate,
+  sourceChanged = {},
+  sourceLabel = '',
+  translatedAt = '',
+  onretranslate,
   inherited = true,
   prefix = 'f',
   mediaBase = '',
@@ -58,6 +63,17 @@ let {
   machine?: string[];
   /** Translate one field from the source language; absent when the site has nothing to do it. */
   ontranslate?: (path: string) => void;
+  /**
+   * What the source language has said since this file was translated, by the same address
+   * `machine` uses. A field named here carries the amber marker; opening it shows the words.
+   */
+  sourceChanged?: Record<string, WordPart[]>;
+  /** What that language is called, for the two lines the marker opens. */
+  sourceLabel?: string;
+  /** When somebody translated this file — the older line's timestamp. */
+  translatedAt?: string;
+  /** Translate this one field again, from the source as it reads now. */
+  onretranslate?: (path: string) => void;
   /** The translation mode the fields inherit — a group hands its own down. */
   inherited?: Translation;
   /** What the field ids start with; two forms on one screen cannot share it. */
@@ -92,12 +108,43 @@ const shown = $derived(
 // One picker at a time per form level; the field id says which is open.
 let picker = $state('');
 
+// One stale marker open at a time, named by the field's address. Dismiss takes the marker off
+// for as long as the screen is open: what would put it back is the source language moving
+// again, and that is a reload either way.
+let opened = $state('');
+let dismissed = $state<string[]>([]);
+// It says `role="dialog"`, so it takes focus when it opens and hands it back to the marker when
+// it closes; axe scores nothing on either. Escape closes it like any other layer here.
+let popover = $state<HTMLElement>();
+$effect(() => {
+  if (opened) popover?.focus();
+});
+const behind = (path: string) => !dismissed.includes(path) && sourceChanged[path] !== undefined;
+// "20 Aug 10:14". Which English this is, not how long ago — a distance says nothing about that.
+const WHEN = new Intl.DateTimeFormat('en-GB', {
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit',
+});
+const when = (iso: string) => {
+  const at = Date.parse(iso);
+  return at ? WHEN.format(at) : '';
+};
+const close = (path: string, then: (path: string) => void) => {
+  const marker = document.getElementById(`stale-${path}`);
+  opened = '';
+  then(path);
+  marker?.focus();
+};
+
 // Where the file names this field: `blocks[_id=k3nf9a2p].heading`, which is what `_machine`
 // and the machine translation route both address it by. The form knows it by its position.
 const address = (at: readonly string[]) => fieldAddress('default', at, root);
-// Prose is what a machine is offered — the fields this column draws as something to type in.
-const prose = (field: Field) =>
-  !!ontranslate && translating && (field.type === 'text' || field.type === 'richtext');
+// Prose is the half a translation owns — the fields this column draws as something to type in.
+// Not conditional on having a machine: the stale marker and the machine badge are worth having
+// on a site with nothing to translate with, and only the Translate button is the machine's.
+const prose = (field: Field) => translating && (field.type === 'text' || field.type === 'richtext');
 
 function read(at: readonly string[]): unknown {
   return at.reduce<unknown>((node, key) => (node as Data | undefined)?.[key], root);
@@ -334,7 +381,56 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
 
 {#snippet machineMark(path: string, text: string)}
   {#if machine.includes(path)}<span class="badge badge-machine">Machine translated</span>{/if}
-  <button class="btn btn-ghost btn-translate" type="button" aria-label="Translate {text} from the source language" onclick={() => ontranslate?.(path)}>Translate</button>
+  {#if behind(path)}
+    <button
+      class="stale"
+      id="stale-{path}"
+      type="button"
+      aria-haspopup="dialog"
+      aria-expanded={opened === path}
+      onclick={() => (opened = opened === path ? '' : path)}
+      >{sourceLabel} changed since this was translated</button
+    >
+  {/if}
+  {#if ontranslate}
+    <button class="btn btn-ghost btn-translate" type="button" aria-label="Translate {text} from the source language" onclick={() => ontranslate?.(path)}>Translate</button>
+  {/if}
+{/snippet}
+
+<!-- The source language before and after, so the decision is "does the German still say this?"
+     and not "what changed, again?". Both lines are the same word diff read from either end. -->
+{#snippet stale(stalePath: string)}
+  <div
+    class="popover"
+    role="dialog"
+    tabindex="-1"
+    bind:this={popover}
+    aria-label="What changed in {sourceLabel}"
+    onkeydown={(e) => e.key === 'Escape' && close(stalePath, () => {})}
+  >
+    <div class="diff">
+      <div class="row">
+        <small>{sourceLabel}, when translated{translatedAt ? ` · ${when(translatedAt)}` : ''}</small
+        >{#each sourceChanged[stalePath] ?? [] as part, i (i)}{#if part.mark === 'del'}<del
+            >{part.text}</del
+          >{:else if part.mark !== 'ins'}{part.text}{/if}{/each}
+      </div>
+      <div class="row">
+        <small>{sourceLabel}, now</small
+        >{#each sourceChanged[stalePath] ?? [] as part, i (i)}{#if part.mark === 'ins'}<ins
+            >{part.text}</ins
+          >{:else if part.mark !== 'del'}{part.text}{/if}{/each}
+      </div>
+    </div>
+    <!-- The address is read before `opened` moves: a snippet's argument is re-read on demand,
+         and closing the popover is what takes this one away. -->
+    <div class="actions">
+      {#if onretranslate}
+        <button class="btn btn-sm" type="button" onclick={() => close(stalePath, onretranslate)}>Re-translate</button>
+      {/if}
+      <button class="btn btn-sm btn-ghost" type="button" onclick={() => close(stalePath, (p) => (dismissed = [...dismissed, p]))}>Dismiss</button>
+    </div>
+  </div>
 {/snippet}
 
 {#snippet groupLabel(id: string, field: Field, text: string, at: readonly string[] = [])}
@@ -417,7 +513,8 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   {@const err = problems[at.join('.')]}
   {@const bad = err ? 'true' : undefined}
   {@const says = err ? `${id}-err` : undefined}
-  <div class="field" class:is-invalid={err}>
+  {@const marked = [address(at), `${address(at)}.label`].find((p) => opened === p)}
+  <div class="field" class:is-invalid={err} class:pop-anchor={marked}>
     {#if field.type === 'menus'}
       {@render groupLabel(id, field, text, at)}
       <Menus {id} labelId="{id}-l" menus={rows(at) as Menu[]} {locale} {translating} />
@@ -460,7 +557,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'link' && translating}
       <!-- A link's label is the half a translation owns; where it points is the same everywhere. -->
       {@render groupLabel(id, field, text, at)}
-      <div class="field"><div class="label-row"><label for="{id}.label">Label</label>{#if ontranslate}{@render machineMark(`${address(at)}.label`, `${text} label`)}{/if}</div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
+      <div class="field"><div class="label-row"><label for="{id}.label">Label</label>{@render machineMark(`${address(at)}.label`, `${text} label`)}</div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
     {:else if field.type === 'link'}
       {@render groupLabel(id, field, text, at)}
       <div class="seg" role="group" aria-label="Link type">
@@ -489,7 +586,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'group'}
       <details class="group" open>
         <summary>{text}<span class="count">{field.fields.length} fields</span></summary>
-        <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} {translating} {machine} {ontranslate} {prefix} {mediaBase} {locale} inherited={mode} /></div>
+        <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} inherited={mode} /></div>
       </details>
     {:else if field.type === 'array'}
       {@const items = rows(at)}
@@ -501,7 +598,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {#each items as row, i (keyOf(items, i))}
           {@const s = sortable(() => keyOf(items, i), () => i)}
           <div class="row-card" class:is-dragging={s.isDragging} {@attach s.attach}>
-            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {prefix} {mediaBase} {locale} inherited={mode} /></div>
+            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} inherited={mode} /></div>
             {#if !translating}{@render controls(at, i, `${text} row ${i + 1}`, s.attachHandle)}{/if}
           </div>
         {:else}
@@ -544,7 +641,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
             {#if shut}
               <!-- folded: the header is the whole card -->
             {:else if inner}
-              <div class="form" id="{id}.{i}-b"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {prefix} {mediaBase} {locale} inherited={mode} /></div>
+              <div class="form" id="{id}.{i}-b"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} inherited={mode} /></div>
             {:else}
               <p class="ref-note" id="{id}.{i}-b">{block(row)._ref ?? `No “${block(row)._type}” block in the registry`} — not editable here</p>
             {/if}
@@ -757,6 +854,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <p class="hint" {id}>Not editable here yet</p>
     {/if}
     {#if err}<p class="error" id="{id}-err">{err}</p>{/if}
+    {#if marked}{@render stale(marked)}{/if}
     {#if framing === id && field.type === 'image'}
       <!-- The page's own dot, over the field's own shape. It wins over the library's default
            for this page, and it is the same picture in every language. -->

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { type Change, diffEntry } from './diff.js';
+import { type Change, diffEntry, sourceChanges } from './diff.js';
 import type { Form } from './schema.js';
 
 // A listing as a translated site has it: the price is the same in every language, the notes
@@ -599,4 +599,71 @@ test('a menu item moved in both files is one move, said once', () => {
     },
   ]);
   expect(changesIn(groups, 'de')).toEqual([]);
+});
+
+// `sourceChanges` — the per-field staleness marker. The whole-file hash in `staleLocales` says
+// *a* language is behind; this says which of its fields, and what the source says now.
+test('a source value that moved comes back as the words that moved', () => {
+  const changed = sourceChanges(
+    'default',
+    listing,
+    { title: 'Mill House', summary: 'Above the harbour.' },
+    { title: 'Mill House', summary: 'Above the fish market.' },
+  );
+
+  expect(changed).toEqual({
+    summary: [
+      { text: 'Above the ' },
+      { text: 'harbour', mark: 'del' },
+      { text: 'fish market', mark: 'ins' },
+      { text: '.' },
+    ],
+  });
+});
+
+test('a value the source has not touched is not marked', () => {
+  const en = { title: 'Mill House', summary: 'Above the harbour.' };
+
+  expect(sourceChanges('default', listing, en, en)).toEqual({});
+});
+
+// The client retyped nothing here: a price is written into every file and translating it again
+// would say the same number back.
+test('a shared value that moved is not something to retranslate', () => {
+  const changed = sourceChanges(
+    'default',
+    listing,
+    { title: 'Mill House', price: 450000 },
+    { title: 'Mill House', price: 435000 },
+  );
+
+  expect(changed).toEqual({});
+});
+
+test('a source value that went reads as the whole sentence going', () => {
+  const changed = sourceChanges(
+    'default',
+    listing,
+    { title: 'Mill House', summary: 'Above the harbour.' },
+    { title: 'Mill House' },
+  );
+
+  expect(changed).toEqual({
+    summary: [{ text: 'Above the harbour.', mark: 'del' }],
+  });
+});
+
+// The marker has to find the field the form drew, and a block is not at a position — it is at
+// its `_id`, which is what `_machine` and the translate route already address it by.
+test('a block field is marked at the address the form knows it by', () => {
+  const changed = sourceChanges(
+    'default',
+    page,
+    { blocks: [hero, cta] },
+    { blocks: [{ ...hero, heading: 'Seaview Cottage, Devon' }, cta] },
+  );
+
+  expect(changed).toEqual({
+    'blocks[_id=aaaa1111].heading': [{ text: 'Seaview Cottage' }, { text: ', Devon', mark: 'ins' }],
+  });
 });

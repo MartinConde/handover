@@ -229,23 +229,6 @@ a.btn { text-decoration: none; }
 .dialog p { color: var(--ink-2); font-size: var(--text-sm); }
 .dialog .actions { display: flex; justify-content: flex-end; gap: var(--s-2); margin-top: var(--s-6); }
 
-/* ---------- narrow viewport (≤ 720px, or a frame marked .is-narrow) ---------- */
-@media (max-width: 720px) {
-  .shell { grid-template-columns: 1fr; }
-  .shell > .sidebar { display: none; }
-  .menu-button { display: inline-flex; }
-  .topbar { padding: var(--s-3) var(--s-3) 0; gap: var(--s-2); flex-wrap: wrap; }
-  .main { margin: var(--s-3); padding: var(--s-5); }
-}
-.is-narrow .shell { grid-template-columns: 1fr; }
-.is-narrow .shell > .sidebar { display: none; }
-.is-narrow .menu-button { display: inline-flex; }
-.is-narrow .topbar { padding: var(--s-3) var(--s-3) 0; gap: var(--s-2); flex-wrap: wrap; }
-.is-narrow .main { margin: var(--s-3); padding: var(--s-5); }
-.is-narrow .indicator .detail, .is-narrow .user-menu .label { display: none; }
-.is-narrow .indicator, .is-narrow .pill { padding: 0 var(--s-3); }
-.is-narrow .user-menu > .btn { padding: 0; }
-
 /* ---------- login / auth card ---------- */
 .auth-page { min-height: 100vh; display: grid; place-items: center; padding: var(--s-6); background: var(--bg); }
 .auth-page > div { width: min(420px, 100%); }
@@ -259,8 +242,6 @@ a.btn { text-decoration: none; }
 .auth-card .secondary { text-align: center; font-size: var(--text-sm); }
 .auth-card .secondary a { color: var(--ink-2); }
 .auth-foot { margin-top: var(--s-6); text-align: center; font-size: var(--text-xs); color: var(--ink-3); }
-.is-narrow .auth-page { padding: var(--s-4); align-items: start; }
-.is-narrow .auth-card { padding: var(--s-8) var(--s-5) var(--s-6); }
 
 /* ---------- shared bits added in 0.9d ---------- */
 .badge-success { background: var(--success-soft); color: var(--success-ink); }
@@ -383,12 +364,6 @@ a.btn { text-decoration: none; }
 .lock-banner.is-drift { background: var(--danger-soft); color: var(--danger-ink); }
 .lock-banner.is-offer { background: var(--warn-soft); color: var(--warn-ink); }
 .form-placeholder { min-height: 160px; border: 1.5px dashed var(--border); border-radius: var(--radius-lg); background: var(--surface-2); display: grid; place-items: center; color: var(--ink-3); font-size: var(--text-sm); text-align: center; padding: var(--s-6); }
-.is-narrow .entry-header { padding: var(--s-4) var(--s-5) 0; }
-.is-narrow .entry-header .actions .btn-preview, .is-narrow .entry-header .actions .btn-sbs, .is-narrow .tabs { display: none; }
-.is-narrow .entry-body { padding: var(--s-5); grid-template-columns: 1fr; }
-.is-narrow .entry-body.has-pane .pane { display: none; }
-.is-narrow .pane-toggle { display: inline-flex; }
-.is-narrow .form .field-group { grid-template-columns: 1fr; }
 
 /* ---------- entry list ---------- */
 .list-toolbar { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; margin-bottom: var(--s-6); }
@@ -460,26 +435,10 @@ a.btn { text-decoration: none; }
 .row-menu { position: relative; }
 .row-menu .menu { top: calc(100% + 4px); }
 .menu hr { border: 0; border-top: 1px solid var(--border); margin: var(--s-2) 0; }
-.is-narrow .list-toolbar .search { max-width: none; }
-.is-narrow .table, .is-narrow .table.has-select { display: grid; grid-template-columns: 1fr; gap: var(--s-3); }
-.is-narrow .table .th { display: none; }
-.is-narrow .table .row { display: grid; grid-template-columns: 1fr auto; gap: var(--s-1) var(--s-2); padding: var(--s-3) var(--s-4); border-radius: var(--radius); box-shadow: var(--shadow-panel); border: 1px solid var(--border); }
-.is-narrow .table .row .td { min-height: 0; padding: 0; border: 0; }
-.is-narrow .table .row .td.title { grid-column: 1; }
-.is-narrow .table .row .td.menu-cell { grid-column: 2; grid-row: 1; }
+
 /* The card rule above keys off `.table`, which `.cols-7` outranks, so the seven columns have to
    be collapsed by name. From and To lead the card; the rest is a labelled line under them. */
-.is-narrow .table.cols-7 { grid-template-columns: 1fr; }
-.is-narrow .table.cols-7 .row { grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-1) var(--s-2); }
-.is-narrow .table.cols-7 .row .td { grid-column: 1; flex-wrap: wrap; min-height: 0; padding: 0; border: 0; background: none; }
-.is-narrow .table.cols-7 .row.is-managed { background: var(--surface-2); }
-.is-narrow .table.cols-7 .row.is-managed .td { background: none; }
-.is-narrow .table.cols-7 .row .td.menu-cell { grid-column: 2; grid-row: 1 / span 2; align-items: start; }
-.is-narrow .table.cols-7 .row .td[data-label]::before { content: attr(data-label) " "; flex: none; color: var(--ink-3); font-family: var(--font-sans); font-size: var(--text-xs); }
-.is-narrow .table.cols-7 .row .td.path { flex-wrap: wrap; }
-.is-narrow .table .row .td.num { grid-column: 1 / -1; }
-.is-narrow .table .row .td.num::before { content: attr(data-label) " "; color: var(--ink-3); }
-.is-narrow .bulk-bar { bottom: var(--s-3); }
+
 .sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; padding: var(--s-5) var(--s-5) var(--s-6); background: var(--surface); border-radius: var(--radius-lg) var(--radius-lg) 0 0; box-shadow: var(--shadow-toast); display: grid; gap: var(--s-4); }
 .sheet h2 { font-size: var(--text-lg); }
 .sheet .handle { width: 36px; height: 4px; border-radius: 2px; background: var(--border-strong); margin: 0 auto; }
@@ -531,12 +490,8 @@ a.btn { text-decoration: none; }
 .checks { display: grid; gap: var(--s-2); }
 .checks .notice { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); }
 .checks .notice .btn-link { margin-left: auto; color: inherit; white-space: nowrap; }
-.is-narrow .scrim.is-right { padding: 0; }
-.is-narrow .drawer { width: 100%; border-radius: 0; }
+
 .drawer-body:has(> .empty) { align-content: center; }
-.is-narrow .change-row { grid-template-columns: 32px minmax(0, 1fr); }
-.is-narrow .change-row .change-actions { grid-row: 3; grid-column: 2; justify-content: flex-start; }
-.is-narrow .change-row .lead { grid-row: 1; }
 
 /* Drift reconciliation — one card per block the languages disagree about, each with the answers
    that block allows. The options come from what has the block against what should: a block
@@ -575,7 +530,6 @@ a.btn { text-decoration: none; }
 .drift legend { padding: 0; margin-bottom: var(--s-2); font-size: var(--text-sm); font-weight: 500; }
 .drift > .actions { display: flex; align-items: center; gap: var(--s-3); }
 .drift > .actions .left { font-size: var(--text-sm); color: var(--ink-2); margin-right: auto; }
-@media (max-width: 720px) { .drift .drift-cols { grid-template-columns: 1fr; } }
 
 /* A one-time prompt in accent ground, above the sections rather than inside them. */
 .suggestion { display: grid; gap: var(--s-3); padding: var(--s-4); border-radius: var(--radius-lg); background: var(--accent-soft); color: var(--ink); }
@@ -671,16 +625,7 @@ a.btn { text-decoration: none; }
 .activity-detail { display: grid; gap: var(--s-3); padding: 0 var(--s-2) var(--s-4) calc(28px + var(--s-3) + var(--s-2)); }
 .activity-detail p { font-size: var(--text-sm); color: var(--ink-2); }
 .load-more { display: grid; justify-items: center; padding-top: var(--s-5); }
-@media (max-width: 720px) {
-  .activity-row { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
-  .activity-row > .avatar { grid-row: 1 / span 2; }
-  .activity-row .meta { grid-column: 2; }
-  .activity-row .when { min-width: 0; }
-}
-.is-narrow .activity-row { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
-.is-narrow .activity-row > .avatar { grid-row: 1 / span 2; }
-.is-narrow .activity-row .meta { grid-column: 2; }
-.is-narrow .activity-row .when { min-width: 0; }
+
 .result-actions { display: flex; align-items: center; gap: var(--s-3); font-size: var(--text-sm); }
 
 /* ---------- media: the image and file widgets, and the picker (3.13d) ---------- */
@@ -834,13 +779,6 @@ a.btn { text-decoration: none; }
 .merged-list .name { font-weight: 500; }
 .resolve > .actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-3); }
 .resolve > .actions .foot-note { flex-basis: 100%; }
-@media (max-width: 720px) {
-  .global-list { grid-template-columns: 1fr; }
-  .media-card, .picker-body { grid-template-columns: 1fr; }
-  .picker-dialog { width: 100%; max-height: none; border-radius: 0; }
-  .picker-side { border-left: 0; border-top: 1px solid var(--border); }
-  .picker-tools .search { max-width: none; }
-}
 
 /* ---------- preview pane (3.18d) ---------- */
 /* The pane stops being a dashed placeholder and becomes a panel: chrome on top, the client's own
@@ -888,12 +826,7 @@ a.btn { text-decoration: none; }
 .preview-error.is-quiet p { color: var(--ink-2); }
 /* On a narrow screen the two cannot sit beside each other, so the preview takes the row under the
    form and the device toggle goes with the pane's width — the phone is the phone frame. */
-@media (max-width: 720px) {
-  .entry-body.has-pane:has(> .pane.is-preview) { grid-template-columns: minmax(0, 1fr); }
-  .pane.is-preview .seg[aria-label="Screen width"] { display: none; }
-  .preview-stage { padding: var(--s-2); }
-  .preview-frame, .preview-frame.is-tablet, .preview-frame.is-phone { max-width: none; }
-}
+
 /* Media library (4.0d) — the picker's grid, rows and side panel taken out of the modal and put on
    the page. A tile stops being a radio and becomes a card with a stretched link: there is nothing
    to choose here, only something to open. Archived and recovered are a flag on the picture, never
@@ -955,10 +888,6 @@ a.btn { text-decoration: none; }
 .tag-row input { flex: 1; min-width: 80px; border: 0; background: none; padding: 0 var(--s-1); font-size: var(--text-sm); }
 .tag-row input:focus { outline: none; }
 .tag-row:has(input:focus) { border-color: var(--accent); outline: 3px solid var(--accent-soft); }
-@media (max-width: 720px) {
-  .lib-body { grid-template-columns: minmax(0, 1fr); }
-  .lib-side { position: static; }
-}
 
 /* ---------- the focal point and the crop, both dialogs over one picture (4.4) ---------- */
 .focal-dialog { width: min(880px, 100%); display: grid; gap: var(--s-4); }
@@ -1040,14 +969,6 @@ a.btn { text-decoration: none; }
 .menu-item.is-label { grid-template-columns: minmax(0, 1fr); gap: var(--s-1); }
 .menu-item.is-label .lbl { font-size: var(--text-sm); color: var(--ink-2); }
 
-@media (max-width: 720px) {
-  .focal-dialog .dialog-cols { grid-template-columns: minmax(0, 1fr); }
-  .nav-build { grid-template-columns: minmax(0, 1fr); }
-  .branch .branch { margin-left: var(--s-3); padding-left: var(--s-3); }
-  .menu-item { grid-template-columns: auto minmax(0, 1fr); }
-  .menu-item .item-actions { grid-row: 3; grid-column: 2; justify-content: flex-start; }
-}
-
 /* The history tab: the version list beside the version being read. Ported from
    `entry-history/mockup.html`; the line diff and the photo pair are not drawn yet. */
 .history { display: grid; grid-template-columns: 340px minmax(0, 1fr); gap: var(--s-8); padding: var(--s-8); flex: 1; align-items: start; }
@@ -1085,10 +1006,6 @@ a.btn { text-decoration: none; }
 .version-view .diff code { font-family: var(--font-mono); font-size: var(--text-xs); }
 .version-view .empty { min-height: 260px; }
 .version-view .form-placeholder { min-height: 120px; }
-.is-narrow .history { grid-template-columns: 1fr; padding: var(--s-5); gap: var(--s-6); }
-@media (max-width: 720px) {
-  .history { grid-template-columns: 1fr; padding: var(--s-5); gap: var(--s-6); }
-}
 
 /* Dashboard. The two big tiles are the top bar's indicator and pill grown up, in the same
    tints, and the lists under them are the activity log's and the entry list's own rows. */
@@ -1125,7 +1042,291 @@ a.btn { text-decoration: none; }
 .locale-line .ok { color: var(--success-ink); font-weight: 500; }
 .dash .activity > li:hover { background: none; }
 .dash .activity-row { padding: var(--s-2) 0; }
+
+/* ---------- entry list ---------- */
+.menu .is-disabled { color: var(--ink-3); cursor: not-allowed; display: flex; justify-content: space-between; }
+.menu .is-disabled small { font-weight: 400; }
+
+/* ---------- field widgets (1.11d) ---------- */
+.field .label-row label { margin-right: auto; }
+.field .meter { font-size: var(--text-xs); color: var(--ink-2); text-align: right; }
+.field .meter.is-over { color: var(--danger-ink); font-weight: 500; }
+.field .error::before { content: "!"; display: inline-grid; place-items: center; width: 14px; height: 14px; margin-right: var(--s-1); border-radius: 50%; background: var(--danger-ink); color: var(--on-danger); font-size: 10px; line-height: 1; }
+.field.is-invalid .picker { border-color: var(--danger); }
+.input.is-focus { border-color: var(--accent); outline: 3px solid var(--accent-soft); outline-offset: 0; }
+.stale { display: inline-flex; align-items: center; gap: var(--s-1); padding: 1px var(--s-2); border: 0; border-radius: var(--radius-sm); background: var(--warn-soft); color: var(--warn-ink); font-size: var(--text-xs); font-weight: 500; cursor: pointer; }
+.stale::before { content: "↻"; }
+select.input { appearance: none; padding-right: 2.25rem; background: var(--surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' fill='none' stroke='%235a6072' stroke-width='1.8'/%3E%3C/svg%3E") no-repeat right var(--s-3) center; }
+input[type="date"].input { padding-right: var(--s-3); }
+.check { display: flex; align-items: center; gap: var(--s-2); font-size: var(--text-md); cursor: pointer; }
+.check input { margin: 0; width: 16px; height: 16px; accent-color: var(--accent-ink); }
+.readonly pre { margin: 0; font-family: var(--font-mono); font-size: var(--text-xs); line-height: 1.55; white-space: pre; overflow-x: auto; color: var(--ink-2); }
+.readonly .body-md { color: var(--ink); font-size: var(--text-md); }
+.readonly .body-md p + p { margin-top: var(--s-3); }
+/* Switch — track is border-strong (≥ 3:1) off, accent-ink on; knob stays white */
+.switch { display: flex; align-items: center; gap: var(--s-3); cursor: pointer; }
+.switch input { appearance: none; flex: none; width: 40px; height: 24px; margin: 0; border: 1px solid transparent; border-radius: 12px; background: var(--border-strong); position: relative; cursor: pointer; }
+.switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: var(--surface); box-shadow: var(--shadow-chip); }
+.switch input:checked { background: var(--accent-ink); }
+.switch input:checked::after { transform: translateX(16px); }
+.switch input[disabled] { opacity: 0.5; cursor: not-allowed; }
+.switch .desc { color: var(--ink-2); font-size: var(--text-xs); }
+/* Radio group ≤ 5 options */
+.field fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: var(--s-2); }
+.field legend { padding: 0; font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--s-2); }
+.choice input[disabled] + span { color: var(--ink-3); }
+/* Rich text — TipTap surface drawn as an input */
+.rte { border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); }
+.rte.is-focus { border-color: var(--accent); outline: 3px solid var(--accent-soft); }
+.rte.is-disabled { background: var(--surface-2); color: var(--ink-2); }
+.rte-toolbar { display: flex; flex-wrap: wrap; gap: 2px; padding: var(--s-1) var(--s-2); border-bottom: 1px solid var(--border); }
+.rte-toolbar button { min-width: 30px; min-height: 30px; padding: 0 var(--s-2); border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink-2); font-size: var(--text-sm); font-weight: 600; cursor: pointer; }
+.rte-toolbar button:hover { background: var(--badge-bg); color: var(--ink); }
+.rte-toolbar button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent-ink); }
+.rte-toolbar button[disabled] { opacity: 0.45; cursor: not-allowed; }
+.rte-toolbar .sep { width: 1px; height: 18px; margin: 0 var(--s-1); align-self: center; background: var(--border); }
+.rte-body { padding: var(--s-3); min-height: 120px; }
+.rte-body > * + * { margin-top: var(--s-3); }
+.rte-body ul, .rte-body ol { padding-left: var(--s-5); }
+.rte-body li + li { margin-top: var(--s-1); }
+.rte-body h2 { font-size: var(--text-lg); font-weight: 600; }
+.rte-body h3 { font-size: var(--text-md); font-weight: 600; }
+.rte-body blockquote { margin: var(--s-3) 0 0; padding-left: var(--s-3); border-left: 3px solid var(--border-strong); color: var(--ink-2); }
+.popover { position: absolute; left: 0; top: calc(100% + 6px); z-index: 10; min-width: 260px; padding: var(--s-3); background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-menu); }
+.menu.is-static { position: static; display: block; width: fit-content; margin-top: var(--s-2); }
+.popover .actions { display: flex; gap: var(--s-2); margin-top: var(--s-3); }
+.picker .input { border-color: var(--border); }
+.media-card .thumb.is-square { aspect-ratio: 1; }
+.media-card .thumb.is-video::after { content: "▶"; position: absolute; inset: 0; display: grid; place-items: center; font-size: 28px; color: var(--surface); text-shadow: 0 2px 8px rgba(23, 26, 33, 0.5); }
+.media-card .notice { padding: var(--s-2) var(--s-3); }
+/* Array rows, groups, blocks — all share the same row card and control cluster */
+.row-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-3); padding: var(--s-3) var(--s-4); border-radius: var(--radius-lg); background: var(--surface-2); align-items: start; }
+.row-card .row-fields { display: grid; gap: var(--s-3); grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+.row-card .row-fields .field { gap: var(--s-1); }
+.row-card .row-fields label { font-size: var(--text-xs); color: var(--ink-2); }
+.row-controls { display: flex; gap: 2px; }
+.row-controls .btn-icon { width: 30px; }
+.row-controls .grip { display: inline-grid; place-items: center; width: 30px; min-height: 30px; color: var(--ink-3); cursor: grab; font-size: var(--text-md); }
+.list { display: grid; gap: var(--s-3); }
+.list .add { justify-self: start; }
+.group { border-radius: var(--radius-lg); background: var(--surface-2); padding: var(--s-3) var(--s-4); }
+.group > summary { display: flex; align-items: center; gap: var(--s-2); list-style: none; font-weight: 500; cursor: pointer; min-height: 30px; }
+.group > summary::-webkit-details-marker { display: none; }
+.group > summary::before { content: "▸"; color: var(--ink-3); font-size: var(--text-sm); }
+.group[open] > summary::before { content: "▾"; }
+.group > summary .count { margin-left: auto; font-size: var(--text-xs); color: var(--ink-3); font-weight: 400; }
+.group > .form { margin-top: var(--s-4); gap: var(--s-4); }
+.block-card .ref-note { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); padding: var(--s-4); font-size: var(--text-sm); color: var(--ink-2); }
+.block-card .ref-note a, .block-card .ref-note .btn-link { margin-left: auto; white-space: nowrap; }
+.block-picker { display: grid; gap: var(--s-2); padding: var(--s-2); min-width: 420px; }
+.block-picker h3 { font-size: var(--text-sm); padding: var(--s-1) var(--s-2) 0; }
+.block-picker .types { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-2); }
+.type-card { display: grid; gap: 2px; padding: var(--s-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); text-align: left; cursor: pointer; color: var(--ink); }
+.type-card:hover, .type-card:focus-visible { border-color: var(--accent-ink); background: var(--accent-soft); }
+.type-card .t { font-weight: 600; }
+.type-card .d { font-size: var(--text-xs); color: var(--ink-2); }
+.type-card .shared { font-size: var(--text-xs); color: var(--accent-ink); }
+.picker-list button > span:first-child { min-width: 0; }
+
+/* ---------- i18n (2.5d) ---------- */
+.menu [aria-current="true"] { background: var(--accent-soft); color: var(--accent-ink); font-weight: 500; }
+.slug-row .url b { color: var(--ink); font-weight: 600; }
+.empty .actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--s-2); margin-top: var(--s-2); }
+
+/* ---------- account · members · activity log (3.0d) ---------- */
+.menu .menu-note { padding: var(--s-1) var(--s-3) var(--s-2); font-size: var(--text-xs); color: var(--ink-2); }
+.activity-detail .actions { display: flex; gap: var(--s-2); }
+.activity-detail .form-placeholder { min-height: 96px; }
+.lock-banner .when { font-weight: 400; }
+.publish-result .result-actions { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.publish-set li > .badge { flex: none; white-space: nowrap; }
+.dialog .form-placeholder { min-height: 0; margin-bottom: var(--s-4); text-align: left; }
+
+/* ---------- media picker · site settings (3.13d) ---------- */
+.picker-tools .spacer { flex: 1; }
+.picker-main .dropzone.is-big { padding: var(--s-12) var(--s-6); }
+.file-row > input { flex: none; width: 18px; height: 18px; margin: 0; accent-color: var(--accent-ink); }
+.file-row:has(> input:checked) { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent-ink); }
+.file-row:has(> input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
+.upload-row .thumb { grid-row: 1 / span 2; aspect-ratio: 1; border-radius: var(--radius-sm); background: linear-gradient(160deg, #8fb3c9 0%, #d7e6ee 48%, #6f8a5a 49%, #3f5a2e 100%); }
+.upload-row .state.is-done { color: var(--success-ink); font-weight: 500; }
+.upload-row .progress { grid-column: 2; margin-top: 2px; }
+.upload-row .actions { grid-row: 1 / span 2; grid-column: 3; display: flex; gap: var(--s-2); }
+.ratio-preview.is-16x9 { aspect-ratio: 16 / 9; }
+.ratio-preview.is-4x3 { aspect-ratio: 4 / 3; }
+.ratio-preview.is-1x1 { aspect-ratio: 1; }
+.ratio-preview.is-social { aspect-ratio: 1200 / 630; }
+/* One definite row, so the dialog's max-height has something to clamp against and the body
+   scrolls instead of the frame clipping it. */
+.scrim:has(> .picker-dialog) { grid-template-rows: minmax(0, 1fr); }
+.scrim.is-full { padding: 0; place-items: stretch; }
+.global-card .meta .lock { color: var(--info-ink); font-weight: 500; }
+
+/* ---------- preview pane (3.18d) ---------- */
+.preview-tools .spacer { flex: 1; }
+.preview-banner.is-hidden { background: var(--badge-bg); color: var(--ink); }
+
+/* ---------- settings / diagnostics (3.18d) ---------- */
+/* Build minutes: the picture is never the number — the sentence above it carries that, and the
+   meter only says how close the month is to the cap. */
+.usage { display: grid; gap: var(--s-2); }
+.settings-section .check-list + .foot-note { margin-top: var(--s-2); }
+.settings-section .notice { font-size: var(--text-sm); }
+
+/* ---------- per-field diff · three-way resolution (3.18d) ---------- */
+/* The diff is fields, never lines: a YAML hunk is unreadable and would leak the file format into
+   the UI. Grouped by language, with the fields that are the same everywhere lifted out so a price
+   does not appear to have changed twice. `.diff` itself is 2.5d's, from the stale-marker popover. */
+.change-row.is-open { background: var(--surface-2); }
+.change-diff h4:first-child { margin-top: 0; }
+
+/* ---------- status selector · redirect dialog · page picker (3.18d) ---------- */
+/* The picker is the nav builder's component (built at 3.26) and this is where it first ships. It
+   searches every language and offers the *resolved* address, because that is what a redirect is
+   made of — the file name is not an answer to "where should visitors go". */
+.dialog .picker { margin-top: calc(var(--s-2) * -1); }
+/* Inside the dialog the list is the content, not a dropdown over it: it grows and the dialog
+   scrolls, so no group is hidden behind a scrollbar the client has to find. */
+.dialog .picker-list { max-height: none; }
+.picker-list h4 { margin: 0; padding: var(--s-2) var(--s-3) var(--s-1); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+/* Deleted view: a full-width row under the table for the refusal, so the reason sits with the row it
+   belongs to instead of floating above the list. */
+.table .row.row-note { grid-template-columns: 1fr; }
+
+/* ---------- media library · entry history · dashboard (4.0d) ---------- */
+.tile .tile-actions { position: relative; z-index: 1; display: flex; gap: var(--s-2); margin-top: var(--s-1); }
+.lib-side.is-recovered .facts dd, .lib-side.is-recovered .hint { color: var(--warn-ink); }
+.focal-handle::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; }
+.focal-dialog .hint { font-size: var(--text-xs); color: var(--ink-2); }
+.crop-box.is-16x9 { left: 6%; top: 24%; width: 88%; height: 49.5%; }
+.crop-handle.h-n { left: calc(50% - 6px); top: -7px; }
+.crop-handle.h-w { left: -7px; top: calc(50% - 6px); }
+.crop-handle.h-e { right: -7px; top: calc(50% - 6px); }
+.crop-handle.h-s { left: calc(50% - 6px); bottom: -7px; }
+.version-view h4 { margin: var(--s-2) 0 0; font-size: var(--text-xs); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+.dtile.span-3 { grid-column: 1 / -1; }
+.dtile.is-quota { background: var(--warn-soft); }
+.dtile.is-quota .big, .dtile.is-quota .line, .dtile.is-quota .big small { color: var(--warn-ink); }
+.dtile .progress.is-indeterminate > span { width: 35%; animation: slide 1.4s ease-in-out infinite alternate; }
+.locale-line a { margin-left: auto; }
+
+/* ---------- nav builder · redirects · pre-publish checks (4.4d) ---------- */
+/* Pre-publish checks — one region above the list, grouped by entry inside it. Above, because the
+   client reads them once and then decides; grouped, because "which page is this about" is the
+   first question. Severity is a word as well as a tint: colour is never the only carrier. */
+.checks-sum { padding: 0 var(--s-2); font-size: var(--text-xs); color: var(--ink-2); }
+.check-group { display: grid; gap: var(--s-2); }
+.check-group > h4 { margin: var(--s-2) 0 0; padding: 0 var(--s-2); font-size: var(--text-sm); font-weight: 600; }
+.check-group > h4 .badge { margin-left: var(--s-1); vertical-align: 1px; }
+.checks .notice .sev { font-weight: 600; }
+.checks .notice code { font-family: var(--font-mono); font-size: var(--text-xs); }
+.checks .notice .msg { flex: 1; min-width: 200px; }
+/* The one-entry publish dialog runs the same list, without the per-entry headings. */
+.dialog .checks { margin: var(--s-4) 0; text-align: left; }
+
+/* ---------- narrow viewport (≤ 720px) ----------
+   Every narrow rule in one query at the end of the file: a media query adds no specificity, so
+   source order is what makes it win. `.is-narrow` is gone — it is how a mockup draws a phone
+   inside a desktop page, and nothing the admin renders ever carries it.
+
+   The rules the design set writes as `.is-narrow X` keep a `:root` in front of them, because
+   dropping the prefix would drop a class of specificity and the rule would then lose to a base
+   rule with one class more — `.table.has-select.cols-4` beat a bare `.table`, and the entry list
+   overflowed sideways on a phone. The rules that were already here carry no prefix: they have
+   always been written this way and raising them would be a change nobody asked for. */
 @media (max-width: 720px) {
+  .shell { grid-template-columns: 1fr; }
+  .shell > .sidebar { display: none; }
+  /* The drawer the menu button opens: the same nav, over the screen rather than beside it. */
+  .shell > .sidebar.is-open { display: flex; position: fixed; inset: 0 auto 0 0; z-index: 40; width: var(--sidebar-w); max-width: 86%; overflow-y: auto; box-shadow: var(--shadow-menu); }
+  .menu-button { display: inline-flex; }
+  .topbar { padding: var(--s-3) var(--s-3) 0; gap: var(--s-2); flex-wrap: wrap; }
+  .main { margin: var(--s-3); padding: var(--s-5); }
+  .drift .drift-cols { grid-template-columns: 1fr; }
+  .activity-row { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+  .activity-row > .avatar { grid-row: 1 / span 2; }
+  .activity-row .meta { grid-column: 2; }
+  .activity-row .when { min-width: 0; }
+  .global-list { grid-template-columns: 1fr; }
+  .media-card, .picker-body { grid-template-columns: 1fr; }
+  .picker-dialog { width: 100%; max-height: none; border-radius: 0; }
+  .picker-side { border-left: 0; border-top: 1px solid var(--border); }
+  .picker-tools .search { max-width: none; }
+  .entry-body.has-pane:has(> .pane.is-preview) { grid-template-columns: minmax(0, 1fr); }
+  .pane.is-preview .seg[aria-label="Screen width"] { display: none; }
+  .preview-stage { padding: var(--s-2); }
+  .preview-frame, .preview-frame.is-tablet, .preview-frame.is-phone { max-width: none; }
+  .lib-body { grid-template-columns: minmax(0, 1fr); }
+  .lib-side { position: static; }
+  .focal-dialog .dialog-cols { grid-template-columns: minmax(0, 1fr); }
+  .nav-build { grid-template-columns: minmax(0, 1fr); }
+  .branch .branch { margin-left: var(--s-3); padding-left: var(--s-3); }
+  .menu-item { grid-template-columns: auto minmax(0, 1fr); }
+  .menu-item .item-actions { grid-row: 3; grid-column: 2; justify-content: flex-start; }
+  .history { grid-template-columns: 1fr; padding: var(--s-5); gap: var(--s-6); }
   .dash { grid-template-columns: 1fr; }
   .dtile.span-2 { grid-column: auto; }
+  :root .indicator .detail, :root .user-menu .label { display: none; }
+  :root .indicator, :root .pill { padding: 0 var(--s-3); }
+  :root .user-menu > .btn { padding: 0; }
+  :root .auth-page { padding: var(--s-4); align-items: start; }
+  :root .auth-card { padding: var(--s-8) var(--s-5) var(--s-6); }
+  :root .entry-header { padding: var(--s-4) var(--s-5) 0; }
+  :root .entry-header .actions .btn-preview, :root .tabs { display: none; }
+  :root .entry-body { padding: var(--s-5); grid-template-columns: 1fr; }
+  :root .entry-body.has-pane .pane { display: none; }
+  :root .pane-toggle { display: inline-flex; }
+  :root .form .field-group { grid-template-columns: 1fr; }
+  /* A block inside a block inside the entry body runs out of screen at the third level: the row
+     card's columns become one, and the block picker gives up the 420px it asks for on a desktop.
+     These take the entry editor from ~190px of sideways overflow at 390px down to about 2, which
+     the deepest nesting on the demo's home page still has — noted, not chased further. */
+  :root .row-card .row-fields { grid-template-columns: minmax(0, 1fr); }
+  :root .block-picker { min-width: 0; }
+  :root .list, :root .pop-anchor { min-width: 0; }
+  :root .list-toolbar .search { max-width: none; }
+  :root .table, :root .table.has-select { display: grid; grid-template-columns: 1fr; gap: var(--s-3); }
+  :root .table .th { display: none; }
+  :root .table .row { display: grid; grid-template-columns: 1fr auto; gap: var(--s-1) var(--s-2); padding: var(--s-3) var(--s-4); border-radius: var(--radius); box-shadow: var(--shadow-panel); border: 1px solid var(--border); }
+  :root .table .row .td { min-height: 0; padding: 0; border: 0; }
+  :root .table .row .td.title { grid-column: 1; }
+  :root .table .row .td.menu-cell { grid-column: 2; grid-row: 1; }
+  /* Top-right is right for the one ⋯ the design set draws there. The entry list puts four plain
+     buttons in that cell instead, and four of them in a narrow track is what pushed the whole
+     list sideways off a phone — so a cell with more than one control takes a row of its own.
+     (The ⋯ the mockup draws for that cell is the entry list's own row to build.) */
+  :root .table .row .td.menu-cell:has(> .btn + .btn) { grid-column: 1 / -1; grid-row: auto; flex-wrap: wrap; }
+  /* `white-space: nowrap` keeps a numeric column straight in the desktop table; on its own row
+     under a label it is what a long file name overflows the screen with, so it wraps here. */
+  :root .table .row .td.num { grid-column: 1 / -1; white-space: normal; overflow-wrap: anywhere; }
+  :root .table .row .td.num::before { content: attr(data-label) " "; color: var(--ink-3); }
+  :root .bulk-bar { bottom: var(--s-3); }
+  :root .scrim.is-right { padding: 0; }
+  :root .drawer { width: 100%; border-radius: 0; }
+  :root .change-row { grid-template-columns: 32px minmax(0, 1fr); }
+  :root .change-row .change-actions { grid-row: 3; grid-column: 2; justify-content: flex-start; }
+  :root .change-row .lead { grid-row: 1; }
+  :root .entry-header .actions .btn-sbs { display: none; }
+  :root .entry-header .title-row .actions { flex-wrap: wrap; justify-content: flex-end; }
+  :root .media-grid { grid-template-columns: 1fr 1fr; }
+  :root .picker-foot > a { flex-basis: 100%; }
+  :root .list-toolbar .filters { flex-basis: 100%; }
+  :root .sheet .lib-side { padding: 0; background: none; }
+  :root .sheet { max-height: 88%; overflow: auto; }
+  /* On a phone the menu tabs are the screen's own navigation, not the editor's Content/SEO/History
+     strip the narrow rule hides — so this one stays. */
+  :root .tabs.is-menus { display: flex; }
+  :root .nav-add { position: static; }
+  /* Narrow: the entry list's card rule keys off `.table`, which `.cols-7` outranks, so the seven
+     columns have to be collapsed by name. From and To lead the card; everything else is a labelled
+     line under them, and the actions sit top right where the row menu was. */
+  :root .table.cols-7 { grid-template-columns: 1fr; }
+  :root .table.cols-7 .row { grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-1) var(--s-2); }
+  :root .table.cols-7 .row .td { grid-column: 1; flex-wrap: wrap; min-height: 0; padding: 0; border: 0; background: none; }
+  :root .table.cols-7 .row.is-managed { background: var(--surface-2); }
+  :root .table.cols-7 .row.is-managed .td { background: none; }
+  :root .table.cols-7 .row .td.menu-cell { grid-column: 2; grid-row: 1 / span 2; align-items: start; }
+  :root .table.cols-7 .row .td[data-label]::before { content: attr(data-label) " "; flex: none; color: var(--ink-3); font-family: var(--font-sans); font-size: var(--text-xs); }
+  :root .table.cols-7 .row .td.path { flex-wrap: wrap; }
+  :root .table.cols-7 .row-menu { display: flex; gap: var(--s-1); }
 }

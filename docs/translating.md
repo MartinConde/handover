@@ -156,6 +156,12 @@ file requoted all leave the hash where it was — none is anything to retranslat
 or a block added changes it. It is only ever a warning: a stale translation publishes, builds and
 serves like any other file, and the mark stays until somebody translates it again.
 
+Side by side, each field the source has moved on from carries an amber marker of its own. Opening
+one shows that field's source as it read when somebody translated it and as it reads now, with the
+words that went and the words that arrived marked; **Re-translate** runs the provider for that one
+field, and **Dismiss** takes the marker off until the entry is opened again. The older source is
+read from the blob the mark names, so it is the exact bytes the translation was made from.
+
 The [dashboard](dashboard.md) counts them per language. That count is taken at build over every
 file, so it is the last build's rather than today's: the warning in the editor is the live one.
 

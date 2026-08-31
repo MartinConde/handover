@@ -87,6 +87,8 @@ export interface GitClient {
    * that is about to **write** names one: see the note on the implementation.
    */
   getFile(path: string, ref?: string): Promise<GitFile | undefined>;
+  /** One blob's text by its object id, for bytes no branch names any more. */
+  getBlob(sha: string): Promise<string | undefined>;
   /**
    * Every `.yaml` under `src/content/` at the branch tip, contents and all, in **one** request.
    * A file at a time is a subrequest at a time, and the Free plan allows fifty of those per
@@ -284,6 +286,24 @@ export function createGitClient(
       const body = (await res.json()) as { sha: string; content: string };
       const bytes = Uint8Array.from(atob(body.content.replace(/\s+/g, '')), (c) => c.charCodeAt(0));
       return { contents: new TextDecoder().decode(bytes), blob_sha: body.sha };
+    },
+
+    /**
+     * A blob by its own id, with no commit and no path. A translation names the source bytes it
+     * was made from ([`_i18n.sourceBlob`](content.ts)) and those bytes may be many commits back;
+     * finding the commit they were in would be a walk of the log, and the id already addresses
+     * them. Gone once git has collected it, which is what `undefined` means here.
+     */
+    async getBlob(sha) {
+      const res = await request(`${repo}/git/blobs/${encodeURIComponent(sha)}`);
+      if (res.status === 404) {
+        await assertRepoReachable();
+        return undefined;
+      }
+      if (!res.ok) throw new Error(`GitHub getBlob ${sha} failed: ${res.status}`);
+      const body = (await res.json()) as { content: string };
+      const bytes = Uint8Array.from(atob(body.content.replace(/\s+/g, '')), (c) => c.charCodeAt(0));
+      return new TextDecoder().decode(bytes);
     },
 
     /**

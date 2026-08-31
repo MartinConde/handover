@@ -2,6 +2,7 @@
 import type { Preset } from '@handover/core';
 import Account from './Account.svelte';
 import Activity from './Activity.svelte';
+import { when } from './activity-line';
 import BuildPill, { type Build } from './BuildPill.svelte';
 import Dashboard from './Dashboard.svelte';
 import Diagnostics from './Diagnostics.svelte';
@@ -111,6 +112,13 @@ let revertPanel = $state<HTMLElement>();
 let reverting = $state(false);
 let revertError = $state('');
 let drawer = $state(false);
+// The sidebar as a phone has it: hidden by the narrow rule, and this is what puts it back over
+// the screen. Closed by a link inside it, by Escape and by the ground beside it.
+let menu = $state(false);
+// The account menu. A disclosure and not `role="menu"`, for the reason the members list gives:
+// that role promises arrow keys, typeahead and a roving tabindex, and two links in DOM order
+// need none of it.
+let account = $state(false);
 // Bumped when a screen's data has moved under it — the screen is thrown away and made again.
 let reload = $state(0);
 
@@ -134,12 +142,23 @@ $effect(() => {
 });
 
 function follow(event: MouseEvent) {
+  // Any click anywhere closes the two things a click outside should close. The account menu
+  // and the phone drawer both re-open from the button that was pressed, so this runs before
+  // the toggle rather than fighting it.
+  const inside = (event.target as Element).closest('.user-menu, .sidebar, .menu-button');
+  if (!inside) {
+    account = false;
+    menu = false;
+  }
   if (event.defaultPrevented || event.button !== 0) return;
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   const a = (event.target as Element).closest('a');
   if (!a || a.target || a.origin !== location.origin) return;
   if (!/^\/admin(\/(?!api\/)|$)/.test(a.pathname)) return;
   event.preventDefault();
+  // A link inside the drawer is what the drawer was opened for.
+  menu = false;
+  account = false;
   navigate(a.pathname + a.search);
 }
 
@@ -177,7 +196,9 @@ async function signOut() {
 
 async function loadPending() {
   const res = await fetch('/admin/api/drafts');
-  if (res.ok) pending = ((await res.json()) as { entries: typeof pending }).entries;
+  // `?? []` so a body without the key leaves an empty list rather than nothing: the indicator
+  // reads the list to say how old the oldest change is, and there is no shape for "unknown".
+  if (res.ok) pending = ((await res.json()) as { entries?: typeof pending }).entries ?? [];
 }
 
 /**
@@ -244,11 +265,19 @@ async function loadEntry(collection: string, slug: string) {
   );
 }
 
+// What the indicator says beyond the count: the oldest change and how many are held back —
+// the dashboard's own line, worded the same way. `oldest` and not the mockup's "started",
+// because a draft row carries when it was last written and not when somebody began it.
+const oldest = $derived(Math.min(...pending.map((e) => e.updated_at)));
+const held = $derived(pending.filter((e) => e.held_by).length);
+
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const initial = $derived(
   (session?.user.name || session?.user.email || '?').charAt(0).toUpperCase(),
 );
 </script>
+
+<svelte:window onkeydown={(e) => e.key === 'Escape' && ((account = false), (menu = false))} />
 
 {#if !session}
   <Login {methods} {path} {query} onlogin={loadSession} />
@@ -267,7 +296,7 @@ const initial = $derived(
   {#if revertError}
     <div class="banner banner-warn" role="alert">{revertError}</div>
   {/if}
-  <aside class="sidebar" aria-label="Main" inert={drawer}>
+  <aside class="sidebar" class:is-open={menu} aria-label="Main" inert={drawer}>
     <div class="site-name"><span class="site-mark" aria-hidden="true">H</span> Handover</div>
     <nav class="nav">
       <div class="nav-group">
@@ -314,6 +343,14 @@ const initial = $derived(
   </aside>
   <div class="shell-body" inert={drawer}>
     <header class="topbar">
+      <!-- Only on a phone, where the narrow rule has taken the sidebar away. -->
+      <button
+        class="btn btn-ghost menu-button"
+        type="button"
+        aria-label="Open menu"
+        aria-expanded={menu}
+        onclick={() => (menu = !menu)}>☰</button
+      >
       <button
         class="indicator"
         class:is-lit={pending.length}
@@ -325,6 +362,13 @@ const initial = $derived(
       >
         <span class="dot" aria-hidden="true"></span>
         {pending.length ? `${pending.length} unpublished change${pending.length === 1 ? '' : 's'}` : 'No unpublished changes'}
+        {#if pending.length}
+          <span class="detail">
+            <span class="sep" aria-hidden="true">·</span>
+            oldest {when(oldest).toLowerCase()}
+            {#if held}<span class="sep" aria-hidden="true">·</span> {held} on hold{/if}
+          </span>
+        {/if}
       </button>
       <span class="spacer"></span>
       <!-- The live region is in the DOM whether there is a build or not, so the first state to
@@ -345,14 +389,36 @@ const initial = $derived(
         {/if}
       </span>
       <div class="user-menu">
-        <a class="btn" href="/admin/account" aria-current={path === '/admin/account' ? 'page' : undefined}>
+        <button
+          class="btn"
+          type="button"
+          aria-expanded={account}
+          aria-label="{session.user.name || session.user.email}, {session.role === 'owner' ? 'Owner' : 'Editor'} — account menu"
+          onclick={() => (account = !account)}
+        >
           <span class="avatar" aria-hidden="true">{initial}</span>
           <span class="label">
             <span class="name">{session.user.name || session.user.email}</span>
             <span class="role">{session.role === 'owner' ? 'Owner' : 'Editor'}</span>
           </span>
-        </a>
-        <button class="btn" type="button" onclick={signOut}>Sign out</button>
+        </button>
+        {#if account}
+          <div class="menu">
+            <!-- Name, email and role are context, not actions: the role is changed on the
+                 members screen and never here. -->
+            <div class="who">
+              <span class="name">
+                {session.user.name || session.user.email}
+                <span class="badge">{session.role === 'owner' ? 'Owner' : 'Editor'}</span>
+              </span>
+              <span class="email">{session.user.email}</span>
+            </div>
+            <a href="/admin/account" aria-current={path === '/admin/account' ? 'page' : undefined}
+              >Account</a
+            >
+            <button type="button" onclick={signOut}>Sign out</button>
+          </div>
+        {/if}
       </div>
     </header>
     <!-- Keyed on the entry rather than on the address, for the reason `editingAt` gives. -->

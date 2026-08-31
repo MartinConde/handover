@@ -1,5 +1,5 @@
 <script lang="ts">
-import { type Field, keptMachine, type ResolvedSeo } from '@handover/core';
+import { type Field, keptMachine, type ResolvedSeo, type WordPart } from '@handover/core';
 import Fields from './Fields.svelte';
 
 type Data = Record<string, unknown>;
@@ -80,6 +80,26 @@ let failed = $state(false);
 // What the collection schema will not accept in this file yet, by field path — the server's
 // answer to the last save, the same as the entry's own form. The publish is where it blocks.
 let problems = $state<Record<string, string>>({});
+
+// Which of this language's fields the source has moved on from, and what it says now. The
+// header already knows the file is behind; this is the second read that says where, and it is
+// only made for a file that is — an entry nobody has translated pays nothing for the marker.
+let behind = $state<{ translatedAt?: string; changed: Record<string, WordPart[]> }>({
+  changed: {},
+});
+$effect(() => {
+  if (!stale) return;
+  let live = true;
+  fetch(`/admin/api/source/${collection}/${slug}/${locale}`)
+    .then((res) => (res.ok ? res.json() : { changed: {} }))
+    .then((body) => {
+      if (live) behind = body as typeof behind;
+    })
+    .catch(() => {});
+  return () => {
+    live = false;
+  };
+});
 
 const json = $derived(JSON.stringify(data));
 const machine = $derived(keptMachine('default', base, data));
@@ -233,6 +253,10 @@ const named = (of: string) => {
         bind:root={data}
         translating
         ontranslate={translator ? (path) => fill([path]) : undefined}
+        onretranslate={translator ? (path) => fill([path]) : undefined}
+        sourceChanged={behind.changed}
+        sourceLabel={named(source)}
+        translatedAt={behind.translatedAt ?? ''}
         prefix="t"
       />
     </fieldset>

@@ -114,6 +114,82 @@ test('the signed-in name and role are in the top bar', () => {
   expect(root.querySelector('.user-menu .role')?.textContent).toBe('Owner');
 });
 
+// The account menu. Name, email and role are context inside it and the role is never a control:
+// it is changed on the members screen.
+test('the account menu opens from the top bar with the two things it offers', () => {
+  drafts();
+  const root = show(session('editor'));
+  expect(root.querySelector('.user-menu .menu')).toBeNull();
+
+  const toggle = root.querySelector<HTMLButtonElement>('.user-menu > button');
+  expect(toggle?.getAttribute('aria-expanded')).toBe('false');
+  toggle?.click();
+  flushSync();
+
+  const menu = root.querySelector('.user-menu .menu');
+  expect(menu?.querySelector('.who .name')?.textContent).toContain('Martin');
+  expect(menu?.querySelector('.who .badge')?.textContent).toBe('Editor');
+  expect(menu?.querySelector('.who .email')?.textContent).toBe('martin@example.com');
+  expect(
+    Array.from(menu?.querySelectorAll('a, button') ?? [], (e) => e.textContent?.trim()),
+  ).toEqual(['Account', 'Sign out']);
+  expect(toggle?.getAttribute('aria-expanded')).toBe('true');
+});
+
+test('Escape closes the account menu', () => {
+  drafts();
+  const root = show(session());
+  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
+  flushSync();
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  flushSync();
+  expect(root.querySelector('.user-menu .menu')).toBeNull();
+});
+
+// On a phone the narrow rule takes the sidebar away, so the nav is unreachable without this.
+test('the menu button opens the sidebar, and a link inside it closes it again', () => {
+  drafts();
+  const root = show(session());
+  const button = root.querySelector<HTMLButtonElement>('.menu-button');
+  expect(button?.getAttribute('aria-expanded')).toBe('false');
+  expect(root.querySelector('.sidebar.is-open')).toBeNull();
+
+  button?.click();
+  flushSync();
+  expect(root.querySelector('.sidebar.is-open')).not.toBeNull();
+
+  root.querySelector<HTMLAnchorElement>('.sidebar a[href="/admin/media"]')?.click();
+  flushSync();
+  expect(root.querySelector('.sidebar.is-open')).toBeNull();
+});
+
+// Beside the count, the two facts that decide whether to publish now: how long the oldest change
+// has been waiting, and how many are being held back.
+test('the indicator names the oldest change and how many are held', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/ping')
+        return Response.json({ ok: true, collections: ['listings', 'pages'] });
+      if (url === '/admin/api/build') return Response.json({});
+      if (url === '/admin/api/dashboard')
+        return Response.json({ recent: [], published: null, translations: null });
+      return Response.json({
+        entries: [
+          pendingEntry('listings/mill-house'),
+          { ...pendingEntry('pages/home'), held_by: { id: 'u2', name: 'Anna' } },
+        ],
+      });
+    }),
+  );
+  const root = show(session());
+  await new Promise((r) => setTimeout(r, 0));
+  flushSync();
+
+  const detail = root.querySelector('.indicator .detail')?.textContent?.replace(/\s+/g, ' ').trim();
+  expect(detail).toBe('· oldest 22 aug 2025 · 1 on hold');
+});
+
 // Regression: sign-out was posted with no content type, which Better Auth refuses with 415 —
 // the form came back while the cookie stayed valid.
 test('signing out posts a request Better Auth accepts, and shows the login form', async () => {
@@ -123,7 +199,9 @@ test('signing out posts a request Better Auth accepts, and shows the login form'
   vi.stubGlobal('fetch', fetchMock);
   const root = show(session('owner'));
 
-  root.querySelector<HTMLButtonElement>('.user-menu button')?.click();
+  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
+  flushSync();
+  root.querySelector<HTMLButtonElement>('.user-menu .menu button')?.click();
   await new Promise((r) => setTimeout(r, 0));
   flushSync();
 
@@ -148,7 +226,9 @@ test('the indicator counts the pending entries and opens the drawer', async () =
   await new Promise((r) => setTimeout(r, 0));
   flushSync();
   const indicator = root.querySelector<HTMLButtonElement>('button.indicator');
-  expect(indicator?.textContent?.trim()).toBe('1 unpublished change');
+  expect(indicator?.firstElementChild?.nextSibling?.textContent?.trim()).toBe(
+    '1 unpublished change',
+  );
   expect(root.querySelector('.drawer')).toBeNull();
 
   indicator?.click();
@@ -292,7 +372,8 @@ test('a save that makes an entry pending moves the count in the top bar', async 
   await vi.advanceTimersByTimeAsync(2000);
   flushSync();
 
-  expect(root.querySelector('.indicator')?.textContent?.trim()).toBe('1 unpublished change');
+  expect(root.querySelector('.indicator .detail')).not.toBeNull();
+  expect(root.querySelector('.indicator')?.textContent).toContain('1 unpublished change');
   vi.useRealTimers();
 });
 

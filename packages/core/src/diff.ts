@@ -1,4 +1,4 @@
-import { isObject, rowKey, TRANSLATED_PROPS } from './content.js';
+import { isObject, rowKey, TRANSLATED_PROPS, translatedValues } from './content.js';
 import { type Field, type Form, humanise, rowFields, type Translation } from './schema.js';
 
 /** A run of a text field's words: what stayed, what went, what arrived. */
@@ -364,3 +364,40 @@ const show = (value: unknown): string | undefined =>
     : typeof value === 'object'
       ? JSON.stringify(value)
       : String(value);
+
+/**
+ * What a translation's source language has said since somebody translated it, field by field —
+ * the marker a target-language field carries in side-by-side editing, and what opening it shows.
+ *
+ * Keyed by the address `_machine` and the translate route already use, so the form finds its own
+ * field without a second convention. Only the values a translation is made from are compared: a
+ * shared price moving is not something to retranslate. A field the older source had and the
+ * newer one does not is a deletion and is reported as one; a field only the newer source has is
+ * not stale — nothing was ever translated from it.
+ */
+export function sourceChanges(
+  _siteId: string,
+  form: Form,
+  translatedFrom: unknown,
+  now: unknown,
+): Record<string, WordPart[]> {
+  const current = new Map(translatedValues(form, now));
+  const changed: Record<string, WordPart[]> = {};
+  for (const [path, was] of translatedValues(form, translatedFrom)) {
+    const is = current.get(path) ?? '';
+    if (is !== was) changed[path] = wordDiff(said(was), said(is));
+  }
+  return changed;
+}
+
+// `translatedValues` encodes each value for the hash it exists to feed; a reader is shown the
+// sentence, not the quotes and `\n` the encoding put round it.
+const said = (encoded: string): string => {
+  if (encoded === '') return '';
+  try {
+    const value: unknown = JSON.parse(encoded);
+    return typeof value === 'string' ? value : encoded;
+  } catch {
+    return encoded;
+  }
+};

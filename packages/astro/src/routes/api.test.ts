@@ -21,7 +21,9 @@ const {
   notice,
   site,
   files,
+  blobs,
   getFile,
+  getBlob,
   getHead,
   contentFiles,
   commitLog,
@@ -64,12 +66,15 @@ const {
   const { blocks, defineBlock, image, link, seo, seoDefaults } = await import('../index.js');
   // Every file the repository holds beyond the one below, path → contents; filled per test.
   const files: Record<string, string> = {};
+  // Blobs by their own object id — the older source a translation names; filled per test.
+  const blobs: Record<string, string> = {};
   const commitLog: Record<
     string,
     { sha: string; date: string; message: string; author?: string }[]
   > = {};
   return {
     files,
+    blobs,
     commitLog,
     // A collection with blocks in it: what two languages of one entry can disagree about.
     page: z.object({
@@ -122,6 +127,8 @@ const {
       return undefined;
     }),
     getHead: vi.fn(async () => 'head789'),
+    // One object by its own id — the older source language a translation names. Filled per test.
+    getBlob: vi.fn(async (sha: string) => blobs[sha]),
     // Every commit that touched one path, newest first; filled per test.
     fileCommits: vi.fn(
       async (path: string, { perPage = 30, page = 1 }: { perPage?: number; page?: number } = {}) =>
@@ -630,6 +637,7 @@ vi.mock('@handover/core', async (original) => ({
   // What a restore asks before it undoes anything: which entry the commit is about.
   createGitClient: () => ({
     getFile,
+    getBlob,
     getHead,
     contentFiles,
     fileCommits,
@@ -771,6 +779,7 @@ afterEach(() => {
   smtpRefusal = undefined;
   sent.length = 0;
   for (const path of Object.keys(files)) delete files[path];
+  for (const sha of Object.keys(blobs)) delete blobs[sha];
   for (const path of Object.keys(commitLog)) delete commitLog[path];
   for (const sha of Object.keys(committedBy)) delete committedBy[sha];
   for (const path of Object.keys(rows)) delete rows[path];
@@ -2561,6 +2570,23 @@ const home = {
   ].join('\n'),
 };
 
+// The German file as a publish of a translation leaves it: which English it was made from, and
+// the id of those exact bytes.
+const translated = [
+  '_version: 1',
+  '_i18n:',
+  '  sourceLocale: "en"',
+  '  sourceBlob: "deadbeef"',
+  '  sourceHash: "0000000000000000"',
+  '  translatedAt: "2026-08-20T10:14:00Z"',
+  'title: "Startseite"',
+  'blocks:',
+  '  - _type: "hero"',
+  '    _id: "k3nf9a2p"',
+  '    heading: "Zieh an die Küste"',
+  '',
+].join('\n');
+
 const drifted = () => {
   locales = ['en', 'de'];
   files['src/content/pages/en/home.yaml'] = home.en;
@@ -2772,6 +2798,56 @@ test('an entry whose translation was made from an older source language says so'
 
   expect(body.stale).toEqual(['de']);
   expect(body.drift).toEqual([]);
+});
+
+// Per-field staleness: the entry response says *which* languages are behind, off one hash over
+// the file; this says which of their fields, by fetching the English the translation names.
+test('the fields a translation is behind on are read from the source it was made from', async () => {
+  locales = ['en', 'de'];
+  files['src/content/pages/en/home.yaml'] = home.en.replace(
+    'Move to the coast',
+    'Move to the Cornish coast',
+  );
+  files['src/content/pages/de/home.yaml'] = translated;
+  blobs.deadbeef = home.en;
+
+  const body = (await (await GET(ctx('source/pages/home/de'))).json()) as {
+    from: string;
+    translatedAt: string;
+    changed: Record<string, unknown>;
+  };
+
+  expect(body.from).toBe('en');
+  expect(body.translatedAt).toBe('2026-08-20T10:14:00Z');
+  expect(body.changed).toEqual({
+    'blocks[_id=k3nf9a2p].heading': [
+      { text: 'Move to the ' },
+      { text: 'Cornish ', mark: 'ins' },
+      { text: 'coast' },
+    ],
+  });
+});
+
+// Nothing to compare against is not an error: the marker is simply not drawn. A file nobody has
+// translated has no mark, and bytes git has collected since are gone whatever the mark says.
+test('a language with no translation mark has no fields to mark', async () => {
+  locales = ['en', 'de'];
+  files['src/content/pages/en/home.yaml'] = home.en;
+  files['src/content/pages/de/home.yaml'] = home.de;
+
+  expect(await (await GET(ctx('source/pages/home/de'))).json()).toEqual({ changed: {} });
+});
+
+test('a source blob git no longer holds leaves the fields unmarked', async () => {
+  locales = ['en', 'de'];
+  files['src/content/pages/en/home.yaml'] = home.en;
+  files['src/content/pages/de/home.yaml'] = translated;
+
+  expect(await (await GET(ctx('source/pages/home/de'))).json()).toEqual({ changed: {} });
+});
+
+test('the source of an entry no collection has is not found', async () => {
+  expect((await GET(ctx('source/nope/home/de'))).status).toBe(404);
 });
 
 // It reads the entry rather than the path: which language a file was translated from is the

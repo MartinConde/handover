@@ -11,6 +11,7 @@ import type {
   FileCommit,
   Form,
   GitClient,
+  I18nMark,
   IndexEntry,
   Integration,
   MediaRow,
@@ -117,6 +118,7 @@ import {
   setEntryStatus,
   setMediaDetails,
   settingFacts,
+  sourceChanges,
   staleLocales,
   stringifyEntry,
   syncLocale,
@@ -1842,6 +1844,44 @@ async function entryDiff(collection: string, slug: string): Promise<Response> {
   });
 }
 
+/**
+ * What one language's source has said since it was translated, field by field — the amber marker
+ * a target-language field carries beside its label, and the before/after opening it shows.
+ *
+ * The entry response already says *which* languages are stale, off one hash over the whole file;
+ * a hash cannot say which field moved, so this is the read that answers the second question. The
+ * older source is fetched by the blob id the translation itself names, which is why it survives
+ * however many commits later somebody asks — [`_i18n.sourceBlob`](../../../core/src/content.ts).
+ *
+ * `{}` rather than a 404 wherever there is nothing to compare — no mark, a mark naming a language
+ * this entry has no file in, or bytes git has since collected. The marker simply is not drawn,
+ * which is what an editor should see on a field nobody can say anything about.
+ */
+async function translatedFromView(
+  collection: string,
+  slug: string,
+  locale: string,
+): Promise<Response> {
+  if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
+  const loaded = await entryLocales(collection, slug, config.i18n.locales);
+  const mark = (loaded[locale]?.data as { _i18n?: Partial<I18nMark> } | undefined)?._i18n;
+  const from = typeof mark?.sourceLocale === 'string' ? mark.sourceLocale : undefined;
+  const blob = typeof mark?.sourceBlob === 'string' ? mark.sourceBlob : undefined;
+  if (!from || !blob || from === locale || !(from in loaded)) return Response.json({ changed: {} });
+  const was = await gitClient().getBlob(blob);
+  if (was === undefined) return Response.json({ changed: {} });
+  return Response.json({
+    from,
+    translatedAt: typeof mark?.translatedAt === 'string' ? mark.translatedAt : undefined,
+    changed: sourceChanges(
+      'default',
+      formFor(collection, slug),
+      parseEntry('default', was),
+      loaded[from]?.data,
+    ),
+  });
+}
+
 const HISTORY_PAGE = 30;
 const SHA = /^[0-9a-f]{7,40}$/;
 
@@ -2964,6 +3004,7 @@ const CHECK = /^checks\/([\w-]+)$/;
 const SETTING = /^settings\/([\w-]+)$/;
 const REDIRECT = /^redirects\/([\w-]+)$/;
 const TRANSLATE = /^translate\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
+const SOURCE = /^source\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 
 // Better Auth owns everything under its base path. Both verbs go straight to its handler:
 // the middleware exempts these paths, so this is the only thing in front of the login.
@@ -3021,6 +3062,11 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
     );
   const changed = params.path?.match(DIFF);
   if (changed) return answering(() => entryDiff(changed[1] ?? '', changed[2] ?? ''));
+  const translatedFrom = params.path?.match(SOURCE);
+  if (translatedFrom)
+    return answering(() =>
+      translatedFromView(translatedFrom[1] ?? '', translatedFrom[2] ?? '', translatedFrom[3] ?? ''),
+    );
   const version = params.path?.match(VERSION);
   if (version) return answering(() => versionDiff(version[1] ?? '', version[2] ?? '', url));
   const past = params.path?.match(HISTORY);

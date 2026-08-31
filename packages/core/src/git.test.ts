@@ -46,6 +46,7 @@ function fakeGitHub(
   visible = true,
   commits: Record<string, unknown> = {},
   log: Record<string, unknown[]> = {},
+  blobs: Record<string, string> = {},
 ) {
   const calls: string[] = [];
   let minted = 0;
@@ -82,6 +83,18 @@ function fakeGitHub(
       return found
         ? Response.json(found)
         : new Response('{"message":"Not Found"}', { status: 404 });
+    }
+    const object = url.match(
+      /^https:\/\/api\.github\.com\/repos\/acme\/site\/git\/blobs\/(.+)$/,
+    )?.[1];
+    if (object) {
+      const held = blobs[object];
+      if (held === undefined) return new Response('{"message":"Not Found"}', { status: 404 });
+      return Response.json({
+        sha: object,
+        encoding: 'base64',
+        content: `${Buffer.from(held).toString('base64')}\n`,
+      });
     }
     const m = url.match(
       /^https:\/\/api\.github\.com\/repos\/acme\/site\/contents\/(.+)\?ref=(.+)$/,
@@ -121,6 +134,24 @@ test('getFile reads the commit it is given rather than the branch', async () => 
   expect(gh.calls).toContain(
     'GET https://api.github.com/repos/acme/site/contents/src/content/listings/en/mill-house.yaml?ref=a1b2c3d',
   );
+});
+
+// The read behind the per-field staleness marker: bytes no branch names any more, addressed by
+// the id the translation itself wrote down.
+test('getBlob returns one object\u2019s text by its own id', async () => {
+  const gh = fakeGitHub({}, true, {}, {}, { deadbeef: 'title: Mill House\n' });
+  const git = createGitClient('default', app, { fetch: gh.fetch });
+
+  expect(await git.getBlob('deadbeef')).toBe('title: Mill House\n');
+});
+
+// Git collects an unreachable blob eventually, and a translation older than that has nothing to
+// compare against. The caller draws no marker rather than an error.
+test('getBlob returns undefined for an object git no longer has', async () => {
+  const gh = fakeGitHub({});
+  const git = createGitClient('default', app, { fetch: gh.fetch });
+
+  expect(await git.getBlob('deadbeef')).toBeUndefined();
 });
 
 test('getFile returns undefined for a missing path', async () => {
