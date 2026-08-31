@@ -19,6 +19,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the entry can be read in. It needs `site` in `astro.config.mjs`: without one there is no
   canonical, no `og:url` and no alternates, because a relative address is not one
   ([Search and sharing](docs/seo.md#seo-)).
+- **The starter carries all three.** `handover init` scaffolds a `seo` field on `page`,
+  `defaultSeo` on the `site` global and `<Seo />` in the layout, and its checklist names the
+  `site` key `astro.config.mjs` needs for the canonical and the alternates.
 - **An SEO field's words are translated.** The second language gets the search title, the
   description and the picture's alt text; the picture itself, the switch and the canonical read
   the same in every language.

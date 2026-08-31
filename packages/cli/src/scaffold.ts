@@ -7,7 +7,15 @@ export interface I18n {
   defaultLocale: string;
 }
 
-const SCHEMAS = `import { type BlockRegistry, blocks, defineBlock, image, richtext } from 'astro-handover';
+const SCHEMAS = `import {
+  type BlockRegistry,
+  blocks,
+  defineBlock,
+  image,
+  richtext,
+  seo,
+  seoDefaults,
+} from 'astro-handover';
 import { z } from 'astro/zod';
 
 export const hero = defineBlock('hero', {
@@ -24,6 +32,9 @@ export type BlockType = keyof typeof blockTypes;
 
 export const page = z.object({
   title: z.string(),
+  // What a search result and a shared link say about this page. Empty is the site's own
+  // defaults below — see docs/seo.md.
+  seo: seo.meta({ label: 'SEO' }).optional(),
   blocks: blocks(() => registry),
 });
 
@@ -31,7 +42,12 @@ export type Page = z.infer<typeof page>;
 
 // Site-wide content the client owns: one file per language under src/content/globals/.
 export const site = z
-  .object({ name: z.string(), footerText: z.string() })
+  .object({
+    name: z.string(),
+    footerText: z.string(),
+    // Every page falls back to these. The package finds them by this key.
+    defaultSeo: seoDefaults.optional(),
+  })
   .meta({ label: 'Site details', description: 'The name and footer line every page carries' });
 
 export type Site = z.infer<typeof site>;
@@ -125,6 +141,8 @@ const { block } = Astro.props;
 
 const LAYOUT = `---
 import Blocks from 'astro-handover/Blocks.astro';
+import Seo from 'astro-handover/Seo.astro';
+import cms from '../../cms.config';
 import { components } from '../blocks/registry';
 import type { Page, Site } from '../content/schemas';
 
@@ -144,7 +162,14 @@ const { data, locale, globals, site } = Astro.props;
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{data.title} — {site.name}</title>
+    <Seo
+      seo={data.seo}
+      defaults={site.defaultSeo}
+      title={data.title}
+      siteName={site.name}
+      {locale}
+      mediaBase={cms.media?.publicBase}
+    />
   </head>
   <body>
     <main>
@@ -211,6 +236,8 @@ blocks:
 const SITE_YAML = `_version: ${FORMAT_VERSION}
 name: "Your site"
 footerText: "One line, edited once, on every page."
+defaultSeo:
+  titlePattern: "%s · Your site"
 `;
 
 /** The starter site, for a project that has no `content.config.ts` of its own to read. */
@@ -325,6 +352,10 @@ One is a var and not a secret, because an origin is not private — and without 
 emailed sign-in link to let the owner above in. In wrangler.jsonc:
 
   "vars": { "HANDOVER_BASE_URL": "https://your-site.example" }
+
+The same origin belongs in astro.config.mjs as \`site: 'https://your-site.example'\`. Without
+it <Seo /> writes no canonical, no og:url and no hreflang alternates, because a relative
+address is not one and the build host is whatever machine ran the build: docs/seo.md.
 
 R2_ACCOUNT_ID and R2_BUCKET are vars for the same reason and are in the block above already.
 Optional secrets turn on the feature that reads them: RESEND_API_KEY or SMTP_USER and
