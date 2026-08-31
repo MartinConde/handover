@@ -35,6 +35,7 @@ let {
   labelId,
   menus,
   locale = '',
+  translating = false,
 }: {
   /** The field's own id; every control on the screen is named under it. */
   id: string;
@@ -44,6 +45,8 @@ let {
   menus: Menu[];
   /** The language this column writes: which address a row shows, and what is missing where. */
   locale?: string;
+  /** A second language's column: the tree is read, and its labels are what can be typed. */
+  translating?: boolean;
 } = $props();
 
 let tab = $state(0);
@@ -288,9 +291,30 @@ function walkTabs(event: KeyboardEvent) {
   </ul>
 {/snippet}
 
+{#snippet labelled(list: MenuItem[])}
+  <ul class="branch">
+    {#each list as item (item._id)}
+      {@const says = flag(item)}
+      <li>
+        <div class="menu-item is-label" class:is-flagged={says}>
+          <label class="lbl" for="{id}-lbl-{item._id}">{fallback(item)}</label>
+          <input class="input" id="{id}-lbl-{item._id}" type="text" value={item.label} oninput={(e) => (item.label = e.currentTarget.value)} placeholder={fallback(item)} aria-describedby="{id}-tgt-{item._id}" />
+          <span class="target" id="{id}-tgt-{item._id}">
+            {item.link.type === 'url' ? 'Link' : 'Page'} <code>{target(item)}</code>
+            {#if says}<span class="badge badge-warn">{says}</span>{/if}
+          </span>
+        </div>
+        {#if item.children?.length}
+          {@render labelled(item.children)}
+        {/if}
+      </li>
+    {/each}
+  </ul>
+{/snippet}
+
 <svelte:window onkeydown={(e) => { if (e.key === 'Escape' && removing) { removing = undefined; trigger?.focus(); } }} />
 
-<div class="nav-build" {id} role="group" aria-labelledby={labelId}>
+<div class="nav-build" class:is-labels={translating} {id} role="group" aria-labelledby={labelId}>
   {#if !menu}
     <div class="empty is-wide">
       <div>
@@ -309,25 +333,27 @@ function walkTabs(event: KeyboardEvent) {
         {/each}
       </div>
     {/if}
-    <div class="nav-add">
-      <h2 class="side-title" id="{id}-add-h">Add to menu</h2>
-      <PagePicker id="{id}-pick" label="pages and entries" labelId="{id}-add-h" onpick={addEntry} />
-      <p class="hint">Choosing one puts it at the bottom of the menu; move it from there.</p>
-      <div class="custom-link">
-        <h3 class="side-title" id="{id}-cl-h">Custom link</h3>
-        <div class="field">
-          <div class="label-row"><label for="{id}-cl-label">Label</label></div>
-          <input class="input" id="{id}-cl-label" type="text" bind:value={custom.label} placeholder="Book a viewing" />
+    {#if !translating}
+      <div class="nav-add">
+        <h2 class="side-title" id="{id}-add-h">Add to menu</h2>
+        <PagePicker id="{id}-pick" label="pages and entries" labelId="{id}-add-h" onpick={addEntry} />
+        <p class="hint">Choosing one puts it at the bottom of the menu; move it from there.</p>
+        <div class="custom-link">
+          <h3 class="side-title" id="{id}-cl-h">Custom link</h3>
+          <div class="field">
+            <div class="label-row"><label for="{id}-cl-label">Label</label></div>
+            <input class="input" id="{id}-cl-label" type="text" bind:value={custom.label} placeholder="Book a viewing" />
+          </div>
+          <div class="field" class:is-invalid={scheme}>
+            <div class="label-row"><label for="{id}-cl-url">Address</label></div>
+            <input class="input" id="{id}-cl-url" type="text" bind:value={custom.href} placeholder="/contact or https://…" aria-invalid={scheme ? 'true' : undefined} aria-describedby={scheme ? `${id}-cl-err` : undefined} />
+            {#if scheme}<p class="error" id="{id}-cl-err">{scheme}: links are not allowed</p>{/if}
+          </div>
+          <label class="choice" for="{id}-cl-tab"><input type="checkbox" id="{id}-cl-tab" bind:checked={custom.newTab} /><span>Open in a new tab</span></label>
+          <button class="btn btn-sm" type="button" disabled={!custom.href || !!scheme} onclick={addCustom}>Add to menu</button>
         </div>
-        <div class="field" class:is-invalid={scheme}>
-          <div class="label-row"><label for="{id}-cl-url">Address</label></div>
-          <input class="input" id="{id}-cl-url" type="text" bind:value={custom.href} placeholder="/contact or https://…" aria-invalid={scheme ? 'true' : undefined} aria-describedby={scheme ? `${id}-cl-err` : undefined} />
-          {#if scheme}<p class="error" id="{id}-cl-err">{scheme}: links are not allowed</p>{/if}
-        </div>
-        <label class="choice" for="{id}-cl-tab"><input type="checkbox" id="{id}-cl-tab" bind:checked={custom.newTab} /><span>Open in a new tab</span></label>
-        <button class="btn btn-sm" type="button" disabled={!custom.href || !!scheme} onclick={addCustom}>Add to menu</button>
       </div>
-    </div>
+    {/if}
     <div class="nav-main" id="{id}-menu" role={menus.length > 1 ? 'tabpanel' : undefined} aria-labelledby={menus.length > 1 ? `${id}-tab-${tab}` : undefined}>
       {#if found}
         <!-- Editing takes the tree's place rather than floating over it: a form over a tree
@@ -366,6 +392,14 @@ function walkTabs(event: KeyboardEvent) {
             <button class="btn" type="button" onclick={() => cancelEdit(found)}>Cancel</button>
           </div>
         </div>
+      {:else if translating}
+        <!-- The shape is one tree for the whole site, and this column cannot save one: a save of
+             a translation writes the words this language owns and nothing else. -->
+        <div class="menu-tree">
+          <p class="notice notice-info">The shape of this menu is shared with every language. Items are added, moved and removed in the other column; the labels here are this language's own.</p>
+          {@render labelled(menu.items)}
+        </div>
+        <p class="tree-note">An empty box uses the page's own title in this language.</p>
       {:else if menu.items.length}
         <div class="menu-tree">
           {@render branch(menu.items, [])}

@@ -1,5 +1,5 @@
 import { isObject, rowKey, TRANSLATED_PROPS } from './content.js';
-import { type Field, type Form, humanise, type Translation } from './schema.js';
+import { type Field, type Form, humanise, rowFields, type Translation } from './schema.js';
 
 /** A run of a text field's words: what stayed, what went, what arrived. */
 export interface WordPart {
@@ -110,12 +110,12 @@ function changesIn(
     const path = at ? `${at}.${key}` : key;
     const label = named ? `${named} · ${field.label}` : field.label;
     const mode = field.i18n ?? inherited;
+    const item = rowFields(field);
     if (field.type === 'group')
       changesIn(form, field.fields, was, now, path, label, mode, wants, found);
     else if (field.type === 'blocks')
       rowsIn(form, (row) => form.blocks[String(row._type)], was, now, path, mode, wants, found);
-    else if (field.type === 'array' && field.item.some((f) => f.path.length > 0))
-      rowsIn(form, () => field.item, was, now, path, mode, wants, found);
+    else if (item) rowsIn(form, () => item, was, now, path, mode, wants, found);
     else leafIn(field, was, now, path, label, mode, wants, found);
   }
 }

@@ -76,8 +76,9 @@ of a translation does not change it.
 The right-hand column draws that: a shared field is shown as the value the languages share rather
 than as something to type over, a field the entry's own language keeps to itself is not drawn at
 all, and a link offers its label and not where it points. Blocks are there to translate but not to
-add, remove or reorder. Pickers whose translated half has no editor yet — an image's `alt`, a
-file's name — are left out.
+add, remove or reorder, and the navigation menus are drawn the same way: the tree as one box a
+row, for the labels alone, with items added and moved in the other column. Pickers whose
+translated half has no editor yet — an image's `alt`, a file's name — are left out.
 
 ## When the languages disagree
 
@@ -101,6 +102,9 @@ wants is ordinary validation rather than another refusal; *Keep it in German onl
 `_locales`. Each card shows what every language has written in the block, so *Remove it from
 English* is answered against the words it would lose. Answering every card writes each language
 the answers change in one go, and the banner goes because the next read has nothing to report.
+
+A menu label is the one translated value a machine is never offered: an empty box is not a gap
+but *use the page's own title*, and that title is already translated.
 
 ## A machine's first draft
 

@@ -12,9 +12,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`<Nav />` and `menusAt()`.** The menu one language renders: every `ref` resolved to the
   address that language serves, and every item it cannot show dropped — with its children — so a
   menu never links to a page that is not there ([Rendering content](docs/rendering.md#navigation-menus)).
-- The menus are the same tree in every language until their labels translate: an edit in one
-  language carries the whole tree into the others, and the second column says so instead of
-  drawing a copy of it.
+- **Menu labels translate; the tree does not.** Which items a menu has, in which order and
+  pointing where is the same in every language — moving one moves it in all of them — and each
+  language keeps its own words for the rows. A translation's column draws that tree as one box
+  a row; an empty box uses the page's own title in that language
+  ([Languages](docs/i18n.md#the-structure-is-shared)).
 - **A focal point instead of a crop tool.** *Set focal point* in the library puts a dot on the
   picture and previews every shape this site's own fields crop to around it; move it once and all
   of them move. The same dialog opens from an image field for that page alone, and writes `focal`

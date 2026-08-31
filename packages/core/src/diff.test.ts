@@ -521,3 +521,82 @@ test('a removed row with no words of its own is named by its place, not its id',
     { path: 'hours[_id=q8zt1m4c]', label: 'Row 2', kind: 'row', at: 'removed', changes: [] },
   ]);
 });
+
+// The menus global: the tree is every language's, the labels are each language's own, and the
+// drawer has to say which of the two a change was.
+const navigation: Form = {
+  fields: [{ path: ['menus'], label: 'Menus', type: 'menus', required: true, i18n: 'duplicate' }],
+  blocks: {},
+};
+const header = (items: unknown[]) => ({ menus: [{ _id: 'n1', key: 'header', items }] });
+const home = (label: string) => ({ _id: 'h1', label, link: { type: 'entry', ref: 'pages/home' } });
+const news = (label: string) => ({ _id: 'l1', label, link: { type: 'url', href: '/news' } });
+
+test('a menu label retyped in one language is that language’s change, not a shared one', () => {
+  const en = header([home('Home'), news('News')]);
+  const de = header([home('Startseite'), news('Neuigkeiten')]);
+
+  const groups = diffEntry(
+    'default',
+    navigation,
+    { en, de },
+    { en, de: header([home('Startseite'), news('Aktuelles')]) },
+  );
+
+  expect(changesIn(groups)).toEqual([]);
+  expect(changesIn(groups, 'en')).toEqual([]);
+  expect(changesIn(groups, 'de')).toEqual([
+    {
+      path: 'menus[_id=n1]',
+      label: 'header',
+      kind: 'row',
+      at: 'same',
+      changes: [
+        {
+          path: 'menus[_id=n1].items[_id=l1]',
+          label: 'Aktuelles',
+          kind: 'row',
+          at: 'same',
+          changes: [
+            {
+              path: 'menus[_id=n1].items[_id=l1].label',
+              label: 'Label',
+              kind: 'words',
+              parts: [
+                { text: 'Neuigkeiten', mark: 'del' },
+                { text: 'Aktuelles', mark: 'ins' },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  ]);
+});
+
+test('a menu item moved in both files is one move, said once', () => {
+  const en = header([home('Home'), news('News')]);
+  const de = header([home('Startseite'), news('Neuigkeiten')]);
+
+  const groups = diffEntry(
+    'default',
+    navigation,
+    { en, de },
+    {
+      en: header([news('News'), home('Home')]),
+      de: header([news('Neuigkeiten'), home('Startseite')]),
+    },
+  );
+
+  const [menu] = changesIn(groups);
+  expect(menu && 'changes' in menu && menu.changes).toEqual([
+    {
+      path: 'menus[_id=n1].items[_id=h1]',
+      label: 'Home',
+      kind: 'row',
+      at: 'moved-down',
+      changes: [],
+    },
+  ]);
+  expect(changesIn(groups, 'de')).toEqual([]);
+});

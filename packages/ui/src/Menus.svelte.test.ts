@@ -37,7 +37,7 @@ const OFFERED = [
 
 let app: ReturnType<typeof mount>;
 let menus: Menu[] = $state([]);
-const show = (items: unknown[] = [], keys = ['header']) => {
+const show = (items: unknown[] = [], keys = ['header'], translating = false) => {
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => Response.json({ entries: OFFERED, locales: ['en', 'de'] })),
@@ -49,7 +49,7 @@ const show = (items: unknown[] = [], keys = ['header']) => {
   })) as Menu[];
   app = mount(Menus, {
     target: document.body,
-    props: { id: 'f-menus', labelId: 'f-menus-l', locale: 'en', menus },
+    props: { id: 'f-menus', labelId: 'f-menus-l', locale: 'en', menus, translating },
   });
   flushSync();
   return document.body;
@@ -406,4 +406,67 @@ test('the parsed file survives the round trip through the tree', () => {
   const parsed = parseEntry('default', file) as { menus: Menu[] };
   show(parsed.menus[0]?.items ?? []);
   expect(written()).toBe(file);
+});
+
+// The second language's column. The tree it draws is the same tree, and the only thing it can
+// write is one word per row: a save of a translation carries the labels and nothing else.
+const translated = [
+  { _id: 'a1b2c3d4', label: 'Kontakt', link: { type: 'entry', ref: 'pages/contact' } },
+  {
+    _id: 'l1i2s3t4',
+    label: 'Angebote',
+    link: { type: 'url', href: '/listings' },
+    children: [{ _id: 'm1i2l3l4', label: '', link: { type: 'entry', ref: 'listings/mill-house' } }],
+  },
+];
+const boxes = () => Array.from(document.querySelectorAll<HTMLInputElement>('.menu-item .input'));
+
+test('the second language types one label a row and cannot move anything', async () => {
+  show(translated, ['header'], true);
+  await loaded();
+
+  expect(boxes().map((b) => b.value)).toEqual(['Kontakt', 'Angebote', '']);
+  expect(document.querySelectorAll('.grip')).toHaveLength(0);
+  expect(document.querySelectorAll('.item-actions')).toHaveLength(0);
+  expect(document.querySelector('.nav-add')).toBeNull();
+
+  type('#f-menus-lbl-a1b2c3d4', 'Kontakt und Anfahrt');
+
+  expect(written()).toBe(`menus:
+  - _id: "menu0aaa"
+    key: "header"
+    items:
+      - _id: "a1b2c3d4"
+        label: "Kontakt und Anfahrt"
+        link:
+          type: "entry"
+          ref: "pages/contact"
+      - _id: "l1i2s3t4"
+        label: "Angebote"
+        link:
+          type: "url"
+          href: "/listings"
+        children:
+          - _id: "m1i2l3l4"
+            label: ""
+            link:
+              type: "entry"
+              ref: "listings/mill-house"
+`);
+});
+
+test('a label box is named by the page it points at, and empty means that page’s own title', async () => {
+  show(translated, ['header'], true);
+  await loaded();
+
+  const [, , child] = boxes();
+  expect(
+    Array.from(document.querySelectorAll('.menu-item .lbl')).map((l) => l.textContent),
+  ).toEqual(['Contact', '/listings', 'Old Mill House']);
+  expect(child?.placeholder).toBe('Old Mill House');
+  // The badge the tree draws is drawn here too: a row the site is going to skip is one nobody
+  // should spend a translation on.
+  expect(document.querySelector('.menu-item.is-flagged .badge-warn')?.textContent).toBe(
+    'Hidden — the site skips this item',
+  );
 });

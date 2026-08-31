@@ -3,7 +3,7 @@ import type { ContentFile } from './entries.js';
 import { blobSha } from './git.js';
 import { entryAddress, entryUrl, type I18nRouting } from './names.js';
 import { checkReserved, isLive, RESERVED_KEYS } from './reserved.js';
-import type { Field, Form, Translation } from './schema.js';
+import { type Field, type Form, rowFields, type Translation } from './schema.js';
 import { keptMachine } from './translate.js';
 
 export interface ContentEntry<T = unknown> {
@@ -572,6 +572,7 @@ function applyIn(
     if (key === undefined) continue;
     const path = at ? `${at}.${key}` : key;
     const mode = field.i18n ?? inherited;
+    const row = rowFields(field);
     if (field.type === 'group')
       applyIn(
         form,
@@ -583,8 +584,7 @@ function applyIn(
       );
     else if (field.type === 'blocks')
       applyRows(form, (row) => form.blocks[String(row._type)], copies, key, path, mode, ctx);
-    else if (field.type === 'array' && field.item.some((f) => f.path.length > 0))
-      applyRows(form, () => field.item, copies, key, path, mode, ctx);
+    else if (row) applyRows(form, () => row, copies, key, path, mode, ctx);
   }
 }
 
@@ -815,6 +815,7 @@ function valuesIn(
     const path = at ? `${at}.${key}` : key;
     const mode = field.i18n ?? inherited;
     const props = TRANSLATED_PROPS[field.type];
+    const row = rowFields(field);
     if (field.type === 'group') valuesIn(form, field.fields, value, path, mode, found);
     else if (props && mode === true)
       for (const prop of props) {
@@ -825,8 +826,7 @@ function valuesIn(
       }
     else if (field.type === 'blocks')
       valuesInRows(form, (row) => form.blocks[String(row._type)], value, path, mode, found);
-    else if (field.type === 'array' && field.item.some((f) => f.path.length > 0))
-      valuesInRows(form, () => field.item, value, path, mode, found);
+    else if (row) valuesInRows(form, () => row, value, path, mode, found);
     else if (mode === true && value !== undefined) found.push([path, JSON.stringify(value)]);
   }
 }
@@ -910,11 +910,11 @@ function driftIn(
       data: isObject(data) ? data[key] : undefined,
     }));
     const path = at ? `${at}.${key}` : key;
+    const row = rowFields(field);
     if (field.type === 'group') driftIn(form, field.fields, under, path, found);
     else if (field.type === 'blocks')
       driftRows(form, (row) => form.blocks[String(row._type)], under, path, found);
-    else if (field.type === 'array' && field.item.some((f) => f.path.length > 0))
-      driftRows(form, () => field.item, under, path, found);
+    else if (row) driftRows(form, () => row, under, path, found);
   }
 }
 
@@ -1023,6 +1023,7 @@ function overlay(
     if (key === undefined) continue;
     const mode = field.i18n ?? inherited;
     const props = TRANSLATED_PROPS[field.type];
+    const row = rowFields(field);
     if (field.type === 'group') {
       const group = overlay(form, field.fields, sent[key], out[key], pick, mode, into(sync, key));
       if (Object.keys(group).length) out[key] = group;
@@ -1042,16 +1043,8 @@ function overlay(
         into(sync, key),
       );
       if (rows) out[key] = rows;
-    } else if (field.type === 'array' && field.item.some((f) => f.path.length > 0)) {
-      const rows = pairRows(
-        form,
-        () => field.item,
-        sent[key],
-        out[key],
-        pick,
-        mode,
-        into(sync, key),
-      );
+    } else if (row) {
+      const rows = pairRows(form, () => row, sent[key], out[key], pick, mode, into(sync, key));
       if (rows) out[key] = rows;
     } else if (pick(mode)) {
       if (key in sent) out[key] = sent[key];
@@ -1270,6 +1263,9 @@ function textIn(
     if (field.type === 'group') textIn(form, field.fields, value, path, mode, found);
     else if (field.type === 'blocks')
       textInRows(form, (row) => form.blocks[String(row._type)], value, path, mode, found);
+    // Menu labels are the one translated leaf a machine is not offered, though the second
+    // column draws them: an empty label is not a gap but "use the page title", and that title
+    // is already translated. Filling it would replace the client's answer with a guess at it.
     else if (field.type === 'array' && field.item.some((f) => f.path.length > 0))
       textInRows(form, () => field.item, value, path, mode, found);
     else if (mode !== true) continue;

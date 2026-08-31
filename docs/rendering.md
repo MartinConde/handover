@@ -119,7 +119,9 @@ const { menus } = Astro.props;
 `aria-current="page"` on the one the reader is on (a trailing slash is the same page), and
 `target="_blank" rel="noopener noreferrer"` where the item asks for a new tab. A menu with
 nothing left in this language draws **nothing**. `label` names the landmark where a page has
-two menus. Style it, or read `menus.header` — `{ label, href, newTab?, children }`, an item with
+two menus. The words come from the file of the language being rendered — the tree is shared and
+the labels are each language's own — so an item nobody has translated is named by the page it
+points at, in that language. Style it, or read `menus.header` — `{ label, href, newTab?, children }`, an item with
 no `label` of its own already named by the page it points at — and write your own markup.
 
 ## Hidden entries

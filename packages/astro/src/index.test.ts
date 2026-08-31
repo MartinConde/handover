@@ -3,7 +3,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import process from 'node:process';
 import { pathToFileURL } from 'node:url';
-import { fieldsFrom, formOf, type JsonSchema, parseEntry, SCHEMA_VERSION } from '@handover/core';
+import {
+  fieldsFrom,
+  formOf,
+  type JsonSchema,
+  parseEntry,
+  SCHEMA_VERSION,
+  syncLocale,
+} from '@handover/core';
 import type { HookParameters } from 'astro';
 import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
@@ -507,6 +514,41 @@ test('the navigation global is one menus field: the walker stops at the shape it
   expect(fields).toEqual([
     { path: ['menus'], label: 'Menus', type: 'menus', required: true, i18n: 'duplicate' },
   ]);
+});
+
+// The tree is one skeleton and the labels are per language, so a row reaches a language
+// before anybody has typed its word for it — and that file still has to parse.
+test('an item synced into another language before it is translated is a valid file', () => {
+  const form = formOf('default', formSchema(navigation));
+  const en = {
+    menus: [
+      {
+        _id: '7h2kq9sd',
+        key: 'header',
+        items: [{ _id: 'a1b2c3d4', label: 'Listings', link: { type: 'url', href: '/listings' } }],
+      },
+    ],
+  };
+
+  const de = syncLocale('default', form, 'de', { before: { menus: [] }, after: en }, {});
+
+  expect(de.menus).toEqual([
+    {
+      _id: '7h2kq9sd',
+      key: 'header',
+      items: [{ _id: 'a1b2c3d4', link: { type: 'url', href: '/listings' } }],
+    },
+  ]);
+  const parsed = navigation.safeParse(de);
+  expect(parsed.success).toBe(true);
+  expect(parsed.data?.menus[0]?.items[0]?.label).toBe('');
+});
+
+// The walkers read a menu item through fields that name themselves under `children`. That
+// description is theirs alone: the form is JSON on its way to the browser, and a cycle in it
+// has no end.
+test('the form a browser is handed carries no cycle', () => {
+  expect(() => JSON.stringify(formOf('default', formSchema(navigation)))).not.toThrow();
 });
 
 test('a menu item link is a bare target: no label or newTab inside it', () => {

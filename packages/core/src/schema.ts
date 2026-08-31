@@ -56,6 +56,44 @@ export function fieldsFrom(_siteId: string, schema: JsonSchema): Field[] {
 }
 
 /**
+ * One menu item as the walkers read it. The schema walker stops at `menus` — the shape is
+ * recursive and has no fields to flatten — but the CMS keeps the tree in step across languages
+ * the way it keeps blocks, and that needs the same fields every other row has: the label is the
+ * one thing a language owns, the link and the shape belong to all of them at once. The order is
+ * the order the files carry, because `ordered` writes the keys in it.
+ */
+const menuItem: Field[] = [
+  { path: ['label'], label: 'Label', type: 'text', required: false, i18n: true },
+  // One value the CMS never looks inside: swapping a page for a URL replaces the whole target.
+  { path: ['link'], label: 'Links to', type: 'unsupported' },
+  { path: ['newTab'], label: 'Open in a new tab', type: 'boolean', required: false },
+];
+menuItem.push({
+  path: ['children'],
+  label: 'Items',
+  type: 'array',
+  required: false,
+  item: menuItem,
+});
+const menuFields: Field[] = [
+  { path: ['key'], label: 'Key', type: 'text', required: true },
+  { path: ['items'], label: 'Items', type: 'array', required: true, item: menuItem },
+];
+
+/**
+ * The fields of one row of a field that holds rows, and nothing for a field that holds none:
+ * where every walk that keeps an entry's languages in step goes down. `menuItem` names itself,
+ * so this is deliberately not on the `Field` the form hands the browser — that one is JSON, and
+ * a cycle in it has no end.
+ */
+export const rowFields = (field: Field): readonly Field[] | undefined =>
+  field.type === 'menus'
+    ? menuFields
+    : field.type === 'array' && field.item.some((f) => f.path.length > 0)
+      ? field.item
+      : undefined;
+
+/**
  * Every ratio a picture is shown at on this site, once each, named by the first field asking for
  * it. The focal picker previews these: one dot, and under it what that dot does to each crop the
  * site actually renders. A field with no ratio crops nothing and has nothing to preview.

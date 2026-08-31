@@ -960,9 +960,9 @@ test('an empty image field offers the library, and its two numbers are two lines
   expect(q('.dropzone button').textContent).toBe('Choose from library');
 });
 
-// The menus are one tree for the whole site: the language being translated is told so rather
-// than shown a copy of it that would only move the other language's.
-test('menus: the translated column says the tree is shared instead of drawing a second one', () => {
+// The menus are one tree for the whole site: the second column draws the same tree with one
+// box a row, because the labels are the one thing in it that language owns.
+test('menus: the translated column draws the tree as labels, with nothing to move', () => {
   const field: Field = {
     path: ['menus'],
     label: 'Menus',
@@ -970,8 +970,11 @@ test('menus: the translated column says the tree is shared instead of drawing a 
     required: true,
     i18n: 'duplicate',
   };
-  show([field], { _version: 1, menus: [{ _id: 'menu0aaa', key: 'header', items: [] }] });
+  const items = [{ _id: 'a1b2c3d4', label: 'Home', link: { type: 'url', href: '/' } }];
+  show([field], { _version: 1, menus: [{ _id: 'menu0aaa', key: 'header', items }] });
   expect(document.querySelector('#f-menus.nav-build')).not.toBeNull();
+  expect(document.querySelector('.nav-build.is-labels')).toBeNull();
+  expect(document.querySelectorAll('.grip')).toHaveLength(1);
 
   unmount(app);
   app = mount(Fields, {
@@ -989,8 +992,10 @@ test('menus: the translated column says the tree is shared instead of drawing a 
     },
   });
   flushSync();
-  expect(document.querySelector('.nav-build')).toBeNull();
-  expect(q('#f-menus').textContent).toContain('The same menus in every language');
+  expect(document.querySelector('.nav-build.is-labels')).not.toBeNull();
+  expect(document.querySelectorAll('.grip')).toHaveLength(0);
+  expect(q<HTMLInputElement>('.menu-item .input').value).toBe('Home');
+  expect(q('#f-menus').textContent).toContain('The shape of this menu is shared');
 });
 
 test('a picked image is written as the format stores it, and Remove empties the field', async () => {

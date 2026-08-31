@@ -1533,3 +1533,152 @@ test('the tree keeps its shape: children are resolved under their parent', async
 test('a site with no navigation global renders no menus rather than throwing', async () => {
   expect(await resolved(undefined, 'en')).toEqual({});
 });
+
+// The menu tree in two languages: one skeleton, one label per language. The pair is the demo's
+// own shape — a page, a section with two children under it, and an item German alone shows.
+const navigation: Form = {
+  fields: [{ path: ['menus'], label: 'Menus', type: 'menus', required: true, i18n: 'duplicate' }],
+  blocks: {},
+};
+const tree = (labels: [string, string, string], over: Record<string, unknown> = {}) => ({
+  _version: 1,
+  menus: [
+    {
+      _id: 'n1h2e3a4',
+      key: 'header',
+      items: [
+        { _id: 'h1o2m3e4', label: labels[0], link: { type: 'entry', ref: 'pages/home' } },
+        {
+          _id: 'l1i2s3t4',
+          label: labels[1],
+          link: { type: 'url', href: '/listings' },
+          children: [{ _id: 'm1i2l3l4', label: '', link: { type: 'entry', ref: 'listings/mill' } }],
+        },
+        { _id: 'i1m2p3r4', label: labels[2], link: { type: 'entry', ref: 'pages/impressum' } },
+      ],
+      ...over,
+    },
+  ],
+});
+const en = () => tree(['Home', 'Listings', 'Impressum']);
+const de = () => tree(['Startseite', 'Angebote', 'Impressum']);
+const itemsOf = (data: Record<string, unknown>) =>
+  ((data.menus as Record<string, unknown>[])[0]?.items ?? []) as Record<string, unknown>[];
+const childrenOf = (data: Record<string, unknown>, at: number) =>
+  (itemsOf(data)[at]?.children ?? []) as Record<string, unknown>[];
+
+test('a menu reordered in one language is reordered in the other, and its labels stay put', () => {
+  const before = en();
+  const [home, listings, impressum] = itemsOf(before);
+  const after = tree(['Home', 'Listings', 'Impressum']);
+  (after.menus[0] as Record<string, unknown>).items = [listings, home, impressum];
+
+  const synced = syncLocale('default', navigation, 'de', { before, after }, de());
+
+  expect(itemsOf(synced).map((i) => [i._id, i.label])).toEqual([
+    ['l1i2s3t4', 'Angebote'],
+    ['h1o2m3e4', 'Startseite'],
+    ['i1m2p3r4', 'Impressum'],
+  ]);
+});
+
+test('what a menu item points at follows the source language; the label does not', () => {
+  const before = en();
+  const after = en();
+  const moved = itemsOf(after)[1] as Record<string, unknown>;
+  moved.link = { type: 'entry', ref: 'pages/for-sale' };
+  moved.newTab = true;
+  moved.label = 'For sale';
+
+  const synced = syncLocale('default', navigation, 'de', { before, after }, de());
+
+  expect(itemsOf(synced)[1]).toMatchObject({
+    label: 'Angebote',
+    link: { type: 'entry', ref: 'pages/for-sale' },
+    newTab: true,
+  });
+});
+
+test('an item added in one language arrives in the other with no label of its own', () => {
+  const before = en();
+  const after = en();
+  itemsOf(after).push({
+    _id: 'c1o2n3t4',
+    label: 'Contact',
+    link: { type: 'entry', ref: 'pages/contact' },
+  });
+
+  const synced = syncLocale('default', navigation, 'de', { before, after }, de());
+
+  expect(itemsOf(synced)[3]).toEqual({
+    _id: 'c1o2n3t4',
+    link: { type: 'entry', ref: 'pages/contact' },
+  });
+});
+
+test('a child label is the child language’s own, however deep the tree goes', () => {
+  const before = en();
+  const after = en();
+  const child = childrenOf(after, 1)[0] as Record<string, unknown>;
+  child.label = 'The Mill';
+  const target = de();
+  (childrenOf(target, 1)[0] as Record<string, unknown>).label = 'Die Mühle';
+
+  const synced = syncLocale('default', navigation, 'de', { before, after }, target);
+
+  expect(childrenOf(synced, 1)[0]?.label).toBe('Die Mühle');
+});
+
+test('a translated save writes labels and moves nothing', () => {
+  const values = {
+    menus: [
+      {
+        _id: 'n1h2e3a4',
+        key: 'header',
+        items: [
+          {
+            _id: 'l1i2s3t4',
+            label: 'Angebote, neu',
+            link: { type: 'entry', ref: 'pages/somewhere-else' },
+          },
+          { _id: 'n9e8w7', label: 'Neu', link: { type: 'url', href: '/neu' } },
+        ],
+      },
+    ],
+  };
+
+  const saved = mergeEntry('default', de(), values, navigation);
+
+  expect(itemsOf(saved).map((i) => [i._id, i.label])).toEqual([
+    ['h1o2m3e4', 'Startseite'],
+    ['l1i2s3t4', 'Angebote, neu'],
+    ['i1m2p3r4', 'Impressum'],
+  ]);
+  expect(itemsOf(saved)[1]?.link).toEqual({ type: 'url', href: '/listings' });
+});
+
+test('a synced menu file is written in the order the format declares', () => {
+  const before = en();
+  const after = en();
+  (itemsOf(after)[0] as Record<string, unknown>).newTab = true;
+  (itemsOf(after)[2] as Record<string, unknown>)._locales = ['de'];
+
+  const synced = syncLocale('default', navigation, 'de', { before, after }, de());
+
+  expect(Object.keys(itemsOf(synced)[0] ?? {})).toEqual(['_id', 'label', 'link', 'newTab']);
+  expect(Object.keys(itemsOf(synced)[2] ?? {})).toEqual(['_id', '_locales', 'label', 'link']);
+});
+
+test('a menu item one language has without `_locales` is drift like any other row', () => {
+  const short = de();
+  itemsOf(short).splice(1, 1);
+
+  expect(driftReport('default', navigation, { en: en(), de: short })).toEqual([
+    {
+      path: 'menus[_id=n1h2e3a4].items[_id=l1i2s3t4]',
+      in: ['en'],
+      expected: ['en', 'de'],
+      values: { en: ['Listings'] },
+    },
+  ]);
+});

@@ -1015,6 +1015,9 @@ a.btn { text-decoration: none; }
 .menu-item.is-flagged .target .badge { flex-basis: 100%; }
 .tree-empty { min-height: 220px; }
 .tree-note { font-size: var(--text-xs); color: var(--ink-2); }
+.nav-build.is-labels { grid-template-columns: minmax(0, 1fr); }
+.menu-item.is-label { grid-template-columns: minmax(0, 1fr); gap: var(--s-1); }
+.menu-item.is-label .lbl { font-size: var(--text-sm); color: var(--ink-2); }
 
 @media (max-width: 720px) {
   .focal-dialog .dialog-cols { grid-template-columns: minmax(0, 1fr); }

@@ -95,7 +95,10 @@ const navItem: z.ZodType<NavItem> = z.lazy(() =>
   z.strictObject({
     _id: z.string(),
     _locales: z.array(z.string()).optional(),
-    label: z.string(),
+    // A label the file does not carry is the page's own title, which is how a row synced into
+    // a language before anybody has translated it reads — and how a picked page reads until
+    // somebody types over the greyed title.
+    label: z.string().default(''),
     link: z.discriminatedUnion('type', [toUrl.strict(), toRef.strict()]),
     newTab: z.boolean().optional(),
     children: z.array(navItem).optional(),
@@ -104,7 +107,8 @@ const navItem: z.ZodType<NavItem> = z.lazy(() =>
 export const navigation = z
   .object({
     // One editor for the whole tree, and the same tree in every language: the skeleton is shared
-    // by the format, and until labels translate (4.6) there is nothing in it one language owns.
+    // by the format, and `label` is the one key in it a language owns — the walkers know that
+    // shape, since the recursion leaves them nothing to read it out of the schema with.
     menus: z
       .array(z.object({ _id: z.string(), key: z.string(), items: z.array(navItem) }))
       .meta({ handover: 'menus', i18n: 'duplicate' }),

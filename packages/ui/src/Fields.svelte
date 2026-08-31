@@ -337,13 +337,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   <div class="field" class:is-invalid={err}>
     {#if field.type === 'menus'}
       {@render groupLabel(id, field, text, at)}
-      {#if translating}
-        <!-- The tree is one skeleton for the whole site, so the second language is told rather
-             than shown a copy of it it cannot move. -->
-        <p class="hint" {id}>The same menus in every language. Their labels get a column of their own in a later release.</p>
-      {:else}
-        <Menus {id} labelId="{id}-l" menus={rows(at) as Menu[]} {locale} />
-      {/if}
+      <Menus {id} labelId="{id}-l" menus={rows(at) as Menu[]} {locale} {translating} />
     {:else if translating && mode === 'duplicate' && !structural(field)}
       {@render groupLabel(id, field, text, at)}
       <div class="readonly" {id} role="region" tabindex="-1" aria-labelledby="{id}-l">{read(at) ?? ''}</div>
