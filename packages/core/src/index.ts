@@ -3,6 +3,7 @@ export type {
   ActivityEvent,
   ActivityGroup,
   ActivityQuery,
+  EntryEdit,
 } from './activity.js';
 export {
   ACTIVITY_GROUPS,
@@ -12,6 +13,7 @@ export {
   deletedEntries,
   lastCommit,
   logActivity,
+  publishedEntries,
 } from './activity.js';
 export type { AccountFacts, Auth, AuthConfig, Member, MemberApi, Role } from './auth.js';
 export {
@@ -73,6 +75,7 @@ export {
   createDraft,
   DraftConflictError,
   discardDraft,
+  draftEditors,
   draftFiles,
   type EntryConflict,
   entryConflict,
@@ -118,6 +121,7 @@ export {
   entryKey,
   entryOffer,
   indexFrom,
+  staleFrom,
   templatesFrom,
 } from './entries.js';
 export type {

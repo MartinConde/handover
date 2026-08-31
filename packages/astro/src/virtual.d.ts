@@ -14,6 +14,8 @@ declare module 'virtual:handover/index' {
   export const templates: Record<string, import('@handover/core').Template[]>;
   /** Which stored media keys each content file names, for the library's usage counts. */
   export const uses: import('@handover/core').MediaUses;
+  /** `"listings/mill-house" -> ["de"]`: translations made from a source that has moved on since. */
+  export const stale: Record<string, string[]>;
 }
 
 declare module 'virtual:handover/loaders' {

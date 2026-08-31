@@ -1089,3 +1089,43 @@ a.btn { text-decoration: none; }
 @media (max-width: 720px) {
   .history { grid-template-columns: 1fr; padding: var(--s-5); gap: var(--s-6); }
 }
+
+/* Dashboard. The two big tiles are the top bar's indicator and pill grown up, in the same
+   tints, and the lists under them are the activity log's and the entry list's own rows. */
+.dash { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); }
+.dtile { display: grid; gap: var(--s-3); align-content: start; min-width: 0; padding: var(--s-5); border-radius: var(--radius-lg); background: var(--surface-2); }
+.dtile.span-2 { grid-column: span 2; }
+.dtile > header { display: flex; align-items: center; gap: var(--s-2); }
+.dtile > header h2 { font-size: var(--text-md); font-weight: 600; }
+.dtile > header a { margin-left: auto; font-size: var(--text-sm); white-space: nowrap; }
+.dtile .big { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); font-size: 2rem; line-height: 1.1; font-weight: 600; letter-spacing: var(--tracking-tight); }
+.dtile .big small { font-size: var(--text-md); font-weight: 400; color: var(--ink-2); }
+.dtile .big.is-quiet { font-size: var(--text-xl); }
+.dtile .line { font-size: var(--text-sm); color: var(--ink-2); }
+.dtile .line b { color: var(--ink); font-weight: 500; }
+.dtile .tile-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); margin-top: var(--s-1); }
+.dtile.is-lit { background: var(--accent-soft); }
+.dtile.is-lit .big { color: var(--accent-ink); }
+.dtile.is-lit .big small, .dtile.is-lit .line { color: var(--accent-ink); }
+.dtile.is-live .big { color: var(--success-ink); }
+.dtile.is-building { background: var(--info-soft); }
+.dtile.is-building .big, .dtile.is-building .line, .dtile.is-building .big small { color: var(--info-ink); }
+.dtile.is-failed { background: var(--danger-soft); }
+.dtile.is-failed .big, .dtile.is-failed .line, .dtile.is-failed .big small { color: var(--danger-ink); }
+.recent { display: grid; margin: 0; padding: 0; list-style: none; }
+.recent li { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); min-height: 40px; padding: var(--s-2) 0; border-bottom: 1px solid var(--border); font-size: var(--text-sm); }
+.recent li:last-child { border-bottom: 0; }
+.recent a { color: var(--ink); font-weight: 500; text-decoration: none; }
+.recent a:hover { text-decoration: underline; }
+.recent .sub { margin-left: auto; white-space: nowrap; }
+.recent .lock { font-size: var(--text-xs); color: var(--info-ink); font-weight: 500; }
+.locales { display: grid; gap: var(--s-2); }
+.locale-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-3); border-radius: var(--radius); background: var(--surface); font-size: var(--text-sm); }
+.locale-line .chip { flex: none; }
+.locale-line .ok { color: var(--success-ink); font-weight: 500; }
+.dash .activity > li:hover { background: none; }
+.dash .activity-row { padding: var(--s-2) 0; }
+@media (max-width: 720px) {
+  .dash { grid-template-columns: 1fr; }
+  .dtile.span-2 { grid-column: auto; }
+}

@@ -187,6 +187,24 @@ test('a publish of one file links to the entry and names its language', async ()
   expect(sentences(root)).toEqual(['Anna Berg published mill-house DE a1b2c3d']);
 });
 
+// A global is edited at its own address rather than under a collection, and every other link to
+// one on every other screen goes there.
+test('a row about a global links to Site settings, not to a collection', async () => {
+  server({
+    events: [
+      ev('publish', {
+        subject: 'src/content/globals/en/site.yaml',
+        detail: { files: 1 },
+        commitSha: 'a1b2c3d4e5f60718',
+      }),
+    ],
+    cursor: null,
+  });
+  const root = await show();
+
+  expect(root.querySelector('.said a')?.getAttribute('href')).toBe('/admin/site/site');
+});
+
 // A commit with no one entry on it has nowhere to send anybody, so it counts its files instead
 // — and counts them in words, since 3.11 decides again what a `publish` row carries.
 test('a publish with no entry on it counts its files and links to none of them', async () => {

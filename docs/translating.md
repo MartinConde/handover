@@ -156,6 +156,9 @@ file requoted all leave the hash where it was — none is anything to retranslat
 or a block added changes it. It is only ever a warning: a stale translation publishes, builds and
 serves like any other file, and the mark stays until somebody translates it again.
 
+The [dashboard](dashboard.md) counts them per language. That count is taken at build over every
+file, so it is the last build's rather than today's: the warning in the editor is the live one.
+
 ## In the entry list
 
 Each row carries one chip per language in the site's own order: filled where the entry has that

@@ -860,7 +860,8 @@ test('virtual:handover/index is the built index, inlined rather than served', as
     `export default JSON.parse(${JSON.stringify(JSON.stringify(await buildIndex(fixture)))});
 export const preview = false;
 export const templates = JSON.parse(${JSON.stringify(JSON.stringify(await buildTemplates(fixture)))});
-export const uses = JSON.parse(${JSON.stringify(JSON.stringify(await buildMediaUses(fixture)))});`,
+export const uses = JSON.parse(${JSON.stringify(JSON.stringify(await buildMediaUses(fixture)))});
+export const stale = JSON.parse("{}");`,
   );
 });
 
@@ -903,7 +904,8 @@ test('the index is built with the title field each collection declares', async (
     `export default JSON.parse(${JSON.stringify(JSON.stringify(listed))});
 export const preview = false;
 export const templates = JSON.parse(${JSON.stringify(JSON.stringify(await buildTemplates(fixture)))});
-export const uses = JSON.parse(${JSON.stringify(JSON.stringify(await buildMediaUses(fixture)))});`,
+export const uses = JSON.parse(${JSON.stringify(JSON.stringify(await buildMediaUses(fixture)))});
+export const stale = JSON.parse("{}");`,
   );
 });
 

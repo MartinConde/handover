@@ -1,11 +1,14 @@
 import { expect, test } from 'vitest';
+import { markTranslation } from './content.js';
 import {
   collectionEntries,
   contentPathErrors,
   entryOffer,
   indexFrom,
+  staleFrom,
   templatesFrom,
 } from './entries.js';
+import type { Form } from './schema.js';
 
 const file = (path: string, body: string) => ({ path, contents: `_version: 1\n${body}` });
 const listing = (locale: string, name: string, body: string) =>
@@ -241,4 +244,66 @@ test('a mark that agrees with the files reports nothing', () => {
     offered: ['en', 'de'],
     problems: [],
   });
+});
+
+const title: Form = {
+  fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+  blocks: {},
+};
+const translated = (en: string, de: string) =>
+  markTranslation(
+    'default',
+    title,
+    { locale: 'en', contents: `_version: 1\ntitle: "${en}"\n`, blob_sha: 'e4a1c9b0'.repeat(5) },
+    `_version: 1\ntitle: "${de}"\n`,
+    undefined,
+  );
+
+test('a translation made from a source that has moved on since is stale at build', async () => {
+  const de = await translated('Mill House', 'Mühlenhaus');
+
+  expect(
+    await staleFrom(
+      'default',
+      [
+        listing('en', 'mill-house', 'title: "The Mill House"\n'),
+        { path: 'src/content/listings/de/mill-house.yaml', contents: de },
+      ],
+      () => title,
+    ),
+  ).toEqual({ 'listings/mill-house': ['de'] });
+});
+
+test('an entry whose source has not moved is not in the map at all', async () => {
+  const de = await translated('Mill House', 'Mühlenhaus');
+
+  expect(
+    await staleFrom(
+      'default',
+      [
+        listing('en', 'mill-house', 'title: "Mill House"\n'),
+        { path: 'src/content/listings/de/mill-house.yaml', contents: de },
+      ],
+      () => title,
+    ),
+  ).toEqual({});
+});
+
+// The site's own files are not entries and no form is asked for them, so a build cannot die
+// here over `redirects.yaml` or a starter nobody has filled in.
+test('a file that is not an entry, and a collection with no form, are left alone', async () => {
+  const de = await translated('Mill House', 'Mühlenhaus');
+
+  expect(
+    await staleFrom(
+      'default',
+      [
+        file('src/content/redirects.yaml', 'rules: []\n'),
+        file('src/content/_templates/listings/blank.yaml', 'title: ""\n'),
+        listing('en', 'mill-house', 'title: "The Mill House"\n'),
+        { path: 'src/content/listings/de/mill-house.yaml', contents: de },
+      ],
+      (collection) => (collection === 'listings' ? undefined : title),
+    ),
+  ).toEqual({});
 });

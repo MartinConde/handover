@@ -33,6 +33,8 @@ const drafts = (...keys: string[]) =>
       if (url.startsWith('/admin/api/activity')) return Response.json({ events: [], cursor: null });
       if (url === '/admin/api/members') return Response.json({ members: [] });
       if (url === '/admin/api/build') return Response.json(buildBody);
+      if (url === '/admin/api/dashboard')
+        return Response.json({ recent: [], published: null, translations: null });
       return Response.json({ entries: keys.map(pendingEntry) });
     }),
   );

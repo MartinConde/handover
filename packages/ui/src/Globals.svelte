@@ -1,4 +1,6 @@
 <script lang="ts">
+import { EXACT, when } from './activity-line';
+
 type Global = {
   key: string;
   label: string;
@@ -8,6 +10,8 @@ type Global = {
   pending: boolean;
   /** Who has it open right now. */
   editing?: { id: string; name: string | null };
+  /** Who last touched it, and whether that edit is out on the site yet. */
+  edited?: { at: number; by: string | null; kind: 'edit' | 'publish' } | null;
 };
 
 let globals = $state<Global[]>([]);
@@ -59,6 +63,16 @@ async function load() {
           </h2>
           {#if global.description}<p>{global.description}</p>{/if}
           {#if global.editing}<span class="badge">Being edited by {global.editing.name || 'somebody'}</span>{/if}
+          {#if global.edited}
+            <p class="sub">
+              {global.edited.kind === 'edit'
+                ? 'Edited'
+                : 'Published'}{#if global.edited.by}{` by ${global.edited.by}`}{/if}{' '}<time
+                datetime={new Date(global.edited.at).toISOString()}
+                title={EXACT.format(global.edited.at)}>{when(global.edited.at).toLowerCase()}</time
+              >
+            </p>
+          {/if}
           {#if locales.length > 1}
             <div class="meta">
               <span class="chips" aria-label="Languages">

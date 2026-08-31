@@ -7,6 +7,7 @@ import {
   createDraft,
   DraftConflictError,
   discardDraft,
+  draftEditors,
   draftFiles,
   entryConflict,
   holdEntry,
@@ -137,6 +138,25 @@ test('a later autosave replaces the contents and leaves the base where it was', 
   expect(row?.baseBlob).toBe(BLOB);
   expect(saved?.pending).toBe(true);
   expect((await db.select().from(drafts)).length).toBe(1);
+});
+
+// Who last typed into an entry, which is the *last edited by* line on the dashboard and on the
+// Site settings cards. A structural write — a rename, a restore, a drift answer — leaves it
+// where it is, since it is not somebody typing.
+test('an autosave records who typed it, and the next person replaces them', async () => {
+  const db = await fresh();
+  await saveDraft('default', db, git, PATH, VALUES, undefined, 'u1');
+  expect((await only(db))?.updatedBy).toBe('u1');
+
+  await saveDraft('default', db, git, PATH, { ...VALUES, rooms: 4 }, undefined, 'u2');
+  expect((await only(db))?.updatedBy).toBe('u2');
+});
+
+test('a save with nobody signed in leaves the line empty rather than wrong', async () => {
+  const db = await fresh();
+  await saveDraft('default', db, git, PATH, VALUES);
+
+  expect((await only(db))?.updatedBy).toBe(null);
 });
 
 test('an autosave for a path that is not in the repo writes nothing', async () => {
@@ -1732,4 +1752,21 @@ test('a language whose file has gone since is not brought back', async () => {
   ]);
 
   expect(paths).toEqual([PATH]);
+});
+
+// One join rather than the whole member list: the dashboard is the landing page and the feature
+// doc forbids it a scan.
+test('who typed each draft is read path by path, and a row nobody signed for is left out', async () => {
+  const db = await fresh();
+  await binding
+    .prepare(
+      `INSERT INTO user (id, name, email, email_verified, role, created_at, updated_at)
+       VALUES ('u1', 'Anna Berg', 'anna@example.com', 1, 'editor', 0, 0)`,
+    )
+    .run();
+  const repo = fakeRepo({ [PATH]: FILE, [OTHER]: OTHER_FILE });
+  await saveDraft('default', db, repo, PATH, VALUES, undefined, 'u1');
+  await saveDraft('default', db, repo, OTHER, { title: 'The Barn', rooms: 2 });
+
+  expect(await draftEditors('default', db)).toEqual({ [PATH]: 'Anna Berg' });
 });

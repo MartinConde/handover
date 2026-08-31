@@ -1,6 +1,7 @@
 import { and, desc, eq, inArray, isNotNull, like, lt, or } from 'drizzle-orm';
 import type { Role } from './auth.js';
 import type { Db } from './db.js';
+import { entryKey } from './entries.js';
 import { newId } from './reserved.js';
 import { activity, user } from './tables.js';
 
@@ -240,6 +241,57 @@ export function activityGroupOf(kind: string): ActivityGroup | null {
   return null;
 }
 
+/** One entry somebody last touched, and who: the dashboard's *Recently edited* rows. */
+export interface EntryEdit {
+  /** `"listings/mill-house"` — the entry, never one of its files. */
+  entry: string;
+  at: number;
+  /** Their name, never their address: this list is not narrowed to the person reading it. */
+  by: string | null;
+}
+
+/**
+ * The entries the last publishes carried, newest first and one row per entry. It is a read of
+ * the log rather than of the draft rows because a draft is **deleted** once the build carrying
+ * it is live ([`clearPublished`](#)) — without this the dashboard would be empty on a site where
+ * everything is published, which is most days.
+ *
+ * Not narrowed to the viewer the way `activityPage` is, for `deletedEntries`' reason: it is
+ * about the site's pages rather than about people, and the entry list already names who is
+ * editing what.
+ */
+export async function publishedEntries(siteId: string, db: Db, limit = 8): Promise<EntryEdit[]> {
+  const rows = await db
+    .select({
+      at: activity.at,
+      subject: activity.subject,
+      detail: activity.detail,
+      name: user.name,
+    })
+    .from(activity)
+    .leftJoin(user, eq(activity.userId, user.id))
+    .where(and(eq(activity.siteId, siteId), eq(activity.kind, 'publish')))
+    .orderBy(desc(activity.at), desc(activity.id))
+    // A publish of twenty entries is one row, so a handful of them is more than the eight the
+    // tile draws; reading further to fill it would scan the log for a list nobody sees.
+    .limit(limit);
+  const found = new Map<string, EntryEdit>();
+  for (const row of rows) {
+    const named = (row.detail as { entries?: unknown } | null)?.entries;
+    // A row written before a publish recorded its entries names one only where it carried a
+    // single file, which is what `subject` has always been.
+    const one = entryKey(row.subject ?? '');
+    const entries = Array.isArray(named)
+      ? named.filter((e): e is string => typeof e === 'string')
+      : one
+        ? [one]
+        : [];
+    for (const entry of entries)
+      if (!found.has(entry)) found.set(entry, { entry, at: row.at, by: row.name ?? null });
+  }
+  return [...found.values()].slice(0, limit);
+}
+
 /**
  * The newest commit the admin made, and when. **This is where the build status reads from**:
  * a publish redeploys the Worker serving `/admin`, so the drawer that made the commit may not
@@ -249,14 +301,17 @@ export function activityGroupOf(kind: string): ActivityGroup | null {
 export async function lastCommit(
   siteId: string,
   db: Db,
-): Promise<{ sha: string; at: number; kind: string } | undefined> {
+): Promise<{ sha: string; at: number; kind: string; by: string | null } | undefined> {
   const [row] = await db
-    .select({ sha: activity.commitSha, at: activity.at, kind: activity.kind })
+    // Who made it is the dashboard's line under the build pill. Their name and never their
+    // address: this row is read by everybody, not only by the person it is about.
+    .select({ sha: activity.commitSha, at: activity.at, kind: activity.kind, by: user.name })
     .from(activity)
+    .leftJoin(user, eq(activity.userId, user.id))
     .where(and(eq(activity.siteId, siteId), isNotNull(activity.commitSha)))
     .orderBy(desc(activity.at), desc(activity.id))
     .limit(1);
-  return row?.sha ? { sha: row.sha, at: row.at, kind: row.kind } : undefined;
+  return row?.sha ? { sha: row.sha, at: row.at, kind: row.kind, by: row.by ?? null } : undefined;
 }
 
 /**

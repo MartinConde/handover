@@ -1,4 +1,5 @@
-import { parseEntry } from './content.js';
+import { parseEntry, staleLocales } from './content.js';
+import type { Form } from './schema.js';
 
 export interface EntryLocale {
   title: string;
@@ -115,6 +116,40 @@ export function indexFrom(
     if (entry.offered) row.offered = entry.offered;
   }
   return Object.fromEntries([...index].map(([name, entries]) => [name, entries.sort(byId)]));
+}
+
+/**
+ * Which languages of each entry were translated from a source that has moved on since, taken
+ * over the whole repository at build: `"listings/mill-house" -> ["de"]`, and nothing at all for
+ * an entry with nothing to report. `staleLocales` answers this per entry from the files
+ * themselves, so a dashboard counting them would need every language of every entry — a git
+ * read per tile. This is the same reading made once, where the files are already in hand.
+ *
+ * The form is asked for per entry rather than per collection, because a global's is its own.
+ */
+export async function staleFrom(
+  siteId: string,
+  files: Iterable<ContentFile>,
+  formFor: (collection: string, name: string) => Form | undefined,
+): Promise<Record<string, string[]>> {
+  const entries = new Map<string, Record<string, unknown>>();
+  for (const file of files) {
+    const parts = entryParts(file.path);
+    if (!parts) continue;
+    const key = `${parts.collection}/${parts.name}`;
+    const languages = entries.get(key) ?? {};
+    languages[parts.locale] = parseEntry(siteId, file.contents);
+    entries.set(key, languages);
+  }
+  const stale: Record<string, string[]> = {};
+  for (const [key, languages] of entries) {
+    const [collection = '', name = ''] = key.split('/');
+    const form = formFor(collection, name);
+    if (!form) continue;
+    const behind = await staleLocales(siteId, form, languages);
+    if (behind.length) stale[key] = behind;
+  }
+  return stale;
 }
 
 /**

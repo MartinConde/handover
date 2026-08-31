@@ -17,6 +17,7 @@
 - [Blocks](blocks.md) — `<Blocks />`, the component registry, blocks that nest, and `_ref` blocks filled from a global.
 - [Rendering content](rendering.md) — `<Markdown />`, `<LocaleSwitcher />`, `<Nav />` and hidden entries.
 - [Drafts and publishing](publishing.md) — autosave into D1, what a draft holds, publishing an entry on its own, creating, renaming and deleting, the content index.
+- [The dashboard](dashboard.md) — the `/admin` landing page: what is waiting, the build, who edited what, and how far behind the translations are.
 - [Pending changes and build status](pending-changes.md) — the drawer, what it refuses, holding an entry back, build status after a commit, reverting a publish.
 - [Working together](working-together.md) — the soft lock on an entry, what "Being edited by…" takes away, taking one over, and a file somebody changed in the repository.
 - [Preview](preview.md) — the client seeing a page before it goes out: turning it on at build, what is behind the gate, the address to preview, and the pane in the editor.

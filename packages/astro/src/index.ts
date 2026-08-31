@@ -10,7 +10,9 @@ import {
   checkCollections,
   checkI18n,
   contentPathErrors,
+  type Form,
   fieldsFrom,
+  formOf,
   indexFrom,
   type JsonSchema,
   type Mailer,
@@ -28,6 +30,7 @@ import {
   sitemapFrom,
   sitemapIndexXml,
   sitemapXml,
+  staleFrom,
   type Template,
   type TitleFields,
   type Translate,
@@ -572,6 +575,38 @@ export async function buildMediaUses(root: URL): Promise<MediaUses> {
   return mediaUsesFrom('default', await contentFiles(root));
 }
 
+/**
+ * The form the CMS works one entry through — the collection's, or a global's own. Exported
+ * because the staleness marks are read in two places that must build it the same way: here at
+ * build, over every entry, and in the Worker for the one entry an editor has open. A `slug` a
+ * collection localizes is out of it, since the address is edited in the entry header and a form
+ * field would put it into the hash a translation is judged stale against.
+ */
+export function entryForm(cms: HandoverConfig, collection: string, name: string): Form | undefined {
+  const schema =
+    (collection === 'globals' ? cms.globals?.[name] : undefined) ??
+    cms.collections[collection]?.schema;
+  if (!schema) return undefined;
+  const form = formOf('default', formSchema(schema));
+  if (!cms.collections[collection]?.localizedSlugs) return form;
+  return { ...form, fields: form.fields.filter((f) => f.path[0] !== 'slug') };
+}
+
+/**
+ * Which languages of which entries were translated from a source that has moved on since. The
+ * dashboard counts them: reading it per request would be every language of every entry out of
+ * git, so it is taken here, where the files are already on disk, and only the stale ones are
+ * carried into the bundle.
+ */
+export async function buildStale(
+  root: URL,
+  cms: HandoverConfig,
+): Promise<Record<string, string[]>> {
+  return staleFrom('default', await contentFiles(root), (collection, name) =>
+    entryForm(cms, collection, name),
+  );
+}
+
 // Astro's own i18n block, as `astro:config:setup` resolves it. A locale is either the
 // folder name or `{ path, codes }`, where the path is the folder and the URL segment.
 type AstroI18n = {
@@ -724,7 +759,8 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
                     ? `export default JSON.parse(${JSON.stringify(JSON.stringify(await buildIndex(config.root, titleFields)))});
 export const preview = ${preview};
 export const templates = JSON.parse(${JSON.stringify(JSON.stringify(await buildTemplates(config.root)))});
-export const uses = JSON.parse(${JSON.stringify(JSON.stringify(await buildMediaUses(config.root)))});`
+export const uses = JSON.parse(${JSON.stringify(JSON.stringify(await buildMediaUses(config.root)))});
+export const stale = JSON.parse(${JSON.stringify(JSON.stringify(await buildStale(config.root, cms)))});`
                     : undefined,
                 configureServer(server: ViteDevServer) {
                   server.watcher.on('all', (_event, file) => {

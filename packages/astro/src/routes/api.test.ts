@@ -317,11 +317,16 @@ const stored: Record<
   { value: string; hint: string; updatedAt: number; updatedBy: string | null }
 > = {};
 // What the log says the last commit was, and what the Worker can ask Cloudflare with.
-let lastCommitRow: { sha: string; at: number; kind: string } | undefined = {
+let lastCommitRow: { sha: string; at: number; kind: string; by: string | null } | undefined = {
   sha: 'def456',
   at: 1755864000000,
   kind: 'publish',
+  by: 'Anna Berg',
 };
+/** The entries the log says the last publishes carried — the dashboard's other half. */
+let publishes: { entry: string; at: number; by: string | null }[] = [];
+/** Who last typed into each draft, by path. */
+let editors: Record<string, string | null> = {};
 // The checks this site has turned off, which is `checks.ignore` in cms.config.ts.
 let siteChecks: { ignore?: string[] } | undefined;
 // Whether the site has been told where its bucket is: all four values, or none of them.
@@ -364,6 +369,9 @@ vi.mock('virtual:handover/config', () => ({
 // What the build read out of src/content/, inlined into the Worker bundle.
 vi.mock('virtual:handover/index', () => ({
   preview: true,
+  // The other scan the build wrote: which languages were translated from a source that has moved
+  // on since. Only `posts/taken` has two languages here, so it is the only one that can be in it.
+  stale: { 'posts/taken': ['de'] },
   // The scan the build wrote: the mill house carries the photo in both its languages and the
   // cottage carries the same one, so the picture is used in two places and not three.
   uses: {
@@ -605,6 +613,11 @@ vi.mock('@handover/core', async (original) => ({
   lockHolder: async () => holder && { tab: '', ...holder },
   heldEntries: async () => editing,
   lockHolders: async () => holders,
+  // The real one is a query against the log; against a real D1 it is proven in core's own
+  // activity.test.ts. What the routes owe is asking it and preferring a draft row to its answer.
+  publishedEntries: async () => publishes,
+  // And the join that turns a draft's `updated_by` into a name, proven in core's own db.test.ts.
+  draftEditors: async () => editors,
   releaseLocks: async (_site: string, _db: unknown, userId: string) => {
     released.push(userId);
   },
@@ -706,7 +719,10 @@ afterEach(() => {
   settingsSecret = 'c2VjcmV0';
   for (const key of Object.keys(stored)) delete stored[key];
   siteMailer = undefined;
-  lastCommitRow = { sha: 'def456', at: 1755864000000, kind: 'publish' };
+  lastCommitRow = { sha: 'def456', at: 1755864000000, kind: 'publish', by: 'Anna Berg' };
+  publishes = [];
+  editors = {};
+  holders = {};
   cloudflareToken = 'cf-token';
   cloudflareWorker = 'acct/handover-demo';
   bucketed = true;
@@ -1516,6 +1532,8 @@ test('a global takes a draft through the same autosave as an entry', async () =>
     { footerText: 'Coastal homes since 2009' },
     // One language, so nothing to keep in step — the same plain write an entry gets.
     undefined,
+    // Nobody signed in on this request, so the *last edited by* line stays empty.
+    undefined,
   );
   expect(await res.json()).toEqual({ updated_at: 1755864000000, pending: true, problems: [] });
   delete files['src/content/globals/en/site.yaml'];
@@ -1560,6 +1578,7 @@ test('the globals list names each global and the languages it has a file in', as
         description: 'Contact details and footer text',
         locales: ['en'],
         pending: false,
+        edited: null,
       },
     ],
     locales: ['en', 'de'],
@@ -1638,7 +1657,27 @@ test('autosaving a draft stores it under the entry path with nothing to report',
     data,
     // A site that declares one language has no other file to keep in step.
     undefined,
+    undefined,
   );
+});
+
+// Who typed it, which is what the dashboard's rows and the Site settings cards report. Only the
+// two writes somebody types record it — a rename or a restore leaves whoever typed last standing.
+test('an autosave carries the id of whoever typed it', async () => {
+  saveDraft.mockClear();
+  const data = { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } };
+  await PUT(
+    ctx(
+      'drafts/listings/mill-house',
+      new Request('https://x/admin/api/drafts/listings/mill-house', {
+        method: 'PUT',
+        body: JSON.stringify({ data }),
+      }),
+      { handover: owner },
+    ),
+  );
+
+  expect((saveDraft.mock.calls[0] as unknown[])?.[6]).toBe('u1');
 });
 
 test('autosaving never publishes, whatever the form holds', async () => {
@@ -1668,6 +1707,7 @@ test('an autosave the schema refuses is stored anyway, with what is missing name
     'src/content/listings/en/mill-house.yaml',
     data,
     // A site that declares one language has no other file to keep in step.
+    undefined,
     undefined,
   );
 });
@@ -1711,6 +1751,7 @@ test('reserved keys in the posted data are dropped before the draft is stored', 
     data,
     // A site that declares one language has no other file to keep in step.
     undefined,
+    undefined,
   );
 });
 
@@ -1736,6 +1777,111 @@ test('the pending list is what the drafts hold that the repository does not', as
       },
     ],
   });
+});
+
+// The landing page. Its two big tiles are the shell's own indicators grown up and are not asked
+// for here; what is here is the half nothing else knows.
+test('the dashboard lists what was edited and what was published, newest first', async () => {
+  publishes = [{ entry: 'posts/hello', at: 1755950000000, by: 'Martin Conde' }];
+  editors = { 'src/content/listings/en/mill-house.yaml': 'Anna Berg' };
+
+  const res = await GET(ctx('dashboard'));
+
+  expect(res.status).toBe(200);
+  const { recent } = (await res.json()) as { recent: Record<string, unknown>[] };
+  expect(recent).toEqual([
+    {
+      key: 'posts/hello',
+      title: 'Hello',
+      collection: 'posts',
+      href: '/admin/c/posts/hello',
+      at: 1755950000000,
+      by: 'Martin Conde',
+      kind: 'publish',
+    },
+    {
+      key: 'listings/mill-house',
+      title: 'The Mill House',
+      collection: 'listings',
+      href: '/admin/c/listings/mill-house',
+      at: 1755864000000,
+      // Who typed it, which is not who published it: the two rows carry different verbs.
+      by: 'Anna Berg',
+      kind: 'edit',
+    },
+  ]);
+});
+
+// The draft is what the client is looking at; the publish it was last in is behind it.
+test('an entry with unpublished changes is described by the edit and not by the publish', async () => {
+  publishes = [{ entry: 'listings/mill-house', at: 1755950000000, by: 'Martin Conde' }];
+  holders = { 'listings/mill-house': { id: 'u2', name: 'Anna Berg' } };
+
+  const { recent } = (await (await GET(ctx('dashboard'))).json()) as {
+    recent: Record<string, unknown>[];
+  };
+
+  expect(recent).toEqual([
+    expect.objectContaining({
+      key: 'listings/mill-house',
+      at: 1755864000000,
+      kind: 'edit',
+      editing: { id: 'u2', name: 'Anna Berg' },
+    }),
+  ]);
+  holders = {};
+});
+
+// A global is edited at its own address, not under /admin/c/.
+test('a global on the dashboard is named and addressed the way Site settings names it', async () => {
+  pendingDrafts.mockImplementationOnce(async () => [
+    {
+      path: 'src/content/globals/en/site.yaml',
+      contents: 'footerText: "Coastal homes since 2009"\n',
+      updatedAt: 1755864000000,
+    },
+  ]);
+
+  const { recent } = (await (await GET(ctx('dashboard'))).json()) as {
+    recent: Record<string, unknown>[];
+  };
+
+  expect(recent[0]).toMatchObject({ title: 'Site details', href: '/admin/site/site' });
+});
+
+test('translation health counts the languages an entry owes and the ones behind their source', async () => {
+  locales = ['en', 'de'];
+
+  const { translations } = (await (await GET(ctx('dashboard'))).json()) as {
+    translations: { defaultLocale: string; locales: { locale: string }[] };
+  };
+
+  expect(translations).toEqual({
+    defaultLocale: 'en',
+    locales: [
+      { locale: 'en', missing: 0, stale: 0 },
+      // Everything the index holds but `posts/taken`, which is the one entry with two files —
+      // and it is the one the build marked stale.
+      { locale: 'de', missing: 5, stale: 1 },
+    ],
+  });
+  locales = ['en'];
+});
+
+test('a one-language site has nothing to report about its languages', async () => {
+  const { translations } = (await (await GET(ctx('dashboard'))).json()) as { translations: null };
+
+  expect(translations).toBe(null);
+});
+
+test('the build line names who published, and says nothing over a commit that was not one', async () => {
+  const line = async () =>
+    ((await (await GET(ctx('dashboard'))).json()) as { published: unknown }).published;
+
+  expect(await line()).toEqual({ at: 1755864000000, by: 'Anna Berg' });
+
+  lastCommitRow = { sha: 'def456', at: 1755864000000, kind: 'entry-rename', by: 'Anna Berg' };
+  expect(await line()).toBe(null);
 });
 
 // One entry, one name, on every screen: a global has no title field to be read off, so the
@@ -2551,6 +2697,7 @@ test('a save of a translation goes to that language and takes only the words it 
     'src/content/pages/de/home.yaml',
     data,
     { form: expect.anything(), locale: 'de', siblings: {}, translation: true },
+    undefined,
   );
 });
 
@@ -3061,6 +3208,7 @@ test('a machine is asked for the fields the translation has not got, and no othe
     expect.anything(),
     'src/content/pages/de/home.yaml',
     { 'blocks[_id=k3nf9a2p].heading': '[de] Move to the coast' },
+    undefined,
   );
 });
 
@@ -3079,6 +3227,7 @@ test('a named field is translated whether it is empty or not', async () => {
     expect.anything(),
     'src/content/pages/de/home.yaml',
     { title: '[de] Home' },
+    undefined,
   );
 });
 
@@ -3120,6 +3269,7 @@ test('a site with no hook of its own translates with the DEEPL_API_KEY it holds'
     expect.anything(),
     'src/content/pages/de/home.yaml',
     { 'blocks[_id=k3nf9a2p].heading': '[de] Move to the coast' },
+    undefined,
   );
 });
 
@@ -3515,6 +3665,7 @@ test("a save of the entry's own language carries the structure, whichever langua
       siblings: { en: 'src/content/pages/en/impressum.yaml' },
       translation: false,
     },
+    undefined,
   );
 });
 
@@ -4097,7 +4248,7 @@ test('a password Better Auth refused is no event', async () => {
   expect(logged).toEqual([]);
 });
 
-test('a publish is a publish event carrying the commit and the file count', async () => {
+test('a publish is a publish event carrying the commit, the count and the entries', async () => {
   await POST(
     ctx('publish', new Request('https://x/admin/api/publish', { method: 'POST' }), {
       handover: owner,
@@ -4109,10 +4260,38 @@ test('a publish is a publish event carrying the commit and the file count', asyn
       userId: 'u1',
       kind: 'publish',
       subject: 'src/content/listings/en/mill-house.yaml',
-      detail: { files: 1 },
+      detail: { files: 1, entries: ['listings/mill-house'] },
       commitSha: 'def456',
     },
   ]);
+});
+
+// The draft rows go once the build carrying them is live, so this row is the only record left
+// that these entries were ever edited — and a batch names no subject, which is why the count on
+// its own was not enough.
+test('a batch publish records the entries it carried, one each and capped', async () => {
+  const paths = Array.from(
+    { length: 10 },
+    (_, i) => `src/content/listings/${i % 2 ? 'de' : 'en'}/house-${Math.floor(i / 2)}.yaml`,
+  );
+  publishDrafts.mockImplementationOnce(async () => ({ commit_sha: 'def456', paths }));
+
+  await POST(publishing(''));
+
+  expect(logged[0]).toMatchObject({
+    kind: 'publish',
+    subject: null,
+    detail: {
+      files: 10,
+      entries: [
+        'listings/house-0',
+        'listings/house-1',
+        'listings/house-2',
+        'listings/house-3',
+        'listings/house-4',
+      ],
+    },
+  });
 });
 
 // Hazard 4: a Publish click with nothing pending must not spend a write. `publish-failed` and
@@ -4544,7 +4723,7 @@ test('a publish that released a hold logs it against the person who set it', asy
       userId: 'u1',
       kind: 'publish',
       subject: 'src/content/listings/en/mill-house.yaml',
-      detail: { files: 1 },
+      detail: { files: 1, entries: ['listings/mill-house'] },
       commitSha: 'def456',
     },
   ]);

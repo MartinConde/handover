@@ -87,3 +87,22 @@ test('a global somebody has open carries their name on the card', async () => {
   expect(site?.querySelector('.badge')?.textContent).toBe('Being edited by Anna Berg');
   expect(cta?.querySelector('.badge')).toBeNull();
 });
+
+// Who last touched it, which the card had no line for until the dashboard gave every screen the
+// same one. A publish names the person who published rather than the person who typed it.
+test('a card says who last edited it, and a card nobody has touched says nothing', async () => {
+  const root = show([
+    {
+      ...GLOBALS[0],
+      edited: { at: Date.now() - 2 * 60 * 60 * 1000, by: 'Anna Berg', kind: 'edit' },
+    },
+    { ...GLOBALS[1], edited: null },
+  ]);
+  await loaded();
+
+  const [site, cta] = all(root, '.global-card');
+  expect(site?.querySelector('.sub')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+    'Edited by Anna Berg 2h ago',
+  );
+  expect(cta?.querySelector('.sub')).toBeNull();
+});

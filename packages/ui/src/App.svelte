@@ -3,6 +3,7 @@ import type { Preset } from '@handover/core';
 import Account from './Account.svelte';
 import Activity from './Activity.svelte';
 import BuildPill, { type Build } from './BuildPill.svelte';
+import Dashboard from './Dashboard.svelte';
 import Diagnostics from './Diagnostics.svelte';
 import Editor from './Editor.svelte';
 import EntryList from './EntryList.svelte';
@@ -396,9 +397,12 @@ const initial = $derived(
     {:else if path === '/admin/settings' && session.role === 'owner'}
       <Diagnostics />
     {:else}
-      <main class="main">
-        <h1>Dashboard</h1>
-      </main>
+      <Dashboard
+        {pending}
+        {build}
+        onreview={() => (drawer = true)}
+        onrevert={askRevert}
+      />
     {/if}
     {/key}
   </div>

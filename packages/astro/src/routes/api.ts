@@ -1,11 +1,12 @@
 import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
-import index, { preview, templates, uses } from 'virtual:handover/index';
+import index, { preview, stale, templates, uses } from 'virtual:handover/index';
 import type {
   Answer,
   CheckEntry,
   ContentIndex,
   Db,
+  EntryEdit,
   EntryLocation,
   FileCommit,
   Form,
@@ -44,6 +45,7 @@ import {
   demoteOwner,
   diffEntry,
   discardDraft,
+  draftEditors,
   draftFiles,
   driftReport,
   dropLock,
@@ -84,6 +86,7 @@ import {
   pendingDrafts,
   presignUpload,
   publishDrafts,
+  publishedEntries,
   type RedirectRule,
   RefMovedError,
   RepoUnreachableError,
@@ -124,7 +127,7 @@ import {
 } from '@handover/core';
 import type { APIRoute } from 'astro';
 import { createAuth, mailer } from '../auth.js';
-import { formSchema } from '../index.js';
+import { entryForm, formSchema } from '../index.js';
 import { entryProblems } from '../problems.js';
 
 export function gitClient(): GitClient {
@@ -958,17 +961,15 @@ const globalLabel = (key: string, schema: Parameters<typeof formSchema>[0]) => {
 };
 
 /**
- * The form the CMS works one collection through. A collection with localized slugs keeps its
- * `slug` out of it: the address is edited in the entry header and not in the form, and a form
- * field would put it in front of the translator, into the staleness hash and into the words a
- * second column can type over. The schema still validates it — this is the form, not the file.
+ * The form the CMS works one collection through — `entryForm`'s, which is also what the build
+ * reads every entry's staleness mark against. One construction on purpose: a form built
+ * differently in the two places would make every translated entry read stale, since the hash is
+ * taken over exactly the fields the form declares translatable.
  */
 function formFor(collection: string, slug: string): Form {
-  const schema = schemaOf(collection, slug);
-  if (!schema) throw new Error(`No collection ${collection}`);
-  const form = formOf('default', formSchema(schema));
-  if (!config.collections[collection]?.localizedSlugs) return form;
-  return { ...form, fields: form.fields.filter((f) => f.path[0] !== 'slug') };
+  const form = entryForm(config, collection, slug);
+  if (!form) throw new Error(`No collection ${collection}`);
+  return form;
 }
 
 // The languages an entry is offered in, and what its `_locales` gets wrong: `written` is the
@@ -1394,6 +1395,7 @@ async function autosave(
       translation || Object.keys(siblings).length
         ? { form: formFor(collection, slug), locale: at, siblings, translation }
         : undefined,
+      session?.user.id,
     );
   } catch (err) {
     // A shape the serialiser cannot write back — a nested array above all — leaves nothing to
@@ -1449,6 +1451,7 @@ async function machineTranslate(
   slug: string,
   locale: string,
   request: Request,
+  session: App.Locals['handover'],
 ): Promise<Response> {
   const schema = schemaOf(collection, slug);
   if (!schema || !config.i18n.locales.includes(locale))
@@ -1489,6 +1492,7 @@ async function machineTranslate(
       gitClient(),
       entryPath(collection, slug, locale),
       Object.fromEntries(wanted.map((v, i) => [v.path, answers[i] ?? v.text])),
+      session?.user.id,
     );
   }
   // The column redraws from this rather than reloading the entry, so an edit in the other one
@@ -2285,12 +2289,15 @@ async function removeRedirect(id: string, session: App.Locals['handover']): Prom
  */
 async function globalsList(): Promise<Response> {
   const database = db();
-  const [rows, waiting, editing] = await Promise.all([
+  const [rows, waiting, editing, published, editors] = await Promise.all([
     overlayRows('default', database, index),
     pendingDrafts('default', database),
     lockHolders('default', database),
+    publishedEntries('default', database),
+    draftEditors('default', database),
   ]);
   const pending = new Set(waiting.map((row) => row.path));
+  const edits = lastEdits(waiting, published, editors);
   const entries = collectionEntries('default', index, 'globals', rows);
   return Response.json({
     globals: Object.entries(config.globals ?? {}).map(([key, schema]) => {
@@ -2303,10 +2310,164 @@ async function globalsList(): Promise<Response> {
         locales: config.i18n.locales.filter((locale) => found?.locales[locale]),
         pending: locales.some(([, file]) => pending.has(file.path)),
         editing: editing[`globals/${key}`],
+        // The same line the dashboard's rows carry, and it goes as far back as the log does:
+        // one nobody has touched in six months has nothing here rather than a guess.
+        edited: edits.get(`globals/${key}`) ?? null,
       };
     }),
     locales: config.i18n.locales,
   });
+}
+
+/** When an entry was last touched, by whom, and whether that edit is out on the site yet. */
+interface LastEdit {
+  key: string;
+  at: number;
+  /** Their name, or nothing: a member who has gone leaves the date standing on its own. */
+  by: string | null;
+  /** An edit nobody has published yet, or the publish that carried one out. Different verbs. */
+  kind: 'edit' | 'publish';
+}
+
+/**
+ * When each entry was last touched. The draft row where there is one, and the publish that
+ * carried it out where there is not — a draft is deleted once the build carrying it is live, so
+ * on a site where everything is published the log is the only record left that anybody edited
+ * anything.
+ *
+ * The draft wins: an entry with unpublished changes is described by the edit, not by whatever
+ * publish it was last in.
+ */
+function lastEdits(
+  drafts: readonly { path: string; updatedAt: number }[],
+  published: readonly EntryEdit[],
+  editors: Record<string, string | null>,
+): Map<string, LastEdit> {
+  const rows = new Map<string, LastEdit>();
+  // Already newest first, which is what makes the first row an entry has the one it keeps.
+  for (const draft of drafts) {
+    const key = entryKey(draft.path);
+    if (!key || rows.has(key)) continue;
+    rows.set(key, { key, at: draft.updatedAt, by: editors[draft.path] ?? null, kind: 'edit' });
+  }
+  for (const done of published)
+    if (!rows.has(done.entry))
+      rows.set(done.entry, { key: done.entry, at: done.at, by: done.by, kind: 'publish' });
+  return rows;
+}
+
+/**
+ * The landing page's own reading of what already exists. Two of its tiles are not here: the
+ * unpublished count and the build pill are the shell's own indicators grown up, and the shell
+ * has already loaded both — asking again would be a second answer for the drawer to disagree
+ * with.
+ *
+ * What is here is the half nothing else knows: who last touched each entry, and how far behind
+ * the translations are. Neither costs a file fetch — the drafts are rows, the publishes are the
+ * log, and the staleness is the map the build wrote.
+ */
+async function dashboard(): Promise<Response> {
+  const database = db();
+  const [drafts, published, editing, editors, overlay, last] = await Promise.all([
+    pendingDrafts('default', database),
+    publishedEntries('default', database),
+    lockHolders('default', database),
+    draftEditors('default', database),
+    overlayRows('default', database, index),
+    lastCommit('default', database),
+  ]);
+  const newest = [...lastEdits(drafts, published, editors).values()]
+    .sort((a, b) => b.at - a.at)
+    .slice(0, 8);
+  const titles = entryTitles(
+    newest.map((row) => row.key),
+    overlay,
+  );
+  const recent = newest.map((row) => {
+    const [collection = '', slug = ''] = row.key.split('/');
+    return {
+      ...row,
+      collection,
+      title: titles.get(row.key) || slug,
+      href: entryHref(row.key),
+      editing: editing[row.key],
+    };
+  });
+  return Response.json({
+    recent,
+    // Only where the newest commit is a publish: a rename or a redirect is a commit too, and
+    // "published by" over one of those names the wrong thing entirely.
+    published: last?.kind === 'publish' ? { at: last.at, by: last.by } : null,
+    translations: translationHealth(overlay),
+  });
+}
+
+/**
+ * Per language: entries offered in it with no file yet, and translations made from a source that
+ * has moved on since. **Missing is exact** — it is the index with today's drafts over it, the
+ * same reading the entry list's chips make. **Stale is the last build's** — judging it needs
+ * every language of the entry, and laying the drafts over that would be a file fetch per entry.
+ *
+ * Nothing at all on a one-language site: every site has a locale folder, and a site with one
+ * has nothing to report about it.
+ */
+function translationHealth(overlay: readonly { path: string; contents: string }[]) {
+  const locales = config.i18n.locales;
+  if (locales.length < 2) return null;
+  const missing: Record<string, number> = {};
+  const behind: Record<string, number> = {};
+  for (const collection of [...Object.keys(config.collections), 'globals'])
+    for (const entry of collectionEntries(
+      'default',
+      index,
+      collection,
+      overlay,
+      config.collections[collection]?.titleField,
+    )) {
+      const { offered } = entryOffer('default', locales, entry.offered, Object.keys(entry.locales));
+      // A language the entry is not offered in is a decision somebody made, not a gap to fill.
+      for (const locale of offered)
+        if (!entry.locales[locale]) missing[locale] = (missing[locale] ?? 0) + 1;
+      for (const locale of stale[`${collection}/${entry.id}`] ?? [])
+        if (entry.locales[locale]) behind[locale] = (behind[locale] ?? 0) + 1;
+    }
+  return {
+    defaultLocale: config.i18n.defaultLocale,
+    locales: locales.map((locale) => ({
+      locale,
+      missing: missing[locale] ?? 0,
+      stale: behind[locale] ?? 0,
+    })),
+  };
+}
+
+/**
+ * What each of these entries is called. The entry list's own reading, so one entry is named the
+ * same thing on every screen: the first language that has a title, whichever that turns out to
+ * be. A global has no title field to be named by and is named the way Site settings names it.
+ */
+function entryTitles(
+  keys: Iterable<string>,
+  overlay: readonly { path: string; contents: string }[],
+) {
+  const titles = new Map<string, string>();
+  for (const collection of new Set([...keys].map((key) => key.split('/')[0] ?? '')))
+    for (const entry of collectionEntries(
+      'default',
+      index,
+      collection,
+      overlay,
+      config.collections[collection]?.titleField,
+    ))
+      titles.set(
+        `${collection}/${entry.id}`,
+        config.i18n.locales.map((l) => entry.locales[l]?.title).find(Boolean) ||
+          Object.values(entry.locales)[0]?.title ||
+          entry.id,
+      );
+  for (const [key, schema] of Object.entries(config.globals ?? {}))
+    titles.set(`globals/${key}`, globalLabel(key, schema).label);
+  return titles;
 }
 
 /**
@@ -2321,27 +2482,10 @@ async function pendingList(): Promise<Response> {
     heldDrafts('default', database),
     overlayRows('default', database, index),
   ]);
-  const titles = new Map<string, string>();
-  // The entry list's own reading, so one entry is called the same thing on both screens: the
-  // first language that has a title, whichever language that turns out to be.
-  for (const collection of new Set(rows.flatMap((r) => ENTRY_FILE.exec(r.path)?.[1] ?? [])))
-    for (const entry of collectionEntries(
-      'default',
-      index,
-      collection,
-      overlay,
-      config.collections[collection]?.titleField,
-    ))
-      titles.set(
-        `${collection}/${entry.id}`,
-        config.i18n.locales.map((l) => entry.locales[l]?.title).find(Boolean) ||
-          Object.values(entry.locales)[0]?.title ||
-          entry.id,
-      );
-  // A global has no title field to be named by, so it is named the way the site settings screen
-  // names it — one entry, one name, on both screens.
-  for (const [key, schema] of Object.entries(config.globals ?? {}))
-    titles.set(`globals/${key}`, globalLabel(key, schema).label);
+  const titles = entryTitles(
+    rows.flatMap((r) => entryKey(r.path) ?? []),
+    overlay,
+  );
   type Row = {
     key: string;
     title: string;
@@ -2862,6 +3006,7 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
   if (params.path === 'globals') return globalsList();
   if (params.path === 'redirects') return answering(() => redirectList());
   if (params.path === 'drafts') return pendingList();
+  if (params.path === 'dashboard') return dashboard();
   if (params.path === 'build') return buildStatus();
   if (params.path === 'diagnostics') return diagnostics(locals.handover);
   if (params.path === 'settings') return answering(() => integrations(locals.handover));
@@ -3156,14 +3301,23 @@ async function publish(request: Request, session: App.Locals['handover']): Promi
       userId: session?.user.id,
       kind: 'publish',
       // One file is an entry somebody can open; a batch is the commit, and the paths are not
-      // small json.
+      // small json — the entries are, and they are what the dashboard reads back. The draft
+      // rows go once the build is live, so this row is the only record that a published entry
+      // was ever edited.
       subject: result.paths.length === 1 ? (result.paths[0] ?? null) : null,
-      detail: { files: result.paths.length },
+      detail: { files: result.paths.length, entries: publishedKeys(result.paths) },
       commitSha: result.commit_sha,
     });
   }
   return Response.json(result ?? { paths: [] });
 }
+
+/**
+ * The entries a publish carried, for the row recording it. Capped at what the dashboard draws:
+ * a publish of two hundred pages is one commit, and the log's `detail` is small json.
+ */
+const publishedKeys = (paths: readonly string[]) =>
+  [...new Set(paths.flatMap((path) => entryKey(path) ?? []))].slice(0, 8);
 
 /** What the browser is handed for one asset: the key a content file stores, and where it is served from. */
 function mediaItem(row: MediaRow) {
@@ -3481,7 +3635,13 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   const filling = params.path?.match(TRANSLATE);
   if (filling)
     return answering(() =>
-      machineTranslate(filling[1] ?? '', filling[2] ?? '', filling[3] ?? '', request),
+      machineTranslate(
+        filling[1] ?? '',
+        filling[2] ?? '',
+        filling[3] ?? '',
+        request,
+        locals.handover,
+      ),
     );
   const made = params.path?.match(TRANSLATION);
   if (made) return answering(() => createTranslation(made[1] ?? '', made[2] ?? '', made[3] ?? ''));

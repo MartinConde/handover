@@ -437,6 +437,26 @@ Grouping happens here rather than in the browser because a title comes from the 
 [content index](publishing.md#the-content-index), which nothing outside the Worker can read.
 
 ```
+GET /admin/api/dashboard  →  { "recent": [...], "published": { "at", "by" } | null, "translations": {...} | null }
+```
+
+Everything the [dashboard](dashboard.md) draws that no other route answers. The unpublished
+count and the build pill are not in it: the shell has already loaded both, and a second
+answer about the same drafts is how a count and a drawer come to disagree.
+
+`recent` is up to eight entries, newest first —
+`{ "key", "title", "collection", "href", "at", "by", "kind", "editing" }`. `kind` is
+`"edit"` for an entry with a draft row and `"publish"` for one whose last change is already
+out; `by` is a name or `null`, never an address; `editing` is the lock holder where there is
+one. `href` is where that entry is edited, which for a global is `/admin/site/<name>`.
+
+`published` is the newest commit the admin made, when it was a publish and not a rename or a
+redirect. `translations` is `null` on a one-language site; otherwise it is
+`{ "defaultLocale", "locales": [{ "locale", "missing", "stale" }] }` — `missing` from the
+content index with the drafts over it, `stale` from the map the build wrote, which is why it
+lags a publish.
+
+```
 POST /admin/api/publish   { "entries": ["listings/mill-house"] }  →  { "commit_sha", "paths", "released" }
 ```
 

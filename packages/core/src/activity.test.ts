@@ -10,6 +10,7 @@ import {
   expireActivity,
   lastCommit,
   logActivity,
+  publishedEntries,
 } from './activity.js';
 import type { Db } from './db.js';
 import * as tables from './tables.js';
@@ -273,6 +274,18 @@ test('the last commit is the newest one the log carries', async () => {
   expect(await lastCommit('default', db)).toMatchObject({ sha: 'bbb222', kind: 'revert' });
 });
 
+test('the last commit names who made it, by name and not by address', async () => {
+  await seedUser('u1', 'Anna Berg', 'anna@example.com');
+  await seedEvent({ id: 'a1', at: 1000, userId: 'u1', kind: 'publish', commitSha: 'aaa111' });
+
+  expect(await lastCommit('default', db)).toEqual({
+    sha: 'aaa111',
+    at: 1000,
+    kind: 'publish',
+    by: 'Anna Berg',
+  });
+});
+
 test('a log with no commit in it has no last commit', async () => {
   await logActivity('default', db, { kind: 'login' });
 
@@ -355,4 +368,55 @@ test('commit authors are the people the log recorded against those commits', asy
   expect(await commitAuthors('default', db, ['aaa111', 'bbb222', 'ccc333', 'ddd444'])).toEqual({
     aaa111: 'Anna Weber',
   });
+});
+
+test('the entries a publish carried are one row each, newest first', async () => {
+  await seedUser('u1', 'Anna Berg', 'anna@example.com');
+  await seedEvent({
+    id: 'a1',
+    at: 1000,
+    userId: 'u1',
+    kind: 'publish',
+    detail: { files: 3, entries: ['listings/mill-house', 'pages/home'] },
+  });
+  await seedEvent({
+    id: 'a2',
+    at: 2000,
+    userId: 'u1',
+    kind: 'publish',
+    detail: { files: 1, entries: ['pages/home'] },
+  });
+
+  expect(await publishedEntries('default', db)).toEqual([
+    { entry: 'pages/home', at: 2000, by: 'Anna Berg' },
+    { entry: 'listings/mill-house', at: 1000, by: 'Anna Berg' },
+  ]);
+});
+
+// Rows the log already holds were written before a publish recorded what it carried.
+test('an older row names its one entry through the file it was about', async () => {
+  await seedEvent({
+    id: 'a1',
+    at: 1000,
+    kind: 'publish',
+    subject: 'src/content/listings/de/mill-house.yaml',
+    detail: { files: 1 },
+  });
+  await seedEvent({ id: 'a2', at: 2000, kind: 'publish', detail: { files: 4 } });
+
+  expect(await publishedEntries('default', db)).toEqual([
+    { entry: 'listings/mill-house', at: 1000, by: null },
+  ]);
+});
+
+test('nothing but a publish is a page somebody edited', async () => {
+  await seedEvent({
+    id: 'a1',
+    at: 1000,
+    kind: 'entry-delete',
+    subject: 'src/content/listings/en/mill-house.yaml',
+    detail: { entries: ['listings/mill-house'] },
+  });
+
+  expect(await publishedEntries('default', db)).toEqual([]);
 });

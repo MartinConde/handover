@@ -91,6 +91,8 @@ export async function saveDraft(
   path: string,
   values: Record<string, unknown>,
   sync?: LocaleSync,
+  /** Whoever typed this, for the *last edited by* line; nothing where a route has no session. */
+  by?: string,
 ): Promise<{ updated_at: number; pending: boolean } | undefined> {
   const loaded = await load(siteId, db, git, path);
   if (!loaded) return undefined;
@@ -103,7 +105,8 @@ export async function saveDraft(
     siteId,
     sync && !translated ? syncLocale(siteId, sync.form, sync.locale, edit, after) : after,
   );
-  const writes = [upsert(db, siteId, path, contents, loaded, updatedAt)];
+  const stamp = by ? { updatedBy: by } : {};
+  const writes = [upsert(db, siteId, path, contents, loaded, updatedAt, stamp)];
   // A translation changes no structure, so the other languages have nothing to follow.
   for (const [locale, sibling] of Object.entries(translated ? {} : (sync?.siblings ?? {}))) {
     if (!sync) break;
@@ -112,7 +115,9 @@ export async function saveDraft(
     const other = await load(siteId, db, git, sibling);
     if (!other) continue;
     const synced = syncLocale(siteId, sync.form, locale, edit, other.entry);
-    writes.push(upsert(db, siteId, sibling, stringifyEntry(siteId, synced), other, updatedAt));
+    writes.push(
+      upsert(db, siteId, sibling, stringifyEntry(siteId, synced), other, updatedAt, stamp),
+    );
   }
   // One batch: an entry's languages reach the drafts table together or not at all.
   const [first, ...rest] = writes;
@@ -490,7 +495,9 @@ function upsert(
   contents: string,
   { open, baseSha, baseBlob }: Loaded,
   updatedAt: number,
-  extra: { pendingRedirects?: RedirectRule[] | null } = {},
+  // `updatedBy` is only ever passed by the two writes somebody *typed* — the structural ones
+  // leave whoever last typed into the entry standing, which is what the line reports.
+  extra: { pendingRedirects?: RedirectRule[] | null; updatedBy?: string } = {},
 ) {
   return db
     .insert(drafts)
@@ -764,6 +771,20 @@ export async function heldDrafts(
 }
 
 /**
+ * Who last typed into each draft, by path — the *last edited by* line the dashboard and the Site
+ * settings cards carry. `heldDrafts`' shape and `heldDrafts`' reason: one read of the table with
+ * the name joined on, rather than the whole member list read to turn one id into one name.
+ */
+export async function draftEditors(siteId: string, db: Db): Promise<Record<string, string | null>> {
+  const rows = await db
+    .select({ path: drafts.path, name: user.name })
+    .from(drafts)
+    .leftJoin(user, eq(user.id, drafts.updatedBy))
+    .where(and(eq(drafts.siteId, siteId), isNotNull(drafts.updatedBy)));
+  return Object.fromEntries(rows.map((row) => [row.path, row.name]));
+}
+
+/**
  * What a publish commits. With nothing chosen it is every pending draft minus the files of an
  * entry somebody marked "Not ready yet"; with a chosen set it is the pending drafts of exactly
  * those entries, hold and all — picking a held entry is how a hold is released, and the entries
@@ -941,12 +962,15 @@ export async function saveTranslated(
   git: Pick<GitClient, 'getFile' | 'getHead'>,
   path: string,
   filled: Record<string, string>,
+  by?: string,
 ): Promise<{ updated_at: number; pending: boolean } | undefined> {
   const loaded = await load(siteId, db, git, path);
   if (!loaded) return undefined;
   const contents = stringifyEntry(siteId, machineFilled(siteId, loaded.entry, filled));
   const updatedAt = Date.now();
-  await db.batch([upsert(db, siteId, path, contents, loaded, updatedAt)]);
+  await db.batch([
+    upsert(db, siteId, path, contents, loaded, updatedAt, by ? { updatedBy: by } : {}),
+  ]);
   return { updated_at: updatedAt, pending: (await blobSha(contents)) !== loaded.baseBlob };
 }
 

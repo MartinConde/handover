@@ -4,6 +4,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **A dashboard at `/admin`.** The landing page is a state-of-the-site view instead of the
+  first collection's list: what is waiting to be published and how old it is, the build pill
+  with who published last and a Revert, the last eight entries anybody edited with the lock
+  holder on each, how many entries each language is missing and how many of its translations
+  are behind their source, and the last ten activity rows
+  ([The dashboard](docs/dashboard.md)).
+- **Site settings cards say who last edited each global**, the same line the dashboard's rows
+  carry.
+- **A `publish` activity row lists the entries it carried** in `detail.entries`, capped at
+  eight. A draft row is deleted once the build carrying it is live, so this is the only record
+  left that a published entry was ever edited ([Activity log](docs/activity.md)).
 - **Pre-publish checks in the drawer.** The pending-changes drawer runs the checks over the
   entries that are **selected** and lists what they found above the list, grouped under the
   entry it is about and worst first, each item carrying *Go to field*. An **error** — a picture

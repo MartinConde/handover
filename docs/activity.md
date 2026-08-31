@@ -84,7 +84,9 @@ with `detail.from` naming whoever had set it.
 
 **A `publish` of one file names the entry and links to it.** A commit with more than one file
 in it says how many instead, since there is no single entry to open. Either way the row carries
-the first seven characters of the commit, which is how the log and git are lined up by hand.
+the first seven characters of the commit, which is how the log and git are lined up by hand,
+and `detail.entries` lists the entries it carried — capped at eight, which is what the
+[dashboard](dashboard.md) reads back once the draft rows are gone.
 
 **A delete carries its own way back.** The two rows that take a file away — `entry-delete` and
 `locale-off` — have a **Restore** beside them, which undoes that commit with a commit of its own.
