@@ -1303,11 +1303,6 @@ input[type="date"].input { padding-right: var(--s-3); }
   :root .table .row .td { min-height: 0; padding: 0; border: 0; }
   :root .table .row .td.title { grid-column: 1; }
   :root .table .row .td.menu-cell { grid-column: 2; grid-row: 1; }
-  /* Top-right is right for the one ⋯ the design set draws there. The entry list puts four plain
-     buttons in that cell instead, and four of them in a narrow track is what pushed the whole
-     list sideways off a phone — so a cell with more than one control takes a row of its own.
-     (The ⋯ the mockup draws for that cell is the entry list's own row to build.) */
-  :root .table .row .td.menu-cell:has(> .btn + .btn) { grid-column: 1 / -1; grid-row: auto; flex-wrap: wrap; }
   /* `white-space: nowrap` keeps a numeric column straight in the desktop table; on its own row
      under a label it is what a long file name overflows the screen with, so it wraps here. */
   :root .table .row .td.num { grid-column: 1 / -1; white-space: normal; overflow-wrap: anywhere; }

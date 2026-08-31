@@ -52,6 +52,8 @@ let chosen = $state<string[]>([]);
 // What the redirect question is open over: hiding one row or the whole selection, or deleting
 // one entry. Both take a page off the site, so both ask it.
 let offsite = $state<{ action: 'hide' | 'delete'; ids: string[] }>();
+/** The row whose ⋯ is open, by entry id. A disclosure and not `role="menu"`, as on Members. */
+let menuFor = $state('');
 let target = $state<Entry>();
 let text = $state('');
 let busy = $state(false);
@@ -235,7 +237,10 @@ async function done() {
 }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && close()} />
+<svelte:window
+  onkeydown={(e) => e.key === 'Escape' && (menuFor ? (menuFor = '') : close())}
+  onclick={(e) => menuFor && !(e.target as HTMLElement).closest('.row-menu') && (menuFor = '')}
+/>
 
 <main class="main">
   <div class="list-toolbar">
@@ -387,35 +392,33 @@ async function done() {
           {/if}
           <div class="td num filename" role="cell" data-label="File name">{entry.id}</div>
           <div class="td menu-cell" role="cell">
-            <button
-              class="btn btn-sm"
-              type="button"
-              disabled={busy}
-              aria-label="{isHidden(entry) ? 'Show' : 'Hide'} {titleOf(entry)}"
-              onclick={() =>
-                isHidden(entry)
-                  ? status([entry.id], false)
-                  : (offsite = { action: 'hide', ids: [entry.id] })}
-              >{isHidden(entry) ? 'Show' : 'Hide'}</button
-            >
-            <button
-              class="btn btn-sm"
-              type="button"
-              aria-label="Duplicate {titleOf(entry)}"
-              onclick={() => open('duplicate', entry)}>Duplicate</button
-            >
-            <button
-              class="btn btn-sm"
-              type="button"
-              aria-label="Rename {titleOf(entry)}"
-              onclick={() => open('rename', entry)}>Rename</button
-            >
-            <button
-              class="btn btn-sm"
-              type="button"
-              aria-label="Delete {titleOf(entry)}"
-              onclick={() => (offsite = { action: 'delete', ids: [entry.id] })}>Delete</button
-            >
+            <div class="row-menu">
+              <button
+                class="btn btn-ghost btn-sm"
+                type="button"
+                aria-expanded={menuFor === entry.id}
+                aria-label="Actions for {titleOf(entry)}"
+                onclick={() => (menuFor = menuFor === entry.id ? '' : entry.id)}>⋯</button
+              >
+              {#if menuFor === entry.id}
+                <div class="menu">
+                  <button type="button" onclick={() => { menuFor = ''; open('duplicate', entry); }}>Duplicate</button>
+                  <button type="button" onclick={() => { menuFor = ''; open('rename', entry); }}>Rename</button>
+                  <!-- Hide before Delete, so the gentler answer is the one reached first. -->
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onclick={() => {
+                      menuFor = '';
+                      if (isHidden(entry)) status([entry.id], false);
+                      else offsite = { action: 'hide', ids: [entry.id] };
+                    }}>{isHidden(entry) ? 'Show' : 'Hide'}</button
+                  >
+                  <hr />
+                  <button type="button" onclick={() => { menuFor = ''; offsite = { action: 'delete', ids: [entry.id] }; }}>Delete</button>
+                </div>
+              {/if}
+            </div>
           </div>
         </div>
       {/each}

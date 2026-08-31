@@ -66,6 +66,20 @@ const click = async (root: ParentNode, sel: string) => {
   q<HTMLButtonElement>(root, sel)?.click();
   await tick();
 };
+// The row's actions live behind one ⋯, as on Members: open it, then press the item by its words.
+const menuItems = (root: ParentNode) =>
+  Array.from(root.querySelectorAll<HTMLButtonElement>('.row .menu button'), (b) =>
+    b.textContent?.trim(),
+  );
+const act = async (root: ParentNode, title: string, item: string) => {
+  await click(root, `.row [aria-label="Actions for ${title}"]`);
+  const found = Array.from(root.querySelectorAll<HTMLButtonElement>('.row .menu button')).find(
+    (b) => b.textContent?.trim() === item,
+  );
+  if (!found) throw new Error(`no ${item} for ${title}`);
+  found.click();
+  await tick();
+};
 const input = (root: ParentNode, sel: string) => {
   const found = q<HTMLInputElement>(root, sel);
   if (!found) throw new Error(`no input matching ${sel}`);
@@ -170,7 +184,7 @@ test('duplicating sends the pre-filled copy name and opens the copy', async () =
   const fetcher = api(ENTRIES, { slug: 'mill-house-copy' });
   const root = show();
   await tick();
-  await click(root, '.row [aria-label="Duplicate The Mill House"]');
+  await act(root, 'The Mill House', 'Duplicate');
   expect(input(root, '.dialog input#copy-to').value).toBe('mill-house-copy');
   await click(root, '.dialog .btn-primary');
 
@@ -186,11 +200,11 @@ test('only an entry with unpublished changes is asked whether to include them', 
   const fetcher = api([{ ...ENTRIES[0], pending: true }, ENTRIES[1]], { slug: 'x' });
   const root = show();
   await tick();
-  await click(root, '.row [aria-label="Duplicate Seaview Cottage"]');
+  await act(root, 'Seaview Cottage', 'Duplicate');
   expect(q(root, '.dialog input[type="checkbox"]')).toBeNull();
   await click(root, '.dialog .btn:not(.btn-primary)');
 
-  await click(root, '.row [aria-label="Duplicate The Mill House"]');
+  await act(root, 'The Mill House', 'Duplicate');
   await click(root, '.dialog input[type="checkbox"]');
   await click(root, '.dialog .btn-primary');
 
@@ -205,7 +219,7 @@ test('renaming sends the new file name and reloads the list', async () => {
   const fetcher = api(ENTRIES, { slug: 'the-old-mill' });
   const root = show();
   await tick();
-  await click(root, '.row [aria-label="Rename The Mill House"]');
+  await act(root, 'The Mill House', 'Rename');
   expect(input(root, '.dialog input#rename-to').value).toBe('mill-house');
   type(root, '.dialog input#rename-to', 'The Old Mill');
   await click(root, '.dialog .btn-primary');
@@ -225,7 +239,7 @@ test('deleting asks where its readers go and sends the answer with the DELETE', 
   const fetcher = api(ENTRIES);
   const root = show();
   await tick();
-  await click(root, '.row [aria-label="Delete The Mill House"]');
+  await act(root, 'The Mill House', 'Delete');
   expect(q(root, '.dialog h2')?.textContent).toBe('Where should visitors to this page go now?');
   expect(q(root, '.dialog .btn-danger')?.textContent?.trim()).toBe('Delete this listing');
   await click(root, '.dialog .btn-danger');
@@ -243,7 +257,7 @@ test('the delete dialog leads with Hide it instead?, and Hide instead asks the h
   const fetcher = api(ENTRIES);
   const root = show();
   await tick();
-  await click(root, '.row [aria-label="Delete The Mill House"]');
+  await act(root, 'The Mill House', 'Delete');
   expect(q(root, '.dialog p')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
     'Hide it instead? Hidden entries come off the site but can be brought back.',
   );
@@ -267,7 +281,7 @@ test('a delete answered "nowhere" says so in the body', async () => {
   const fetcher = api(ENTRIES);
   const root = show();
   await tick();
-  await click(root, '.row [aria-label="Delete The Mill House"]');
+  await act(root, 'The Mill House', 'Delete');
   const nowhere = Array.from(
     root.querySelectorAll<HTMLInputElement>('.dialog input[type="radio"]'),
   ).at(-1);
@@ -293,7 +307,7 @@ test('a refused rename says so and keeps the dialog open', async () => {
   );
   const root = show();
   await tick();
-  await click(root, '.row [aria-label="Rename The Mill House"]');
+  await act(root, 'The Mill House', 'Rename');
   await click(root, '.dialog .btn-primary');
 
   expect(q(root, '.dialog [role="alert"]')?.textContent).toContain('Publish this entry');
@@ -412,8 +426,33 @@ test('a hidden entry is badged and offers to be shown again', async () => {
   expect(Array.from(root.querySelectorAll('.row .td.title .badge'), (b) => b.textContent)).toEqual([
     'Hidden',
   ]);
-  expect(q(root, '.row [aria-label="Show The Mill House"]')).not.toBeNull();
-  expect(q(root, '.row [aria-label="Hide Seaview Cottage"]')).not.toBeNull();
+  await click(root, '.row [aria-label="Actions for The Mill House"]');
+  expect(menuItems(root)).toEqual(['Duplicate', 'Rename', 'Show', 'Delete']);
+  await click(root, '.row [aria-label="Actions for Seaview Cottage"]');
+  expect(menuItems(root)).toEqual(['Duplicate', 'Rename', 'Hide', 'Delete']);
+});
+
+// One ⋯ per row where there were four buttons, which is what the design set draws and what
+// stopped fitting on a phone. A disclosure, as on Members: Escape and a click elsewhere close it.
+test("a row's actions are one menu, closed by Escape and by a click outside", async () => {
+  api(ENTRIES);
+  const root = show();
+  await tick();
+  expect(root.querySelectorAll('.row .menu-cell button')).toHaveLength(2);
+
+  await click(root, '.row [aria-label="Actions for The Mill House"]');
+  expect(
+    q(root, '.row [aria-label="Actions for The Mill House"]')?.getAttribute('aria-expanded'),
+  ).toBe('true');
+  expect(root.querySelectorAll('.row .menu')).toHaveLength(1);
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+  flushSync();
+  expect(root.querySelectorAll('.row .menu')).toHaveLength(0);
+
+  await click(root, '.row [aria-label="Actions for The Mill House"]');
+  document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  flushSync();
+  expect(root.querySelectorAll('.row .menu')).toHaveLength(0);
 });
 
 // The one status change with a consequence outside the CMS, so the row never just makes it.
@@ -422,7 +461,7 @@ test('hiding a row asks where its readers go and sends the answer', async () => 
   const root = show();
   await tick();
 
-  await click(root, '.row [aria-label="Hide The Mill House"]');
+  await act(root, 'The Mill House', 'Hide');
   expect(q(root, '.dialog h2')?.textContent).toBe('Where should visitors to this page go now?');
   expect(q(root, '.dialog .choice .desc')?.textContent).toBe('/listings');
   await click(root, '.dialog .btn-primary');
@@ -441,7 +480,7 @@ test('showing an entry again asks nothing', async () => {
   const root = show();
   await tick();
 
-  await click(root, '.row [aria-label="Show The Mill House"]');
+  await act(root, 'The Mill House', 'Show');
 
   expect(q(root, '.dialog')).toBeNull();
   expect(fetcher).toHaveBeenCalledWith('/admin/api/status/listings', {

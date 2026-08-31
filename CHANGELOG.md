@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **One ⋯ per row in the entry list.** Duplicate, Rename, Hide (or Show) and Delete are behind
+  one button per row, as on Members, instead of four buttons that had to wrap onto a row of
+  their own on a phone.
 - **Notes fold in the drawer.** The pre-publish checks list errors and warnings as before and put
   the notes of each entry under *N notes*, opened on demand — a site with no SEO defaults gets two
   per entry, and twenty entries made forty lines ([Pending changes](docs/pending-changes.md#checks-before-a-publish)).
