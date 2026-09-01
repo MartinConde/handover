@@ -12,6 +12,8 @@ interface Version {
   locales: string[];
   /** Nobody, where the commit is the App's and the log no longer has the row. */
   author?: string;
+  /** The name the entry's files had at this commit, where a rename has moved them since. */
+  name?: string;
 }
 
 let {
@@ -19,16 +21,19 @@ let {
   slug,
   locales = [],
   drafted = false,
+  mediaBase = '',
   onrestored,
 }: {
   collection: string;
   slug: string;
+  /** Where a stored media key is served from, for a replaced picture's thumbnails. */
+  mediaBase?: string;
   /** The languages the site declares; with one there is nothing to filter by. */
   locales?: string[];
   /** Whether the entry has unpublished changes a restore would write over. */
   drafted?: boolean;
   /** The version is in the drafts now: the editor reloads and the Content tab takes over. */
-  onrestored: () => void;
+  onrestored: (date: string) => void;
 } = $props();
 
 let versions = $state<Version[]>([]);
@@ -84,10 +89,16 @@ async function load(want: number) {
  * is live now, so the fields marked are the ones restoring it would change; with two it is the
  * older of them, so they read as what happened in between.
  */
-async function readDiff(to: string, from?: string) {
+async function readDiff(to: Version, from?: Version) {
   reading = true;
   diffError = '';
-  const query = new URLSearchParams({ to, ...(from ? { from } : {}) });
+  // A version from before a rename has its files under the name the entry had then.
+  const query = new URLSearchParams({
+    to: to.sha,
+    ...(to.name ? { name: to.name } : {}),
+    ...(from ? { from: from.sha } : {}),
+    ...(from?.name ? { fromName: from.name } : {}),
+  });
   const res = await fetch(`/admin/api/history/${collection}/${slug}/diff?${query}`);
   reading = false;
   if (!res.ok) {
@@ -113,7 +124,10 @@ async function restore() {
   restoring = true;
   const res = await fetch(`/admin/api/history/${collection}/${slug}/restore`, {
     method: 'POST',
-    body: JSON.stringify({ commit_sha: confirming.sha }),
+    body: JSON.stringify({
+      commit_sha: confirming.sha,
+      ...(confirming.name ? { name: confirming.name } : {}),
+    }),
   });
   restoring = false;
   if (!res.ok) {
@@ -121,15 +135,16 @@ async function restore() {
     restoreError = (await res.text()) || 'That version could not be restored.';
     return;
   }
+  const { date } = confirming;
   confirming = undefined;
   restoreError = '';
-  onrestored();
+  onrestored(date);
 }
 
 function open(version: Version) {
   selected = version;
   chosen = [];
-  readDiff(version.sha);
+  readDiff(version);
 }
 
 function compare(version: Version, on: boolean) {
@@ -140,7 +155,7 @@ function compare(version: Version, on: boolean) {
     return;
   }
   const [older, newer] = [...chosen].sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
-  if (older && newer) readDiff(newer.sha, older.sha);
+  if (older && newer) readDiff(newer, older);
 }
 
 const shown = $derived(only ? versions.filter((v) => v.locales.includes(only)) : versions);
@@ -265,7 +280,7 @@ const initials = (name: string) =>
                 onclick={() => open(version)}
               >{version.summary}</button>
               <span class="sub">
-                <span>{when(version.date)}{version.author ? ` · ${version.author}` : ''}</span>
+                <span>{when(version.date)}{version.author ? ` · ${version.author}` : ''}{version.name ? ` · as ${version.name}` : ''}</span>
                 <!-- A bare span may not carry an aria-label, so the word is in the sentence. -->
                 <span class="visually-hidden">Languages:</span>
                 <span class="chips">
@@ -309,7 +324,7 @@ const initials = (name: string) =>
           )} · <em>{selected.summary}</em> · compared with what is live now
         </p>
       </div>
-      <Diff {groups} />
+      <Diff {groups} {mediaBase} />
     <!-- No Restore here: it restores the version being looked at, and a pair is neither of
          them. Ticking a second box is what takes the button away. -->
     {:else if chosen.length === 2}
@@ -323,7 +338,7 @@ const initials = (name: string) =>
           <em>{pair[1]?.summary}</em>, {when(pair[1]?.date ?? '')}
         </p>
       </div>
-      <Diff {groups} />
+      <Diff {groups} {mediaBase} />
     {:else if versions.length}
       <div class="form-placeholder">
         <span>

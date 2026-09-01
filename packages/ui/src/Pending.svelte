@@ -32,6 +32,7 @@ type CheckItem = {
 let {
   entries,
   defaultLocale = '',
+  mediaBase = '',
   build,
   onclose,
   onpublished,
@@ -42,6 +43,8 @@ let {
   /** The site's default language: the one an entry's structure is written in, and the one a
    * check found in several files opens. */
   defaultLocale?: string;
+  /** Where a stored media key is served from, for a replaced picture's thumbnails. */
+  mediaBase?: string;
   /** The shell's build status, repeated here beside the commit it is of. */
   build?: Build | null;
   onclose: () => void;
@@ -499,7 +502,7 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
       {@const shown = changes[entry.key]}
       {#if shown}
         <div class="change-diff">
-          <Diff groups={shown.groups} />
+          <Diff groups={shown.groups} {mediaBase} />
           {#if shown.redirects.length}
             <h4>Riding along</h4>
             <div class="diff">

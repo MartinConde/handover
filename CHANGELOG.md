@@ -4,6 +4,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **History across renames.** An entry's History follows it back through a rename made from
+  the admin: the list carries on under the old name, a version from before the rename says
+  *as old-mill* and carries `name` in `GET /admin/api/history/…`, and diffing or restoring one
+  reads its files under that name (`name` / `fromName` on the diff, `name` on the restore) and
+  writes them under the name the entry has now. A replaced picture in any per-field diff — the
+  drawer's, the log's, a version's — is both thumbnails, *Before* and *After*, instead of two
+  storage keys. After a restore the editor opens with *Restored the version from …* until those
+  changes are published.
 - **The 90-day hidden check.** A daily job — `hidden`, on the same schedule as the rest —
   reads every `_status: hidden` file in the repository and dates the hide from the file's own
   commits; the drawer's checks then list a page hidden for more than 90 days as a note, *The

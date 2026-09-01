@@ -274,6 +274,21 @@ const urlOf = (
   return entryUrl(siteId, loc.i18n, loc.route, entryAddress(siteId, data, name), file.locale);
 };
 
+/**
+ * The name an entry had before the rename commit this message is of; nothing where it is not
+ * one. A history that reaches the commit that started a file's log has reached the rename that
+ * made it, and this is what lets it carry on under the old name without `--follow`.
+ */
+export function renamedFrom(
+  _siteId: string,
+  message: string,
+  collection: string,
+  name: string,
+): string | undefined {
+  const found = /^Rename ([\w-]+)\/([\w-]+) to ([\w-]+)$/.exec(message.split('\n')[0] ?? '');
+  return found && found[1] === collection && found[3] === name ? found[2] : undefined;
+}
+
 // One commit moves every locale file and records where each language's old URL now goes.
 export async function renameEntry(
   siteId: string,

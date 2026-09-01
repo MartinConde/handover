@@ -4,6 +4,7 @@ import index, { preview, site, stale, templates, uses } from 'virtual:handover/i
 import type {
   Answer,
   CheckEntry,
+  CommitPage,
   ContentIndex,
   Db,
   EntryEdit,
@@ -104,6 +105,7 @@ import {
   regenerateIds,
   releaseLocks,
   removeSetting,
+  renamedFrom,
   renameEntry,
   resolveConflict,
   resolveDrift,
@@ -1907,6 +1909,9 @@ async function translatedFromView(
 
 const HISTORY_PAGE = 30;
 const SHA = /^[0-9a-f]{7,40}$/;
+const NAME = /^[\w-]+$/;
+// How many renames back a history is followed; each is a read per page per language.
+const RENAMES = 3;
 
 /**
  * One language file's commits down to the page asked for, and whether GitHub still had older
@@ -1927,6 +1932,33 @@ async function commitsFor(git: GitClient, path: string, pages: number) {
 }
 
 /**
+ * One language's commits under the name the entry has and, once that log is read to its start,
+ * under the names it had before: the commit that started the log is the rename that made it,
+ * when there was one, and its message says what the file was called — no `--follow`, which the
+ * commits API has none of, and no read that a never-renamed entry pays for.
+ */
+async function commitsUnder(
+  git: GitClient,
+  collection: string,
+  slug: string,
+  locale: string,
+  pages: number,
+): Promise<CommitPage[]> {
+  const found: CommitPage[] = [];
+  let name = slug;
+  for (let hop = 0; hop <= RENAMES; hop++) {
+    const read = await commitsFor(git, entryPath(collection, name, locale), pages);
+    found.push({ locale, ...read, ...(name !== slug ? { name } : {}) });
+    const was = read.more
+      ? undefined
+      : renamedFrom('default', read.commits.at(-1)?.message ?? '', collection, name);
+    if (!was) break;
+    name = was;
+  }
+  return found;
+}
+
+/**
  * One entry's versions: the commits of every language file it has, merged, newest first. A read
  * of the branch and nothing else — nothing this derived is written down, so history costs the
  * same on every open.
@@ -1943,12 +1975,14 @@ async function entryHistory(collection: string, slug: string, url: URL): Promise
   const pages = Math.min(Math.max(Number.isSafeInteger(asked) ? asked : 1, 1), 10);
   const git = gitClient();
   const read = await Promise.all(
-    Object.entries(entryPaths(collection, slug)).map(async ([locale, path]) => ({
-      locale,
-      ...(await commitsFor(git, path, pages)),
-    })),
+    config.i18n.locales.map((locale) => commitsUnder(git, collection, slug, locale, pages)),
   );
-  const { versions, more } = mergeFileCommits(read);
+  // The current name's pages first, whatever the language: the rename commit is in both logs
+  // and the merge names a version by the first page it meets it on.
+  const { versions, more } = mergeFileCommits([
+    ...read.flatMap((pages) => pages.filter((p) => !p.name)),
+    ...read.flatMap((pages) => pages.filter((p) => p.name)),
+  ]);
   const authors = await commitAuthors(
     'default',
     db(),
@@ -1965,6 +1999,9 @@ async function entryHistory(collection: string, slug: string, url: URL): Promise
         summary: version.message.split('\n')[0] ?? '',
         locales: version.locales,
         ...(author ? { author } : {}),
+        // The name the files had then, where it is not the one they have now: a diff or a
+        // restore of this version reads them under it.
+        ...(version.name ? { name: version.name } : {}),
       };
     }),
     more,
@@ -1983,19 +2020,27 @@ async function versionDiff(collection: string, slug: string, url: URL): Promise<
   const asked = url.searchParams.get('from');
   if (!SHA.test(to) || (asked !== null && !SHA.test(asked)))
     return Response.json({ error: 'a version is named by its commit' }, { status: 400 });
+  // The names the files had at each side, where a rename has moved them since (`entryHistory`).
+  const name = url.searchParams.get('name') ?? slug;
+  const fromName = url.searchParams.get('fromName') ?? slug;
+  if (!NAME.test(name) || !NAME.test(fromName))
+    return Response.json({ error: 'a version is named by its commit' }, { status: 400 });
   const git = gitClient();
   const from = asked ?? (await git.getHead());
   const [before, after] = await Promise.all([
-    entryAt(git, collection, slug, from),
-    entryAt(git, collection, slug, to),
+    entryAt(git, collection, slug, from, fromName),
+    entryAt(git, collection, slug, to, name),
   ]);
   return Response.json({ groups: diffEntry('default', formFor(collection, slug), before, after) });
 }
 
-/** One entry as a commit has it, language by language — a diff's before or its after. */
-async function entryAt(git: GitClient, collection: string, slug: string, ref: string) {
+/**
+ * One entry as a commit has it, language by language — a diff's before or its after. `name` is
+ * what its files were called at that commit, where a rename has moved them since.
+ */
+async function entryAt(git: GitClient, collection: string, slug: string, ref: string, name = slug) {
   const read = await Promise.all(
-    Object.entries(entryPaths(collection, slug)).map(async ([locale, path]) => {
+    Object.entries(entryPaths(collection, name)).map(async ([locale, path]) => {
       const file = await git.getFile(path, ref);
       return file ? ([locale, parseEntry('default', file.contents)] as const) : undefined;
     }),
@@ -2054,18 +2099,25 @@ async function restoreVersion(
 ): Promise<Response> {
   const schema = schemaOf(collection, slug);
   if (!schema) return new Response('Not found', { status: 404 });
-  const sha = await undoing(request);
+  const body = (await request.json().catch(() => undefined)) as
+    | { commit_sha?: unknown; name?: unknown }
+    | undefined;
+  const sha = typeof body?.commit_sha === 'string' ? body.commit_sha : '';
   if (!SHA.test(sha)) return new Response('A commit_sha is needed to restore', { status: 400 });
+  // The name the files had at that commit, where a rename has moved them since: read under it,
+  // written under the name the entry has now — a restore never moves the entry back.
+  const name = typeof body?.name === 'string' ? body.name : slug;
+  if (!NAME.test(name)) return new Response('That is not a name this entry had', { status: 400 });
   const held = await heldByAnother(collection, slug, session, 'restored');
   if (held) return held;
   const git = gitClient();
   const read = await Promise.all(
-    Object.values(entryPaths(collection, slug)).map(async (path) => {
-      const file = await git.getFile(path, sha);
+    config.i18n.locales.map(async (locale) => {
+      const file = await git.getFile(entryPath(collection, name, locale), sha);
       const entry = file ? parseEntry('default', file.contents) : undefined;
       // An empty file at that commit parses to nothing, which is not a version of anything.
       return entry && typeof entry === 'object' && !Array.isArray(entry)
-        ? { path, entry: entry as Record<string, unknown> }
+        ? { path: entryPath(collection, slug, locale), entry: entry as Record<string, unknown> }
         : undefined;
     }),
   );

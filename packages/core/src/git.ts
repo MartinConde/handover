@@ -35,11 +35,15 @@ export interface CommitPage {
   locale: string;
   commits: FileCommit[];
   more: boolean;
+  /** The file name the entry had at these commits, where it is not the one it has now. */
+  name?: string;
 }
 
 /** A commit of one entry: the same commit however many of its language files it touched. */
 export interface EntryVersion extends FileCommit {
   locales: string[];
+  /** The name the entry's files had at this commit, when it was not the name it has now. */
+  name?: string;
 }
 
 /**
@@ -51,14 +55,22 @@ export interface EntryVersion extends FileCommit {
  * and are independent, so a commit that touched only the German file can sit between two pages
  * of the English one; showing past the newest of those ends would leave a hole nobody could
  * see, and the next page is read from the top again rather than from where this one stopped.
+ *
+ * Pages under an older name come after the current name's: the rename commit is in both logs,
+ * and the first page it is met on says what the entry was called when that commit was made.
  */
 export function mergeFileCommits(pages: CommitPage[]): { versions: EntryVersion[]; more: boolean } {
   const found = new Map<string, EntryVersion>();
   for (const page of pages)
     for (const commit of page.commits) {
       const seen = found.get(commit.sha);
-      if (seen) seen.locales.push(page.locale);
-      else found.set(commit.sha, { ...commit, locales: [page.locale] });
+      if (!seen)
+        found.set(commit.sha, {
+          ...commit,
+          locales: [page.locale],
+          ...(page.name ? { name: page.name } : {}),
+        });
+      else if (!seen.locales.includes(page.locale)) seen.locales.push(page.locale);
     }
   const at = (date: string | undefined) => Date.parse(date ?? '') || 0;
   const versions = [...found.values()].sort((a, b) => at(b.date) - at(a.date));

@@ -8,7 +8,14 @@ import {
 import { ENTRY, EXACT, initials, type Person, said, when } from './activity-line';
 import Diff from './Diff.svelte';
 
-let { role }: { role: 'owner' | 'editor' } = $props();
+let {
+  role,
+  mediaBase = '',
+}: {
+  role: 'owner' | 'editor';
+  /** Where a stored media key is served from, for a replaced picture's thumbnails. */
+  mediaBase?: string;
+} = $props();
 
 let events = $state<ActivityEvent[]>([]);
 let cursor = $state<string | null>(null);
@@ -274,7 +281,7 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
                 {#each changed.entries as entry (entry.key)}
                   <section>
                     <h2><a href={hrefOf(entry.key)}>{entry.key.split('/')[1]}</a></h2>
-                    <Diff groups={entry.groups} />
+                    <Diff groups={entry.groups} {mediaBase} />
                   </section>
                 {/each}
                 {#if changed.more}

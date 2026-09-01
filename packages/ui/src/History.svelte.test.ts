@@ -12,6 +12,7 @@ type Version = {
   summary: string;
   locales: string[];
   author?: string;
+  name?: string;
 };
 
 const ago = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString();
@@ -25,6 +26,8 @@ let refusal: number | undefined;
 let restored: string[] = [];
 let restoreRefusal: string | undefined;
 let handedOff = 0;
+/** The date of each version the editor was handed. */
+let handedDates: string[] = [];
 
 const show = async (locales = ['en', 'de'], drafted = false) => {
   asked = [];
@@ -50,8 +53,9 @@ const show = async (locales = ['en', 'de'], drafted = false) => {
       slug: 'mill-house',
       locales,
       drafted,
-      onrestored: () => {
+      onrestored: (date: string) => {
         handedOff += 1;
+        handedDates.push(date);
       },
     },
   });
@@ -74,6 +78,7 @@ afterEach(() => {
   restored = [];
   restoreRefusal = undefined;
   handedOff = 0;
+  handedDates = [];
 });
 
 const q = <T extends Element>(sel: string) => {
@@ -261,6 +266,38 @@ test('restoring the version being read posts that commit and hands off to the ed
   expect(restored).toEqual([JSON.stringify({ commit_sha: 'aaa111bbb222' })]);
   expect(handedOff).toBe(1);
   expect(all('.dialog')).toHaveLength(0);
+});
+
+// A version from before a rename has its files under the old name, and the row says so; the
+// diff and the restore read them under it, and the restore writes them under the name now.
+test('a version from before a rename is read and restored under its old name', async () => {
+  versions = [
+    VERSION,
+    {
+      sha: 'ooo999',
+      date: ago(90),
+      summary: 'Create The Old Mill',
+      locales: ['en'],
+      name: 'old-mill',
+    },
+  ];
+  await show(['en']);
+  expect(rows()[1]?.[1]).toContain('as old-mill');
+
+  await click(all('.version-row .summary')[1] as Element);
+  expect(asked.at(-1)).toBe('/admin/api/history/listings/mill-house/diff?to=ooo999&name=old-mill');
+
+  await click(q('.version-head .actions button'));
+  await click(all('.dialog .actions button')[1] as Element);
+  expect(restored).toEqual([JSON.stringify({ commit_sha: 'ooo999', name: 'old-mill' })]);
+});
+
+test('the editor is handed the date of the version restored', async () => {
+  await openRestore();
+
+  await click(all('.dialog .actions button')[1] as Element);
+
+  expect(handedDates).toEqual([VERSION.date]);
 });
 
 test('the confirmation names the version, who published it and the languages it writes', async () => {

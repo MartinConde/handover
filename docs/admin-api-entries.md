@@ -116,11 +116,16 @@ GET /admin/api/history/:collection/:slug?page=1  →  { "versions": [ … ], "mo
 ```
 
 The entry's git log, merged across its language files: one entry of `{ "sha", "date",
-"summary", "locales", "author" }` per commit, newest first, with `locales` the languages that
-commit touched and `summary` the commit's first line. `author` is the person the [activity
+"summary", "locales", "author", "name" }` per commit, newest first, with `locales` the languages
+that commit touched and `summary` the commit's first line. `author` is the person the [activity
 log](activity.md) recorded against that commit, falling back to git's own author and absent
 where the commit is the GitHub App's — the App is what makes them, so git names it rather than
 the editor. Nothing is stored: every open is a read of GitHub.
+
+The log follows the entry back through a rename the admin made: the commit that started the
+current file's log is that rename, and its message names the old file, so the list carries on
+under it — up to three renames back. A version from before one carries `name`, the file name
+the entry had then; a rename made by hand in the repository is not followed.
 
 Paged at 30 per language file. `more` says GitHub still had older ones; the next page is read
 from the top again rather than carried on, because the merge cuts the list where the shallowest
@@ -134,17 +139,19 @@ GET /admin/api/history/:collection/:slug/diff?to=<sha>&from=<sha>  →  { "group
 
 What the version named by `to` says that the one named by `from` does not, in the same
 [per-field diff](pending-changes.md) the drawer draws. Without `from` the other side is the
-branch as it is now, so what is marked is what restoring `to` would change. Both are read at
-the addresses the entry has **now**: a version from before a rename is not followed. `400`
-when either is not a commit.
+branch as it is now, so what is marked is what restoring `to` would change. A version from
+before a rename is read under the `name` the list gave it — `&name=` for `to`, `&fromName=`
+for `from`. `400` when either is not a commit, or a name is not one.
 
 ```
-POST /admin/api/history/:collection/:slug/restore   { "commit_sha" }  →  { "paths": [ … ] }
+POST /admin/api/history/:collection/:slug/restore   { "commit_sha", "name" }  →  { "paths": [ … ] }
 ```
 
 That version back as unpublished changes, one draft row per language it has a file in. **Git is
 never rewritten**: the rows go into the editor and publishing them is the ordinary forward
-commit, so the version being restored — and everything after it — stays in the list.
+commit, so the version being restored — and everything after it — stays in the list. `name` is
+the version's from the list, where it has one: the files are read under it and written under
+the name the entry has now, so a restore never moves the entry back.
 
 Three keys are the entry's as it stands now rather than the version's: `slug`, `_status` and
 `_locales`. Each of them is set by a route that commits redirect rules beside it, so an old

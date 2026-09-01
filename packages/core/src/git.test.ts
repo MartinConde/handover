@@ -525,3 +525,28 @@ test('mergeFileCommits keeps a commit only one language has when every page is f
 
   expect(merged.versions.map((v) => v.sha)).toEqual(['aaa', 'ddd']);
 });
+
+// A page read under the name the entry used to have says so on its versions, and the rename
+// commit — in the old name's log as the deletion and in the new name's as the creation — is
+// one version wearing the language once, under the name it left the entry with.
+test('mergeFileCommits carries the old name onto its versions and wears a language once', () => {
+  const merged = mergeFileCommits([
+    page('en', [
+      { sha: 'aaa', date: '2026-08-30T10:00:00Z' },
+      { sha: 'rrr', date: '2026-08-20T10:00:00Z' },
+    ]),
+    {
+      ...page('en', [
+        { sha: 'rrr', date: '2026-08-20T10:00:00Z' },
+        { sha: 'ooo', date: '2026-08-10T10:00:00Z' },
+      ]),
+      name: 'old-mill',
+    },
+  ]);
+
+  expect(merged.versions.map((v) => [v.sha, v.locales, v.name])).toEqual([
+    ['aaa', ['en'], undefined],
+    ['rrr', ['en'], undefined],
+    ['ooo', ['en'], 'old-mill'],
+  ]);
+});

@@ -156,6 +156,7 @@ export {
   redirectError,
   redirectRule,
   redirectsText,
+  renamedFrom,
   renameEntry,
   revertRedirects,
 } from './lifecycle.js';

@@ -35,7 +35,16 @@ would move the page or take it away with nothing forwarding visitors. A language
 no file for is left where it stands — which, if the structure has changed since, is the
 languages disagreeing, and the editor asks about it before the publish goes out.
 
-## Not yet
+## Across a rename
 
-History cannot follow an entry through a rename — the addresses it reads are the ones the
-entry has now.
+Renaming an entry from the ⋯ menu moves its files, and history follows: the list carries on
+under the old name, and a version from before the rename says which name it is under — *2 weeks
+ago · Anna · as old-mill*. Restoring one writes it under the name the entry has now; the entry
+never moves back. A rename made by hand in the repository, without the admin, is not followed.
+
+## What a version shows
+
+A replaced picture is both pictures, *Before* and *After* with their file names, since a picture
+has no history of its own — the drawer's diff draws it the same way. After a restore the entry
+opens on the Content tab with a banner, *Restored the version from 2 weeks ago*, that stays
+until those changes are published.

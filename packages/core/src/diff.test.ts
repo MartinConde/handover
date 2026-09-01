@@ -93,9 +93,11 @@ test('a rich text body says that it changed and nothing more', () => {
   expect(changesIn(groups, 'en')).toEqual([{ path: 'body', label: 'Body', kind: 'whole' }]);
 });
 
+// A picture is a key into storage that never changes, so a replaced one is two keys the reader
+// sees as two thumbnails — and its size is the picture's, never a change of its own.
 test('only the properties a translator retypes are per-language', () => {
-  const before = { image: { src: 'media/a.webp', alt: 'The front', width: 2400 } };
-  const after = { image: { src: 'media/b.webp', alt: 'The garden', width: 1800 } };
+  const before = { image: { src: 'media/a.webp', alt: 'The front', width: 2400, height: 1600 } };
+  const after = { image: { src: 'media/b.webp', alt: 'The garden', width: 1800, height: 1200 } };
 
   const groups = diffEntry(
     'default',
@@ -107,12 +109,11 @@ test('only the properties a translator retypes are per-language', () => {
   expect(changesIn(groups)).toEqual([
     {
       path: 'image.src',
-      label: 'Image · Src',
-      kind: 'value',
+      label: 'Image',
+      kind: 'picture',
       before: 'media/a.webp',
       after: 'media/b.webp',
     },
-    { path: 'image.width', label: 'Image · Width', kind: 'value', before: '2400', after: '1800' },
   ]);
   expect(changesIn(groups, 'en')).toEqual([
     {
@@ -448,6 +449,30 @@ test('a list of words is read as a sentence, not as the brackets the file writes
         { text: 'harbour', mark: 'ins' },
         { text: ', devon' },
       ],
+    },
+  ]);
+});
+
+test('the sharing image is a picture too, named by the steps down to it', () => {
+  const form: Form = {
+    fields: [{ path: ['seo'], label: 'SEO', type: 'seo', required: false }],
+    blocks: {},
+  };
+
+  const groups = diffEntry(
+    'default',
+    form,
+    { en: { seo: { image: { src: 'media/a.webp', width: 1200 } } } },
+    { en: { seo: { image: { src: 'media/b.webp', width: 1600 } } } },
+  );
+
+  expect(changesIn(groups, 'en')).toEqual([
+    {
+      path: 'seo.image.src',
+      label: 'SEO · Image',
+      kind: 'picture',
+      before: 'media/a.webp',
+      after: 'media/b.webp',
     },
   ]);
 });

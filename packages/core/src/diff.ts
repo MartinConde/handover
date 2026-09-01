@@ -17,6 +17,8 @@ export type RowAt = 'added' | 'removed' | 'moved-up' | 'moved-down' | 'same';
 export type Change = { path: string; label: string } & (
   | { kind: 'words'; parts: WordPart[] }
   | { kind: 'value'; before?: string; after?: string }
+  /** Two keys into storage: a picture that was replaced, put in or taken out. */
+  | { kind: 'picture'; before?: string; after?: string }
   | { kind: 'whole' }
   | { kind: 'row'; type?: string; at: RowAt; above?: string; changes: Change[] }
 );
@@ -164,12 +166,18 @@ function propsIn(
     ...Object.keys(isObject(before) ? before : {}),
     ...Object.keys(isObject(after) ? after : {}).filter((k) => !(isObject(before) && k in before)),
   ].filter((k) => !k.startsWith('_'));
+  // A picture is a key into storage that never changes, so a replaced one is two keys and not a
+  // value that moved; its size is the picture's and never a change of its own.
+  const picture =
+    field.type === 'image'
+      ? under.length === 0
+      : field.type === 'seo' && under.join('.') === 'image';
   for (const key of keys) {
+    if (picture && (key === 'width' || key === 'height')) continue;
     const was = isObject(before) ? before[key] : undefined;
     const now = isObject(after) ? after[key] : undefined;
     const inner = [...under, key];
     const to = `${path}.${inner.join('.')}`;
-    const says = [label, ...inner.map(humanise)].join(' · ');
     if (isObject(was) || isObject(now)) {
       propsIn(field, translated, was, now, path, label, inner, mode, wants, found);
       continue;
@@ -179,7 +187,22 @@ function propsIn(
     const own: Translation =
       mode === true && !translated.includes(inner.join('.')) ? 'duplicate' : mode;
     if (!wants(own) || show(was) === show(now)) continue;
-    found.push({ path: to, label: says, kind: 'value', before: show(was), after: show(now) });
+    if (picture && key === 'src')
+      found.push({
+        path: to,
+        label: [label, ...under.map(humanise)].join(' · '),
+        kind: 'picture',
+        ...(typeof was === 'string' ? { before: was } : {}),
+        ...(typeof now === 'string' ? { after: now } : {}),
+      });
+    else
+      found.push({
+        path: to,
+        label: [label, ...inner.map(humanise)].join(' · '),
+        kind: 'value',
+        before: show(was),
+        after: show(now),
+      });
   }
 }
 

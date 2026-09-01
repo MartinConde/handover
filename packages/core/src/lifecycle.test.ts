@@ -9,6 +9,7 @@ import {
   readRedirects,
   redirectError,
   redirectsText,
+  renamedFrom,
   renameEntry,
 } from './lifecycle.js';
 
@@ -583,5 +584,22 @@ test('a path and an absolute destination are both accepted', () => {
   expect(redirectError('default', { from: '/a', to: '/b' }, site)).toBeUndefined();
   expect(
     redirectError('default', { from: '/a', to: 'https://example.com/b.pdf' }, site),
+  ).toBeUndefined();
+});
+
+// The commit that starts a renamed file's log is the rename that made it, and its message is
+// the one place the old name is written down — so history can follow it without `--follow`.
+test('renamedFrom reads the old name out of a rename commit of this entry', () => {
+  expect(
+    renamedFrom('default', 'Rename listings/old-mill to mill-house', 'listings', 'mill-house'),
+  ).toBe('old-mill');
+  expect(
+    renamedFrom('default', 'Rename pages/old-mill to mill-house', 'listings', 'mill-house'),
+  ).toBeUndefined();
+  expect(
+    renamedFrom('default', 'Rename listings/mill-house to barn', 'listings', 'mill-house'),
+  ).toBeUndefined();
+  expect(
+    renamedFrom('default', 'Update listings/en/mill-house', 'listings', 'mill-house'),
   ).toBeUndefined();
 });

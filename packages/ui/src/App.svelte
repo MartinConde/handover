@@ -70,6 +70,9 @@ const editing = $derived(
  * language the switcher is on and whether the second column is open.
  */
 const editingAt = $derived(editing ? `${editing.collection}/${editing.slug}` : '');
+/** The version an entry's unpublished changes were restored from: the editor is remounted by
+ * the reload that follows a restore, so the banner's memory lives here. */
+let restored = $state<{ entry: string; date: string }>();
 const openEntry = $derived.by(() => {
   // Read on purpose: `reload` is the entry's files having moved under it, and that is the one
   // thing besides the entry itself that has to be read again.
@@ -463,6 +466,8 @@ const initial = $derived(
           }}
           onpending={loadPending}
           onpublished={(title) => notify(`Published ${title} — building`)}
+          onrestored={(date) => (restored = { entry: editingAt, date })}
+          restored={restored?.entry === editingAt ? restored.date : undefined}
         />
       {:catch error}
         <main class="main"><p class="notice notice-danger" role="alert">{error.message}</p></main>
@@ -482,7 +487,7 @@ const initial = $derived(
     {:else if path === '/admin/activity'}
       <!-- No role condition: the log is an editor's screen as much as an owner's, and which
            events they see is the server's filter rather than this branch's. -->
-      <Activity role={session.role} />
+      <Activity role={session.role} mediaBase={session.mediaBase ?? ''} />
     {:else if path === '/admin/settings' && session.role === 'owner'}
       <Diagnostics />
     {:else}
@@ -501,6 +506,7 @@ const initial = $derived(
     <Pending
       entries={pending}
       {defaultLocale}
+      mediaBase={session?.mediaBase ?? ''}
       {build}
       onrevert={askRevert}
       onclose={() => {

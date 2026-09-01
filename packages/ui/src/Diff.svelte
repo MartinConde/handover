@@ -1,7 +1,16 @@
 <script lang="ts">
 import type { Change, DiffGroup } from '@handover/core';
 
-let { groups }: { groups: DiffGroup[] } = $props();
+let {
+  groups,
+  mediaBase = '',
+}: {
+  groups: DiffGroup[];
+  /** Where a stored media key is served from; without it a replaced picture has no thumbnails. */
+  mediaBase?: string;
+} = $props();
+
+const basename = (key: string) => key.slice(key.lastIndexOf('/') + 1);
 
 const LANGUAGES = new Intl.DisplayNames(['en'], { type: 'language' });
 const named = (locale: string) => {
@@ -60,6 +69,21 @@ const shown = $derived(groups.filter((g) => g.locale !== undefined || g.changes.
         <small>{label}</small>{#each change.parts as part, i (i)}{#if part.mark === 'del'}<del
             >{part.text}</del
           >{:else if part.mark === 'ins'}<ins>{part.text}</ins>{:else}{part.text}{/if}{/each}
+      </div>
+    {:else if change.kind === 'picture'}
+      <!-- A picture has no history of its own — its key never changes — so the change is the
+           two pictures, named, and never the two keys. -->
+      <div class="row is-block">
+        <small>{label}</small>
+        <span>photo {change.before && change.after ? 'replaced' : change.after ? 'added' : 'removed'}</span>
+        <div class="pair">
+          {#if change.before}
+            <div><span class="lbl">Before · {basename(change.before)}</span><div class="ratio-preview is-16x9 is-old"><img src="{mediaBase}/{change.before}" alt="" loading="lazy" /></div></div>
+          {/if}
+          {#if change.after}
+            <div><span class="lbl">After · {basename(change.after)}</span><div class="ratio-preview is-16x9"><img src="{mediaBase}/{change.after}" alt="" loading="lazy" /></div></div>
+          {/if}
+        </div>
       </div>
     {:else if change.kind === 'value'}
       <div class="row">

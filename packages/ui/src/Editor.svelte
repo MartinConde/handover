@@ -11,6 +11,7 @@ import {
   syncLocale,
 } from '@handover/core';
 import { onMount, tick } from 'svelte';
+import { when } from './activity-line';
 import DriftPanel from './Drift.svelte';
 import Fields from './Fields.svelte';
 import History from './History.svelte';
@@ -34,6 +35,8 @@ let {
   onchanged,
   onpending,
   onpublished,
+  onrestored,
+  restored,
   site,
 }: {
   collection: string;
@@ -112,6 +115,10 @@ let {
   onpending?: () => void;
   /** This entry went out from its header, named the way the shell should say it. */
   onpublished?: (title: string) => void;
+  /** A version went into the drafts, dated as git dates it; the shell remembers it past the reload. */
+  onrestored?: (date: string) => void;
+  /** The date of the version the unpublished changes were restored from, while they wait. */
+  restored?: string;
 } = $props();
 
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
@@ -822,7 +829,20 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {/if}
     </div>
   {/if}
-  {#if entry.drift.length}
+  {#if restored && entry.pending.length}
+    <!-- The restore is over by the time this draws — the tab moved and the entry was read
+         again — so this is what says what just happened, until the version goes out. -->
+    <div class="lock-banner" class:is-drift={entry.drift.length > 0} role="status">
+      <span>
+        <b>Restored the version from {when(Date.parse(restored)).toLowerCase()}.</b>
+        {#if entry.drift.length}
+          The languages disagree about its blocks since then — decide what to keep, then publish.
+        {:else}
+          It is here as unpublished changes — nothing is live until you publish.
+        {/if}
+      </span>
+    </div>
+  {:else if entry.drift.length}
     <div class="lock-banner is-drift">
       The languages of this entry disagree about its blocks — publishing is blocked until that is
       settled.
@@ -998,11 +1018,13 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     <History
       {collection}
       {slug}
+      {mediaBase}
       locales={entry.locales}
       drafted={entry.pending.length > 0}
-      onrestored={() => {
+      onrestored={(date) => {
         // The Content tab and a fresh read of the entry: the address changes first so the
         // reload lands on the form the restore has just rewritten.
+        onrestored?.(date);
         navigate(`/admin/c/${collection}/${slug}`);
         onchanged();
       }}

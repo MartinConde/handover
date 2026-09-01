@@ -728,6 +728,10 @@ a.btn { text-decoration: none; }
 .upload-row .state.is-failed { color: var(--danger-ink); font-weight: 500; }
 /* The crop this field will render, with the focal dot on it. */
 .ratio-preview { position: relative; border-radius: var(--radius); overflow: hidden; background: var(--badge-bg); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); flex-basis: 100%; max-width: 440px; }
+.pair > div { display: grid; gap: var(--s-1); }
+.pair .lbl { font-size: var(--text-xs); color: var(--ink-2); }
+.pair .ratio-preview.is-old { filter: grayscale(0.4); }
 .facts { display: grid; gap: var(--s-4); margin: 0; }
 .facts > div { display: grid; gap: var(--s-1); }
 .facts dt { font-size: var(--text-sm); font-weight: 500; }

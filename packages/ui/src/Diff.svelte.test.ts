@@ -8,8 +8,8 @@ import Diff from './Diff.svelte';
 // Not testing: the other change shapes, which are the walker's output rendered straight.
 
 let app: ReturnType<typeof mount>;
-const show = (groups: DiffGroup[]) => {
-  app = mount(Diff, { target: document.body, props: { groups } });
+const show = (groups: DiffGroup[], mediaBase = '') => {
+  app = mount(Diff, { target: document.body, props: { groups, mediaBase } });
   flushSync();
   return document.body;
 };
@@ -62,4 +62,37 @@ test('a language that went is one line, not a deletion per field', () => {
 
   const german = Array.from(root.querySelectorAll('h3')).find((h) => h.textContent === 'German');
   expect(german?.nextElementSibling?.textContent?.trim()).toBe('The German version was removed');
+});
+
+// A picture has no history of its own — it is a key into storage that never changes — so a
+// replaced one is the two pictures, named, and not two keys nobody can read.
+test('a replaced picture is both thumbnails', () => {
+  const root = show(
+    [
+      {
+        locale: 'en',
+        changes: [
+          {
+            path: 'hero.src',
+            label: 'Hero image',
+            kind: 'picture',
+            before: 'media/aaaa.webp',
+            after: 'media/bbbb.webp',
+          },
+        ],
+      },
+    ],
+    'https://media.example',
+  );
+
+  const row = root.querySelector('.diff .row');
+  expect(row?.textContent).toContain('photo replaced');
+  expect(Array.from(root.querySelectorAll('.pair .lbl')).map((l) => l.textContent)).toEqual([
+    'Before · aaaa.webp',
+    'After · bbbb.webp',
+  ]);
+  expect(Array.from(root.querySelectorAll('.pair img')).map((i) => i.getAttribute('src'))).toEqual([
+    'https://media.example/media/aaaa.webp',
+    'https://media.example/media/bbbb.webp',
+  ]);
 });

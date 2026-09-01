@@ -22,7 +22,8 @@ pill and the revert — is [Build status and revert](build-status.md).
 - **A row opens into what it would put in the commit**, field by field: the draft against
   the file in the repository as it is now, grouped by language, with the values every
   language shares in a group of their own and blocks addressed by `_id` so a block that
-  moved says *moved*. The redirect rules riding along are in there too, under *Riding
+  moved says *moved*; a replaced picture is both pictures, *Before* and *After*, since a
+  picture has no history of its own. The redirect rules riding along are in there too, under *Riding
   along*, since they are a consequence of the entry rather than a file anybody chose
 - The rows are kept once the commit succeeds and re-seeded on it, which is what makes the
   next publish of an entry somebody is still editing not look like a conflict with this one

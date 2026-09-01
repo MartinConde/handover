@@ -6137,6 +6137,59 @@ test('a second page of history reads both files twice and reaches the older comm
   expect(fileCommits).toHaveBeenCalledWith(EN, { perPage: 30, page: 2 });
 });
 
+const OLD = 'src/content/listings/en/old-mill.yaml';
+
+// The commit that starts a file's log is the rename that made it, when there was one, and its
+// message names the old file — so the list carries on under that name with no `--follow`, and
+// the versions from before the rename say which name they are under.
+test('history follows a rename back to the commits under the old name', async () => {
+  commitLog[EN] = [
+    { sha: 'aaa111', date: '2026-08-30T10:00:00Z', message: 'Update price' },
+    {
+      sha: 'rrr000',
+      date: '2026-08-25T10:00:00Z',
+      message: 'Rename listings/old-mill to mill-house',
+    },
+  ];
+  commitLog[OLD] = [
+    {
+      sha: 'rrr000',
+      date: '2026-08-25T10:00:00Z',
+      message: 'Rename listings/old-mill to mill-house',
+    },
+    { sha: 'ooo999', date: '2026-08-20T10:00:00Z', message: 'Create The Old Mill' },
+  ];
+
+  const body = (await (await GET(history('history/listings/mill-house'))).json()) as {
+    versions: { sha: string; locales: string[]; name?: string }[];
+    more: boolean;
+  };
+
+  expect(body.versions.map((v) => [v.sha, v.locales, v.name])).toEqual([
+    ['aaa111', ['en'], undefined],
+    ['rrr000', ['en'], undefined],
+    ['ooo999', ['en'], 'old-mill'],
+  ]);
+  expect(body.more).toBe(false);
+});
+
+test('a version from before a rename is diffed from the files under its old name', async () => {
+  files[`abc1234:${OLD}`] = 'title: The Old Mill\nlocation: Bakewell\nrooms: 3\n';
+
+  const res = await GET(history('history/listings/mill-house/diff', '?to=abc1234&name=old-mill'));
+
+  expect(res.status).toBe(200);
+  const { groups } = (await res.json()) as { groups: { changes: { path: string }[] }[] };
+  expect(groups.flatMap((g) => g.changes.map((c) => c.path))).toEqual(['title']);
+  expect(getFile).toHaveBeenCalledWith(OLD, 'abc1234');
+});
+
+test('a diff refuses a name that is not one', async () => {
+  const res = await GET(history('history/listings/mill-house/diff', '?to=abc1234&name=../etc'));
+
+  expect(res.status).toBe(400);
+});
+
 // What is marked is what restoring this version would change, so the version is the *after*
 // side and what is live now is the before.
 test('a version is diffed against what is live now', async () => {
@@ -6243,6 +6296,33 @@ test('restoring a version hands core the entry as that commit had it, language b
     { path: EN, entry: { _version: 1, title: 'The Mill House', location: 'Bakewell', rooms: 2 } },
     { path: DE, entry: { _version: 1, title: 'Das Mühlenhaus', rooms: 2 } },
   ]);
+});
+
+// The version's files are read under the name the entry had then and written under the name it
+// has now: a restore across a rename never moves the entry back.
+test('restoring a version from before a rename reads the old name and writes the current one', async () => {
+  files[`abc1234:${OLD}`] = 'title: The Old Mill\nrooms: 2\n';
+  restoreDraft.mockResolvedValueOnce({ paths: [EN] });
+
+  const res = await restoring('history/listings/mill-house/restore', {
+    commit_sha: 'abc1234',
+    name: 'old-mill',
+  });
+
+  expect(res.status).toBe(200);
+  expect(restoreDraft.mock.calls[0]?.[4]).toEqual([
+    { path: EN, entry: { _version: 1, title: 'The Old Mill', rooms: 2 } },
+  ]);
+});
+
+test('a restore refuses a name that is not one', async () => {
+  const res = await restoring('history/listings/mill-house/restore', {
+    commit_sha: 'abc1234',
+    name: '../etc',
+  });
+
+  expect(res.status).toBe(400);
+  expect(restoreDraft).not.toHaveBeenCalled();
 });
 
 // A restore writes over whatever unpublished changes the entry had — a colleague's draft typed

@@ -510,6 +510,24 @@ const heldBy = (over: Record<string, unknown> = {}) =>
       : Response.json({}),
   );
 
+// The restore is over by the time the form draws — the tab has moved and the entry was read
+// again — so the banner is what says what just happened, for as long as the version is waiting.
+test('a restored version is announced until it is published', () => {
+  const root = show({
+    restored: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+    entry: { ...entry, pending: ['en'] },
+  });
+
+  expect($(root, '.lock-banner')?.textContent).toContain('Restored the version from 3 days ago.');
+  expect($(root, '.lock-banner')?.textContent).toContain('nothing is live until you publish');
+});
+
+test('a restored version already published is not announced', () => {
+  const root = show({ restored: new Date().toISOString() });
+
+  expect($(root, '.lock-banner')).toBeNull();
+});
+
 test('an entry somebody else is editing reads, and says who has it', async () => {
   vi.stubGlobal('fetch', heldBy());
   const root = show();
