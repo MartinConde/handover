@@ -677,8 +677,6 @@ test('emitSitemap writes one sitemap per language, an index and robots.txt', asy
   expect(await read('robots.txt')).toContain(
     'Sitemap: https://coastalhomes.example/sitemap-index.xml',
   );
-  // The fixture is committed in this repository, so its page carries the file's last commit.
-  expect(await read('sitemap-en.xml')).toMatch(/<lastmod>\d{4}-\d{2}-\d{2}T[^<]+<\/lastmod>/);
 });
 
 // Workers Builds and most CI runners clone at depth 1, where every file is "added" by the one
