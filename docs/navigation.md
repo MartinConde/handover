@@ -9,8 +9,8 @@ edits it.
 
 `navigation` from `astro-handover` is the schema for `src/content/globals/<locale>/navigation.yaml`:
 several menus in one file, each a tree of items. An item is a label and a link; `children`
-nests items. The link points at an entry or page by its filename id, or at a URL — never
-at a locale-prefixed path.
+nests items. The link points at an entry or page by its filename id, at a collection's index
+page by the collection's name, or at a URL — never at a locale-prefixed path.
 
 ```yaml
 _version: 1
@@ -21,8 +21,8 @@ menus:
       - _id: "a1b2c3d4"
         label: "Listings"
         link:
-          type: "entry"
-          ref: "listings/seaview-cottage"
+          type: "index"
+          collection: "listings"
         children:
           - _id: "e5f6g7h8"
             label: "For sale"
@@ -39,7 +39,10 @@ menus:
           ref: "pages/impressum"
 ```
 
-`newTab` sits on the item, not inside `link`. Every menu and item has an `_id`, the same
+`newTab` sits on the item, not inside `link`. An `index` item links each language's own
+index page — `/listings` in English, `/de/listings` in German — where a `url` item sends every
+language to the one address it holds; it needs the collection to declare an `index`, and is
+named by the collection until a label is typed. Every menu and item has an `_id`, the same
 in every locale. A `label` left empty is not a mistake: the item is then named by the page it
 points at, so renaming that page moves the menu with it — in each language by that language's
 title.
@@ -51,8 +54,8 @@ moves it in all of them, and the German file keeps its German words while it hap
 
 ## In the admin
 
-The client edits this file in **Site settings → Navigation**: pages and entries on the left,
-the tree on the right. Rows move by dragging the handle — a hairline marks a slot between
+The client edits this file in **Site settings → Navigation**: pages, entries and each
+collection's index page on the left, the tree on the right. Rows move by dragging the handle — a hairline marks a slot between
 siblings, a tinted well names the parent a drop would go inside, and a slot past three levels
 refuses in place — or with each row's buttons (up, down, indent, outdent). The second language's column draws the same tree as one box a row,
 for the labels alone. A row pointing at something this language cannot show is flagged
@@ -62,7 +65,7 @@ developer's: they are declared in this file, and the client fills them.
 ## Rendering the menus
 
 `menusAt()` resolves the [file above](#the-file) for one language:
-every menu by its key, every item's `ref` turned into the address that language serves, and
+every menu by its key, every item's `ref` or `collection` turned into the address that language serves, and
 everything that language cannot show **dropped** — an entry with no file in it, a hidden one,
 and an item whose `_locales` names another language. A dropped item takes its children with it,
 so a menu never becomes the way a reader finds a 404. Resolve it in the loader, like everything

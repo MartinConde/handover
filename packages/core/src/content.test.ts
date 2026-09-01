@@ -1264,7 +1264,7 @@ test('the last machine-written path typed over takes the key out of the file', (
 const site = {
   i18n: { locales: ['en', 'de', 'fr'], defaultLocale: 'en' },
   collections: {
-    listings: { route: '/listings/[slug]' },
+    listings: { route: '/listings/[slug]', index: '/listings' },
     samples: {},
     pages: { route: '/[slug]', localizedSlugs: true },
   },
@@ -1550,6 +1550,21 @@ test('the tree keeps its shape: children are resolved under their parent', async
     { label: 'Coast', href: '/listings/coast', children: [] },
     { label: 'Sold', href: '/sold', children: [] },
   ]);
+});
+
+// A collection's index is not an entry, so a menu cannot point at it by file: the item names
+// the collection and the address is that language's own index page.
+test("an index item points at the language's own index page, named by the collection", async () => {
+  const nav = menu([item({ link: { type: 'index', collection: 'listings' } })]);
+
+  expect((await resolved(nav, 'en')).header).toEqual([
+    { label: 'Listings', href: '/listings', children: [] },
+  ]);
+  expect((await resolved(nav, 'de')).header?.[0]?.href).toBe('/de/listings');
+  // A collection with no index page has nowhere to link.
+  expect(
+    (await resolved(menu([item({ link: { type: 'index', collection: 'samples' } })]), 'en')).header,
+  ).toEqual([]);
 });
 
 test('a site with no navigation global renders no menus rather than throwing', async () => {

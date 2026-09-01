@@ -3,7 +3,7 @@ import type { ContentFile } from './entries.js';
 import { blobSha } from './git.js';
 import { entryAddress, entryUrl, type I18nRouting } from './names.js';
 import { checkReserved, isLive, RESERVED_KEYS } from './reserved.js';
-import { type Field, type Form, rowFields, type Translation } from './schema.js';
+import { type Field, type Form, humanise, rowFields, type Translation } from './schema.js';
 import { keptMachine } from './translate.js';
 
 export interface ContentEntry<T = unknown> {
@@ -115,7 +115,10 @@ export interface LocaleLink {
 /** As much of `cms.config.ts` as a link needs: the languages and the collections' routes. */
 export interface LocaleSite {
   i18n: I18nRouting;
-  collections: Record<string, { route?: string; localizedSlugs?: boolean; titleField?: string }>;
+  collections: Record<
+    string,
+    { route?: string; index?: string; localizedSlugs?: boolean; titleField?: string }
+  >;
 }
 
 /**
@@ -224,6 +227,13 @@ async function href<C extends Record<string, unknown>>(
   if (!isObject(link)) return undefined;
   if (link.type === 'url')
     return typeof link.href === 'string' ? { href: link.href, name: link.href } : undefined;
+  // A collection's index is not an entry, so the item names the collection and the address is
+  // this language's own index page; a collection with no index page has nowhere to link.
+  if (link.type === 'index') {
+    if (typeof link.collection !== 'string') return undefined;
+    const url = entryUrl(siteId, site.i18n, site.collections[link.collection]?.index, '', locale);
+    return url ? { href: url, name: humanise(link.collection) } : undefined;
+  }
   if (typeof link.ref !== 'string') return undefined;
   const cut = link.ref.indexOf('/');
   const collection = link.ref.slice(0, cut);

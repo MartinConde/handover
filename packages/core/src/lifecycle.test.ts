@@ -466,6 +466,43 @@ test('a rule appended that sends an address back to itself drops the rule that m
   expect(collapsed).toEqual([manual('/b', '/a', 'back')]);
 });
 
+test('a rule appended whose destination already forwards lands where that forwards', () => {
+  const collapsed = collapseRedirects(
+    [manual('/b', '/c', 'first')],
+    [manual('/a', '/b', 'second')],
+  );
+
+  expect(collapsed).toEqual([manual('/b', '/c', 'first'), manual('/a', '/c', 'second')]);
+});
+
+// A file edited by hand may hold a chain the admin would never have written; a rule added to
+// the end of it still lands in one hop, and a chain that goes round stops where it started.
+test('a rule appended follows a hand-written chain to its end and never round a loop', () => {
+  const chain = [manual('/b', '/c', 'first'), manual('/c', '/d', 'second')];
+
+  expect(collapseRedirects(chain, [manual('/a', '/b', 'third')]).at(-1)).toEqual(
+    manual('/a', '/d', 'third'),
+  );
+  expect(
+    collapseRedirects([...chain, manual('/d', '/b', 'round')], [manual('/a', '/b', 'in')]).at(-1),
+  ).toEqual(manual('/a', '/d', 'in'));
+});
+
+// An edit is the same write as an add, made in place: the rules that led to the edited one's
+// old address follow it, and its own new destination is resolved the way an added one is.
+test('a rule already in the file is re-collapsed where it stands', () => {
+  const collapsed = collapseRedirects(
+    [manual('/p', '/a', 'lead'), manual('/a', '/b', 'edited'), manual('/x', '/y', 'onward')],
+    [manual('/a', '/x', 'edited')],
+  );
+
+  expect(collapsed).toEqual([
+    manual('/p', '/y', 'lead'),
+    manual('/a', '/y', 'edited'),
+    manual('/x', '/y', 'onward'),
+  ]);
+});
+
 // A hidden entry's rule is dropped again by its `entry`, so a manual rule re-pointing it must
 // not take that link off: the entry would come back on the site with its redirect left behind.
 test('a re-pointed rule keeps the entry it belongs to when the new rule names none', () => {

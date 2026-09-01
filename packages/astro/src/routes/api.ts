@@ -65,6 +65,7 @@ import {
   heldDrafts,
   heldEntries,
   holdEntry,
+  humanise,
   INTEGRATIONS,
   imagePresets,
   isLive,
@@ -2273,6 +2274,26 @@ async function listEntries(collection: string): Promise<Response> {
 async function pickList(): Promise<Response> {
   return Response.json({
     entries: await pickable(),
+    // A collection's index page is not an entry, and a menu can point at one all the same: the
+    // collection, and where each language serves its index.
+    indexes: Object.entries(config.collections).flatMap(([collection, { index: page }]) => {
+      if (!page) return [];
+      const urls: Record<string, string> = {};
+      for (const locale of config.i18n.locales) {
+        const url = entryUrl('default', config.i18n, page, '', locale);
+        if (url) urls[locale] = url;
+      }
+      return [
+        {
+          collection,
+          index: true,
+          path: collection,
+          title: humanise(collection),
+          locales: config.i18n.locales,
+          urls,
+        },
+      ];
+    }),
     locales: config.i18n.locales,
     // Which language a typed path is in is read off its own segment, and the default one has
     // none: a picker asked for an address needs both halves of that to name a language.
@@ -2388,10 +2409,14 @@ async function addRedirect(request: Request, session: App.Locals['handover']): P
   const [rules, entries] = await Promise.all([readRedirects('default', git), pickable()]);
   const bad = redirectError('default', typed, { pages: sitePages(entries), rules });
   if (bad) return Response.json(bad, { status: 422 });
-  const rule = redirectRule('default', { ...typed, reason: 'manual' }, Date.now());
-  const { commit_sha } = await editRedirects('default', git, `Add redirect ${rule.from}`, (all) =>
-    collapseRedirects(all, [rule]),
-  );
+  const typed_ = redirectRule('default', { ...typed, reason: 'manual' }, Date.now());
+  // As the file has it: a destination that already forwarded lands where that forwards.
+  let rule = typed_;
+  const { commit_sha } = await editRedirects('default', git, `Add redirect ${rule.from}`, (all) => {
+    const written = collapseRedirects(all, [typed_]);
+    rule = written.find((r) => r._id === typed_._id) ?? typed_;
+    return written;
+  });
   await logActivity('default', db(), {
     userId: session?.user.id,
     kind: 'redirect-added',
@@ -2417,7 +2442,7 @@ async function changeRedirect(
   const bad = redirectError('default', typed, { pages: sitePages(entries), rules }, id);
   if (bad) return Response.json(bad, { status: 422 });
   const { commit_sha } = await editRedirects('default', git, `Edit redirect ${found.from}`, (all) =>
-    all.map((rule) => (rule._id === id ? { ...rule, ...typed } : rule)),
+    collapseRedirects(all, [{ ...found, ...typed }]),
   );
   await logActivity('default', db(), {
     userId: session?.user.id,

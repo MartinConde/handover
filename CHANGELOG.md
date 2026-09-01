@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Menus and redirects.** A menu item can point at a collection's index page — its row sits
+  at the top of the collection in the picker, written as `link: { type: "index", collection:
+  "listings" }` — and each language then links its own index (`/listings`, `/de/listings`)
+  where a custom link sent every language to one address; `menusAt()` resolves it and
+  `GET /admin/api/entries` carries `indexes`. A menu edit in the publish drawer, the log and
+  History reads item by item: an item with no label of its own is named by what it points at,
+  and a swapped target reads *before → after*. Redirect chains collapse on edit as well as on
+  add, and in both directions — adding `/a → /b` while `/b → /c` exists writes `/a → /c` — and
+  `POST /admin/api/redirects` answers the rule as the file has it.
 - **History across renames.** An entry's History follows it back through a rename made from
   the admin: the list carries on under the old name, a version from before the rename says
   *as old-mill* and carries `name` in `GET /admin/api/history/…`, and diffing or restoring one

@@ -107,31 +107,49 @@ export async function appendRedirects(
 }
 
 /**
- * These rules appended to those. An existing rule that pointed at one's `from` is pointed at its
- * `to` instead, so a visitor never hops twice, and a rule that would then send a URL to itself —
- * a rename back — is dropped. The entry a rewritten rule belongs to stays its own where the new
- * rule names none: a rule the client added by hand is nobody's, and losing that link would leave
- * a hidden entry's rule behind when the entry is put back. A hide is the one kind that is undone,
- * so a rule it re-points remembers where it pointed.
+ * These rules written into those: a rule already in the file (an edit) is replaced where it
+ * stands, any other is appended. Either way a visitor never hops twice — an existing rule that
+ * led to the written one's `from` now leads where it leads, the written one lands wherever its
+ * own `to` already forwards (following a hand-written chain to its end, never round a loop), and
+ * a rule that would then send a URL to itself — a rename back — is dropped. The entry a
+ * re-pointed rule belongs to stays its own where the new rule names none: a rule the client
+ * added by hand is nobody's, and losing that link would leave a hidden entry's rule behind when
+ * the entry is put back. A hide is the one kind that is undone, so a rule it re-points
+ * remembers where it pointed.
  */
 export function collapseRedirects(
   rules: readonly RedirectRule[],
-  added: readonly RedirectRule[],
+  written: readonly RedirectRule[],
 ): RedirectRule[] {
   let all = [...rules];
-  for (const rule of added)
-    all = [...all, rule]
+  for (const rule of written) {
+    const list = all.some((r) => r._id === rule._id) ? all : [...all, rule];
+    // The rules that led to this one's `from` are about to follow it, so they are no step
+    // onward from it; without that, `A → B` written over `B → A` would chase its own tail.
+    const onward = list.filter((r) => r._id !== rule._id && r.to !== rule.from);
+    const seen = new Set([rule.from]);
+    let to = rule.to;
+    for (let next = onward.find((r) => r.from === to); next && !seen.has(next.to); ) {
+      seen.add(to);
+      to = next.to;
+      next = onward.find((r) => r.from === to);
+    }
+    const landed = { ...rule, to };
+    all = list
       .map((r) =>
-        r !== rule && r.to === rule.from
-          ? {
-              ...r,
-              to: rule.to,
-              entry: rule.entry ?? r.entry,
-              ...(rule.reason === 'hidden' ? { was: r.to } : {}),
-            }
-          : r,
+        r._id === rule._id
+          ? landed
+          : r.to === rule.from
+            ? {
+                ...r,
+                to,
+                entry: rule.entry ?? r.entry,
+                ...(rule.reason === 'hidden' ? { was: r.to } : {}),
+              }
+            : r,
       )
       .filter((r) => r.from !== r.to);
+  }
   return all;
 }
 

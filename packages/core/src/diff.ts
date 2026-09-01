@@ -145,6 +145,14 @@ function leafIn(
   if (!wants(mode) || show(before) === show(after)) return;
   if (field.type === 'text' || field.type === 'array')
     found.push({ path, label, kind: 'words', parts: wordDiff(str(before), str(after)) });
+  else if (field.type === 'unsupported' && (linkTarget(before) || linkTarget(after)))
+    found.push({
+      path,
+      label,
+      kind: 'value',
+      before: linkTarget(before),
+      after: linkTarget(after),
+    });
   else if (field.type === 'richtext' || field.type === 'unsupported')
     found.push({ path, label, kind: 'whole' });
   else found.push({ path, label, kind: 'value', before: show(before), after: show(after) });
@@ -283,10 +291,25 @@ const asRow = (row: unknown): Record<string, unknown> => (isObject(row) ? row : 
 const typeOf = (row: unknown) =>
   isObject(row) && typeof row._type === 'string' ? { type: humanise(row._type) } : {};
 
-/** What a row is called: the first words it says, falling back to its type or its place. */
+/**
+ * What a row is called: the first words it says, or what it points at — a menu item named by
+ * its page keeps no label of its own — falling back to its type or its place.
+ */
 function rowLabel(fields: readonly Field[], row: unknown, index: number): string {
-  return firstWords(fields, row) ?? typeOf(row).type ?? `Row ${index + 1}`;
+  return (
+    firstWords(fields, row) ||
+    linkTarget(isObject(row) ? row.link : undefined) ||
+    typeOf(row).type ||
+    `Row ${index + 1}`
+  );
 }
+
+// A menu item's link, which the schema cannot read into: the page, address or collection it
+// names is what a reader knows it by, never the JSON of it.
+const linkTarget = (link: unknown): string | undefined =>
+  isObject(link)
+    ? [link.ref, link.href, link.collection].find((v): v is string => typeof v === 'string')
+    : undefined;
 
 function firstWords(fields: readonly Field[], row: unknown): string | undefined {
   for (const field of fields) {

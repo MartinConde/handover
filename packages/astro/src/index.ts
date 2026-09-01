@@ -89,6 +89,9 @@ const href = z.string().superRefine((url, ctx) => {
 });
 const toUrl = z.object({ type: z.literal('url'), href });
 const toRef = z.object({ type: z.enum(['entry', 'page']), ref: z.string() });
+// A collection's index page, which is not an entry: the item names the collection and each
+// language links its own index.
+const toIndex = z.object({ type: z.literal('index'), collection: z.string() });
 const linkExtras = { label: z.string().optional(), newTab: z.boolean().optional() };
 export const link = z
   .discriminatedUnion('type', [toUrl.extend(linkExtras), toRef.extend(linkExtras)])
@@ -101,7 +104,7 @@ export interface NavItem {
   _id: string;
   _locales?: string[];
   label: string;
-  link: z.infer<typeof toUrl> | z.infer<typeof toRef>;
+  link: z.infer<typeof toUrl> | z.infer<typeof toRef> | z.infer<typeof toIndex>;
   newTab?: boolean;
   children?: NavItem[];
 }
@@ -113,7 +116,7 @@ const navItem: z.ZodType<NavItem> = z.lazy(() =>
     // a language before anybody has translated it reads — and how a picked page reads until
     // somebody types over the greyed title.
     label: z.string().default(''),
-    link: z.discriminatedUnion('type', [toUrl.strict(), toRef.strict()]),
+    link: z.discriminatedUnion('type', [toUrl.strict(), toRef.strict(), toIndex.strict()]),
     newTab: z.boolean().optional(),
     children: z.array(navItem).optional(),
   }),

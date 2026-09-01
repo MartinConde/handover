@@ -35,12 +35,24 @@ const OFFERED = [
   },
 ];
 
+/** The collections with an index page, which a menu can point at though no file is one. */
+const INDEXES = [
+  {
+    collection: 'listings',
+    index: true,
+    path: 'listings',
+    title: 'Listings',
+    locales: ['en', 'de'],
+    urls: { en: '/listings', de: '/de/listings' },
+  },
+];
+
 let app: ReturnType<typeof mount>;
 let menus: Menu[] = $state([]);
 const show = (items: unknown[] = [], keys = ['header'], translating = false) => {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () => Response.json({ entries: OFFERED, locales: ['en', 'de'] })),
+    vi.fn(async () => Response.json({ entries: OFFERED, indexes: INDEXES, locales: ['en', 'de'] })),
   );
   menus = keys.map((key, i) => ({
     _id: `menu${i}aaa`,
@@ -128,6 +140,28 @@ test('a page chosen from the list joins the menu, named by the page until somebo
         link:
           type: "entry"
           ref: "pages/contact"
+`);
+});
+
+// The index is not an entry, so the item names the collection and each language links its own
+// index page — where a url item would send every language to the same address.
+test("a collection's index chosen from the list is written as an index item", async () => {
+  show();
+  await loaded();
+  pickRow('listings');
+
+  expect(labels()).toEqual(['Listings Uses the page title']);
+  expect(q('.menu-item .target code').textContent).toBe('/listings');
+  const added = menus[0]?.items[0] as { _id: string };
+  expect(written()).toBe(`menus:
+  - _id: "menu0aaa"
+    key: "header"
+    items:
+      - _id: "${added._id}"
+        label: ""
+        link:
+          type: "index"
+          collection: "listings"
 `);
 });
 

@@ -5,7 +5,10 @@ export interface MenuItem {
   /** The languages this item is shown in; absent is all of them. */
   _locales?: string[];
   label: string;
-  link: { type: 'url'; href: string } | { type: 'entry' | 'page'; ref: string };
+  link:
+    | { type: 'url'; href: string }
+    | { type: 'entry' | 'page'; ref: string }
+    | { type: 'index'; collection: string };
   newTab?: boolean;
   children?: MenuItem[];
 }
@@ -86,23 +89,29 @@ $effect(() => {
 });
 const language = $derived(locale || known.locales[0] || '');
 
+/** What a link names in the picker's list: the entry's path, the collection of an index. */
+const keyOf = (link: MenuItem['link']) =>
+  link.type === 'url' ? '' : link.type === 'index' ? link.collection : link.ref;
 const entryOf = (item: MenuItem) => {
   const link = item.link;
-  return link.type === 'url' ? undefined : known.entries.find((e) => e.path === link.ref);
+  if (link.type === 'url') return undefined;
+  const rows = link.type === 'index' ? (known.indexes ?? []) : known.entries;
+  return rows.find((e) => e.path === keyOf(link));
 };
 /** What the row is called when nobody has typed a label: the page's own title. */
 const fallback = (item: MenuItem) =>
-  item.link.type === 'url' ? item.link.href : (entryOf(item)?.title ?? item.link.ref);
+  item.link.type === 'url' ? item.link.href : (entryOf(item)?.title ?? keyOf(item.link));
 const name = (item: MenuItem) => item.label || fallback(item);
 /** Where it goes in this language, which is what the client recognises the page by. */
 const target = (item: MenuItem) =>
-  item.link.type === 'url' ? item.link.href : (entryOf(item)?.urls[language] ?? item.link.ref);
+  item.link.type === 'url' ? item.link.href : (entryOf(item)?.urls[language] ?? keyOf(item.link));
 // Why the site will skip this row. The renderer drops it either way; the editor is where
 // somebody can see that it is going to and tidy the menu.
 const flag = (item: MenuItem) => {
   if (item.link.type === 'url') return undefined;
   const entry = entryOf(item);
   if (!entry) return 'That page is gone — the site skips this item';
+  if (item.link.type === 'index') return undefined;
   if (entry.hidden) return 'Hidden — the site skips this item';
   if (language && !entry.locales.includes(language))
     return `Not available in ${language.toUpperCase()} — the site skips this item here`;
@@ -182,8 +191,11 @@ function add(item: MenuItem) {
 }
 // A picked page keeps no label of its own: renaming the page then moves the menu with it, and
 // typing over the greyed title is what writes one.
-const addEntry = (entry: PickEntry) =>
-  add({ _id: newId('default'), label: '', link: { type: 'entry', ref: entry.path } });
+const linkTo = (entry: PickEntry): MenuItem['link'] =>
+  entry.index
+    ? { type: 'index', collection: entry.collection }
+    : { type: 'entry', ref: entry.path };
+const addEntry = (entry: PickEntry) => add({ _id: newId('default'), label: '', link: linkTo(entry) });
 function addCustom() {
   if (!custom.href || scheme) return;
   add({
@@ -486,7 +498,7 @@ function walkTabs(event: KeyboardEvent) {
       {/if}
       <div class="nav-add" class:is-open={adding} id="{id}-add">
         <h2 class="side-title" id="{id}-add-h" tabindex="-1">Add to menu</h2>
-        <PagePicker id="{id}-pick" label="pages and entries" labelId="{id}-add-h" onpick={addEntry} />
+        <PagePicker id="{id}-pick" label="pages and entries" labelId="{id}-add-h" indexes onpick={addEntry} />
         <p class="hint">Choosing one puts it at the bottom of the menu; move it from there.</p>
         <div class="custom-link">
           <h3 class="side-title" id="{id}-cl-h">Custom link</h3>
@@ -519,7 +531,7 @@ function walkTabs(event: KeyboardEvent) {
           <div class="field">
             <div class="label-row"><span id="{id}-ed-link-l">Links to</span><span class="mode">Same in every language</span></div>
             {#if changing}
-              <PagePicker id="{id}-ed-link" label="a page or entry" labelId="{id}-ed-link-l" chosen={found.link.type === 'url' ? '' : found.link.ref} onpick={(e) => { found.link = { type: 'entry', ref: e.path }; changing = false; }} onurl={(href) => { found.link = { type: 'url', href }; changing = false; }} onclose={() => (changing = false)} />
+              <PagePicker id="{id}-ed-link" label="a page or entry" labelId="{id}-ed-link-l" indexes chosen={keyOf(found.link)} onpick={(e) => { found.link = linkTo(e); changing = false; }} onurl={(href) => { found.link = { type: 'url', href }; changing = false; }} onclose={() => (changing = false)} />
             {:else}
               <div class="link-summary" role="group" aria-labelledby="{id}-ed-link-l">
                 <span class="name">{fallback(found)}</span>

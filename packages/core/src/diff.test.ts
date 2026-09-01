@@ -599,6 +599,45 @@ test('a menu label retyped in one language is that language’s change, not a sh
   ]);
 });
 
+// The drawer has no titles to hand, so an item that keeps no label of its own — most of them,
+// since a picked page is named by its title — is named by what it points at, and a swapped
+// target reads as the two targets rather than as *changed*.
+test('a menu item with no label is named by its target, and a swapped target is both targets', () => {
+  const en = header([home('Home'), { _id: 'x1', label: '', link: { type: 'url', href: '/' } }]);
+  const after = header([
+    home('Home'),
+    { _id: 'x1', label: '', link: { type: 'index', collection: 'listings' } },
+    { _id: 'x2', label: '', link: { type: 'entry', ref: 'pages/contact' } },
+  ]);
+
+  const [menu] = changesIn(diffEntry('default', navigation, { en }, { en: after }), 'en');
+
+  expect(menu && 'changes' in menu && menu.changes).toEqual([
+    {
+      path: 'menus[_id=n1].items[_id=x1]',
+      label: 'listings',
+      kind: 'row',
+      at: 'same',
+      changes: [
+        {
+          path: 'menus[_id=n1].items[_id=x1].link',
+          label: 'Links to',
+          kind: 'value',
+          before: '/',
+          after: 'listings',
+        },
+      ],
+    },
+    {
+      path: 'menus[_id=n1].items[_id=x2]',
+      label: 'pages/contact',
+      kind: 'row',
+      at: 'added',
+      changes: [],
+    },
+  ]);
+});
+
 test('a menu item moved in both files is one move, said once', () => {
   const en = header([home('Home'), news('News')]);
   const de = header([home('Startseite'), news('Neuigkeiten')]);

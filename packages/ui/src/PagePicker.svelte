@@ -13,9 +13,13 @@ export interface PickEntry {
   urls: Record<string, string>;
   /** Off the site: still an answer, but a poor one, and the list says why. */
   hidden?: boolean;
+  /** A collection's index page rather than an entry; `path` is then the collection alone. */
+  index?: true;
 }
 export interface Pickable {
   entries: PickEntry[];
+  /** The collections with an index page, and where each language serves it. */
+  indexes?: PickEntry[];
   /** The languages the site declares, in config order: what the chips are drawn for. */
   locales: string[];
   /** The one whose URLs carry no segment of their own, unless the site asked for one. */
@@ -42,6 +46,7 @@ let {
   labelId,
   collection,
   locale,
+  indexes = false,
   chosen,
   onpick,
   onurl,
@@ -60,6 +65,8 @@ let {
    * that language serves, and an entry with none there is refused with the reason.
    */
   locale?: string;
+  /** Offer each collection's index page too, ahead of its entries: a menu can point at one. */
+  indexes?: boolean;
   /** What the field holds now, so the list says which row that is. */
   chosen?: string;
   onpick: (entry: PickEntry) => void;
@@ -91,21 +98,27 @@ const why = (entry: PickEntry) => {
 // And what is worth saying about a row that is still pickable. A hidden page has an address
 // and would take the choice; it is just a poor one, so it is said rather than refused.
 const note = (entry: PickEntry) =>
-  entry.hidden ? 'Hidden itself — visitors would land on a page that isn’t there either' : undefined;
+  entry.index
+    ? 'The page that lists them all'
+    : entry.hidden
+      ? 'Hidden itself — visitors would land on a page that isn’t there either'
+      : undefined;
 
 const matches = $derived(
-  all.entries.filter(
+  [...all.entries, ...(indexes ? (all.indexes ?? []) : [])].filter(
     (e) =>
       (!collection || e.collection === collection) &&
       (e.title.toLowerCase().includes(query.toLowerCase().trim()) ||
         e.path.toLowerCase().includes(query.toLowerCase().trim())),
   ),
 );
-// Grouped under the collection's name, in the order the config declares them.
+// Grouped under the collection's name, in the order the config declares them, its index first.
 const groups = $derived(
   [...new Set(matches.map((e) => e.collection))].map((name) => ({
     name,
-    rows: matches.filter((e) => e.collection === name),
+    rows: matches
+      .filter((e) => e.collection === name)
+      .sort((a, b) => Number(b.index ?? false) - Number(a.index ?? false)),
   })),
 );
 

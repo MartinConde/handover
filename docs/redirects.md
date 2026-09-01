@@ -26,9 +26,11 @@ showing the entry again puts that back and drops the key.
 ## In the admin
 
 The admin's table refuses a `from` that is a page the site already serves — that redirect would
-take the page off the site — and a second rule from an address that already has one. A rule
-pointing at an address a new rule claims is re-pointed at its destination, so a visitor never
-hops twice. A rule the client adds is **committed as it is added** rather than waiting in the
+take the page off the site — and a second rule from an address that already has one. A visitor
+never hops twice: when a rule is added or edited, older rules pointing at its old address are
+re-pointed at its destination, and its own destination is resolved through any rule already
+forwarding from there — adding `/a → /b` while `/b → /c` exists writes `/a → /c`, and the answer
+to the request is the rule as the file has it. A rule the client adds is **committed as it is added** rather than waiting in the
 publish drawer: this file is assembled at publish out of the rules of the selected entries, so a
 rule belonging to no entry has nowhere to wait. It reaches visitors after the build.
 

@@ -2728,6 +2728,33 @@ test('the entry list says which languages the site declares', async () => {
   expect(body.locales).toEqual(['en', 'de']);
 });
 
+// A menu can point at a collection's index, which is not an entry: the picker is told which
+// collections have one and where each language serves it, apart from the entries.
+test('the picker list carries each collection with an index page, in every language', async () => {
+  locales = ['en', 'de'];
+
+  const body = (await (await GET(ctx('entries'))).json()) as { indexes: unknown[] };
+
+  expect(body.indexes).toEqual([
+    {
+      collection: 'listings',
+      index: true,
+      path: 'listings',
+      title: 'Listings',
+      locales: ['en', 'de'],
+      urls: { en: '/listings', de: '/de/listings' },
+    },
+    {
+      collection: 'posts',
+      index: true,
+      path: 'posts',
+      title: 'Posts',
+      locales: ['en', 'de'],
+      urls: { en: '/blog', de: '/de/blog' },
+    },
+  ]);
+});
+
 // The page picker's one read. `presenters` renders nowhere, so it has entries and no
 // addresses; `posts` has localized slugs, so the German file's own `slug` is its address.
 test('the picker list carries every collection with the address each language serves', async () => {
@@ -5960,6 +5987,38 @@ test('adding a rule from an address that already forwards points the old rule at
   expect(committed().rules.map((r) => [r._id, r.from, r.to])).toEqual([
     ['aaaaaaaa', '/a', '/c'],
     [expect.stringMatching(/^[0-9a-z]{8}$/), '/b', '/c'],
+  ]);
+});
+
+test('adding a rule to an address that already forwards lands where that forwards, and says so', async () => {
+  files['src/content/redirects.yaml'] = RULES(yamlRule('aaaaaaaa', '/b', '/c'));
+
+  const res = await POST(post('redirects', JSON.stringify({ from: '/a', to: '/b' })));
+
+  expect(res.status).toBe(200);
+  expect(((await res.json()) as { rule: { to: string } }).rule.to).toBe('/c');
+  expect(committed().rules.map((r) => [r._id, r.from, r.to])).toEqual([
+    ['aaaaaaaa', '/b', '/c'],
+    [expect.stringMatching(/^[0-9a-z]{8}$/), '/a', '/c'],
+  ]);
+});
+
+test('editing a rule collapses the chain again, both ways', async () => {
+  files['src/content/redirects.yaml'] = RULES(
+    yamlRule('aaaaaaaa', '/p', '/old'),
+    yamlRule('bbbbbbbb', '/old', '/new'),
+    yamlRule('cccccccc', '/x', '/y'),
+  );
+
+  const res = await PUT(
+    put('redirects/bbbbbbbb', JSON.stringify({ from: '/old', to: '/x', status: 301 })),
+  );
+
+  expect(res.status).toBe(200);
+  expect(committed().rules.map((r) => [r._id, r.from, r.to])).toEqual([
+    ['aaaaaaaa', '/p', '/y'],
+    ['bbbbbbbb', '/old', '/y'],
+    ['cccccccc', '/x', '/y'],
   ]);
 });
 

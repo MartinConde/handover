@@ -9,7 +9,7 @@ The changes that commit — a rename, a delete, a language turned off, hiding �
 [entry lifecycle](admin-api-lifecycle.md).
 
 ```
-GET /admin/api/entries                      →  { "entries": [{ "collection", "path", "title", "locales", "urls", "hidden" }], "locales": ["en", "de"], "defaultLocale": "en" }
+GET /admin/api/entries                      →  { "entries": [{ "collection", "path", "title", "locales", "urls", "hidden" }], "indexes": [{ "collection", "index": true, "path", "title", "locales", "urls" }], "locales": ["en", "de"], "defaultLocale": "en" }
 ```
 
 Everything an editor can point at, across every collection the site declares, in config
