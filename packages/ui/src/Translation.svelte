@@ -19,7 +19,6 @@ let {
   translator = false,
   url,
   site,
-  redirect,
   onsaved,
   onrefused,
   onclose,
@@ -48,12 +47,10 @@ let {
   stale?: boolean;
   /** The site has something to machine-translate with; without one, none of it is drawn. */
   translator?: boolean;
-  /** The URL this language serves the entry at, for the dialog that offers to take it away. */
+  /** The URL this language serves the entry at, for the SEO panel's previews. */
   url?: string;
   /** The site's origin, for the SEO previews; none, and the panel draws none. */
   site?: string;
-  /** Where its readers go once it has: nothing when the collection has nowhere to send them. */
-  redirect?: string;
   /** A save landed: whether this language's file is now ahead of the repository. The entry
       keeps it, because this column is thrown away when the screen changes and its edit is not. */
   onsaved?: (pending: boolean) => void;
@@ -62,9 +59,9 @@ let {
   onrefused?: (lock: unknown) => void;
   /** Close the second column; nothing when it is the only one on screen. */
   onclose?: () => void;
-  /** Turn this language off for the entry, which deletes its file; the server's refusal when
-      it did not happen, for the dialog to show. */
-  onturnoff?: () => Promise<string | undefined>;
+  /** Ask to turn this language off for the entry, which deletes its file. The entry asks where
+      its readers go and commits, the way a delete does; nothing when the language cannot go. */
+  onturnoff?: () => void;
 } = $props();
 
 // svelte-ignore state_referenced_locally -- the loaded file is the initial value on purpose
@@ -209,30 +206,6 @@ export async function flush(): Promise<boolean> {
   return !failed;
 }
 
-// Turning this language off deletes its file, so it is confirmed the way a delete is. The
-// dialog is here rather than in the entry because the control is: the header of the column it
-// is about, which is also where focus comes back to.
-let asking = $state(false);
-let offing = $state(false);
-let refused = $state('');
-let trigger = $state<HTMLButtonElement>();
-let panel = $state<HTMLElement>();
-$effect(() => {
-  if (asking) panel?.focus();
-});
-function stopAsking() {
-  asking = false;
-  refused = '';
-  trigger?.focus();
-}
-// A refusal keeps the dialog open with the sentence in it: it says what to do instead, and
-// closing over it would leave the person pressing the same button again.
-async function turnOff() {
-  offing = true;
-  refused = (await onturnoff?.()) ?? '';
-  offing = false;
-}
-
 const LANGUAGES = new Intl.DisplayNames(['en'], { type: 'language' });
 const named = (of: string) => {
   try {
@@ -259,13 +232,9 @@ const named = (of: string) => {
       </button>
     {/if}
     {#if onturnoff}
-      <button
-        class="btn btn-sm btn-off"
-        type="button"
-        bind:this={trigger}
-        disabled={locked}
-        onclick={() => (asking = true)}>Turn {named(locale)} off</button
-      >
+      <button class="btn btn-sm btn-off" type="button" disabled={locked} onclick={onturnoff}>
+        Turn {named(locale)} off
+      </button>
     {/if}
     {#if onclose}
       <button
@@ -300,33 +269,3 @@ const named = (of: string) => {
     </fieldset>
   </form>
 </section>
-
-<!-- The entry list's delete dialog, for what is a delete of one file. Not aria-modal for the
-     same reason it is not: the shell behind stays reachable until the design gate gives these
-     the drawer's inert treatment. -->
-<svelte:window onkeydown={(e) => e.key === 'Escape' && asking && stopAsking()} />
-
-{#if asking}
-  <div class="scrim">
-    <div class="dialog" role="dialog" aria-labelledby="off-{locale}" bind:this={panel} tabindex="-1">
-      <h2 id="off-{locale}">Turn {named(locale)} off for this entry?</h2>
-      <p>
-        The {named(locale)} file leaves the repository in one commit and the entry is no longer
-        offered in {named(locale)}.
-        {#if url && redirect}
-          Readers of {url} are sent to {redirect}.
-        {:else if url}
-          Readers of {url} will get a 404 — this collection has nowhere to send them.
-        {/if}
-        Unpublished changes to {named(locale)} are dropped.
-      </p>
-      {#if refused}<div class="notice notice-danger" role="alert">{refused}</div>{/if}
-      <div class="actions">
-        <button class="btn" type="button" onclick={stopAsking}>Cancel</button>
-        <button class="btn btn-danger" type="button" disabled={offing} onclick={turnOff}>
-          {offing ? 'Turning off…' : 'Turn off'}
-        </button>
-      </div>
-    </div>
-  </div>
-{/if}

@@ -1137,7 +1137,33 @@ test('a language with a file is turned off from its own column, through a dialog
   expect(fetchMock).toHaveBeenCalledWith('/admin/api/entries/listings/seaview-cottage/locales', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ locales: ['en'] }),
+    body: JSON.stringify({ locales: ['en'], redirect: { kind: 'index' } }),
+  });
+  vi.unstubAllGlobals();
+});
+
+// The dialog is the one a hide gets: it asks where the readers of that language go, and the
+// answer rides with the turn-off rather than the route deciding on the overview.
+test('turning a language off asks where its readers go and sends the answer', async () => {
+  const fetchMock = posted();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({
+    entry: { ...bilingual, route: '/listings/[slug]', index: '/listings' },
+  });
+
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  $<HTMLButtonElement>(root, '.pane-head button.btn-off')?.click();
+  flushSync();
+  $$<HTMLInputElement>(root, '.dialog input[type="radio"]').at(-1)?.click();
+  await tick();
+  $<HTMLButtonElement>(root, '.dialog button.btn-danger')?.click();
+  await tick();
+
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/entries/listings/seaview-cottage/locales', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ locales: ['en'], redirect: { kind: 'none' } }),
   });
   vi.unstubAllGlobals();
 });

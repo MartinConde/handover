@@ -13,6 +13,8 @@ export interface RedirectRule {
   reason: 'slug-change' | 'hidden' | 'deleted' | 'manual';
   entry?: string;
   createdAt: string;
+  /** Where this pointed before a hide re-pointed it at the hidden page's target; put back on unhide. */
+  was?: string;
 }
 
 export interface EntryLocation {
@@ -73,6 +75,9 @@ export const redirectRule = (
  * change appends here rather than committing on its own, so the entry and the redirect for it
  * land in one commit.
  *
+ * `drop` names the hide rules of an entry going back on the site. A rule those hides had
+ * re-pointed goes back where it pointed: the page answers at its own address again.
+ *
  * `undefined` when there is nothing to write: no file, and nothing to add to one.
  */
 export async function appendRedirects(
@@ -89,10 +94,15 @@ export async function appendRedirects(
   const doc = (file ? parseEntry(siteId, file.contents) : { _version: 1 }) as {
     rules?: RedirectRule[];
   };
-  const rules = collapseRedirects(
-    (doc.rules ?? []).filter((r) => !drop?.(r)),
-    added,
-  );
+  const had = doc.rules ?? [];
+  const back = new Set(had.filter((r) => drop?.(r)).map((r) => r.entry));
+  const kept = had.flatMap((r) => {
+    if (drop?.(r)) return [];
+    if (r.was === undefined || r.entry === undefined || !back.has(r.entry)) return [r];
+    const { was, ...rest } = r;
+    return [{ ...rest, to: was }];
+  });
+  const rules = collapseRedirects(kept, added);
   return { path: REDIRECTS, contents: stringifyEntry(siteId, { ...doc, rules }) };
 }
 
@@ -101,7 +111,8 @@ export async function appendRedirects(
  * `to` instead, so a visitor never hops twice, and a rule that would then send a URL to itself —
  * a rename back — is dropped. The entry a rewritten rule belongs to stays its own where the new
  * rule names none: a rule the client added by hand is nobody's, and losing that link would leave
- * a hidden entry's rule behind when the entry is put back.
+ * a hidden entry's rule behind when the entry is put back. A hide is the one kind that is undone,
+ * so a rule it re-points remembers where it pointed.
  */
 export function collapseRedirects(
   rules: readonly RedirectRule[],
@@ -111,7 +122,14 @@ export function collapseRedirects(
   for (const rule of added)
     all = [...all, rule]
       .map((r) =>
-        r !== rule && r.to === rule.from ? { ...r, to: rule.to, entry: rule.entry ?? r.entry } : r,
+        r !== rule && r.to === rule.from
+          ? {
+              ...r,
+              to: rule.to,
+              entry: rule.entry ?? r.entry,
+              ...(rule.reason === 'hidden' ? { was: r.to } : {}),
+            }
+          : r,
       )
       .filter((r) => r.from !== r.to);
   return all;

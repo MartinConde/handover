@@ -11,6 +11,8 @@ export type Target =
 let {
   action,
   what,
+  language = '',
+  served,
   many = false,
   collection,
   index,
@@ -20,10 +22,14 @@ let {
   onhide,
   onclose,
 }: {
-  /** Hiding keeps the files and waits for a publish; deleting removes them in a commit now. */
-  action: 'hide' | 'delete';
+  /** Hiding keeps the files and waits for a publish; deleting removes them in a commit now, and
+      turning a language off removes that one language's file the same way. */
+  action: 'hide' | 'delete' | 'off';
   /** What is coming off the site: one entry's title, or "4 listings" for a batch. */
   what: string;
+  /** Turning off only: the language going, and the address it served the entry at. */
+  language?: string;
+  served?: string;
   /** Whether `what` is a batch, which is only the difference between two verbs. */
   many?: boolean;
   /** The collection these belong to: the overview is named for it, the button for one of them. */
@@ -70,11 +76,17 @@ const ready = $derived(kind === 'entry' ? Boolean(picked) : kind !== 'url' || ur
         </p>
       {/if}
       <p>
-        <strong>{what}</strong>
-        {#if action === 'delete'}
-          leaves the repository in one commit, and its unpublished changes go with it.
+        {#if action === 'off'}
+          The {language} half of <strong>{what}</strong>{#if served} — <code>{served}</code>{/if} leaves
+          the repository in one commit; the entry is no longer offered in {language}, and
+          unpublished changes to it go with it.
         {:else}
-          {many ? 'come' : 'comes'} off the site the next time you publish.
+          <strong>{what}</strong>
+          {#if action === 'delete'}
+            leaves the repository in one commit, and its unpublished changes go with it.
+          {:else}
+            {many ? 'come' : 'comes'} off the site the next time you publish.
+          {/if}
         {/if}
         Anyone following an old link — a bookmark, an email, a search result — has to land
         somewhere.
@@ -119,8 +131,8 @@ const ready = $derived(kind === 'entry' ? Boolean(picked) : kind !== 'url' || ur
       <!-- One answer, several rules: the server writes each language's from the address that
            language serves, which is why the dialog asks once however many languages there are. -->
       <p class="hint">
-        The rule is written {action === 'delete' ? 'in the same commit' : 'when you publish'}, once
-        per language, from the address each of them serves at.
+        The rule is written {action === 'hide' ? 'when you publish' : 'in the same commit'}{#if action !== 'off'},
+          once per language, from the address each of them serves at{/if}.
       </p>
       {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
       <div class="actions">
@@ -129,12 +141,14 @@ const ready = $derived(kind === 'entry' ? Boolean(picked) : kind !== 'url' || ur
           <button class="btn btn-primary" type="button" onclick={onhide}>Hide instead</button>
         {/if}
         <button
-          class="btn {action === 'delete' ? 'btn-danger' : 'btn-primary'}"
+          class="btn {action === 'hide' ? 'btn-primary' : 'btn-danger'}"
           type="submit"
           disabled={busy || !ready}
         >
           {#if busy}
-            {action === 'delete' ? 'Deleting…' : 'Hiding…'}
+            {action === 'delete' ? 'Deleting…' : action === 'off' ? 'Turning off…' : 'Hiding…'}
+          {:else if action === 'off'}
+            Turn {language} off
           {:else}
             {verb} {many ? what : `this ${singular}`}
           {/if}

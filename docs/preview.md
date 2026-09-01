@@ -104,8 +104,11 @@ The pane is offered where the site has a page to show — a collection with a `r
 [loader](loaders.md). A global has neither, so its editor has no Preview button: what changing
 a global looks like is seen by previewing a page that reads it.
 
-Two things the pane says that the site does not, above the frame:
+Three things the pane says that the site does not, above the frame:
 
+- **Hidden — not on the live site.** The entry is hidden. The page still renders here — looking
+  at it before it goes back on is what previewing a hidden page is for — and nowhere else until
+  it is shown again.
 - **Not published yet — previewing at `/listings/harbour-loft`.** The repository has no file
   for this language of this entry, so the pane is the only place the page exists and the
   address is the one it will get. A brand-new entry previews like any other: the draft is the
@@ -116,4 +119,7 @@ Two things the pane says that the site does not, above the frame:
 A draft the schema still refuses is a card in place of the frame, one line per field with a
 button back to it — the same refusal the route answers `422` with, said before the request.
 
-A link inside a preview goes to the live page rather than to its preview.
+A link inside a preview stays in the preview: every link to a page on this site is rewritten to
+that page's `/_preview` address on the way out, so clicking through a draft site keeps showing
+drafts. Links elsewhere are left alone. The site's own language switcher inside the frame moves
+the frame only; the pane's **DE** moves the whole screen.

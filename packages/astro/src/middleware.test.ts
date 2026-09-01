@@ -68,3 +68,27 @@ test('the shell and the public site are not gated', async () => {
     expect(await run(path), path).toMatchObject({ status: 200, passed: true });
   }
 });
+
+// A draft page's links point at the live site, so clicking through a preview would leave it;
+// the ones to this site are turned into their previews on the way out, and nothing else is.
+test('a link on a preview page to a page on this site stays in the preview', async () => {
+  session = null;
+  const url = new URL('/_preview/listings/mill-house?at=1', 'https://x');
+  const page =
+    '<a href="/listings/barn">Barn</a> <a href="/">Home</a> <a href="/_preview/de">DE</a> ' +
+    '<a href="https://example.com/">Out</a> <a href="//cdn.example/x">P</a> <a href="#top">Top</a>';
+  const next = vi.fn(
+    async () => new Response(page, { headers: { 'content-type': 'text/html; charset=utf-8' } }),
+  );
+
+  const res = (await onRequest(
+    { request: new Request(url), url, locals: {} } as unknown as APIContext,
+    next,
+  )) as Response;
+
+  expect(await res.text()).toBe(
+    '<a href="/_preview/listings/barn">Barn</a> <a href="/_preview/">Home</a> <a href="/_preview/de">DE</a> ' +
+      '<a href="https://example.com/">Out</a> <a href="//cdn.example/x">P</a> <a href="#top">Top</a>',
+  );
+  expect(getSession).not.toHaveBeenCalled();
+});

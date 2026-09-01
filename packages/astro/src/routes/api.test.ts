@@ -3167,6 +3167,29 @@ test('turning off a language that has a file removes it in one commit, with its 
   );
 });
 
+// The question a hide and a delete ask, asked here too: one language going is still a page
+// going, and its readers are sent where the answer says rather than to this collection's
+// overview — resolved per language like a hide's, so a picked page with no German half sends
+// the German readers to its own collection's German overview.
+test('turning a language off sends its readers where the answer says', async () => {
+  bilingualPost();
+  publish.mockClear();
+
+  const res = await POST(
+    post(
+      'entries/posts/taken/locales',
+      JSON.stringify({
+        locales: ['en'],
+        redirect: { kind: 'entry', value: 'listings/mill-house' },
+      }),
+    ),
+  );
+
+  expect(res.status).toBe(200);
+  const [written] = (publish.mock.calls[0] ?? []) as unknown as [PublishFile[]];
+  expect(written[2]?.contents).toContain('from: "/de/blog/belegt"\n    to: "/de/listings"');
+});
+
 // The one refusal: with no other file left this is a delete of the entry, and a delete asks the
 // redirect question for the whole entry rather than for one of its languages.
 test('turning off the last language an entry has a file in is refused', async () => {

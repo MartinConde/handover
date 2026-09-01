@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Status and preview leftovers.** The preview pane says *Hidden — not on the live site* over a
+  hidden entry's page; a link inside a preview stays in the preview — every link to a page on
+  this site is rewritten to its `/_preview` address; showing a hidden entry again points a rule
+  the hide had re-pointed back at the page (a rule a hide rewrites carries `was` meanwhile); and
+  turning a language off asks where that language's readers go, the way Hide does —
+  `POST /admin/api/entries/:collection/:slug/locales` takes the same `redirect` a hide does, and
+  without one still sends them to the collection's overview.
 - **Sentences and ages.** A rename and a duplicate read as sentences in the activity log —
   *Anna renamed contact-us to contact*, *Anna duplicated mill-house as mill-house-copy* —
   instead of the raw kind; the drawer's hold badge says how long the entry has sat, *On hold ·

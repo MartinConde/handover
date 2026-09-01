@@ -19,7 +19,9 @@ rules:
 
 `from` is a path starting with `/`; `to` is a path or an absolute URL; `status` is `301` or
 `302`; `reason` is one of `slug-change`, `hidden`, `deleted`, `manual`. Exact matches only — no
-wildcards.
+wildcards. `was` appears on a rule a hide re-pointed — an older rule that pointed at the hidden
+page points at the hide's target while the page is hidden — and holds where it pointed before;
+showing the entry again puts that back and drops the key.
 
 ## In the admin
 

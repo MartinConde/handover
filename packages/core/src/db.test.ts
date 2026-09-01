@@ -1116,6 +1116,51 @@ test('publishing an unhide takes the committed hide rules out of redirects.yaml'
   expect(repo.read(PAGE_EN)).toBe(page('Home', 'Move to the coast', 'Ready to move?'));
 });
 
+// A rule that already pointed at the page — from an older name, say — was re-pointed at the
+// hide's target so nobody hops twice. Showing the page again puts it back at its own address,
+// so the rule goes back to pointing at it and not at the overview that stood in.
+test('publishing an unhide points a rule the hide re-pointed back at the page', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+  const older = {
+    _id: 'a1b2c3d4',
+    from: '/old-home',
+    to: '/home',
+    status: 301 as const,
+    reason: 'slug-change' as const,
+    entry: 'pages/home',
+    createdAt: '2026-08-01T09:00:00Z',
+  };
+  repo.write(REDIRECTS, stringifyEntry('default', { _version: 1, rules: [older] }));
+  const rules = () =>
+    (parseEntry('default', repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules;
+  await setEntryStatus(
+    'default',
+    db,
+    repo,
+    PAGE_FORM,
+    [
+      { path: PAGE_EN, redirect: HIDE_EN },
+      { path: PAGE_DE, redirect: HIDE_DE },
+    ],
+    true,
+  );
+  await publishDrafts('default', db, repo);
+  expect(rules().find((r) => r._id === 'a1b2c3d4')?.to).toBe('/pages');
+
+  await setEntryStatus(
+    'default',
+    db,
+    repo,
+    PAGE_FORM,
+    [{ path: PAGE_EN }, { path: PAGE_DE }],
+    false,
+  );
+  await publishDrafts('default', db, repo);
+
+  expect(rules()).toEqual([older]);
+});
+
 // "Not ready yet" is the entry's, the way a lock is: it is written to the language the editor
 // was on, and the entry's other files are not somebody else's to publish because of that.
 test('a publish leaves out every language of an entry somebody is holding back', async () => {

@@ -29,10 +29,9 @@ same commit as `_status` ([Redirects](redirects.md)). Showing the entry
 again takes those rules back out, in the commit that puts the page back, so the page
 returns to its own address.
 
-One thing hiding does not undo: a rule that already pointed **at** this page — from an
-older slug, say — was rewritten to the hide's target when it was hidden, so that nobody
-following it hops twice, and it stays rewritten. That URL was the live one at the time.
-Point it back at the page yourself if it matters.
+A rule that already pointed **at** this page — from an older slug, say — is rewritten to the
+hide's target when the entry is hidden, so that nobody following it hops twice, and goes back
+to pointing at the page when the entry is shown again.
 
 "Nowhere" is an honest answer for a page nobody linked to: its address answers 404.
 
@@ -88,8 +87,8 @@ now?"** — because the page has been at its address just as long: the collectio
 another page picked from the list, a web address, or nowhere. The delete commits now rather
 than at the next publish, so the answer becomes `reason: "deleted"` rules with no `entry` in
 the commit that removes the files. Turning off a language that has a file removes that one
-file the same way and sends its readers to the collection's overview without asking — the
-entry is not going anywhere, only that language's half of it
+file the same way and asks the same question for that language's readers — the entry is not
+going anywhere, only that language's half of it
 ([Translating](translating.md#turning-a-language-off)). A collection without a `route` has no
 URL and gets no rule.
 

@@ -222,7 +222,7 @@ async function createFilled(of: string) {
 }
 // Through `act` rather than `ask`: a turn-off the server refuses — the last published language,
 // say — refuses with a sentence, and that sentence is the answer the screen shows.
-async function offer(of: string, on: boolean) {
+async function offer(of: string, on: boolean, redirect?: Target) {
   const res = await act(`/admin/api/entries/${collection}/${slug}/locales`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -230,6 +230,7 @@ async function offer(of: string, on: boolean) {
       locales: on
         ? entry.locales.filter((l) => l === of || !off(l))
         : entry.offered.filter((l) => l !== of),
+      ...(redirect ? { redirect } : {}),
     }),
   });
   if (res) onchanged();
@@ -706,18 +707,18 @@ const url = $derived(entryUrl('default', routing, entry.route, address || slug, 
 // The part in front of the address, so what is being typed reads as the URL it will be.
 const before = $derived(entryUrl('default', routing, entry.route, '', locale) ?? '');
 
-// Turning a language off commits, and the screen is read again afterwards: whatever is in the
-// other form goes into its row first, the way an address change stores everything before it
-// writes. The column's own draft is not flushed — it goes with the file.
-// The refusal, for the column's dialog to show; nothing when the language went.
-async function turnOff(): Promise<string | undefined> {
+// Turning a language off deletes its file, so it asks where that language's readers go the way
+// a delete does, and commits. The screen is read again afterwards: whatever is in the other form
+// goes into its row first, the way an address change stores everything before it writes. The
+// column's own draft is not flushed — it goes with the file. A refusal stays in the dialog.
+let offing = $state<string>();
+async function turnOff(of: string, target: Target) {
   if (json !== saved) await autosave();
-  if (shown === undefined || (await offer(shown, false))) return undefined;
-  return actionFailed;
+  if (await offer(of, false, target)) offing = undefined;
 }
 
-// What the second column's Turn-off dialog names: the URL that language serves this entry at,
-// and where its readers go afterwards — nothing when the collection has no page above it.
+// What the Turn-off dialog names: the URL that language serves this entry at, and the page
+// above it that its readers are offered — nothing when the collection has no page above it.
 const localeUrl = (of: string) =>
   entryUrl('default', routing, entry.route, entry.addresses?.[of] || slug, of) ?? undefined;
 const localeIndex = (of: string) => entryUrl('default', routing, entry.index, '', of) ?? undefined;
@@ -1120,7 +1121,6 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             translator={entry.translator}
             url={localeUrl(shown)}
             {site}
-            redirect={localeIndex(shown)}
             onsaved={(pending) => {
               if (pending !== translated) onpending?.();
               translated = pending;
@@ -1134,7 +1134,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             }}
             {mediaBase}
             onclose={side ? () => leaving(() => (side = false)) : undefined}
-            onturnoff={entry.singleton ? undefined : turnOff}
+            onturnoff={entry.singleton ? undefined : () => { actionFailed = ''; offing = shown; }}
           />
         {/key}
         {#if previewing}{@render previewPane()}{/if}
@@ -1228,6 +1228,21 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       onclose={() => (deleting = false)}
     />
   {/if}
+  {#if offing}
+    {@const going = offing}
+    <OffsiteDialog
+      action="off"
+      language={language(going)}
+      what={title}
+      served={localeUrl(going)}
+      {collection}
+      index={localeIndex(going)}
+      {busy}
+      error={actionFailed}
+      onconfirm={(target: Target) => turnOff(going, target)}
+      onclose={() => (offing = undefined)}
+    />
+  {/if}
   {#if taking}
     <div class="scrim">
       <!-- Not aria-modal: the shell behind stays reachable, as on every other dialog here. -->
@@ -1258,6 +1273,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     onlocale={(of) => leaving(() => (locale = of))}
     enabled={preview}
     published={entry.published.includes(locale)}
+    {hidden}
     stale={saveFailed}
     problems={previewProblems}
     ongo={goTo}

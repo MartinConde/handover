@@ -2,7 +2,7 @@
 /**
  * The page the client is editing, rendered by their own site from the draft rows, beside the
  * form. Everything inside the frame's border belongs to the site: the toolbar sits outside it
- * and the two banners above it, because a band drawn inside would read as the site's own.
+ * and the banners above it, because a band drawn inside would read as the site's own.
  *
  * The frame is an `<iframe>` on `/_preview<address>` rather than markup this pane builds, so
  * what is on screen is the page and not a drawing of it. A render is a request, so it happens
@@ -20,6 +20,7 @@ let {
   onlocale,
   enabled,
   published,
+  hidden = false,
   stale = false,
   problems,
   ongo,
@@ -35,6 +36,8 @@ let {
   enabled: boolean;
   /** The live site already serves this page; a new entry is only ever here. */
   published: boolean;
+  /** Off the live site, which is the one thing the rendered page cannot say about itself. */
+  hidden?: boolean;
   /** The last save did not land, so what is rendered is behind the form. */
   stale?: boolean;
   /** What the schema still wants. A page cannot be built around a hole, so these come first. */
@@ -145,6 +148,9 @@ const status = $derived(
         </div>
       </div>
     {:else}
+      {#if hidden}
+        <p class="preview-banner is-hidden">Hidden — not on the live site.</p>
+      {/if}
       {#if !published}
         <p class="preview-banner">Not published yet — previewing at <code>{url}</code>.</p>
       {/if}

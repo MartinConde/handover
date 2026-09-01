@@ -1511,9 +1511,9 @@ async function machineTranslate(
  *
  * Turning off a language that has a file is a delete of that one file, and a delete commits:
  * the file goes, the mark goes into the files that stay, and the URL that language served sends
- * its readers to the collection's index, all in one commit. Turning off the last language an
- * entry has a file in is refused — that is a delete of the entry, and Delete is where the
- * redirect question is asked for all of it at once.
+ * its readers where `redirect` says — the hide's four answers, the collection's index without
+ * one — all in one commit. Turning off the last language an entry has a file in is refused —
+ * that is a delete of the entry, and Delete is where the question is asked for all of it at once.
  */
 async function offering(
   collection: string,
@@ -1523,7 +1523,9 @@ async function offering(
 ): Promise<Response> {
   const collected = config.collections[collection];
   if (!collected) return new Response('Not found', { status: 404 });
-  const body = (await request.json().catch(() => undefined)) as { locales?: unknown } | undefined;
+  const body = (await request.json().catch(() => undefined)) as
+    | { locales?: unknown; redirect?: { kind?: unknown; value?: unknown } }
+    | undefined;
   const wanted = Array.isArray(body?.locales) ? body.locales : [];
   const offered = config.i18n.locales.filter((locale) => wanted.includes(locale));
   const written = Object.keys(await entryLocales(collection, slug, config.i18n.locales));
@@ -1547,6 +1549,18 @@ async function offering(
     );
   const pathsOf = (locales: string[]) => locales.map((l) => entryPath(collection, slug, l));
   if (published.some((locale) => going.includes(locale))) {
+    // The same question a hide asks, resolved the same way: a picked page is the address that
+    // language serves it at, and a language it has no half in falls back the way the dialog says.
+    const answer = body?.redirect ?? { kind: 'index' };
+    const picked =
+      answer.kind === 'entry'
+        ? collectionEntries(
+            'default',
+            index,
+            String(answer.value ?? '').split('/')[0] ?? '',
+            await overlayRows('default', database, index),
+          )
+        : undefined;
     const { commit_sha, kept } = await deleteLocales(
       'default',
       git,
@@ -1554,9 +1568,7 @@ async function offering(
       slug,
       going,
       offered,
-      // Not asked about: one language going is not the entry going, and the entry-wide question
-      // is Delete's. Its readers go to the collection's page above it under their own segment.
-      (locale) => entryUrl('default', config.i18n, collected.index, '', locale),
+      (locale) => redirectTarget(answer, collected, picked, locale),
     );
     for (const { locale, path, file } of files) {
       if (!going.includes(locale)) continue;

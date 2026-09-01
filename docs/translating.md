@@ -45,11 +45,12 @@ name: "Theo Adeyemi"
 On a language with no file that is the link beside *Create from English*, and turning it back on
 takes the key out again — an entry offered in every language the site declares carries none. On a
 language that **has** a file it is a delete of that file, so it is asked for where the file is:
-the second column's header offers **Turn German off**, and confirming it commits. The file leaves
-the repository, the mark goes into the files that stay, the URL that language served redirects to
-the collection's listing page under its own language segment, and unpublished changes to it go
-with it. Where the collection has no listing page the dialog says so before you press — the old
-URL will 404. A turn-off the CMS refuses — on the last language the entry is published in, say —
+the second column's header offers **Turn German off**, which asks where that language's readers
+go — the same four answers Hide gets: the collection's listing page under its own language
+segment, another page, a web address, or nowhere — and confirming it commits. The file leaves the
+repository, the mark goes into the files that stay, the URL that language served redirects where
+you answered, and unpublished changes to it go with it. Where the collection has no listing page,
+*nowhere* is the answer offered first. A turn-off the CMS refuses — on the last language the entry is published in, say —
 keeps the dialog open with the reason (*publish en first, or Delete the entry*).
 
 **The last language an entry has a published file in cannot be turned off**: that is deleting the

@@ -45,7 +45,7 @@ the unpublished bytes of every language that has them instead of the committed f
 the entry has never been published — there is nothing in the repository to copy.
 
 ```
-POST /admin/api/entries/:collection/:slug/locales  { "locales": ["en"] }  →  {}
+POST /admin/api/entries/:collection/:slug/locales  { "locales": ["en"], "redirect": { "kind": "index" } }  →  {}
 ```
 
 The languages the entry is offered in, written as `_locales` into every file it has — or taken
@@ -54,8 +54,9 @@ point of it.
 
 Leaving out a language that **has** a file deletes that file, so this one commits where the rest
 of the editor drafts: one commit removes it, writes the mark into the files that stay and appends
-the redirect its URL owes to the collection's `index` under that language's own segment — none
-where the collection has no `index`. An `_i18n` naming a language that went is dropped from the
+the redirect its URL owes, to where `redirect` says — the same four shapes a hide takes, resolved
+per language the same way. Without a `redirect` its readers go to the collection's `index` under
+that language's own segment, and nowhere when the collection has none. An `_i18n` naming a language that went is dropped from the
 files that carry it, and unpublished changes to a language that goes are dropped with its file.
 A language whose file is only a draft is not in the repository, so it makes no commit and no
 redirect: the draft is thrown away and the mark is drafted like any other.
@@ -108,13 +109,14 @@ three **commit as they are called**: the file is assembled at publish out of the
 selected entries, so a rule belonging to no entry has nowhere to wait.
 
 ```
-GET /admin/api/redirects  →  { "rules": [{ "_id", "from", "to", "status", "reason", "entry", "createdAt", "title", "pending" }] }
+GET /admin/api/redirects  →  { "rules": [{ "_id", "from", "to", "status", "reason", "entry", "createdAt", "was", "title", "pending" }] }
 ```
 
 The file's rules in the order it holds them — which is the order `_redirects` serves them in —
 and after them the rules waiting on an entry's draft, each with `pending: true`. `title` is what
 the entry named by `entry` is called, resolved here because a title comes from the build's
-content index. `503` when the repository is out of reach.
+content index; `was`, on a rule a hide re-pointed, is where it pointed before
+([Redirects](redirects.md#the-file)). `503` when the repository is out of reach.
 
 ```
 POST   /admin/api/redirects        { "from", "to", "status" }  →  { "rule" }

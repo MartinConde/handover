@@ -20,6 +20,7 @@ let props = $state({
   onlocale: chosen,
   enabled: true,
   published: true,
+  hidden: false,
   stale: false,
   problems: [] as { path: string; label: string; message: string }[],
   ongo: went,
@@ -38,6 +39,7 @@ afterEach(() => {
     locale: 'en',
     enabled: true,
     published: true,
+    hidden: false,
     stale: false,
     problems: [],
     savedAt: 1755864000000,
@@ -135,4 +137,15 @@ test('choosing another language hands the choice back rather than moving the fra
   (all(root, '.seg[aria-label="Language"] button')[1] as HTMLButtonElement).click();
 
   expect(chosen).toHaveBeenCalledWith('de');
+});
+
+// A hidden page is the one most worth looking at before it goes back on, so the frame stays
+// and the pane says the one thing the site cannot: this page is off the live site.
+test('a hidden entry still renders, under a banner saying it is off the live site', () => {
+  const root = show({ hidden: true });
+
+  expect(q(root, '.preview-banner.is-hidden')?.textContent).toContain(
+    'Hidden — not on the live site',
+  );
+  expect(q(root, 'iframe')).not.toBe(null);
 });
