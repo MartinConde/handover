@@ -520,15 +520,19 @@ export async function emitSitemap(
  * When each content file last changed, read off the checkout the build runs in — one `git log`
  * for the tree, not a call per file. A publish is a commit, so the last commit touching a file
  * is its last change. No git, or a file never committed, gives no date rather than a made-up
- * one; a shallow clone gives the clone's.
+ * one — and so does a shallow clone (Workers Builds, most CI runners), where the one commit
+ * the clone has "adds" every file: the deploy's time on every page is not a change date.
  */
 export async function modifiedAt(root: URL): Promise<Map<string, string>> {
-  const { stdout } = await promisify(execFile)(
-    'git',
-    ['log', '--format=%cI', '--name-only', '--relative', '--', 'src/content'],
-    { cwd: fileURLToPath(root), maxBuffer: 64 * 1024 * 1024 },
-  ).catch(() => ({ stdout: '' }));
-  return modifiedFrom('default', stdout);
+  const git = (...args: string[]) =>
+    promisify(execFile)('git', args, {
+      cwd: fileURLToPath(root),
+      maxBuffer: 64 * 1024 * 1024,
+    }).then((r) => r.stdout);
+  const shallow = await git('rev-parse', '--is-shallow-repository').catch(() => 'true');
+  if (shallow.trim() === 'true') return new Map();
+  const log = await git('log', '--format=%cI', '--name-only', '--relative', '--', 'src/content');
+  return modifiedFrom('default', log);
 }
 
 /**

@@ -5,7 +5,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## Unreleased
 
 - **SEO and sitemap.** Every sitemap page carries a `<lastmod>` — the date of the last commit
-  that touched its file, from one `git log` at build; an index page the newest of its entries. A
+  that touched its file, from one `git log` at build; an index page the newest of its entries;
+  none from a shallow clone (Workers Builds, `fetch-depth: 1`), where every file would carry
+  the deploy's time. A
   site under Astro's `base` declares it as `i18n.base` in `cms.config.ts` (the build refuses a
   mismatch, as for the rest of the block) and every address, the sitemap files and the
   `Sitemap:` line are written under it. The social image on the SEO panel has a *Set focal point*

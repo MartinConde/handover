@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -33,6 +34,7 @@ import handover, {
   image,
   link,
   loadersModule,
+  modifiedAt,
   NO_ADAPTER_MESSAGE,
   navigation,
   redirects,
@@ -677,6 +679,35 @@ test('emitSitemap writes one sitemap per language, an index and robots.txt', asy
   );
   // The fixture is committed in this repository, so its page carries the file's last commit.
   expect(await read('sitemap-en.xml')).toMatch(/<lastmod>\d{4}-\d{2}-\d{2}T[^<]+<\/lastmod>/);
+});
+
+// Workers Builds and most CI runners clone at depth 1, where every file is "added" by the one
+// commit the clone has: the deploy's time on every page is not a change date, so none is written.
+test('a shallow clone dates nothing, where the full history dates every file', async () => {
+  const full = await mkdtemp(join(tmpdir(), 'handover-git-'));
+  const git = (cwd: string, ...args: string[]) =>
+    execFileSync('git', args, {
+      cwd,
+      stdio: 'pipe',
+      env: {
+        ...process.env,
+        GIT_AUTHOR_DATE: '2026-08-30T10:00:00+02:00',
+        GIT_COMMITTER_DATE: '2026-08-30T10:00:00+02:00',
+      },
+    });
+  git(full, 'init', '-q');
+  git(full, 'config', 'user.email', 'walk@example.com');
+  git(full, 'config', 'user.name', 'Walk');
+  await mkdir(join(full, 'src/content/pages/en'), { recursive: true });
+  await writeFile(join(full, 'src/content/pages/en/about.yaml'), 'title: "About"\n');
+  git(full, 'add', '.');
+  git(full, 'commit', '-q', '-m', 'Add about');
+  expect(await modifiedAt(new URL(`file://${full}/`))).toEqual(
+    new Map([['src/content/pages/en/about.yaml', '2026-08-30T10:00:00+02:00']]),
+  );
+  const shallow = join(await mkdtemp(join(tmpdir(), 'handover-git-')), 'clone');
+  git(tmpdir(), 'clone', '-q', '--depth', '1', `file://${full}`, shallow);
+  expect(await modifiedAt(new URL(`file://${shallow}/`))).toEqual(new Map());
 });
 
 test('a site under a base path names its pages, its sitemaps and the robots line under it', async () => {

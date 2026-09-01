@@ -107,9 +107,11 @@ is listed once per language, and every URL names its other languages as `hreflan
 Each page carries a `<lastmod>`: the date of the last commit that touched its file, read with
 one `git log` over `src/content/` in the checkout the build runs in — a publish is a commit, so
 that is when the page last changed. An index page carries the newest date among its entries.
-A build with no git, or a file never committed, writes no `<lastmod>` for it; a shallow clone
-(`fetch-depth: 1` on a CI runner) dates every page at that one commit, so fetch the history
-where the dates matter.
+A build with no git, or a file never committed, writes no `<lastmod>` for it. Nor does a
+**shallow clone** — Cloudflare's Workers Builds, and a CI runner at `fetch-depth: 1` — where the
+one commit the clone has would put the deploy's time on every page: a wrong `<lastmod>` is
+worse than none, so the dates appear where the build has the history (`wrangler deploy` from a
+full checkout, or a runner with `fetch-depth: 0`).
 
 `robots.txt` disallows `/admin` and `/_preview`. A `robots.txt` of your own in `public/` is
 left exactly as it is — the build writes one only where there is none.
