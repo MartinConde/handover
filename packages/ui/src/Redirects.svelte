@@ -316,7 +316,7 @@ async function remove() {
               <div class="td" role="cell" data-label="Reason">
                 <span class="badge">{REASONS[rule.reason]}</span>
               </div>
-              <div class="td" role="cell" data-label="Entry">
+              <div class="td entry" role="cell" data-label="Entry">
                 {#if rule.entry}
                   <a href="/admin/c/{rule.entry}">{rule.title ?? rule.entry}</a>
                 {:else}

@@ -1957,3 +1957,44 @@ test('the field is landed on when the address changes under an open entry', asyn
 
   expect(document.activeElement?.id).toBe('f-title');
 });
+
+// The screen under the dialog is not inert — the sidebar and the top bar stay reachable — so the
+// dialog must not claim a trap that is not there, the way every other dialog here declines to.
+test('the take-over dialog claims no modal trap the screen does not have', async () => {
+  vi.stubGlobal('fetch', heldBy());
+  const root = show();
+  await tick();
+  flushSync();
+
+  $<HTMLButtonElement>(root, '.lock-banner .btn-link')?.click();
+  flushSync();
+  const dialog = $(root, '[aria-labelledby="take-h"]');
+  expect(dialog).not.toBeNull();
+  expect(dialog?.getAttribute('aria-modal')).toBeNull();
+  vi.unstubAllGlobals();
+});
+
+// The shell's notice names the entry, and only this screen knows what it is called.
+test('a header publish tells the shell what was published', async () => {
+  const published = vi.fn();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) =>
+      isLock(url)
+        ? Response.json(HELD)
+        : init?.method === 'POST' && url === '/admin/api/publish'
+          ? Response.json({ commit_sha: 'def4567890', paths: ['src/content/x.yaml'] })
+          : Response.json({ updated_at: 1755864000000, pending: true, problems: [] }),
+    ),
+  );
+  const root = show({ entry: { ...entry, pending: ['en'] }, onpublished: published });
+  $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
+  await tick();
+  flushSync();
+  $<HTMLButtonElement>(root, '.dialog .btn-primary')?.click();
+  await tick();
+  flushSync();
+
+  expect(published).toHaveBeenCalledWith('Seaview Cottage');
+  vi.unstubAllGlobals();
+});

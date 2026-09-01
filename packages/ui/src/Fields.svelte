@@ -485,7 +485,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   <div class="previews">
     <div class="preview-box">
       <p class="variant-title">Search preview · {of}</p>
-      <div class="snippet" aria-label="Search result preview">
+      <div class="snippet" role="group" aria-label="Search result preview">
         <div class="url"><span class="fav" aria-hidden="true">{host.charAt(0).toUpperCase()}</span><span class="crumbs">{crumbs}</span></div>
         <div class="title">{title}</div>
         <div class="desc">{desc}</div>
@@ -493,7 +493,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     </div>
     <div class="preview-box">
       <p class="variant-title">Social card · {of}</p>
-      <div class="social-card" aria-label="Social card preview">
+      <div class="social-card" role="group" aria-label="Social card preview">
         <div class="thumb">{#if picture}<img src={picture} alt="" />{/if}</div>
         <div class="body"><div class="domain">{host}</div><div class="title">{title}</div><div class="desc">{desc}</div></div>
       </div>

@@ -101,7 +101,8 @@ a.btn { text-decoration: none; }
 .btn-block { width: 100%; }
 .btn-icon { width: 30px; min-height: 30px; padding: 0; font-size: var(--text-md); line-height: 1; }
 .btn[disabled], .btn[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
-.btn-link { background: none; border: 0; padding: 0; min-height: 0; color: var(--accent-ink); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; box-shadow: none; }
+/* 24px is WCAG 2.2's floor for a target that is not inline in a sentence — the Show beside a password box. */
+.btn-link { background: none; border: 0; padding: 0; min-height: 24px; color: var(--accent-ink); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; box-shadow: none; }
 
 .field { display: grid; gap: var(--s-2); }
 .field label { font-size: var(--text-sm); font-weight: 500; color: var(--ink); }
@@ -162,7 +163,8 @@ a.btn { text-decoration: none; }
 .nav a[data-icon="settings"] { --icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3Cpath d='M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1'/%3E%3C/svg%3E"); }
 
 /* Top bar floats on the canvas; its chips are the white elements */
-.topbar { min-height: var(--topbar-h); display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-6) 0; }
+/* Wraps rather than scrolls: a long name or a long indicator drops the pill to a second line. */
+.topbar { min-height: var(--topbar-h); display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-6) 0; }
 .topbar .spacer { flex: 1; }
 .menu-button { display: none; }
 
@@ -213,7 +215,7 @@ a.btn { text-decoration: none; }
 .banner-info { background: var(--info-soft); color: var(--info-ink); }
 
 /* Toast stack — white cards, bottom right, newest at the bottom */
-.toasts { position: absolute; right: var(--s-6); bottom: var(--s-6); display: grid; gap: var(--s-3); width: min(380px, calc(100% - 2 * var(--s-6))); z-index: 20; }
+.toasts { position: fixed; right: var(--s-6); bottom: var(--s-6); display: grid; gap: var(--s-3); width: min(380px, calc(100% - 2 * var(--s-6))); z-index: 20; }
 .toast { display: flex; align-items: flex-start; gap: var(--s-3); padding: var(--s-4) var(--s-4); border-radius: var(--radius-lg); background: var(--surface); color: var(--ink); font-size: var(--text-sm); box-shadow: var(--shadow-toast); }
 .toast::before { content: ""; flex: none; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--accent-ink); box-shadow: 0 0 0 3px var(--accent-soft); }
 .toast[role="alert"]::before { background: var(--danger); }
@@ -401,7 +403,10 @@ a.btn { text-decoration: none; }
    and dropping them would leave the client guessing which rules are theirs to delete. */
 .redirects { display: grid; gap: var(--s-4); align-content: start; min-width: 0; }
 .redirects .list-toolbar { margin-bottom: var(--s-1); }
-.table.cols-7 { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.3fr) auto auto auto auto auto; }
+/* Entry is a fraction and not `auto`: a long title would otherwise take its full width first
+   and leave the two addresses a character a line. */
+.table.cols-7 { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.3fr) auto auto minmax(0, 1fr) auto auto; }
+.table .td.entry { min-width: 0; overflow-wrap: anywhere; }
 .table .td.path { min-width: 0; flex-wrap: wrap; font-family: var(--font-mono); font-size: var(--text-sm); overflow-wrap: anywhere; }
 .table .td.path .badge { flex: none; font-family: var(--font-sans); }
 .table .td.path a { color: var(--ink); }
@@ -1290,13 +1295,18 @@ input[type="date"].input { padding-right: var(--s-3); }
    rule with one class more — `.table.has-select.cols-4` beat a bare `.table`, and the entry list
    overflowed sideways on a phone. The rules that were already here carry no prefix: they have
    always been written this way and raising them would be a change nobody asked for. */
-@media (max-width: 720px) {
+/* The sidebar goes behind the menu button well above phone width: beside it, a tablet's screen
+   is 500px and every table and toolbar overflowed it. The screens' own narrow rules stay at 720. */
+@media (max-width: 960px) {
   .shell { grid-template-columns: 1fr; }
   .shell > .sidebar { display: none; }
   /* The drawer the menu button opens: the same nav, over the screen rather than beside it. */
   .shell > .sidebar.is-open { display: flex; position: fixed; inset: 0 auto 0 0; z-index: 40; width: var(--sidebar-w); max-width: 86%; overflow-y: auto; box-shadow: var(--shadow-menu); }
   .menu-button { display: inline-flex; }
-  .topbar { padding: var(--s-3) var(--s-3) 0; gap: var(--s-2); flex-wrap: wrap; }
+}
+
+@media (max-width: 720px) {
+  .topbar { padding: var(--s-3) var(--s-3) 0; gap: var(--s-2); }
   .main { margin: var(--s-3); padding: var(--s-5); }
   .drift .drift-cols { grid-template-columns: 1fr; }
   .activity-row { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
@@ -1346,7 +1356,9 @@ input[type="date"].input { padding-right: var(--s-3); }
   :root .list, :root .pop-anchor { min-width: 0; }
   :root .list-toolbar .search { max-width: none; }
   :root .table, :root .table.has-select { display: grid; grid-template-columns: 1fr; gap: var(--s-3); }
-  :root .table .th { display: none; }
+  /* The whole header row and not its cells: a `row` whose `columnheader`s are all hidden is a row
+     with no children, which axe reports as such. */
+  :root .table .row-head { display: none; }
   :root .table .row { display: grid; grid-template-columns: 1fr auto; gap: var(--s-1) var(--s-2); padding: var(--s-3) var(--s-4); border-radius: var(--radius); box-shadow: var(--shadow-panel); border: 1px solid var(--border); }
   :root .table .row .td { min-height: 0; padding: 0; border: 0; }
   :root .table .row .td.title { grid-column: 1; }
@@ -1391,6 +1403,8 @@ input[type="date"].input { padding-right: var(--s-3); }
   :root .table.cols-7 .row .td.path { flex-wrap: wrap; }
   :root .table.cols-7 .row-menu { display: flex; gap: var(--s-1); }
   .previews { grid-template-columns: minmax(0, 1fr); }
+  /* Title, chips, path and Remove in one row is wider than a phone; the path takes its own line. */
+  .ref-item { flex-wrap: wrap; }
   /* A block header three levels down has less room than its own words; let it wrap. */
   .block-card > header { flex-wrap: wrap; }
 }

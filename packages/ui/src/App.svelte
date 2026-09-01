@@ -124,6 +124,20 @@ let menu = $state(false);
 let account = $state(false);
 // Bumped when a screen's data has moved under it — the screen is thrown away and made again.
 let reload = $state(0);
+// App-shell state 9. A commit is said once here as well as on the screen that made it, because
+// that screen's own account goes with the drawer or the dialog that closes; each notice has an
+// explicit close and leaves on its own after a moment. The container is always in the DOM, so
+// a notice added to it is announced rather than being a live region that appeared mid-sentence.
+let notices = $state<{ id: number; text: string }[]>([]);
+let noticeSeq = 0;
+function notify(text: string) {
+  const id = ++noticeSeq;
+  notices.push({ id, text });
+  setTimeout(() => dismiss(id), 8_000);
+}
+function dismiss(id: number) {
+  notices = notices.filter((n) => n.id !== id);
+}
 
 $effect(() => {
   if (session) {
@@ -255,6 +269,7 @@ async function revert() {
     return;
   }
   await Promise.all([loadPending(), loadBuild()]);
+  notify('Reverted that publish — building');
   // The drawer's "Published 1 change" describes a commit that has just been undone, and its
   // Revert would now be refused. It goes with the publish it was about.
   drawerKey += 1;
@@ -447,6 +462,7 @@ const initial = $derived(
             reload += 1;
           }}
           onpending={loadPending}
+          onpublished={(title) => notify(`Published ${title} — building`)}
         />
       {:catch error}
         <main class="main"><p class="notice notice-danger" role="alert">{error.message}</p></main>
@@ -490,7 +506,8 @@ const initial = $derived(
         drawer = false;
         indicator?.focus();
       }}
-      onpublished={async () => {
+      onpublished={async (count) => {
+        notify(`Published ${count} change${count === 1 ? '' : 's'} — building`);
         await Promise.all([loadPending(), loadBuild()]);
       }}
       ondiscarded={async () => {
@@ -503,6 +520,14 @@ const initial = $derived(
   <!-- Not aria-modal: the drawer under it stays where it is, and claiming a trap that is not
        there is worse than not claiming it. Escape is stopped here so it does not also reach
        the drawer's own handler and close two things with one press. -->
+  <div class="toasts" aria-live="polite">
+    {#each notices as notice (notice.id)}
+      <div class="toast">
+        <div class="body">{notice.text}</div>
+        <button class="close" type="button" aria-label="Dismiss" onclick={() => dismiss(notice.id)}>×</button>
+      </div>
+    {/each}
+  </div>
   {#if confirmRevert}
     <div class="scrim">
       <div

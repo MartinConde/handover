@@ -44,7 +44,7 @@ let {
   /** The shell's build status, repeated here beside the commit it is of. */
   build?: Build | null;
   onclose: () => void;
-  onpublished: () => void;
+  onpublished: (count: number) => void;
   /** Undo the commit this drawer just made; the shell owns the confirmation. */
   onrevert: (commitSha: string) => void;
   /**
@@ -288,7 +288,7 @@ async function publish() {
     // Selection is per publish: what is left behind starts from the defaults again, the same
     // as it would if the drawer had been closed and reopened.
     toggled = [];
-    onpublished();
+    onpublished(published);
     return;
   }
   if (res.status === 422) {

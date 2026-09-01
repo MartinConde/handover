@@ -189,3 +189,25 @@ test('clearing the search asks for the whole library again', async () => {
   await search('');
   expect(asked.at(-1)).toBe('/admin/api/media?kind=images&q=');
 });
+
+// The mockup's `pk-title` and `pk-hero-l` were one id on two elements each, which points every
+// `aria-labelledby` and `aria-describedby` at the wrong one; the picker's are one per element.
+test('every id in the picker is unique, refused tiles included', async () => {
+  await open(
+    [
+      item({ id: 'b'.repeat(64), filename: 'winter-storm.jpg', width: 800, height: 450 }),
+      item({ id: 'c'.repeat(64), filename: 'summer-storm.jpg', width: 900, height: 500 }),
+      item({ filename: 'front-of-house.jpg' }),
+    ],
+    { ratio: '16:9', max: 2400, min: 1600 },
+  );
+  const ids = Array.from(document.body.querySelectorAll('[id]'), (el) => el.id);
+  expect(ids.length).toBeGreaterThan(4);
+  expect(new Set(ids).size).toBe(ids.length);
+  for (const el of Array.from(
+    document.body.querySelectorAll('[aria-describedby], [aria-labelledby]'),
+  )) {
+    const ref = el.getAttribute('aria-describedby') ?? el.getAttribute('aria-labelledby');
+    expect(document.body.querySelectorAll(`#${ref}`)).toHaveLength(1);
+  }
+});

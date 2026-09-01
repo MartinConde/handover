@@ -33,6 +33,7 @@ let {
   userId = '',
   onchanged,
   onpending,
+  onpublished,
   site,
 }: {
   collection: string;
@@ -109,6 +110,8 @@ let {
    * and unlike `onchanged` nothing on this screen is thrown away, since the person is typing.
    */
   onpending?: () => void;
+  /** This entry went out from its header, named the way the shell should say it. */
+  onpublished?: (title: string) => void;
 } = $props();
 
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
@@ -642,6 +645,7 @@ async function publishEntry() {
   sending = false;
   if (res.ok) {
     confirming = false;
+    onpublished?.(title);
     // The rows are re-seeded on the commit and a hold comes off with them, so the screen is
     // read again rather than patched here.
     onchanged();
@@ -1226,7 +1230,8 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   {/if}
   {#if taking}
     <div class="scrim">
-      <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="take-h" tabindex="-1" bind:this={takePanel}>
+      <!-- Not aria-modal: the shell behind stays reachable, as on every other dialog here. -->
+      <div class="dialog" role="dialog" aria-labelledby="take-h" tabindex="-1" bind:this={takePanel}>
         <h2 id="take-h">Take over editing from {holder}?</h2>
         <p>
           Nothing {holder} has written is lost — there is one shared draft and you carry on from

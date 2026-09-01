@@ -50,7 +50,8 @@ had open across the whole cycle keeps its row until their lock runs out
 **Revert this publish** is in the drawer beside the result of a publish, and **Revert last
 publish** in the build pill when a build has failed. Either makes one new commit that undoes the
 one it names, and the changes that commit carried come back as unpublished changes, so they can
-be fixed and published again.
+be fixed and published again. A notice at the bottom right says the revert is on its way, the
+way one does after a publish.
 
 It is **not `git revert`**. The GitHub trees API has no three-way merge to run, so the inverse is
 composed:

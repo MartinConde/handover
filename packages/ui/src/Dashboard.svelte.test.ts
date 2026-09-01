@@ -187,3 +187,26 @@ test('a one-language site is drawn no translation tile at all', async () => {
 
   expect(tile(root, 'd-tr')).toBeNull();
 });
+
+// The mockup gave its six tile headings one id between them, which breaks every
+// `aria-labelledby` on the page; the ported tiles each carry their own.
+test('every id on the filled dashboard is unique', async () => {
+  const root = show(
+    {
+      recent: RECENT,
+      published: { by: 'Martin Conde', at: Date.now() - 7_200_000, commit_sha: 'c0ffee11' },
+      translations: HEALTH,
+    },
+    {
+      pending: [pendingEntry('listings/mill-house')],
+      build: { commit_sha: 'c0ffee11', state: 'live', live_at: Date.now() - 7_000_000 },
+    },
+  );
+  await loaded();
+
+  const ids = all(root, '[id]').map((el) => el.id);
+  expect(ids.length).toBeGreaterThan(4);
+  expect(new Set(ids).size).toBe(ids.length);
+  for (const tile of all(root, '[aria-labelledby]'))
+    expect(root.querySelector(`#${tile.getAttribute('aria-labelledby')}`)).not.toBeNull();
+});

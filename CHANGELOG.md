@@ -4,6 +4,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **A notice says what just went out.** After a publish — from the drawer or from an entry's
+  header — and after a revert, a notice at the bottom right says so (*Published 3 changes —
+  building*, *Reverted that publish — building*); each has a close and leaves on its own after a
+  few seconds.
+- **The sidebar folds behind the menu button up to 960px wide**, not 720: beside a 248px
+  sidebar a tablet's screen was 500px, the top bar scrolled sideways between 720 and 900px and
+  every table overflowed. The top bar now wraps rather than scrolls at any width.
+- **Small admin fixes.** The redirects table's Entry column wraps a long title instead of
+  squeezing the two addresses to a character a line; a reference field's card wraps on a phone;
+  the take-over dialog no longer claims `aria-modal` over a screen that is not inert; a table's
+  header row is hidden whole on a phone rather than cell by cell; the Show/Hide beside a
+  password box is 24px tall; the SEO previews are labelled groups.
 - **Docs: build status and revert are their own page** —
   [Build status and revert](docs/build-status.md), out of
   [Pending changes](docs/pending-changes.md), which keeps the drawer, the checks and the hold.

@@ -676,3 +676,75 @@ test('the history tab is an address of the same entry, not a second load of it',
   expect(root.querySelector('.form')).toBeNull();
   expect(loads()).toBe(1);
 });
+
+// App-shell state 9: the drawer's own result panel goes when the drawer closes, so the commit is
+// also said once in a notice that outlives it, with an explicit close.
+const publishing = () =>
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
+      if (url === '/admin/api/build') return Response.json(buildBody);
+      if (url === '/admin/api/publish')
+        return Response.json({ commit_sha: 'c0ffee11', paths: ['src/content/listings/en/a.yaml'] });
+      if (url === '/admin/api/revert') return Response.json({ commit_sha: 'rev999', paths: [] });
+      return Response.json({ entries: [pendingEntry('listings/a')] });
+    }),
+  );
+const toasts = (root: ParentNode) =>
+  Array.from(root.querySelectorAll('.toasts .toast .body'), (el) => el.textContent?.trim());
+
+test('a publish from the drawer is said in a notice that outlives the drawer', async () => {
+  publishing();
+  const root = show(session());
+  await settle();
+  expect(root.querySelector('.toasts')).not.toBeNull();
+  expect(toasts(root)).toEqual([]);
+
+  root.querySelector<HTMLButtonElement>('.indicator')?.click();
+  flushSync();
+  root.querySelector<HTMLButtonElement>('.drawer-foot .btn-primary')?.click();
+  await settle();
+  expect(toasts(root)).toEqual(['Published 1 change — building']);
+
+  root.querySelector<HTMLButtonElement>('.drawer [aria-label="Close"]')?.click();
+  flushSync();
+  expect(root.querySelector('.drawer')).toBeNull();
+  expect(toasts(root)).toEqual(['Published 1 change — building']);
+
+  root.querySelector<HTMLButtonElement>('.toast .close')?.click();
+  flushSync();
+  expect(toasts(root)).toEqual([]);
+});
+
+test('a revert is said in a notice', async () => {
+  buildBody = { commit_sha: 'c0ffee11', state: 'failed' };
+  publishing();
+  const root = show(session());
+  await settle();
+  root.querySelector<HTMLButtonElement>('.topbar .pill .btn-link')?.click();
+  flushSync();
+  document.querySelector<HTMLButtonElement>('[aria-labelledby="revert-h"] .btn-danger')?.click();
+  await settle();
+
+  expect(toasts(root)).toEqual(['Reverted that publish — building']);
+});
+
+test('a notice leaves on its own after a few seconds', async () => {
+  vi.useFakeTimers();
+  publishing();
+  const root = show(session());
+  await vi.advanceTimersByTimeAsync(0);
+  root.querySelector<HTMLButtonElement>('.indicator')?.click();
+  flushSync();
+  root.querySelector<HTMLButtonElement>('.drawer-foot .btn-primary')?.click();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(toasts(root)).toHaveLength(1);
+
+  await vi.advanceTimersByTimeAsync(7_000);
+  expect(toasts(root)).toHaveLength(1);
+  await vi.advanceTimersByTimeAsync(1_500);
+  flushSync();
+  expect(toasts(root)).toEqual([]);
+  vi.useRealTimers();
+});

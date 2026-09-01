@@ -76,7 +76,8 @@ There are two ways to publish, and both are one click.
 
 **"I changed one thing."** The entry header has **Publish this entry**. It confirms first,
 naming every language file that goes with the entry, and then commits that entry and
-nothing else — whatever else you or anybody else has been working on stays unpublished.
+nothing else — whatever else you or anybody else has been working on stays unpublished. A
+notice at the bottom right says what went out; [Build status](build-status.md) takes it from there.
 
 **"I have been working through a dozen pages."** The top bar says how many entries are
 waiting ("3 unpublished changes"); the button opens the **pending-changes drawer**, which
