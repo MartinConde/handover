@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Three guards.** A `seo.canonical` that would run code (`javascript:`) is refused the way a
+  link field's target is, in the panel and on save; `defineConfig` rejects a `mailer.provider`
+  that is not `resend`, `smtp` or `cloudflare` instead of letting it fall through to Resend; a
+  `youtube.com/live/` link parses as a video, and a Google Maps view with no place on it
+  (`/maps/@lat,lng`) is refused with a sentence saying so rather than the generic one.
 - **A notice says what just went out.** After a publish — from the drawer or from an entry's
   header — and after a revert, a notice at the bottom right says so (*Published 3 changes —
   building*, *Reverted that publish — building*); each has a close and leaves on its own after a

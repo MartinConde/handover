@@ -66,7 +66,8 @@ export function parseEmbedUrl(input: string): EmbedParse {
   if (host === 'youtu.be') return video('youtube', path[0], t);
   if (host === 'youtube.com' || host === 'm.youtube.com' || host === 'youtube-nocookie.com') {
     if (path[0] === 'watch') return video('youtube', url.searchParams.get('v') ?? undefined, t);
-    if (path[0] === 'shorts' || path[0] === 'embed') return video('youtube', path[1], t);
+    if (path[0] === 'shorts' || path[0] === 'embed' || path[0] === 'live')
+      return video('youtube', path[1], t);
     return { refused: UNKNOWN };
   }
   if (host === 'vimeo.com' || host === 'player.vimeo.com')
@@ -87,6 +88,12 @@ export function parseEmbedUrl(input: string): EmbedParse {
       return {
         refused:
           'That is Google’s embed code. Open the map itself and copy the address from your browser.',
+      };
+    // `/maps/@lat,lng,zoom` is a view, not a place: a pin at its centre is not what was seen.
+    if (path[0] === 'maps' && path[1]?.startsWith('@') && !url.searchParams.has('q'))
+      return {
+        refused:
+          'This link is a map view with no place on it. Search for the place in Google Maps, then copy the address from your browser.',
       };
     const q =
       url.searchParams.get('q') ??

@@ -156,6 +156,8 @@ mailer: { provider: 'resend', from: 'Your Site <hello@your-site.com>' },
 | `'smtp'` | `SMTP_USER` and `SMTP_PASS`, plus `host` here (and `port`, if it is not `465`) |
 | `'cloudflare'` | a `send_email` binding named `EMAIL`, and no secret at all |
 
+Any other `provider` fails `defineConfig` naming the key and the three values.
+
 Each needs a sending domain it may write from — [Sending email](email.md) has all three, and how
 to prove one works. Anything else is a function of your own, given the message and answering with
 the provider's id for it where there is one:

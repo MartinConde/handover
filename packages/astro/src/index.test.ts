@@ -69,6 +69,14 @@ test('a link field refuses a target that would run code', () => {
   expect(link.safeParse({ type: 'url', href: 'mailto:hello@example.com' }).success).toBe(true);
 });
 
+// The canonical box took any string: a `javascript:` one would have gone into a <link> tag.
+test('a seo canonical refuses a target that would run code', () => {
+  const parsed = seo.safeParse({ canonical: 'javascript:alert(1)' });
+  expect(parsed.success).toBe(false);
+  expect(parsed.error?.issues[0]?.message).toBe('javascript: links are not allowed');
+  expect(seo.safeParse({ canonical: 'https://example.com/about/' }).success).toBe(true);
+});
+
 test('link accepts url and ref shapes and rejects a mismatched pair', () => {
   expect(link.safeParse({ type: 'url', href: '/contact', newTab: true }).success).toBe(true);
   expect(link.safeParse({ type: 'page', ref: 'pages/impressum' }).success).toBe(true);
@@ -1010,6 +1018,34 @@ test('a field says how it translates through .meta({ i18n })', () => {
 
 // A typo in checks.ignore is a check the site thinks it turned off and did not, which nothing
 // else would ever say out loud.
+// `mailer()` treated an unrecognised provider as resend, so a JS site with a typo was told
+// RESEND_API_KEY was missing.
+test('defineConfig fails when mailer.provider names no provider', () => {
+  expect(() =>
+    defineConfig({
+      i18n: EN,
+      collections: { posts: { schema: z.object({}) } },
+      mailer: { provider: 'sendgrid', from: 'Site <hi@example.com>' } as never,
+    }),
+  ).toThrow(
+    'cms.config.ts › mailer.provider: "sendgrid" is not one of the providers — resend, smtp, cloudflare',
+  );
+  expect(() =>
+    defineConfig({
+      i18n: EN,
+      collections: { posts: { schema: z.object({}) } },
+      mailer: { provider: 'smtp', from: 'Site <hi@example.com>', host: 'smtp.example.com' },
+    }),
+  ).not.toThrow();
+  expect(() =>
+    defineConfig({
+      i18n: EN,
+      collections: { posts: { schema: z.object({}) } },
+      mailer: async () => ({ id: '1' }),
+    }),
+  ).not.toThrow();
+});
+
 test('defineConfig fails when checks.ignore names no check', () => {
   expect(() =>
     defineConfig({

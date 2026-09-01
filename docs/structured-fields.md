@@ -149,7 +149,10 @@ the provider's name, the id that was stored and — for YouTube — the provider
 Under it are the `title` the frame is named by and the second the video starts at. **Change**
 puts the box back with the card still under it, so a link that is not recognised leaves the
 video you had; a link from anywhere else is refused with the list of what is accepted, and
-nothing is stored until one parses. A language that is being translated gets the title and
+nothing is stored until one parses. YouTube's `watch`, `youtu.be`, `shorts`, `embed` and `live`
+links all parse. Three Google Maps links are refused with a sentence saying what to do instead: a
+shortened `maps.app.goo.gl` one, Google's own embed code, and a map dragged to somewhere
+(`/maps/@lat,lng`) — a view with no place on it. A language that is being translated gets the title and
 nothing else — the video is the same in every language. What the page does with the value is
 [`<Embed />`](rendering.md#videos-and-maps).
 

@@ -854,6 +854,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'seo'}
       {@const image = [...at, 'image']}
       {@const hiding = read([...at, 'noindex']) === true}
+      {@const scheme = unsafeLinkScheme('default', str([...at, 'canonical']))}
       {@render groupLabel(id, field, text, at)}
       <div class="form" {id} role="group" aria-labelledby="{id}-l" aria-describedby={says}>
         {@render seoWords(id, at, 'title', 'Search title', SEO_TITLE_LIMIT, inheritedSeo?.title ?? '', 'Leave empty to use the page title and the site’s own pattern.')}
@@ -890,9 +891,10 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {#if host}{@render previews(at)}{/if}
         <details class="group">
           <summary>Canonical URL{#if str([...at, 'canonical'])}<span class="count">{str([...at, 'canonical'])}</span>{/if}</summary>
-          <div class="field">
+          <div class="field" class:is-invalid={scheme}>
             <div class="label-row"><label for="{id}.canonical">Canonical URL</label></div>
-            <input class="input" id="{id}.canonical" type="url" aria-describedby="{id}.canonical-hint" value={str([...at, 'canonical'])} oninput={(e) => seoWrite(at, 'canonical', e.currentTarget.value || undefined)} />
+            <input class="input" id="{id}.canonical" type="url" aria-invalid={scheme ? 'true' : undefined} aria-describedby="{id}.canonical-hint{scheme ? ` ${id}.canonical-err` : ''}" value={str([...at, 'canonical'])} oninput={(e) => seoWrite(at, 'canonical', e.currentTarget.value || undefined)} />
+            {#if scheme}<p class="error" id="{id}.canonical-err">{scheme}: links are not allowed</p>{/if}
             <p class="hint" id="{id}.canonical-hint">Only set this when the same page lives at another address.</p>
           </div>
         </details>

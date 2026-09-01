@@ -12,6 +12,11 @@ test.each([
   ],
   ['shorts', 'https://youtube.com/shorts/dQw4w9WgXcQ', { provider: 'youtube', id: 'dQw4w9WgXcQ' }],
   [
+    'live',
+    'https://www.youtube.com/live/dQw4w9WgXcQ?feature=share',
+    { provider: 'youtube', id: 'dQw4w9WgXcQ' },
+  ],
+  [
     'embed on the nocookie host',
     'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ',
     { provider: 'youtube', id: 'dQw4w9WgXcQ' },
@@ -72,7 +77,6 @@ test.each([
   ['a youtube page that is not a video', 'https://www.youtube.com/@someone'],
   ['a watch link with no id', 'https://www.youtube.com/watch?list=PL1'],
   ['a vimeo page that is not a video', 'https://vimeo.com/staffpicks'],
-  ['a map with neither a place nor a query', 'https://www.google.com/maps/@50.5,-4.8,17z'],
   ['not a URL at all', 'the mill house video'],
   ['a script URL', 'javascript:alert(1)'],
   ['iframe markup', '<iframe src="https://youtu.be/dQw4w9WgXcQ"></iframe>'],
@@ -87,6 +91,14 @@ test.each([
 test('a shortened map link says to open it first', () => {
   expect(parseEmbedUrl('https://maps.app.goo.gl/AbCdEf123')).toEqual({
     refused: 'Google Maps shortened this link. Open it, then copy the address from your browser.',
+  });
+});
+
+// A map dragged to somewhere is a view, not a place: a pin at its centre is not what was seen.
+test('a map view with no place on it says to search for one', () => {
+  expect(parseEmbedUrl('https://www.google.com/maps/@50.5,-4.8,17z')).toEqual({
+    refused:
+      'This link is a map view with no place on it. Search for the place in Google Maps, then copy the address from your browser.',
   });
 });
 

@@ -18,7 +18,9 @@ export const listing = z.object({
 
 It stores `{ title?, description?, image?, noindex?, canonical? }`. Keep it `.optional()`:
 every one of those has somewhere to fall back to, and a required `seo` asks a client to write
-five things before a page can go out.
+five things before a page can go out. `canonical` goes into a `<link>` tag, so it is held to the
+same allow-list as a `link` field — `https:`, `http:`, or a path; a `javascript:` one is refused
+as *javascript: links are not allowed*, in the panel and on save.
 
 ## Site defaults
 

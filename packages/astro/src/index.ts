@@ -200,7 +200,8 @@ export const seo = z
     // every social card asks for, so the cap and the floor are the same number.
     image: image({ ratio: '1.91:1', max: 1200, min: 1200 }).optional(),
     noindex: z.boolean().optional(),
-    canonical: z.string().optional(),
+    // Goes into a <link> tag, so the same allow-list as anything an editor can click.
+    canonical: href.optional(),
   })
   .meta({ handover: 'seo' });
 export type Seo = z.infer<typeof seo>;
@@ -399,6 +400,13 @@ export function defineConfig(config: HandoverConfig): HandoverConfig {
       errors.push(
         `cms.config.ts › checks.ignore: ${JSON.stringify(id)} is not one of the checks — ${Object.keys(CHECKS).join(', ')}`,
       );
+  // `mailer()` falls through to resend, so a JS site's typo would be told RESEND_API_KEY is missing.
+  const provider =
+    typeof config.mailer === 'object' ? (config.mailer.provider as string) : undefined;
+  if (provider && !['resend', 'smtp', 'cloudflare'].includes(provider))
+    errors.push(
+      `cms.config.ts › mailer.provider: ${JSON.stringify(provider)} is not one of the providers — resend, smtp, cloudflare`,
+    );
   if (errors.length) throw new Error(errors.join('\n'));
   return config;
 }
