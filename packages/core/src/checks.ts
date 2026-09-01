@@ -3,16 +3,17 @@
 // nobody has read. **Warnings and notes, never a refusal**: the only two things that stop a
 // publish are the schema and unresolved drift, exactly as before.
 
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray } from 'drizzle-orm';
 import { isObject, parseEntry, staleLocales } from './content.js';
 import type { Db } from './db.js';
-import type { ContentIndex, IndexEntry } from './entries.js';
+import { type ContentIndex, entryParts, type IndexEntry } from './entries.js';
+import type { GitClient } from './git.js';
 import { objectExists, type R2Store } from './media.js';
 import { type I18nRouting, previewTarget } from './names.js';
 import { richtextLinks } from './richtext.js';
 import { type Field, type Form, rowFields, type Translation } from './schema.js';
 import { resolveSeo, SEO_TITLE_LIMIT, type SeoDefaultsValue, type SeoValue } from './seo.js';
-import { media } from './tables.js';
+import { activity, media } from './tables.js';
 
 export type CheckSeverity = 'error' | 'warn' | 'info';
 
@@ -34,6 +35,7 @@ export const CHECKS = {
   'seo-title': 'info',
   'seo-description': 'info',
   'seo-image': 'info',
+  'hidden-long': 'info',
 } as const satisfies Record<string, CheckSeverity>;
 
 export type CheckName = keyof typeof CHECKS;
@@ -83,6 +85,8 @@ export interface CheckInput {
   store?: R2Store;
   /** The ids this site has turned off: `checks.ignore` in `cms.config.ts`. */
   ignore?: readonly string[];
+  /** What the daily job last found hidden for too long: `lastHiddenLong`. */
+  hiddenLong?: HiddenLong[];
 }
 
 /**
@@ -95,8 +99,9 @@ export async function runChecks(
   siteId: string,
   db: Db,
   input: CheckInput,
-  deps: { fetch?: typeof globalThis.fetch } = {},
+  deps: { fetch?: typeof globalThis.fetch; now?: number } = {},
 ): Promise<CheckResult[]> {
+  const now = deps.now ?? Date.now();
   const found: CheckResult[] = [];
   const assets: { key: string; path: string; fieldPath: string; label: string }[] = [];
   for (const entry of input.entries) {
@@ -158,6 +163,22 @@ export async function runChecks(
       });
     }
   }
+  for (const { path, since } of input.hiddenLong ?? []) {
+    const parts = entryParts(path);
+    const page = parts
+      ? input.index[parts.collection]?.find((e) => e.id === parts.name)?.locales[parts.locale]
+      : undefined;
+    // The index is newer than the job's list: a page shown or deleted since it ran is not one
+    // to mention.
+    if (page?.status !== 'hidden') continue;
+    found.push({
+      check: 'hidden-long',
+      path,
+      fieldPath: '',
+      severity: CHECKS['hidden-long'],
+      message: `${page.title} has been hidden for over ${Math.floor((now - Date.parse(since)) / (30 * DAY))} months — long enough to decide whether it comes back or goes`,
+    });
+  }
   found.push(...(await assetResults(siteId, db, input, assets, deps)));
   const ignore = new Set(input.ignore ?? []);
   // Grouped by file, in the order the walk found them: the drawer lists an entry's results
@@ -165,6 +186,80 @@ export async function runChecks(
   return found
     .filter((result) => !ignore.has(result.check))
     .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
+const DAY = 24 * 60 * 60 * 1000;
+const LONG_HIDDEN = 90 * DAY;
+// A top-level key, so a `_status` inside a block does not match; quoted or not, as a hand
+// writes it or the serialiser does.
+const HIDDEN = /^_status:\s*["']?hidden["']?\s*$/m;
+
+/** One file the daily job found hidden for longer than it should be, and the commit date since. */
+export interface HiddenLong {
+  path: string;
+  since: string;
+}
+
+/**
+ * The daily job behind `hidden-long`: every `_status: hidden` file at the branch tip, dated
+ * from its own commits, since nothing else records when a page was hidden. Only the tip's
+ * version is known for free; older ones are read back a commit at a time, newest first, and
+ * the walk stops at the first version that was not hidden or at the first that is already old
+ * enough to settle the question — so `since` is the hide, or an edit already past the limit.
+ * The list rides in the job's `cron-hidden` activity row, which is where `lastHiddenLong`
+ * reads it back for the drawer.
+ */
+export async function findHiddenLong(
+  _siteId: string,
+  git: Pick<GitClient, 'contentFiles' | 'fileCommits' | 'getFile'> | undefined,
+  now = Date.now(),
+): Promise<{ done: number; entries: HiddenLong[] }> {
+  const entries: HiddenLong[] = [];
+  if (!git) return { done: 0, entries };
+  const files = (await git.contentFiles()).filter(
+    (f) => entryParts(f.path) && HIDDEN.test(f.contents),
+  );
+  for (const { path } of files) {
+    let since: string | undefined;
+    for (const [i, commit] of (await git.fileCommits(path)).entries()) {
+      if (i > 0 && !HIDDEN.test((await git.getFile(path, commit.sha))?.contents ?? '')) break;
+      since = commit.date;
+      if (now - Date.parse(since) > LONG_HIDDEN) break;
+    }
+    if (since && now - Date.parse(since) > LONG_HIDDEN) entries.push({ path, since });
+  }
+  return { done: entries.length, entries };
+}
+
+/**
+ * The newest list the job wrote within two days. A run that failed left the last answer
+ * standing, and a job that has not answered for two days has nothing current to say.
+ */
+export async function lastHiddenLong(
+  siteId: string,
+  db: Db,
+  now = Date.now(),
+): Promise<HiddenLong[]> {
+  const rows = await db
+    .select({ detail: activity.detail })
+    .from(activity)
+    .where(
+      and(
+        eq(activity.siteId, siteId),
+        eq(activity.kind, 'cron-hidden'),
+        gt(activity.at, now - 2 * DAY),
+      ),
+    )
+    .orderBy(desc(activity.at));
+  for (const { detail } of rows) {
+    const list = isObject(detail) ? detail.entries : undefined;
+    if (Array.isArray(list))
+      return list.filter(
+        (e): e is HiddenLong =>
+          isObject(e) && typeof e.path === 'string' && typeof e.since === 'string',
+      );
+  }
+  return [];
 }
 
 const sourceOf = (data: unknown) => {

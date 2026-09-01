@@ -55,7 +55,7 @@ about, worst first:
 |---|---|
 | **Error** | the visitor sees the page broken. One check is an error: a picture or a download whose bytes are not in the bucket and not in the library any more |
 | **Warning** | the page says something nobody meant — a link to a page this site has none of, a link to a page that has no file in this language, a picture that has been archived, alt text left empty, a required translation standing blank, a menu item pointing at a page that is gone |
-| **Note** | worth reading before the words go out — a translation made from a version somebody has changed since, a value machine translation filled in that nobody has read, a search title over the length Google shows, no search description, no sharing image |
+| **Note** | worth reading before the words go out — a translation made from a version somebody has changed since, a value machine translation filled in that nobody has read, a search title over the length Google shows, no search description, no sharing image, a page hidden for more than 90 days |
 
 **Only an error stops a publish.** With one in the list the button is disabled and reads
 *Fix 1 error to publish*; with warnings it reads *Publish anyway (2 warnings)* and commits
@@ -75,6 +75,12 @@ the collection schema is not done with, and languages that have drifted apart.
   in several languages is one line, and its link opens the site's default language
 - A pass that could not be run says so and holds nothing back: a lint nobody could run is not
   a reason to stop you publishing your own site
+- **One note is about the site rather than the set.** A daily job reads every hidden file in
+  the repository and dates the hide from the file's commits; a page hidden for more than 90
+  days is listed under *Elsewhere on the site* for as long as it stays hidden, without a
+  *Go to field* — the decision is to show it again or delete it. It appears once the job has
+  run, which is the first tick after the deploy and then daily, and it is `hidden-long` in
+  `checks.ignore`
 - A rule that is noise on a particular site is turned off in `cms.config.ts` —
   `checks: { ignore: ['seo-description'] }` ([Configuration](configuration.md#checks))
 

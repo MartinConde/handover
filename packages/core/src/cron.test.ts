@@ -71,11 +71,12 @@ const kinds = () =>
 test('a job the table has never seen is due, so the first tick runs them all', async () => {
   const report = await runDue('default', { db, store, fetch: listing([]), now: NOW });
 
-  expect(report).toEqual({ reconcile: 0, retention: 0, orphans: 0 });
+  expect(report).toEqual({ reconcile: 0, retention: 0, orphans: 0, hidden: 0 });
   expect(await cronRows()).toEqual([
     { job: 'reconcile', lastRun: NOW },
     { job: 'retention', lastRun: NOW },
     { job: 'orphans', lastRun: NOW },
+    { job: 'hidden', lastRun: NOW },
   ]);
 });
 
@@ -88,6 +89,7 @@ test('a job whose interval has not passed is skipped and its stamp is left alone
     { job: 'reconcile', lastRun: NOW },
     { job: 'retention', lastRun: NOW },
     { job: 'orphans', lastRun: NOW },
+    { job: 'hidden', lastRun: NOW },
   ]);
 });
 
@@ -101,6 +103,7 @@ test('an hour later the hourly job runs again and the daily one does not', async
     { job: 'reconcile', lastRun: later },
     { job: 'retention', lastRun: NOW },
     { job: 'orphans', lastRun: NOW },
+    { job: 'hidden', lastRun: NOW },
   ]);
 });
 
@@ -121,7 +124,7 @@ test('work done is logged as cron-<job> with its count', async () => {
 
   const report = await runDue('default', { db, store, fetch: listing([orphan]), now: NOW });
 
-  expect(report).toEqual({ reconcile: 1, retention: 1, orphans: 0 });
+  expect(report).toEqual({ reconcile: 1, retention: 1, orphans: 0, hidden: 0 });
   expect(await kinds()).toEqual(['cron-reconcile {"done":1}', 'cron-retention {"done":1}']);
 });
 
@@ -134,12 +137,14 @@ test('a job that throws is logged, stamped, and does not stop the next one', asy
     reconcile: 'R2 LIST site-media failed: 403',
     retention: 0,
     orphans: 0,
+    hidden: 0,
   });
   expect(await kinds()).toEqual(['cron-reconcile {"error":"R2 LIST site-media failed: 403"}']);
   expect(await cronRows()).toEqual([
     { job: 'reconcile', lastRun: NOW },
     { job: 'retention', lastRun: NOW },
     { job: 'orphans', lastRun: NOW },
+    { job: 'hidden', lastRun: NOW },
   ]);
 });
 
@@ -161,14 +166,19 @@ const stampFails = (real: Db): Db =>
 test('a stamp that cannot be written does not stop the job after it', async () => {
   const deps = { db: stampFails(db), store, fetch: listing([]), now: NOW };
 
-  expect(await runDue('default', deps)).toEqual({ reconcile: 0, retention: 0, orphans: 0 });
+  expect(await runDue('default', deps)).toEqual({
+    reconcile: 0,
+    retention: 0,
+    orphans: 0,
+    hidden: 0,
+  });
 });
 
 test('a name nothing is registered under is refused', async () => {
   await expect(runJob('default', 'sitemap', { db, store, now: NOW })).rejects.toThrow(
-    'there is no cron job called sitemap: this site runs reconcile, retention, orphans',
+    'there is no cron job called sitemap: this site runs reconcile, retention, orphans, hidden',
   );
-  expect(JOB_NAMES).toEqual(['reconcile', 'retention', 'orphans']);
+  expect(JOB_NAMES).toEqual(['reconcile', 'retention', 'orphans', 'hidden']);
 });
 
 // The sweep needs the repository, and the dispatcher is the only thing that hands it over.
@@ -187,4 +197,24 @@ test('the orphan sweep is given the repository the tick was called with', async 
 
   expect(report.orphans).toBe(1);
   expect(await db.select().from(tables.drafts)).toEqual([]);
+});
+
+// The hidden check's answer is read later by the drawer, so its row carries the list and not
+// only the count — the one job whose "how many" is not the whole of what it did.
+test('the hidden job writes what it found into its activity row', async () => {
+  const path = 'src/content/listings/en/old-barn.yaml';
+  const since = new Date(NOW - 100 * DAY).toISOString();
+  const git = {
+    getHead: async () => 'commit-B',
+    getFile: async () => undefined,
+    contentFiles: async () => [{ path, contents: '_status: "hidden"\ntitle: "Barn"\n' }],
+    fileCommits: async () => [{ sha: 'h1', date: since, message: 'Hide' }],
+  } as never;
+
+  const report = await runDue('default', { db, store, git, fetch: listing([]), now: NOW });
+
+  expect(report.hidden).toBe(1);
+  expect(await kinds()).toEqual([
+    `cron-hidden {"done":1,"entries":[{"path":"${path}","since":"${since}"}]}`,
+  ]);
 });

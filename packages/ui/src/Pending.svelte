@@ -143,6 +143,9 @@ const groups = $derived(
     .map((entry) => ({ entry, items: merged(found.filter((c) => c.entry === entry.key)) }))
     .sort((a, b) => WORST[a.items[0]?.severity ?? 'info'] - WORST[b.items[0]?.severity ?? 'info']),
 );
+// A note about a page that is not in the set at all — the daily hidden check's — has no row to
+// sit under and is not the set's to answer for, so it is listed on its own and never counted.
+const elsewhere = $derived(merged(checks.filter((c) => !entries.some((e) => e.key === c.entry))));
 // Counted as the client reads them: one line is one problem, however many files it is in.
 const lines = $derived(groups.flatMap((g) => g.items));
 const errors = $derived(lines.filter((c) => c.severity === 'error'));
@@ -580,7 +583,7 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
             {@render result()}
           </div>
         {/if}
-        {#if checksFailed || groups.length}
+        {#if checksFailed || groups.length || elsewhere.length}
           <section class="checks" aria-labelledby="checks-h">
             <h3 class="group-title" id="checks-h">Checks</h3>
             {#if checksFailed}
@@ -589,7 +592,7 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
               </p>
             {:else}
               <p class="checks-sum">
-                {counted}{verdict} Checked over
+                {lines.length ? `${counted}${verdict}` : 'Nothing found.'} Checked over
                 {selected.length === 1 ? 'the entry' : `the ${selected.length} entries`} you have
                 selected, and again when you press Publish.
               </p>
@@ -612,6 +615,17 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
                   {/if}
                 </div>
               {/each}
+              {#if elsewhere.length}
+                <div class="check-group">
+                  <h4>Elsewhere on the site</h4>
+                  {#each elsewhere as item (item.path + item.fieldPath + item.check)}
+                    <div class="notice notice-{TINT[item.severity]}">
+                      <span class="sev">{SEVERITY[item.severity]}</span>
+                      <span class="msg">{item.message}</span>
+                    </div>
+                  {/each}
+                </div>
+              {/if}
             {/if}
           </section>
         {/if}

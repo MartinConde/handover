@@ -346,6 +346,8 @@ let lastCommitRow: { sha: string; at: number; kind: string; by: string | null } 
 let publishes: { entry: string; at: number; by: string | null }[] = [];
 /** Who last typed into each draft, by path. */
 let editors: Record<string, string | null> = {};
+// What the daily hidden check last found, as the drawer's checks read it. Filled per test.
+let hiddenLong: { path: string; since: string }[] = [];
 // The checks this site has turned off, which is `checks.ignore` in cms.config.ts.
 let siteChecks: { ignore?: string[] } | undefined;
 // Whether the site has been told where its bucket is: all four values, or none of them.
@@ -638,6 +640,7 @@ vi.mock('@handover/core', async (original) => ({
   publishedEntries: async () => publishes,
   // And the join that turns a draft's `updated_by` into a name, proven in core's own db.test.ts.
   draftEditors: async () => editors,
+  lastHiddenLong: async () => hiddenLong,
   releaseLocks: async (_site: string, _db: unknown, userId: string) => {
     released.push(userId);
   },
@@ -738,6 +741,7 @@ afterEach(() => {
   lastCommitRow = { sha: 'def456', at: 1755864000000, kind: 'publish', by: 'Anna Berg' };
   publishes = [];
   editors = {};
+  hiddenLong = [];
   holders = {};
   cloudflareToken = 'cf-token';
   cloudflareWorker = 'acct/handover-demo';
@@ -6451,4 +6455,27 @@ test('a file this publish removes is not linted', async () => {
   ]);
 
   expect(await results(await checking(['posts/hello']))).toEqual([]);
+});
+
+// The one check that is about the whole site: the daily job's list reaches the checks and comes
+// out named by its entry, so the drawer can say which page it is about.
+test("a page the daily job found hidden too long is a note beside the set's own", async () => {
+  hiddenLong = [
+    { path: 'src/content/listings/en/seaview-cottage.yaml', since: '2026-04-01T09:00:00Z' },
+  ];
+  readyDrafts.mockImplementationOnce(async () => [
+    {
+      path: 'src/content/listings/en/seaview-cottage.yaml',
+      contents:
+        '_status: hidden\ntitle: Seaview Cottage\nrooms: 3\naddress:\n  street: Cliff Road\n',
+      updatedAt: 1755864000000,
+    },
+  ]);
+
+  const found = await results(await checking(['listings/seaview-cottage']));
+
+  expect(found.map((r) => `${r.check} ${r.entry}`)).toEqual([
+    'hidden-long listings/seaview-cottage',
+  ]);
+  expect(found[0]?.message).toMatch(/^Seaview Cottage has been hidden for over \d+ months — /);
 });

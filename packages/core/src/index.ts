@@ -36,8 +36,9 @@ export type {
   CheckResult,
   CheckSeverity,
   CheckSite,
+  HiddenLong,
 } from './checks.js';
-export { CHECKS, runChecks } from './checks.js';
+export { CHECKS, findHiddenLong, lastHiddenLong, runChecks } from './checks.js';
 export type {
   AstroContent,
   ContentEntry,

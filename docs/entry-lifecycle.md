@@ -35,6 +35,9 @@ to pointing at the page when the entry is shown again.
 
 "Nowhere" is an honest answer for a page nobody linked to: its address answers 404.
 
+A page hidden for more than 90 days comes up as a note in the pending-changes drawer, so a
+page put away and forgotten is seen once more ([Pending changes](pending-changes.md#checks-before-a-publish)).
+
 ## Creating an entry
 
 "New entry" asks for a title and derives the filename from it

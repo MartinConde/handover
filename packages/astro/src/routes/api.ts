@@ -68,6 +68,7 @@ import {
   imagePresets,
   isLive,
   lastCommit,
+  lastHiddenLong,
   loadDraft,
   lockHolder,
   lockHolders,
@@ -3369,6 +3370,7 @@ async function prepublishChecks(request: Request): Promise<Response> {
     seoDefaults: (await siteSeoDefaults()) as Record<string, SeoDefaultsValue>,
     store: mediaStore(),
     ignore: config.checks?.ignore,
+    hiddenLong: await lastHiddenLong('default', database),
   });
   // Named by the entry as well as by the file: the drawer lists entries, and which of an
   // entry's languages a result is about is the file it carries.

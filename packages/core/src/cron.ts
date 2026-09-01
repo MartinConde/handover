@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { expireActivity, logActivity } from './activity.js';
+import { findHiddenLong } from './checks.js';
 import { type Db, sweepOrphans } from './db.js';
 import type { GitClient } from './git.js';
 import { type R2Store, reconcileMedia } from './media.js';
@@ -18,24 +19,28 @@ export interface JobDeps {
 
 const HOUR = 60 * 60 * 1000;
 
+/** How many things a job did — and, for the one whose answer is read back later, what it found. */
+type JobDone = number | { done: number; [detail: string]: unknown };
+
 /**
  * The one Cron Trigger dispatches to these. A job says how often it wants to run and returns how
  * many things it did; adding one is a line here and never a second trigger in `wrangler.jsonc`.
  */
 const JOBS: Record<
   string,
-  { every: number; run: (siteId: string, deps: JobDeps) => Promise<number> }
+  { every: number; run: (siteId: string, deps: JobDeps) => Promise<JobDone> }
 > = {
   reconcile: { every: HOUR, run: (siteId, d) => reconcileMedia(siteId, d.db, d.store, d) },
   retention: { every: 24 * HOUR, run: (siteId, d) => expireActivity(siteId, d.db, d.now) },
   orphans: { every: 24 * HOUR, run: (siteId, d) => sweepOrphans(siteId, d.db, d.git, d.now) },
+  hidden: { every: 24 * HOUR, run: (siteId, d) => findHiddenLong(siteId, d.git, d.now) },
 };
 
 /** What this site runs, in the order the dispatcher walks them. */
 export const JOB_NAMES = Object.keys(JOBS);
 
 /** One named job, whatever the clock says. Nothing is registered under an unknown name. */
-export async function runJob(siteId: string, name: string, deps: JobDeps): Promise<number> {
+export async function runJob(siteId: string, name: string, deps: JobDeps): Promise<JobDone> {
   const job = JOBS[name];
   if (!job)
     throw new Error(`there is no cron job called ${name}: this site runs ${JOB_NAMES.join(', ')}`);
@@ -60,9 +65,14 @@ export async function runDue(siteId: string, deps: JobDeps): Promise<CronReport>
     // A job the table has never seen is due now, which is what makes the first tick run them all.
     if (before !== undefined && now - before < job.every) continue;
     try {
-      const done = await runJob(siteId, name, { ...deps, now });
+      const out = await runJob(siteId, name, { ...deps, now });
+      const done = typeof out === 'number' ? out : out.done;
       report[name] = done;
-      if (done) await logActivity(siteId, deps.db, { kind: `cron-${name}`, detail: { done } });
+      if (done)
+        await logActivity(siteId, deps.db, {
+          kind: `cron-${name}`,
+          detail: typeof out === 'number' ? { done } : out,
+        });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       report[name] = message;

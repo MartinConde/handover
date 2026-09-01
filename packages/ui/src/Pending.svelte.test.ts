@@ -908,3 +908,40 @@ test('checks that could not be run leave the publish where it was', async () => 
 
   expect(published).toHaveBeenCalled();
 });
+
+// A note about a page that is not in the set at all — the daily hidden check's — has no entry
+// row to sit under, so it gets a group of its own and stays out of the set's own count.
+test('a note about a page outside the set is listed under its own heading', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({
+        results: [
+          CHECKS.results[0],
+          {
+            check: 'hidden-long',
+            entry: 'listings/old-barn',
+            path: 'src/content/listings/en/old-barn.yaml',
+            fieldPath: '',
+            severity: 'info',
+            message: 'The Old Barn has been hidden for over 4 months — long enough to decide',
+          },
+        ],
+      }),
+    ),
+  );
+  const root = show();
+  await settled();
+
+  expect(
+    Array.from(root.querySelectorAll('.check-group h4'), (n) => n.textContent?.trim()),
+  ).toEqual(['Home Pages', 'Elsewhere on the site']);
+  expect(messages(root)).toEqual([
+    'No search description — a search engine will quote whatever sentence it likes',
+    'The Old Barn has been hidden for over 4 months — long enough to decide',
+  ]);
+  expect(q(root, '.checks-sum')?.textContent?.replace(/\s+/g, ' ')).toBe(
+    '1 note — nothing is in the way. Checked over the 2 entries you have selected, and again when you press Publish.',
+  );
+  expect(root.querySelectorAll('.check-group .notice a')).toHaveLength(1);
+});

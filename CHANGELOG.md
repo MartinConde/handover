@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **The 90-day hidden check.** A daily job — `hidden`, on the same schedule as the rest —
+  reads every `_status: hidden` file in the repository and dates the hide from the file's own
+  commits; the drawer's checks then list a page hidden for more than 90 days as a note, *The
+  Old Barn has been hidden for over 4 months — long enough to decide whether it comes back or
+  goes*, under **Elsewhere on the site** when the page is not in the set, for as long as it
+  stays hidden. `hidden-long` in `checks.ignore` turns it off; the job's `cron-hidden` row in
+  the activity log carries what it found.
 - **Dashboard leftovers.** The dashboard has the quick actions — one *New page* / *New listing*
   button per collection opening the same New entry dialog the list opens — and *Show* beside a
   language on the translation tile, which lands on the entry list's new **Language** filter:

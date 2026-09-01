@@ -342,6 +342,7 @@ test('a cron row says what the job did, or why it did not', async () => {
       ev('cron-reconcile', { user: null, detail: { done: 2 } }),
       ev('cron-retention', { user: null, detail: { done: 1 } }),
       ev('cron-orphans', { user: null, detail: { done: 3 } }),
+      ev('cron-hidden', { user: null, detail: { done: 2, entries: [] } }),
       ev('cron-orphans', { user: null, detail: { error: 'the repository could not be reached' } }),
       ev('cron-later', { user: null, detail: { done: 1 } }),
     ],
@@ -353,6 +354,7 @@ test('a cron row says what the job did, or why it did not', async () => {
     'The hourly media check recorded 2 uploads the library had missed.',
     'The daily clean-up removed 1 activity row older than 180 days.',
     'The daily clean-up discarded 3 drafts whose file is no longer in the repository.',
+    'The daily hidden-page check found 2 pages hidden for more than 90 days.',
     'The daily draft clean-up failed: the repository could not be reached.',
     'The later job ran and did 1 thing.',
   ]);

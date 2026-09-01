@@ -6,6 +6,8 @@ import {
   type CheckInput,
   type CheckResult,
   type CheckSite,
+  findHiddenLong,
+  lastHiddenLong,
   runChecks,
 } from './checks.js';
 import { type Db, openDb } from './db.js';
@@ -118,7 +120,7 @@ beforeAll(async () => {
 const run = (
   entries: CheckEntry[],
   extra: Partial<CheckInput> = {},
-  deps: { fetch?: typeof globalThis.fetch } = {},
+  deps: { fetch?: typeof globalThis.fetch; now?: number } = {},
 ) => runChecks('default', db, { entries, site, index, ...extra }, deps);
 
 const shown = (results: CheckResult[]) => results.map((r) => `${r.check} ${r.fieldPath}`);
@@ -449,4 +451,128 @@ test('results are grouped by the file they are about', async () => {
     ...results.filter((r) => r.path.includes('/de/')).map((r) => r.path),
     ...results.filter((r) => r.path.includes('/en/')).map((r) => r.path),
   ]);
+});
+
+// ---------------------------------------------------------------------------
+// The one check that is a question about the whole site rather than about a publish: a page
+// hidden so long that nobody is coming back to it. The daily job dates each hide from the
+// file's own commits; the drawer shows what it found while the file is still hidden.
+
+const NOW = 1_800_000_000_000;
+const DAY = 24 * 60 * 60 * 1000;
+const ago = (days: number) => new Date(NOW - days * DAY).toISOString();
+const hidden = '_status: "hidden"\ntitle: "Put away"\n';
+
+/** A repository whose tip holds these files, with the commits and older versions given. */
+function repo(
+  tip: Record<string, string>,
+  log: Record<string, { sha: string; date: string }[]>,
+  versions: Record<string, string> = {},
+) {
+  const asked: string[] = [];
+  return {
+    asked,
+    git: {
+      contentFiles: async () => Object.entries(tip).map(([path, contents]) => ({ path, contents })),
+      fileCommits: async (path: string) => {
+        asked.push(`log ${path}`);
+        return (log[path] ?? []).map((c) => ({ ...c, message: 'x' }));
+      },
+      getFile: async (path: string, ref?: string) => {
+        asked.push(`file ${path}@${ref}`);
+        const contents = versions[`${path}@${ref}`];
+        return contents === undefined ? undefined : { contents, blob_sha: 'b' };
+      },
+    },
+  };
+}
+
+test('the job finds a file hidden 91 days ago and not one hidden 89 days ago', async () => {
+  const barn = file('listings', 'en', 'old-barn');
+  const cafe = file('listings', 'en', 'cafe-bar');
+  const { git, asked } = repo(
+    { [barn]: hidden, [cafe]: hidden, [file('listings', 'en', 'mill-house')]: title },
+    { [barn]: [{ sha: 'h1', date: ago(91) }], [cafe]: [{ sha: 'h2', date: ago(89) }] },
+  );
+
+  expect(await findHiddenLong('default', git, NOW)).toEqual({
+    done: 1,
+    entries: [{ path: barn, since: ago(91) }],
+  });
+  // A live file's history is never read, and the tip's own version is never read back.
+  expect(asked).toEqual([`log ${barn}`, `log ${cafe}`]);
+});
+
+test('an edit after the hide keeps the date of the hide', async () => {
+  const barn = file('listings', 'en', 'old-barn');
+  const { git } = repo(
+    { [barn]: hidden },
+    {
+      [barn]: [
+        { sha: 'edit', date: ago(5) },
+        { sha: 'hide', date: ago(100) },
+      ],
+    },
+    { [`${barn}@hide`]: hidden },
+  );
+
+  expect((await findHiddenLong('default', git, NOW)).entries).toEqual([
+    { path: barn, since: ago(100) },
+  ]);
+});
+
+test('a page shown and hidden again counts from the newer hide', async () => {
+  const barn = file('listings', 'en', 'old-barn');
+  const { git } = repo(
+    { [barn]: hidden },
+    {
+      [barn]: [
+        { sha: 'hide', date: ago(10) },
+        { sha: 'shown', date: ago(100) },
+      ],
+    },
+    { [`${barn}@shown`]: title },
+  );
+
+  expect((await findHiddenLong('default', git, NOW)).entries).toEqual([]);
+});
+
+test('a site with no repository configured has nothing for the job to read', async () => {
+  expect(await findHiddenLong('default', undefined, NOW)).toEqual({ done: 0, entries: [] });
+});
+
+test('what the job found is a note naming the page, while the index still lists it hidden', async () => {
+  const barn = file('listings', 'en', 'old-barn');
+  const cafe = file('listings', 'en', 'cafe-bar');
+  const results = await run(
+    [],
+    {
+      hiddenLong: [
+        { path: barn, since: ago(120) },
+        { path: cafe, since: ago(120) },
+      ],
+    },
+    { now: NOW },
+  );
+
+  expect(results).toEqual([
+    {
+      check: 'hidden-long',
+      path: barn,
+      fieldPath: '',
+      severity: 'info',
+      message:
+        'The Old Barn has been hidden for over 4 months — long enough to decide whether it comes back or goes',
+    },
+  ]);
+});
+
+test('the drawer reads the list the job wrote this week, not an older one or a failed run', async () => {
+  const row = (id: string, at: number, detail: unknown) =>
+    db.insert(tables.activity).values({ id, siteId: 'default', at, kind: 'cron-hidden', detail });
+  await row('old', NOW - 3 * DAY, { done: 1, entries: [{ path: 'a', since: ago(100) }] });
+  await row('fresh', NOW - DAY, { done: 1, entries: [{ path: 'b', since: ago(100) }] });
+  await row('failed', NOW - 60_000, { error: 'the repository could not be reached' });
+
+  expect(await lastHiddenLong('default', db, NOW)).toEqual([{ path: 'b', since: ago(100) }]);
 });

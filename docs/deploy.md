@@ -43,9 +43,11 @@ export default { ...handler, scheduled };
 ## The schedule
 
 One Cron Trigger runs every five minutes and one handler decides what is due: media
-reconciliation hourly, activity-log retention daily, and daily a sweep of the draft rows a
-rename or a delete left behind when the request died between its commit and its database write. A package upgrade that adds a job
-adds no trigger, so `wrangler.jsonc` is written once.
+reconciliation hourly, activity-log retention daily, daily a sweep of the draft rows a
+rename or a delete left behind when the request died between its commit and its database
+write, and daily the hidden-page check behind the drawer's `hidden-long` note
+([Pending changes](pending-changes.md#checks-before-a-publish)). A package upgrade that adds
+a job adds no trigger, so `wrangler.jsonc` is written once.
 
 To fire a tick by hand, build first and ask for one. `--bundle` is not optional — the Astro
 build ships its own, and `--test-scheduled` only reaches a Worker wrangler bundled itself:

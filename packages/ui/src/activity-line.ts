@@ -101,11 +101,14 @@ const JOB_DID: Record<string, (n: number) => string> = {
     `The daily clean-up removed ${n} activity row${n === 1 ? '' : 's'} older than 180 days.`,
   orphans: (n) =>
     `The daily clean-up discarded ${n} draft${n === 1 ? '' : 's'} whose file is no longer in the repository.`,
+  hidden: (n) =>
+    `The daily hidden-page check found ${n} page${n === 1 ? '' : 's'} hidden for more than 90 days.`,
 };
 const JOB_NAME: Record<string, string> = {
   reconcile: 'hourly media check',
   retention: 'daily activity clean-up',
   orphans: 'daily draft clean-up',
+  hidden: 'daily hidden-page check',
 };
 
 export function said(event: ActivityEvent, people: Person[] = []): Said {
