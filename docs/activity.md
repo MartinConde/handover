@@ -14,7 +14,7 @@ first sign-in onwards.
 |---|---|
 | Accounts | `login` (by password, by emailed link or through GitHub) · `invite` · `role-change`, naming the member as well as their id, so the row still reads once they are renamed or gone · `member-removed` · `password-set` (a first one, a change or a reset) |
 | Publishing | `publish`, with the commit it made and how many files were in it · `publish-conflict`, when a file had changed in the repository since it was opened · `publish-failed`, when the repository turned the commit down · `lock-takeover`, naming who the entry was taken from · `hold-released` · `draft-discard`, when unpublished changes were thrown away — by **Discard** in the drawer, or by an older version restored over them, which `detail.restore` names by its commit |
-| Entries | `entry-rename`, with the name it had before · `entry-delete` and `locale-off`, each with the commit that took the files away and the languages that went — which is what a **Restore** on the row puts back ([Entry lifecycle](entry-lifecycle.md#putting-a-deleted-entry-back)) |
+| Entries | `entry-rename` and `entry-duplicate`, each with the name it had before or was copied from · `entry-delete` and `locale-off`, each with the commit that took the files away and the languages that went — which is what a **Restore** on the row puts back ([Entry lifecycle](entry-lifecycle.md#putting-a-deleted-entry-back)) |
 | Media | `upload` — a picture stored, named by the file it was chosen as. Choosing one the site already holds is not an upload and is not a row · `media-archive` — put away or taken back out · `media-delete` — bytes and row gone, which only happens when nothing names them |
 | Site | `redirect-added`, `redirect-changed` and `redirect-deleted` — a rule the client wrote by hand under Site settings → Redirects, each with the commit it made. A rule a rename or a hide wrote is part of that publish and is not a row of its own |
 | Settings | `setting-changed` — one of the client's own [integration keys](diagnostics.md#integrations) set, replaced or removed. The name of the key, never its value |
@@ -86,7 +86,11 @@ with `detail.from` naming whoever had set it.
 in it says how many instead, since there is no single entry to open. Either way the row carries
 the first seven characters of the commit, which is how the log and git are lined up by hand,
 and `detail.entries` lists the entries it carried — capped at eight, which is what the
-[dashboard](dashboard.md) reads back once the draft rows are gone.
+[dashboard](dashboard.md) reads back once the draft rows are gone. **The row opens on what
+the commit changed**, field by field and one entry at a time, in the same diff the
+pending-changes drawer and version history draw: *Rooms 2 → 4*, never a YAML hunk. It is read
+from git when the row is opened rather than with the page, and shows the first eight entries of
+the commit with the rest counted.
 
 **A delete carries its own way back.** The two rows that take a file away — `entry-delete` and
 `locale-off` — have a **Restore** beside them, which undoes that commit with a commit of its own.
@@ -110,7 +114,7 @@ again from the newest — the cursor belongs to the query that produced it.
 
 **A kind with no sentence of its own still gets a row.** Kinds arrive with the features that
 write them, and the screen names one it does not recognise rather than throwing:
-*Anna Berg — entry-rename contact EN*. Adding the sentence is one line beside the others.
+*Anna Berg — template-saved contact EN*. Adding the sentence is one line beside the others.
 
 ## Reading it from your own code
 

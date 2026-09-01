@@ -10,6 +10,7 @@ import {
   draftEditors,
   draftFiles,
   entryConflict,
+  heldDrafts,
   holdEntry,
   loadDraft,
   openDb,
@@ -69,6 +70,7 @@ test('a draft row round-trips every column', async () => {
     updatedAt: 1755864000000,
     updatedBy: 'anna',
     heldBy: 'martin',
+    heldAt: 1755860000000,
     pendingRedirects: [
       {
         _id: 'k3n8x1',
@@ -1130,6 +1132,22 @@ test('a publish leaves out every language of an entry somebody is holding back',
   expect((await pendingDrafts('default', db)).map((r) => r.path).toSorted()).toEqual(
     [PATH, LISTING_DE].toSorted(),
   );
+});
+
+// The drawer's *· 2 days*: the moment the hold was set is stored beside who set it, since
+// nothing else records it — a draft's `updated_at` is the last keystroke, not the flag.
+test('the held entries say when each hold was set', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+
+  await holdEntry('default', db, [PATH], 'u1', 1755864000000);
+
+  expect(await heldDrafts('default', db)).toEqual({
+    'listings/mill-house': { id: 'u1', name: null, since: 1755864000000 },
+  });
+  await holdEntry('default', db, [PATH], null);
+  expect((await db.select().from(drafts)).map((r) => r.heldAt)).toEqual([null]);
 });
 
 test('the same set publishes whole once the hold comes off', async () => {

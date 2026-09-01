@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Sentences and ages.** A rename and a duplicate read as sentences in the activity log —
+  *Anna renamed contact-us to contact*, *Anna duplicated mill-house as mill-house-copy* —
+  instead of the raw kind; the drawer's hold badge says how long the entry has sat, *On hold ·
+  Martin · 2 days*, from a new `held_at` column on `drafts` (**schema version 4**: run
+  `npx handover db generate` and commit `migrations/`; `held_by` in `GET /admin/api/drafts`
+  gains `since`); and a publish row in the log opens on the commit's per-field diff, read from
+  git through the new `GET /admin/api/activity/diff?sha=`.
 - **Three guards.** A `seo.canonical` that would run code (`javascript:`) is refused the way a
   link field's target is, in the panel and on save; `defineConfig` rejects a `mailer.provider`
   that is not `resend`, `smtp` or `cloudflare` instead of letting it fall through to Resend; a

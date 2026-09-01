@@ -88,8 +88,8 @@ the status in the entry header.
 - It is the **whole entry**, every language, the way a lock is. The header tints and says
   *On hold — won't be included when others publish*
 - The pending-changes drawer lists held entries under **On hold**, tinted, badged *On hold
-  · Martin Vale* and with their checkbox off, so a publish never quietly leaves something
-  out: the count line reads *5 changes · 4 selected · 1 on hold* and the button counts what
+  · Martin Vale · 2 days* — who set it and how many days it has sat, nothing on the day it was
+  set — and with their checkbox off, so a publish never quietly leaves something out: the count line reads *5 changes · 4 selected · 1 on hold* and the button counts what
   is going, `Publish 4 changes`
 - Anybody can check one anyway — it is a courtesy flag, not a permission — and the drawer
   says what that does before the button is pressed: publishing it releases the hold, logged

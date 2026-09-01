@@ -69,7 +69,7 @@ export interface Person {
 export interface Said {
   lead: string;
   link?: { href: string; label: string; locale: string };
-  /** Why a publish was not made. The one kind of row that expands, until 3.19 draws the diff. */
+  /** Why a publish was not made; the row opens on it, the way a publish row opens on its diff. */
   reason?: string;
 }
 
@@ -198,6 +198,22 @@ export function said(event: ActivityEvent, people: Person[] = []): Said {
       const key = INTEGRATIONS[event.subject ?? ''];
       return { lead: key ? `${actor} ${did} the ${key}.` : `${actor} ${did} a key.` };
     }
+    // Both rows carry the old name and are about the entry as it is now, which is the one of
+    // the two that is somewhere to go.
+    case 'entry-rename': {
+      const one = entryOf(event.subject);
+      const from = str(d, 'from') ?? 'an entry';
+      return one
+        ? { lead: `${actor} renamed ${from} to `, link: one }
+        : { lead: `${actor} renamed ${from}.` };
+    }
+    case 'entry-duplicate': {
+      const one = entryOf(event.subject);
+      const from = str(d, 'from') ?? 'an entry';
+      return one
+        ? { lead: `${actor} duplicated ${from} as `, link: one }
+        : { lead: `${actor} duplicated ${from}.` };
+    }
     case 'entry-delete': {
       // Named rather than linked: the entry is gone, and a row pointing at a page that answers
       // 404 is worse than the file name on its own.
@@ -284,4 +300,14 @@ export function when(at: number): string {
   if (days <= 1) return 'Yesterday';
   if (days < 7) return `${days} days ago`;
   return DATE.format(at);
+}
+
+/**
+ * How long something has been the case — the drawer's *On hold · Martin · 2 days* — in the same
+ * calendar days `when` counts. Nothing on the day it was set: a hold from this morning is not
+ * one anybody has been waiting on.
+ */
+export function age(since: number): string {
+  const days = Math.round((midnight(Date.now()) - midnight(since)) / 86_400_000);
+  return days < 1 ? '' : days === 1 ? '1 day' : `${days} days`;
 }

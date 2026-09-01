@@ -35,6 +35,8 @@ const ev = (kind: string, extra: Partial<Event> = {}): Event => ({
 function server(
   pages: Page | (Page | (() => Promise<Page>))[],
   members: { id: string; name: string; email: string }[] = [],
+  /** What a publish row's expansion reads: `GET /admin/api/activity/diff?sha=`, by sha. */
+  diffs: Record<string, unknown> = {},
 ) {
   const calls: string[] = [];
   const queue = Array.isArray(pages) ? [...pages] : [pages];
@@ -43,6 +45,10 @@ function server(
     vi.fn(async (url: string) => {
       calls.push(url);
       if (url === '/admin/api/members') return Response.json({ members });
+      if (url.startsWith('/admin/api/activity/diff?')) {
+        const sha = new URLSearchParams(url.split('?')[1]).get('sha') ?? '';
+        return sha in diffs ? Response.json(diffs[sha]) : new Response('', { status: 404 });
+      }
       const answer = queue.length > 1 ? queue.shift() : queue[0];
       return Response.json(typeof answer === 'function' ? await answer() : answer);
     }),
@@ -254,18 +260,41 @@ test('a message the provider would not take names what it was for and nobody', a
 // named the way a publish names one, since that much is true whatever the kind turns out to be.
 test('a kind nothing has written a sentence for still reads as a record', async () => {
   server({
+    events: [ev('template-saved', { subject: 'src/content/pages/en/contact.yaml' })],
+    cursor: null,
+  });
+  const root = await show();
+
+  expect(sentences(root)).toEqual(['Anna Berg — template-saved contact EN']);
+  expect(root.querySelector('.said a')?.getAttribute('href')).toBe('/admin/c/pages/contact');
+});
+
+// Both rows are written with the old name in `detail.from` and the entry as it is now as the
+// subject, which is the one of the two that is somewhere to go.
+test('a rename and a duplicate name what the entry was and link to what it is', async () => {
+  server({
     events: [
       ev('entry-rename', {
         subject: 'src/content/pages/en/contact.yaml',
         detail: { from: 'contact-us' },
+      }),
+      ev('entry-duplicate', {
+        subject: 'src/content/listings/en/mill-house-copy.yaml',
+        detail: { from: 'mill-house' },
       }),
     ],
     cursor: null,
   });
   const root = await show();
 
-  expect(sentences(root)).toEqual(['Anna Berg — entry-rename contact EN']);
-  expect(root.querySelector('.said a')?.getAttribute('href')).toBe('/admin/c/pages/contact');
+  expect(sentences(root)).toEqual([
+    'Anna Berg renamed contact-us to contact EN',
+    'Anna Berg duplicated mill-house as mill-house-copy EN',
+  ]);
+  expect(Array.from(root.querySelectorAll('.said a')).map((a) => a.getAttribute('href'))).toEqual([
+    '/admin/c/pages/contact',
+    '/admin/c/listings/mill-house-copy',
+  ]);
 });
 
 // The log outlives the account: the id is there with nothing behind it, and reading that as the
@@ -523,6 +552,62 @@ test('a log with nothing in it yet is not the same sentence as one nothing match
 });
 
 // The two ways a publish comes back with nothing written, and the one row on this screen that
+// The mockup's state 5: the row opens on what the commit changed, field by field, read from
+// the server only once somebody asks — a log page of fifty publishes is not fifty git reads.
+test('a publish row opens to the commit read field by field, not to its files', async () => {
+  const calls = server(
+    {
+      events: [
+        ev('publish', {
+          subject: 'src/content/listings/en/mill-house.yaml',
+          detail: { files: 1, entries: ['listings/mill-house'] },
+          commitSha: 'def5678abc',
+        }),
+      ],
+      cursor: null,
+    },
+    [],
+    {
+      def5678abc: {
+        entries: [
+          {
+            key: 'listings/mill-house',
+            groups: [
+              {
+                locale: 'en',
+                changes: [
+                  { path: 'rooms', label: 'Rooms', kind: 'value', before: '2', after: '4' },
+                ],
+              },
+            ],
+          },
+        ],
+        more: 0,
+      },
+    },
+  );
+  const root = await show();
+
+  const toggle = root.querySelector('.expand button') as HTMLButtonElement;
+  expect(toggle.getAttribute('aria-label')).toBe('What changed, 1h ago');
+  expect(toggle.getAttribute('aria-expanded')).toBe('false');
+  expect(calls.some((u) => u.startsWith('/admin/api/activity/diff'))).toBe(false);
+
+  toggle.click();
+  flushSync();
+  await settle();
+
+  const panel = root.querySelector('.activity-detail') as HTMLElement;
+  expect(toggle.getAttribute('aria-controls')).toBe(panel.id);
+  expect(panel.hidden).toBe(false);
+  expect(text(panel)).toContain('mill-house');
+  expect(text(panel)).toContain('Rooms2 → 4');
+  expect(text(panel)).not.toContain('rooms:');
+  expect(calls.filter((u) => u.startsWith('/admin/api/activity/diff'))).toEqual([
+    '/admin/api/activity/diff?sha=def5678abc',
+  ]);
+});
+
 // expands: 3.19 puts the other commit's diff under it, this puts the reason.
 test('a failed publish says the repository refused it and opens on the reason', async () => {
   server({
@@ -744,7 +829,9 @@ test('restore is offered on a removal and sends the commit that row named', asyn
   });
   const root = await show();
 
-  const buttons = Array.from(root.querySelectorAll('li .meta button'));
+  // The publish row's own button is the one that opens its diff, in `.expand`; Restore is not
+  // offered on it.
+  const buttons = Array.from(root.querySelectorAll('li .meta > button'));
   expect(buttons.map((b) => b.textContent)).toEqual(['Restore']);
   (buttons[0] as HTMLButtonElement).click();
   await settle();

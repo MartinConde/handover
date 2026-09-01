@@ -742,30 +742,33 @@ export async function holdEntry(
   db: Db,
   paths: string[],
   heldBy: string | null,
+  now = Date.now(),
 ): Promise<void> {
   await db
     .update(drafts)
-    .set({ heldBy })
+    .set({ heldBy, heldAt: heldBy ? now : null })
     .where(and(eq(drafts.siteId, siteId), inArray(drafts.path, paths)));
 }
 
 /**
- * The entries somebody is holding back, `"listings/mill-house"` → who marked it. Named here
- * rather than in the drawer, since the drawer is where somebody else reads it.
+ * The entries somebody is holding back, `"listings/mill-house"` → who marked it and when. Named
+ * here rather than in the drawer, since the drawer is where somebody else reads it.
  */
 export async function heldDrafts(
   siteId: string,
   db: Db,
-): Promise<Record<string, { id: string; name: string | null }>> {
+): Promise<Record<string, { id: string; name: string | null; since: number | null }>> {
   const rows = await db
-    .select({ path: drafts.path, heldBy: drafts.heldBy, name: user.name })
+    .select({ path: drafts.path, heldBy: drafts.heldBy, heldAt: drafts.heldAt, name: user.name })
     .from(drafts)
     .leftJoin(user, eq(user.id, drafts.heldBy))
     .where(and(eq(drafts.siteId, siteId), isNotNull(drafts.heldBy)));
   return Object.fromEntries(
     rows.flatMap((row) => {
       const entry = entryKey(row.path);
-      return entry && row.heldBy ? [[entry, { id: row.heldBy, name: row.name }] as const] : [];
+      return entry && row.heldBy
+        ? [[entry, { id: row.heldBy, name: row.name, since: row.heldAt }] as const]
+        : [];
     }),
   );
 }
@@ -936,6 +939,7 @@ export async function publishDrafts(
         publishedSha: commit_sha,
         // A hold this publish went through is over: the entry it was keeping back is out.
         heldBy: null,
+        heldAt: null,
         // The rules are in the commit now; leaving them on the row writes them again.
         pendingRedirects: null,
       })

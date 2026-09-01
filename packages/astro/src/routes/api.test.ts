@@ -25,6 +25,7 @@ const {
   getFile,
   getBlob,
   getHead,
+  getCommit,
   contentFiles,
   commitLog,
   fileCommits,
@@ -127,6 +128,17 @@ const {
       return undefined;
     }),
     getHead: vi.fn(async () => 'head789'),
+    // What a restore asks before it undoes anything, and what a publish row's diff is read
+    // against: which files the commit touched and what it was made on.
+    getCommit: vi.fn(
+      async (
+        sha: string,
+      ): Promise<{ sha: string; parent?: string; message: string; paths: string[] }> => ({
+        sha,
+        message: 'Delete The Mill House',
+        paths: ['src/content/listings/en/mill-house.yaml', 'src/content/redirects.yaml'],
+      }),
+    ),
     // One object by its own id — the older source language a translation names. Filled per test.
     getBlob: vi.fn(async (sha: string) => blobs[sha]),
     // Every commit that touched one path, newest first; filled per test.
@@ -635,7 +647,6 @@ vi.mock('@handover/core', async (original) => ({
   dropLock: async (_site: string, _db: unknown, entry: string) => {
     dropped.push(entry);
   },
-  // What a restore asks before it undoes anything: which entry the commit is about.
   createGitClient: () => ({
     getFile,
     getBlob,
@@ -643,11 +654,7 @@ vi.mock('@handover/core', async (original) => ({
     contentFiles,
     fileCommits,
     publish,
-    getCommit: async (sha: string) => ({
-      sha,
-      message: 'Delete The Mill House',
-      paths: ['src/content/listings/en/mill-house.yaml', 'src/content/redirects.yaml'],
-    }),
+    getCommit,
   }),
   openDb: () => {
     if (dbRefusal) throw dbRefusal;
@@ -997,7 +1004,7 @@ test('the database check answers with the schema version the tables are at', asy
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
     ok: true,
-    detail: "The database answered — the admin's tables are there. Schema version 3.",
+    detail: "The database answered — the admin's tables are there. Schema version 4.",
   });
 });
 
@@ -6106,6 +6113,48 @@ test('two versions are diffed against each other rather than against the branch'
   expect(groups.flatMap((g) => g.changes.map((c) => c.after))).toEqual(['4']);
   expect(getHead).not.toHaveBeenCalled();
 });
+
+// The log's publish row, opened: the commit against the commit it was made on, one entry at a
+// time, so a row that carried two pages answers two diffs and a redirects.yaml in the same
+// commit is not one of them.
+test('a publish is diffed against its parent, one entry at a time', async () => {
+  getCommit.mockResolvedValueOnce({
+    sha: 'def5678',
+    parent: 'abc1234',
+    message: 'Update listings/en/mill-house',
+    paths: [EN, 'src/content/redirects.yaml'],
+  });
+  files[`abc1234:${EN}`] = 'title: The Mill House\nlocation: Bakewell\nrooms: 2\n';
+  files[`def5678:${EN}`] = 'title: The Mill House\nlocation: Bakewell\nrooms: 4\n';
+
+  const res = await activityDiff('?sha=def5678', owner);
+
+  expect(res.status).toBe(200);
+  const body = (await res.json()) as {
+    entries: { key: string; groups: { changes: unknown[] }[] }[];
+    more: number;
+  };
+  expect(body.entries.map((e) => e.key)).toEqual(['listings/mill-house']);
+  expect(body.entries[0]?.groups.flatMap((g) => g.changes)).toEqual([
+    { path: 'rooms', label: 'Rooms', kind: 'value', before: '2', after: '4' },
+  ]);
+  expect(body.more).toBe(0);
+  expect(getFile).toHaveBeenCalledWith(EN, 'abc1234');
+  expect(getFile).toHaveBeenCalledWith(EN, 'def5678');
+});
+
+test('a publish diff needs a session and a commit', async () => {
+  expect((await activityDiff('?sha=def5678')).status).toBe(401);
+  expect((await activityDiff('?sha=../../etc', owner)).status).toBe(400);
+});
+
+const activityDiff = (query: string, session?: unknown) =>
+  GET({
+    params: { path: 'activity/diff' },
+    request: undefined,
+    url: new URL(`https://x/admin/api/activity/diff${query}`),
+    locals: { handover: session },
+  } as unknown as APIContext);
 
 test('a version diff of something that is not a commit is refused', async () => {
   const res = await GET(history('history/listings/mill-house/diff', '?to=../../etc'));

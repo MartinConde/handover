@@ -18,8 +18,9 @@ that has one, falling back to the file name. `locales` is the languages of it th
 waiting, in config order, and `files` their paths — which is what matches a refusal's
 `paths` back to a row. `redirects` is how many redirect rules the entry owes and is absent
 when it owes none; `redirects.yaml` itself is assembled at publish and is never a row.
-`held_by` is `{ "id", "name" }` when somebody marked the entry *Not ready yet*, and it is
-read once per entry rather than per file, since the hold is the entry's.
+`held_by` is `{ "id", "name", "since" }` when somebody marked the entry *Not ready yet* —
+`since` the moment they did, epoch milliseconds, which the drawer reads as *· 2 days* — and it
+is read once per entry rather than per file, since the hold is the entry's.
 
 Grouping happens here rather than in the browser because a title comes from the build's
 [content index](publishing.md#the-content-index), which nothing outside the Worker can read.

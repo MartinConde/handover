@@ -1,6 +1,12 @@
 <script lang="ts">
-import { ACTIVITY_GROUPS, type ActivityEvent, activityGroupOf } from '@handover/core';
+import {
+  ACTIVITY_GROUPS,
+  type ActivityEvent,
+  activityGroupOf,
+  type DiffGroup,
+} from '@handover/core';
 import { ENTRY, EXACT, initials, type Person, said, when } from './activity-line';
+import Diff from './Diff.svelte';
 
 let { role }: { role: 'owner' | 'editor' } = $props();
 
@@ -35,8 +41,29 @@ let asked = 0;
 /** The removal being put back, and what the server said if it would not be. */
 let putting = $state('');
 let refused = $state('');
-/** Which row has its reason open — one at a time, the way the log reads. */
+/** Which row is open — one at a time, the way the log reads. */
 let why = $state('');
+/** What each publish row's commit changed, read from the server the first time it is opened. */
+type Changed = { entries: { key: string; groups: DiffGroup[] }[]; more: number };
+let diffs = $state<Record<string, Changed | 'loading' | 'failed'>>({});
+
+/** A publish that made a commit opens on the commit's diff; a refused one opens on its reason. */
+const opens = (event: ActivityEvent, reason: string | undefined) =>
+  Boolean(reason) || (event.kind === 'publish' && Boolean(event.commitSha));
+
+async function toggle(event: ActivityEvent) {
+  why = why === event.id ? '' : event.id;
+  if (why !== event.id || event.kind !== 'publish' || event.id in diffs) return;
+  diffs[event.id] = 'loading';
+  const res = await fetch(`/admin/api/activity/diff?sha=${event.commitSha}`);
+  diffs[event.id] = res.ok ? ((await res.json()) as Changed) : 'failed';
+}
+
+/** Where an entry key opens: a global at its own address, everything else under its collection. */
+const hrefOf = (key: string) => {
+  const [collection = '', name = ''] = key.split('/');
+  return collection === 'globals' ? `/admin/site/${name}` : `/admin/c/${collection}/${name}`;
+};
 
 $effect(() => {
   load();
@@ -216,14 +243,14 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
               >
               <!-- Empty on every other row, which is what keeps the column straight. -->
               <span class="expand">
-                {#if line.reason}
+                {#if opens(event, line.reason)}
                   <button
                     class="btn btn-ghost btn-icon"
                     type="button"
                     aria-expanded={why === event.id}
                     aria-controls="why-{event.id}"
-                    aria-label="Why it failed, {when(event.at)}"
-                    onclick={() => (why = why === event.id ? '' : event.id)}
+                    aria-label="{line.reason ? 'Why it failed' : 'What changed'}, {when(event.at)}"
+                    onclick={() => toggle(event)}
                     >{why === event.id ? '▾' : '▸'}</button
                   >
                 {/if}
@@ -233,6 +260,27 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
           {#if line.reason}
             <div class="activity-detail" id="why-{event.id}" hidden={why !== event.id}>
               <p>{line.reason}</p>
+            </div>
+          {:else if opens(event, line.reason)}
+            {@const changed = diffs[event.id]}
+            <div class="activity-detail" id="why-{event.id}" hidden={why !== event.id}>
+              {#if changed === undefined || changed === 'loading'}
+                <p>Loading…</p>
+              {:else if changed === 'failed'}
+                <p>The commit could not be read from GitHub.</p>
+              {:else if changed.entries.length === 0}
+                <p>Nothing in this commit is an entry.</p>
+              {:else}
+                {#each changed.entries as entry (entry.key)}
+                  <section>
+                    <h2><a href={hrefOf(entry.key)}>{entry.key.split('/')[1]}</a></h2>
+                    <Diff groups={entry.groups} />
+                  </section>
+                {/each}
+                {#if changed.more}
+                  <p>…and {changed.more} more {changed.more === 1 ? 'entry' : 'entries'} in this commit.</p>
+                {/if}
+              {/if}
             </div>
           {/if}
         </li>

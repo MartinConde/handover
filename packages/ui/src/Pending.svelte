@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { DiffGroup } from '@handover/core';
+import { age } from './activity-line';
 import BuildPill, { type Build } from './BuildPill.svelte';
 import Diff from './Diff.svelte';
 import Resolve from './Resolve.svelte';
@@ -16,7 +17,7 @@ type Entry = {
   redirects?: number;
   updated_at: number;
   /** Somebody marked it "Not ready yet"; null where nobody has. */
-  held_by?: { id: string; name: string | null } | null;
+  held_by?: { id: string; name: string | null; since?: number | null } | null;
 };
 /** One thing the checks found, named by the entry as well as by the file it is in. */
 type CheckItem = {
@@ -447,7 +448,10 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
           <span class="badge badge-accent">+{plural(entry.redirects, 'redirects')}</span>
         {/if}
         {#if entry.held_by}
-          <span class="badge badge-warn">On hold · {entry.held_by.name || 'somebody'}</span>
+          {@const held = entry.held_by.since ? age(entry.held_by.since) : ''}
+          <span class="badge badge-warn"
+            >On hold · {entry.held_by.name || 'somebody'}{held ? ` · ${held}` : ''}</span
+          >
         {/if}
         {#if conflicts.includes(entry.key)}
           <span class="badge badge-danger">Changed in the repository since you opened it</span>

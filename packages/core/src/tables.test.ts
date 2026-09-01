@@ -73,6 +73,7 @@ test('the generated migration creates the columns the drafts table is specified 
     ['updated_at', 1, 0],
     ['updated_by', 0, 0],
     ['held_by', 0, 0],
+    ['held_at', 0, 0],
     ['pending_redirects', 0, 0],
     ['published_sha', 0, 0],
   ]);

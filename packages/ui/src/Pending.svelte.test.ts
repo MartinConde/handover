@@ -400,6 +400,21 @@ const HELD = [
   { ...(ENTRIES[1] as (typeof ENTRIES)[number]), held_by: { id: 'u1', name: 'Martin' } },
 ];
 
+// The age is calendar days from when the hold was set, the way the log's *Yesterday* is: a
+// hold that has sat for a week is the one the drawer exists to show.
+test('a hold set yesterday says how long the entry has been held back', () => {
+  const yesterday = [
+    ENTRIES[0] as (typeof ENTRIES)[number],
+    {
+      ...(ENTRIES[1] as (typeof ENTRIES)[number]),
+      held_by: { id: 'u1', name: 'Martin', since: Date.now() - 86_400_000 },
+    },
+  ];
+  const root = show(yesterday);
+
+  expect(q(root, '.change-group .badge-warn')?.textContent).toBe('On hold · Martin · 1 day');
+});
+
 test('an entry on hold is listed apart, unchecked and out of what Publish commits', () => {
   const root = show(HELD);
 

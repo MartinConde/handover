@@ -27,6 +27,8 @@ export const drafts = sqliteTable(
     updatedBy: text('updated_by'),
     /** "Not ready yet": the user id holding the entry back, null when it is ready. */
     heldBy: text('held_by'),
+    /** When the hold was set, epoch milliseconds — the drawer's *· 2 days*. Null with `held_by`. */
+    heldAt: integer('held_at'),
     /** Rules this entry adds to redirects.yaml when it is the one being published. */
     pendingRedirects: text('pending_redirects', { mode: 'json' }).$type<RedirectRule[]>(),
     /** The commit this row was published in; the row is cleared once that build is live. */
@@ -131,7 +133,7 @@ export const cronState = sqliteTable(
  * `migrations/handover.json`; the build refuses to go out with a stale one, so a package
  * upgrade that forgot to generate fails there rather than at the first query.
  */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 const GENERATE = 'run `npx handover db generate` and commit migrations/';
 

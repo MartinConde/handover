@@ -129,3 +129,12 @@ everybody else on the site pays for.
 Paging is by cursor rather than by offset. Two events can happen in the same millisecond, so
 the cursor carries the time *and* the row id — an offset would serve one of them twice or skip
 it, and would re-read every row already sent.
+
+```http
+GET /admin/api/activity/diff?sha=<commit>  →  { "entries": [{ "key", "groups" }], "more" }
+```
+
+What a `publish` row's commit changed, for the row's expansion: the commit against the commit
+it was made on, one item per entry it touched, `key` being `collection/name` and `groups` the
+shape [the history diff](admin-api-entries.md#history) answers. The first eight entries, with
+`more` counting the rest. `400` when `sha` is not a commit id.

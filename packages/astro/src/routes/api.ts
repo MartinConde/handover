@@ -1964,17 +1964,55 @@ async function versionDiff(collection: string, slug: string, url: URL): Promise<
     return Response.json({ error: 'a version is named by its commit' }, { status: 400 });
   const git = gitClient();
   const from = asked ?? (await git.getHead());
-  const at = async (ref: string) => {
-    const read = await Promise.all(
-      Object.entries(entryPaths(collection, slug)).map(async ([locale, path]) => {
-        const file = await git.getFile(path, ref);
-        return file ? ([locale, parseEntry('default', file.contents)] as const) : undefined;
-      }),
-    );
-    return Object.fromEntries(read.filter((f) => f !== undefined));
-  };
-  const [before, after] = await Promise.all([at(from), at(to)]);
+  const [before, after] = await Promise.all([
+    entryAt(git, collection, slug, from),
+    entryAt(git, collection, slug, to),
+  ]);
   return Response.json({ groups: diffEntry('default', formFor(collection, slug), before, after) });
+}
+
+/** One entry as a commit has it, language by language — a diff's before or its after. */
+async function entryAt(git: GitClient, collection: string, slug: string, ref: string) {
+  const read = await Promise.all(
+    Object.entries(entryPaths(collection, slug)).map(async ([locale, path]) => {
+      const file = await git.getFile(path, ref);
+      return file ? ([locale, parseEntry('default', file.contents)] as const) : undefined;
+    }),
+  );
+  return Object.fromEntries(read.filter((f) => f !== undefined));
+}
+
+/**
+ * The log's publish row, opened: what the commit changed against the commit it was made on,
+ * one entry at a time. Read when the row is opened and never with the page — fifty publishes
+ * on a page would be a hundred git reads for rows nobody looks into.
+ */
+async function activityDiff(url: URL, session: App.Locals['handover']): Promise<Response> {
+  if (!session) return new Response('Unauthorized', { status: 401 });
+  const sha = url.searchParams.get('sha') ?? '';
+  if (!SHA.test(sha))
+    return Response.json({ error: 'a publish is named by its commit' }, { status: 400 });
+  const git = gitClient();
+  const commit = await git.getCommit(sha);
+  const keys = [...new Set(commit.paths.flatMap((path) => entryKey(path) ?? []))].filter((key) => {
+    const [collection = '', slug = ''] = key.split('/');
+    return schemaOf(collection, slug) !== undefined;
+  });
+  // The dashboard's cap. Each entry is two reads per language, and a request on the Free plan
+  // has fifty subrequests in it.
+  const shown = keys.slice(0, 8);
+  const entries = await Promise.all(
+    shown.map(async (key) => {
+      const [collection = '', slug = ''] = key.split('/');
+      const [before, after] = await Promise.all([
+        // A root commit was made on nothing, so everything in it is new.
+        commit.parent ? entryAt(git, collection, slug, commit.parent) : {},
+        entryAt(git, collection, slug, sha),
+      ]);
+      return { key, groups: diffEntry('default', formFor(collection, slug), before, after) };
+    }),
+  );
+  return Response.json({ entries, more: keys.length - shown.length });
 }
 
 /**
@@ -2554,7 +2592,7 @@ async function pendingList(): Promise<Response> {
     files: string[];
     redirects?: number;
     updated_at: number;
-    held_by: { id: string; name: string | null } | null;
+    held_by: { id: string; name: string | null; since: number | null } | null;
   };
   const entries: Row[] = [];
   // Newest first, and the row that made an entry appear is the newest it has.
@@ -3062,6 +3100,7 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
   if (mounted(url.pathname)) return createAuth(url, locals.cfContext).handler(request);
   if (params.path === 'account') return account(locals.handover);
   if (params.path === 'activity') return activityLog(url, locals.handover);
+  if (params.path === 'activity/diff') return activityDiff(url, locals.handover);
   if (params.path === 'members') return members(locals.handover);
   if (params.path === 'ping') {
     return Response.json({
