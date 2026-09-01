@@ -4,6 +4,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Dashboard leftovers.** The dashboard has the quick actions — one *New page* / *New listing*
+  button per collection opening the same New entry dialog the list opens — and *Show* beside a
+  language on the translation tile, which lands on the entry list's new **Language** filter:
+  the rows that language is missing or stale in, also reachable as `?locale=de` on the list's
+  address, with the stale chip tinted. `GET /admin/api/entries/:collection` rows carry `stale`
+  and the dashboard's `translations.locales[]` carry `where`. *Last edited by* now names
+  whoever changed an entry's address, restored a version, answered a drift question or renamed
+  the entry, not only whoever typed last.
 - **SEO and sitemap.** Every sitemap page carries a `<lastmod>` — the date of the last commit
   that touched its file, from one `git log` at build; an index page the newest of its entries;
   none from a shallow clone (Workers Builds, `fetch-depth: 1`), where every file would carry

@@ -1,6 +1,7 @@
 <script lang="ts">
 import { entryName } from '@handover/core';
 import { EXACT, when } from './activity-line';
+import NewEntry, { nameOf } from './NewEntry.svelte';
 import { navigate } from './navigate';
 import OffsiteDialog, { type Target } from './Offsite.svelte';
 
@@ -15,6 +16,8 @@ type Entry = {
   editing?: { id: string; name: string | null };
   /** Who last touched it and how — the draft's editor, or the publish that carried it out. */
   edited?: { at: number; by: string | null; kind: 'edit' | 'publish' } | null;
+  /** The languages the last build found translated from a source that has moved on since. */
+  stale?: string[];
 };
 /** One thing the CMS took away, as the activity log remembers it. */
 type Deleted = {
@@ -43,9 +46,6 @@ let putting = $state<Deleted>();
 let locales = $state<string[]>([]);
 // The page above this collection, which is where a hidden entry's readers go by default.
 let index = $state<string>();
-// The starters this collection ships, and which one New entry is set to — '' is Blank.
-let templates = $state<string[]>([]);
-let starter = $state('');
 // Whether a duplicate carries the unpublished changes as well as the published file.
 let withDrafts = $state(false);
 let loading = $state(true);
@@ -75,7 +75,7 @@ $effect(() => {
 });
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const singular = $derived(collection.replace(/s$/, ''));
+const singular = $derived(nameOf(collection));
 // The first language the entry is written in, in the site's own order: an entry that exists
 // in German alone is listed by its German title rather than by its file name.
 const titleOf = (entry: Entry) =>
@@ -87,11 +87,29 @@ const many = $derived(locales.length > 1);
 const offered = (entry: Entry, locale: string) => entry.offered?.includes(locale) ?? true;
 // `_status` is the entry's rather than one language's, so any file of it saying so is the answer.
 const isHidden = (entry: Entry) => Object.values(entry.locales).some((l) => l.status === 'hidden');
-// The one filter the toolbar has: the rows the site shows, the ones it does not, or every row.
+// Two filters in the toolbar: the rows the site shows, the ones it does not, or every row; and
+// the rows a language is still owed in — no file yet, or a translation the build marked stale.
+// The dashboard's *Show* arrives as `?locale=de`, read once, when the list opens.
 let showing = $state<'all' | 'live' | 'hidden'>('all');
+let language = $state(new URLSearchParams(location.search).get('locale') ?? '');
+const owes = (entry: Entry, locale: string) =>
+  offered(entry, locale) && (!entry.locales[locale] || (entry.stale?.includes(locale) ?? false));
 const shown = $derived(
-  showing === 'all' ? entries : entries.filter((e) => isHidden(e) === (showing === 'hidden')),
+  entries.filter(
+    (e) =>
+      (showing === 'all' || isHidden(e) === (showing === 'hidden')) &&
+      (!language || owes(e, language)),
+  ),
 );
+const filtered = $derived(showing !== 'all' || language !== '');
+const chipTitle = (entry: Entry, locale: string) =>
+  !offered(entry, locale)
+    ? 'turned off for this entry'
+    : !entry.locales[locale]
+      ? 'not written yet'
+      : entry.stale?.includes(locale)
+        ? 'behind the language it was translated from'
+        : 'written';
 const named = (ids: string[]) =>
   ids.length === 1 ? (entries.find((e) => e.id === ids[0]) ?? undefined) : undefined;
 
@@ -104,9 +122,6 @@ const preview = $derived(
     entries.map((e) => e.id).filter((id) => dialog !== 'rename' || id !== target?.id),
   ),
 );
-// `house` → `House`, which is all a file name has to say to be picked from a list of two.
-const starterLabel = (name: string) => capitalise(name.replace(/-/g, ' '));
-
 const WHEN = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
   month: 'long',
@@ -125,16 +140,12 @@ async function loadDeleted(name: string) {
 async function load(name: string) {
   const res = await fetch(`/admin/api/entries/${name}`);
   if (res.ok) {
-    const body = (await res.json()) as {
-      entries: Entry[];
-      locales?: string[];
-      index?: string;
-      templates?: string[];
-    };
+    const body = (await res.json()) as { entries: Entry[]; locales?: string[]; index?: string };
     entries = body.entries;
     locales = body.locales ?? [];
     index = body.index;
-    templates = body.templates ?? [];
+    // A language the address names and the site does not declare filters nothing.
+    if (!locales.includes(language)) language = '';
   } else error = `Could not load the list (${res.status})`;
   loading = false;
 }
@@ -154,7 +165,6 @@ function open(kind: 'new' | 'rename' | 'duplicate', entry?: Entry) {
   dialog = kind;
   target = entry;
   text = kind === 'new' ? '' : kind === 'rename' ? (entry?.id ?? '') : `${entry?.id ?? ''}-copy`;
-  starter = '';
   withDrafts = false;
   error = '';
 }
@@ -200,17 +210,6 @@ async function restore(row: Deleted) {
   onchanged();
 }
 
-async function create(event: Event) {
-  event.preventDefault();
-  const res = await send(
-    `/admin/api/entries/${collection}`,
-    json({ title: text, ...(starter ? { template: starter } : {}) }),
-  );
-  if (!res) return;
-  const { slug } = (await res.json()) as { slug: string };
-  navigate(`/admin/c/${collection}/${slug}`);
-}
-
 // The copy is a draft like a new entry, so it opens the same way — its own lock, nothing in
 // the repository until somebody publishes it.
 async function duplicate(event: Event) {
@@ -252,7 +251,7 @@ async function done() {
 
 <main class="main">
   <div class="list-toolbar">
-    <h1>{capitalise(collection)} <span class="count">{showing === 'all' ? entries.length : `${shown.length} of ${entries.length}`}</span></h1>
+    <h1>{capitalise(collection)} <span class="count">{filtered ? `${shown.length} of ${entries.length}` : entries.length}</span></h1>
     <span class="spacer"></span>
     <div class="filters">
       <label class="visually-hidden" for="list-status">Status</label>
@@ -261,6 +260,15 @@ async function done() {
         <option value="live">Live</option>
         <option value="hidden">Hidden</option>
       </select>
+      {#if many}
+        <label class="visually-hidden" for="list-locale">Language</label>
+        <select class="input" id="list-locale" bind:value={language}>
+          <option value="">Every language</option>
+          {#each locales as locale (locale)}
+            <option value={locale}>{locale.toUpperCase()} missing or stale</option>
+          {/each}
+        </select>
+      {/if}
     </div>
     <button class="btn btn-primary" type="button" onclick={() => open('new')}>New {singular}</button>
   </div>
@@ -351,7 +359,11 @@ async function done() {
   {:else if loading}
     <p class="placeholder">Loading…</p>
   {:else if entries.length && !shown.length}
-    <p class="placeholder">No {showing} {collection}.</p>
+    <p class="placeholder">
+      {language
+        ? `Nothing is missing or stale in ${language.toUpperCase()}.`
+        : `No ${showing} ${collection}.`}
+    </p>
   {:else if entries.length}
     <!-- The languages column is the one that comes and goes; without it the grid is the
          stylesheet's five-column `has-select.cols-4`, with it the six-column default. -->
@@ -401,11 +413,8 @@ async function done() {
                     class="chip"
                     class:chip-missing={!entry.locales[locale] && offered(entry, locale)}
                     class:chip-disabled={!offered(entry, locale)}
-                    title="{locale}: {offered(entry, locale)
-                      ? entry.locales[locale]
-                        ? 'written'
-                        : 'not written yet'
-                      : 'turned off for this entry'}"
+                    class:chip-stale={Boolean(entry.locales[locale]) && entry.stale?.includes(locale)}
+                    title="{locale}: {chipTitle(entry, locale)}"
                   >{locale.toUpperCase()}</span>
                 {/each}
               </span>
@@ -537,7 +546,9 @@ async function done() {
 
 <!-- Not aria-modal: the shell behind stays reachable until the design gate gives these the
      drawer's inert treatment, and claiming a trap that is not there is worse than not claiming it. -->
-{#if dialog}
+{#if dialog === 'new'}
+  <NewEntry {collection} onclose={close} />
+{:else if dialog}
   <div class="scrim">
     <div class="dialog" role="dialog" aria-labelledby="entry-dialog-h">
       {#if dialog === 'rename'}
@@ -566,7 +577,7 @@ async function done() {
             </button>
           </div>
         </form>
-      {:else if dialog === 'duplicate'}
+      {:else}
         <h2 id="entry-dialog-h">Duplicate {titleOf(target as Entry)}</h2>
         <form onsubmit={duplicate}>
           <div class="field">
@@ -596,45 +607,6 @@ async function done() {
             <button class="btn" type="button" onclick={close}>Cancel</button>
             <button class="btn btn-primary" type="submit" disabled={busy}>
               {busy ? 'Duplicating…' : 'Duplicate'}
-            </button>
-          </div>
-        </form>
-      {:else}
-        <h2 id="entry-dialog-h">New {singular}</h2>
-        <form onsubmit={create}>
-          <div class="field">
-            <div class="label-row"><label for="new-title">Title</label></div>
-            <input
-              class="input"
-              id="new-title"
-              type="text"
-              bind:value={text}
-              bind:this={field}
-              aria-describedby="new-hint"
-            />
-            <p class="hint" id="new-hint">
-              Saved as <span class="filename">{preview}</span>. This becomes the web address.
-            </p>
-          </div>
-          {#if templates.length}
-            <fieldset>
-              <legend>Start from</legend>
-              <label class="choice">
-                <input type="radio" name="starter" value="" bind:group={starter} /> Blank
-              </label>
-              {#each templates as name (name)}
-                <label class="choice">
-                  <input type="radio" name="starter" value={name} bind:group={starter} />
-                  {starterLabel(name)} <span class="desc">template</span>
-                </label>
-              {/each}
-            </fieldset>
-          {/if}
-          {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
-          <div class="actions">
-            <button class="btn" type="button" onclick={close}>Cancel</button>
-            <button class="btn btn-primary" type="submit" disabled={busy}>
-              {busy ? 'Creating…' : 'Create'}
             </button>
           </div>
         </form>

@@ -4,6 +4,12 @@
 out and how far behind the translations are. Nothing on it is configurable, and it adds no
 tables — every tile is a read the admin already makes.
 
+## Quick actions
+
+Above the tiles, one button per collection — *New page*, *New listing* — opens the same New
+entry dialog the collection's list opens: a title, the file name it will be saved under, and
+the collection's starters beside Blank. Creating one lands on the new entry.
+
 ## The tiles
 
 **Unpublished changes** — how many entries are waiting, how many of them somebody is
@@ -19,8 +25,10 @@ unpublished changes reads *Edited by …*; one whose changes are already out rea
 by …*. A row somebody has open right now carries *… is editing*.
 
 **Translation health** — per language, how many entries owe it a file and how many of its
-translations were made from a source that has changed since. Not drawn on a site that
-declares one language.
+translations were made from a source that has changed since. *Show* beside a language opens
+the entry list filtered to the rows that owe it ([translating.md](translating.md#in-the-entry-list));
+when more than one collection owes it there is one link per list, each named. Not drawn on a
+site that declares one language.
 
 **Recent activity** — the last ten rows of the [activity log](activity.md), which an editor
 sees narrowed to their own events exactly as they do on that screen.

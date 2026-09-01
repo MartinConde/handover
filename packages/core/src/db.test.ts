@@ -142,9 +142,8 @@ test('a later autosave replaces the contents and leaves the base where it was', 
   expect((await db.select().from(drafts)).length).toBe(1);
 });
 
-// Who last typed into an entry, which is the *last edited by* line on the dashboard and on the
-// Site settings cards. A structural write — a rename, a restore, a drift answer — leaves it
-// where it is, since it is not somebody typing.
+// Who last touched an entry, which is the *last edited by* line on the dashboard and on the
+// Site settings cards. A rename, a restore and a drift answer stamp it too, each in its own test.
 test('an autosave records who typed it, and the next person replaces them', async () => {
   const db = await fresh();
   await saveDraft('default', db, git, PATH, VALUES, undefined, 'u1');
@@ -381,6 +380,18 @@ test('a rename carries the unpublished edits rather than the committed bytes', a
   expect(row?.baseSha).toBe('commit-rename');
   // The rename commit moved the loaded bytes untouched, so the base blob still describes them.
   expect(row?.baseBlob).toBe(await blobSha(FILE));
+});
+
+// A rename is the last thing that happened to the entry, so *last edited by* names the renamer
+// rather than whoever typed before them.
+test('a rename stamps who renamed onto the draft it carries over', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, title: 'The Old Mill' }, undefined, 'u1');
+
+  await recordRename('default', db, PATH, RENAMED, FILE, 'commit-rename', 'u2');
+
+  expect((await only(db))?.updatedBy).toBe('u2');
 });
 
 test('a delete takes the entry out of the list and leaves nothing to publish', async () => {
@@ -723,6 +734,28 @@ test('answering drift writes every language the answer changes in one batch', as
   expect(rows[0]?.updatedAt).toBe(rows[1]?.updatedAt);
 });
 
+test('a drift answer stamps who answered on every file it writes', async () => {
+  const db = await fresh();
+  const mark = ['    _locales:', '      - "de"'];
+  const repo = fakeRepo({
+    [PAGE_EN]: drifted('Home', [...HERO, ...CTA.slice(0, 2), ...mark, ...CTA.slice(2)]),
+    [PAGE_DE]: drifted('Startseite', [...HERO, ...CTA.slice(0, 2), ...mark, ...CTA.slice(2)]),
+  });
+
+  await resolveDrift(
+    'default',
+    db,
+    repo,
+    PAGE_FORM,
+    ['en', 'de'],
+    PAGE_PATHS,
+    [{ path: 'blocks[_id=q1w2e3r4]', locales: ['en', 'de'] }],
+    'u2',
+  );
+
+  expect((await db.select().from(drafts)).map((r) => r.updatedBy)).toEqual(['u2', 'u2']);
+});
+
 test('a language the answer leaves alone is not made pending by it', async () => {
   const db = await fresh();
   const repo = fakeRepo({
@@ -907,6 +940,15 @@ test('an address is written into that language alone, in schema order', async ()
       '_version: 1\nslug: "startseite"\n',
     ),
   );
+});
+
+test('an address change stamps who made it', async () => {
+  const db = await fresh();
+  const repo = bilingual();
+
+  await setEntryAddress('default', db, repo, ADDRESSED, PAGE_DE, 'startseite', REDIRECT, 'u2');
+
+  expect((await only(db))?.updatedBy).toBe('u2');
 });
 
 test('an address stamps the version on a file that has none', async () => {
@@ -1744,6 +1786,25 @@ test('restoring a version writes its bytes as the draft of every language it has
   expect(row?.contents).toBe(
     '_version: 1\n_status: "hidden"\ntitle: "The Mill House"\nprice: "£800 per week"\nrooms: 2\n',
   );
+});
+
+test('a restore stamps who restored on every language it writes', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE, [PATH_DE]: FILE_DE });
+
+  await restoreDraft(
+    'default',
+    db,
+    repo,
+    VERSION_FORM,
+    [
+      { path: PATH, entry: OLD_EN },
+      { path: PATH_DE, entry: OLD_DE },
+    ],
+    'u2',
+  );
+
+  expect((await db.select().from(drafts)).map((r) => r.updatedBy)).toEqual(['u2', 'u2']);
 });
 
 // The version says what the page said, not where it lived or whether it was on the site: an old

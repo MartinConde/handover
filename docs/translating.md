@@ -116,6 +116,12 @@ but *use the page's own title*, and that title is already translated.
 ## In the entry list
 
 Each row carries one chip per language in the site's own order: filled where the entry has that
-file, outlined where it has none, struck through where it is not offered in that language, and not
-drawn at all on a one-language site. An entry written in one language only is listed by the words
-it has, whichever language they are in, and opens in that language.
+file, outlined where it has none, struck through where it is not offered in that language, tinted
+where the last build found the translation behind its source, and not drawn at all on a
+one-language site. An entry written in one language only is listed by the words it has, whichever
+language they are in, and opens in that language.
+
+The **Language** filter in the toolbar narrows the list to the rows a language is still owed in —
+no file yet, or a translation the last build marked stale — and the heading counts what is shown,
+of the total. `/admin/c/listings?locale=de` opens the list with it set, which is where the
+dashboard's *Show* lands.

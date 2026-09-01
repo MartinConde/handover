@@ -1638,6 +1638,7 @@ async function address(
   slug: string,
   locale: string,
   request: Request,
+  session: App.Locals['handover'],
 ): Promise<Response> {
   const collected = config.collections[collection];
   if (!collected?.localizedSlugs || !config.i18n.locales.includes(locale))
@@ -1672,6 +1673,7 @@ async function address(
     path,
     wanted,
     from && to && from !== to ? { from, to, entry: `${collection}/${slug}` } : undefined,
+    session?.user.id,
   );
   return Response.json({});
 }
@@ -1786,7 +1788,12 @@ async function setStatus(
  * has no way to say a block comes out of German. Nothing is marked resolved — the entry is read
  * again afterwards, and the banner goes because the next report is empty.
  */
-async function reconcile(collection: string, slug: string, request: Request): Promise<Response> {
+async function reconcile(
+  collection: string,
+  slug: string,
+  request: Request,
+  session: App.Locals['handover'],
+): Promise<Response> {
   const schema = schemaOf(collection, slug);
   if (!schema) return new Response('Not found', { status: 404 });
   const body = (await request.json().catch(() => undefined)) as { choices?: unknown } | undefined;
@@ -1812,6 +1819,7 @@ async function reconcile(collection: string, slug: string, request: Request): Pr
     config.i18n.locales,
     Object.fromEntries(Object.keys(locales).map((l) => [l, entryPath(collection, slug, l)])),
     choices,
+    session?.user.id,
   );
   return Response.json({});
 }
@@ -2075,7 +2083,7 @@ async function restoreVersion(
   const form = formOf('default', formSchema(schema));
   const database = db();
   const pending = await pendingLocales(collection, slug, database);
-  const { paths } = await restoreDraft('default', database, git, form, files);
+  const { paths } = await restoreDraft('default', database, git, form, files, session?.user.id);
   // The lock only refuses somebody editing right now; a draft typed yesterday and closed goes
   // with this write, so the log says whose words a version was put over.
   const went = pending.filter((locale) => paths.includes(entryPath(collection, slug, locale)));
@@ -2185,6 +2193,10 @@ async function listEntries(collection: string): Promise<Response> {
         // The dashboard's line, and it goes as far back as the log does: a row nobody has
         // touched in six months has nothing here rather than a guess.
         edited: edits.get(`${collection}/${entry.id}`) ?? null,
+        // The last build's mark, the same one the dashboard counts, for the language filter.
+        stale: stale[`${collection}/${entry.id}`]?.length
+          ? stale[`${collection}/${entry.id}`]
+          : undefined,
       };
     },
   );
@@ -2526,6 +2538,13 @@ function translationHealth(overlay: readonly { path: string; contents: string }[
   if (locales.length < 2) return null;
   const missing: Record<string, number> = {};
   const behind: Record<string, number> = {};
+  // Which lists to send somebody to: a global has none, so it counts and is not named.
+  const where: Record<string, Set<string>> = {};
+  const owed = (locale: string, collection: string) => {
+    if (collection === 'globals') return;
+    where[locale] ??= new Set();
+    where[locale].add(collection);
+  };
   for (const collection of [...Object.keys(config.collections), 'globals'])
     for (const entry of collectionEntries(
       'default',
@@ -2537,9 +2556,15 @@ function translationHealth(overlay: readonly { path: string; contents: string }[
       const { offered } = entryOffer('default', locales, entry.offered, Object.keys(entry.locales));
       // A language the entry is not offered in is a decision somebody made, not a gap to fill.
       for (const locale of offered)
-        if (!entry.locales[locale]) missing[locale] = (missing[locale] ?? 0) + 1;
+        if (!entry.locales[locale]) {
+          missing[locale] = (missing[locale] ?? 0) + 1;
+          owed(locale, collection);
+        }
       for (const locale of stale[`${collection}/${entry.id}`] ?? [])
-        if (entry.locales[locale]) behind[locale] = (behind[locale] ?? 0) + 1;
+        if (entry.locales[locale]) {
+          behind[locale] = (behind[locale] ?? 0) + 1;
+          owed(locale, collection);
+        }
     }
   return {
     defaultLocale: config.i18n.defaultLocale,
@@ -2547,6 +2572,7 @@ function translationHealth(overlay: readonly { path: string; contents: string }[
       locale,
       missing: missing[locale] ?? 0,
       stale: behind[locale] ?? 0,
+      where: [...(where[locale] ?? [])],
     })),
   };
 }
@@ -2744,6 +2770,7 @@ async function rename(
       entryPath(collection, to, locale),
       file.contents,
       commit_sha,
+      session?.user.id,
     );
   }
   // Whoever has the entry open still has it: what they are editing is the same entry under
@@ -3796,7 +3823,7 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   const addressed = params.path?.match(ADDRESS);
   if (addressed)
     return answering(() =>
-      address(addressed[1] ?? '', addressed[2] ?? '', addressed[3] ?? '', request),
+      address(addressed[1] ?? '', addressed[2] ?? '', addressed[3] ?? '', request, locals.handover),
     );
   const offered = params.path?.match(LOCALES);
   if (offered)
@@ -3809,7 +3836,10 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   const settling = params.path?.match(CONFLICT);
   if (settling) return answering(() => resolve(settling[1] ?? '', settling[2] ?? '', request));
   const answered = params.path?.match(DRIFT);
-  if (answered) return answering(() => reconcile(answered[1] ?? '', answered[2] ?? '', request));
+  if (answered)
+    return answering(() =>
+      reconcile(answered[1] ?? '', answered[2] ?? '', request, locals.handover),
+    );
   const renamed = params.path?.match(RENAME);
   if (renamed)
     return answering(() => rename(renamed[1] ?? '', renamed[2] ?? '', request, locals.handover));

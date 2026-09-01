@@ -55,6 +55,7 @@ afterEach(() => {
   unmount(app);
   changed.mockClear();
   vi.unstubAllGlobals();
+  history.replaceState({}, '', '/');
 });
 
 const q = <T extends Element>(root: ParentNode, sel: string) => root.querySelector<T>(sel);
@@ -487,6 +488,53 @@ test('the status filter narrows the list to the hidden rows, or to the live ones
   status.dispatchEvent(new Event('change'));
   await tick();
   expect(titles(root)).toEqual(['Seaview Cottage']);
+});
+
+// The dashboard's *Show* arrives as `?locale=de`: the rows that language is owed in — no file
+// yet, or a translation the build marked stale — and the stale chip says which is which.
+test('the language filter narrows to the rows a language is missing or stale in', async () => {
+  api(
+    [
+      ...ENTRIES,
+      {
+        id: 'old-barn',
+        locales: {
+          en: { title: 'The Old Barn', path: 'src/content/listings/en/old-barn.yaml' },
+          de: { title: 'Die alte Scheune', path: 'src/content/listings/de/old-barn.yaml' },
+        },
+        stale: ['de'],
+      },
+      {
+        id: 'boathouse',
+        locales: {
+          en: { title: 'The Boathouse', path: 'src/content/listings/en/boathouse.yaml' },
+          de: { title: 'Das Bootshaus', path: 'src/content/listings/de/boathouse.yaml' },
+        },
+      },
+    ],
+    {},
+    ['en', 'de'],
+  );
+  history.replaceState({}, '', '/admin/c/listings?locale=de');
+  const root = show();
+  await tick();
+
+  expect(q<HTMLSelectElement>(root, 'select#list-locale')?.value).toBe('de');
+  expect(titles(root)).toEqual(['The Mill House', 'Seaview Cottage', 'The Old Barn']);
+  expect(q(root, '.list-toolbar .count')?.textContent).toBe('3 of 4');
+  expect(
+    Array.from(
+      root.querySelectorAll('.row'),
+      (row) => row.querySelector('.chip-stale')?.textContent,
+    ),
+  ).toEqual([undefined, undefined, 'DE']);
+
+  const language = q<HTMLSelectElement>(root, 'select#list-locale');
+  if (!language) throw new Error('language filter missing');
+  language.value = '';
+  language.dispatchEvent(new Event('change'));
+  await tick();
+  expect(titles(root).length).toBe(4);
 });
 
 test('a hidden entry is badged and offers to be shown again', async () => {

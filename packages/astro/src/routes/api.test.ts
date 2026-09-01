@@ -1879,10 +1879,11 @@ test('translation health counts the languages an entry owes and the ones behind 
   expect(translations).toEqual({
     defaultLocale: 'en',
     locales: [
-      { locale: 'en', missing: 0, stale: 0 },
+      { locale: 'en', missing: 0, stale: 0, where: [] },
       // Everything the index holds but `posts/taken`, which is the one entry with two files —
-      // and it is the one the build marked stale.
-      { locale: 'de', missing: 5, stale: 1 },
+      // and it is the one the build marked stale. `where` is the collections owing it, in config
+      // order and without the globals, which have no list to be shown in.
+      { locale: 'de', missing: 5, stale: 1, where: ['listings', 'presenters', 'posts'] },
     ],
   });
   locales = ['en'];
@@ -2117,6 +2118,19 @@ test('the entry list is the built index with the pending drafts over it', async 
   ]);
   // The starters the New entry dialog offers beside Blank, read at build with the index.
   expect(listed.templates).toEqual(['house']);
+});
+
+// The list's language filter narrows to the rows a language is missing or stale in, so a row
+// carries the build's stale mark; absent where there is none, like `offered` and `pending`.
+test('a row names the languages the build marked stale', async () => {
+  const { entries } = (await (await GET(ctx('entries/posts'))).json()) as {
+    entries: { id: string; stale?: string[] }[];
+  };
+
+  expect(entries.map((e) => [e.id, e.stale])).toEqual([
+    ['hello', undefined],
+    ['taken', ['de']],
+  ]);
 });
 
 // The dashboard's line, on every row: the draft's editor where there is a draft, the publish
@@ -2402,6 +2416,7 @@ test('renaming moves the entry in one commit and takes its unpublished edits wit
     'src/content/listings/en/the-old-mill.yaml',
     'title: The Mill House\nlocation: Bakewell\nrooms: 3\n',
     'def456',
+    undefined,
   );
 });
 
@@ -2978,6 +2993,7 @@ test("the answers to an entry's drift go to every language it has a file in", as
       de: 'src/content/pages/de/home.yaml',
     },
     choices,
+    undefined,
   );
 });
 
@@ -3708,7 +3724,14 @@ test('moving a published address owes a redirect from where it was, in that lang
   setEntryAddress.mockClear();
 
   const res = await POST(
-    post('entries/posts/hello/address/de', JSON.stringify({ address: 'servus' })),
+    ctx(
+      'entries/posts/hello/address/de',
+      new Request('https://x/admin/api/entries/posts/hello/address/de', {
+        method: 'POST',
+        body: JSON.stringify({ address: 'servus' }),
+      }),
+      { handover: owner },
+    ),
   );
 
   expect(res.status).toBe(200);
@@ -3722,6 +3745,8 @@ test('moving a published address owes a redirect from where it was, in that lang
     'src/content/posts/de/hello.yaml',
     'servus',
     { from: '/de/blog/hallo', to: '/de/blog/servus', entry: 'posts/hello' },
+    // Who moved it, for the dashboard's *last edited by*.
+    'u1',
   );
 });
 
@@ -3748,6 +3773,7 @@ test('an entry with no file in the repository yet owes nothing', async () => {
     }),
     'src/content/posts/de/hello.yaml',
     'hallo',
+    undefined,
     undefined,
   );
 });

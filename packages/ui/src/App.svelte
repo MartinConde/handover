@@ -489,6 +489,7 @@ const initial = $derived(
       <Dashboard
         {pending}
         {build}
+        {collections}
         onreview={() => (drawer = true)}
         onrevert={askRevert}
       />

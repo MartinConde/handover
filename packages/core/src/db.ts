@@ -105,7 +105,7 @@ export async function saveDraft(
     siteId,
     sync && !translated ? syncLocale(siteId, sync.form, sync.locale, edit, after) : after,
   );
-  const stamp = by ? { updatedBy: by } : {};
+  const stamp = stampOf(by);
   const writes = [upsert(db, siteId, path, contents, loaded, updatedAt, stamp)];
   // A translation changes no structure, so the other languages have nothing to follow.
   for (const [locale, sibling] of Object.entries(translated ? {} : (sync?.siblings ?? {}))) {
@@ -236,6 +236,7 @@ export async function resolveDrift(
   locales: string[],
   files: Record<string, string>,
   choices: DriftChoice[],
+  by?: string,
 ): Promise<void> {
   const found = await Promise.all(
     Object.entries(files).map(async ([locale, path]) => {
@@ -252,7 +253,7 @@ export async function resolveDrift(
     const contents = stringifyEntry(siteId, writtenEntry(siteId, after[locale], form.fields));
     return contents === stringifyEntry(siteId, writtenEntry(siteId, before[locale], form.fields))
       ? []
-      : [upsert(db, siteId, path, contents, loaded, updatedAt)];
+      : [upsert(db, siteId, path, contents, loaded, updatedAt, stampOf(by))];
   });
   const [first, ...rest] = writes;
   if (first) await db.batch([first, ...rest]);
@@ -312,6 +313,7 @@ export async function setEntryAddress(
   path: string,
   address: string,
   redirect?: { from: string; to: string; entry: string },
+  by?: string,
 ): Promise<{ updated_at: number; pending: boolean } | undefined> {
   const loaded = await load(siteId, db, git, path);
   if (!loaded) return undefined;
@@ -338,6 +340,7 @@ export async function setEntryAddress(
   await db.batch([
     upsert(db, siteId, path, contents, loaded, updatedAt, {
       pendingRedirects: rule ? [rule] : null,
+      ...stampOf(by),
     }),
   ]);
   return { updated_at: updatedAt, pending: (await blobSha(contents)) !== loaded.baseBlob };
@@ -427,6 +430,7 @@ export async function restoreDraft(
   git: Pick<GitClient, 'getFile' | 'getHead'>,
   form: Form,
   files: readonly { path: string; entry: Record<string, unknown> }[],
+  by?: string,
 ): Promise<{ paths: string[] }> {
   const found = await Promise.all(
     files.map(async (file) => {
@@ -446,7 +450,7 @@ export async function restoreDraft(
       else delete entry[key];
     }
     const contents = stringifyEntry(siteId, writtenEntry(siteId, entry, form.fields));
-    return [upsert(db, siteId, file.path, contents, file.loaded, updatedAt)];
+    return [upsert(db, siteId, file.path, contents, file.loaded, updatedAt, stampOf(by))];
   });
   const [first, ...rest] = writes;
   if (first) await db.batch([first, ...rest]);
@@ -495,8 +499,6 @@ function upsert(
   contents: string,
   { open, baseSha, baseBlob }: Loaded,
   updatedAt: number,
-  // `updatedBy` is only ever passed by the two writes somebody *typed* — the structural ones
-  // leave whoever last typed into the entry standing, which is what the line reports.
   extra: { pendingRedirects?: RedirectRule[] | null; updatedBy?: string } = {},
 ) {
   return db
@@ -509,6 +511,10 @@ function upsert(
         : { contents, baseSha, baseBlob, updatedAt, publishedSha: null, ...extra },
     });
 }
+
+// Who did it, for the *last edited by* line; a write with nobody signed in leaves the last name
+// standing rather than blanking it.
+const stampOf = (by?: string) => (by ? { updatedBy: by } : {});
 
 // What a save of one language would put in another, values it does not own left out: two of
 // these being equal is what says the other languages have nothing to write.
@@ -575,6 +581,7 @@ export async function recordRename(
   to: string,
   contents: string,
   commitSha: string,
+  by?: string,
 ): Promise<void> {
   const open = await loadDraft(siteId, db, from);
   // Only a removed row can be at the new path — a rename takes a free name, and a delete is
@@ -583,7 +590,7 @@ export async function recordRename(
   if (open)
     await db
       .update(drafts)
-      .set({ path: to, baseSha: commitSha })
+      .set({ path: to, baseSha: commitSha, ...stampOf(by) })
       .where(and(eq(drafts.siteId, siteId), eq(drafts.path, from)));
   else
     await db.insert(drafts).values({
@@ -972,9 +979,7 @@ export async function saveTranslated(
   if (!loaded) return undefined;
   const contents = stringifyEntry(siteId, machineFilled(siteId, loaded.entry, filled));
   const updatedAt = Date.now();
-  await db.batch([
-    upsert(db, siteId, path, contents, loaded, updatedAt, by ? { updatedBy: by } : {}),
-  ]);
+  await db.batch([upsert(db, siteId, path, contents, loaded, updatedAt, stampOf(by))]);
   return { updated_at: updatedAt, pending: (await blobSha(contents)) !== loaded.baseBlob };
 }
 

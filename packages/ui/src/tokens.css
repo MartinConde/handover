@@ -1037,6 +1037,7 @@ a.btn { text-decoration: none; }
 
 /* Dashboard. The two big tiles are the top bar's indicator and pill grown up, in the same
    tints, and the lists under them are the activity log's and the entry list's own rows. */
+.quick { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-bottom: var(--s-6); }
 .dash { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--s-4); }
 .dtile { display: grid; gap: var(--s-3); align-content: start; min-width: 0; padding: var(--s-5); border-radius: var(--radius-lg); background: var(--surface-2); }
 .dtile.span-2 { grid-column: span 2; }
@@ -1265,7 +1266,7 @@ input[type="date"].input { padding-right: var(--s-3); }
 .dtile.is-quota { background: var(--warn-soft); }
 .dtile.is-quota .big, .dtile.is-quota .line, .dtile.is-quota .big small { color: var(--warn-ink); }
 .dtile .progress.is-indeterminate > span { width: 35%; animation: slide 1.4s ease-in-out infinite alternate; }
-.locale-line a { margin-left: auto; }
+.locale-line .show { margin-left: auto; display: flex; gap: var(--s-3); }
 
 /* ---------- nav builder · redirects · pre-publish checks (4.4d) ---------- */
 /* Pre-publish checks — one region above the list, grouped by entry inside it. Above, because the

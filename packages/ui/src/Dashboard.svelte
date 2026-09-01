@@ -3,6 +3,7 @@ import type { ActivityEvent } from '@handover/core';
 import { activityGroupOf } from '@handover/core';
 import { EXACT, initials, said, when } from './activity-line';
 import BuildPill, { type Build } from './BuildPill.svelte';
+import NewEntry, { nameOf } from './NewEntry.svelte';
 
 type Recent = {
   key: string;
@@ -16,7 +17,8 @@ type Recent = {
 };
 type Health = {
   defaultLocale: string;
-  locales: { locale: string; missing: number; stale: number }[];
+  /** `where` is the collections owing the language, in config order — the lists *Show* opens. */
+  locales: { locale: string; missing: number; stale: number; where?: string[] }[];
 };
 
 // The two big tiles are the shell's own indicators at tile size, so they are handed over rather
@@ -24,6 +26,7 @@ type Health = {
 let {
   pending,
   build,
+  collections,
   onreview,
   onrevert,
 }: {
@@ -33,9 +36,13 @@ let {
     held_by?: { id: string; name: string | null } | null;
   }[];
   build: Build | null;
+  collections: string[];
   onreview: () => void;
   onrevert: (sha: string) => void;
 } = $props();
+
+// The collection whose New entry dialog is open — the list's own dialog, opened from here.
+let creating = $state('');
 
 let recent = $state<Recent[]>([]);
 let health = $state<Health | null>(null);
@@ -80,6 +87,13 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
 <main class="main">
   <h1>Dashboard</h1>
   <p class="list-note">What changed, and what is waiting to go out.</p>
+  {#if collections.length}
+    <div class="quick">
+      {#each collections as name (name)}
+        <button class="btn" type="button" onclick={() => (creating = name)}>New {nameOf(name)}</button>
+      {/each}
+    </div>
+  {/if}
   <div class="dash">
     <section class="dtile" class:is-lit={pending.length} aria-labelledby="d-pending">
       <header><h2 id="d-pending">Unpublished changes</h2></header>
@@ -169,6 +183,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
         <header><h2 id="d-tr">Translation health</h2></header>
         <div class="locales">
           {#each health.locales as row (row.locale)}
+            {@const where = row.where ?? []}
             <div class="locale-line">
               <span class="chip" class:chip-missing={row.missing}>{row.locale.toUpperCase()}</span>
               {#if row.locale === health.defaultLocale && !row.missing && !row.stale}
@@ -181,6 +196,14 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
                     ? ' · '
                     : ''}{row.stale ? `${row.stale} stale` : ''}</span
                 >
+              {/if}
+              <!-- One list is *Show*; several are named, since a list is one collection's. -->
+              {#if where.length}
+                <span class="show">
+                  {#each where as name (name)}
+                    <a href="/admin/c/{name}?locale={row.locale}">Show{where.length > 1 ? ` ${name}` : ''}</a>
+                  {/each}
+                </span>
               {/if}
             </div>
           {/each}
@@ -230,3 +253,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
     </section>
   </div>
 </main>
+
+{#if creating}
+  <NewEntry collection={creating} onclose={() => (creating = '')} />
+{/if}

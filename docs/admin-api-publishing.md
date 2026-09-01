@@ -41,9 +41,10 @@ one. `href` is where that entry is edited, which for a global is `/admin/site/<n
 
 `published` is the newest commit the admin made, when it was a publish and not a rename or a
 redirect. `translations` is `null` on a one-language site; otherwise it is
-`{ "defaultLocale", "locales": [{ "locale", "missing", "stale" }] }` — `missing` from the
-content index with the drafts over it, `stale` from the map the build wrote, which is why it
-lags a publish.
+`{ "defaultLocale", "locales": [{ "locale", "missing", "stale", "where" }] }` — `missing` from
+the content index with the drafts over it, `stale` from the map the build wrote, which is why
+it lags a publish, and `where` the collections owing that language, in config order and without
+the globals, which have no list to be shown in.
 
 ```
 POST /admin/api/publish   { "entries": ["listings/mill-house"] }  →  { "commit_sha", "paths", "released" }

@@ -32,8 +32,8 @@ const RECENT = [
 const HEALTH = {
   defaultLocale: 'en',
   locales: [
-    { locale: 'en', missing: 0, stale: 0 },
-    { locale: 'de', missing: 4, stale: 2 },
+    { locale: 'en', missing: 0, stale: 0, where: [] },
+    { locale: 'de', missing: 4, stale: 2, where: ['listings'] },
   ],
 };
 const pendingEntry = (key: string, held?: string) => ({
@@ -62,6 +62,7 @@ const show = (
     props: {
       pending: [],
       build: null,
+      collections: [],
       onreview: () => reviewed.push(1),
       onrevert: (sha: string) => reverted.push(sha),
       ...props,
@@ -175,9 +176,57 @@ test('the translation tile counts what is missing and what is behind its source'
   const lines = all(tile(root, 'd-tr') as ParentNode, '.locale-line');
   expect(lines.map((line) => line.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
     'EN Source language',
-    'DE 4 missing · 2 stale',
+    'DE 4 missing · 2 stale Show',
   ]);
   expect(lines[1]?.querySelector('.chip-missing')).not.toBeNull();
+});
+
+// The link the tile has waited for since 4.15: the list, filtered to the language it is owed
+// in. One collection is *Show*; several are named, since a list is one collection's.
+test("the translation tile's Show lands on the list filtered to the language", async () => {
+  const root = show({ recent: [], published: null, translations: HEALTH });
+  await loaded();
+
+  const lines = all(tile(root, 'd-tr') as ParentNode, '.locale-line');
+  expect(lines[0]?.querySelector('a')).toBeNull();
+  expect(
+    Array.from(lines[1]?.querySelectorAll('a') ?? [], (a) => [
+      a.textContent,
+      a.getAttribute('href'),
+    ]),
+  ).toEqual([['Show', '/admin/c/listings?locale=de']]);
+});
+
+test('a language owed in several collections gets a link per list', async () => {
+  const health = {
+    ...HEALTH,
+    locales: [HEALTH.locales[0], { ...HEALTH.locales[1], where: ['listings', 'pages'] }],
+  };
+  const root = show({ recent: [], published: null, translations: health });
+  await loaded();
+
+  const line = all(tile(root, 'd-tr') as ParentNode, '.locale-line')[1];
+  expect(Array.from(line?.querySelectorAll('a') ?? [], (a) => a.textContent)).toEqual([
+    'Show listings',
+    'Show pages',
+  ]);
+});
+
+// The mockup's quick actions: the same New entry dialog the list opens, one button a collection.
+test('a quick action opens the New entry dialog for that collection', async () => {
+  const root = show(undefined, { collections: ['pages', 'listings'] });
+  await loaded();
+
+  expect(all(root, '.quick .btn').map((b) => b.textContent?.trim())).toEqual([
+    'New page',
+    'New listing',
+  ]);
+  (all(root, '.quick .btn')[1] as HTMLButtonElement).click();
+  await loaded();
+
+  expect(root.querySelector('.dialog h2')?.textContent).toBe('New listing');
+  expect(root.querySelector<HTMLInputElement>('.dialog input#new-title')).not.toBeNull();
+  expect(fetch).toHaveBeenCalledWith('/admin/api/entries/listings');
 });
 
 // Every site has a locale folder; a site with one language has nothing to report about it.
