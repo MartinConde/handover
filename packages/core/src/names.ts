@@ -143,6 +143,7 @@ export interface I18nConfig {
   locales?: unknown;
   defaultLocale?: unknown;
   prefixDefaultLocale?: unknown;
+  base?: unknown;
 }
 
 // Locales are folder names under src/content/<collection>/ and path segments in the URL,
@@ -160,7 +161,7 @@ export function checkI18n(_siteId: string, i18n: I18nConfig | undefined): string
     return [
       `${at()}required, like i18n: { locales: ['en'], defaultLocale: 'en' } — a site with one language declares it too, and keeps its files under src/content/<collection>/en/`,
     ];
-  const { locales, defaultLocale, prefixDefaultLocale } = i18n;
+  const { locales, defaultLocale, prefixDefaultLocale, base } = i18n;
   const errors: string[] = [];
   if (
     !Array.isArray(locales) ||
@@ -180,6 +181,10 @@ export function checkI18n(_siteId: string, i18n: I18nConfig | undefined): string
     errors.push(
       `${at('prefixDefaultLocale')}expected true or false, got ${JSON.stringify(prefixDefaultLocale)}`,
     );
+  if (base !== undefined && (typeof base !== 'string' || !/^\/.+[^/]$/.test(base)))
+    errors.push(
+      `${at('base')}expected astro.config.mjs's base, a path like "/site" — leading slash, no trailing one, got ${JSON.stringify(base)}`,
+    );
   return errors;
 }
 
@@ -188,14 +193,17 @@ export interface I18nRouting {
   locales: string[];
   defaultLocale: string;
   prefixDefaultLocale?: boolean;
+  /** Astro's `base`, where the whole site is served under a path: `/site`. Absent at the root. */
+  base?: string;
 }
 
 /**
  * Where one entry is served: the collection's `route` with `[slug]` filled in, under the
  * language's own segment. The default language has none unless the site asked for one, which
  * is Astro's `prefixDefaultLocale`. The preview path is this path behind its own prefix, so
- * the segment is settled here rather than in each site's routes. `undefined` for a collection
- * with no route: nothing renders it, so there is nowhere to link.
+ * the segment is settled here rather than in each site's routes, and so is the site's `base`
+ * where it has one. `undefined` for a collection with no route: nothing renders it, so there is
+ * nowhere to link.
  */
 export function entryUrl(
   _siteId: string,
@@ -206,7 +214,7 @@ export function entryUrl(
 ): string | undefined {
   if (!route) return undefined;
   const prefix = locale === i18n.defaultLocale && !i18n.prefixDefaultLocale ? '' : `/${locale}`;
-  return prefix + route.replace('[slug]', slug);
+  return (i18n.base ?? '') + prefix + route.replace('[slug]', slug);
 }
 
 /**

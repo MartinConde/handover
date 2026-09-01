@@ -975,6 +975,17 @@ const AT = {
   servedAt: '/listings/seaview-cottage',
   mediaBase: 'https://media.example.com',
 };
+// A 1.91:1 card cut from a 3:2 photo loses a band top and bottom, so the card gets the same dot
+// a field's picture has, and it is written into the same place.
+test('seo: the social card has a focal point, written into the picture', async () => {
+  show([seoField], seoData());
+  click('#f-seo .media-card .actions .btn-sm');
+  await settle();
+  type('input#focal-y', '60');
+  click('.focal-dialog .btn-primary');
+  expect(snap()).toMatchObject({ seo: { image: { focal: [0.5, 0.6] } } });
+});
+
 test('seo: the previews draw the address, the typed words and the picture', () => {
   show([seoField], seoData(), {}, {}, INHERITED, AT);
   expect(q('.snippet .crumbs').textContent).toBe(
@@ -1072,7 +1083,7 @@ test('seo: an empty box is greyed with what the site says instead', () => {
 
 test('seo: taking the picture away hands the page back to the site’s card', () => {
   show([seoField], seoData(), {}, {}, INHERITED);
-  const [, fallback] = Array.from(document.querySelectorAll('#f-seo .media-card .actions button'));
+  const fallback = q('#f-seo .media-card .actions .btn-ghost');
   expect(fallback?.textContent).toBe('Use the site’s default');
   (fallback as HTMLButtonElement).click();
   flushSync();
@@ -1083,7 +1094,7 @@ test('seo: taking the picture away hands the page back to the site’s card', ()
 // With no site default there is nothing to fall back to, so the button says what it does.
 test('seo: with no site card the same button is a plain Remove', () => {
   show([seoField], seoData());
-  const [, fallback] = Array.from(document.querySelectorAll('#f-seo .media-card .actions button'));
+  const fallback = q('#f-seo .media-card .actions .btn-ghost');
   expect(fallback?.textContent).toBe('Remove');
 });
 

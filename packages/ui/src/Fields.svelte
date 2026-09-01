@@ -13,6 +13,7 @@ import {
   type ResolvedSeo,
   SEO_DESCRIPTION_LIMIT,
   SEO_TITLE_LIMIT,
+  SOCIAL_CARD,
   seoMeter,
   type Translation,
   unsafeLinkScheme,
@@ -842,7 +843,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {@render seoWords(id, at, 'description', 'Description', SEO_DESCRIPTION_LIMIT, inheritedSeo?.description ?? '', '')}
         {#if read([...at, 'image']) !== undefined}
           <div class="media-card">
-            <span class="thumb" style="aspect-ratio: 1.91 / 1"><img src={src([...at, 'image'])} alt="" /></span>
+            <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"><img src={src([...at, 'image'])} alt="" style="object-position: {dot([...at, 'image'])[0]}% {dot([...at, 'image'])[1]}%" /></span>
             <div class="meta">
               {@render altField(`${id}.image`, [...at, 'image'])}
               <p class="hint">The same picture in every language.</p>
@@ -863,11 +864,12 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           <div class="label-row"><span id="{id}.image-l">Social image</span><span class="mode">Same in every language</span></div>
           {#if read(image) !== undefined}
             <div class="media-card" role="group" aria-labelledby="{id}.image-l">
-              <span class="thumb" style="aspect-ratio: 1.91 / 1"><img src={src(image)} alt="" /></span>
+              <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"><img src={src(image)} alt="" style="object-position: {dot(image)[0]}% {dot(image)[1]}%" /><span class="focal" style="left: {dot(image)[0]}%; top: {dot(image)[1]}%" aria-hidden="true"></span></span>
               <div class="meta">
                 <div><div class="sub">{str([...image, 'src'])} · {num([...image, 'width'])} × {num([...image, 'height'])}</div></div>
                 {@render altField(`${id}.image`, image)}
                 <div class="actions">
+                  <button class="btn btn-sm" type="button" onclick={() => (framing = `${id}.image`)}>Set focal point</button>
                   <button class="btn btn-sm" type="button" onclick={() => (picker = `${id}.image`)}>Replace</button>
                   <button class="btn btn-sm btn-ghost" type="button" onclick={() => write(image, undefined)}>{inheritedSeo?.image ? 'Use the site’s default' : 'Remove'}</button>
                 </div>
@@ -877,7 +879,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
             <!-- svelte-ignore a11y_no_static_element_interactions -- the button inside is the control; the zone is a drop target -->
             <div class="dropzone" role="group" aria-labelledby="{id}.image-l" ondragover={(e) => e.preventDefault()} ondrop={(e) => dropOn(`${id}.image`, e)}>
               <span>{inheritedSeo?.image ? 'The site’s own card is shared for this page' : 'Drop an image or choose from library'}</span>
-              <span class="hint">1.91:1 · at least 1200 px wide</span>
+              <span class="hint">{SOCIAL_CARD.ratio} · at least {SOCIAL_CARD.min} px wide</span>
               <button class="btn btn-sm" type="button" onclick={() => (picker = `${id}.image`)}>Choose from library</button>
             </div>
           {/if}
@@ -917,13 +919,24 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         onclose={() => (framing = '')}
       />
     {/if}
+    {#if framing === `${id}.image` && field.type === 'seo'}
+      {@const image = [...at, 'image']}
+      <!-- A 1.91:1 card cut from a 3:2 photo loses a band top and bottom, so the card has the
+           same dot a field's picture has, and it lives in the same place. -->
+      <Focal
+        name="Social image"
+        url={src(image)}
+        focal={point(image)}
+        presets={[{ label: 'Social image', preset: SOCIAL_CARD }]}
+        onsave={(moved) => { write([...image, 'focal'], centred(moved) ? undefined : moved); framing = ''; }}
+        onclose={() => (framing = '')}
+      />
+    {/if}
     {#if picker === `${id}.image` && field.type === 'seo'}
-      <!-- The one preset a platform fixes rather than a designer: 1.91:1 at 1200 is the
-           1200 × 630 every social card asks for. -->
       <Media
         kind="images"
         label="Social image"
-        preset={{ ratio: '1.91:1', max: 1200, min: 1200 }}
+        preset={SOCIAL_CARD}
         base={mediaBase}
         {dropped}
         onpick={(items) => { seoWrite(at, 'image', stored('image', items[0] as MediaItem)); picker = ''; dropped = []; }}

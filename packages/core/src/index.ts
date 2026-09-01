@@ -189,6 +189,7 @@ export {
   objectExists,
   presignUpload,
   ratioOf,
+  SOCIAL_CARD,
   setMediaDetails,
   tooSmall,
   UploadRefusedError,
@@ -235,6 +236,7 @@ export {
 } from './settings.js';
 export type { SitemapPage, SitemapSite } from './sitemap.js';
 export {
+  modifiedFrom,
   robotsText,
   sitemapFrom,
   sitemapIndexXml,

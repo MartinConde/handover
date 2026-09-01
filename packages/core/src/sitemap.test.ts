@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { robotsText, sitemapFrom, sitemapIndexXml, sitemapXml } from './sitemap.js';
+import { modifiedFrom, robotsText, sitemapFrom, sitemapIndexXml, sitemapXml } from './sitemap.js';
 
 const BASE = 'https://coastalhomes.example';
 
@@ -78,6 +78,7 @@ test('the XML is one url per page, with its alternates inside it', () => {
     sitemapXml('default', [
       {
         loc: `${BASE}/listings/mill-house/`,
+        lastmod: '2026-08-30T10:00:00+02:00',
         alternates: [
           { locale: 'en', loc: `${BASE}/listings/mill-house/` },
           { locale: 'de', loc: `${BASE}/de/listings/muehlenhaus/` },
@@ -89,6 +90,7 @@ test('the XML is one url per page, with its alternates inside it', () => {
       '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">\n' +
       '  <url>\n' +
       `    <loc>${BASE}/listings/mill-house/</loc>\n` +
+      '    <lastmod>2026-08-30T10:00:00+02:00</lastmod>\n' +
       `    <xhtml:link rel="alternate" hreflang="en" href="${BASE}/listings/mill-house/"/>\n` +
       `    <xhtml:link rel="alternate" hreflang="de" href="${BASE}/de/listings/muehlenhaus/"/>\n` +
       '  </url>\n' +
@@ -123,4 +125,50 @@ test('robots.txt points at the sitemap and keeps crawlers out of the admin', () 
 
 test('robots.txt names no sitemap for a site that has not said where it is served', () => {
   expect(robotsText('default')).toBe('User-agent: *\nDisallow: /admin\nDisallow: /_preview\n');
+});
+
+const EN = 'src/content/listings/en/mill-house.yaml';
+const DE = 'src/content/listings/de/mill-house.yaml';
+
+test('a page is dated by its file’s last commit and an index by its newest page; one the log does not know has no date', () => {
+  const modified = new Map([[EN, '2026-08-30T10:00:00+02:00']]);
+  const pages = sitemapFrom('default', both(), site, modified);
+  expect(pages.en?.map((p) => p.lastmod)).toEqual([
+    '2026-08-30T10:00:00+02:00',
+    '2026-08-30T10:00:00+02:00',
+  ]);
+  expect(pages.de?.map((p) => p.lastmod)).toEqual([undefined, undefined]);
+  expect(sitemapXml('default', pages.de ?? [])).not.toContain('lastmod');
+});
+
+test('an index is dated by the newest of its pages, whatever order the log lists them in', () => {
+  const modified = new Map([
+    [EN, '2026-08-30T10:00:00+02:00'],
+    ['src/content/pages/en/about.yaml', '2026-08-31T09:00:00+02:00'],
+  ]);
+  const files = [...both(), at('src/content/pages/en/about.yaml', 'title: "About"\n')];
+  const listings = {
+    ...site,
+    collections: { ...site.collections, pages: { route: '/[slug]', index: '/' } },
+  };
+  expect(sitemapFrom('default', files, listings, modified).en?.[0]?.lastmod).toBe(
+    '2026-08-31T09:00:00+02:00',
+  );
+});
+
+test('the git log is read newest first, so the first date a path appears under is its last change', () => {
+  const log = `2026-08-31T09:00:00+02:00\n\n${DE}\n\n2026-08-30T10:00:00+02:00\n\n${EN}\n${DE}\n`;
+  expect(modifiedFrom('default', log)).toEqual(
+    new Map([
+      [DE, '2026-08-31T09:00:00+02:00'],
+      [EN, '2026-08-30T10:00:00+02:00'],
+    ]),
+  );
+});
+
+test('a site under a base path has every address under it', () => {
+  const under = { ...site, i18n: { ...site.i18n, base: '/site' } };
+  const pages = sitemapFrom('default', both(), under);
+  expect(locs(pages, 'en')).toEqual([`${BASE}/site/`, `${BASE}/site/listings/mill-house/`]);
+  expect(locs(pages, 'de')).toEqual([`${BASE}/site/de/`, `${BASE}/site/de/listings/muehlenhaus/`]);
 });

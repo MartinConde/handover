@@ -10,6 +10,8 @@ import { isLive } from './reserved.js';
 /** One page: where it is served, and the same page in the other languages. */
 export interface SitemapPage {
   loc: string;
+  /** When the file behind it last changed, W3C datetime; absent where the log does not say. */
+  lastmod?: string;
   /** Every language this page can be read in, this one included; empty where there is one. */
   alternates: { locale: string; loc: string }[];
 }
@@ -30,6 +32,24 @@ const href = (site: SitemapSite, path: string) =>
   new URL(withSlash(path, site.slash), site.base).href;
 
 /**
+ * When each content file last changed, from `git log --format=%cI --name-only`: the log is
+ * newest first, so the first date a path is listed under is its last change. A publish is a
+ * commit, which makes this the date a crawler wants; a file the log has never seen has none.
+ */
+export function modifiedFrom(_siteId: string, log: string): Map<string, string> {
+  const modified = new Map<string, string>();
+  let date = '';
+  for (const line of log.split('\n')) {
+    if (!line) continue;
+    if (/^\d{4}-\d{2}-\d{2}T/.test(line)) date = line;
+    else if (date && !modified.has(line)) modified.set(line, date);
+  }
+  return modified;
+}
+
+const newer = (a: string | undefined, b: string) => (!a || Date.parse(b) > Date.parse(a) ? b : a);
+
+/**
  * Every address the site serves, by language. An entry is in it once per language it is
  * written in, live in and not hidden from search in — the same three answers the page itself
  * gives, so a URL here is a page a crawler can index.
@@ -41,8 +61,10 @@ export function sitemapFrom(
   siteId: string,
   files: Iterable<ContentFile>,
   site: SitemapSite,
+  modified: Map<string, string> = new Map(),
 ): Record<string, SitemapPage[]> {
   const entries = new Map<string, Map<string, string>>();
+  const dates = new Map<string, string>();
   for (const file of files) {
     const parts = entryParts(file.path);
     const route = parts && site.collections[parts.collection]?.route;
@@ -56,7 +78,15 @@ export function sitemapFrom(
     const key = `${parts.collection}/${parts.name}`;
     const locales = entries.get(key) ?? new Map<string, string>();
     entries.set(key, locales);
-    locales.set(parts.locale, href(site, url));
+    const loc = href(site, url);
+    locales.set(parts.locale, loc);
+    const date = modified.get(file.path);
+    if (!date) continue;
+    dates.set(loc, date);
+    // A listing page changes when anything on it does, so it carries its newest entry's date.
+    const index = site.collections[parts.collection]?.index;
+    if (index)
+      dates.set(`${index}:${parts.locale}`, newer(dates.get(`${index}:${parts.locale}`), date));
   }
 
   // A listing page is the collection rather than one of its entries, so it is not in the walk
@@ -66,7 +96,10 @@ export function sitemapFrom(
     const locales = new Map<string, string>();
     for (const locale of site.i18n.locales) {
       const url = entryUrl(siteId, site.i18n, c.index, '', locale);
-      if (url) locales.set(locale, href(site, url));
+      if (!url) continue;
+      locales.set(locale, href(site, url));
+      const date = dates.get(`${c.index}:${locale}`);
+      if (date) dates.set(href(site, url), date);
     }
     entries.set(`index:${c.index}`, locales);
   }
@@ -82,7 +115,10 @@ export function sitemapFrom(
             return loc ? [{ locale, loc }] : [];
           })
         : [];
-    for (const [locale, loc] of locales) pages[locale]?.push({ loc, alternates });
+    for (const [locale, loc] of locales) {
+      const lastmod = dates.get(loc);
+      pages[locale]?.push({ loc, ...(lastmod ? { lastmod } : {}), alternates });
+    }
   }
   // Sorted so a build with no content change writes the same bytes, and deduplicated because
   // two collections may share one index page even though no two share a route.
@@ -111,6 +147,7 @@ export function sitemapXml(_siteId: string, pages: SitemapPage[]): string {
   ];
   for (const page of pages) {
     lines.push('  <url>', `    <loc>${xmlText(page.loc)}</loc>`);
+    if (page.lastmod) lines.push(`    <lastmod>${xmlText(page.lastmod)}</lastmod>`);
     for (const a of page.alternates)
       lines.push(
         `    <xhtml:link rel="alternate" hreflang="${xmlText(a.locale)}" href="${xmlText(a.loc)}"/>`,

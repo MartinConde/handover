@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **SEO and sitemap.** Every sitemap page carries a `<lastmod>` — the date of the last commit
+  that touched its file, from one `git log` at build; an index page the newest of its entries. A
+  site under Astro's `base` declares it as `i18n.base` in `cms.config.ts` (the build refuses a
+  mismatch, as for the rest of the block) and every address, the sitemap files and the
+  `Sitemap:` line are written under it. The social image on the SEO panel has a *Set focal point*
+  button, and the 1.91:1 / 1200 preset it and the `seo` schemas share is one `SOCIAL_CARD`.
 - **Status and preview leftovers.** The preview pane says *Hidden — not on the live site* over a
   hidden entry's page; a link inside a preview stays in the preview — every link to a page on
   this site is rewritten to its `/_preview` address; showing a hidden entry again points a rule

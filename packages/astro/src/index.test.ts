@@ -343,6 +343,22 @@ test('the documented message names both files when the default locale drifts', (
   );
 });
 
+test('a base in astro.config.mjs that cms.config.ts does not declare is refused', () => {
+  expect(() =>
+    runSetup(
+      adapter,
+      new URL('file:///site/'),
+      { collections: {}, i18n: EN },
+      {
+        i18n: { ...EN, routing: { prefixDefaultLocale: false } },
+        base: '/site',
+      },
+    ),
+  ).toThrow(
+    'cms.config.ts › i18n.base: none is not astro.config.mjs\'s base "/site"; the two must match exactly',
+  );
+});
+
 test('a different list of locales is refused', () => {
   expect(() =>
     drift(
@@ -658,6 +674,23 @@ test('emitSitemap writes one sitemap per language, an index and robots.txt', asy
   );
   expect(await read('robots.txt')).toContain(
     'Sitemap: https://coastalhomes.example/sitemap-index.xml',
+  );
+  // The fixture is committed in this repository, so its page carries the file's last commit.
+  expect(await read('sitemap-en.xml')).toMatch(/<lastmod>\d{4}-\d{2}-\d{2}T[^<]+<\/lastmod>/);
+});
+
+test('a site under a base path names its pages, its sitemaps and the robots line under it', async () => {
+  const client = await clientDir();
+  await emitSitemap(fixture, client, { ...crawl, i18n: { ...crawl.i18n, base: '/site' } });
+  const read = (name: string) => readFile(new URL(name, client), 'utf8');
+  expect(await read('sitemap-en.xml')).toContain(
+    '<loc>https://coastalhomes.example/site/listings/seaview-cottage/</loc>',
+  );
+  expect(await read('sitemap-index.xml')).toContain(
+    '<sitemap><loc>https://coastalhomes.example/site/sitemap-en.xml</loc></sitemap>',
+  );
+  expect(await read('robots.txt')).toContain(
+    'Sitemap: https://coastalhomes.example/site/sitemap-index.xml',
   );
 });
 

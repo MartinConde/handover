@@ -40,8 +40,8 @@ digits and dashes.
 
 Required, a site with one language included. `locales` are the folder names under
 `src/content/<collection>/` and `defaultLocale` is one of them; `prefixDefaultLocale` is
-`false` unless you say otherwise. The same block goes in `astro.config.mjs` and the build
-stops if the two disagree — the keys, the error and the folder layout are in
+`false` unless you say otherwise, and `base` is Astro's `base` when the site has one. The same
+block goes in `astro.config.mjs` and the build stops if the two disagree — the keys, the error and the folder layout are in
 [Languages](i18n.md).
 
 `translate` is optional and only for using something other than DeepL to

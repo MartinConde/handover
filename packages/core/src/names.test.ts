@@ -91,6 +91,7 @@ test('a valid i18n block produces no errors', () => {
   expect(
     checkI18n('default', { locales: ['pt-br'], defaultLocale: 'pt-br', prefixDefaultLocale: true }),
   ).toEqual([]);
+  expect(checkI18n('default', { locales: ['en'], defaultLocale: 'en', base: '/site' })).toEqual([]);
 });
 
 test.each([
@@ -108,6 +109,16 @@ test.each([
     'a prefixDefaultLocale that is not a boolean',
     { locales: ['en'], defaultLocale: 'en', prefixDefaultLocale: 'yes' },
     'i18n.prefixDefaultLocale',
+  ],
+  [
+    'a base without a leading slash',
+    { locales: ['en'], defaultLocale: 'en', base: 'site' },
+    'i18n.base',
+  ],
+  [
+    'a base with a trailing slash',
+    { locales: ['en'], defaultLocale: 'en', base: '/site/' },
+    'i18n.base',
   ],
 ])('%s is reported at its key', (_name, i18n, at) => {
   const [message, ...rest] = checkI18n('default', i18n);
@@ -129,6 +140,17 @@ test('the default language has no segment and the others do', () => {
 test('prefixDefaultLocale gives the default language a segment too', () => {
   const prefixed = { ...two, prefixDefaultLocale: true };
   expect(entryUrl('default', prefixed, '/[slug]', 'home', 'en')).toBe('/en/home');
+});
+
+test('a site under a base path has it in front of every address', () => {
+  const under = { ...two, base: '/site' };
+  expect(entryUrl('default', under, '/listings/[slug]', 'mill-house', 'en')).toBe(
+    '/site/listings/mill-house',
+  );
+  expect(entryUrl('default', under, '/listings/[slug]', 'mill-house', 'de')).toBe(
+    '/site/de/listings/mill-house',
+  );
+  expect(entryUrl('default', under, '/', '', 'en')).toBe('/site/');
 });
 
 test('a collection with no route of its own has no URL', () => {

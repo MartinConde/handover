@@ -51,6 +51,12 @@ export interface Preset {
 /** Longest side an upload is stored at where its field asks for nothing narrower. */
 export const DEFAULT_MAX = 2400;
 
+/**
+ * The one preset a platform fixes rather than a designer: 1.91:1 at 1200 is the 1200 × 630
+ * every social card asks for, so the cap and the floor are the same number.
+ */
+export const SOCIAL_CARD: Preset = { ratio: '1.91:1', max: 1200, min: 1200 };
+
 /** `'16:9'` as the number a crop is measured with; nothing for a field that shows a picture whole. */
 export const ratioOf = (ratio: string | undefined) => {
   const [w, h] = (ratio ?? '').split(':').map(Number);

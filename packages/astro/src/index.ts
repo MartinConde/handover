@@ -1,7 +1,9 @@
+import { execFile } from 'node:child_process';
 import { appendFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import {
   CHECKS,
   type CheckName,
@@ -18,6 +20,7 @@ import {
   type Mailer,
   type MediaUses,
   mediaUsesFrom,
+  modifiedFrom,
   type Preset,
   parseEntry,
   type RichtextTier,
@@ -26,6 +29,7 @@ import {
   richtextErrors,
   robotsText,
   type SitemapSite,
+  SOCIAL_CARD,
   schemaVersionError,
   sitemapFrom,
   sitemapIndexXml,
@@ -196,9 +200,7 @@ export const seo = z
   .object({
     title: z.string().optional(),
     description: z.string().optional(),
-    // The one preset a platform fixes rather than a designer: 1.91:1 at 1200 is the 1200 × 630
-    // every social card asks for, so the cap and the floor are the same number.
-    image: image({ ratio: '1.91:1', max: 1200, min: 1200 }).optional(),
+    image: image(SOCIAL_CARD).optional(),
     noindex: z.boolean().optional(),
     // Goes into a <link> tag, so the same allow-list as anything an editor can click.
     canonical: href.optional(),
@@ -220,9 +222,7 @@ export const seoDefaults = z
       .optional()
       .meta({ label: 'Default search title', description: '%s becomes the page’s own title' }),
     description: z.string().optional(),
-    image: image({ ratio: '1.91:1', max: 1200, min: 1200 })
-      .optional()
-      .meta({ label: 'Default social image' }),
+    image: image(SOCIAL_CARD).optional().meta({ label: 'Default social image' }),
     // One account for the site, written the way X wants it read: `@name`.
     twitter: z.string().optional().meta({ i18n: 'duplicate', label: 'X (Twitter) handle' }),
   })
@@ -335,6 +335,8 @@ export interface HandoverConfig {
     defaultLocale: string;
     /** Whether the default locale's URLs carry its segment. Astro's `routing.prefixDefaultLocale`. */
     prefixDefaultLocale?: boolean;
+    /** Astro's `base`, when the whole site is served under a path: `'/site'`. */
+    base?: string;
     /**
      * What machine-translates a field, when it is not DeepL: given the texts and the two
      * languages, the same texts translated, in order. Without one, `DEEPL_API_KEY` is used;
@@ -483,25 +485,50 @@ export async function emitSitemap(
 ): Promise<string[]> {
   await mkdir(clientDir, { recursive: true });
   const written: string[] = [];
+  // The files sit beside the pages, so under a `base` they are served under it too.
+  const at = (name: string) =>
+    site ? new URL(`${site.i18n.base ?? ''}/${name}`, site.base).href : undefined;
   if (site) {
-    const pages = sitemapFrom('default', await contentFiles(root), site);
+    const pages = sitemapFrom('default', await contentFiles(root), site, await modifiedAt(root));
     for (const locale of site.i18n.locales) {
       const name = `sitemap-${locale}.xml`;
       await writeFile(new URL(name, clientDir), sitemapXml('default', pages[locale] ?? []));
       written.push(name);
     }
     const index = new URL('sitemap-index.xml', clientDir);
-    const locs = written.map((name) => new URL(name, site.base).href);
-    await writeFile(index, sitemapIndexXml('default', locs));
+    await writeFile(
+      index,
+      sitemapIndexXml(
+        'default',
+        written.map((name) => at(name) ?? name),
+      ),
+    );
     written.push('sitemap-index.xml');
   }
   const own = await readFile(new URL('robots.txt', clientDir), 'utf8').catch(() => undefined);
   if (own === undefined) {
-    const sitemap = site && new URL('sitemap-index.xml', site.base).href;
-    await writeFile(new URL('robots.txt', clientDir), robotsText('default', sitemap || undefined));
+    await writeFile(
+      new URL('robots.txt', clientDir),
+      robotsText('default', at('sitemap-index.xml')),
+    );
     written.push('robots.txt');
   }
   return written;
+}
+
+/**
+ * When each content file last changed, read off the checkout the build runs in — one `git log`
+ * for the tree, not a call per file. A publish is a commit, so the last commit touching a file
+ * is its last change. No git, or a file never committed, gives no date rather than a made-up
+ * one; a shallow clone gives the clone's.
+ */
+export async function modifiedAt(root: URL): Promise<Map<string, string>> {
+  const { stdout } = await promisify(execFile)(
+    'git',
+    ['log', '--format=%cI', '--name-only', '--relative', '--', 'src/content'],
+    { cwd: fileURLToPath(root), maxBuffer: 64 * 1024 * 1024 },
+  ).catch(() => ({ stdout: '' }));
+  return modifiedFrom('default', stdout);
 }
 
 /**
@@ -631,14 +658,25 @@ type AstroI18n = {
  * writes files and preview paths from ours, so a drift would put a German file under a
  * folder Astro never builds — silently, until someone opens the page.
  */
-function i18nErrors(cms: HandoverConfig['i18n'], astro: AstroI18n | undefined): string[] {
+function i18nErrors(
+  cms: HandoverConfig['i18n'],
+  astro: AstroI18n | undefined,
+  base: unknown = '/',
+): string[] {
   const at = (key: string) => `cms.config.ts › i18n.${key}: `;
   const is = (them: unknown, key: string) => `is not astro.config.mjs's i18n.${key} ${them}`;
+  // Astro spells its base with or without the slash by `trailingSlash`; ours is written bare.
+  const theirs = String(base ?? '/').replace(/\/+$/, '') || '/';
+  const errors: string[] = [];
+  if ((cms.base ?? '/') !== theirs)
+    errors.push(
+      `${at('base')}${cms.base === undefined ? 'none' : JSON.stringify(cms.base)} is not astro.config.mjs's base ${JSON.stringify(theirs)}; the two must match exactly`,
+    );
   if (!astro)
     return [
+      ...errors,
       `astro.config.mjs has no i18n block: cms.config.ts declares ${JSON.stringify(cms.locales)}, so astro.config.mjs needs i18n: { locales: ${JSON.stringify(cms.locales)}, defaultLocale: ${JSON.stringify(cms.defaultLocale)} }. The two must match exactly.`,
     ];
-  const errors: string[] = [];
   const locales = (Array.isArray(astro.locales) ? astro.locales : []).map((l) =>
     typeof l === 'string' ? l : (l as { path?: string }).path,
   );
@@ -721,7 +759,7 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
       },
       'astro:config:setup': ({ config, logger, injectRoute, addMiddleware, updateConfig }) => {
         if (!config.adapter) throw new Error(NO_ADAPTER_MESSAGE);
-        const drift = i18nErrors(cms.i18n, config.i18n);
+        const drift = i18nErrors(cms.i18n, config.i18n, config.base);
         if (drift.length) throw new Error(`\n${drift.join('\n')}`);
         logger.info('astro-handover integration loaded');
 
