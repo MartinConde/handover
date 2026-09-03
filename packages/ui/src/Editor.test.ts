@@ -327,6 +327,114 @@ test('confirming publishes this entry alone and reads the screen again', async (
   vi.unstubAllGlobals();
 });
 
+// The dialog runs the same checks the drawer does, over this one entry, and refuses the same
+// way: an error disables the button, warnings never stop a publish, and the pass runs again on
+// the press so a picture deleted since the dialog opened is still caught.
+const BROKEN = {
+  check: 'media-missing',
+  entry: 'listings/seaview-cottage',
+  path: 'src/content/listings/en/seaview-cottage.yaml',
+  fieldPath: 'photo.src',
+  severity: 'error',
+  message: 'Photo has nothing behind it any more — the page would show a broken image',
+};
+/** Each checks pass answers the next of `passes`; the publish answers a commit. */
+const checking = (passes: (unknown[] | number)[]) =>
+  vi.fn(async (url: string) => {
+    if (isLock(url)) return Response.json(HELD);
+    if (url === '/admin/api/publish/checks') {
+      const pass = passes.length > 1 ? passes.shift() : passes[0];
+      return typeof pass === 'number'
+        ? new Response('', { status: pass })
+        : Response.json({ results: pass });
+    }
+    if (url === '/admin/api/publish') return Response.json({ commit_sha: 'def4567890', paths: [] });
+    return Response.json({ updated_at: 1755864000000, pending: true, problems: [] });
+  });
+const settled = async () => {
+  await tick();
+  await tick();
+  flushSync();
+};
+const publishCalls = (mock: { mock: { calls: unknown[][] } }) =>
+  mock.mock.calls.filter((call) => call[0] === '/admin/api/publish');
+
+test('Publish this entry lists what the checks found and an error disables the button', async () => {
+  const fetchMock = checking([[BROKEN]]);
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: { ...entry, pending: ['en'] } });
+  $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
+  await settled();
+
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/publish/checks', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ entries: ['listings/seaview-cottage'] }),
+  });
+  expect($(root, '.dialog .checks .notice-danger .msg')?.textContent).toBe(BROKEN.message);
+  expect($(root, '.dialog .checks-sum')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+    '1 error. The error has to go first.',
+  );
+  const button = $<HTMLButtonElement>(root, '.dialog .actions .btn-primary');
+  expect(button?.disabled).toBe(true);
+  expect(button?.textContent?.trim()).toBe('Fix 1 error to publish');
+  vi.unstubAllGlobals();
+});
+
+test('an error found on the press refuses with the drawer’s sentence and commits nothing', async () => {
+  const fetchMock = checking([[], [BROKEN]]);
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: { ...entry, pending: ['en'] } });
+  $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
+  await settled();
+  $<HTMLButtonElement>(root, '.dialog .actions .btn-primary')?.click();
+  await settled();
+
+  expect($(root, '.dialog [role="alert"]')?.textContent).toBe(
+    'Nothing was published. The checks found something in the way just now — it is listed above.',
+  );
+  expect(publishCalls(fetchMock)).toHaveLength(0);
+  expect($(root, '.dialog .actions .btn-primary')?.textContent?.trim()).toBe(
+    'Fix 1 error to publish',
+  );
+  vi.unstubAllGlobals();
+});
+
+test('warnings read Publish anyway and never stop the entry going out', async () => {
+  const fetchMock = checking([[{ ...BROKEN, check: 'image-alt', severity: 'warn' }]]);
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: { ...entry, pending: ['en'] } });
+  $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
+  await settled();
+
+  const button = $<HTMLButtonElement>(root, '.dialog .actions .btn-primary');
+  expect(button?.disabled).toBe(false);
+  expect(button?.textContent?.trim()).toBe('Publish anyway (1 warning)');
+  button?.click();
+  await settled();
+  expect(publishCalls(fetchMock)).toHaveLength(1);
+  vi.unstubAllGlobals();
+});
+
+test('a pass that could not be run says so and holds nothing back', async () => {
+  const fetchMock = checking([500]);
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: { ...entry, pending: ['en'] } });
+  $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
+  await settled();
+
+  expect(
+    $(root, '.dialog .checks-sum[role="status"]')?.textContent?.replace(/\s+/g, ' ').trim(),
+  ).toBe('The checks could not be run this time, so nothing here has been looked at.');
+  const button = $<HTMLButtonElement>(root, '.dialog .actions .btn-primary');
+  expect(button?.disabled).toBe(false);
+  expect(button?.textContent?.trim()).toBe('Publish this entry');
+  button?.click();
+  await settled();
+  expect(publishCalls(fetchMock)).toHaveLength(1);
+  vi.unstubAllGlobals();
+});
+
 // Detection, not resolution: the header says the entry is stale and the drawer's Discard is
 // the way out. Choosing field by field is the three-way view, which is not built yet.
 test('a file somebody changed in the repository badges the header and names the drawer', async () => {

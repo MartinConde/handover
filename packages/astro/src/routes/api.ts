@@ -3453,8 +3453,8 @@ async function driftedPaths(paths: string[]): Promise<string[]> {
  *
  * **A request of its own on purpose.** The pass then has its own ten milliseconds of CPU, so a
  * publish too heavily cross-linked to read in one go costs a check result and never the commit;
- * and nothing here refuses anything, since the drawer's Publish button is where an error stops
- * somebody ([pre-publish-checks.md](../../../docs/pending-changes.md)).
+ * and nothing here refuses anything, since the drawer's Publish button and the entry header's
+ * dialog are where an error stops somebody ([pre-publish-checks.md](../../../docs/pending-changes.md)).
  */
 async function prepublishChecks(request: Request): Promise<Response> {
   const database = db();

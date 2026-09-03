@@ -76,6 +76,9 @@ the collection schema is not done with, and languages that have drifted apart.
   in several languages is one line, and its link opens the site's default language
 - A pass that could not be run says so and holds nothing back: a lint nobody could run is not
   a reason to stop you publishing your own site
+- **Publish this entry** in the entry header runs the same pass over its one entry — when the
+  dialog opens and again on the press — and refuses an error the same way; a note about some
+  other page is the drawer's alone
 - **One note is about the site rather than the set.** A daily job reads every hidden file in
   the repository and dates the hide from the file's commits; a page hidden for more than 90
   days is listed under *Elsewhere on the site* for as long as it stays hidden, without a

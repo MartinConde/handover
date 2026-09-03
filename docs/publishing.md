@@ -75,7 +75,8 @@ the old key is still written back on the next save, so the value is there for
 There are two ways to publish, and both are one click.
 
 **"I changed one thing."** The entry header has **Publish this entry**. It confirms first,
-naming every language file that goes with the entry, and then commits that entry and
+naming every language file that goes with the entry, runs the same [checks](pending-changes.md#checks-before-a-publish)
+the drawer does over that one entry, and then commits that entry and
 nothing else — whatever else you or anybody else has been working on stays unpublished. A
 notice at the bottom right says what went out; [Build status](build-status.md) takes it from there.
 
@@ -145,6 +146,5 @@ without a restart.
 The build pill has no **quota** state and none is planned: the Builds API carries no usage
 against the free plan's monthly build minutes, so a build that fails for want of them reads as
 an ordinary failure. The publish rows in the [activity log](activity.md) do not expand into
-what the commit changed, though the drawer shows the same diff before it goes out. **Publish this entry** runs no
-pre-publish checks and does not name the redirect rules riding along with it the way the
-drawer does.
+what the commit changed, though the drawer shows the same diff before it goes out. **Publish this entry** does not
+name the redirect rules riding along with it the way the drawer does.

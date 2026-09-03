@@ -12,6 +12,7 @@ import {
 } from '@handover/core';
 import { onMount, tick } from 'svelte';
 import { when } from './activity-line';
+import CheckLines, { type CheckItem, merged, plural, verdict } from './CheckLines.svelte';
 import DriftPanel from './Drift.svelte';
 import Fields from './Fields.svelte';
 import History from './History.svelte';
@@ -609,6 +610,13 @@ onMount(fromAddress);
 let confirming = $state(false);
 let sending = $state(false);
 let publishFailed = $state('');
+/** What the pre-publish checks found over this entry, read when the dialog opens and on the press. */
+let checks = $state<CheckItem[]>([]);
+/** The pass could not be run at all — which holds nothing back: it is a lint, not a gate. */
+let checksFailed = $state(false);
+const lines = $derived(merged(checks));
+const errors = $derived(lines.filter((c) => c.severity === 'error'));
+const warnings = $derived(lines.filter((c) => c.severity === 'warn'));
 // Somebody committed to one of this entry's files after it was opened. Detection only: taking
 // theirs whole is the drawer's Discard, and choosing field by field is the three-way view.
 let conflicted = $state(false);
@@ -635,6 +643,25 @@ async function askToPublish() {
   if (pane && !(await pane.flush())) return;
   publishFailed = '';
   confirming = true;
+  void lint();
+}
+
+/**
+ * The same lint the drawer runs, over this one entry: a request of its own that refuses nothing —
+ * an answer that never comes leaves the publish where it was, since a check nobody could run is
+ * not a reason to stop a client publishing their own site.
+ */
+async function lint() {
+  const key = `${collection}/${slug}`;
+  const res = await fetch('/admin/api/publish/checks', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ entries: [key] }),
+  }).catch(() => undefined);
+  checksFailed = !res?.ok;
+  // The daily hidden check's note about some other page is the drawer's to list, not this entry's.
+  const results = (res?.ok && ((await res.json()) as { results?: CheckItem[] }).results) || [];
+  checks = results.filter((c) => c.entry === key);
 }
 
 function closePublish() {
@@ -645,6 +672,18 @@ function closePublish() {
 async function publishEntry() {
   sending = true;
   publishFailed = '';
+  // Again, on the press: the dialog may have been open a while, and a picture somebody deleted
+  // in another tab since is what the error would be about.
+  await lint();
+  if (errors.length) {
+    sending = false;
+    // The button goes disabled and the list above changes; neither says anything, and a
+    // disabled button drops the focus that pressed it.
+    publishFailed =
+      'Nothing was published. The checks found something in the way just now — it is listed above.';
+    publishPanel?.focus();
+    return;
+  }
   const res = await fetch('/admin/api/publish', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -1189,6 +1228,19 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             </li>
           </ul>
         {/if}
+        {#if checksFailed || lines.length}
+          <section class="checks" aria-labelledby="publish-checks-h">
+            <h3 class="group-title" id="publish-checks-h">Checks</h3>
+            {#if checksFailed}
+              <p class="checks-sum" role="status">
+                The checks could not be run this time, so nothing here has been looked at.
+              </p>
+            {:else}
+              <p class="checks-sum">{verdict(lines)}</p>
+              <CheckLines {lines} chips={many} />
+            {/if}
+          </section>
+        {/if}
         <p class="rebuild-note">
           One commit, then the site rebuilds — live in 1–3 minutes. The admin may reload while it
           deploys.
@@ -1196,8 +1248,16 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         {#if publishFailed}<div class="notice notice-danger" role="alert">{publishFailed}</div>{/if}
         <div class="actions">
           <button class="btn" type="button" onclick={closePublish}>Cancel</button>
-          <button class="btn btn-primary" type="button" disabled={sending} onclick={publishEntry}>
-            {sending ? 'Publishing…' : 'Publish this entry'}
+          <button
+            class="btn btn-primary"
+            type="button"
+            disabled={sending || errors.length > 0}
+            onclick={publishEntry}
+          >
+            {#if sending}Publishing…
+            {:else if errors.length}Fix {plural(errors.length, 'errors')} to publish
+            {:else if warnings.length}Publish anyway ({plural(warnings.length, 'warnings')})
+            {:else}Publish this entry{/if}
           </button>
         </div>
       </div>

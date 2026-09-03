@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Publish this entry runs the checks.** The entry header's dialog runs the same pre-publish
+  pass the drawer does over its one entry — when it opens and again on the press — lists what
+  it found, and refuses an error the same way: *Fix 1 error to publish*, disabled, or *Nothing
+  was published. The checks found something in the way just now* when the error turned up on
+  the press. Warnings read *Publish anyway (N warnings)*, and a pass that could not be run
+  holds nothing back.
 - **Save as template.** An owner can save an entry list row as one of the collection's
   starters — `POST /admin/api/entries/:collection/:slug/template` commits
   `src/content/_templates/<collection>/<name>.yaml` from the entry as published, in the
