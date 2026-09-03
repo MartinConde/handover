@@ -56,6 +56,7 @@ const {
   revertCommit,
   restoreCommit,
   deletedEntries,
+  savedTemplates,
   findMedia,
   mediaList,
   draftFiles,
@@ -284,6 +285,9 @@ const {
     deletedEntries: vi.fn<(...args: unknown[]) => Promise<Record<string, unknown>[]>>(
       async () => [],
     ),
+    // The names the log remembers saving as templates, per collection; the query is proven in
+    // core's own activity.test.ts.
+    savedTemplates: vi.fn<(...args: unknown[]) => Promise<string[]>>(async () => []),
   };
 });
 
@@ -720,6 +724,7 @@ vi.mock('@handover/core', async (original) => ({
   revertCommit,
   restoreCommit,
   deletedEntries,
+  savedTemplates,
   findMedia,
   mediaList,
   draftFiles,
@@ -765,6 +770,7 @@ afterEach(() => {
   restoreCommit.mockClear();
   restoreDraft.mockClear();
   deletedEntries.mockClear();
+  savedTemplates.mockClear();
   setPassword = async () => ({ status: true });
   facts = { hasPassword: true, sessions: [] };
   asked = [];
@@ -812,8 +818,12 @@ const ctx = (path: string, request?: Request, locals: Record<string, unknown> = 
     url: new URL(`https://x/admin/api/${path}`),
     locals,
   }) as unknown as APIContext;
-const post = (path: string, body: string) =>
-  ctx(path, new Request(`https://x/admin/api/${path}`, { method: 'POST', body }));
+const post = (path: string, body: string, session?: unknown) =>
+  ctx(
+    path,
+    new Request(`https://x/admin/api/${path}`, { method: 'POST', body }),
+    session ? { handover: session } : {},
+  );
 const put = (path: string, body: string) =>
   ctx(path, new Request(`https://x/admin/api/${path}`, { method: 'PUT', body }));
 const patch = (path: string, body: unknown, locals: Record<string, unknown> = {}) =>
@@ -2394,6 +2404,102 @@ test('creating from a template no collection declares is 404', async () => {
   );
   expect(res.status).toBe(404);
   expect(createDraft).not.toHaveBeenCalled();
+});
+
+// A template is the entry's own file in the language it was written in, less what belongs to
+// the entry alone — its address, its languages, its status and every `_id` — committed at once,
+// so the next deploy has it, and logged, so the dialog has it before then.
+test('saving as a template commits one stripped file and logs it', async () => {
+  publish.mockClear();
+  files['src/content/pages/en/home.yaml'] =
+    '_version: 1\n_i18n:\n  sourceLocale: "en"\n_status: "hidden"\nslug: "start"\ntitle: "Home"\nblocks:\n  - _type: "hero"\n    _id: "k3nf9a2p"\n    heading: "Hi"\n';
+
+  const res = await POST(
+    post('entries/pages/home/template', JSON.stringify({ to: 'Landing page' }), owner),
+  );
+
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ name: 'landing-page' });
+  expect(publish).toHaveBeenCalledTimes(1);
+  expect(publish).toHaveBeenCalledWith(
+    [
+      {
+        path: 'src/content/_templates/pages/landing-page.yaml',
+        contents: '_version: 1\ntitle: "Home"\nblocks:\n  - _type: "hero"\n    heading: "Hi"\n',
+      },
+    ],
+    { base_sha: 'head789', message: 'Save pages/home as the template landing-page' },
+  );
+  expect(logged).toEqual([
+    {
+      userId: 'u1',
+      kind: 'template-saved',
+      subject: 'src/content/pages/en/home.yaml',
+      detail: { template: 'landing-page' },
+      commitSha: 'def456',
+    },
+  ]);
+});
+
+// The name goes through the same derivation as a new entry's, against the templates the
+// collection already has — the built ones and the saved ones — so nothing is written over.
+test('a template name already taken gets the next free one', async () => {
+  publish.mockClear();
+  files['src/content/pages/en/home.yaml'] = '_version: 1\ntitle: "Home"\n';
+  savedTemplates.mockImplementationOnce(async () => ['home']);
+
+  const res = await POST(post('entries/pages/home/template', JSON.stringify({}), owner));
+
+  expect(await res.json()).toEqual({ name: 'home-2' });
+  expect(publish.mock.calls[0]?.[0]).toEqual([
+    { path: 'src/content/_templates/pages/home-2.yaml', contents: '_version: 1\ntitle: "Home"\n' },
+  ]);
+});
+
+test('an entry that was never published cannot be saved as a template', async () => {
+  publish.mockClear();
+  const res = await POST(
+    post('entries/listings/strandhaus-nord/template', JSON.stringify({}), owner),
+  );
+  expect(res.status).toBe(409);
+  expect(await res.text()).toBe('Publish this entry before saving it as a template');
+  expect(publish).not.toHaveBeenCalled();
+});
+
+// A template shapes every entry made after it, which is nearer to the site's shape than to
+// its content, so it is the owner's to make.
+test('an editor cannot save a template', async () => {
+  publish.mockClear();
+  files['src/content/pages/en/home.yaml'] = '_version: 1\ntitle: "Home"\n';
+  const res = await POST(post('entries/pages/home/template', JSON.stringify({}), editor));
+  expect(res.status).toBe(403);
+  expect(publish).not.toHaveBeenCalled();
+});
+
+// Until the next build the repository's own list does not have a saved template, so the
+// dialog reads the two lists as one.
+test('the entry list offers the saved templates beside the built ones', async () => {
+  savedTemplates.mockImplementationOnce(async () => ['flat', 'house']);
+  const res = await GET(ctx('entries/listings'));
+  expect(((await res.json()) as { templates: string[] }).templates).toEqual(['flat', 'house']);
+});
+
+test('creating from a saved template reads its file from the repository', async () => {
+  createDraft.mockClear();
+  savedTemplates.mockImplementationOnce(async () => ['landing-page']);
+  files['src/content/_templates/pages/landing-page.yaml'] =
+    '_version: 1\ntitle: "Home"\nblocks:\n  - _type: "hero"\n    heading: "Hi"\n';
+
+  const res = await POST(
+    post('entries/pages', JSON.stringify({ title: 'Move to Devon', template: 'landing-page' })),
+  );
+
+  expect(await res.json()).toEqual({ slug: 'move-to-devon' });
+  const values = createDraft.mock.calls[0]?.[4] as Record<string, unknown>;
+  const [block] = values.blocks as { _id: string; heading: string }[];
+  expect(block?.heading).toBe('Hi');
+  expect(block?._id).toMatch(/^[0-9a-z]{8}$/);
+  expect(values.title).toBe('Move to Devon');
 });
 
 test('renaming moves the entry in one commit and takes its unpublished edits with it', async () => {

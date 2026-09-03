@@ -11,6 +11,7 @@ import {
   lastCommit,
   logActivity,
   publishedEntries,
+  savedTemplates,
 } from './activity.js';
 import type { Db } from './db.js';
 import * as tables from './tables.js';
@@ -351,6 +352,46 @@ test('a delete that made no commit is not in the deleted list', async () => {
   });
 
   expect(await deletedEntries('default', db, 'listings')).toEqual([]);
+});
+
+// The New entry dialog offers a saved template before the next build has read it from the
+// repository, so the names ride in the log: one collection's, newest first, each once.
+test('the saved templates are the names the log recorded for one collection', async () => {
+  const at = 1_800_000_000_000;
+  await seedEvent({
+    id: 't1',
+    at,
+    kind: 'template-saved',
+    subject: 'src/content/listings/en/mill-house.yaml',
+    detail: { template: 'house' },
+    commitSha: 'aaa111',
+  });
+  await seedEvent({
+    id: 't2',
+    at: at + 1000,
+    kind: 'template-saved',
+    subject: 'src/content/pages/en/about.yaml',
+    detail: { template: 'about' },
+    commitSha: 'bbb222',
+  });
+  await seedEvent({
+    id: 't3',
+    at: at + 2000,
+    kind: 'template-saved',
+    subject: 'src/content/listings/de/harbour-flat.yaml',
+    detail: { template: 'flat' },
+    commitSha: 'ccc333',
+  });
+  await seedEvent({
+    id: 't4',
+    at: at + 3000,
+    kind: 'template-saved',
+    subject: 'src/content/listings/en/seaview-cottage.yaml',
+    detail: { template: 'house' },
+    commitSha: 'ddd444',
+  });
+
+  expect(await savedTemplates('default', db, 'listings')).toEqual(['house', 'flat']);
 });
 
 // Git records the installation rather than the person, so this lookup is the only thing that

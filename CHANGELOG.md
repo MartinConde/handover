@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Save as template.** An owner can save an entry list row as one of the collection's
+  starters — `POST /admin/api/entries/:collection/:slug/template` commits
+  `src/content/_templates/<collection>/<name>.yaml` from the entry as published, in the
+  language it was written in and without its ids, address, languages or status, and logs it
+  as `template-saved`. The New entry dialog offers it at once, ahead of the build that reads
+  starters from the repository, and the activity log reads *saved the template house from
+  mill-house*.
 - **Menus and redirects.** A menu item can point at a collection's index page — its row sits
   at the top of the collection in the picker, written as `link: { type: "index", collection:
   "listings" }` — and each language then links its own index (`/listings`, `/de/listings`)

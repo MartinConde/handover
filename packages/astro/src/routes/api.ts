@@ -116,6 +116,7 @@ import {
   runChecks,
   SCHEMA_VERSION,
   saveDraft,
+  savedTemplates,
   saveTranslated,
   setEntryAddress,
   setEntryLocales,
@@ -2261,7 +2262,7 @@ async function listEntries(collection: string): Promise<Response> {
     // The page above them, which is where the hide dialog offers to send a row's readers.
     index: collected.index,
     // The starters this collection ships, which the New entry dialog offers beside Blank.
-    templates: (templates[collection] ?? []).map((t) => t.name),
+    templates: await templateNames(collection, database),
   });
 }
 
@@ -2775,15 +2776,88 @@ const locationOf = (collection: string): EntryLocation => ({
   localizedSlugs: config.collections[collection]?.localizedSlugs,
 });
 
+const templatePath = (collection: string, name: string) =>
+  `src/content/_templates/${collection}/${name}.yaml`;
+
+// The starters the dialog offers: the build's, and the ones saved from the admin since it ran.
+async function templateNames(collection: string, database: Db): Promise<string[]> {
+  const built = (templates[collection] ?? []).map((t) => t.name);
+  const saved = await savedTemplates('default', database, collection);
+  return [...new Set([...built, ...saved])].sort((a, b) => a.localeCompare(b));
+}
+
 // What a starter hands the new entry, and what it does not: the identity keys are the entry's
-// own, and a template that carried them would put every entry made from it at one address.
-const startedFrom = (collection: string, name: string): Record<string, unknown> | undefined => {
-  const found = templates[collection]?.find((t) => t.name === name);
-  if (!found) return undefined;
-  const values = regenerateIds('default', found.data) as Record<string, unknown>;
+// own, and a template that carried them would put every entry made from it at one address. One
+// the build has not seen is read from the repository, which is where a save put it.
+async function startedFrom(
+  collection: string,
+  name: string,
+): Promise<Record<string, unknown> | undefined> {
+  const built = templates[collection]?.find((t) => t.name === name)?.data;
+  const file =
+    built === undefined ? await gitClient().getFile(templatePath(collection, name)) : undefined;
+  const data = built ?? (file && parseEntry('default', file.contents));
+  if (data === undefined) return undefined;
+  const values = regenerateIds('default', data) as Record<string, unknown>;
   for (const key of ['_i18n', '_locales', '_status', 'slug']) delete values[key];
   return values;
-};
+}
+
+// Every `_id` taken out, the way a hand-written starter arrives: creating from it stamps fresh ones.
+const withoutIds = (value: unknown): unknown =>
+  Array.isArray(value)
+    ? value.map(withoutIds)
+    : value && typeof value === 'object'
+      ? Object.fromEntries(
+          Object.entries(value)
+            .filter(([k]) => k !== '_id')
+            .map(([k, v]) => [k, withoutIds(v)]),
+        )
+      : value;
+
+/**
+ * A template is the entry's own file in the language it was written in, less what belongs to
+ * the entry alone, committed at once so the next build offers it and logged so the dialog
+ * offers it before then. The owner's to make: a template shapes every entry made after it.
+ */
+async function saveTemplate(
+  collection: string,
+  slug: string,
+  request: Request,
+  session: App.Locals['handover'],
+): Promise<Response> {
+  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
+  const body = (await request.json().catch(() => undefined)) as { to?: unknown } | undefined;
+  const git = gitClient();
+  const database = db();
+  const files = await entryFiles(git, collection, slug);
+  // The language it was written in, or the first it is published in: the site's default first.
+  const from = sourceOrder()
+    .map((locale) => files.find((f) => f.locale === locale && f.file))
+    .find(Boolean);
+  if (!from?.file)
+    return new Response('Publish this entry before saving it as a template', { status: 409 });
+  const wanted = typeof body?.to === 'string' && body.to ? body.to : slug;
+  const name = entryName('default', wanted, await templateNames(collection, database));
+  const values = withoutIds(parseEntry('default', from.file.contents)) as Record<string, unknown>;
+  for (const key of ['_i18n', '_locales', '_status', '_machine', 'slug']) delete values[key];
+  const { commit_sha } = await git.publish(
+    [{ path: templatePath(collection, name), contents: stringifyEntry('default', values) }],
+    {
+      base_sha: await git.getHead(),
+      message: `Save ${collection}/${slug} as the template ${name}`,
+    },
+  );
+  await logActivity('default', database, {
+    userId: session?.user.id,
+    kind: 'template-saved',
+    subject: from.path,
+    detail: { template: name },
+    commitSha: commit_sha,
+  });
+  return Response.json({ name });
+}
 
 /**
  * A new entry is a draft, not a commit: nothing is in the repository until it is published,
@@ -2801,7 +2875,7 @@ async function createEntry(collection: string, request: Request): Promise<Respon
   const title = typeof body?.title === 'string' ? body.title : '';
   const starter =
     typeof body?.template === 'string' && body.template
-      ? startedFrom(collection, body.template)
+      ? await startedFrom(collection, body.template)
       : {};
   if (!starter) return new Response('No such template', { status: 404 });
   const database = db();
@@ -3191,6 +3265,7 @@ const DRAFT = /^drafts\/([\w-]+)\/([\w-]+)$/;
 const TRANSLATION = /^drafts\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 const RENAME = /^entries\/([\w-]+)\/([\w-]+)\/rename$/;
 const DUPLICATE = /^entries\/([\w-]+)\/([\w-]+)\/duplicate$/;
+const TEMPLATE = /^entries\/([\w-]+)\/([\w-]+)\/template$/;
 const LOCALES = /^entries\/([\w-]+)\/([\w-]+)\/locales$/;
 const ADDRESS = /^entries\/([\w-]+)\/([\w-]+)\/address\/([\w-]+)$/;
 const DRIFT = /^drift\/([\w-]+)\/([\w-]+)$/;
@@ -3925,6 +4000,11 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   const copied = params.path?.match(DUPLICATE);
   if (copied)
     return answering(() => duplicate(copied[1] ?? '', copied[2] ?? '', request, locals.handover));
+  const templated = params.path?.match(TEMPLATE);
+  if (templated)
+    return answering(() =>
+      saveTemplate(templated[1] ?? '', templated[2] ?? '', request, locals.handover),
+    );
   const created = params.path?.match(ENTRIES);
   if (created) return answering(() => createEntry(created[1] ?? '', request));
   return new Response('Not found', { status: 404 });

@@ -32,7 +32,18 @@ type Deleted = {
   /** Why it cannot come back: something is at one of its paths again. */
   blocked?: string;
 };
-let { collection, onchanged }: { collection: string; onchanged: () => void } = $props();
+let {
+  collection,
+  onchanged,
+  role,
+  onsaved,
+}: {
+  collection: string;
+  onchanged: () => void;
+  /** Saving a template shapes every entry made after it, so the item is the owner's. */
+  role?: 'owner' | 'editor';
+  onsaved?: (name: string) => void;
+} = $props();
 
 let entries = $state<Entry[]>([]);
 // Which set is on screen. A tab rather than a filter: the filters all narrow the same list and
@@ -46,10 +57,12 @@ let putting = $state<Deleted>();
 let locales = $state<string[]>([]);
 // The page above this collection, which is where a hidden entry's readers go by default.
 let index = $state<string>();
+// The starters the collection has, which a saved template's name must not repeat.
+let templates = $state<string[]>([]);
 // Whether a duplicate carries the unpublished changes as well as the published file.
 let withDrafts = $state(false);
 let loading = $state(true);
-let dialog = $state<'' | 'new' | 'rename' | 'duplicate'>('');
+let dialog = $state<'' | 'new' | 'rename' | 'duplicate' | 'template'>('');
 // The rows the bulk bar is about; checking any one of them reveals the column for all.
 let chosen = $state<string[]>([]);
 // What the redirect question is open over: hiding one row or the whole selection, or deleting
@@ -114,12 +127,15 @@ const named = (ids: string[]) =>
   ids.length === 1 ? (entries.find((e) => e.id === ids[0]) ?? undefined) : undefined;
 
 // The same derivation the server runs on the same names, so the dialog can promise the file
-// name before anything is written. A rename does not collide with the entry being renamed.
+// name before anything is written. A rename does not collide with the entry being renamed,
+// and a template's name is taken against the starters rather than the entries.
 const preview = $derived(
   entryName(
     'default',
     text,
-    entries.map((e) => e.id).filter((id) => dialog !== 'rename' || id !== target?.id),
+    dialog === 'template'
+      ? templates
+      : entries.map((e) => e.id).filter((id) => dialog !== 'rename' || id !== target?.id),
   ),
 );
 const WHEN = new Intl.DateTimeFormat('en-GB', {
@@ -140,10 +156,16 @@ async function loadDeleted(name: string) {
 async function load(name: string) {
   const res = await fetch(`/admin/api/entries/${name}`);
   if (res.ok) {
-    const body = (await res.json()) as { entries: Entry[]; locales?: string[]; index?: string };
+    const body = (await res.json()) as {
+      entries: Entry[];
+      locales?: string[];
+      index?: string;
+      templates?: string[];
+    };
     entries = body.entries;
     locales = body.locales ?? [];
     index = body.index;
+    templates = body.templates ?? [];
     // A language the address names and the site does not declare filters nothing.
     if (!locales.includes(language)) language = '';
   } else error = `Could not load the list (${res.status})`;
@@ -161,10 +183,10 @@ async function status(ids: string[], hidden: boolean, redirect?: Target) {
   await done();
 }
 
-function open(kind: 'new' | 'rename' | 'duplicate', entry?: Entry) {
+function open(kind: 'new' | 'rename' | 'duplicate' | 'template', entry?: Entry) {
   dialog = kind;
   target = entry;
-  text = kind === 'new' ? '' : kind === 'rename' ? (entry?.id ?? '') : `${entry?.id ?? ''}-copy`;
+  text = kind === 'new' ? '' : kind === 'duplicate' ? `${entry?.id ?? ''}-copy` : (entry?.id ?? '');
   withDrafts = false;
   error = '';
 }
@@ -219,6 +241,19 @@ async function duplicate(event: Event) {
   if (!res) return;
   const { slug } = (await res.json()) as { slug: string };
   navigate(`/admin/c/${collection}/${slug}`);
+}
+
+// A template is a commit, not a draft, and has no screen of its own to open: the list stays
+// where it is and the shell says what was saved.
+async function saveTemplate(event: Event) {
+  event.preventDefault();
+  const url = `/admin/api/entries/${collection}/${target?.id}/template`;
+  const res = await send(url, json({ to: text }));
+  if (!res) return;
+  const { name } = (await res.json()) as { name: string };
+  close();
+  await load(collection);
+  onsaved?.(name);
 }
 
 async function rename(event: Event) {
@@ -444,6 +479,9 @@ async function done() {
                 <div class="menu">
                   <button type="button" onclick={() => { menuFor = ''; open('duplicate', entry); }}>Duplicate</button>
                   <button type="button" onclick={() => { menuFor = ''; open('rename', entry); }}>Rename</button>
+                  {#if role === 'owner'}
+                    <button type="button" onclick={() => { menuFor = ''; open('template', entry); }}>Save as template</button>
+                  {/if}
                   <!-- Hide before Delete, so the gentler answer is the one reached first. -->
                   <button
                     type="button"
@@ -574,6 +612,32 @@ async function done() {
             <button class="btn" type="button" onclick={close}>Cancel</button>
             <button class="btn btn-primary" type="submit" disabled={busy}>
               {busy ? 'Renaming…' : 'Rename'}
+            </button>
+          </div>
+        </form>
+      {:else if dialog === 'template'}
+        <h2 id="entry-dialog-h">Save {titleOf(target as Entry)} as a template</h2>
+        <form onsubmit={saveTemplate}>
+          <div class="field">
+            <div class="label-row"><label for="template-to">Template name</label></div>
+            <input
+              class="input filename"
+              id="template-to"
+              type="text"
+              bind:value={text}
+              bind:this={field}
+              aria-describedby="template-hint"
+            />
+            <p class="hint" id="template-hint">
+              Saved as <span class="filename">{preview}</span> and offered when somebody makes a new
+              {singular}. What is published now is what it keeps, in the language it was written in.
+            </p>
+          </div>
+          {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
+          <div class="actions">
+            <button class="btn" type="button" onclick={close}>Cancel</button>
+            <button class="btn btn-primary" type="submit" disabled={busy}>
+              {busy ? 'Saving…' : 'Save as template'}
             </button>
           </div>
         </form>

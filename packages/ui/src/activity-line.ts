@@ -217,6 +217,13 @@ export function said(event: ActivityEvent, people: Person[] = []): Said {
         ? { lead: `${actor} duplicated ${from} as `, link: one }
         : { lead: `${actor} duplicated ${from}.` };
     }
+    case 'template-saved': {
+      const one = entryOf(event.subject);
+      const name = str(d, 'template') ?? 'a template';
+      return one
+        ? { lead: `${actor} saved the template ${name} from `, link: one }
+        : { lead: `${actor} saved the template ${name}.` };
+    }
     case 'entry-delete': {
       // Named rather than linked: the entry is gone, and a row pointing at a page that answers
       // 404 is worse than the file name on its own.

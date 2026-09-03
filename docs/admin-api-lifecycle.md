@@ -45,6 +45,19 @@ the unpublished bytes of every language that has them instead of the committed f
 the entry has never been published — there is nothing in the repository to copy.
 
 ```
+POST /admin/api/entries/:collection/:slug/template   { "to": "…" }  →  { "name" }
+```
+
+Writes the entry as one of the collection's [starters](site-files.md#templates) —
+`src/content/_templates/:collection/<name>.yaml`, committed at once. The file is the entry's
+own in the language it was written in, without its `_id`s, `_i18n`, `_locales`, `_status` and
+`slug`. `to` is optional and defaults to the entry's filename; it goes through the same
+derivation as a new entry's title against the starters the collection already has, so `name`
+in the answer is the one actually written. The template is offered by the New entry dialog from
+then on, ahead of the build that reads it from the repository. Owners only: `403` for an editor,
+`409` if the entry has never been published.
+
+```
 POST /admin/api/entries/:collection/:slug/locales  { "locales": ["en"], "redirect": { "kind": "index" } }  →  {}
 ```
 

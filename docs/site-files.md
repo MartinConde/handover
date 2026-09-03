@@ -84,4 +84,12 @@ file (`house.yaml` → *House*). The values are copied into the new draft, every
 row is given an `_id`, and the title typed into the dialog wins over the one the starter
 carries — so a starter needs no ids and no `_status`, `_locales` or `slug` of its own; those
 belong to the entry. They are read at build time with the rest of `src/content/`, so a starter
-added to the repository appears in the dialog after the next deploy.
+added to the repository by hand appears in the dialog after the next deploy.
+
+**Save as template** on an entry list row — owners only, since a template shapes every entry
+made after it — writes one from the entry as it is published, in the language it was written
+in, less its `_id`s, address, languages and status. It asks for a name, which goes through the
+same derivation as a new entry's filename and never takes one the collection already has, and
+commits the file at once. The dialog offers it straight away, without waiting for the deploy;
+one saved and then deleted from the repository by hand is still offered until then, and
+creating from it fails.

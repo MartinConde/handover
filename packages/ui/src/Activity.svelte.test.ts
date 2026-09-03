@@ -260,13 +260,31 @@ test('a message the provider would not take names what it was for and nobody', a
 // named the way a publish names one, since that much is true whatever the kind turns out to be.
 test('a kind nothing has written a sentence for still reads as a record', async () => {
   server({
-    events: [ev('template-saved', { subject: 'src/content/pages/en/contact.yaml' })],
+    events: [ev('entry-archived', { subject: 'src/content/pages/en/contact.yaml' })],
     cursor: null,
   });
   const root = await show();
 
-  expect(sentences(root)).toEqual(['Anna Berg — template-saved contact EN']);
+  expect(sentences(root)).toEqual(['Anna Berg — entry-archived contact EN']);
   expect(root.querySelector('.said a')?.getAttribute('href')).toBe('/admin/c/pages/contact');
+});
+
+// The row is about the entry the template was made from, which is the one that is somewhere
+// to go; the template's own name is in the detail.
+test('a saved template names the template and links to the entry it came from', async () => {
+  server({
+    events: [
+      ev('template-saved', {
+        subject: 'src/content/listings/en/mill-house.yaml',
+        detail: { template: 'house' },
+      }),
+    ],
+    cursor: null,
+  });
+  const root = await show();
+
+  expect(sentences(root)).toEqual(['Anna Berg saved the template house from mill-house EN']);
+  expect(root.querySelector('.said a')?.getAttribute('href')).toBe('/admin/c/listings/mill-house');
 });
 
 // Both rows are written with the old name in `detail.from` and the entry as it is now as the

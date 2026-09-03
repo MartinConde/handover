@@ -47,7 +47,8 @@ filename can still change and an abandoned entry leaves nothing behind. After th
 publish, changing the filename is the rename below.
 
 It can also start from one of the collection's
-[starters](site-files.md#templates) instead of empty.
+[starters](site-files.md#templates) instead of empty; an owner makes one from an entry with
+**Save as template** on its row.
 
 ## Duplicating an entry
 

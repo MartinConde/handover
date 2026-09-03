@@ -43,10 +43,11 @@ const api = (
   return fetcher;
 };
 
-const show = () => {
+const saved = vi.fn();
+const show = (role?: 'owner' | 'editor') => {
   app = mount(EntryList, {
     target: document.body,
-    props: { collection: 'listings', onchanged: changed },
+    props: { collection: 'listings', onchanged: changed, role, onsaved: saved },
   });
   flushSync();
   return document.body;
@@ -227,6 +228,32 @@ test('duplicating sends the pre-filled copy name and opens the copy', async () =
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ to: 'mill-house-copy' }),
   });
+});
+
+// A template shapes every entry made after it, so the item is the owner's; the name goes
+// through the same derivation as a new entry's, against the starters the collection has.
+test('an owner can save a row as a template under a derived name', async () => {
+  const fetcher = api(ENTRIES, { name: 'mill-house' }, ['en'], ['house']);
+  const root = show('owner');
+  await tick();
+  await click(root, '.row [aria-label="Actions for The Mill House"]');
+  expect(menuItems(root)).toEqual(['Duplicate', 'Rename', 'Save as template', 'Hide', 'Delete']);
+  Array.from(root.querySelectorAll<HTMLButtonElement>('.row .menu button'))
+    .find((b) => b.textContent?.trim() === 'Save as template')
+    ?.click();
+  await tick();
+  expect(input(root, '.dialog input#template-to').value).toBe('mill-house');
+  type(root, '.dialog input#template-to', 'House');
+  expect(q(root, '.dialog .hint .filename')?.textContent).toBe('house-2');
+  await click(root, '.dialog .btn-primary');
+
+  expect(fetcher).toHaveBeenCalledWith('/admin/api/entries/listings/mill-house/template', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ to: 'House' }),
+  });
+  expect(saved).toHaveBeenCalledWith('mill-house');
+  expect(q(root, '.dialog')).toBeNull();
 });
 
 // The question only makes sense about an entry that has something unpublished to carry.

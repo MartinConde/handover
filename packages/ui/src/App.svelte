@@ -473,7 +473,12 @@ const initial = $derived(
         <main class="main"><p class="notice notice-danger" role="alert">{error.message}</p></main>
       {/await}
     {:else if listRoute}
-      <EntryList collection={listRoute[1] ?? ''} onchanged={loadPending} />
+      <EntryList
+        collection={listRoute[1] ?? ''}
+        role={session.role}
+        onchanged={loadPending}
+        onsaved={(name) => notify(`Saved the template ${name}`)}
+      />
     {:else if redirectRoute}
       <Redirects />
     {:else if path === '/admin/site'}

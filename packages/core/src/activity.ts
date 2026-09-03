@@ -229,6 +229,32 @@ export async function deletedEntries(
 }
 
 /**
+ * The templates saved from one collection's entries, newest first and each name once. The
+ * New entry dialog reads the starters off the build, which has not seen a file committed since
+ * it ran, so a saved one is offered from here until the next build carries it — the same way
+ * the Deleted view is a query against the log rather than the index.
+ */
+export async function savedTemplates(
+  siteId: string,
+  db: Db,
+  collection: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ detail: activity.detail })
+    .from(activity)
+    .where(
+      and(
+        eq(activity.siteId, siteId),
+        eq(activity.kind, 'template-saved'),
+        like(activity.subject, `src/content/${collection}/%`),
+      ),
+    )
+    .orderBy(desc(activity.at), desc(activity.id));
+  const names = rows.map((row) => (row.detail as { template?: unknown } | null)?.template);
+  return [...new Set(names.filter((name): name is string => typeof name === 'string'))];
+}
+
+/**
  * Which group's chip a row wears — the inverse of the table above, with the same `cron-` rule
  * `groupWhere` applies. Null for a kind nothing claims: a screen must be able to draw a row it
  * has never heard of rather than throw on it.

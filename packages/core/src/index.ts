@@ -14,6 +14,7 @@ export {
   lastCommit,
   logActivity,
   publishedEntries,
+  savedTemplates,
 } from './activity.js';
 export type { AccountFacts, Auth, AuthConfig, Member, MemberApi, Role } from './auth.js';
 export {

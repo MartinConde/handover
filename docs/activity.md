@@ -114,7 +114,7 @@ again from the newest — the cursor belongs to the query that produced it.
 
 **A kind with no sentence of its own still gets a row.** Kinds arrive with the features that
 write them, and the screen names one it does not recognise rather than throwing:
-*Anna Berg — template-saved contact EN*. Adding the sentence is one line beside the others.
+*Anna Berg — entry-archived contact EN*. Adding the sentence is one line beside the others.
 
 ## Reading it from your own code
 
