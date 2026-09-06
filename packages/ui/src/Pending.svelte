@@ -14,6 +14,7 @@ import CheckLines, {
 } from './CheckLines.svelte';
 import Diff from './Diff.svelte';
 import Resolve from './Resolve.svelte';
+import { request as fetch } from './request.js';
 
 type Entry = {
   /** `listings/mill-house` — what a publish is of, since the languages go out together. */

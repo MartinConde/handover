@@ -51,7 +51,7 @@ POST /admin/api/publish   { "entries": ["listings/mill-house"] }  →  { "commit
 ```
 
 Publishes the entries the body names, or everything pending that is not on hold when there
-is no body. An entry is `collection/name` — the same key for every language, since the
+is no body. Malformed JSON, a missing or non-array `entries` property, unknown properties, and invalid array elements return `400` before draft selection. An empty array selects nothing; it never means all. An entry is `collection/name` — the same key for every language, since the
 languages of one entry are published together — and an entry that is **on hold** goes out
 when it is named, which releases the hold. Naming an entry with nothing pending, or passing
 an empty list, publishes nothing and is not an error.
@@ -120,15 +120,14 @@ longer be asked about.
 not both set, or when the Cloudflare API cannot be reached; the admin draws no build status at
 all rather than an unknown one.
 
-Answering `"live"` is also what clears the draft rows that commit published, for the entries
-nobody is editing.
+Answering `"live"` clears unchanged draft rows only when `commit_sha` identifies the last CMS commit and nobody is editing the entry. An unrelated successful build clears nothing.
 
 ```
 POST /admin/api/revert   { "commit_sha": "…" }  →  { "commit_sha", "paths" }
 ```
 
 Undoes that commit with a commit of its own, [Reverting a publish](build-status.md#reverting-a-publish). It works over any
-commit the admin made, not only the last one. The answer's `commit_sha` is the new commit and
+eligible commit recorded in the server activity log, not only the last one. Every changed path must belong to that operation and to a configured editable content file; otherwise the whole request is `403`. Redirect-only operations additionally require an owner. The answer's `commit_sha` is the new commit and
 `paths` what it wrote. `400` without a `commit_sha`; `409` with `{ "error", "paths" }` when one of
 the files has changed since — nothing is written and the paths are named.
 

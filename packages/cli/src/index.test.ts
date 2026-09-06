@@ -374,3 +374,37 @@ test('init scaffolds before it creates anything, so a nothing is left behind to 
     ),
   ).toEqual(['wrangler d1 create my-site', 'scaffolded=true']);
 });
+
+test.each([
+  ['migrate', '--dryrun'],
+  ['migrate', '--check'],
+  ['migrate', 'file'],
+  ['migrate', '--dry-run', '--dry-run'],
+  ['db', 'generate', '--chek'],
+  ['db', 'generate', '--dry-run'],
+  ['db', 'generate', 'file'],
+  ['init', '--unknown'],
+])('invalid arguments %j never touch files or run external commands', async (...argv) => {
+  const path = 'src/content/pages/en/home.yaml';
+  const cwd = site({ [path]: OLD });
+  const ran: string[][] = [];
+  expect((await run(argv, cwd, ran)).code).toBe(1);
+  expect(ran).toEqual([]);
+  expect(readFileSync(join(cwd, path), 'utf8')).toBe(OLD);
+  expect(existsSync(join(cwd, 'migrations'))).toBe(false);
+});
+
+test.each([['--help'], ['migrate', '--help'], ['db', 'generate', '--help'], ['init', '-h']])(
+  'help %j is read-only',
+  async (...argv) => {
+    const cwd = site({ 'src/content/pages/en/home.yaml': OLD });
+    const ran: string[][] = [];
+    expect(await run(argv, cwd, ran)).toMatchObject({
+      code: 0,
+      out: expect.stringContaining('Usage:'),
+    });
+    expect(ran).toEqual([]);
+    expect(readFileSync(join(cwd, 'src/content/pages/en/home.yaml'), 'utf8')).toBe(OLD);
+    expect(existsSync(join(cwd, 'migrations'))).toBe(false);
+  },
+);

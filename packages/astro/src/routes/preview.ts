@@ -102,7 +102,7 @@ function validate(collection: string, data: unknown, path: string): unknown {
 export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Response | Rendered> {
   const session = await createAuth(ctx.url).api.getSession({ headers: ctx.request.headers });
   if (!session) return answer(401, 'Sign in to the admin to see a preview.');
-  const path = `/${ctx.params.path ?? ''}`;
+  const path = `${(config.i18n.base ?? '').replace(/\/+$/, '')}/${ctx.params.path ?? ''}`;
   const target = previewTarget('default', config.i18n, config.collections, path);
   if (!target) return answer(404, 'This site serves no page at that address.');
 

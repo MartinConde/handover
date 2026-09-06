@@ -1,8 +1,11 @@
 import {
   applyDrift,
+  createGitClient,
   type EmailSender,
   formOf,
+  loadDraft,
   type Mailer,
+  openDb,
   type PublishFile,
   parseEntry,
   RepoUnreachableError,
@@ -597,6 +600,10 @@ const dropped: string[] = [];
 let asked: unknown[] = [];
 vi.mock('@handover/core', async (original) => ({
   ...(await original<typeof import('@handover/core')>()),
+  commitScope: async () => ({ kind: 'publish', allows: () => true }),
+  reservePaths: async () => 'reservation',
+  releasePaths: async () => {},
+  openDraft: async (_site: string, _db: unknown, path: string) => rows[path] ?? draft,
   memberList: async () => memberRows,
   // The real one is an UPDATE whose WHERE holds the rule; against a real D1 it is proven in
   // core's own auth.test.ts. What the route owes is asking it before it removes anybody.
@@ -654,7 +661,7 @@ vi.mock('@handover/core', async (original) => ({
   dropLock: async (_site: string, _db: unknown, entry: string) => {
     dropped.push(entry);
   },
-  createGitClient: () => ({
+  createGitClient: vi.fn(() => ({
     getFile,
     getBlob,
     getHead,
@@ -662,11 +669,11 @@ vi.mock('@handover/core', async (original) => ({
     fileCommits,
     publish,
     getCommit,
-  }),
-  openDb: () => {
+  })),
+  openDb: vi.fn(() => {
     if (dbRefusal) throw dbRefusal;
     return { query: { drafts: { findFirst: async () => undefined } } };
-  },
+  }),
   checkStore: async () => {
     if (storeRefusal) throw storeRefusal;
   },
@@ -698,9 +705,17 @@ vi.mock('@handover/core', async (original) => ({
   removeSetting: async (_site: string, _db: unknown, key: string) => {
     delete stored[key];
   },
-  loadDraft: async (_site: string, _db: unknown, path: string) => rows[path] ?? draft,
+  loadDraft: vi.fn(async (_site: string, _db: unknown, path: string) => rows[path] ?? draft),
   saveDraft,
   createDraft,
+  createDrafts: async (
+    site: string,
+    database: unknown,
+    git: unknown,
+    files: { path: string; values: Record<string, unknown> }[],
+  ) => {
+    for (const file of files) await createDraft(site, database, git, file.path, file.values);
+  },
   recordRename,
   recordDelete,
   recordOffer,
@@ -824,8 +839,14 @@ const post = (path: string, body: string, session?: unknown) =>
     new Request(`https://x/admin/api/${path}`, { method: 'POST', body }),
     session ? { handover: session } : {},
   );
-const put = (path: string, body: string) =>
-  ctx(path, new Request(`https://x/admin/api/${path}`, { method: 'PUT', body }));
+const put = (path: string, body: string) => {
+  try {
+    const parsed = JSON.parse(body);
+    if (parsed && typeof parsed === 'object')
+      body = JSON.stringify({ revision: 'opened', ...parsed });
+  } catch {}
+  return ctx(path, new Request(`https://x/admin/api/${path}`, { method: 'PUT', body }));
+};
 const patch = (path: string, body: unknown, locals: Record<string, unknown> = {}) =>
   ctx(
     path,
@@ -1018,7 +1039,7 @@ test('the database check answers with the schema version the tables are at', asy
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
     ok: true,
-    detail: "The database answered — the admin's tables are there. Schema version 4.",
+    detail: "The database answered — the admin's tables are there. Schema version 5.",
   });
 });
 
@@ -1407,6 +1428,7 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
     blocks: {},
     data: { title: 'The Mill House', location: 'Bakewell', rooms: 3 },
     translations: {},
+    revisions: {},
     pending: [],
     held: false,
     problems: [{ path: 'address', message: 'Required' }],
@@ -1552,7 +1574,7 @@ test('a global takes a draft through the same autosave as an entry', async () =>
   const res = await PUT(
     put(
       'drafts/globals/site',
-      JSON.stringify({ data: { footerText: 'Coastal homes since 2009' } }),
+      JSON.stringify({ revision: 'opened', data: { footerText: 'Coastal homes since 2009' } }),
     ),
   );
 
@@ -1567,6 +1589,7 @@ test('a global takes a draft through the same autosave as an entry', async () =>
     undefined,
     // Nobody signed in on this request, so the *last edited by* line stays empty.
     undefined,
+    'opened',
   );
   expect(await res.json()).toEqual({ updated_at: 1755864000000, pending: true, problems: [] });
   delete files['src/content/globals/en/site.yaml'];
@@ -1691,6 +1714,7 @@ test('autosaving a draft stores it under the entry path with nothing to report',
     // A site that declares one language has no other file to keep in step.
     undefined,
     undefined,
+    'opened',
   );
 });
 
@@ -1704,7 +1728,7 @@ test('an autosave carries the id of whoever typed it', async () => {
       'drafts/listings/mill-house',
       new Request('https://x/admin/api/drafts/listings/mill-house', {
         method: 'PUT',
-        body: JSON.stringify({ data }),
+        body: JSON.stringify({ revision: 'opened', data }),
       }),
       { handover: owner },
     ),
@@ -1742,6 +1766,7 @@ test('an autosave the schema refuses is stored anyway, with what is missing name
     // A site that declares one language has no other file to keep in step.
     undefined,
     undefined,
+    'opened',
   );
 });
 
@@ -1751,7 +1776,7 @@ test('an autosave the serialiser cannot write back is refused, with the reason',
     throw new Error('Nested array at tags[0]: wrap the inner array in an object');
   });
   const res = await PUT(
-    put('drafts/listings/mill-house', JSON.stringify({ data: { tags: [[]] } })),
+    put('drafts/listings/mill-house', JSON.stringify({ revision: 'opened', data: { tags: [[]] } })),
   );
   expect(res.status).toBe(400);
   expect(await res.text()).toBe('Nested array at tags[0]: wrap the inner array in an object');
@@ -1759,11 +1784,12 @@ test('an autosave the serialiser cannot write back is refused, with the reason',
 
 test('a body that is not an object, and an unknown collection, are refused', async () => {
   saveDraft.mockClear();
-  const body = JSON.stringify({ data: { title: 'No rooms' } });
+  const body = JSON.stringify({ revision: 'opened', data: { title: 'No rooms' } });
   expect((await PUT(put('drafts/listings/mill-house', 'not json'))).status).toBe(400);
-  expect((await PUT(put('drafts/listings/mill-house', JSON.stringify({ data: [] })))).status).toBe(
-    400,
-  );
+  expect(
+    (await PUT(put('drafts/listings/mill-house', JSON.stringify({ revision: 'opened', data: [] }))))
+      .status,
+  ).toBe(400);
   expect((await PUT(put('drafts/nope/mill-house', body))).status).toBe(404);
   expect(saveDraft).not.toHaveBeenCalled();
 });
@@ -1774,7 +1800,10 @@ test('reserved keys in the posted data are dropped before the draft is stored', 
   saveDraft.mockClear();
   const data = { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } };
   await PUT(
-    put('drafts/listings/mill-house', JSON.stringify({ data: { ...data, _status: 'hidden' } })),
+    put(
+      'drafts/listings/mill-house',
+      JSON.stringify({ revision: 'opened', data: { ...data, _status: 'hidden' } }),
+    ),
   );
   expect(saveDraft).toHaveBeenCalledWith(
     'default',
@@ -1785,6 +1814,7 @@ test('reserved keys in the posted data are dropped before the draft is stored', 
     // A site that declares one language has no other file to keep in step.
     undefined,
     undefined,
+    'opened',
   );
 });
 
@@ -2947,6 +2977,7 @@ test('a save of a translation goes to that language and takes only the words it 
     data,
     { form: expect.anything(), locale: 'de', siblings: {}, translation: true },
     undefined,
+    'opened',
   );
 });
 
@@ -2954,7 +2985,9 @@ test('a save to a language the site does not declare is refused', async () => {
   drifted();
   saveDraft.mockClear();
 
-  const res = await PUT(put('drafts/pages/home/fr', JSON.stringify({ data: { title: 'x' } })));
+  const res = await PUT(
+    put('drafts/pages/home/fr', JSON.stringify({ revision: 'opened', data: { title: 'x' } })),
+  );
 
   expect(res.status).toBe(404);
   expect(saveDraft).not.toHaveBeenCalled();
@@ -3532,6 +3565,7 @@ test('a machine is asked for the fields the translation has not got, and no othe
     'src/content/pages/de/home.yaml',
     { 'blocks[_id=k3nf9a2p].heading': '[de] Move to the coast' },
     undefined,
+    undefined,
   );
 });
 
@@ -3550,6 +3584,7 @@ test('a named field is translated whether it is empty or not', async () => {
     expect.anything(),
     'src/content/pages/de/home.yaml',
     { title: '[de] Home' },
+    undefined,
     undefined,
   );
 });
@@ -3592,6 +3627,7 @@ test('a site with no hook of its own translates with the DEEPL_API_KEY it holds'
     expect.anything(),
     'src/content/pages/de/home.yaml',
     { 'blocks[_id=k3nf9a2p].heading': '[de] Move to the coast' },
+    undefined,
     undefined,
   );
 });
@@ -3999,6 +4035,7 @@ test("a save of the entry's own language carries the structure, whichever langua
       translation: false,
     },
     undefined,
+    'opened',
   );
 });
 
@@ -4152,7 +4189,7 @@ const beat = (path: string, session?: unknown) =>
     }),
   );
 
-test('a beat on an entry nobody is editing takes it, with the base each file was loaded from', async () => {
+test('a beat on an entry nobody is editing takes it', async () => {
   rows['src/content/listings/en/mill-house.yaml'] = {
     contents: 'title: The Mill House\n',
     baseSha: 'head789',
@@ -4166,9 +4203,6 @@ test('a beat on an entry nobody is editing takes it, with the base each file was
     held_by: null,
     mine: true,
     expires_at: 1755864120000,
-    base: {
-      'src/content/listings/en/mill-house.yaml': { sha: 'head789', blob: 'abc123' },
-    },
   });
 });
 
@@ -4603,7 +4637,11 @@ test('a publish is a publish event carrying the commit, the count and the entrie
       userId: 'u1',
       kind: 'publish',
       subject: 'src/content/listings/en/mill-house.yaml',
-      detail: { files: 1, entries: ['listings/mill-house'] },
+      detail: {
+        files: 1,
+        entries: ['listings/mill-house'],
+        paths: ['src/content/listings/en/mill-house.yaml'],
+      },
       commitSha: 'def456',
     },
   ]);
@@ -4770,7 +4808,7 @@ test('an autosave from somebody who does not hold the lock is refused, naming wh
       'drafts/listings/mill-house',
       new Request('https://x/admin/api/drafts', {
         method: 'PUT',
-        body: JSON.stringify({ data }),
+        body: JSON.stringify({ revision: 'opened', data }),
       }),
       { handover: editor },
     ),
@@ -4794,6 +4832,7 @@ test('the holder of the lock saves as they always did', async () => {
       new Request('https://x/admin/api/drafts', {
         method: 'PUT',
         body: JSON.stringify({
+          revision: 'opened',
           data: { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } },
         }),
       }),
@@ -4860,6 +4899,7 @@ test('a second tab of the same person is refused and the first tab keeps saving'
         new Request('https://x/admin/api/drafts', {
           method: 'PUT',
           body: JSON.stringify({
+            revision: 'opened',
             data: { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } },
             tab,
           }),
@@ -5067,7 +5107,11 @@ test('a publish that released a hold logs it against the person who set it', asy
       userId: 'u1',
       kind: 'publish',
       subject: 'src/content/listings/en/mill-house.yaml',
-      detail: { files: 1, entries: ['listings/mill-house'] },
+      detail: {
+        files: 1,
+        entries: ['listings/mill-house'],
+        paths: ['src/content/listings/en/mill-house.yaml'],
+      },
       commitSha: 'def456',
     },
   ]);
@@ -5211,6 +5255,7 @@ test('revert undoes the commit the body names and logs it', async () => {
     expect.anything(),
     expect.anything(),
     'def456',
+    expect.any(Function),
   );
   expect(logged.at(-1)).toMatchObject({
     kind: 'revert',
@@ -5300,6 +5345,7 @@ test('restore undoes the commit the body names and says so in the log', async ()
     expect.anything(),
     expect.anything(),
     'del111',
+    expect.any(Function),
   );
   // The same kind a revert writes — it is the same inverse commit — with what it was over.
   expect(logged.at(-1)).toMatchObject({
@@ -5405,9 +5451,9 @@ test('a hash the site does not have is answered with a presigned PUT to its own 
   const res = await POST(post('media', declared));
   expect(res.status).toBe(200);
   const { upload } = (await res.json()) as { upload: { key: string; url: string } };
-  expect(upload.key).toBe(`media/${HASH}.webp`);
+  expect(upload.key).toMatch(new RegExp(`^uploads/[0-9a-f-]{36}/media/${HASH}\\.webp$`));
   const url = new URL(upload.url);
-  expect(url.pathname).toBe(`/site-media/media/${HASH}.webp`);
+  expect(url.pathname).toBe(`/site-media/${upload.key}`);
   expect(url.searchParams.get('X-Amz-Expires')).toBe('300');
   expect(url.searchParams.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/);
 });
@@ -5697,34 +5743,35 @@ test('a picture only the published site still uses says so in those words', asyn
 
   expect(res.status).toBe(409);
   expect(await res.json()).toMatchObject({
-    error: expect.stringContaining('The published site still uses this in 1 place'),
-    uses: ['pages/about'],
+    error: expect.stringContaining('The published site still uses this in 3 places'),
+    uses: ['listings/mill-house', 'listings/seaview-cottage', 'pages/about'],
   });
   expect(deleteMedia).not.toHaveBeenCalled();
 });
 
 test('a picture nothing names is deleted, bytes and row, and says so in the log', async () => {
+  const unused = 'b'.repeat(64);
   findMedia.mockResolvedValueOnce({
-    id: PHOTO,
-    r2Key: `media/${PHOTO}.webp`,
+    id: unused,
+    r2Key: `media/${unused}.webp`,
     filename: 'front.jpg',
   });
   contentFiles.mockResolvedValueOnce([
     { path: 'src/content/pages/en/about.yaml', contents: 'title: "About"\n' },
   ]);
 
-  const res = await deleteAsset(PHOTO);
+  const res = await deleteAsset(unused);
 
   expect(res.status).toBe(200);
   expect(deleteMedia).toHaveBeenCalledWith(
     'default',
     expect.anything(),
     expect.objectContaining({ bucket: 'site-media' }),
-    expect.objectContaining({ id: PHOTO, r2Key: `media/${PHOTO}.webp` }),
+    expect.objectContaining({ id: unused, r2Key: `media/${unused}.webp` }),
   );
   expect(logged.at(-1)).toMatchObject({
     kind: 'media-delete',
-    subject: PHOTO,
+    subject: unused,
     detail: { name: 'front.jpg' },
   });
 });
@@ -5785,6 +5832,7 @@ test('the three-way view asks about every language of the entry', async () => {
   locales = ['en', 'de'];
   entryConflict.mockResolvedValue({
     head: 'commit-B',
+    version: 'report-version',
     sides: {},
     conflicted: { en: { path: 'src/content/listings/en/mill-house.yaml', blob: 'b1' } },
     questions: [{ path: 'rooms', label: 'Rooms', locale: 'en', base: '3' }],
@@ -5806,6 +5854,7 @@ test('the three-way view asks about every language of the entry', async () => {
   );
   expect(await res.json()).toEqual({
     head: 'commit-B',
+    version: 'report-version',
     questions: [{ path: 'rooms', label: 'Rooms', locale: 'en', base: '3' }],
     merged: [{ label: 'Location', side: 'theirs' }],
     files: ['src/content/listings/en/mill-house.yaml'],
@@ -5824,6 +5873,7 @@ test('a conflict somebody has already settled is refused rather than drawn', asy
 const conflicted = () => {
   entryConflict.mockResolvedValue({
     head: 'commit-B',
+    version: 'report-version',
     sides: {},
     conflicted: { en: { path: 'src/content/listings/en/mill-house.yaml', blob: 'b1' } },
     questions: [
@@ -5834,7 +5884,10 @@ const conflicted = () => {
   });
 };
 const answers = (list: unknown) =>
-  post('conflict/listings/mill-house', JSON.stringify({ answers: list }));
+  post(
+    'conflict/listings/mill-house',
+    JSON.stringify({ answers: list, version: 'report-version' }),
+  );
 
 test('the answers to a conflict are written for the entry', async () => {
   conflicted();
@@ -6723,4 +6776,56 @@ test("a page the daily job found hidden too long is a note beside the set's own"
     'hidden-long listings/seaview-cottage',
   ]);
   expect(found[0]?.message).toMatch(/^Seaview Cottage has been hidden for over \d+ months — /);
+});
+
+test.each([
+  '{',
+  'null',
+  '[]',
+  '{}',
+  ' ',
+  '{"entries":"pages/home"}',
+  '{"entries":["pages/home",null]}',
+  '{"entries":["../code"]}',
+  '{"entries":["pages/home"],"all":true}',
+])('malformed publish body %s is refused before selecting drafts', async (body) => {
+  readyDrafts.mockClear();
+  publishDrafts.mockClear();
+  const res = await POST(post('publish', body));
+  expect(res.status).toBe(400);
+  expect(readyDrafts).not.toHaveBeenCalled();
+  expect(publishDrafts).not.toHaveBeenCalled();
+});
+
+test('each request reuses its own lazy GitHub and database dependencies', async () => {
+  vi.mocked(createGitClient).mockClear();
+  vi.mocked(openDb).mockClear();
+  expect((await GET(ctx('ping'))).status).toBe(200);
+  expect(createGitClient).not.toHaveBeenCalled();
+  expect(openDb).not.toHaveBeenCalled();
+  const responses = await Promise.all([
+    GET(ctx('entries/listings/mill-house')),
+    GET(ctx('entries/listings/mill-house')),
+  ]);
+  expect(responses.map((res) => res.status)).toEqual([200, 200]);
+  expect(createGitClient).toHaveBeenCalledTimes(2);
+  expect(openDb).toHaveBeenCalledTimes(2);
+});
+
+test('lock reads, renewals and takeovers omit bases and do not read draft rows', async () => {
+  vi.mocked(loadDraft).mockClear();
+  const responses = [
+    await GET(ctx('locks/listings/mill-house', undefined, { handover: editor })),
+    await beat('locks/listings/mill-house', editor),
+    await POST(post('locks/listings/mill-house', JSON.stringify({ take: true }), editor)),
+  ];
+  for (const res of responses) {
+    expect(res.status).toBe(200);
+    expect(Object.keys((await res.json()) as object).sort()).toEqual([
+      'expires_at',
+      'held_by',
+      'mine',
+    ]);
+  }
+  expect(loadDraft).not.toHaveBeenCalled();
 });

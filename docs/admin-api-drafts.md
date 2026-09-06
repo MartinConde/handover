@@ -9,10 +9,10 @@ Everything an editor types goes through these, and none of them commits — see
 than the form, is [Drafts and publishing](publishing.md#what-autosave-stores).
 
 ```
-PUT /admin/api/drafts/:collection/:slug  { "data": { … }, "tab": "…" }  →  { "updated_at", "pending", "problems" }
+PUT /admin/api/drafts/:collection/:slug  { "data": { … }, "tab": "…", "revision": "…" }  →  { "updated_at", "pending", "problems", "revision", "revisions" }
 ```
 
-Merges `data` into the entry and stores the result. `tab` is the token the tab beats the
+Merges `data` into the entry and stores the result. `revision` is the version returned by GET for this language. The response supplies the next `revision`, plus `revisions` for every language changed by a shared-field edit. Missing or stale revisions return `409` with `{ "reason": "revision", "error": "…" }` and leave all affected drafts unchanged. `tab` is the token the tab beats the
 lock with ([Locks](admin-api.md#locks)); a save without the holder's token is refused. `pending` is false when the stored
 bytes are identical to the file in git — an autosave that changed nothing. `problems` is
 what the collection schema will not accept, `[{ "path": "body.1.heading", "message":
@@ -24,7 +24,7 @@ the reason as the body; `404` if the collection or the file does not exist. `409
 the same person's ([Working together](working-together.md#take-over)).
 
 ```
-PUT /admin/api/drafts/:collection/:slug/:locale  { "data": { … }, "tab": "…" }  →  { "updated_at", "pending", "problems" }
+PUT /admin/api/drafts/:collection/:slug/:locale  { "data": { … }, "tab": "…", "revision": "…" }  →  { "updated_at", "pending", "problems", "revision", "revisions" }
 ```
 
 The same, for a language the entry is translated into
@@ -46,7 +46,7 @@ the language already has a file or a draft, or when the entry is not offered in 
 language the site does not declare, or an entry with no file in any of them.
 
 ```
-POST /admin/api/translate/:collection/:slug/:locale  { "paths": ["title"] }  →  { "data", "pending" }
+POST /admin/api/translate/:collection/:slug/:locale  { "paths": ["title"] }  →  { "data", "pending", "revision" }
 ```
 
 Machine-translates that language from the one the entry is written in and stores the answers in
@@ -109,8 +109,8 @@ with nothing in it, which is how the screen tells "unchanged" from "not loaded".
 collection is not configured.
 
 ```
-GET  /admin/api/conflict/:collection/:slug  →  { "head", "questions", "merged", "files" }
-POST /admin/api/conflict/:collection/:slug  { "answers": [{ "path", "locale", "side" }] }  →  {}
+GET  /admin/api/conflict/:collection/:slug  →  { "head", "version", "questions", "merged", "files" }
+POST /admin/api/conflict/:collection/:slug  { "version", "answers": [{ "path", "locale", "side" }] }  →  {}
 ```
 
 The three-way view of an entry the repository moved under, and the answers to it
@@ -120,7 +120,7 @@ fields **both** sides changed — `path`, `label`, the `locale` it belongs to or
 value every language shares, the `base` both started from, and `ours` / `theirs` as the same
 change shapes the diff uses — and `merged` are the ones only one side changed, each with the
 `side` that changed it. `files` is the paths that moved, and `head` the commit they are being
-answered against.
+answered against. `version` fingerprints the complete report, including HEAD and all draft revisions. Send it unchanged with the answers. If either side changed, the server returns `409`; reload the report and review the new values. Draft revisions are checked again atomically when writing the resolution.
 
 The `POST` takes one answer per question, `side` being `"ours"` or `"theirs"`, and `path` and
 `locale` exactly as the question gave them. It writes the merge into the drafts of the files

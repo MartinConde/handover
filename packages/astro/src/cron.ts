@@ -1,5 +1,5 @@
 import { type GitClient, runDue } from '@handover/core';
-import { db, gitClient, mediaStore } from './routes/api.js';
+import { db, gitClient, mediaStore } from './routes/api/environment.js';
 
 /**
  * The site's one scheduled handler. `wrangler.jsonc` carries a single trigger and the dispatcher

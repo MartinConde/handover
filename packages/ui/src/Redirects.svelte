@@ -1,5 +1,6 @@
 <script lang="ts">
 import PagePicker, { type Pickable, readPickable } from './PagePicker.svelte';
+import { request as fetch, sitePath } from './request.js';
 
 /** One rule as `/admin/api/redirects` answers it. */
 interface Rule {
@@ -245,7 +246,7 @@ async function remove() {
 <main class="main main-editor">
   <header class="entry-header">
     <div class="crumbs">
-      <a href="/admin/site">Site settings</a><span class="sep" aria-hidden="true">/</span><span
+      <a href={sitePath(`/admin/site`)}>Site settings</a><span class="sep" aria-hidden="true">/</span><span
         >Redirects</span
       >
     </div>
@@ -318,7 +319,7 @@ async function remove() {
               </div>
               <div class="td entry" role="cell" data-label="Entry">
                 {#if rule.entry}
-                  <a href="/admin/c/{rule.entry}">{rule.title ?? rule.entry}</a>
+                  <a href={sitePath(`/admin/c/${rule.entry}`)}>{rule.title ?? rule.entry}</a>
                 {:else}
                   <span class="note">—</span>
                 {/if}

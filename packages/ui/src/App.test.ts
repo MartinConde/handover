@@ -220,6 +220,40 @@ test('without a session only the login form renders', () => {
   expect(root.querySelector('.sidebar')).toBeNull();
 });
 
+test.each(['network', 'server'])(
+  'a %s sign-out failure keeps the session visible for retry',
+  async (failure) => {
+    drafts();
+    const previous = globalThis.fetch;
+    let refused = true;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url !== '/admin/api/auth/sign-out') return previous(url, init);
+        if (!refused) return Response.json({ success: true });
+        if (failure === 'network') throw new TypeError('Failed to fetch');
+        return new Response('Unavailable', { status: 503 });
+      }),
+    );
+    const root = show(session());
+    root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
+    flushSync();
+    root.querySelector<HTMLButtonElement>('.user-menu .menu button')?.click();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(root.textContent).toContain('Could not sign out. Please try again.');
+    });
+    expect(root.querySelector('.sidebar')).not.toBeNull();
+    expect(root.querySelector('input#password')).toBeNull();
+    refused = false;
+    root.querySelector<HTMLButtonElement>('.user-menu .menu button')?.click();
+    await vi.waitFor(() => {
+      flushSync();
+      expect(root.querySelector('input#password')).not.toBeNull();
+    });
+  },
+);
+
 test('the indicator counts the pending entries and opens the drawer', async () => {
   drafts('listings/mill-house');
   const root = show(session());
@@ -352,7 +386,7 @@ test('a save that makes an entry pending moves the count in the top bar', async 
         });
       if (url === '/admin/api/build') return Response.json({});
       if (url.startsWith('/admin/api/locks/'))
-        return Response.json({ held_by: null, mine: true, expires_at: 1755864120000, base: {} });
+        return Response.json({ held_by: null, mine: true, expires_at: 1755864120000 });
       if (url.startsWith('/admin/api/drafts/') && init?.method === 'PUT') {
         waiting = ['listings/mill-house'];
         return Response.json({ updated_at: 1755864000000, pending: true, problems: [] });
@@ -545,7 +579,7 @@ test("a revert clears the drawer's account of the publish it undid", async () =>
 
 // The shell is a single page: a sidebar click swaps the screen in place rather than fetching
 // the document again, and the address bar follows so a reload or a shared link still lands.
-test('a sidebar click swaps the screen without a page load', () => {
+test('a sidebar click swaps the screen without a page load', async () => {
   drafts();
   history.replaceState({}, '', '/admin');
   const root = show(session('owner'));
@@ -554,6 +588,7 @@ test('a sidebar click swaps the screen without a page load', () => {
   );
   const event = new MouseEvent('click', { bubbles: true, cancelable: true });
   link?.dispatchEvent(event);
+  await new Promise((resolve) => setTimeout(resolve, 0));
   flushSync();
   expect(event.defaultPrevented).toBe(true);
   expect(location.pathname).toBe('/admin/settings');
@@ -575,12 +610,13 @@ test('a modifier-click on a sidebar link is left to the browser', () => {
   expect(location.pathname).toBe('/admin');
 });
 
-test('back and forward move the screen with the address', () => {
+test('back and forward move the screen with the address', async () => {
   drafts();
   history.replaceState({}, '', '/admin/settings');
   const root = show(session('owner'), '/admin/settings');
   history.replaceState({}, '', '/admin/activity');
   window.dispatchEvent(new PopStateEvent('popstate'));
+  await new Promise((resolve) => setTimeout(resolve, 0));
   flushSync();
   expect(root.querySelector('main.main h1')?.textContent).toBe('Activity');
 });
@@ -592,7 +628,7 @@ test('the seo tab is an address of the same entry', async () => {
     if (url === '/admin/api/drafts') return Response.json({ entries: [] });
     if (url === '/admin/api/build') return Response.json({});
     if (url.startsWith('/admin/api/locks/'))
-      return Response.json({ held_by: null, mine: true, expires_at: 1755864120000, base: {} });
+      return Response.json({ held_by: null, mine: true, expires_at: 1755864120000 });
     return Response.json({
       fields: [{ path: ['seo'], label: 'SEO', type: 'seo', required: false }],
       blocks: {},
@@ -636,7 +672,7 @@ test('the history tab is an address of the same entry, not a second load of it',
     if (url === '/admin/api/build') return Response.json({});
     if (url.startsWith('/admin/api/history/')) return Response.json({ versions: [], more: false });
     if (url.startsWith('/admin/api/locks/'))
-      return Response.json({ held_by: null, mine: true, expires_at: 1755864120000, base: {} });
+      return Response.json({ held_by: null, mine: true, expires_at: 1755864120000 });
     return Response.json({
       fields: [],
       blocks: {},
@@ -748,3 +784,79 @@ test('a notice leaves on its own after a few seconds', async () => {
   expect(toasts(root)).toEqual([]);
   vi.useRealTimers();
 });
+
+test.each(['link', 'back'])(
+  'leaving during the debounce by %s waits for save and keeps the form on failure',
+  async (mode) => {
+    const start = '/admin/c/listings/mill-house';
+    history.replaceState({}, '', start);
+    let saving: ((res: Response) => void) | undefined;
+    let stored = '';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (url === '/admin/api/entries/listings/mill-house')
+          return Response.json({
+            fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+            blocks: {},
+            data: { title: 'Home' },
+            revisions: { en: 'opened' },
+            pending: [],
+            published: ['en'],
+            problems: [],
+            locales: ['en'],
+            defaultLocale: 'en',
+            sourceLocale: 'en',
+            offered: ['en'],
+            translations: {},
+            stale: [],
+            drift: [],
+          });
+        if (url.startsWith('/admin/api/locks/'))
+          return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
+        if (init?.method === 'PUT') {
+          stored = JSON.parse(String(init.body)).data.title;
+          return new Promise<Response>((r) => {
+            saving = r;
+          });
+        }
+        if (url === '/admin/api/build') return Response.json({});
+        return Response.json({ entries: [] });
+      }),
+    );
+    const root = show(session(), start);
+    await new Promise((r) => setTimeout(r, 0));
+    flushSync();
+    const input = root.querySelector<HTMLInputElement>('#f-title');
+    if (!input) throw new Error('Editor did not open');
+    input.value = 'Final keystroke';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    const leave = () => {
+      if (mode === 'back') {
+        history.replaceState({}, '', '/admin/settings');
+        dispatchEvent(new PopStateEvent('popstate'));
+      } else
+        root
+          .querySelector<HTMLAnchorElement>('a[href="/admin/settings"]')
+          ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    };
+    leave();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(root.querySelector('#f-title')).toBe(input);
+    expect(stored).toBe('Final keystroke');
+    saving?.(new Response('offline', { status: 500 }));
+    await new Promise((r) => setTimeout(r, 0));
+    flushSync();
+    expect(root.querySelector('#f-title')).toBe(input);
+    expect(location.pathname).toBe(start);
+    expect(input.value).toBe('Final keystroke');
+    leave();
+    await new Promise((r) => setTimeout(r, 0));
+    saving?.(Response.json({ pending: true, problems: [], revisions: { en: 'next' } }));
+    await new Promise((r) => setTimeout(r, 0));
+    flushSync();
+    expect(root.querySelector('#f-title')).toBeNull();
+    expect(location.pathname).toBe('/admin/settings');
+  },
+);

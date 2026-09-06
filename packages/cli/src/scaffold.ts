@@ -180,9 +180,10 @@ const { data, locale, globals, site } = Astro.props;
 </html>
 `;
 
-const LOADER = `import { type ContentSource, globalsAt, staticSource as createStaticSource } from 'astro-handover';
+const LOADER = `import { type ContentSource, entryAt, globalsAt, staticSource as createStaticSource } from 'astro-handover';
 import { getCollection, getEntry } from 'astro:content';
 import type { Page, Site } from '../content/schemas';
+import cms from '../../cms.config';
 
 export { default as Page } from '../layouts/Page.astro';
 
@@ -197,7 +198,7 @@ export const staticSource: Source = createStaticSource('default', {
 // is a real problem rather than a page nobody wrote. Preview calls this same function with a
 // source that reads the unpublished drafts.
 export async function load(source: Source, { locale, slug }: { locale: string; slug: string }) {
-  const entry = await source.getEntry('pages', \`\${locale}/\${slug}\`);
+  const entry = await entryAt('default', source, cms, 'pages', locale, slug);
   if (!entry) return undefined;
   const globals = await globalsAt('default', source, locale);
   return { data: entry.data, locale, globals, site: globals.site as Site };

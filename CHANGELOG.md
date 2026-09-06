@@ -4,6 +4,30 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Saves use server-seeded edit snapshots and revisions, preserve newer work during publication,
+  and flush before navigation or dependent actions. Rename and creation reserve destination
+  paths atomically. Revert and restore require a recorded CMS operation and authorized paths;
+  direct authentication administration routes cannot bypass the member safeguards.
+  **Schema version 5** adds draft revisions and path reservations: generate and apply the
+  site's D1 migration before deployment, then reload open admin tabs.
+- Source and translation autosaves share debounce, progress, failure, retry, and flush
+  coordination. Each admin request reuses its database and GitHub client, including pending
+  token requests. Lock responses omit unused per-language bases.
+- Conflict answers bind to the reviewed HEAD and draft versions. Network failures settle
+  action states and retain edits for retry; failed sign-out keeps the current session visible
+  with a retry message. Typing in either language renews locks; idle polling cannot reclaim them.
+- Admin assets, authentication, navigation, and previews honor the configured base path.
+- Uploads use temporary keys; actual bytes, hashes, types, and dimensions are verified before
+  public finalization. Recovery uses the same validation. Reload open admin tabs on upgrade.
+- Malformed publish selections and unknown CLI arguments are refused before writes; help is
+  read-only.
+
+- Protect public results across deployments: `entryAt()` hides public entries while authenticated
+  preview can still read them, and new starters use that helper. Media deletion checks the
+  deployed snapshot as well as drafts and repository content. Redirect undo restores edited
+  and deleted rules and refuses overlapping changes. Address changes retain pending hide
+  destinations, and revert preserves unpublished work while invalidating stale edit revisions.
+
 - **Publish this entry runs the checks.** The entry header's dialog runs the same pre-publish
   pass the drawer does over its one entry — when it opens and again on the press — lists what
   it found, and refuses an error the same way: *Fix 1 error to publish*, disabled, or *Nothing

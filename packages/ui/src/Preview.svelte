@@ -1,4 +1,6 @@
 <script lang="ts">
+import { previewPath, sitePath } from './request.js';
+
 /**
  * The page the client is editing, rendered by their own site from the draft rows, beside the
  * form. Everything inside the frame's border belongs to the site: the toolbar sits outside it
@@ -60,7 +62,7 @@ let busy = $state(true);
 let renderedAt = $state(0);
 let now = $state(Date.now());
 
-const src = $derived(`/_preview${url}?at=${Math.max(savedAt, refreshed)}`);
+const src = $derived(`${previewPath(url ?? '/')}?at=${Math.max(savedAt, refreshed)}`);
 // A render in flight — which there is none of while the schema is unhappy, since the frame is
 // not on screen to load anything.
 const working = $derived(busy && problems.length === 0);
@@ -130,7 +132,7 @@ const status = $derived(
         <p class="preview-status" class:is-busy={working} class:is-warn={!working && (stale || problems.length > 0)} role="status">{status}</p>
         <span class="spacer"></span>
         <button class="btn btn-ghost btn-sm" type="button" onclick={() => (refreshed = Date.now())}>Refresh</button>
-        <a class="btn btn-ghost btn-sm" href="/_preview{url}" target="_blank" rel="noreferrer">Open in new tab ↗</a>
+        <a class="btn btn-ghost btn-sm" href={previewPath(url ?? '/')} target="_blank" rel="noreferrer">Open in new tab ↗</a>
       </div>
     </div>
     {#if problems.length}

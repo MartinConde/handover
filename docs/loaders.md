@@ -7,7 +7,7 @@ its data in one `load()`, and the layout is handed the result. Follow them and
 
 ## A loader
 
-`ContentSource` is `{ getEntry, getCollection }`. Entry ids are `locale/slug`, matching the
+`ContentSource` provides `getEntry` and `getCollection`, with an optional `preview` flag. Entry ids are `locale/slug`, matching the
 folder layout `src/content/<collection>/<locale>/<slug>.yaml`, and `getCollection` takes the
 locale and returns only that folder. `staticSource` wraps Astro's own `astro:content` functions;
 pass them in, since the package does not import `astro:content` itself. The first argument
@@ -18,9 +18,10 @@ page file spreads one into the other.
 
 ```ts
 // src/loaders/listing.ts
-import { type ContentSource, staticSource as createStaticSource } from 'astro-handover';
+import { type ContentSource, entryAt, staticSource as createStaticSource } from 'astro-handover';
 import { getCollection, getEntry } from 'astro:content';
 import type { Listing } from '../content/schemas';
+import cms from '../../cms.config';
 
 export { default as Page } from '../layouts/Page.astro';
 
@@ -32,13 +33,19 @@ export const staticSource: Source = createStaticSource('default', {
 });
 
 export async function load(source: Source, { locale, slug }: { locale: string; slug: string }) {
-  const entry = await source.getEntry('listings', `${locale}/${slug}`);
+  const entry = await entryAt('default', source, cms, 'listings', locale, slug);
   return entry && { data: entry.data, locale };
 }
 ```
 
 `ContentSource<{ listings: Listing }>` maps collection names to their data type, so
 `entry.data` is typed without casts.
+
+Use `entryAt()` for public single-page reads: hidden entries return `undefined`, including
+localized addresses. `draftSource()` sets `preview: true` so authenticated preview can still
+render hidden entries. Public sources must omit that flag. Raw `source.getEntry()` and
+`getCollection()` remain unfiltered reads; use `filterLive()` for public lists. Preserve
+`_status` in the content schema, as the generated starter does.
 
 **A miss is a value, not an error.** Return `undefined` and let the page answer `404`. A
 `.catch()` around the call swallows everything, so a real problem — a `generateId` the loader is

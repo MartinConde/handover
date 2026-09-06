@@ -3,9 +3,9 @@
 Pictures and files live in an R2 bucket, not in the repository. A content file stores a
 key (`media/9f3a….webp`), never a URL, so moving the CDN never touches one.
 
-The bytes never pass through the Worker: the browser asks for a signed URL and PUTs
-straight to the bucket. What the Worker does is decide the key, sign the PUT, and check
-afterwards that what arrived is what was declared.
+The browser uploads straight to a temporary bucket key. On confirmation the Worker reads
+and verifies the bytes, then writes them to a separate public key. The upload URL cannot
+overwrite that public asset.
 
 ## 1. Make the bucket
 

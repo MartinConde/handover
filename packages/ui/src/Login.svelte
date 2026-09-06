@@ -1,4 +1,6 @@
 <script lang="ts">
+import { request as fetch, sitePath } from './request.js';
+
 export interface LoginMethods {
   /** The site has a base URL and a mailer, so both "email me a link" and "forgot password" work. */
   emailLink: boolean;
@@ -82,8 +84,8 @@ async function sendLink() {
   // what is shown: whether an email exists is not the login's to say.
   const res = await post('/admin/api/auth/sign-in/magic-link', {
     email,
-    callbackURL: '/admin',
-    errorCallbackURL: '/admin',
+    callbackURL: sitePath('/admin'),
+    errorCallbackURL: sitePath('/admin'),
   });
   if (!limited) view = res.ok ? 'link-sent' : 'sign-in';
   if (!limited && !res.ok) error = REFUSED;
@@ -92,7 +94,7 @@ async function sendLink() {
 async function forgot() {
   const res = await post('/admin/api/auth/request-password-reset', {
     email,
-    redirectTo: '/admin/reset',
+    redirectTo: sitePath('/admin/reset'),
   });
   if (!limited) view = res.ok ? 'reset-sent' : 'sign-in';
 }
@@ -100,8 +102,8 @@ async function forgot() {
 async function withGitHub() {
   const res = await post('/admin/api/auth/sign-in/social', {
     provider: 'github',
-    callbackURL: '/admin',
-    errorCallbackURL: '/admin',
+    callbackURL: sitePath('/admin'),
+    errorCallbackURL: sitePath('/admin'),
   });
   const { url } = (await res.json().catch(() => ({}))) as { url?: string };
   if (url) location.href = url;
@@ -125,7 +127,7 @@ async function saveNewPassword(event: SubmitEvent) {
   if (res.ok) {
     // Better Auth mints no session on a reset — and every old one has just been revoked — so
     // this ends at the form rather than inside the admin.
-    history.replaceState(null, '', '/admin');
+    history.replaceState(null, '', sitePath('/admin'));
     view = 'sign-in';
     usePassword = true;
     notice = 'Your password is saved. Sign in with it.';

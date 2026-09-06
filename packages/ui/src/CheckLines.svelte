@@ -53,6 +53,8 @@ export function verdict(lines: CheckLine[]): string {
 </script>
 
 <script lang="ts">
+import { sitePath } from './request.js';
+
 let {
   lines,
   chips = false,
@@ -83,7 +85,7 @@ const notes = $derived(lines.filter((line) => line.severity === 'info'));
     <!-- The machine-translation note is about a field the client has read and not about a
          mistake in it, so it is the one with nowhere to go. -->
     {#if goTo && item.fieldPath && item.check !== 'translation-machine'}
-      <a class="btn-link" href={goTo(item)} onclick={onclose}>Go to field</a>
+      <a class="btn-link" href={sitePath(goTo(item))} onclick={onclose}>Go to field</a>
     {/if}
   </div>
 {/snippet}

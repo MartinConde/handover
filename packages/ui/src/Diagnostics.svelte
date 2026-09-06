@@ -1,5 +1,6 @@
 <script lang="ts">
 import { untrack } from 'svelte';
+import { request as fetch } from './request.js';
 
 interface Config {
   collections: { name: string; route?: string }[];

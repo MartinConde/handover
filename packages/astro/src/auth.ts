@@ -164,6 +164,7 @@ export function createAuth(url: URL, ctx?: CloudflareContext, options?: { invite
   return create('default', db, {
     secret,
     baseURL: base,
+    basePath: `${(config.i18n.base ?? '').replace(/\/+$/, '')}/admin/api/auth`,
     // The same string the cookie's `Secure` is decided from, so the two cannot disagree about
     // one request. With no base URL set this is still the request's own scheme, which is what
     // a cookie is scoped to anyway.

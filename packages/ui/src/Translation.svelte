@@ -1,6 +1,9 @@
 <script lang="ts">
 import { type Field, keptMachine, type ResolvedSeo, type WordPart } from '@handover/core';
+import { untrack } from 'svelte';
 import Fields from './Fields.svelte';
+import { request as fetch } from './request.js';
+import { type SaveState, saveCoordinator, saveLane } from './save';
 
 type Data = Record<string, unknown>;
 let {
@@ -8,6 +11,9 @@ let {
   slug,
   locale,
   tab = '',
+  revision,
+  onrevision,
+  lane = saveLane(),
   fields,
   blocks,
   data: loaded,
@@ -20,6 +26,7 @@ let {
   url,
   site,
   onsaved,
+  onactivity,
   onrefused,
   onclose,
   onturnoff,
@@ -30,6 +37,9 @@ let {
   locale: string;
   /** The editor's tab token: the lock is the tab's, and this column's saves are its saves. */
   tab?: string;
+  revision?: string;
+  onrevision?: (revision: string) => void;
+  lane?: ReturnType<typeof saveLane>;
   fields: readonly Field[];
   blocks: Record<string, Field[]>;
   /** Where a stored media key is served from; an alt is written beside the picture it describes. */
@@ -53,7 +63,8 @@ let {
   site?: string;
   /** A save landed: whether this language's file is now ahead of the repository. The entry
       keeps it, because this column is thrown away when the screen changes and its edit is not. */
-  onsaved?: (pending: boolean) => void;
+  onsaved?: (pending: boolean, data?: Data) => void;
+  onactivity?: () => void;
   /** A save was refused: somebody took the entry over. The lock is the entry's, so what the
       screen does about it belongs to the entry rather than to this column. */
   onrefused?: (lock: unknown) => void;
@@ -65,16 +76,18 @@ let {
 } = $props();
 
 // svelte-ignore state_referenced_locally -- the loaded file is the initial value on purpose
-let data = $state<Data>(structuredClone(loaded));
+let data = $state<Data>($state.snapshot(loaded));
 // svelte-ignore state_referenced_locally -- the loaded file is the initial value on purpose
-let saved = $state(JSON.stringify(loaded));
+let saveState = $state<SaveState>({ saved: JSON.stringify(loaded), phase: 'idle' });
+const saved = $derived(saveState.saved);
 // The file as the server last had it. The badge on a machine-filled field has to come off as
 // somebody types over it and not on the next open, and what says so is the same comparison the
 // save makes: the words this file had against the words the form has now.
 // svelte-ignore state_referenced_locally -- the loaded file is the initial value on purpose
 let base = $state<Data>(loaded);
-let saving = $state(false);
-let failed = $state(false);
+const saving = $derived(saveState.phase === 'saving');
+let fillFailed = $state(false);
+const failed = $derived(saveState.phase === 'failed' || fillFailed);
 // Whether the stored draft of this language differs from its file in git — the server's answer
 // to the last save. A file with a draft already waiting when the entry opened is not counted:
 // the publish drawer is what lists those.
@@ -114,8 +127,7 @@ let filling = $state(false);
  * still inside the wait would be overwritten by the answer coming back.
  */
 async function fill(paths?: string[]) {
-  if (json !== saved) await save();
-  if (failed) return;
+  if (!(await flush())) return;
   filling = true;
   const res = await fetch(`/admin/api/translate/${collection}/${slug}/${locale}`, {
     method: 'POST',
@@ -123,44 +135,62 @@ async function fill(paths?: string[]) {
     body: JSON.stringify(paths ? { paths } : {}),
   });
   filling = false;
-  failed = !res.ok;
+  fillFailed = !res.ok;
   if (!res.ok) return;
-  const body = (await res.json()) as { data: Data; pending: boolean };
+  const body = (await res.json()) as { data: Data; pending: boolean; revision?: string };
+  if (body.revision) {
+    revision = body.revision;
+    onrevision?.(body.revision);
+  }
   base = structuredClone(body.data);
   data = body.data;
-  saved = JSON.stringify(body.data);
-  onsaved?.(body.pending);
+  saves.accept(JSON.stringify(body.data));
+  onsaved?.(body.pending, body.data);
 }
 
-// The same wait as the entry's own form, and its own row: the two languages are two files.
+// Subscribe only to snapshots; failure-state updates must not schedule another retry.
 $effect(() => {
-  if (json === saved) return;
-  const timer = setTimeout(save, 2000);
-  return () => clearTimeout(timer);
+  const dirty = json !== saved;
+  return untrack(() => {
+    if (dirty) onactivity?.();
+    return saves.change();
+  });
 });
 
-async function save() {
-  const sent = json;
-  saving = true;
+// svelte-ignore state_referenced_locally -- this coordinator belongs to the opened file
+const saves = saveCoordinator({
+  current: () => json,
+  saved,
+  lane,
+  write: writeSave,
+  onstate: (state) => {
+    saveState = state;
+  },
+});
+
+async function writeSave(sent: string): Promise<boolean> {
+  fillFailed = false;
   const res = await fetch(`/admin/api/drafts/${collection}/${slug}/${locale}`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ data, tab }),
+    body: JSON.stringify({ data: JSON.parse(sent), tab, revision }),
   });
-  saving = false;
-  if (res.status === 409) {
-    onrefused?.(await res.json());
-    return;
+  if (!res.ok) {
+    if (res.status === 409) onrefused?.(await res.json());
+    return false;
   }
-  failed = !res.ok;
-  if (!res.ok) return;
-  saved = sent;
   const body = (await res.json()) as {
     pending: boolean;
     problems: { path: string; message: string }[];
+    revision?: string;
   };
-  onsaved?.(body.pending);
+  if (body.revision) {
+    revision = body.revision;
+    onrevision?.(body.revision);
+  }
+  onsaved?.(body.pending, JSON.parse(sent));
   problems = Object.fromEntries(body.problems.map((p) => [p.path, p.message]));
+  return true;
 }
 
 // Key order is the file's; two objects that differ only in it are the same words.
@@ -194,7 +224,7 @@ export function sync(reshape: (target: Data) => Data): void {
 
 /** Whether this language holds an edit the drafts table has not got yet. */
 export function unsaved(): boolean {
-  return json !== saved;
+  return saves.unsaved();
 }
 
 /**
@@ -202,8 +232,7 @@ export function unsaved(): boolean {
  * second after typing here has to find this language in D1 as well as the other one.
  */
 export async function flush(): Promise<boolean> {
-  if (json !== saved) await save();
-  return !failed;
+  return saves.flush();
 }
 
 const LANGUAGES = new Intl.DisplayNames(['en'], { type: 'language' });
@@ -223,7 +252,7 @@ const named = (of: string) => {
       <span class="mode">{named(source)} changed since this was translated</span>
     {/if}
     <span class="autosave" class:is-saving={saving} class:is-offline={failed}>
-      {#if saving}Saving…{:else if failed}Not saved{:else if json !== saved}Unsaved changes{:else}Saved{/if}
+      {#if saving}Saving…{:else if failed}Not saved <button type="button" class="btn-link" onclick={() => flush()}>Retry save</button>{:else if json !== saved}Unsaved changes{:else}Saved{/if}
     </span>
     <span class="spacer"></span>
     {#if translator}

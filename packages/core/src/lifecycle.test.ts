@@ -6,11 +6,13 @@ import {
   deleteEntry,
   duplicateEntry,
   editRedirects,
+  type RedirectRule,
   readRedirects,
   redirectError,
   redirectsText,
   renamedFrom,
   renameEntry,
+  revertRedirects,
 } from './lifecycle.js';
 
 // An in-memory repo: serves files, records every publish call and every read that named a
@@ -640,3 +642,39 @@ test('renamedFrom reads the old name out of a rename commit of this entry', () =
     renamedFrom('default', 'Update listings/en/mill-house', 'listings', 'mill-house'),
   ).toBeUndefined();
 });
+
+const undoRules = (before: RedirectRule[], after: RedirectRule[], head: RedirectRule[]) =>
+  revertRedirects(
+    'default',
+    {
+      getFile: async (_path, at) => ({
+        contents: JSON.stringify({
+          rules: at === 'before' ? before : at === 'after' ? after : head,
+        }),
+        blob_sha: 'blob',
+      }),
+    },
+    { parent: 'before', commit: 'after', head: 'head' },
+  );
+
+test('redirect undo restores edits and deletions and keeps later independent rules', async () => {
+  const original = manual('/old', '/before', 'original');
+  const removed = manual('/deleted', '/target', 'removed1');
+  const added = manual('/before', '/after', 'added111');
+  const later = manual('/later', '/elsewhere', 'later111');
+  const rewritten = { ...original, to: '/after' };
+  const file = await undoRules([original, removed], [rewritten, added], [rewritten, added, later]);
+  expect(parse(file?.contents ?? '').rules).toEqual([original, later, removed]);
+});
+
+test.each(['edit', 'delete', 'addition'])(
+  'redirect undo refuses a later overlapping %s',
+  async (kind) => {
+    const original = manual('/old', '/before', 'original');
+    const changed = { ...original, to: '/after' };
+    const later = { ...changed, to: '/later' };
+    await expect(
+      undoRules(kind === 'addition' ? [] : [original], kind === 'delete' ? [] : [changed], [later]),
+    ).rejects.toMatchObject({ name: 'RevertConflictError', paths: ['src/content/redirects.yaml'] });
+  },
+);

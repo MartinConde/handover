@@ -231,13 +231,19 @@ export function redirectError(
   return undefined;
 }
 
-/**
- * `redirects.yaml` with the rules one commit added taken back out. It is **recomputed, not
- * restored**: rules appended since that commit have to stay, so this is the file as HEAD has it
- * minus the ids that commit introduced. A `to` the commit rewrote on an older rule stays
- * rewritten — that URL is the live one, and putting the old one back would send visitors to a
- * page that has moved on. `undefined` when the commit added no rule, which is most of them.
- */
+/** A file the revert would write has changed since the commit it is undoing. */
+export class RevertConflictError extends Error {
+  override name = 'RevertConflictError';
+  constructor(readonly paths: string[]) {
+    super(
+      paths.length === 1
+        ? `${paths[0]} has changed since that commit, so it cannot be put back`
+        : `${paths.length} files have changed since that commit, so they cannot be put back — ${paths.join(', ')}`,
+    );
+  }
+}
+
+/** Invert only the rules this commit changed; overlapping later edits refuse the whole undo. */
 export async function revertRedirects(
   siteId: string,
   git: Pick<GitClient, 'getFile'>,
@@ -248,15 +254,37 @@ export async function revertRedirects(
     return file ? (parseEntry(siteId, file.contents) as { rules?: RedirectRule[] }) : undefined;
   };
   const [before, after, head] = await Promise.all([doc(at.parent), doc(at.commit), doc(at.head)]);
-  const was = new Set((before?.rules ?? []).map((r) => r._id));
-  const added = new Set((after?.rules ?? []).flatMap((r) => (was.has(r._id) ? [] : [r._id])));
-  if (!added.size || !head) return undefined;
+  const byId = (rules: readonly RedirectRule[]) => new Map(rules.map((r) => [r._id, r]));
+  const was = byId(before?.rules ?? []);
+  const wrote = byId(after?.rules ?? []);
+  const current = byId(head?.rules ?? []);
+  const equal = (a: RedirectRule | undefined, b: RedirectRule | undefined) =>
+    JSON.stringify(a && Object.entries(a).sort(([a], [b]) => a.localeCompare(b))) ===
+    JSON.stringify(b && Object.entries(b).sort(([a], [b]) => a.localeCompare(b)));
+  const changed = [...new Set([...was.keys(), ...wrote.keys()])].filter(
+    (id) => !equal(was.get(id), wrote.get(id)),
+  );
+  if (!changed.length) return undefined;
+  for (const id of changed) {
+    if (!equal(current.get(id), wrote.get(id))) throw new RevertConflictError([REDIRECTS]);
+    const restored = was.get(id);
+    // A later rule can claim an address under a different ID too.
+    if (
+      restored &&
+      [...current.values()].some(
+        (r) => r._id !== id && !changed.includes(r._id) && r.from === restored.from,
+      )
+    )
+      throw new RevertConflictError([REDIRECTS]);
+  }
+  for (const id of changed) {
+    const restored = was.get(id);
+    if (restored) current.set(id, restored);
+    else current.delete(id);
+  }
   return {
     path: REDIRECTS,
-    contents: stringifyEntry(siteId, {
-      ...head,
-      rules: (head.rules ?? []).filter((r) => !added.has(r._id)),
-    }),
+    contents: stringifyEntry(siteId, { ...(head ?? before), rules: [...current.values()] }),
   };
 }
 
@@ -317,6 +345,10 @@ export async function renameEntry(
   deps: { now?: () => number } = {},
 ): Promise<{ commit_sha: string }> {
   const base_sha = await git.getHead();
+  const destinations = await Promise.all(
+    loc.i18n.locales.map((locale) => git.getFile(entryPath(loc.collection, locale, to), base_sha)),
+  );
+  if (destinations.some(Boolean)) throw new RenameCollisionError();
   const files = await localeFiles(git, loc, from, base_sha);
   const changes: PublishFile[] = files.flatMap(({ locale, contents }) => [
     { path: entryPath(loc.collection, locale, from), contents: null },
@@ -480,4 +512,11 @@ export async function duplicateEntry(
     if (loc.localizedSlugs) delete copy.slug;
     return { path: entryPath(loc.collection, locale, to), contents: stringifyEntry(siteId, copy) };
   });
+}
+
+export class RenameCollisionError extends Error {
+  override name = 'RenameCollisionError';
+  constructor() {
+    super('The destination already exists in the repository');
+  }
 }

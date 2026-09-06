@@ -43,6 +43,7 @@ export interface AuthConfig {
    * never come from a header. Absent, the emailing methods are not offered at all.
    */
   baseURL?: string;
+  basePath?: string;
   /** Absent until the site has GitHub credentials — the provider is not mounted without them. */
   github?: { clientId: string; clientSecret: string };
   /** Sends the link the user clicks; absent until the site has a `Mailer`. */
@@ -94,7 +95,7 @@ export function authOptions(siteId: string, db: Db, config: AuthConfig): BetterA
   const emailing = Boolean(config.baseURL);
   const resetting = emailing && config.sendPasswordReset;
   return {
-    basePath: AUTH_BASE_PATH,
+    basePath: config.basePath ?? AUTH_BASE_PATH,
     baseURL: config.baseURL,
     secret: config.secret,
     database: drizzleAdapter(db, { provider: 'sqlite', schema: { ...authTables } }),
@@ -134,7 +135,7 @@ export function authOptions(siteId: string, db: Db, config: AuthConfig): BetterA
     // gets, and a first trip through GitHub's consent screen can take longer — there is nothing
     // left to read it out of. Without this the person ends on Better Auth's own error page;
     // with it they end on the login, which says the one thing every refusal here says.
-    onAPIError: { errorURL: '/admin' },
+    onAPIError: { errorURL: (config.basePath ?? AUTH_BASE_PATH).replace(/\/api\/auth$/, '') },
     // The admin plugin's impersonation would let an owner act as anybody, with the log saying
     // it was that person. Switched off rather than guarded: nothing in the admin asks for it.
     disabledPaths: ['/admin/impersonate-user'],
@@ -262,7 +263,31 @@ export const memberApi = (_siteId: string, auth: Auth): MemberApi =>
  * fighting over the D1 lock is the documented 33-second `wrangler dev` hang.
  */
 export function createAuth(siteId: string, db: Db, config: AuthConfig): Auth {
-  return betterAuth(authOptions(siteId, db, config));
+  const auth = betterAuth(authOptions(siteId, db, config));
+  const handler = auth.handler;
+  // Expose only the login/account flows used by the UI. Plugin administration remains
+  // available to the guarded server-side MemberApi, never to direct HTTP callers.
+  auth.handler = async (request) => {
+    const path = new URL(request.url).pathname.slice((config.basePath ?? AUTH_BASE_PATH).length);
+    const allowed =
+      request.method === 'POST'
+        ? [
+            '/sign-in/email',
+            '/sign-in/magic-link',
+            '/sign-in/social',
+            '/sign-out',
+            '/request-password-reset',
+            '/reset-password',
+            '/update-user',
+            '/change-password',
+            '/revoke-other-sessions',
+          ].includes(path)
+        : request.method === 'GET' &&
+          (/^\/(callback\/github|magic-link\/verify|reset-password\/[^/]+)$/.test(path) ||
+            ['/get-session', '/error'].includes(path));
+    return allowed ? handler(request) : new Response('Not found', { status: 404 });
+  };
+  return auth;
 }
 
 /** Whether this address has an account at all — what decides if a sign-in link is worth sending. */

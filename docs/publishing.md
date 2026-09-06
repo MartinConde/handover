@@ -32,7 +32,7 @@ price: "£1,200 per week"
   write ([Languages](i18n.md#the-structure-is-shared)).
 
 Each row also records where it came from: the commit the file was loaded from and that
-file's git blob sha. Those are read from GitHub by the server on the first save of an
+file's git blob sha. Those are read from GitHub by the server when opening an
 entry and are never sent by the browser, so a tab left open for a day cannot save against
 a base that has moved on.
 
@@ -112,6 +112,11 @@ where that language served the entry to where it serves it now — and one only,
 times the address was changed before publishing. The other languages' URLs did not move, so
 nothing is written for them, and an entry that has never been published owes nothing at all.
 
+When an entry is moved and hidden before publishing, the hide destination wins: the old
+public URL redirects directly there, or returns 404 if “nowhere” was chosen. The unpublished
+new address is hidden too. Changing or clearing the address preserves the pending hide choice;
+showing the entry again before publishing restores the pending address redirect.
+
 ## The endpoints
 
 The routes behind all of this — the draft writes, the publish, the build status and the
@@ -148,3 +153,27 @@ against the free plan's monthly build minutes, so a build that fails for want of
 an ordinary failure. The publish rows in the [activity log](activity.md) do not expand into
 what the commit changed, though the drawer shows the same diff before it goes out. **Publish this entry** does not
 name the redirect rules riding along with it the way the drawer does.
+
+## Save revisions and leaving an entry
+
+Opening an entry seeds its draft from the exact Git commit being displayed and returns an
+opaque revision for each language. Saves must carry that revision. A stale write receives
+`409` and cannot replace the stored draft; changes to shared fields and sibling languages
+succeed or fail together.
+
+The source and translation panes share one save queue. A flush waits for the outstanding
+request and then saves the newest text typed during it. Internal navigation, translation
+switches, and actions that rewrite or reload an entry wait for a successful flush. If saving
+fails, the form stays open with its text and an explicit retry. Reloading or closing a tab
+warns while it contains unsaved work; the browser cannot reliably finish an asynchronous
+save during unload.
+
+Publishing validates and commits one captured set of drafts. Edits saved during GitHub's
+work remain pending, rebased on the committed file. Cleanup compares the selected revisions
+again and requires the build to identify that publish's commit, so an older successful build
+cannot clear its overlays.
+
+Schema version 5 adds `drafts.revision` and `path_reservations`. On a package upgrade, generate
+and apply the site's D1 migration before serving the new code, following [Deploy](deploy.md#the-database).
+Existing rows receive the legacy revision; subsequent writes assign fresh opaque revisions.
+Older open browser sessions must reopen the entry before saving through the new API.

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
 import { drizzle } from 'drizzle-orm/d1';
 import { Miniflare } from 'miniflare';
@@ -120,9 +121,18 @@ test('work done is logged as cron-<job> with its count', async () => {
     at: NOW - 200 * DAY,
     kind: 'login',
   });
-  const orphan = `media/${'b'.repeat(64)}.webp`;
+  const pdf = '%PDF-1.7 cron';
+  const orphan = `files/${createHash('sha256').update(pdf).digest('hex')}.pdf`;
+  const fetch = (async (input: Request) =>
+    new URL(input.url).searchParams.has('list-type')
+      ? new Response(
+          `<ListBucketResult><Contents><Key>${orphan}</Key><Size>${pdf.length}</Size></Contents></ListBucketResult>`,
+        )
+      : new Response(pdf, {
+          headers: { 'content-type': 'application/pdf', 'content-disposition': 'attachment' },
+        })) as unknown as typeof globalThis.fetch;
 
-  const report = await runDue('default', { db, store, fetch: listing([orphan]), now: NOW });
+  const report = await runDue('default', { db, store, fetch, now: NOW });
 
   expect(report).toEqual({ reconcile: 1, retention: 1, orphans: 0, hidden: 0 });
   expect(await kinds()).toEqual(['cron-reconcile {"done":1}', 'cron-retention {"done":1}']);

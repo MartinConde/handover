@@ -129,6 +129,8 @@ The session cookie is `HttpOnly`, `SameSite=Lax`, and `Secure` on any site whose
 `POST /admin/api/auth/sign-out`, which the user menu does for you. It must carry
 `content-type: application/json` — without one the endpoint answers `415` and the session
 survives.
+The user menu waits for a successful response before showing the login form. A failed request
+keeps the current session visible and asks the user to try signing out again.
 
 ## ⚠️ Sign-up is closed, and what that actually means
 
@@ -143,3 +145,12 @@ There is no route that lets a stranger make an account:
 
 The status codes are Better Auth's and are not all `403`; what matters, and what the package's
 tests assert, is that **no row is created** on any of these paths.
+
+## Public authentication routes
+
+The HTTP handler forwards only password, magic-link and GitHub sign-in, their verification
+callbacks, sign-out, password reset/change, profile updates, session reads and revoking other
+sessions. All direct admin-plugin HTTP routes return `404`, including role changes, user
+creation/removal, bans and impersonation. Member administration uses the guarded CMS routes,
+which call the authentication library server-side after enforcing owner rules and then log
+the change and release locks where required.

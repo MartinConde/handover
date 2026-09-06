@@ -283,3 +283,33 @@ test('withSlash writes a path the way the site serves it and leaves the rest alo
   expect(withSlash('/de/#top', false)).toBe('/de#top');
   expect(withSlash('https://example.com/b.pdf', true)).toBe('https://example.com/b.pdf');
 });
+
+test.each(['', '/', '/site', '/nested/site', '/site/'])(
+  'preview URLs round trip under base %s',
+  (base) => {
+    for (const prefixDefaultLocale of [false, true]) {
+      const i18n = { base, locales: ['en', 'de'], defaultLocale: 'en', prefixDefaultLocale };
+      const collections = {
+        pages: { route: '/[slug]' },
+        blog: { index: '/blog', route: '/blog/[slug]' },
+      };
+      for (const locale of i18n.locales) {
+        const url = entryUrl('default', i18n, '/[slug]', 'home', locale) ?? '';
+        expect(previewTarget('default', i18n, collections, url)).toEqual({
+          collection: 'pages',
+          locale,
+          address: 'home',
+        });
+        const index = entryUrl('default', i18n, '/blog', '', locale) ?? '';
+        expect(previewTarget('default', i18n, collections, `${index}/`)).toEqual({
+          collection: 'blog',
+          locale,
+        });
+      }
+      if (base.replace(/\/+$/, '')) {
+        expect(previewTarget('default', i18n, collections, '/de/home')).toBeUndefined();
+        expect(previewTarget('default', i18n, collections, `${base}ish/de/home`)).toBeUndefined();
+      }
+    }
+  },
+);

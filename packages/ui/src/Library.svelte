@@ -2,6 +2,7 @@
 import type { Preset } from '@handover/core';
 import Crop from './Crop.svelte';
 import Focal from './Focal.svelte';
+import { request as fetch, sitePath } from './request.js';
 import { fileSize, type LibraryItem, uploadFile, uploadImage } from './upload.js';
 
 let {
@@ -322,7 +323,7 @@ function show(next: 'images' | 'files') {
                   <summary><span class="badge">{count(chosen)}</span></summary>
                   <ul class="usage-list">
                     {#each chosen.uses as use (use.entry)}
-                      <li><a href={use.href}>{use.title}</a><span class="where">{use.entry.split('/')[0]}</span></li>
+                      <li><a href={sitePath(use.href)}>{use.title}</a><span class="where">{use.entry.split('/')[0]}</span></li>
                     {/each}
                   </ul>
                 </details>

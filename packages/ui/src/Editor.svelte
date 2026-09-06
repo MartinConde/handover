@@ -10,15 +10,17 @@ import {
   type SeoDefaultsValue,
   syncLocale,
 } from '@handover/core';
-import { onMount, tick } from 'svelte';
+import { onMount, tick, untrack } from 'svelte';
 import { when } from './activity-line';
 import CheckLines, { type CheckItem, merged, plural, verdict } from './CheckLines.svelte';
 import DriftPanel from './Drift.svelte';
 import Fields from './Fields.svelte';
 import History from './History.svelte';
-import { navigate } from './navigate';
+import { guardNavigation, navigate } from './navigate';
 import OffsiteDialog, { type Target } from './Offsite.svelte';
 import PreviewPane from './Preview.svelte';
+import { request as fetch, sitePath } from './request.js';
+import { flushEntry, type SaveState, saveCoordinator, saveLane } from './save';
 import Translation from './Translation.svelte';
 
 type Data = Record<string, unknown>;
@@ -52,6 +54,7 @@ let {
     fields: readonly Field[];
     blocks: Record<string, Field[]>;
     data: Data;
+    revisions?: Record<string, string>;
     /** The languages whose file this entry has a draft ahead of in git. */
     pending: string[];
     /** The languages the repository already has a file for; the rest are only in the preview. */
@@ -124,13 +127,20 @@ let {
 
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let data = $state<Data>(structuredClone(entry.data));
+// svelte-ignore state_referenced_locally -- versions and languages belong to this opened editor
+let revisions = $state({ ...entry.revisions });
+// svelte-ignore state_referenced_locally -- retain saved translations across pane switches
+let translations = $state(structuredClone(entry.translations));
+const lane = saveLane();
 // The last shape the draft row holds; the loaded data is already in it, hence no write on open.
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
-let saved = $state(JSON.stringify(entry.data));
+let saveState = $state<SaveState>({ saved: JSON.stringify(entry.data), phase: 'idle' });
+const saved = $derived(saveState.saved);
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let drafted = $state(entry.pending.includes(entry.sourceLocale));
-let saving = $state(false);
-let saveFailed = $state(false);
+const saving = $derived(saveState.phase === 'saving');
+const saveFailed = $derived(saveState.phase === 'failed');
+let saveError = $state('');
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let held = $state(entry.held === true);
 // A draft stores whatever was typed, so what the schema still wants is the server's answer to
@@ -169,10 +179,12 @@ let busy = $state(false);
 // The two answers to a language with no file. Both change which files the entry has, so the
 // screen is read again rather than patched here.
 async function ask(url: string, init: RequestInit = {}) {
+  if (!(await flush())) return false;
   busy = true;
   const res = await fetch(url, { method: 'POST', ...init });
   busy = false;
   if (res.ok) onchanged();
+  else actionFailed = await res.text();
   return res.ok;
 }
 
@@ -217,16 +229,27 @@ const createFrom = (of: string) => ask(`/admin/api/drafts/${collection}/${slug}/
 // Create from English and then a machine's first draft of it, as one answer to the offer: the
 // file has to exist before anything can be written into it.
 async function createFilled(of: string) {
+  if (!(await flush())) return;
   busy = true;
   const made = await fetch(`/admin/api/drafts/${collection}/${slug}/${of}`, { method: 'POST' });
+  let filled: Response | undefined;
   if (made.ok)
-    await fetch(`/admin/api/translate/${collection}/${slug}/${of}`, {
+    filled = await fetch(`/admin/api/translate/${collection}/${slug}/${of}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({}),
     });
   busy = false;
-  if (made.ok) onchanged();
+  if (!made.ok) {
+    actionFailed = await made.text();
+    return;
+  }
+  if (!filled?.ok) {
+    actionFailed =
+      'The language was created, but translation failed. Reload it to retry translation.';
+    return;
+  }
+  onchanged();
 }
 // Through `act` rather than `ask`: a turn-off the server refuses — the last published language,
 // say — refuses with a sentence, and that sentence is the answer the screen shows.
@@ -361,6 +384,18 @@ const recheck = () => {
   if (lock?.mine && !lost && document.visibilityState === 'visible') void beat(false);
 };
 
+let renewing = false;
+function renew() {
+  if (!lock?.mine || lost || renewing || Date.now() - beatAt < 45000) return;
+  if (lock.expires_at !== null && Date.now() >= lock.expires_at) {
+    lost = true;
+    return;
+  }
+  renewing = true;
+  void beat(true).finally(() => {
+    renewing = false;
+  });
+}
 async function beat(claim: boolean) {
   const res = await fetch(
     `/admin/api/locks/${collection}/${slug}${claim ? '' : `?tab=${tab}`}`,
@@ -376,12 +411,10 @@ async function beat(claim: boolean) {
   const had = lock?.mine === true;
   lock = (await res.json()) as Lock;
   asked = Date.now();
-  if (lock.mine) beatAt = asked;
-  else if (had && !claim) {
-    // The lock this tab held is somebody else's now, or nobody's: a take-over is the lost
-    // banner, and a lock that merely lapsed while this tab sat here is taken back.
-    if (lock.held_by) lost = true;
-    else void beat(true);
+  if (lock.mine && claim) beatAt = asked;
+  else if (had && !lock.mine) {
+    // Expiry and takeover both require a fresh read before this tab can resume editing.
+    lost = true;
   }
 }
 
@@ -397,46 +430,87 @@ $effect(() => {
   column.sync((target) => syncLocale('default', form, of, { before: entry.data, after }, target));
 });
 
-// Autosave. The wait restarts on every keystroke, so a burst of typing is one write.
+// Subscribe only to snapshots; failure-state updates must not schedule another retry.
 $effect(() => {
-  if (json === saved) return;
-  const timer = setTimeout(autosave, 2000);
-  return () => clearTimeout(timer);
+  const dirty = json !== saved;
+  return untrack(() => {
+    if (dirty) renew();
+    return saves.change();
+  });
 });
 
-async function autosave() {
-  const sent = json;
-  saving = true;
-  const res = await fetch(`/admin/api/drafts/${collection}/${slug}`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ data, tab }),
-  });
-  saving = false;
-  // Somebody pressed Take over. The words are not lost — they are in the shared draft the new
-  // holder is carrying on from — but this tab is reading from here on.
-  if (res.status === 409) {
-    lost = true;
-    lock = (await res.json()) as Lock;
-    return;
-  }
-  saveFailed = !res.ok;
-  if (res.ok) {
-    // Typing is what holds the entry, and this is where the CMS hears it. Once every three
-    // quarters of a lifetime, so a fast typist is not a write per pause. A refused save is not
-    // a beat: the lock it would push out is not ours any more.
-    if (Date.now() - beatAt >= 45000) void beat(true);
-    saved = sent;
-    // What the preview renders is the stored draft, so a settled save is when it is worth
-    // asking the site to draw the page again.
+// svelte-ignore state_referenced_locally -- this coordinator belongs to the opened file
+const saves = saveCoordinator({
+  current: () => json,
+  saved,
+  lane,
+  write: writeSave,
+  onstate: (state) => {
+    saveState = state;
+  },
+});
+
+async function writeSave(sent: string): Promise<boolean> {
+  saveError = '';
+  try {
+    const res = await fetch(`/admin/api/drafts/${collection}/${slug}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        data: JSON.parse(sent),
+        tab,
+        revision: revisions[entry.sourceLocale],
+      }),
+    });
+    if (!res.ok) {
+      saveError = 'Your changes are still here. Try saving again before leaving.';
+      if (res.status === 409) {
+        const body = await res.json();
+        if (body.reason !== 'revision') {
+          lost = true;
+          lock = body as Lock;
+        } else
+          saveError =
+            body.error ?? 'This entry changed elsewhere. Copy your unsaved text before reloading.';
+      }
+      return false;
+    }
+    const body = (await res.json()) as {
+      pending: boolean;
+      problems: Problem[];
+      revisions?: Record<string, string>;
+    };
+    revisions = { ...revisions, ...body.revisions };
     savedAt = Date.now();
-    // Whether the stored draft differs from the file in git is the server's answer, not ours.
-    const body = (await res.json()) as { pending: boolean; problems: Problem[] };
+    renew();
     if (body.pending !== drafted) onpending?.();
     drafted = body.pending;
     problems = byPath(body.problems);
+    return true;
+  } catch {
+    saveError = 'Your changes are still here. Check your connection and try saving again.';
+    return false;
   }
 }
+
+export function flush(): Promise<boolean> {
+  return flushEntry(saves, () => pane);
+}
+const unsaved = () => saves.unsaved() || (pane?.unsaved() ?? false);
+onMount(() => {
+  const release = guardNavigation(flush);
+  const warn = (event: BeforeUnloadEvent) => {
+    if (unsaved()) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  };
+  addEventListener('beforeunload', warn);
+  return () => {
+    release();
+    removeEventListener('beforeunload', warn);
+  };
+});
 
 // The one thing that takes somebody else's work away, so it confirms first. The entry is read
 // again afterwards: there is one shared draft, and carrying on from it means loading what they
@@ -449,8 +523,11 @@ async function takeOver() {
     body: JSON.stringify({ take: true, tab }),
   });
   busy = false;
+  if (!res.ok) {
+    actionFailed = await res.text();
+    return;
+  }
   taking = false;
-  if (!res.ok) return;
   lock = (await res.json()) as Lock;
   onchanged();
 }
@@ -468,8 +545,10 @@ async function setStatus(next: boolean, redirect?: Target) {
   busy = true;
   statusFailed = '';
   // Everything on screen goes into the rows first: this write rewrites the same files.
-  if (json !== saved) await autosave();
-  if (pane?.unsaved()) await pane.flush();
+  if (!(await flush())) {
+    busy = false;
+    return;
+  }
   const res = await fetch(`/admin/api/status/${collection}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -504,6 +583,7 @@ function openRename() {
 // A 409 is the server's own sentence — "publish this first", "somebody else has it" — and
 // reads better than anything this screen could say about it.
 async function act(url: string, init: RequestInit) {
+  if (!(await flush())) return undefined;
   busy = true;
   actionFailed = '';
   const res = await fetch(url, init);
@@ -542,12 +622,10 @@ async function remove(redirect: Target) {
 async function toggleHold() {
   const next = !held;
   busy = true;
-  if (json !== saved) await autosave();
-  if (saveFailed || lost) {
+  if (!(await flush())) {
     busy = false;
     return;
   }
-  if (pane?.unsaved()) await pane.flush();
   const res = await fetch(`/admin/api/hold/${collection}/${slug}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -555,6 +633,7 @@ async function toggleHold() {
   });
   busy = false;
   if (res.ok) held = ((await res.json()) as { held: unknown }).held === true;
+  else actionFailed = await res.text();
 }
 
 // Scrolling there is not enough on its own: the count is a button, so it has to land somewhere.
@@ -637,10 +716,7 @@ const going = $derived(
 );
 
 async function askToPublish() {
-  if (json !== saved) await autosave();
-  if (saveFailed) return;
-  // The other language is its own file and its own row, and the publish reads the rows.
-  if (pane && !(await pane.flush())) return;
+  if (!(await flush())) return;
   publishFailed = '';
   confirming = true;
   void lint();
@@ -726,10 +802,9 @@ async function publishEntry() {
 }
 
 // The second column holds one language and goes when the screen changes under it — closed, or
-// pointed at another language. Its wait would go with it, so whatever is in it is sent before
-// the change; the request outlives the component, and the screen does not wait on it.
-function leaving(change: () => void) {
-  if (pane?.unsaved()) pane.flush();
+// pointed at another language. Keep the pane mounted until all its changes have been saved.
+async function leaving(change: () => void) {
+  if (unsaved() && !(await flush())) return;
   change();
 }
 
@@ -756,10 +831,10 @@ const before = $derived(entryUrl('default', routing, entry.route, '', locale) ??
 // Turning a language off deletes its file, so it asks where that language's readers go the way
 // a delete does, and commits. The screen is read again afterwards: whatever is in the other form
 // goes into its row first, the way an address change stores everything before it writes. The
-// column's own draft is not flushed — it goes with the file. A refusal stays in the dialog.
+// column is flushed too, so a refused action leaves every edit available. A refusal stays in the dialog.
 let offing = $state<string>();
 async function turnOff(of: string, target: Target) {
-  if (json !== saved) await autosave();
+  if (!(await flush())) return;
   if (await offer(of, false, target)) offing = undefined;
 }
 
@@ -799,8 +874,10 @@ function editAddress() {
 // read again afterwards so both columns come back with the address the server settled on.
 async function saveAddress() {
   busy = true;
-  if (json !== saved) await autosave();
-  if (pane?.unsaved()) await pane.flush();
+  if (!(await flush())) {
+    busy = false;
+    return;
+  }
   const res = await fetch(`/admin/api/entries/${collection}/${slug}/address/${locale}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -830,6 +907,8 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 <svelte:document onvisibilitychange={recheck} />
 
 <main class="main main-editor">
+  {#if actionFailed && !renaming && !deleting && !offing}<p class="notice notice-danger" role="alert">{actionFailed}</p>{/if}
+  {#if saveError}<p class="notice notice-danger" role="alert">{saveError} <button class="btn-link" type="button" onclick={() => flush()}>Retry save</button></p>{/if}
   {#each entry.offerProblems ?? [] as problem (problem)}
     <div class="lock-banner is-offer">
       This entry's file says something its languages contradict — {problem}. Fix it in the
@@ -841,11 +920,11 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
          in D1 and the new holder carries on from them, so "lost" is never true of the words. -->
     <div class="lock-banner is-lost">
       {#if otherTab}
-        Your other tab has this entry now. Everything you wrote is in the shared draft — that tab is
-        carrying on from it.
+        Your other tab has this entry now. Saved changes are in the shared draft. Any unsaved text remains here; copy it before reloading.
+      {:else if !lock?.held_by}
+        This editing session expired while idle. Saved changes are in the shared draft. Any unsaved text remains here; copy it before reloading.
       {:else}
-        {holder} took over this entry. Everything you wrote is in the shared draft — {holder} is carrying
-        on from it.
+        {holder} took over this entry. Saved changes are in the shared draft. Any unsaved text remains here; copy it before reloading.
       {/if}
       <button class="btn-link" type="button" onclick={onchanged}>Reload</button>
     </div>
@@ -1047,9 +1126,9 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
          navigates is not the widget that role claims. 4.16 must not port the roles back. -->
     {#if !entry.singleton}
       <nav class="tabs" aria-label="Entry sections">
-        <a href="/admin/c/{collection}/{slug}" aria-current={section === '' ? 'page' : undefined}>Content</a>
-        {#if seoField}<a href="/admin/c/{collection}/{slug}/seo" aria-current={section === 'seo' ? 'page' : undefined}>SEO</a>{/if}
-        <a href="/admin/c/{collection}/{slug}/history" aria-current={section === 'history' ? 'page' : undefined}>History</a>
+        <a href={sitePath(`/admin/c/${collection}/${slug}`)} aria-current={section === '' ? 'page' : undefined}>Content</a>
+        {#if seoField}<a href={sitePath(`/admin/c/${collection}/${slug}/seo`)} aria-current={section === 'seo' ? 'page' : undefined}>SEO</a>{/if}
+        <a href={sitePath(`/admin/c/${collection}/${slug}/history`)} aria-current={section === 'history' ? 'page' : undefined}>History</a>
       </nav>
     {/if}
   </header>
@@ -1174,7 +1253,10 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             {tab}
             {fields}
             blocks={entry.blocks}
-            data={entry.translations[shown] ?? {}}
+            data={translations[shown] ?? {}}
+            {lane}
+            revision={revisions[shown]}
+            onrevision={(next) => { revisions[shown] = next; }}
             inheritedSeo={inherited(shown, entry.translations[shown] ?? {})}
             source={entry.sourceLocale}
             {locked}
@@ -1182,7 +1264,10 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             translator={entry.translator}
             url={localeUrl(shown)}
             {site}
-            onsaved={(pending) => {
+            onactivity={renew}
+            onsaved={(pending, snapshot) => {
+              renew();
+              if (snapshot) translations[shown] = snapshot;
               if (pending !== translated) onpending?.();
               translated = pending;
               // This column has its own file and its own autosave, and the preview renders
@@ -1190,8 +1275,10 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
               savedAt = Date.now();
             }}
             onrefused={(taken) => {
-              lost = true;
-              lock = taken as Lock;
+              if (!(taken as { reason?: string }).reason) {
+                lost = true;
+                lock = taken as Lock;
+              }
             }}
             {mediaBase}
             onclose={side ? () => leaving(() => (side = false)) : undefined}

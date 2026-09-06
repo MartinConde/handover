@@ -27,12 +27,25 @@ export interface Env {
 
 export async function main(argv: string[], env: Env): Promise<number> {
   const [cmd, sub] = argv;
-  const flags = new Set(argv.filter((a) => a.startsWith('--')));
+  if (
+    ['--help', '-h'].includes(argv.at(-1) ?? '') &&
+    (argv.length === 1 ||
+      (argv.length === 2 && ['init', 'migrate', 'db'].includes(cmd ?? '')) ||
+      (argv.length === 3 && cmd === 'db' && sub === 'generate'))
+  ) {
+    env.log(USAGE);
+    return 0;
+  }
   try {
     if (cmd === 'init' && argv.length === 2 && sub) return init(env, sub);
-    if (cmd === 'migrate' && argv.length <= 2) return migrate(env, flags.has('--dry-run'));
-    if (cmd === 'db' && sub === 'generate' && argv.length <= 3)
-      return dbGenerate(env, flags.has('--check'));
+    if (cmd === 'migrate' && (argv.length === 1 || (argv.length === 2 && sub === '--dry-run')))
+      return migrate(env, sub === '--dry-run');
+    if (
+      cmd === 'db' &&
+      sub === 'generate' &&
+      (argv.length === 2 || (argv.length === 3 && argv[2] === '--check'))
+    )
+      return dbGenerate(env, argv[2] === '--check');
   } catch (e) {
     env.log(e instanceof Error ? e.message : String(e));
     return 1;

@@ -1,5 +1,6 @@
 <script lang="ts">
 import { EXACT, when } from './activity-line';
+import { request as fetch, sitePath } from './request.js';
 
 type Global = {
   key: string;
@@ -59,7 +60,7 @@ async function load() {
               <span class="pdot" aria-hidden="true"></span>
               <span class="visually-hidden">Unpublished changes.</span>
             {/if}
-            <a href="/admin/site/{global.key}">{global.label}</a>
+            <a href={sitePath(`/admin/site/${global.key}`)}>{global.label}</a>
           </h2>
           {#if global.description}<p>{global.description}</p>{/if}
           {#if global.editing}<span class="badge">Being edited by {global.editing.name || 'somebody'}</span>{/if}
@@ -95,7 +96,7 @@ async function load() {
            the way the menus are, and not a different kind of thing. Every site has one, so it
            is here whether or not the dev declared any globals. -->
       <div class="global-card">
-        <h2><a href="/admin/site/redirects">Redirects</a></h2>
+        <h2><a href={sitePath(`/admin/site/redirects`)}>Redirects</a></h2>
         <p>Old addresses that forward to new ones</p>
         <div class="meta"><span class="sub">One list, no languages</span></div>
       </div>

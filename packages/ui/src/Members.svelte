@@ -1,4 +1,6 @@
 <script lang="ts">
+import { request as fetch, sitePath } from './request.js';
+
 interface Member {
   id: string;
   name: string;
@@ -194,7 +196,7 @@ async function remove() {
     <p class="notice notice-danger" role="alert">
       {failure}
       {#if failure === mailerFailure}
-        <a href="/admin/settings">Settings</a> says which credential is missing. Fix it and resend.
+        <a href={sitePath(`/admin/settings`)}>Settings</a> says which credential is missing. Fix it and resend.
       {/if}
     </p>
   {/if}

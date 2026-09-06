@@ -8,6 +8,7 @@ export {
   drafts,
   locks,
   media,
+  pathReservations,
   rateLimit,
   session,
   settings,

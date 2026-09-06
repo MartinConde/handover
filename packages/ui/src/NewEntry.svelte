@@ -4,6 +4,8 @@ export const nameOf = (collection: string) => collection.replace(/s$/, '');
 </script>
 
 <script lang="ts">
+import { request as fetch } from './request.js';
+
 import { entryName } from '@handover/core';
 import { navigate } from './navigate';
 

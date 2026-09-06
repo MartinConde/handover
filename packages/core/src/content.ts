@@ -13,6 +13,8 @@ export interface ContentEntry<T = unknown> {
 
 // What every `load()` in a site's `src/loaders/` takes. Ids are `${locale}/${slug}`.
 export interface ContentSource<C extends Record<string, unknown> = Record<string, unknown>> {
+  /** Set by draftSource for authenticated preview; public sources omit it. */
+  readonly preview?: boolean;
   getEntry<K extends keyof C & string>(
     collection: K,
     id: string,
@@ -82,6 +84,7 @@ export function draftSource<C extends Record<string, unknown>>(
     return { id, data: validate(collection, parseEntry(siteId, contents), path) as C[K] };
   };
   return {
+    preview: true,
     getEntry: async (collection, id) => {
       const row = rows.find((r) => r.path === pathOf(collection, id));
       if (!row) return built.getEntry(collection, id);
@@ -265,11 +268,15 @@ export async function entryAt<C extends Record<string, unknown>, K extends keyof
   locale: string,
   address: string,
 ): Promise<ContentEntry<C[K]> | undefined> {
+  const visible = (entry: ContentEntry<C[K]> | undefined) =>
+    entry && (source.preview === true || isLive(siteId, entry.data)) ? entry : undefined;
   const named = await source.getEntry(collection, `${locale}/${address}`);
-  if (!site.collections[collection]?.localizedSlugs) return named;
-  if (named && entryAddress(siteId, named.data, address) === address) return named;
+  if (!site.collections[collection]?.localizedSlugs) return visible(named);
+  if (named && entryAddress(siteId, named.data, address) === address) return visible(named);
   const found = await source.getCollection(collection, locale);
-  return found.find((e) => entryAddress(siteId, e.data, e.id.slice(locale.length + 1)) === address);
+  return visible(
+    found.find((e) => entryAddress(siteId, e.data, e.id.slice(locale.length + 1)) === address),
+  );
 }
 
 /**

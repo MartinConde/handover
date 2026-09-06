@@ -550,3 +550,40 @@ test('mergeFileCommits carries the old name onto its versions and wears a langua
     ['ooo', ['en'], 'old-mill'],
   ]);
 });
+
+test('parallel reads share token creation and refresh', async () => {
+  const gh = fakeGitHub({ 'a.yaml': 'a', 'b.yaml': 'b' });
+  let now = Date.parse('2026-08-21T10:00:00Z');
+  const git = createGitClient('default', app, { fetch: gh.fetch, now: () => now });
+  for (const expected of [1, 2]) {
+    const files = await Promise.all([git.getFile('a.yaml'), git.getFile('b.yaml')]);
+    expect(files.map((file) => file?.contents)).toEqual(['a', 'b']);
+    expect(gh.minted()).toBe(expected);
+    now += 2 * 60 * 60 * 1000;
+  }
+});
+
+for (const failure of ['http', 'network', 'json']) {
+  test(`a shared ${failure} token failure allows a later retry`, async () => {
+    const gh = fakeGitHub({ 'a.yaml': 'a' });
+    let attempts = 0;
+    let refuse = true;
+    const fetch: typeof globalThis.fetch = async (url, init) => {
+      if (String(url).endsWith('/access_tokens')) {
+        attempts++;
+        if (refuse) {
+          if (failure === 'network') throw new Error('Offline');
+          return new Response('broken', { status: failure === 'http' ? 503 : 200 });
+        }
+      }
+      return gh.fetch(url, init);
+    };
+    const git = createGitClient('default', app, { fetch });
+    const results = await Promise.allSettled([git.getFile('a.yaml'), git.getFile('a.yaml')]);
+    expect(results.map((r) => r.status)).toEqual(['rejected', 'rejected']);
+    expect(attempts).toBe(1);
+    refuse = false;
+    expect((await git.getFile('a.yaml'))?.contents).toBe('a');
+    expect(attempts).toBe(2);
+  });
+}

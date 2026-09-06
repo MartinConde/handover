@@ -1,5 +1,7 @@
 # The admin API
 
+Routes below are relative to the configured site base. For `base: "/site"`, use `/site/admin/api/...`; admin assets, login callbacks, navigation, and preview routes use the same base.
+
 Every route under `/admin/api` is behind the admin session: without one they answer `401`,
 and there is no other way in. They are the package's own surface — the admin talks to
 itself through them — so they are here to be *debugged*, not to be built against from
@@ -40,22 +42,22 @@ The soft lock on an entry, and what it does to a save. What it means for two peo
 working at once is [Working together](working-together.md).
 
 ```
-POST /admin/api/locks/:collection/:slug  { "tab": "…" }  →  { "held_by", "mine", "expires_at", "base" }
+POST /admin/api/locks/:collection/:slug  { "tab": "…" }  →  { "held_by", "mine", "expires_at" }
 ```
 
 The heartbeat. It takes the entry when nobody is editing it and pushes the caller's own
 lock further out when they are, and it is what the editor sends as it opens and again
-while somebody types in it. `tab` is a token the tab made up once — the lock is the tab's,
+while somebody types in it, including translation edits. Only a successful POST records a renewal; GET polling never extends a lease. An idle expired editor stays released and requires a reload before editing resumes. `tab` is a token the tab made up once — the lock is the tab's,
 so the same person's second tab is refused like anybody else's and reads `held_by` as
 themselves with `mine` false. `held_by` is `{ "id", "name" }` for the person editing it and
 `null` when nobody is, `mine` says whether that is the caller's tab, and `expires_at` is when
-the lock lapses — epoch milliseconds, about two minutes out. `base` is what each of the
-entry's files was loaded against, `{ "src/content/listings/en/seaview-cottage.yaml":
-{ "sha", "blob" } }`, so a tab open across somebody else's publish knows its diff base;
-a language with no draft is not in it. `404` if the collection is not configured.
+the lock lapses — epoch milliseconds, about two minutes out. `404` if the collection is not configured.
+Edit bases stay server-side: the entry GET seeds the draft snapshot and supplies the revision
+used by subsequent saves ([Drafts](admin-api-drafts.md)). Lock responses do not read or return
+per-language draft bases.
 
 ```
-GET /admin/api/locks/:collection/:slug?tab=…   →  { "held_by", "mine", "expires_at", "base" }
+GET /admin/api/locks/:collection/:slug?tab=…   →  { "held_by", "mine", "expires_at" }
 ```
 
 The same answer, taking nothing. This is what the person waiting polls: an entry changes

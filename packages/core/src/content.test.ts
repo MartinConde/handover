@@ -1719,3 +1719,20 @@ test('a menu item one language has without `_locales` is drift like any other ro
     },
   ]);
 });
+
+test.each(['en', 'de'])(
+  'public entry reads hide both named and localized pages in %s',
+  async (locale) => {
+    const entries = [{ id: `${locale}/home`, data: { _status: 'hidden', slug: 'welcome' } }];
+    const source = staticSource('default', {
+      getEntry: async () => entries[0],
+      getCollection: async () => entries,
+    });
+    expect(await entryAt('default', source, site, 'listings', locale, 'home')).toBeUndefined();
+    expect(await entryAt('default', source, site, 'pages', locale, 'welcome')).toBeUndefined();
+    const preview = draftSource('default', source, [], (_collection, data) => data);
+    expect((await entryAt('default', preview, site, 'pages', locale, 'welcome'))?.id).toBe(
+      `${locale}/home`,
+    );
+  },
+);

@@ -166,7 +166,7 @@ test('the password sign-up endpoint refuses an unknown email and creates no user
     name: 'Stranger',
   });
 
-  expect(res.status).toBe(400);
+  expect(res.status).toBe(404);
   expect(await userRows()).toEqual([]);
 });
 
@@ -178,7 +178,7 @@ test('the admin plugin refuses to create a user for a caller with no session', a
     role: 'owner',
   });
 
-  expect(res.status).toBe(401);
+  expect(res.status).toBe(404);
   expect(await userRows()).toEqual([]);
 });
 
@@ -220,7 +220,7 @@ test('an editor session cannot create a user', async () => {
     { cookie },
   );
 
-  expect(res.status).toBe(403);
+  expect(res.status).toBe(404);
   expect((await userRows()).map((r) => r.email)).toEqual(['editor@example.com']);
 });
 
@@ -985,4 +985,27 @@ test('opening a sign-in link is not a password being set', async () => {
   await open(magicLinks[0]?.url ?? '');
 
   expect((await activityRows()).map((r) => r.kind)).toEqual(['login']);
+});
+
+test('a nested auth mount signs in and still blocks direct member administration', async () => {
+  await seed('base@example.com', 'correct-horse-battery', 'owner');
+  const mounted = createAuth('default', db, {
+    secret: 'a-secret-long-enough-for-better-auth-32',
+    baseURL: SITE,
+    basePath: '/nested/site/admin/api/auth',
+  });
+  const request = (path: string, body: unknown) =>
+    new Request(`${SITE}/nested/site/admin/api/auth${path}`, {
+      method: 'POST',
+      headers: { origin: SITE, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  const signed = await mounted.handler(
+    request('/sign-in/email', { email: 'base@example.com', password: 'correct-horse-battery' }),
+  );
+  expect(signed.status).toBe(200);
+  expect(cookiesOf(signed)).toContain('session_token');
+  expect(
+    (await mounted.handler(request('/admin/set-role', { userId: 'x', role: 'editor' }))).status,
+  ).toBe(404);
 });

@@ -59,7 +59,7 @@ const answering = (questions: unknown[] = QUESTIONS, merged: unknown[] = MERGED)
   const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
     init?.method === 'POST'
       ? Response.json({})
-      : Response.json({ head: 'a1c9f2b0000', questions, merged }),
+      : Response.json({ head: 'a1c9f2b0000', version: 'reviewed-version', questions, merged }),
   );
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
@@ -143,6 +143,7 @@ test('Done stays off until every question is answered, and sends one answer each
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
+      version: 'reviewed-version',
       answers: [
         { path: 'price', side: 'ours' },
         { path: 'summary', locale: 'en', side: 'theirs' },
@@ -165,6 +166,7 @@ test('Keep all mine answers every question at once and says what that costs', as
   await tick();
 
   expect(JSON.parse(String(fetchMock.mock.lastCall?.[1]?.body))).toEqual({
+    version: 'reviewed-version',
     answers: [
       { path: 'price', side: 'ours' },
       { path: 'summary', locale: 'en', side: 'ours' },

@@ -1,5 +1,6 @@
 <script lang="ts">
 import { type Preset, tooSmall } from '@handover/core';
+import { request as fetch, sitePath } from './request.js';
 import { fileSize, type MediaItem, uploadFile, uploadImage } from './upload.js';
 
 let {
@@ -237,7 +238,7 @@ function drop(e: DragEvent) {
       </div>
     </div>
     <div class="picker-foot">
-      <a href="/admin/media">Manage in Media library</a>
+      <a href={sitePath(`/admin/media`)}>Manage in Media library</a>
       <span class="spacer"></span>
       <span class="count">{chosen.length ? `${chosen.length} selected` : 'Nothing selected'}</span>
       <button class="btn" type="button" onclick={onclose}>Cancel</button>

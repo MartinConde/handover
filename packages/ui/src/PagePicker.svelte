@@ -40,6 +40,8 @@ export async function readPickable(): Promise<Pickable> {
 </script>
 
 <script lang="ts">
+import { request as fetch } from './request.js';
+
 let {
   id,
   label,

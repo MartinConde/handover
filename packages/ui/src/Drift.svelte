@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { Drift } from '@handover/core';
+import { request as fetch } from './request.js';
 
 let {
   collection,

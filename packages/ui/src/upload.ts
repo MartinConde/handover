@@ -1,4 +1,5 @@
 import { DEFAULT_MAX } from '@handover/core';
+import { request } from './request.js';
 /** One asset as the admin answers for it: the key a content file stores, and where it is served. */
 export interface MediaItem {
   id: string;
@@ -52,7 +53,7 @@ export async function uploadBlob(
   about: { filename?: string; width?: number; height?: number; derivedFrom?: string },
   deps: { fetch?: typeof globalThis.fetch } = {},
 ): Promise<MediaItem> {
-  const { fetch = globalThis.fetch } = deps;
+  const { fetch = request } = deps;
   const hash = hex(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()));
   const declared = { hash, bytes: blob.size, mime: blob.type, ...about };
   const asked = await fetch('/admin/api/media', {
@@ -61,7 +62,10 @@ export async function uploadBlob(
     body: JSON.stringify(declared),
   });
   if (!asked.ok) throw await refusal(asked, 'the upload');
-  const answer = (await asked.json()) as { media?: MediaItem; upload?: { url: string } };
+  const answer = (await asked.json()) as {
+    media?: MediaItem;
+    upload?: { url: string; key: string };
+  };
   if (answer.media) return answer.media;
   const put = await fetch(answer.upload?.url ?? '', {
     method: 'PUT',
@@ -77,7 +81,7 @@ export async function uploadBlob(
   const confirmed = await fetch(`/admin/api/media/${hash}`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(declared),
+    body: JSON.stringify({ ...declared, key: answer.upload?.key }),
   });
   if (!confirmed.ok) throw await refusal(confirmed, 'the upload');
   return ((await confirmed.json()) as { media: MediaItem }).media;

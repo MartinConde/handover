@@ -7,14 +7,15 @@ gets there is [Uploads](media-uploads.md).
 ## Nothing is deleted on its own
 
 Clients reuse pictures, and a picture removed from an entry is still on the published site
-until that entry is published. Nothing here ever tidies up after an edit. Handover deletes an
+until the deployment removing it is live. Nothing here ever tidies up after an edit. Handover deletes an
 object by itself in exactly one case: [step 4 of an upload](media-uploads.md#what-an-upload-does),
 where what arrived was not what was asked for and no row was ever written.
 
-An upload whose confirm never arrived leaves an object with no row behind it. An hourly job
-lists the bucket and writes a row for anything it finds, so those bytes come back rather than
-sitting there unnamed ([Deploy](deploy.md#the-schedule)). It only ever adds: the width and
-height it cannot read stay empty, and nothing in the bucket is touched.
+An hourly job recovers uploads interrupted before registration ([Deploy](deploy.md#the-schedule)).
+It verifies actual bytes, SHA-256, type, and image dimensions before adopting a public object.
+After a temporary upload's five-minute lease expires, it applies the same validation and
+finalization as confirmation. Invalid temporary uploads and leftovers of known assets are removed.
+Invalid public objects are left unregistered for the operator to inspect.
 
 ## Archive, and the one delete somebody asks for
 
@@ -22,16 +23,15 @@ height it cannot read stay empty, and nothing in the bucket is touched.
 its bytes, so every page that already names it goes on working. It stays in the library, flagged,
 and the same button puts it back. Nothing about archiving depends on where the picture is used.
 
-**Delete** is the exception, and it is gated. An asset any file names cannot be deleted — the
-panel's Delete is off with the count beside it, and the API refuses whatever the screen thought.
-The check is not the usage badge: that number comes from a scan the last build made, and a commit
-pushed since is not in it. At delete time the site reads `src/content/` out of GitHub as it
-stands.
+**Delete** is the exception, and it is gated. An asset any draft, repository content file, or
+currently deployed content snapshot names cannot be deleted. The badge overlays drafts on
+the build's scan, so a zero there is not enough: deletion independently checks the fresh
+GitHub tree, every draft, and the running bundle's scan.
 
-A picture an editor took out of a listing this morning is still refused, and the refusal says
-why: *the published site still uses this* — the live page is asking for those bytes until that
-listing is published. A repository that cannot be read is not an answer either: the delete is
-refused rather than allowed.
+If current content still uses it, the refusal names the entries. If only repository or deployed
+content needs it, the refusal says *the published site still uses this*. Publish the removal
+and wait for that deployment to be live. A pending or failed build leaves the old site's
+pictures protected; a repository that cannot be read refuses deletion with `503`.
 
 What a delete does not check is the rest of the repository. A key written into a template or a
 component by hand is not a content file and is not seen.
@@ -98,4 +98,4 @@ all.
 
 The crop is made in the browser, so it reads the original back out of the bucket: this is the one
 thing beyond the upload itself that needs `GET` in the bucket's [CORS rule](media.md#2-let-the-admins-origin-write-to-it).
-Without it the crop refuses and says so. A picture the library has no width and height for — what
+Without it the crop refuses and says so. A legacy picture with no width and height cannot be cropped until its dimensions are available.

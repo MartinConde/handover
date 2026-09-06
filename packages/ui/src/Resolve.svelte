@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { Change, MergedChange, Question } from '@handover/core';
+import { request as fetch } from './request.js';
 
 let {
   entry,
@@ -26,6 +27,7 @@ let questions = $state<Question[]>([]);
 let merged = $state<MergedChange[]>([]);
 /** The commit the repository is at, which is what "theirs" is of. */
 let head = $state('');
+let version = $state('');
 let answers = $state<Record<string, 'ours' | 'theirs'>>({});
 let loading = $state(true);
 let busy = $state(false);
@@ -42,6 +44,9 @@ $effect(() => {
 });
 
 async function load() {
+  loading = true;
+  error = '';
+  answers = {};
   const res = await fetch(`/admin/api/conflict/${entry}`);
   loading = false;
   if (!res.ok) {
@@ -52,10 +57,12 @@ async function load() {
     questions: Question[];
     merged: MergedChange[];
     head: string;
+    version: string;
   };
   questions = body.questions;
   merged = body.merged;
   head = body.head;
+  version = body.version;
 }
 
 // A conflict somebody else settled, or a repository out of reach: neither is about the answers
@@ -78,6 +85,7 @@ async function done() {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
+      version,
       answers: questions.map((q) => ({
         path: q.path,
         ...(q.locale ? { locale: q.locale } : {}),
@@ -229,7 +237,7 @@ const said = (change: Change): string => {
     </details>
   {/if}
 
-  {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
+  {#if error}<div class="notice notice-danger" role="alert">{error}</div><button type="button" class="btn" disabled={busy} onclick={load}>Reload conflict</button>{/if}
 
   <div class="actions">
     <button class="btn" type="button" disabled={busy} onclick={onclose}>Cancel</button>

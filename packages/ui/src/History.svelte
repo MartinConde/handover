@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { DiffGroup } from '@handover/core';
 import Diff from './Diff.svelte';
+import { request as fetch, sitePath } from './request.js';
 
 /** One version as `/admin/api/history/:collection/:slug` answers it. */
 interface Version {
@@ -252,7 +253,7 @@ const initials = (name: string) =>
             This entry exists only as unpublished changes. Its first version appears here when it
             is published.
           </p>
-          <a class="btn" href="/admin/c/{collection}/{slug}">Back to Content</a>
+          <a class="btn" href={sitePath(`/admin/c/${collection}/${slug}`)}>Back to Content</a>
         </div>
       </div>
     {:else}

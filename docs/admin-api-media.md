@@ -36,8 +36,8 @@ POST /admin/api/media  { "hash", "bytes", "mime", "filename?", "width?", "height
 "Do you have these bytes?" `hash` is the SHA-256 of the file, hex. The first answer is the
 asset the site already holds, and the upload is over before it started — the same picture
 chosen twice is one object and one row. The second is a PUT URL signed for five minutes,
-for a key the server chose: `media/<sha256>.<ext>`, or `files/<sha256>.<ext>` for anything
-that is not a picture. `422` when the type is not one the bucket takes or the declared size
+for a temporary key the server chose: `uploads/<uuid>/media/<sha256>.<ext>`, or
+`uploads/<uuid>/files/<sha256>.<ext>` for a PDF. Return that `key` when confirming; the signed URL never permits a write to the public asset. `422` when the type is not one the bucket takes or the declared size
 is over 10MB, `503` when the site has no bucket configured.
 
 `focal` is the two fractions every crop of the picture holds around, `[0.5, 0.5]` for one nobody
@@ -69,30 +69,28 @@ DELETE /admin/api/media/:hash
   →  409 { "error": "…", "uses": [ "listings/mill-house" ] }
 ```
 
-The bytes and the row, gone. **An asset any file names cannot be deleted**, and this does not
-read the `uses` above to decide it: that count comes from the scan the last build made, and a
-commit pushed since is not in it. This reads `src/content/` out of GitHub at the moment it is
-asked.
+The bytes and the row, gone. **An asset referenced by current drafts, fresh repository
+content, or the running deployment cannot be deleted.** The server reads GitHub at deletion
+time and checks the bundle's built usage map independently of draft overlays. A build that
+is pending or failed does not release assets the deployed snapshot still needs.
 
-There are two `409`s, and they say different things. An asset the entries use *now* — the drafts
-over the tree, as the badge reads it — is refused as *used in N places*. An asset only the tree
-still names is refused as *the published site still uses this*: the change that takes it out has
-not been published, and the live page is asking for those bytes until it is. Both name the
-entries in `uses`.
+An asset used by current content is refused as *used in N places*. One only the repository
+or deployed snapshot names is refused as *the published site still uses this*, with instructions
+to publish its removal and wait for that deployment to be live. Both responses are `409`
+and include the affected entry keys in `uses`. A repository that cannot be read returns `503`
+and leaves the asset in place.
 
 `503` when the site has no bucket, or when the repository cannot be read at all — a check that
 could not be made is never read as *nothing uses it*. `404` when the site has no such asset.
 
 ```
-PUT /admin/api/media/:hash  { "hash", "bytes", "mime", "filename?", "width?", "height?",
+PUT /admin/api/media/:hash  { "key", "hash", "bytes", "mime", "filename?", "width?", "height?",
                               "derivedFrom?" }
   →  { "media": { … } }
 ```
 
-The upload is over. The Worker reads the object back and holds it to the declaration: an
-object whose size or content type is not what was declared is **deleted** and answered
-`422`, and no row is written. A file is held to two more things: it must have been stored as
-a download (`content-disposition: attachment`), and its first bytes must be the type it was
-uploaded as — a renamed `.html` is deleted rather than served from the CDN domain. Bytes the site already had are answered from the row without
-the bucket being touched at all, which is also what stops a made-up declaration deleting
-somebody else's good object.
+The Worker reads the temporary object's actual bytes with a bounded size limit, verifies its SHA-256 and type, and derives image dimensions from the encoded container. Caller dimensions are ignored. A bad temporary object is deleted and answered `422`; a failed storage request leaves it available for retry.
+
+After verification, the Worker writes the exact verified bytes to the public `media/` or `files/` key with immutable caching. PDFs must have a PDF signature and the final object is forced to download. Copying the temporary key is deliberately avoided: another PUT could change it between verification and a copy. Reusing a still-valid upload URL can only change the temporary object.
+
+Only after finalization is the media row inserted. Existing rows remain the inexpensive dedupe path. Hourly reconciliation verifies final objects before adoption and finalizes abandoned temporary uploads after their five-minute lease; it uses the same byte/hash/type checks.

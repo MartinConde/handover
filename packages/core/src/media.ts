@@ -5,11 +5,10 @@ import type { Db } from './db.js';
 import type { ContentFile } from './entries.js';
 import { entryKey } from './entries.js';
 import { media } from './tables.js';
+import { imageDimensions } from './upload-bytes.js';
 
 /**
- * The S3 credentials the Worker signs uploads with. The bytes never pass through it — a
- * browser PUTs them straight to the bucket — so this is only ever used to sign, to look at
- * what arrived and to delete what should not have.
+ * The S3 credentials used to sign temporary uploads, verify their bytes, and write final assets.
  */
 export interface R2Store {
   /** The Cloudflare account the bucket is in; the S3 endpoint is named after it. */
@@ -23,6 +22,8 @@ export interface R2Store {
 export interface Upload {
   /** sha-256 of the bytes, hex. The object is named by it, so it is also the row's id. */
   hash: string;
+  /** Temporary object returned by the upload request; never a public key. */
+  key?: string;
   bytes: number;
   mime: string;
   /** The name it was chosen under, kept for search rather than for addressing anything. */
@@ -95,10 +96,6 @@ const EXTENSIONS: Record<string, string> = {
   'application/pdf': 'pdf',
 };
 
-// A type whose bytes are worth reading back, because the name proves nothing and the CDN's own
-// domain is what would serve a renamed file. Ascii signatures, compared as text.
-const MAGIC: Record<string, string> = { 'application/pdf': '%PDF-' };
-
 const SHA256 = /^[0-9a-f]{64}$/;
 /** Long enough for a slow phone on a train, short enough that a leaked url is worth nothing. */
 const TTL = 300;
@@ -121,7 +118,7 @@ export function mediaKey(upload: Upload): string {
     );
   if (!SHA256.test(upload.hash))
     throw new UploadRefusedError('an upload is named by the sha-256 of its own bytes');
-  if (!(upload.bytes > 0 && upload.bytes <= MAX_UPLOAD_BYTES))
+  if (!(Number.isInteger(upload.bytes) && upload.bytes > 0 && upload.bytes <= MAX_UPLOAD_BYTES))
     throw new UploadRefusedError(
       `an upload may be at most ${MAX_UPLOAD_BYTES / 1024 / 1024}MB, and this one is ${Math.round(upload.bytes / 1024 / 1024)}MB`,
     );
@@ -270,19 +267,7 @@ export function mediaUsage(
   return Object.fromEntries(Object.entries(used).map(([key, set]) => [key, [...set].sort()]));
 }
 
-/**
- * Which entries name this key, read from the files themselves. **This is the delete gate**, and
- * it is deliberately not `mediaUsage`: that one is the badge, built from a scan the last build
- * made, and a commit somebody pushed since is not in it. Here the caller hands over the tree as
- * git has it now, plus every draft — added to the tree rather than laid over it, because a
- * picture an editor took out of a listing this morning is still on the published site until that
- * listing is published, and the bytes are what the live page is asking for.
- *
- * The text is searched rather than the parsed file: a stored key is 64 hex characters and a file
- * naming one anywhere — in a comment, in a field no schema knows — is a file that names it. Four
- * hundred entries is also four hundred YAML parses, which is not what ten milliseconds of CPU is
- * for.
- */
+/** Raw references in drafts or repository files; deletion also checks deployed media usage. */
 export function namedBy(key: string, files: Iterable<ContentFile>): string[] {
   const found = new Set<string>();
   for (const file of files)
@@ -308,6 +293,8 @@ const signer = (store: R2Store) =>
  * enforcement.
  */
 export async function presignUpload(store: R2Store, key: string): Promise<string> {
+  if (!/^uploads\/[0-9a-f-]{36}\/(?:media|files)\/[0-9a-f]{64}\.[a-z]+$/.test(key))
+    throw new UploadRefusedError('Only temporary upload keys may be signed');
   const url = new URL(objectUrl(store, key));
   url.searchParams.set('X-Amz-Expires', String(TTL));
   const signed = await signer(store).sign(url.toString(), {
@@ -384,15 +371,8 @@ export async function objectExists(
   return (await object(store, key, 'HEAD', fetch)).ok;
 }
 
-/**
- * Step 6: what arrived, against what was declared. A browser holds an unsigned PUT for five
- * minutes, so this is the only thing standing between the bucket and 12MB of anything — an
- * object that is not what was asked for is deleted rather than left for the reconciliation job,
- * and no row is written for it.
- *
- * **Bytes the site already has are answered from the table without touching the bucket.** That
- * is the dedupe, and it is also what stops a made-up declaration for a hash somebody else
- * uploaded deleting a good object.
+/** Verify a temporary upload, finalize the exact bytes, then register the public asset.
+ * Existing rows are the cheap dedupe path and never delete another upload's final object.
  */
 export async function confirmUpload(
   siteId: string,
@@ -406,45 +386,32 @@ export async function confirmUpload(
   const known = await findMedia(siteId, db, upload.hash);
   if (known) return { media: known, created: false };
 
-  const head = await object(store, key, 'HEAD', fetch);
-  if (head.status === 404)
-    throw new UploadRefusedError('the upload never reached the bucket; nothing was stored');
-  if (!head.ok) throw new Error(`R2 HEAD ${key} failed: ${head.status}`);
-  const size = head.headers.get('content-length');
-  // No size is not a verdict: there is nothing to hold the object to, and deleting on "could
-  // not read it" would throw away a good upload.
-  if (size === null) throw new Error(`R2 HEAD ${key} answered without a content-length`);
-  const bytes = Number(size);
-  const mime = head.headers.get('content-type') ?? '';
-  if (bytes !== upload.bytes || mime !== upload.mime) {
-    await object(store, key, 'DELETE', fetch);
-    throw new UploadRefusedError(
-      `what was uploaded is not what was declared — ${bytes} bytes of ${mime}, not ${upload.bytes} of ${upload.mime}. It has been deleted`,
-    );
+  if (
+    !upload.key ||
+    !new RegExp(`^uploads/[0-9a-f-]{36}/${key.replace('.', '\\.')}$`).test(upload.key)
+  )
+    throw new UploadRefusedError('Confirm the temporary key returned by the upload request');
+  let verified: Awaited<ReturnType<typeof verifyObject>>;
+  try {
+    verified = await verifyObject(store, upload.key, upload, fetch);
+  } catch (error) {
+    if (error instanceof UploadRefusedError) await object(store, upload.key, 'DELETE', fetch);
+    throw error;
   }
-
-  // A file the bucket's domain would render is an XSS vector against that domain, so it is stored
-  // as a download and held to it here — and its first bytes have to be the type it was uploaded
-  // as, which is the one claim a rename cannot fake.
-  const magic = MAGIC[upload.mime];
-  if (magic) {
-    if (!(head.headers.get('content-disposition') ?? '').startsWith('attachment')) {
-      await object(store, key, 'DELETE', fetch);
-      throw new UploadRefusedError(
-        'a file is stored as a download, and this one was not. It has been deleted',
-      );
-    }
-    const first = await object(store, key, 'GET', fetch, {
-      range: `bytes=0-${magic.length - 1}`,
-    });
-    if (!(await first.text()).startsWith(magic)) {
-      await object(store, key, 'DELETE', fetch);
-      throw new UploadRefusedError(
-        `these bytes are not a ${EXTENSIONS[upload.mime]?.toUpperCase()}, whatever the upload called them. It has been deleted`,
-      );
-    }
-  }
-
+  // Write the exact buffer that was verified. Copying the temporary key would race another PUT.
+  // Only the server can write final keys, and every such write verifies the same SHA-256.
+  const finalized = await fetch(
+    await signer(store).sign(objectUrl(store, key), {
+      method: 'PUT',
+      headers: {
+        'content-type': upload.mime,
+        'cache-control': 'public, max-age=31536000, immutable',
+        ...(upload.mime === 'application/pdf' ? { 'content-disposition': 'attachment' } : {}),
+      },
+      body: verified.data,
+    }),
+  );
+  if (!finalized.ok) throw new Error(`R2 finalization failed: ${finalized.status}`);
   const [written] = await db
     .insert(media)
     .values({
@@ -454,8 +421,8 @@ export async function confirmUpload(
       filename: upload.filename ?? null,
       mime: upload.mime,
       bytes: upload.bytes,
-      width: upload.width ?? null,
-      height: upload.height ?? null,
+      width: verified.width ?? null,
+      height: verified.height ?? null,
       derivedFrom: upload.derivedFrom ?? null,
       createdAt: now,
     })
@@ -464,6 +431,8 @@ export async function confirmUpload(
   // Two tabs confirming the same bytes at the same moment: the one that lost reads the row.
   const stored = written ?? (await findMedia(siteId, db, upload.hash));
   if (!stored) throw new Error(`the media row for ${upload.hash} was not written`);
+  // Keep staging through registration so a failed database write can retry immediately.
+  await object(store, upload.key, 'DELETE', fetch).catch(() => undefined);
   return { media: stored, created: Boolean(written) };
 }
 
@@ -511,14 +480,7 @@ const listPage = async (store: R2Store, fetch: typeof globalThis.fetch, token?: 
   return res.text();
 };
 
-/**
- * Objects the table has never heard of — an upload whose confirm never arrived, a session that
- * went away between the PUT and it. They are given rows rather than deleted: the bytes are
- * somebody's work, and a row is the whole of what makes them visible again.
- *
- * `width` and `height` stay null. A listing carries a size and a key carries a type, so neither
- * costs a request; the dimensions are in the pixels and reading those is not this job's.
- */
+/** Recover verified final objects and abandoned temporary uploads after their PUT lease expires. */
 export async function reconcileMedia(
   siteId: string,
   db: Db,
@@ -542,28 +504,124 @@ export async function reconcileMedia(
     const xml = await listPage(store, fetch, token);
     for (const match of xml.matchAll(CONTENTS)) {
       const item = match[1] ?? '';
-      const key = tag(item, 'Key') ?? '';
+      const storedKey = tag(item, 'Key') ?? '';
+      const staging = storedKey.match(
+        /^uploads\/[0-9a-f-]{36}\/((?:media|files)\/[0-9a-f]{64}\.[a-z]+)$/,
+      )?.[1];
+      const key = staging ?? storedKey;
       const [, id = '', ext = ''] = key.match(OURS) ?? [];
-      // An object nothing here ever wrote is not this table's to claim.
-      if (!id || known.has(id)) continue;
-      known.add(id);
+      if (!id) continue;
+      if (staging) {
+        const uploaded = Date.parse(tag(item, 'LastModified') ?? '');
+        // A live client may still be writing. Missing metadata is no permission to delete.
+        if (!Number.isFinite(uploaded) || now - uploaded < TTL * 1000) continue;
+        if (known.has(id)) {
+          await object(store, storedKey, 'DELETE', fetch);
+          continue;
+        }
+      } else if (known.has(id)) continue;
+      const mime = MIMES[ext];
       const bytes = Number(tag(item, 'Size'));
+      if (
+        !mime ||
+        !Number.isInteger(bytes) ||
+        bytes <= 0 ||
+        bytes > MAX_UPLOAD_BYTES ||
+        key !== mediaKey({ hash: id, bytes, mime })
+      ) {
+        if (staging) await object(store, storedKey, 'DELETE', fetch);
+        continue;
+      }
+      if (staging) {
+        try {
+          const result = await confirmUpload(
+            siteId,
+            db,
+            store,
+            { hash: id, bytes, mime, key: storedKey },
+            { fetch, now },
+          );
+          recovered += Number(result.created);
+          known.add(id);
+        } catch (error) {
+          if (!(error instanceof UploadRefusedError)) throw error;
+        }
+        continue;
+      }
+      let verified: Awaited<ReturnType<typeof verifyObject>>;
+      try {
+        verified = await verifyObject(store, key, { hash: id, bytes, mime }, fetch);
+      } catch (error) {
+        if (error instanceof UploadRefusedError) continue;
+        throw error;
+      }
       const written = await db
         .insert(media)
         .values({
           id,
           siteId,
           r2Key: key,
-          mime: MIMES[ext] ?? null,
-          bytes: Number.isFinite(bytes) ? bytes : null,
+          mime,
+          bytes,
+          width: verified.width ?? null,
+          height: verified.height ?? null,
           createdAt: now,
         })
         .onConflictDoNothing()
         .returning({ id: media.id });
       // The count is rows written, not objects seen: a confirm arriving mid-listing wins.
       recovered += written.length;
+      known.add(id);
     }
     token = tag(xml, 'IsTruncated') === 'true' ? tag(xml, 'NextContinuationToken') : undefined;
   } while (token);
   return recovered;
+}
+
+async function verifyObject(
+  store: R2Store,
+  key: string,
+  upload: Upload,
+  fetch: typeof globalThis.fetch,
+) {
+  mediaKey(upload);
+  const response = await object(store, key, 'GET', fetch);
+  if (response.status === 404) throw new UploadRefusedError('The upload never reached the bucket');
+  if (!response.ok) throw new Error(`R2 GET ${key} failed: ${response.status}`);
+  if (response.headers.get('content-type') !== upload.mime)
+    throw new UploadRefusedError('The uploaded content type differs from its declaration');
+  const reader = response.body?.getReader();
+  if (!reader) throw new UploadRefusedError('The upload is empty');
+  const data = new Uint8Array(upload.bytes);
+  let size = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > data.length)
+        throw new UploadRefusedError('The uploaded size differs from its declaration');
+      data.set(value, size - value.byteLength);
+    }
+  } finally {
+    await reader.cancel();
+  }
+  if (size !== data.length)
+    throw new UploadRefusedError('The uploaded size differs from its declaration');
+  const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', data)), (n) =>
+    n.toString(16).padStart(2, '0'),
+  ).join('');
+  if (hash !== upload.hash)
+    throw new UploadRefusedError('The uploaded SHA-256 does not match its key');
+  if (upload.mime === 'application/pdf') {
+    if (
+      key.startsWith('files/') &&
+      !response.headers.get('content-disposition')?.startsWith('attachment')
+    )
+      throw new UploadRefusedError('A public PDF must be stored as a download');
+    if (!new TextDecoder().decode(data.slice(0, 5)).startsWith('%PDF-'))
+      throw new UploadRefusedError('The uploaded bytes are not a PDF');
+    return { data, width: undefined, height: undefined };
+  }
+  return { data, ...imageDimensions(data, upload.mime) };
 }

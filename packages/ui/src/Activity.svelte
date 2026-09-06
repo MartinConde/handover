@@ -7,6 +7,7 @@ import {
 } from '@handover/core';
 import { ENTRY, EXACT, initials, type Person, said, when } from './activity-line';
 import Diff from './Diff.svelte';
+import { request as fetch, sitePath } from './request.js';
 
 let {
   role,
@@ -225,7 +226,7 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
               aria-hidden="true">{event.user ? initials(event) || '?' : '⚙'}</span
             >
             <p class="said">
-              {line.lead}{#if line.link}<a href={line.link.href}>{line.link.label}</a>
+              {line.lead}{#if line.link}<a href={sitePath(line.link.href)}>{line.link.label}</a>
                 <span class="sub">{line.link.locale.toUpperCase()}</span>{/if}
               {#if event.commitSha}<span class="sub sha">{event.commitSha.slice(0, 7)}</span>{/if}
             </p>
@@ -280,7 +281,7 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
               {:else}
                 {#each changed.entries as entry (entry.key)}
                   <section>
-                    <h2><a href={hrefOf(entry.key)}>{entry.key.split('/')[1]}</a></h2>
+                    <h2><a href={sitePath(hrefOf(entry.key))}>{entry.key.split('/')[1]}</a></h2>
                     <Diff groups={entry.groups} {mediaBase} />
                   </section>
                 {/each}

@@ -1,5 +1,6 @@
 import { mount } from 'svelte';
 import App from './App.svelte';
+import { request as fetch, localPath } from './request.js';
 import './tokens.css';
 
 const target = document.getElementById('app');
@@ -13,7 +14,7 @@ mount(App, {
   target,
   props: {
     session: res.ok ? await res.json() : null,
-    path: location.pathname,
+    path: localPath(location.pathname),
     query: location.search,
     methods,
   },

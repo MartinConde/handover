@@ -1,6 +1,7 @@
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
 import { Miniflare } from 'miniflare';
 import { afterAll, beforeAll, expect, test, vi } from 'vitest';
+import { logActivity } from './activity.js';
 import { driftReport, offeredEntry, parseEntry, staleLocales, stringifyEntry } from './content.js';
 import {
   clearPublished,
@@ -33,7 +34,7 @@ import {
   setEntryStatus,
   sweepOrphans,
 } from './db.js';
-import { type ContentIndex, collectionEntries, indexFrom } from './entries.js';
+import { type ContentIndex, collectionEntries, entryKey, indexFrom } from './entries.js';
 import { blobSha } from './git.js';
 import type { RedirectRule } from './lifecycle.js';
 import { claimLock } from './locks.js';
@@ -63,6 +64,7 @@ test('a draft row round-trips every column', async () => {
   const db = openDb('default', binding);
   const row = {
     siteId: 'default',
+    revision: 'first-revision',
     path: 'src/content/listings/en/seaview-cottage.yaml',
     contents: 'title: "Seaview Cottage"\n',
     baseSha: '9f2c1b4e8a7d6c5b4a39281706f5e4d3c2b1a098',
@@ -106,6 +108,7 @@ const git = {
 const fresh = async () => {
   const db = openDb('default', binding);
   await db.delete(drafts);
+  await db.delete(tables.activity);
   return db;
 };
 const only = async (db: ReturnType<typeof openDb>) => (await db.select().from(drafts))[0];
@@ -1411,6 +1414,12 @@ test('reverting a publish puts the files back and leaves the changes unpublished
   await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
   const published = await publishDrafts('default', db, repo);
 
+  await logActivity('default', db, {
+    kind: 'publish',
+    subject: PATH,
+    commitSha: published?.commit_sha,
+    detail: { entries: ['listings/mill-house'] },
+  });
   const result = await revertCommit('default', db, repo, published?.commit_sha ?? '');
 
   expect(repo.now()[PATH]).toBe(FILE);
@@ -1428,6 +1437,12 @@ test('reverting a publish that created a file removes it', async () => {
   await createDraft('default', db, repo, PATH, VALUES);
   const published = await publishDrafts('default', db, repo);
 
+  await logActivity('default', db, {
+    kind: 'publish',
+    subject: PATH,
+    commitSha: published?.commit_sha,
+    detail: { entries: ['listings/mill-house'] },
+  });
   await revertCommit('default', db, repo, published?.commit_sha ?? '');
 
   expect(repo.now()[PATH]).toBe(undefined);
@@ -1446,6 +1461,12 @@ test('reverting a rename brings the old name back and takes the new one away', a
     { base_sha: 'commit-0', message: 'Rename the Mill House' },
   );
 
+  await logActivity('default', db, {
+    kind: 'entry-rename',
+    subject: PATH,
+    commitSha: renamed?.commit_sha,
+    detail: { entries: [entryKey(PATH) ?? '', entryKey(RENAMED) ?? ''] },
+  });
   await revertCommit('default', db, repo, renamed.commit_sha);
 
   expect(repo.now()[PATH]).toBe(FILE);
@@ -1460,6 +1481,12 @@ test('reverting is refused when a file has changed since that commit', async () 
   repo.push([{ path: PATH, contents: `${FILE}note: "hand edited"\n` }]);
   const before = repo.now()[PATH];
 
+  await logActivity('default', db, {
+    kind: 'publish',
+    subject: PATH,
+    commitSha: published?.commit_sha,
+    detail: { entries: ['listings/mill-house'] },
+  });
   await expect(revertCommit('default', db, repo, published?.commit_sha ?? '')).rejects.toThrow(
     new RevertConflictError([PATH]),
   );
@@ -1483,6 +1510,12 @@ test('reverting recomputes redirects.yaml rather than restoring it', async () =>
   });
   repo.push([{ path: REDIRECTS, contents: rules(one, two, three) }]);
 
+  await logActivity('default', db, {
+    kind: 'redirect-added',
+    subject: PATH,
+    commitSha: published?.commit_sha,
+    detail: {},
+  });
   await revertCommit('default', db, repo, published.commit_sha);
 
   const left = repo.now()[REDIRECTS] ?? '';
@@ -1516,6 +1549,12 @@ test('restoring a turn-off re-offers the language in the draft that was open', a
   await recordDelete('default', db, MILL_DE, off.commit_sha);
   await recordOffer('default', db, PATH, kept, OFFER, off.commit_sha);
 
+  await logActivity('default', db, {
+    kind: 'locale-off',
+    subject: PATH,
+    commitSha: off?.commit_sha,
+    detail: { entries: ['listings/mill-house'] },
+  });
   await restoreCommit('default', db, repo, off.commit_sha);
 
   const row = (await db.select().from(drafts)).find((r) => r.path === PATH);
@@ -1539,6 +1578,12 @@ test('restoring a delete takes away the row that was hiding the path', async () 
   await recordDelete('default', db, PATH, deleted.commit_sha);
   expect(await listed(db, index)).toEqual([]);
 
+  await logActivity('default', db, {
+    kind: 'entry-delete',
+    subject: PATH,
+    commitSha: deleted?.commit_sha,
+    detail: { entries: ['listings/mill-house'] },
+  });
   await restoreCommit('default', db, repo, deleted.commit_sha);
 
   expect(repo.now()[PATH]).toBe(FILE);
@@ -1893,4 +1938,205 @@ test('who typed each draft is read path by path, and a row nobody signed for is 
   await saveDraft('default', db, repo, OTHER, { title: 'The Barn', rooms: 2 });
 
   expect(await draftEditors('default', db)).toEqual({ [PATH]: 'Anna Berg' });
+});
+
+/** Pause a real D1 read after it completes; subsequent SQL still runs against the same DB. */
+function afterRead(match: (query: string) => boolean, work: () => Promise<void>) {
+  let waiting = true;
+  const wrapped = new Proxy(binding, {
+    get(target, key) {
+      if (key !== 'prepare') {
+        const value = Reflect.get(target, key, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      }
+      return (query: string) => {
+        const wrap = (
+          statement: ReturnType<typeof binding.prepare>,
+        ): ReturnType<typeof binding.prepare> =>
+          new Proxy(statement, {
+            get(stmt, method) {
+              if (method === 'bind') return (...args: unknown[]) => wrap(stmt.bind(...args));
+              const value = Reflect.get(stmt, method, stmt);
+              if (typeof value !== 'function') return value;
+              return async (...args: unknown[]) => {
+                const result = await value.apply(stmt, args);
+                if (waiting && match(query) && (method === 'raw' || method === 'all')) {
+                  waiting = false;
+                  await work();
+                }
+                return result;
+              };
+            },
+          });
+        return wrap(target.prepare(query));
+      };
+    },
+  });
+  return openDb('default', wrapped);
+}
+
+test('cleanup rechecks the revision when a newer save arrives after selecting candidates', async () => {
+  const db = await fresh(),
+    repo = fakeHistory({ [PATH]: FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  const published = await publishDrafts('default', db, repo);
+  const raced = afterRead(
+    (q) => q.includes('from "locks"'),
+    async () => {
+      await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 5 });
+    },
+  );
+  await clearPublished('default', raced, published?.commit_sha ?? '');
+  expect((await loadDraft('default', db, PATH))?.contents).toContain('rooms: 5');
+  expect((await loadDraft('default', db, PATH))?.publishedSha).toBeNull();
+});
+
+test('cleanup rechecks a lock acquired after its lock read', async () => {
+  const db = await fresh(),
+    repo = fakeHistory({ [PATH]: FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  const published = await publishDrafts('default', db, repo);
+  const raced = afterRead(
+    (q) => q.includes('from "locks"'),
+    async () => {
+      await claimLock('default', db, 'listings/mill-house', 'editing', 'tab');
+    },
+  );
+  await clearPublished('default', raced, published?.commit_sha ?? '');
+  expect(await loadDraft('default', db, PATH)).toBeDefined();
+  await db.delete(tables.locks);
+});
+
+test('overlay cleanup cannot delete a recreated entry after reading its deletion marker', async () => {
+  const db = await fresh();
+  await recordDelete('default', db, PATH, 'removed');
+  const raced = afterRead(
+    (q) => q.includes('from "drafts"'),
+    async () => {
+      await createDraft('default', db, git, PATH, { title: 'Recreated' });
+    },
+  );
+  await overlayRows('default', raced, indexOf({}));
+  expect((await loadDraft('default', db, PATH))?.contents).toContain('Recreated');
+});
+
+test('a stale source save rolls back its sibling changes as one batch', async () => {
+  const db = await fresh(),
+    repo = fakeHistory({ [PATH]: FILE, [LISTING_DE]: MILL_DE_FILE });
+  await saveDraft('default', db, repo, PATH, VALUES);
+  const revision = (await loadDraft('default', db, PATH))?.revision;
+  // Two writers read the same source; their shared price also changes the other language.
+  const results = await Promise.allSettled([
+    saveDraft(
+      'default',
+      db,
+      repo,
+      PATH,
+      { ...VALUES, price: 'One' },
+      { form: DE_FORM, locale: 'en', siblings: { de: LISTING_DE } },
+      undefined,
+      revision,
+    ),
+    saveDraft(
+      'default',
+      db,
+      repo,
+      PATH,
+      { ...VALUES, price: 'Two' },
+      { form: DE_FORM, locale: 'en', siblings: { de: LISTING_DE } },
+      undefined,
+      revision,
+    ),
+  ]);
+  expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+  const en = parseEntry('default', (await loadDraft('default', db, PATH))?.contents ?? '') as {
+    price: string;
+  };
+  const de = parseEntry(
+    'default',
+    (await loadDraft('default', db, LISTING_DE))?.contents ?? '',
+  ) as {
+    price: string;
+  };
+  expect(de.price).toBe(en.price);
+});
+
+test('rename reservations exclude creations in every destination locale and release on request', async () => {
+  const { reservePaths, releasePaths } = await import('./db.js');
+  const db = await fresh();
+  const paths = [PATH, LISTING_DE];
+  const reservation = await reservePaths('default', db, paths);
+  for (const path of paths)
+    await expect(createDraft('default', db, git, path, { title: 'Taken' })).rejects.toThrow();
+  expect(await db.select().from(drafts)).toEqual([]);
+  await releasePaths('default', db, reservation);
+  await createDraft('default', db, git, PATH, { title: 'Allowed' });
+  await expect(reservePaths('default', db, paths)).rejects.toThrow();
+  expect(await db.select().from(tables.pathReservations)).toEqual([]);
+  expect((await loadDraft('default', db, PATH))?.contents).toContain('Allowed');
+});
+
+test('a new multi-language entry claims all paths or leaves every path untouched', async () => {
+  const { createDrafts } = await import('./db.js');
+  const db = await fresh();
+  await createDraft('default', db, git, LISTING_DE, { title: 'Existing German' });
+  await expect(
+    createDrafts('default', db, git, [
+      { path: PATH, values: { title: 'New English' } },
+      { path: LISTING_DE, values: { title: 'New German' } },
+    ]),
+  ).rejects.toThrow();
+  expect(await loadDraft('default', db, PATH)).toBeUndefined();
+  expect((await loadDraft('default', db, LISTING_DE))?.contents).toContain('Existing German');
+});
+
+test.each(['hide-move', 'move-hide', 'hide-clear'])(
+  'pending hide redirects survive address changes: %s',
+  async (order) => {
+    const db = await fresh();
+    const repo = bilingual();
+    const hide = () =>
+      setEntryStatus('default', db, repo, ADDRESSED, [{ path: PAGE_DE, redirect: HIDE_DE }], true);
+    const move = () =>
+      setEntryAddress('default', db, repo, ADDRESSED, PAGE_DE, 'startseite', REDIRECT);
+    if (order === 'move-hide') {
+      await move();
+      await hide();
+    } else {
+      await hide();
+      await move();
+    }
+    if (order === 'hide-clear')
+      await setEntryAddress('default', db, repo, ADDRESSED, PAGE_DE, '', undefined);
+    expect(await ruleFor(db, PAGE_DE)).toEqual(
+      expect.arrayContaining([expect.objectContaining({ reason: 'hidden', ...HIDE_DE })]),
+    );
+    await publishDrafts('default', db, repo);
+    const rules = (parseEntry('default', repo.read(REDIRECTS)) as { rules: RedirectRule[] }).rules;
+    expect(rules.map(({ from, to }) => ({ from, to }))).toEqual([HIDE_DE]);
+  },
+);
+
+test('a sibling change after reading a conflict aborts the complete resolution batch', async () => {
+  const db = await fresh();
+  const sibling = PAGE_EN.replace('/en/', '/de/');
+  const original = page('Home', 'Hero', 'CTA');
+  const repo = fakeHistory({ [PAGE_EN]: original, [sibling]: original });
+  await saveDraft('default', db, repo, PAGE_EN, { title: 'Ours' });
+  await saveDraft('default', db, repo, sibling, { title: 'German' });
+  repo.push([{ path: PAGE_EN, contents: page('Theirs', 'Hero', 'CTA') }]);
+  const report = await entryConflict('default', db, repo, PAGE_FORM, { en: PAGE_EN, de: sibling });
+  if (!report) throw new Error('Expected a conflict');
+  await saveDraft('default', db, repo, sibling, { title: 'New German' });
+  const before = await draftFiles('default', db);
+  await expect(
+    resolveConflict(
+      'default',
+      db,
+      PAGE_FORM,
+      report,
+      report.questions.map((q) => ({ path: q.path, locale: q.locale, side: 'theirs' })),
+    ),
+  ).rejects.toThrow();
+  expect(await draftFiles('default', db)).toEqual(before);
 });

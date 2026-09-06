@@ -226,15 +226,21 @@ export function createGitClient(
     });
   }
 
+  let pendingToken: Promise<string> | undefined;
   async function token(): Promise<string> {
     if (cached && cached.expiresAt - now() > 60_000) return cached.token;
-    const res = await api(`/app/installations/${app.installationId}/access_tokens`, {
-      method: 'POST',
+    pendingToken ??= (async () => {
+      const res = await api(`/app/installations/${app.installationId}/access_tokens`, {
+        method: 'POST',
+      });
+      if (!res.ok) throw new Error(`GitHub installation token failed: ${res.status}`);
+      const body = (await res.json()) as { token: string; expires_at: string };
+      cached = { token: body.token, expiresAt: Date.parse(body.expires_at) };
+      return cached.token;
+    })().finally(() => {
+      pendingToken = undefined;
     });
-    if (!res.ok) throw new Error(`GitHub installation token failed: ${res.status}`);
-    const body = (await res.json()) as { token: string; expires_at: string };
-    cached = { token: body.token, expiresAt: Date.parse(body.expires_at) };
-    return cached.token;
+    return pendingToken;
   }
 
   const repo = `/repos/${app.owner}/${app.repo}`;

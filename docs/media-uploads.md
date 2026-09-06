@@ -15,9 +15,13 @@ there. Setting the bucket up is [Media](media.md).
    bytes. If it does, **nothing is uploaded at all** — the same picture chosen twice is
    one object and one row
 3. Otherwise the admin answers with a PUT URL signed for five minutes, for a key it chose
-   itself: `media/<sha256>.webp`. The browser PUTs the bytes to it
-4. The browser says it is done, and the admin reads the object back: an object whose size
-   or content type is not what was declared is **deleted**, and no row is written for it
+   itself: `uploads/<uuid>/media/<sha256>.webp`. The browser PUTs the bytes to it
+4. The browser returns the temporary key. The admin reads the bytes with a bounded size limit,
+   checks the SHA-256 and type, and reads image dimensions from the encoded container.
+   A bad upload is deleted without creating a media row
+5. The admin writes the exact verified bytes to `media/<sha256>.webp` (or `files/<sha256>.pdf`),
+   sets immutable caching and PDF download headers, writes the row, and deletes the temporary object.
+   Replaying the upload URL can only affect the temporary key
 
 Step 4 is the size limit. R2 cannot bind a maximum size into a signed URL, so the declared
 size is checked before anything is signed and the object is checked after it arrives.
@@ -26,10 +30,9 @@ The cap is **10MB** per upload and the types are `image/webp`, `image/jpeg`, `im
 `image/gif`, `image/avif` and `application/pdf`. Anything else is refused before a signature
 exists.
 
-A file skips step 1 — nothing re-encodes a PDF — and gets two checks pictures do not. It is
-PUT with `content-disposition: attachment`, so the bucket's own domain hands it over instead
-of rendering it, and step 4 reads its first bytes back: an object whose signature is not the
-type it was uploaded as is deleted, whatever it was called. A renamed `.html` served from your
+A file skips step 1 — nothing re-encodes a PDF. Its signature must identify a PDF and the
+server stores the final object with `content-disposition: attachment`. An object whose signature
+is not the type it was uploaded as is deleted, whatever it was called. A renamed `.html` served from your
 CDN domain would be a cross-site scripting hole, and a name is not evidence.
 
 ## Keys are content-addressed

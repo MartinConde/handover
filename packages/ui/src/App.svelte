@@ -12,9 +12,10 @@ import Globals from './Globals.svelte';
 import Library from './Library.svelte';
 import Login, { type LoginMethods } from './Login.svelte';
 import Members from './Members.svelte';
-import { navigate } from './navigate';
+import { flushNavigation, navigate } from './navigate';
 import Pending from './Pending.svelte';
 import Redirects from './Redirects.svelte';
+import { request as fetch, localPath, sitePath } from './request.js';
 
 export interface Session {
   collections: string[];
@@ -154,11 +155,23 @@ $effect(() => {
 // on an admin route — a new tab, the API, the preview — is the browser's.
 $effect(() => {
   const moved = () => {
-    path = location.pathname;
+    path = localPath(location.pathname);
     if (session) loadPending();
   };
-  addEventListener('popstate', moved);
-  return () => removeEventListener('popstate', moved);
+  const back = async () => {
+    const to = location.href;
+    if (!(await flushNavigation())) {
+      history.pushState({}, '', sitePath(path));
+      return;
+    }
+    if (location.href === to) moved();
+  };
+  addEventListener('popstate', back);
+  addEventListener('handover:navigate', moved);
+  return () => {
+    removeEventListener('popstate', back);
+    removeEventListener('handover:navigate', moved);
+  };
 });
 
 function follow(event: MouseEvent) {
@@ -174,7 +187,7 @@ function follow(event: MouseEvent) {
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   const a = (event.target as Element).closest('a');
   if (!a || a.target || a.origin !== location.origin) return;
-  if (!/^\/admin(\/(?!api\/)|$)/.test(a.pathname)) return;
+  if (!/^\/admin(\/(?!api\/)|$)/.test(localPath(a.pathname))) return;
   event.preventDefault();
   // A link inside the drawer is what the drawer was opened for.
   menu = false;
@@ -206,11 +219,16 @@ async function loadSession() {
 // The content type is load-bearing: without it Better Auth answers 415 and the session
 // outlives the click, so the next person at this browser is still signed in.
 async function signOut() {
-  await fetch('/admin/api/auth/sign-out', {
+  if (!(await flushNavigation())) return;
+  const res = await fetch('/admin/api/auth/sign-out', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: '{}',
   });
+  if (!res.ok) {
+    notify('Could not sign out. Please try again.');
+    return;
+  }
   session = null;
 }
 
@@ -276,7 +294,7 @@ async function revert() {
   // The drawer's "Published 1 change" describes a commit that has just been undone, and its
   // Revert would now be refused. It goes with the publish it was about.
   drawerKey += 1;
-  reload += 1;
+  if (await flushNavigation()) reload += 1;
 }
 
 async function loadEntry(collection: string, slug: string) {
@@ -324,7 +342,7 @@ const initial = $derived(
     <div class="site-name"><span class="site-mark" aria-hidden="true">H</span> Handover</div>
     <nav class="nav">
       <div class="nav-group">
-        <a href="/admin" data-icon="dashboard" aria-current={path === '/admin' ? 'page' : undefined}>Dashboard</a>
+        <a href={sitePath(`/admin`)} data-icon="dashboard" aria-current={path === '/admin' ? 'page' : undefined}>Dashboard</a>
       </div>
     </nav>
     <!-- Above the collections, and not under Manage: the client thinks of this as "my site",
@@ -334,7 +352,7 @@ const initial = $derived(
       <div class="nav-label" id="nav-site">Site</div>
       <div class="nav-group">
         <a
-          href="/admin/site"
+          href={sitePath(`/admin/site`)}
           data-icon="site"
           aria-current={path.startsWith('/admin/site') ? 'page' : undefined}
         >Site settings</a>
@@ -345,7 +363,7 @@ const initial = $derived(
       <div class="nav-group">
         {#each collections as name (name)}
           <a
-            href="/admin/c/{name}"
+            href={sitePath(`/admin/c/${name}`)}
             data-icon={name}
             aria-current={(listRoute ?? entryRoute)?.[1] === name ? 'page' : undefined}
           >{capitalise(name)}</a>
@@ -357,7 +375,7 @@ const initial = $derived(
       <div class="nav-group">
         {#each manage as item (item.path)}
           <a
-            href={item.path}
+            href={sitePath(item.path)}
             data-icon={item.icon}
             aria-current={path === item.path ? 'page' : undefined}
           >{item.label}</a>
@@ -437,7 +455,7 @@ const initial = $derived(
               </span>
               <span class="email">{session.user.email}</span>
             </div>
-            <a href="/admin/account" aria-current={path === '/admin/account' ? 'page' : undefined}
+            <a href={sitePath(`/admin/account`)} aria-current={path === '/admin/account' ? 'page' : undefined}
               >Account</a
             >
             <button type="button" onclick={signOut}>Sign out</button>
@@ -462,7 +480,7 @@ const initial = $derived(
           userId={session?.user.id}
           onchanged={async () => {
             await loadPending();
-            reload += 1;
+            if (await flushNavigation()) reload += 1;
           }}
           onpending={loadPending}
           onpublished={(title) => notify(`Published ${title} — building`)}
@@ -524,7 +542,7 @@ const initial = $derived(
       }}
       ondiscarded={async () => {
         await loadPending();
-        reload += 1;
+        if (await flushNavigation()) reload += 1;
       }}
     />
     {/key}

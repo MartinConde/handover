@@ -1,4 +1,8 @@
+import config from 'virtual:handover/config';
 import assets from 'virtual:handover/ui';
+
+const base = (config.i18n.base ?? '').replace(/\/+$/, '');
+
 import type { APIRoute } from 'astro';
 import { loginMethods } from '../auth.js';
 
@@ -9,8 +13,8 @@ const tags = Object.keys(assets)
   .sort()
   .map((name) =>
     name.endsWith('.css')
-      ? `<link rel="stylesheet" href="/admin/${ASSET_PREFIX}${name}">`
-      : `<script type="module" src="/admin/${ASSET_PREFIX}${name}"></script>`,
+      ? `<link rel="stylesheet" href="${base}/admin/${ASSET_PREFIX}${name}">`
+      : `<script type="module" src="${base}/admin/${ASSET_PREFIX}${name}"></script>`,
   )
   .join('\n    ');
 
@@ -27,7 +31,7 @@ const shell = (methods: string) => `<!doctype html>
     ${tags}
   </head>
   <body>
-    <div id="app" data-methods='${methods}'></div>
+    <div id="app" data-base='${base}' data-methods='${methods}'></div>
   </body>
 </html>
 `;

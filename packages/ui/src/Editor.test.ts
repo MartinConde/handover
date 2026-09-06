@@ -142,7 +142,7 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 sessionStorage.setItem('handover-tab', 'tab-1');
 // Every editor takes the entry's lock as it opens, so a stub answers that route too — an answer
 // of any other shape reads as somebody else holding it, and the screen would go read-only.
-const HELD = { held_by: null, mine: true, expires_at: 1755864120000, base: {} };
+const HELD = { held_by: null, mine: true, expires_at: 1755864120000 };
 const isLock = (url: unknown) => String(url).startsWith('/admin/api/locks/');
 /** The writes a test is about: the beat rides on the same fetch and is none of them. */
 const wrote = (mock: { mock: { calls: unknown[][] } }) =>
@@ -1694,7 +1694,7 @@ test('a tab coming back to the front asks about its lock at once', async () => {
 
 // A lock that lapsed with nobody after it is not a take-over: the tab is still here, so it takes
 // its own lock back rather than telling the person somebody else has the entry.
-test('a lapsed lock nobody took is claimed again by the tab that had it', async () => {
+test('a lapsed idle lock stays released until the editor reloads', async () => {
   vi.useFakeTimers();
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) =>
     !isLock(url)
@@ -1709,9 +1709,9 @@ test('a lapsed lock nobody took is claimed again by the tab that had it', async 
   flushSync();
 
   const claims = fetchMock.mock.calls.filter((c) => isLock(c[0]) && c[1]?.method === 'POST');
-  expect(claims).toHaveLength(2);
-  expect($(root, '.lock-banner')).toBeNull();
-  expect($<HTMLFieldSetElement>(root, '.form > fieldset')?.disabled).toBe(false);
+  expect(claims).toHaveLength(1);
+  expect($(root, '.lock-banner.is-lost')).not.toBeNull();
+  expect($<HTMLFieldSetElement>(root, '.form > fieldset')?.disabled).toBe(true);
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -2148,5 +2148,283 @@ test('a header publish tells the shell what was published', async () => {
   flushSync();
 
   expect(published).toHaveBeenCalledWith('Seaview Cottage');
+  vi.unstubAllGlobals();
+});
+
+// F05–F07: the mounted editor must keep the actual form, not merely report a failed helper.
+test.each([500, 409])(
+  'a refused translation flush (%i) keeps its pane and blocks hold/address/status',
+  async (status) => {
+    const changed = vi.fn();
+    const requests = vi.fn(async (url: string, init?: RequestInit) =>
+      isLock(url)
+        ? Response.json(HELD)
+        : init?.method === 'PUT'
+          ? Response.json({ reason: 'revision' }, { status })
+          : Response.json({}),
+    );
+    vi.stubGlobal('fetch', requests);
+    const root = show({ entry: { ...addressed, hidden: true }, onchanged: changed });
+    $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+    flushSync();
+    type(root, 'input#t-title', 'Unsaved German');
+    $<HTMLButtonElement>(root, '[aria-label="Close side by side"]')?.click();
+    await tick();
+    flushSync();
+    expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Unsaved German');
+    expect($(root, '.pane .autosave')?.textContent).toContain('Not saved');
+    $<HTMLButtonElement>(root, '.hold-toggle')?.click();
+    await tick();
+    $<HTMLButtonElement>(root, '.slug-row .btn-link')?.click();
+    flushSync();
+    $<HTMLButtonElement>(root, '.slug-row .btn')?.click();
+    await tick();
+    $<HTMLButtonElement>(root, '.status')?.click();
+    flushSync();
+    $$<HTMLButtonElement>(root, '.status-menu button')[0]?.click();
+    await tick();
+    expect(wrote(requests).every((c) => (c[1] as RequestInit).method === 'PUT')).toBe(true);
+    expect(changed).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  },
+);
+
+test('a slow save drains the latest source edit with the returned revision before flush finishes', async () => {
+  const { flushNavigation } = await import('./navigate');
+  let release!: (response: Response) => void;
+  const calls: { data: { title: string }; revision: string }[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (isLock(url)) return Response.json(HELD);
+      calls.push(JSON.parse(String(init?.body)));
+      if (calls.length === 1)
+        return new Promise<Response>((r) => {
+          release = r;
+        });
+      return Response.json({ pending: true, problems: [], revisions: { en: 'third' } });
+    }),
+  );
+  const root = show({ entry: { ...entry, revisions: { en: 'first' } } });
+  type(root, 'input#f-title', 'First edit');
+  const flushing = flushNavigation();
+  await tick();
+  type(root, 'input#f-title', 'Seaview Cottage');
+  const again = flushNavigation();
+  await tick();
+  expect(calls).toHaveLength(1);
+  const unloading = new Event('beforeunload', { cancelable: true });
+  dispatchEvent(unloading);
+  expect(unloading.defaultPrevented).toBe(true);
+  release(Response.json({ pending: true, problems: [], revisions: { en: 'second' } }));
+  expect(await flushing).toBe(true);
+  expect(await again).toBe(true);
+  flushSync();
+  expect(calls.map((c) => [c.data.title, c.revision])).toEqual([
+    ['First edit', 'first'],
+    ['Seaview Cottage', 'second'],
+  ]);
+  expect(
+    $(root, '.editor-header .autosave')?.textContent ?? $(root, '.autosave')?.textContent,
+  ).toContain('Saved');
+  vi.unstubAllGlobals();
+});
+
+test('a rejected network save settles, preserves the edit, warns on unload, and can retry', async () => {
+  const { flushNavigation } = await import('./navigate');
+  let offline = true;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (isLock(url)) return Response.json(HELD);
+      if (offline) throw new TypeError('offline');
+      return Response.json({ pending: true, problems: [], revisions: { en: 'next' } });
+    }),
+  );
+  const root = show({ entry: { ...entry, revisions: { en: 'opened' } } });
+  type(root, 'input#f-title', 'Keep this text');
+  expect(await flushNavigation()).toBe(false);
+  flushSync();
+  expect($(root, '.autosave')?.textContent).toContain('Not saved');
+  expect($<HTMLInputElement>(root, 'input#f-title')?.value).toBe('Keep this text');
+  const unloading = new Event('beforeunload', { cancelable: true });
+  dispatchEvent(unloading);
+  expect(unloading.defaultPrevented).toBe(true);
+  offline = false;
+  expect(await flushNavigation()).toBe(true);
+  flushSync();
+  const savedUnload = new Event('beforeunload', { cancelable: true });
+  dispatchEvent(savedUnload);
+  expect(savedUnload.defaultPrevented).toBe(false);
+  vi.unstubAllGlobals();
+});
+
+test.each([500, 409])(
+  'a source save failure (%i) prevents status and turn-off mutations',
+  async (status) => {
+    const changed = vi.fn();
+    const requests = vi.fn(async (url: string, init?: RequestInit) =>
+      isLock(url)
+        ? Response.json(HELD)
+        : init?.method === 'PUT'
+          ? Response.json({ reason: 'revision' }, { status })
+          : Response.json({}),
+    );
+    vi.stubGlobal('fetch', requests);
+    const root = show({ entry: { ...addressed, hidden: true }, onchanged: changed });
+    $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+    flushSync();
+    type(root, 'input#f-title', 'Keep the source edit');
+    $<HTMLButtonElement>(root, '.status')?.click();
+    flushSync();
+    $$<HTMLButtonElement>(root, '.status-menu button')[0]?.click();
+    await tick();
+    $<HTMLButtonElement>(root, '.pane-head button.btn-off')?.click();
+    flushSync();
+    $<HTMLButtonElement>(root, '.dialog button.btn-danger')?.click();
+    await tick();
+    expect(wrote(requests).length).toBeGreaterThan(0);
+    expect(wrote(requests).every((c) => (c[1] as RequestInit).method === 'PUT')).toBe(true);
+    expect(changed).not.toHaveBeenCalled();
+    expect($<HTMLInputElement>(root, 'input#f-title')?.value).toBe('Keep the source edit');
+    vi.unstubAllGlobals();
+  },
+);
+
+test('the source and translation share a save lane and propagate sibling revisions', async () => {
+  const { flushNavigation } = await import('./navigate');
+  let release: ((response: Response) => void) | undefined;
+  const calls: { url: string; revision: string }[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (isLock(url)) return Response.json(HELD);
+      calls.push({ url, revision: JSON.parse(String(init?.body)).revision });
+      if (calls.length === 1)
+        return new Promise<Response>((r) => {
+          release = r;
+        });
+      return Response.json({ pending: true, problems: [], revision: 'de-next' });
+    }),
+  );
+  const root = show({ entry: { ...bilingual, revisions: { en: 'en-opened', de: 'de-opened' } } });
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  type(root, 'input#f-price', 'New shared price');
+  const flushing = flushNavigation();
+  await tick();
+  type(root, 'input#t-title', 'New German words');
+  const again = flushNavigation();
+  await tick();
+  expect(calls).toHaveLength(1);
+  if (!release) throw new Error('Source save did not start');
+  release(
+    Response.json({ pending: true, problems: [], revisions: { en: 'en-next', de: 'de-synced' } }),
+  );
+  expect(await flushing).toBe(true);
+  expect(await again).toBe(true);
+  expect(calls).toEqual([
+    { url: '/admin/api/drafts/listings/seaview-cottage', revision: 'en-opened' },
+    { url: '/admin/api/drafts/listings/seaview-cottage/de', revision: 'de-synced' },
+  ]);
+  vi.unstubAllGlobals();
+});
+
+test.each(['source', 'translation'])(
+  '%s activity renews a lease despite frequent read polls',
+  async (column) => {
+    vi.useFakeTimers();
+    let expiry = Date.now() + 120000;
+    const requests = vi.fn(async (url: string, init?: RequestInit) => {
+      if (isLock(url)) {
+        if (init?.method === 'POST') expiry = Date.now() + 120000;
+        return Response.json({ ...HELD, expires_at: expiry });
+      }
+      return Response.json({ pending: true, problems: [] });
+    });
+    vi.stubGlobal('fetch', requests);
+    try {
+      const root = show({ entry: bilingual });
+      if (column === 'translation') {
+        $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+        flushSync();
+      }
+      await vi.advanceTimersByTimeAsync(46000);
+      type(root, column === 'source' ? 'input#f-title' : 'input#t-title', 'Activity renews');
+      await vi.advanceTimersByTimeAsync(2100);
+      flushSync();
+      const claims = () =>
+        requests.mock.calls.filter(([url, init]) => isLock(url) && init?.method === 'POST');
+      expect(claims()).toHaveLength(2);
+      await vi.advanceTimersByTimeAsync(46000);
+      flushSync();
+      expect(claims()).toHaveLength(2);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  },
+);
+
+test.each(['source', 'translation'])(
+  'a rejected %s save settles and retains data for retry',
+  async (column) => {
+    const { flushNavigation } = await import('./navigate');
+    let offline = true;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (isLock(url)) return Response.json(HELD);
+        if (offline) throw new TypeError('Network disconnected');
+        return Response.json({ pending: true, problems: [] });
+      }),
+    );
+    const root = show({ entry: bilingual });
+    if (column === 'translation') {
+      $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+      flushSync();
+    }
+    const field = column === 'source' ? 'input#f-title' : 'input#t-title';
+    type(root, field, 'Keep offline words');
+    expect(await flushNavigation()).toBe(false);
+    flushSync();
+    expect(root.textContent).toContain('Not saved');
+    expect(root.textContent).not.toContain('Saving…');
+    expect($<HTMLInputElement>(root, field)?.value).toBe('Keep offline words');
+    offline = false;
+    expect(await flushNavigation()).toBe(true);
+    flushSync();
+    expect(root.textContent).not.toContain('Not saved');
+    vi.unstubAllGlobals();
+  },
+);
+
+test('a rejected status action becomes retryable without discarding the editor', async () => {
+  const changed = vi.fn();
+  let offline = true;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (isLock(url)) return Response.json(HELD);
+      if (offline) throw new TypeError('offline');
+      return Response.json({});
+    }),
+  );
+  const root = show({ entry: { ...entry, hidden: true }, onchanged: changed });
+  const clickStatus = () => {
+    $<HTMLButtonElement>(root, '.status')?.click();
+    flushSync();
+    $$<HTMLButtonElement>(root, '.status-menu button')[0]?.click();
+  };
+  clickStatus();
+  await tick();
+  flushSync();
+  expect(changed).not.toHaveBeenCalled();
+  expect(root.textContent).toContain('Connection lost');
+  offline = false;
+  clickStatus();
+  await tick();
+  flushSync();
+  expect(changed).toHaveBeenCalledOnce();
   vi.unstubAllGlobals();
 });

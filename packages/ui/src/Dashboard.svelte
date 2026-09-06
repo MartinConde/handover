@@ -4,6 +4,7 @@ import { activityGroupOf } from '@handover/core';
 import { EXACT, initials, said, when } from './activity-line';
 import BuildPill, { type Build } from './BuildPill.svelte';
 import NewEntry, { nameOf } from './NewEntry.svelte';
+import { request as fetch, sitePath } from './request.js';
 
 type Recent = {
   key: string;
@@ -120,7 +121,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
     >
       <header>
         <h2 id="d-build">Build status</h2>
-        <a href="/admin/activity">Activity</a>
+        <a href={sitePath(`/admin/activity`)}>Activity</a>
       </header>
       {#if build}
         <p class="big"><BuildPill {build} /></p>
@@ -157,7 +158,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
         <ul class="recent">
           {#each recent as row (row.key)}
             <li>
-              <a href={row.href}>{row.title}</a>
+              <a href={sitePath(row.href)}>{row.title}</a>
               <span class="badge">{row.collection}</span>
               {#if row.editing}
                 <span class="lock">{row.editing.name || 'Somebody'} is editing</span>
@@ -201,7 +202,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
               {#if where.length}
                 <span class="show">
                   {#each where as name (name)}
-                    <a href="/admin/c/{name}?locale={row.locale}">Show{where.length > 1 ? ` ${name}` : ''}</a>
+                    <a href={sitePath(`/admin/c/${name}?locale=${row.locale}`)}>Show{where.length > 1 ? ` ${name}` : ''}</a>
                   {/each}
                 </span>
               {/if}
@@ -218,7 +219,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
     <section class="dtile span-2" aria-labelledby="d-act">
       <header>
         <h2 id="d-act">Recent activity</h2>
-        <a href="/admin/activity">All activity</a>
+        <a href={sitePath(`/admin/activity`)}>All activity</a>
       </header>
       {#if loading}
         <p class="line">Loading…</p>
@@ -232,7 +233,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
                   >{event.user ? initials(event) || '?' : '⚙'}</span
                 >
                 <p class="said">
-                  {line.lead}{#if line.link}<a href={line.link.href}>{line.link.label}</a>
+                  {line.lead}{#if line.link}<a href={sitePath(line.link.href)}>{line.link.label}</a>
                     <span class="sub">{line.link.locale.toUpperCase()}</span>{/if}
                 </p>
                 <span class="meta">

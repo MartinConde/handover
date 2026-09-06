@@ -18,6 +18,8 @@ export const drafts = sqliteTable(
     siteId: text('site_id').notNull().default('default'),
     path: text('path').notNull(),
     contents: text('contents').notNull(),
+    /** Opaque edit version. Writers assign a fresh UUID; the constant default upgrades existing rows. */
+    revision: text('revision').notNull().default('legacy'),
     /** Commit the file was loaded from; the diff base of the three-way view. */
     baseSha: text('base_sha').notNull(),
     /** Blob SHA of that file at `base_sha`; conflict detection compares this against HEAD. */
@@ -133,7 +135,7 @@ export const cronState = sqliteTable(
  * `migrations/handover.json`; the build refuses to go out with a stale one, so a package
  * upgrade that forgot to generate fails there rather than at the first query.
  */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 const GENERATE = 'run `npx handover db generate` and commit migrations/';
 
@@ -146,3 +148,14 @@ export function schemaVersionError(marker: string | undefined): string | undefin
     return `migrations/ was generated for schema version ${at} but astro-handover's tables are at ${SCHEMA_VERSION}: the package is older than the migrations`;
   return `astro-handover's tables are at schema version ${SCHEMA_VERSION} but migrations/ was generated for ${at}: ${GENERATE}`;
 }
+
+/** Short-lived exclusive claims while a rename crosses the Git/D1 boundary. */
+export const pathReservations = sqliteTable(
+  'path_reservations',
+  {
+    siteId: text('site_id').notNull(),
+    path: text('path').notNull(),
+    token: text('token').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.siteId, t.path] })],
+);

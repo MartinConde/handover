@@ -163,3 +163,7 @@ package's is migrated in memory on the way.
 `400` when `commit_sha` is not a commit; `409` when that version has no file of the entry, when
 somebody else has the entry open, or when the file was written by a newer package than this one;
 `404` when the collection is not configured.
+
+Opening an entry also returns `revisions`, a locale-to-opaque-version map. GET seeds the displayed
+file and its immutable Git base atomically when no draft exists. Send the corresponding revision
+on each autosave and use the versions returned by that save for subsequent requests.

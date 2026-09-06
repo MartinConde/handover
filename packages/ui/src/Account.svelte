@@ -1,4 +1,6 @@
 <script lang="ts">
+import { request as fetch } from './request.js';
+
 interface Facts {
   hasPassword: boolean;
   sessions: { id: string; current: boolean; userAgent: string | null; lastUsed: number }[];

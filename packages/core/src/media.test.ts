@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
 import { Miniflare } from 'miniflare';
 import { afterAll, beforeAll, expect, test } from 'vitest';
@@ -108,177 +109,180 @@ test('an upload bigger than the cap is refused before anything is signed', () =>
   expect(() => mediaKey({ ...declared, bytes: 0 })).toThrow(UploadRefusedError);
 });
 
-test('the presigned PUT is a query-signed url that expires in five minutes', async () => {
-  const url = new URL(await presignUpload(store, `media/${HASH}.webp`));
-  expect(url.origin).toBe(`https://${store.accountId}.r2.cloudflarestorage.com`);
-  expect(url.pathname).toBe(`/${store.bucket}/media/${HASH}.webp`);
-  expect(url.searchParams.get('X-Amz-Expires')).toBe('300');
-  expect(url.searchParams.get('X-Amz-Algorithm')).toBe('AWS4-HMAC-SHA256');
-  expect(url.searchParams.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/);
-  // Neither the size nor the type can be signed into it, which is why step 6 exists.
-  expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe('host');
-});
-
-test('an object whose size is not what was declared is deleted and refused', async () => {
-  const db = openDb('default', binding);
-  const r2 = bucket({ [`media/${HASH}.webp`]: { bytes: 9_000_000, mime: 'image/webp' } });
-  await expect(confirmUpload('default', db, store, declared, { fetch: r2.fetch })).rejects.toThrow(
-    UploadRefusedError,
-  );
-  expect(r2.calls.map((c) => c.method)).toEqual(['HEAD', 'DELETE']);
-  expect(r2.objects).toEqual({});
-  expect(await findMedia('default', db, HASH)).toBeUndefined();
-});
-
-test('an object whose type is not what was declared is deleted and refused', async () => {
-  const db = openDb('default', binding);
-  const hash = 'b'.repeat(64);
-  const r2 = bucket({ [`media/${hash}.webp`]: { bytes: 12_345, mime: 'text/html' } });
-  await expect(
-    confirmUpload('default', db, store, { ...declared, hash }, { fetch: r2.fetch }),
-  ).rejects.toThrow(/text\/html/);
-  expect(r2.objects).toEqual({});
-});
-
-test('an upload that never arrived is refused with nothing to delete', async () => {
-  const db = openDb('default', binding);
-  const r2 = bucket({});
-  await expect(
-    confirmUpload('default', db, store, { ...declared, hash: 'c'.repeat(64) }, { fetch: r2.fetch }),
-  ).rejects.toThrow(UploadRefusedError);
-  expect(r2.calls.map((c) => c.method)).toEqual(['HEAD']);
-});
-
-// The one answer that is not a verdict: without a size there is nothing to hold the object to,
-// and deleting on "we could not read it" would throw away a good upload.
-test('an object whose size the bucket did not report is left where it is', async () => {
-  const db = openDb('default', binding);
-  const hash = 'f'.repeat(64);
-  const calls: string[] = [];
+const png = (tag: string) =>
+  Buffer.concat([
+    Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7zsAAAAASUVORK5CYII=',
+      'base64',
+    ),
+    Buffer.from(tag),
+  ]);
+const digest = (data: Uint8Array) => createHash('sha256').update(data).digest('hex');
+const temporary = (key: string) => `uploads/12345678-1234-1234-1234-123456789abc/${key}`;
+function fixture(tag: string, mime = 'image/png') {
+  const data = mime === 'application/pdf' ? Buffer.from(`%PDF-1.7 ${tag}`) : png(tag);
+  const upload: Upload = {
+    hash: digest(data),
+    bytes: data.length,
+    mime,
+    filename: `${tag}.png`,
+    width: 999,
+    height: 999,
+  };
+  const key = mediaKey(upload);
+  upload.key = temporary(key);
+  const objects = new Map<string, { data: Uint8Array; mime: string; disposition?: string }>([
+    [upload.key, { data, mime }],
+  ]);
+  const calls: Request[] = [];
   const fetch = (async (input: Request) => {
-    calls.push(input.method);
-    return new Response(null, { status: 200, headers: { 'content-type': 'image/webp' } });
+    calls.push(input);
+    const key = new URL(input.url).pathname.slice(`/${store.bucket}/`.length);
+    if (input.method === 'PUT') {
+      objects.set(key, {
+        data: new Uint8Array(await input.arrayBuffer()),
+        mime: input.headers.get('content-type') ?? '',
+        disposition: input.headers.get('content-disposition') ?? undefined,
+      });
+      return new Response(null, { status: 200 });
+    }
+    if (input.method === 'DELETE') {
+      objects.delete(key);
+      return new Response(null, { status: 204 });
+    }
+    const object = objects.get(key);
+    return object
+      ? new Response(new Uint8Array(object.data), { headers: { 'content-type': object.mime } })
+      : new Response(null, { status: 404 });
   }) as unknown as typeof globalThis.fetch;
+  return { data, upload, key, objects, fetch, calls };
+}
+
+test('only a temporary key can receive a five-minute client PUT', async () => {
+  const key = temporary(`media/${HASH}.webp`);
+  const url = new URL(await presignUpload(store, key));
+  expect(url.pathname).toBe(`/${store.bucket}/${key}`);
+  expect(url.searchParams.get('X-Amz-Expires')).toBe('300');
+  expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe('host');
+  expect(url.searchParams.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/);
+  await expect(presignUpload(store, `media/${HASH}.webp`)).rejects.toThrow(UploadRefusedError);
+});
+
+test.each(['size', 'mime', 'hash', 'image'])(
+  'a wrong %s is refused before finalization',
+  async (wrong) => {
+    const f = fixture(`bad-${wrong}`);
+    if (wrong === 'size') f.upload.bytes++;
+    if (wrong === 'mime') f.objects.set(f.upload.key ?? '', { data: f.data, mime: 'text/html' });
+    if (wrong === 'hash') {
+      const data = new Uint8Array(f.data);
+      data[data.length - 1] = (data[data.length - 1] ?? 0) ^ 1;
+      f.objects.set(f.upload.key ?? '', { data, mime: f.upload.mime });
+    }
+    if (wrong === 'image') {
+      const data = Buffer.from('<script>not an image</script>');
+      f.upload.hash = digest(data);
+      f.upload.bytes = data.length;
+      f.upload.key = temporary(mediaKey(f.upload));
+      f.objects.set(f.upload.key, { data, mime: f.upload.mime });
+    }
+    await expect(
+      confirmUpload('default', openDb('default', binding), store, f.upload, { fetch: f.fetch }),
+    ).rejects.toThrow(UploadRefusedError);
+    expect(f.calls.some((call) => call.method === 'PUT')).toBe(false);
+    expect(await findMedia('default', openDb('default', binding), f.upload.hash)).toBeUndefined();
+    expect(f.objects.has(f.upload.key ?? '')).toBe(false);
+  },
+);
+
+test('a missing upload and a foreign temporary key are refused', async () => {
+  const f = fixture('missing');
+  f.objects.clear();
   await expect(
-    confirmUpload('default', db, store, { ...declared, hash }, { fetch }),
-  ).rejects.toThrow(/content-length/);
-  expect(calls).toEqual(['HEAD']);
-  expect(await findMedia('default', db, hash)).toBeUndefined();
-});
-
-test('a verified upload writes the row the library reads', async () => {
-  const db = openDb('default', binding);
-  const hash = 'd'.repeat(64);
-  const r2 = bucket({ [`media/${hash}.webp`]: { bytes: 12_345, mime: 'image/webp' } });
-  const { media, created } = await confirmUpload(
-    'default',
-    db,
-    store,
-    { ...declared, hash },
-    { fetch: r2.fetch, now: 1755864000000 },
-  );
-  expect(created).toBe(true);
-  expect(media).toMatchObject({
-    id: hash,
-    r2Key: `media/${hash}.webp`,
-    filename: 'seaview.jpg',
-    mime: 'image/webp',
-    bytes: 12_345,
-    width: 2400,
-    height: 1350,
-    createdAt: 1755864000000,
-  });
-  expect(await findMedia('default', db, hash)).toMatchObject({ id: hash });
-});
-
-test('a hash the table already knows is answered from the row, and its object is left alone', async () => {
-  const db = openDb('default', binding);
-  const hash = 'e'.repeat(64);
-  const r2 = bucket({ [`media/${hash}.webp`]: { bytes: 12_345, mime: 'image/webp' } });
-  await confirmUpload('default', db, store, { ...declared, hash }, { fetch: r2.fetch });
-  // A second confirm of bytes that are already stored: no head, no delete, no second row.
-  const again = bucket({ [`media/${hash}.webp`]: { bytes: 1, mime: 'text/html' } });
-  const { media, created } = await confirmUpload(
-    'default',
-    db,
-    store,
-    { ...declared, hash },
-    { fetch: again.fetch },
-  );
-  expect(created).toBe(false);
-  expect(media).toMatchObject({ id: hash, bytes: 12_345, mime: 'image/webp' });
-  expect(again.calls).toEqual([]);
-  expect(again.objects).toHaveProperty(`media/${hash}.webp`);
-});
-
-test('a pdf is stored under files/, an image under media/', () => {
-  const pdf: Upload = { hash: HASH, bytes: 2_481_033, mime: 'application/pdf', filename: 'b.pdf' };
-  expect(mediaKey(pdf)).toBe(`files/${HASH}.pdf`);
-  expect(mediaKey(declared)).toBe(`media/${HASH}.webp`);
-});
-
-test('a file the bucket would render inline is deleted and refused', async () => {
-  const db = openDb('default', binding);
-  const hash = '1'.repeat(64);
-  const r2 = bucket({
-    [`files/${hash}.pdf`]: { bytes: 5, mime: 'application/pdf', body: '%PDF-1.7' },
-  });
+    confirmUpload('default', openDb('default', binding), store, f.upload, { fetch: f.fetch }),
+  ).rejects.toThrow(/never reached/);
   await expect(
     confirmUpload(
       'default',
-      db,
+      openDb('default', binding),
       store,
-      { hash, bytes: 5, mime: 'application/pdf' },
-      { fetch: r2.fetch },
+      { ...f.upload, key: f.key },
+      { fetch: f.fetch },
     ),
-  ).rejects.toThrow(/download/);
-  expect(r2.objects).toEqual({});
+  ).rejects.toThrow(/temporary key/);
 });
 
-test('bytes that are not the type they were uploaded as are deleted and refused', async () => {
-  const db = openDb('default', binding);
-  const hash = '2'.repeat(64);
-  const r2 = bucket({
-    [`files/${hash}.pdf`]: {
-      bytes: 5,
-      mime: 'application/pdf',
-      disposition: 'attachment',
-      body: '<script>',
-    },
-  });
+test('a disconnected object read retains the temporary bytes for retry', async () => {
+  const f = fixture('disconnected');
+  const failed = (async () => {
+    throw new TypeError('offline');
+  }) as typeof fetch;
   await expect(
-    confirmUpload(
-      'default',
-      db,
-      store,
-      { hash, bytes: 5, mime: 'application/pdf' },
-      { fetch: r2.fetch },
-    ),
-  ).rejects.toThrow(/not a pdf/i);
-  expect(r2.calls.map((c) => c.method)).toEqual(['HEAD', 'GET', 'DELETE']);
-  expect(r2.objects).toEqual({});
-  expect(await findMedia('default', db, hash)).toBeUndefined();
+    confirmUpload('default', openDb('default', binding), store, f.upload, { fetch: failed }),
+  ).rejects.toThrow('offline');
+  expect(f.objects.has(f.upload.key ?? '')).toBe(true);
+  expect(
+    (
+      await confirmUpload('default', openDb('default', binding), store, f.upload, {
+        fetch: f.fetch,
+      })
+    ).created,
+  ).toBe(true);
 });
 
-test('a verified pdf writes its row', async () => {
+test('finalization derives dimensions and replaying the upload URL cannot change the final object', async () => {
+  const f = fixture('immutable');
   const db = openDb('default', binding);
-  const hash = '3'.repeat(64);
-  const r2 = bucket({
-    [`files/${hash}.pdf`]: {
-      bytes: 8,
-      mime: 'application/pdf',
-      disposition: 'attachment',
-      body: '%PDF-1.7',
-    },
+  const result = await confirmUpload('default', db, store, f.upload, { fetch: f.fetch, now: 1700 });
+  expect(result.media).toMatchObject({
+    id: f.upload.hash,
+    r2Key: f.key,
+    width: 1,
+    height: 1,
+    bytes: f.data.length,
+    createdAt: 1700,
   });
-  const { media } = await confirmUpload(
-    'default',
-    db,
-    store,
-    { hash, bytes: 8, mime: 'application/pdf', filename: 'brochure.pdf' },
-    { fetch: r2.fetch, now: 1755864000000 },
+  expect(f.objects.has(f.upload.key ?? '')).toBe(false);
+  const url = await presignUpload(store, f.upload.key ?? '');
+  await f.fetch(
+    new Request(url, { method: 'PUT', body: 'replaced', headers: { 'content-type': 'text/html' } }),
   );
-  expect(media).toMatchObject({ id: hash, r2Key: `files/${hash}.pdf`, filename: 'brochure.pdf' });
+  expect(f.objects.get(f.key)?.data).toEqual(new Uint8Array(f.data));
+  const before = f.calls.length;
+  expect((await confirmUpload('default', db, store, f.upload, { fetch: f.fetch })).created).toBe(
+    false,
+  );
+  expect(f.calls).toHaveLength(before);
+});
+
+test('a temporary object changed after GET cannot race the verified final bytes', async () => {
+  const f = fixture('race');
+  const fetch = (async (input: Request) => {
+    const response = await f.fetch(input);
+    if (input.method === 'GET')
+      f.objects.set(f.upload.key ?? '', { data: Buffer.from('evil'), mime: 'text/html' });
+    return response;
+  }) as unknown as typeof globalThis.fetch;
+  await confirmUpload('default', openDb('default', binding), store, f.upload, { fetch });
+  expect(f.objects.get(f.key)?.data).toEqual(new Uint8Array(f.data));
+});
+
+test('PDF bytes are verified and the final object is forced to download', async () => {
+  const f = fixture('brochure', 'application/pdf');
+  const { media } = await confirmUpload('default', openDb('default', binding), store, f.upload, {
+    fetch: f.fetch,
+  });
+  expect(media).toMatchObject({ r2Key: f.key, width: null, height: null });
+  expect(f.objects.get(f.key)?.disposition).toBe('attachment');
+  const bad = fixture('wrong-pdf', 'application/pdf');
+  const data = Buffer.from('<script>');
+  bad.upload.hash = digest(data);
+  bad.upload.bytes = data.length;
+  bad.upload.key = temporary(mediaKey(bad.upload));
+  bad.objects.set(bad.upload.key, { data, mime: bad.upload.mime });
+  await expect(
+    confirmUpload('default', openDb('default', binding), store, bad.upload, { fetch: bad.fetch }),
+  ).rejects.toThrow(/not a PDF/);
 });
 
 test('the widest crop at a ratio is what a picture is measured by, not its longest side', () => {
@@ -316,17 +320,15 @@ test('a field with no floor refuses nothing, and one with no ratio measures the 
 test('the library is newest first, and pictures and files are two lists', async () => {
   const db = openDb('default', binding);
   const put = async (hash: string, mime: string, now: number) => {
-    const key = mediaKey({ hash, bytes: 8, mime });
-    const r2 = bucket({
-      [key]: { bytes: 8, mime, disposition: 'attachment', body: '%PDF-1.7' },
+    await db.insert(tables.media).values({
+      id: hash,
+      siteId: 'default',
+      r2Key: mediaKey({ hash, bytes: 8, mime }),
+      mime,
+      bytes: 8,
+      filename: hash.slice(0, 3),
+      createdAt: now,
     });
-    await confirmUpload(
-      'default',
-      db,
-      store,
-      { hash, bytes: 8, mime, filename: `${hash.slice(0, 3)}` },
-      { fetch: r2.fetch, now },
-    );
   };
   await put('4'.repeat(64), 'image/webp', 1_000);
   await put('5'.repeat(64), 'application/pdf', 2_000);
@@ -439,50 +441,37 @@ test('a draft is what the entry uses now — the picture it dropped and the one 
   ).toEqual({});
 });
 
-const ORPHAN = '7'.repeat(64);
-
-test('an object with no row is recovered from the listing alone, with no HEAD', async () => {
+test('reconciliation verifies orphans and skips bad hashes, types, sizes and temporary objects', async () => {
+  const f = fixture('recover');
+  const bad = fixture('bad-recover');
+  f.objects.set(f.key, { data: f.data, mime: f.upload.mime });
+  f.objects.set(bad.key, { data: Buffer.from('bad'), mime: bad.upload.mime });
+  const keys = [f.key, bad.key, f.upload.key ?? '', 'backups/other.zip'];
+  const list = lister([{ keys }]);
+  const fetch = (async (input: Request) =>
+    new URL(input.url).searchParams.has('list-type')
+      ? new Response(
+          `<ListBucketResult>${keys.map((key) => `<Contents><Key>${key}</Key><Size>${key === f.key ? f.data.length : 3}</Size></Contents>`).join('')}</ListBucketResult>`,
+        )
+      : f.fetch(input)) as unknown as typeof globalThis.fetch;
   const db = openDb('recover', binding);
-  const { fetch, seen } = lister([{ keys: [`media/${ORPHAN}.webp`] }]);
-
   expect(await reconcileMedia('recover', db, store, { fetch, now: 1700 })).toBe(1);
-
-  const row = await findMedia('recover', db, ORPHAN);
-  expect(row).toMatchObject({
-    r2Key: `media/${ORPHAN}.webp`,
-    mime: 'image/webp',
-    bytes: 2048,
+  expect(await findMedia('recover', db, f.upload.hash)).toMatchObject({
+    width: 1,
+    height: 1,
     createdAt: 1700,
-    width: null,
-    height: null,
   });
-  expect(seen).toEqual([null]);
-});
-
-test('an object the table already knows is left alone', async () => {
-  const db = openDb('recover', binding);
-  const again = lister([{ keys: [`media/${ORPHAN}.webp`] }]);
-
-  expect(await reconcileMedia('recover', db, store, { fetch: again.fetch, now: 9900 })).toBe(0);
-  expect(await findMedia('recover', db, ORPHAN)).toMatchObject({ createdAt: 1700 });
-});
-
-test('an object nothing here ever wrote is not claimed', async () => {
-  const db = openDb('foreign', binding);
-  const { fetch } = lister([{ keys: ['backups/2026-08-01.zip', 'media/not-a-hash.webp'] }]);
-
-  expect(await reconcileMedia('foreign', db, store, { fetch, now: 1700 })).toBe(0);
+  expect(await findMedia('recover', db, bad.upload.hash)).toBeUndefined();
+  expect(await reconcileMedia('recover', db, store, { fetch: list.fetch })).toBe(0);
 });
 
 test('a truncated listing is followed to the end', async () => {
-  const db = openDb('paged', binding);
-  const one = `media/${'8'.repeat(64)}.webp`;
-  const two = `files/${'9'.repeat(64)}.pdf`;
-  const { fetch, seen } = lister([{ keys: [one], next: 'page-2' }, { keys: [two] }]);
-
-  expect(await reconcileMedia('paged', db, store, { fetch, now: 1700 })).toBe(2);
+  const { fetch, seen } = lister([
+    { keys: ['foreign'], next: 'page-2' },
+    { keys: ['also-foreign'] },
+  ]);
+  expect(await reconcileMedia('paged', openDb('paged', binding), store, { fetch })).toBe(0);
   expect(seen).toEqual([null, 'page-2']);
-  expect(await findMedia('paged', db, '9'.repeat(64))).toMatchObject({ mime: 'application/pdf' });
 });
 
 test('a site with no bucket has nothing to reconcile and does not fail', async () => {
@@ -635,16 +624,70 @@ test('the focal point is two numbers on the row, and centring it is saying nothi
 // A crop is a new picture made from an old one: its own bytes, its own row, and a line back to
 // the parent. The original is not touched, which is the whole of why cropping is allowed at all.
 test('a crop is confirmed as its own row, pointing at the picture it came from', async () => {
-  const db = openDb('default', binding);
+  const f = fixture('crop');
   const parent = 'b8'.repeat(32);
-  const hash = 'c9'.repeat(32);
-  const r2 = bucket({ [`media/${hash}.webp`]: { bytes: 12_345, mime: 'image/webp' } });
   const { media } = await confirmUpload(
     'default',
-    db,
+    openDb('default', binding),
     store,
-    { ...declared, hash, filename: 'seaview-crop.webp', derivedFrom: parent },
-    { fetch: r2.fetch },
+    { ...f.upload, derivedFrom: parent },
+    { fetch: f.fetch },
   );
-  expect(media).toMatchObject({ id: hash, filename: 'seaview-crop.webp', derivedFrom: parent });
+  expect(media).toMatchObject({ id: f.upload.hash, derivedFrom: parent });
+});
+
+test('abandoned temporary uploads are verified and finalized only after their lease', async () => {
+  const f = fixture('abandoned');
+  const db = openDb('abandoned', binding);
+  const fetch = (async (input: Request) =>
+    new URL(input.url).searchParams.has('list-type')
+      ? new Response(
+          `<ListBucketResult><Contents><Key>${f.upload.key}</Key><Size>${f.data.length}</Size><LastModified>2026-09-06T00:00:00Z</LastModified></Contents></ListBucketResult>`,
+        )
+      : f.fetch(input)) as unknown as typeof globalThis.fetch;
+  const at = Date.parse('2026-09-06T00:00:00Z');
+  expect(await reconcileMedia('abandoned', db, store, { fetch, now: at + 299000 })).toBe(0);
+  expect(f.objects.has(f.key)).toBe(false);
+  expect(await reconcileMedia('abandoned', db, store, { fetch, now: at + 301000 })).toBe(1);
+  expect(f.objects.has(f.key)).toBe(true);
+  expect(f.objects.has(f.upload.key ?? '')).toBe(false);
+  expect(await findMedia('abandoned', db, f.upload.hash)).toMatchObject({ width: 1, height: 1 });
+});
+
+test('failed finalization leaves no row and retry can finish the same upload', async () => {
+  const f = fixture('failed-finalization');
+  const db = openDb('default', binding);
+  const fetch = (async (input: Request) =>
+    input.method === 'PUT'
+      ? new Response(null, { status: 503 })
+      : f.fetch(input)) as unknown as typeof globalThis.fetch;
+  await expect(confirmUpload('default', db, store, f.upload, { fetch })).rejects.toThrow(
+    /finalization/,
+  );
+  expect(await findMedia('default', db, f.upload.hash)).toBeUndefined();
+  expect(f.objects.has(f.upload.key ?? '')).toBe(true);
+  expect((await confirmUpload('default', db, store, f.upload, { fetch: f.fetch })).created).toBe(
+    true,
+  );
+});
+
+test('a failed media row write retains staging for an immediate confirmation retry', async () => {
+  const f = fixture('registration-retry');
+  const real = openDb('default', binding);
+  const db = new Proxy(real, {
+    get(target, property) {
+      if (property === 'insert')
+        return () => {
+          throw new Error('database offline');
+        };
+      return Reflect.get(target, property);
+    },
+  });
+  await expect(confirmUpload('default', db, store, f.upload, { fetch: f.fetch })).rejects.toThrow(
+    'database offline',
+  );
+  expect(f.objects.has(f.upload.key ?? '')).toBe(true);
+  expect((await confirmUpload('default', real, store, f.upload, { fetch: f.fetch })).created).toBe(
+    true,
+  );
 });

@@ -4,6 +4,8 @@ import { onRequest } from './middleware.js';
 
 // The Better Auth instance is the boundary here: what it answers is proven against a real D1
 // in core's auth.test.ts, and what this file tests is which requests ever get to ask it.
+vi.mock('virtual:handover/config', () => ({ default: { i18n: {} } }));
+
 let session: {
   user: { id: string; name: string; email: string; role: string | null };
   session: { id: string };

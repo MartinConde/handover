@@ -4,6 +4,7 @@ import { EXACT, when } from './activity-line';
 import NewEntry, { nameOf } from './NewEntry.svelte';
 import { navigate } from './navigate';
 import OffsiteDialog, { type Target } from './Offsite.svelte';
+import { request as fetch, sitePath } from './request.js';
 
 type Entry = {
   id: string;
@@ -435,7 +436,7 @@ async function done() {
             />
           </div>
           <div class="td title" role="cell">
-            <a href="/admin/c/{collection}/{entry.id}">{titleOf(entry)}</a>
+            <a href={sitePath(`/admin/c/${collection}/${entry.id}`)}>{titleOf(entry)}</a>
             {#if isHidden(entry)}<span class="badge">Hidden</span>{/if}
             {#if entry.editing}<span class="badge">Being edited by {entry.editing.name || 'somebody'}</span>{/if}
           </div>

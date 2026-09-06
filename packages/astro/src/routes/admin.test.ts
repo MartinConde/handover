@@ -21,7 +21,7 @@ vi.mock('cloudflare:workers', () => ({
   },
 }));
 vi.mock('virtual:handover/config', () => ({
-  default: { mailer: async () => ({ id: 'x' }) },
+  default: { i18n: {}, mailer: async () => ({ id: 'x' }) },
 }));
 
 const ctx = (path?: string) => ({ params: { path } }) as unknown as APIContext;
@@ -33,7 +33,9 @@ test('the shell HTML links the hashed script and stylesheet', async () => {
   const html = await res.text();
   expect(html).toContain('<script type="module" src="/admin/_assets/main-abc123.js"></script>');
   expect(html).toContain('<link rel="stylesheet" href="/admin/_assets/main-abc123.css">');
-  expect(html).toContain(`<div id="app" data-methods='{"emailLink":false,"github":false}'></div>`);
+  expect(html).toContain(
+    `<div id="app" data-base='' data-methods='{"emailLink":false,"github":false}'></div>`,
+  );
 });
 
 test('any non-asset path gets the same shell', async () => {

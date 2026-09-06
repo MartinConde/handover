@@ -62,8 +62,16 @@ composed:
 - A file somebody has **changed since** is refused rather than overwritten — putting it back
   would undo their work too. The whole revert is refused and it names the file, the same way a
   publish conflict does
-- `redirects.yaml` is **recomputed, not restored**: it is the file as it stands now minus the
-  rules that commit added, so rules written since are kept. A `to` the commit rewrote on an older
-  rule stays rewritten — that URL is the live one
+- `redirects.yaml` is **recomputed by rule ID**: additions are removed, deleted rules return,
+  and edits (including collapsed targets) take their previous values. Later unrelated rules
+  stay. If a later change overlaps one of those rules or claims an address being restored,
+  the whole revert is refused with a conflict.
 
 Reverting makes a commit, so it starts a build of its own.
+
+Revert and restore require a retained server-side CMS operation record and validate every path
+before writing. Developer commits, code/configuration paths, and paths outside the operation
+are refused as a whole. Restore additionally requires an `entry-delete` or `locale-off` record.
+A publish revert recreates pending content even after deployment cleanup, preserving newer
+unpublished work and invalidating open edit revisions against the old base. Delete/restore
+operations do not recreate published content as new pending edits. An operation whose record was pruned cannot be undone through these routes.

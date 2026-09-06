@@ -214,7 +214,7 @@ export function entryUrl(
 ): string | undefined {
   if (!route) return undefined;
   const prefix = locale === i18n.defaultLocale && !i18n.prefixDefaultLocale ? '' : `/${locale}`;
-  return (i18n.base ?? '') + prefix + route.replace('[slug]', slug);
+  return (i18n.base ?? '').replace(/\/+$/, '') + prefix + route.replace('[slug]', slug);
 }
 
 /**
@@ -258,6 +258,9 @@ export function previewTarget(
   // else is tidied up: an allow-list that repairs what it is given ends up allowing more than
   // it can name.
   if (!path.startsWith('/') || path.includes('//')) return undefined;
+  const base = (i18n.base ?? '').replace(/\/+$/, '');
+  if (base && path !== base && !path.startsWith(`${base}/`)) return undefined;
+  path = path.slice(base.length) || '/';
   const trimmed = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
   const segments = trimmed === '/' ? [] : trimmed.slice(1).split('/');
 

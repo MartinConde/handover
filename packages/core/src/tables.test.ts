@@ -6,7 +6,7 @@ import * as tables from './tables.js';
 const mf = new Miniflare({
   modules: true,
   script: 'export default {}',
-  d1Databases: { DB: ':memory:' },
+  d1Databases: { DB: ':memory:', UPGRADE: 'upgrade-memory' },
 });
 afterAll(() => mf.dispose());
 
@@ -43,6 +43,7 @@ test('the migration creates every table and index the docs specify', async () =>
     'drafts',
     'locks',
     'media',
+    'path_reservations',
     'rate_limit',
     'session',
     'settings',
@@ -68,6 +69,7 @@ test('the generated migration creates the columns the drafts table is specified 
     ['site_id', 1, 1],
     ['path', 1, 2],
     ['contents', 1, 0],
+    ['revision', 1, 0],
     ['base_sha', 1, 0],
     ['base_blob', 1, 0],
     ['updated_at', 1, 0],
@@ -77,4 +79,27 @@ test('the generated migration creates the columns the drafts table is specified 
     ['pending_redirects', 0, 0],
     ['published_sha', 0, 0],
   ]);
+});
+
+test('upgrading existing drafts preserves content and supplies a usable legacy revision', async () => {
+  const current = await generateSQLiteDrizzleJson({ ...tables });
+  const previous = structuredClone(current);
+  delete previous.tables.path_reservations;
+  const oldDrafts = previous.tables.drafts;
+  if (!oldDrafts) throw new Error('Missing drafts schema');
+  delete oldDrafts.columns.revision;
+  const upgrade = await mf.getD1Database('UPGRADE');
+  const oldSql = await generateSQLiteMigration(await generateSQLiteDrizzleJson({}), previous);
+  await upgrade.batch(oldSql.map((sql) => upgrade.prepare(sql)));
+  await upgrade
+    .prepare(
+      "insert into drafts (site_id,path,contents,base_sha,base_blob,updated_at) values ('default','src/content/pages/en/home.yaml','Keep my edits','old','blob',1)",
+    )
+    .run();
+  const migration = await generateSQLiteMigration(previous, current);
+  await upgrade.batch(migration.map((sql) => upgrade.prepare(sql)));
+  expect(await upgrade.prepare('select contents,revision from drafts').first()).toEqual({
+    contents: 'Keep my edits',
+    revision: 'legacy',
+  });
 });
