@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Pin Better Auth to the tested 1.7.1 account schema. Packed installations can no longer
+  silently select 1.7.3, whose removed `issuer` writes prevent authentication from starting.
+
 - Saves use server-seeded edit snapshots and revisions, preserve newer work during publication,
   and flush before navigation or dependent actions. Rename and creation reserve destination
   paths atomically. Revert and restore require a recorded CMS operation and authorized paths;

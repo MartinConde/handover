@@ -124,6 +124,13 @@ and a caller cannot send in.
 The session cookie is `HttpOnly`, `SameSite=Lax`, and `Secure` on any site whose
 `HANDOVER_BASE_URL` is `https:` — so `http://localhost` still signs in.
 
+## Upgrading authentication
+
+Handover pins Better Auth to the version matching its generated account schema. Do not
+override that dependency independently: Better Auth 1.7.3 no longer writes the required
+`account.issuer` field used by this schema. Upgrading authentication requires regenerating
+and migrating the schema together with the runtime.
+
 ## Signing out
 
 `POST /admin/api/auth/sign-out`, which the user menu does for you. It must carry
