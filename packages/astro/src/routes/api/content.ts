@@ -118,11 +118,17 @@ export const entryFiles = async (git: GitClient, collection: string, slug: strin
  * hold and one-commit publish as anything else. What it does not have is what a collection's
  * routes are about: no address, no rename, no delete, no turning a language off.
  */
-export const globalOf = (collection: string, slug: string) =>
+export const globalOf = (
+  collection: string,
+  slug: string,
+): Parameters<typeof formSchema>[0] | undefined =>
   collection === 'globals' ? config.globals?.[slug] : undefined;
 
 /** The schema one file of the CMS is held to: its collection's, or the global's own. */
-export const schemaOf = (collection: string, slug: string) =>
+export const schemaOf = (
+  collection: string,
+  slug: string,
+): Parameters<typeof formSchema>[0] | undefined =>
   globalOf(collection, slug) ?? config.collections[collection]?.schema;
 
 /** What the site settings list calls a global, and what it says it is for. */
