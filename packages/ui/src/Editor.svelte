@@ -1150,7 +1150,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   {:else}
   <!-- A decision to make, not a form to fill: the panel stands where the form would be, because
        every field on it belongs to a structure the languages have not agreed on yet. -->
-  <div class="entry-body" class:has-pane={!entry.drift.length && (!alone || previewing)}>
+  <div class="entry-body" class:has-pane={!entry.drift.length && (!alone || previewing) && !(!previewable && shown === undefined)}>
     {#if entry.drift.length}
       <DriftPanel
         {collection}
@@ -1174,9 +1174,13 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {#if previewing && !alone}
         {@render previewPane()}
       {:else if shown === undefined}
-        <aside class="pane" aria-label="Right pane">
-          <div><strong>Right pane</strong>Preview to see the page, or Side by side for another language.</div>
-        </aside>
+        <!-- The placeholder offers Preview, so where there is none — every global — the form has
+             the width and the right column exists once Side by side asks for one. -->
+        {#if previewable}
+          <aside class="pane" aria-label="Right pane">
+            <div><strong>Right pane</strong>Preview to see the page, or Side by side for another language.</div>
+          </aside>
+        {/if}
       {:else if untranslated(shown)}
         <!-- An empty form here would autosave a file nobody asked for, so the language with no
              file is an offer instead: make one from the source language, or say the entry is

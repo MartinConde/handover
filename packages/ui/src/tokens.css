@@ -938,9 +938,16 @@ a.btn { text-decoration: none; }
 /* The menu builder, ported from nav-menu-builder/mockup.html: add on the left, the menu on the
    right. The tree is nested lists of real buttons and not role="tree", so every move has a
    button behind it whether or not a pointer is in play. */
+/* The builder is the screen, not a field in a 640px form: the form's cap goes, and the label
+   the form puts over every field stays for the group's name alone — the page is already called
+   Navigation. The field is a query container so the builder stacks by the width it actually has,
+   which is half the body beside a second language and all of it otherwise. */
+.form:has(.nav-build) { max-width: none; }
+.field:has(> .nav-build:not(.is-labels)) { container-type: inline-size; }
+.field:has(> .nav-build) > .label-row { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .nav-build { display: grid; grid-template-columns: 360px minmax(0, 1fr); gap: var(--s-6); align-items: start; min-width: 0; }
 .nav-build .tabs.is-menus { grid-column: 1 / -1; }
-.nav-add { display: grid; gap: var(--s-4); align-content: start; min-width: 0; padding: var(--s-5); border-radius: var(--radius-lg); background: var(--surface-2); }
+.nav-add { position: sticky; top: calc(var(--topbar-h) + var(--s-8)); display: grid; gap: var(--s-4); align-content: start; min-width: 0; padding: var(--s-5); border-radius: var(--radius-lg); background: var(--surface-2); }
 .nav-add .side-title { font-size: var(--text-sm); font-weight: 600; }
 .nav-add .picker { gap: var(--s-3); }
 .nav-add .picker-list { max-height: 340px; }
@@ -975,8 +982,10 @@ a.btn { text-decoration: none; }
 .menu-item .target code { font-family: var(--font-mono); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .menu-item .target .badge { flex: none; }
 .menu-item .item-actions { grid-row: 1 / span 2; grid-column: 3; display: flex; align-items: center; gap: var(--s-1); }
-.menu-item .move-controls { display: none; align-items: center; gap: var(--s-1); padding-right: var(--s-2); margin-right: var(--s-1); border-right: 1px solid var(--border); }
-.menu-item:hover .move-controls, .menu-item:focus-within .move-controls { display: flex; }
+/* Hidden, not absent: the buttons keep their width so a row does not widen under the pointer
+   that just reached it. */
+.menu-item .move-controls { visibility: hidden; display: flex; align-items: center; gap: var(--s-1); padding-right: var(--s-2); margin-right: var(--s-1); border-right: 1px solid var(--border); }
+.menu-item:hover .move-controls, .menu-item:focus-within .move-controls { visibility: visible; }
 .menu-item.is-lifted { background: var(--surface-2); box-shadow: none; border: 1.5px dashed var(--border-strong); color: var(--ink-2); }
 .menu-item.is-lifted .lbl { color: var(--ink-2); }
 .menu-item.is-flagged { background: var(--warn-soft); box-shadow: none; }
@@ -1000,6 +1009,24 @@ a.btn { text-decoration: none; }
 .nav-add-open, .nav-add .nav-add-close { display: none; }
 .menu-item.is-label { grid-template-columns: minmax(0, 1fr); gap: var(--s-1); }
 .menu-item.is-label .lbl { font-size: var(--text-sm); color: var(--ink-2); }
+/* The address's column 2 is the editing row's; here it would open a second column the title is squeezed beside. */
+.menu-item.is-label .target { grid-column: 1; }
+/* Under 800px the tree would be left ~300px beside the add pane, and a row is a handle, two lines
+   and six buttons: the tree keeps the width and the add pane is a sheet over it, opened from the
+   button above — the phone's layout, and Side by side's. Narrower still, the row itself folds. */
+@container (width < 800px) {
+  .nav-build { grid-template-columns: minmax(0, 1fr); }
+  .nav-add-open { display: inline-flex; justify-self: start; }
+  .nav-add { display: none; position: static; }
+  .nav-add.is-open { display: grid; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; max-height: 85vh; overflow: auto; border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: var(--surface); box-shadow: var(--shadow-toast); }
+  .nav-add .nav-add-close { display: inline-flex; justify-self: end; }
+  .nav-scrim { display: block; position: fixed; inset: 0; z-index: 29; background: rgba(23, 26, 33, 0.38); }
+}
+@container (width < 480px) {
+  .branch .branch { margin-left: var(--s-3); padding-left: var(--s-3); }
+  .menu-item { grid-template-columns: auto minmax(0, 1fr); }
+  .menu-item .item-actions { grid-row: 3; grid-column: 2; justify-content: flex-start; }
+}
 
 /* The history tab: the version list beside the version being read. Ported from
    `entry-history/mockup.html`; the line diff and the photo pair are not drawn yet. */
@@ -1331,10 +1358,6 @@ input[type="date"].input { padding-right: var(--s-3); }
   .lib-body { grid-template-columns: minmax(0, 1fr); }
   .lib-side { position: static; }
   .focal-dialog .dialog-cols { grid-template-columns: minmax(0, 1fr); }
-  .nav-build { grid-template-columns: minmax(0, 1fr); }
-  .branch .branch { margin-left: var(--s-3); padding-left: var(--s-3); }
-  .menu-item { grid-template-columns: auto minmax(0, 1fr); }
-  .menu-item .item-actions { grid-row: 3; grid-column: 2; justify-content: flex-start; }
   .history { grid-template-columns: 1fr; padding: var(--s-5); gap: var(--s-6); }
   .dash { grid-template-columns: 1fr; }
   .dtile.span-2 { grid-column: auto; }
@@ -1389,13 +1412,6 @@ input[type="date"].input { padding-right: var(--s-3); }
   /* On a phone the menu tabs are the screen's own navigation, not the editor's Content/SEO/History
      strip the narrow rule hides — so this one stays. */
   :root .tabs.is-menus { display: flex; }
-  :root .nav-add { position: static; }
-  /* The add pane is a sheet over the tree, opened from the button above it. */
-  .nav-add-open { display: inline-flex; justify-self: start; }
-  .nav-add { display: none; }
-  .nav-add.is-open { display: grid; position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; max-height: 85vh; overflow: auto; border-radius: var(--radius-lg) var(--radius-lg) 0 0; background: var(--surface); box-shadow: var(--shadow-toast); }
-  .nav-add .nav-add-close { display: inline-flex; justify-self: end; }
-  .nav-scrim { display: block; position: fixed; inset: 0; z-index: 29; background: rgba(23, 26, 33, 0.38); }
   /* Narrow: the entry list's card rule keys off `.table`, which `.cols-7` outranks, so the seven
      columns have to be collapsed by name. From and To lead the card; everything else is a labelled
      line under them, and the actions sit top right where the row menu was. */

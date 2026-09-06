@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Globals lose the empty right pane.** The dashed placeholder offered Preview, which a global
+  never has; the right column now appears when Side by side is on. The navigation builder takes
+  the whole width with it: it no longer sits in a 640px form, the tree gets the room, the add pane stays in view while a long menu scrolls,
+  a row's move buttons keep their space rather than widening the row under the pointer, and
+  narrower than about 800px — a phone, or beside a second language — the add pane opens as a
+  sheet from a button. The second language's rows stack title, box and address instead of
+  squeezing the title beside the box.
 - Preview navigation, language switchers and localized address lookups no longer validate
   unrelated page bodies. An incomplete linked draft no longer blocks the homepage; the
   page being previewed and other content its loader renders still require valid drafts.
