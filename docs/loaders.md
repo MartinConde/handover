@@ -47,6 +47,14 @@ render hidden entries. Public sources must omit that flag. Raw `source.getEntry(
 `getCollection()` remain unfiltered reads; use `filterLive()` for public lists. Preserve
 `_status` in the content schema, as the generated starter does.
 
+Draft sources also provide optional `getEntryMetadata(collection, id)` and
+`getCollectionMetadata(collection, locale)` reads. Their data is `unknown` and has not passed
+the collection schema; use it only for link titles, addresses and visibility. `menusAt()`,
+`getEntryLocales()` and localized address resolution use these reads automatically, falling
+back to ordinary reads for custom sources without them. `entryAt()` then reads the matched
+page through `getEntry()` so the content it returns is still validated. Rendered content
+must always use `getEntry()` or `getCollection()`.
+
 **A miss is a value, not an error.** Return `undefined` and let the page answer `404`. A
 `.catch()` around the call swallows everything, so a real problem — a `generateId` the loader is
 missing, a schema a file no longer satisfies — reaches the visitor as a 404 with nothing said.

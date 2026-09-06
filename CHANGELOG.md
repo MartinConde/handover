@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Preview navigation, language switchers and localized address lookups no longer validate
+  unrelated page bodies. An incomplete linked draft no longer blocks the homepage; the
+  page being previewed and other content its loader renders still require valid drafts.
+
 - Pin Better Auth to the tested 1.7.1 account schema. Packed installations can no longer
   silently select 1.7.3, whose removed `issuer` writes prevent authentication from starting.
 

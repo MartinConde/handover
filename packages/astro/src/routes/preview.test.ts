@@ -1,3 +1,4 @@
+import { type ContentSource, entryAt, getEntryLocales, menusAt } from '@handover/core';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { preview } from './preview.js';
 
@@ -23,7 +24,8 @@ vi.mock('virtual:handover/config', () => ({
     i18n: { locales: ['en', 'de'], defaultLocale: 'en' },
     collections: {
       listings: { schema: listing, route: '/listings/[slug]', index: '/', load: 'listing' },
-      pages: { schema: listing, route: '/[slug]' },
+      pages: { schema: listing, route: '/[slug]', localizedSlugs: true, load: 'page' },
+      unwired: { schema: listing, route: '/unwired/[slug]' },
       samples: { schema: listing },
     },
   },
@@ -43,7 +45,7 @@ const Index = 'Index.astro';
 let loader: Record<string, unknown> = {};
 vi.mock('virtual:handover/loaders', () => ({
   get default() {
-    return { listing: loader };
+    return { listing: loader, page: pageLoader };
   },
 }));
 
@@ -68,6 +70,43 @@ const built: Record<string, unknown> = {
   'de/mill-house': { title: 'Mühlenhaus' },
 };
 
+const pagesBuilt: Record<string, unknown> = {
+  'en/home': { title: 'Home' },
+  'de/home': { title: 'Startseite', slug: 'startseite' },
+  'de/impressum': { title: 'Impressum' },
+};
+const pageSite = {
+  i18n: { locales: ['en', 'de'], defaultLocale: 'en' },
+  collections: { pages: { route: '/[slug]', localizedSlugs: true } },
+};
+// The demo's actual read pattern: page, language switcher, then shared navigation.
+const pageLoader = {
+  Page,
+  load: async (source: ContentSource, { locale, slug }: { locale: string; slug: string }) => {
+    const entry = await entryAt('default', source, pageSite, 'pages', locale, slug);
+    if (!entry) return undefined;
+    return {
+      data: entry.data,
+      locales: await getEntryLocales(
+        'default',
+        source,
+        pageSite,
+        'pages',
+        entry.id.slice(locale.length + 1),
+      ),
+      menus: await menusAt(
+        'default',
+        source,
+        pageSite,
+        {
+          menus: [{ key: 'header', items: [{ link: { type: 'entry', ref: 'pages/impressum' } }] }],
+        },
+        locale,
+      ),
+    };
+  },
+};
+
 const get = (path: string) => {
   const response = { headers: new Headers() };
   return Promise.resolve(
@@ -79,9 +118,15 @@ const get = (path: string) => {
         response,
       },
       {
-        getEntry: async (_collection: string, id: string) =>
-          built[id] ? { id, data: built[id] } : undefined,
-        getCollection: async () => Object.entries(built).map(([id, data]) => ({ id, data })),
+        getEntry: async (collection: string, id: string) => {
+          const entries = collection === 'pages' ? pagesBuilt : built;
+          return entries[id] ? { id, data: entries[id] } : undefined;
+        },
+        getCollection: async (collection: string) =>
+          Object.entries(collection === 'pages' ? pagesBuilt : built).map(([id, data]) => ({
+            id,
+            data,
+          })),
       },
     ),
   ).then((result) => ({ result, response }));
@@ -174,9 +219,75 @@ test('a draft its collection refuses is a readable failure naming the field', as
   );
 });
 
+test.each(['home', 'de/startseite'])(
+  'an incomplete English Impressum does not block the homepage at %s',
+  async (path) => {
+    rows.push({ path: 'src/content/pages/en/impressum.yaml', contents: 'title: null\n' });
+    const { result } = await get(path);
+    expect(result).toMatchObject({ Component: Page });
+    expect(result).toMatchObject({
+      props: {
+        menus: {
+          header: [
+            {
+              label: path === 'home' ? 'impressum' : 'Impressum',
+              href: path === 'home' ? '/impressum' : '/de/impressum',
+            },
+          ],
+        },
+      },
+    });
+  },
+);
+
+test('localized address lookup ignores unrelated invalid drafts', async () => {
+  rows.push(
+    { path: 'src/content/pages/en/home.yaml', contents: 'title: Home\nslug: welcome\n' },
+    { path: 'src/content/pages/en/impressum.yaml', contents: 'title: null\n' },
+  );
+  expect((await get('welcome')).result).toMatchObject({
+    Component: Page,
+    props: { data: { title: 'Home' } },
+  });
+  expect(((await get('missing')).result as Response).status).toBe(404);
+});
+
+test('a switcher can link an incomplete translation without blocking the current locale', async () => {
+  rows.push({ path: 'src/content/pages/en/home.yaml', contents: 'title: null\n' });
+  expect((await get('de/startseite')).result).toMatchObject({
+    Component: Page,
+    props: {
+      locales: [
+        { locale: 'en', url: '/home' },
+        { locale: 'de', url: '/de/startseite' },
+      ],
+    },
+  });
+});
+
+test.each(['impressum', 'legal-notice'])(
+  'the incomplete page itself still fails validation at %s',
+  async (path) => {
+    rows.push({
+      path: 'src/content/pages/en/impressum.yaml',
+      contents: `title: null\n${path === 'legal-notice' ? 'slug: legal-notice\n' : ''}`,
+    });
+    const { result } = await get(path);
+    expect((result as Response).status).toBe(422);
+    expect(await (result as Response).text()).toContain(
+      'src/content/pages/en/impressum.yaml › title:',
+    );
+  },
+);
+
+test('a collection whose contents are rendered still validates its drafts', async () => {
+  rows.push({ path: 'src/content/listings/en/barn.yaml', contents: 'title: null\n' });
+  expect(((await get('')).result as Response).status).toBe(422);
+});
+
 // Both are the site's own mistake and only preview can see them, so they say what to write.
 test('a collection with no loader says so rather than rendering nothing', async () => {
-  const { result } = await get('anything');
+  const { result } = await get('unwired/anything');
   expect((result as Response).status).toBe(500);
   expect(await (result as Response).text()).toContain('cms.config.ts needs load:');
 });

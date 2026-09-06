@@ -23,6 +23,15 @@ export interface ContentSource<C extends Record<string, unknown> = Record<string
     collection: K,
     locale: string,
   ): Promise<ContentEntry<C[K]>[]>;
+  /** Unvalidated data for addresses, titles and visibility only; never render content from it. */
+  getEntryMetadata?(
+    collection: keyof C & string,
+    id: string,
+  ): Promise<ContentEntry<unknown> | undefined>;
+  getCollectionMetadata?(
+    collection: keyof C & string,
+    locale: string,
+  ): Promise<ContentEntry<unknown>[]>;
 }
 
 // The two functions from `astro:content`; core never imports that module itself.
@@ -70,7 +79,8 @@ export function staticSource<C extends Record<string, unknown>>(
  * so a page rendered through this is the page as it would be published, not only the entry being
  * edited. The bytes are held to the collection's own schema, which lives in the site's
  * `cms.config.ts`, so `validate` is passed in: a draft the schema refuses is that error and never
- * half an entry.
+ * half an entry. Metadata reads use the same overlay without collection validation: linking
+ * to a page does not require its body to be ready to render.
  */
 export function draftSource<C extends Record<string, unknown>>(
   siteId: string,
@@ -79,16 +89,22 @@ export function draftSource<C extends Record<string, unknown>>(
   validate: (collection: string, data: unknown, path: string) => unknown,
 ): ContentSource<C> {
   const pathOf = (collection: string, id: string) => `src/content/${collection}/${id}.yaml`;
-  const read = <K extends keyof C & string>(collection: K, id: string, contents: string) => {
+  const read = <K extends keyof C & string>(
+    collection: K,
+    id: string,
+    contents: string,
+    checked: boolean,
+  ) => {
     const path = pathOf(collection, id);
-    return { id, data: validate(collection, parseEntry(siteId, contents), path) as C[K] };
+    const data = parseEntry(siteId, contents);
+    return { id, data: (checked ? validate(collection, data, path) : data) as C[K] };
   };
-  return {
+  const overlay = (checked: boolean): ContentSource<C> => ({
     preview: true,
     getEntry: async (collection, id) => {
       const row = rows.find((r) => r.path === pathOf(collection, id));
       if (!row) return built.getEntry(collection, id);
-      return row.contents ? read(collection, id, row.contents) : undefined;
+      return row.contents ? read(collection, id, row.contents, checked) : undefined;
     },
     getCollection: async (collection, locale) => {
       const prefix = `src/content/${collection}/${locale}/`;
@@ -100,13 +116,29 @@ export function draftSource<C extends Record<string, unknown>>(
       const kept = snapshot.flatMap((e) => {
         const drafted = mine.find((m) => m.id === e.id);
         if (!drafted) return [e];
-        return drafted.row.contents ? [read(collection, e.id, drafted.row.contents)] : [];
+        return drafted.row.contents ? [read(collection, e.id, drafted.row.contents, checked)] : [];
       });
       // An entry the snapshot has never seen is new since the build, so it goes at the end.
       const added = mine.filter((m) => m.row.contents && !snapshot.some((e) => e.id === m.id));
-      return [...kept, ...added.map((m) => read(collection, m.id, m.row.contents))];
+      return [...kept, ...added.map((m) => read(collection, m.id, m.row.contents, checked))];
     },
+  });
+  const metadata = overlay(false);
+  return {
+    ...overlay(true),
+    getEntryMetadata: metadata.getEntry,
+    getCollectionMetadata: metadata.getCollection,
   };
+}
+
+function entryMetadata<C extends Record<string, unknown>>(
+  source: ContentSource<C>,
+  collection: keyof C & string,
+  id: string,
+): Promise<ContentEntry<unknown> | undefined> {
+  return source.getEntryMetadata
+    ? source.getEntryMetadata(collection, id)
+    : source.getEntry(collection, id);
 }
 
 /** One language an entry can be read in, and where. */
@@ -148,7 +180,7 @@ export async function getEntryLocales<C extends Record<string, unknown>>(
   if (!route) return [];
   const found = await Promise.all(
     site.i18n.locales.map(async (locale) => {
-      const entry = await source.getEntry(collection, `${locale}/${slug}`);
+      const entry = await entryMetadata(source, collection, `${locale}/${slug}`);
       if (!entry || !isLive(siteId, entry.data)) return undefined;
       const address = site.collections[collection]?.localizedSlugs
         ? entryAddress(siteId, entry.data, slug)
@@ -242,7 +274,7 @@ async function href<C extends Record<string, unknown>>(
   const collection = link.ref.slice(0, cut);
   const name = link.ref.slice(cut + 1);
   if (cut < 1 || !name) return undefined;
-  const entry = await source.getEntry(collection as keyof C & string, `${locale}/${name}`);
+  const entry = await entryMetadata(source, collection as keyof C & string, `${locale}/${name}`);
   if (!entry || !isLive(siteId, entry.data)) return undefined;
   const of = site.collections[collection];
   const address = of?.localizedSlugs ? entryAddress(siteId, entry.data, name) : name;
@@ -270,13 +302,20 @@ export async function entryAt<C extends Record<string, unknown>, K extends keyof
 ): Promise<ContentEntry<C[K]> | undefined> {
   const visible = (entry: ContentEntry<C[K]> | undefined) =>
     entry && (source.preview === true || isLive(siteId, entry.data)) ? entry : undefined;
-  const named = await source.getEntry(collection, `${locale}/${address}`);
-  if (!site.collections[collection]?.localizedSlugs) return visible(named);
-  if (named && entryAddress(siteId, named.data, address) === address) return visible(named);
-  const found = await source.getCollection(collection, locale);
-  return visible(
-    found.find((e) => entryAddress(siteId, e.data, e.id.slice(locale.length + 1)) === address),
+  if (!site.collections[collection]?.localizedSlugs)
+    return visible(await source.getEntry(collection, `${locale}/${address}`));
+  // Resolve the address from metadata first, then validate only the page being rendered.
+  // A scan for a translated slug must not validate every other page in that language.
+  const named = await entryMetadata(source, collection, `${locale}/${address}`);
+  if (named && entryAddress(siteId, named.data, address) === address)
+    return visible(await source.getEntry(collection, named.id));
+  const found = source.getCollectionMetadata
+    ? await source.getCollectionMetadata(collection, locale)
+    : await source.getCollection(collection, locale);
+  const match = found.find(
+    (e) => entryAddress(siteId, e.data, e.id.slice(locale.length + 1)) === address,
   );
+  return match ? visible(await source.getEntry(collection, match.id)) : undefined;
 }
 
 /**

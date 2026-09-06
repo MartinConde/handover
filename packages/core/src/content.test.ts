@@ -1473,6 +1473,65 @@ test('a draft the collection refuses is the schema error and not half an entry',
   );
 });
 
+test('metadata overlays draft edits, additions and deletions without validating page bodies', async () => {
+  const source = draftSource(
+    'default',
+    built,
+    [
+      {
+        path: 'src/content/listings/en/mill-house.yaml',
+        contents: 'title: null\nslug: old-mill\n',
+      },
+      { path: 'src/content/listings/en/coast.yaml', contents: '' },
+      { path: 'src/content/listings/en/barn.yaml', contents: 'title: null\n' },
+      { path: 'src/content/listings/de/barn.yaml', contents: 'title: null\n' },
+    ],
+    () => {
+      throw new Error('Invalid body');
+    },
+  );
+
+  expect(await source.getEntryMetadata?.('listings', 'en/mill-house')).toEqual({
+    id: 'en/mill-house',
+    data: { title: null, slug: 'old-mill' },
+  });
+  expect(await source.getEntryMetadata?.('listings', 'en/coast')).toBeUndefined();
+  expect(await source.getCollectionMetadata?.('listings', 'en')).toEqual([
+    { id: 'en/mill-house', data: { title: null, slug: 'old-mill' } },
+    { id: 'en/barn', data: { title: null } },
+  ]);
+  await expect(source.getEntry('listings', 'en/mill-house')).rejects.toThrow('Invalid body');
+  await expect(source.getCollection('listings', 'en')).rejects.toThrow('Invalid body');
+});
+
+test.each(['_status: hidden\ntitle: null\n', ''])(
+  'metadata links still omit hidden or deleted draft entries',
+  async (contents) => {
+    const source = draftSource(
+      'default',
+      switcherSource,
+      [{ path: 'src/content/pages/en/home.yaml', contents }],
+      () => {
+        throw new Error('Invalid body');
+      },
+    );
+    expect(await getEntryLocales('default', source, site, 'pages', 'home')).toEqual([
+      { locale: 'de', url: '/de/startseite' },
+    ]);
+    expect(
+      await menusAt(
+        'default',
+        source,
+        site,
+        {
+          menus: [{ key: 'header', items: [{ link: { type: 'entry', ref: 'pages/home' } }] }],
+        },
+        'en',
+      ),
+    ).toEqual({ header: [] });
+  },
+);
+
 // The menu one language renders: what the tree points at, resolved through the site's own
 // routes, with everything that language cannot show dropped.
 const menu = (items: unknown[]) => ({ menus: [{ _id: 'm1', key: 'header', items }] });

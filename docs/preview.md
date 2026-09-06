@@ -88,6 +88,12 @@ This draft cannot be rendered:
 src/content/listings/en/mill-house.yaml › location: Invalid input: expected string, received undefined
 ```
 
+This validation applies to content the loader renders. Navigation links, language switchers,
+and localized address lookups read draft metadata separately, so an incomplete English
+Impressum does not block the English homepage just because its menu links there. Following
+that link still reports the Impressum's own validation errors. Collections whose contents
+are rendered, and globals read by the loader, still require valid drafts.
+
 An address the site could serve but has no entry at is `404`, the same answer the page itself
 would give. A collection with no `load`, or a loader that exports no component, is `500` saying
 which line to write: those are the site's own wiring, and only preview reads it.
