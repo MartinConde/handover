@@ -15,6 +15,11 @@ type Version = {
   name?: string;
 };
 
+// Relative times count calendar days from local midnight, so "26 hours ago" is two days back
+// just after midnight and CI, which runs at any hour, went red on it. An afternoon is pinned.
+vi.useFakeTimers({ toFake: ['Date'] });
+vi.setSystemTime(new Date('2026-08-25T14:00:00'));
+
 const ago = (hours: number) => new Date(Date.now() - hours * 3_600_000).toISOString();
 
 let app: ReturnType<typeof mount>;

@@ -8,6 +8,11 @@ import Dashboard from './Dashboard.svelte';
 // Not testing: the tile grid, the sidebar link that routes here, or the sentences an activity
 // row reads as, which are `activity-line`'s and are covered on the activity screen.
 
+// Relative times count calendar days from local midnight, so "26 hours ago" is two days back
+// just after midnight and CI, which runs at any hour, went red on it. An afternoon is pinned.
+vi.useFakeTimers({ toFake: ['Date'] });
+vi.setSystemTime(new Date('2026-08-25T14:00:00'));
+
 const RECENT = [
   {
     key: 'listings/mill-house',
