@@ -289,6 +289,8 @@ a.btn { text-decoration: none; }
 /* The main panel loses its padding; the sticky header and the body bring their own so the header can stick flush to the panel's top edge. */
 .main-editor { padding: 0; display: flex; flex-direction: column; }
 .entry-header { position: sticky; top: 0; z-index: 5; padding: var(--s-5) var(--s-8) 0; background: var(--surface); border-bottom: 1px solid var(--border); border-radius: var(--radius-lg) var(--radius-lg) 0 0; display: grid; gap: var(--s-3); }
+/* The tabs are what keeps the entry header off its own bottom border; a global has none. */
+.entry-header:not(:has(> .tabs)) { padding-bottom: var(--s-5); }
 .entry-header .crumbs { display: flex; align-items: center; gap: var(--s-2); font-size: var(--text-sm); color: var(--ink-2); }
 .entry-header .crumbs a { color: var(--ink-2); text-decoration: none; }
 .entry-header .crumbs a:hover { color: var(--ink); text-decoration: underline; }
@@ -379,6 +381,10 @@ a.btn { text-decoration: none; }
 .filter.is-on { background: var(--accent-soft); color: var(--accent-ink); border-color: transparent; font-weight: 500; }
 .filter::after { content: "▾"; font-size: 10px; opacity: 0.7; }
 .filter.is-on::after { content: "×"; font-size: var(--text-md); }
+/* A select cannot draw ::after, and the browser's own arrow sits at the far edge of a box sized
+   to the widest option: the chevron is drawn by hand just past the text instead. */
+select.filter { appearance: none; width: auto; padding-right: calc(var(--s-3) + 1rem); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%235a6072' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right var(--s-2) center; background-size: 14px; }
+select.filter.is-on { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%2335720a' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
 .table { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto; }
 .table.has-select { grid-template-columns: auto minmax(0, 1fr) auto auto auto auto; }
 .table.cols-3 { grid-template-columns: minmax(0, 1fr) auto auto; }
@@ -738,13 +744,22 @@ a.btn { text-decoration: none; }
 .facts dd { margin: 0; display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; color: var(--ink-2); }
 /* Site settings — one card per global. Cards, not table rows: each carries a sentence of
    description, and the two specialised editors sit in the same list as the plain forms. */
-.global-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: var(--s-4); }
-.global-card { display: grid; gap: var(--s-2); padding: var(--s-4); border-radius: var(--radius-lg); background: var(--surface-2); align-content: start; }
-.global-card h2 { font-size: var(--text-md); font-weight: 600; display: flex; align-items: center; gap: var(--s-2); }
+/* Site settings — one row per thing the site has, the whole row the link; the right column
+   is the row's state. */
+.settings-list { border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+.global-card { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; grid-template-rows: auto auto; gap: 2px var(--s-5); align-items: center; padding: var(--s-4) var(--s-5); }
+.global-card + .global-card { border-top: 1px solid var(--border); }
+.global-card:hover { background: var(--surface-2); }
+.global-card:has(> h2 a:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; }
+.global-card h2 { grid-column: 1; grid-row: 1; font-size: var(--text-md); font-weight: 600; display: flex; align-items: center; gap: var(--s-2); }
 .global-card h2 a { color: var(--ink); text-decoration: none; }
-.global-card h2 a:hover { text-decoration: underline; }
-.global-card p { font-size: var(--text-sm); color: var(--ink-2); }
-.global-card .meta { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); font-size: var(--text-xs); color: var(--ink-2); margin-top: var(--s-1); }
+.global-card h2 a::after { content: ""; position: absolute; inset: 0; }
+.global-card h2 a:focus-visible { outline: none; }
+.global-card > p { grid-column: 1; grid-row: 2; font-size: var(--text-sm); color: var(--ink-2); }
+/* Above the row-wide link, so the chips keep their tooltips. */
+.global-card .meta { position: relative; z-index: 1; grid-column: 2; grid-row: 1 / 3; display: flex; flex-direction: column; align-items: flex-end; gap: var(--s-1); font-size: var(--text-xs); color: var(--ink-2); }
+.global-card .meta-row { display: inline-flex; align-items: center; gap: var(--s-2); }
+.global-card .arrow { grid-column: 3; grid-row: 1 / 3; width: 16px; height: 16px; fill: none; stroke: var(--ink-3); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 /* Per-field diff — what a publish would take. Fields and not lines, grouped by language, and
    a block that moved says so rather than arriving as one deletion plus one addition. */
 .diff { display: grid; gap: var(--s-2); font-size: var(--text-sm); }
@@ -861,7 +876,7 @@ a.btn { text-decoration: none; }
 .file-row .tile-link::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius); }
 .file-row:has(.tile-link:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
 .file-row.is-selected { background: var(--accent-soft); box-shadow: inset 0 0 0 2px var(--accent-ink); }
-.lib-tabs { margin-bottom: var(--s-5); border-bottom: 1px solid var(--border); }
+.lib-tabs, .list-tabs { margin-bottom: var(--s-5); border-bottom: 1px solid var(--border); }
 .lib-body { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: var(--s-6); align-items: start; }
 .lib-main { display: grid; gap: var(--s-5); align-content: start; min-width: 0; }
 .lib-main .dropzone.is-big { padding: var(--s-12) var(--s-6); }
@@ -1046,6 +1061,12 @@ a.btn { text-decoration: none; }
   .item-editor { margin-left: 0; padding: var(--s-3); }
   .item-editor .label-row, .item-editor legend { flex-wrap: wrap; }
 }
+.tree-note { font-size: var(--text-xs); color: var(--ink-2); }
+/* The second language's row: the page it points at, the box for this language's word, the kind. */
+.menu-item.is-label { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-1); padding: var(--s-2) var(--s-3); }
+.menu-item.is-label:hover { background: var(--surface); }
+.menu-item.is-label .lbl { font-size: var(--text-sm); font-weight: 500; color: var(--ink-2); }
+.menu-item.is-label .kind { display: flex; align-items: center; gap: var(--s-2); white-space: normal; }
 
 /* The history tab: the version list beside the version being read. Ported from
    `entry-history/mockup.html`; the line diff and the photo pair are not drawn yet. */
@@ -1061,12 +1082,6 @@ a.btn { text-decoration: none; }
 .version-row > input { grid-row: 1 / span 2; width: 18px; height: 18px; margin: 0; accent-color: var(--accent-ink); position: relative; z-index: 1; }
 .version-row > .avatar { grid-row: 1 / span 2; }
 .version-row .summary { min-width: 0; color: var(--ink); font-weight: 500; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tree-note { font-size: var(--text-xs); color: var(--ink-2); }
-/* The second language's row: the page it points at, the box for this language's word, the kind. */
-.menu-item.is-label { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-1); padding: var(--s-2) var(--s-3); }
-.menu-item.is-label:hover { background: var(--surface); }
-.menu-item.is-label .lbl { font-size: var(--text-sm); font-weight: 500; color: var(--ink-2); }
-.menu-item.is-label .kind { display: flex; align-items: center; gap: var(--s-2); white-space: normal; }
 .version-row .summary::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius); }
 .version-row:has(.summary:focus-visible) { outline: 2px solid var(--focus); outline-offset: 2px; }
 .version-row .sub { grid-column: 3; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); }
@@ -1274,7 +1289,6 @@ input[type="date"].input { padding-right: var(--s-3); }
    scrolls instead of the frame clipping it. */
 .scrim:has(> .picker-dialog) { grid-template-rows: minmax(0, 1fr); }
 .scrim.is-full { padding: 0; place-items: stretch; }
-.global-card .meta .lock { color: var(--info-ink); font-weight: 500; }
 
 /* ---------- preview pane (3.18d) ---------- */
 .preview-tools .spacer { flex: 1; }
@@ -1371,7 +1385,9 @@ input[type="date"].input { padding-right: var(--s-3); }
   .activity-row > .avatar { grid-row: 1 / span 2; }
   .activity-row .meta { grid-column: 2; }
   .activity-row .when { min-width: 0; }
-  .global-list { grid-template-columns: 1fr; }
+  .global-card { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto auto auto; }
+  .global-card .meta { grid-column: 1; grid-row: 3; align-items: flex-start; margin-top: var(--s-2); }
+  .global-card .arrow { grid-column: 2; grid-row: 1 / 4; }
   .media-card, .picker-body { grid-template-columns: 1fr; }
   .picker-dialog { width: 100%; max-height: none; border-radius: 0; }
   .picker-side { border-left: 0; border-top: 1px solid var(--border); }
@@ -1391,7 +1407,7 @@ input[type="date"].input { padding-right: var(--s-3); }
   :root .user-menu > .btn { padding: 0; }
   :root .auth-page { padding: var(--s-4); align-items: start; }
   :root .auth-card { padding: var(--s-8) var(--s-5) var(--s-6); }
-  :root .entry-header { padding: var(--s-4) var(--s-5) 0; }
+  :root .entry-header { padding: var(--s-4) var(--s-5); }
   :root .entry-header .actions .btn-preview, :root .tabs { display: none; }
   :root .entry-body { padding: var(--s-5); grid-template-columns: 1fr; }
   :root .entry-body.has-pane .pane { display: none; }

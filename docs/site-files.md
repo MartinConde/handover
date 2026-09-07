@@ -56,7 +56,7 @@ Write the default language's file yourself — the build stops on a global that 
 never written, since the admin edits files rather than creating them. The other languages are
 the editor's *Create from English*, like any entry's.
 
-In the admin they are **Site settings**, above the collections: one card per global, and a
+In the admin they are **Site settings**, above the collections: one row per global, and a
 form that is the entry editor without the parts that do not apply — a global cannot be hidden,
 renamed, duplicated or deleted. Everything else is the same screen, locks, unpublished changes
 and one-commit publish included. Not to be confused with the read-only **Settings** screen,

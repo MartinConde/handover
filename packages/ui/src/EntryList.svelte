@@ -291,14 +291,14 @@ async function done() {
     <span class="spacer"></span>
     <div class="filters">
       <label class="visually-hidden" for="list-status">Status</label>
-      <select class="input" id="list-status" bind:value={showing}>
+      <select class="filter" class:is-on={showing !== 'all'} id="list-status" bind:value={showing}>
         <option value="all">All</option>
         <option value="live">Live</option>
         <option value="hidden">Hidden</option>
       </select>
       {#if many}
         <label class="visually-hidden" for="list-locale">Language</label>
-        <select class="input" id="list-locale" bind:value={language}>
+        <select class="filter" class:is-on={language} id="list-locale" bind:value={language}>
           <option value="">Every language</option>
           {#each locales as locale (locale)}
             <option value={locale}>{locale.toUpperCase()} missing or stale</option>
@@ -308,7 +308,7 @@ async function done() {
     </div>
     <button class="btn btn-primary" type="button" onclick={() => open('new')}>New {singular}</button>
   </div>
-  <div class="tabs" role="tablist" aria-label="Which {collection}">
+  <div class="tabs list-tabs" role="tablist" aria-label="Which {collection}">
     <button
       type="button"
       role="tab"
