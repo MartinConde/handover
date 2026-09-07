@@ -66,7 +66,7 @@ vi.mock('virtual:handover/index', () => ({
   templates: {},
   uses: boundary.uses,
 }));
-// Only the external repository boundary is replaced. All persistence, auth and route helpers run.
+// Only replace the external repository boundary.
 vi.mock('@handover/core', async (original) => ({
   ...(await original<typeof import('@handover/core')>()),
   createGitClient: () => boundary.repo,

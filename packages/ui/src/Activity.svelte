@@ -25,15 +25,13 @@ let more = $state(false);
 let failure = $state('');
 let people = $state<Person[]>([]);
 
-/** What the list is filtered by. The typed box is separate, so it is applied on change and not
-    on every keystroke. */
+/** The typed box is separate, so the entry filter applies on change, not every keystroke. */
 let group = $state('');
 let person = $state('');
 let entry = $state('');
 let typed = $state('');
 const filtered = $derived(Boolean(group || person || entry));
-/** Changing a filter replaces the list in place, which is a change nobody is otherwise told
-    about. The element is always in the document, or its first content would not be announced. */
+/** Always in the document, or its first content would not be announced. */
 const status = $derived(
   loading
     ? ''
@@ -76,8 +74,7 @@ const hrefOf = (key: string) => {
 $effect(() => {
   load();
 });
-// An editor may not call the members route at all, and needs neither of the things it answers:
-// the person filter is not offered, and a role change is never one of their own events.
+// An editor may not call the members route, and the person filter is not offered to them.
 $effect(() => {
   if (role === 'owner') loadPeople();
 });
@@ -109,11 +106,7 @@ async function load(next?: string | null) {
   cursor = page.cursor;
 }
 
-/**
- * The delete on this row undone. No confirmation, unlike the entry list's own Restore and unlike
- * a revert: this only ever puts files back, and the one case where it would write over something
- * is refused by the server rather than done — so there is nothing here to be sorry about.
- */
+/** No confirmation: it only puts files back; the one overwrite case the server refuses. */
 async function putBack(event: ActivityEvent) {
   putting = event.id;
   refused = '';
@@ -151,9 +144,7 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
     <h1>Activity</h1>
     <span class="spacer"></span>
     <div class="filters">
-      <!-- Native controls wearing the chip. A select brings its own keyboard, its typeahead and
-           the platform's picker on a phone; the mockup's ▾ button is a drawing of what one of
-           these already does. -->
+      <!-- A native select brings its own keyboard, typeahead and the phone's picker. -->
       <label class="visually-hidden" for="activity-group">Kind</label>
       <select class="filter" class:is-on={group} id="activity-group" bind:value={group}>
         <option value="">All kinds</option>
@@ -170,8 +161,7 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
           {/each}
         </select>
       {/if}
-      <!-- The server matches `subject` exactly, and a subject is a file path, so the box takes
-           one. The list suggests the paths on screen; anything older is typed or pasted. -->
+      <!-- The server matches `subject` exactly, a file path, so the box takes one. -->
       <label class="visually-hidden" for="activity-entry">Entry</label>
       <input
         class="input filter-text"
@@ -231,9 +221,7 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
               {#if event.commitSha}<span class="sub sha">{event.commitSha.slice(0, 7)}</span>{/if}
             </p>
             <span class="meta">
-              <!-- The way back from the two commits that take a file away, on the row that
-                   recorded one. The entry list's Deleted view is the same undo with the
-                   collection's chrome around it. -->
+              <!-- The entry list's Deleted view is the same undo with the collection's chrome. -->
               {#if RESTORABLE.includes(event.kind) && event.commitSha}
                 <button
                   class="btn btn-sm"

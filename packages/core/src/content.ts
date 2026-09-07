@@ -11,7 +11,7 @@ export interface ContentEntry<T = unknown> {
   data: T;
 }
 
-// What every `load()` in a site's `src/loaders/` takes. Ids are `${locale}/${slug}`.
+// What every `load()` in a site's `src/loaders/` takes; ids are `${locale}/${slug}`.
 export interface ContentSource<C extends Record<string, unknown> = Record<string, unknown>> {
   /** Set by draftSource for authenticated preview; public sources omit it. */
   readonly preview?: boolean;
@@ -45,9 +45,7 @@ export function staticSource<C extends Record<string, unknown>>(
   astro: AstroContent<keyof C & string>,
 ): ContentSource<C> {
   return {
-    // The collection is asked whether the id exists before the entry is asked for by name:
-    // Astro's `getEntry` logs "Entry listings → de/coast was not found" on a miss, and an
-    // untranslated entry would miss once per language on every page that draws the switcher.
+    // Ask the collection first: Astro's `getEntry` logs a miss for every untranslated entry.
     getEntry: async (collection, id) => {
       const all = await astro.getCollection(collection);
       if (!all.some((e) => e.id === id)) return undefined;
@@ -57,10 +55,7 @@ export function staticSource<C extends Record<string, unknown>>(
     },
     getCollection: async (collection, locale) => {
       const all = await astro.getCollection(collection);
-      // Astro's glob loader files an entry under a `slug` it finds in the data, which is where
-      // a `localizedSlugs` collection keeps its address. Nothing outside the site's own
-      // `content.config.ts` can see the loader, so the reader handed the ids is where the
-      // missing option is caught — otherwise it shows as a 404 on every entry.
+      // Without generateId the glob loader files entries under their data `slug`, a 404 everywhere.
       const misfiled = all.find((e) => !e.id.includes('/'));
       if (misfiled)
         throw new Error(
@@ -73,15 +68,7 @@ export function staticSource<C extends Record<string, unknown>>(
   };
 }
 
-/**
- * What preview reads: the build's snapshot with the draft rows laid over it. A row wins for the
- * file it names, an emptied one is an entry that has gone, and everything else is the snapshot —
- * so a page rendered through this is the page as it would be published, not only the entry being
- * edited. The bytes are held to the collection's own schema, which lives in the site's
- * `cms.config.ts`, so `validate` is passed in: a draft the schema refuses is that error and never
- * half an entry. Metadata reads use the same overlay without collection validation: linking
- * to a page does not require its body to be ready to render.
- */
+/** The build's snapshot with the draft rows laid over it; metadata reads skip `validate`. */
 export function draftSource<C extends Record<string, unknown>>(
   siteId: string,
   built: ContentSource<C>,
@@ -156,19 +143,7 @@ export interface LocaleSite {
   >;
 }
 
-/**
- * The languages one entry can be followed to: it has a file in that language's folder and that
- * file is live. The switcher on the site draws these.
- *
- * **The files are the fact.** A language the entry is not offered in has no file — that is how
- * turning one off is written — so having the file is the whole question, and the top-level
- * `_locales` is the CMS's record of the decision rather than the site's arbiter. Reading the
- * mark here would answer differently depending on which of the entry's files a bad edit landed
- * in; `entryOffer` reports that contradiction instead, where somebody can fix it.
- *
- * Everything it reads is in the content collections, so it costs the build no lookup of its
- * own — and a collection nothing renders has nowhere to send anyone.
- */
+/** The switcher's languages: a file that exists and is live, never the `_locales` mark. */
 export async function getEntryLocales<C extends Record<string, unknown>>(
   siteId: string,
   source: ContentSource<C>,
@@ -200,18 +175,7 @@ export interface NavLink {
   children: NavLink[];
 }
 
-/**
- * The `navigation` global's menus in one language, keyed by menu, ready to render.
- *
- * The tree is the same in every language; what it can point at is not. An item whose entry has
- * no file in this language, or whose file is hidden, is **dropped**, and its children with it —
- * a menu is the most-clicked thing on a site and must never be the way a reader finds a 404.
- * The editor flags those items so somebody tidies the menu; this is what keeps the site right
- * until they do.
- *
- * An item with no `label` is named by the page it points at, so renaming a page moves the menu
- * with it. The whole tree is walked defensively: it is content, and a hand edit is not a crash.
- */
+/** An item whose entry is missing or hidden in this language is dropped, children included. */
 export async function menusAt<C extends Record<string, unknown>>(
   siteId: string,
   source: ContentSource<C>,
@@ -262,8 +226,7 @@ async function href<C extends Record<string, unknown>>(
   if (!isObject(link)) return undefined;
   if (link.type === 'url')
     return typeof link.href === 'string' ? { href: link.href, name: link.href } : undefined;
-  // A collection's index is not an entry, so the item names the collection and the address is
-  // this language's own index page; a collection with no index page has nowhere to link.
+  // An index is not an entry: the address is this language's index page, or nothing.
   if (link.type === 'index') {
     if (typeof link.collection !== 'string') return undefined;
     const url = entryUrl(siteId, site.i18n, site.collections[link.collection]?.index, '', locale);
@@ -283,15 +246,7 @@ async function href<C extends Record<string, unknown>>(
   return url ? { href: url, name: typeof titled === 'string' ? titled : name } : undefined;
 }
 
-/**
- * The entry one language serves at this address, for the site's own `[slug]` route. Without
- * localized slugs the address is the file name and this is the lookup it always was.
- *
- * With them the file name is no longer the URL, so it stops answering to one: a file whose
- * `slug` has moved it elsewhere is **not** served under its name — the old address is a
- * redirect the publish wrote, not a second live page. Only then is the language's folder read
- * through, which is a page's worth of files on the sites this is for.
- */
+/** With localized slugs a file whose `slug` moved is not served under its file name. */
 export async function entryAt<C extends Record<string, unknown>, K extends keyof C & string>(
   siteId: string,
   source: ContentSource<C>,
@@ -304,8 +259,7 @@ export async function entryAt<C extends Record<string, unknown>, K extends keyof
     entry && (source.preview === true || isLive(siteId, entry.data)) ? entry : undefined;
   if (!site.collections[collection]?.localizedSlugs)
     return visible(await source.getEntry(collection, `${locale}/${address}`));
-  // Resolve the address from metadata first, then validate only the page being rendered.
-  // A scan for a translated slug must not validate every other page in that language.
+  // Resolve from metadata first so a slug scan does not validate every page in the language.
   const named = await entryMetadata(source, collection, `${locale}/${address}`);
   if (named && entryAddress(siteId, named.data, address) === address)
     return visible(await source.getEntry(collection, named.id));
@@ -318,11 +272,7 @@ export async function entryAt<C extends Record<string, unknown>, K extends keyof
   return match ? visible(await source.getEntry(collection, match.id)) : undefined;
 }
 
-/**
- * Every `_ref` in a file that names a global `cms.config.ts` does not declare. The build refuses
- * these the way an unregistered `_type` is refused: the block renders as the global's content,
- * so a name nothing answers to is a hole in the page and not a value somebody can fill in.
- */
+/** Every `_ref` naming an undeclared global: refused at build like an unregistered `_type`. */
 export function refErrors(
   _siteId: string,
   path: string,
@@ -354,11 +304,7 @@ export function refErrors(
   return errors;
 }
 
-/**
- * The site's globals in one language, keyed by file name — what a `_ref` block is filled from
- * and what a footer reads its text out of. One read of the collection rather than one per key,
- * since a page that wants any of them usually wants two.
- */
+/** The globals in one language keyed by file name, read in one collection call. */
 export async function globalsAt<C extends Record<string, unknown>>(
   _siteId: string,
   source: ContentSource<C>,
@@ -374,23 +320,15 @@ export function parseEntry(_siteId: string, contents: string): unknown {
   return data;
 }
 
-// Transcribed from js-yaml's lib/type/timestamp.js rather than depending on the package:
-// core/ ships in the Worker bundle. A plain scalar matching either of these is a `Date` to
-// js-yaml, which Astro's content loader parses with, and a string to `yaml`'s core schema,
-// which everything here parses with. `2026-7-4` matches neither and is a string to both.
+// Copied from js-yaml's timestamp.js: a plain scalar matching these is a Date to Astro's loader.
 const YAML_DATE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 const YAML_TIMESTAMP =
   /^[0-9]{4}-[0-9]{1,2}-[0-9]{1,2}(?:[Tt]|[ \t]+)[0-9]{1,2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]*)?(?:[ \t]*(?:Z|[-+][0-9]{1,2}(?::[0-9]{2})?))?$/;
 
-// Anything but a plain scalar is a string to both parsers, so the test is on the style and
-// not on PLAIN: a scalar style this list has never heard of is reported rather than skipped.
+// Test the style, not PLAIN, so an unknown scalar style is reported rather than skipped.
 const QUOTED = ['QUOTE_DOUBLE', 'QUOTE_SINGLE', 'BLOCK_LITERAL', 'BLOCK_FOLDED'];
 
-/**
- * Every unquoted date in a hand-written file, one message per key. The build calls this
- * before Astro's loader reads the same file, because the loader's own message for it is
- * `Expected type "string", received "object"` and never mentions the quotes.
- */
+/** Every unquoted date, checked before Astro's loader whose own message never mentions quotes. */
 export function timestampErrors(_siteId: string, path: string, contents: string): string[] {
   const errors: string[] = [];
   const walk = (node: unknown, at: string): void => {
@@ -417,8 +355,7 @@ export function timestampErrors(_siteId: string, path: string, contents: string)
   return errors;
 }
 
-// The only writer of content files. Pinned here so publish can compare blob SHAs:
-// parse(text) → stringify must give back text unchanged for any file the CMS wrote.
+// Pinned so publish can compare blob SHAs: parse then stringify must return the text unchanged.
 const YAML_OPTIONS = {
   defaultStringType: 'QUOTE_DOUBLE',
   defaultKeyType: 'PLAIN',
@@ -433,11 +370,7 @@ export const FORMAT_VERSION = 1;
 // Sorted last, so a key the schema does not declare keeps the place the file gave it.
 const UNDECLARED = Number.MAX_SAFE_INTEGER;
 
-/**
- * One object's keys in the order the format fixes: the reserved `_` keys, then the schema's
- * own order, then whatever else it carries — a key the schema no longer declares keeps the
- * place the file gave it rather than being dropped (session 1.23).
- */
+/** Reserved `_` keys, then schema order, then undeclared keys in the place the file gave them. */
 function ordered(
   fields: readonly Field[],
   entry: Record<string, unknown>,
@@ -452,12 +385,7 @@ function ordered(
   return Object.fromEntries(keys.map((key) => [key, entry[key]]));
 }
 
-/**
- * One file as a write must leave it, for every write that is not the editor's save: `_version`
- * in front of a file that has none, and the canonical key order. Reconciling drift, turning a
- * language off, setting an address and duplicating an entry all write files the browser never
- * sent, and `content-format.md`'s "the next save stamps it" is about them too.
- */
+/** Every non-editor write stamps `_version` and the canonical key order. */
 export function writtenEntry(
   _siteId: string,
   entry: unknown,
@@ -466,12 +394,7 @@ export function writtenEntry(
   return { _version: FORMAT_VERSION, ...ordered(fields, (entry ?? {}) as Record<string, unknown>) };
 }
 
-/**
- * One file of an entry whose languages changed: the ones it is still offered in written into it —
- * the key taken out again when they are all of them — and an `_i18n` made against a language
- * that has gone dropped with them. A mark naming a file the entry no longer has can never be
- * compared against anything, so it would stand as a warning nobody could clear.
- */
+/** An `_i18n` mark against a language that has gone is dropped: nobody could ever clear it. */
 export function offeredEntry(
   siteId: string,
   entry: unknown,
@@ -491,15 +414,7 @@ export function offeredEntry(
   return written;
 }
 
-// The form sends back every key it was given, a key the schema no longer declares included:
-// a rename in `schemas.ts` before the migration is written must not lose the value on the
-// first save. The `_` keys belong to the file, so they are read back off the entry as it
-// stands rather than being dropped on every save. A file from before Handover has no
-// `_version`; it is read as 1 and stamped here, so every file the CMS writes carries one.
-//
-// A locale other than the source one passes the form it drew: its form shows the fields that
-// locale owns and nothing else, so everything else is read off the file rather than dropped
-// for having never been sent back (decap-cms#6978).
+// Undeclared keys, `_` keys and fields this locale's form never drew survive a save (decap#6978).
 export function mergeEntry(
   _siteId: string,
   entry: unknown,
@@ -517,23 +432,14 @@ export function mergeEntry(
     ...Object.fromEntries(reserved),
     ...merged,
   };
-  // A machine wrote some of these values; a person typing over one takes its badge off, and
-  // the save is the only place that notices, since the form sends every field it drew.
+  // Typing over a machine value takes its badge off, and only the save can notice.
   const machine = keptMachine(_siteId, entry, out);
   if (machine.length) out._machine = machine;
   else delete out._machine;
   return out;
 }
 
-/**
- * One entry's other language, brought into line with the edit just made to this one. The
- * skeleton is global, so `after`'s rows and their order win — adding, removing or moving a
- * block is one edit to every language or it is not one at all. `before` is what tells a row
- * the edit dropped from a row it never had: what only `target` has, a locale-only block or a
- * drifted one, is left exactly where it stands, because reconciling drift is a decision
- * somebody makes and not something a save does. `_locales` says which files a row is written
- * to, `duplicate` values come from `after` and translated ones stay in `target`.
- */
+/** The skeleton follows `after`; rows only `target` has stay put, as drift is somebody's call. */
 export function syncLocale(
   _siteId: string,
   form: Form,
@@ -556,16 +462,7 @@ export interface DriftChoice {
   locales: string[];
 }
 
-/**
- * Every language's file with the answers applied. A row ends up in the files its answer names
- * and comes out of the others, arriving in a new one with the values every language shares and
- * nothing to read yet — the same as a block added to one language. `_locales` is rewritten only
- * where the answer is not what the mark already said, so a mark naming a language the entry has
- * no file in survives an answer about the languages it does have.
- *
- * `locales` is the site's declared languages: a row in every one of them carries no mark at all,
- * which is not the same as one naming them.
- */
+/** `_locales` is rewritten only where the answer differs from what the mark already said. */
 export function applyDrift(
   _siteId: string,
   form: Form,
@@ -681,11 +578,7 @@ function applyRows(
   }
 }
 
-/**
- * One row's answer in every language's file. A file the answer names gets the row where its
- * neighbours put it — behind the last row before it that this file also has — and one it does
- * not name loses it. The mark follows the answer only where the two disagree.
- */
+/** A file the answer names gets the row behind the last row before it that this file also has. */
 function answerRow(
   form: Form,
   fieldsOf: FieldsOf,
@@ -705,8 +598,7 @@ function answerRow(
     return isObject(row) && Array.isArray(row._locales) ? (row._locales as string[]) : [];
   });
   const expected = named.length ? files.filter((l) => named.includes(l)) : files;
-  // What the answer says the mark should be, keeping a language it names that has no file to
-  // disagree with. A row in every declared language carries no mark.
+  // A language the mark names but has no file cannot disagree, so the answer keeps it.
   const mark = locales.filter(
     (l) => answer.includes(l) || (named.includes(l) && !files.includes(l)),
   );
@@ -729,8 +621,7 @@ function answerRow(
   }
 }
 
-// A row arriving in a file that has not had it: its shared values and its skeleton, the blocks
-// inside it included, and the place its neighbours give it.
+// A row arriving in a file that lacked it: shared values, skeleton, and its neighbours' place.
 function place(
   form: Form,
   fieldsOf: FieldsOf,
@@ -756,7 +647,7 @@ function place(
   return made;
 }
 
-/** The mark a translation carries: which language it was made from, and that language as it stood. */
+/** The mark a translation carries: the source language, and that language as it stood. */
 export interface I18nMark {
   sourceLocale: string;
   /** Git blob SHA of the source language's file the translation was made from. */
@@ -773,16 +664,7 @@ export interface TranslationSource {
   blob_sha: string;
 }
 
-/**
- * One translation's file, marked with the language it was made from and that language as this
- * same commit leaves it. When the source language moves on afterwards the two stop agreeing,
- * which is what makes the translation stale — a warning and never a refusal.
- *
- * `was` is the file as the repository has it. A block arriving from another language or leaving
- * it rewrites a translation without anybody translating anything, and so does a shared value:
- * what says somebody translated is a value both files have and disagree about. Without a
- * repository file there is nothing it could be but a translation.
- */
+/** A source language moving on makes the mark disagree: stale is a warning, never a refusal. */
 export async function markTranslation(
   siteId: string,
   form: Form,
@@ -806,13 +688,7 @@ export async function markTranslation(
   return stringifyEntry(siteId, { ...data, _i18n: mark });
 }
 
-/**
- * The languages whose translation was made from an older source language than the one this entry
- * now has. A file with no `_i18n` has never been marked and is not stale; neither is one whose
- * mark carries no hash, or one naming a source language the entry has no file in — a mark that
- * says nothing about the values cannot say they have moved on, and there would be no way to
- * clear the warning if it did. Warn only — nothing is refused for this.
- */
+/** A file with no `_i18n`, no hash, or a source the entry has no file in is never stale. */
 export async function staleLocales(
   _siteId: string,
   form: Form,
@@ -831,9 +707,7 @@ export async function staleLocales(
   return stale;
 }
 
-// Sixteen characters: it goes in every translated file and answers one question. `blobSha` for
-// want of another hash in the bundle — it is taken over the values and not over a file, and
-// nothing in the repository is addressed by it.
+// Sixteen characters of `blobSha` over the values, for want of another hash in the bundle.
 const hashOf = async (form: Form, data: unknown) =>
   (
     await blobSha(
@@ -843,12 +717,7 @@ const hashOf = async (form: Form, data: unknown) =>
     )
   ).slice(0, 16);
 
-/**
- * Every value a translation is made from: the translated leaves of one file, addressed the way
- * `_machine` addresses a field and sorted by that address, so moving a block is not a change to
- * what the file says. Shared and source-language-only fields are left out — a price nobody
- * retypes is not a reason to retranslate.
- */
+/** Translated leaves sorted by `_machine` address, so moving a block is not a change. */
 export function translatedValues(form: Form, data: unknown): [string, string][] {
   const found: [string, string][] = [];
   valuesIn(form, form.fields, data, '', true, found);
@@ -926,16 +795,7 @@ export interface Drift {
   values: Record<string, string[]>;
 }
 
-/**
- * Every row an entry's languages disagree about. The skeleton is shared, so a block one file
- * has and another does not, with no `_locales` to say so, is a hand edit or a bad merge — and
- * `syncLocale` leaves it exactly where it stands, because choosing a side is somebody's
- * decision. A publish is refused while one stands: committing would bake it into git.
- *
- * `files` is the languages the entry has a file in, parsed; fewer than two cannot drift. Where
- * two copies of a row name different `_locales`, the row is taken to belong to all of them
- * together: what they name between them is what is expected of it.
- */
+/** Rows the languages disagree about; a publish is refused while one stands. */
 export function driftReport(_siteId: string, form: Form, files: Record<string, unknown>): Drift[] {
   const found: Drift[] = [];
   const copies = Object.entries(files).map(([locale, data]) => ({ locale, data }));
@@ -949,8 +809,7 @@ interface Copy {
   data: unknown;
 }
 
-// The same descent `overlay` makes: rows live under `blocks` fields, under arrays of objects
-// and inside groups, and nowhere else the CMS keeps in step.
+// The same descent `overlay` makes.
 function driftIn(
   form: Form,
   fields: readonly Field[],
@@ -1019,11 +878,7 @@ function driftRows(
   }
 }
 
-/**
- * The words one row says, in the schema's order: what the reconciliation panel shows so an
- * answer is made against the content and not against a file name. Prose only — a card is for
- * reading, and nobody is deciding between two numbers.
- */
+/** Prose only: the reconciliation panel shows words, and nobody decides between two numbers. */
 function rowWords(fields: readonly Field[], data: unknown, found: string[]): void {
   for (const field of fields) {
     const value = isObject(data) ? data[field.path[0] ?? ''] : undefined;
@@ -1033,8 +888,7 @@ function rowWords(fields: readonly Field[], data: unknown, found: string[]): voi
   }
 }
 
-// The properties a structured field translates; everything else in one is the same in every
-// language. Getting this wrong is what makes clients retype image URLs.
+// Getting this wrong is what makes clients retype image URLs.
 export const TRANSLATED_PROPS: Partial<Record<Field['type'], readonly string[]>> = {
   image: ['alt'],
   file: ['name'],
@@ -1055,14 +909,7 @@ interface Skeleton {
 const into = (sync: Skeleton | undefined, key: string): Skeleton | undefined =>
   sync && { ...sync, was: isObject(sync.was) ? sync.was[key] : undefined };
 
-/**
- * `onto` is the file being written and keeps its own structure; `from` supplies the value of
- * every field `pick` claims for it — an absent one included, since a field the form drew and
- * left empty comes back as no key at all. A save picks the translatable values out of the
- * form, propagation the duplicate ones out of the source locale, and it is the same walk.
- * With `sync` the structure comes from `from` as well: that is a save of one language
- * carrying its skeleton into another.
- */
+/** `pick` claims fields from `from`, absent ones included; `sync` takes its structure too. */
 function overlay(
   form: Form,
   fields: readonly Field[],
@@ -1107,8 +954,7 @@ function overlay(
       else delete out[key];
     }
   }
-  // A key this walk added lands at the end of the object it was added to, so a file written
-  // from another language would carry the shared values before the translated ones.
+  // Re-order so a key this walk added does not land after the translated ones.
   return ordered(fields, out);
 }
 
@@ -1151,8 +997,7 @@ function canonical(value: unknown, path: string): unknown {
   return value;
 }
 
-// The yaml library silently drops back from `|` to a quoted string on trailing spaces, a
-// trailing newline run or control characters, which would change the bytes on the next save.
+// The yaml library drops `|` for a quoted string on trailing spaces or newlines, changing bytes.
 function normalise(text: string): string {
   return text
     .replace(/\r\n/g, '\n')
@@ -1169,8 +1014,7 @@ export const rowKey = (row: unknown, i: number) =>
 const inLocale = (row: unknown, locale: string) =>
   !isObject(row) || !Array.isArray(row._locales) || row._locales.includes(locale);
 
-// The skeleton is the same in every language, so the file being written keeps its own rows in
-// their own order and the other side is read for values alone, paired by `_id`.
+// The written file keeps its own rows and order; the other side supplies values, paired by `_id`.
 function pairRows(
   form: Form,
   fieldsOf: (row: Record<string, unknown>) => readonly Field[] | undefined,
@@ -1193,8 +1037,7 @@ function pairRows(
   });
 }
 
-// A structured field splits: an image's `alt` is translated and its `src`, `width` and
-// `height` are the same everywhere, so one image is written from two files.
+// An image's `alt` is translated and its `src` shared, so one field is written from two files.
 function overlayProps(
   from: unknown,
   onto: unknown,
@@ -1219,11 +1062,7 @@ function overlayProps(
   return Object.keys(out).length ? out : undefined;
 }
 
-/**
- * The rows `sync.locale`'s file gets. `from`'s order is the order, minus the rows this
- * language is not one of; a row only `onto` has holds its place behind the last row both
- * sides know, so a block added to German alone stays next to the neighbour it was put after.
- */
+/** A row only `onto` has holds its place behind the last row both sides know. */
 function syncRows(
   form: Form,
   fieldsOf: (row: Record<string, unknown>) => readonly Field[] | undefined,
@@ -1258,8 +1097,7 @@ function syncRows(
   for (const { row, key } of source) {
     const fields = isObject(row) ? fieldsOf(row) : undefined;
     const there = target.get(key);
-    // A block type the form has never heard of cannot be split into a shared half and a
-    // translated one, so the file keeps the row it has and a new one arrives whole.
+    // An unknown block type cannot be split, so the file keeps its row and a new one arrives whole.
     out.push(
       fields && isObject(row)
         ? overlay(form, fields, row, skeletonOf(row, there), pick, mode, {
@@ -1273,8 +1111,7 @@ function syncRows(
   return out;
 }
 
-// `_type`, `_id`, `_label` and `_locales` are the skeleton and come from the language being
-// saved; the values under them are the other language's own.
+// The `_` keys are the skeleton and come from the saved language; values are the other's own.
 function skeletonOf(source: Record<string, unknown>, target: unknown): Record<string, unknown> {
   const keys = (obj: Record<string, unknown>, reserved: boolean) =>
     Object.entries(obj).filter(([k]) => k.startsWith('_') === reserved);
@@ -1284,13 +1121,7 @@ function skeletonOf(source: Record<string, unknown>, target: unknown): Record<st
   ]);
 }
 
-/**
- * Every string a machine can be asked to translate, in the order the form draws them and
- * addressed the way `_machine` addresses a field. Prose only: a shared value and one the source
- * language keeps to itself are not translations, and the pickers whose translated half has no
- * editor in the second column yet are left out — a machine's words nobody can see are words
- * nobody can correct, and the badge would never come off.
- */
+/** Only leaves the second column draws: a machine's words nobody sees are never corrected. */
 export function translatableText(
   _siteId: string,
   form: Form,
@@ -1319,9 +1150,7 @@ function textIn(
     if (field.type === 'group') textIn(form, field.fields, value, path, mode, found);
     else if (field.type === 'blocks')
       textInRows(form, (row) => form.blocks[String(row._type)], value, path, mode, found);
-    // Menu labels are the one translated leaf a machine is not offered, though the second
-    // column draws them: an empty label is not a gap but "use the page title", and that title
-    // is already translated. Filling it would replace the client's answer with a guess at it.
+    // An empty menu label means "use the page title", which is already translated.
     else if (field.type === 'array' && field.item.some((f) => f.path.length > 0))
       textInRows(form, () => field.item, value, path, mode, found);
     else if (mode !== true) continue;

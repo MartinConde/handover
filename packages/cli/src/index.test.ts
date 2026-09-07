@@ -288,8 +288,7 @@ test('init takes the languages from astro.config.mjs rather than writing a secon
   expect(readFileSync(join(cwd, 'cms.config.ts'), 'utf8')).toContain(
     "i18n: { locales: ['en', 'de'], defaultLocale: 'de' },",
   );
-  // A global with no file in a language throws when a page in it renders, so both get one;
-  // the entry is a translation and is the client's to make in the admin.
+  // A global with no file in a language throws when that language renders, so both get one.
   expect(existsSync(join(cwd, 'src/content/globals/de/site.yaml'))).toBe(true);
   expect(existsSync(join(cwd, 'src/content/globals/en/site.yaml'))).toBe(true);
   expect(existsSync(join(cwd, 'src/content/pages/de/home.yaml'))).toBe(true);

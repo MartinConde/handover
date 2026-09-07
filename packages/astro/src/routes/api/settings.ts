@@ -39,18 +39,12 @@ export async function testEmail(session: App.Locals['handover']): Promise<Respon
     });
     return Response.json({ ok: true, to, id });
   } catch (err) {
-    // The provider's own refusal, which names the rule that was broken — an unverified sending
-    // domain above all — and is the whole use of the button.
+    // The provider's refusal names the broken rule, which is the whole use of the button.
     return Response.json({ error: (err as Error).message }, { status: 502 });
   }
 }
 
-/**
- * What the site's config came out as, for a screen that has to be readable by somebody who will
- * forward it rather than act on it. **Owner only**: it names the sending address, the
- * repository's media host and what this build serves, and a sidebar item an editor never sees
- * is not a gate.
- */
+/** Owner only: it names the sending address and the media host, and the sidebar is not a gate. */
 export function diagnostics(session: App.Locals['handover']): Response {
   if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
   const configured = config.mailer;
@@ -68,8 +62,7 @@ export function diagnostics(session: App.Locals['handover']): Response {
         ? { provider: 'custom' }
         : { provider: configured.provider, from: configured.from },
     preview,
-    // "Simulate conflict" commits to the repository, so it is offered to somebody developing
-    // the site and not to somebody living on it.
+    // "Simulate conflict" commits to the repository, so only a developer is offered it.
     dev: import.meta.env.DEV,
   });
 }
@@ -77,12 +70,7 @@ export function diagnostics(session: App.Locals['handover']): Response {
 /** Something the site was never told, rather than something that refused: a different sentence. */
 const unset = (why: string) => Response.json({ error: why }, { status: 503 });
 
-/**
- * Which of the client's own keys are set and which one is in force, for the one section of the
- * settings screen that writes. The key itself is never in the answer — a value that can be read
- * back is a value that leaves in a screenshot — so what comes back is its last four characters,
- * who put it there and when. Owner only, like the rest of the page.
- */
+/** The key itself is never in the answer: only its last four characters, who set it and when. */
 export async function integrations(
   ctx: RequestContext,
   session: App.Locals['handover'],
@@ -94,18 +82,15 @@ export async function integrations(
     memberList('default', database),
   ]);
   const e = env as Record<string, string | undefined>;
-  // Only DeepL has an environment variable behind it: writing help has no feature to read one
-  // yet, so a key stored for it is in force or nothing.
+  // Only DeepL has an environment variable behind it; writing help has none yet.
   const inEnv = (key: Integration) => (key === 'deepl' ? e.DEEPL_API_KEY : undefined);
   return Response.json({
     integrations: INTEGRATIONS.map((key) => {
       const fact = facts.find((row) => row.key === key);
-      // What would be in force with no row here — which is what Remove does, and the card says
-      // it before the button is pressed rather than after.
+      // What would be in force with no row, which is what Remove does; the card says so first.
       const fallback =
         key === 'deepl' && config.i18n.translate ? 'code' : inEnv(key) ? 'env' : 'off';
-      // A site that hands in its own `translate` is translated by that code whatever is stored
-      // here, so the card cannot claim to be in charge while something above it is.
+      // A site's own `translate` wins over whatever is stored here.
       const source = fact && fallback !== 'code' ? 'settings' : fallback;
       return {
         key,
@@ -113,20 +98,14 @@ export async function integrations(
         fallback,
         hint: fact?.hint ?? null,
         updatedAt: fact?.updatedAt ?? null,
-        // An id on screen tells nobody anything, and a member who has since gone leaves the
-        // date standing on its own.
+        // An id on screen says nothing; a member who has gone leaves the date on its own.
         by: members.find((member) => member.id === fact?.updatedBy)?.name ?? null,
       };
     }),
   });
 }
 
-/**
- * Storing one of them. The key is tried against the service before it is written where there is
- * something to try it against, because the alternative is finding out on the next translation;
- * a refusal is the provider's own sentence and nothing is stored. The answer never carries the
- * value back.
- */
+/** The key is tried against the service before it is written; a refusal stores nothing. */
 export async function setIntegration(
   ctx: RequestContext,
   key: string,
@@ -141,8 +120,7 @@ export async function setIntegration(
   let detail: string | undefined;
   if (key === 'deepl') {
     const to = config.i18n.locales.find((l) => l !== config.i18n.defaultLocale);
-    // A one-language site has nothing to translate into, so there is no call to make with the
-    // key: it is stored untried rather than refused.
+    // A one-language site has nothing to translate into, so the key is stored untried.
     if (to) {
       try {
         await deeplTranslate('default', value)(['Hello'], config.i18n.defaultLocale, to);
@@ -164,21 +142,20 @@ export async function setIntegration(
       session.user.id,
     );
   } catch (err) {
-    // The one thing that can be missing here is the secret the row is encrypted under, and its
-    // own sentence names it.
+    // The one thing that can be missing here is the secret the row is encrypted under.
     return unset((err as Error).message);
   }
   await logActivity('default', database, {
     userId: session.user.id,
     kind: 'setting-changed',
-    // The name of the key and what happened to it. Never the value, and never its hint.
+    // Never the value, and never its hint.
     subject: key,
     detail: { how: replaced ? 'replaced' : 'set' },
   });
   return Response.json({ ok: true, ...(detail ? { detail } : {}) });
 }
 
-/** Taking one out again. What happens next is the resolution order, and the card says which. */
+/** What is in force afterwards is the resolution order, and the card says which. */
 export async function clearIntegration(
   ctx: RequestContext,
   key: string,
@@ -197,12 +174,7 @@ export async function clearIntegration(
   return Response.json({ ok: true });
 }
 
-/**
- * One connection, tried for real. Every answer is a sentence and not a status, because this
- * page is read by the person who forwards it: what refused has to be in the words of the thing
- * that has to change. A check whose thing is optional and absent answers `off` rather than
- * failing — a site with no DeepL key is not broken.
- */
+/** Every answer is a sentence, not a status; an optional thing that is absent answers `off`. */
 export async function connection(
   ctx: RequestContext,
   name: string,
@@ -217,8 +189,7 @@ export async function connection(
 
   if (name === 'github') {
     let git: GitClient;
-    // `gitClient()` writes its own sentence naming every value that has to be set, and that
-    // sentence is the one this screen exists to show.
+    // `gitClient()` names every value that has to be set; this screen exists to show that.
     try {
       git = ctx.git();
     } catch (err) {
@@ -251,8 +222,7 @@ export async function connection(
     try {
       stored = config.i18n.translate ? undefined : await deeplKey(ctx);
     } catch (err) {
-      // A key that is stored and cannot be opened: the secret changed under it, and this is
-      // the one screen where that reads as a sentence somebody can act on.
+      // A stored key that cannot be opened means the secret changed under it.
       return unset((err as Error).message);
     }
     const translate =
@@ -278,8 +248,7 @@ export async function connection(
         'No CLOUDFLARE_API_TOKEN and CLOUDFLARE_WORKER, so the admin cannot say whether a publish reached the site.',
       );
     try {
-      // No commit named: what is checked here is the token, and a commit nothing has built
-      // would read as a token that does not work.
+      // No commit named: a commit nothing has built would read as a token that does not work.
       await commitBuild(builds, undefined);
       return ok(`Cloudflare answered for ${builds.worker} — the token works.`);
     } catch (err) {
@@ -303,17 +272,7 @@ export async function connection(
   return new Response('Not found', { status: 404 });
 }
 
-/**
- * "Simulate conflict": the sequence from
- * [drafts-and-publishing.md](../../../docs/publishing.md) run against the real repository on a
- * scratch entry, so the three-way view can be exercised on a live site without hand-crafting
- * commits. It publishes an entry, edits the draft, and then commits a different edit to the
- * same file — which is exactly what a developer's push does to somebody's open draft.
- *
- * It writes to the repository, so it is the owner's and it names what it made: delete that
- * entry when the walk is over. `422` when no collection here can be filled in from its schema
- * alone — a scratch file the site's own content schema rejects would break the next build.
- */
+/** Commits a different edit over an open draft, which is what a developer's push does to one. */
 export async function simulateConflict(
   ctx: RequestContext,
   session: App.Locals['handover'],
@@ -326,9 +285,7 @@ export async function simulateConflict(
     const values = sampleValues(form.fields);
     const texts = form.fields.flatMap((f) => (f.type === 'text' ? (f.path[0] ?? []) : []));
     if (!values || !texts.length || entryProblems(collected.schema, values).length) continue;
-    // Named after the commit it is made against, the way the integration tests name theirs: the
-    // taken-names check reads the built index, which lags the repository by a build, so a plain
-    // `conflict-check` would collide with the last run's entry on a site that has not rebuilt.
+    // The index lags a build, so a fixed name would collide with the last run's entry.
     const head = await git.getHead();
     const slug = entryName(
       'default',
@@ -341,9 +298,7 @@ export async function simulateConflict(
       `${collection}/${slug}`,
     ]);
     if (!seeded) return new Response('The scratch entry could not be committed', { status: 502 });
-    // Both sides write the first two text fields, so there is a question each and the answers
-    // can differ; the two after them are one-sided, so there is something merged to read beside
-    // them. A collection with fewer text fields than that simply asks fewer questions.
+    // Two fields raise a question each; the next two are one-sided, so something merged shows too.
     const [first = '', second, third, fourth] = texts;
     const ours = { ...values, [first]: 'Your version' };
     const theirs = { ...values, [first]: 'The version in the code' };
@@ -368,11 +323,7 @@ export async function simulateConflict(
 
 const SCRATCH = 'Conflict check';
 
-/**
- * A file a collection's own schema accepts, filled from the field types alone. `undefined`
- * where the schema requires something no default can stand in for — a picture, a reference —
- * because the file this makes is committed and the site builds from it.
- */
+/** `undefined` where a required field has no stand-in, since the site builds from this file. */
 function sampleValues(fields: Form['fields']): Record<string, unknown> | undefined {
   const out: Record<string, unknown> = {};
   for (const field of fields) {

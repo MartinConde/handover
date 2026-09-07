@@ -31,11 +31,7 @@ import {
 } from './content.js';
 import type { RequestContext } from './context.js';
 
-/**
- * What one entry would put in the next commit, field by field: the drawer's expanded row. The
- * draft against the file at HEAD and not against the commit it was loaded from — the question
- * the row answers is what is about to go out, which is measured against what is there now.
- */
+/** The draft against HEAD, not the commit it was loaded from: the row says what goes out next. */
 export async function entryDiff(
   ctx: RequestContext,
   collection: string,
@@ -63,27 +59,14 @@ export async function entryDiff(
       Object.fromEntries(found.map((f) => [f.locale, parsed(f.file?.contents)])),
       Object.fromEntries(found.map((f) => [f.locale, parsed(f.row?.contents ?? f.file?.contents)])),
     ),
-    // The rules an address change owes ride in the same commit, so they belong in the diff and
-    // not in the list: a consequence of this entry, not a file anybody chose.
+    // The redirects an address change owes ride in the same commit, so they belong in the diff.
     redirects: found
       .flatMap((f) => f.row?.pendingRedirects ?? [])
       .map(({ from, to }) => ({ from, to })),
   });
 }
 
-/**
- * What one language's source has said since it was translated, field by field — the amber marker
- * a target-language field carries beside its label, and the before/after opening it shows.
- *
- * The entry response already says *which* languages are stale, off one hash over the whole file;
- * a hash cannot say which field moved, so this is the read that answers the second question. The
- * older source is fetched by the blob id the translation itself names, which is why it survives
- * however many commits later somebody asks — [`_i18n.sourceBlob`](../../../core/src/content.ts).
- *
- * `{}` rather than a 404 wherever there is nothing to compare — no mark, a mark naming a language
- * this entry has no file in, or bytes git has since collected. The marker simply is not drawn,
- * which is what an editor should see on a field nobody can say anything about.
- */
+/** `{}` rather than a 404 when there is nothing to compare: the marker is simply not drawn. */
 export async function translatedFromView(
   ctx: RequestContext,
   collection: string,
@@ -115,12 +98,7 @@ const HISTORY_PAGE = 30;
 // How many renames back a history is followed; each is a read per page per language.
 const RENAMES = 3;
 
-/**
- * One language file's commits down to the page asked for, and whether GitHub still had older
- * ones. The pages are read from the top each time rather than carried on from where the last
- * one stopped, because the merge across languages cuts the list and a per-path cursor would
- * then start below the cut — see `mergeFileCommits`.
- */
+// Read from the top each time: the merge across languages cuts the list below a per-path cursor.
 async function commitsFor(git: GitClient, path: string, pages: number) {
   const commits: FileCommit[] = [];
   let more = false;
@@ -133,12 +111,7 @@ async function commitsFor(git: GitClient, path: string, pages: number) {
   return { commits, more };
 }
 
-/**
- * One language's commits under the name the entry has and, once that log is read to its start,
- * under the names it had before: the commit that started the log is the rename that made it,
- * when there was one, and its message says what the file was called — no `--follow`, which the
- * commits API has none of, and no read that a never-renamed entry pays for.
- */
+// The commits API has no `--follow`, so the rename commit's message says what the file was called.
 async function commitsUnder(
   git: GitClient,
   collection: string,
@@ -160,15 +133,7 @@ async function commitsUnder(
   return found;
 }
 
-/**
- * One entry's versions: the commits of every language file it has, merged, newest first. A read
- * of the branch and nothing else — nothing this derived is written down, so history costs the
- * same on every open.
- *
- * **Who made a version is the log's answer, not git's.** A commit the admin makes is the
- * installation's, so git names the App; the person who pressed Publish is in the activity row
- * that carries the same sha, and a commit somebody pushed themselves keeps the name git has.
- */
+/** Who made a version comes from the activity log, since git names the App for admin commits. */
 export async function entryHistory(
   ctx: RequestContext,
   collection: string,
@@ -177,15 +142,13 @@ export async function entryHistory(
 ): Promise<Response> {
   if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
   const asked = Number(url.searchParams.get('page') ?? 1);
-  // Every page is one request per language file, so the depth is capped rather than trusted:
-  // fifty subrequests is what the Free plan allows a request in total.
+  // Every page is one request per language file, and the Free plan allows fifty subrequests.
   const pages = Math.min(Math.max(Number.isSafeInteger(asked) ? asked : 1, 1), 10);
   const git = ctx.git();
   const read = await Promise.all(
     config.i18n.locales.map((locale) => commitsUnder(git, collection, slug, locale, pages)),
   );
-  // The current name's pages first, whatever the language: the rename commit is in both logs
-  // and the merge names a version by the first page it meets it on.
+  // Current name's pages first: the rename commit is in both logs and the first page met names it.
   const { versions, more } = mergeFileCommits([
     ...read.flatMap((pages) => pages.filter((p) => !p.name)),
     ...read.flatMap((pages) => pages.filter((p) => p.name)),
@@ -201,13 +164,11 @@ export async function entryHistory(
       return {
         sha: version.sha,
         date: version.date,
-        // The first line only: a commit body is the list of files it wrote, and the row beside
-        // it already says which languages those were.
+        // The body only lists the files written, which the row's languages already say.
         summary: version.message.split('\n')[0] ?? '',
         locales: version.locales,
         ...(author ? { author } : {}),
-        // The name the files had then, where it is not the one they have now: a diff or a
-        // restore of this version reads them under it.
+        // A diff or restore of this version reads the files under the name they had then.
         ...(version.name ? { name: version.name } : {}),
       };
     }),
@@ -215,12 +176,7 @@ export async function entryHistory(
   });
 }
 
-/**
- * What one version says that another does not, field by field, in the drawer's own diff.
- * `from` is what is live now unless the caller names a commit, so the fields marked are the
- * ones restoring this version would change — which is the question somebody reading a version
- * is asking.
- */
+/** `from` defaults to HEAD, so the fields marked are the ones a restore would change. */
 export async function versionDiff(
   ctx: RequestContext,
   collection: string,
@@ -232,7 +188,6 @@ export async function versionDiff(
   const asked = url.searchParams.get('from');
   if (!SHA.test(to) || (asked !== null && !SHA.test(asked)))
     return Response.json({ error: 'a version is named by its commit' }, { status: 400 });
-  // The names the files had at each side, where a rename has moved them since (`entryHistory`).
   const name = url.searchParams.get('name') ?? slug;
   const fromName = url.searchParams.get('fromName') ?? slug;
   if (!NAME.test(name) || !NAME.test(fromName))
@@ -246,10 +201,7 @@ export async function versionDiff(
   return Response.json({ groups: diffEntry('default', formFor(collection, slug), before, after) });
 }
 
-/**
- * One entry as a commit has it, language by language — a diff's before or its after. `name` is
- * what its files were called at that commit, where a rename has moved them since.
- */
+// `name` is what the files were called at that commit, where a rename has moved them since.
 async function entryAt(git: GitClient, collection: string, slug: string, ref: string, name = slug) {
   const read = await Promise.all(
     Object.entries(entryPaths(collection, name)).map(async ([locale, path]) => {
@@ -260,11 +212,7 @@ async function entryAt(git: GitClient, collection: string, slug: string, ref: st
   return Object.fromEntries(read.filter((f) => f !== undefined));
 }
 
-/**
- * The log's publish row, opened: what the commit changed against the commit it was made on,
- * one entry at a time. Read when the row is opened and never with the page — fifty publishes
- * on a page would be a hundred git reads for rows nobody looks into.
- */
+/** Read on opening a row, never with the page: fifty publishes would be a hundred git reads. */
 export async function activityDiff(
   ctx: RequestContext,
   url: URL,
@@ -280,8 +228,7 @@ export async function activityDiff(
     const [collection = '', slug = ''] = key.split('/');
     return schemaOf(collection, slug) !== undefined;
   });
-  // The dashboard's cap. Each entry is two reads per language, and a request on the Free plan
-  // has fifty subrequests in it.
+  // Each entry is two reads per language, and a request on the Free plan has fifty subrequests.
   const shown = keys.slice(0, 8);
   const entries = await Promise.all(
     shown.map(async (key) => {
@@ -297,16 +244,7 @@ export async function activityDiff(
   return Response.json({ entries, more: keys.length - shown.length });
 }
 
-/**
- * One version of an entry back as unpublished changes. Never a rewrite of git: the version's
- * files go into the draft rows the editor is already working through, and publishing them is
- * the ordinary forward commit every other edit makes — the version being restored stays in the
- * list, and so does everything after it.
- *
- * A file older than the format this package reads is migrated in memory on the way past, so a
- * pre-migration version never reaches the editor unmigrated; one written by a newer package is
- * refused with the reason rather than drawn as a shape the form does not know.
- */
+/** Never a rewrite of git: the version goes into the draft rows and publishes forward. */
 export async function restoreVersion(
   ctx: RequestContext,
   collection: string,
@@ -321,8 +259,7 @@ export async function restoreVersion(
     | undefined;
   const sha = typeof body?.commit_sha === 'string' ? body.commit_sha : '';
   if (!SHA.test(sha)) return new Response('A commit_sha is needed to restore', { status: 400 });
-  // The name the files had at that commit, where a rename has moved them since: read under it,
-  // written under the name the entry has now — a restore never moves the entry back.
+  // Read under the name the files had then, written under the current one: a restore never renames.
   const name = typeof body?.name === 'string' ? body.name : slug;
   if (!NAME.test(name)) return new Response('That is not a name this entry had', { status: 400 });
   const held = await heldByAnother(ctx, collection, slug, session, 'restored');
@@ -348,14 +285,12 @@ export async function restoreVersion(
       status: 409,
     });
   }
-  // The whole form, `slug` included: `formFor` takes the address out of what the client types
-  // into, but it is a key the schema declares and the file writes it where it says.
+  // The whole form, `slug` included: `formFor` strips the address but the file writes it.
   const form = formOf('default', formSchema(schema));
   const database = ctx.db();
   const pending = await pendingLocales(collection, slug, database);
   const { paths } = await restoreDraft('default', database, git, form, files, session?.user.id);
-  // The lock only refuses somebody editing right now; a draft typed yesterday and closed goes
-  // with this write, so the log says whose words a version was put over.
+  // A closed draft goes with this write unrefused, so the log says whose words were put over.
   const went = pending.filter((locale) => paths.includes(entryPath(collection, slug, locale)));
   if (went.length)
     await logActivity('default', database, {
@@ -367,12 +302,7 @@ export async function restoreVersion(
   return Response.json({ paths });
 }
 
-/**
- * The three-way view: what both sides started from, what only one of them changed and is
- * merged without asking, and the fields somebody has to answer. `409` when nothing of the
- * entry has moved in the repository, which is a drawer asking about a conflict already
- * settled — the same shape the drift answer's refusal has.
- */
+/** 409 when nothing has moved in the repository: the conflict is already settled. */
 export async function conflictView(
   ctx: RequestContext,
   collection: string,
@@ -398,11 +328,7 @@ export async function conflictView(
 
 const SETTLED = 'This entry has not changed in the repository since it was opened';
 
-/**
- * The answers to one entry's conflict, one per question the report asked. Every question is
- * answered or none of them are: a half-answered entry would be written with the repository's
- * value in the fields nobody had reached, which is not what leaving a question alone means.
- */
+/** All questions answered or none: a half-answered entry would silently take HEAD's values. */
 export async function resolve(
   ctx: RequestContext,
   collection: string,

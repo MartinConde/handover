@@ -281,8 +281,7 @@ test('a $ref is resolved against the root $defs', () => {
   ]);
 });
 
-// The shape `blocks()` from astro-handover produces: a ref block or one of the registered
-// block objects, the recursive one through $defs.
+// The shape `blocks()` produces: a ref block or a registered block, recursion through $defs.
 const blockList = (types: string[]): JsonSchema => ({
   type: 'array',
   handover: 'blocks',
@@ -353,8 +352,7 @@ test('formOf of a schema without blocks has an empty block map', () => {
   });
 });
 
-// F3: a camelCase key read as code in the form ("AvailableFrom"). The key is humanised
-// unless the schema names the field.
+// A camelCase key is humanised unless the schema names the field.
 test.each([
   ['title', 'Title'],
   ['availableFrom', 'Available from'],
@@ -432,8 +430,7 @@ test('a mode that is not one of the three is ignored', () => {
   expect(fieldsFrom('default', schema)[0]?.i18n).toBeUndefined();
 });
 
-// The focal picker previews every crop the site renders, so it needs the ratios the site's
-// own fields ask for — wherever they sit, and each ratio once however many fields want it.
+// The focal picker previews every crop the site renders, each ratio once however many ask.
 test('the site’s image ratios are collected from every depth, once each', () => {
   const listing = formOf(
     'default',

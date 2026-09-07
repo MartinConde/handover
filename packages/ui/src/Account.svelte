@@ -16,8 +16,7 @@ let {
   onname: () => void;
 } = $props();
 
-// svelte-ignore state_referenced_locally -- the prop is what the field starts at; after that
-// the field is the person's own edit and the shell reloads the session when it is saved
+// svelte-ignore state_referenced_locally -- the prop seeds the field; the shell reloads it on save
 let name = $state(user.name);
 let current = $state('');
 let next = $state('');
@@ -55,11 +54,7 @@ async function saveName(event: SubmitEvent) {
   } else notice = `Your name could not be saved (${res.status}).`;
 }
 
-/**
- * One form for both, because they are one thing to the person filling it in — but two
- * endpoints: Better Auth's `/change-password` asks for the old one, and setting a first
- * password is server-only and refuses outright once one exists.
- */
+/** One form, two endpoints: setting a first password is server-only and refuses once one exists. */
 async function savePassword(event: SubmitEvent, hasPassword: boolean) {
   event.preventDefault();
   notice = '';
@@ -76,8 +71,7 @@ async function savePassword(event: SubmitEvent, hasPassword: boolean) {
     ? await post('/admin/api/auth/change-password', {
         currentPassword: current,
         newPassword: next,
-        // The section says so out loud: a password nobody else knows is only true if the
-        // sessions opened with the old one are gone.
+        // Sessions opened with the old password must go, or "nobody else knows it" is false.
         revokeOtherSessions: true,
       })
     : await post('/admin/api/account/set-password', { newPassword: next });
@@ -105,10 +99,7 @@ async function signOutEverywhere() {
   reload += 1;
 }
 
-/**
- * What the session row calls a device. Better Auth keeps the raw user-agent and nothing else,
- * so this is a guess at the two words a person recognises rather than a parser.
- */
+/** A guess at the two words a person recognises, not a parser. */
 function device(userAgent: string | null): string {
   if (!userAgent) return 'Unknown device';
   const browser = /Edg\//.test(userAgent)

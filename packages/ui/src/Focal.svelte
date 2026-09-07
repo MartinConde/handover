@@ -9,18 +9,19 @@ let {
   onsave,
   onclose,
 }: {
-  /** What the heading calls the picture: its file name in the library, the field's name in a form. */
+  /** What the heading calls the picture: its file name in the library. */
   name: string;
   url: string;
   focal: [number, number];
-  /** The crops this dot is previewed in: the whole site's in the library, the field's own in a form. */
+  /** The crops this dot is previewed in: the whole site's in the library. */
   presets?: { label: string; preset: Preset }[];
   onsave: (focal: [number, number]) => void;
   onclose: () => void;
 } = $props();
 
-// Whole percents: the dot is a place in a photograph, and nobody is choosing 41.7% of one.
+// svelte-ignore state_referenced_locally -- the dialog edits an initial snapshot
 let across = $state(Math.round(focal[0] * 100));
+// svelte-ignore state_referenced_locally -- the dialog edits an initial snapshot
 let down = $state(Math.round(focal[1] * 100));
 let panel = $state<HTMLElement>();
 let stage = $state<HTMLElement>();
@@ -29,8 +30,7 @@ $effect(() => {
   panel?.focus();
 });
 
-// A phone holds a picture upright whatever the site's fields crop to, so that shape is always
-// previewed after the site's own.
+// A phone holds a picture upright whatever the site's fields crop to.
 const PHONE = { label: 'Phone, upright', preset: { ratio: '9:16' } as Preset };
 const shapes = $derived(
   presets.some((p) => p.preset.ratio === PHONE.preset.ratio) ? presets : [...presets, PHONE],
@@ -72,10 +72,7 @@ const aspect = (preset: Preset) => preset.ratio?.replace(':', ' / ') ?? '4 / 3';
     <p>Put the dot on the part that has to stay in every crop. Drag it, or move it with the arrow keys.</p>
     <div class="dialog-cols">
       <div>
-        <!-- svelte-ignore a11y_no_static_element_interactions -- the handle is the control; the
-             picture is the pointer's way to the same two numbers. A press anywhere on it lands
-             the dot, and the picture itself is not draggable, or the browser would drag a ghost
-             of it instead. -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -- the handle is the control -->
         <div class="focal-stage" bind:this={stage} onpointerdown={grab} onpointermove={(e) => e.buttons === 1 && point(e)}>
           <img src={url} alt="" draggable="false" />
           <button

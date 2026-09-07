@@ -22,8 +22,7 @@ type Health = {
   locales: { locale: string; missing: number; stale: number; where?: string[] }[];
 };
 
-// The two big tiles are the shell's own indicators at tile size, so they are handed over rather
-// than asked for again: two answers about the same drafts is how a count and a drawer disagree.
+// The two big tiles are handed the shell's own counts, so a count and the drawer never disagree.
 let {
   pending,
   build,
@@ -58,12 +57,10 @@ $effect(() => {
 async function load() {
   const [own, log] = await Promise.all([
     fetch('/admin/api/dashboard'),
-    // The log's own endpoint, cut to ten here: the tile is the top of that list and not a
-    // different reading of it, so there is nothing else for a route of its own to answer.
+    // The log's own endpoint, cut to ten here: the tile is the top of that list.
     fetch('/admin/api/activity'),
   ]);
-  // Every read falls back to nothing rather than to undefined: this is the landing page, and a
-  // route answering something unexpected must leave a tile empty, not an admin that will not draw.
+  // Every read falls back to nothing, so a surprising answer empties a tile, not the admin.
   if (own.ok) {
     const body = (await own.json()) as {
       recent?: Recent[];
@@ -80,8 +77,7 @@ async function load() {
 }
 
 const held = $derived(pending.filter((entry) => entry.held_by).length);
-// The drawer's own rows, so the age is of the changes waiting and not of the eight this screen
-// happens to draw.
+// The drawer's own rows, so the age is of every change waiting, not the eight drawn here.
 const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
 </script>
 
@@ -133,8 +129,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
             >
           </p>
         {/if}
-        <!-- Offered over any publish the admin made, which is what this tile is for; the top
-             bar's pill offers it only on a failed build, where it is the way out of one. -->
+        <!-- Offered on any publish here; the top bar's pill offers it only on a failed build. -->
         {#if build.commit_sha && published}
           <div class="tile-actions">
             <button class="btn-link" type="button" onclick={() => onrevert(build?.commit_sha ?? '')}>
@@ -177,8 +172,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
       {/if}
     </section>
 
-    <!-- Absent on a one-language site: every site has a locale folder, and a site with one has
-         nothing to report about it. -->
+    <!-- Absent on a one-language site, which has nothing to report. -->
     {#if health}
       <section class="dtile" aria-labelledby="d-tr">
         <header><h2 id="d-tr">Translation health</h2></header>

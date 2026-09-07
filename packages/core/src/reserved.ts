@@ -26,8 +26,7 @@ export function newId(_siteId: string): string {
   return id;
 }
 
-// Throws on a reserved key whose shape is wrong; entry-level keys are rejected on blocks and
-// vice versa. Unprefixed keys are the schema's business and are not looked at.
+// Entry-level keys are rejected on blocks and vice versa; unprefixed keys are not looked at.
 export function checkReserved(value: unknown, path = ''): void {
   if (Array.isArray(value)) {
     for (const [i, item] of value.entries()) checkReserved(item, `${path}[${i}]`);
@@ -64,9 +63,7 @@ export function checkReserved(value: unknown, path = ''): void {
 const isStringArray = (v: unknown): v is string[] =>
   Array.isArray(v) && v.every((s) => typeof s === 'string');
 
-// Deep copy with a fresh `_id` on every block and array item, and one on an array item that
-// never had it — a hand-written template is the file that arrives without any. Pass the same
-// `ids` map for each locale file of an entry so the copies keep one shared skeleton.
+// Pass the same `ids` map for each locale file of an entry so the copies share one skeleton.
 export function regenerateIds<T>(siteId: string, data: T, ids = new Map<string, string>()): T {
   const renamed = walk(siteId, data, ids) as T;
   const machine = (renamed as { _machine?: string[] })._machine;
@@ -89,20 +86,13 @@ function walk(siteId: string, value: unknown, ids: Map<string, string>, at = '')
       return [k, next];
     }),
   );
-  // The identity the editor keys rows on and `_machine` addresses fields through, which the
-  // form gives every row it adds. Keyed by where it sits, so the languages of one copy agree
-  // about it the way a regenerated one makes them: `rowKey` pairs rows across files by `_id`,
-  // and two files inventing their own would read as drift. `stringifyEntry` sorts it to the front.
+  // Keyed by position, so the languages of one copy agree on the id instead of reading as drift.
   if (at.endsWith(']') && typeof copy._id !== 'string')
     copy._id = ids.get(at) ?? ids.set(at, newId(siteId)).get(at);
   return copy;
 }
 
-/**
- * Whether a file renders: no `_status`, and — given a locale — one the entry is offered in.
- * The top-level `_locales` is written into every file the entry has, so whichever one is read
- * says the same thing. Called with no locale it is the check it has always been.
- */
+/** `_locales` is written into every file the entry has, so whichever is read says the same. */
 export function isLive(_siteId: string, data: unknown, locale?: string): boolean {
   const entry = data as { _status?: unknown; _locales?: unknown } | null;
   if (entry?._status !== undefined) return false;

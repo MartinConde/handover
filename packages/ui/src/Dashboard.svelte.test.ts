@@ -2,14 +2,9 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Dashboard from './Dashboard.svelte';
 
-// Testing: what each tile says in the two states that differ — changes waiting or nothing
-// waiting, a language behind or none to report — and that the two buttons hand back to the
-// shell rather than doing anything themselves.
-// Not testing: the tile grid, the sidebar link that routes here, or the sentences an activity
-// row reads as, which are `activity-line`'s and are covered on the activity screen.
+// Testing: each tile's two states, buttons deferring to the shell; not the grid or activity lines.
 
-// Relative times count calendar days from local midnight, so "26 hours ago" is two days back
-// just after midnight and CI, which runs at any hour, went red on it. An afternoon is pinned.
+// Relative times count calendar days from local midnight, so an afternoon is pinned for CI.
 vi.useFakeTimers({ toFake: ['Date'] });
 vi.setSystemTime(new Date('2026-08-25T14:00:00'));
 
@@ -142,8 +137,7 @@ test('the build tile names who published and hands a revert back to the shell', 
   expect(reverted).toEqual(['def456']);
 });
 
-// A build with no commit named is the worker's newest, not this admin's publish — the pill in
-// the top bar makes the same distinction, and there is nothing here to take back.
+// A build naming no commit is the worker's newest, not this admin's publish: nothing to take back.
 test('a build this admin did not commit is not offered a revert', async () => {
   const root = show(
     { recent: [], published: { at: Date.now() - 3600_000, by: 'Anna Berg' }, translations: null },
@@ -186,8 +180,7 @@ test('the translation tile counts what is missing and what is behind its source'
   expect(lines[1]?.querySelector('.chip-missing')).not.toBeNull();
 });
 
-// The link the tile has waited for since 4.15: the list, filtered to the language it is owed
-// in. One collection is *Show*; several are named, since a list is one collection's.
+// One collection is *Show*; several are named, since a list is one collection's.
 test("the translation tile's Show lands on the list filtered to the language", async () => {
   const root = show({ recent: [], published: null, translations: HEALTH });
   await loaded();
@@ -242,8 +235,7 @@ test('a one-language site is drawn no translation tile at all', async () => {
   expect(tile(root, 'd-tr')).toBeNull();
 });
 
-// The mockup gave its six tile headings one id between them, which breaks every
-// `aria-labelledby` on the page; the ported tiles each carry their own.
+// The mockup gave its six tile headings one id, which breaks every `aria-labelledby`.
 test('every id on the filled dashboard is unique', async () => {
   const root = show(
     {

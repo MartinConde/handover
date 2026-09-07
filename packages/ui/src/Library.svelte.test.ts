@@ -3,10 +3,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import Library from './Library.svelte';
 import type { LibraryItem } from './upload.js';
 
-// Testing: the search reaching the server rather than filtering what was loaded, the usage
-// badge and the entries behind it, and tags written through the panel.
-// Not testing: uploading through the component (jsdom has no canvas; upload.ts is unit-tested)
-// or styling.
+// Not tested: uploading through the component, since jsdom has no canvas.
 
 const item = (over: Partial<LibraryItem> = {}): LibraryItem => ({
   id: 'a'.repeat(64),
@@ -130,8 +127,7 @@ test('the panel lists the entries a picture is used in, each linking to its edit
   expect(q('.usage-list .where').textContent).toBe('listings');
 });
 
-// The table does the searching: a tag is not in what was loaded, and a name past the hundredth
-// row would be a match nobody could find by filtering the browser's copy.
+// The table does the searching: a tag is not in what was loaded.
 test('a search is asked of the server, with the archived shown', async () => {
   media = [item()];
   await show();
@@ -160,8 +156,6 @@ test('a tag typed into the panel is saved to the row and shown on it', async () 
   expect(q('.tag-row .badge').textContent?.trim()).toBe('seaview ×');
 });
 
-// Archiving is the answer to "get rid of it": it is never gated, and the same button takes it
-// back out again.
 test('archiving is one button, and an archived picture is offered the way back', async () => {
   media = [item()];
   saved = item({ archived: true });
@@ -183,8 +177,7 @@ test('archiving is one button, and an archived picture is offered the way back',
 const names = () =>
   Array.from(document.body.querySelectorAll('.tile .name'), (n) => n.textContent?.trim());
 
-// The three toggles are over what is already loaded: the list carries the archived rows, and
-// recovered and unused are things the row itself says.
+// The three toggles are over what is already loaded, not the server.
 test('the filters narrow the grid to the archived, the recovered and the unused', async () => {
   media = [
     item({ uses: [{ entry: 'pages/home', title: 'Home', href: '/admin/c/pages/home' }] }),
@@ -208,8 +201,7 @@ test('the filters narrow the grid to the archived, the recovered and the unused'
   expect(q('.list-toolbar .count').textContent?.trim()).toBe('2 unused images');
 });
 
-// The panel already has the button; the tile has it too, so a client clearing out the archive
-// need not open every picture to bring one back.
+// On the tile too, so clearing out the archive need not open every picture.
 test('an archived tile offers Unarchive on the tile itself', async () => {
   media = [item({ archived: true })];
   saved = item({ archived: false });
@@ -236,8 +228,6 @@ test('delete is off while the picture is used, and the line says by how many', a
   expect(q('.lib-side .delete-hint').textContent).toContain('used in 1 place');
 });
 
-// The dialog is the *only* way to the request, and it says what deleting is rather than asking
-// whether the client is sure.
 test('deleting a picture nothing uses asks first, then takes the tile away', async () => {
   media = [item(), item({ id: 'b'.repeat(64), filename: 'old-banner.jpg' })];
   await show();
@@ -272,8 +262,7 @@ test('a delete the server refuses says so and leaves the picture where it is', a
   expect(document.querySelectorAll('.tile')).toHaveLength(1);
 });
 
-// A row the reconciliation cron wrote: an object in the bucket that no upload ever confirmed,
-// so nothing measured the picture.
+// A recovered row is an object the cron found in the bucket, so nothing measured the picture.
 test('a recovered picture is flagged and says why it is there', async () => {
   media = [item({ width: null, height: null })];
   await show();
@@ -282,8 +271,6 @@ test('a recovered picture is flagged and says why it is there', async () => {
   expect(q('.lib-side .notice').textContent).toContain('found in storage without a record');
 });
 
-// axe sees none of this: a dialog that opens takes focus, and cancelling gives it back to the
-// button that opened it.
 test('the delete dialog takes focus and hands it back on cancel', async () => {
   media = [item()];
   await show();
@@ -298,7 +285,7 @@ test('the delete dialog takes focus and hands it back on cancel', async () => {
   expect(document.activeElement).toBe(del);
 });
 
-// --- 4.4: the focal point and the crop ---
+// The focal point and the crop
 
 const setFocal = '.lib-side .actions button:nth-child(1)';
 const cropButton = '.lib-side .actions button:nth-child(2)';
@@ -311,8 +298,7 @@ const nudge = (key: string, times: number, shiftKey = false) => {
   flushSync();
 };
 
-// The dot is the picture's own default: every page that did not set one crops around it, so it
-// is written to the row and not to any file.
+// The dot is the picture's own default, so it is written to the row and not to any file.
 test('the dot moved in the dialog is saved to the row, and the panel draws it where it lands', async () => {
   media = [item()];
   saved = item({ focal: [0.42, 0.3] });
@@ -333,8 +319,7 @@ test('the dot moved in the dialog is saved to the row, and the panel draws it wh
   expect(q<HTMLElement>('.lib-side .preview .focal').style.left).toBe('42%');
 });
 
-// A browser drags a picture by default, and that drag used to swallow the dot's: the press landed
-// on the image, not the handle, and the pointer stream was cancelled for a ghost of the photo.
+// The browser's own image drag used to swallow the dot's pointer stream.
 test('the picture under the dot cannot be dragged as an image', async () => {
   media = [item()];
   await show();
@@ -344,8 +329,7 @@ test('the picture under the dot cannot be dragged as an image', async () => {
   expect(q('.focal-stage img').getAttribute('draggable')).toBe('false');
 });
 
-// A phone holds a picture upright, whatever shape the site's fields crop to, so that shape is
-// previewed beside the site's own.
+// A phone holds a picture upright, whatever shape the site's fields crop to.
 test('the previews end with a phone-shaped portrait beside the site’s own shapes', async () => {
   media = [item()];
   presets = [{ label: 'Hero image', preset: { ratio: '16:9', max: 2400 } }];
@@ -358,8 +342,7 @@ test('the previews end with a phone-shaped portrait beside the site’s own shap
   expect(q('.ratio-item:last-child .sub').textContent).toBe('Phone, upright');
 });
 
-// A row the reconciliation job wrote has no dimensions, and a crop is a rectangle of pixels
-// nobody has counted. The dot still works on it: that one is a fraction of whatever it is.
+// A crop is pixels and a recovered row has none; the dot is a fraction and still works.
 test('a picture nobody measured cannot be cropped', async () => {
   media = [item({ width: null, height: null })];
   await show();

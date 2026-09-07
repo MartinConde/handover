@@ -1,23 +1,10 @@
-/**
- * One provider, in and out: the texts to translate, the language they are in and the one they
- * are wanted in, and the same list back in the same order. A site swaps DeepL for another
- * service by handing `i18n.translate` its own function — nothing above here knows which one
- * answered, only that a machine did and `_machine` says so.
- */
+/** A site swaps DeepL for its own function; callers only know a machine answered. */
 export type Translate = (texts: string[], from: string, to: string) => Promise<string[]>;
 
-// DeepL's own cap on one request. A page of blocks goes over it, so the call is split and the
-// answers are put back in the order they were asked in.
+// DeepL's cap on one request, so the call is split and the answers reassembled in order.
 const PER_REQUEST = 50;
 
-/**
- * DeepL behind the hook. A free key ends in `:fx` and its account only answers on the free
- * host, which is the one thing a key cannot be used without knowing.
- *
- * The language codes are the locale as the site declares it: `de` is `DE` and `pt-br` is
- * `PT-BR`, which is what DeepL wants of a target. A source is the language alone — it has no
- * regional variants — so `pt-br` asks in `PT`.
- */
+/** A `:fx` key only answers on the free host; a source language has no regional variant. */
 export function deeplTranslate(_siteId: string, key: string): Translate {
   const host = key.trimEnd().endsWith(':fx') ? 'api-free.deepl.com' : 'api.deepl.com';
   return async (texts, from, to) => {
@@ -37,8 +24,7 @@ export function deeplTranslate(_siteId: string, key: string): Translate {
         translations?: { text?: string }[];
         message?: string;
       };
-      // DeepL says which of its rules was broken — an unsupported target language above all —
-      // and that is more use to whoever configured it than a status code.
+      // DeepL's message names the rule broken, which is more use than a status code.
       if (!res.ok)
         throw new Error(
           `DeepL refused the translation (${res.status})${body.message ? `: ${body.message}` : ''}`,
@@ -49,11 +35,7 @@ export function deeplTranslate(_siteId: string, key: string): Translate {
   };
 }
 
-/**
- * One file with a machine's answers in it: each path it filled written where the path says,
- * and `_machine` naming every path a machine's words are still standing at. The badge those
- * draw comes off one at a time, as somebody types over them — see `keptMachine`.
- */
+/** `_machine` names every path a machine's words still stand at; see `keptMachine`. */
 export function machineFilled(
   _siteId: string,
   data: unknown,
@@ -61,8 +43,7 @@ export function machineFilled(
 ): Record<string, unknown> {
   const out = structuredClone(isObject(data) ? data : {});
   const was = Array.isArray(out._machine) ? (out._machine as string[]) : [];
-  // A path the file has no room for — a block another language alone has — writes nothing, and
-  // a `_machine` naming a value that is not there would badge an empty field.
+  // A path the file has no room for writes nothing, or `_machine` would badge an empty field.
   const written = Object.entries(filled).filter(([path, text]) => writeAt(out, path, text));
   const put = new Set(written.map(([path]) => path));
   const machine = [...was.filter((p) => !put.has(p)), ...put];
@@ -70,12 +51,7 @@ export function machineFilled(
   return out;
 }
 
-/**
- * The paths of `before`'s `_machine` that are still a machine's words in `after`: the ones
- * whose value nobody has changed. A person typing over a machine-filled field is what takes
- * its badge off, and the save is where that is noticed — the browser sends values and never
- * says which of them it touched. A path whose field is gone goes with it.
- */
+/** The browser never says which values it touched, so an unchanged value keeps its badge. */
 export function keptMachine(_siteId: string, before: unknown, after: unknown): string[] {
   const machine = isObject(before) && Array.isArray(before._machine) ? before._machine : [];
   return (machine as string[]).filter((path) => {
@@ -84,12 +60,7 @@ export function keptMachine(_siteId: string, before: unknown, after: unknown): s
   });
 }
 
-/**
- * The address of the field a form is drawing, the way `_machine` and the drift report write
- * one: `blocks[_id=k3nf9a2p].heading`. The form knows a field by where it sits — `blocks.1.
- * heading` — and a row's position changes when somebody moves it, so the ids are read out of
- * the data on the way down. A row without one is its position, as everywhere else.
- */
+/** Rows are addressed by `_id`, since a row's position changes when somebody moves it. */
 export function fieldAddress(_siteId: string, path: readonly string[], root: unknown): string {
   let node: unknown = root;
   let out = '';
@@ -107,11 +78,7 @@ export function fieldAddress(_siteId: string, path: readonly string[], root: unk
   return out;
 }
 
-/**
- * `fieldAddress` read back: where the form draws the field that address names, as the steps
- * down the data — `['blocks', '1', 'heading']` — with each row looked up by its id where it
- * sits *now*. A row the data no longer has ends the walk.
- */
+/** `fieldAddress` read back to positions; a row the data no longer has ends the walk. */
 export function fieldPosition(
   _siteId: string,
   address: string,
@@ -134,8 +101,7 @@ export function fieldPosition(
   return out;
 }
 
-// `blocks[_id=k3nf9a2p].heading` split into the steps a walk takes: a key, or a row of the
-// array under the key before it.
+// A step is a key, or a row of the array under the key before it.
 const STEPS = /\[(?:_id=)?([^\]]+)\]|([^.[\]]+)/g;
 
 const stepsOf = (path: string) => [...path.matchAll(STEPS)].map(([, row, key]) => ({ row, key }));
@@ -150,12 +116,7 @@ function readAt(data: unknown, path: string): unknown {
   return node;
 }
 
-/**
- * Whether the value went in. A group the file does not have yet is made on the way down — a
- * translation whose every field is translated has no group at all until the first one is
- * filled — but a row it does not have is not: which blocks a file has is the entry's structure,
- * and a fill is not the place that changes it.
- */
+/** A missing group is made on the way down; a missing row is not, as a fill never adds blocks. */
 function writeAt(data: Record<string, unknown>, path: string, value: string): boolean {
   const steps = stepsOf(path);
   const last = steps.pop();

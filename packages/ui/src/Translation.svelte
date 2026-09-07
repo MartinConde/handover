@@ -33,45 +33,32 @@ let {
 }: {
   collection: string;
   slug: string;
-  /** The language this column is of — never the one the entry's structure is edited in. */
+  /** Never the language the entry's structure is edited in. */
   locale: string;
-  /** The editor's tab token: the lock is the tab's, and this column's saves are its saves. */
+  /** The editor's tab token: this column's saves are the tab's saves. */
   tab?: string;
   revision?: string;
   onrevision?: (revision: string) => void;
   lane?: ReturnType<typeof saveLane>;
   fields: readonly Field[];
   blocks: Record<string, Field[]>;
-  /** Where a stored media key is served from; an alt is written beside the picture it describes. */
   mediaBase?: string;
-  /** What this language's page would say with nothing typed into the SEO panel. */
   inheritedSeo?: ResolvedSeo;
-  /** This language's file as the editor last saw it. */
   data: Data;
-  /** The language it was translated from, for the header. */
   source: string;
-  /** Somebody else is editing this entry. The lock is on all of its languages, so this
-      column reads like the other one. */
+  /** The lock is on all of the entry's languages, so this column reads like the other one. */
   locked?: boolean;
-  /** Its source language has moved on since somebody translated this. A warning, no more. */
   stale?: boolean;
-  /** The site has something to machine-translate with; without one, none of it is drawn. */
   translator?: boolean;
-  /** The URL this language serves the entry at, for the SEO panel's previews. */
   url?: string;
-  /** The site's origin, for the SEO previews; none, and the panel draws none. */
   site?: string;
-  /** A save landed: whether this language's file is now ahead of the repository. The entry
-      keeps it, because this column is thrown away when the screen changes and its edit is not. */
+  /** The entry keeps `pending`: this column is thrown away on a screen change, its edit is not. */
   onsaved?: (pending: boolean, data?: Data) => void;
   onactivity?: () => void;
-  /** A save was refused: somebody took the entry over. The lock is the entry's, so what the
-      screen does about it belongs to the entry rather than to this column. */
+  /** The lock is the entry's, so what the screen does about a refusal belongs to the entry. */
   onrefused?: (lock: unknown) => void;
-  /** Close the second column; nothing when it is the only one on screen. */
   onclose?: () => void;
-  /** Ask to turn this language off for the entry, which deletes its file. The entry asks where
-      its readers go and commits, the way a delete does; nothing when the language cannot go. */
+  /** Absent when the language cannot go. */
   onturnoff?: () => void;
 } = $props();
 
@@ -80,24 +67,15 @@ let data = $state<Data>($state.snapshot(loaded));
 // svelte-ignore state_referenced_locally -- the loaded file is the initial value on purpose
 let saveState = $state<SaveState>({ saved: JSON.stringify(loaded), phase: 'idle' });
 const saved = $derived(saveState.saved);
-// The file as the server last had it. The badge on a machine-filled field has to come off as
-// somebody types over it and not on the next open, and what says so is the same comparison the
-// save makes: the words this file had against the words the form has now.
 // svelte-ignore state_referenced_locally -- the loaded file is the initial value on purpose
 let base = $state<Data>(loaded);
 const saving = $derived(saveState.phase === 'saving');
 let fillFailed = $state(false);
 const failed = $derived(saveState.phase === 'failed' || fillFailed);
-// Whether the stored draft of this language differs from its file in git — the server's answer
-// to the last save. A file with a draft already waiting when the entry opened is not counted:
-// the publish drawer is what lists those.
-// What the collection schema will not accept in this file yet, by field path — the server's
-// answer to the last save, the same as the entry's own form. The publish is where it blocks.
+// The server's answer to the last save; the publish is where these block.
 let problems = $state<Record<string, string>>({});
 
-// Which of this language's fields the source has moved on from, and what it says now. The
-// header already knows the file is behind; this is the second read that says where, and it is
-// only made for a file that is — an entry nobody has translated pays nothing for the marker.
+// Only read for a stale file, so an entry nobody has translated pays nothing for the marker.
 let behind = $state<{ translatedAt?: string; changed: Record<string, WordPart[]> }>({
   changed: {},
 });
@@ -119,13 +97,7 @@ const json = $derived(JSON.stringify(data));
 const machine = $derived(keptMachine('default', base, data));
 let filling = $state(false);
 
-/**
- * A machine's first draft. Without `paths` every field this language has nothing in yet is
- * filled — one button for the column; with them, the one field a Translate button is on.
- *
- * Whatever is in the form goes first: the fill is written against the stored draft, so an edit
- * still inside the wait would be overwritten by the answer coming back.
- */
+// Flushed first: the fill is written against the stored draft and would overwrite a waiting edit.
 async function fill(paths?: string[]) {
   if (!(await flush())) return;
   filling = true;
@@ -148,7 +120,7 @@ async function fill(paths?: string[]) {
   onsaved?.(body.pending, body.data);
 }
 
-// Subscribe only to snapshots; failure-state updates must not schedule another retry.
+// Subscribes only to the snapshot: a failure-state update must not schedule another retry.
 $effect(() => {
   const dirty = json !== saved;
   return untrack(() => {
@@ -193,7 +165,7 @@ async function writeSave(sent: string): Promise<boolean> {
   return true;
 }
 
-// Key order is the file's; two objects that differ only in it are the same words.
+// Two objects that differ only in key order are the same words.
 const canon = (v: unknown): string =>
   JSON.stringify(v, (_k, value) =>
     isPlain(value)
@@ -207,30 +179,20 @@ const canon = (v: unknown): string =>
 const isPlain = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
-/**
- * The source language's structure, carried into this column as it changes there: a block
- * moved, added or dropped in the other column moves here now rather than on the next open, and
- * a shared value reads here as it is typed. `reshape` is the entry's walk over this column's
- * own data, so words typed here and not yet saved are kept.
- */
+/** `reshape` walks this column's own data, so words typed here and not yet saved are kept. */
 export function sync(reshape: (target: Data) => Data): void {
   const target = $state.snapshot(data) as Data;
   const next = reshape(target);
-  // The walk stamps the format version; a file the form was handed without one does not gain
-  // one here — that is the save's business, and a key added on open would be a save on open.
+  // A `_version` added on open would be a save on open; stamping it is the save's business.
   if (!('_version' in target)) delete next._version;
   if (canon(next) !== canon(target)) data = next;
 }
 
-/** Whether this language holds an edit the drafts table has not got yet. */
 export function unsaved(): boolean {
   return saves.unsaved();
 }
 
-/**
- * Whatever is still inside the wait, stored. The publish reads the rows, so a click made a
- * second after typing here has to find this language in D1 as well as the other one.
- */
+/** The publish reads D1, so a click a second after typing must find this language there. */
 export async function flush(): Promise<boolean> {
   return saves.flush();
 }

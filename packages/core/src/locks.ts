@@ -2,10 +2,7 @@ import { and, eq, gt, lte, or } from 'drizzle-orm';
 import type { Db } from './db.js';
 import { locks, user } from './tables.js';
 
-/**
- * How long a lock outlives the beat that took it. The editor beats while somebody is typing,
- * so an abandoned tab lets go of the entry without anybody having to say it did.
- */
+/** The editor beats while somebody types, so an abandoned tab lets go without saying so. */
 export const LOCK_TTL = 120_000;
 
 /** Who is editing an entry, and when the beat that took it runs out. */
@@ -18,15 +15,7 @@ export interface Lock {
   expiresAt: number;
 }
 
-/**
- * Take the lock on one entry, or push the one we already hold further out. The expiry it now
- * carries, or `undefined` when another tab is editing it — `lockHolder` names them. The lock is
- * the tab's and not the person's: the same person in a second tab is refused too, since two
- * tabs on one draft row is the overwrite the lock exists to stop.
- *
- * One statement: the update only fires for our own row or an expired one, so two tabs asking
- * at once cannot both be told they have it.
- */
+/** One conditional upsert, so two tabs asking at once cannot both be told they have it. */
 export async function claimLock(
   siteId: string,
   db: Db,
@@ -98,11 +87,7 @@ export async function releaseLocks(siteId: string, db: Db, userId: string): Prom
   await db.delete(locks).where(and(eq(locks.siteId, siteId), eq(locks.userId, userId)));
 }
 
-/**
- * Take an entry off whoever is holding it: the same upsert as `claimLock` without the condition,
- * because Take over is a person deciding rather than two tabs racing. The holder hears about it
- * when their next save is refused.
- */
+/** Take over bypasses the racing-tab condition by user choice. */
 export async function takeLock(
   siteId: string,
   db: Db,
@@ -119,12 +104,7 @@ export async function takeLock(
   return expiresAt;
 }
 
-/**
- * The lock follows the entry a rename gave a new name: whoever has it open still has it, and
- * their next beat is about the entry that now exists. The row a free name might still carry
- * goes first, the way `recordRename` clears the draft at the new path — only a name nothing
- * holds is ever renamed onto, and a primary key that did collide would throw after the commit.
- */
+/** The row a free name might still carry goes first, the way `recordRename` clears the draft. */
 export async function moveLock(siteId: string, db: Db, from: string, to: string): Promise<void> {
   await db.delete(locks).where(and(eq(locks.siteId, siteId), eq(locks.entry, to)));
   await db

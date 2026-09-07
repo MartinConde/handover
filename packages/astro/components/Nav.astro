@@ -3,30 +3,24 @@ import { type NavLink, withSlash } from '@handover/core';
 import Nav from './Nav.astro';
 
 interface Props {
-  /** Which menu of the `navigation` global to draw, by its key. */
   menu?: string;
-  /** The menus this page's language resolved to — what `menusAt()` handed the loader. */
+  /** What `menusAt()` handed the loader. */
   menus?: Record<string, NavLink[]>;
-  /** The path being read, so the item that leads here is the one marked. */
   current?: string;
-  /** What the landmark is called: a page with two navs needs them told apart. */
+  /** A page with two navs needs them told apart. */
   label?: string;
-  /** The recursion's own: one level's items, drawn as a list inside their parent. */
+  /** The recursion's own. */
   items?: NavLink[];
 }
 
 const { menu = '', menus = {}, current, label = 'Main', items } = Astro.props;
 const list = items ?? menus[menu] ?? [];
-// The landmark belongs to the menu, not to every level of it; the nested lists are the same
-// component without one. An empty menu draws nothing at all rather than a landmark saying so.
-// `Fragment` is the compiler's own — importing it collides with what it injects.
+// `Fragment` is the compiler's own: importing it collides with what it injects.
 const Tag = items ? Fragment : 'nav';
-// A trailing slash is the same page: the site links `/listings/` and a menu stores `/listings`,
-// and the reader is on one page either way.
+// The site links `/listings/` and a menu stores `/listings`: the same page.
 const bare = (path: string) => path.replace(/\/+$/, '');
 const here = (link: NavLink) => current !== undefined && bare(link.href) === bare(current);
-// The links are written the way the page being read is, so none of them is a hop through the
-// redirect the site answers the other form with; without `current` they are left as stored.
+// Links match the current page's slash form so none is a hop through the site's redirect.
 const href = (link: NavLink) =>
   current === undefined ? link.href : withSlash(link.href, current.endsWith('/'));
 ---

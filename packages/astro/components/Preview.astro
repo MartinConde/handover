@@ -1,6 +1,5 @@
 ---
-// The injected `/_preview/[...path]` route. It is an `.astro` file because it renders the
-// site's own components; every decision behind it is `preview()`, which is where the tests are.
+// An .astro file because it renders the site's own components; every decision is in `preview()`.
 import { getCollection, getEntry } from 'astro:content';
 import { preview } from '../dist/routes/preview.js';
 

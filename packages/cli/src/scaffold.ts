@@ -24,16 +24,14 @@ export const hero = defineBlock('hero', {
 });
 export const textSection = defineBlock('textSection', { body: richtext('full') });
 
-// \`BlockType\` is keyof this plain object, so a block with a schema and no component in
-// src/blocks/registry.ts fails typecheck there rather than at build.
+// \`BlockType\` is keyof this plain object.
 const blockTypes = { hero, textSection };
 export const registry: BlockRegistry = blockTypes;
 export type BlockType = keyof typeof blockTypes;
 
 export const page = z.object({
   title: z.string(),
-  // What a search result and a shared link say about this page. Empty is the site's own
-  // defaults below — see docs/seo.md.
+  // What a search result and a shared link say about this page.
   seo: seo.meta({ label: 'SEO' }).optional(),
   blocks: blocks(() => registry),
 });
@@ -45,7 +43,7 @@ export const site = z
   .object({
     name: z.string(),
     footerText: z.string(),
-    // Every page falls back to these. The package finds them by this key.
+    // The package finds these page defaults by key.
     defaultSeo: seoDefaults.optional(),
   })
   .meta({ label: 'Site details', description: 'The name and footer line every page carries' });
@@ -58,13 +56,10 @@ import { defineCollection } from 'astro:content';
 import { z } from 'astro/zod';
 import { page } from './content/schemas';
 
-// The entry id is the file's path — \`<locale>/<name>\` — and nothing else. Astro's default
-// reads a \`slug\` out of the data and files the entry under that instead, which is where
-// \`localizedSlugs\` keeps an address.
+// The entry id is the file's path — \`<locale>/<name>\` — and nothing else.
 const byPath = ({ entry }: { entry: string }) => entry.replace(/\\.ya?ml$/, '');
 
-// A plain \`z.object\` drops every key it does not declare, and the reserved ones are declared
-// nowhere: without this the built data store holds no \`_status\` and a hidden entry renders.
+// A plain \`z.object\` drops every key it does not declare.
 const withReserved = <T extends z.ZodObject>(schema: T) =>
   schema.extend({
     _status: z.literal('hidden').optional(),
@@ -76,8 +71,7 @@ export const collections = {
     loader: glob({ pattern: '**/*.yaml', base: './src/content/pages', generateId: byPath }),
     schema: withReserved(page),
   }),
-  // One collection, a schema per file: each global is held to its own in \`cms.config.ts\`,
-  // so what the build wants here is the file as it stands.
+  // One collection, a schema per file: each global is held to its own in \`cms.config.ts\`.
   globals: defineCollection({
     loader: glob({ pattern: '**/*.yaml', base: './src/content/globals', generateId: byPath }),
     schema: z.looseObject({}),
@@ -194,9 +188,7 @@ export const staticSource: Source = createStaticSource('default', {
   getCollection: (collection) => getCollection(collection),
 });
 
-// A miss is a value and not an error: the page answers 404 with it, and anything thrown here
-// is a real problem rather than a page nobody wrote. Preview calls this same function with a
-// source that reads the unpublished drafts.
+// A miss is a value and not an error: the page answers 404 with it.
 export async function load(source: Source, { locale, slug }: { locale: string; slug: string }) {
   const entry = await entryAt('default', source, cms, 'pages', locale, slug);
   if (!entry) return undefined;
@@ -253,11 +245,9 @@ export function starter({ locales, defaultLocale }: I18n): Record<string, string
     'src/layouts/Page.astro': LAYOUT,
     'src/loaders/page.ts': LOADER,
     'src/pages/[slug].astro': route(defaultLocale, '../'),
-    // One route per language, each in that language's own folder.
     ...Object.fromEntries(others.map((l) => [`src/pages/${l}/[slug].astro`, route(l, '../../')])),
     [`src/content/pages/${defaultLocale}/home.yaml`]: HOME(),
-    // A declared global with no file in the default language stops the build; one with no file
-    // in a language throws when a page in it renders. Both, so neither happens.
+    // A global missing in any language breaks either the build or that language's pages.
     ...Object.fromEntries(locales.map((l) => [`src/content/globals/${l}/site.yaml`, SITE_YAML])),
   };
 }
@@ -295,14 +285,10 @@ const ASTRO_CONFIGS = [
   'astro.config.mts',
 ];
 
-/**
- * The languages the site already declares. Stated in two files that have to agree, and this is
- * the one that exists first — guessing `en` into the other would fail the build it just wrote.
- */
+/** Read from astro.config rather than guessed: `en` guessed wrong fails the build just written. */
 export function i18nOf(cwd: string): I18n {
   const path = ASTRO_CONFIGS.map((f) => join(cwd, f)).find((f) => existsSync(f));
-  // Whole file rather than the `i18n` block: `routing: { … }` nests inside it, and stopping at
-  // the first closing brace loses whichever of the two keys sits after it.
+  // The whole file, not the `i18n` block: `routing: { … }` nests inside it.
   const text = path ? readFileSync(path, 'utf8') : '';
   const listed = /locales\s*:\s*\[([^\]]*)\]/.exec(text)?.[1] ?? '';
   const locales = [...listed.matchAll(/['"]([\w-]+)['"]/g)].map((m) => m[1] as string);
@@ -314,19 +300,14 @@ export function i18nOf(cwd: string): I18n {
   };
 }
 
-/**
- * The collections an existing `content.config.ts` declares, and whether each one's schema is a
- * name this command can import. An inline `z.object` is not: it is named on stdout so its owner
- * moves it into `schemas.ts`, which is where `cms.config.ts` has to read it from.
- */
+/** An inline `z.object` has no name to import, so it is reported for its owner to move. */
 export function collectionsOf(text: string): { name: string; schema?: string }[] {
   const decl = /(['"]?)([A-Za-z][\w-]*)\1\s*:\s*defineCollection\(/g;
   const starts = [...text.matchAll(decl)];
   return starts
     .map((match, i) => {
       const body = text.slice(match.index, starts[i + 1]?.index ?? text.length);
-      // `schema: withReserved(listing)` and `schema: listing` are both the name; an inline
-      // `z.object({…})` matches neither and comes back without one.
+      // `withReserved(listing)` and bare `listing` both name it; an inline `z.object` does not.
       const schema = /schema:\s*(?:\w+\()?\s*([A-Za-z_$][\w$]*)\s*[,)\n]/.exec(body)?.[1];
       return { name: match[2] as string, schema };
     })

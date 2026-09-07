@@ -28,8 +28,7 @@ afterEach(async () => {
   await db().delete(settings);
 });
 
-// Two secrets a test can tell apart, each 32 bytes as base64 — what `openssl rand -base64 32`
-// prints.
+// Two secrets a test can tell apart, each 32 bytes as base64.
 const base64 = (byte: number) => btoa(String.fromCharCode(...new Uint8Array(32).fill(byte)));
 const SECRET = base64(7);
 const OTHER = base64(9);
@@ -68,8 +67,7 @@ test('replacing a key answers with the new one', async () => {
   expect(row?.updatedBy).toBe('usr_anna');
 });
 
-// The state every site starts in, and the one the hot path meets: nothing stored, and no
-// secret either. It must not be an error.
+// The state every site starts in, and the one the hot path meets.
 test('a key nothing was written for reads as nothing without a secret', async () => {
   expect(await readSetting('default', db(), undefined, 'deepl')).toBeUndefined();
 });

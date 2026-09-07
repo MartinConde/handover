@@ -2,9 +2,7 @@ import { type ContentSource, entryAt, getEntryLocales, menusAt } from '@handover
 import { beforeEach, expect, test, vi } from 'vitest';
 import { preview } from './preview.js';
 
-// What the session is worth is proven against a real D1 in core's auth.test.ts; what this file
-// tests is which requests ever get past it, what every answer carries either way, and what a
-// request that is let through renders.
+// What the session is worth is proven against a real D1 in core's auth.test.ts.
 let session: { user: { id: string } } | null = null;
 vi.mock('../auth.js', () => ({
   createAuth: () => ({ api: { getSession: async () => session } }),
@@ -38,8 +36,7 @@ vi.mock('@handover/core', async (original) => ({
   draftFiles: async () => rows,
 }));
 
-// The site's own loader, as `src/loaders/listing.ts`: it reads through the source it is handed,
-// which is the whole point — the same function the static page calls, over the drafts.
+// The site's own loader, as `src/loaders/listing.ts`.
 const Page = 'Page.astro';
 const Index = 'Index.astro';
 let loader: Record<string, unknown> = {};
@@ -149,8 +146,7 @@ test('a path the site serves no page at is not found', async () => {
   expect(((await get('samples/everything')).result as Response).status).toBe(404);
 });
 
-// The gate is on the refusals too: a 401 that a CDN cached, or that a stranger's page could
-// frame, is the same hole as a rendered one.
+// The gate is on the refusals too: a 401 that a CDN cached, or that a stranger's page could frame.
 test.each([
   ['signed out', null, 'listings/mill-house'],
   ['no such page', { user: { id: 'u1' } }, 'nope/nope/nope'],
@@ -194,8 +190,7 @@ test("an index renders the collection's index component with the drafts in the l
   });
 });
 
-// Tier 2: the entry has never been built, so the site has no route to it and `getEntry` on the
-// build has nothing to answer with — the row is the whole page.
+// Tier 2: the entry has never been built.
 test('an entry the build has never seen renders from its draft alone', async () => {
   rows.push({ path: 'src/content/listings/en/barn.yaml', contents: 'title: "The Barn"\n' });
 

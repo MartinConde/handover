@@ -38,8 +38,7 @@ test('a key that is simply absent reads as required, whatever its type', () => {
     { path: 'presenter', message: 'Required' },
     { path: 'minutes', message: 'Required' },
     { path: 'studio.street', message: 'Required' },
-    // An enum reports the options it wanted and a union reports every branch it tried; a key
-    // that is not there is still just missing.
+    // An enum and a union would otherwise report what they tried.
     { path: 'slot', message: 'Required' },
     { path: 'cta', message: 'Required' },
   ]);
@@ -60,8 +59,7 @@ test('a row of an array is named by its index', () => {
   ]);
 });
 
-// A blocks() field is a union, so every block type reports on every block. The one the
-// editor is looking at is the branch that did not fail on a reserved key.
+// A blocks() union reports every branch; the right one is the branch that did not fail on `_type`.
 test('a missing field inside a block is named on the field, not on the block', () => {
   const body = [
     { _type: 'prose', _id: 'b1', body: 'Hello' },

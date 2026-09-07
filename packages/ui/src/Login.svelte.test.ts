@@ -72,8 +72,7 @@ test('a site with both offers the link as the primary way in and GitHub as a tex
   expect(text(root)).toContain('Continue with GitHub');
 });
 
-// The form must not confirm which addresses have an account, so it renders the same card
-// whatever was typed — the server answers the same for both by design.
+// The form must not confirm which addresses have an account, so it renders the same card for any.
 test('asking for a link says check your inbox for any address at all', async () => {
   const calls = server(ok);
   const root = show(BOTH);
@@ -108,8 +107,7 @@ test('a dead link lands back here saying so, with one tap to a fresh one', () =>
   expect(root.querySelector('.btn-primary')?.textContent?.trim()).toBe('Send a new link');
 });
 
-// Any refusal reads the same. Better Auth's own code for "this GitHub account has no row" is
-// `signup_disabled`, and rendering that would tell a stranger their address is unknown here.
+// Better Auth's `signup_disabled` would tell a stranger their address is unknown here.
 test('a refused GitHub sign-in reads the same as an expired link', () => {
   const root = show(BOTH, '/admin', '?error=signup_disabled');
 
@@ -146,8 +144,7 @@ test('a new password under twelve characters is refused without asking the serve
   expect(root.querySelector('input#new-password')?.getAttribute('aria-invalid')).toBe('true');
 });
 
-// The same refusal on a site with no emailed link: the expired-link wording would be a lie, so
-// it reads as the one message the form gives for everything else.
+// With no emailed link the expired-link wording would be a lie.
 test('a refused GitHub sign-in on a password-only site does not talk about links', () => {
   const root = show({ emailLink: false, github: true }, '/admin', '?error=signup_disabled');
 

@@ -18,9 +18,7 @@ const tags = Object.keys(assets)
   )
   .join('\n    ');
 
-// The one value in the shell that is not the same on every site. It is two booleans, so it
-// carries nothing a signed-out visitor could not work out from the buttons anyway — and it
-// saves the login a request it has no session to make.
+// The one value in the shell that is not the same on every site.
 const shell = (methods: string) => `<!doctype html>
 <html lang="en">
   <head>

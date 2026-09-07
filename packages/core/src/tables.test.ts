@@ -53,8 +53,7 @@ test('the migration creates every table and index the docs specify', async () =>
   expect(await names('index')).toContain('activity_site_at');
 });
 
-// Phase 3 has one migration, so a plugin turned on later has no table to arrive in. These
-// columns are the ones only the admin plugin and database-backed rate limiting produce.
+// One migration only, so a plugin turned on later has no table to arrive in.
 test('the auth tables carry the whole plugin set', async () => {
   expect(await columns('user')).toEqual(
     expect.arrayContaining(['role', 'banned', 'ban_reason', 'ban_expires']),

@@ -66,8 +66,7 @@ const REASONS = {
 } as const;
 const WHEN = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
 
-// The whole file is on screen, so the search is over what is loaded: unlike the media library
-// there is no next page for a match to be hiding on.
+// The whole file is on screen, so unlike the media library the search is over what is loaded.
 const shown = $derived(
   rules.filter((rule) => {
     const q = query.trim().toLowerCase();
@@ -86,8 +85,7 @@ const months = (rule: Rule) =>
   Math.max(1, Math.round((Date.now() - Date.parse(rule.createdAt)) / (30.44 * 24 * 3600 * 1000)));
 const young = (rule: Rule) => Date.now() - Date.parse(rule.createdAt) < YEAR;
 
-// Which language the destination is picked in: the one the old address is under, since that is
-// the reader being sent on. A path with no segment of its own is the site's default language.
+// The destination is picked in the old address's language, since that is the reader sent on.
 const toLocale = $derived(
   (known.locales ?? []).find(
     (l) => writing?.from === `/${l}` || writing?.from.startsWith(`/${l}/`),
@@ -96,8 +94,7 @@ const toLocale = $derived(
     known.locales[0] ??
     '',
 );
-// A rule already pointing at the address being claimed will be pointed at the new one instead,
-// which the client would otherwise see change and not know why.
+// A rule already pointing at the claimed address will be re-pointed, which the client should hear.
 const chained = $derived(
   writing ? rules.find((r) => r.to === writing?.from && r._id !== writing?.id) : undefined,
 );
@@ -161,18 +158,13 @@ const lands = (rule: Rule, at: string) => {
   return there.origin === to.origin && trimmed(there.pathname) === trimmed(to.pathname);
 };
 
-// Asked of the live site, from the browser: the file is not the answer, since a rule is live
-// only after a publish and a build, and between the two the table is right while the site is
-// not. The redirect is followed and where it ended up is the verdict — a status code alone would
-// not say whether the rule ran, and the browser cache is bypassed so a rule changed today is not
-// answered by the 301 it cached last week.
+// Asked of the live site, cache bypassed: the file is only live after a publish and a build.
 async function probe(rule: Rule): Promise<Verdict> {
   let res: Response;
   try {
     res = await fetch(rule.from, { cache: 'no-store' });
   } catch {
-    // Following a redirect off this site is a request to another origin, which the browser
-    // will not show this page. For a rule that points off the site, that is the rule working.
+    // The browser hides a cross-origin redirect; for a rule pointing off the site that is success.
     return rule.to.startsWith('/')
       ? {
           kind: 'wait',
@@ -219,8 +211,7 @@ async function probe(rule: Rule): Promise<Verdict> {
   };
 }
 
-// Busy rather than disabled while the site is asked: a disabled button drops the focus, and a
-// keyboard would land back at the top of the page for every Test.
+// Busy rather than disabled: a disabled button drops the focus to the top of the page.
 async function test(rule: Rule) {
   if (tested?.id === rule._id && !tested.verdict) return;
   tested = { id: rule._id };
@@ -353,8 +344,7 @@ async function remove() {
                       {rule.from}</span
                     ></button
                   >
-                  <!-- Greyed with aria-disabled rather than disabled: a disabled button takes no
-                       focus, so a keyboard would walk past the reason without hearing it. -->
+                  <!-- aria-disabled, not disabled: a disabled button would skip the reason. -->
                   <button
                     class="btn btn-ghost btn-sm"
                     type="button"
@@ -376,8 +366,7 @@ async function remove() {
                   >
                 </div>
               </div>
-              <!-- The verdict sits under its row rather than floating over the next one: what the
-                   live site said belongs beside the rule it was asked about. -->
+              <!-- The verdict sits under its row rather than floating over the next one. -->
               {#if verdict}
                 <div class="td verdict-cell" role="cell" aria-colspan="4">
                   <div class="test-pop is-{verdict.kind}" role="status">
@@ -412,8 +401,7 @@ async function remove() {
   </div>
 </main>
 
-<!-- Not aria-modal: the shell behind stays reachable, as it does on the library and on Members,
-     and claiming a focus trap that is not there is worse than not claiming one. -->
+<!-- Not aria-modal: the shell behind stays reachable, as on the library and Members. -->
 {#if writing}
   <div class="scrim">
     <div class="dialog is-wide" role="dialog" aria-labelledby="rd-h">
@@ -480,15 +468,13 @@ async function remove() {
               />
             </div>
           {/if}
-          <!-- What the rule will say, whichever half was used: a picked page is an address like
-               any other, and the client is about to publish it. -->
+          <!-- A picked page is an address like any other, so the rule is shown as it will read. -->
           <p class="hint">
             Visitors go to <code>{writing.to || '…'}</code>
           </p>
           {#if bad?.field === 'to'}<p class="error" id="rd-to-e">{bad.message}</p>{/if}
         </fieldset>
-        <!-- A fieldset rather than the mockup's labelled group: two radios are what a legend
-             is for, and a <label> naming no control is a label a screen reader drops. -->
+        <!-- A fieldset: a <label> naming no control is a label a screen reader drops. -->
         <fieldset>
           <legend>How permanent is this?</legend>
           <label class="choice">

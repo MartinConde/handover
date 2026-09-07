@@ -18,8 +18,7 @@ export const plural = (n: number, what: string) =>
   `${n} ${n === 1 ? what.replace(/s$/, '') : what}`;
 
 const LOCALE = /^src\/content\/[^/]+\/([^/]+)\//;
-// The languages of one entry share their structure, so the same field in each of them is the
-// same problem said twice — one line naming both, since the client's edit is one edit.
+// The same field in two language files is one problem, since the client's edit is one edit.
 export function merged(items: CheckItem[]): CheckLine[] {
   const lines: CheckLine[] = [];
   for (const item of items) {
@@ -33,8 +32,7 @@ export function merged(items: CheckItem[]): CheckLine[] {
   return lines.sort((a, b) => WORST[a.severity] - WORST[b.severity]);
 }
 
-// Severity is a word before it is a colour, and the worst word present is also what the button
-// says: only an error stops a publish, and the rest is the client's call.
+// Only an error stops a publish; the worst word present is also what the button says.
 export function verdict(lines: CheckLine[]): string {
   if (!lines.length) return 'Nothing found.';
   const count = (of: CheckLine['severity'], what: string) => {
@@ -82,8 +80,7 @@ const notes = $derived(lines.filter((line) => line.severity === 'info'));
       </span>
     {/if}
     <span class="msg">{item.message}</span>
-    <!-- The machine-translation note is about a field the client has read and not about a
-         mistake in it, so it is the one with nowhere to go. -->
+    <!-- The machine-translation note is not about a mistake, so it has nowhere to go. -->
     {#if goTo && item.fieldPath && item.check !== 'translation-machine'}
       <a class="btn-link" href={sitePath(goTo(item))} onclick={onclose}>Go to field</a>
     {/if}
@@ -93,8 +90,7 @@ const notes = $derived(lines.filter((line) => line.severity === 'info'));
 {#each lines.filter((item) => item.severity !== 'info') as item (item.path + item.fieldPath + item.check)}
   {@render line(item)}
 {/each}
-<!-- A note is worth a read, not a wall: a site with no SEO defaults gets two on every entry,
-     and what stops or changes a publish has to stay in view. -->
+<!-- Notes fold away so what stops or changes a publish stays in view. -->
 {#if notes.length}
   <details class="check-notes">
     <summary>{plural(notes.length, 'notes')}</summary>

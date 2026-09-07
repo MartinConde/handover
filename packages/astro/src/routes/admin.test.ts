@@ -5,8 +5,7 @@ import { GET } from './admin.js';
 vi.mock('virtual:handover/ui', () => ({
   default: { 'main-abc123.js': 'console.log("shell")', 'main-abc123.css': 'body{margin:0}' },
 }));
-// The shell says which ways in the site has, so it reads the same env the login is mounted
-// from. What a site with none of them looks like is the default here.
+// The shell reads the same env the login is mounted from; a site with none is the default here.
 let baseUrl: string | undefined;
 let clientId: string | undefined;
 vi.mock('cloudflare:workers', () => ({
@@ -55,8 +54,7 @@ test('unknown assets are 404, not the shell', async () => {
   expect((await GET(ctx('_assets/nope.js'))).status).toBe(404);
 });
 
-// The login is the one screen with no session, so it cannot ask an endpoint behind one which
-// ways in exist. What the shell says has to be what `createAuth` actually mounts.
+// The login has no session, so the shell itself must say which ways in `createAuth` mounts.
 test('the shell tells the login which ways in this site has', async () => {
   baseUrl = 'https://demo.example';
   clientId = 'gh_id';

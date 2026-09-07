@@ -45,9 +45,7 @@ interface Choice {
 const missingFrom = (row: Drift) => row.expected.filter((l) => !row.in.includes(l));
 const extraIn = (row: Drift) => row.in.filter((l) => !row.expected.includes(l));
 
-// Not a fixed three: the answers come from which languages have the block against which should.
-// Making the files say what the mark says, making the mark say what the files say, and — where
-// a language is missing it — not having it at all, which is the alternative to translating it.
+// Not a fixed three: the choices come from which languages have the block against which should.
 function choicesFor(row: Drift): Choice[] {
   const missing = missingFrom(row);
   const extra = extraIn(row);
@@ -111,8 +109,7 @@ async function apply() {
   });
   busy = false;
   if (!res.ok) {
-    // A 409 here is the report having moved on under the tab, which reading the entry again
-    // is the answer to — the same as every other way out of this panel.
+    // A 409 is the report having moved on under the tab; reading the entry again is the answer.
     error =
       res.status === 409
         ? 'This entry changed while you were deciding. Reload it and look again.'

@@ -2,10 +2,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import PagePicker, { type PickEntry } from './PagePicker.svelte';
 
-// Testing: what the list is filtered and grouped by, that the keyboard walks it without a
-// pointer, and that closing is one key. What a chosen row writes, the collection lock, the
-// refusal of an entry with no address and the refusal of a scheme belong to the fields that
-// open the picker and are tested through them in Fields.svelte.test.ts.
+// Testing: what the list is filtered and grouped by, that the keyboard walks it without a pointer.
 
 const OFFERED: PickEntry[] = [
   {
@@ -107,8 +104,7 @@ test('searching matches the title and the path, and says so when nothing does', 
   expect(q('.picker-list .hint').textContent).toBe('Nothing here matches “nothing like this”');
 });
 
-// The rows are buttons, so Tab reaches them all; the arrows are what makes a long list
-// bearable from the search box the picker opens with the cursor in.
+// The rows are buttons, so Tab reaches them all.
 test('the arrows walk the rows from the search box down, and wrap at both ends', async () => {
   await show();
   press('ArrowDown');
@@ -131,8 +127,7 @@ test('a row hands back the entry it stands for, and Escape hands back nothing', 
   expect(closed).toBe(true);
 });
 
-// 3.26 listed a hidden entry with nothing to say about it. Said, not refused: pointing at one
-// is sometimes right, and a list that quietly drops rows is a list nobody trusts.
+// 3.26 listed a hidden entry with nothing to say about it.
 test('a hidden entry is offered with the reason it is a poor answer', async () => {
   await show([{ ...(OFFERED[0] as PickEntry) }, { ...(OFFERED[1] as PickEntry), hidden: true }]);
 
@@ -148,8 +143,7 @@ test('a hidden entry is offered with the reason it is a poor answer', async () =
   expect(picked?.path).toBe('listings/mill-house');
 });
 
-// The mockup's roles, which the shipped component never had: the rows are options of one
-// listbox, grouped under the collection names, and the chosen one says so.
+// The mockup's roles, which the shipped component never had.
 test('the list is a listbox of options, and the chosen row is the selected one', async () => {
   await show(OFFERED, { chosen: 'pages/contact' });
 

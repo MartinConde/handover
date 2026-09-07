@@ -41,8 +41,7 @@ let {
   ondiscarded,
 }: {
   entries: Entry[];
-  /** The site's default language: the one an entry's structure is written in, and the one a
-   * check found in several files opens. */
+  /** The language a check found in several files opens. */
   defaultLocale?: string;
   /** Where a stored media key is served from, for a replaced picture's thumbnails. */
   mediaBase?: string;
@@ -52,15 +51,11 @@ let {
   onpublished: (count: number) => void;
   /** Undo the commit this drawer just made; the shell owns the confirmation. */
   onrevert: (commitSha: string) => void;
-  /**
-   * A draft was thrown away or written over by a resolution: the entry behind it has to be
-   * read again wherever it is open.
-   */
+  /** A draft was discarded or overwritten, so the entry must be reread wherever it is open. */
   ondiscarded: () => void;
 } = $props();
 
-// The shell behind the drawer goes inert, so focus has to come with it or be lost — and the
-// confirmation takes it in turn, giving it back when it closes.
+// The inert shell would lose the focus, so the drawer takes it and the confirmation in turn.
 let panel = $state<HTMLElement>();
 let confirmPanel = $state<HTMLElement>();
 $effect(() => (confirmPanel ?? panel)?.focus());
@@ -76,8 +71,7 @@ let conflicts = $state<string[]>([]);
 let checks = $state<CheckItem[]>([]);
 /** The pass could not be run at all — which holds nothing back: it is a lint, not a gate. */
 let checksFailed = $state(false);
-// What the results on screen were asked for. Plain, not state: it decides which answer to keep
-// and nothing draws it.
+// Plain, not state: it only decides which answer to keep and nothing draws it.
 let asked = '';
 /** Entries whose stored file is not everything their schema needs; fixed where they are edited. */
 let unready = $state<string[]>([]);
@@ -94,15 +88,11 @@ let changes = $state<
   Record<string, { groups: DiffGroup[]; redirects: { from: string; to: string }[] }>
 >({});
 let reading = $state('');
-// What the client changed their mind about, not what is checked: the default is every entry
-// except the ones on hold, and a row this publish was refused over is off whatever they said.
-// Storing the selection itself would either be recomputed on every reload — losing the refusal
-// — or unable to take a refused row back out.
+// Only the changes of mind are stored: a stored selection could not drop a refused row.
 let toggled = $state<string[]>([]);
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-// The pill belongs to the commit this drawer made, not to whatever the shell is showing: a
-// second publish elsewhere would otherwise put its build beside this one's result.
+// Only this drawer's commit gets the pill, or a publish elsewhere would show its build here.
 const ours = $derived(build && committed && build.commit_sha === committed ? build : undefined);
 const named = (entry: Entry) => entry.title;
 
@@ -110,47 +100,39 @@ const blocked = $derived([...conflicts, ...unready, ...drifted]);
 const checked = (entry: Entry) =>
   !blocked.includes(entry.key) && !entry.held_by !== toggled.includes(entry.key);
 
-// What this publish would commit, and what it would leave behind. A held entry is somebody
-// else's promise not to ship half a page, so it is listed rather than quietly missing.
+// A held entry is a promise not to ship half a page, so it is listed rather than missing.
 const ready = $derived(entries.filter((e) => !e.held_by));
 const held = $derived(entries.filter((e) => e.held_by));
 const selected = $derived(entries.filter(checked));
 
-// The results of the set as it stands. Filtered here as well as sent to the server, so
-// unchecking an entry takes its checks off the screen before the next answer arrives.
+// Filtered here too, so unchecking an entry drops its checks before the next answer arrives.
 const found = $derived(checks.filter((c) => selected.some((e) => e.key === c.entry)));
 
-// Grouped by entry and each group worst first, the groups themselves worst first: *which page
-// is this about* is the first question, and "no alt text" means nothing without it.
+// Grouped by entry, worst first: "no alt text" means nothing without which page it is about.
 const groups = $derived(
   entries
     .filter((entry) => found.some((c) => c.entry === entry.key))
     .map((entry) => ({ entry, items: merged(found.filter((c) => c.entry === entry.key)) }))
     .sort((a, b) => WORST[a.items[0]?.severity ?? 'info'] - WORST[b.items[0]?.severity ?? 'info']),
 );
-// A note about a page that is not in the set at all — the daily hidden check's — has no row to
-// sit under and is not the set's to answer for, so it is listed on its own and never counted.
+// A check on a page outside the set has no row to sit under, so it is listed apart, uncounted.
 const elsewhere = $derived(merged(checks.filter((c) => !entries.some((e) => e.key === c.entry))));
 // Counted as the client reads them: one line is one problem, however many files it is in.
 const lines = $derived(groups.flatMap((g) => g.items));
 const errors = $derived(lines.filter((c) => c.severity === 'error'));
 const warnings = $derived(lines.filter((c) => c.severity === 'warn'));
 
-// Where a result is answered: the entry it is in, the panel that field is edited on, and the
-// field itself for the editor to land on — addressed the way the check names it, so it still
-// lands after its block has been moved. A global is edited on the site screen and has no tabs.
+// Addressed the way the check names the field, so it still lands after its block has moved.
 const goTo = (item: CheckLine) => {
   const [collection = '', slug = ''] = item.entry.split('/');
-  // The default language when the line covers it — the language the fix is written in —
-  // rather than whichever file the checks happened to list first.
+  // The default language is the one the fix is written in, not whichever file was listed first.
   const locale = item.locales.find((l) => l === defaultLocale) ?? item.locales[0];
   const query = new URLSearchParams({ field: item.fieldPath, ...(locale ? { locale } : {}) });
   if (collection === 'globals') return `/admin/site/${slug}?${query}`;
   return `/admin/c/${collection}/${slug}${item.fieldPath.startsWith('seo') ? '/seo' : ''}?${query}`;
 };
 
-// "3 pages · 2 listings · +1 redirect" — the collections behind the entries, in the order they
-// first appear, and what their address changes owe.
+// "3 pages · 2 listings · +1 redirect", collections in the order they first appear.
 const rules = $derived(entries.reduce((n, e) => n + (e.redirects ?? 0), 0));
 const summary = $derived(
   [
@@ -161,25 +143,20 @@ const summary = $derived(
   ].join(' · '),
 );
 
-// What a refusal says. A conflict names its entries, and those rows carry the rest of it; a
-// branch that moved names none, and saying so in the server's words beats guessing. Both ways
-// out are named, in the order they are worth taking: Resolve keeps what was written.
+// A moved branch names no entries, so the server's own sentence stands as it is.
 const refusal = (body: string, keys: string[]) => {
   if (!keys.length) return `Nothing was published. ${body}`;
   const [what, them] = keys.length === 1 ? ['One entry', 'it'] : [`${keys.length} entries`, 'them'];
   return `Nothing was published. ${what} changed in the repository after you opened ${them}. Resolve ${them} to keep what you wrote, or discard your changes to take what is there now.`;
 };
 
-// The other refusal: nothing was taken from anyone, the entry simply is not finished. Unlike a
-// conflict, coming back and pressing again can work — so the way out for a field with no editor
-// yet is named, because filling it in is not one.
+// Pressing again can work here, so the way out for a field with no editor yet is named.
 const incomplete = (keys: string[]) =>
   keys.length === 1
     ? 'Nothing was published. One entry is not finished — open it to see what is missing. Delete it if it cannot be filled in yet.'
     : `Nothing was published. ${keys.length} entries are not finished — open them to see what is missing. Delete the ones that cannot be filled in yet.`;
 
-// And the third: the entry's own files disagree about which blocks it has. Nothing was taken
-// from anyone and no draft is stale, so Discard is not the way out — the files themselves are.
+// No draft is stale here, so Discard is not the way out; the files themselves are.
 const adrift = (keys: string[]) =>
   keys.length === 1
     ? "Nothing was published. One entry's languages disagree about which blocks it has — the files have to agree before it can go out."
@@ -189,22 +166,15 @@ const adrift = (keys: string[]) =>
 const entriesOf = (paths: string[]) =>
   entries.filter((e) => e.files.some((f) => paths.includes(f))).map((e) => e.key);
 
-// The pass runs over what is selected rather than over everything pending: a link is checked
-// against the site as *this* publish would leave it, so a page only an unselected draft would
-// create is a page that is not there.
+// Linted over the selection: a page only an unselected draft would create is not there.
 $effect(() => {
   void lint(selected.map((e) => e.key));
 });
 
-/**
- * The lint, in a request of its own. It refuses nothing and holds nothing back — an answer that
- * never comes leaves the publish exactly where it was, because a check nobody could run is not
- * a reason to stop a client publishing their own site.
- */
+/** A check nobody could run is no reason to stop a publish, so the lint holds nothing back. */
 async function lint(keys: string[]): Promise<void> {
   const of = keys.join(' ');
   asked = of;
-  // Nothing chosen is nothing to read: an empty set has no answer worth a round trip.
   if (!keys.length) {
     checks = [];
     checksFailed = false;
@@ -215,8 +185,7 @@ async function lint(keys: string[]): Promise<void> {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ entries: keys }),
   }).catch(() => undefined);
-  // A selection that moved on while this was in flight: the answer is about a set nobody is
-  // looking at any more.
+  // The selection moved on while this was in flight, so the answer is about nobody's set.
   if (asked !== of) return;
   checksFailed = !res?.ok;
   checks = (res?.ok && ((await res.json()) as { results?: CheckItem[] }).results) || [];
@@ -224,20 +193,16 @@ async function lint(keys: string[]): Promise<void> {
 
 async function publish() {
   const going = selected;
-  // Busy from the press and not from the commit: the pass below is a round trip, and a button
-  // still live through it publishes the same set twice — the second answer being a conflict
-  // with the first, which is the one sentence in this drawer nobody could diagnose.
+  // Busy from the press, not the commit: a button live through the lint publishes the set twice.
   busy = true;
   error = '';
   unready = [];
   drifted = [];
-  // Again, over exactly what is going out: the drawer may have been open a while, and a picture
-  // somebody deleted in another tab since is what the error would be about.
+  // Linted again over exactly what goes out: the drawer may have been open a while.
   await lint(going.map((e) => e.key));
   if (errors.length) {
     busy = false;
-    // The button goes disabled and the list above changes; neither says anything, and a
-    // disabled button drops the focus that pressed it.
+    // A disabled button drops the focus that pressed it, and nothing else says why.
     error =
       'Nothing was published. The checks found something in the way just now — it is listed above.';
     panel?.focus();
@@ -252,11 +217,9 @@ async function publish() {
   if (res.ok) {
     const { paths, commit_sha } = (await res.json()) as { paths: string[]; commit_sha?: string };
     committed = commit_sha ?? '';
-    // Counted here rather than after the reload: the list is about to be read again without
-    // what just went out.
+    // Counted before the reload reads the list again without what just went out.
     published = going.filter((e) => e.files.some((f) => paths.includes(f))).length;
-    // Selection is per publish: what is left behind starts from the defaults again, the same
-    // as it would if the drawer had been closed and reopened.
+    // Selection is per publish: what is left behind starts from the defaults again.
     toggled = [];
     onpublished(published);
     return;
@@ -275,8 +238,7 @@ async function publish() {
     error = `Publish failed (${res.status}). Nothing was changed.`;
     return;
   }
-  // A conflict answers with JSON, drift with JSON that says which one it is, a ref that moved
-  // with a sentence; all three are 409.
+  // A conflict, drift and a moved ref are all 409; only the first two answer with JSON.
   const body = await res.text();
   const parsed = JSON.parse(body.startsWith('{') ? body : '{}') as {
     paths?: string[];
@@ -291,8 +253,7 @@ async function publish() {
   error = refusal(body, conflicts);
 }
 
-// Take theirs, whole: the row is gone from the drawer and the entry reads the repository
-// again. Choosing field by field is the three-way view, which is not built yet.
+// Take theirs whole; choosing field by field is the three-way view.
 async function discard() {
   const entry = confirming;
   if (!entry) return;
@@ -310,8 +271,7 @@ async function discard() {
   ondiscarded();
 }
 
-// What one entry would put in the commit. Read when it is first opened and kept, since the
-// list behind it does not move while the drawer is: a second look is the same answer.
+// Read once and kept: the list does not move while the drawer is open.
 async function open(entry: Entry) {
   opened = opened === entry.key ? '' : entry.key;
   if (!opened || changes[entry.key]) return;
@@ -326,15 +286,13 @@ async function open(entry: Entry) {
   changes[entry.key] = (await res.json()) as (typeof changes)[string];
 }
 
-// The panel took the focus when it took the list's place, so it hands it back rather than
-// leaving it on the button it just removed.
+// Focus goes back to the panel rather than staying on the button just removed.
 function closeResolver() {
   resolving = undefined;
   panel?.focus();
 }
 
-// The answers are written and the draft now sits on the file at HEAD, so the badge goes and
-// the row can be published with the rest.
+// The draft now sits on the file at HEAD, so the row can be published with the rest.
 function resolved(entry: Entry) {
   closeResolver();
   conflicts = conflicts.filter((k) => k !== entry.key);
@@ -349,13 +307,11 @@ function toggle(entry: Entry) {
     ? toggled.filter((k) => k !== entry.key)
     : [...toggled, entry.key];
 }
-// Select all and none are absolute, and the store is what the client changed their mind about:
-// all of it means every hold turned on, none of it means every ready entry turned off.
+// The store is changes of mind: all turns every hold on, none turns every ready entry off.
 const selectAll = () => (toggled = held.map((e) => e.key));
 const selectNone = () => (toggled = ready.map((e) => e.key));
 </script>
 
-<!-- One line of the checks: what is wrong, in which languages, and where it is edited. -->
 <svelte:window
   onkeydown={(e) =>
     e.key === 'Escape' &&
@@ -511,8 +467,7 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
     </header>
     <div class="drawer-body">
       {#if resolving}
-        <!-- In place of the list, not over it: the entry is what is being read, and the rows
-             behind it are not answers to anything. -->
+        <!-- In place of the list, not over it: the rows behind it are not answers to anything. -->
         <Resolve
           entry={resolving.key}
           title={named(resolving)}
@@ -521,9 +476,7 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
           onresolved={() => resolving && resolved(resolving)}
         />
       {:else if entries.length}
-        <!-- A publish that left a hold behind does not empty the drawer, so the empty state below
-             is not where the commit gets named. Neutral, not green: the commit landed, the site
-             has not. -->
+        <!-- A hold left behind keeps the drawer open, so the commit is also named here. -->
         {#if published}
           <div class="publish-result">
             <h3>Published {plural(published, 'changes')}</h3>
@@ -640,8 +593,7 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
   </div>
 </div>
 
-<!-- Not aria-modal: the drawer under it is not inert, and claiming a trap that is not there
-     is worse than not claiming it. -->
+<!-- Not aria-modal: the drawer under it is not inert, so claiming a trap would be false. -->
 {#if confirming}
   <div class="scrim">
     <div class="dialog" role="dialog" aria-labelledby="discard-h" tabindex="-1" bind:this={confirmPanel}>

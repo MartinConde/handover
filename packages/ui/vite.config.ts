@@ -1,12 +1,10 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vite';
 
-// Output lands in the integration's dist so astro-handover ships the SPA pre-built;
-// flat hashed names are what routes/admin.ts serves under /admin/_assets/.
+// Output lands in the integration's dist; flat hashed names are what routes/admin.ts serves.
 export default defineConfig(({ mode }) => ({
   plugins: [svelte()],
-  // Tests mount components in jsdom, so svelte must resolve to its browser build there;
-  // leave the build's default conditions alone or the bundle gets the server build too.
+  // Tests run in jsdom, so svelte must resolve to its browser build there but not in the build.
   ...(mode === 'test' ? { resolve: { conditions: ['browser'] } } : {}),
   test: { environment: 'jsdom', setupFiles: ['vitest.setup.ts'] },
   build: {

@@ -2,8 +2,6 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import History from './History.svelte';
 
-// Testing: what a version row says, the locale filter, the empty and error states, what opening
-// a version and picking a pair ask for, and the cap on the pair.
 // Not testing: the per-field diff, which is Diff.svelte's own, or the tab that mounts this.
 
 type Version = {
@@ -15,8 +13,7 @@ type Version = {
   name?: string;
 };
 
-// Relative times count calendar days from local midnight, so "26 hours ago" is two days back
-// just after midnight and CI, which runs at any hour, went red on it. An afternoon is pinned.
+// Relative times count calendar days from local midnight, so the clock is pinned to an afternoon.
 vi.useFakeTimers({ toFake: ['Date'] });
 vi.setSystemTime(new Date('2026-08-25T14:00:00'));
 
@@ -102,8 +99,7 @@ const rows = () =>
     row.querySelector('.sub')?.textContent?.trim().replace(/\s+/g, ' '),
   ]);
 
-// The entry is one thing to the client, so a commit that wrote both files wears both chips —
-// and the sha is a tooltip rather than a column, because this is an editor's history.
+// The sha is a tooltip rather than a column, because this is an editor's history.
 test('a version says what changed, when, who and which languages', async () => {
   versions = [
     {
@@ -121,8 +117,7 @@ test('a version says what changed, when, who and which languages', async () => {
   expect(q('.avatar').textContent).toBe('AW');
 });
 
-// A commit the App made whose activity row has aged out has nobody against it, and a blank is
-// honest where the App's own name would not be.
+// A blank is honest where the App's own name would not be.
 test('a version nobody is recorded against says only when it happened', async () => {
   versions = [
     { sha: 'aaa111', date: ago(3), summary: 'Update listings/en/mill-house', locales: ['en'] },
@@ -147,8 +142,7 @@ test('the locale filter leaves the commits that touched that language', async ()
   expect(rows().map((r) => r[0])).toEqual(['Update price', 'Translate']);
 });
 
-// Not an error and not an empty filter: the tab is reachable so the client learns where history
-// will be, and the sentence says what it is waiting for.
+// Not an error: the tab is reachable so the client learns where history will be.
 test('an entry with no commits says nothing is published yet', async () => {
   await show();
 
@@ -170,8 +164,7 @@ test('a GitHub that would not answer is a notice with a way to ask again', async
   expect(rows().map((r) => r[0])).toEqual(['Update price']);
 });
 
-// What is marked is what restoring this version would change, so the version is asked for on
-// its own and the other side is what is live now.
+// The other side is what is live now, so what is marked is what a restore would change.
 test('opening a version asks for its changes against what is live now', async () => {
   versions = [{ sha: 'aaa111', date: ago(50), summary: 'Update price', locales: ['en'] }];
   await show();
@@ -199,15 +192,13 @@ test('a pair is compared oldest first', async () => {
 
   expect(asked.at(-1)).toBe('/admin/api/history/listings/mill-house/diff?to=aaa111&from=bbb222');
   expect(q('.version-head h2').textContent).toBe('Two versions compared');
-  // Both of these would read "2 days ago" on a busy afternoon, so the pair is named by what
-  // each version says.
+  // Both would read "2 days ago", so the pair is named by what each version says.
   expect(q('.version-head .by').textContent?.replace(/\s+/g, ' ').trim()).toBe(
     'From Create, 2 days ago, to Update price, 2h ago',
   );
 });
 
-// A third would be a comparison of nothing: the count line says how many are chosen and the
-// rest of the boxes stop offering.
+// A third would be a comparison of nothing.
 test('a third version cannot be added to a pair', async () => {
   versions = [
     { sha: 'aaa111', date: ago(2), summary: 'Update price', locales: ['en'] },
@@ -259,8 +250,7 @@ const openRestore = async () => {
   return body;
 };
 
-// The primary action is on the version being looked at, and it is a draft write: the dialog
-// says the two things a client needs — what it replaces, and that nothing goes live yet.
+// The dialog says what it replaces and that nothing goes live yet.
 test('restoring the version being read posts that commit and hands off to the editor', async () => {
   await openRestore();
 
@@ -273,8 +263,7 @@ test('restoring the version being read posts that commit and hands off to the ed
   expect(all('.dialog')).toHaveLength(0);
 });
 
-// A version from before a rename has its files under the old name, and the row says so; the
-// diff and the restore read them under it, and the restore writes them under the name now.
+// A pre-rename version's files are read under the old name and restored under the name now.
 test('a version from before a rename is read and restored under its old name', async () => {
   versions = [
     VERSION,
@@ -315,8 +304,7 @@ test('the confirmation names the version, who published it and the languages it 
   expect(q('#rs-d p').textContent?.replace(/\s+/g, ' ')).toContain('in English and German');
 });
 
-// With nothing unpublished there is nothing of the client's to replace, and saying there is
-// would be a warning about a loss that cannot happen.
+// With nothing unpublished there is no loss to warn about.
 test('an entry with no unpublished changes is not warned about losing them', async () => {
   versions = [VERSION];
   await show(['en', 'de'], false);
@@ -352,8 +340,7 @@ test('Escape closes the confirmation and gives focus back to Restore', async () 
   expect(restored).toEqual([]);
 });
 
-// A refusal is the server's own sentence — somebody holding the entry, or a version this
-// package cannot read — and the dialog stays open so it is read next to the button.
+// The dialog stays open so the server's sentence is read next to the button.
 test('a refused restore says what the server said', async () => {
   restoreRefusal = 'Anna is editing this entry — it can be restored once they are done';
   await openRestore();
@@ -366,8 +353,7 @@ test('a refused restore says what the server said', async () => {
   expect(handedOff).toBe(0);
 });
 
-// The refusal belongs to the attempt, not to the version: leaving it up would follow the
-// client to the next version they open and describe something that did not happen there.
+// The refusal belongs to the attempt, not the version, or it would follow to the next one opened.
 test('cancelling clears the refusal', async () => {
   restoreRefusal = 'Anna is editing this entry — it can be restored once they are done';
   await openRestore();

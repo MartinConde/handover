@@ -78,7 +78,6 @@ const navigation: Form = {
   blocks: {},
 };
 
-/** One entry as the drawer would hand it over: its files, and the languages going out. */
 const entryOf = (
   key: string,
   files: Record<string, string>,
@@ -132,7 +131,6 @@ const store: R2Store = {
   secretAccessKey: 'wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY',
 };
 
-/** The bucket with these keys in it, and every key it was asked about. */
 function bucket(has: string[]) {
   const asked: string[] = [];
   const fetch = (async (input: Request) => {
@@ -453,17 +451,13 @@ test('results are grouped by the file they are about', async () => {
   ]);
 });
 
-// ---------------------------------------------------------------------------
-// The one check that is a question about the whole site rather than about a publish: a page
-// hidden so long that nobody is coming back to it. The daily job dates each hide from the
-// file's own commits; the drawer shows what it found while the file is still hidden.
+// hidden-long: the one check about the whole site rather than a publish.
 
 const NOW = 1_800_000_000_000;
 const DAY = 24 * 60 * 60 * 1000;
 const ago = (days: number) => new Date(NOW - days * DAY).toISOString();
 const hidden = '_status: "hidden"\ntitle: "Put away"\n';
 
-/** A repository whose tip holds these files, with the commits and older versions given. */
 function repo(
   tip: Record<string, string>,
   log: Record<string, { sha: string; date: string }[]>,

@@ -15,8 +15,7 @@ import {
   revertRedirects,
 } from './lifecycle.js';
 
-// An in-memory repo: serves files, records every publish call and every read that named a
-// commit rather than the branch.
+// Records every publish call and every read, with the commit it named.
 function fakeGit(files: Record<string, string>) {
   const published: { files: PublishFile[]; message: string; base_sha: string }[] = [];
   const read: { path: string; at?: string }[] = [];
@@ -109,9 +108,7 @@ test('rename moves every locale file and appends a rule per language in one comm
   });
 });
 
-// The URL a language serves the entry at is the one that moved, and on a collection with
-// localized slugs the file name is not it: renaming the file leaves that language's address
-// exactly where it was, so there is nothing to redirect.
+// With localized slugs the file name is not the address, so renaming it moves nothing.
 test('rename writes no rule for a language whose address is its own', async () => {
   const { git, published } = fakeGit({
     'src/content/pages/en/seaview.yaml': '_version: 1\ntitle: "Seaview"\n',
@@ -259,8 +256,7 @@ test('delete removes every locale file and sends each language to its own index'
   ]);
 });
 
-// A delete is the one place the address still has to be read: the file goes, so the URL it
-// answered to is the only record of where the visitors were going.
+// The file goes, so the URL it answered to is the only record of where visitors were going.
 test('delete redirects the address a language served, not the file name', async () => {
   const { git, published } = fakeGit({
     'src/content/pages/de/seaview.yaml': '_version: 1\nslug: "meerblick"\n',
@@ -287,8 +283,7 @@ test('delete sends each language to the target it was given, and none where it w
     'src/content/listings/de/seaview.yaml': '_version: 1\n',
     'src/content/listings/fr/seaview.yaml': '_version: 1\n',
   });
-  // One page picked in the dialog, resolved to the URL each language serves it at — and to
-  // nothing at all in the language that has no page for it.
+  // One page picked in the dialog, resolved per language; none where the language has no page.
   const picked: Record<string, string> = {
     en: '/listings/harbour-flat',
     de: '/de/listings/hafenwohnung',
@@ -325,9 +320,7 @@ test('delete with no redirect target touches only the entry files', async () => 
   ]);
 });
 
-// A visitor arrives with whichever form the page had when they bookmarked it, and the asset
-// server matches a redirect exactly: one line per form of `from`. `to` is written the way the
-// site's pages answer, so the visitor lands in one hop rather than through a second redirect.
+// The asset server matches exactly, so both forms of `from` are written and `to` lands in one hop.
 test("redirectsText writes each from both ways and to in the site's own form", () => {
   const rule = { _id: 'aaaaaaaa', status: 301 as const, createdAt: '2026-01-01T00:00:00Z' };
   const rules = [
@@ -344,9 +337,7 @@ test("redirectsText writes each from both ways and to in the site's own form", (
   expect(redirectsText('default', [], true)).toBe('');
 });
 
-// decap-cms#7371 / payload#14491: duplicating an entry copies the default locale and
-// silently drops the rest. The copy has to stay one cross-locale entry, so the same block
-// gets the same new `_id` in every locale file.
+// decap-cms#7371 / payload#14491: a copy that drops the other locales is no longer one entry.
 test('duplicate copies every locale of the entry with one shared id map', async () => {
   const block = (heading: string) =>
     `_version: 1\nblocks:\n  - _type: "hero"\n    _id: "k3nf9a2p"\n    heading: "${heading}"\n`;
@@ -369,8 +360,7 @@ test('duplicate copies every locale of the entry with one shared id map', async 
   expect(ids[0]).not.toBe('k3nf9a2p');
 });
 
-// An address is one entry's own: a copy that kept it would be a second page answering to the
-// same URL, which is the thing `POST …/address/:locale` refuses with a 409.
+// A copy that kept the address would be a second page answering to the same URL.
 test('duplicate leaves the original address behind and falls back to the new file name', async () => {
   const { git } = fakeGit({
     'src/content/pages/de/seaview.yaml': '_version: 1\nslug: "meerblick"\ntitle: "Meerblick"\n',
@@ -382,9 +372,7 @@ test('duplicate leaves the original address behind and falls back to the new fil
   expect(copies[0]?.contents).toBe('_version: 1\ntitle: "Meerblick"\n');
 });
 
-// A file written by hand — a starter, or anything from before the CMS — has no `_id` on its
-// rows. The copy gives them one, and the languages have to agree about it: `rowKey` pairs rows
-// across files by `_id`, so two files inventing their own would read as drift on day one.
+// `rowKey` pairs rows across files by `_id`, so two files inventing their own would read as drift.
 test('a row that never had an _id gets the same new one in every locale', async () => {
   const block = (heading: string) =>
     `_version: 1\nblocks:\n  - _type: "hero"\n    heading: "${heading}"\n`;
@@ -402,8 +390,7 @@ test('a row that never had an _id gets the same new one in every locale', async 
   expect(ids[1]).toBe(ids[0]);
 });
 
-// "Duplicate including unpublished changes?": the languages the caller answers yes for are
-// copied from the draft it hands in, and the rest still come from the commit.
+// The languages the caller hands in are copied from that draft; the rest come from the commit.
 test('duplicate copies the bytes the caller hands it over the committed ones', async () => {
   const { git } = fakeGit({
     'src/content/listings/en/seaview.yaml': '_version: 1\ntitle: "Seaview"\n',
@@ -418,8 +405,7 @@ test('duplicate copies the bytes the caller hands it over the committed ones', a
   expect(copies[1]?.contents).toBe('_version: 1\ntitle: "Meerblick"\n');
 });
 
-// A file from before Handover has no `_version`, and every write stamps it — not the editor's
-// save alone (F3 in 02-i18n.md).
+// A file from before Handover has no `_version`, and every write stamps it (F3 in 02-i18n.md).
 test('duplicate stamps the version onto a file that has none', async () => {
   const { git } = fakeGit({ 'src/content/listings/en/seaview.yaml': 'title: "Seaview"\n' });
 
@@ -428,8 +414,7 @@ test('duplicate stamps the version onto a file that has none', async () => {
   expect(copies[0]?.contents).toBe('_version: 1\ntitle: "Seaview"\n');
 });
 
-// A commit made of files read from the branch is a commit that can carry bytes from before
-// somebody else's push and put them back, without the ref update having anything to refuse.
+// Files read from the branch could put back bytes from before somebody else's push unnoticed.
 test('a rename reads every file it moves at the commit it is made against', async () => {
   const { git, published, read } = fakeGit({
     'src/content/listings/en/seaview.yaml': '_version: 1\ntitle: "Seaview"\n',
@@ -477,8 +462,7 @@ test('a rule appended whose destination already forwards lands where that forwar
   expect(collapsed).toEqual([manual('/b', '/c', 'first'), manual('/a', '/c', 'second')]);
 });
 
-// A file edited by hand may hold a chain the admin would never have written; a rule added to
-// the end of it still lands in one hop, and a chain that goes round stops where it started.
+// A hand-edited file may hold a chain, or a loop, the admin would never have written.
 test('a rule appended follows a hand-written chain to its end and never round a loop', () => {
   const chain = [manual('/b', '/c', 'first'), manual('/c', '/d', 'second')];
 
@@ -490,8 +474,7 @@ test('a rule appended follows a hand-written chain to its end and never round a 
   ).toEqual(manual('/a', '/d', 'in'));
 });
 
-// An edit is the same write as an add, made in place: the rules that led to the edited one's
-// old address follow it, and its own new destination is resolved the way an added one is.
+// An edit is the same write as an add, made in place.
 test('a rule already in the file is re-collapsed where it stands', () => {
   const collapsed = collapseRedirects(
     [manual('/p', '/a', 'lead'), manual('/a', '/b', 'edited'), manual('/x', '/y', 'onward')],
@@ -505,8 +488,7 @@ test('a rule already in the file is re-collapsed where it stands', () => {
   ]);
 });
 
-// A hidden entry's rule is dropped again by its `entry`, so a manual rule re-pointing it must
-// not take that link off: the entry would come back on the site with its redirect left behind.
+// A hidden entry's rule is dropped again by its `entry`, so re-pointing it must keep that link.
 test('a re-pointed rule keeps the entry it belongs to when the new rule names none', () => {
   const hidden = {
     ...RULE,
@@ -626,8 +608,7 @@ test('a path and an absolute destination are both accepted', () => {
   ).toBeUndefined();
 });
 
-// The commit that starts a renamed file's log is the rename that made it, and its message is
-// the one place the old name is written down — so history can follow it without `--follow`.
+// The rename commit's message is the one place the old name is written down.
 test('renamedFrom reads the old name out of a rename commit of this entry', () => {
   expect(
     renamedFrom('default', 'Rename listings/old-mill to mill-house', 'listings', 'mill-house'),

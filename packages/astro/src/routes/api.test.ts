@@ -102,14 +102,11 @@ const {
       name: z.string(),
       portrait: image({ ratio: '1:1', max: 512 }).optional(),
     }),
-    // A collection whose languages each serve their entries at an address of their own, and the
-    // one that carries the SEO panel.
+    // Localized addresses per language, and the one collection that carries the SEO panel.
     article: z.object({ title: z.string(), slug: z.string().optional(), seo: seo.optional() }),
-    // The collection with a link in it: what the pre-publish checks follow to a page that is
-    // there or is not.
+    // The collection with the link the pre-publish checks follow.
     notice: z.object({ title: z.string(), cta: link.optional() }),
-    // A global: the same editor path with no collection behind it, named by its own schema. It
-    // is also where the site's SEO defaults live, which is how the package finds them.
+    // A global: the same editor path with no collection behind it; it also holds the SEO defaults.
     site: z
       .object({
         footerText: z.string(),
@@ -132,8 +129,7 @@ const {
       return undefined;
     }),
     getHead: vi.fn(async () => 'head789'),
-    // What a restore asks before it undoes anything, and what a publish row's diff is read
-    // against: which files the commit touched and what it was made on.
+    // Which files the commit touched and its parent: what a restore and a publish diff ask.
     getCommit: vi.fn(
       async (
         sha: string,
@@ -143,15 +139,14 @@ const {
         paths: ['src/content/listings/en/mill-house.yaml', 'src/content/redirects.yaml'],
       }),
     ),
-    // One object by its own id — the older source language a translation names. Filled per test.
+    // Filled per test with blobs named by commit id.
     getBlob: vi.fn(async (sha: string) => blobs[sha]),
     // Every commit that touched one path, newest first; filled per test.
     fileCommits: vi.fn(
       async (path: string, { perPage = 30, page = 1 }: { perPage?: number; page?: number } = {}) =>
         (commitLog[path] ?? []).slice((page - 1) * perPage, page * perPage),
     ),
-    // The one-request read of src/content the delete gate is made on; the walk itself runs
-    // against a faked GraphQL endpoint in core's own git.test.ts.
+    // The one-request read the delete gate is made on; the walk is tested in core's git.test.ts.
     contentFiles: vi.fn<() => Promise<{ path: string; contents: string }[]>>(async () => []),
     publish: vi.fn(async (_files: unknown, opts: { base_sha: string }) => {
       if (opts.base_sha === 'stale') {
@@ -168,8 +163,7 @@ const {
         updatedAt: 1755864000000,
       },
     ]),
-    // What a publish will write: `pendingDrafts` minus the entries somebody is holding back.
-    // The filter itself runs against a real D1 in core's `db.test.ts`.
+    // What a publish will write: `pendingDrafts` minus the held entries; the filter is core's.
     readyDrafts: vi.fn<
       (...args: unknown[]) => Promise<{ path: string; contents: string; updatedAt: number }[]>
     >(async () => [
@@ -193,8 +187,7 @@ const {
       updated_at: 1755864000000,
     })),
     resolveDrift: vi.fn(async () => {}),
-    // The three-way view is core's, proven against a real D1 there; what the route owes is
-    // asking for the entry's files and holding the answers to the questions it came back with.
+    // The three-way view is proven in core; only the route's ask and its handling are tested here.
     entryConflict: vi.fn(async () => undefined as unknown),
     resolveConflict: vi.fn(async () => ({ paths: [] })),
     saveTranslated: vi.fn(async () => ({ updated_at: 1755864000000, pending: true })),
@@ -214,8 +207,7 @@ const {
     discardDraft: vi.fn(async () => {}),
     // What the entry list lays over the index: the pending drafts plus what a commit left.
     overlayRows: vi.fn(async () => [] as { path: string; contents: string }[]),
-    // The Workers Builds boundary; the mapping itself runs against a faked API in core's
-    // builds.test.ts.
+    // The Workers Builds boundary; the mapping runs against a faked API in core's builds.test.ts.
     commitBuild: vi.fn(async (_cfg: unknown, commit: { sha: string } | undefined) => ({
       ...(commit ? { commit_sha: commit.sha } : {}),
       state: 'building' as string,
@@ -283,19 +275,16 @@ const {
       commit_sha: 'res888',
       paths: ['src/content/listings/en/mill-house.yaml'],
     })),
-    // The Deleted view's query. What it selects is proven against a real D1 in core's own
-    // activity.test.ts; what the route owes is what it makes of the rows.
+    // The query is core's; what the route makes of the rows is tested here.
     deletedEntries: vi.fn<(...args: unknown[]) => Promise<Record<string, unknown>[]>>(
       async () => [],
     ),
-    // The names the log remembers saving as templates, per collection; the query is proven in
-    // core's own activity.test.ts.
+    // The template names the log remembers, per collection; the query is core's.
     savedTemplates: vi.fn<(...args: unknown[]) => Promise<string[]>>(async () => []),
   };
 });
 
-// The row GET should overlay, set per test. `rows` is the same thing keyed by path, for an
-// entry whose languages are not all in the same state.
+// The row GET should overlay; `rows` is the same keyed by path when the languages differ in state.
 type Row = {
   contents: string;
   baseSha: string;
@@ -335,8 +324,7 @@ const fakeMailer: Mailer = async (message) => {
 };
 // And what the Worker holds when the site has no hook of its own.
 let deeplKey: string | undefined;
-// The settings table as the routes meet it: what is stored, and the secret it is stored under.
-// The encryption itself runs for real against a real D1 in core's own settings.test.ts.
+// The settings table as the routes meet it; the encryption is tested in core's settings.test.ts.
 let settingsSecret: string | undefined = 'c2VjcmV0';
 const stored: Record<
   string,
@@ -353,7 +341,7 @@ let lastCommitRow: { sha: string; at: number; kind: string; by: string | null } 
 let publishes: { entry: string; at: number; by: string | null }[] = [];
 /** Who last typed into each draft, by path. */
 let editors: Record<string, string | null> = {};
-// What the daily hidden check last found, as the drawer's checks read it. Filled per test.
+// What the daily hidden check last found, as the drawer's checks read it; filled per test.
 let hiddenLong: { path: string; since: string }[] = [];
 // The checks this site has turned off, which is `checks.ignore` in cms.config.ts.
 let siteChecks: { ignore?: string[] } | undefined;
@@ -380,8 +368,7 @@ vi.mock('virtual:handover/config', () => ({
     },
     media: { publicBase: 'https://media.example.com' },
     collections: {
-      // Pages first, and its blocks field is required: a scratch entry cannot be filled in
-      // from that schema, which is the collection "Simulate conflict" has to walk past.
+      // Pages first and its blocks are required, so "Simulate conflict" has to walk past it.
       pages: { schema: page },
       listings: { schema: listing, route: '/listings/[slug]', index: '/listings' },
       presenters: { schema: presenter, titleField: 'name' },
@@ -398,11 +385,9 @@ vi.mock('virtual:handover/config', () => ({
 vi.mock('virtual:handover/index', () => ({
   preview: true,
   site: 'https://coastalhomes.example',
-  // The other scan the build wrote: which languages were translated from a source that has moved
-  // on since. Only `posts/taken` has two languages here, so it is the only one that can be in it.
+  // Only `posts/taken` has two languages, so it is the only entry the build can mark stale.
   stale: { 'posts/taken': ['de'] },
-  // The scan the build wrote: the mill house carries the photo in both its languages and the
-  // cottage carries the same one, so the picture is used in two places and not three.
+  // The mill house's two languages and the cottage share the photo: two places, not three.
   uses: {
     'src/content/listings/en/mill-house.yaml': [`media/${'a'.repeat(64)}.webp`],
     'src/content/listings/de/mill-house.yaml': [`media/${'a'.repeat(64)}.webp`],
@@ -521,12 +506,9 @@ vi.mock('cloudflare:workers', () => ({
     DB: {},
   },
 }));
-// Better Auth's own `setPassword` is proven against a real database in core's auth.test.ts;
-// what these route tests are about is what this file does with its answers.
+// `setPassword` is core's; only what the route does with its answers is tested here.
 let setPassword: (args: unknown) => Promise<unknown> = async () => ({ status: true });
-// The admin plugin's four endpoints are proven against a real Better Auth in core's own
-// auth.test.ts; what these route tests are about is what this file sends them and does with
-// their answers. `invited` records whether the instance asking was the invite one.
+// The admin plugin's endpoints are core's; `invite` records whether the invite instance asked.
 type Call = { body: Record<string, unknown>; invite: boolean };
 const calls: Record<string, Call[]> = {
   createUser: [],
@@ -562,7 +544,7 @@ vi.mock('../auth.js', async (original) => ({
   },
 }));
 let facts = { hasPassword: true, sessions: [] as unknown[] };
-// Who this site's members are, per test. The real query runs against a real D1 in core.
+// Who this site's members are, per test; the real query runs against a real D1 in core.
 type MemberRow = {
   id: string;
   name: string;
@@ -574,17 +556,14 @@ type MemberRow = {
   invitedAt: number;
 };
 let memberRows: MemberRow[] = [];
-// The D1 boundary again: what each route asked to be written, and what it asked the reader
-// for. The reader's own filter runs against a real D1 in core's `activity.test.ts`.
+// What each route asked the log to write and asked the reader for; the filter is core's.
 const logged: Record<string, unknown>[] = [];
 /** Who the log says made a commit, which is the half of a version's author git cannot answer. */
 const committedBy: Record<string, string> = {};
 let read: unknown[] = [];
 /** Which rows the routes took out of the owner count, in order. */
 const demoted: string[] = [];
-// The locks table, per test: who is editing the entry a request is about, what everybody is
-// editing, and whose locks a removal let go of. The statements themselves run against a real
-// D1 in core's own `locks.test.ts`.
+// The locks table, per test; the statements run against a real D1 in core's `locks.test.ts`.
 let holder: { userId: string; name: string; expiresAt: number; tab?: string } | undefined;
 let editing: Record<string, string[]> = {};
 let holders: Record<string, { id: string; name: string | null }> = {};
@@ -595,8 +574,7 @@ const taken: string[] = [];
 /** Which entry a rename moved the lock to, and which one a delete let go of. */
 const moved: string[] = [];
 const dropped: string[] = [];
-// Which user and which session the route asked about — the two values that must come from the
-// session and never from the request, or one person could read another's account.
+// The user and session the route asked about must come from the session, never the request.
 let asked: unknown[] = [];
 vi.mock('@handover/core', async (original) => ({
   ...(await original<typeof import('@handover/core')>()),
@@ -605,8 +583,7 @@ vi.mock('@handover/core', async (original) => ({
   releasePaths: async () => {},
   openDraft: async (_site: string, _db: unknown, path: string) => rows[path] ?? draft,
   memberList: async () => memberRows,
-  // The real one is an UPDATE whose WHERE holds the rule; against a real D1 it is proven in
-  // core's own auth.test.ts. What the route owes is asking it before it removes anybody.
+  // The real UPDATE holds the rule and is core's; the route must ask it before removing anybody.
   demoteOwner: async (_site: string, _db: unknown, id: string) => {
     const target = memberRows.find((row) => row.id === id);
     if (target?.role !== 'owner') return false;
@@ -618,8 +595,7 @@ vi.mock('@handover/core', async (original) => ({
   logActivity: async (_site: string, _db: unknown, event: Record<string, unknown>) => {
     logged.push(event);
   },
-  // The real one is a join against the log; against a real D1 it is proven in core's own
-  // activity.test.ts. What the route owes is asking it and preferring its answer to git's.
+  // The real join is core's; the route must ask it and prefer its answer to git's.
   commitAuthors: async (_site: string, _db: unknown, shas: string[]) =>
     Object.fromEntries(
       shas.filter((sha) => sha in committedBy).map((sha) => [sha, committedBy[sha]]),
@@ -646,8 +622,7 @@ vi.mock('@handover/core', async (original) => ({
   lockHolder: async () => holder && { tab: '', ...holder },
   heldEntries: async () => editing,
   lockHolders: async () => holders,
-  // The real one is a query against the log; against a real D1 it is proven in core's own
-  // activity.test.ts. What the routes owe is asking it and preferring a draft row to its answer.
+  // The real query is core's; the routes must ask it and prefer a draft row to its answer.
   publishedEntries: async () => publishes,
   // And the join that turns a draft's `updated_by` into a name, proven in core's own db.test.ts.
   draftEditors: async () => editors,
@@ -818,8 +793,7 @@ afterEach(() => {
   for (const path of Object.keys(rows)) delete rows[path];
   entryConflict.mockClear();
   entryConflict.mockResolvedValue(undefined);
-  // A `…Once` nobody consumed outlives its test and is handed to the next caller: reset puts
-  // the implementation the mock was made with back.
+  // A `…Once` nobody consumed outlives its test and is handed to the next caller.
   pendingDrafts.mockReset();
   publish.mockClear();
   setEntryStatus.mockClear();
@@ -868,15 +842,13 @@ test('ping returns the collection names and who is signed in', async () => {
     role: 'editor',
     // Where a stored key is served from: the widgets draw thumbnails of keys nothing listed.
     mediaBase: 'https://media.example.com',
-    // Every ratio the site's own fields show a picture at, which is what the focal picker
-    // previews: one dot, and what it does to each crop the site really renders.
+    // Every ratio the site's own fields show a picture at, which is what the focal picker previews.
     presets: [
       { label: 'Portrait', preset: { ratio: '1:1', max: 512 } },
       // The site's default social card: the one preset a platform fixes rather than a designer.
       { label: 'Default social image', preset: { ratio: '1.91:1', max: 1200, min: 1200 } },
     ],
-    // Whether this build has a preview route at all: without one the pane says so rather than
-    // drawing a frame around a 404.
+    // Whether this build has a preview route at all.
     preview: true,
     // `site` from astro.config, which is what the SEO panel's previews print addresses under.
     site: 'https://coastalhomes.example',
@@ -902,9 +874,7 @@ test('a test email goes to the signed-in owner and answers with the id it was gi
   expect(sent[0]?.to).toBe('martin@example.com');
 });
 
-// The diagnostics screen's own endpoints: the configuration it reads back, and one check per
-// connection. Every one of them is the owner's — the payload names the repository, the sending
-// address and the media host, and a hidden sidebar item is not a gate.
+// The diagnostics screen's own endpoints.
 const check = (name: string, session?: unknown) =>
   POST(
     ctx(`checks/${name}`, new Request(`https://x/admin/api/checks/${name}`, { method: 'POST' }), {
@@ -931,8 +901,7 @@ test('the diagnostics page reads the configuration back as the site resolved it'
     mediaBase: 'https://media.example.com',
     mailer: { provider: 'resend', from: 'Handover <hello@example.com>' },
     preview: true,
-    // What the build mode is, and under vitest that is development — the flag is what decides
-    // whether the screen offers "Simulate conflict", which commits to the repository.
+    // What the build mode is, and under vitest that is development.
     dev: true,
   });
 });
@@ -1019,8 +988,7 @@ test('the build check asks the host about the worker rather than about a commit'
   const res = await check('build', owner);
   expect(res.status).toBe(200);
   expect((await body(res)).detail).toContain('acct/handover-demo');
-  // No commit: what is being checked is the token, and a commit nothing built would read as
-  // a broken token.
+  // No commit: what is being checked is the token.
   expect(commitBuild).toHaveBeenCalledWith(
     { worker: 'acct/handover-demo', token: 'cf-token' },
     undefined,
@@ -1060,9 +1028,7 @@ test('a check nobody has heard of is not found', async () => {
   expect((await check('nonsense', owner)).status).toBe(404);
 });
 
-// The one writable section of the settings screen. The encryption is core's and runs against a
-// real D1 there; what these are about is the gate, the order the sources resolve in, what comes
-// back to the browser and what goes into the log.
+// The one writable section of the settings screen.
 const settings = (session?: unknown) => GET(ctx('settings', undefined, { handover: session }));
 const setKey = (key: string, value: unknown, session: unknown = owner) =>
   PUT(
@@ -1115,8 +1081,7 @@ test('a key set here is named by its last four and by who set it', async () => {
       {
         key: 'deepl',
         source: 'settings',
-        // Nothing behind it, so the card can say Remove hides the Translate button rather than
-        // guessing that something else would take over.
+        // The empty setting proves Remove disables translation.
         fallback: 'off',
         hint: 'x7Kq',
         updatedAt: 1755864000000,
@@ -1442,13 +1407,11 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
     drift: [],
     stale: [],
     translator: true,
-    // Where the site serves it, which is what the editor builds a URL from — the address row,
-    // and the URL it names when a language that has a file is turned off.
+    // Where the site serves it, which is what the editor builds a URL from.
     route: '/listings/[slug]',
     index: '/listings',
     prefixDefaultLocale: false,
-    // Which of its languages the repository already has a file for: the rest are pages the
-    // preview can show and the live site cannot.
+    // Which of its languages the repository already has a file for.
     published: ['en'],
   });
 });
@@ -1472,8 +1435,7 @@ test('an entry the App cannot reach names the repository rather than the entry',
   expect(await res.text()).toBe(message);
 });
 
-// A global is edited through the entry path: `globals` is the collection and the file name the
-// slug. What comes back says so, and carries the name the dev gave it rather than a title field.
+// A global is edited through the entry path.
 test('a global is served as an entry, in singleton mode and under its own label', async () => {
   files['src/content/globals/en/site.yaml'] = 'footerText: "Coastal homes since 2009"\n';
 
@@ -1484,8 +1446,7 @@ test('a global is served as an entry, in singleton mode and under its own label'
   expect(body.fields).toEqual([
     { path: ['footerText'], label: 'Footer text', type: 'text', required: true },
     { path: ['phone'], label: 'Phone', type: 'text', required: false, i18n: 'duplicate' },
-    // The site's SEO defaults are an ordinary group: a pattern, a description, a card and a
-    // handle, each edited by the widget its own type already has.
+    // The site's SEO defaults are an ordinary group.
     {
       path: ['defaultSeo'],
       label: 'Search and sharing',
@@ -1520,8 +1481,7 @@ test('a global is served as an entry, in singleton mode and under its own label'
   delete files['src/content/globals/en/site.yaml'];
 });
 
-// The panel greys the site's own defaults behind an empty box, and they are per language, so
-// they are read with the entry rather than handed over once when the tab opened.
+// The panel greys the site's own defaults behind an empty box, and they are per language.
 test('an entry with a seo field is served the site’s defaults, per language', async () => {
   locales = ['en', 'de'];
   files['src/content/posts/en/hello.yaml'] = 'title: Hello\n';
@@ -1554,8 +1514,7 @@ test('a key cms.config.ts does not declare is not a global', async () => {
   expect((await GET(ctx('entries/globals/nope'))).status).toBe(404);
 });
 
-// The subtraction from the other side: a global's file is named by the schema and there is one
-// of it, so the four routes that move an entry around have nothing to do with it.
+// The subtraction from the other side.
 test('a global is refused the routes that rename, address, delete or turn off an entry', async () => {
   files['src/content/globals/en/site.yaml'] = 'footerText: "Coastal homes"\n';
 
@@ -1595,8 +1554,7 @@ test('a global takes a draft through the same autosave as an entry', async () =>
   delete files['src/content/globals/en/site.yaml'];
 });
 
-// The publish holds every file to a schema, and a global's is its own: without this the one
-// file nothing else validates would be the one that can break the build.
+// The publish holds every file to a schema, and a global's is its own.
 test('publishing is refused when a global is missing something its schema needs', async () => {
   publishDrafts.mockClear();
   readyDrafts.mockImplementationOnce(async () => [
@@ -1617,8 +1575,7 @@ test('publishing is refused when a global is missing something its schema needs'
   expect(publishDrafts).not.toHaveBeenCalled();
 });
 
-// The site settings list: the cards, in cms.config.ts order. A language with no file is left out
-// rather than listed empty — the dashed chip on the card is what offers to make one.
+// The site settings list: the cards, in cms.config.ts order.
 test('the globals list names each global and the languages it has a file in', async () => {
   locales = ['en', 'de'];
   pendingDrafts.mockImplementationOnce(async () => []);
@@ -1674,8 +1631,7 @@ test('a global somebody has open says who', async () => {
   holders = {};
 });
 
-// A file with nothing in it is still a file: the language is published and opens empty, rather
-// than reading as a language the entry does not have.
+// A file with nothing in it is still a file.
 test('a language whose file is empty opens as an empty entry', async () => {
   locales = ['en', 'de'];
   files['src/content/listings/de/mill-house.yaml'] = '';
@@ -1718,8 +1674,7 @@ test('autosaving a draft stores it under the entry path with nothing to report',
   );
 });
 
-// Who typed it, which is what the dashboard's rows and the Site settings cards report. Only the
-// two writes somebody types record it — a rename or a restore leaves whoever typed last standing.
+// Who typed it, which is what the dashboard's rows and the Site settings cards report.
 test('an autosave carries the id of whoever typed it', async () => {
   saveDraft.mockClear();
   const data = { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } };
@@ -1794,8 +1749,7 @@ test('a body that is not an object, and an unknown collection, are refused', asy
   expect(saveDraft).not.toHaveBeenCalled();
 });
 
-// The `_` keys belong to the file: the server reads them off the entry, so a browser cannot
-// set `_version` or `_status` by posting one.
+// The `_` keys belong to the file: the server reads them off the entry.
 test('reserved keys in the posted data are dropped before the draft is stored', async () => {
   saveDraft.mockClear();
   const data = { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } };
@@ -1843,8 +1797,7 @@ test('the pending list is what the drafts hold that the repository does not', as
   });
 });
 
-// The landing page. Its two big tiles are the shell's own indicators grown up and are not asked
-// for here; what is here is the half nothing else knows.
+// The landing page.
 test('the dashboard lists what was edited and what was published, newest first', async () => {
   publishes = [{ entry: 'posts/hello', at: 1755950000000, by: 'Martin Conde' }];
   editors = { 'src/content/listings/en/mill-house.yaml': 'Anna Berg' };
@@ -1924,9 +1877,7 @@ test('translation health counts the languages an entry owes and the ones behind 
     defaultLocale: 'en',
     locales: [
       { locale: 'en', missing: 0, stale: 0, where: [] },
-      // Everything the index holds but `posts/taken`, which is the one entry with two files —
-      // and it is the one the build marked stale. `where` is the collections owing it, in config
-      // order and without the globals, which have no list to be shown in.
+      // Everything the index holds but `posts/taken`, which is the one entry with two files.
       { locale: 'de', missing: 5, stale: 1, where: ['listings', 'presenters', 'posts'] },
     ],
   });
@@ -1949,8 +1900,7 @@ test('the build line names who published, and says nothing over a commit that wa
   expect(await line()).toBe(null);
 });
 
-// One entry, one name, on every screen: a global has no title field to be read off, so the
-// drawer calls it what the site settings screen calls it rather than by its file name.
+// One entry, one name, on every screen.
 test('a global waiting to be published is listed under its label', async () => {
   pendingDrafts.mockImplementationOnce(async () => [
     {
@@ -1978,8 +1928,7 @@ test('a global waiting to be published is listed under its label', async () => {
   });
 });
 
-// The drawer picks entries, so the grouping is done where the titles are: the content index
-// lives in the Worker, and a browser handed paths could only fold them back into files.
+// The drawer picks entries, so the grouping is done where the titles are.
 test('the pending list is one row per entry, whatever languages of it are waiting', async () => {
   locales = ['en', 'de'];
   pendingDrafts.mockImplementationOnce(async () => [
@@ -2078,8 +2027,7 @@ test('publishing is refused when a stored draft is not everything the schema nee
   expect(publishDrafts).not.toHaveBeenCalled();
 });
 
-// redirects.yaml and the globals share the prefix and belong to no collection; holding them
-// to a schema nobody declared would block every publish for good.
+// redirects.yaml and the globals share the prefix and belong to no collection.
 test('a pending file no collection owns is not held to a collection schema', async () => {
   publishDrafts.mockClear();
   readyDrafts.mockImplementationOnce(async () => [
@@ -2164,8 +2112,7 @@ test('the entry list is the built index with the pending drafts over it', async 
   expect(listed.templates).toEqual(['house']);
 });
 
-// The list's language filter narrows to the rows a language is missing or stale in, so a row
-// carries the build's stale mark; absent where there is none, like `offered` and `pending`.
+// The list's language filter narrows to the rows a language is missing or stale in.
 test('a row names the languages the build marked stale', async () => {
   const { entries } = (await (await GET(ctx('entries/posts'))).json()) as {
     entries: { id: string; stale?: string[] }[];
@@ -2177,8 +2124,7 @@ test('a row names the languages the build marked stale', async () => {
   ]);
 });
 
-// The dashboard's line, on every row: the draft's editor where there is a draft, the publish
-// that carried the last one out where there is not.
+// The dashboard's line, on every row: the draft's editor where there is a draft.
 test('the entry list says who last touched each row, and whether that is out yet', async () => {
   publishes = [{ entry: 'listings/seaview-cottage', at: 1755950000000, by: 'Martin Conde' }];
   editors = { 'src/content/listings/en/mill-house.yaml': 'Anna Berg' };
@@ -2267,8 +2213,7 @@ test('creating an entry derives its file name and stores it as a draft, uncommit
     expect.anything(),
     expect.anything(),
     'src/content/listings/en/cafe-bar-2026.yaml',
-    // Only the title: a required field is left absent rather than guessed at, and the editor
-    // is shown what is still missing.
+    // Only the title: a required field is left absent rather than guessed at.
     { _version: 1, title: 'Café & Bar / 2026' },
   );
   expect(publish).not.toHaveBeenCalled();
@@ -2321,9 +2266,7 @@ test('an entry that exists only as a draft opens from it', async () => {
   draft = undefined;
 });
 
-// decap-cms#7371 / payload#14491 at the route: the copy is one entry across its languages,
-// hidden so a half-edited copy never rides out on somebody else's publish, and without the
-// staleness marks, which were made about the original's translations.
+// decap-cms#7371 / payload#14491 at the route.
 test('duplicating drafts a hidden copy of every language, ids regenerated together', async () => {
   createDraft.mockClear();
   publish.mockClear();
@@ -2395,8 +2338,7 @@ test('the copy takes the file name it is given, through the same derivation as a
   expect(createDraft.mock.calls[0]?.[3]).toBe('src/content/pages/en/zweites-zuhause.yaml');
 });
 
-// What is copied is what the repository has, so an entry that has never been in it has
-// nothing to copy — the same sentence, and the same reason, as a rename's.
+// What is copied is what the repository has.
 test('an entry that was never published cannot be duplicated', async () => {
   createDraft.mockClear();
   const res = await POST(post('entries/listings/strandhaus-nord/duplicate', JSON.stringify({})));
@@ -2409,8 +2351,7 @@ test('duplicating in an unknown collection is 404', async () => {
   expect((await POST(post('entries/nope/home/duplicate', JSON.stringify({})))).status).toBe(404);
 });
 
-// A starter is a file with no ids in it: the form gives every row it adds one, so an entry
-// made from that file owes its rows the same.
+// A starter is a file with no ids in it.
 test('creating from a template fills the entry from it and gives its blocks ids', async () => {
   createDraft.mockClear();
   const res = await POST(
@@ -2436,9 +2377,7 @@ test('creating from a template no collection declares is 404', async () => {
   expect(createDraft).not.toHaveBeenCalled();
 });
 
-// A template is the entry's own file in the language it was written in, less what belongs to
-// the entry alone — its address, its languages, its status and every `_id` — committed at once,
-// so the next deploy has it, and logged, so the dialog has it before then.
+// A template is the entry's own file in the language it was written in.
 test('saving as a template commits one stripped file and logs it', async () => {
   publish.mockClear();
   files['src/content/pages/en/home.yaml'] =
@@ -2471,8 +2410,7 @@ test('saving as a template commits one stripped file and logs it', async () => {
   ]);
 });
 
-// The name goes through the same derivation as a new entry's, against the templates the
-// collection already has — the built ones and the saved ones — so nothing is written over.
+// The name goes through the same derivation as a new entry's.
 test('a template name already taken gets the next free one', async () => {
   publish.mockClear();
   files['src/content/pages/en/home.yaml'] = '_version: 1\ntitle: "Home"\n';
@@ -2496,8 +2434,7 @@ test('an entry that was never published cannot be saved as a template', async ()
   expect(publish).not.toHaveBeenCalled();
 });
 
-// A template shapes every entry made after it, which is nearer to the site's shape than to
-// its content, so it is the owner's to make.
+// A template shapes every entry made after it.
 test('an editor cannot save a template', async () => {
   publish.mockClear();
   files['src/content/pages/en/home.yaml'] = '_version: 1\ntitle: "Home"\n';
@@ -2506,8 +2443,7 @@ test('an editor cannot save a template', async () => {
   expect(publish).not.toHaveBeenCalled();
 });
 
-// Until the next build the repository's own list does not have a saved template, so the
-// dialog reads the two lists as one.
+// Until the next build the repository's own list does not have a saved template.
 test('the entry list offers the saved templates beside the built ones', async () => {
   savedTemplates.mockImplementationOnce(async () => ['flat', 'house']);
   const res = await GET(ctx('entries/listings'));
@@ -2602,8 +2538,7 @@ test('deleting commits the removal with a redirect and says the file has gone', 
   );
 });
 
-// Step one of the order a rename and a delete are held to: both commit every file of the entry
-// at once, so neither goes in under whoever has it open.
+// Step one of the order a rename and a delete are held to.
 test('renaming waits for the editor who has the entry open', async () => {
   publish.mockClear();
   holder = { userId: 'someone-else', name: 'Anna Berg', expiresAt: 1755864120000 };
@@ -2630,8 +2565,7 @@ test('deleting waits for the editor who has the entry open', async () => {
   expect(publish).not.toHaveBeenCalled();
 });
 
-// The entry is the same entry: whoever has it open still has it, under the name it now answers
-// to. A delete leaves nobody editing anything.
+// The entry is the same entry: whoever has it open still has it, under the name it now answers to.
 test('the lock follows a rename and goes with a delete', async () => {
   await POST(post('entries/listings/mill-house/rename', JSON.stringify({ to: 'The Old Mill' })));
   expect(moved).toEqual(['listings/mill-house -> listings/the-old-mill']);
@@ -2640,9 +2574,7 @@ test('the lock follows a rename and goes with a delete', async () => {
   expect(dropped).toEqual(['listings/mill-house']);
 });
 
-// Discarding is the one thing besides a restore that throws a colleague's unpublished words
-// away, and it used to leave no trace: the kind has been in the log's list since Phase 3 with
-// nothing writing it.
+// Discarding is the one thing besides a restore that throws a colleague's unpublished words away.
 test("discarding an entry's changes leaves a draft-discard row naming the languages", async () => {
   const res = await DELETE(
     ctx(
@@ -2669,9 +2601,7 @@ test('discarding an entry with nothing pending writes no row', async () => {
   expect(logged).toEqual([]);
 });
 
-// The row the deleted list is built from: the path of the language the entry was written in,
-// which the route reads before the commit takes the files away, and the languages that went —
-// which is what a restore would put back.
+// The row the deleted list is built from.
 test('a delete leaves a log row naming the entry that went', async () => {
   const res = await del('entries/listings/mill-house');
 
@@ -2687,9 +2617,7 @@ test('a delete leaves a log row naming the entry that went', async () => {
   ]);
 });
 
-// The rule a rename or a delete owes is a URL on the site: it carries the language's segment,
-// and on a collection with localized slugs the address that language actually served rather
-// than the file name every language shares (F5 in 02-i18n.md).
+// The rule a rename or a delete owes is a URL on the site.
 test('deleting a bilingual entry sends each language its own URL to its own index', async () => {
   locales = ['en', 'de'];
   files['src/content/posts/en/hello.yaml'] = '_version: 1\ntitle: "Hello"\n';
@@ -2705,8 +2633,7 @@ test('deleting a bilingual entry sends each language its own URL to its own inde
   expect(rules).toContain('from: "/de/blog/hallo"\n    to: "/de/blog"');
 });
 
-// The same question hide asks, and the same answer shape: the client picked one page and the
-// server turns it into the URL each language serves that page at.
+// The same question hide asks, and the same answer shape.
 test('deleting sends each language to the page the dialog picked', async () => {
   locales = ['en', 'de'];
   files['src/content/posts/en/hello.yaml'] = '_version: 1\ntitle: "Hello"\nslug: "hello-world"\n';
@@ -2748,9 +2675,7 @@ test('deleting an entry that was never published makes no commit', async () => {
   );
 });
 
-// A language drafted from English and never published has a row and no file: the commit
-// cannot take it away, so the delete has to, or the drawer offers a draft of an entry that
-// has gone.
+// A language drafted from English and never published has a row and no file.
 test('deleting discards the draft of a language that has no file', async () => {
   locales = ['en', 'de'];
   discardDraft.mockClear();
@@ -2770,8 +2695,7 @@ test('deleting discards the draft of a language that has no file', async () => {
   );
 });
 
-// One entry in two languages, with a block only the German file has and nothing saying it is
-// German-only: the fixture pair from @handover/core, through the routes the admin calls.
+// The fixture covers language-specific block structure.
 const home = {
   en: [
     '_version: 1',
@@ -2796,8 +2720,7 @@ const home = {
   ].join('\n'),
 };
 
-// The German file as a publish of a translation leaves it: which English it was made from, and
-// the id of those exact bytes.
+// The German file as a publish of a translation leaves it.
 const translated = [
   '_version: 1',
   '_i18n:',
@@ -2835,8 +2758,7 @@ test('opening an entry reports the blocks its languages disagree about', async (
   ]);
 });
 
-// Side by side: the second language is drawn from the same response, so opening an entry is
-// still one read per language and the browser never asks for a file of its own.
+// Side by side: the second language is drawn from the same response.
 test('an entry carries the languages it has a file in beside the one it opens on', async () => {
   drifted();
 
@@ -2864,8 +2786,7 @@ test('the entry list says which languages the site declares', async () => {
   expect(body.locales).toEqual(['en', 'de']);
 });
 
-// A menu can point at a collection's index, which is not an entry: the picker is told which
-// collections have one and where each language serves it, apart from the entries.
+// A menu can point at a collection's index, which is not an entry.
 test('the picker list carries each collection with an index page, in every language', async () => {
   locales = ['en', 'de'];
 
@@ -2891,8 +2812,7 @@ test('the picker list carries each collection with an index page, in every langu
   ]);
 });
 
-// The page picker's one read. `presenters` renders nowhere, so it has entries and no
-// addresses; `posts` has localized slugs, so the German file's own `slug` is its address.
+// The page picker's one read.
 test('the picker list carries every collection with the address each language serves', async () => {
   locales = ['en', 'de'];
 
@@ -2956,8 +2876,7 @@ test('the picker list carries every collection with the address each language se
   ]);
 });
 
-// 3.26 listed a hidden entry with nothing to say about it; the picker draws the reason from
-// this flag rather than deciding for itself what a status means.
+// 3.26 listed a hidden entry with nothing to say about it.
 test('the picker says which of its rows is off the site', async () => {
   overlayRows.mockResolvedValueOnce([
     {
@@ -3039,8 +2958,7 @@ test('an entry whose languages agree publishes, drift or no drift elsewhere', as
   expect(publishDrafts).toHaveBeenCalled();
 });
 
-// Staleness: the German file says which English it was translated from, and the entry says
-// whether that is still the English it has. A warning and never a refusal.
+// Staleness: the German file says which English it was translated from.
 test('an entry whose translation was made from an older source language says so', async () => {
   locales = ['en', 'de'];
   files['src/content/pages/en/home.yaml'] = home.en;
@@ -3069,8 +2987,7 @@ test('an entry whose translation was made from an older source language says so'
   expect(body.drift).toEqual([]);
 });
 
-// Per-field staleness: the entry response says *which* languages are behind, off one hash over
-// the file; this says which of their fields, by fetching the English the translation names.
+// Per-field staleness: the entry response says *which* languages are behind.
 test('the fields a translation is behind on are read from the source it was made from', async () => {
   locales = ['en', 'de'];
   files['src/content/pages/en/home.yaml'] = home.en.replace(
@@ -3097,8 +3014,7 @@ test('the fields a translation is behind on are read from the source it was made
   });
 });
 
-// Nothing to compare against is not an error: the marker is simply not drawn. A file nobody has
-// translated has no mark, and bytes git has collected since are gone whatever the mark says.
+// Nothing to compare against is not an error: the marker is simply not drawn.
 test('a language with no translation mark has no fields to mark', async () => {
   locales = ['en', 'de'];
   files['src/content/pages/en/home.yaml'] = home.en;
@@ -3119,8 +3035,7 @@ test('the source of an entry no collection has is not found', async () => {
   expect((await GET(ctx('source/nope/home/de'))).status).toBe(404);
 });
 
-// It reads the entry rather than the path: which language a file was translated from is the
-// entry's answer, and an entry with no English file has not been translated from English.
+// It reads the entry rather than the path.
 test('a publish names the language each translation it commits was made from', async () => {
   drifted();
   publishDrafts.mockClear();
@@ -3138,8 +3053,7 @@ test('a publish names the language each translation it commits was made from', a
   expect(await sourceOf('src/content/redirects.yaml')).toBe(undefined);
 });
 
-// A site with one language has no second file to compare against and never reads for one:
-// opening an entry is the one request it always was, and publishing reads nothing extra.
+// A site with one language has no second file to compare against and never reads for one.
 test('a one-language site is not asked for a second language of anything', async () => {
   getFile.mockClear();
 
@@ -3154,8 +3068,7 @@ test('a one-language site is not asked for a second language of anything', async
   expect(getFile).not.toHaveBeenCalled();
 });
 
-// Reconciling that drift: the answers are the editor's, and every language of the entry is
-// written behind them. The entry is read again afterwards, so nothing is marked resolved.
+// Reconciling that drift: the answers are the editor's.
 const answer = (choices: unknown) => post('drift/pages/home', JSON.stringify({ choices }));
 
 test("the answers to an entry's drift go to every language it has a file in", async () => {
@@ -3191,8 +3104,7 @@ test('an answer about a block the languages agree on is refused rather than writ
   expect((await POST(answer([]))).status).toBe(409);
 });
 
-// The two ends of the done-when: the state an answer leaves behind is one that publishes, and
-// the answer that puts a block into English leaves the schema's own complaint, not a refusal.
+// The two ends of the done-when: the state an answer leaves behind is one that publishes.
 const resolved = (locales: string[]) => {
   drifted();
   const form = formOf('default', formSchema(page));
@@ -3235,8 +3147,7 @@ test('a block answered into English is refused for what its schema needs, not fo
   expect(publishDrafts).not.toHaveBeenCalled();
 });
 
-// An entry with no German file: the two things the editor offers there — make one from the
-// English, or say this entry is not offered in German at all.
+// An entry with no German file: the two things the editor offers there.
 const untranslated = (english = home.en) => {
   locales = ['en', 'de'];
   files['src/content/pages/en/home.yaml'] = english;
@@ -3285,9 +3196,7 @@ test('creating a language the entry already has is refused', async () => {
   expect(createDraft).not.toHaveBeenCalled();
 });
 
-// The site's default language is no longer a language this route refuses on sight: an entry
-// with no file in it is exactly what it is for. What refuses it here is the file this entry
-// has — the same rule every other language is held to.
+// The site's default language is no longer a language this route refuses on sight.
 test('the language an entry is written in is refused for the file it has, not for being it', async () => {
   untranslated();
   createDraft.mockClear();
@@ -3297,9 +3206,7 @@ test('the language an entry is written in is refused for the file it has, not fo
   expect(createDraft).not.toHaveBeenCalled();
 });
 
-// Create from English writes a draft in a language the entry's form does not draw, so the
-// response has to name it: the editor offers Publish on any language being ahead, not on the
-// one it happens to be showing.
+// Create from English writes a draft in a language the entry's form does not draw.
 test('an entry names every language whose draft is ahead of the repository', async () => {
   untranslated();
   rows['src/content/pages/de/home.yaml'] = {
@@ -3330,10 +3237,7 @@ test('turning a language off writes the ones it keeps into every file the entry 
   );
 });
 
-// Turning off a language that has a file is a delete of that one file: it goes in a commit of
-// its own, the languages the entry keeps go into the files that stay, and the URL that language
-// served sends its readers to the collection's index under that language's segment — the
-// address that language answered to, not the file name every language shares (F5's shape).
+// Turning off a language that has a file is a delete of that one file.
 const bilingualPost = () => {
   locales = ['en', 'de'];
   files['src/content/posts/en/taken.yaml'] = '_version: 1\ntitle: "Taken"\n';
@@ -3366,10 +3270,7 @@ test('turning off a language that has a file removes it in one commit, with its 
   );
 });
 
-// The question a hide and a delete ask, asked here too: one language going is still a page
-// going, and its readers are sent where the answer says rather than to this collection's
-// overview — resolved per language like a hide's, so a picked page with no German half sends
-// the German readers to its own collection's German overview.
+// The question a hide and a delete ask, asked here too.
 test('turning a language off sends its readers where the answer says', async () => {
   bilingualPost();
   publish.mockClear();
@@ -3389,8 +3290,7 @@ test('turning a language off sends its readers where the answer says', async () 
   expect(written[2]?.contents).toContain('from: "/de/blog/belegt"\n    to: "/de/listings"');
 });
 
-// The one refusal: with no other file left this is a delete of the entry, and a delete asks the
-// redirect question for the whole entry rather than for one of its languages.
+// The one refusal: with no other file left this is a delete of the entry.
 test('turning off the last language an entry has a file in is refused', async () => {
   locales = ['en', 'de'];
   files['src/content/posts/en/taken.yaml'] = '_version: 1\ntitle: "Taken"\n';
@@ -3405,8 +3305,7 @@ test('turning off the last language an entry has a file in is refused', async ()
   expect(setEntryLocales).not.toHaveBeenCalled();
 });
 
-// A draft is not a file yet: discarding it afterwards would leave the entry with nothing, and
-// the commit has already taken the published one away. Publishing it first is the way through.
+// A draft is not a file yet: discarding it afterwards would leave the entry with nothing.
 test('a language whose only other file is a draft cannot be turned off', async () => {
   untranslated();
   rows['src/content/pages/de/home.yaml'] = {
@@ -3425,8 +3324,7 @@ test('a language whose only other file is a draft cannot be turned off', async (
   expect(setEntryLocales).not.toHaveBeenCalled();
 });
 
-// A collection nothing renders has nowhere to send anybody: the file goes anyway, and the
-// dialog is where the client is told the old URL will 404.
+// A collection nothing renders has nowhere to send anybody.
 test('a collection with no index writes no redirect for the language that went', async () => {
   drifted();
   publish.mockClear();
@@ -3441,9 +3339,7 @@ test('a collection with no index writes no redirect for the language that went',
   ]);
 });
 
-// The language a translation was made from can be the one that goes: what is left becomes the
-// entry's own language, and a mark against a file the entry no longer has cannot say anything
-// is stale — so it goes with it.
+// The language a translation was made from can be the one that goes.
 test('turning off the language a translation was made from drops the mark that named it', async () => {
   locales = ['en', 'de'];
   files['src/content/pages/en/home.yaml'] = home.en;
@@ -3464,9 +3360,7 @@ test('turning off the language a translation was made from drops the mark that n
   expect(german).not.toContain('_i18n');
 });
 
-// Nothing of that language is in the repository, so there is nothing to commit and no URL
-// anybody could have followed: what Create from English left behind is thrown away, and the
-// mark is drafted the way it is for a language that never had a file.
+// Nothing of that language is in the repository.
 test('turning off a language whose file is only a draft commits nothing', async () => {
   untranslated();
   rows['src/content/pages/de/home.yaml'] = {
@@ -3497,9 +3391,7 @@ test('turning off a language whose file is only a draft commits nothing', async 
   );
 });
 
-// A top-level `_locales` is written into every file the entry has, so one that names fewer
-// languages than the entry has files is a hand edit or a bad merge: the list struck the
-// language through while the editor let somebody type in it, and neither said why.
+// A top-level `_locales` is written into every file the entry has.
 test('a _locales the files contradict is reported, and the file wins', async () => {
   locales = ['en', 'de'];
   files['src/content/pages/en/home.yaml'] = home.en.replace(
@@ -3546,8 +3438,7 @@ test('an entry says which languages it is offered in', async () => {
   expect(body.offered).toEqual(['en']);
 });
 
-// The `translate(from, to)` hook: whatever answers, the route asks it for prose and writes
-// the answers into the translation's own draft with `_machine` naming them.
+// The `translate(from, to)` hook: whatever answers.
 const machine = () => {
   locales = ['en', 'de'];
   files['src/content/pages/en/home.yaml'] = home.en;
@@ -3611,8 +3502,7 @@ test('a translation with nothing left to fill asks no machine anything', async (
   expect(translate).not.toHaveBeenCalled();
 });
 
-// Every other test here supplies `i18n.translate`, so the fallback — and which DeepL the key
-// then reaches — is the one wiring none of them walks.
+// Every other test here supplies `i18n.translate`, so the fallback.
 test('a site with no hook of its own translates with the DEEPL_API_KEY it holds', async () => {
   machine();
   translator = undefined;
@@ -3675,8 +3565,7 @@ test('an entry says whether there is anything to translate with', async () => {
   ).toBe(false);
 });
 
-// Having nothing to translate with is about the site and not about this entry, so it is the
-// answer even when the entry would have been refused for its own reasons.
+// Having nothing to translate with is about the site and not about this entry.
 test('nothing to translate with outranks the entry having no file in that language', async () => {
   machine();
   translator = undefined;
@@ -3685,11 +3574,7 @@ test('nothing to translate with outranks the entry having no file in that langua
   expect((await POST(post('translate/pages/home/de', ''))).status).toBe(409);
 });
 
-// A collection with an address per language. The file name stays the entry's id across them;
-// the address is only what a URL is built from.
-// The redirect a hide owes is one per language, and each language's rule is read off the
-// answer the client gave once. `files()` is the repository: a language with no file there was
-// never on the site, so it has no URL anybody could have followed.
+// A collection with an address per language.
 const hide = (body: Record<string, unknown>) =>
   POST(post('status/posts', JSON.stringify({ entries: ['hello'], hidden: true, ...body })));
 const written = () => {
@@ -3713,8 +3598,7 @@ test('hiding an entry sends each language to the overview under its own segment'
   ]);
 });
 
-// The page picker answers with an entry, and the entry's address in that language is what the
-// rule is made of — not the English one under a German segment.
+// Redirects use the picked entry's address in the current language.
 test('a picked page is the address that language serves it at', async () => {
   addressed();
 
@@ -3726,8 +3610,7 @@ test('a picked page is the address that language serves it at', async () => {
   ]);
 });
 
-// The case redirects.md spells out: a target with no page in one of the languages sends that
-// language to the target's own collection index instead of to a page it cannot read.
+// Missing translations redirect to the target collection's localized index.
 test('a picked page with no half in a language falls back to that collection overview', async () => {
   addressed();
 
@@ -3759,8 +3642,7 @@ test('"nowhere" hides the entry and writes no rule at all', async () => {
   expect(setEntryStatus.mock.calls[0]?.[5]).toBe(true);
 });
 
-// A language whose file is only a draft has never been served, so hiding the entry before its
-// first publish owes nothing: there is no old link for anybody to follow.
+// A language whose file is only a draft has never been served.
 test('a language with no file in the repository owes no redirect', async () => {
   locales = ['en', 'de'];
   files['src/content/posts/en/hello.yaml'] = '_version: 1\ntitle: "Hello"\nslug: "hello-world"\n';
@@ -3842,8 +3724,7 @@ test('a collection without localized slugs draws no address at all', async () =>
   expect(body.addresses).toBe(undefined);
 });
 
-// It is a URL, not prose: a machine's guess at one is not a word anybody can read in the form
-// and correct, and it would not survive the address rules anyway.
+// URLs are never machine-translated.
 test('a machine is never asked to translate the address', async () => {
   addressed();
   translate.mockClear();
@@ -3868,8 +3749,7 @@ test('an address that is not one is refused with the reason', async () => {
 test('an address another entry in that language already serves is refused', async () => {
   addressed();
 
-  // `belegt` is another entry's address in German; `taken` is its file name, which is what it
-  // would fall back to the moment somebody cleared that address.
+  // `belegt` is another entry's address in German.
   for (const address of ['belegt', 'taken']) {
     const res = await POST(post('entries/posts/hello/address/de', JSON.stringify({ address })));
     expect([address, res.status]).toEqual([address, 409]);
@@ -3973,7 +3853,6 @@ test('a collection without localized slugs has no address to set', async () => {
 });
 
 // An entry with no file in the site's default language — the demo's German-only Impressum.
-// Its structure is German's, because that is the only language anybody wrote it in.
 const germanOnly = () => {
   locales = ['en', 'de'];
   files['src/content/pages/de/impressum.yaml'] = [
@@ -4076,8 +3955,7 @@ test('the account route refuses a caller with no session', async () => {
   expect(res.status).toBe(401);
 });
 
-// The path carries no id, and neither may the answer: an account page that read a user from
-// the request would be one URL away from being everybody's account page.
+// The path carries no id, and neither may the answer.
 test("the account route reads the session's own user, never the request's", async () => {
   const url = new URL('https://x/admin/api/account?userId=u9&sessionId=s9');
   const res = await GET({
@@ -4121,8 +3999,7 @@ test('a password Better Auth accepts answers ok', async () => {
   expect(await res.json()).toEqual({ ok: true });
 });
 
-// A throw with no code is not Better Auth refusing — it is something broken, and answering
-// `400` would tell the person at the keyboard to fix their password.
+// A throw with no code is not Better Auth refusing.
 test('an error that is not a refusal is not turned into one', async () => {
   setPassword = async () => {
     throw new Error('D1 is unreachable');
@@ -4132,7 +4009,7 @@ test('an error that is not a refusal is not turned into one', async () => {
   );
 });
 
-// ─── members ─────────────────────────────────────────────────────────────────────────────
+// Member routes.
 
 const member = (
   id: string,
@@ -4187,8 +4064,7 @@ test('the members list says what each of them is editing, by the name on the ent
 
   const res = await GET(ctx('members', undefined, { handover: owner }));
 
-  // The index knows the first and has never seen the second, which is still an entry somebody
-  // is holding: it is named by its file name rather than left out.
+  // The index knows the first and has never seen the second.
   expect(((await res.json()) as { members: { editing: string[] }[] }).members[0]?.editing).toEqual([
     'Seaview Cottage',
     'nowhere',
@@ -4231,8 +4107,7 @@ test('a beat on an entry somebody else is editing names them and takes nothing',
   });
 });
 
-// The read the second editor polls on: it watches the lock, and a poll arriving first is not a
-// way to take an entry off somebody.
+// The read the second editor polls on.
 test('reading the lock never claims it', async () => {
   const res = await GET(ctx('locks/listings/mill-house', undefined, { handover: editor }));
 
@@ -4282,8 +4157,7 @@ test('an invite creates one row and mails exactly one address', async () => {
   ]);
 });
 
-// The endpoint also takes a `data` record that writes user columns directly, so a body spread
-// into it would let an invite set `banned`, `emailVerified` or a role it was refused.
+// The endpoint also takes a `data` record that writes user columns directly.
 test('an invite carries the three values it is allowed to and nothing else the body holds', async () => {
   siteMailer = fakeMailer;
 
@@ -4306,9 +4180,7 @@ test('an invite carries the three values it is allowed to and nothing else the b
   });
 });
 
-// `setRole` takes an array and stores it joined with commas; `hasPermission` splits on the
-// comma and grants on any segment, while `roleOf` reads the whole string and sees an editor.
-// So `owner,editor` is an owner Better Auth honours and a screen that shows Editor.
+// `setRole` takes an array and stores it joined with commas.
 test('a role sent as an array is refused rather than stored', async () => {
   memberRows = [
     member('u1', 'martin@example.com', 'owner'),
@@ -4338,8 +4210,7 @@ test('an invite with no mailer names the credential that is missing and writes n
   expect(calls.createUser).toEqual([]);
 });
 
-// The row is written before the mail is tried, so the screen's failure notice can tell the
-// owner to fix the mailer and resend rather than to invite the same person twice.
+// The row is written before the mail is tried.
 test('an invite whose mail fails leaves the row, and names no link', async () => {
   siteMailer = fakeMailer;
   magicLinkRefusal = new Error(
@@ -4445,10 +4316,7 @@ test('promoting an editor is still Better Auth setting the role', async () => {
   expect(demoted).toEqual([]);
 });
 
-// The guard, aimed at directly. Its premise is synthetic: reaching this route needs an owner
-// session, so if there is one owner the caller *is* them and the self-check answers first. The
-// database cannot produce a caller who is an owner and is not the owner — what this pins is
-// that the rule is stated on the route rather than emerging from a different one.
+// The guard, aimed at directly.
 test('the last owner is refused even to a caller who is not them', async () => {
   memberRows = [
     member('u1', 'martin@example.com', 'owner'),
@@ -4491,8 +4359,7 @@ test('removing somebody else takes their sessions and accounts with them', async
   expect(demoted).toEqual([]);
 });
 
-// The removal asks for the owner slot before it asks for the row, so two owners removing each
-// other cannot both be told yes.
+// The removal asks for the owner slot before it asks for the row.
 test('removing an owner takes them out of the count before it deletes them', async () => {
   memberRows = [
     member('u1', 'martin@example.com', 'owner'),
@@ -4515,7 +4382,7 @@ test('a member id the request made up is a 404, not a 500', async () => {
   expect([roled.status, removed.status]).toEqual([404, 404]);
 });
 
-// ─── what reaches the activity log ───────────────────────────────────────────────────────
+// Activity log effects.
 
 test('an invite is an invite event naming who invited whom', async () => {
   siteMailer = fakeMailer;
@@ -4532,8 +4399,7 @@ test('an invite is an invite event naming who invited whom', async () => {
   ]);
 });
 
-// The row exists whether or not the message went, so the log says so too — and the link that
-// was minted for it is in neither the answer nor the row.
+// The row exists whether or not the message went, so the log says so too.
 test('an invite whose mail fails is still an invite event, and carries no link', async () => {
   siteMailer = fakeMailer;
   magicLinkRefusal = new Error('https://x/admin/api/auth/magic-link/verify?token=SECRET_TOKEN');
@@ -4572,8 +4438,7 @@ test('promoting somebody is a role-change event', async () => {
   ]);
 });
 
-// Demotion is the branch that goes through `demoteOwner` rather than `setRole`, so it is the
-// one a log line hung off Better Auth's endpoint would miss.
+// Demotion is the branch that goes through `demoteOwner` rather than `setRole`.
 test('demoting an owner is a role-change event too', async () => {
   memberRows = [
     member('u1', 'martin@example.com', 'owner'),
@@ -4660,9 +4525,7 @@ test('a publish is a publish event carrying the commit, the count and the entrie
   ]);
 });
 
-// The draft rows go once the build carrying them is live, so this row is the only record left
-// that these entries were ever edited — and a batch names no subject, which is why the count on
-// its own was not enough.
+// The draft rows go once the build carrying them is live.
 test('a batch publish records the entries it carried, one each and capped', async () => {
   const paths = Array.from(
     { length: 10 },
@@ -4688,9 +4551,7 @@ test('a batch publish records the entries it carried, one each and capped', asyn
   });
 });
 
-// Hazard 4: a Publish click with nothing pending must not spend a write. `publish-failed` and
-// `publish-conflict` have no caller in this row either — a schema refusal is answered to the
-// person who asked, in the same response.
+// Hazard 4: a Publish click with nothing pending must not spend a write.
 test('a publish that commits nothing writes no event', async () => {
   publishDrafts.mockImplementationOnce(async () => undefined);
 
@@ -4718,8 +4579,7 @@ test('a publish the schema refused writes no event', async () => {
   expect(logged).toEqual([]);
 });
 
-// `params.path` is the route's own segment and the filters ride on the query string, so this
-// one builds its context by hand rather than through `ctx`.
+// `params.path` is the route's own segment and the filters ride on the query string.
 const activityGet = (query: string, session?: unknown) =>
   GET({
     params: { path: 'activity' },
@@ -4728,8 +4588,7 @@ const activityGet = (query: string, session?: unknown) =>
     locals: { handover: session },
   } as unknown as APIContext);
 
-// The whole of `editor sees only their own`: the id is the session's and a `user` in the
-// query is passed on for core to ignore, never swapped in for the caller.
+// The whole of `editor sees only their own`.
 test('the activity log is read as the signed-in person, whoever the query string names', async () => {
   await activityGet('?user=u1', editor);
 
@@ -4757,8 +4616,7 @@ test('the filters and the cursor are passed on as they were asked for', async ()
   });
 });
 
-// The row is gone by the time anybody reads this, so the address is in the event or it is
-// nowhere: an id alone would name somebody nothing can look up.
+// The row is gone by the time anybody reads this, so the address is in the event or it is nowhere.
 test('removing a member is an event naming who was removed', async () => {
   memberRows = [
     member('u1', 'martin@example.com', 'owner'),
@@ -4809,8 +4667,7 @@ test('removing somebody who is not there is no event', async () => {
   expect(logged).toEqual([]);
 });
 
-// Take over is what makes the lock safe to lose: the person it was taken from finds out because
-// the save their tab makes next is refused, not because a poll noticed.
+// Take over is what makes the lock safe to lose.
 test('an autosave from somebody who does not hold the lock is refused, naming who has it', async () => {
   holder = { userId: 'u1', name: 'Anna Berg', expiresAt: 1755864060000 };
   saveDraft.mockClear();
@@ -4901,8 +4758,7 @@ test('a beat is not a take-over, whatever else the body carries', async () => {
   expect(logged).toEqual([]);
 });
 
-// The lock is the tab's: the same person opening the entry twice is told so in the second tab,
-// and the first tab's next save is kept rather than written over.
+// The lock is the tab's: the same person opening the entry twice is told so in the second tab.
 test('a second tab of the same person is refused and the first tab keeps saving', async () => {
   holder = { userId: 'u2', name: 'Anna', expiresAt: 1755864060000, tab: 'tab-1' };
   const save = (tab: string) =>
@@ -4937,8 +4793,7 @@ test('a second tab of the same person is refused and the first tab keeps saving'
   expect((await save('tab-1')).status).toBe(200);
 });
 
-// The rest of what writes to an entry's files waits on the lock the way Rename and Delete do:
-// an open entry is blocked for everyone else.
+// The rest of what writes to an entry's files waits on the lock the way Rename and Delete do.
 test('hiding waits for the editor who has the entry open', async () => {
   setEntryStatus.mockClear();
   holder = { userId: 'someone-else', name: 'Anna Berg', expiresAt: 1755864120000 };
@@ -4991,8 +4846,7 @@ test('a hold is written to every language the entry could have', async () => {
   expect(logged).toEqual([]);
 });
 
-// Only the way off is an event: a hold is a promise to somebody else, and taking it off is the
-// half they would want to read about afterwards.
+// Only the way off is an event: a hold is a promise to somebody else.
 test('taking a hold off clears the column and is logged', async () => {
   const res = await POST(
     ctx(
@@ -5045,9 +4899,7 @@ test('the drawer reads the hold as the entry\u2019s, whichever of its files carr
   });
 });
 
-// The checks a publish runs are about the files it is going to write, and a held entry is not
-// one of them: a half-written draft somebody is holding back must not block everybody else's
-// publish the way an unfinished one they are not holding back does.
+// The checks a publish runs are about the files it is going to write.
 test('a publish is checked against the files it will write, not the ones on hold', async () => {
   pendingDrafts.mockResolvedValueOnce([
     {
@@ -5063,8 +4915,7 @@ test('a publish is checked against the files it will write, not the ones on hold
   expect(publishDrafts).toHaveBeenCalled();
 });
 
-// Selective publish. The body names entries and the server reads its own rows for them: the
-// checks and the commit are made of the same set, and neither is made of what a browser sent.
+// Selective publish.
 const publishing = (body: string, session: Record<string, unknown> = owner) =>
   ctx('publish', new Request('https://x/admin/api/publish', { method: 'POST', body }), {
     handover: session,
@@ -5081,8 +4932,7 @@ test('a publish of a chosen set reads and commits exactly those entries', async 
   expect(publishDrafts.mock.calls[0]?.[4]).toEqual(['listings/mill-house']);
 });
 
-// What the drawer sends: a POST with no body at all, which is not the same request as one
-// carrying an empty string.
+// What the drawer sends: a POST with no body at all.
 test('a publish with no body is still every entry that is ready', async () => {
   publishDrafts.mockClear();
   readyDrafts.mockClear();
@@ -5130,8 +4980,7 @@ test('a publish that released a hold logs it against the person who set it', asy
   ]);
 });
 
-// The two refusals that are somebody else's work rather than the clicker's own drafts, and the
-// only two a publish spends a write on.
+// The two refusals that are somebody else's work rather than the clicker's own drafts.
 test('a file that changed in the repository is logged as a conflict', async () => {
   const { DraftConflictError } = await import('@handover/core');
   publishDrafts.mockImplementationOnce(async () => {
@@ -5181,8 +5030,7 @@ test('the build endpoint answers where the last commit has got to', async () => 
   });
 });
 
-// Rule 3 of "your own publish must not look like a conflict": the rows go when the build
-// carrying them is live, and this is the one moment the Worker learns that it is.
+// Rule 3 of "your own publish must not look like a conflict".
 test('the rows a live build carries are cleared when it reports live', async () => {
   commitBuild.mockImplementationOnce(
     async (_cfg: unknown, commit: { sha: string } | undefined) => ({
@@ -5195,9 +5043,7 @@ test('the rows a live build carries are cleared when it reports live', async () 
   expect(clearPublished).toHaveBeenCalledWith('default', expect.anything(), 'def456');
 });
 
-// `committed_at` is what the pill's counter runs from, so an answer that is no longer about
-// the commit must not carry it — 3.21 found a pill counting sixteen hours from a day-old
-// publish. The build the answer *is* about brings its own `started_at`.
+// `committed_at` is what the pill's counter runs from.
 test('an answer that names no commit carries no committed_at', async () => {
   commitBuild.mockImplementationOnce(async () => ({
     state: 'live',
@@ -5223,8 +5069,7 @@ test('a site with no Cloudflare token draws no build status at all', async () =>
   expect(commitBuild).not.toHaveBeenCalled();
 });
 
-// No commit of ours to ask about, but the site is serving something: the worker's newest build
-// answers for it, with no commit_sha so nothing offers to revert a developer's own deploy.
+// No commit of ours to ask about, but the site is serving something.
 test("a site that has published nothing reads the worker's newest build", async () => {
   lastCommitRow = undefined;
   expect(await (await GET(ctx('build'))).json()).toEqual({
@@ -5235,8 +5080,7 @@ test("a site that has published nothing reads the worker's newest build", async 
   expect(clearPublished).not.toHaveBeenCalled();
 });
 
-// An API that cannot be asked is the site's configuration rather than a state the site is in,
-// so the pill goes away instead of claiming something.
+// An API that cannot be asked is the site's configuration rather than a state the site is in.
 test('an unreachable Workers Builds API answers as no build status', async () => {
   commitBuild.mockImplementationOnce(async () => {
     throw new Error('Cloudflare builds failed: 403');
@@ -5277,9 +5121,7 @@ test('revert undoes the commit the body names and logs it', async () => {
   });
 });
 
-// The row the Deleted view and the activity log are both built on. `entrySubject` names the
-// language the entry is left written in; the languages that went are the detail, so nothing has
-// to ask git what the commit touched.
+// The row the Deleted view and the activity log are both built on.
 test('turning a language off is a row in the log naming the languages that went', async () => {
   bilingualPost();
 
@@ -5293,8 +5135,7 @@ test('turning a language off is a row in the log naming the languages that went'
   });
 });
 
-// The same set the entry list draws, so the two screens never disagree about what exists: an
-// entry whose file is there again is not offered a restore that would write over it.
+// The same set the entry list draws, so the two screens never disagree about what exists.
 test('the deleted list says which rows cannot be put back over what is there now', async () => {
   deletedEntries.mockImplementationOnce(async () => [
     {
@@ -5330,8 +5171,7 @@ test('the deleted list says which rows cannot be put back over what is there now
     whole: false,
     commit_sha: 'off222',
   });
-  // `mill-house` is in the index and no row says it has gone, so restoring it would write over
-  // whatever is there now.
+  // `mill-house` is in the index and no row says it has gone.
   expect(body.deleted[1]).toMatchObject({
     slug: 'mill-house',
     by: 'Martin',
@@ -5369,9 +5209,7 @@ test('restore undoes the commit the body names and says so in the log', async ()
   });
 });
 
-// A language that stays and has only a draft behind it was never in the turn-off commit — the
-// mark went into its row rather than into a file — so no inverse commit can put it back, and
-// the route has to. It takes three languages to reach at all.
+// A language that stays and has only a draft behind it was never in the turn-off commit.
 test('restoring writes the offer back into a language that has only a draft', async () => {
   locales = ['en', 'de', 'fr'];
   files['src/content/listings/de/mill-house.yaml'] = '_version: 1\ntitle: "Die Muehle"\n';
@@ -5407,8 +5245,7 @@ test('revert with no commit named is refused', async () => {
   expect(revertCommit).not.toHaveBeenCalled();
 });
 
-// The one thing an inverse composed against HEAD cannot decide on its own; the drawer says so
-// on the panel the button sits on.
+// The one thing an inverse composed against HEAD cannot decide on its own.
 test('revert is 409 naming the file that has moved on since', async () => {
   const { RevertConflictError } = await import('@handover/core');
   revertCommit.mockImplementationOnce(async () => {
@@ -5667,8 +5504,7 @@ test('a write with nothing the row holds is refused, and an unknown asset is a 4
   expect((await PATCH(patch(`media/${PHOTO}`, { tags: ['x'] }))).status).toBe(404);
 });
 
-// Archiving is the answer to "get rid of it" and is never gated on usage: the bytes stay, every
-// page that names them keeps working, and the picker stops offering it.
+// Archiving is the answer to "get rid of it" and is never gated on usage.
 test('archiving is a write to the row, and unarchiving is the same write back', async () => {
   const res = await PATCH(patch(`media/${PHOTO}`, { archived: true }, { handover: owner }));
   expect(res.status).toBe(200);
@@ -5698,9 +5534,7 @@ const deleteAsset = (id: string) =>
     }),
   );
 
-// The gate is not the badge. The badge is the scan the last build made, and a commit pushed
-// since is not in it — so the tree is read at delete time, and the file that names the picture
-// is the one that stops it going.
+// The gate is not the badge.
 test('a picture a file in the repository names cannot be deleted', async () => {
   findMedia.mockResolvedValueOnce({
     id: PHOTO,
@@ -5736,9 +5570,7 @@ test('a picture only a draft names cannot be deleted either', async () => {
   expect(deleteMedia).not.toHaveBeenCalled();
 });
 
-// The commonest refusal, and the one that must not read as "you did not remove it": the client
-// took the picture out this morning, the badge agrees, and the bytes are still what the live
-// page is asking for until that listing is published.
+// The commonest refusal, and the one that must not read as "you did not remove it".
 test('a picture only the published site still uses says so in those words', async () => {
   findMedia.mockResolvedValueOnce({ id: PHOTO, r2Key: `media/${PHOTO}.webp` });
   contentFiles.mockResolvedValueOnce([
@@ -5817,8 +5649,7 @@ test('a site that has not been told where its bucket is names all four values', 
   });
 });
 
-// The drawer's expanded row: what one entry would put in the next commit, read against the
-// repository as it is now rather than against the commit the draft was loaded from.
+// The drawer's expanded row: what one entry would put in the next commit.
 test('the expanded row is the draft against the file at HEAD, redirects riding along', async () => {
   rows['src/content/listings/en/mill-house.yaml'] = {
     contents: '_version: 1\ntitle: "The Mill House"\nlocation: "Bakewell"\nrooms: 4\n',
@@ -5839,8 +5670,7 @@ test('the expanded row is the draft against the file at HEAD, redirects riding a
   expect(body.redirects).toEqual([{ from: '/listings/mill', to: '/listings/mill-house' }]);
 });
 
-// The three-way view behind Resolve. What the route owes: the entry's files, both languages
-// or one, and a refusal that says the conflict is already settled rather than 404.
+// The three-way view behind Resolve.
 test('the three-way view asks about every language of the entry', async () => {
   locales = ['en', 'de'];
   entryConflict.mockResolvedValue({
@@ -5881,8 +5711,7 @@ test('a conflict somebody has already settled is refused rather than drawn', asy
   expect((await GET(ctx('conflict/nothing/at-all'))).status).toBe(404);
 });
 
-// Every question or none: written half-answered, the fields nobody reached would silently
-// take the repository's value, which is not what leaving a question alone means.
+// Every question or none: written half-answered.
 const conflicted = () => {
   entryConflict.mockResolvedValue({
     head: 'commit-B',
@@ -5941,9 +5770,7 @@ test('a half-answered conflict is refused and nothing is written', async () => {
   expect(resolveConflict).not.toHaveBeenCalled();
 });
 
-// "Simulate conflict": the diagnostics button's endpoint. It writes to the repository, so what
-// is proven here is that it only writes where a scratch entry can be made valid — a file the
-// site's own content schema rejects would break the build behind it — and only for an owner.
+// "Simulate conflict": the diagnostics button's endpoint.
 test('the simulated conflict is made in a collection its schema can be filled in', async () => {
   publish.mockClear();
 
@@ -5951,8 +5778,7 @@ test('the simulated conflict is made in a collection its schema can be filled in
 
   expect(res.status).toBe(200);
   const body = (await res.json()) as { entry: string; path: string };
-  // Named after the commit it is made against, so a second run does not land on the first
-  // run's entry while the built index still knows nothing about it.
+  // Named after the commit it is made against.
   expect(body.entry).toBe('listings/conflict-check-head789');
   expect(createDraft).toHaveBeenCalledWith(
     'default',
@@ -5989,7 +5815,6 @@ test("simulating a conflict is the owner's, not an editor's", async () => {
 });
 
 // The dot the library sets is the picture's own default, and a page that set its own keeps it.
-// Anything but two fractions is not a dot: a number outside the picture would crop off it.
 test('a focal point is two fractions on the row, and anything else is refused', async () => {
   const res = await PATCH(patch(`media/${PHOTO}`, { focal: [0.42, 0.3] }));
   expect(res.status).toBe(200);
@@ -6013,8 +5838,7 @@ test('the browser is handed the picture’s focal point, centred where nobody se
   expect(never[0]?.focal).toEqual([0.5, 0.5]);
 });
 
-// A crop is a new picture with a line back to the one it came from, and that line is declared
-// like the rest of the upload — the row is written from what the object is held to.
+// A crop is a new picture with a line back to the one it came from.
 test('a cropped copy declares the picture it came from', async () => {
   const crop = 'b'.repeat(64);
   const parent = { hash: crop, bytes: 4, mime: 'image/webp', derivedFrom: PHOTO };
@@ -6028,10 +5852,7 @@ test('a cropped copy declares the picture it came from', async () => {
   );
 });
 
-// ── Redirects ────────────────────────────────────────────────────────────────────────────
-// The manual rules UI over redirects.yaml. A rule the client adds is committed as it is added:
-// the file is assembled at publish out of the *selected* entries' rules, so an ownerless rule
-// has nowhere to wait.
+// Manual redirect rules use redirects.yaml.
 
 const RULES = (...rules: string[]) => `_version: 1\nrules:\n${rules.join('')}`;
 const yamlRule = (id: string, from: string, to: string, reason = 'manual', entry?: string) =>
@@ -6080,8 +5901,7 @@ test('the redirects table is the file, and a rule waiting on a draft is flagged'
         reason: 'slug-change',
         entry: 'listings/mill-house',
         createdAt: '2026-01-01T00:00:00Z',
-        // Resolved here, because a title comes from the build's index and nothing in the
-        // browser can read that.
+        // Resolve titles here because only the build index has them.
         title: 'The Mill House',
       },
       {
@@ -6125,8 +5945,7 @@ test('a manual rule is committed as it is added, on its own', async () => {
   });
 });
 
-// The refusal that matters: a redirect over a page that exists takes that page off the site,
-// and a client would never diagnose that from a 404.
+// The refusal that matters: a redirect over a page that exists takes that page off the site.
 test('a rule over a page the site serves is refused by the page it would hide', async () => {
   const res = await POST(
     post('redirects', JSON.stringify({ from: '/listings/mill-house', to: '/listings' })),
@@ -6240,8 +6059,7 @@ test('a rule is deleted and the deletion is logged against the commit', async ()
   ]);
 });
 
-// Unhiding the entry removes its rule in the same commit, so taking it out from here would
-// leave the pair inconsistent and the rule would come back at the next publish.
+// Unhiding the entry removes its rule in the same commit.
 test('a hidden entry’s rule is not deleted from this screen', async () => {
   files['src/content/redirects.yaml'] = RULES(
     yamlRule('cccccccc', '/listings/mill-house', '/listings', 'hidden', 'listings/mill-house'),
@@ -6288,8 +6106,7 @@ const history = (path: string, query = '') =>
 const EN = 'src/content/listings/en/mill-house.yaml';
 const DE = 'src/content/listings/de/mill-house.yaml';
 
-// The entry is one thing to the client even where it is a file per language, so a commit that
-// wrote both is one version — and who made it is the log's answer where git only has the App.
+// The entry is one thing to the client even where it is a file per language.
 test('history merges the language files into one list and names who published', async () => {
   locales = ['en', 'de'];
   commitLog[EN] = [
@@ -6343,8 +6160,7 @@ test('history refuses a collection the site does not declare', async () => {
   expect((await GET(history('history/nope/mill-house'))).status).toBe(404);
 });
 
-// A page is one request per language file, and the page after it is read from the top again:
-// the merge cuts the list, so a per-path cursor would start below the cut.
+// A page is one request per language file, and the page after it is read from the top again.
 test('a second page of history reads both files twice and reaches the older commit', async () => {
   commitLog[EN] = Array.from({ length: 31 }, (_, i) => ({
     sha: `en${i}`,
@@ -6370,9 +6186,7 @@ test('a second page of history reads both files twice and reaches the older comm
 
 const OLD = 'src/content/listings/en/old-mill.yaml';
 
-// The commit that starts a file's log is the rename that made it, when there was one, and its
-// message names the old file — so the list carries on under that name with no `--follow`, and
-// the versions from before the rename say which name they are under.
+// The commit that starts a file's log is the rename that made it, when there was one.
 test('history follows a rename back to the commits under the old name', async () => {
   commitLog[EN] = [
     { sha: 'aaa111', date: '2026-08-30T10:00:00Z', message: 'Update price' },
@@ -6421,8 +6235,7 @@ test('a diff refuses a name that is not one', async () => {
   expect(res.status).toBe(400);
 });
 
-// What is marked is what restoring this version would change, so the version is the *after*
-// side and what is live now is the before.
+// What is marked is what restoring this version would change.
 test('a version is diffed against what is live now', async () => {
   files[`abc1234:${EN}`] = 'title: The Mill House\nlocation: Bakewell\nrooms: 2\n';
   files[EN] = 'title: The Mill House\nlocation: Bakewell\nrooms: 3\n';
@@ -6451,9 +6264,7 @@ test('two versions are diffed against each other rather than against the branch'
   expect(getHead).not.toHaveBeenCalled();
 });
 
-// The log's publish row, opened: the commit against the commit it was made on, one entry at a
-// time, so a row that carried two pages answers two diffs and a redirects.yaml in the same
-// commit is not one of them.
+// The log's publish row, opened: the commit against the commit it was made on, one entry at a time.
 test('a publish is diffed against its parent, one entry at a time', async () => {
   getCommit.mockResolvedValueOnce({
     sha: 'def5678',
@@ -6499,8 +6310,7 @@ test('a version diff of something that is not a commit is refused', async () => 
   expect(res.status).toBe(400);
 });
 
-// Restoring is a draft write and never a rewrite of git: what the version says goes into the
-// rows, and the publish after it is the ordinary forward commit.
+// Restoring is a draft write and never a rewrite of git.
 const restoring = (path: string, body: unknown, session: unknown = editor) =>
   POST(
     ctx(
@@ -6529,8 +6339,7 @@ test('restoring a version hands core the entry as that commit had it, language b
   ]);
 });
 
-// The version's files are read under the name the entry had then and written under the name it
-// has now: a restore across a rename never moves the entry back.
+// Restoring across a rename keeps the entry's current name.
 test('restoring a version from before a rename reads the old name and writes the current one', async () => {
   files[`abc1234:${OLD}`] = 'title: The Old Mill\nrooms: 2\n';
   restoreDraft.mockResolvedValueOnce({ paths: [EN] });
@@ -6556,10 +6365,7 @@ test('a restore refuses a name that is not one', async () => {
   expect(restoreDraft).not.toHaveBeenCalled();
 });
 
-// A restore writes over whatever unpublished changes the entry had — a colleague's draft typed
-// yesterday and closed, which the lock does not guard — so that is the moment the log records,
-// as the same kind the drawer's Discard writes. A restore over nothing pending is a draft edit
-// like typing and no row.
+// A restore writes over whatever unpublished changes the entry had.
 test('restoring a version over unpublished changes leaves a draft-discard row', async () => {
   files[`abc1234:${EN}`] = 'title: The Mill House\n';
   restoreDraft.mockResolvedValueOnce({ paths: [EN] });
@@ -6586,8 +6392,7 @@ test('restoring a version over nothing pending writes no row', async () => {
   expect(logged).toEqual([]);
 });
 
-// A language the version has no file for is not in the hand-over at all: what happens to it is
-// core's business, and there is nothing of it to restore.
+// A language the version has no file for is not in the hand-over at all.
 test('a language the version has no file for is not restored', async () => {
   locales = ['en', 'de'];
   files[`abc1234:${EN}`] = 'title: The Mill House\nrooms: 2\n';
@@ -6613,8 +6418,7 @@ test('a restore of something that is not a commit is refused', async () => {
   expect(restoreDraft).not.toHaveBeenCalled();
 });
 
-// The one write on this screen, so it owes the same refusal every other entry-wide write gives:
-// a restore under somebody who has the entry open writes over what they are typing.
+// The one write on this screen, so it owes the same refusal every other entry-wide write gives.
 test('a restore is refused while somebody else has the entry open', async () => {
   files[`abc1234:${EN}`] = 'title: The Mill House\nrooms: 2\n';
   holder = { userId: 'u9', name: 'Anna', expiresAt: 1755864120000 };
@@ -6628,8 +6432,7 @@ test('a restore is refused while somebody else has the entry open', async () => 
   expect(restoreDraft).not.toHaveBeenCalled();
 });
 
-// A file written by a newer package than this one is migrated forward by nobody, so the restore
-// says so rather than putting a shape the editor cannot draw into the draft.
+// A file written by a newer package than this one is migrated forward by nobody.
 test('a version this package cannot read is refused with the reason', async () => {
   files[`abc1234:${EN}`] = '_version: 99\ntitle: The Mill House\nrooms: 2\n';
 
@@ -6640,8 +6443,7 @@ test('a version this package cannot read is refused with the reason', async () =
   expect(restoreDraft).not.toHaveBeenCalled();
 });
 
-// `formFor` takes the address out of the form the client types into, so a restore given that
-// form writes `slug` after every field the schema declares instead of where the file has it.
+// `formFor` takes the address out of the form the client types into.
 test('a restore writes the address where the schema puts it', async () => {
   files['abc1234:src/content/posts/en/hello.yaml'] = 'title: Hello\nslug: hallo\n';
 
@@ -6657,11 +6459,7 @@ test('a restore of a collection the site does not declare is a 404', async () =>
   ).toBe(404);
 });
 
-// ---------------------------------------------------------------------------
-// Pre-publish checks: the lint the drawer runs over the set it is about to commit. The rules
-// themselves are core's, proven against a real D1 in its own checks.test.ts; what the route
-// owes is the set it hands over — which entries, which languages, and which site the links are
-// resolved against.
+// Pre-publish checks: the lint the drawer runs over the set it is about to commit.
 
 const checking = (entries?: string[]) =>
   POST(
@@ -6702,8 +6500,7 @@ test('a link to a page this site has none of is reported, named by its entry', a
   ]);
 });
 
-// The whole reason the selection is sent rather than filtered in the browser: what a link
-// resolves against is the site as *this* publish would leave it.
+// The whole reason the selection is sent rather than filtered in the browser.
 test('a link to a page only an unselected draft would create is reported', async () => {
   const drafts = [
     {
@@ -6742,8 +6539,7 @@ test('a check the site turned off is not reported', async () => {
   expect(await results(await checking(['notices/opening']))).toEqual([]);
 });
 
-// A language that is not going out is still read, since a translation is judged stale against
-// the file it was made from — and it is never itself reported on.
+// A language that is not going out is still read.
 test('the languages going out are the ones reported on', async () => {
   locales = ['en', 'de'];
   files['src/content/listings/de/mill-house.yaml'] = 'title: ""\nrooms: 3\naddress:\n  street: x\n';
@@ -6758,8 +6554,7 @@ test('the languages going out are the ones reported on', async () => {
   expect(await results(await checking(['listings/mill-house']))).toEqual([]);
 });
 
-// A rename and a delete write an empty row at the path they took the file from, and a file
-// that is not there says nothing about what its page needs.
+// A rename and a delete write an empty row at the path they took the file from.
 test('a file this publish removes is not linted', async () => {
   readyDrafts.mockImplementationOnce(async () => [
     { path: 'src/content/posts/en/hello.yaml', contents: '', updatedAt: 1755864000000 },
@@ -6768,8 +6563,7 @@ test('a file this publish removes is not linted', async () => {
   expect(await results(await checking(['posts/hello']))).toEqual([]);
 });
 
-// The one check that is about the whole site: the daily job's list reaches the checks and comes
-// out named by its entry, so the drawer can say which page it is about.
+// The one check that is about the whole site.
 test("a page the daily job found hidden too long is a note beside the set's own", async () => {
   hiddenLong = [
     { path: 'src/content/listings/en/seaview-cottage.yaml', since: '2026-04-01T09:00:00Z' },

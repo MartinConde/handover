@@ -3,11 +3,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Menus, { type Menu } from './Menus.svelte';
 
-// Testing: what the tree writes into the global — adding a page and an address from the picker,
-// reordering by mouse and by keyboard, indent and outdent under the depth cap, an
-// item removed with its children, and the label an item does not store; plus the badge on an
-// item the site is going to skip.
-// Not testing: the Fields dispatch (glue) or styling.
+// Not tested: the Fields dispatch (glue) or styling.
 
 /** Everything the picker offers, as `/admin/api/entries` answers it. */
 const OFFERED = [
@@ -142,8 +138,7 @@ test('a page chosen from the list joins the menu, named by the page until somebo
 
   expect(labels()).toEqual(['Contact']);
   expect(document.querySelector('.nav-library')).not.toBeNull();
-  // The title is what the row shows and not what the file holds: renaming the page moves the
-  // menu with it.
+  // The title is the row's, not the file's, so renaming the page moves the menu with it.
   const added = menus[0]?.items[0] as { _id: string };
   expect(written()).toBe(`menus:
   - _id: "menu0aaa"
@@ -157,8 +152,7 @@ test('a page chosen from the list joins the menu, named by the page until somebo
 `);
 });
 
-// The index is not an entry, so the item names the collection and each language links its own
-// index page — where a url item would send every language to the same address.
+// The index is not an entry, so each language links its own index page.
 test("a collection's index chosen from the list is written as an index item", async () => {
   show();
   await openAdd();
@@ -227,7 +221,6 @@ test('an item the site will skip says so on the row', async () => {
     'Hidden — the site skips this item',
     'That page is gone — the site skips this item',
   ]);
-  // The row's editor says it in full.
   click(rowOpen());
   expect(q('.item-editor .notice-warn').textContent).toBe(
     'Not available in EN — the site skips this item here',
@@ -247,7 +240,6 @@ test('the move buttons reorder a level, and the ends of it cannot be moved off',
   expect(action('Contact', 'Move Contact down').disabled).toBe(true);
   click(action('Listings', 'Move Listings up'));
   expect(labels()).toEqual(['Listings', 'Home', 'Contact']);
-  // The ⋯ closes on the choice, and focus comes back to it.
   expect(document.querySelector('.row-menu .menu')).toBeNull();
   await loaded();
   expect(document.activeElement).toBe(byLabel('Actions for Listings'));
@@ -268,8 +260,7 @@ test('indent makes the row a sub-item of the one above it, and outdent brings it
   expect(written()).toBe(flat);
 });
 
-// The format is recursive; three levels is this editor's cap, and it counts what is under the
-// row as well as the row, so indenting cannot quietly flatten a sub-menu.
+// The cap counts what is under the row too, so indenting cannot quietly flatten a sub-menu.
 test('the third level is the last: indent is off for a row that would push past it', () => {
   show([
     item({
@@ -290,7 +281,6 @@ test('the third level is the last: indent is off for a row that would push past 
 
   // 'Sold' is two levels of its own at depth 2: indenting it would put 'Last year' at four.
   expect(action('Sold', 'Indent Sold — make it a sub-item').disabled).toBe(true);
-  // Take its child away and the same row can be indented.
   click(action('Last year', 'Remove Last year'));
   expect(action('Sold', 'Indent Sold — make it a sub-item').disabled).toBe(false);
   click(action('Sold', 'Indent Sold — make it a sub-item'));
@@ -362,14 +352,11 @@ test('a site with several menus edits one at a time, and the arrow keys walk the
   expect(q('.tree-empty h2').textContent).toBe('Nothing in this menu yet');
 });
 
-// jsdom lays nothing out, and dnd-kit finds the row under the pointer by its box: rows are
-// stacked 60 px tall in document order, the way the flattened tree reads. The carried card is
-// the overlay, so the rows themselves stay where they are while a drag is live.
+// jsdom lays nothing out, so rows are stacked 60 px tall in document order for dnd-kit.
 const ROW = '.menu-item';
 const laidOut = () =>
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
-    // The carried card is the drag's shape, and dnd-kit places it through its own custom
-    // properties — so its box is wherever the drag has moved it.
+    // dnd-kit moves the overlay through custom properties, so its box is wherever the drag is.
     const overlay = this.closest('[data-dnd-overlay]');
     if (overlay instanceof HTMLElement) {
       const at = (prop: string) => parseFloat(overlay.style.getPropertyValue(prop)) || 0;
@@ -404,9 +391,7 @@ const until = async (ready: () => boolean, what: string) => {
   }
   throw new Error(`never ${what}`);
 };
-// The lift crosses a requestAnimationFrame and ↑ ↓ resolve their target in a promise, so on a
-// slow machine a keydown can land in the gap and be dropped. Walk on state, not on time: wait
-// for the lift, and press again if a press fell before the drag was ready to hear it.
+// A keydown can land in the rAF gap before the lift on a slow machine, so it is pressed again.
 const arrow = async (dir: 'ArrowUp' | 'ArrowDown') => {
   for (let attempt = 0; attempt < 5; attempt++) {
     await key(document, dir);
@@ -510,8 +495,7 @@ test('the library reflects removal and the active menu when switching tabs', asy
   expect(menus[1]?.items).toHaveLength(1);
 });
 
-// One provider spans the tree now, but a drag that keeps its own indent stays in its own
-// branch: the slot's depth follows the pointer, and the pointer has not moved sideways.
+// The slot's depth follows the pointer, which has not moved sideways.
 test('a sub-item is dragged within its own branch', async () => {
   laidOut();
   show([
@@ -543,9 +527,7 @@ const nested = () => [
   item({ _id: 'd4e5f6a7', label: 'Contact', link: { type: 'url', href: '/contact' } }),
 ];
 
-// One DragDropProvider spans the whole tree, so a drag can land on another level. Nothing moves
-// while the drag is live: the slot it would land in is drawn instead — a hairline between
-// siblings, a tinted well that names its parent, a refusal at the position that is over the cap.
+// Nothing moves while the drag is live; the slot it would land in is drawn instead.
 test('carried right over a sub-menu, the well names the slot and the drop nests the row', async () => {
   laidOut();
   show(nested());
@@ -693,8 +675,7 @@ test('the parsed file survives the round trip through the tree', () => {
   expect(written()).toBe(file);
 });
 
-// The second language's column. The tree it draws is the same tree, and the only thing it can
-// write is one word per row: a save of a translation carries the labels and nothing else.
+// A save of a translation carries the labels and nothing else.
 const translated = [
   { _id: 'a1b2c3d4', label: 'Kontakt', link: { type: 'entry', ref: 'pages/contact' } },
   {
@@ -749,8 +730,7 @@ test('a label box is named by the page it points at, and empty means that page�
     Array.from(document.querySelectorAll('.menu-item .lbl')).map((l) => l.textContent),
   ).toEqual(['Contact', '/listings', 'Old Mill House']);
   expect(child?.placeholder).toBe('Old Mill House');
-  // The badge the tree draws is drawn here too: a row the site is going to skip is one nobody
-  // should spend a translation on.
+  // A row the site skips is one nobody should spend a translation on.
   expect(document.querySelector<HTMLElement>('.menu-item .badge-warn')?.title).toBe(
     'Hidden — the site skips this item',
   );

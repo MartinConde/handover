@@ -1,26 +1,19 @@
 import type { ActivityEvent } from '@handover/core';
 
-/**
- * One activity row as a sentence. Both screens that draw the log — the full one and the
- * dashboard's tile — say the same thing about the same event, so what a row *reads as* lives
- * here and each screen writes only its own markup around it.
- */
+/** Both screens that draw the log share these sentences, so they never disagree. */
 
-// `src/content/<collection>/<locale>/<slug>.yaml` — the only subject shape that is somewhere to
-// go. A user id or a media id is a key, and a key on screen tells nobody anything.
+// The only subject shape that is somewhere to go: an id on screen tells nobody anything.
 export const ENTRY = /^src\/content\/([\w-]+)\/([\w-]+)\/([\w-]+)\.yaml$/;
 const entryOf = (subject: string | null) => {
   const found = subject?.match(ENTRY);
   if (!found) return undefined;
   const [, collection = '', locale = '', name = ''] = found;
-  // A global is edited at its own address rather than under a collection, which is where every
-  // other link to one on every other screen goes.
+  // A global is edited at its own address, not under a collection.
   const href = collection === 'globals' ? `/admin/site/${name}` : `/admin/c/${collection}/${name}`;
   return { href, label: name, locale };
 };
 
-/** `detail` is small json written by whichever route caused the event, so every read of it is a
-    read of one named key and never of the blob. */
+/** `detail` is small json; every read is of one named key, never the blob. */
 const str = (detail: unknown, key: string): string | undefined => {
   const value = (detail as Record<string, unknown> | null | undefined)?.[key];
   return typeof value === 'string' ? value : undefined;
@@ -51,9 +44,7 @@ const MESSAGE: Record<string, string> = {
 
 export const who = (event: ActivityEvent) =>
   event.user ? event.user.name || event.user.email || 'A removed member' : 'System';
-/** The subject of an Accounts event is a member id; the list an owner already has gives it a name. */
-// The member list first, where the screen has one; then the name the row was written with, so
-// the dashboard and an editor's own view name people too; a row with neither says nothing.
+/** The subject is a member id; the owner's member list or the written name gives it a name. */
 const named = (id: string | null, people: Person[], written?: string) => {
   const found = people.find((p) => p.id === id);
   return found ? found.name || found.email : written || 'a member';
@@ -195,14 +186,12 @@ export function said(event: ActivityEvent, people: Person[] = []): Said {
         : { lead: `${actor} took over an entry.` };
     }
     case 'setting-changed': {
-      // The log holds the name of the key and what happened to it, never the value, so the row
-      // has nothing else to say. An unknown key is still a record of a change.
+      // The log holds the key name and what happened, never the value.
       const did = HOW_KEY[str(d, 'how') ?? ''] ?? 'changed';
       const key = INTEGRATIONS[event.subject ?? ''];
       return { lead: key ? `${actor} ${did} the ${key}.` : `${actor} ${did} a key.` };
     }
-    // Both rows carry the old name and are about the entry as it is now, which is the one of
-    // the two that is somewhere to go.
+    // Both rows link the entry as it is now, which is the one that is somewhere to go.
     case 'entry-rename': {
       const one = entryOf(event.subject);
       const from = str(d, 'from') ?? 'an entry';
@@ -225,8 +214,7 @@ export function said(event: ActivityEvent, people: Person[] = []): Said {
         : { lead: `${actor} saved the template ${name}.` };
     }
     case 'entry-delete': {
-      // Named rather than linked: the entry is gone, and a row pointing at a page that answers
-      // 404 is worse than the file name on its own.
+      // Named, not linked: a row pointing at a 404 is worse than the file name.
       const gone = entryOf(event.subject);
       const langs = went(d);
       return {
@@ -241,8 +229,7 @@ export function said(event: ActivityEvent, people: Person[] = []): Said {
         : { lead: `${actor} turned ${langs} off for an entry.` };
     }
     case 'revert': {
-      // Both are the same inverse commit, so the detail is what tells them apart: one takes a
-      // publish back, the other puts a delete back.
+      // Both are the same inverse commit; only the detail tells them apart.
       const one = entryOf(event.subject);
       if (!(d as { restore?: unknown } | null)?.restore)
         return { lead: `${actor} undid a publish.` };
@@ -262,8 +249,7 @@ export function said(event: ActivityEvent, people: Person[] = []): Said {
     }
     case 'media-delete':
       return { lead: `${actor} deleted ${str(d, 'name') ?? 'a file'} from storage.` };
-    // A rule is named by the address it covers, which is the half a client recognises; where it
-    // sends them is the other column of the screen it was written on.
+    // A rule is named by the address it covers, the half a client recognises.
     case 'redirect-added':
       return { lead: `${actor} added a redirect from ${str(d, 'from') ?? 'an address'}.` };
     case 'redirect-changed':
@@ -273,8 +259,7 @@ export function said(event: ActivityEvent, people: Person[] = []): Said {
     case 'mail-failed':
       return { lead: `${MESSAGE[str(d, 'message') ?? ''] ?? 'A message'} could not be sent.` };
   }
-  // Later kinds arrive without opening this file. A row whose sentence nobody has written is
-  // still a record of something, so it names the kind rather than throwing or vanishing.
+  // A kind with no sentence yet is still a record, so it is named rather than dropped.
   const one = entryOf(event.subject);
   return { lead: one ? `${actor} — ${event.kind} ` : `${actor} — ${event.kind}`, link: one };
 }
@@ -294,12 +279,7 @@ const midnight = (at: number) => {
   return day.getTime();
 };
 
-/**
- * A week is where a distance stops being an answer: "1 week ago" is not something an audit can
- * be read off, so anything older is its date. The day buckets count calendar days from local
- * midnight rather than dividing elapsed milliseconds, because a day is 23 or 25 hours across a
- * daylight-saving change — 2026-03-29 02:00 local is 25 hours after 2026-03-28 01:00 here.
- */
+/** Day buckets count from local midnight: a day is 23 or 25 hours across a DST change. */
 export function when(at: number): string {
   const minutes = Math.floor((Date.now() - at) / 60_000);
   if (minutes < 1) return 'Just now';
@@ -312,11 +292,7 @@ export function when(at: number): string {
   return DATE.format(at);
 }
 
-/**
- * How long something has been the case — the drawer's *On hold · Martin · 2 days* — in the same
- * calendar days `when` counts. Nothing on the day it was set: a hold from this morning is not
- * one anybody has been waiting on.
- */
+/** Same calendar days as `when`; nothing on the day it was set. */
 export function age(since: number): string {
   const days = Math.round((midnight(Date.now()) - midnight(since)) / 86_400_000);
   return days < 1 ? '' : days === 1 ? '1 day' : `${days} days`;

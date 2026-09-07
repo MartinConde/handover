@@ -48,12 +48,7 @@ import {
 import type { RequestContext } from './context.js';
 import { mediaStore, workerBuilds } from './environment.js';
 
-/**
- * The redirects table: the file's rules in the order the file has them — which is the order
- * `_redirects` serves them in — and after them the rules waiting on an entry's draft, flagged.
- * Those are the only unpublished ones there are: a rule the client adds here is committed as
- * it is added, since `redirects.yaml` never gets a draft row of its own.
- */
+/** Committed rules in file order, then the rules waiting on an entry's draft, flagged. */
 export async function redirectList(ctx: RequestContext): Promise<Response> {
   const database = ctx.db();
   const [committed, waiting, entries] = await Promise.all([
@@ -62,8 +57,7 @@ export async function redirectList(ctx: RequestContext): Promise<Response> {
     pickable(ctx),
   ]);
   const titles = new Map(entries.map((e) => [e.path, e.title || e.path]));
-  // One hide owes a rule per language and writes each on that language's row, so the same rule
-  // is never on two rows — but a row read twice would still double it.
+  // Keyed by id: a row read twice would otherwise list the same rule twice.
   const pending = new Map(
     waiting.flatMap((row) => (row.pendingRedirects ?? []).map((rule) => [rule._id, rule] as const)),
   );
@@ -84,7 +78,6 @@ export async function redirectList(ctx: RequestContext): Promise<Response> {
 const MANAGED =
   'This redirect belongs to the entry that is hidden. Show that entry again and the redirect goes with it.';
 
-/** `from`, `to` and how permanent it is, as the dialog sends them. */
 const typedRule = async (request: Request) => {
   const body = (await request.json().catch(() => undefined)) as
     | { from?: unknown; to?: unknown; status?: unknown }
@@ -96,12 +89,7 @@ const typedRule = async (request: Request) => {
   };
 };
 
-/**
- * A rule the client writes by hand. It is committed as it is added rather than waiting in the
- * drawer: the file is assembled at publish out of the rules of the *selected* entries
- * ([drafts-and-publishing.md](../../../../docs/features/drafts-and-publishing.md)), so a rule
- * with no entry to ride on has nowhere to wait. The same is true of a rename and a delete.
- */
+/** Committed on add: a rule with no entry to ride on has nowhere to wait for a publish. */
 export async function addRedirect(
   ctx: RequestContext,
   request: Request,
@@ -113,7 +101,7 @@ export async function addRedirect(
   const bad = redirectError('default', typed, { pages: sitePages(entries), rules });
   if (bad) return Response.json(bad, { status: 422 });
   const typed_ = redirectRule('default', { ...typed, reason: 'manual' }, Date.now());
-  // As the file has it: a destination that already forwarded lands where that forwards.
+  // Read back from the file: a destination that already forwarded is collapsed onto its target.
   let rule = typed_;
   const { commit_sha } = await editRedirects('default', git, `Add redirect ${rule.from}`, (all) => {
     const written = collapseRedirects(all, [typed_]);
@@ -130,7 +118,7 @@ export async function addRedirect(
   return Response.json({ rule });
 }
 
-/** One rule rewritten. A hidden entry's is refused here for the reason it is refused a delete. */
+/** A hidden entry's rule is refused for the reason a delete of it is. */
 export async function changeRedirect(
   ctx: RequestContext,
   id: string,
@@ -158,12 +146,7 @@ export async function changeRedirect(
   return Response.json({});
 }
 
-/**
- * One rule taken out. Deleting a redirect is allowed — it is a rule and not the client's
- * content — and the dialog warns about a young one rather than refusing it. The one refusal is
- * the entry's own rule: unhiding removes it in the same commit, so taking it out from here
- * would leave the pair inconsistent and the rule would come back at the next publish.
- */
+/** A hidden entry's rule is refused: it would come back at the next publish anyway. */
 export async function removeRedirect(
   ctx: RequestContext,
   id: string,
@@ -190,18 +173,7 @@ export async function removeRedirect(
   return Response.json({ deleted: id });
 }
 
-/**
- * Where the last commit the admin made has got to. **The state is the server's**, read from the
- * activity log rather than kept in the drawer: a publish redeploys the Worker serving `/admin`,
- * so the tab that pressed Publish may be reloaded before the build finishes and whatever it was
- * holding would go with it. Every screen asks this and gets the same answer.
- *
- * `{}` where the site has no token — the pill is not drawn at all rather than drawn as an
- * unknown, since a site without build status is an ordinary site. A site that has **published
- * nothing yet** does get an answer, from the worker's newest build: there is no commit of ours to
- * ask about, but the site is still serving something and a blank top bar is the wrong reading of
- * it. That answer carries no `commit_sha`, so nothing offers to revert a developer's own deploy.
- */
+/** Read from the log: a publish redeploys the Worker, so the tab that pressed it may reload. */
 export async function buildStatus(ctx: RequestContext): Promise<Response> {
   const database = ctx.db();
   const last = await lastCommit('default', database);
@@ -211,25 +183,18 @@ export async function buildStatus(ctx: RequestContext): Promise<Response> {
   try {
     status = await commitBuild(builds, last);
   } catch (err) {
-    // A token that cannot ask is the site's configuration, not a state the site is in. It is
-    // said once in the log the deploy reads and answered as no pill at all.
+    // A token that cannot ask is configuration, not a site state: log once and draw no pill.
     console.error('build status: the Workers Builds API could not be asked', err);
     return Response.json({});
   }
-  // Rule 3 of "your own publish must not look like a conflict" runs here, because this is the
-  // one moment the Worker learns the build went green: the rows go once nobody is in the entry.
+  // The one moment the Worker learns the build went green, so the published rows go here.
   if (last && status.state === 'live' && status.commit_sha === last.sha)
     await clearPublished('default', database, last.sha);
-  // Only where the answer is still about that commit: `committed_at` is what the pill counts
-  // from, and hanging it on the worker's newest build is a counter running from another commit.
+  // `committed_at` only while the answer is about our commit, or the pill counts from another.
   return Response.json(last && status.commit_sha ? { ...status, committed_at: last.at } : status);
 }
 
-/**
- * One commit undone. `commit_sha` is the body's, so this works over any commit the admin made
- * and not only the last one; `409` with `{ error, paths }` when one of its files has moved on
- * since, which is the one thing an inverse composed against HEAD cannot decide on its own.
- */
+/** Any admin commit, not only the last; 409 with paths when one of its files has moved since. */
 export async function revert(
   ctx: RequestContext,
   request: Request,
@@ -263,7 +228,6 @@ const undoPath = (_session: App.Locals['handover']) => (path: string) => {
   );
 };
 
-/** Which commit the body names, or the empty string. Both undo routes read the same one key. */
 async function undoing(request: Request): Promise<string> {
   const body = (await request.json().catch(() => undefined)) as
     | { commit_sha?: unknown }
@@ -271,15 +235,7 @@ async function undoing(request: Request): Promise<string> {
   return typeof body?.commit_sha === 'string' ? body.commit_sha : '';
 }
 
-/**
- * A delete undone, over the commit the log recorded it with. The same inverse a revert is, plus
- * what only D1 knows: the marks a turn-off wrote into the open drafts of the files that stayed,
- * and the rows that were keeping the restored paths off the entry list.
- *
- * `409` with `{ error, paths }` when a file the restore would write has moved since — a name
- * somebody has taken again, or an entry already put back — because writing over it would be
- * undoing somebody else's work in the name of undoing your own.
- */
+/** A revert plus the draft marks and hidden rows only D1 knows; 409 when a file has moved since. */
 export async function restore(
   ctx: RequestContext,
   request: Request,
@@ -290,8 +246,7 @@ export async function restore(
   const database = ctx.db();
   const git = ctx.git();
   await commitScope('default', database, sha, true);
-  // Which entry the commit took away, asked before anything is undone: somebody may have it open
-  // again under the same name, and a restore would write over what they are typing.
+  // Asked before undoing: somebody may have the name open again and a restore would overwrite it.
   const about = entryKey((await git.getCommit(sha)).paths.find((p) => entryKey(p)) ?? '');
   if (about) {
     const [collection = '', slug = ''] = about.split('/');
@@ -299,8 +254,7 @@ export async function restore(
     if (held) return held;
   }
   const result = await restoreCommit('default', database, git, sha, undoPath(session));
-  // A language that stays with only a draft behind it was never in the turn-off commit — the
-  // mark went into its row rather than into a file — so the inverse commit cannot put it back.
+  // A draft-only language was never in the turn-off commit, so the inverse cannot put it back.
   const entry = entryKey(result.paths[0] ?? '');
   const [collection = '', slug = ''] = entry ? entry.split('/') : [];
   if (config.collections[collection]) {
@@ -321,8 +275,7 @@ export async function restore(
   await logActivity('default', database, {
     userId: session?.user.id,
     kind: 'revert',
-    // What was put back, and which the log's own row it undoes. `restore` is what tells the
-    // two apart on screen: both are the same inverse commit.
+    // `restore` is what tells this row from a revert on screen: both are the same inverse commit.
     subject: result.paths[0] ?? null,
     detail: { of: sha, files: result.paths.length, restore: true },
     commitSha: result.commit_sha,
@@ -330,19 +283,13 @@ export async function restore(
   return Response.json({ commit_sha: result.commit_sha, paths: result.paths });
 }
 
-// `src/content/<collection>/<locale>/<slug>.yaml`. redirects.yaml belongs to no collection and
-// has no schema to be held to; a global's is its own, keyed by the file name.
+// redirects.yaml belongs to no collection; a global's schema is keyed by the file name.
 const schemaFor = (path: string) => {
   const [, collection = '', , slug = ''] = ENTRY_FILE.exec(path) ?? [];
   return schemaOf(collection, slug);
 };
 
-/**
- * Which of these files belong to an entry whose languages have drifted apart. The one refusal
- * besides the schema: the structure is shared, so committing a file that disagrees with its
- * other languages would bake the difference into git, and which side is right is a decision
- * somebody makes. A site with one language never has a second file to disagree with.
- */
+/** A file whose structure disagrees with its other languages is not committed. */
 async function driftedPaths(ctx: RequestContext, paths: string[]): Promise<string[]> {
   if (config.i18n.locales.length < 2) return [];
   // One entry is one check, however many of its languages are waiting to be published.
@@ -366,16 +313,7 @@ async function driftedPaths(ctx: RequestContext, paths: string[]): Promise<strin
   return drifted;
 }
 
-/**
- * The lint the drawer runs over the set it is about to commit: the entries the body names, or
- * everything pending that is not on hold — the same body and the same set `POST
- * /admin/api/publish` reads.
- *
- * **A request of its own on purpose.** The pass then has its own ten milliseconds of CPU, so a
- * publish too heavily cross-linked to read in one go costs a check result and never the commit;
- * and nothing here refuses anything, since the drawer's Publish button and the entry header's
- * dialog are where an error stops somebody ([pre-publish-checks.md](../../../docs/pending-changes.md)).
- */
+/** A request of its own so the pass gets its own CPU budget; nothing here refuses anything. */
 export async function prepublishChecks(ctx: RequestContext, request: Request): Promise<Response> {
   const database = ctx.db();
   const body = (await request.json().catch(() => undefined)) as { entries?: unknown } | undefined;
@@ -383,9 +321,7 @@ export async function prepublishChecks(ctx: RequestContext, request: Request): P
     ? body.entries.filter((e): e is string => typeof e === 'string')
     : undefined;
   const rows = await readyDrafts('default', database, chosen);
-  // The built index with **these** drafts over it and no others: what a link is checked against
-  // is the site as this publish would leave it, and a draft nobody selected is not going out.
-  // Overlaying the rest would call a link to a page only an unselected draft creates good.
+  // Overlay only the selected drafts: a link to a page only an unselected draft creates is bad.
   const overlay = rows.map(({ path, contents }) => ({ path, contents }));
   const overlaid: ContentIndex = Object.fromEntries(
     Object.keys(config.collections).map((name) => [
@@ -396,8 +332,7 @@ export async function prepublishChecks(ctx: RequestContext, request: Request): P
   const going = new Map<string, Record<string, string>>();
   for (const row of rows) {
     const [, collection = '', locale = '', slug = ''] = ENTRY_FILE.exec(row.path) ?? [];
-    // A file this publish removes is not a file to lint; the overlay above has already taken
-    // the page it was off the index.
+    // A file this publish removes is not linted; the overlay already took its page off the index.
     if (!collection || !row.contents || !schemaOf(collection, slug)) continue;
     const files = going.get(`${collection}/${slug}`) ?? {};
     files[locale] = row.contents;
@@ -407,9 +342,7 @@ export async function prepublishChecks(ctx: RequestContext, request: Request): P
   const entries: CheckEntry[] = await Promise.all(
     [...going].map(async ([key, drafted]) => {
       const [collection = '', slug = ''] = key.split('/');
-      // The languages this publish is not committing are read from the repository: a
-      // translation is judged stale against the file it was made from, which is often one of
-      // them, and a file that is not going out is never reported on.
+      // Unpublished languages come from git: a translation is judged stale against its source.
       const rest = await Promise.all(
         config.i18n.locales
           .filter((locale) => !(locale in drafted))
@@ -444,29 +377,20 @@ export async function prepublishChecks(ctx: RequestContext, request: Request): P
     ignore: config.checks?.ignore,
     hiddenLong: await lastHiddenLong('default', database),
   });
-  // Named by the entry as well as by the file: the drawer lists entries, and which of an
-  // entry's languages a result is about is the file it carries.
+  // The drawer lists entries; the file says which language a result is about.
   return Response.json({
     results: results.map((result) => ({ ...result, entry: entryKey(result.path) ?? result.path })),
   });
 }
 
-/**
- * One commit, of every draft that differs from the repository or of the entries the body names.
- * The rows it committed are re-seeded on it rather than deleted, so an editor who carries on
- * typing is measured against what was published and not against whatever HEAD is by then.
- *
- * The schema decides here rather than at every keystroke, so a blank new entry cannot commit
- * a file the site's own content schema rejects and break the build behind it. The captured
- * rows are passed to publishDrafts, so validation and the commit use the same versions.
- */
+/** Committed rows are re-seeded rather than deleted, so later typing is measured against them. */
 export async function publish(
   ctx: RequestContext,
   request: Request,
   session: App.Locals['handover'],
 ): Promise<Response> {
   const database = ctx.db();
-  // Only a genuinely empty body means all. A malformed selection must never widen scope.
+  // Only a genuinely empty body means all: a malformed selection must never widen scope.
   const raw = await request.text();
   let chosen: string[] | undefined;
   if (raw !== '') {
@@ -488,9 +412,7 @@ export async function publish(
       return new Response('Publish requires an array of entry keys', { status: 400 });
     chosen = [...new Set(body.entries as string[])];
   }
-  // The same set the commit will be made of, held to the schema before anything is written: an
-  // entry nobody chose is not in this commit, so it is not this commit's job to hold it to the
-  // schema either — and a held entry that *was* chosen is, since it is going out.
+  // Held to the schema before anything is written, over exactly the set the commit is made of.
   const pending = await readyDrafts('default', database, chosen);
   // Who was holding what, read while the holds are still there: the publish releases them.
   const holders = chosen?.length ? await heldDrafts('default', database) : {};
@@ -525,8 +447,7 @@ export async function publish(
             ? `${drifted[0]} has drifted apart from the entry's other languages — resolve it in the editor`
             : `${drifted.length} files have drifted apart from their entries' other languages — ${drifted.join(', ')}`,
         paths: drifted,
-        // Which 409 this is: the drawer's way out of a conflict is Discard, and this one's is
-        // the editor.
+        // Which 409 this is: a conflict's way out is Discard, drift's is the editor.
         reason: 'drift',
       },
       { status: 409 },
@@ -543,10 +464,7 @@ export async function publish(
       pending,
     );
   } catch (err) {
-    // A publish the repository refused is somebody else's work getting in the way of this one —
-    // the file that moved, or the branch that did — and that is what an owner reads the log for.
-    // A schema or a drift refusal is not: it is the state of this person's own drafts, and it is
-    // answered to them in the same response.
+    // Only a repository refusal is logged: a schema or drift refusal is this person's own drafts.
     const conflict = err instanceof DraftConflictError;
     await logActivity('default', database, {
       userId: session?.user.id,
@@ -559,8 +477,7 @@ export async function publish(
     });
     throw err;
   }
-  // A hold this publish went through is released, and that is the half the person who set it
-  // would want to read about afterwards — the same event the toggle writes.
+  // A released hold is logged as the same event the toggle writes.
   for (const entry of result?.released ?? []) {
     const [collection = '', slug = ''] = entry.split('/');
     const from = holders[entry]?.name;
@@ -571,16 +488,12 @@ export async function publish(
       detail: from ? { from } : null,
     });
   }
-  // Only a commit is an event. A Publish click with nothing pending is not one, and spending a
-  // D1 write on it is how one busy editor costs a site its day's budget.
+  // A Publish click with nothing pending is not an event; a D1 write per click adds up.
   if (result?.commit_sha) {
     await logActivity('default', database, {
       userId: session?.user.id,
       kind: 'publish',
-      // One file is an entry somebody can open; a batch is the commit, and the paths are not
-      // small json — the entries are, and they are what the dashboard reads back. The draft
-      // rows go once the build is live, so this row is the only record that a published entry
-      // was ever edited.
+      // The draft rows go once the build is live, so this row is the only record of the edit.
       subject: result.paths.length === 1 ? (result.paths[0] ?? null) : null,
       detail: {
         files: result.paths.length,
@@ -593,9 +506,6 @@ export async function publish(
   return Response.json(result ?? { paths: [] });
 }
 
-/**
- * The entries a publish carried, for the row recording it. Capped at what the dashboard draws:
- * a publish of two hundred pages is one commit, and the log's `detail` is small json.
- */
+/** Capped at what the dashboard draws: the log's `detail` is small json. */
 const publishedKeys = (paths: readonly string[]) =>
   [...new Set(paths.flatMap((path) => entryKey(path) ?? []))].slice(0, 8);

@@ -67,10 +67,7 @@ let {
   machine?: string[];
   /** Translate one field from the source language; absent when the site has nothing to do it. */
   ontranslate?: (path: string) => void;
-  /**
-   * What the source language has said since this file was translated, by the same address
-   * `machine` uses. A field named here carries the amber marker; opening it shows the words.
-   */
+  /** What the source language changed since translation, by the address `machine` uses. */
   sourceChanged?: Record<string, WordPart[]>;
   /** What that language is called, for the two lines the marker opens. */
   sourceLabel?: string;
@@ -86,11 +83,7 @@ let {
   mediaBase?: string;
   /** The language this column writes: what a link typed into rich text has to point at. */
   locale?: string;
-  /**
-   * What this page would say with nothing typed in the panel — the site's defaults resolved by
-   * the same `resolveSeo` the build runs, so the greyed value and the emitted tag agree. Not
-   * handed down the recursion: it belongs to the entry's own `seo` field, which is a tab.
-   */
+  /** Resolved by the build's own `resolveSeo`, so the greyed value and the emitted tag agree. */
   inheritedSeo?: ResolvedSeo;
   /** The site's origin, for the SEO previews; none, and the panel draws none. */
   site?: string;
@@ -99,17 +92,12 @@ let {
 } = $props();
 
 const modeOf = (field: Field): Translation => field.i18n ?? inherited;
-// A group, an array or a blocks field is walked whatever its own mode says, because a field
-// inside it can say otherwise.
+// Walked whatever its own mode says, because a field inside it can say otherwise.
 const structural = (field: Field) =>
   field.type === 'group' || field.type === 'array' || field.type === 'blocks';
-// Widgets a translation has nothing to act on: a `reference` points at the same entry in every
-// language, and an unsupported field has no value to show. Neither is given to the second
-// language as a picture of the first language's value it cannot change.
+// Widgets a translation has nothing to act on, so the second language is not shown them.
 const FIXED = new Set(['reference', 'unsupported']);
-// The schema names a link's missing target `button.ref` and a picture's caption `image.alt`,
-// keys the one widget draws itself — so what it says is the widget's to show. A group or a
-// list leaves such a key to the field inside it that owns it.
+// A key like `button.ref` is drawn by the one widget, so that widget shows its problem.
 const problemOf = (field: Field, at: string[]) => {
   const key = at.join('.');
   if (problems[key] !== undefined || structural(field)) return problems[key];
@@ -129,19 +117,16 @@ const shown = $derived(
 // One picker at a time per form level; the field id says which is open.
 let picker = $state('');
 
-// One stale marker open at a time, named by the field's address. Dismiss takes the marker off
-// for as long as the screen is open: what would put it back is the source language moving
-// again, and that is a reload either way.
+// Dismiss lasts for the screen's life: what would bring the marker back is a reload anyway.
 let opened = $state('');
 let dismissed = $state<string[]>([]);
-// It says `role="dialog"`, so it takes focus when it opens and hands it back to the marker when
-// it closes; axe scores nothing on either. Escape closes it like any other layer here.
+// A `role="dialog"` takes focus when it opens and hands it back to the marker on close.
 let popover = $state<HTMLElement>();
 $effect(() => {
   if (opened) popover?.focus();
 });
 const behind = (path: string) => !dismissed.includes(path) && sourceChanged[path] !== undefined;
-// "20 Aug 10:14". Which English this is, not how long ago — a distance says nothing about that.
+// A date rather than "3 days ago": how long ago says nothing about which words.
 const WHEN = new Intl.DateTimeFormat('en-GB', {
   day: 'numeric',
   month: 'short',
@@ -159,15 +144,11 @@ const close = (path: string, then: (path: string) => void) => {
   marker?.focus();
 };
 
-// Where the file names this field: `blocks[_id=k3nf9a2p].heading`, which is what `_machine`
-// and the machine translation route both address it by. The form knows it by its position.
+// `_machine` and the translation route name a field by file address, not form position.
 const address = (at: readonly string[]) => fieldAddress('default', at, root);
-// Prose is the half a translation owns — the fields this column draws as something to type in.
-// Not conditional on having a machine: the stale marker and the machine badge are worth having
-// on a site with nothing to translate with, and only the Translate button is the machine's.
+// Not conditional on a machine: the stale marker and badge are worth having without one.
 const prose = (field: Field) => translating && (field.type === 'text' || field.type === 'richtext');
-// `coastalhomes.example › listings › seaview-cottage`: the address the way a search result prints
-// it. The host is read out of `site`, and a `site` that is not an address prints nothing.
+// A `site` that is not a URL prints no host rather than throwing.
 const host = $derived.by(() => {
   try {
     return site ? new URL(site).host : '';
@@ -215,8 +196,7 @@ function add(at: readonly string[], item: unknown) {
   if (Array.isArray(read(at))) list(at).push(item);
   else write(at, [item]);
 }
-// A scalar row has no `_id`, so its card is keyed by a name of its own that moves with it;
-// otherwise a reorder leaves the cards where they are and swaps the words in them.
+// A scalar row has no `_id`; without a key that moves with it a reorder swaps words, not cards.
 const names = new WeakMap<object, string[]>();
 function keyOf(items: unknown[], i: number): string {
   const row = items[i] as Data | undefined;
@@ -235,8 +215,7 @@ function drop(at: readonly string[], index: number) {
   names.get(list(at))?.splice(index, 1);
 }
 type Handlers = Required<DragDropEventHandlers>;
-// The list is rewritten as the card passes over each place it could land, so the others make
-// room under it; a drag that is escaped puts the card back where it was picked up.
+// The list is rewritten as the card passes over each slot, so an escaped drag must put it back.
 let origin = -1;
 function begun(event: Parameters<Handlers['onDragStart']>[0]) {
   const { source } = event.operation;
@@ -252,9 +231,7 @@ function ended(at: readonly string[], event: Parameters<Handlers['onDragEnd']>[0
   if (!event.canceled || !isSortable(source) || origin < 0 || source.index === origin) return;
   move(list(at), source.index, origin);
 }
-// The handle is the only thing that drags: the row's inputs keep their pointer and keyboard.
-// Both arguments are read lazily: an eager read would remake the sortable on every reorder,
-// and a sortable born at its new index has no move to animate.
+// Read lazily: an eager read would remake the sortable on every reorder, losing the animation.
 const sortable = (id: () => string, index: () => number) =>
   createSortable({
     get id() {
@@ -272,7 +249,6 @@ const block = (row: unknown) =>
   row as { _type?: string; _id?: string; _label?: string; _ref?: string };
 // Folded blocks, by the block's own key, so a fold rides along when the block is moved.
 let folded = $state<Record<string, boolean>>({});
-// A folded card still says what is in it: the first words it holds, in the order its form shows.
 function excerpt(row: unknown, inner: Field[] | undefined): string {
   for (const f of inner ?? []) {
     const v = f.path.reduce<unknown>((node, key) => (node as Data | undefined)?.[key], row);
@@ -280,21 +256,18 @@ function excerpt(row: unknown, inner: Field[] | undefined): string {
   }
   return '';
 }
-// A `_ref` block's content lives in a global, and an unknown `_type` has no fields to show;
-// both are the same read-only card.
+// A `_ref` block's content lives in a global and an unknown `_type` has no fields: both read-only.
 const blockName = (row: unknown) => block(row)._label || block(row)._type || '';
 const blockFields = (row: unknown) =>
   block(row)._ref === undefined ? blocks[block(row)._type ?? ''] : undefined;
 
-// A stored reference names an entry this form never picked, so the list is read for its
-// title and the languages it has. Only where there is something on screen that needs one.
+// A stored reference names an entry this form never picked, so its title is looked up.
 let known = $state<Pickable>({ entries: [], locales: [] });
 $effect(() => {
   if (fields.some((f) => f.type === 'reference' || f.type === 'link'))
     readPickable().then((p) => (known = p));
 });
 
-// The picture as this field will show it: `16:9` is already what `aspect-ratio` wants.
 const aspect = (preset: Preset) => preset.ratio?.replace(':', ' / ') ?? '4 / 3';
 const src = (at: readonly string[]) => {
   const key = str([...at, 'src']);
@@ -314,20 +287,17 @@ let pasting = $state('');
 /** The last paste that was not a link we know, and the field it was made in. */
 let refused = $state({ id: '', why: '' });
 
-// A control that replaces itself takes the reader's place with it, so the focus follows the eye:
-// onto the box that Change opened, and back onto Change when the box closes. Ids carry dots.
+// A control that replaces itself would drop focus, so focus follows onto its replacement.
 const focusOn = (elementId: string) =>
   void tick().then(() => document.getElementById(elementId)?.focus());
 
-// A hand-edited file can hold anything under an embed key, and a card drawn from half a value
-// is worse than the paste box.
+// A hand-edited file can hold anything under an embed key; half a value draws no card.
 function embedValue(at: readonly string[]): EmbedValue | undefined {
   const v = read(at) as EmbedValue | undefined;
   return v && typeof v.id === 'string' && v.provider in EMBED_LABELS ? v : undefined;
 }
 
-// A link that is not recognised leaves the value alone: a mistyped one must never empty the
-// field. A recognised one replaces the whole value, title included — it named the old video.
+// A mistyped link must never empty the field; a recognised one replaces the title too.
 function pasteEmbed(at: readonly string[], id: string, input: HTMLInputElement) {
   refused = { id: '', why: '' };
   if (!input.value.trim()) return;
@@ -337,16 +307,13 @@ function pasteEmbed(at: readonly string[], id: string, input: HTMLInputElement) 
     return;
   }
   const { provider, id: chosen, start } = parsed.embed;
-  // The format's own order, with `title` and `start` left as holes: nothing is written for
-  // either until somebody types one, and each keeps its place in the file when they do.
+  // `title` and `start` are holes so each keeps its place in the file once typed.
   write(at, { provider, id: chosen, title: undefined, start });
   input.value = '';
   pasting = '';
   focusOn(`${id}-change`);
 }
-// The format's order, every key a hole: a description typed before a search title must not put
-// itself above it in the file. Assigning to a key an object already has keeps its place, so the
-// shape is laid down the first time each key is written and nothing is stored for the rest.
+// Every key a hole, so a description typed before a title does not land above it in the file.
 const SEO_SHAPE = {
   title: undefined,
   description: undefined,
@@ -365,10 +332,7 @@ const bytes = (at: readonly string[]) => fileSize(read([...at, 'bytes']) as numb
 /** One picked asset as the format stores it — and in that order. */
 const stored = (type: 'image' | 'file', item: MediaItem) =>
   type === 'image'
-    ? // `alt` is left as a hole rather than an empty string: nothing is written for it until
-      // somebody types one, and it keeps its place in the file when they do. The dot comes with
-      // the picture — it is the library's default, and only where somebody moved it off centre:
-      // a page saying "crop around the middle" is the same page saying nothing.
+    ? // `alt` is a hole so it keeps its place in the file; a centred focal is the same as none.
       {
         src: item.src,
         alt: undefined,
@@ -378,7 +342,7 @@ const stored = (type: 'image' | 'file', item: MediaItem) =>
       }
     : { src: item.src, name: item.filename, bytes: item.bytes, mime: item.mime };
 
-/** Nothing to write down: the middle is where a crop holds when no page and no row says otherwise. */
+/** The middle is where a crop holds when nothing says otherwise, so it is not written. */
 const centred = (focal?: [number, number] | null) =>
   !focal || (focal[0] === 0.5 && focal[1] === 0.5);
 
@@ -387,8 +351,7 @@ function picked(at: readonly string[], type: 'image' | 'file', items: MediaItem[
   picker = '';
 }
 
-// A gallery is an array whose row *is* the picture, so the picker takes several at once and each
-// one is a row of its own, in the order they were ticked.
+// An array whose row is the picture: the picker takes several at once, one row each.
 const gallery = (field: Field) =>
   field.type === 'array' &&
   field.item.length === 1 &&
@@ -433,8 +396,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   {/if}
 {/snippet}
 
-<!-- The source language before and after, so the decision is "does the German still say this?"
-     and not "what changed, again?". Both lines are the same word diff read from either end. -->
+<!-- Before and after in full, so the question is "does the German still say this?" -->
 {#snippet stale(stalePath: string)}
   <div
     class="popover"
@@ -458,8 +420,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           >{:else if part.mark !== 'del'}{part.text}{/if}{/each}
       </div>
     </div>
-    <!-- The address is read before `opened` moves: a snippet's argument is re-read on demand,
-         and closing the popover is what takes this one away. -->
+    <!-- Read the address before `opened` moves: closing is what takes the argument away. -->
     <div class="actions">
       {#if onretranslate}
         <button class="btn btn-sm" type="button" onclick={() => close(stalePath, onretranslate)}>Re-translate</button>
@@ -619,7 +580,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         </select>
       {/if}
     {:else if field.type === 'link' && translating}
-      <!-- A link's label is the half a translation owns; where it points is the same everywhere. -->
+      <!-- A link's label is the half a translation owns. -->
       {@render groupLabel(id, field, text, at)}
       <div class="field"><div class="label-row"><label for="{id}.label">Label</label>{@render machineMark(`${address(at)}.label`, `${text} label`)}</div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
     {:else if field.type === 'link'}
@@ -757,7 +718,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       </div>
     {:else if field.type === 'image'}
       {@render groupLabel(id, field, text, at)}
-      <!-- svelte-ignore a11y_no_static_element_interactions -- the button inside is the control; the zone is a drop target -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
       <div class="dropzone" role="group" aria-labelledby="{id}-l" aria-describedby={says} ondragover={(e) => e.preventDefault()} ondrop={(e) => dropOn(id, e)}>
         <span>Drop an image or choose from library</span>
         {#if field.preset.ratio || field.preset.min}<span class="hint">{[field.preset.ratio, field.preset.min && `at least ${field.preset.min} px wide`].filter(Boolean).join(' · ')}</span>{/if}
@@ -790,7 +751,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       </div>
     {:else if field.type === 'file'}
       {@render groupLabel(id, field, text, at)}
-      <!-- svelte-ignore a11y_no_static_element_interactions -- the button inside is the control; the zone is a drop target -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
       <div class="dropzone" role="group" aria-labelledby="{id}-l" aria-describedby={says} ondragover={(e) => e.preventDefault()} ondrop={(e) => dropOn(id, e)}>
         <span>Drop a file or choose from library</span>
         <span class="hint">{field.accept.map((m) => (m.split('/').pop() ?? '').toUpperCase()).join(', ')} up to 10 MB</span>
@@ -852,8 +813,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         </div>
       {/if}
     {:else if field.type === 'seo' && translating}
-      <!-- A translation owns the words a page is found by and nothing else: the search title,
-           the description, and what the picture is of. -->
+      <!-- A translation owns the words a page is found by: title, description, alt. -->
       {@render groupLabel(id, field, text, at)}
       <div class="form" {id} role="group" aria-labelledby="{id}-l" aria-describedby={says}>
         {@render seoWords(id, at, 'title', 'Search title', SEO_TITLE_LIMIT, inheritedSeo?.title ?? '', 'Leave empty to use the page title.')}
@@ -893,7 +853,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
               </div>
             </div>
           {:else}
-            <!-- svelte-ignore a11y_no_static_element_interactions -- the button inside is the control; the zone is a drop target -->
+            <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
             <div class="dropzone" role="group" aria-labelledby="{id}.image-l" ondragover={(e) => e.preventDefault()} ondrop={(e) => dropOn(`${id}.image`, e)}>
               <span>{inheritedSeo?.image ? 'The site’s own card is shared for this page' : 'Drop an image or choose from library'}</span>
               <span class="hint">{SOCIAL_CARD.ratio} · at least {SOCIAL_CARD.min} px wide</span>
@@ -925,8 +885,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {#if err}<p class="error" id="{id}-err">{err}</p>{/if}
     {#if marked}{@render stale(marked)}{/if}
     {#if framing === id && field.type === 'image'}
-      <!-- The page's own dot, over the field's own shape. It wins over the library's default
-           for this page, and it is the same picture in every language. -->
+      <!-- The page's own dot wins over the library's default and is the same in every language. -->
       <Focal
         name={text}
         url={src(at)}
@@ -938,8 +897,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {/if}
     {#if framing === `${id}.image` && field.type === 'seo'}
       {@const image = [...at, 'image']}
-      <!-- A 1.91:1 card cut from a 3:2 photo loses a band top and bottom, so the card has the
-           same dot a field's picture has, and it lives in the same place. -->
+      <!-- A 1.91:1 card cut from a 3:2 photo loses a band top and bottom. -->
       <Focal
         name="Social image"
         url={src(image)}

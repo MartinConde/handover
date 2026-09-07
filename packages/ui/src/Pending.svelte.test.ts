@@ -2,13 +2,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Pending from './Pending.svelte';
 
-// Testing: the count line, one row per entry, which entries are checked to begin with and what
-// Publish sends, a hold going out only when somebody checks it, the four answers a publish can
-// get (published / an entry changed under it / the branch moved / an entry the schema is not
-// done with), a refused entry taking itself out of the set so the rest still publish, the way
-// out of a conflict, and the empty state.
-// Not testing: Select all / none, which set the same state a checkbox does, and the drawer's
-// chrome classes.
+// Not testing Select all / none: they set the same state a checkbox does.
 
 const ENTRIES = [
   {
@@ -25,8 +19,7 @@ const ENTRIES = [
     collection: 'listings',
     locales: ['en'],
     files: ['src/content/listings/en/mill-house.yaml'],
-    // Its web address moved, so redirects.yaml owes it a rule. The file itself is never a row:
-    // it is assembled at publish out of the entries that are going out.
+    // redirects.yaml is never a row: it is assembled at publish from the entries going out.
     redirects: 1,
     updated_at: 1755863000000,
   },
@@ -160,8 +153,7 @@ test('with nothing checked there is nothing to publish and the button says so', 
   expect(q(root, '.drawer-foot .foot-note')?.textContent?.trim()).toBe(
     'Nothing is selected. Check what you want to publish.',
   );
-  // The pass the drawer opened with, and none for the empty set it is left in: there is
-  // nothing for the checks to read.
+  // One pass on open and none for the empty set: there is nothing for the checks to read.
   expect(fetchMock.mock.calls.flat()).toEqual(['/admin/api/publish/checks', expect.anything()]);
 });
 
@@ -200,8 +192,7 @@ test('an entry changed in the repository takes itself out and the rest still pub
   expect(button?.disabled).toBe(false);
   expect(button?.textContent).toBe('Publish 1 change');
 
-  // URL by URL from here: the publish is preceded by the checks pass, which must not eat the
-  // answer this one is about.
+  // The checks pass precedes the publish, so answer URL by URL from here.
   fetchMock.mockImplementation(async (url: string) =>
     url === '/admin/api/publish'
       ? Response.json({ commit_sha: 'def4567890', paths: ENTRIES[0]?.files })
@@ -306,8 +297,7 @@ test('discarding one of two conflicted entries leaves the other named and says s
   expect(root.querySelectorAll('.change-row.is-blocked').length).toBe(1);
 });
 
-// S1: a blank new entry is a publishable row whose file the site's own schema rejects. The
-// commit is refused whole and the rows that are not ready say which they are.
+// A blank new entry's file is rejected by the schema, so the commit is refused whole.
 test('an entry the schema is not done with is named on its row and takes itself out', async () => {
   vi.stubGlobal(
     'fetch',
@@ -333,8 +323,7 @@ test('an entry the schema is not done with is named on its row and takes itself 
   expect(published).not.toHaveBeenCalled();
 });
 
-// The footer has to say which nothing this is: a refusal that leaves nothing selected is not
-// "check something" — every checkbox in the drawer is disabled.
+// A refusal that leaves nothing selected is not "check something": every checkbox is disabled.
 test('a refusal that blocks the only entry says so instead of asking for a checkbox', async () => {
   vi.stubGlobal(
     'fetch',
@@ -362,9 +351,7 @@ test('Discard names the entry it would throw away, for anybody who cannot see th
   );
 });
 
-// The other blocking refusal: the entry's own files disagree about which blocks it has, which
-// is settled in the editor and not here — so the row says that rather than "changed in the
-// repository", and Discard is not offered for it.
+// Drift is settled in the editor, not here, so the row says that and offers no Discard.
 test('an entry whose languages have drifted apart is named on its row as that', async () => {
   vi.stubGlobal(
     'fetch',
@@ -387,21 +374,18 @@ test('an entry whose languages have drifted apart is named on its row as that', 
     "Nothing was published. One entry's languages disagree about which blocks it has — the files have to agree before it can go out.",
   );
   expect(q(root, '.change-row.is-blocked .badge-danger')?.textContent).toBe('Languages disagree');
-  // Discard is the way out of a conflict and not of drift, so the row keeps only the control
-  // every row has — the one that opens what changed.
+  // Discard is the way out of a conflict, not of drift.
   expect(q(root, '.change-row.is-blocked .change-actions .btn-sm')).toBe(null);
   expect(published).not.toHaveBeenCalled();
 });
 
-// A hold is a promise between colleagues, so the drawer has to say what it kept back before
-// anybody presses Publish — a count that quietly went down is not a reason anybody can read.
+// A hold is a promise between colleagues, so the drawer says what it kept back before Publish.
 const HELD = [
   ENTRIES[0] as (typeof ENTRIES)[number],
   { ...(ENTRIES[1] as (typeof ENTRIES)[number]), held_by: { id: 'u1', name: 'Martin' } },
 ];
 
-// The age is calendar days from when the hold was set, the way the log's *Yesterday* is: a
-// hold that has sat for a week is the one the drawer exists to show.
+// The age is calendar days from when the hold was set, the way the log's *Yesterday* is.
 test('a hold set yesterday says how long the entry has been held back', () => {
   const yesterday = [
     ENTRIES[0] as (typeof ENTRIES)[number],
@@ -429,8 +413,7 @@ test('an entry on hold is listed apart, unchecked and out of what Publish commit
   );
 });
 
-// The hold is a courtesy, not a permission: anybody may include it, and the drawer says what
-// including it does before they press the button rather than after.
+// The hold is a courtesy, not a permission, so the drawer says what including it does first.
 test('checking an entry on hold puts it in the publish and says the hold comes off', async () => {
   const fetchMock = vi.fn(async () => Response.json({ commit_sha: 'def4567890', paths: [] }));
   vi.stubGlobal('fetch', fetchMock);
@@ -465,11 +448,7 @@ test('a set that is entirely on hold has nothing to publish and says why', () =>
   expect(q(root, '.drawer-foot .foot-note')?.textContent).toContain('on hold');
 });
 
-// A publish that leaves something behind does not empty the drawer, so the empty state cannot
-// be where it says what went out: a client who sees the list still standing has been told
-// nothing about their commit.
-// Selection is per publish and not stored, so what a publish leaves behind is checked the way
-// a freshly opened drawer would have it — not the way the last press happened to leave it.
+// Selection is per publish, so what a publish leaves behind is checked as a fresh drawer would.
 test('what a publish leaves behind starts from the defaults again', async () => {
   vi.stubGlobal(
     'fetch',
@@ -506,8 +485,7 @@ test('a publish that left a hold behind still says what it published', async () 
   expect(published).toHaveBeenCalled();
 });
 
-// The panel a publish leaves behind is where the build and the way back live — p7d of the
-// mockup. It is neutral rather than green: the commit landed, the site has not.
+// The result panel is neutral rather than green: the commit landed, the site has not.
 const publishing = (body: Record<string, unknown>) =>
   vi.stubGlobal(
     'fetch',
@@ -532,20 +510,17 @@ test('the build of that commit is shown beside it, in words as well as colour', 
   const root = show();
   q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.click();
   await tick();
-  // No `started_at`: the Builds API has no build for the commit for the first half-minute after
-  // a publish, which is exactly when this panel is being looked at.
+  // No `started_at`: the Builds API has no build for the commit for the first half-minute.
   build = { commit_sha: 'c0ffee11', state: 'building', committed_at: Date.now() - 45_000 };
   flushSync();
 
   const pill = q(root, '.publish-result .pill');
-  // With the elapsed time, the way the mockup's fourth frame reads it — the shell's pill and
-  // this one are the same component, so they cannot say different things again.
+  // The shell's pill and this one are the same component, so they cannot disagree again.
   expect(pill?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Building… 0m 45s');
   expect(pill?.className).toContain('pill-building');
 });
 
-// A colleague publishing something else moves the shell's pill on; this panel is about the
-// commit this drawer made and nothing else.
+// The panel is about the commit this drawer made, not whatever moved the shell's pill.
 test('a build of some other commit is not shown as this publish’s', async () => {
   publishing({ commit_sha: 'c0ffee11', paths: ENTRIES[0]?.files ?? [] });
   const root = show();
@@ -558,9 +533,7 @@ test('a build of some other commit is not shown as this publish’s', async () =
   expect(q(root, '.publish-result .result-actions .btn-link')).not.toBeNull();
 });
 
-// What a row opens: the per-field diff of what it would put in the commit, and the address
-// change riding along with it. The diff itself is `Diff.svelte`'s; what the drawer owes is
-// asking for the entry and drawing the rules on top.
+// The diff itself is `Diff.svelte`'s; the drawer owes asking for the entry and the rules on top.
 test('opening a row shows what would go out and the redirect riding along', async () => {
   const fetchMock = vi.fn(async () =>
     Response.json({
@@ -592,9 +565,7 @@ test('opening a row shows what would go out and the redirect riding along', asyn
   );
 });
 
-// The way out of a conflict that is not giving up the draft. It takes the list's place rather
-// than opening over it, and nothing publishes while it is open: the other entries would go out
-// in the same commit as this one.
+// Nothing publishes while a conflict is open: the other entries would go out in the same commit.
 test('Resolve opens the three-way view in place of the list, and publishing waits', async () => {
   const fetchMock = vi.fn(async (url: string) =>
     url.startsWith('/admin/api/conflict')
@@ -637,7 +608,6 @@ test('a resolved entry loses the badge and is read again wherever it is open', a
   expect(q(root, '.resolve')).toBe(null);
   expect(q(root, '.badge-danger')).toBe(null);
   expect(discarded).toHaveBeenCalled();
-  // And the row can go out with the rest again.
   expect(boxes(root)[1]?.disabled).toBe(false);
   expect(q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.disabled).toBe(false);
 });
@@ -649,10 +619,7 @@ test('the drawer is a div with the dialog role, not an aside', () => {
   expect(root.querySelector('.drawer')?.tagName).toBe('DIV');
 });
 
-// ---------------------------------------------------------------------------
-// Pre-publish checks. The rules are the server's; what the drawer owes is running them over
-// what is selected, grouping them under the entry they are about, and letting an error stop a
-// publish that warnings never do.
+// Pre-publish checks: the rules are the server's; the drawer groups them and lets errors block.
 
 const CHECKS = {
   results: [
@@ -697,8 +664,7 @@ const settled = async () => {
 const messages = (root: ParentNode) =>
   Array.from(root.querySelectorAll('.check-group .notice .msg'), (n) => n.textContent);
 
-// The same problem in both files is one line, and its link opens the language the fix is
-// written in — the site's default — not whichever file the checks happened to list first.
+// A merged line links to the default language, not whichever file the checks listed first.
 test('a merged check line links to the default language, not the first it lists', async () => {
   vi.stubGlobal(
     'fetch',
@@ -753,8 +719,7 @@ test('the checks are grouped under the entry they are about, worst first', async
   expect(q(root, '.checks-sum')?.textContent?.replace(/\s+/g, ' ')).toBe(
     '1 error · 1 warning · 1 note. The error has to go first. Checked over the 2 entries you have selected, and again when you press Publish.',
   );
-  // The field is opened where it is edited: the entry, the SEO panel for a search field, and
-  // the address and language of the field itself for the editor to land on.
+  // A search field opens on the SEO panel, with the field's address and language for landing.
   expect(
     Array.from(root.querySelectorAll('.check-group .notice a'), (a) => a.getAttribute('href')),
   ).toEqual([
@@ -764,9 +729,7 @@ test('the checks are grouped under the entry they are about, worst first', async
   ]);
 });
 
-// A site with no SEO defaults gets two notes on every entry it publishes, and twenty entries
-// make forty lines nobody reads past. A note is worth a read, not a wall: they fold under a
-// count, and what stops or changes a publish stays on the page.
+// A site with no SEO defaults gets two notes per entry, so notes fold under a count.
 test('notes fold under a count while errors and warnings stay listed', async () => {
   vi.stubGlobal('fetch', checking());
   const root = show();
@@ -791,8 +754,7 @@ test('an error stops the publish and warnings never do', async () => {
   expect(button?.disabled).toBe(true);
   expect(button?.textContent?.trim()).toBe('Fix 1 error to publish');
 
-  // The entry the error is about, unchecked: its checks go with it, and what is left is a
-  // warning and a note, which the client publishes anyway.
+  // Unchecking the entry takes its checks with it; a warning and a note publish anyway.
   boxes(root)[1]?.click();
   await settled();
 
@@ -809,8 +771,7 @@ test('an error stops the publish and warnings never do', async () => {
   });
 });
 
-// One picture in a field every language shares is one problem, and the client's edit is one
-// edit: two identical lines would only send them looking for the difference.
+// A shared picture is one problem; two identical lines would send readers hunting a difference.
 test('the same problem in two languages is one line naming both', async () => {
   const both = {
     results: [{ ...CHECKS.results[1], path: 'src/content/pages/en/home.yaml' }, CHECKS.results[1]],
@@ -834,8 +795,7 @@ test('the same problem in two languages is one line naming both', async () => {
   expect(q(root, '.checks-sum')?.textContent?.replace(/\s+/g, ' ')).toContain('1 warning');
 });
 
-// The drawer may have been open a while: the picture the error is about could have been
-// deleted in another tab since, and the button that says nothing is in the way is stale.
+// The picture may have been deleted in another tab since, so the earlier all-clear is stale.
 test('Publish runs the checks again and an error stops the commit', async () => {
   let answer = { results: [] as (typeof CHECKS)['results'] };
   const fetchMock = vi.fn(async (url: string) =>
@@ -864,8 +824,7 @@ test('Publish runs the checks again and an error stops the commit', async () => 
   expect(document.activeElement).toBe(q(root, '.drawer'));
 });
 
-// The pass before the commit is a round trip, and the press is what the client thinks started
-// the publish: a live button through it commits the same set twice.
+// The checks pass is a round trip, so a live button through it would commit the same set twice.
 test('a second press while the checks are running commits nothing twice', async () => {
   const fetchMock = vi.fn(async (url: string) =>
     url === '/admin/api/publish/checks'
@@ -886,8 +845,7 @@ test('a second press while the checks are running commits nothing twice', async 
   expect(fetchMock.mock.calls.filter(([url]) => url === '/admin/api/publish')).toHaveLength(1);
 });
 
-// A lint that cannot be run is not a refusal: the publish it could not read is still the
-// client's to make.
+// A lint that cannot be run is not a refusal.
 test('checks that could not be run leave the publish where it was', async () => {
   const fetchMock = vi.fn(async (url: string) =>
     url === '/admin/api/publish/checks'
@@ -909,8 +867,7 @@ test('checks that could not be run leave the publish where it was', async () => 
   expect(published).toHaveBeenCalled();
 });
 
-// A note about a page that is not in the set at all — the daily hidden check's — has no entry
-// row to sit under, so it gets a group of its own and stays out of the set's own count.
+// The daily hidden check's note has no entry row to sit under, so it gets a group of its own.
 test('a note about a page outside the set is listed under its own heading', async () => {
   vi.stubGlobal(
     'fetch',

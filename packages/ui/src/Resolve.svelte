@@ -33,8 +33,7 @@ let loading = $state(true);
 let busy = $state(false);
 let error = $state('');
 
-// A question is one field of one language, or one every language shares: both are needed to
-// tell two of them apart, and both go back with the answer.
+// A question is one field of one language, or one every language shares.
 const key = (q: { path: string; locale?: string }) => `${q.locale ?? ''} ${q.path}`;
 const answered = $derived(questions.filter((q) => answers[key(q)]).length);
 const plural = (n: number, what: string) => `${n} ${n === 1 ? what.replace(/s$/, '') : what}`;
@@ -65,8 +64,7 @@ async function load() {
   version = body.version;
 }
 
-// A conflict somebody else settled, or a repository out of reach: neither is about the answers
-// on this screen, and both are the server's own sentence.
+// A conflict somebody else settled, or a repository out of reach.
 const refusal = async (res: Response) =>
   res.status === 409 || res.status === 503
     ? await res.text()
@@ -119,9 +117,7 @@ const said = (change: Change): string => {
 };
 </script>
 
-<!-- What this side says, with what it added marked. The words it took out are not drawn: the
-     line above already names what both started from, and a deletion run against an insertion
-     is unreadable in a sentence nobody has read yet. -->
+<!-- What this side says, with what it added marked. -->
 {#snippet value(change: Change)}
   {#if change.kind === 'value'}{change.after ?? 'empty'}
   {:else if change.kind === 'words'}{#each change.parts.filter((p) => p.mark !== 'del') as part, i (i)}{#if part.mark === 'ins'}<ins
@@ -142,8 +138,7 @@ const said = (change: Change): string => {
       onchange={() => (answers[key(q)] = mine ? 'ours' : 'theirs')}
     >
     <span class="body">
-      <!-- The dash is a literal: Svelte trims the whitespace around a block and the two would
-           otherwise read as one word. -->
+      <!-- Literal spacing keeps Svelte blocks from joining words. -->
       <b>{mine ? 'Yours' : 'Theirs'}{#if short}{' — '}{@render value(change)}{/if}</b>
       {#if !short}<span class="quote">{@render value(change)}</span>{/if}
       <small>

@@ -11,8 +11,7 @@ import { navigate } from './navigate';
 
 let { collection, onclose }: { collection: string; onclose: () => void } = $props();
 
-// Read when the dialog opens rather than handed in, so the dashboard opens it exactly as the
-// list does: the names already taken, for the file-name promise, and the starters beside Blank.
+// Read when the dialog opens, so the dashboard opens it exactly as the list does.
 let taken = $state<string[]>([]);
 let templates = $state<string[]>([]);
 let text = $state('');
@@ -37,8 +36,7 @@ async function load(name: string) {
 }
 
 const singular = $derived(nameOf(collection));
-// The same derivation the server runs on the same names, so the dialog can promise the file
-// name before anything is written.
+// The same derivation the server runs, so the dialog can promise the file name.
 const preview = $derived(entryName('default', text, taken));
 // `flat-by-the-sea` → `Flat by the sea`, which is all a file name has to say to be picked.
 const starterLabel = (name: string) => {
@@ -71,8 +69,7 @@ async function create(event: Event) {
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
 
-<!-- Not aria-modal: the shell behind stays reachable until the design gate gives these the
-     drawer's inert treatment, and claiming a trap that is not there is worse than not claiming it. -->
+<!-- Not aria-modal: the shell behind stays reachable, so claiming a trap would be a lie. -->
 <div class="scrim">
   <div class="dialog" role="dialog" aria-labelledby="new-entry-h">
     <h2 id="new-entry-h">New {singular}</h2>

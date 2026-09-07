@@ -145,8 +145,7 @@ test('a later autosave replaces the contents and leaves the base where it was', 
   expect((await db.select().from(drafts)).length).toBe(1);
 });
 
-// Who last touched an entry, which is the *last edited by* line on the dashboard and on the
-// Site settings cards. A rename, a restore and a drift answer stamp it too, each in its own test.
+// *Last edited by* on the dashboard; a rename, a restore and a drift answer stamp it too.
 test('an autosave records who typed it, and the next person replaces them', async () => {
   const db = await fresh();
   await saveDraft('default', db, git, PATH, VALUES, undefined, 'u1');
@@ -171,8 +170,7 @@ test('an autosave for a path that is not in the repo writes nothing', async () =
   expect(await only(db)).toBe(undefined);
 });
 
-// A repo in a Map: publish moves the head and the files, so a second publish sees the
-// bytes the first one wrote. A read with no commit is the branch, which `lag` can hold behind.
+// A read with no ref is the branch, which `lag` can hold behind the last publish.
 function fakeRepo(files: Record<string, string>) {
   let head = 'commit-A';
   let n = 0;
@@ -225,8 +223,7 @@ test('publishing commits every pending draft in one commit and re-seeds those ro
 
   expect(repo.publish).toHaveBeenCalledTimes(1);
   expect(result?.paths.toSorted()).toEqual([OTHER, PATH].toSorted());
-  // The rows are still there, re-seeded on the commit: what says they are published is that
-  // nothing about them is waiting any more.
+  // The rows stay, re-seeded on the commit; published means nothing is pending.
   expect(await pendingDrafts('default', db)).toEqual([]);
 });
 
@@ -346,8 +343,7 @@ test('discarding a draft leaves nothing for the next publish to write back', asy
   expect(await publishDrafts('default', db, repo)).toBe(undefined);
 });
 
-// The index as the last build made it: the entry list's other half, one build behind
-// everything a rename or a delete commits.
+// The index as the last build made it: one build behind whatever a rename or delete commits.
 const indexOf = (files: Record<string, string>) =>
   indexFrom(
     'default',
@@ -385,8 +381,7 @@ test('a rename carries the unpublished edits rather than the committed bytes', a
   expect(row?.baseBlob).toBe(await blobSha(FILE));
 });
 
-// A rename is the last thing that happened to the entry, so *last edited by* names the renamer
-// rather than whoever typed before them.
+// A rename is the last thing that happened to the entry, so it names the renamer.
 test('a rename stamps who renamed onto the draft it carries over', async () => {
   const db = await fresh();
   const repo = fakeRepo({ [PATH]: FILE });
@@ -408,8 +403,7 @@ test('a delete takes the entry out of the list and leaves nothing to publish', a
   expect(await publishDrafts('default', db, repo)).toBe(undefined);
 });
 
-// Only the half that says a path has gone: the row carrying the file's own bytes is one the
-// repository already has, and those wait for the build status rather than for a title to agree.
+// The row carrying the file's own bytes waits for the build status, not for a title to agree.
 test('the row a rename left at the old path is dropped by the build that catches up', async () => {
   const db = await fresh();
   await recordRename('default', db, PATH, RENAMED, FILE, 'commit-rename');
@@ -441,8 +435,7 @@ test('an autosave after a delete takes its base from the file, not from the row'
   expect((await publishDrafts('default', db, repo))?.paths).toEqual([PATH]);
 });
 
-// One entry, two languages. The structure is shared, so a block moved in English is a block
-// moved in German — in the same write, or the two files leave the editor out of step.
+// The structure is shared, so a block moved in English moves in German in the same write.
 const REDIRECTS = 'src/content/redirects.yaml';
 const PAGE_EN = 'src/content/pages/en/home.yaml';
 const PAGE_DE = 'src/content/pages/de/home.yaml';
@@ -545,9 +538,7 @@ test('a language the entry does not have yet is not created by a save of another
   expect((await db.select().from(drafts)).map((r) => r.path)).toEqual([PAGE_EN]);
 });
 
-// The other direction: a save of a language the entry is translated into. It owns its own
-// words and nothing else — the structure and the shared values are the file's, whatever the
-// browser posts back (decap-cms#6978).
+// A translation owns only its words; the rest is the file's (decap-cms#6978).
 const LISTING_DE = 'src/content/listings/de/mill-house.yaml';
 const DE_FORM: Form = {
   fields: [
@@ -624,8 +615,7 @@ test('publishing an entry commits the languages that moved with it in one commit
   expect(await pendingDrafts('default', db)).toEqual([]);
 });
 
-// Staleness. The German file is a translation of the English as it stood when somebody wrote
-// it, and `_i18n` is the publish writing down which English that was.
+// `_i18n` is the publish writing down which English the German was translated from.
 const sourceOf = async (path: string) =>
   path === PAGE_DE ? { locale: 'en', path: PAGE_EN, form: PAGE_FORM } : undefined;
 const mark = (contents: string) =>
@@ -709,8 +699,7 @@ test('a structural edit that carries the translation along does not clear it', a
   expect(await stale(repo)).toEqual(['de']);
 });
 
-// Reconciling drift is the write `saveDraft` cannot make: the answer moves a block between
-// the entry's files, and every file it changes has to reach the drafts table together.
+// A drift answer moves a block between files, so every file it changes is written together.
 const drifted = (title: string, blocks: string[]) =>
   ['_version: 1', `title: "${title}"`, 'blocks:', ...blocks, ''].join('\n');
 const HERO = ['  - _type: "hero"', '    _id: "k3nf9a2p"', '    heading: "Hallo"'];
@@ -784,8 +773,7 @@ test('a language the answer leaves alone is not made pending by it', async () =>
   );
 });
 
-// Every write stamps `_version`, not the editor's save alone: a file written before Handover,
-// or by hand, has none, and `content-format.md` promises the next save gives it one (F3).
+// A hand-written file has no `_version`; the next write owes it one (content-format.md F3).
 test('answering drift stamps the version on the file the answer changes', async () => {
   const db = await fresh();
   const repo = fakeRepo({
@@ -813,9 +801,7 @@ test('turning a language off stamps the version on a file that has none', async 
   );
 });
 
-// Turning a language off is a decision about the entry, so it goes in the files the entry has
-// rather than in D1: the site builds from git alone, and no file is written for the language
-// that was turned off.
+// The site builds from git alone, so the language mark lives in the entry's files, not D1.
 test('turning a language off marks every file the entry has with the ones it keeps', async () => {
   const db = await fresh();
   const repo = bilingual();
@@ -843,10 +829,7 @@ test('turning every language back on takes the mark out again', async () => {
   expect((await only(db))?.contents).toBe(page('Home', 'Move to the coast', 'Ready to move?'));
 });
 
-// The other half of turning a language off: the commit that removed one language's file also
-// wrote the mark into the files that stay, and somebody may have had one of them open. The
-// draft keeps their words, takes the mark, and is rebased on the commit — without that it would
-// publish the language back on, over a base that has moved.
+// The draft takes the mark and rebases on the commit, or its publish turns the language back on.
 test('a file rewritten by a commit carries the mark into the draft somebody had open', async () => {
   const db = await fresh();
   const repo = bilingual();
@@ -882,8 +865,7 @@ test('a file rewritten by a commit carries the mark into the draft somebody had 
   expect(row?.baseBlob).toBe(await blobSha(committed));
 });
 
-// A machine's answers are their own write: `saveDraft` carries what a form sent back, and a
-// fill is neither a form nor the words of the language whose file it lands in.
+// A fill is neither a form's values nor the language's own words, so it is its own write.
 test('a machine fill writes the values into the draft and names them in the file', async () => {
   const db = await fresh();
   const repo = bilingual();
@@ -915,12 +897,9 @@ test('a fill of a language with no file writes nothing', async () => {
   expect(await db.select().from(drafts)).toEqual([]);
 });
 
-// The address a language serves an entry at. Its own write, like the language mark: it is not
-// a form's values, and the redirect it owes cannot be committed until the entry is published —
-// until then the old address is the live one.
+// The redirect an address owes cannot be committed until the entry is published.
 const REDIRECT = { from: '/de/home', to: '/de/startseite', entry: 'pages/home' };
-// `slug` is the first key the page schema declares, and the address goes where the schema puts
-// it rather than at the end of the file (F4 in 02-i18n.md).
+// The address goes where the schema puts `slug`, not at the end of the file (F4 in 02-i18n.md).
 const ADDRESSED: Form = {
   ...PAGE_FORM,
   fields: [
@@ -996,8 +975,7 @@ test('an entry with no redirect to owe publishes redirects.yaml untouched', asyn
   expect(repo.read(REDIRECTS)).toBe('');
 });
 
-// The row is still published for the words typed after it, so the rule has to be gone rather
-// than merely unreachable: a redirect from a URL that never moved is a redirect forever.
+// A redirect from a URL that never moved is a redirect forever, so the rule has to be gone.
 test('an address put back the way it was owes nothing', async () => {
   const db = await fresh();
   const repo = bilingual();
@@ -1018,8 +996,7 @@ const hidden = (contents: string) =>
 const ruleFor = async (db: ReturnType<typeof openDb>, path: string) =>
   (await db.select().from(drafts)).find((r) => r.path === path)?.pendingRedirects ?? [];
 
-// `_status` is the entry's and not one language's, so both files carry it or the entry is in a
-// state the format has no way to write down.
+// `_status` is the entry's, not one language's, so every file carries it.
 test('hiding an entry writes _status into every language it has', async () => {
   const db = await fresh();
   const repo = bilingual();
@@ -1085,8 +1062,7 @@ test('unhiding takes the key back out of every file', async () => {
   );
 });
 
-// Two rules, one row: the address moved and then the entry came off the site, and each owes its
-// own redirect. Writing the hide over the row would ship the address change with none.
+// The address moved and then the entry was hidden; each owes its own redirect.
 test('hiding an entry keeps the redirect a moved address already owes', async () => {
   const db = await fresh();
   const repo = bilingual();
@@ -1125,8 +1101,7 @@ test('unhiding before the publish takes only the hide back out', async () => {
   expect((await ruleFor(db, PAGE_DE)).map((r) => r.reason)).toEqual(['slug-change']);
 });
 
-// The other half: the hide was published, so its rules are in the file rather than on the row.
-// The commit that puts the page back takes them out, and leaves every other rule alone.
+// The hide was published, so its rules are in the file; the unhide commit takes only those out.
 test('publishing an unhide takes the committed hide rules out of redirects.yaml', async () => {
   const db = await fresh();
   const repo = bilingual();
@@ -1161,9 +1136,7 @@ test('publishing an unhide takes the committed hide rules out of redirects.yaml'
   expect(repo.read(PAGE_EN)).toBe(page('Home', 'Move to the coast', 'Ready to move?'));
 });
 
-// A rule that already pointed at the page — from an older name, say — was re-pointed at the
-// hide's target so nobody hops twice. Showing the page again puts it back at its own address,
-// so the rule goes back to pointing at it and not at the overview that stood in.
+// The hide re-pointed an older rule at its target so nobody hops twice; the unhide points it back.
 test('publishing an unhide points a rule the hide re-pointed back at the page', async () => {
   const db = await fresh();
   const repo = bilingual();
@@ -1206,8 +1179,7 @@ test('publishing an unhide points a rule the hide re-pointed back at the page', 
   expect(rules()).toEqual([older]);
 });
 
-// "Not ready yet" is the entry's, the way a lock is: it is written to the language the editor
-// was on, and the entry's other files are not somebody else's to publish because of that.
+// A hold is the entry's, the way a lock is, so it holds every language's file.
 test('a publish leaves out every language of an entry somebody is holding back', async () => {
   const db = await fresh();
   const repo = fakeRepo({ [PATH]: FILE, [LISTING_DE]: GERMAN, [OTHER]: OTHER_FILE });
@@ -1224,8 +1196,7 @@ test('a publish leaves out every language of an entry somebody is holding back',
   );
 });
 
-// The drawer's *· 2 days*: the moment the hold was set is stored beside who set it, since
-// nothing else records it — a draft's `updated_at` is the last keystroke, not the flag.
+// A draft's `updated_at` is the last keystroke, so the hold's moment is stored beside who set it.
 test('the held entries say when each hold was set', async () => {
   const db = await fresh();
   const repo = fakeRepo({ [PATH]: FILE });
@@ -1253,8 +1224,7 @@ test('the same set publishes whole once the hold comes off', async () => {
   expect(result?.paths.toSorted()).toEqual([PATH, LISTING_DE].toSorted());
 });
 
-// Selective publish. The unit of selection is the entry, never the file: one entry's languages
-// share a structure and a block moved in English is moved in German, so they go together.
+// The unit of selection is the entry, never the file: its languages share a structure.
 test('a chosen entry publishes its languages and leaves the rest waiting', async () => {
   const db = await fresh();
   const repo = fakeRepo({ [PATH]: FILE, [LISTING_DE]: GERMAN, [OTHER]: OTHER_FILE });
@@ -1294,9 +1264,7 @@ test('the entries left out of a publish keep their redirect rules', async () => 
   expect((await pendingDrafts('default', db)).map((r) => r.path)).toEqual([PAGE_DE]);
 });
 
-// Trap 1 of the re-seed: a translation is stamped on the way into the commit, so the file and
-// the row the publish started from are different bytes. Seed both from the marked ones or the
-// next publish reports a conflict with this one.
+// A translation is stamped going into the commit, so the row is re-seeded from the marked bytes.
 test('a published translation is re-seeded on the bytes the commit wrote', async () => {
   const db = await fresh();
   const repo = bilingual();
@@ -1312,8 +1280,7 @@ test('a published translation is re-seeded on the bytes the commit wrote', async
   expect(await pendingDrafts('default', db)).toEqual([]);
 });
 
-// The row outlives the commit now, so the rule it carried has to go: it is in redirects.yaml
-// already, and a second copy of it is a redirect nobody asked for.
+// The row outlives the commit, so the rule it carried has to go or it is written twice.
 test('an address change published once is not written a second time', async () => {
   const db = await fresh();
   const repo = bilingual();
@@ -1327,9 +1294,7 @@ test('an address change published once is not written a second time', async () =
   expect(rules.map((r) => r.from)).toEqual(['/de/home']);
 });
 
-// Every read a write is made from names the commit it is made against. The branch is a name the
-// contents API answers from a cache, so a read of it can be a commit behind — and a base_sha
-// taken beside a blob from an older one is somebody else's commit going in unnoticed.
+// The branch is served from a cache, so a base_sha taken beside a lagging blob would miss a commit.
 test('a branch read that has not caught up cannot make a publish miss a commit', async () => {
   const db = await fresh();
   const repo = fakeRepo({ [PATH]: FILE });
@@ -1357,8 +1322,7 @@ test('a draft records the base blob of the commit it recorded the base sha of', 
   expect((await publishDrafts('default', db, repo))?.paths).toEqual([PATH]);
 });
 
-// A repository with a history: an inverse reads the same path at three commits, so the fake
-// above — which answers with whatever the file is now — cannot stand in for one.
+// An inverse reads the same path at three commits, so the fake above cannot stand in for one.
 function fakeHistory(initial: Record<string, string>) {
   const trees: Record<string, Record<string, string>> = { 'commit-0': { ...initial } };
   const commits: Record<string, { parent?: string; message: string; paths: string[] }> = {};
@@ -1493,8 +1457,7 @@ test('reverting is refused when a file has changed since that commit', async () 
   expect(repo.now()[PATH]).toBe(before);
 });
 
-// The trees API has no three-way merge, so the inverse of an append is composed: rules added
-// since the commit stay, and only the ones it introduced come out.
+// The trees API has no three-way merge, so the inverse of an append is composed.
 test('reverting recomputes redirects.yaml rather than restoring it', async () => {
   const db = await fresh();
   const REDIRECTS = 'src/content/redirects.yaml';
@@ -1524,9 +1487,7 @@ test('reverting recomputes redirects.yaml rather than restoring it', async () =>
   expect(left).not.toContain(two);
 });
 
-// The other half of a turn-off: the mark naming the languages that are left goes into the files
-// that stay, and `recordOffer` writes it into their open drafts as well. A restore that touched
-// git alone would leave the draft saying German is off, and the next publish would write it off.
+// A restore that touched git alone would leave the open draft saying German is off.
 const MILL_DE = 'src/content/listings/de/mill-house.yaml';
 const MILL_DE_FILE = '_version: 1\ntitle: "Die Muehle"\nprice: "950 GBP pro Woche"\nrooms: 3\n';
 const OFFER = { offered: ['en'], locales: ['en', 'de'], gone: ['de'] };
@@ -1561,12 +1522,10 @@ test('restoring a turn-off re-offers the language in the draft that was open', a
   const entry = parseEntry('default', row?.contents ?? '') as Record<string, unknown>;
   // Absent is what says every language is offered, so the mark goes rather than being rewritten.
   expect(entry._locales).toBe(undefined);
-  // And the words the editor had typed are still theirs.
   expect(entry.rooms).toBe(4);
 });
 
-// F15: the row a delete leaves settles only once the built index lacks the path, so a file put
-// back before that build keeps its row — and the entry list goes on hiding the entry for good.
+// F15: a file put back before the build settles the delete row would stay hidden for good.
 test('restoring a delete takes away the row that was hiding the path', async () => {
   const db = await fresh();
   const repo = fakeHistory({ [PATH]: FILE });
@@ -1601,8 +1560,7 @@ test('a published row is cleared once the build carrying it is live', async () =
   expect(await only(db)).toBe(undefined);
 });
 
-// Green is not enough: the row is also what an open tab publishes against, so it waits for
-// whoever is typing in the entry to let go.
+// The row is also what an open tab publishes against, so green alone does not clear it.
 test('a published row whose entry somebody is editing is kept', async () => {
   const db = await fresh();
   const repo = fakeHistory({ [PATH]: FILE });
@@ -1614,8 +1572,7 @@ test('a published row whose entry somebody is editing is kept', async () => {
   expect((await only(db))?.path).toBe(PATH);
 });
 
-// The entry list drops those itself, against the index it can see; dropping one here would
-// take it away before the new bundle is serving and the deleted entry would reappear.
+// Dropping it here would let the deleted entry reappear before the new bundle is serving.
 test('a row that says a path has gone is not cleared by the build going live', async () => {
   const db = await fresh();
   await recordDelete('default', db, PATH, 'commit-9');
@@ -1624,9 +1581,7 @@ test('a row that says a path has gone is not cleared by the build going live', a
   expect((await only(db))?.path).toBe(PATH);
 });
 
-// Three-way resolution: the way out of a file somebody changed in the repository that is not
-// giving up the draft. The report is `resolve.ts`'s; what is proven here is the reading of the
-// three sides out of D1 and git, and the row the answers leave behind.
+// The report is `resolve.ts`'s; proven here is reading the three sides and the row left behind.
 const PAGE_FILES = { en: PAGE_EN };
 
 test('a file the repository moved under a draft is one question and one merged change', async () => {
@@ -1664,8 +1619,7 @@ test('an entry the repository has not moved has nothing to resolve', async () =>
   expect(await entryConflict('default', db, repo, PAGE_FORM, PAGE_FILES)).toBe(undefined);
 });
 
-// The row's base has to become the file at HEAD, blob and all: seeded from the merge instead,
-// the row would read as published and leave the drawer without ever being committed.
+// Seeded from the merge, the row would read as published and leave the drawer uncommitted.
 test('answering a conflict rebases the row on the file at HEAD and keeps it pending', async () => {
   const db = await fresh();
   const repo = fakeHistory({ [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?') });
@@ -1715,8 +1669,7 @@ test('taking theirs everywhere leaves a row the drawer no longer has anything to
   expect(await pendingDrafts('default', db)).toEqual([]);
 });
 
-// What preview reads. Unlike the entry list's overlay this takes the rows as they stand: a
-// settled row is still what the editor last saw, and a render must not write.
+// Preview takes the rows as they stand: a settled row is still what the editor last saw.
 test('the draft files are every row as it stands, published ones included', async () => {
   const db = await fresh();
   await saveDraft('default', db, git, PATH, VALUES);
@@ -1737,8 +1690,7 @@ test('the draft files are every row as it stands, published ones included', asyn
   ]);
 });
 
-// The orphan sweep. Git and D1 cannot share a transaction, so a rename or a delete killed
-// between the commit and the re-key leaves a row pointing at a path the tree no longer has.
+// Git and D1 share no transaction, so a rename killed mid-way leaves a row the tree lacks.
 const ORPHAN = 'src/content/listings/en/gone.yaml';
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = 1755864000000;
@@ -1772,8 +1724,7 @@ test('an entry that has never been published keeps its draft', async () => {
   expect(await paths(db)).toEqual([ORPHAN]);
 });
 
-// The row a delete leaves is how the entry list knows the path has gone until the build
-// catches up; sweeping it would put the deleted entry back on the screen.
+// Sweeping the row a delete leaves would put the deleted entry back on the screen.
 test('the row a delete left to keep the path off the list stays', async () => {
   const db = await fresh();
   await recordDelete('default', db, ORPHAN, 'commit-B');
@@ -1791,8 +1742,7 @@ test('a draft left open for a week whose file is still there stays', async () =>
   expect(await paths(db)).toEqual([PATH]);
 });
 
-// The age is what keeps the sweep off a rename that is between its commit and its re-key
-// right now — the request the job would be racing.
+// The age keeps the sweep off a rename that is between its commit and its re-key right now.
 test('a row younger than a day is left alone', async () => {
   const db = await fresh();
   await db.insert(drafts).values(orphanRow(ORPHAN, { updatedAt: NOW - DAY + 1000 }));
@@ -1801,8 +1751,6 @@ test('a row younger than a day is left alone', async () => {
   expect(await paths(db)).toEqual([ORPHAN]);
 });
 
-// Testing: what a restore writes, the keys it refuses to take from the version, the languages
-// it leaves alone, and that the publish after it is an ordinary forward commit.
 // Not testing: reading the version out of GitHub, which is the route's.
 const VERSION_FORM: Form = {
   fields: [
@@ -1852,9 +1800,7 @@ test('a restore stamps who restored on every language it writes', async () => {
   expect((await db.select().from(drafts)).map((r) => r.updatedBy)).toEqual(['u2', 'u2']);
 });
 
-// The version says what the page said, not where it lived or whether it was on the site: an old
-// `slug`, `_status` or `_locales` would move the address, hide the page or turn a language back
-// on, and each of those owes redirect rules a draft write has no way to make.
+// An old `slug`, `_status` or `_locales` would owe redirect rules a draft write cannot make.
 test('a restore keeps the address, the status and the languages the entry has now', async () => {
   const db = await fresh();
   const repo = fakeRepo({ [PATH]: FILE });
@@ -1869,8 +1815,7 @@ test('a restore keeps the address, the status and the languages the entry has no
   expect(entry._locales).toBe(undefined);
 });
 
-// Publishing a restore is the point of it: the row keeps the base the file has now, so the
-// commit goes on top of HEAD rather than being refused as somebody else's work.
+// The row keeps the base the file has now, so the commit goes on top of HEAD.
 test('publishing a restored version is an ordinary forward commit', async () => {
   const db = await fresh();
   const repo = fakeRepo({ [PATH]: FILE });
@@ -1882,9 +1827,7 @@ test('publishing a restored version is an ordinary forward commit', async () => 
   expect(repo.read(PATH)).toContain('rooms: 2');
 });
 
-// Restoring across a structural change is just a draft: the languages now disagree about the
-// blocks, which is the drift the editor asks about before the publish goes out. This restore
-// makes it rather than resolving it, and nothing here refuses.
+// The restore makes the drift the editor is asked about before publish; nothing here refuses.
 test('restoring one language across a structural change leaves the languages in drift', async () => {
   const db = await fresh();
   const repo = fakeRepo({
@@ -1909,8 +1852,7 @@ test('restoring one language across a structural change leaves the languages in 
   ]);
 });
 
-// Bringing a deleted language file back is Create from English and a turn-on, both of which
-// commit rules of their own; a restore that recreated the path would skip all of that.
+// Recreating the path would skip the rules Create from English and a turn-on commit.
 test('a language whose file has gone since is not brought back', async () => {
   const db = await fresh();
   const repo = fakeRepo({ [PATH]: FILE });
@@ -1923,8 +1865,7 @@ test('a language whose file has gone since is not brought back', async () => {
   expect(paths).toEqual([PATH]);
 });
 
-// One join rather than the whole member list: the dashboard is the landing page and the feature
-// doc forbids it a scan.
+// One join, not the member list: the feature doc forbids the dashboard a scan.
 test('who typed each draft is read path by path, and a row nobody signed for is left out', async () => {
   const db = await fresh();
   await binding

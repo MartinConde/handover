@@ -26,8 +26,7 @@ beforeAll(async () => {
   );
 });
 
-// Every test gets its own database, so one test's failed sign-ins cannot spend another's
-// rate-limit budget or leave a user row behind.
+// Each test gets its own database so failed sign-ins cannot spend another's rate-limit budget.
 beforeEach(async () => {
   const rows = (await binding.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all())
     .results as { name: string }[];
@@ -37,8 +36,7 @@ beforeEach(async () => {
   await binding.batch(ddl.map((sql) => binding.prepare(sql)));
 });
 
-// What the site is configured with, per test. Left as it was for the password-only tests:
-// the two emailing methods are not mounted until a site has both a base URL and a sender.
+// The two emailing methods are not mounted until a site has both a base URL and a sender.
 const SITE = 'https://demo.example';
 let baseURL: string | undefined;
 let github: { clientId: string; clientSecret: string } | undefined;
@@ -78,8 +76,7 @@ function emailing() {
   sending = true;
 }
 
-// Following a link out of an email: a plain GET, no body, no origin header, exactly as a
-// mail client opens it.
+// A link out of an email is a plain GET: no body, no origin header, as a mail client opens it.
 afterEach(() => vi.unstubAllGlobals());
 
 const open = (url: string, cookie = '') =>
@@ -96,8 +93,7 @@ const cookiesOf = (res: Response) =>
     .map((c) => c.split(';')[0])
     .join('; ');
 
-// Each request declares its own client address: the limiter buckets on `cf-connecting-ip`,
-// so without one every test in the file would share the three attempts per ten seconds.
+// The limiter buckets on `cf-connecting-ip`; without one every test would share three attempts.
 let caller = 0;
 function call(
   path: string,
@@ -126,10 +122,7 @@ const userRows = async () =>
     role: string | null;
   }[];
 
-/**
- * An invited person before they have ever signed in: a row and nothing else. `handover init`
- * will seed the first owner this way once there is a mailer to send them a link.
- */
+/** An invited person before they have ever signed in: a row and nothing else. */
 async function seedUser(email: string, role: string) {
   const id = `usr_${email}`;
   await binding
@@ -142,11 +135,7 @@ async function seedUser(email: string, role: string) {
   return id;
 }
 
-/**
- * What `handover init` will seed and what hazard 3's `wrangler d1 execute` writes by hand:
- * a credential account is keyed on the user's own id, and its issuer is the synthetic
- * `local:credential` — a row missing either is a password nothing can sign in with.
- */
+/** Without the user's own id as key and issuer `local:credential`, nothing can sign in. */
 async function seed(email: string, password: string, role: string) {
   const id = await seedUser(email, role);
   await binding
@@ -224,8 +213,7 @@ test('an editor session cannot create a user', async () => {
   expect((await userRows()).map((r) => r.email)).toEqual(['editor@example.com']);
 });
 
-// Better Auth infers this from `NODE_ENV` when no baseURL is set, and a Worker has none — so
-// left alone the deployed site hands out a session cookie any plaintext request can carry.
+// Better Auth infers Secure from `NODE_ENV` when no baseURL is set, and a Worker has none.
 test('the session cookie is marked Secure when the request came over https', async () => {
   await seed('owner@example.com', 'correct-horse-battery', 'owner');
 
@@ -250,10 +238,9 @@ test('a request over plain http gets no Secure cookie, so localhost still signs 
   expect(res.headers.get('set-cookie')).not.toMatch(/Secure/);
 });
 
-// ─── magic link ──────────────────────────────────────────────────────────────────────────
+// magic link
 
-// A site with a mailer but no base URL still has no way to say where a link should point, so
-// the method is absent rather than mailing one built from whatever `Host` the request carried.
+// With no base URL there is nowhere to point a link, rather than trusting the request's `Host`.
 test('a mailer alone does not mount the magic link — the base URL does', async () => {
   sending = true;
   await seed('owner@example.com', 'correct-horse-battery', 'owner');
@@ -299,9 +286,7 @@ test('the same link a second time signs nobody in', async () => {
   expect(res.headers.get('set-cookie')).toBeNull();
 });
 
-// The property `features/auth.md` names: not a status, a row. 1.7.1 answers the POST with
-// `{status: true}` for every address, which is what keeps the form from confirming who has an
-// account — so the link is the only place the refusal can be seen.
+// 1.7.1 answers `{status: true}` for every address, so only the link can show the refusal.
 test('a magic link for an unknown email creates no user', async () => {
   emailing();
   const sent = await call('/sign-in/magic-link', { email: 'stranger@example.com' });
@@ -313,7 +298,7 @@ test('a magic link for an unknown email creates no user', async () => {
   expect(res.headers.get('location')).toBe(`${SITE}/?error=new_user_signup_disabled`);
 });
 
-// ─── password reset ──────────────────────────────────────────────────────────────────────
+// password reset
 
 test('a reset link is mailed to the address that asked for it', async () => {
   emailing();
@@ -343,7 +328,7 @@ test('a reset for an unknown email answers the same and mails nothing', async ()
   expect(resetLinks).toEqual([]);
 });
 
-// The *Done when*: an invited row has no `account` at all, and the reset is what gives it one.
+// An invited row has no `account` at all, and the reset is what gives it one.
 test('an invited user with no account row sets a password and signs in with it', async () => {
   emailing();
   await seedUser('invited@example.com', 'editor');
@@ -377,7 +362,7 @@ test('a new password under twelve characters is refused', async () => {
   expect(res.status).toBe(400);
 });
 
-// ─── the account page's two facts ────────────────────────────────────────────────────────
+// the account page's two facts
 
 test('an invited user has no password and no session anywhere', async () => {
   const id = await seedUser('invited@example.com', 'editor');
@@ -403,8 +388,7 @@ test('a signed-in user has a password and sees the session that asked marked as 
   expect(facts.sessions[0]?.current).toBe(true);
 });
 
-// Better Auth's own /list-sessions answers with each session's token. Nothing the browser is
-// shown here can revoke anything, so an XSS on the account page steals no session but its own.
+// Better Auth's /list-sessions returns each token; an XSS on the account page must steal none.
 test('no session token reaches the account page', async () => {
   const id = await seed('owner@example.com', 'correct-horse-battery', 'owner');
   await call('/sign-in/email', {
@@ -422,12 +406,9 @@ test('no session token reaches the account page', async () => {
   ]);
 });
 
-// ─── GitHub ──────────────────────────────────────────────────────────────────────────────
+// GitHub
 
-/**
- * GitHub's three endpoints, so the callback can be walked without one. Everything else in
- * these two tests is the real provider, the real callback and the real database.
- */
+/** GitHub's three endpoints; everything else is the real provider, callback and database. */
 function stubGitHub(profile: { login: string; email: string; verified: boolean }) {
   vi.stubGlobal(
     'fetch',
@@ -455,8 +436,7 @@ async function githubCallback(profile: Parameters<typeof stubGitHub>[0]) {
   const { url } = (await started.json()) as { url: string };
   const state = new URL(url).searchParams.get('state') ?? '';
   stubGitHub(profile);
-  // 1.7 keeps the OAuth state in an encrypted cookie, not in `verification`, so the callback
-  // is only itself when it carries the one `/sign-in/social` set.
+  // 1.7 keeps the OAuth state in a cookie.
   return open(
     `${SITE}${AUTH_BASE_PATH}/callback/github?code=gh_code&state=${encodeURIComponent(state)}`,
     cookiesOf(started),
@@ -489,7 +469,7 @@ test('a GitHub account signs in against the row that already carries its verifie
   expect((await userRows()).map((r) => r.email)).toEqual(['owner@example.com']);
 });
 
-// ─── setting a first password ────────────────────────────────────────────────────────────
+// setting a first password
 
 /** Sign in by password and keep the cookie, which is how a server-only call proves who asks. */
 async function sessionCookie(email: string, password: string) {
@@ -531,9 +511,7 @@ test('setting a password refuses when one already exists', async () => {
   expect((refused as { body?: { code?: string } }).body?.code).toBe('PASSWORD_ALREADY_SET');
 });
 
-// An emailed link that establishes a session and then bounces the person somewhere else is a
-// session handed to whoever asked for it. 1.7.1 refuses the address before minting anything;
-// this is here so an upgrade that loosened it would not pass quietly.
+// 1.7.1 refuses the address before minting; an upgrade that loosened it must not pass quietly.
 test('a magic link cannot be pointed off the site, and mails nothing when it is tried', async () => {
   emailing();
   await seed('owner@example.com', 'correct-horse-battery', 'owner');
@@ -573,9 +551,7 @@ test('a reset link cannot be pointed off the site either', async () => {
   expect(resetLinks).toEqual([]);
 });
 
-// Five minutes is all the OAuth state gets, and a first trip through GitHub's consent screen can
-// take longer. The callback cannot read where to go back to out of a state that is gone, so it
-// falls back — and the fallback has to be the login rather than Better Auth's own error page.
+// A consent screen can outlast the five-minute state, and the fallback has to be the login.
 test('a GitHub callback whose state has expired lands on the login, not on an error page', async () => {
   emailing();
   github = { clientId: 'gh_id', clientSecret: 'gh_secret' };
@@ -586,7 +562,7 @@ test('a GitHub callback whose state has expired lands on the login, not on an er
   expect(res.headers.get('location')).toBe('/admin?error=state_mismatch');
 });
 
-// ─── the members list's two computed facts ───────────────────────────────────────────────
+// the members list's two computed facts
 
 /** An invite as `createUser` writes one: a row, no password, and an unproven address. */
 async function seedInvite(email: string, role: string, at = 1_000) {
@@ -737,8 +713,7 @@ test('the last owner is not demoted, and is left as they were', async () => {
   expect(await roleOfRow(martin)).toBe('owner');
 });
 
-// The whole point of doing it in one statement. Two owners removing each other both read a
-// count of two; whichever `UPDATE` lands second finds no other owner and changes nothing.
+// Two owners removing each other both count two; whichever `UPDATE` lands second changes nothing.
 test('two owners cannot demote each other into a site with no owner', async () => {
   const martin = await seedUser('martin@example.com', 'owner');
   const kim = await seedUser('kim@example.com', 'owner');
@@ -761,12 +736,9 @@ test('somebody who is not an owner is nobody to demote', async () => {
   expect(await roleOfRow(anna)).toBe('editor');
 });
 
-// ─── what a sign-in leaves behind ────────────────────────────────────────────────────────
+// what a sign-in leaves behind
 
-/**
- * The activity table as anybody reading it would: every column of every row, so a test that
- * says "no token was written" is looking at what was written rather than at the code.
- */
+/** Every column of every row, so "no token was written" looks at what was written. */
 const activityRows = async () =>
   (await binding.prepare('SELECT * FROM activity ORDER BY at').all()).results as {
     user_id: string | null;
@@ -892,8 +864,7 @@ test('a session opened since the last login event is the newer of the two', asyn
   expect((await memberList('default', db))[0]?.lastSignIn).toBe(9_000);
 });
 
-// The admin plugin mounts `impersonate-user`, which would let an owner act as anybody with no
-// record of it: the path is switched off, so an owner asking gets what a stranger gets.
+// `impersonate-user` is switched off, so an owner asking gets what a stranger gets.
 test('an owner cannot impersonate anybody', async () => {
   await seed('owner@example.com', 'correct-horse-battery', 'owner');
   await seedUser('anna@example.com', 'editor');
@@ -928,8 +899,7 @@ test('changing a password is a password-set event saying it was a change', async
   ]);
 });
 
-// The user is in neither the updated row nor the endpoint context on this path, so it comes off
-// the `verification` row the reset consumes — whose *other* column is the token in the clear.
+// Here the user comes off the `verification` row, whose other column is the token in the clear.
 test('resetting a password is a password-set event naming whose it was', async () => {
   const id = await seed('owner@example.com', 'correct-horse-battery', 'owner');
   emailing();
@@ -963,8 +933,7 @@ test('a reset the password rules refused is no event, and leaves the link usable
   expect(await activityRows()).toEqual([]);
 });
 
-// A second sign-in through GitHub updates the account row the first one made, on the same
-// endpoint the first used. Only the two password endpoints are a password being set.
+// A second GitHub sign-in updates the account row; only the two password endpoints set a password.
 test('signing in through GitHub again is not a password being set', async () => {
   emailing();
   github = { clientId: 'gh_id', clientSecret: 'gh_secret' };

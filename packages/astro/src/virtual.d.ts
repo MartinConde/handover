@@ -10,7 +10,7 @@ declare module 'virtual:handover/index' {
   export default index;
   /** Whether this build was told to serve `/_preview`, which is what the admin draws from. */
   export const preview: boolean;
-  /** `site` from astro.config without its trailing slash, or empty: what an address is printed under. */
+  /** `site` from astro.config without its trailing slash, or empty. */
   export const site: string;
   /** The starters each collection ships under `src/content/_templates/`, by collection. */
   export const templates: Record<string, import('@handover/core').Template[]>;
@@ -34,8 +34,7 @@ declare module 'cloudflare:workers' {
   export const env: Record<string, unknown>;
 }
 
-// What the session middleware puts in front of every handler under /admin/api/, and what
-// @astrojs/cloudflare puts there before either of us — `cfContext` is its `ExecutionContext`.
+// What the session middleware puts in front of every handler under /admin/api/.
 declare namespace App {
   interface Locals {
     handover?: import('./auth.js').Session;

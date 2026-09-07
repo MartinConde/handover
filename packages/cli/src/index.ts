@@ -101,12 +101,10 @@ function init(env: Env, email: string): number {
   if (existsSync(join(env.cwd, 'migrations')))
     throw new Error('migrations/ is already here, and init only ever creates it. Nothing changed.');
 
-  // Both bins before anything is created: a database and a bucket that outlive a run that
-  // died on a missing dependency are what a second `init` then trips over.
+  // Both bins before anything is created.
   env.capture(['drizzle-kit', '--version']);
   const name = siteName(env.cwd);
-  // Local files first, by the same argument as the probe above: a scaffold that throws after
-  // the database exists leaves one the retry then trips over.
+  // Local files first, by the same argument as the probe above.
   scaffold(env);
   const account = accountId(env);
   env.run(['wrangler', 'd1', 'create', name]);
@@ -128,8 +126,7 @@ function init(env: Env, email: string): number {
   for (const where of ['--local', '--remote'])
     env.run(['wrangler', 'd1', 'migrations', 'apply', name, where]);
 
-  // A user row and nothing else: the first sign-in is an emailed link, so there is no
-  // password for this command to invent and hand over.
+  // A user row and nothing else: the first sign-in is an emailed link.
   const seed = `INSERT INTO user (id, name, email, email_verified, role, created_at, updated_at) VALUES ('${randomUUID()}', '${email.split('@')[0]}', '${email}', 1, 'owner', 0, 0)`;
   for (const where of ['--local', '--remote'])
     env.run(['wrangler', 'd1', 'execute', name, where, '--command', seed]);
@@ -141,12 +138,7 @@ function init(env: Env, email: string): number {
   return 0;
 }
 
-/**
- * The site's own files. A project with no `content.config.ts` has no content either, so it gets
- * the starter the template convention describes; one that has content keeps every file it wrote
- * and gets `cms.config.ts` read off it — including the languages, which the two configs have to
- * agree on.
- */
+/** The site's own files. */
 function scaffold(env: Env): void {
   const i18n = i18nOf(env.cwd);
   const theirs = join(env.cwd, 'src/content.config.ts');
@@ -190,7 +182,7 @@ function siteName(cwd: string): string {
     .toLowerCase();
 }
 
-/** Which account the resources are created in. Guessing one is creating them in the wrong place. */
+/** Require an account choice to avoid creating resources in the wrong place. */
 function accountId(env: Env): string {
   const accounts = (JSON.parse(env.capture(['wrangler', 'whoami', '--json'])).accounts ?? []) as {
     id: string;

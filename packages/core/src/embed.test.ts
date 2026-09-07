@@ -80,8 +80,7 @@ test.each([
   ['not a URL at all', 'the mill house video'],
   ['a script URL', 'javascript:alert(1)'],
   ['iframe markup', '<iframe src="https://youtu.be/dQw4w9WgXcQ"></iframe>'],
-  // The id reaches a provider template, so anything that is not one of their characters is
-  // refused here rather than encoded and sent.
+  // Reject unsafe provider ids before interpolation.
   ['an id that is markup', 'https://youtu.be/<script>'],
 ])('%s is refused with the allow-list', (_name, url) => {
   expect(parseEmbedUrl(url)).toEqual({ refused: UNKNOWN });

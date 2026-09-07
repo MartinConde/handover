@@ -2,11 +2,6 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Redirects from './Redirects.svelte';
 
-// Testing: what a row says about a rule and who owns it, the search and the reason filter, the
-// three writes and the sentence each refusal carries, the age warning on a delete, and the three
-// verdicts Test reads off the live site.
-// Not testing: the route branch that mounts this screen, or the page picker, which has its own.
-
 type Rule = {
   _id: string;
   from: string;
@@ -150,8 +145,7 @@ test('a row says where the rule came from and a rule waiting on a draft says it 
   expect(q('.notice-info').textContent).toContain('not live yet');
 });
 
-// Unhiding removes the rule in the same commit, so this screen never takes one out: the row
-// says whose it is instead of offering an action that would come undone at the next publish.
+// Unhiding removes the rule in the same commit, so this screen never takes one out.
 test('a hidden entry’s rule is locked, and both buttons say why', async () => {
   rules = [
     rule({ _id: 'c', reason: 'hidden', entry: 'listings/mill-house', title: 'The Mill House' }),
@@ -270,9 +264,7 @@ test('a rule older than a year is deleted without the warning', async () => {
   expect(document.body.querySelector('.dialog .notice-warn')).toBe(null);
 });
 
-// Test asks the live site, from the browser, for the old address — the file is not the answer,
-// since a rule is live only after a publish and a build. Three verdicts: it works, it is not
-// there yet, or something else is answering.
+// A rule is live only after a publish and a build, so Test asks the live site, not the file.
 const verdict = async () => {
   click('.menu-cell .btn-test');
   await settle();
@@ -322,8 +314,7 @@ test('Test reads a mismatch when a page answers or the address forwards elsewher
   expect(elsewhere.text).toContain('somewhere else');
 });
 
-// The button is busy while the site is asked, not disabled: a disabled button drops focus, and
-// the keyboard would land back at the top of the page for every Test.
+// A disabled button drops focus, so the button is busy instead while the site is asked.
 test('Test keeps the focus on its button while the site is asked and after it answers', async () => {
   rules = [rule()];
   await show();
@@ -339,8 +330,7 @@ test('Test keeps the focus on its button while the site is asked and after it an
   expect(button.getAttribute('aria-busy')).toBe(null);
 });
 
-// A rule pointing off this site: following it is a request to another origin, which the browser
-// will not show this page. That failure is the rule doing its job.
+// A cross-origin follow the browser refuses is the rule doing its job.
 test('Test on a rule pointing off the site counts a refused cross-origin follow as Working', async () => {
   rules = [rule({ to: 'https://example.com/brochure.pdf' })];
   live = new TypeError('Failed to fetch');

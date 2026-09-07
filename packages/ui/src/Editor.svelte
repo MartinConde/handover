@@ -61,7 +61,7 @@ let {
     published: string[];
     /** Somebody marked it "Not ready yet" — the toggle opens pressed, whoever they were. */
     held?: boolean;
-    /** Off the site. The entry's, not one language's: `_status` is shared across the files. */
+    /** Off the site for every language, since `_status` is shared across the files. */
     hidden?: boolean;
     /** Where each language sends its readers while it is hidden; empty for "nowhere". */
     redirects?: Record<string, string>;
@@ -79,8 +79,7 @@ let {
     locales: string[];
     /** The site's default, which is what says whether a language's URLs carry its segment. */
     defaultLocale: string;
-    /** The one this entry's structure is edited in, and the one a translation is made from:
-        the site default only where the entry has a file in it. */
+    /** The language the structure is edited in and a translation is made from. */
     sourceLocale: string;
     /** The languages it is offered in; the rest are turned off and get no file. */
     offered: string[];
@@ -109,17 +108,13 @@ let {
   section?: string;
   /** The site's origin, for the SEO previews; none, and the panel draws none. */
   site?: string;
-  /** A file of this entry was made, removed or settled: it has to be read again, screen with it. */
+  /** A file of this entry was made, removed or settled, so the entry has to be read again. */
   onchanged: () => void;
-  /**
-   * This entry has something waiting to be published that it did not have a moment ago. The
-   * drawer counts entries, so it hears about the save that flips that and about no other —
-   * and unlike `onchanged` nothing on this screen is thrown away, since the person is typing.
-   */
+  /** Fires only on the save that flips whether this entry has something to publish. */
   onpending?: () => void;
   /** This entry went out from its header, named the way the shell should say it. */
   onpublished?: (title: string) => void;
-  /** A version went into the drafts, dated as git dates it; the shell remembers it past the reload. */
+  /** A version went into the drafts; the shell remembers its git date past the reload. */
   onrestored?: (date: string) => void;
   /** The date of the version the unpublished changes were restored from, while they wait. */
   restored?: string;
@@ -132,7 +127,6 @@ let revisions = $state({ ...entry.revisions });
 // svelte-ignore state_referenced_locally -- retain saved translations across pane switches
 let translations = $state(structuredClone(entry.translations));
 const lane = saveLane();
-// The last shape the draft row holds; the loaded data is already in it, hence no write on open.
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let saveState = $state<SaveState>({ saved: JSON.stringify(entry.data), phase: 'idle' });
 const saved = $derived(saveState.saved);
@@ -143,17 +137,11 @@ const saveFailed = $derived(saveState.phase === 'failed');
 let saveError = $state('');
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let held = $state(entry.held === true);
-// A draft stores whatever was typed, so what the schema still wants is the server's answer to
-// every save rather than a reason to refuse one; the publish is where it blocks.
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let schemaProblems = $state(byPath(entry.problems));
 /** What the pre-publish checks found over this entry: read when it opens and after every save. */
 let checks = $state<CheckItem[]>([]);
-// A check error — a picture with nothing behind it — holds the publish back the way a schema
-// refusal does, so it is counted and marked the same way rather than kept for the dialog.
-// Warnings and notes stay there: nothing stops on them. The check names the field by row id;
-// the form draws rows by position, so it is read against where that row sits now. The one
-// error is about a key every language shares, so a result from any file marks this form.
+// Only check errors block the publish; they name rows by id, so the position is looked up now.
 const checkProblems = $derived(
   Object.fromEntries(
     checks
@@ -165,8 +153,6 @@ const checkProblems = $derived(
   ),
 );
 const problems = $derived({ ...checkProblems, ...schemaProblems });
-// Which language the switcher has, and whether the second column is open. Two independent
-// things: the second column is always the default language beside a translation.
 // svelte-ignore state_referenced_locally -- the language the entry is written in is where it opens
 let locale = $state(entry.sourceLocale);
 let side = $state(false);
@@ -174,16 +160,13 @@ let side = $state(false);
 let previewing = $state(false);
 let savedAt = $state(0);
 let pane = $state<ReturnType<typeof Translation>>();
-// A second language stored ahead of the repository. It lives here rather than in the column,
-// which is thrown away whenever the screen changes and would take the fact with it.
+// Lives here rather than in the column, which is thrown away whenever the screen changes.
 let translated = $state(false);
 
-// Every control below is about having more than one language, so a site that declares one
-// draws none of them — not greyed, not always-1-of-1, absent.
+// A site with one language draws none of the language controls.
 const many = $derived(entry.locales.length > 1);
 const others = $derived(entry.locales.filter((l) => l !== entry.sourceLocale));
-// The column beside the language the entry is written in: the one the switcher has, or the
-// first other language when the switcher is on that one.
+// The column beside the source language.
 const target = $derived(locale === entry.sourceLocale ? others[0] : locale);
 const shown = $derived(side ? target : locale === entry.sourceLocale ? undefined : locale);
 // A translation on its own: the switcher is on another language and the second column is shut.
@@ -194,8 +177,7 @@ const untranslated = (of: string) => of !== entry.sourceLocale && !(of in entry.
 const off = (of: string) => !entry.offered.includes(of);
 let busy = $state(false);
 
-// The two answers to a language with no file. Both change which files the entry has, so the
-// screen is read again rather than patched here.
+// Both change which files the entry has, so the screen is read again rather than patched.
 async function ask(url: string, init: RequestInit = {}) {
   if (!(await flush())) return false;
   busy = true;
@@ -206,11 +188,7 @@ async function ask(url: string, init: RequestInit = {}) {
   return res.ok;
 }
 
-/**
- * The turn-off this language can be brought back from, when the CMS is what turned it off.
- * Without it *Turn German back on* re-offers the language and hands over an empty form, and the
- * German words are only in the repository — which is the whole difference between the two.
- */
+/** The turn-off this language can be brought back from, when the CMS is what turned it off. */
 let putBack = $state<{ commit_sha: string; at: number }>();
 $effect(() => {
   const of = shown;
@@ -220,8 +198,7 @@ $effect(() => {
 });
 
 async function findRestore(of: string) {
-  // A nicety, not the way in: if the log cannot be asked, the offer is simply not made and
-  // *Turn German back on* stands where it did.
+  // A nicety: if the log cannot be asked, the offer is simply not made.
   const res = await fetch(`/admin/api/deleted/${collection}`).catch(() => undefined);
   if (!res?.ok) return;
   const { deleted } = (await res.json()) as {
@@ -244,8 +221,7 @@ async function findRestore(of: string) {
 const WHEN = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
 const createFrom = (of: string) => ask(`/admin/api/drafts/${collection}/${slug}/${of}`);
-// Create from English and then a machine's first draft of it, as one answer to the offer: the
-// file has to exist before anything can be written into it.
+// The file has to exist before a machine's draft can be written into it.
 async function createFilled(of: string) {
   if (!(await flush())) return;
   busy = true;
@@ -269,8 +245,7 @@ async function createFilled(of: string) {
   }
   onchanged();
 }
-// Through `act` rather than `ask`: a turn-off the server refuses — the last published language,
-// say — refuses with a sentence, and that sentence is the answer the screen shows.
+// Through `act`: a refused turn-off answers with a sentence the screen shows.
 async function offer(of: string, on: boolean, redirect?: Target) {
   const res = await act(`/admin/api/entries/${collection}/${slug}/locales`, {
     method: 'POST',
@@ -290,11 +265,7 @@ const json = $derived(JSON.stringify(data));
 const missing = $derived(Object.keys(problems));
 const named = $derived(data[entry.titleField ?? 'title']);
 const title = $derived(entry.label ?? (typeof named === 'string' && named ? named : slug));
-// The SEO panel is a tab of its own, so the field is taken out of the form the Content tab
-// draws: one `seo` field, one set of ids on the screen. A `seo` field nested inside a group is
-// an ordinary widget there — the tab is the entry's own.
-// A global has no tab bar, so its panel stays in its one form rather than behind a tab nothing
-// draws.
+// The SEO panel is its own tab, so the Content form omits the field; a global has no tabs.
 const seoField = $derived(!entry.singleton && entry.fields.some((f) => f.type === 'seo'));
 /** The key the seo field sits under, which is what a problem on it is named by. */
 const seoAt = $derived(entry.fields.find((f) => f.type === 'seo')?.path[0]);
@@ -305,7 +276,7 @@ const fields = $derived(
       ? entry.fields.filter((f) => f.type === 'seo')
       : entry.fields.filter((f) => f.type !== 'seo'),
 );
-/** What one language's page would say with nothing typed: the build's own resolution, run here. */
+/** What one language's page would say with nothing typed: the build's own resolution. */
 const inherited = (of: string, values: Data) =>
   entry.fields.some((f) => f.type === 'seo')
     ? resolveSeo(
@@ -314,9 +285,7 @@ const inherited = (of: string, values: Data) =>
         String(values[entry.titleField ?? 'title'] ?? ''),
       )
     : undefined;
-// A language other than the one this screen's form saves, already ahead of the repository when
-// the entry was read. It stands until the entry is read again: a false offer costs an empty
-// drawer, a false refusal loses the draft behind a disabled button.
+// Another language already pending when the entry was read; stands until it is read again.
 const elsewhere = $derived(entry.pending.some((l) => l !== entry.sourceLocale));
 // The second column is its own file, so an edit only made there is still something to publish.
 const dirty = $derived(
@@ -331,20 +300,14 @@ const language = (of: string) => {
   }
 };
 
-/**
- * The soft lock on this entry — every language of it at once, since they share a structure.
- * `undefined` until the first answer comes back; the tab that has it edits, the tab that has
- * not reads.
- */
+/** The soft lock on every language of this entry at once; `undefined` until the first answer. */
 type Lock = {
   held_by: { id: string; name: string | null } | null;
   mine: boolean;
   expires_at: number | null;
 };
 let lock = $state<Lock>();
-// The lock is the tab's, not the person's, and this is what tells the tabs apart: a token made
-// up once per browser tab and sent with every beat and every save. Session storage is per tab
-// and survives moving between entries, so a tab that comes back to an entry is still itself.
+// A per-tab token, kept in session storage so a tab that returns to an entry is still itself.
 const tab = (() => {
   try {
     const kept = sessionStorage.getItem('handover-tab');
@@ -356,8 +319,7 @@ const tab = (() => {
     return crypto.randomUUID();
   }
 })();
-// A save came back refused: somebody took the entry over while this tab had it. Its own state
-// rather than the lock's, because the two banners say different things about the same fact.
+// Separate from the lock: the lost and locked banners say different things about the same fact.
 let lost = $state(false);
 let taking = $state(false);
 let takePanel = $state<HTMLElement>();
@@ -365,8 +327,7 @@ let takeTrigger = $state<HTMLButtonElement>();
 $effect(() => {
   if (taking) takePanel?.focus();
 });
-// Cancel gives focus back to the button that opened it; taking over reads the entry again and
-// there is no banner left to go back to.
+// Taking over reads the entry again, so only Cancel has a button to give focus back to.
 function cancelTake() {
   taking = false;
   takeTrigger?.focus();
@@ -378,26 +339,20 @@ const locked = $derived(lock !== undefined && !lock.mine);
 const holder = $derived(lock?.held_by?.name || 'Somebody else');
 // The holder is this same person, in another tab.
 const otherTab = $derived(lock?.held_by?.id !== undefined && lock?.held_by?.id === userId);
-// How long ago the holder last typed: the lock is taken by a beat and beats ride on the
-// autosave, so the expiry it carries is that keystroke plus one lifetime.
+// Beats ride on the autosave, so the expiry is the holder's last keystroke plus one lifetime.
 const idle = $derived(lock?.expires_at ? asked - (lock.expires_at - LOCK_TTL) : 0);
 
 $effect(() => {
   void beat(true);
 });
 
-// The poll only reads: an entry changes hands when somebody presses Take over, not because a
-// tab was watching when the last beat lapsed. It runs on both sides — the reader's banner has
-// to age and see the lock run out, and the holder has to hear of a take-over without typing,
-// which used to be the one way never to hear of it. A tab that has lost the entry has nothing
-// left to ask.
+// The poll only reads; it runs on both sides so a holder hears of a take-over without typing.
 $effect(() => {
   if (lost) return;
   const timer = setInterval(() => beat(false), 15000);
   return () => clearInterval(timer);
 });
-// Coming back to the front is the moment somebody is about to type again, so the answer is
-// wanted now rather than at the next tick.
+// Coming back to the front means somebody is about to type, so ask now rather than next tick.
 const recheck = () => {
   if (lock?.mine && !lost && document.visibilityState === 'visible') void beat(false);
 };
@@ -436,9 +391,7 @@ async function beat(claim: boolean) {
   }
 }
 
-// The skeleton is one edit to every language. The save carries it into the stored rows of the
-// others (`siblings`, server side); this is the same walk made at once for the column on
-// screen, from the entry as it opened to the form as it is, over whatever that column holds now.
+// The same skeleton sync the server runs for stored siblings, applied to the column on screen.
 $effect(() => {
   const column = pane;
   const of = shown;
@@ -504,8 +457,7 @@ async function writeSave(sent: string): Promise<boolean> {
     if (body.pending !== drafted) onpending?.();
     drafted = body.pending;
     schemaProblems = byPath(body.problems);
-    // The checks read the draft rows, so they are asked once the row is there; a save that left
-    // nothing pending has nothing for them to find.
+    // The checks read the draft rows, so a save that left nothing pending has nothing to lint.
     if (body.pending) void lint();
     else checks = [];
     return true;
@@ -534,9 +486,7 @@ onMount(() => {
   };
 });
 
-// The one thing that takes somebody else's work away, so it confirms first. The entry is read
-// again afterwards: there is one shared draft, and carrying on from it means loading what they
-// left rather than saving this tab's form over it.
+// The entry is read again afterwards: carrying on means loading the shared draft they left.
 async function takeOver() {
   busy = true;
   const res = await fetch(`/admin/api/locks/${collection}/${slug}`, {
@@ -554,8 +504,6 @@ async function takeOver() {
   onchanged();
 }
 
-// On the site or off it. Hiding has a consequence outside the CMS, so it asks where the page's
-// readers should go before it writes anything; showing it again just writes.
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let hidden = $state(entry.hidden === true);
 let statusMenu = $state(false);
@@ -586,8 +534,7 @@ async function setStatus(next: boolean, redirect?: Target) {
   onchanged();
 }
 
-// The overflow menu: what the list row offers, from inside the entry. A rename opens the entry
-// under its new name and a delete goes back to the list, so neither needs the screen after.
+// A rename navigates to the new name and a delete to the list, so neither refreshes this screen.
 let moreMenu = $state(false);
 let renaming = $state(false);
 let deleting = $state(false);
@@ -602,8 +549,7 @@ function openRename() {
   renaming = true;
 }
 
-// A 409 is the server's own sentence — "publish this first", "somebody else has it" — and
-// reads better than anything this screen could say about it.
+// A 409 body is the server's own sentence, which reads better than a generic one.
 async function act(url: string, init: RequestInit) {
   if (!(await flush())) return undefined;
   busy = true;
@@ -639,8 +585,7 @@ async function remove(redirect: Target) {
   if (res) navigate(`/admin/c/${collection}`);
 }
 
-// "Not ready yet". The flag lives on the draft rows, so whatever is in the form is stored
-// first — otherwise the entry is held back and the words that made somebody hold it are not.
+// The flag lives on the draft rows, so the form is stored first or the hold outruns the words.
 async function toggleHold() {
   const next = !held;
   busy = true;
@@ -676,8 +621,7 @@ function focusField(path: readonly string[]) {
     target;
   control.focus({ preventScroll: true });
 }
-// A picture's `src` is a key its card draws itself, with no control of its own: the jump lands
-// on the nearest thing drawn up the path.
+// A picture's `src` has no control of its own, so the jump lands on the nearest drawn ancestor.
 function drawn(prefix: string, path: string | undefined) {
   const steps = path?.split('.') ?? [];
   for (; steps.length; steps.pop()) {
@@ -688,9 +632,7 @@ function drawn(prefix: string, path: string | undefined) {
 }
 function goTo(path: string | undefined) {
   const field = drawn('f', path);
-  // A field the other tab draws is not on screen at all, and a jump that lands nowhere reads as
-  // a broken count. Go to the tab that has it, then land on it once — and once only: a second
-  // miss is a field nothing draws, and looking again would never stop.
+  // A field on the other tab is not on screen: go to that tab, then look for it once only.
   if (!field && path && seoField && path.split('.')[0] === seoAt) {
     navigate(`/admin/c/${collection}/${slug}/seo`);
     void tick().then(() => land(drawn('f', path)));
@@ -700,11 +642,7 @@ function goTo(path: string | undefined) {
 }
 const goToFirst = () => goTo(missing[0]);
 
-// The drawer's *Go to field*: `?field=blocks[_id=k3nf9a2p].heading&locale=de`. The address
-// names the rows by id, the form draws them by position, and a German file is edited in the
-// second column — so the column is opened first and the control looked for once it is drawn.
-// Read when the entry opens and whenever the address moves under it, since the drawer links
-// to the entry that is already on screen as readily as to another.
+// The drawer's `?field=…&locale=…`: open the column first, then look for the control once drawn.
 function fromAddress() {
   const query = new URLSearchParams(location.search);
   const field = query.get('field');
@@ -731,10 +669,7 @@ onMount(() => {
   if (entry.pending.length) void lint();
 });
 
-// Publishing is the drawer's job, over every draft at once; the entry's own edit only has
-// to be in D1 before it opens, so a click inside the autosave window is not lost.
-// The header's half of publishing: this entry, whole, and nothing else anybody has been
-// working on. It commits, so it confirms first.
+// This entry whole and nothing else; it commits, so it confirms first.
 let confirming = $state(false);
 let sending = $state(false);
 let publishFailed = $state('');
@@ -744,8 +679,7 @@ let pass = 0;
 const lines = $derived(merged(checks));
 const errors = $derived(lines.filter((c) => c.severity === 'error'));
 const warnings = $derived(lines.filter((c) => c.severity === 'warn'));
-// Somebody committed to one of this entry's files after it was opened. Detection only: taking
-// theirs whole is the drawer's Discard, and choosing field by field is the three-way view.
+// Detection only; resolving it is the drawer's job.
 let conflicted = $state(false);
 let publishButton = $state<HTMLButtonElement>();
 let publishPanel = $state<HTMLElement>();
@@ -753,8 +687,7 @@ $effect(() => {
   if (confirming) publishPanel?.focus();
 });
 
-// The languages this publish would write. `drafted` is the live answer for the one the form
-// saves; the rest are as the entry was read, plus whatever the second column has since sent.
+// `drafted` is live for the source language; the rest are as read, plus what the column sent.
 const going = $derived(
   entry.locales.filter(
     (of) =>
@@ -770,11 +703,7 @@ async function askToPublish() {
   void lint();
 }
 
-/**
- * The same lint the drawer runs, over this one entry: a request of its own that refuses nothing —
- * an answer that never comes leaves the publish where it was, since a check nobody could run is
- * not a reason to stop a client publishing their own site.
- */
+/** The drawer's lint over this one entry; an answer that never comes holds nothing back. */
 async function lint() {
   const key = `${collection}/${slug}`;
   const mine = ++pass;
@@ -799,13 +728,11 @@ function closePublish() {
 async function publishEntry() {
   sending = true;
   publishFailed = '';
-  // Again, on the press: the dialog may have been open a while, and a picture somebody deleted
-  // in another tab since is what the error would be about.
+  // Again on the press: the dialog may have been open a while.
   await lint();
   if (errors.length) {
     sending = false;
-    // The button goes disabled and the list above changes; neither says anything, and a
-    // disabled button drops the focus that pressed it.
+    // A disabled button drops the focus that pressed it.
     publishFailed =
       'Nothing was published. The checks found something in the way just now — it is listed above.';
     publishPanel?.focus();
@@ -820,8 +747,7 @@ async function publishEntry() {
   if (res.ok) {
     confirming = false;
     onpublished?.(title);
-    // The rows are re-seeded on the commit and a hold comes off with them, so the screen is
-    // read again rather than patched here.
+    // The rows are re-seeded on the commit, so the screen is read again rather than patched.
     onchanged();
     return;
   }
@@ -838,8 +764,7 @@ async function publishEntry() {
   if (res.status === 409) {
     const body = await res.text();
     const parsed = JSON.parse(body.startsWith('{') ? body : '{}') as { reason?: string };
-    // Drift is the panel this screen already draws; a file somebody else changed is not, and
-    // the way out of that one is in the drawer.
+    // Drift has a panel on this screen; a file somebody else changed is handled in the drawer.
     if (parsed.reason !== 'drift') {
       closePublish();
       conflicted = true;
@@ -852,16 +777,13 @@ async function publishEntry() {
   publishFailed = `Nothing was published (${res.status}).`;
 }
 
-// The second column holds one language and goes when the screen changes under it — closed, or
-// pointed at another language. Keep the pane mounted until all its changes have been saved.
+// Keep the pane mounted until all its changes have been saved.
 async function leaving(change: () => void) {
   if (unsaved() && !(await flush())) return;
   change();
 }
 
-// The address the language on screen serves this entry at. Its own control and its own write:
-// unlike a field it is validated and has to be unique, and moving a published one owes a
-// redirect. The file name never moves with it — renaming is the other action.
+// Unlike a field, an address is validated, unique and owes a redirect when it moves.
 let editing = $state(false);
 let typed = $state('');
 let addressFailed = $state('');
@@ -879,34 +801,27 @@ const url = $derived(entryUrl('default', routing, entry.route, address || slug, 
 // The part in front of the address, so what is being typed reads as the URL it will be.
 const before = $derived(entryUrl('default', routing, entry.route, '', locale) ?? '');
 
-// Turning a language off deletes its file, so it asks where that language's readers go the way
-// a delete does, and commits. The screen is read again afterwards: whatever is in the other form
-// goes into its row first, the way an address change stores everything before it writes. The
-// column is flushed too, so a refused action leaves every edit available. A refusal stays in the dialog.
+// Deletes the file, so it asks where that language's readers go; a refusal stays in the dialog.
 let offing = $state<string>();
 async function turnOff(of: string, target: Target) {
   if (!(await flush())) return;
   if (await offer(of, false, target)) offing = undefined;
 }
 
-// What the Turn-off dialog names: the URL that language serves this entry at, and the page
-// above it that its readers are offered — nothing when the collection has no page above it.
+// What the Turn-off dialog names; no index when the collection has no page above it.
 const localeUrl = (of: string) =>
   entryUrl('default', routing, entry.route, entry.addresses?.[of] || slug, of) ?? undefined;
 const localeIndex = (of: string) => entryUrl('default', routing, entry.index, '', of) ?? undefined;
 
-// What the preview pane is offered for: a collection with no route renders nowhere, so there is
-// no page to frame — which is every global, and is why Preview is absent rather than refusing.
+// A collection with no route renders nowhere, so Preview is absent rather than refusing.
 const previewable = $derived(Boolean(entry.route));
-// The languages it can be previewed in are the ones it has a file in: a language with none is an
-// offer to create one, not a page.
+// A language with no file is an offer to create one, not a page.
 const previewLocales = $derived(
   entry.locales
     .filter((of) => of === entry.sourceLocale || !untranslated(of))
     .map((of) => ({ locale: of, label: language(of), url: localeUrl(of) ?? '' })),
 );
-// A field's own label, so the card says "Price" and not "price". Nested paths answer under the
-// field they are inside, which is where the form scrolls to anyway.
+// Nested paths answer under the top field, which is where the form scrolls to anyway.
 const labelOf = (path: string) => {
   const head = path.split('.')[0] ?? path;
   return entry.fields.find((f) => f.path.join('.') === head)?.label ?? head;
@@ -921,8 +836,7 @@ function editAddress() {
   editing = true;
 }
 
-// Everything on screen is stored first: this write goes into the same rows, and the screen is
-// read again afterwards so both columns come back with the address the server settled on.
+// The screen is read again afterwards so both columns get the address the server settled on.
 async function saveAddress() {
   busy = true;
   if (!(await flush())) {
@@ -967,8 +881,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     </div>
   {/each}
   {#if lost}
-    <!-- Leads with where the work went, because the fear is that it is gone: the draft rows are
-         in D1 and the new holder carries on from them, so "lost" is never true of the words. -->
+    <!-- Leads with where the work went: the draft is in D1. -->
     <div class="lock-banner is-lost">
       {#if otherTab}
         Your other tab has this entry now. Saved changes are in the shared draft. Any unsaved text remains here; copy it before reloading.
@@ -999,8 +912,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     </div>
   {/if}
   {#if restored && entry.pending.length}
-    <!-- The restore is over by the time this draws — the tab moved and the entry was read
-         again — so this is what says what just happened, until the version goes out. -->
+    <!-- The restore is over by the time this draws, so this is what says what just happened. -->
     <div class="lock-banner" class:is-drift={entry.drift.length > 0} role="status">
       <span>
         <b>Restored the version from {when(Date.parse(restored)).toLowerCase()}.</b>
@@ -1027,8 +939,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     <div class="title-row">
       <h1>{title}</h1>
       <div class="meta">
-        <!-- A global is one file the schema names and nothing lists it: there is nothing to
-             take it off the site from, so it has no status at all. -->
+        <!-- Nothing lists a global, so there is nothing to take it off the site from. -->
         {#if !entry.singleton}
           <div class="pop-anchor">
             <button
@@ -1104,11 +1015,8 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         {/if}
       </p>
     {/if}
-    <!-- A global holds the site-wide SEO defaults rather than having its own, and there is no
-         second version of a file the schema names: no tabs at all rather than three dead ones. -->
-    <!-- Links and not a `role="tablist"`, which the mockup draws: each of these is an address
-         the browser's back button and a shared link both have to land on, and a tab that
-         navigates is not the widget that role claims. 4.16 must not port the roles back. -->
+    <!-- A global has no SEO or versions of its own: no tabs rather than three dead ones. -->
+    <!-- Links, not a tablist: each is an address the back button lands on; keep the roles off. -->
     <div class="editor-toolbar">
     {#if !entry.singleton}
       <nav class="tabs" aria-label="Entry sections">
@@ -1194,16 +1102,14 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       locales={entry.locales}
       drafted={entry.pending.length > 0}
       onrestored={(date) => {
-        // The Content tab and a fresh read of the entry: the address changes first so the
-        // reload lands on the form the restore has just rewritten.
+        // The address changes first so the reload lands on the form the restore rewrote.
         onrestored?.(date);
         navigate(`/admin/c/${collection}/${slug}`);
         onchanged();
       }}
     />
   {:else}
-  <!-- A decision to make, not a form to fill: the panel stands where the form would be, because
-       every field on it belongs to a structure the languages have not agreed on yet. -->
+  <!-- Stands where the form would be: every field belongs to a structure not yet agreed on. -->
   <div class="entry-body" class:has-pane={!entry.drift.length && (previewing || (!alone && shown !== undefined))} class:has-outline={!entry.drift.length && !alone && shown === undefined && !previewing && fields.length > 4}>
     {#if entry.drift.length}
       <DriftPanel
@@ -1214,8 +1120,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         onresolved={onchanged}
       />
     {:else}
-      <!-- The default language's form is the one the structure is edited in, so it is not
-           drawn when the switcher is on another language and the second column is shut. -->
+      <!-- Not drawn when a translation is on its own. -->
       {#if !alone}
         <form class="form" onsubmit={(e) => e.preventDefault()}>
           <fieldset disabled={locked}>
@@ -1223,8 +1128,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           </fieldset>
         </form>
       {/if}
-      <!-- The pane holds one thing: the preview, or the second language. Previewing beside a
-           translation keeps that column, since it is the only form on screen. -->
+      <!-- Previewing beside a translation keeps that column. -->
       {#if previewing && !alone}
         {@render previewPane()}
       {:else if shown === undefined}
@@ -1237,9 +1141,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           </nav>
         {/if}
       {:else if untranslated(shown)}
-        <!-- An empty form here would autosave a file nobody asked for, so the language with no
-             file is an offer instead: make one from the source language, or say the entry is
-             not offered in it at all. -->
+        <!-- An empty form here would autosave a file nobody asked for. -->
         <section class="pane is-locale" aria-labelledby="pane-{shown}">
           <div class="pane-head"><h2 id="pane-{shown}">{language(shown)}</h2></div>
           <div class="empty">
@@ -1329,8 +1231,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
               if (snapshot) translations[shown] = snapshot;
               if (pending !== translated) onpending?.();
               translated = pending;
-              // This column has its own file and its own autosave, and the preview renders
-              // whichever language is on screen: a save here is a page to draw again too.
+              // The preview shows this language too, so a save here redraws it.
               savedAt = Date.now();
             }}
             onrefused={(taken) => {
@@ -1349,13 +1250,10 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     {/if}
   </div>
   {/if}
-  <!-- It commits, so it confirms — and it names everything that goes with the entry, which is
-       every language file. What it never offers is a choice of what to include: an entry
-       publishes whole or not at all, and picking is what the drawer is for. -->
+  <!-- Publishes whole or not at all: picking languages is what the drawer is for. -->
   {#if confirming}
     <div class="scrim">
-      <!-- Not aria-modal: the screen under it is not inert, and claiming a trap that is not
-           there is worse than not claiming it. -->
+      <!-- Not aria-modal: the screen under it is not inert. -->
       <div class="dialog" role="dialog" aria-labelledby="publish-h" tabindex="-1" bind:this={publishPanel}>
         <h2 id="publish-h">Publish {title}?</h2>
         <p>
@@ -1490,9 +1388,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   {/if}
 </main>
 
-<!-- The pane, wherever it lands: beside the source form, or beside a translation being edited
-     on its own. Its language is the one on screen, and choosing another moves the whole screen
-     rather than only the frame — one entry, one language at a time. -->
+<!-- Choosing a language here moves the whole screen, not only the frame. -->
 {#snippet previewPane()}
   <PreviewPane
     url={localeUrl(locale) ?? ''}

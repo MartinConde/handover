@@ -23,19 +23,10 @@ const at = (data: unknown, path: PropertyKey[]) =>
     data,
   );
 
-/**
- * `blocks()` is a union, so a missing field in one block is reported once per block type the
- * union holds, buried under the reasons the other types did not match. A branch that failed on
- * a reserved key — a `_type` belonging to another block, a `_ref` this one does not have — is a
- * branch that never applied; when discarding those leaves exactly one, its issues are the real
- * ones. Otherwise the union is as deep as we can name it.
- */
+/** Branches that failed on a reserved key never applied; one left is the real list of issues. */
 function problemsOf(data: unknown, issue: Issue, base: PropertyKey[]): Problem[] {
   const path = [...base, ...issue.path];
-  // Zod's wording is written for whoever wrote the schema, and it says something different for
-  // every kind — an enum lists its options, a union reports each branch it tried. A key that is
-  // not there is the case every new entry meets, and nothing under it can be named, so it gets
-  // the one word the form marks it with.
+  // A missing key is what every new entry meets, so it gets the one word the form marks it with.
   if (at(data, path) === undefined) return [{ path: dotted(path), message: 'Required' }];
   if (issue.code !== 'invalid_union' || !issue.errors)
     return [{ path: dotted(path), message: issue.message }];

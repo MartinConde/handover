@@ -4,6 +4,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Shorten internal source comments, simplify dividers, and mark intentional Svelte snapshots.
 - Redesign the redirects table. The old and new address stack in one column with the status code
   beside them, so a path no longer breaks mid-word; the reason keeps the entry it came from under
   it; the row's actions are quiet until the row is hovered; and *Test* answers under its own row

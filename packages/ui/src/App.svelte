@@ -25,7 +25,7 @@ export interface Session {
   presets?: { label: string; preset: Preset }[];
   /** This build serves `/_preview`, so the editor can offer to show the page before it is live. */
   preview?: boolean;
-  /** `site` from astro.config, which the SEO panel's previews print each language's address under. */
+  /** `site` from astro.config, which the SEO previews print each language's address under. */
   site?: string;
   user: { id: string; name: string; email: string };
   role: 'owner' | 'editor';
@@ -42,19 +42,14 @@ let {
   query?: string;
   methods?: LoginMethods;
 } = $props();
-// svelte-ignore state_referenced_locally -- the prop is the initial value on purpose; the
-// shell reloads it itself after a sign-in or a sign-out
+// svelte-ignore state_referenced_locally -- the prop is only the initial value
 let session = $state(signedIn);
-// svelte-ignore state_referenced_locally -- the prop is where the page loaded; the shell
-// moves itself from there
+// svelte-ignore state_referenced_locally -- the prop is only where the page loaded
 let path = $state(landedAt);
 
 const entryRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)\/([\w-]+)(?:\/(history|seo))?$/));
 const listRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)$/));
-// A global is edited on the entry screen, so its route is the entry route under another name:
-// `globals` is the collection and the file name is the slug. Redirects live under the same
-// prefix and are a screen of their own, so they are taken out before the match: a site that
-// happened to declare a global called `redirects` would otherwise reach neither.
+// Redirects are taken out first, or a global called `redirects` would reach neither screen.
 const redirectRoute = $derived(path === '/admin/site/redirects');
 const globalRoute = $derived(redirectRoute ? null : path.match(/^\/admin\/site\/([\w-]+)$/));
 const editing = $derived(
@@ -64,27 +59,18 @@ const editing = $derived(
       ? { collection: entryRoute[1] ?? '', slug: entryRoute[2] ?? '', section: entryRoute[3] ?? '' }
       : undefined,
 );
-/**
- * Which entry the screen is on, as one string. Everything below turns on *this* rather than on
- * `editing`, which is a new object on every address change: an entry's tabs are addresses of
- * the same entry, and re-reading it on a tab click would throw away what is typed, which
- * language the switcher is on and whether the second column is open.
- */
+/** A tab click must not reread the entry, and `editing` is a new object on every address. */
 const editingAt = $derived(editing ? `${editing.collection}/${editing.slug}` : '');
-/** The version an entry's unpublished changes were restored from: the editor is remounted by
- * the reload that follows a restore, so the banner's memory lives here. */
+/** Kept here because the reload after a restore remounts the editor. */
 let restored = $state<{ entry: string; date: string }>();
 const openEntry = $derived.by(() => {
-  // Read on purpose: `reload` is the entry's files having moved under it, and that is the one
-  // thing besides the entry itself that has to be read again.
+  // Read on purpose: a reload means the entry's files moved under it.
   void reload;
   if (!editingAt) return undefined;
   const [collection = '', slug = ''] = editingAt.split('/');
   return loadEntry(collection, slug);
 });
 
-// Members and Settings are owner-only in the screen inventory, so an editor's sidebar has
-// neither.
 const MANAGE = [
   { path: '/admin/media', icon: 'media', label: 'Media', ownerOnly: false },
   { path: '/admin/activity', icon: 'activity', label: 'Activity', ownerOnly: false },
@@ -119,19 +105,13 @@ let revertPanel = $state<HTMLElement>();
 let reverting = $state(false);
 let revertError = $state('');
 let drawer = $state(false);
-// The sidebar as a phone has it: hidden by the narrow rule, and this is what puts it back over
-// the screen. Closed by a link inside it, by Escape and by the ground beside it.
+// Puts the sidebar back over the screen on a phone, where the narrow rule hides it.
 let menu = $state(false);
-// The account menu. A disclosure and not `role="menu"`, for the reason the members list gives:
-// that role promises arrow keys, typeahead and a roving tabindex, and two links in DOM order
-// need none of it.
+// A disclosure, not role="menu": that role promises arrow keys and a roving tabindex.
 let account = $state(false);
 // Bumped when a screen's data has moved under it — the screen is thrown away and made again.
 let reload = $state(0);
-// App-shell state 9. A commit is said once here as well as on the screen that made it, because
-// that screen's own account goes with the drawer or the dialog that closes; each notice has an
-// explicit close and leaves on its own after a moment. The container is always in the DOM, so
-// a notice added to it is announced rather than being a live region that appeared mid-sentence.
+// The container is always in the DOM, so a new notice is announced rather than missed.
 let notices = $state<{ id: number; text: string }[]>([]);
 let noticeSeq = 0;
 function notify(text: string) {
@@ -150,9 +130,7 @@ $effect(() => {
   }
 });
 
-// The shell is a single page: an admin link swaps the screen in place and the address follows,
-// so back, forward, reload and a shared link all still land. Anything that is not a plain click
-// on an admin route — a new tab, the API, the preview — is the browser's.
+// A plain click on an admin route swaps the screen in place; anything else is the browser's.
 $effect(() => {
   const moved = () => {
     path = localPath(location.pathname);
@@ -175,9 +153,7 @@ $effect(() => {
 });
 
 function follow(event: MouseEvent) {
-  // Any click anywhere closes the two things a click outside should close. The account menu
-  // and the phone drawer both re-open from the button that was pressed, so this runs before
-  // the toggle rather than fighting it.
+  // Runs before the toggle: the menu and drawer both re-open from the button that was pressed.
   const inside = (event.target as Element).closest('.user-menu, .sidebar, .menu-button');
   if (!inside) {
     account = false;
@@ -195,11 +171,9 @@ function follow(event: MouseEvent) {
   navigate(a.pathname + a.search);
 }
 
-// A boolean rather than the object: an effect that read `build` would be torn down and rebuilt
-// by every poll, and the interval it had just made would never fire again.
+// A boolean, not the object: an effect reading `build` would be rebuilt by every poll.
 const building = $derived(build?.state === 'building');
-// Only worth asking again while something is happening — a build that has finished does not
-// start on its own, and the next publish loads it.
+// A finished build does not start on its own, and the next publish loads it.
 $effect(() => {
   if (!building) return;
   const poll = setInterval(() => void loadBuild(), 10_000);
@@ -209,15 +183,13 @@ $effect(() => {
   if (confirmRevert) revertPanel?.focus();
 });
 
-// Ping answers 401 until there is a session, so the shell's own data arrives after the login
-// form hands over, not with the page.
+// Ping answers 401 until there is a session, so the shell's data arrives after the login form.
 async function loadSession() {
   const res = await fetch('/admin/api/ping');
   session = res.ok ? ((await res.json()) as Session) : null;
 }
 
-// The content type is load-bearing: without it Better Auth answers 415 and the session
-// outlives the click, so the next person at this browser is still signed in.
+// Without the content type Better Auth answers 415 and the session outlives the click.
 async function signOut() {
   if (!(await flushNavigation())) return;
   const res = await fetch('/admin/api/auth/sign-out', {
@@ -234,25 +206,19 @@ async function signOut() {
 
 async function loadPending() {
   const res = await fetch('/admin/api/drafts');
-  // `?? []` so a body without the key leaves an empty list rather than nothing: the indicator
-  // reads the list to say how old the oldest change is, and there is no shape for "unknown".
+  // Falls back to [] because the indicator reads the list and there is no shape for "unknown".
   if (!res.ok) return;
   const body = (await res.json()) as { entries?: typeof pending; defaultLocale?: string };
   pending = body.entries ?? [];
   defaultLocale = body.defaultLocale ?? '';
 }
 
-/**
- * Build status is the server's: a publish redeploys the Worker serving this page, so the tab
- * that pressed Publish may be reloaded before the build finishes. `{}` is a site that has
- * committed nothing yet or has no Cloudflare token — no pill at all rather than an empty one.
- */
+/** A publish redeploys the Worker, so this tab may be reloaded before the build finishes. */
 async function loadBuild() {
   const res = await fetch('/admin/api/build');
   if (!res.ok) return;
   const body = (await res.json()) as Partial<NonNullable<typeof build>>;
-  // No `commit_sha` is a site that has published nothing yet: the pill is then reporting the
-  // worker's newest build, which is still what the site is serving.
+  // Without `commit_sha` nothing was published yet and the pill reports the worker's own build.
   build = body.state ? { ...body, state: body.state } : null;
 }
 
@@ -267,8 +233,7 @@ function closeRevert() {
   returnTo?.focus();
 }
 
-// One button for both the pill's *Revert last publish* and the drawer's *Revert this publish*:
-// it is the same inverse commit either way, over whichever commit the caller names.
+// The pill's and the drawer's Revert are the same inverse commit over whichever sha is named.
 async function revert() {
   const sha = confirmRevert;
   if (!sha) return;
@@ -291,8 +256,7 @@ async function revert() {
   }
   await Promise.all([loadPending(), loadBuild()]);
   notify('Reverted that publish — building');
-  // The drawer's "Published 1 change" describes a commit that has just been undone, and its
-  // Revert would now be refused. It goes with the publish it was about.
+  // The drawer describes a commit just undone, so it goes with the publish it was about.
   drawerKey += 1;
   if (await flushNavigation()) reload += 1;
 }
@@ -307,9 +271,7 @@ async function loadEntry(collection: string, slug: string) {
   );
 }
 
-// What the indicator says beyond the count: the oldest change and how many are held back —
-// the dashboard's own line, worded the same way. `oldest` and not the mockup's "started",
-// because a draft row carries when it was last written and not when somebody began it.
+// `oldest`, not "started": a draft row carries when it was last written, not when it began.
 const oldest = $derived(Math.min(...pending.map((e) => e.updated_at)));
 const held = $derived(pending.filter((e) => e.held_by).length);
 
@@ -324,13 +286,10 @@ const initial = $derived(
 {#if !session}
   <Login {methods} {path} {query} onlogin={loadSession} />
 {:else}
-<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -- it only
-     hears clicks the links inside already make keyboard-reachable -->
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -- nested links handle keyboard input -->
 <div class="shell" onclick={follow}>
   <a class="skip-link" href="#workspace" onclick={(event) => { event.preventDefault(); document.getElementById('workspace')?.focus(); }}>Skip to content</a>
-  <!-- The reload note outlives a page load, so it is a banner and not a toast. It does not
-       announce: the pill beside it is the live region, and two of them would talk over
-       each other about the same thing. -->
+  <!-- A banner, not a toast, since it outlives a page load; the pill is the live region. -->
   {#if building}
     <div class="banner banner-info">
       Publishing — the admin may reload briefly while the site deploys. Your place is kept.
@@ -346,9 +305,7 @@ const initial = $derived(
         <a href={sitePath(`/admin`)} data-icon="dashboard" aria-current={path === '/admin' ? 'page' : undefined}>Dashboard</a>
       </div>
     </nav>
-    <!-- Above the collections, and not under Manage: the client thinks of this as "my site",
-         and Manage's Settings is the developer's read-only config. Always there, even on a site
-         that declares no globals: every site has redirects, and they are listed on that screen. -->
+    <!-- Always there, even with no globals: every site has redirects, listed on that screen. -->
     <nav class="nav" aria-labelledby="nav-site">
       <div class="nav-label" id="nav-site">Site</div>
       <div class="nav-group">
@@ -417,14 +374,11 @@ const initial = $derived(
         {/if}
       </button>
       <span class="spacer"></span>
-      <!-- The live region is in the DOM whether there is a build or not, so the first state to
-           arrive is announced rather than missed. The elapsed time is hidden from it: it ticks
-           every second and would say the whole pill again each time. -->
+      <!-- Always in the DOM so the first state is announced; the ticking clock stays out of it. -->
       <span class="build-status" role="status">
         {#if build}
           <BuildPill {build}>
-            <!-- Only over a commit the admin itself made: with none, this pill is reporting the
-                 developer's own deploy and there is nothing here to take back. -->
+            <!-- Only over the admin's own commit; otherwise the pill is the developer's deploy. -->
             {#if build.state === 'failed' && build.commit_sha}
               <span class="sep" aria-hidden="true">·</span>
               <button class="btn-link" type="button" onclick={() => askRevert(build?.commit_sha ?? '')}>
@@ -450,8 +404,7 @@ const initial = $derived(
         </button>
         {#if account}
           <div class="menu">
-            <!-- Name, email and role are context, not actions: the role is changed on the
-                 members screen and never here. -->
+            <!-- Context, not actions: the role is changed on the members screen, never here. -->
             <div class="who">
               <span class="name">
                 {session.user.name || session.user.email}
@@ -512,8 +465,7 @@ const initial = $derived(
     {:else if path === '/admin/members' && session.role === 'owner'}
       <Members user={session.user} />
     {:else if path === '/admin/activity'}
-      <!-- No role condition: the log is an editor's screen as much as an owner's, and which
-           events they see is the server's filter rather than this branch's. -->
+      <!-- No role condition: which events an editor sees is the server's filter. -->
       <Activity role={session.role} mediaBase={session.mediaBase ?? ''} />
     {:else if path === '/admin/settings' && session.role === 'owner'}
       <Diagnostics />
@@ -551,9 +503,6 @@ const initial = $derived(
     />
     {/key}
   {/if}
-  <!-- Not aria-modal: the drawer under it stays where it is, and claiming a trap that is not
-       there is worse than not claiming it. Escape is stopped here so it does not also reach
-       the drawer's own handler and close two things with one press. -->
   <div class="toasts" aria-live="polite">
     {#each notices as notice (notice.id)}
       <div class="toast">
@@ -562,6 +511,7 @@ const initial = $derived(
       </div>
     {/each}
   </div>
+  <!-- Not aria-modal: the drawer stays live; Escape is stopped so one press closes only this. -->
   {#if confirmRevert}
     <div class="scrim">
       <div

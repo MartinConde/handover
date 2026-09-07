@@ -1,15 +1,7 @@
 <script lang="ts">
 import { previewPath, sitePath } from './request.js';
 
-/**
- * The page the client is editing, rendered by their own site from the draft rows, beside the
- * form. Everything inside the frame's border belongs to the site: the toolbar sits outside it
- * and the banners above it, because a band drawn inside would read as the site's own.
- *
- * The frame is an `<iframe>` on `/_preview<address>` rather than markup this pane builds, so
- * what is on screen is the page and not a drawing of it. A render is a request, so it happens
- * when the draft changes and not while somebody types.
- */
+// Toolbar and banners sit outside the frame: a band drawn inside would read as the site's own.
 interface Problem {
   path: string;
   label: string;
@@ -28,24 +20,22 @@ let {
   ongo,
   savedAt,
 }: {
-  /** Where the site serves this page in the language shown — the address it will get if it is new. */
+  /** The address a new entry will get. */
   url: string;
   locale: string;
-  /** The languages it can be read in and where each serves it. */
   locales: { locale: string; label: string; url: string }[];
   onlocale: (of: string) => void;
-  /** This build has a `/_preview` route at all: without one there is nothing to frame. */
+  /** Whether this build has a `/_preview` route at all. */
   enabled: boolean;
-  /** The live site already serves this page; a new entry is only ever here. */
   published: boolean;
-  /** Off the live site, which is the one thing the rendered page cannot say about itself. */
+  /** The one thing the rendered page cannot say about itself. */
   hidden?: boolean;
-  /** The last save did not land, so what is rendered is behind the form. */
+  /** The last save did not land, so the render is behind the form. */
   stale?: boolean;
-  /** What the schema still wants. A page cannot be built around a hole, so these come first. */
+  /** A page cannot be built around a hole, so these come first. */
   problems: Problem[];
   ongo: (path: string) => void;
-  /** When the draft last settled. The render follows the stored draft, never the keystrokes. */
+  /** The render follows the stored draft, never the keystrokes. */
   savedAt: number;
 } = $props();
 
@@ -56,23 +46,21 @@ const WIDTHS: { value: Width; label: string }[] = [
   { value: 'phone', label: 'Phone' },
 ];
 let width = $state<Width>('desktop');
-// Pressing Refresh asks for the same address again, which an unchanged `src` would not do.
+// Refresh must change `src`, or the same address would not be asked for again.
 let refreshed = $state(0);
 let busy = $state(true);
 let renderedAt = $state(0);
 let now = $state(Date.now());
 
 const src = $derived(`${previewPath(url ?? '/')}?at=${Math.max(savedAt, refreshed)}`);
-// A render in flight — which there is none of while the schema is unhappy, since the frame is
-// not on screen to load anything.
+// No render is in flight while the schema is unhappy: the frame is not on screen.
 const working = $derived(busy && problems.length === 0);
-// The render is a request whose answer takes about a second, so the pane says it is working:
-// the ground behind the page changes and the page itself keeps its colours.
+// A render takes about a second, so the pane says it is working.
 $effect(() => {
   void src;
   busy = true;
 });
-// "Updated 2 seconds ago" has to keep being true without a render behind it.
+// "Updated 2 seconds ago" has to stay true without a render behind it.
 $effect(() => {
   const tick = setInterval(() => (now = Date.now()), 15000);
   return () => clearInterval(tick);
@@ -86,8 +74,7 @@ function ago(since: number): string {
   const hours = Math.round(minutes / 60);
   return `${hours} hour${hours === 1 ? '' : 's'} ago`;
 }
-// Nothing is being rendered while the schema is unhappy, so the count is the state and not a
-// render that never comes back.
+// While the schema is unhappy the count is the state, not a render that never comes back.
 const status = $derived(
   problems.length
     ? `Not updated — ${problems.length} problem${problems.length === 1 ? '' : 's'}`
@@ -101,8 +88,7 @@ const status = $derived(
 
 <aside class="pane is-preview" aria-label="Preview">
   {#if !enabled}
-    <!-- The route is injected at build or not at all, so this is the developer's to change and
-         the sentence names the flag they set. -->
+    <!-- The route is injected at build, so the sentence names the developer's flag. -->
     <div class="preview-error is-quiet">
       <h3>Preview isn't switched on for this site</h3>
       <p>
@@ -136,8 +122,7 @@ const status = $derived(
       </div>
     </div>
     {#if problems.length}
-      <!-- A draft the schema refuses cannot be rendered, so the card stands where the frame
-           would be rather than the page arriving with a hole in it. -->
+      <!-- The card stands where the frame would be, rather than a page with a hole in it. -->
       <div class="preview-error">
         <h3>Can't show a preview yet</h3>
         {#each problems as problem (problem.path)}

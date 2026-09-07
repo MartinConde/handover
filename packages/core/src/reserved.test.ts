@@ -90,8 +90,7 @@ test('regenerateIds rewrites _machine paths to the new ids', () => {
   ]);
 });
 
-// A hand-written template arrives with no `_id` anywhere — the form gives every row it adds
-// one, so an entry made from that file owes its rows the same.
+// A hand-written template has no `_id` anywhere, and the form gives every row it adds one.
 test('regenerateIds gives an array item that never had an _id one of its own', () => {
   const copy = regenerateIds('default', {
     title: 'New listing',
@@ -105,8 +104,7 @@ test('regenerateIds gives an array item that never had an _id one of its own', (
   expect(copy.tags).toEqual(['sea', 'devon']);
 });
 
-// `rowKey` pairs rows across languages by `_id`, so a stamped one has to be shared the way a
-// regenerated one is — two locale files of one copy disagreeing about it reads as drift.
+// `rowKey` pairs rows by `_id`, so two locale files disagreeing about one reads as drift.
 test('a stamped _id is shared across the locale files of one entry too', () => {
   const ids = new Map<string, string>();
   const rows = {

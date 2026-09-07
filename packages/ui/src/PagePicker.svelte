@@ -68,10 +68,7 @@ let {
   labelId: string;
   /** Only this collection's entries — a `reference` is locked to the one its schema names. */
   collection?: string;
-  /**
-   * The caller wants an address rather than a pointer, in this language: rows show the URL
-   * that language serves, and an entry with none there is refused with the reason.
-   */
+  /** Asked for an address in this language: rows show its URL, and one without is refused. */
   locale?: string;
   /** Offer each collection's index page too, ahead of its entries: a menu can point at one. */
   indexes?: boolean;
@@ -98,16 +95,14 @@ $effect(() => {
   readPickable().then((p) => (all = p));
 });
 
-// Why this entry is no answer for the caller: it has no address in the language being
-// written, either because that language has no file or because nothing renders it at all.
+// Why this entry is no answer: it has no address in the language being written.
 const why = (entry: PickEntry) => {
   if (!locale || entry.urls[locale]) return undefined;
   return entry.locales.includes(locale)
     ? 'Nothing on the site renders this, so it has no address'
     : `There is no ${locale.toUpperCase()} page to link to`;
 };
-// And what is worth saying about a row that is still pickable. A hidden page has an address
-// and would take the choice; it is just a poor one, so it is said rather than refused.
+// A hidden page still takes the choice; it is a poor one, so it is said rather than refused.
 const note = (entry: PickEntry) =>
   entry.index
     ? 'The page that lists them all'
@@ -135,8 +130,7 @@ const groups = $derived(
 
 const refused = $derived(typed ? unsafeLinkScheme('default', typed) : undefined);
 
-// Arrow keys walk the rows from the search box down, and wrap; every row is a button, so
-// Tab reaches them all whether or not this runs.
+// Arrow keys walk the rows and wrap; every row is a button, so Tab reaches them regardless.
 function step(e: KeyboardEvent) {
   if (e.key === 'Escape') return onclose?.();
   if (e.target !== box && e.target !== e.currentTarget && !list?.contains(e.target as Node)) return;
@@ -150,22 +144,19 @@ function step(e: KeyboardEvent) {
 }
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_element_interactions -- the keys move focus between the controls inside -->
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -- arrow keys move focus inside -->
 <div class="picker" class:is-library={library} role="group" aria-labelledby={labelId} onkeydown={step}>
   <label class="visually-hidden" for="{id}-q">Search {label}</label>
   <input class="input" id="{id}-q" type="search" placeholder="Search pages and entries" bind:value={query} bind:this={box} />
   <div class="picker-list" bind:this={list} role={library ? 'group' : 'listbox'} aria-label={label}>
     {#each groups as group (group.name)}
-      <!-- The collection's name is what the rows under it have in common, not a step in the
-           page's outline: a heading here reads as one level below whatever opened the picker,
-           and the picker opens under a different level on every screen. -->
+      <!-- Not a heading: the picker opens under a different outline level on every screen. -->
       <div role="group" aria-labelledby="{id}-g-{group.name}">
       <p class="group-name" id="{id}-g-{group.name}" role="presentation">{group.name}</p>
       {#each group.rows as row (row.path)}
         {@const no = why(row)}
         {@const says = no ?? note(row)}
-        <!-- Refused with aria-disabled rather than disabled: a disabled button takes no focus,
-             so a keyboard would walk past the row and never hear the reason. -->
+        <!-- aria-disabled: a disabled button takes no focus, so the reason goes unheard. -->
         <button type="button" role={library ? undefined : 'option'} aria-label={library ? `Add ${row.title}${included.includes(row.path) ? ' again' : ''}` : undefined} aria-selected={library ? undefined : row.path === chosen ? 'true' : 'false'} aria-disabled={no ? 'true' : undefined} aria-describedby={says && (!library || !row.index) ? `${id}-why-${row.path}` : undefined} onclick={() => !no && onpick(row)}>
           {#if library}
             <span class="library-entry">

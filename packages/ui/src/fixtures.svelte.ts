@@ -5,8 +5,7 @@ import Fields from './Fields.svelte';
 import PagePicker, { type PickEntry } from './PagePicker.svelte';
 import './tokens.css';
 
-// Every shape the form can produce, so the page below shows what each one's diff reads like:
-// the drawer shows one entry's, and this is all of them at once.
+// Every shape the form can produce, so the page below shows what each one's diff reads like.
 const everything: Form = {
   fields: [
     { path: ['title'], label: 'Title', type: 'text', required: true },
@@ -154,8 +153,7 @@ for (const { name, groups } of cases) {
   mount(Diff, { target: host, props: { groups } });
 }
 
-// The picker in the three shapes the package opens it in. There is no admin behind this page,
-// so its one request is answered here.
+// The picker in the three shapes the package opens it in.
 const OFFERED: PickEntry[] = [
   {
     collection: 'pages',

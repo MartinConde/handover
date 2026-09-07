@@ -100,8 +100,7 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-// The one check on the page with a side effect. Opening Settings must not mail the owner, so
-// the email card is the only one that waits to be asked.
+// The one check on the page with a side effect.
 test('opening the page runs every check except the one that sends an email', async () => {
   await show();
   expect(requests.filter((url) => url.startsWith('/admin/api/checks/')).sort()).toEqual([
@@ -320,8 +319,7 @@ test('a key the service refuses keeps the dialog open and says what refused it',
   expect(requests.filter((url) => url === '/admin/api/settings')).toHaveLength(1);
 });
 
-// A key is not re-typeable from memory, so taking one away asks first — with the card's own
-// sentence about what takes over, since that is the whole of what is being decided.
+// A key is not re-typeable from memory, so taking one away asks first.
 test('removing a key asks first, then asks the route to and reads the list again', async () => {
   const root = await show(
     { '/admin/api/settings/deepl': Response.json({ ok: true }) },

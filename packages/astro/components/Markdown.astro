@@ -5,8 +5,7 @@ interface Props {
   content: string;
 }
 
-// The HTML is built from the validated tree, never from the file's own markup, so
-// `set:html` here cannot emit anything a richtext tier disallows.
+// The HTML is built from the validated tree, so `set:html` cannot emit what a tier disallows.
 const html = renderRichtext('default', Astro.props.content);
 ---
 

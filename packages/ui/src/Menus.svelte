@@ -18,7 +18,7 @@ export interface Menu {
   items: MenuItem[];
 }
 
-/** How deep a menu may go. The format is recursive; the cap is this editor's. */
+/** The format is recursive; the cap is this editor's. */
 const MAX_DEPTH = 3;
 
 /** How many levels the item itself is, so indenting cannot push its children past the cap. */
@@ -46,7 +46,7 @@ let {
   id: string;
   /** The heading the whole builder belongs to. */
   labelId: string;
-  /** The global's menus, edited in place. A developer declares them; the client fills them. */
+  /** Edited in place; a developer declares them and the client fills them. */
   menus: Menu[];
   /** The language this column writes: which address a row shows, and what is missing where. */
   locale?: string;
@@ -66,7 +66,7 @@ let removing = $state<MenuItem>();
 let trigger: HTMLElement | undefined;
 /** The editor's picker is open over the link summary. */
 let changing = $state(false);
-/** The row whose ⋯ is open, by `_id`. A disclosure and not `role="menu"`, as on the entry list. */
+/** A disclosure and not `role="menu"`, as on the entry list. */
 let menuFor = $state('');
 /** Feedback stays beside the library, so adding several pages never loses your place. */
 let addedMessage = $state('');
@@ -74,8 +74,6 @@ let lastAdded = $state('');
 
 const menu = $derived(menus[tab]);
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-// The pages and entries an item can point at, for the picker and for saying what a row
-// already points at — the same read the link field makes.
 let known = $state<Pickable>({ entries: [], locales: [] });
 $effect(() => {
   readPickable().then((p) => (known = p));
@@ -110,8 +108,7 @@ const kind = (item: MenuItem) => {
   if (link.type === 'index') return `${capitalise(link.collection)} index`;
   return capitalise(entryOf(item)?.collection ?? link.ref.split('/')[0] ?? '');
 };
-// Why the site will skip this row: a word on the row, the sentence in its editor. The renderer
-// drops it either way; the editor is where somebody can see that it is going to and tidy the menu.
+// The renderer drops the row either way; the editor is where somebody can see why and tidy up.
 const flag = (item: MenuItem): { chip: string; why: string } | undefined => {
   if (item.link.type === 'url') return undefined;
   const entry = entryOf(item);
@@ -136,9 +133,7 @@ function step(path: number[], by: -1 | 1) {
   const i = path[path.length - 1] as number;
   if (i + by >= 0 && i + by < list.length) move(list, i, i + by);
 }
-// Indenting makes the row a child of the one above it, which is where a sub-menu comes from.
-// It is refused where the row's own children would land past the cap rather than silently
-// flattening them.
+// Refused where the row's own children would land past the cap, rather than flattening them.
 const canIndent = (item: MenuItem, path: number[]) =>
   (path[path.length - 1] as number) > 0 && path.length + heightOf(item) <= MAX_DEPTH;
 function indent(item: MenuItem, path: number[]) {
@@ -146,8 +141,7 @@ function indent(item: MenuItem, path: number[]) {
   const list = listAt(path.slice(0, -1));
   const i = path[path.length - 1] as number;
   const parent = list[i - 1] as MenuItem;
-  // Read back after the assignment: what `??=` hands on is the bare array, and a row pushed
-  // into that one is pushed into nothing — the state's own copy is the proxy behind the key.
+  // Not `??=`: it hands on the bare array, and a push into that reaches no proxy.
   if (!parent.children) parent.children = [];
   parent.children.push(...list.splice(i, 1));
 }
@@ -159,8 +153,7 @@ function outdent(path: number[]) {
   up.splice(at + 1, 0, ...list.splice(path[path.length - 1] as number, 1));
   prune(path.slice(0, -1));
 }
-// An item with nothing under it holds no `children` at all: an empty list is a key in the file
-// that says nothing, and it would show up in every diff of the menu it was taken out of.
+// An empty `children` is a key in the file that says nothing and shows up in every diff.
 function prune(path: number[]) {
   if (!path.length) return;
   const parent = listAt(path.slice(0, -1))[path[path.length - 1] as number];
@@ -181,8 +174,7 @@ function drop(path: number[]) {
     trigger?.focus();
   }
 }
-// A row's ⋯ closes on the choice; what was chosen runs, and focus comes back to the ⋯ if the
-// row is still there to hold it.
+// Focus returns to the ⋯ only if the row is still there to hold it.
 function act(item: MenuItem, what: () => void) {
   menuFor = '';
   trigger = document.getElementById(`${id}-more-${item._id}`) ?? undefined;
@@ -199,8 +191,7 @@ const pathOf = (item: MenuItem, list = menu?.items ?? [], at: number[] = []): nu
   return [];
 };
 
-// A picked page keeps no label of its own: renaming the page then moves the menu with it, and
-// typing over the greyed title is what writes one.
+// No label of its own, so renaming the page renames the menu row with it.
 const linkTo = (entry: PickEntry): MenuItem['link'] =>
   entry.index
     ? { type: 'index', collection: entry.collection }
@@ -291,10 +282,7 @@ function rowsOf(list: MenuItem[], skip?: MenuItem, depth = 1, parent?: Row): Row
 const flatItems = $derived(rowsOf(menu?.items ?? []).map((row) => row.item));
 const included = $derived(flatItems.map((item) => keyOf(item.link)).filter(Boolean));
 
-// Nothing moves while a drag is live — the mockup's model, not 4.1's: the slot the row would
-// land in is drawn where the pointer is, and the drop is the one move. The gap is the target
-// row's upper or lower half; the depth within the gap is the drag's sideways travel, clamped
-// to what the rows around the gap allow — except past the cap, where the refusal is the answer.
+// Nothing moves during a drag: the slot is drawn under the pointer and the drop is the one move.
 function place(manager: Manager, to?: { x: number; y: number }) {
   mark = undefined;
   const op = manager.dragOperation;
@@ -376,8 +364,7 @@ function moved(event: Parameters<Handlers['onDragMove']>[0], manager: Manager) {
     event.to ?? (event.by ? { x: current.x + event.by.x, y: current.y + event.by.y } : undefined);
   place(manager, to);
 }
-// A canceled drag has nothing to put back — the tree never moved. A drop is the one move:
-// out of the old list, into the marked slot, children carried along.
+// A canceled drag has nothing to put back, since the tree never moved.
 function ended(event: Parameters<Handlers['onDragEnd']>[0]) {
   const slot = mark;
   mark = undefined;
@@ -464,8 +451,7 @@ function walkTabs(event: KeyboardEvent) {
   </ul>
 {/snippet}
 
-<!-- Under its row rather than over the tree: the row it edits stays in sight, and so do the
-     rows around it. -->
+<!-- Under its row rather than over the tree, so the rows around it stay in sight. -->
 {#snippet editor(row: MenuItem, says: { chip: string; why: string } | undefined)}
   <div class="item-editor" role="group" aria-label="Edit {name(row)}">
     {#if says}<p class="notice notice-warn">{says.why}</p>{/if}
@@ -582,8 +568,7 @@ function walkTabs(event: KeyboardEvent) {
           <span class="nav-count">{flatItems.length} {flatItems.length === 1 ? 'item' : 'items'}</span>
         </header>
       {#if translating}
-        <!-- The shape is one tree for the whole site, and this column cannot save one: a save of
-             a translation writes the words this language owns and nothing else. -->
+        <!-- One tree for the whole site: a translation saves only the words this language owns. -->
         <div class="menu-tree">
           <p class="notice notice-info">Edit labels here. To add, remove or arrange items, switch to {sourceLabel || 'the source language'}. The menu structure is shared across languages.</p>
           {@render labelled(menu.items)}

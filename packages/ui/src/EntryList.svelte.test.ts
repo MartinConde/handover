@@ -2,13 +2,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import EntryList from './EntryList.svelte';
 
-// Testing: one row per entry with the title the API returned, the derived file name the new
-// entry dialog shows, what create / duplicate / rename / delete / hide send, which entries are
-// offered the unpublished-changes question, the empty state, and the Deleted view's two rows — the one that can come back and the one that cannot.
-// Not testing: which collection the sidebar routed here, the shell around the list, the bulk
-// bar's own markup, or how one answer becomes a rule per language — that is the route's, and
-// api.test.ts holds it to each of the four answers. Which rows the Deleted view gets, and why a
-// row is blocked, are the route's too.
+// Not tested: how one answer becomes a rule per language, which api.test.ts holds the route to.
 
 const ENTRIES = [
   {
@@ -108,8 +102,7 @@ test('the list is one row per entry, titled and linked by file name', async () =
   );
 });
 
-// The heading's number is the collection's size everywhere else in the admin, so a filter
-// narrows it to "1 of 2" rather than replacing it: what the list shows, of what there is.
+// A filter narrows the heading to "1 of 2" rather than replacing the collection's size.
 test('under the Status filter the heading counts what is shown, of the total', async () => {
   api([
     ...ENTRIES,
@@ -230,8 +223,7 @@ test('duplicating sends the pre-filled copy name and opens the copy', async () =
   });
 });
 
-// A template shapes every entry made after it, so the item is the owner's; the name goes
-// through the same derivation as a new entry's, against the starters the collection has.
+// The item is the owner's; the name goes through the same derivation as a new entry's.
 test('an owner can save a row as a template under a derived name', async () => {
   const fetcher = api(ENTRIES, { name: 'mill-house' }, ['en'], ['house']);
   const root = show('owner');
@@ -294,8 +286,7 @@ test('renaming sends the new file name and reloads the list', async () => {
   expect(q(root, '.dialog')).toBeNull();
 });
 
-// A delete takes a page off the site the way a hide does, so it asks the same question — and
-// answers it in the commit that removes the files rather than at the next publish.
+// A delete asks the hide question, and answers it in the commit that removes the files.
 test('deleting asks where its readers go and sends the answer with the DELETE', async () => {
   const fetcher = api(ENTRIES);
   const root = show();
@@ -313,7 +304,7 @@ test('deleting asks where its readers go and sends the answer with the DELETE', 
   expect(changed).toHaveBeenCalled();
 });
 
-// Principle #5: the client will want it back. The dialog says so before the question.
+// Principle #5: the client will want it back, so the dialog says so before the question.
 test('the delete dialog leads with Hide it instead?, and Hide instead asks the hide question', async () => {
   const fetcher = api(ENTRIES);
   const root = show();
@@ -376,7 +367,6 @@ test('a refused rename says so and keeps the dialog open', async () => {
   expect(changed).not.toHaveBeenCalled();
 });
 
-// Which languages an entry has a file in, one chip each in the order the site declares them.
 // One language declared and the column is not drawn at all — nor emptied, nor always 1/1.
 test('a row says which languages it has been written in', async () => {
   api(
@@ -404,10 +394,7 @@ test('a row says which languages it has been written in', async () => {
   ]);
 });
 
-// A language somebody turned off for the entry has no file and never will: struck through
-// rather than listed as one still to write.
-// A bare span may not carry an aria-label; the word is in the sentence instead, as History
-// already had it, and axe stops flagging every row.
+// A bare span may not carry an aria-label, so the word is in the sentence, as History has it.
 test('the language chips are introduced by a word, not labelled on a span', async () => {
   api(ENTRIES, {}, ['en', 'de']);
   const root = show();
@@ -517,8 +504,7 @@ test('the status filter narrows the list to the hidden rows, or to the live ones
   expect(titles(root)).toEqual(['Seaview Cottage']);
 });
 
-// The dashboard's *Show* arrives as `?locale=de`: the rows that language is owed in — no file
-// yet, or a translation the build marked stale — and the stale chip says which is which.
+// The dashboard's *Show* arrives as `?locale=de`: rows missing or stale in that language.
 test('the language filter narrows to the rows a language is missing or stale in', async () => {
   api(
     [
@@ -578,8 +564,7 @@ test('a hidden entry is badged and offers to be shown again', async () => {
   expect(menuItems(root)).toEqual(['Duplicate', 'Rename', 'Hide', 'Delete']);
 });
 
-// One ⋯ per row where there were four buttons, which is what the design set draws and what
-// stopped fitting on a phone. A disclosure, as on Members: Escape and a click elsewhere close it.
+// Four buttons stopped fitting on a phone, so it is a disclosure as on Members.
 test("a row's actions are one menu, closed by Escape and by a click outside", async () => {
   api(ENTRIES);
   const root = show();
@@ -715,8 +700,7 @@ test('the deleted view says what went and who took it away', async () => {
   expect(q(rows[0] as ParentNode, '.td.num')?.textContent).toContain('Martin');
 });
 
-// Greyed rather than gone, with the reason under the row: a disabled button takes no focus, and
-// a keyboard user would arrow past the sentence without ever hearing it.
+// Greyed, not gone: a disabled button takes no focus, and a keyboard user would never hear why.
 test('a row whose file is there again keeps its button and says why', async () => {
   const fetcher = withDeleted();
   const root = show();

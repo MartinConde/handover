@@ -1,10 +1,5 @@
 #!/usr/bin/env sh
-# A golden file is the byte-for-byte output of the serialiser for one shape. Changing one
-# means every file already written in that shape now round-trips differently, which is the
-# thing `_version` and `handover migrate` exist to carry. So a changed golden has to come
-# with a format version bump; the step that goes with the bump is checked by
-# `packages/core/src/migrate.test.ts`. Adding a golden is free — a new file cannot change
-# the shape of one that already exists.
+# A changed golden changes how existing content round-trips, so it needs a FORMAT_VERSION bump.
 set -eu
 
 base=${1:-}
@@ -16,16 +11,13 @@ case "$base" in
     ;;
 esac
 
-# A base the checkout does not have is a commit that was amended and force-pushed over: the
-# push event still names the SHA it replaced. The commit before HEAD is what it was amended
-# from, so that is what the diff is against, and the log says so.
+# A base missing from the checkout was amended over, so compare against the commit before HEAD.
 if ! git cat-file -e "$base^{commit}" 2>/dev/null; then
   echo "format-lock: $base is not in this checkout (amended and pushed over?); comparing against $head~1 instead."
   base="$head~1"
 fi
 
-# --no-renames so a rename carrying an edit shows up as a delete plus an add, not as an R
-# the MD filter would let through.
+# --no-renames so an edited rename shows as delete plus add, not an R the MD filter skips.
 changed=$(git diff --name-only --no-renames --diff-filter=MD "$base...$head" -- packages/core/test/golden)
 [ -n "$changed" ] || exit 0
 

@@ -25,9 +25,7 @@ export const RICHTEXT_CONSTRUCTS = {
   ],
 } as const satisfies Record<RichtextTier, readonly string[]>;
 
-// A link is the only construct that carries a target. Browsers ignore ASCII whitespace
-// and control characters inside a URL, so `java<tab>script:` is a live `javascript:` link
-// and the scheme is read from the stripped string.
+// Browsers drop ASCII whitespace and controls inside a URL, so `java<tab>script:` is live.
 const LINK_SCHEMES = new Set(['http', 'https', 'mailto', 'tel']);
 
 /** The scheme of a link that must not be rendered, or undefined when the target is fine. */
@@ -51,8 +49,7 @@ const BASIC_NODES = new Set([
 ]);
 const FULL_ONLY_NODES = new Set(['heading', 'blockquote']);
 
-// GFM is parsed so a table or strikethrough is rejected by name instead of slipping
-// through as paragraph text and rendering as a table later.
+// GFM is parsed so a table or strikethrough is rejected by name instead of rendering later.
 export function richtextErrors(_siteId: string, markdown: string, tier: RichtextTier): string[] {
   const tree = fromMarkdown(markdown, {
     extensions: [gfm()],
@@ -77,11 +74,7 @@ export function richtextErrors(_siteId: string, markdown: string, tier: Richtext
   return errors;
 }
 
-/**
- * Every link target in a richtext value, read with the parser the page is rendered with — so
- * the pre-publish link check sees the links the site sees and not what a regular expression
- * makes of the markdown.
- */
+/** Read with the parser the page renders with, so the link check sees what the site sees. */
 export function richtextLinks(_siteId: string, markdown: string): string[] {
   const tree = fromMarkdown(markdown, {
     extensions: [gfm()],
@@ -99,17 +92,10 @@ export function richtextLinks(_siteId: string, markdown: string): string[] {
 const escapeHtml = (text: string) =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-// Every attribute value is editor text, so it is escaped here rather than trusted to
-// arrive clean — a heading's slug included.
+// Every attribute value is editor text, a heading's slug included.
 const escapeAttribute = (value: string) => escapeHtml(value).replace(/"/g, '&quot;');
 
-/**
- * Richtext as HTML. Astro's own Markdown pipeline is a native binary the Workers runtime
- * cannot run, and a hast pipeline in its place costs ~20 KiB gzip of a Worker bundle
- * already at 16% of the limit, so the closed construct list is emitted straight from the
- * mdast the tier check already parses. A node the tiers disallow — raw HTML above all —
- * contributes escaped text and never markup, so this output is safe to set as HTML.
- */
+/** Emitted from the mdast: Astro's Markdown pipeline is a native binary Workers cannot run. */
 export function renderRichtext(_siteId: string, markdown: string): string {
   const tree = fromMarkdown(markdown, {
     extensions: [gfm()],
@@ -144,8 +130,7 @@ export function renderRichtext(_siteId: string, markdown: string): string {
       case 'emphasis':
         return `<em>${kids()}</em>`;
       case 'link':
-        // A file written outside the CMS never passed the tier check, so the target is
-        // read again here and a link that would run code keeps only its text.
+        // A file written outside the CMS never passed the tier check, so the target is read again.
         return unsafeLinkScheme(_siteId, node.url)
           ? kids()
           : `<a href="${escapeAttribute(node.url)}">${kids()}</a>`;

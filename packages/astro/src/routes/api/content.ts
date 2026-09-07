@@ -22,54 +22,37 @@ import {
 import { entryForm, formSchema } from '../../index.js';
 import type { RequestContext } from './context.js';
 
-/**
- * The DeepL key in force: the one the client pasted into Settings, and otherwise the one the
- * developer set on the Worker. A site with neither has no row to read, so nothing here asks for
- * `HANDOVER_SETTINGS_KEY` on a site that never stored anything under it.
- */
+/** The pasted key wins; a site with neither never needs `HANDOVER_SETTINGS_KEY`. */
 export async function deeplKey(ctx: RequestContext): Promise<string | undefined> {
   const e = env as Record<string, string | undefined>;
   const stored = await readSetting('default', ctx.db(), e.HANDOVER_SETTINGS_KEY, 'deepl');
   return stored ?? e.DEEPL_API_KEY;
 }
 
-// What machine-translates a field: the site's own hook, or DeepL on whichever key is in force.
-// Neither is an ordinary state of a site — the admin draws no translate button at all — so it
-// is a question the entry answers rather than something a route discovers on the way. A stored
-// key that cannot be decrypted is translation off here; the settings screen is where it is a
-// sentence, because that is where somebody can act on it.
+// A stored key that cannot be decrypted is translation off here; Settings says why.
 export async function translator(ctx: RequestContext): Promise<Translate | undefined> {
   if (config.i18n.translate) return config.i18n.translate;
   const key = await deeplKey(ctx).catch(() => undefined);
   return key ? deeplTranslate('default', key) : undefined;
 }
 
-// An entry as the list would show it: the title of whichever language the build read first, and
-// the file name for one the index has never seen — a lock outlives the commit that removed it.
+// Falls back to the file name: a lock outlives the commit that removed its entry.
 export function entryTitle(entry: string): string {
   const [collection = '', slug = ''] = entry.split('/');
   const found = index[collection]?.find((e) => e.id === slug);
   return Object.values(found?.locales ?? {})[0]?.title ?? slug;
 }
 
-// One file of one entry. No language is implied: which one an entry is written in is the
-// entry's own answer, so every caller says which file it means.
+// No language is implied: every caller says which file it means.
 export const entryPath = (collection: string, slug: string, locale: string) =>
   `src/content/${collection}/${locale}/${slug}.yaml`;
 
-/**
- * The language an entry's structure is edited in, and the one its translations are made from:
- * the site's default where the entry has that file, and otherwise the first language it does
- * have one in. It is the entry's property and not the site's — an entry written in German alone
- * is a German entry, not a broken English one. What stays the site's is the URL, since whether a
- * language carries its segment is the same answer for every entry.
- */
+/** The language an entry is edited in is the entry's own: a German-only entry is German. */
 export const sourceOrder = () => [...new Set([config.i18n.defaultLocale, ...config.i18n.locales])];
 
 export const sourceIn = (loaded: Record<string, unknown>) => sourceOrder().find((l) => l in loaded);
 
-// The same answer for a route that has not read the entry: the languages are asked in order, so
-// an ordinary entry costs one read and a site with one language costs none.
+// Asked in order: an ordinary entry costs one read, a one-language site none.
 export async function sourceFor(
   ctx: RequestContext,
   collection: string,
@@ -89,8 +72,7 @@ export async function sourceFor(
   return undefined;
 }
 
-// One entry's other languages, locale → path. Empty on a site that declares one language,
-// which is what keeps that site's save exactly the write it was.
+// Empty on a one-language site, which keeps that site's save exactly the write it was.
 export const siblingPaths = (collection: string, slug: string, source: string) =>
   Object.fromEntries(
     config.i18n.locales
@@ -98,8 +80,7 @@ export const siblingPaths = (collection: string, slug: string, source: string) =
       .map((locale) => [locale, entryPath(collection, slug, locale)]),
   );
 
-// Every file one entry is made of. A rename or a delete commits all of them, so all of them
-// have to be recorded in D1 too, or a draft left at the old path publishes the file back.
+// Every file must be recorded in D1 too, or a draft at the old path publishes it back.
 export const entryFiles = async (git: GitClient, collection: string, slug: string) => {
   const locales = config.i18n.locales;
   const files = await Promise.all(
@@ -112,12 +93,7 @@ export const entryFiles = async (git: GitClient, collection: string, slug: strin
   }));
 };
 
-/**
- * A global rides the entry path: `globals` is the collection and the file name is the slug, so
- * one file per language at `src/content/globals/<locale>/<key>.yaml` — the same drafts, locks,
- * hold and one-commit publish as anything else. What it does not have is what a collection's
- * routes are about: no address, no rename, no delete, no turning a language off.
- */
+/** A global rides the entry path as collection `globals`; it has no address, rename or delete. */
 export const globalOf = (
   collection: string,
   slug: string,
@@ -141,20 +117,14 @@ export const globalLabel = (key: string, schema: Parameters<typeof formSchema>[0
   };
 };
 
-/**
- * The form the CMS works one collection through — `entryForm`'s, which is also what the build
- * reads every entry's staleness mark against. One construction on purpose: a form built
- * differently in the two places would make every translated entry read stale, since the hash is
- * taken over exactly the fields the form declares translatable.
- */
+/** Built the same way as the build's, or every translated entry reads stale. */
 export function formFor(collection: string, slug: string): Form {
   const form = entryForm(config, collection, slug);
   if (!form) throw new Error(`No collection ${collection}`);
   return form;
 }
 
-// The languages an entry is offered in, and what its `_locales` gets wrong: `written` is the
-// languages it has a file in, and a file is the fact the mark has to agree with.
+// `written` is the languages it has a file in, which the mark has to agree with.
 export const offeredIn = (data: unknown, written: string[]) =>
   entryOffer(
     'default',
@@ -163,14 +133,7 @@ export const offeredIn = (data: unknown, written: string[]) =>
     written,
   );
 
-/**
- * The site's own SEO defaults, per language, for the panel to show greyed behind what nobody
- * has typed. Found by the `defaultSeo` key rather than by a config option: the shape is the
- * package's (`seoDefaults`), and a site that spreads it into a global has said where it is.
- *
- * Read here and not on `ping`: this is content a client edits in another tab, and a stale
- * pattern behind an empty box is a client typing against a site name that has changed.
- */
+/** Found by the `defaultSeo` key; read per open, not on `ping`, since another tab may edit it. */
 export async function siteSeoDefaults(ctx: RequestContext): Promise<Record<string, unknown>> {
   const key = Object.entries(config.globals ?? {}).find(([, schema]) =>
     formOf('default', formSchema(schema)).fields.some((f) => f.path[0] === 'defaultSeo'),
@@ -185,11 +148,7 @@ export async function siteSeoDefaults(ctx: RequestContext): Promise<Record<strin
   );
 }
 
-// One entry as the editor has it, language by language: its draft where there is one, the
-// repository where there is not, and no key at all for a language it has no file in. Each
-// language also says whether what the editor has is ahead of the repository, which is what
-// the entry's Publish is offered on. What `driftReport` compares — a structure two files
-// disagree about is a hand edit or a bad merge.
+// Draft where there is one, repository where not, and no key for a language with no file.
 export async function entryLocales(
   ctx: RequestContext,
   collection: string,
@@ -221,8 +180,7 @@ export async function entryLocales(
         ? await openDraft('default', database, path, head, file)
         : await loadDraft('default', database, path);
       const contents = row?.contents || file?.contents;
-      // A file with nothing in it is still the language's file: it opens as an empty entry
-      // rather than reading as a language the entry does not have.
+      // An empty file is still the language's file, so it opens as an empty entry.
       if (!contents && !file) return undefined;
       const pending = row ? (await blobSha(row.contents)) !== file?.blob_sha : false;
       return [
@@ -232,11 +190,9 @@ export async function entryLocales(
           data: contents ? parseEntry('default', contents) : {},
           pending,
           held: Boolean(row?.heldBy),
-          // Whether the repository has this language's file: a draft with none behind it is a
-          // page only the preview can show.
+          // A draft with no file behind it is a page only the preview can show.
           live: Boolean(file),
-          // The URL the repository serves it at, which is what a redirect written for this
-          // language says `from` — an address only a draft has was never followed.
+          // What a redirect's `from` is: an address only a draft has was never followed.
           url: file
             ? entryUrl(
                 'default',
@@ -258,8 +214,7 @@ export async function entryLocales(
 export const localeData = (loaded: Record<string, { data: unknown }>): Record<string, unknown> =>
   Object.fromEntries(Object.entries(loaded).map(([locale, l]) => [locale, l.data]));
 
-// Whether the lock is this tab's. A request with no token is its own tab, so a hand-made call
-// on a held entry is refused the way a second tab is.
+// A request with no token is its own tab, so a hand-made call on a held entry is refused.
 export const isHolder = (
   holder: { userId: string; tab: string } | undefined,
   session: App.Locals['handover'],
@@ -271,8 +226,7 @@ export const tabOf = (body: unknown) => {
   return typeof tab === 'string' ? tab : '';
 };
 
-// Which file an event about the whole entry names: the one the entry is written in, so the log
-// links to the language somebody would open.
+// The language the entry is written in, so the log links to the file somebody would open.
 export async function entrySubject(
   ctx: RequestContext,
   collection: string,
@@ -298,8 +252,7 @@ export async function pickable(ctx: RequestContext) {
     collectionEntries('default', index, collection, rows, collected.titleField).map((entry) => {
       const urls: Record<string, string> = {};
       for (const [locale, info] of Object.entries(entry.locales)) {
-        // The same address the entry's own language serves it at: its `slug` where the
-        // collection has localized slugs, its file name where it has none.
+        // Its `slug` where the collection has localized slugs, its file name where not.
         const address = collected.localizedSlugs ? (info.slug ?? entry.id) : entry.id;
         const url = entryUrl('default', config.i18n, collected.route, address, locale);
         if (url) urls[locale] = url;
@@ -307,8 +260,7 @@ export async function pickable(ctx: RequestContext) {
       const locales = Object.keys(entry.locales);
       return {
         collection,
-        // Off the site: still offered, since pointing at it is sometimes right, but the picker
-        // says so — a redirect to a hidden page lands the visitor on another 404.
+        // Still offered, but flagged: a redirect to a hidden page lands on another 404.
         hidden: Object.values(entry.locales).some((l) => l.status === 'hidden'),
         // What a reference or an entry link stores, and what the picker shows under the title.
         path: `${collection}/${entry.id}`,
@@ -326,19 +278,13 @@ export async function pickable(ctx: RequestContext) {
   );
 }
 
-/**
- * Every URL the site serves now, by the name of whatever answers it: each entry's address in
- * each language it has a file in, and each collection's index under each language's segment.
- * This is what a `from` is held against — a redirect over a page that exists takes that page
- * off the site, and a client would never diagnose that from a 404.
- */
+/** What a `from` is held against: a redirect over a live page takes it off the site silently. */
 export function sitePages(entries: Awaited<ReturnType<typeof pickable>>): Record<string, string> {
   const pages: Record<string, string> = {};
   for (const [collection, collected] of Object.entries(config.collections))
     for (const locale of config.i18n.locales) {
       const url = entryUrl('default', config.i18n, collected.index, '', locale);
-      // An entry beats an index that answers at the same address, because it is the more
-      // specific thing to be named in the refusal.
+      // An entry beats an index at the same address, being the more specific thing to name.
       if (url) pages[url] = `the ${collection} index`;
     }
   for (const entry of entries)
@@ -352,12 +298,7 @@ export async function takenNames(collection: string, database: Db): Promise<stri
   return collectionEntries('default', index, collection, rows).map((e) => e.id);
 }
 
-/**
- * Step one of the order every write to a whole entry is held to — a rename, a delete, a hide, a
- * restore — so none of them runs under somebody who has it open. The sentence is the whole
- * answer: the entry list shows what the server said. Per person rather than per tab: the same
- * person's other tab is not "somebody else".
- */
+/** Per person, not per tab: the same person's other tab is not "somebody else". */
 export async function heldByAnother(
   ctx: RequestContext,
   collection: string,
@@ -381,7 +322,7 @@ export const locationOf = (collection: string): EntryLocation => ({
   localizedSlugs: config.collections[collection]?.localizedSlugs,
 });
 
-/** The languages of one entry with unpublished changes — what a discard or a restore throws away. */
+/** The languages of one entry with unpublished changes. */
 export async function pendingLocales(
   collection: string,
   slug: string,
@@ -395,13 +336,7 @@ export async function pendingLocales(
 
 export const ENTRY_FILE = /^src\/content\/([a-z0-9-]+)\/([^/]+)\/([^/]+)\.yaml$/;
 
-/**
- * Which language a file this publish is about to commit was translated from: the file of the
- * language its entry is written in, and the form that says which of its values a translation is
- * made from. Nothing for that language's own file, and nothing for a path no collection owns —
- * a global has no schema, so no form. On a site that declares one language it is always nothing,
- * which is what keeps such a site's publish the read-free write it always was.
- */
+/** Nothing on a one-language site, which keeps its publish the read-free write it was. */
 export const sourceOf = async (ctx: RequestContext, path: string) => {
   const [, collection = '', locale = '', slug = ''] = ENTRY_FILE.exec(path) ?? [];
   const schema = schemaOf(collection, slug);

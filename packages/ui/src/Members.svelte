@@ -6,7 +6,7 @@ interface Member {
   name: string;
   email: string;
   role: 'owner' | 'editor';
-  /** An invite nobody has opened yet. Computed by the server; there is no invite table. */
+  /** An invite nobody has opened yet; computed by the server, since there is no invite table. */
   pending: boolean;
   method: 'github' | 'password' | 'link' | null;
   /** The entries they are holding a lock on right now, by the name the list shows. */
@@ -77,8 +77,7 @@ async function load() {
 }
 
 function start(kind: 'invite' | 'role' | 'remove', member?: Member) {
-  // The row's own button, not the menu item that was pressed: the item is thrown away with the
-  // menu, and focus cannot go back to a node that is no longer in the document.
+  // The row's own button: the menu item is gone with the menu and cannot take focus back.
   const here = document.activeElement as HTMLElement | null;
   trigger = here?.closest('.row-menu')?.querySelector('button') ?? here ?? undefined;
   dialog = kind;
@@ -119,12 +118,7 @@ async function invite(event: SubmitEvent) {
   const res = await fetch('/admin/api/members', json({ email, role }));
   const body = (await res.json().catch(() => ({}))) as { error?: string; to?: string };
   busy = false;
-  // The row exists either way, so the list is reloaded whether the message went or not — the
-  // failure notice tells the owner to fix the mailer and resend, and the row is what they
-  // resend from.
-  // A mailer that is not wired is the same thing to the person at the keyboard as one that
-  // refused, and `missingMailer()` names env vars and a wrangler command at them. The words
-  // that name the missing credential are the developer's, and they are on Settings.
+  // The row exists whether the mailer refused (502) or is unwired (503), so the list is reloaded.
   if (res.status === 502 || res.status === 503) {
     close();
     notice = '';
@@ -142,9 +136,7 @@ async function invite(event: SubmitEvent) {
   await load();
 }
 
-// Settings is where the mailer says which credential is missing, so the notice sends them
-// there rather than describing the problem twice. The link is markup: the notice is one
-// interpolated string everywhere else, and an anchor inside it would be escaped.
+// Settings names the missing credential, so the notice points there rather than repeating it.
 const mailerFailure = "Couldn't send the invite — email isn't set up correctly on this site.";
 
 async function resend(member: Member) {
@@ -204,9 +196,7 @@ async function remove() {
     <p class="placeholder">Loading…</p>
   {:else}
     <div class="table" role="table" aria-label="Members">
-      <!-- The header cells need a row of their own: `role="table"` with `columnheader`
-           children and nothing between them is what axe calls aria-required-parent. Both
-           wrappers are `display: contents`, so the grid is unchanged. -->
+      <!-- role="table" needs a row around its columnheaders; display: contents keeps the grid. -->
       <div class="row-head" role="row">
         <div class="th" role="columnheader">Name</div>
         <div class="th" role="columnheader">Role</div>
@@ -239,11 +229,7 @@ async function remove() {
             {member.method ? METHODS[member.method] : '—'}
           </div>
           <div class="td menu-cell" role="cell">
-            <!-- Your own row has no menu: the server refuses both a self role change and a
-                 self removal, and the last owner is always the viewer. A disclosure, not a
-                 menu: `role="menu"` promises arrow keys, typeahead and a roving tabindex, and
-                 three buttons in DOM order need none of it. Escape and a click outside close
-                 it; Tab walks the items as it would anywhere. -->
+            <!-- No menu on your own row, since the server refuses self changes. -->
             {#if member.id !== user.id}
               <div class="row-menu">
                 <button
@@ -276,10 +262,7 @@ async function remove() {
   {/if}
 </main>
 
-<!-- Not aria-modal: the shell behind stays reachable, as it does on the entry list, and
-     claiming a focus trap that is not there is worse than not claiming one. Native <dialog>
-     would give all three screens the trap, Escape and the top layer for free; that is a change
-     to the shared stylesheet and to two screens that already shipped. -->
+<!-- Not aria-modal: the shell behind stays reachable, so claiming a trap would be false. -->
 {#if dialog === 'invite'}
   <div class="scrim">
     <div class="dialog" role="dialog" aria-labelledby="invite-h">

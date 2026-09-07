@@ -1,10 +1,8 @@
-// A pasted link never reaches a content file. Each provider has its own reading of a URL, and
-// what is stored is the provider and the id it names — the `src` a page renders is built back
-// from a template here, so nothing a client pastes can become an iframe pointing anywhere.
+// Only provider and id are stored; `src` is templated, so a paste cannot aim an iframe anywhere.
 
 export type EmbedProvider = 'youtube' | 'vimeo' | 'google-maps';
 
-/** The stored shape. `title` is the translated half and is typed in the admin, never parsed. */
+/** `title` is the translated half and is typed in the admin, never parsed. */
 export interface EmbedValue {
   provider: EmbedProvider;
   id: string;
@@ -34,8 +32,7 @@ function seconds(raw: string | null | undefined): number | undefined {
   return Number(h) * 3600 + Number(m) * 60 + Number(s);
 }
 
-// Google writes spaces in a path segment as `+`, so they go back before the percent decoding
-// rather than after it — a name really containing one arrives as `%2B` and must survive.
+// Google writes spaces as `+`, restored before percent decoding so a real `%2B` survives.
 const place = (segment: string) => decodeURIComponent(segment.replace(/\+/g, '%20'));
 
 const video = (
@@ -47,10 +44,7 @@ const video = (
     ? { embed: { provider, id, ...(start ? { start } : {}) } }
     : { refused: UNKNOWN };
 
-/**
- * The paste box's whole job. `start` is kept only where the link carried one, so a plain link
- * stores no key at all and the file says nothing about where the video begins.
- */
+/** `start` is kept only where the link carried one, so a plain link stores no key. */
 export function parseEmbedUrl(input: string): EmbedParse {
   let url: URL;
   try {
@@ -77,8 +71,7 @@ export function parseEmbedUrl(input: string): EmbedParse {
       seconds(/^#t=(.+)$/.exec(url.hash)?.[1]) ?? t,
     );
 
-  // The two things Google's own Share dialog hands over, each named rather than lumped in with
-  // a link from nowhere: a client who followed the instructions deserves the next instruction.
+  // Google's own Share dialog hands over these two, so each gets the next instruction by name.
   if (host === 'maps.app.goo.gl' || (host === 'goo.gl' && path[0] === 'maps'))
     return {
       refused: 'Google Maps shortened this link. Open it, then copy the address from your browser.',
@@ -116,10 +109,7 @@ export function embedSrc(value: EmbedValue): string {
   }
 }
 
-/**
- * The still the browser loads straight from the provider — no thumbnail fetch through the
- * Worker. Only YouTube has one at an address that can be guessed from the id.
- */
+/** Loaded straight from the provider; only YouTube's is guessable from the id. */
 export const embedThumb = (value: EmbedValue): string | undefined =>
   value.provider === 'youtube'
     ? `https://i.ytimg.com/vi/${encodeURIComponent(value.id)}/hqdefault.jpg`

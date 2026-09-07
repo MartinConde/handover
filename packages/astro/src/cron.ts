@@ -1,15 +1,10 @@
 import { type GitClient, runDue } from '@handover/core';
 import { db, gitClient, mediaStore } from './routes/api/environment.js';
 
-/**
- * The site's one scheduled handler. `wrangler.jsonc` carries a single trigger and the dispatcher
- * decides which jobs this tick belongs to, so a package upgrade that adds a job changes nothing
- * there. What ran goes to `wrangler tail`; the durable record is the activity log.
- */
+/** One trigger in `wrangler.jsonc`; `runDue` decides which jobs the tick belongs to. */
 export async function scheduled(controller: { cron: string }): Promise<void> {
   let git: GitClient | undefined;
-  // A site whose App is not configured has no repository for a job to ask about, and the one
-  // that wants it answers nothing rather than failing the tick.
+  // A site without the App configured has no repository; the jobs that want one answer nothing.
   try {
     git = gitClient();
   } catch {

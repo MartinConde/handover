@@ -21,10 +21,7 @@ export function gitClient(): GitClient {
   });
 }
 
-/**
- * What the Workers Builds API is asked with, or nothing where the site has not been told: build
- * status is optional the way DeepL is, and a site without it simply draws no pill.
- */
+/** Optional the way DeepL is: a site without it draws no pill. */
 export function workerBuilds(): { worker: string; token: string } | undefined {
   const e = env as Record<string, string | undefined>;
   return e.CLOUDFLARE_API_TOKEN && e.CLOUDFLARE_WORKER
@@ -32,11 +29,7 @@ export function workerBuilds(): { worker: string; token: string } | undefined {
     : undefined;
 }
 
-/**
- * Where the site's uploads live, or nothing where it was never told. Two of the four are not
- * secrets — an account id and a bucket name — so they sit in wrangler.jsonc beside the two that
- * are, and a site with none of them simply has no media.
- */
+/** Account id and bucket are not secrets, so they sit in wrangler.jsonc beside the two that are. */
 export function mediaStore(): R2Store | undefined {
   const e = env as Record<string, string | undefined>;
   return e.R2_ACCOUNT_ID && e.R2_BUCKET && e.R2_ACCESS_KEY_ID && e.R2_SECRET_ACCESS_KEY
@@ -56,18 +49,7 @@ export function db(): Db {
   return openDb('default', (env as { DB?: Parameters<typeof openDb>[1] }).DB);
 }
 
-/**
- * The one message the admin sends on its own account: proof to whoever pasted the key that it
- * works. It goes to the person who asked for it and to nobody else — a recipient the caller
- * names is a mail relay behind a login — and only an owner may ask, which is what the settings
- * screen it sits on is. Every way it can fail is answered in words the person who configured
- * the mailer can act on rather than as a status.
- */
-/**
- * Why there is no mailer, in the words of the thing that has to be set. State 2 of the settings
- * screen is a person who has done half the wiring, so it names the half that is missing rather
- * than reporting that email is off.
- */
+/** Names the half of the wiring that is missing rather than saying email is off. */
 export function missingMailer(): string {
   const configured = config.mailer;
   if (!configured || typeof configured === 'function')

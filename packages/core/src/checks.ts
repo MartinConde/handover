@@ -1,7 +1,4 @@
-// The lint pass a publish gets before the commit: the things that build fine and look broken
-// — a link to a page that is not there, a picture the bucket does not have, a translation
-// nobody has read. **Warnings and notes, never a refusal**: the only two things that stop a
-// publish are the schema and unresolved drift, exactly as before.
+// Warnings and notes, never a refusal: only the schema and unresolved drift stop a publish.
 
 import { and, desc, eq, gt, inArray } from 'drizzle-orm';
 import { isObject, parseEntry, staleLocales } from './content.js';
@@ -17,11 +14,7 @@ import { activity, media } from './tables.js';
 
 export type CheckSeverity = 'error' | 'warn' | 'info';
 
-/**
- * Every check, by the id `checks.ignore` turns it off with, and what a result of it costs the
- * site: an **error** is a page the visitor sees broken, a **warn** a page that says something
- * nobody meant, an **info** a note worth reading before the words go out.
- */
+/** Keyed by the id `checks.ignore` turns a check off with. */
 export const CHECKS = {
   'media-missing': 'error',
   'link-target': 'warn',
@@ -42,15 +35,13 @@ export type CheckName = keyof typeof CHECKS;
 
 export interface CheckResult {
   check: CheckName;
-  /** The file it is about; the drawer groups by the entry that file belongs to. */
   path: string;
-  /** The field, addressed the way `_machine` addresses one, so *Go to field* survives a move. */
+  /** Addressed the way `_machine` addresses a field, so *Go to field* survives a move. */
   fieldPath: string;
   severity: CheckSeverity;
   message: string;
 }
 
-/** As much of `cms.config.ts` as a check needs: where pages are served and what they are called. */
 export interface CheckSite {
   i18n: I18nRouting;
   collections: Record<
@@ -59,42 +50,31 @@ export interface CheckSite {
   >;
 }
 
-/**
- * One entry as this publish would leave it. Every language it has is here, because a
- * translation cannot be judged stale, or empty where the source has words, against one file
- * — but only the languages actually going out are linted, which is the drawer's own rule
- * about what a publish is answerable for.
- */
+/** Every language is here because staleness needs the source, but only `publishing` is linted. */
 export interface CheckEntry {
-  /** `listings/mill-house`: collection and file name, the key the drawer lists. */
+  /** `listings/mill-house`. */
   key: string;
   form: Form;
   files: Record<string, { path: string; contents: string }>;
-  /** The languages this publish commits. The rest are context and are never reported on. */
+  /** The rest are context and are never reported on. */
   publishing: string[];
 }
 
 export interface CheckInput {
   entries: CheckEntry[];
   site: CheckSite;
-  /** The built content index with the pending drafts laid over it: what a link resolves against. */
+  /** The built index with pending drafts laid over it. */
   index: ContentIndex;
-  /** The site's SEO defaults per language, out of the global that declares them. */
   seoDefaults?: Record<string, SeoDefaultsValue>;
-  /** Where the uploads live. Without it a key the table has no row for is taken as missing. */
+  /** Without it a key the table has no row for is taken as missing. */
   store?: R2Store;
-  /** The ids this site has turned off: `checks.ignore` in `cms.config.ts`. */
+  /** `checks.ignore` in `cms.config.ts`. */
   ignore?: readonly string[];
-  /** What the daily job last found hidden for too long: `lastHiddenLong`. */
+  /** From `lastHiddenLong`. */
   hiddenLong?: HiddenLong[];
 }
 
-/**
- * The whole lint, in one pass over the drafts. Each file is parsed once and walked once —
- * ten milliseconds of CPU is not enough to parse the same YAML for every rule — and the
- * assets every file names are looked up in one read of the table at the end, with the bucket
- * asked only about the keys that read found nothing for.
- */
+/** Each file is parsed once: ten milliseconds of CPU cannot parse the same YAML per rule. */
 export async function runChecks(
   siteId: string,
   db: Db,
@@ -106,18 +86,14 @@ export async function runChecks(
   const assets: { key: string; path: string; fieldPath: string; label: string }[] = [];
   for (const entry of input.entries) {
     const collection = entry.key.slice(0, entry.key.indexOf('/'));
-    // A global's key is `globals/navigation`, and `globals` is not one of the site's
-    // collections: the miss is the right answer, since a global has no route to be linked at
-    // and no title field to be named by.
+    // `globals` is not a collection, and the miss is right: a global has no route or title field.
     const of = input.site.collections[collection] ?? {};
     const parsed: Record<string, unknown> = {};
     for (const locale of entry.publishing) {
       const file = entry.files[locale];
       if (file) parsed[locale] = parseEntry(siteId, file.contents);
     }
-    // A language that is not going out is read only where one that is says it was translated
-    // from it: that file is what the staleness hash is taken over, and parsing the others is
-    // the budget spent on a result nobody would be shown.
+    // A language not going out is parsed only as the source of one that is.
     for (const data of Object.values(parsed)) {
       const mark = isObject(data) && isObject(data._i18n) ? data._i18n.sourceLocale : undefined;
       const from = typeof mark === 'string' && !(mark in parsed) ? entry.files[mark] : undefined;
@@ -140,8 +116,7 @@ export async function runChecks(
         asset: (key, fieldPath, label) => assets.push({ key, path: file.path, fieldPath, label }),
       };
       fieldsIn(walk, entry.form.fields, data, '', true);
-      // Which values a machine filled in is the file's own record of itself, so it is read
-      // off the file rather than walked for.
+      // `_machine` is the file's own record, so it is read rather than walked for.
       const machine = isObject(data) && Array.isArray(data._machine) ? data._machine : [];
       for (const at of machine as unknown[])
         if (typeof at === 'string')
@@ -168,8 +143,7 @@ export async function runChecks(
     const page = parts
       ? input.index[parts.collection]?.find((e) => e.id === parts.name)?.locales[parts.locale]
       : undefined;
-    // The index is newer than the job's list: a page shown or deleted since it ran is not one
-    // to mention.
+    // The index is newer than the job's list: a page shown or deleted since is not mentioned.
     if (page?.status !== 'hidden') continue;
     found.push({
       check: 'hidden-long',
@@ -181,8 +155,7 @@ export async function runChecks(
   }
   found.push(...(await assetResults(siteId, db, input, assets, deps)));
   const ignore = new Set(input.ignore ?? []);
-  // Grouped by file, in the order the walk found them: the drawer lists an entry's results
-  // under the entry, and a stable order is what makes two runs of the same publish agree.
+  // Grouped by file in walk order, so two runs of the same publish agree.
   return found
     .filter((result) => !ignore.has(result.check))
     .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
@@ -190,25 +163,15 @@ export async function runChecks(
 
 const DAY = 24 * 60 * 60 * 1000;
 const LONG_HIDDEN = 90 * DAY;
-// A top-level key, so a `_status` inside a block does not match; quoted or not, as a hand
-// writes it or the serialiser does.
+// Top-level only, so a `_status` inside a block does not match; quoted or not.
 const HIDDEN = /^_status:\s*["']?hidden["']?\s*$/m;
 
-/** One file the daily job found hidden for longer than it should be, and the commit date since. */
 export interface HiddenLong {
   path: string;
   since: string;
 }
 
-/**
- * The daily job behind `hidden-long`: every `_status: hidden` file at the branch tip, dated
- * from its own commits, since nothing else records when a page was hidden. Only the tip's
- * version is known for free; older ones are read back a commit at a time, newest first, and
- * the walk stops at the first version that was not hidden or at the first that is already old
- * enough to settle the question — so `since` is the hide, or an edit already past the limit.
- * The list rides in the job's `cron-hidden` activity row, which is where `lastHiddenLong`
- * reads it back for the drawer.
- */
+/** Dated from the file's own commits, walked newest first until a shown or old-enough version. */
 export async function findHiddenLong(
   _siteId: string,
   git: Pick<GitClient, 'contentFiles' | 'fileCommits' | 'getFile'> | undefined,
@@ -231,10 +194,7 @@ export async function findHiddenLong(
   return { done: entries.length, entries };
 }
 
-/**
- * The newest list the job wrote within two days. A run that failed left the last answer
- * standing, and a job that has not answered for two days has nothing current to say.
- */
+/** A failed run leaves the last answer standing; after two days there is nothing current. */
 export async function lastHiddenLong(
   siteId: string,
   db: Db,
@@ -269,22 +229,20 @@ const sourceOf = (data: unknown) => {
     : 'source language';
 };
 
-/** One file being linted, and the two ways a rule reports what it found. */
 interface Walk {
   siteId: string;
   input: CheckInput;
   form: Form;
   locale: string;
-  /** The collection's route, and nothing where the site renders no page for it. */
+  /** Nothing where the site renders no page for the collection. */
   route: string | undefined;
-  /** What this entry is called in this language: what a search title falls back to. */
+  /** What a search title falls back to. */
   title: string;
   say: (check: CheckName, fieldPath: string, message: string) => void;
   asset: (key: string, fieldPath: string, label: string) => void;
 }
 
-// The same descent the drift report and the propagation walk make: groups, blocks, arrays of
-// rows, and the menus the schema walker cannot see inside.
+// The same descent the drift report makes, plus the menus the schema walker cannot see inside.
 function fieldsIn(
   w: Walk,
   fields: readonly Field[],
@@ -301,8 +259,7 @@ function fieldsIn(
     if (field.type === 'group') fieldsIn(w, field.fields, value, path, mode);
     else if (field.type === 'blocks')
       rowsIn(w, (row) => w.form.blocks[String(row._type)], value, path, mode);
-    // Before `rowFields`, which knows a menu's rows: an item is a link and a label rather than
-    // fields to lint, so the tree has a walk of its own.
+    // Before `rowFields`, which knows a menu's rows: an item is a link and a label, not fields.
     else if (field.type === 'menus') menusIn(w, value, path);
     else {
       const rows = rowFields(field);
@@ -330,10 +287,7 @@ function rowsIn(
   }
 }
 
-// Parsing markdown costs about a fifth of a millisecond a field and this walk has ten to
-// spend, so the parser is only started where there is something for it to find: a link to
-// this site is written `](/`, and it is the only way one can be written — a reference
-// definition is not one of the constructs a richtext field allows.
+// Markdown parsing costs 0.2 ms a field, so it only runs where `](/` says there is a link.
 const INTERNAL_LINK = /\]\(\s*<?\s*\//;
 
 const filled = (value: unknown) => typeof value === 'string' && value.trim() !== '';
@@ -356,8 +310,7 @@ function valueIn(w: Walk, field: Field, value: unknown, path: string, mode: Tran
         w.asset(value.src, `${path}.src`, field.label);
       break;
     case 'seo': {
-      // The sharing picture is a picture like any other, and the one the site falls back to
-      // belongs to the global that holds it rather than to this entry.
+      // The fallback sharing picture belongs to the global that holds it, not to this entry.
       const image = (value as SeoValue | undefined)?.image?.src;
       if (typeof image === 'string') w.asset(image, `${path}.image.src`, 'The sharing image');
       seoIn(w, value, path);
@@ -377,11 +330,7 @@ function valueIn(w: Walk, field: Field, value: unknown, path: string, mode: Tran
   }
 }
 
-/**
- * A field the schema requires, standing empty in a language that is not the one the site is
- * written in. The schema is happy — an empty string is a string — and the page is not: it
- * renders a blank where every other language has words.
- */
+/** Reject blank text even when the schema accepts it. */
 function emptyIn(
   w: Walk,
   field: Extract<Field, { type: 'text' | 'richtext' }>,
@@ -399,11 +348,7 @@ function emptyIn(
   );
 }
 
-/**
- * What the page will tell a search engine and a chat window about itself, resolved the way
- * `<Seo />` resolves it: the entry's own field, then the site's defaults. A collection the
- * site renders no page for has nothing to say to anybody, so it is not asked.
- */
+/** Resolved the way `<Seo />` resolves it; a collection with no page has nothing to say. */
 function seoIn(w: Walk, value: unknown, path: string): void {
   if (!w.route) return;
   const seo = resolveSeo(value as SeoValue | undefined, w.input.seoDefaults?.[w.locale], w.title);
@@ -427,15 +372,13 @@ function seoIn(w: Walk, value: unknown, path: string): void {
     );
 }
 
-/** The entry a `collection/name` reference names, and nothing where the index has no such row. */
 function entryOf(index: ContentIndex, ref: string): IndexEntry | undefined {
   const cut = ref.indexOf('/');
   if (cut < 1) return undefined;
   return index[ref.slice(0, cut)]?.find((e) => e.id === ref.slice(cut + 1));
 }
 
-// The three ways a page is not there in one language: no file, a file the entry says it is not
-// offered in, and one taken off the site. All three are a 404 to somebody following a link.
+// No file, not offered, or hidden: all three are a 404 to somebody following a link.
 const liveIn = (entry: IndexEntry, locale: string) => {
   const file = entry.locales[locale];
   return Boolean(file) && file?.status !== 'hidden' && (entry.offered?.includes(locale) ?? true);
@@ -465,15 +408,7 @@ function linkIn(w: Walk, value: unknown, path: string, label: string): void {
   if (typeof value.href === 'string') urlIn(w, value.href, `${path}.href`, label);
 }
 
-/**
- * An address typed rather than picked: a link field's own URL, and every link inside a
- * richtext value.
- *
- * **A path the site's own routes could not produce is left alone.** It may be a page a
- * template renders itself, which no content file knows about — the same scope the media scan
- * and the sitemap have. What is reported is a path that *is* one of the collections' routes
- * and names no entry: that one is a 404 nobody typed on purpose.
- */
+/** A path no collection route could produce is left alone: a template may render it itself. */
 function urlIn(w: Walk, href: string, fieldPath: string, label: string): void {
   if (!href.startsWith('/')) return;
   const target = previewTarget(
@@ -483,8 +418,7 @@ function urlIn(w: Walk, href: string, fieldPath: string, label: string): void {
     href.replace(/[?#].*$/, ''),
   );
   if (!target?.address) return;
-  // Without localized slugs the file name is the address in every language; with them the
-  // entry answering here is the one whose own slug in that language says so.
+  // With localized slugs the entry answering is the one whose slug in that language says so.
   const localized = w.input.site.collections[target.collection]?.localizedSlugs;
   const found = (w.input.index[target.collection] ?? []).find(
     (e) => (localized ? (e.locales[target.locale]?.slug ?? e.id) : e.id) === target.address,
@@ -503,14 +437,7 @@ function urlIn(w: Walk, href: string, fieldPath: string, label: string): void {
     );
 }
 
-/**
- * The navigation global's tree. A menu is the most-clicked thing on a site, so an item whose
- * page has gone is worth a warning even though the renderer drops it rather than linking to a
- * 404 — the item disappearing without a word is exactly what nobody notices.
- *
- * An item that only misses *this* language is not reported: that is what turning a page off in
- * one language does, the editor already flags it, and the menu is shared across the languages.
- */
+/** The renderer drops a dead item silently, which is exactly what nobody notices. */
 function menusIn(w: Walk, value: unknown, at: string): void {
   if (!Array.isArray(value)) return;
   for (const [i, menu] of value.entries()) {
@@ -545,17 +472,13 @@ function itemsIn(w: Walk, items: unknown, at: string, menu: string): void {
   }
 }
 
-// The key format `mediaKey` writes: the row's id is the hash in the middle of it.
+// The row's id is the hash in the middle of `mediaKey`'s format.
 const STORED = /^(?:media|files)\/([0-9a-f]{64})\./;
 
-// D1 takes a hundred bound parameters in one query, and the site id is one of them.
+// D1 takes a hundred bound parameters a query, and the site id is one of them.
 const PER_QUERY = 90;
 
-/**
- * Every picture and download the publish names, in one read of the table. The bucket is asked
- * only about the keys that read found nothing for — a HEAD apiece is a subrequest apiece, and
- * on a healthy site there are none.
- */
+/** The bucket is asked only about keys with no row: a HEAD apiece is a subrequest apiece. */
 async function assetResults(
   siteId: string,
   db: Db,
@@ -591,8 +514,7 @@ async function assetResults(
         'media-archived',
         `${asset.label} has been archived in the media library — it still renders, but somebody put it away`,
       );
-    // An object with no row renders perfectly well and is what the reconciliation job gives a
-    // row back within the hour, so it is nobody's problem here.
+    // An object with no row renders fine and gets its row back from the reconciliation job.
     if (!row && gone.has(asset.key))
       return said(
         'media-missing',

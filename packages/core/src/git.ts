@@ -2,7 +2,7 @@ import type { ContentFile } from './entries.js';
 
 export interface GitHubApp {
   appId: string;
-  privateKey: string; // PKCS#8 PEM; GitHub's download is PKCS#1, convert with `openssl pkcs8 -topk8 -nocrypt`
+  privateKey: string; // PKCS#8 PEM; GitHub's PKCS#1 download needs `openssl pkcs8 -topk8 -nocrypt`
   installationId: string;
   owner: string;
   repo: string;
@@ -46,19 +46,7 @@ export interface EntryVersion extends FileCommit {
   name?: string;
 }
 
-/**
- * One entry's versions out of its languages' commit lists. An entry is one thing to the client
- * even where it is a file per language, so a commit is one version and carries the languages
- * it touched.
- *
- * **The list is cut where the shallowest unfinished page ends.** The pages are read per path
- * and are independent, so a commit that touched only the German file can sit between two pages
- * of the English one; showing past the newest of those ends would leave a hole nobody could
- * see, and the next page is read from the top again rather than from where this one stopped.
- *
- * Pages under an older name come after the current name's: the rename commit is in both logs,
- * and the first page it is met on says what the entry was called when that commit was made.
- */
+/** Cut where the shallowest unfinished page ends, or a commit between two pages would be a hole. */
 export function mergeFileCommits(pages: CommitPage[]): { versions: EntryVersion[]; more: boolean } {
   const found = new Map<string, EntryVersion>();
   for (const page of pages)
@@ -83,7 +71,7 @@ export function mergeFileCommits(pages: CommitPage[]): { versions: EntryVersion[
 /** One commit as undoing it needs to know it. */
 export interface GitCommit {
   sha: string;
-  /** What it was made on. A root commit has none, and no inverse either. */
+  /** A root commit has no parent or inverse. */
   parent?: string;
   message: string;
   /** Every path it touched, a rename counting as both of its names. */
@@ -94,23 +82,13 @@ export interface GitClient {
   /** Authenticated call against api.github.com; `path` starts with `/`. */
   request(path: string, init?: RequestInit): Promise<Response>;
   getHead(): Promise<string>;
-  /**
-   * The file as one commit has it, or as the branch does when no commit is named. Anything
-   * that is about to **write** names one: see the note on the implementation.
-   */
+  /** Anything about to write names a `ref`: see the note on the implementation. */
   getFile(path: string, ref?: string): Promise<GitFile | undefined>;
   /** One blob's text by its object id, for bytes no branch names any more. */
   getBlob(sha: string): Promise<string | undefined>;
-  /**
-   * Every `.yaml` under `src/content/` at the branch tip, contents and all, in **one** request.
-   * A file at a time is a subrequest at a time, and the Free plan allows fifty of those per
-   * request — a site with two hundred listings would have run out long before the answer.
-   */
+  /** One request for every file: per-file reads would exhaust the Free plan's fifty subrequests. */
   contentFiles(): Promise<ContentFile[]>;
-  /**
-   * The commits that touched one path, newest first, one page at a time. A caller merging
-   * several paths asks each of them for the same depth — see `mergeFileCommits`.
-   */
+  /** A caller merging several paths asks each for the same depth — see `mergeFileCommits`. */
   fileCommits(path: string, opts?: { perPage?: number; page?: number }): Promise<FileCommit[]>;
   getCommit(sha: string): Promise<GitCommit>;
   publish(
@@ -124,8 +102,7 @@ export class RefMovedError extends Error {
   override name = 'RefMovedError';
 }
 
-// The App cannot reach the repository at all, so every path answers 404 and no file the
-// admin asks for exists as far as GitHub is concerned.
+// The App cannot reach the repository, so every path answers 404.
 export class RepoUnreachableError extends Error {
   override name = 'RepoUnreachableError';
 }
@@ -149,23 +126,18 @@ function collect(node: TreeNode | undefined, prefix: string, found: ContentFile[
       collect(object, `${path}/`, found);
       continue;
     }
-    // Neither a folder this walk asked into nor a file it can read — which is a folder below the
-    // depth an entry may live at. Skipping it would be a file nobody saw, and the whole use of
-    // this is deciding something about every file.
+    // A folder below the depth an entry may live at would be a file nobody saw, so it is an error.
     if (!object || !('text' in object))
       throw new Error(`${path} is deeper than src/content/<collection>/<locale>/<name>.yaml`);
     if (!path.endsWith('.yaml')) continue;
-    // Half a file is not an answer either: one that was cut off reads as one that happens to
-    // say nothing.
+    // A file cut off would read as one that says nothing.
     if (typeof object.text !== 'string' || object.isTruncated)
       throw new Error(`GitHub would not answer ${path} in full`);
     found.push({ path, contents: object.text });
   }
 }
 
-// A git object id is a pure function of the bytes: sha1("blob <length>\0" + bytes). Two
-// of these decide whether a draft still matches the file it was loaded from, with no
-// fetch per file — the length is bytes, so a multibyte character is not one.
+// Decides whether a draft still matches its file without a fetch; the length is bytes, not chars.
 export async function blobSha(contents: string): Promise<string> {
   const bytes = new TextEncoder().encode(contents);
   const header = new TextEncoder().encode(`blob ${bytes.length}\0`);
@@ -209,11 +181,7 @@ interface TokenSlot {
   pending?: Promise<string>;
 }
 
-// One installation token per GitHub, shared by every client made in this isolate, in memory
-// only. A token minted moments ago reads the branch head from a replica that can be seconds
-// behind (measured: a token minted after a commit read the head from before it in 8 of 28
-// reads, up to 2s; tokens minted before the commit never did), and a token per request is a
-// stale base for the publish that follows your own. A test's fake fetch is its own GitHub.
+// One shared token per GitHub: a fresh token reads the branch head from a replica seconds behind.
 const tokens = new WeakMap<typeof globalThis.fetch, Map<string, TokenSlot>>();
 
 export function createGitClient(
@@ -263,9 +231,7 @@ export function createGitClient(
     return api(path, init, await token());
   }
 
-  // GitHub answers 404 for a repository outside the installation exactly as it does for a
-  // missing path, so a 404 only means "no such file" once the repository itself has answered.
-  // Asked at most once per client, and never on a path that succeeds.
+  // GitHub answers 404 for a repository outside the installation exactly as for a missing path.
   let reachable: Promise<boolean> | undefined;
   async function assertRepoReachable(): Promise<void> {
     reachable ??= request(repo).then((res) => res.status !== 404);
@@ -294,16 +260,7 @@ export function createGitClient(
       return body.object.sha;
     },
 
-    /**
-     * ⚠️ **Pass `ref` wherever the answer is going to be written back.** The contents API is
-     * served from a replica and cached under the ref it was asked for, so two reads of the
-     * branch seconds apart can be two different commits — and a `base_sha` taken beside a blob
-     * from an older one is how somebody else's commit is quietly overwritten: the blobs agree,
-     * no conflict is reported, and the ref update succeeds because the parent was current. A
-     * commit is immutable, so a read of one is the same answer forever and a set of reads at
-     * one commit is a snapshot. A read that only shows somebody something can stay on the
-     * branch, where being a moment behind costs nothing.
-     */
+    /** ⚠️ Pass `ref` for a read that is written back: branch reads come from a lagging replica. */
     async getFile(path, ref) {
       const encoded = path.split('/').map(encodeURIComponent).join('/');
       const res = await request(
@@ -319,12 +276,7 @@ export function createGitClient(
       return { contents: new TextDecoder().decode(bytes), blob_sha: body.sha };
     },
 
-    /**
-     * A blob by its own id, with no commit and no path. A translation names the source bytes it
-     * was made from ([`_i18n.sourceBlob`](content.ts)) and those bytes may be many commits back;
-     * finding the commit they were in would be a walk of the log, and the id already addresses
-     * them. Gone once git has collected it, which is what `undefined` means here.
-     */
+    /** By id: the source bytes may be many commits back; `undefined` once git has collected it. */
     async getBlob(sha) {
       const res = await request(`${repo}/git/blobs/${encodeURIComponent(sha)}`);
       if (res.status === 404) {
@@ -337,13 +289,7 @@ export function createGitClient(
       return new TextDecoder().decode(bytes);
     },
 
-    /**
-     * The GraphQL API is what makes this one request rather than one per file: REST answers a
-     * tree without contents, and then it is a blob at a time. The nesting is three deep because
-     * `src/content/<collection>/<locale>/<name>.yaml` is as deep as a content file may be — the
-     * build refuses anything else ([`contentPathErrors`](entries.ts)) — so a repository that
-     * builds has nothing below what this walks.
-     */
+    /** GraphQL makes this one request; three levels because the build refuses deeper paths. */
     async contentFiles() {
       const res = await request('/graphql', {
         method: 'POST',
@@ -364,8 +310,7 @@ export function createGitClient(
       };
       if (body.errors?.length)
         throw new Error(`GitHub read content failed: ${body.errors[0]?.message}`);
-      // A repository outside the installation resolves to nothing, exactly as a repository with
-      // no `src/content/` does, so the two are told apart the same way every other read does it.
+      // A repository outside the installation resolves to nothing, like one with no `src/content/`.
       if (!body.data?.repository) await assertRepoReachable();
       const found: ContentFile[] = [];
       collect(body.data?.repository?.object ?? undefined, 'src/content/', found);
@@ -390,9 +335,7 @@ export function createGitClient(
         sha: c.sha,
         date: c.commit.author?.date ?? '',
         message: c.commit.message,
-        // A commit the App made carries the App's own name, which is nobody the client has
-        // ever met. Only a person who pushed themselves is named here; who pressed Publish is
-        // the log's answer, not git's.
+        // A commit the App made carries the App's name, so only a person who pushed is named.
         ...(c.author?.type && c.author.type !== 'Bot' && c.commit.author?.name
           ? { author: c.commit.author.name }
           : {}),
@@ -410,7 +353,6 @@ export function createGitClient(
         sha: body.sha,
         parent: body.parents[0]?.sha,
         message: body.commit.message,
-        // A rename is one entry carrying both of its names, and undoing one has to write both.
         // ⚠️ GitHub stops listing files at 300; a commit the admin made is a handful.
         paths: [
           ...new Set(
@@ -422,9 +364,7 @@ export function createGitClient(
       };
     },
 
-    // Text goes inline in the tree, so no blob step. base_tree keeps every unlisted file;
-    // parents: [base_sha] plus a non-force ref update is what makes a concurrent push fail
-    // here instead of being clobbered.
+    // parents: [base_sha] plus a non-force ref update makes a concurrent push fail, not clobber.
     async publish(files, { base_sha, message }) {
       const post = { method: 'POST', headers: { 'content-type': 'application/json' } };
       const parent = await json<{ tree: { sha: string } }>(

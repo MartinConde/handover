@@ -13,12 +13,7 @@ interface Config {
   dev: boolean;
 }
 
-/**
- * One of the client's own keys. Where it is *in force* and what would take over without it are
- * two different answers, and the card needs both: Remove has to say what happens before it is
- * pressed. The key itself is never here — a value that can be read back is a value that leaves
- * in a screenshot.
- */
+/** The key itself is never here: a value that can be read back leaves in a screenshot. */
 interface Key {
   key: string;
   source: 'settings' | 'env' | 'code' | 'off';
@@ -35,11 +30,7 @@ interface Result {
   at?: number;
 }
 
-/**
- * One card per connection, each with what it is *for* before what it is doing, because this
- * page is read by somebody who will forward it. `sends` marks the one check with a side effect:
- * it never runs on open, and its button says what pressing it does rather than "Test".
- */
+/** `sends` marks the one check with a side effect: it never runs on open. */
 const CHECKS = [
   {
     key: 'github',
@@ -92,7 +83,7 @@ let conflict = $state('');
 let simulating = $state(false);
 let keys = $state<Key[]>([]);
 let keysError = $state('');
-/** Which key is being typed in, if any. Nothing is in the browser until Save. */
+/** The key currently being entered, never retained before Save. */
 let typing = $state<Key>();
 let typed = $state('');
 let saving = $state(false);
@@ -101,9 +92,7 @@ let keySaid = $state('');
 let field = $state<HTMLInputElement>();
 let trigger: HTMLElement | null = null;
 
-// Every check but the one that sends something, once, when the screen opens. Untracked because
-// `run` both reads and writes `results`, and an effect that did would start itself again for
-// ever; Test is what runs one after that.
+// Untracked because `run` reads and writes `results`, so a tracking effect would loop for ever.
 $effect(() => {
   untrack(() => {
     for (const check of CHECKS) if (!check.sends) void run(check.key);
@@ -139,8 +128,7 @@ async function run(key: string) {
     };
     return;
   }
-  // The test email is the older endpoint and answers with the address it went to rather than a
-  // sentence, which is the whole of what there is to say about it.
+  // The test email endpoint answers with the address it went to rather than a sentence.
   const detail = body.detail ?? (body.to ? `Sent to ${body.to}.` : '');
   results[key] = { state: body.off ? 'off' : 'ok', detail, at };
 }
@@ -156,8 +144,7 @@ async function loadKeys() {
 }
 
 function open(row: Key) {
-  // The card's own button, so closing puts focus back where it came from, as the members
-  // screen's dialogs do.
+  // Remember the card's button so closing puts focus back where it came from.
   trigger = document.activeElement as HTMLElement | null;
   typing = row;
   typed = '';
@@ -185,8 +172,7 @@ async function saveKey(event: SubmitEvent) {
   });
   const body = (await res.json().catch(() => ({}))) as { error?: string; detail?: string };
   saving = false;
-  // The dialog stays open on a refusal with the key still in it: what refused is nearly always
-  // a typo in the value that is right there.
+  // The dialog stays open on a refusal: what refused is nearly always a typo in the value.
   if (!res.ok) {
     keyError = body.error ?? `The key was not saved (${res.status}).`;
     return;
@@ -196,8 +182,7 @@ async function saveKey(event: SubmitEvent) {
   await loadKeys();
 }
 
-// Asked first: a key cannot be typed back from memory, and the card's own sentence about what
-// takes over is the whole of what is being decided.
+// Asked first: a key cannot be typed back from memory.
 let removing = $state<Key>();
 
 async function removeKey(row: Key) {
@@ -246,11 +231,7 @@ const KEY_BADGE: Record<Key['source'], { class: string; label: string }> = {
 };
 const DAY = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
-/**
- * What each card says, in the three sources plus the one where the site's own code is above
- * both of them. A removal names what takes over, because the alternative is finding out after
- * the button is pressed.
- */
+/** A removal names what takes over, because the alternative is finding out after the press. */
 function says(row: Key): string {
   if (row.source === 'code')
     return 'Your site translates with its own code, handed in by your developer, so a key here would not be used.';
@@ -292,8 +273,7 @@ const MAILERS: Record<string, string> = {
   {#await load()}
     <p class="placeholder">Loading…</p>
   {:then config}
-    <!-- The failures can be half a page apart, so they are counted at the top — and the count
-         says what stops working, because that is the half the owner can judge. -->
+    <!-- The count says what stops working, because that is the half the owner can judge. -->
     {#if failing.length}
       <p class="notice notice-danger page-alert" role="status">
         <strong>
@@ -360,8 +340,7 @@ const MAILERS: Record<string, string> = {
               {#if config.preview}
                 On
               {:else}
-                <!-- Named rather than offered: nothing in the admin can turn this on, and a
-                     switch that cannot work is worse than a sentence. -->
+                <!-- Named rather than offered: nothing in the admin can turn this on. -->
                 Off <span class="sub">your developer switches it on by setting <code>PREVIEW_ENABLED</code> when the site is built</span>
               {/if}
             </dd>
@@ -388,8 +367,7 @@ const MAILERS: Record<string, string> = {
               </div>
               <p class="what">{check.what}</p>
               <div class="actions">
-                <!-- aria-disabled and not disabled: a disabled button takes no focus, so the
-                     reason it is busy is never heard. Sending twice is what it prevents. -->
+                <!-- aria-disabled, not disabled: a disabled button takes no focus. -->
                 <button
                   class="btn btn-sm"
                   type="button"
@@ -429,8 +407,7 @@ const MAILERS: Record<string, string> = {
               </div>
               <p class="what">{says(row)}</p>
               <div class="actions">
-                <!-- Nothing to press where the site's own code is in charge: a control that
-                     cannot change what happens is worse than none. -->
+                <!-- No button where the site's code is in charge: it could change nothing. -->
                 {#if row.source === 'settings'}
                   <button class="btn btn-sm" type="button" onclick={() => open(row)}>
                     Replace<span class="visually-hidden"> the {NAMES[row.key] ?? row.key} key</span>
@@ -467,8 +444,7 @@ const MAILERS: Record<string, string> = {
         </section>
       {/if}
     </div>
-    <!-- Inside the loaded block rather than beside <main>, where every other dialog sits,
-         because whether the key is tried before it is stored is the site's language count. -->
+    <!-- Inside the loaded block: whether the key is tried first is the site's language count. -->
     {#if removing}
       {@const name = NAMES[removing.key] ?? removing.key}
       {@const row = removing}

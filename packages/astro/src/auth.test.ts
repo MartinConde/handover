@@ -4,15 +4,13 @@ import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/
 import { Miniflare } from 'miniflare';
 import { afterAll, beforeAll, beforeEach, expect, test, vi } from 'vitest';
 
-// What the Worker holds, per test. This file is about the three answers this layer gives that
-// core cannot: where an emailed link points, who is worth mailing, and when the send happens.
+// This file is about what this layer adds to core: where a link points, who is mailed, and when.
 let baseUrl: string | undefined;
 let clientId: string | undefined;
 let clientSecret: string | undefined;
 let resendKey: string | undefined;
 const sent: { to: string; subject: string; text: string }[] = [];
-// What a mailer that is having a bad day answers with. Its message names nothing, because a
-// provider's refusal is the developer's to read in the log and not a person's to see.
+// A provider's refusal is the developer's to read in the log, not a person's to see.
 let refuseSend: Error | undefined;
 let binding: Awaited<ReturnType<Miniflare['getD1Database']>>;
 
@@ -44,8 +42,7 @@ vi.mock('cloudflare:workers', () => ({
   },
 }));
 
-// The site hands in its own `Mailer`, which is the union's other half and the cheapest way to
-// read what was actually sent.
+// The site's own `Mailer` is the cheapest way to read what was actually sent.
 vi.mock('virtual:handover/config', () => ({
   default: {
     i18n: { locales: ['en'], defaultLocale: 'en' },
@@ -114,10 +111,7 @@ async function seedCredentials(email: string, password: string) {
     .run();
 }
 
-/**
- * A request as it really arrives — its own `Host`, which is the value this file exists to keep
- * out of an email. `origin` matches it, since a browser sends the one it is on.
- */
+/** A request with its own `Host`, which is the value this file exists to keep out of an email. */
 function askForLink(
   email: string,
   host = 'https://demo.example',
@@ -148,10 +142,7 @@ test('a mailer with no base URL offers no sign-in link at all', async () => {
   expect(sent).toEqual([]);
 });
 
-// The whole reason the base URL is stated rather than read off the request: the link in this
-// email is a working credential, and `Host` is a value the caller writes. Better Auth's origin
-// check refuses a request whose `Origin` is untrusted, so the case left to defend is a forged
-// `Host` behind a trusted `Origin` — which is what a proxy or a routing mistake looks like.
+// The link is a credential and `Host` is the caller's to write, so the base URL is stated.
 test('the emailed link points at the configured base URL, not at the request Host', async () => {
   await seedUser('owner@example.com');
 
@@ -167,8 +158,7 @@ test('the emailed link points at the configured base URL, not at the request Hos
   expect(sent[0]?.text).not.toContain('attacker.example');
 });
 
-// `/sign-in/magic-link` answers the same for every address, which is what keeps it from
-// confirming who has an account — and mails one regardless unless something stops it.
+// The endpoint answers the same for every address, so it must not confirm who has an account.
 test('an address with no account is mailed nothing, and gets the same answer', async () => {
   await seedUser('owner@example.com');
 
@@ -179,9 +169,7 @@ test('an address with no account is mailed nothing, and gets the same answer', a
   expect(sent.map((m) => m.to)).toEqual(['owner@example.com']);
 });
 
-// `baseURL` and the cookie's `Secure` come from one string, so they cannot disagree about a
-// request: a site that says it is https gets a Secure cookie however the request reached it.
-// A request whose `Origin` is nobody's business here does not get as far as minting anything.
+// A request whose `Origin` is nobody's business does not get as far as minting anything.
 test('a request from an untrusted origin is refused before a link is made', async () => {
   await seedUser('owner@example.com');
 
@@ -195,6 +183,7 @@ test('a request from an untrusted origin is refused before a link is made', asyn
   expect(sent).toEqual([]);
 });
 
+// `baseURL` and the cookie's `Secure` come from one string, so they cannot disagree.
 test('the session cookie is Secure on an https site even when the request arrived over http', async () => {
   await seedCredentials('owner@example.com', 'correct-horse-battery');
   const url = new URL(`http://localhost:4321${AUTH_BASE_PATH}/sign-in/email`);
@@ -215,12 +204,9 @@ test('the session cookie is Secure on an https site even when the request arrive
   expect(res.headers.get('set-cookie')).toMatch(/Secure/);
 });
 
-// ─── the invite's own link ───────────────────────────────────────────────────────────────
+// The invite's own link
 
-/**
- * What the members screen does after it has written the row: the same endpoint the login uses,
- * on the instance that mints a longer-lived link and says something else in the mail.
- */
+/** The same endpoint the login uses, on the instance that mints a longer-lived link. */
 function sendInvite(email: string, host = 'https://demo.example') {
   const url = new URL(`${host}${AUTH_BASE_PATH}/sign-in/magic-link`);
   return memberApi('default', createAuth(url, undefined, { invite: true })).signInMagicLink({
@@ -281,13 +267,9 @@ test('an invite to an address with no row mails nothing', async () => {
   expect(sent).toEqual([]);
 });
 
-// ─── a message that never went ───────────────────────────────────────────────────────────
+// A message that never went
 
-/**
- * The one trace of a send that failed. A sign-in link answers `500` with an empty body and a
- * reset answers `200` nobody hears about, so without a row the only record is a line in the
- * Worker's log — which the person running the site cannot read.
- */
+/** Without a row the only record of a failed send is a log line the site's owner cannot read. */
 const mailFailures = async () =>
   (await binding.prepare("SELECT * FROM activity WHERE kind = 'mail-failed'").all()).results as {
     user_id: string | null;
@@ -347,8 +329,7 @@ test('a reset that could not be sent leaves a row, and no link in it', async () 
   expect(rows.map((r) => (JSON.parse(r.detail) as { message: string }).message)).toEqual([
     'password reset',
   ]);
-  // What a reset stores is `reset-password:<token>` with the token in the clear — unlike a
-  // magic link, which is hashed. So the row this test reads is the credential itself.
+  // A reset stores its token in the clear, so the row this reads is the credential itself.
   const stored = (
     (await binding.prepare('SELECT identifier FROM verification').all()).results as {
       identifier: string;

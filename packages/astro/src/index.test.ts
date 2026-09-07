@@ -128,8 +128,7 @@ test('image and file take media keys, never URLs', () => {
     mime: 'application/pdf',
   };
   expect(file().safeParse(doc).success).toBe(true);
-  // The display name is the translatable half, so a language that has not typed one yet still
-  // has a valid file: a source language adding a PDF must not block that language's publish.
+  // The name is the translatable half, so a language yet to type one still has a valid file.
   expect(file().safeParse({ ...doc, name: undefined }).success).toBe(true);
   expect(file().safeParse({ ...doc, src: 'media/3e8a1b9c.pdf' }).success).toBe(false);
 });
@@ -237,8 +236,7 @@ test('group, array and blocks are detected from real Zod output', () => {
 
 type Setup = HookParameters<'astro:config:setup'>;
 
-// The flag is read off the environment at build, so the suite states it rather than inheriting
-// whatever shell it was launched from.
+// The flag is read off the environment, so the suite states it rather than inheriting a shell's.
 beforeEach(() => {
   delete process.env.PREVIEW_ENABLED;
 });
@@ -284,8 +282,7 @@ test('injects the admin shell and API routes as SSR', () => {
   ]);
 });
 
-// Preview renders draft content on the client's own domain, so the site that did not ask for
-// it has no such route to reach at all — not a route that answers 404.
+// A site that did not ask for preview has no such route at all, not one that answers 404.
 test('the preview route is injected only where the build was told to', () => {
   const patterns = () =>
     runSetup({ name: 'fake-adapter', hooks: {} }).injectRoute.mock.calls.map(([r]) => r.pattern);
@@ -477,8 +474,7 @@ test('defineConfig fails when titleField is not a text field of the schema', () 
   ).not.toThrow();
 });
 
-// The twin of the titleField check: the site's own route reads the field, so a collection
-// promising an address per language without one would fail at the first page rather than here.
+// The site's route reads the field, so a collection without one would fail at the first page.
 test('defineConfig fails when localizedSlugs has no optional slug field to read', () => {
   const bare = z.object({ title: z.string() });
   expect(() =>
@@ -543,8 +539,7 @@ test('the navigation global is one menus field: the walker stops at the shape it
   ]);
 });
 
-// The tree is one skeleton and the labels are per language, so a row reaches a language
-// before anybody has typed its word for it — and that file still has to parse.
+// Labels are per language, so a row reaches a language before anybody typed its word for it.
 test('an item synced into another language before it is translated is a valid file', () => {
   const form = formOf('default', formSchema(navigation));
   const en = {
@@ -571,9 +566,7 @@ test('an item synced into another language before it is translated is a valid fi
   expect(parsed.data?.menus[0]?.items[0]?.label).toBe('');
 });
 
-// The walkers read a menu item through fields that name themselves under `children`. That
-// description is theirs alone: the form is JSON on its way to the browser, and a cycle in it
-// has no end.
+// The form is JSON on its way to the browser, and a cycle in it has no end.
 test('the form a browser is handed carries no cycle', () => {
   expect(() => JSON.stringify(formOf('default', formSchema(navigation)))).not.toThrow();
 });
@@ -679,8 +672,7 @@ test('emitSitemap writes one sitemap per language, an index and robots.txt', asy
   );
 });
 
-// Workers Builds and most CI runners clone at depth 1, where every file is "added" by the one
-// commit the clone has: the deploy's time on every page is not a change date, so none is written.
+// Workers Builds and most CI clone at depth 1, where every file is "added" by the one commit.
 test('a shallow clone dates nothing, where the full history dates every file', async () => {
   const full = await mkdtemp(join(tmpdir(), 'handover-git-'));
   const git = (cwd: string, ...args: string[]) =>
@@ -746,8 +738,7 @@ test('a robots.txt the site ships itself is left where it is', async () => {
 type Done = HookParameters<'astro:config:done'>;
 type BuildDone = HookParameters<'astro:build:done'>;
 
-// The two hooks that write the crawler's files, against the fixture project: `astro:config:done`
-// is where the site's own address and URL form are read off Astro's resolved config.
+// `astro:config:done` is where the site's own address and URL form are read off Astro's config.
 async function runBuild(astro: Record<string, unknown> = {}) {
   const client = await clientDir();
   const cms: Parameters<typeof handover>[0] = {
@@ -783,8 +774,7 @@ test('the sitemap is written in the form the site’s own pages answer at', asyn
   );
 });
 
-// The real glob loader on the fixture project: with the documented per-collection base,
-// `src/content/_templates/` is outside every collection and never becomes an entry.
+// With the per-collection base, `src/content/_templates/` is outside every collection.
 test('a _templates/ file is not in the built collection', async () => {
   const store = new Map<string, { id: string }>();
   const loader = glob({ pattern: '**/*.yaml', base: './src/content/listings' });
@@ -838,8 +828,7 @@ test('buildIndex lists an entry per locale file and leaves _templates/ out', asy
   });
 });
 
-// The same file the loader and the index both skip is the one the New entry dialog offers,
-// which is why it is read here rather than listed out of git at run time.
+// The file the loader and index skip is the one the New entry dialog offers, so it is read here.
 test('buildTemplates reads the starters the site ships', async () => {
   expect(await buildTemplates(fixture)).toEqual({
     listings: [
@@ -877,9 +866,7 @@ test('buildIndex fails on a content file below the locale folder, naming it', as
   );
 });
 
-// A global the site declares and never writes would be a card in Site settings that opens
-// nothing: the admin edits the file a language has, and there is no "new global" — the dev
-// declares them and the first file comes with the declaration.
+// There is no "new global": the dev declares them and the first file comes with the declaration.
 test('the build names a declared global that has no file in the default language', async () => {
   const root = new URL(`${await mkdtemp(join(tmpdir(), 'handover-site-'))}/`, 'file://');
   await mkdir(new URL('src/content/globals/de/', root), { recursive: true });
@@ -891,8 +878,7 @@ test('the build names a declared global that has no file in the default language
   ]);
 });
 
-// Only the default language: a global with no German file yet is what "Create from English"
-// is for, and the site renders the language it has.
+// A global with no German file yet is what "Create from English" is for.
 test('a global missing in a language other than the default is not a build error', async () => {
   const root = new URL(`${await mkdtemp(join(tmpdir(), 'handover-site-'))}/`, 'file://');
   await mkdir(new URL('src/content/globals/en/', root), { recursive: true });
@@ -901,9 +887,7 @@ test('a global missing in a language other than the default is not a build error
   expect(await contentErrors(root, ['site'], 'en')).toEqual([]);
 });
 
-// The build-time half of `_ref`: an unregistered `_type` is refused by the block union at
-// content sync, and a name no global answers to has to be refused in the same pass — the block
-// renders as that global's content, so this is a hole in the page, not an empty field.
+// The block renders as that global's content, so an undeclared name is a hole in the page.
 test('the build refuses a _ref naming a global cms.config.ts does not declare', async () => {
   const root = new URL(`${await mkdtemp(join(tmpdir(), 'handover-site-'))}/`, 'file://');
   await mkdir(new URL('src/content/pages/en/', root), { recursive: true });
@@ -936,9 +920,7 @@ export const stale = JSON.parse("{}");`,
   );
 });
 
-// The admin cannot read a build flag, and a Preview button that opens a 404 is worse than one
-// that says why it is not there — so the same read that decides the route rides to the Worker
-// on the one module the build already hands it.
+// The admin cannot read a build flag, so the decision rides to the Worker on the index module.
 test('the index module carries whether this build has a preview route', async () => {
   const source = async () => {
     const { updateConfig } = runSetup({ name: 'fake-adapter', hooks: {} }, fixture);
@@ -959,8 +941,7 @@ test('the index is built with the title field each collection declares', async (
   const module = await updateConfig.mock.calls[0]?.[0].vite.plugins[1].load(
     '\0virtual:handover/index',
   );
-  // The fixture entry has a title and no location, so it lists under its file name: the
-  // declared field is the only one read.
+  // The fixture entry has a title and no location, so it lists under its file name.
   const listed = {
     listings: [
       {
@@ -1005,8 +986,7 @@ test('a label names the field, on a plain type and on top of a helper', () => {
   ]);
 });
 
-// Mirror of handover-demo/src/content/schemas.ts: the snapshot is the descriptor tree the
-// admin form is built from, and it must hold no unsupported marker.
+// Mirror of handover-demo/src/content/schemas.ts; the snapshot must hold no unsupported marker.
 test('the demo schema produces a full descriptor tree', () => {
   const hero = defineBlock('hero', {
     heading: z.string(),
@@ -1078,10 +1058,7 @@ test('a field says how it translates through .meta({ i18n })', () => {
   ]);
 });
 
-// A typo in checks.ignore is a check the site thinks it turned off and did not, which nothing
-// else would ever say out loud.
-// `mailer()` treated an unrecognised provider as resend, so a JS site with a typo was told
-// RESEND_API_KEY was missing.
+// `mailer()` took an unknown provider for resend, so a typo was told RESEND_API_KEY was missing.
 test('defineConfig fails when mailer.provider names no provider', () => {
   expect(() =>
     defineConfig({
@@ -1108,6 +1085,7 @@ test('defineConfig fails when mailer.provider names no provider', () => {
   ).not.toThrow();
 });
 
+// A typo in checks.ignore is a check the site thinks it turned off, which nothing else would say.
 test('defineConfig fails when checks.ignore names no check', () => {
   expect(() =>
     defineConfig({

@@ -5,18 +5,14 @@ import { entryKey } from './entries.js';
 import { newId } from './reserved.js';
 import { activity, user } from './tables.js';
 
-/**
- * One thing that happened, as its writer knows it. `at` and the id are this file's, so no
- * caller can date a row; everything else is the caller's, because only it knows what the
- * event was about.
- */
+/** `at` and the id are this file's, so no caller can date a row. */
 export interface ActivityEntry {
   /** Null is the system: a cron job, or a message that failed after the response had gone. */
   userId?: string | null;
   kind: string;
   /** An entry path, a media id or a user id — whichever this kind is about. */
   subject?: string | null;
-  /** Small json. Never file contents, and never a one-time link: those are credentials. */
+  /** Small JSON with no file contents or credentials. */
   detail?: unknown;
   commitSha?: string | null;
 }
@@ -29,10 +25,7 @@ export interface ActivityEvent {
   subject: string | null;
   detail: unknown;
   commitSha: string | null;
-  /**
-   * Null is the system. A removed member keeps their events for the rest of the retention
-   * window, so the id is there with nothing behind it — the log outlives the account.
-   */
+  /** Null is the system; a removed member's id stays with nothing behind it. */
   user: { id: string; name: string | null; email: string | null } | null;
 }
 
@@ -44,11 +37,7 @@ export interface ActivityQuery {
   cursor?: string;
 }
 
-/**
- * The kind groups the screen filters by. The kinds themselves are
- * `docs/features/activity-log.md`'s single list and this is a transcription of it, so a kind
- * that has no caller yet is here anyway — adding one is a string and needs no migration.
- */
+/** Transcribed from `docs/features/activity-log.md`, so a kind with no caller yet is here too. */
 export const ACTIVITY_GROUPS = {
   Accounts: ['login', 'invite', 'role-change', 'member-removed', 'password-set'],
   Publishing: [
@@ -68,18 +57,13 @@ export const ACTIVITY_GROUPS = {
 } as const;
 export type ActivityGroup = keyof typeof ACTIVITY_GROUPS;
 
-// Every registered cron job writes its own `cron-<job>`, so System is the one group that is a
-// prefix as well as a list.
+// Every cron job writes its own `cron-<job>`, so System is a prefix as well as a list.
 const groupWhere = (group: ActivityGroup) =>
   group === 'System'
     ? or(inArray(activity.kind, [...ACTIVITY_GROUPS.System]), like(activity.kind, 'cron-%'))
     : inArray(activity.kind, [...ACTIVITY_GROUPS[group]]);
 
-/**
- * One row. It never throws: nobody loses a sign-in, an invite or a commit because the line
- * recording it could not be written, and every caller here is on a path where the thing being
- * recorded has already happened.
- */
+/** Never throws: nobody loses a sign-in or a commit because the line recording it failed. */
 export async function logActivity(siteId: string, db: Db, event: ActivityEntry): Promise<void> {
   try {
     await db.insert(activity).values({
@@ -97,26 +81,17 @@ export async function logActivity(siteId: string, db: Db, event: ActivityEntry):
   }
 }
 
-/** The screen's page size. It is not a parameter: a caller-chosen limit is a self-inflicted scan. */
+/** Not a parameter: a caller-chosen limit is a self-inflicted scan. */
 const PAGE = 50;
 
-/**
- * `at` is not unique — two events in the same millisecond are ordinary — so the cursor is the
- * whole of what the order is on. An offset would re-read every row already served, and D1
- * bills rows scanned.
- */
+/** `at` is not unique, so the cursor carries the id too; an offset would rescan served rows. */
 const cursorOf = (raw: string | undefined) => {
   const [at, id] = (raw ?? '').split('.');
   const ms = Number(at);
   return id && at && Number.isSafeInteger(ms) ? { at: ms, id } : undefined;
 };
 
-/**
- * The last fifty events this person may see, newest first. **The filter is the whole of
- * "an editor sees only their own"**: their id comes off the session, and a `user` in the
- * query is read only for an owner — an editor naming somebody else is not refused, it is
- * not looked at, so there is nothing to probe.
- */
+/** The whole of "an editor sees only their own": `query.user` is read for an owner only. */
 export async function activityPage(
   siteId: string,
   db: Db,
@@ -176,16 +151,7 @@ export async function activityPage(
 /** The two commits that take a file away, which are the two a restore is offered over. */
 const REMOVALS = ['entry-delete', 'locale-off'];
 
-/**
- * What the CMS removed from one collection, newest first — the Deleted view's rows. It is a
- * query against the log rather than a filter over the entry list, because a deleted entry is in
- * neither the built index nor the draft rows once the build has caught up.
- *
- * **Not narrowed to the viewer** the way `activityPage` is. That filter is there so the log is
- * not a way to find out who else has an account; this list is about the collection rather than
- * about people, and an editor who could not see a delete could not undo one either — the entry
- * list already tells them who is holding and who is editing a row.
- */
+/** Read from the log, not the index: a deleted entry is in neither index nor draft rows. */
 export async function deletedEntries(
   siteId: string,
   db: Db,
@@ -209,8 +175,7 @@ export async function deletedEntries(
       and(
         eq(activity.siteId, siteId),
         inArray(activity.kind, REMOVALS),
-        // Only a row that names a commit can be undone. A delete of an entry that was never
-        // published made none, and there is nothing to put back.
+        // A delete of a never-published entry made no commit, so there is nothing to put back.
         isNotNull(activity.commitSha),
         like(activity.subject, `src/content/${collection}/%`),
       ),
@@ -228,12 +193,7 @@ export async function deletedEntries(
   }));
 }
 
-/**
- * The templates saved from one collection's entries, newest first and each name once. The
- * New entry dialog reads the starters off the build, which has not seen a file committed since
- * it ran, so a saved one is offered from here until the next build carries it — the same way
- * the Deleted view is a query against the log rather than the index.
- */
+/** The build has not seen a template saved since it ran, so the log offers it until then. */
 export async function savedTemplates(
   siteId: string,
   db: Db,
@@ -254,11 +214,7 @@ export async function savedTemplates(
   return [...new Set(names.filter((name): name is string => typeof name === 'string'))];
 }
 
-/**
- * Which group's chip a row wears — the inverse of the table above, with the same `cron-` rule
- * `groupWhere` applies. Null for a kind nothing claims: a screen must be able to draw a row it
- * has never heard of rather than throw on it.
- */
+/** Null for a kind nothing claims: a screen must draw a row it has never heard of, not throw. */
 export function activityGroupOf(kind: string): ActivityGroup | null {
   if (kind.startsWith('cron-')) return 'System';
   for (const [group, kinds] of Object.entries(ACTIVITY_GROUPS)) {
@@ -276,16 +232,7 @@ export interface EntryEdit {
   by: string | null;
 }
 
-/**
- * The entries the last publishes carried, newest first and one row per entry. It is a read of
- * the log rather than of the draft rows because a draft is **deleted** once the build carrying
- * it is live ([`clearPublished`](#)) — without this the dashboard would be empty on a site where
- * everything is published, which is most days.
- *
- * Not narrowed to the viewer the way `activityPage` is, for `deletedEntries`' reason: it is
- * about the site's pages rather than about people, and the entry list already names who is
- * editing what.
- */
+/** Read from the log, not the draft rows: a draft is deleted once its build is live. */
 export async function publishedEntries(siteId: string, db: Db, limit = 8): Promise<EntryEdit[]> {
   const rows = await db
     .select({
@@ -298,14 +245,12 @@ export async function publishedEntries(siteId: string, db: Db, limit = 8): Promi
     .leftJoin(user, eq(activity.userId, user.id))
     .where(and(eq(activity.siteId, siteId), eq(activity.kind, 'publish')))
     .orderBy(desc(activity.at), desc(activity.id))
-    // A publish of twenty entries is one row, so a handful of them is more than the eight the
-    // tile draws; reading further to fill it would scan the log for a list nobody sees.
+    // A publish of twenty entries is one row, so a handful of rows already overfills the tile.
     .limit(limit);
   const found = new Map<string, EntryEdit>();
   for (const row of rows) {
     const named = (row.detail as { entries?: unknown } | null)?.entries;
-    // A row written before a publish recorded its entries names one only where it carried a
-    // single file, which is what `subject` has always been.
+    // A row from before `entries` was recorded names one entry only through its `subject`.
     const one = entryKey(row.subject ?? '');
     const entries = Array.isArray(named)
       ? named.filter((e): e is string => typeof e === 'string')
@@ -318,19 +263,13 @@ export async function publishedEntries(siteId: string, db: Db, limit = 8): Promi
   return [...found.values()].slice(0, limit);
 }
 
-/**
- * The newest commit the admin made, and when. **This is where the build status reads from**:
- * a publish redeploys the Worker serving `/admin`, so the drawer that made the commit may not
- * survive the reload and cannot be what remembers it. The log already carries the sha, so no
- * column and no state anywhere else is needed for the pill to be right after a reload.
- */
+/** What the build status reads: a publish redeploys the Worker. */
 export async function lastCommit(
   siteId: string,
   db: Db,
 ): Promise<{ sha: string; at: number; kind: string; by: string | null } | undefined> {
   const [row] = await db
-    // Who made it is the dashboard's line under the build pill. Their name and never their
-    // address: this row is read by everybody, not only by the person it is about.
+    // Name and never address: this row is read by everybody, not only the person it is about.
     .select({ sha: activity.commitSha, at: activity.at, kind: activity.kind, by: user.name })
     .from(activity)
     .leftJoin(user, eq(activity.userId, user.id))
@@ -340,18 +279,12 @@ export async function lastCommit(
   return row?.sha ? { sha: row.sha, at: row.at, kind: row.kind, by: row.by ?? null } : undefined;
 }
 
-/**
- * Who the log says made each of these commits. Git cannot answer it: a commit the admin makes
- * is the installation's, so the person who pressed the button survives here and nowhere else —
- * and only for as long as the retention window below keeps the row. Older than that, and a
- * version simply has no name against it.
- */
+/** Git cannot answer this: an admin commit is the installation's, so the name lives only here. */
 export async function commitAuthors(
   siteId: string,
   db: Db,
   shas: readonly string[],
 ): Promise<Record<string, string>> {
-  // An entry with no commits yet is the common way in here; it costs no read.
   if (shas.length === 0) return {};
   const rows = await db
     .select({ sha: activity.commitSha, name: user.name })
@@ -359,19 +292,12 @@ export async function commitAuthors(
     .innerJoin(user, eq(activity.userId, user.id))
     .where(and(eq(activity.siteId, siteId), inArray(activity.commitSha, [...shas])));
   const found: Record<string, string> = {};
-  // The name and never the email: the log is deliberately not a way to find out who else has an
-  // account, and this list — unlike the activity page — is not narrowed to the person reading it.
-  // A member who has not set a name has no name against their versions.
-  // A commit can carry more than one event — a publish releases the holds it went through —
-  // and they are the same person, so the first row to name one wins.
+  // A commit can carry several events by the same person, so the first row to name it wins.
   for (const row of rows) if (row.sha && row.name && !(row.sha in found)) found[row.sha] = row.name;
   return found;
 }
 
-/**
- * How long a row is kept. The one place the never-delete principle does not apply: this is
- * telemetry about client data rather than client data, and git holds the other half forever.
- */
+/** The one exception to never-delete: this is telemetry about client data, not client data. */
 const KEEP = 180 * 24 * 60 * 60 * 1000;
 
 /** Rows older than the window, deleted; the count is what the cron dispatcher logs. */

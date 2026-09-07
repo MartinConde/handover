@@ -1,52 +1,33 @@
 import { isObject, rowKey, TRANSLATED_PROPS, translatedValues } from './content.js';
 import { type Field, type Form, humanise, rowFields, type Translation } from './schema.js';
 
-/** A run of a text field's words: what stayed, what went, what arrived. */
 export interface WordPart {
   text: string;
   mark?: 'del' | 'ins';
 }
 
-/** A block or array row against the rows around it. */
 export type RowAt = 'added' | 'removed' | 'moved-up' | 'moved-down' | 'same';
 
-/**
- * One field's change in the shape it is read in: a sentence with the words that moved marked,
- * a value against the value it replaced, a body too long to read twice, or a row.
- */
 export type Change = { path: string; label: string } & (
   | { kind: 'words'; parts: WordPart[] }
   | { kind: 'value'; before?: string; after?: string }
-  /** Two keys into storage: a picture that was replaced, put in or taken out. */
+  /** Two keys into storage, never a value that moved. */
   | { kind: 'picture'; before?: string; after?: string }
   | { kind: 'whole' }
   | { kind: 'row'; type?: string; at: RowAt; above?: string; changes: Change[] }
 );
 
-/** The changes one language made, or the ones its languages share. */
 export interface DiffGroup {
-  /** Absent on the group of fields every language holds the same value in. */
+  /** Absent on the shared group. */
   locale?: string;
-  /** The whole language went: one event, not a deletion per field. */
+  /** One event, not a deletion per field. */
   removed?: true;
   changes: Change[];
 }
 
-/** Which fields a group takes: the ones every language shares, or the ones one language owns. */
 type Wants = (mode: Translation) => boolean;
 
-/**
- * What changed between two states of one entry, field by field and language by language.
- *
- * **Fields, not lines.** Both sides are parsed entries per language — the draft against the file
- * at HEAD, or one version against another — and the walk is the schema's, so the marks a file
- * carries (`_i18n`, `_machine`, `_locales`) are never a change anybody made.
- *
- * The groups are the languages, plus one for the values they share: a price written into every
- * file would otherwise read as having changed twice. An entry in a single language has no shared
- * group, because nothing in it is doubled, and a language nothing happened in still gets a group
- * — silence reads as "not loaded".
- */
+/** The walk is the schema's, so marks like `_i18n` are never a change. */
 export function diffEntry(
   _siteId: string,
   form: Form,
@@ -59,9 +40,7 @@ export function diffEntry(
   const shared = locales.length > 1;
   const groups: DiffGroup[] = [];
   if (shared) {
-    // Every file is read, not only the first: a shared value is only shared while the files agree,
-    // and one that moved in the German file alone is exactly what a conflict view exists to catch.
-    // A file that went is not read at all: its shared values are still in the files that stayed.
+    // Every surviving file is read: a shared value moved in one file alone is what this catches.
     const seen = new Set<string>();
     const changes: Change[] = [];
     for (const locale of locales)
@@ -91,8 +70,7 @@ const walk = (form: Form, before: unknown, after: unknown, wants: Wants): Change
   return found;
 };
 
-// The same descent `driftIn` and `overlay` make: groups, blocks fields and arrays of rows, and
-// nowhere else. `at` addresses a value the way `_machine` does; `named` is what a reader sees.
+// `at` addresses a value the way `_machine` does; `named` is what a reader sees.
 function changesIn(
   form: Form,
   fields: readonly Field[],
@@ -122,11 +100,7 @@ function changesIn(
   }
 }
 
-/**
- * A leaf, or the properties of one. A structured field is not one value: only the properties a
- * translator retypes are that language's — getting this wrong is what makes clients retype image
- * URLs, and here it would report the same replaced picture under every language.
- */
+/** Only the properties a translator retypes are the language's. */
 function leafIn(
   field: Field,
   before: unknown,
@@ -174,8 +148,7 @@ function propsIn(
     ...Object.keys(isObject(before) ? before : {}),
     ...Object.keys(isObject(after) ? after : {}).filter((k) => !(isObject(before) && k in before)),
   ].filter((k) => !k.startsWith('_'));
-  // A picture is a key into storage that never changes, so a replaced one is two keys and not a
-  // value that moved; its size is the picture's and never a change of its own.
+  // A replaced picture is two keys, not a moved value, and its size is never a change of its own.
   const picture =
     field.type === 'image'
       ? under.length === 0
@@ -190,8 +163,7 @@ function propsIn(
       propsIn(field, translated, was, now, path, label, inner, mode, wants, found);
       continue;
     }
-    // Shared unless this property is one of the field's translated ones — and only where the
-    // field itself is translated at all.
+    // Shared unless the property is a translated one of a translated field.
     const own: Translation =
       mode === true && !translated.includes(inner.join('.')) ? 'duplicate' : mode;
     if (!wants(own) || show(was) === show(now)) continue;
@@ -214,11 +186,7 @@ function propsIn(
   }
 }
 
-/**
- * Rows keyed by `_id`, so a block that moved says it moved instead of arriving as one deletion
- * plus one addition; rows without one — a template's list — pair by position and never move.
- * A row that arrived or left is not read into: the row itself is the change.
- */
+/** Keyed by `_id` so a moved block says so; rows without one pair by position and never move. */
 function rowsIn(
   form: Form,
   fieldsOf: (row: Record<string, unknown>) => readonly Field[] | undefined,
@@ -291,10 +259,7 @@ const asRow = (row: unknown): Record<string, unknown> => (isObject(row) ? row : 
 const typeOf = (row: unknown) =>
   isObject(row) && typeof row._type === 'string' ? { type: humanise(row._type) } : {};
 
-/**
- * What a row is called: the first words it says, or what it points at — a menu item named by
- * its page keeps no label of its own — falling back to its type or its place.
- */
+/** A menu item named by its page keeps no label of its own, hence the link fallback. */
 function rowLabel(fields: readonly Field[], row: unknown, index: number): string {
   return (
     firstWords(fields, row) ||
@@ -304,8 +269,7 @@ function rowLabel(fields: readonly Field[], row: unknown, index: number): string
   );
 }
 
-// A menu item's link, which the schema cannot read into: the page, address or collection it
-// names is what a reader knows it by, never the JSON of it.
+// A reader knows a link by what it names, never by its JSON.
 const linkTarget = (link: unknown): string | undefined =>
   isObject(link)
     ? [link.ref, link.href, link.collection].find((v): v is string => typeof v === 'string')
@@ -323,10 +287,7 @@ function firstWords(fields: readonly Field[], row: unknown): string | undefined 
   return undefined;
 }
 
-/**
- * Which rows a reader would call moved: the longest run that kept its order is where the entry
- * stood still, and everything else went somewhere. Two rows that swapped are one move, not two.
- */
+/** The longest run that kept its order stood still; two rows that swapped are one move, not two. */
 function movers(before: string[], after: string[]): Map<string, 'moved-up' | 'moved-down'> {
   const kept = new Set(after);
   const had = new Set(before);
@@ -364,11 +325,7 @@ function lcs<T extends string>(a: T[], b: T[]): T[] {
   return out;
 }
 
-/**
- * One text field's sentence with the words that went and the words that arrived marked in it.
- * Split on word boundaries rather than on spaces, so adding a comma to a word is not the whole
- * word being replaced, and never on lines: a line diff would leak the file format into the UI.
- */
+/** Split on word boundaries, so adding a comma is not the whole word replaced; never on lines. */
 function wordDiff(before: string, after: string): WordPart[] {
   const a = words(before);
   const b = words(after);
@@ -395,8 +352,7 @@ function wordDiff(before: string, after: string): WordPart[] {
 
 const words = (text: string) => text.split(/([^\p{L}\p{N}]+)/u).filter((w) => w !== '');
 
-// A list of plain words is a sentence, not the brackets the file writes it in: an array of rows
-// went to `rowsIn` long before this, so what is left here is `['sea', 'view']`.
+// Only a plain-word array reaches here, and it reads as a sentence, not brackets.
 const str = (value: unknown): string =>
   Array.isArray(value)
     ? value.map((item) => str(item)).join(', ')
@@ -411,16 +367,7 @@ const show = (value: unknown): string | undefined =>
       ? JSON.stringify(value)
       : String(value);
 
-/**
- * What a translation's source language has said since somebody translated it, field by field —
- * the marker a target-language field carries in side-by-side editing, and what opening it shows.
- *
- * Keyed by the address `_machine` and the translate route already use, so the form finds its own
- * field without a second convention. Only the values a translation is made from are compared: a
- * shared price moving is not something to retranslate. A field the older source had and the
- * newer one does not is a deletion and is reported as one; a field only the newer source has is
- * not stale — nothing was ever translated from it.
- */
+/** Keyed the way `_machine` addresses a field; a field only the newer source has is not stale. */
 export function sourceChanges(
   _siteId: string,
   form: Form,
@@ -436,8 +383,7 @@ export function sourceChanges(
   return changed;
 }
 
-// `translatedValues` encodes each value for the hash it exists to feed; a reader is shown the
-// sentence, not the quotes and `\n` the encoding put round it.
+// `translatedValues` encodes for its hash; a reader is shown the sentence, not the quotes.
 const said = (encoded: string): string => {
   if (encoded === '') return '';
   try {

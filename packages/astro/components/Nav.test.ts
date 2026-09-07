@@ -49,8 +49,7 @@ test('<Nav /> opens an item marked for a new tab in one, and lets nothing back t
   expect(html).not.toContain('target="_blank" rel="noopener noreferrer">Home');
 });
 
-// An empty menu, and a site whose global has no menu by that name at all: both are nothing to
-// render rather than an empty landmark a screen reader still announces.
+// Nothing rather than an empty landmark a screen reader would still announce.
 test('<Nav /> draws nothing for a menu with no items in this language', async () => {
   expect((await render({ menu: 'footer', menus })).trim()).toBe('');
   expect((await render({ menu: 'legal', menus })).trim()).toBe('');

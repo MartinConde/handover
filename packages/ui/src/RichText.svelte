@@ -1,6 +1,5 @@
 <script lang="ts">
-// The only file that imports TipTap. Value in and out is Markdown; the tier decides which
-// extensions exist, so a paste is sanitised to the tier by the schema itself.
+// The only file importing TipTap; the tier's extensions are what sanitise a paste.
 import type { RichtextTier } from '@handover/core';
 import { richtextErrors } from '@handover/core';
 import { Editor } from '@tiptap/core';
@@ -40,7 +39,7 @@ let {
   onchange: (markdown: string) => void;
 } = $props();
 
-// svelte-ignore state_referenced_locally -- decided once on load; TipTap would silently drop the content
+// svelte-ignore state_referenced_locally -- initialized once to avoid dropping content
 const foreign = richtextErrors('default', value, tier).length > 0;
 
 const BASIC = [
@@ -80,8 +79,7 @@ const FULL = [
 // svelte-ignore state_referenced_locally -- the tier is fixed per field
 const buttons = tier === 'full' ? [...BASIC, ...FULL] : BASIC;
 
-// Where a link points is chosen in the page picker, so a target the site would refuse is
-// refused while it is being typed rather than on the way to the repository.
+// A target the site would refuse is refused while typed, not on the way to the repository.
 let linking = $state(false);
 function toggleLink(e: Editor) {
   if (e.isActive('link')) return e.chain().focus().unsetLink().run();
@@ -104,8 +102,7 @@ function linkTo(href: string, text = href) {
 let element = $state<HTMLDivElement>();
 let editor = $state<Editor>();
 
-// TipTap fixes the editable node's attributes when it is built, so the two that change with
-// the entry's problems are written onto the node itself.
+// TipTap fixes the editable node's attributes on build, so the changing two are written directly.
 $effect(() => {
   const body = editor?.view.dom;
   if (!body) return;

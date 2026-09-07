@@ -38,9 +38,7 @@ async function verifyJwt(header: string | null): Promise<{ iss: string; exp: num
   return JSON.parse(Buffer.from(p ?? '', 'base64url').toString());
 }
 
-// A fake GitHub: mints a token when the JWT verifies, serves one file, records every call.
-// `visible: false` is a repository outside the installation — GitHub 404s every path of it,
-// the repository itself included.
+// `visible: false` is a repository outside the installation, which GitHub 404s on every path.
 function fakeGitHub(
   files: Record<string, string>,
   visible = true,
@@ -123,8 +121,7 @@ test('getFile returns decoded contents and the blob sha', async () => {
   });
 });
 
-// The read a publish makes. A branch is a name the API answers from a cache, so a set of reads
-// of one is not a snapshot; a commit is immutable and reading one is.
+// A branch is a name the API answers from a cache, so reads of one are not a snapshot.
 test('getFile reads the commit it is given rather than the branch', async () => {
   const gh = fakeGitHub({ 'src/content/listings/en/mill-house.yaml': 'title: Mühlenhaus\n' });
   const git = createGitClient('default', app, { fetch: gh.fetch });
@@ -136,8 +133,7 @@ test('getFile reads the commit it is given rather than the branch', async () => 
   );
 });
 
-// The read behind the per-field staleness marker: bytes no branch names any more, addressed by
-// the id the translation itself wrote down.
+// Bytes no branch names any more, addressed by the id the translation wrote down.
 test('getBlob returns one object\u2019s text by its own id', async () => {
   const gh = fakeGitHub({}, true, {}, {}, { deadbeef: 'title: Mill House\n' });
   const git = createGitClient('default', app, { fetch: gh.fetch });
@@ -145,8 +141,7 @@ test('getBlob returns one object\u2019s text by its own id', async () => {
   expect(await git.getBlob('deadbeef')).toBe('title: Mill House\n');
 });
 
-// Git collects an unreachable blob eventually, and a translation older than that has nothing to
-// compare against. The caller draws no marker rather than an error.
+// Git collects an unreachable blob eventually; the caller draws no marker rather than an error.
 test('getBlob returns undefined for an object git no longer has', async () => {
   const gh = fakeGitHub({});
   const git = createGitClient('default', app, { fetch: gh.fetch });
@@ -233,8 +228,7 @@ test('two clients on the same GitHub share one installation token', async () => 
   expect(gh.minted()).toBe(1);
 });
 
-// A fake Git Data API over one branch: records the ref PATCH body so a test can prove
-// the update is never forced, and moves the head underneath the client when asked.
+// Records the ref PATCH body so a test can prove the update is never forced.
 function fakeGitData(opts: { headMovesTo?: string } = {}) {
   const bodies: Record<string, unknown> = {};
   let minted = 0;
@@ -320,16 +314,14 @@ test('publish throws RefMovedError when the branch moved past base_sha', async (
   ).rejects.toBeInstanceOf(RefMovedError);
 });
 
-// Oracle: `git hash-object`. The length in the header is bytes, so `£` counts as two.
+// Oracle is `git hash-object`; the header length is bytes, so `£` counts as two.
 test('blobSha is the git object id of the file contents', async () => {
   expect(await blobSha('')).toBe('e69de29bb2d1d6434b8b29ae775ad8c2e48c5391');
   expect(await blobSha('hello\n')).toBe('ce013625030ba8dba906f756967f9e9ca394464a');
   expect(await blobSha('£')).toBe('3048c9ab8389e833f2b95ef09b7e305a9df2e2b6');
 });
 
-// Undoing a commit has to write every path it touched, and GitHub reports a rename as one entry
-// carrying both of its names: taking `filename` alone would remove the new path and never put
-// the old one back.
+// GitHub reports a rename as one entry carrying both names, and a revert needs both.
 test('getCommit names the parent and both names of a rename', async () => {
   const gh = fakeGitHub({}, true, {
     c0ffee11: {
@@ -360,12 +352,10 @@ test('getCommit names the parent and both names of a rename', async () => {
   });
 });
 
-// A fake GraphQL endpoint that answers the nested tree query from a flat map of paths, so a
-// test states the repository as paths and the walk is what is under test.
+// Answers the nested tree query from a flat map of paths, so the walk is what is under test.
 function fakeGraphQL(files: Record<string, string | null>, opts: { truncated?: string } = {}) {
   const queries: string[] = [];
-  // The query asks three levels deep, so a folder below that comes back as neither — which is
-  // what GraphQL answers when a node matches none of the fragments asked for.
+  // The query asks three levels deep, so a folder below that comes back matching no fragment.
   const tree = (prefix: string, depth = 3): unknown => {
     if (depth === 0) return {};
     const names = new Set<string>();
@@ -417,11 +407,7 @@ test('contentFiles reads every yaml under src/content in one request', async () 
   expect(gh.queries).toHaveLength(1);
 });
 
-// Whatever this is read for is a decision about the whole tree, so half a file is not an
-// answer: it is refused rather than reported as a file that happens not to say anything.
-// The build refuses a content file deeper than this, so a repository that builds has nothing
-// below what the query asks for — and a folder the walk cannot see into is refused rather than
-// stepped over, because a file nobody read is a file nobody counted.
+// A folder the walk cannot see into is refused: a file nobody read is a file nobody counted.
 test('contentFiles refuses a folder deeper than an entry may live at', async () => {
   const gh = fakeGraphQL({ 'src/content/listings/en/deeper/nope.yaml': 'title: No\n' });
   const git = createGitClient('default', app, { fetch: gh.fetch });
@@ -505,8 +491,7 @@ test('mergeFileCommits makes one version of a commit both languages carry', () =
   expect(merged.more).toBe(false);
 });
 
-// The pages are read per path, so the German file's own commits are not in the English page at
-// all: merging past where a still-unfinished page ends would leave a hole nobody could see.
+// Merging past where an unfinished page ends would leave a hole nobody could see.
 test('mergeFileCommits cuts the list where the shallowest unfinished page ends', () => {
   const merged = mergeFileCommits([
     page(
@@ -524,8 +509,7 @@ test('mergeFileCommits cuts the list where the shallowest unfinished page ends',
   expect(merged.more).toBe(true);
 });
 
-// A German-only commit older than every English one is still this entry's history, and nothing
-// is left to fetch that could push it out of place.
+// A German-only commit older than every English one is still this entry's history.
 test('mergeFileCommits keeps a commit only one language has when every page is finished', () => {
   const merged = mergeFileCommits([
     page('en', [{ sha: 'aaa', date: '2026-08-30T10:00:00Z' }]),
@@ -535,9 +519,7 @@ test('mergeFileCommits keeps a commit only one language has when every page is f
   expect(merged.versions.map((v) => v.sha)).toEqual(['aaa', 'ddd']);
 });
 
-// A page read under the name the entry used to have says so on its versions, and the rename
-// commit — in the old name's log as the deletion and in the new name's as the creation — is
-// one version wearing the language once, under the name it left the entry with.
+// The rename commit is in both logs, so it wears the language once, under the new name.
 test('mergeFileCommits carries the old name onto its versions and wears a language once', () => {
   const merged = mergeFileCommits([
     page('en', [

@@ -2,11 +2,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import type { Db } from './db.js';
 import { settings } from './tables.js';
 
-/**
- * The keys a client may set for themselves, fixed here and nowhere else. Everything that keeps
- * the admin running — the GitHub App, the bucket, the mailer, the session secret — stays in the
- * environment, because a wrong value there locks the client out of the screen that fixes it.
- */
+/** The keys a client may set for themselves, fixed here and nowhere else. */
 export const INTEGRATIONS = ['deepl', 'assist'] as const;
 export type Integration = (typeof INTEGRATIONS)[number];
 
@@ -24,10 +20,7 @@ const UNSET =
 const WRONG_SIZE =
   'HANDOVER_SETTINGS_KEY is not 32 bytes of base64: make one with `openssl rand -base64 32`';
 
-/**
- * AES-256-GCM under the Worker's own secret. D1 encrypts its disk, which is not the same as a
- * dumped row or a Time Travel restore, so what is written is already unreadable.
- */
+/** AES-256-GCM under the Worker's own secret. */
 async function aesKey(secret: string | undefined) {
   if (!secret) throw new Error(UNSET);
   let raw: Uint8Array;
@@ -40,9 +33,7 @@ async function aesKey(secret: string | undefined) {
   return crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['encrypt', 'decrypt']);
 }
 
-// Read as hex rather than as a blob: Drizzle maps a blob column through `Buffer`, which is not
-// there without `nodejs_compat`, and what D1 hands back for one differs between the Worker and
-// the local proxy. A string is a string in both.
+// Read as hex rather than as a blob: Drizzle maps a blob column through `Buffer`.
 const bytesOf = (hex: string): Uint8Array =>
   Uint8Array.from(hex.match(/../g) ?? [], (pair) => Number.parseInt(pair, 16));
 
@@ -75,10 +66,7 @@ export async function writeSetting(
     .onConflictDoUpdate({ target: [settings.siteId, settings.key], set: row });
 }
 
-/**
- * The key in force, or nothing. A site with no row never touches the secret — which is most
- * sites, and the path an entry opening asks this on.
- */
+/** The key in force, or nothing. */
 export async function readSetting(
   siteId: string,
   db: Db,
@@ -100,8 +88,7 @@ export async function readSetting(
     );
     return new TextDecoder().decode(plain);
   } catch {
-    // Rotating the secret leaves rows nothing can open. Say that, rather than reporting the
-    // service as broken: the fix is to paste the key again.
+    // Rotating the secret leaves rows nothing can open.
     throw new Error(
       `The stored ${key} key was encrypted with a different HANDOVER_SETTINGS_KEY and cannot be read: replace it in Settings, or put the old secret back`,
     );

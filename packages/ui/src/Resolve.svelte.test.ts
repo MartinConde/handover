@@ -2,10 +2,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Resolve from './Resolve.svelte';
 
-// Testing: the two questions a report can ask — a value and a sentence — the answers Done sends
-// back, Done staying off until every one of them is answered, the shortcut that answers them all
-// at once, the merged list naming which side moved each field, and a report with nothing to
-// answer. Not testing: the loading line or the panel's chrome.
+// Testing: the two questions a report can ask.
 
 const QUESTIONS = [
   {
@@ -109,8 +106,7 @@ test('a question names what both sides started from before it offers the two ans
     'Yours',
     'Theirs',
   ]);
-  // The side says what it *is*, with what it added marked — the words it took out are not
-  // drawn twice against the base line above.
+  // The side says what it *is*, with what it added marked.
   expect(q(root, '.resolve-field .quote ins')?.textContent).toBe('fish market');
   expect(q(root, '.resolve-field .quote')?.textContent).toBe('A cottage above the fish market');
   expect(q(root, '.resolve-field .quote del')).toBe(null);

@@ -16,7 +16,7 @@ type Global = {
 };
 
 let globals = $state<Global[]>([]);
-// The languages the site declares, in its own order. One and no chips are drawn at all.
+// The site's languages in its own order; with one, no chips are drawn at all.
 let locales = $state<string[]>([]);
 let loading = $state(true);
 let error = $state('');
@@ -98,9 +98,7 @@ async function load() {
           <svg class="arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3l5 5-5 5" /></svg>
         </div>
       {/each}
-      <!-- In the list rather than in the sidebar: to the client this is a thing the site has,
-           the way the menus are, and not a different kind of thing. Every site has one, so it
-           is here whether or not the dev declared any globals. -->
+      <!-- Listed, not in the sidebar: to the client this is a thing the site has. -->
       <div class="global-card">
         <span class="global-symbol" aria-hidden="true">↗</span>
         <h2><a href={sitePath(`/admin/site/redirects`)}>Redirects</a></h2>

@@ -69,8 +69,7 @@ const THERE = {
   lastUsed: Date.now() - 2 * 86400000,
 };
 
-// Two password forms on one screen is how somebody sets the wrong one, so the prompt takes the
-// section's place rather than sitting above it.
+// Two password forms on one screen is how the wrong one gets set, so the prompt replaces it.
 test('somebody who has never set a password is offered one instead of the Password section', async () => {
   server({ hasPassword: false, sessions: [HERE] });
   const root = await show();
@@ -88,8 +87,7 @@ test('somebody who has a password is asked for the old one and not prompted', as
   expect(text(root)).not.toContain('You signed in with an email link');
 });
 
-// Two endpoints, because Better Auth has two: setting a first password is server-only and
-// asks for nothing, changing one asks for the old one.
+// Better Auth has two endpoints: a first password is server-only and asks for nothing.
 test('a first password goes to the package route, not to change-password', async () => {
   const calls = server({ hasPassword: false, sessions: [HERE] });
   const root = await show();

@@ -509,8 +509,7 @@ test('a bucket that will not take the object names the step that refused', async
   expect(r2.calls.map((c) => c.method)).toEqual(['PUT']);
 });
 
-// A refusal is only useful if it names the fix, and R2's two say different things: 403 is the
-// credential, 404 is the bucket this site was pointed at.
+// R2's two refusals say different things: 403 is the credential, 404 is the bucket.
 test('a refused write says which of the four values to look at', async () => {
   await expect(
     checkStore(store, { fetch: checkable({ method: 'PUT', status: 403 }).fetch }),
@@ -545,9 +544,7 @@ test('the gate counts a file that names the key, whichever file it is', () => {
   expect(namedBy(`media/${'9'.repeat(64)}.webp`, files)).toEqual([]);
 });
 
-// The badge lays drafts *over* the files, because it is about what the entry says now. The gate
-// adds them instead: a picture pulled out of a listing this morning is on the published site
-// until that listing is published, and deleting it would break the page that is live.
+// The gate adds drafts rather than laying them over: a picture dropped this morning is still live.
 test('the gate adds the drafts to the tree rather than laying them over it', () => {
   const tree = [{ path: 'src/content/listings/en/mill-house.yaml', contents: yaml() }];
   const dropped = { path: 'src/content/listings/en/mill-house.yaml', contents: 'title: "Mill"\n' };
@@ -574,9 +571,7 @@ test('archiving is a flag on the row, and unarchiving takes it off again', async
   expect((await setMediaDetails('archive', db, id, { alt: 'A mill' }))?.archived).toBe(1);
 });
 
-// The row goes first. An object left in the bucket with no row is what the hourly job exists
-// for and comes back as *Recovered* within the hour; a row pointing at bytes that are gone is
-// a broken picture nothing ever repairs.
+// The row goes first: an orphan object is recovered hourly, a row over missing bytes never is.
 test('a delete takes the row before the object, and both are gone', async () => {
   const db = openDb('delete', binding);
   const id = 'f6'.repeat(32);
@@ -599,8 +594,7 @@ test('a delete takes the row before the object, and both are gone', async () => 
   expect(order).toEqual(['r2 DELETE']);
 });
 
-// The dot is what every crop holds on to, and it is the row's default rather than a page's:
-// a page that set its own keeps it. Centre is what "nobody has set one" looks like.
+// The dot is the row's default rather than a page's; centre is what "nobody set one" looks like.
 test('the focal point is two numbers on the row, and centring it is saying nothing', async () => {
   const db = openDb('focal', binding);
   const id = 'a7'.repeat(32);
@@ -621,8 +615,7 @@ test('the focal point is two numbers on the row, and centring it is saying nothi
   expect([back?.focalX, back?.focalY]).toEqual([0.5, 0.5]);
 });
 
-// A crop is a new picture made from an old one: its own bytes, its own row, and a line back to
-// the parent. The original is not touched, which is the whole of why cropping is allowed at all.
+// A crop is its own bytes and row with a line back to the parent, which is left untouched.
 test('a crop is confirmed as its own row, pointing at the picture it came from', async () => {
   const f = fixture('crop');
   const parent = 'b8'.repeat(32);

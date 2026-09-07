@@ -83,9 +83,7 @@ test('a nested list is a list, not a new construct', () => {
   expect(richtextErrors('default', '- a\n  - b\n- c', 'basic')).toEqual([]);
 });
 
-// A link is the one construct that carries a target, and a `javascript:` or `data:` one
-// runs in the reader's browser. Browsers ignore ASCII whitespace inside a URL, so the
-// mangled forms are the same link.
+// Browsers ignore ASCII whitespace inside a URL, so the mangled forms are the same link.
 const unsafeLinks: Record<string, string> = {
   javascript: '[x](javascript:alert(1))',
   mixedCase: '[x](JaVaScRiPt:alert(1))',
@@ -128,8 +126,7 @@ test('an empty string is valid in both tiers', () => {
   expect(richtextErrors('default', '', 'basic')).toEqual([]);
 });
 
-// 1.6's construct list, rendered. Every allowed construct has one expected string, so a
-// construct that validates but renders as nothing fails here.
+// A construct that validates but renders as nothing fails here.
 const rendered: Record<string, string> = {
   paragraph: '<p>Two bedrooms, one bathroom.</p>\n<p>Five minutes from the beach.</p>',
   bold: '<p>A <strong>sunny</strong> terrace.</p>',
@@ -154,8 +151,7 @@ test('every allowed construct has a render fixture', () => {
   expect(Object.keys(rendered)).toEqual([...RICHTEXT_CONSTRUCTS.full]);
 });
 
-// The tiers exist to keep raw HTML out of the page; the renderer is the last place it
-// could get back in, so it escapes rather than emits.
+// The renderer is the last place raw HTML could get back in, so it escapes rather than emits.
 test('raw HTML is escaped, never emitted', () => {
   expect(renderRichtext('default', '<script>alert(1)</script>')).not.toContain('<script>');
   expect(renderRichtext('default', 'A <b>bold</b> claim.')).toBe(

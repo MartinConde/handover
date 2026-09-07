@@ -16,8 +16,7 @@ import {
 import type { Db } from './db.js';
 import * as tables from './tables.js';
 
-// The same harness `auth.test.ts` uses: a real D1 behind the real generated schema, since
-// what this file is about is a query and a cursor rather than arithmetic.
+// A real D1 behind the generated schema, since this file is about a query and a cursor.
 const mf = new Miniflare({
   modules: true,
   script: 'export default {}',
@@ -59,7 +58,7 @@ async function seedUser(id: string, name: string, email: string) {
     .run();
 }
 
-/** A row written straight in, so a test can say what time it happened and in what order. */
+/** Written straight in, so a test can say when it happened. */
 async function seedEvent(row: {
   id: string;
   at: number;
@@ -223,8 +222,7 @@ test('the last page has no cursor', async () => {
 });
 
 test('paging does not skip or repeat rows written in the same millisecond', async () => {
-  // Three events sharing one `at`: `at` alone cannot order them, so a cursor that carries only
-  // the time either loses the middle row or serves it twice.
+  // A cursor carrying only `at` would lose the middle row or serve it twice.
   await seedEvent({ id: 'aaa', at: 5000, kind: 'login' });
   await seedEvent({ id: 'bbb', at: 5000, kind: 'invite' });
   await seedEvent({ id: 'ccc', at: 5000, kind: 'publish' });
@@ -246,8 +244,7 @@ test('a cursor that is not a cursor is ignored rather than obeyed', async () => 
   expect(await kindsOf(OWNER, { cursor: "1000' OR 1=1 --" })).toEqual(['login']);
 });
 
-// The inverse of the group table, for the chip a row wears. It is here rather than in the
-// screen because the `cron-` prefix rule is this file's and two copies of it would drift.
+// Tested here because the `cron-` prefix rule lives here and two copies would drift.
 test('a kind is named by the group that holds it', () => {
   expect(activityGroupOf('login')).toBe('Accounts');
   expect(activityGroupOf('publish')).toBe('Publishing');
@@ -259,13 +256,11 @@ test('every cron job is System, whatever the job is called', () => {
   expect(activityGroupOf('cron-whatever-3-17-registers')).toBe('System');
 });
 
-// A screen that throws on a kind nobody has claimed yet is a screen that breaks on the next
-// row, so the lookup answers rather than refuses.
+// A throw on an unclaimed kind would break the screen on the next row.
 test('a kind no group claims is named by none of them', () => {
   expect(activityGroupOf('something-phase-9-invents')).toBe(null);
 });
 
-// What the build pill reads after the publish that redeployed the Worker under it.
 test('the last commit is the newest one the log carries', async () => {
   await logActivity('default', db, { kind: 'publish', commitSha: 'aaa111' });
   await logActivity('default', db, { kind: 'login' });
@@ -305,9 +300,6 @@ test('retention deletes rows past 180 days and keeps the day before the cut', as
   expect(await kindsOf(OWNER)).toEqual(['login', 'publish']);
 });
 
-// The Deleted view is a query against the log, so what it asks for is this file's to get right:
-// the two kinds that take a file away, in one collection, and only where there is a commit to
-// undo.
 test('the deleted list is the two removals in one collection, newest first', async () => {
   const at = 1_800_000_000_000;
   const gone = 'src/content/listings/en/mill-house.yaml';
@@ -341,8 +333,7 @@ test('the deleted list is the two removals in one collection, newest first', asy
   expect(rows[0]?.detail).toEqual({ locales: ['de'] });
 });
 
-// An entry that was never published is deleted without a commit, so there is nothing to put back
-// and no row to offer it on.
+// A never-published entry is deleted without a commit, so there is nothing to put back.
 test('a delete that made no commit is not in the deleted list', async () => {
   await seedEvent({
     id: 'e1',
@@ -354,8 +345,7 @@ test('a delete that made no commit is not in the deleted list', async () => {
   expect(await deletedEntries('default', db, 'listings')).toEqual([]);
 });
 
-// The New entry dialog offers a saved template before the next build has read it from the
-// repository, so the names ride in the log: one collection's, newest first, each once.
+// The names ride in the log so the dialog offers a template before the next build reads it.
 test('the saved templates are the names the log recorded for one collection', async () => {
   const at = 1_800_000_000_000;
   await seedEvent({
@@ -394,8 +384,7 @@ test('the saved templates are the names the log recorded for one collection', as
   expect(await savedTemplates('default', db, 'listings')).toEqual(['house', 'flat']);
 });
 
-// Git records the installation rather than the person, so this lookup is the only thing that
-// can put a name against a version the admin committed.
+// Git records the installation, not the person, so only this lookup can name a version's author.
 test('commit authors are the people the log recorded against those commits', async () => {
   await seedUser('u1', 'Anna Weber', 'anna@example.com');
   await seedUser('u2', '', 'martin@example.com');
@@ -404,8 +393,7 @@ test('commit authors are the people the log recorded against those commits', asy
   await seedEvent({ id: 'e3', at: 3, userId: 'u2', kind: 'entry-rename', commitSha: 'bbb222' });
   await seedEvent({ id: 'e4', at: 4, userId: null, kind: 'publish', commitSha: 'ccc333' });
 
-  // The name and never the email: this list is not narrowed to the person reading it, so an
-  // email here would be a way to find out who else has an account.
+  // Never the email: the list is not narrowed to the reader, so it would reveal who has an account.
   expect(await commitAuthors('default', db, ['aaa111', 'bbb222', 'ccc333', 'ddd444'])).toEqual({
     aaa111: 'Anna Weber',
   });
@@ -434,7 +422,7 @@ test('the entries a publish carried are one row each, newest first', async () =>
   ]);
 });
 
-// Rows the log already holds were written before a publish recorded what it carried.
+// Older rows predate a publish recording the entries it carried.
 test('an older row names its one entry through the file it was about', async () => {
   await seedEvent({
     id: 'a1',

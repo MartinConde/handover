@@ -6,15 +6,14 @@ export interface MigrationStep {
   up(doc: Record<string, unknown>): Record<string, unknown>;
 }
 
-/** One step per format version bump, in order. Empty while the format is at 1. */
+/** Ordered format migrations, empty while version 1 is current. */
 export const MIGRATIONS: MigrationStep[] = [];
 
 export function versionOf(doc: Record<string, unknown>): number {
   return typeof doc._version === 'number' ? doc._version : 1;
 }
 
-// A second run is a no-op because each step only sees files at its `from` version, so no
-// step has to be idempotent on its own.
+// A second run is a no-op because each step only sees files at its `from` version.
 export function migrateDocument(
   _siteId: string,
   doc: Record<string, unknown>,

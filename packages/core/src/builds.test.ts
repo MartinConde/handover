@@ -1,16 +1,12 @@
 import { expect, test, vi } from 'vitest';
 import { commitBuild } from './builds.js';
 
-// Testing: what a commit's build reads as in each of the states the Workers Builds API puts one
-// in, a commit no build has been made for yet, the name → tag lookup the endpoint needs, and an
-// API that refuses. Not testing: pagination, since one publish is one build and the newest ten
-// cover any admin left open.
 // The shapes below are a real answer from the deployed demo's worker, trimmed.
 
 const ACCOUNT = '2e4dff78a4af5223c7940d6b41d7c9a7';
 const TAG = '1ccd6a35aa294a8fab84992db9f7fcce';
 const SHA = '0147c1defa9dd84b07a80bf5bbfcc2ee488d9017';
-// When the admin pressed Publish: what the window a commit may go unnamed for runs from.
+// When Publish was pressed: the window a commit may go unnamed for runs from here.
 const AT = Date.parse('2026-08-25T16:36:00.000Z');
 const commit = (at = AT) => ({ sha: SHA, at });
 const HOUR = 60 * 60 * 1000;
@@ -31,8 +27,7 @@ const build = (over: Partial<Build> = {}): Build => ({
   ...over,
 });
 
-// Cloudflare, as far as this file is concerned: the service lookup that turns a worker's name
-// into its tag, and that tag's builds. Every URL it was asked for, in order.
+// The service lookup and that tag's builds; `calls` is every URL asked for, in order.
 const cloudflare = (builds: Build[], name: string, ok = true) => {
   const calls: string[] = [];
   const fetch = vi.fn(async (url: string) => {
@@ -52,7 +47,7 @@ test('a commit whose build succeeded is live', async () => {
     commit_sha: SHA,
     state: 'live',
     started_at: Date.parse('2026-08-25T16:36:24.712Z'),
-    // When the site changed, which is what the pill's "Live since 14:02" reads.
+    // What the pill's "Live since 14:02" reads.
     live_at: Date.parse('2026-08-25T16:37:51.781Z'),
   });
 });
@@ -71,8 +66,7 @@ test('a build that stopped without succeeding has failed', async () => {
   );
 });
 
-// The window between the ref update and the build appearing: the commit is not live, and saying
-// it is would put the site's own pill a minute ahead of the site.
+// Between the ref update and the build appearing, saying live would put the pill ahead of the site.
 test('a commit no build has been made for yet is building', async () => {
   const cf = cloudflare(
     [build({ build_trigger_metadata: { commit_hash: 'f'.repeat(40) } })],
@@ -99,7 +93,7 @@ test('the tag is looked up once, however often the build is polled', async () =>
   expect(cf.calls.filter((u) => u.includes('/workers/services/'))).toHaveLength(1);
 });
 
-// The API's own example abbreviates the hash where the deployed worker answers with all forty.
+// The API's own example abbreviates the hash; the deployed worker answers with all forty.
 test('an abbreviated commit hash still matches the commit', async () => {
   const cf = cloudflare(
     [build({ build_trigger_metadata: { commit_hash: SHA.slice(0, 12) } })],
@@ -113,8 +107,7 @@ test('an API that refuses is an error rather than a state', async () => {
   await expect(commitBuild(worker('w-403'), commit(), { fetch: cf.fetch })).rejects.toThrow('403');
 });
 
-// A site the admin has never published on: there is no commit of ours to ask about, and a blank
-// top bar is the wrong reading of a perfectly live site.
+// With no commit of ours to ask about, a blank top bar misreads a perfectly live site.
 test('with no commit named it is the worker’s newest build', async () => {
   const cf = cloudflare([build({ status: 'running', build_outcome: null }), build()], 'w-newest');
   expect(await commitBuild(worker('w-newest'), undefined, { fetch: cf.fetch })).toEqual({
@@ -130,11 +123,7 @@ test('a worker nothing has ever built, asked about no commit, is live', async ()
   });
 });
 
-// The defect 3.21's walk found. The list endpoint takes no commit filter — asking for one is
-// ignored, `total_count` does not move — so one page of ten is all there is, and a commit that
-// has scrolled off it matched nothing and read as **Building… 1012m** through every reload.
-// Past the window a commit may reasonably go unnamed for, the answer is the worker's newest
-// build instead, and it names no commit: the pill's counter runs from `committed_at`.
+// The list endpoint takes no commit filter.
 test('a commit older than the window no build names it reads as the newest build', async () => {
   const cf = cloudflare(
     [build({ build_trigger_metadata: { commit_hash: 'f'.repeat(40) } })],
@@ -149,9 +138,7 @@ test('a commit older than the window no build names it reads as the newest build
   });
 });
 
-// Falling through to the newest build where there is none would answer `live` about a commit
-// that plainly is not: nothing has ever been built here. It stays building, and with no build to
-// take a `started_at` off and no commit named the pill draws no counter beside it.
+// A missing newest build must not mark an older commit live.
 test('a stale commit on a worker nothing has ever built is building, and bare', async () => {
   const cf = cloudflare([], 'w-stale-never');
   expect(

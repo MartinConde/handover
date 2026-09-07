@@ -31,8 +31,7 @@ test('<Embed /> encodes a map place into the query it is read from', async () =>
   );
 });
 
-// The id is the only part of the address that comes from a file, and it is encoded on the way
-// in: nothing written into a content file by hand can end the attribute and start another.
+// The id is the only part of the address that comes from a file, and it is encoded on the way in.
 test('<Embed /> cannot be talked out of its own attribute', async () => {
   const html = await render({
     value: { provider: 'youtube', id: 'abc" onload="alert(1)', title: 'Tour' },
@@ -43,8 +42,7 @@ test('<Embed /> cannot be talked out of its own attribute', async () => {
   );
 });
 
-// A frame with no name is one a screen reader announces as nothing at all, and a title nobody
-// has typed in this language is the ordinary state of a freshly translated entry.
+// A frame with no name is one a screen reader announces as nothing at all.
 test('<Embed /> falls back to the provider name where this language has no title', async () => {
   const html = await render({ value: { provider: 'vimeo', id: '76979871' } });
   expect(html).toContain('title="Vimeo"');

@@ -14,7 +14,7 @@ const MIN = 16;
 const clamp = (n: number, low: number, high: number) =>
   Math.min(Math.max(n, low), Math.max(low, high));
 
-/** The widest crop at this ratio the picture holds, in the middle of it; free is the whole picture. */
+/** The widest crop at this ratio the picture holds, in the middle of it. */
 export function fitRegion(width: number, height: number, ratio?: string): Region {
   const r = ratioOf(ratio);
   const w = r ? Math.min(width, Math.round(height * r)) : width;
@@ -37,11 +37,7 @@ export function moveRegion(
   };
 }
 
-/**
- * The crop at a size somebody typed on a slider, grown or shrunk about its own middle: they are
- * choosing how much of the picture to keep rather than where a corner lands. A locked ratio is
- * read off the width, and the picture's own edge is where either stops.
- */
+/** The crop at a size somebody typed on a slider, grown or shrunk about its own middle. */
 export function sizeRegion(
   region: Region,
   width: number,
@@ -62,11 +58,7 @@ export function sizeRegion(
   return moveRegion({ x, y, w: nw, h: nh }, width, height, 0, 0);
 }
 
-/**
- * A corner dragged to a point, with the corner opposite held where it is — which is what makes
- * the box feel like a box. Under a locked ratio the pointer names the width and the height
- * follows it, so the shape never fights the hand.
- */
+/** A corner dragged to a point, with the corner opposite held where it is. */
 export function dragRegion(
   region: Region,
   width: number,
@@ -93,27 +85,18 @@ export function dragRegion(
   return { x: left ? ax - w : ax, y: top ? ay - h : ay, w, h };
 }
 
-/** What the copy is called: the picture's own name, said to be a crop of it, in what it is stored as. */
+/** What the copy is called: the picture's own name, said to be a crop of it. */
 export const cropName = (filename?: string | null) =>
   `${(filename ?? '').replace(/\.[^.]+$/, '') || 'crop'}${filename ? '-crop' : ''}.webp`;
 
-/**
- * The crop as its own asset: the original's bytes are read back from the bucket, the region is
- * drawn into a canvas and the result is uploaded like any other picture, with a line back to the
- * picture it came from. **The original is never touched** — that is the whole of why cropping is
- * offered at all, and why the copy is a row of its own rather than a second version of one.
- */
+/** The crop as its own asset: the original's bytes are read back from the bucket. */
 export async function uploadCrop(
   item: MediaItem,
   region: Region,
   deps: { fetch?: typeof globalThis.fetch } = {},
 ): Promise<MediaItem> {
   const { fetch = globalThis.fetch } = deps;
-  // A cross-origin read of the bucket, which is the one thing the site's CORS rule has to allow
-  // beyond the upload itself; without it the browser refuses before there is a status to report.
-  // `reload` because the picture on the screen is already in the browser's cache, fetched by an
-  // `<img>` that sent no `Origin` — and a cached answer with no CORS headers on it fails this
-  // read however the bucket is configured.
+  // CORS must permit reading the stored original.
   const res = await fetch(item.url ?? '', { cache: 'reload' }).catch(() => undefined);
   if (!res?.ok)
     throw new Error(

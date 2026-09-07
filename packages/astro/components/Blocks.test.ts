@@ -29,8 +29,7 @@ test('<Blocks /> renders the 1.5 golden through the components, three levels dee
   expect(html.trim().startsWith('<h1>')).toBe(true);
 });
 
-// The golden's `_ref` sits three levels down, inside a column, and the nesting component passes
-// on `components` alone: filling the whole tree at the top is what makes that work.
+// The `_ref` sits three levels down and the nesting component passes on `components` alone.
 test('<Blocks /> fills a nested _ref block from the globals of the language it is given', async () => {
   const container = await AstroContainer.create();
   const render = (globals: Record<string, unknown>) =>

@@ -90,8 +90,7 @@ test('<Seo /> points the canonical at this page, or where the entry says instead
   expect(elsewhere).toContain('<link rel="canonical" href="https://example.com/original">');
 });
 
-// A relative hreflang is not an address, and a guessed origin is the build host: neither is
-// worth emitting, so a site that declares none gets the tags that need no origin and no more.
+// A relative hreflang is not an address, and a guessed origin is the build host.
 test('<Seo /> emits no address at all when the site has not said where it lives', async () => {
   const html = await render({
     ...base,
@@ -125,9 +124,7 @@ test('<Seo /> lists every language the entry can be read in', async () => {
   );
 });
 
-// One page has one address, and the site serves it under one of the two forms: a cluster whose
-// self-reference is the other form is a cluster this page is not in, and every other language
-// in it points at the redirect the site answers with.
+// One page has one address, and the site serves it under one of the two forms.
 test('<Seo /> writes the alternates the way the site writes this page', async () => {
   const html = await render({ ...base, locales: alternates });
 
@@ -174,9 +171,7 @@ test('<Seo /> escapes what a hand-edited file put in the title', async () => {
   expect(html).not.toContain('onload="alert(1)">');
 });
 
-// The two readings of one switch: the tag this component writes and the URL the build leaves
-// out of the sitemap. Asserted together, off the same file, because a page that says `noindex`
-// and is still offered to a crawler is the same defect as an hreflang pointing at a redirect.
+// This switch controls both the tag and sitemap inclusion.
 const crawl = {
   i18n: { locales: ['en'], defaultLocale: 'en' },
   collections: { listings: { route: '/listings/[slug]' } },

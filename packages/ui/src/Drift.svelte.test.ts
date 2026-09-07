@@ -2,8 +2,6 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Drift from './Drift.svelte';
 
-// Testing: the answers each row allows, which come from what has the block against what should
-// have it and not from a fixed three; and what Apply sends for the one that was picked.
 // Not testing: the banner above it or the chrome the panel sits in.
 
 const STRAY = {
@@ -106,8 +104,7 @@ test('Apply waits until every block has been answered', () => {
   expect(root.querySelector('.actions .left')?.textContent).toBe('1 of 2 answered');
 });
 
-// A card names files until it can name words: removing a block from English is losing what is
-// written there, and nobody should answer that against a file name.
+// Removing a block from English loses what is written there, so a card names words, not files.
 test('a card shows what each language says in the block it is deciding about', () => {
   const root = show([MARKED]);
 

@@ -70,8 +70,7 @@ async function load(want: number) {
   const res = await fetch(`/admin/api/history/${collection}/${slug}?page=${want}`);
   loading = false;
   if (!res.ok) {
-    // A repository out of reach is the server's own sentence and names the installation; a
-    // rate limit is GitHub refusing this site for a few minutes, which is nobody's mistake.
+    // A 503 is the server's own sentence; anything else is GitHub refusing for a few minutes.
     error =
       res.status === 503
         ? await res.text()
@@ -85,11 +84,7 @@ async function load(want: number) {
   more = body.more === true;
 }
 
-/**
- * What the chosen version says that another does not. With one version the other side is what
- * is live now, so the fields marked are the ones restoring it would change; with two it is the
- * older of them, so they read as what happened in between.
- */
+/** With one version the other side is what is live now; with two it is the older of them. */
 async function readDiff(to: Version, from?: Version) {
   reading = true;
   diffError = '';
@@ -116,10 +111,7 @@ function closeConfirm() {
   restoreButton?.focus();
 }
 
-/**
- * The version into the entry's drafts. Never a rewrite of git: the editor opens on it and
- * publishing it is the ordinary forward commit, which is what the dialog says in words.
- */
+/** Into the drafts, never a rewrite of git: publishing it is the ordinary forward commit. */
 async function restore() {
   if (!confirming) return;
   restoring = true;
@@ -178,8 +170,7 @@ const midnight = (at: number) => {
   return day.getTime();
 };
 
-// The activity log's own scale, and for the same reason: past a week a distance stops being an
-// answer and the date is what somebody is actually looking for.
+// Past a week a distance stops being an answer, so the date is shown, as in the activity log.
 function when(iso: string): string {
   const at = Date.parse(iso);
   if (!at) return '';
@@ -244,8 +235,7 @@ const initials = (name: string) =>
         {/each}
       </ul>
     {:else if versions.length === 0}
-      <!-- Not an error and not an empty search: the tab is reachable so the client learns
-           where history will be, and the sentence says what it is waiting for. -->
+      <!-- Not an error: the tab is reachable so the client learns where history will be. -->
       <div class="empty">
         <div>
           <h2>Nothing published yet</h2>
@@ -271,8 +261,7 @@ const initials = (name: string) =>
               {#if version.author}
                 <span class="avatar avatar-sm" aria-hidden="true">{initials(version.author)}</span>
               {/if}
-              <!-- The commit is a tooltip at most: this is an editor's history, not a git
-                   client, and a sha is not something a client has any use for. -->
+              <!-- A sha is a tooltip at most: a client has no use for it. -->
               <button
                 class="summary"
                 type="button"
@@ -326,14 +315,12 @@ const initials = (name: string) =>
         </p>
       </div>
       <Diff {groups} {mediaBase} />
-    <!-- No Restore here: it restores the version being looked at, and a pair is neither of
-         them. Ticking a second box is what takes the button away. -->
+    <!-- No Restore for a pair: it restores the version being looked at, which a pair is not. -->
     {:else if chosen.length === 2}
       {@const pair = [...chosen].sort((a, b) => Date.parse(a.date) - Date.parse(b.date))}
       <div class="version-head">
         <h2>Two versions compared</h2>
-        <!-- Named by what each says rather than by when it happened: two versions of the same
-             afternoon both read "6 days ago", which tells nobody which pair this is. -->
+        <!-- Named by what each says: two versions of one afternoon both read "6 days ago". -->
         <p class="by">
           From <em>{pair[0]?.summary}</em>, {when(pair[0]?.date ?? '')}, to
           <em>{pair[1]?.summary}</em>, {when(pair[1]?.date ?? '')}
@@ -352,8 +339,7 @@ const initials = (name: string) =>
 
 <svelte:window onkeydown={(e) => { if (e.key === 'Escape' && confirming) closeConfirm(); }} />
 
-<!-- Not aria-modal: the shell behind stays reachable, as it does on the library and on Members,
-     and claiming a focus trap that is not there is worse than not claiming one. -->
+<!-- Not aria-modal: the shell behind stays reachable, so claiming a focus trap would be false. -->
 {#if confirming}
   <div class="scrim">
     <div class="dialog is-slim" role="dialog" aria-labelledby="rs-h" aria-describedby="rs-d">

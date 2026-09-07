@@ -2,8 +2,7 @@ import type { APIContext } from 'astro';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { onRequest } from './middleware.js';
 
-// The Better Auth instance is the boundary here: what it answers is proven against a real D1
-// in core's auth.test.ts, and what this file tests is which requests ever get to ask it.
+// Better Auth is the boundary here: this file tests which requests ever get to ask it.
 vi.mock('virtual:handover/config', () => ({ default: { i18n: {} } }));
 
 let session: {
@@ -46,8 +45,7 @@ test('a signed-in call passes through carrying the user and the role', async () 
   };
   const { status, passed, locals } = await run('/admin/api/drafts');
   expect({ status, passed }).toEqual({ status: 200, passed: true });
-  // The session's own id rides along so the account page can mark one row "this device"
-  // without the browser ever being handed a session token.
+  // The session id rides along so the account page can mark "this device" without a token.
   expect(locals.handover).toEqual({
     user: { id: 'u1', name: 'Martin', email: 'martin@example.com' },
     role: 'owner',
@@ -71,8 +69,7 @@ test('the shell and the public site are not gated', async () => {
   }
 });
 
-// A draft page's links point at the live site, so clicking through a preview would leave it;
-// the ones to this site are turned into their previews on the way out, and nothing else is.
+// Links to this site are turned into their previews on the way out, and nothing else is.
 test('a link on a preview page to a page on this site stays in the preview', async () => {
   session = null;
   const url = new URL('/_preview/listings/mill-house?at=1', 'https://x');

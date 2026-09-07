@@ -2,10 +2,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Preview from './Preview.svelte';
 
-// Testing: what the pane shows instead of a page — a build with no route, and a draft the schema
-// still refuses with the way back to the field — the two facts that are the admin's and not the
-// site's (never published, not saved), which address it frames, and what makes it ask for the
-// page again. Not testing: the device buttons or the status wording, chrome over one class.
+// Testing: what the pane shows instead of a page.
 
 const chosen = vi.fn();
 const went = vi.fn();
@@ -89,8 +86,7 @@ test('a build with no preview route says whose job turning it on is', () => {
   expect(q(root, '.preview-error.is-quiet')?.textContent).toContain('PREVIEW_ENABLED');
 });
 
-// A page cannot be built around a hole, so the card stands where the frame would be — and the
-// way back to the field is the point of naming it.
+// A page cannot be built around a hole, so the card stands where the frame would be.
 test('a draft the schema still refuses is a card naming each field, not half a page', () => {
   const root = show({
     problems: [
@@ -139,8 +135,7 @@ test('choosing another language hands the choice back rather than moving the fra
   expect(chosen).toHaveBeenCalledWith('de');
 });
 
-// A hidden page is the one most worth looking at before it goes back on, so the frame stays
-// and the pane says the one thing the site cannot: this page is off the live site.
+// A hidden page is the one most worth looking at before it goes back on.
 test('a hidden entry still renders, under a banner saying it is off the live site', () => {
   const root = show({ hidden: true });
 

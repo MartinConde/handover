@@ -118,8 +118,6 @@ test('an invite names the address it went to and the role it was for', async () 
   expect(sentences(await show())).toEqual(['Anna Berg invited lea@example.com as an editor.']);
 });
 
-// The subject of a role change is a member id, and the row has to read as a sentence rather
-// than as a database key.
 test('a role change names the member it was about rather than their id', async () => {
   server(
     { events: [ev('role-change', { subject: 'u9', detail: { role: 'owner' } })], cursor: null },
@@ -129,9 +127,7 @@ test('a role change names the member it was about rather than their id', async (
   expect(sentences(await show())).toEqual(['Anna Berg made Jonas Weber an owner.']);
 });
 
-// The dashboard draws the same rows with no member list — an owner-only read it does not
-// make — so the row carries the name it was about at the time, and a member since renamed or
-// removed is still named.
+// The dashboard draws the same rows without the owner-only member list.
 test('a role change names the member from the row itself when there is no member list', async () => {
   server({
     events: [ev('role-change', { subject: 'u9', detail: { role: 'owner', name: 'Jonas Weber' } })],
@@ -205,8 +201,6 @@ test('a publish of one file links to the entry and names its language', async ()
   expect(sentences(root)).toEqual(['Anna Berg published mill-house DE a1b2c3d']);
 });
 
-// A global is edited at its own address rather than under a collection, and every other link to
-// one on every other screen goes there.
 test('a row about a global links to Site settings, not to a collection', async () => {
   server({
     events: [
@@ -223,8 +217,6 @@ test('a row about a global links to Site settings, not to a collection', async (
   expect(root.querySelector('.said a')?.getAttribute('href')).toBe('/admin/site/site');
 });
 
-// A commit with no one entry on it has nowhere to send anybody, so it counts its files instead
-// — and counts them in words, since 3.11 decides again what a `publish` row carries.
 test('a publish with no entry on it counts its files and links to none of them', async () => {
   server({
     events: [
@@ -255,9 +247,7 @@ test('a message the provider would not take names what it was for and nobody', a
   expect(root.querySelector('.avatar')?.classList.contains('is-system')).toBe(true);
 });
 
-// 3.14 to 3.29 add kinds without opening this file, so a kind with no sentence of its own has
-// to read as a record rather than throw or render nothing. A subject that is an entry file is
-// named the way a publish names one, since that much is true whatever the kind turns out to be.
+// Later sessions add kinds without opening this file, so an unknown kind must still read.
 test('a kind nothing has written a sentence for still reads as a record', async () => {
   server({
     events: [ev('entry-archived', { subject: 'src/content/pages/en/contact.yaml' })],
@@ -269,8 +259,6 @@ test('a kind nothing has written a sentence for still reads as a record', async 
   expect(root.querySelector('.said a')?.getAttribute('href')).toBe('/admin/c/pages/contact');
 });
 
-// The row is about the entry the template was made from, which is the one that is somewhere
-// to go; the template's own name is in the detail.
 test('a saved template names the template and links to the entry it came from', async () => {
   server({
     events: [
@@ -287,8 +275,7 @@ test('a saved template names the template and links to the entry it came from', 
   expect(root.querySelector('.said a')?.getAttribute('href')).toBe('/admin/c/listings/mill-house');
 });
 
-// Both rows are written with the old name in `detail.from` and the entry as it is now as the
-// subject, which is the one of the two that is somewhere to go.
+// The subject is the entry as it is now, since that is the one that is somewhere to go.
 test('a rename and a duplicate name what the entry was and link to what it is', async () => {
   server({
     events: [
@@ -315,8 +302,7 @@ test('a rename and a duplicate name what the entry was and link to what it is', 
   ]);
 });
 
-// The log outlives the account: the id is there with nothing behind it, and reading that as the
-// system would say a person's sign-in was a cron job.
+// The log outlives the account: an id with nothing behind it is not the system.
 test('an event whose person has been removed is not drawn as the system', async () => {
   server({
     events: [
@@ -353,7 +339,6 @@ test('each row wears the chip of the group its kind belongs to, and an unclaimed
   ).toEqual(['Accounts', 'Publishing', 'System', '']);
 });
 
-// A cron row is a sentence like every other, not the job's internal name with a dash in it.
 test('a cron row says what the job did, or why it did not', async () => {
   server({
     events: [
@@ -378,9 +363,7 @@ test('a cron row says what the job did, or why it did not', async () => {
   ]);
 });
 
-// "Yesterday" is not an audit record, so a row stops counting backwards once it is a week old.
-// The buckets are calendar days from local midnight, not elapsed milliseconds, because a day is
-// 23 or 25 hours across a daylight-saving change.
+// Buckets are calendar days from local midnight, since a day is 23 or 25 hours across DST.
 test('a time is worded by how long ago it was, and becomes a date after a week', async () => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(new Date('2026-08-25T14:00:00'));
@@ -455,11 +438,9 @@ test('an entry filter sends the path exactly, since that is what the server matc
   );
 });
 
-// The cursor belongs to the query that produced it. Carrying it across a filter change appends
-// page two of the old question under page one of the new one.
+// A cursor carried across a filter change appends page two of the old question to the new one.
 test('changing a filter drops the cursor it was holding', async () => {
-  // Page two hands back a cursor of its own: a screen holding one that answers `null` cannot
-  // carry anything, so the fixture has to give it something to carry.
+  // Both pages hand back a cursor, or there would be nothing to carry.
   const calls = server([
     { events: [ev('login', { detail: { method: 'password' } })], cursor: '1000.a' },
     { events: [ev('login', { detail: { method: 'link' } })], cursor: '2000.b' },
@@ -522,8 +503,7 @@ test('load more says so, and refuses a second press, while the page is on its wa
   expect(sentences(root)).toHaveLength(2);
 });
 
-// Replacing the list under somebody is a change axe scores nothing on and a keyboard pass does
-// not catch: the region has to be in the document before its content changes, or nothing is said.
+// The region has to be in the document before its content changes, or nothing is said.
 test('the result of a filter is announced, not only redrawn', async () => {
   const calls = server([
     { events: [ev('login', { detail: { method: 'password' } })], cursor: null },
@@ -561,8 +541,6 @@ test('an owner whose filters match nothing is offered a way back', async () => {
   expect((root.querySelector('#activity-group') as HTMLSelectElement).value).toBe('');
 });
 
-// "Nothing here" and "nothing matches" are different answers, and only one of them mentions
-// the filters somebody has set.
 test('a log with nothing in it yet is not the same sentence as one nothing matches', async () => {
   server({ events: [], cursor: null });
   const root = await show();
@@ -571,9 +549,7 @@ test('a log with nothing in it yet is not the same sentence as one nothing match
   expect(text(root)).not.toContain('No activity matches these filters');
 });
 
-// The two ways a publish comes back with nothing written, and the one row on this screen that
-// The mockup's state 5: the row opens on what the commit changed, field by field, read from
-// the server only once somebody asks — a log page of fifty publishes is not fifty git reads.
+// Read from the server only once somebody asks: fifty publishes are not fifty git reads.
 test('a publish row opens to the commit read field by field, not to its files', async () => {
   const calls = server(
     {
@@ -628,7 +604,6 @@ test('a publish row opens to the commit read field by field, not to its files', 
   ]);
 });
 
-// expands: 3.19 puts the other commit's diff under it, this puts the reason.
 test('a failed publish says the repository refused it and opens on the reason', async () => {
   server({
     events: [ev('publish-failed', { detail: { files: 3, reason: 'ref-moved' } })],
@@ -672,7 +647,6 @@ test('a publish stopped by a file somebody else changed names that entry', async
   );
 });
 
-// 3.10's two kinds, whose sentences the mockup draws beside the failed publish.
 test('a take-over and a released hold read as sentences, and neither expands', async () => {
   server({
     events: [
@@ -697,7 +671,6 @@ test('a take-over and a released hold read as sentences, and neither expands', a
   expect(root.querySelector('.activity-detail')).toBe(null);
 });
 
-// One kind, two writers: the drawer's Discard and a version restored over unpublished changes.
 test('a discard reads as a sentence, and a restore over a draft says which it was', async () => {
   server({
     events: [
@@ -731,8 +704,6 @@ test('a hold released with nobody named still reads', async () => {
   expect(sentences(root)).toEqual(['Anna Berg released the hold on about-us EN']);
 });
 
-// 3.14's kind. There is no media library to open until Phase 4, so the row says what happened
-// and stops there.
 test('an upload reads as a sentence, named by the file it was chosen as', async () => {
   server({
     events: [
@@ -750,9 +721,7 @@ test('an upload reads as a sentence, named by the file it was chosen as', async 
   expect(root.querySelector('.said a')).toBe(null);
 });
 
-// 4.3's two. Archiving and unarchiving are the same kind and are told apart by the flag, so
-// each is its own sentence; a delete says where the file went, because it is the only row in
-// the log about bytes that are gone.
+// A delete says where the file went, being the only row in the log about bytes that are gone.
 test('putting a picture away, taking it back and deleting it each read as themselves', async () => {
   server({
     events: [
@@ -776,8 +745,7 @@ test('putting a picture away, taking it back and deleting it each read as themse
   ]);
 });
 
-// 3.25's kind. The value is never in the row, and never was in the log: what happened to which
-// key is the whole of it.
+// The value is never in the log, so what happened to which key is the whole row.
 test('a key the client set reads as what happened to it, and never as the key', async () => {
   server({
     events: [
@@ -798,8 +766,7 @@ test('a key the client set reads as what happened to it, and never as the key', 
   ]);
 });
 
-// The two commits that take a file away, and the one that puts one back. A delete is named
-// rather than linked: the entry is gone, so the link would be a 404.
+// A delete is named rather than linked: the entry is gone, so the link would be a 404.
 test('the two removals and a restore each read as their own sentence', async () => {
   server({
     events: [
@@ -833,8 +800,7 @@ test('the two removals and a restore each read as their own sentence', async () 
   expect(root.querySelectorAll('.said a').length).toBe(2);
 });
 
-// The way back is on the row that recorded the removal, and only there: a publish is undone
-// from the drawer, and a row with no commit behind it has nothing to put back.
+// A publish is undone from the drawer, and a row with no commit has nothing to put back.
 test('restore is offered on a removal and sends the commit that row named', async () => {
   const calls = server({
     events: [
@@ -849,8 +815,7 @@ test('restore is offered on a removal and sends the commit that row named', asyn
   });
   const root = await show();
 
-  // The publish row's own button is the one that opens its diff, in `.expand`; Restore is not
-  // offered on it.
+  // The publish row's button in `.expand` opens its diff; Restore is not offered on it.
   const buttons = Array.from(root.querySelectorAll('li .meta > button'));
   expect(buttons.map((b) => b.textContent)).toEqual(['Restore']);
   (buttons[0] as HTMLButtonElement).click();
@@ -861,12 +826,11 @@ test('restore is offered on a removal and sends the commit that row named', asyn
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ commit_sha: 'd1b2c3d4e5f60718' }),
   });
-  // And the list is read again, so the row it was on can say what it says now.
+  // The list is read again so the row can say what it says now.
   expect(activityCalls(calls).length).toBe(2);
 });
 
-// The one case a restore is refused: something is at the path again. The server's own sentence
-// names the file, and nothing was written.
+// A restore is refused only when something is at the path again; the server names the file.
 test('a refused restore says what the server said', async () => {
   server({
     events: [

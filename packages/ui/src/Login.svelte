@@ -19,22 +19,18 @@ let {
   onlogin: () => void;
 } = $props();
 
-// svelte-ignore state_referenced_locally -- the location is read once: reaching /admin/reset
-// or coming back from a dead link is a page load, not a prop changing under the component
+// svelte-ignore state_referenced_locally -- initialized once from the page URL
 const params = new URLSearchParams(query);
-// The token from a reset email, which /admin/reset was redirected to carrying it. Anything else
-// in `error` — an expired link, a GitHub account nobody invited — is one message, below.
 // svelte-ignore state_referenced_locally -- same page load
 const resetToken = path === '/admin/reset' ? (params.get('token') ?? '') : '';
-// Better Auth sends every refusal back here the same way — a dead link, and a GitHub account
-// nobody invited — and they read the same, so the form never says which addresses exist. On a
-// site with no emailed link the expired-link wording would be a lie, so it gets the plain one.
+// With no emailed link the expired-link wording would be a lie, so it gets the plain message.
 const refused = Boolean(params.get('error'));
 
 // One message for both causes, so the form never confirms which addresses have an account.
 const REFUSED = "We couldn't sign you in. Check your email and password.";
 
 type View = 'sign-in' | 'link-sent' | 'reset-sent' | 'link-dead' | 'reset';
+// svelte-ignore state_referenced_locally -- the login view is chosen once per page load
 let view = $state<View>(
   resetToken ? 'reset' : refused && methods.emailLink ? 'link-dead' : 'sign-in',
 );
@@ -42,11 +38,10 @@ let email = $state('');
 let password = $state('');
 let next = $state('');
 let confirm = $state('');
-// The mockup's email-only first state exists because "Email me a link" is the primary button.
-// A site that has no link has nothing to reveal, so it opens on the password form instead.
 // svelte-ignore state_referenced_locally -- a site does not gain a mailer while the page is up
 let usePassword = $state(!methods.emailLink);
 let reveal = $state(false);
+// svelte-ignore state_referenced_locally -- the initial error is chosen once per page load
 let error = $state(refused && !methods.emailLink ? REFUSED : '');
 let fieldError = $state('');
 let notice = $state('');
@@ -71,8 +66,7 @@ async function post(path: string, body: unknown) {
 
 async function signIn(event: SubmitEvent) {
   event.preventDefault();
-  // The email-only form's one primary button is the link; the password half is revealed by
-  // the secondary button beside it, or is already open on a site with no link at all.
+  // The email-only form's primary button is the link; the password half is revealed beside it.
   if (!usePassword) return sendLink();
   const res = await post('/admin/api/auth/sign-in/email', { email, password });
   if (res.ok) onlogin();
@@ -80,8 +74,7 @@ async function signIn(event: SubmitEvent) {
 }
 
 async function sendLink() {
-  // The answer is the same for an address that has an account and one that does not, and so is
-  // what is shown: whether an email exists is not the login's to say.
+  // The same answer whether the address has an account or not: that is not the login's to say.
   const res = await post('/admin/api/auth/sign-in/magic-link', {
     email,
     callbackURL: sitePath('/admin'),
@@ -125,8 +118,7 @@ async function saveNewPassword(event: SubmitEvent) {
     newPassword: next,
   });
   if (res.ok) {
-    // Better Auth mints no session on a reset — and every old one has just been revoked — so
-    // this ends at the form rather than inside the admin.
+    // Better Auth mints no session on a reset, so this ends at the form, not inside the admin.
     history.replaceState(null, '', sitePath('/admin'));
     view = 'sign-in';
     usePassword = true;

@@ -59,10 +59,7 @@ test('the globals of one language are keyed by file name, without the locale fol
   });
 });
 
-// Astro's glob loader files an entry under a `slug` it finds in the data, which is exactly
-// where a `localizedSlugs` collection keeps its address: without `generateId` the German half
-// of `home` stops being `de/home` and every lookup misses. Nothing else can see the loader, so
-// the reader that is handed the ids says so (F7 in 02-i18n.md).
+// Without `generateId` Astro's glob loader files an entry under its `slug` (F7 in 02-i18n.md).
 test('an entry filed under its address rather than its path names the loader option', async () => {
   const misfiled = staticSource<{ pages: unknown }>('default', {
     getEntry: async () => undefined,
@@ -93,9 +90,7 @@ for (const name of readdirSync(goldenDir)) {
   });
 }
 
-// The pair session 2.5 compares. DE has two blocks EN has not: `compliance` carries
-// `_locales`, so it is DE-only on purpose, and `quote` carries nothing, so it is drift. A
-// report that flags every difference passes on one of them and fails on the other.
+// DE has two blocks EN has not: `compliance` is DE-only on purpose, `quote` is drift.
 for (const locale of ['en', 'de']) {
   test(`the drift fixture's ${locale} file is one the serialiser could have written`, () => {
     const file = readFileSync(
@@ -106,8 +101,7 @@ for (const locale of ['en', 'de']) {
   });
 }
 
-// One fixture per scalar field type: the object a form produces must land in the golden
-// file byte for byte and come back equal, so the stored form of each type is pinned.
+// One fixture per scalar field type pins the stored form of each.
 const scalars: Record<string, unknown> = {
   text: {
     _version: 1,
@@ -205,7 +199,6 @@ for (const [type, fixture] of Object.entries(structured)) {
   });
 }
 
-// Nesting types: a group is a plain object, an array holds groups (each with an `_id`), and
 // `blocks` nests three levels deep — blocks → array of groups → blocks — with one `_ref`.
 const nesting: Record<string, unknown> = {
   group: {
@@ -303,8 +296,7 @@ test('an array directly inside an array is rejected at serialise time', () => {
   );
 });
 
-// Collection-level shapes: a global, the navigation global, redirects.yaml and a template.
-// A template carries no `_id`s — they are generated when an entry is created from it.
+// A template carries no `_id`s; they are generated when an entry is created from it.
 const conventions: Record<string, unknown> = {
   'globals-site': {
     _version: 1,
@@ -412,12 +404,7 @@ test('a save keeps the _version the entry already has', () => {
   });
 });
 
-// decap-cms#6978: fields configured to duplicate are stripped from a translated document on
-// save, because the German form never showed them and so never sent them back. `price` and
-// `bedrooms` are duplicate, `image.src` / `width` / `height` are duplicate and `image.alt` is
-// translatable — the nested case is the one clients notice, since it makes them retype URLs.
-// The form a translated locale draws: `price` and `bedrooms` are the same in every language,
-// `image` splits — its `src`, `width` and `height` are the file's, only `alt` is translated.
+// decap-cms#6978: the German form never sends duplicate fields back; a save must keep them.
 const listing: Form = {
   fields: [
     { path: ['title'], label: 'Title', type: 'text', required: true },
@@ -430,9 +417,7 @@ const listing: Form = {
   blocks: {},
 };
 
-// The second column draws an embed as a card with one input in it, and the browser is not
-// trusted with the rest: a request that also names another video is a request to change what
-// every language points at, which is not a translation's to make.
+// Which video an embed points at is every language's, so a translation cannot change it.
 test('a translated save of an embed writes the title and leaves the video alone', () => {
   const form: Form = {
     fields: [{ path: ['video'], label: 'Video', type: 'embed', required: false }],
@@ -539,8 +524,7 @@ test('a translated field its form left empty goes, rather than coming back', () 
   });
 });
 
-// The skeleton is the same in every language, so a translated save carries values and never
-// structure: the blocks it writes are the ones the file has, paired by `_id`.
+// A translated save carries values, never structure: blocks are paired by `_id` with the file's.
 const article: Form = {
   fields: [{ path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: ['hero'] }],
   blocks: {
@@ -604,9 +588,7 @@ test('a translated save does not add, drop or reorder blocks', () => {
   });
 });
 
-// The pair the `image.src` / `image.alt` split is drawn on: everything the two files share is
-// byte for byte the same, `notes` is the source locale's alone, and the German file holds
-// nothing but translations of the rest.
+// `notes` is the source locale's alone and the German file holds only translations.
 const millHouse: Form = {
   fields: [
     ...listing.fields,
@@ -661,10 +643,7 @@ test('the other locale file comes back byte for byte when the source has nothing
   expect(stringifyEntry('default', synced)).toBe(de);
 });
 
-// A file Create-from-English made had its shared keys before its translated ones — the order
-// `overlay` acquired them in, the create carrying one and the first save adding the rest —
-// rather than the order the schema declares them (F4 in 02-i18n.md). The serialiser already
-// puts the reserved keys in front; what it cannot know is where the rest belong.
+// Create-from-English used to write shared keys before translated ones (F4 in 02-i18n.md).
 const presenter: Form = {
   fields: [
     { path: ['name'], label: 'Name', type: 'text', required: true },
@@ -693,9 +672,7 @@ test('a file made from another language is written in schema order', () => {
   expect(Object.keys(typed)).toEqual(['_version', 'name', 'role', 'bio']);
 });
 
-// The drift pair: EN has the two shared blocks, DE has those plus a `compliance` block marked
-// `_locales: [de]` and a `quote` block marked nothing at all. One fixture covers both rules —
-// what an edit in one language owns, and what it must not touch.
+// DE has the shared blocks plus `compliance` marked `_locales: [de]` and an unmarked `quote`.
 const page: Form = {
   fields: [
     { path: ['title'], label: 'Title', type: 'text', required: true },
@@ -831,8 +808,7 @@ test('a language whose file has no blocks yet is given the structure, not left e
   expect(synced._version).toBe(1);
 });
 
-// Drift is what a save is not allowed to resolve: the same fixture pair, read rather than
-// written. `compliance` says which language it belongs to and `quote` says nothing at all.
+// Drift is what a save is not allowed to resolve.
 test('a block one language has without `_locales` is drift, and one with it is not', () => {
   expect(driftReport('default', page, { en: drifted('en'), de: drifted('de') })).toEqual([
     {
@@ -847,8 +823,7 @@ test('a block one language has without `_locales` is drift, and one with it is n
 
 test('an entry with a file in one language alone has nothing to have drifted from', () => {
   const de = drifted('de');
-  // A block naming a language the entry has no file in included: there is no second file to
-  // reconcile it against, so a publish of it is never the one that is blocked.
+  // With no second file to reconcile against, a publish of a stray mark is never blocked.
   const stray = { _type: 'quote', _id: 'z9y8x7w6', _locales: ['en'], body: 'Ein seltener Fund.' };
 
   expect(driftReport('default', page, { de: { ...de, blocks: [stray] } })).toEqual([]);
@@ -877,8 +852,7 @@ test('a block in a language its `_locales` does not name has drifted too', () =>
   ]);
 });
 
-// The card has to show what an answer would lose, and the report is where the words come from:
-// the panel reads no file of its own.
+// The card shows what an answer would lose, and the panel reads no file of its own.
 test('a drift row carries the words each language has for it', () => {
   const de = drifted('de');
   const compliance = (de.blocks as Record<string, unknown>[])[1];
@@ -893,8 +867,7 @@ test('a drift row carries the words each language has for it', () => {
   });
 });
 
-// Blocks inside a block, and rows inside a group's array: drift anywhere the structure is
-// shared is drift, and the report addresses the row the way `_machine` addresses a field.
+// The report addresses a row the way `_machine` addresses a field.
 const nested: Form = {
   fields: [
     {
@@ -955,8 +928,7 @@ test('a row an array in one language has and the other does not is drift', () =>
   ]);
 });
 
-// Reconciliation: the same rows, answered. An answer names the languages the row should end
-// up in, and the files are made to say that — the one thing a save is not allowed to do.
+// An answer names the languages a row should end up in, which a save is not allowed to do.
 const QUOTE = 'blocks[_id=z9y8x7w6]';
 const answer = (locales: string[], files: Record<string, unknown>, path = QUOTE) =>
   applyDrift('default', page, ['en', 'de'], files, [{ path, locales }]);
@@ -1078,9 +1050,7 @@ test('a block answered into another language takes the blocks inside it along', 
   });
 });
 
-// Staleness: the German was translated from the English as it then stood, and `_i18n` is what
-// says which English that was. The pair above is the one to ask it about — a shared price and
-// a source-language-only note must not count as something anybody has to retranslate.
+// A shared price and a source-only note must not count as something to retranslate.
 const translate = (en: string, de: string, was?: string) =>
   markTranslation(
     'default',
@@ -1118,8 +1088,7 @@ test('the source language moving on makes the translation stale', async () => {
 test('a shared value, a hidden one and a requoted file leave the translation current', async () => {
   const en = localeFile('en');
   const de = parseEntry('default', await translate(en, localeFile('de')));
-  // Single quotes are the same values in different bytes: `sourceBlob` moves, `sourceHash` does
-  // not, which is the whole reason there are two of them.
+  // Requoting moves `sourceBlob` but not `sourceHash`, which is why there are two of them.
   const same = {
     ...(parseEntry('default', en.replace(/"/g, "'")) as Record<string, unknown>),
     price: 450000,
@@ -1153,8 +1122,7 @@ test('a block moved in the source language is not something to retranslate', asy
   expect(await staleLocales('default', page, files)).toEqual([]);
 });
 
-// What a publish must not do: the German file is rewritten whenever English changes its
-// structure or a shared value, and neither of those is somebody translating it.
+// A structural or shared-value edit rewrites the German file without anybody translating it.
 test('a translation carried along by a structural edit keeps the mark it had', async () => {
   const was = await translate(localeFile('en'), localeFile('de'), undefined);
   const en = localeFile('en').replace('Mill House', 'The Mill House');
@@ -1193,10 +1161,7 @@ test('a mark that says nothing about the values is not a claim to be stale', asy
   ).toEqual([]);
 });
 
-// What a machine is offered: the words the second column actually draws. A shared value and a
-// source-language-only one are not translations, and an image's `alt` or a file's name have no
-// editor in that column before Phase 3 — filling one would leave a machine's words where
-// nobody can see them, correct them or take the badge off.
+// A field with no editor in the second column is not filled, or nobody can take the badge off.
 test('the values offered for translation are the prose the translated form draws', () => {
   expect(translatableText('default', millHouse, parseEntry('default', localeFile('en')))).toEqual([
     { path: 'title', text: 'Mill House' },
@@ -1221,8 +1186,7 @@ test('a link offers its label and never where it points', () => {
   ]);
 });
 
-// The address the walk reports is the address the form's own field ids turn into, or a badge
-// in the second column would sit on a field the file never named.
+// The reported address must match the form's field ids, or a badge sits on the wrong field.
 test('a reported path is the one the form derives for the same field', () => {
   const en = parseEntry('default', localeFile('en'));
   const [, , block] = translatableText('default', millHouse, en);
@@ -1295,9 +1259,7 @@ test('a language the entry has no file in is not offered by the switcher', async
   ]);
 });
 
-// Astro's `getEntry` logs "Entry listings → de/coast was not found" for every miss, and an
-// untranslated entry misses once per language on every page: the switcher asks the collection
-// which ids exist rather than probing each language by name.
+// Astro's `getEntry` logs every miss, so the switcher asks which ids exist instead of probing.
 test('the switcher never asks by name for a language the entry has no file in', async () => {
   const asked: string[] = [];
   const source = staticSource<{ listings: unknown }>('default', {
@@ -1321,9 +1283,7 @@ test('a hidden file is skipped', async () => {
   ]);
 });
 
-// The files are the fact: turning a language off writes no file for it, so a mark that says
-// otherwise while the file is there is a contradiction for the CMS to report, not a page to
-// hide. Reading it here would answer differently depending on which file the bad edit landed in.
+// A mark contradicting the files is for the CMS to report, not a page to hide.
 test('a _locales the files contradict does not take a page out of the switcher', async () => {
   expect(await getEntryLocales('default', switcherSource, site, 'listings', 'offer')).toEqual([
     { locale: 'en', url: '/listings/offer' },
@@ -1355,8 +1315,7 @@ test('a file with no slug of its own is served under its name', async () => {
   expect(found?.id).toBe('en/home');
 });
 
-// The whole point of an address: the file name stops being the URL, so it must stop serving it
-// — the old one is a redirect the publish wrote, not a second live page.
+// The old file name is a redirect the publish wrote, not a second live page.
 test('a file name a slug has moved off does not serve that address', async () => {
   expect(await entryAt('default', switcherSource, site, 'pages', 'de', 'home')).toBe(undefined);
 });
@@ -1380,8 +1339,7 @@ test('the switcher links each language at the address that language serves', asy
   ]);
 });
 
-// draftSource — what preview reads: the build's snapshot with the D1 rows laid over it. The
-// bytes go through the collection's own schema, which is the site's, so `validate` is passed in.
+// The bytes go through the collection's own schema, the site's, so `validate` is passed in.
 const built = staticSource<{ listings: { title: string } }>('default', {
   getEntry: async (_c, id) =>
     [
@@ -1421,8 +1379,7 @@ test('an entry no row mentions is the one the build holds', async () => {
   });
 });
 
-// An emptied row is how a delete is written down before the build catches up: the entry is
-// gone from the preview even though the snapshot still has the file.
+// An emptied row is how a delete is written down before the build catches up.
 test('an emptied row is an entry that has gone', async () => {
   const source = drafted([{ path: 'src/content/listings/en/coast.yaml', contents: '' }]);
 
@@ -1532,8 +1489,7 @@ test.each(['_status: hidden\ntitle: null\n', ''])(
   },
 );
 
-// The menu one language renders: what the tree points at, resolved through the site's own
-// routes, with everything that language cannot show dropped.
+// The menu is resolved through the site's own routes, dropping what the language cannot show.
 const menu = (items: unknown[]) => ({ menus: [{ _id: 'm1', key: 'header', items }] });
 const item = (over: Record<string, unknown>) => ({ _id: 'i1', label: '', ...over });
 const resolved = (nav: unknown, locale: string) =>
@@ -1611,8 +1567,7 @@ test('the tree keeps its shape: children are resolved under their parent', async
   ]);
 });
 
-// A collection's index is not an entry, so a menu cannot point at it by file: the item names
-// the collection and the address is that language's own index page.
+// A collection's index is not an entry, so the item names the collection instead of a file.
 test("an index item points at the language's own index page, named by the collection", async () => {
   const nav = menu([item({ link: { type: 'index', collection: 'listings' } })]);
 
@@ -1630,8 +1585,7 @@ test('a site with no navigation global renders no menus rather than throwing', a
   expect(await resolved(undefined, 'en')).toEqual({});
 });
 
-// The menu tree in two languages: one skeleton, one label per language. The pair is the demo's
-// own shape — a page, a section with two children under it, and an item German alone shows.
+// One skeleton, one label per language.
 const navigation: Form = {
   fields: [{ path: ['menus'], label: 'Menus', type: 'menus', required: true, i18n: 'duplicate' }],
   blocks: {},

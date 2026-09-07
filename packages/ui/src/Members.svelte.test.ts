@@ -118,8 +118,7 @@ test('an invite nobody has opened is marked pending and has never signed in', as
   expect(cells(root, 'Last sign-in')).toEqual(['Never']);
 });
 
-// Signing out deletes the session row, so there is no date left to show — and saying "Never"
-// there would call somebody who uses the site every day an unopened invite.
+// "Never" here would call somebody who signs in daily an unopened invite.
 test('a member with no session row left reads as not known, not as never', async () => {
   server([row('u2', 'anna@example.com', { lastSignIn: null })]);
 
@@ -149,8 +148,6 @@ test('the invite dialog sends the address and the role that were chosen', async 
   expect(text(root)).toContain('Invite sent to lea@example.com.');
 });
 
-// Settings is where the mailer's own sentence names the credential that is missing, so the
-// notice sends them there rather than describing the problem a second time.
 test('an invite the mailer refused sends the owner to Settings', async () => {
   server([row('u1', 'martin@example.com', { role: 'owner' })], {
     '/admin/api/members': Response.json({ error: 'invite-not-sent' }, { status: 502 }),
@@ -179,7 +176,7 @@ test('the viewer has no actions menu on their own row, whether or not there is a
   ]);
   const root = await show();
 
-  // Nothing in it would be allowed: not a role change, not a removal. The server refuses both.
+  // The server refuses a self role change and a self removal alike.
   expect(root.querySelector('button[aria-label="Actions for martin@example.com"]')).toBe(null);
   expect(root.querySelector('button[aria-label="Actions for anna@example.com"]')).not.toBe(null);
 });
@@ -249,8 +246,7 @@ test('changing a role sends the one that was picked', async () => {
   });
 });
 
-// Hazard: the one line people get wrong. Their drafts belong to the site and stay; what goes
-// is their access, and the entries they were holding.
+// The one line people get wrong: drafts belong to the site and stay.
 test('removing somebody warns what goes and says their drafts stay', async () => {
   const calls = server([
     row('u1', 'martin@example.com', { role: 'owner' }),
@@ -297,8 +293,6 @@ test('revoking an invite is a different question from removing a member', async 
   expect(text(dialog)).not.toContain('unpublished changes');
 });
 
-// The server refuses these too; what the dialog owes is the sentence it was given, rather than
-// a status the person at the keyboard cannot act on.
 test("a refused change comes back in the server's own words, beside the button that asked", async () => {
   server([row('u1', 'martin@example.com', { role: 'owner' }), row('u2', 'anna@example.com')], {
     '/admin/api/members/u2/role': Response.json(
@@ -317,8 +311,7 @@ test("a refused change comes back in the server's own words, beside the button t
   );
 });
 
-// axe sees none of this. A dialog opened from a row menu has to take focus and give it back
-// to the row's own button — the menu item that was pressed is gone by then.
+// The menu item that was pressed is gone by the time focus comes back.
 test('each dialog takes focus and hands it back to the button that opened it', async () => {
   server([
     row('u1', 'martin@example.com', { role: 'owner' }),
@@ -338,8 +331,7 @@ test('each dialog takes focus and hands it back to the button that opened it', a
   menu.focus();
   menu.click();
   flushSync();
-  // A real click focuses the button it lands on, and jsdom's `.click()` does not — so the
-  // focus the component reads is put where a browser would put it.
+  // jsdom's `.click()` does not focus the button the way a real click does.
   const item = button(root.querySelector('.menu') as HTMLElement, 'Change role');
   item.focus();
   item.click();
@@ -349,8 +341,7 @@ test('each dialog takes focus and hands it back to the button that opened it', a
   expect(document.activeElement).toBe(menu);
 });
 
-// A real send takes about a second. Without this the button stays live and a second click
-// invites the same address again, which comes back "User already exists".
+// A live button through a second-long send invites the same address twice.
 test('the invite button is disabled while the message is being sent', async () => {
   const calls = server([row('u1', 'martin@example.com', { role: 'owner' })], {
     // Never settles: a send still in flight, which is what the button is disabled for.
@@ -372,8 +363,7 @@ test('the invite button is disabled while the message is being sent', async () =
   expect(calls).toHaveLength(1);
 });
 
-// `missingMailer()` names env vars and a `wrangler secret put` command. Those are the
-// developer's words and belong on the diagnostics screen, not in front of the client.
+// `missingMailer()` names env vars and a wrangler command, which are the developer's words.
 test('a site with no mailer gets the same sentence as one whose mailer refused', async () => {
   server([row('u1', 'martin@example.com', { role: 'owner' })], {
     '/admin/api/members': Response.json(

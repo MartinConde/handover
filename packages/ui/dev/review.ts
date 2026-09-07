@@ -1,4 +1,4 @@
-/** Development-only design preview. All API traffic is handled locally; no site is connected. */
+/** Local design preview with stubbed API traffic. */
 import { mount } from 'svelte';
 import App from '../src/App.svelte';
 import '../src/tokens.css';

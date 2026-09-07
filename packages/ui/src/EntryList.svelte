@@ -47,14 +47,13 @@ let {
 } = $props();
 
 let entries = $state<Entry[]>([]);
-// Which set is on screen. A tab rather than a filter: the filters all narrow the same list and
-// this one changes which list, because a deleted entry is in neither the index nor the drafts.
+// A tab, not a filter: a deleted entry is in neither the index nor the drafts.
 let tab = $state<'all' | 'deleted'>('all');
 let deleted = $state<Deleted[]>([]);
 let deletedLoading = $state(false);
 // The row whose restore is waiting to be confirmed.
 let putting = $state<Deleted>();
-// The languages the site declares, in its own order. One and the column is not drawn at all.
+// The site's languages in its own order; with one the column is not drawn at all.
 let locales = $state<string[]>([]);
 // The page above this collection, which is where a hidden entry's readers go by default.
 let index = $state<string>();
@@ -66,10 +65,9 @@ let loading = $state(true);
 let dialog = $state<'' | 'new' | 'rename' | 'duplicate' | 'template'>('');
 // The rows the bulk bar is about; checking any one of them reveals the column for all.
 let chosen = $state<string[]>([]);
-// What the redirect question is open over: hiding one row or the whole selection, or deleting
-// one entry. Both take a page off the site, so both ask it.
+// Hiding and deleting both take a page off the site, so both ask the redirect question.
 let offsite = $state<{ action: 'hide' | 'delete'; ids: string[] }>();
-/** The row whose ⋯ is open, by entry id. A disclosure and not `role="menu"`, as on Members. */
+/** The row whose ⋯ is open; a disclosure and not `role="menu"`, as on Members. */
 let menuFor = $state('');
 let target = $state<Entry>();
 let text = $state('');
@@ -90,8 +88,7 @@ $effect(() => {
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const singular = $derived(nameOf(collection));
-// The first language the entry is written in, in the site's own order: an entry that exists
-// in German alone is listed by its German title rather than by its file name.
+// An entry that exists in German alone is listed by its German title, not its file name.
 const titleOf = (entry: Entry) =>
   locales.map((l) => entry.locales[l]?.title).find(Boolean) ||
   Object.values(entry.locales)[0]?.title ||
@@ -101,9 +98,7 @@ const many = $derived(locales.length > 1);
 const offered = (entry: Entry, locale: string) => entry.offered?.includes(locale) ?? true;
 // `_status` is the entry's rather than one language's, so any file of it saying so is the answer.
 const isHidden = (entry: Entry) => Object.values(entry.locales).some((l) => l.status === 'hidden');
-// Two filters in the toolbar: the rows the site shows, the ones it does not, or every row; and
-// the rows a language is still owed in — no file yet, or a translation the build marked stale.
-// The dashboard's *Show* arrives as `?locale=de`, read once, when the list opens.
+// The dashboard's *Show* arrives as `?locale=de`, read once when the list opens.
 let search = $state('');
 let showing = $state<'all' | 'live' | 'hidden'>('all');
 let language = $state(new URLSearchParams(location.search).get('locale') ?? '');
@@ -132,9 +127,7 @@ const chipTitle = (entry: Entry, locale: string) =>
 const named = (ids: string[]) =>
   ids.length === 1 ? (entries.find((e) => e.id === ids[0]) ?? undefined) : undefined;
 
-// The same derivation the server runs on the same names, so the dialog can promise the file
-// name before anything is written. A rename does not collide with the entry being renamed,
-// and a template's name is taken against the starters rather than the entries.
+// The same derivation the server runs, so the dialog can promise the file name in advance.
 const preview = $derived(
   entryName(
     'default',
@@ -209,9 +202,7 @@ const json = (body: unknown) => ({
   body: JSON.stringify(body),
 });
 
-// A 409 is the server's own sentence — "publish this first", "someone else changed it" —
-// and reads better than anything this component could say about it. So is the 503 that says
-// the App cannot see the repository.
+// A 409 or 503 is the server's own sentence and reads better than anything said here.
 async function send(url: string, init: RequestInit) {
   busy = true;
   error = '';
@@ -229,8 +220,7 @@ async function send(url: string, init: RequestInit) {
 const said = (body: string) =>
   body.startsWith('{') ? ((JSON.parse(body) as { error?: string }).error ?? body) : body;
 
-// Undoing the commit that took the files away, which is the same inverse a revert is. Both
-// lists move: the entry is back in one and its row can no longer be restored in the other.
+// The same inverse commit as a revert; both lists move, so both are read again.
 async function restore(row: Deleted) {
   if (!(await send('/admin/api/restore', json({ commit_sha: row.commit_sha })))) return;
   close();
@@ -238,8 +228,7 @@ async function restore(row: Deleted) {
   onchanged();
 }
 
-// The copy is a draft like a new entry, so it opens the same way — its own lock, nothing in
-// the repository until somebody publishes it.
+// The copy is a draft like a new entry, so it opens the same way with its own lock.
 async function duplicate(event: Event) {
   event.preventDefault();
   const url = `/admin/api/entries/${collection}/${target?.id}/duplicate`;
@@ -249,8 +238,7 @@ async function duplicate(event: Event) {
   navigate(`/admin/c/${collection}/${slug}`);
 }
 
-// A template is a commit, not a draft, and has no screen of its own to open: the list stays
-// where it is and the shell says what was saved.
+// A template is a commit with no screen of its own, so the list stays and the shell says so.
 async function saveTemplate(event: Event) {
   event.preventDefault();
   const url = `/admin/api/entries/${collection}/${target?.id}/template`;
@@ -269,8 +257,7 @@ async function rename(event: Event) {
   await done();
 }
 
-// The answer travels with the DELETE: a delete commits now, so the rules go into the commit
-// that takes the files away rather than waiting on a publish the way a hide's do.
+// A delete commits now, so the redirect rules ride in that commit, not a later publish.
 async function remove(id: string, redirect: Target) {
   const url = `/admin/api/entries/${collection}/${id}`;
   if (!(await send(url, { ...json({ redirect }), method: 'DELETE' }))) return;
@@ -373,8 +360,7 @@ async function done() {
               {WHEN.format(row.at)}
             </div>
             <div class="td menu-cell" role="cell">
-              <!-- Greyed with aria-disabled rather than disabled: a disabled button takes no
-                   focus, and a keyboard user would arrow past the reason without hearing it. -->
+              <!-- aria-disabled so the button keeps focus and the reason is heard. -->
               <button
                 class="btn btn-sm"
                 type="button"
@@ -418,12 +404,9 @@ async function done() {
         : `No ${showing} ${collection}.`}
     </p>
   {:else if entries.length}
-    <!-- The languages column is the one that comes and goes; without it the grid is the
-         stylesheet's five-column `has-select.cols-4`, with it the six-column default. -->
+    <!-- Without the languages column the grid is the five-column `has-select.cols-4`. -->
     <div class="table has-select" class:cols-4={!many} role="table" aria-label={capitalise(collection)}>
-      <!-- The header cells need a row of their own, and every cell a role: `role="table"`
-           with `columnheader` children and nothing between them is aria-required-parent. Both
-           wrappers are `display: contents`, so the grid is unchanged. -->
+      <!-- role="table" needs a row around its columnheaders; display: contents keeps the grid. -->
       <div class="row-head" role="row">
         <div class="th" role="columnheader">
           <input
@@ -600,8 +583,7 @@ async function done() {
   />
 {/if}
 
-<!-- Not aria-modal: the shell behind stays reachable until the design gate gives these the
-     drawer's inert treatment, and claiming a trap that is not there is worse than not claiming it. -->
+<!-- Not aria-modal: the shell behind stays reachable, so claiming a trap would be false. -->
 {#if dialog === 'new'}
   <NewEntry {collection} onclose={close} />
 {:else if dialog}

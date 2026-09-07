@@ -3,19 +3,12 @@ import { afterEach, expect, test, vi } from 'vitest';
 import Media from './Media.svelte';
 import type { MediaItem } from './upload.js';
 
-// The canvas step is the browser's and jsdom has none, so the one boundary this file fakes is
-// what an upload comes back as; upload.ts is unit-tested against a fake server of its own.
+// jsdom has no canvas, so the upload result is the one boundary faked; upload.ts is tested alone.
 let uploaded: MediaItem;
 vi.mock('./upload.js', async (original) => ({
   ...(await original<typeof import('./upload.js')>()),
   uploadImage: vi.fn(async () => uploaded),
 }));
-
-// Testing: the floor a field sets, applied to the crop rather than to the file — which picture
-// is refused, in what words, and that a refused one cannot be inserted; and an array of images
-// taking several at once, in the order they were ticked.
-// Not testing: uploading through the component (jsdom has no canvas; upload.ts is unit-tested)
-// or styling.
 
 const item = (over: Partial<MediaItem>): MediaItem => ({
   id: 'a'.repeat(64),
@@ -80,8 +73,7 @@ test('a picture too narrow for the field is shown, refused, and says both number
   const tiles = document.querySelectorAll('.tile');
   expect(tiles).toHaveLength(2);
   const refused = q<HTMLInputElement>(`input[value="${'b'.repeat(64)}"]`);
-  // aria-disabled, not disabled: a disabled radio takes no focus, so a keyboard user would
-  // arrow past the tile and never hear why it is refused.
+  // aria-disabled, not disabled: a disabled radio takes no focus and the reason is never heard.
   expect(refused.getAttribute('aria-disabled')).toBe('true');
   expect(refused.disabled).toBe(false);
   expect(q(`#${refused.getAttribute('aria-describedby')}`).textContent).toBe(
@@ -113,8 +105,7 @@ test('a field with no floor refuses nothing, and Insert hands back the asset', a
   expect(picked?.map((i) => i.src)).toEqual(['media/a.webp']);
 });
 
-// Uploading is not choosing: the picture is in the library either way, but a field it is too
-// narrow for must not end up inserted because it happened to arrive last.
+// Uploading is not choosing: a picture too narrow must not be inserted for arriving last.
 test('a picture uploaded into a field too narrow for it is listed, not selected', async () => {
   uploaded = item({ id: 'c'.repeat(64), filename: 'small.jpg', width: 800, height: 450 });
   await open([], { ratio: '16:9', max: 2400, min: 1600 });
@@ -130,8 +121,7 @@ test('a picture uploaded into a field too narrow for it is listed, not selected'
   expect(q<HTMLButtonElement>('.picker-foot .btn-primary').disabled).toBe(true);
 });
 
-// The reconciliation job recovers objects with no row, and a HEAD cannot say how wide a
-// picture is. Such a row must not be insertable: the field stores width and height.
+// Reconciliation recovers objects with no row, and a HEAD cannot say how wide a picture is.
 test('a picture whose size the library does not know cannot be chosen', async () => {
   await open([item({ width: null, height: null })], { ratio: '16:9', max: 2400 });
   expect(q('.tile .why').textContent).toBe(
@@ -142,8 +132,7 @@ test('a picture whose size the library does not know cannot be chosen', async ()
   expect(q<HTMLButtonElement>('.picker-foot .btn-primary').disabled).toBe(true);
 });
 
-// An array of `image` is the same picker with checkboxes: the order is the order they were
-// ticked, and un-ticking one takes it back out rather than starting again.
+// The order is the order they were ticked, and un-ticking takes one back out.
 test('a gallery field takes several pictures, in the order they were ticked', async () => {
   await open(
     [
@@ -173,8 +162,7 @@ test('a gallery field takes several pictures, in the order they were ticked', as
   expect(picked?.map((i) => i.src)).toEqual(['media/c.webp', 'media/b.webp']);
 });
 
-// The search is the table's, so emptying the box has to ask again: before this it filtered the
-// list in the browser, where clearing restored it for free.
+// The search is the table's now, so emptying the box has to ask again.
 test('clearing the search asks for the whole library again', async () => {
   await open([item({})]);
   const box = q<HTMLInputElement>('#picker-q');
@@ -190,8 +178,7 @@ test('clearing the search asks for the whole library again', async () => {
   expect(asked.at(-1)).toBe('/admin/api/media?kind=images&q=');
 });
 
-// The mockup's `pk-title` and `pk-hero-l` were one id on two elements each, which points every
-// `aria-labelledby` and `aria-describedby` at the wrong one; the picker's are one per element.
+// The mockup reused one id on two elements, which points every aria reference at the wrong one.
 test('every id in the picker is unique, refused tiles included', async () => {
   await open(
     [

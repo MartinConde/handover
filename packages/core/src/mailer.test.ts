@@ -5,7 +5,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-// The Resend boundary. Every call made is kept so a test can read what was sent.
+// Keep every Resend call for assertions.
 function stubFetch(reply: () => Response) {
   const calls: { url: string; init: RequestInit; body: Record<string, unknown> }[] = [];
   vi.stubGlobal(
@@ -81,7 +81,7 @@ test('a sender that is only an address stays one string', () => {
   expect(senderAddress('default', '  admin@dev.martinconde.de  ')).toBe('admin@dev.martinconde.de');
 });
 
-// The `send_email` binding. Every call is kept, the way the Resend stub above keeps its own.
+// Keep every Cloudflare binding call for assertions.
 function stubBinding(reply: () => Promise<{ messageId: string }>) {
   const calls: Parameters<EmailSender['send']>[0][] = [];
   return {

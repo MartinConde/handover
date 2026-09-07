@@ -4,7 +4,7 @@ import { request } from './request.js';
 export interface MediaItem {
   id: string;
   src: string;
-  /** The name it was uploaded under: what the library lists it by, and a file field's first name. */
+  /** What the library lists it by, and a file field's first name. */
   filename?: string | null;
   url?: string;
   mime?: string | null;
@@ -41,13 +41,7 @@ const refusal = async (res: Response, what: string) => {
   );
 };
 
-/**
- * The upload protocol, from bytes that are ready to store: name them by their own sha-256, ask
- * the Worker whether it has them already, and only otherwise PUT them to the url it signs —
- * the bytes go to the bucket and never through the Worker. The confirm afterwards is what
- * turns the object into a row, and it is the Worker that checks the object against this
- * declaration rather than taking it.
- */
+/** Bytes go to the bucket, never the Worker; the confirm afterwards turns the object into a row. */
 export async function uploadBlob(
   blob: Blob,
   about: { filename?: string; width?: number; height?: number; derivedFrom?: string },
@@ -71,8 +65,7 @@ export async function uploadBlob(
     method: 'PUT',
     headers: {
       'content-type': blob.type,
-      // A file the bucket's own domain would render is an XSS vector against that domain, so it
-      // is stored as a download. The confirm below holds the object to it.
+      // A file the bucket's domain would render is an XSS vector, so it is stored as a download.
       ...(blob.type.startsWith('image/') ? {} : { 'content-disposition': 'attachment' }),
     },
     body: blob,
@@ -87,13 +80,7 @@ export async function uploadBlob(
   return ((await confirmed.json()) as { media: MediaItem }).media;
 }
 
-/**
- * Step 1, and it is not about the delivery format — Cloudflare re-encodes on the way out. It
- * caps what goes over the client's uplink, bakes in the EXIF orientation and strips the rest of
- * the EXIF with it (the GPS of somebody's house must not land in a public bucket), reads the
- * dimensions the content file needs, and turns a phone's HEIC into something the admin can draw.
- * Quality 0.9 because this is the original every later crop is re-encoded from.
- */
+/** Strips EXIF so no GPS reaches a public bucket; 0.9 because every crop re-encodes from this. */
 export async function normaliseImage(
   file: File,
   max = DEFAULT_MAX,

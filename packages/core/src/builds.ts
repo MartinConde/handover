@@ -2,7 +2,7 @@
 export type BuildState = 'building' | 'live' | 'failed';
 
 export interface BuildStatus {
-  /** The commit asked about. Absent when this is simply the worker's newest build. */
+  /** The requested commit, or the worker's newest when absent. */
   commit_sha?: string;
   state: BuildState;
   /** Epoch ms the build was created, so the pill can say how long it has been going. */
@@ -20,8 +20,7 @@ export interface WorkerBuilds {
 
 const API = 'https://api.cloudflare.com/client/v4';
 
-// Worker name → script tag. A tag is a property of the script rather than of this Worker's
-// lifetime, so one lookup covers every poll an isolate serves.
+// A tag is the script's, not this Worker's lifetime's, so one lookup covers every poll.
 const tags = new Map<string, Promise<string>>();
 
 async function json<T>(url: string, token: string, fetch: typeof globalThis.fetch, what: string) {
@@ -30,11 +29,7 @@ async function json<T>(url: string, token: string, fetch: typeof globalThis.fetc
   return (await res.json()) as { result: T };
 }
 
-/**
- * ⚠️ The builds endpoint is keyed on the worker's **tag**, not its name: a name answers `200`
- * with an empty list, so every commit would read as one no build was ever made for. The tag is
- * not something the dashboard shows, so the config asks for the name and this looks it up.
- */
+/** ⚠️ Keyed on the worker's tag, not its name: a name answers `200` with an empty list. */
 function tagOf(account: string, name: string, token: string, fetch: typeof globalThis.fetch) {
   const key = `${account}/${name}`;
   const found =
@@ -63,30 +58,10 @@ interface Build {
   build_trigger_metadata?: { commit_hash?: string };
 }
 
-/**
- * ⚠️ How long a commit no build names may still read as `building`. It covers the build row
- * **appearing** — half a minute on the deployed demo — and not the build running, which the row
- * itself then reports. Past it the commit has not gone unbuilt: it has scrolled off the one page
- * that can be asked for, and a pill that keeps counting is how one reached sixteen hours.
- */
+/** ⚠️ Covers the build row appearing, not running; past it the commit has scrolled off the page. */
 const NAMED_WITHIN = 10 * 60 * 1000;
 
-/**
- * What the host has done with one commit. **A commit no build names yet is `building`**, not
- * unknown and certainly not live: there is a window between the ref update and the build
- * appearing, and a pill that says Live in it is a minute ahead of the site. That window is
- * `NAMED_WITHIN` long — the list endpoint takes no commit filter, so a commit older than the ten
- * builds asked for cannot be told from one nothing has built yet, and past the window the
- * likelier of the two is the one the site is already serving.
- *
- * With **no commit named**, and past the window, it is the worker's newest build instead — what
- * the site is serving on a site the admin has never published on, where there is no commit of
- * ours to ask about and a blank top bar would be the only reading of a perfectly live site. The
- * answer carries no `commit_sha` then, which is what stops the counter running from the commit.
- *
- * Throws when the account cannot be asked at all — that is the site's configuration and not a
- * state the site is in, so it is not one of the three.
- */
+/** A commit no build names yet is `building`, not live; throws when the account cannot be asked. */
 export async function commitBuild(
   builds: WorkerBuilds,
   commit: { sha: string; at: number } | undefined,
@@ -102,24 +77,18 @@ export async function commitBuild(
     'builds',
   );
   const sha = commit?.sha.toLowerCase();
-  // The deployed worker answers with all forty characters; the API's own example abbreviates,
-  // so the shorter of the two decides.
+  // The worker gives forty characters but the API's example abbreviates, so the shorter decides.
   const matched = sha
     ? result.find((b) => {
         const hash = b.build_trigger_metadata?.commit_hash?.toLowerCase() ?? '';
         return hash !== '' && (hash.startsWith(sha) || sha.startsWith(hash));
       })
     : undefined;
-  // Whether the answer is still about the commit. Once it is not, it is the newest build —
-  // first in the list — the same one a site that has published nothing gets.
+  // Once the answer is no longer about the commit it is the newest build, first in the list.
   const named = !!commit && (!!matched || now - commit.at <= NAMED_WITHIN);
   const found = named ? matched : result[0];
   const started = found?.created_on ? Date.parse(found.created_on) : undefined;
-  // `status` is where the build got to and `build_outcome` is what it decided; only both
-  // together are green. Everything the API can be running is one word to an editor.
-  // With no commit named there is nothing waiting on a build, so a worker that has never been
-  // built at all is live rather than building — but one asked about a commit is not: falling
-  // through to a build that does not exist would call a commit live that nothing has built.
+  // An unbuilt worker is live only when no commit is named; a commit nothing built is building.
   const state: BuildState =
     !found && !commit
       ? 'live'

@@ -10,9 +10,7 @@ export type Build = {
   committed_at?: number;
 };
 
-// One pill for the two places that show one — the top bar and the drawer's publish result. They
-// were the same markup twice and drifted apart on the first change; `children` is what differs,
-// which is the shell's Revert button sitting inside the pill.
+// One pill for the top bar and the drawer; `children` is the shell's Revert button inside it.
 let { build, children }: { build: Build; children?: Snippet } = $props();
 
 const LABEL = { building: 'Building…', live: 'Live', failed: 'Build failed' } as const;
@@ -25,9 +23,7 @@ $effect(() => {
   return () => clearInterval(id);
 });
 
-// ⚠️ From when the commit was made rather than when the build started: there is a window after
-// a publish where the Builds API has no build for the commit yet, and `started_at` comes off the
-// build. Counting from the click is also what an editor means by "how long has this been going".
+// ⚠️ From the commit, not the build's start: right after a publish there is no build yet.
 const from = $derived(build.committed_at ?? build.started_at);
 // "0m 45s", the way the mockup reads it.
 const elapsed = (from: number) => {
@@ -45,8 +41,7 @@ const since = (at: number) =>
   {#if build.state === 'live' && build.live_at}
     <span class="detail">since {since(build.live_at)}</span>
   {:else if build.state === 'building' && from}
-    <!-- Hidden from the live region around it: it ticks every second and would otherwise say
-         the whole pill again each time. -->
+    <!-- Hidden from the live region: it ticks every second and would re-announce the pill. -->
     <span class="detail" aria-hidden="true">{elapsed(from)}</span>
   {/if}
   {@render children?.()}

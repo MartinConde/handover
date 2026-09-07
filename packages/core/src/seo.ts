@@ -1,6 +1,4 @@
-// What a page says about itself, resolved once: the entry's own `seo` field, then the site's
-// defaults, then nothing. The admin's panel and `<Seo />` both read it here, so the greyed
-// value a client is shown while typing cannot disagree with the tag the build emits.
+// What a page says about itself, resolved once.
 
 /** Guidance, never validation: what Google shows before it truncates, in characters. */
 export const SEO_TITLE_LIMIT = 60;
@@ -41,13 +39,7 @@ export interface ResolvedSeo {
   twitter?: string;
 }
 
-/**
- * `pageTitle` is the entry's own heading — what a search title nobody typed falls back to.
- *
- * A typed search title is used as it is: a client who writes one has said what the page is
- * called, and appending the site name to it would be the panel changing their words. The
- * pattern is for the pages nobody has written one for, which is nearly all of them.
- */
+/** `pageTitle` is the entry's own heading — what a search title nobody typed falls back to. */
 export function resolveSeo(
   seo: SeoValue | undefined,
   defaults: SeoDefaultsValue | undefined,
@@ -66,8 +58,7 @@ export function resolveSeo(
   };
 }
 
-// An absent key rather than an undefined one: the result is compared in tests and spread into
-// attributes, and `{ canonical: undefined }` is not the same object as `{}` in either.
+// An absent key rather than an undefined one.
 const pick = <K extends string, V>(key: K, value: V | undefined) =>
   (value === undefined ? {} : { [key]: value }) as { [P in K]?: V };
 

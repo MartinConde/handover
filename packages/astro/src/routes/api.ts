@@ -116,8 +116,7 @@ const REDIRECT = /^redirects\/([\w-]+)$/;
 const TRANSLATE = /^translate\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 const SOURCE = /^source\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
 
-// Better Auth owns everything under its base path. Both verbs go straight to its handler:
-// the middleware exempts these paths, so this is the only thing in front of the login.
+// The middleware exempts Better Auth's paths, so this is the only thing in front of the login.
 const mounted = (pathname: string) =>
   pathname.startsWith(`${(config.i18n.base ?? '').replace(/\/+$/, '')}${AUTH_BASE_PATH}/`);
 
@@ -135,24 +134,18 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
       // The middleware has already asserted a session by the time any of this runs.
       user: locals.handover?.user,
       role: locals.handover?.role,
-      // Where a media key is served from. The widgets need it for a value the picker did not
-      // hand them — everything already in a content file.
+      // Where a media key is served from, for values already in a content file.
       mediaBase: config.media?.publicBase?.replace(/\/$/, ''),
-      // Every ratio the site shows a picture at, which is what the focal picker previews: one
-      // dot, and under it what that dot does to each crop the site really renders. Read here
-      // rather than per screen — it is the site's shape, and it cannot change while a tab is open.
+      // Every crop the site renders, for the focal picker; it cannot change while a tab is open.
       presets: imagePresets(
         [
           ...Object.values(config.collections).map((c) => c.schema),
           ...Object.values(config.globals ?? {}),
         ].map((schema) => formOf('default', formSchema(schema))),
       ),
-      // Whether this build has a `/_preview` route at all. The flag is read at build and the
-      // route simply does not exist without it, so the editor asks here rather than framing
-      // a page that would answer 404.
+      // `/_preview` does not exist without the flag, so the editor asks before framing a 404.
       preview,
-      // `site` from astro.config, for the SEO panel to print each language's address under.
-      // Absent rather than guessed: without one the panel draws no preview at all.
+      // `site` from astro.config; absent rather than guessed, so the SEO panel draws no preview.
       site: site || undefined,
     });
   }
@@ -229,8 +222,7 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
   return new Response('Not found', { status: 404 });
 };
 
-// The one verb that changes an asset without changing its bytes: what the library calls the
-// picture, never the picture itself, which is immutable and named by its own hash.
+// The one verb that changes an asset without changing its bytes, which are named by their hash.
 export const PATCH: APIRoute = async ({ params, request, locals }) => {
   const ctx = requestContext();
   const asset = params.path?.match(MEDIA);
@@ -243,11 +235,9 @@ async function answering(work: () => Promise<Response>): Promise<Response> {
   try {
     return await work();
   } catch (err) {
-    // The repository is out of reach for every path, so this is about the installation and
-    // not about whatever entry happened to be open — hence the message rather than a 404.
+    // The repository is out of reach for every path, so 503 with the message rather than a 404.
     if (err instanceof RepoUnreachableError) return new Response(err.message, { status: 503 });
-    // A conflict names its files as data as well as prose: the drawer badges those rows and
-    // offers each one the way out. A ref that moved has no file to name.
+    // A conflict names its files as data so the drawer can badge those rows.
     if (err instanceof DraftConflictError)
       return Response.json({ error: err.message, paths: err.paths }, { status: 409 });
     if (err instanceof CommitScopeError) return new Response(err.message, { status: 403 });
@@ -256,14 +246,12 @@ async function answering(work: () => Promise<Response>): Promise<Response> {
         { error: new DraftRevisionError().message, reason: 'revision' },
         { status: 409 },
       );
-    // A revert refused over a file that moved names it the same way a publish's conflict does,
-    // and the drawer says so on the panel the button sits on.
+    // A refused revert names its files the way a publish's conflict does.
     if (err instanceof RevertConflictError)
       return Response.json({ error: err.message, paths: err.paths }, { status: 409 });
     if (err instanceof RenameCollisionError) return new Response(err.message, { status: 409 });
     if (err instanceof RefMovedError) return new Response(err.message, { status: 409 });
-    // An upload the site will not take is the chooser's own file rather than somebody else's
-    // work, so it is answered to them, named by the rule it broke.
+    // A refused upload is the chooser's own file, so it is answered to them by the rule it broke.
     if (err instanceof UploadRefusedError)
       return Response.json({ error: err.message }, { status: 422 });
     throw err;
@@ -278,8 +266,7 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
     const name = checked[1] ?? '';
     if (name === 'email') return testEmail(locals.handover);
     if (name === 'conflict') return answering(() => simulateConflict(ctx, locals.handover));
-    // Not `answering`: every branch of the check catches for itself, because the whole use of
-    // this page is the sentence the thing that refused wrote.
+    // Not `answering`: every branch catches for itself.
     return connection(ctx, name, locals.handover);
   }
   if (params.path === 'account/set-password')

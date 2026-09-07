@@ -27,8 +27,7 @@ test('<LocaleSwitcher /> draws nothing when the entry can be read in one languag
   expect(html.trim()).toBe('');
 });
 
-// The addresses come bare from `getEntryLocales()`; the page being read carries the form the
-// site builds under, and a link written the other way is a hop through a redirect.
+// The addresses come bare from `getEntryLocales()`.
 test('<LocaleSwitcher /> writes its links the way the page being read is written', async () => {
   const html = await render(
     {

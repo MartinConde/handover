@@ -14,8 +14,7 @@ import {
 } from './locks.js';
 import * as tables from './tables.js';
 
-// The same harness `activity.test.ts` uses: a real D1 behind the real generated schema, since
-// what this file is about is a conditional upsert and an expiry rather than arithmetic.
+// A real D1 behind the real schema, since this is about a conditional upsert and an expiry.
 const mf = new Miniflare({
   modules: true,
   script: 'export default {}',
@@ -127,8 +126,7 @@ test('removing a member lets go of their entries and leaves everyone else holdin
   expect((await lockHolder('default', db, 'pages/home', NOW))?.userId).toBe('u2');
 });
 
-// The lock is per tab: one person with the entry open twice is two holders, and the second is
-// told so rather than writing over the first.
+// The lock is per tab: the same person's second tab is refused, not written over.
 test('a second tab of the same person is refused, and reads its own name as the holder', async () => {
   await claimLock('default', db, 'listings/seaview-cottage', 'u1', 'tab-a', NOW);
   expect(

@@ -39,8 +39,7 @@ test('an entry is one row with a locale per file', () => {
   });
 });
 
-// The language a client turned off has no file, so the row's own languages cannot say it: the
-// list reads which ones the entry is offered in off the files it does have.
+// A language turned off has no file, so `offered` is read off the files the entry does have.
 test('an entry carries the languages it is offered in when it is not offered in all of them', () => {
   const index = indexFrom('default', [
     listing('en', 'mill-house', '_locales:\n  - "en"\ntitle: "The Mill House"\n'),
@@ -112,8 +111,7 @@ test('templates and redirects are not entries', () => {
   ).toEqual({});
 });
 
-// The same files the index throws away are the ones the New entry dialog offers: they are
-// read once, at build, and told apart by the folder they sit in.
+// The files the index throws away are the ones the New entry dialog offers.
 test('the starters under _templates are listed per collection, by name', () => {
   expect(
     templatesFrom('default', [
@@ -132,8 +130,7 @@ test('the starters under _templates are listed per collection, by name', () => {
   });
 });
 
-// The globals share the entry layout and the CMS edits them through it, so the list of them
-// is answered from the index like any other — a global has no title field, so it lists by key.
+// A global has no title field, so it lists by key.
 test('a global is an entry of the globals collection, named by its file', () => {
   expect(
     indexFrom('default', [file('src/content/globals/en/site.yaml', 'name: "Handover"\n')]).globals,
@@ -217,8 +214,7 @@ test('a renamed entry is listed under its new name before the build catches up',
   ]);
 });
 
-// A top-level `_locales` is written by the admin into every file the entry has, so a mark
-// that disagrees with the files there are is a hand edit or a bad merge — drift, one level up.
+// A `_locales` mark that disagrees with the files is a hand edit or a bad merge.
 test('the languages an entry has a file in are offered whatever the mark says', () => {
   const { offered, problems } = entryOffer('default', ['en', 'de'], ['en'], ['en', 'de']);
   expect(offered).toEqual(['en', 'de']);
@@ -289,8 +285,7 @@ test('an entry whose source has not moved is not in the map at all', async () =>
   ).toEqual({});
 });
 
-// The site's own files are not entries and no form is asked for them, so a build cannot die
-// here over `redirects.yaml` or a starter nobody has filled in.
+// A build must not die over `redirects.yaml` or a starter nobody has filled in.
 test('a file that is not an entry, and a collection with no form, are left alone', async () => {
   const de = await translated('Mill House', 'Mühlenhaus');
 

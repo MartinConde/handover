@@ -11,7 +11,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-// The DeepL boundary. Every call made is kept so a test can read what was sent.
+// Keep every DeepL call for assertions.
 function stubFetch(reply: (body: { text: string[] }) => Response) {
   const calls: { url: string; init: RequestInit; body: { text: string[]; target_lang: string } }[] =
     [];

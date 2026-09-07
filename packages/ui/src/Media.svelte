@@ -15,7 +15,7 @@ let {
   onpick,
   onclose,
 }: {
-  /** Pictures or downloads. The field that opened this decides which library it is.  */
+  /** Pictures or downloads, decided by the field that opened this. */
   kind: 'images' | 'files';
   /** The field's own name: what the client is choosing for. */
   label: string;
@@ -47,10 +47,7 @@ $effect(() => {
 });
 
 let opened = false;
-// The library, and then anything the client dropped on the field to get here. The search is the
-// table's rather than this list's — tags are not in what was loaded, and a name past the
-// hundredth row would be a match nobody could find — so searching is the same load with the
-// words on it, and emptying the box is the load with none.
+// Searching is the same load with the words on it: tags are not in what was loaded here.
 $effect(() => {
   const q = query;
   // Opening waits for nothing, and what was dropped on the field goes up once.
@@ -69,10 +66,7 @@ async function load(q: string) {
   if (res.ok) items = ((await res.json()) as { media: MediaItem[] }).media;
 }
 
-// Why this picture cannot go in this field: measured on the crop at the field's ratio, not on
-// the file, so a tall phone photo cannot pass a floor sideways. A field with no floor refuses
-// nothing. A row whose size nobody knows — what the reconciliation job recovers, since a HEAD
-// cannot measure a picture — is refused whatever the floor is: the field stores those numbers.
+// Measured on the crop at the field's ratio, so a tall phone photo cannot pass a floor sideways.
 const why = (item: MediaItem) => {
   if (kind === 'files') return undefined;
   if (!item.width || !item.height)
@@ -91,8 +85,7 @@ const one = $derived(chosen[0]);
 
 async function take(files: File[]) {
   for (const file of files) {
-    // The row is read back out of the array: what is in there is the reactive proxy, and the
-    // object that went in is not — writing to that one updates nothing on the screen.
+    // Read back out of the array: only the proxy in there updates the screen.
     const row = queue[
       queue.push({ name: file.name, state: kind === 'images' ? 'Converting…' : 'Uploading…' }) - 1
     ] as { name: string; state: string; failed?: boolean };
@@ -103,8 +96,7 @@ async function take(files: File[]) {
       const held = items.some((i) => i.id === media.id);
       row.state = held ? 'Already in your library — reused, nothing uploaded' : 'Uploaded';
       items = [media, ...items.filter((i) => i.id !== media.id)];
-      // Uploading is not choosing: a picture the field is too narrow for is listed with its
-      // reason like any other, rather than selected because it arrived last.
+      // Uploading is not choosing: a refused picture is listed with its reason, not selected.
       if (!why(media)) chosen = many ? [...chosen, media] : [media];
     } catch (err) {
       row.state = err instanceof Error ? err.message : 'The upload failed';
@@ -155,7 +147,7 @@ function drop(e: DragEvent) {
     </div>
     <div class="picker-body">
       <div class="picker-main">
-        <!-- svelte-ignore a11y_no_static_element_interactions -- the button inside is the control; the zone is a drop target -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
         <div class="dropzone" class:is-over={over} ondragover={(e) => { e.preventDefault(); over = true; }} ondragleave={() => (over = false)} ondrop={drop}>
           <span>Drop {kind === 'images' ? 'images' : 'files'} here to upload</span>
           <span class="hint">
@@ -185,8 +177,7 @@ function drop(e: DragEvent) {
             {#each items as item (item.id)}
               {@const refused = why(item)}
               <label class="tile">
-                <!-- Refused with aria-disabled rather than disabled: a disabled control takes no
-                     focus, so a keyboard would arrow past the tile and never hear the reason. -->
+                <!-- aria-disabled, not disabled: a disabled control would skip the reason. -->
                 <input type={many ? 'checkbox' : 'radio'} name="picker-pick" value={item.id} checked={chosen.some((i) => i.id === item.id)} aria-disabled={refused ? 'true' : undefined} aria-describedby={refused ? `why-${item.id}` : undefined} onchange={() => { if (!refused) choose(item); }} />
                 {#if kind === 'images'}
                   <span class="thumb"><MediaImage src={item.url} alt="" /></span>
@@ -206,7 +197,7 @@ function drop(e: DragEvent) {
       <div class="picker-side">
         {#if many}
           <p class="side-title">{chosen.length ? `${chosen.length} chosen — they go in this order` : 'Nothing chosen yet'}</p>
-          <!-- Taking one back out is × on its row here, not un-ticking it across a grid of forty. -->
+          <!-- Taking one back out is × on its row here, not un-ticking it in a grid of forty. -->
           <ul class="upload-queue">
             {#each chosen as item (item.id)}
               <li class="upload-row">

@@ -29,8 +29,7 @@ const entry = {
   drift: [] as Drift[],
 };
 
-// The same entry on a site that declares two languages. `price` is the same in both, `notes`
-// belongs to English alone, and the German file is the other half of the screen.
+// Two languages: `price` is shared, `notes` is English-only, the German file is the second column.
 const bilingual = {
   ...entry,
   fields: [
@@ -94,8 +93,6 @@ test('renders one labelled input per text field, filled from the entry data', ()
   expect($<HTMLInputElement>(root, 'input#f-seo\\.description')?.value).toBe('Harbour view');
 });
 
-// Singleton mode is a subtraction and nothing else: what a global cannot have is what a
-// collection's routes are about, and everything that makes it editable content stays.
 test('a global is drawn without the status chip, the overflow menu or the tab bar', () => {
   const root = show({
     collection: 'globals',
@@ -106,7 +103,6 @@ test('a global is drawn without the status chip, the overflow menu or the tab ba
   expect($(root, '.status')).toBeNull();
   expect($(root, '[aria-label="More actions"]')).toBeNull();
   expect($(root, '[role="tablist"]')).toBeNull();
-  // What stays: the hold toggle and the entry's own Publish.
   expect($(root, '.hold-toggle')).not.toBeNull();
   expect($(root, '.btn-primary')?.textContent).toContain('Publish this entry');
 });
@@ -137,16 +133,14 @@ const type = (root: ParentNode, sel: string, value: string) => {
   flushSync();
 };
 const tick = () => new Promise((r) => setTimeout(r, 0));
-// The token the editor sends with every beat and save is per browser tab and kept in session
-// storage, so pinning it there is what makes the bodies below literal.
+// The tab token lives in session storage, so pinning it makes the request bodies below literal.
 sessionStorage.setItem('handover-tab', 'tab-1');
-// Every editor takes the entry's lock as it opens, so a stub answers that route too — an answer
-// of any other shape reads as somebody else holding it, and the screen would go read-only.
+// Every editor takes the lock on open; any other answer shape reads as somebody else holding it.
 const HELD = { held_by: null, mine: true, expires_at: 1755864120000 };
 const isLock = (url: unknown) => String(url).startsWith('/admin/api/locks/');
 /** The checks pass a save that left a draft asks for; it rides on the same fetch as the save. */
 const isLint = (url: unknown) => url === '/admin/api/publish/checks';
-/** The writes a test is about: the beat and the lint ride on the same fetch and are none of them. */
+/** The writes a test is about, with the lock beats and lint passes filtered out. */
 const wrote = (mock: { mock: { calls: unknown[][] } }) =>
   mock.mock.calls.filter((call) => !isLock(call[0]) && !isLint(call[0]));
 const autosaved = () =>
@@ -170,8 +164,7 @@ const withProblems = (problems: { path: string; message: string }[]) => {
   return document.body;
 };
 
-// Preview is a page on the site, so an entry nothing renders — every global, and any collection
-// without a route — has nowhere to open and is not offered the button.
+// Preview is a page on the site, so an entry nothing renders has nowhere to open.
 test('Preview is offered only where the site has a page to show', () => {
   expect($(show(), 'button.btn-preview')).toBeNull();
   unmount(app);
@@ -270,8 +263,7 @@ test('Escape closes the publish dialog and gives focus back to the button', asyn
   vi.unstubAllGlobals();
 });
 
-// An entry you were holding back publishes like any other, and the hold goes with the draft:
-// the button is not blocked by it, and what comes back has the toggle off.
+// The hold goes with the draft, so it never blocks the entry's own publish.
 test('an entry on hold can still be published from its own header', async () => {
   vi.stubGlobal('fetch', autosaved());
   const root = show({ entry: { ...entry, pending: ['en'], held: true } });
@@ -285,8 +277,7 @@ test('an entry on hold can still be published from its own header', async () => 
   vi.unstubAllGlobals();
 });
 
-// The one-entry half of publishing: it commits, so it confirms, and it names everything that
-// goes with the entry — every language file, since they are written together.
+// Language files are written together, so the confirm names every one of them.
 test('Publish this entry names the language files it is about to commit', async () => {
   vi.stubGlobal('fetch', autosaved());
   const root = show({ entry: { ...bilingual, pending: ['en', 'de'] } });
@@ -329,9 +320,7 @@ test('confirming publishes this entry alone and reads the screen again', async (
   vi.unstubAllGlobals();
 });
 
-// The dialog runs the same checks the drawer does, over this one entry, and refuses the same
-// way: an error disables the button, warnings never stop a publish, and the pass runs again on
-// the press so a picture deleted since the dialog opened is still caught.
+// The pass runs again on the press, so a picture deleted since the dialog opened is still caught.
 const BROKEN = {
   check: 'media-missing',
   entry: 'listings/seaview-cottage',
@@ -438,9 +427,7 @@ test('a pass that could not be run says so and holds nothing back', async () => 
   vi.unstubAllGlobals();
 });
 
-// A check error is a page the visitor sees broken, and it holds the publish back the way a
-// schema problem does — so the editor counts and marks it the same way, from the moment the
-// entry opens and after every save, rather than only once the publish dialog is up.
+// A check error blocks a publish like a schema problem, so it is counted before the dialog is up.
 const pictured = {
   ...entry,
   fields: [
@@ -494,8 +481,7 @@ test('an entry with nothing pending asks the checks nothing when it opens', asyn
   vi.unstubAllGlobals();
 });
 
-// Detection, not resolution: the header says the entry is stale and the drawer's Discard is
-// the way out. Choosing field by field is the three-way view, which is not built yet.
+// Detection only: field-by-field resolution is the three-way view, not built yet.
 test('a file somebody changed in the repository badges the header and names the drawer', async () => {
   vi.stubGlobal(
     'fetch',
@@ -525,8 +511,7 @@ test('a file somebody changed in the repository badges the header and names the 
   vi.unstubAllGlobals();
 });
 
-// The draft is what the browser read, not what the descriptors describe: a field renamed in
-// schemas.ts before its migration is written would otherwise lose its value on the first save.
+// A field renamed in schemas.ts before its migration would otherwise lose its value on first save.
 test('a key no descriptor mentions is written back, not dropped', async () => {
   const fetchMock = autosaved();
   vi.stubGlobal('fetch', fetchMock);
@@ -600,8 +585,7 @@ test('an edit is sent as a draft two seconds after the last keystroke', async ()
   vi.useRealTimers();
 });
 
-// The drawer counts entries, not keystrokes: it is stale only while an entry it does not know
-// about has become pending, so the shell is told when that flips and not on every save.
+// The drawer counts entries, not keystrokes, so the shell hears only when pending flips.
 test('the first save that makes an entry pending tells the shell; the next does not', async () => {
   vi.useFakeTimers();
   vi.stubGlobal('fetch', autosaved());
@@ -619,8 +603,6 @@ test('the first save that makes an entry pending tells the shell; the next does 
   vi.useRealTimers();
 });
 
-// An entry already ahead of the repository when it opened is already counted, so a save of it
-// tells the shell nothing it does not know.
 test('a save of an entry that was already pending tells the shell nothing', async () => {
   vi.useFakeTimers();
   vi.stubGlobal('fetch', autosaved());
@@ -677,8 +659,7 @@ const heldBy = (over: Record<string, unknown> = {}) =>
       : Response.json({}),
   );
 
-// The restore is over by the time the form draws — the tab has moved and the entry was read
-// again — so the banner is what says what just happened, for as long as the version is waiting.
+// The restore is over before the form draws, so the banner is the only trace of it.
 test('a restored version is announced until it is published', () => {
   const root = show({
     restored: new Date(Date.now() - 3 * 86_400_000).toISOString(),
@@ -708,8 +689,7 @@ test('an entry somebody else is editing reads, and says who has it', async () =>
   vi.unstubAllGlobals();
 });
 
-// The lock is the tab's, so the same person's second tab is refused too — and told it is their
-// own other tab rather than "Being edited by" themselves.
+// The lock belongs to the tab, so the same person's second tab is refused too.
 test('the same person in a second tab is told it is open in another tab', async () => {
   vi.stubGlobal('fetch', heldBy({ held_by: { id: 'u2', name: 'Anna' } }));
   const root = show({ userId: 'u2' });
@@ -741,8 +721,7 @@ test('the beat and the save carry the same tab token', async () => {
   vi.useRealTimers();
 });
 
-// The whole of the decision the banner is there for: a lock held by somebody who has stopped
-// typing is a minute from freeing itself, and one held by somebody mid-sentence is not.
+// A holder who stopped typing is a minute from losing the lock; one mid-sentence is not.
 test('the banner says how long ago the holder last typed', async () => {
   vi.stubGlobal('fetch', heldBy({ expires_at: Date.now() + LOCK_TTL - 70_000 }));
   const root = show();
@@ -838,8 +817,7 @@ test('a draft that matches the published file again leaves nothing to publish', 
   vi.useRealTimers();
 });
 
-// S1: a new entry whose required field has no widget yet used to say only "Not saved". The
-// entry names what is missing instead, and the schema stops it at the publish.
+// Regression: a required field with no widget yet used to say only "Not saved".
 test('what the schema is still missing is counted in the header and marked on the field', () => {
   const root = withProblems([{ path: 'title', message: 'Required' }]);
   expect($(root, '.problems')?.textContent).toBe('1 problem');
@@ -914,8 +892,7 @@ test('an entry whose languages disagree gets the panel where its form would be',
   expect($<HTMLButtonElement>(root, 'header button.btn-primary')?.disabled).toBe(true);
 });
 
-// F2: the list read `_locales` one way and the form another. Now the file wins and the
-// disagreement is said out loud, above the form it would otherwise have decided in silence.
+// The file wins over `_locales`, and the disagreement is said above the form.
 test('an entry whose _locales its files contradict says so', () => {
   const root = show({
     entry: {
@@ -929,9 +906,7 @@ test('an entry whose _locales its files contradict says so', () => {
   expect($(root, 'form.form')).not.toBe(null);
 });
 
-// One language declared is a CMS with no i18n in it: the controls are not drawn at all, and
-// the rule is on the config rather than on the data — two languages and no German file still
-// draws every one of them, because the missing German is what the client is meant to see.
+// The rule is on the config: two declared languages with no German file still draw every control.
 test('a site that declares one language draws no language controls at all', () => {
   const root = show();
 
@@ -950,8 +925,7 @@ test('a second language with nothing written in it still draws every control', (
   expect($(root, 'button.btn-sbs')).not.toBeNull();
 });
 
-// Five languages is where a row of buttons stops fitting, so the switcher becomes a menu —
-// Sveltia's threshold, and the only other shape this control has.
+// Five languages is where a row of buttons stops fitting — Sveltia's threshold.
 test('a site with five languages picks its language from a menu', () => {
   const five = ['en', 'de', 'fr', 'es', 'it'];
   const root = show({ entry: { ...bilingual, locales: five, offered: five } });
@@ -988,8 +962,7 @@ test('side by side edits the second language and saves it to its own file', asyn
   vi.unstubAllGlobals();
 });
 
-// The pane renders what is stored, and the second column stores its own file: a save there is
-// as much a reason to draw the page again as a save on this one.
+// The second column stores its own file, so its save is as much a reason to redraw the page.
 test('a save in the second language asks the preview for the page again', async () => {
   vi.stubGlobal('fetch', autosaved());
   const root = show({
@@ -1014,9 +987,7 @@ test('a save in the second language asks the preview for the page again', async 
   vi.unstubAllGlobals();
 });
 
-// The skeleton is one edit to every language. The server has always mirrored a move into the
-// other language's stored row; the second column used to keep the copy it was opened with and
-// show the new order on the next open — Phase 3's W1.
+// The skeleton is one edit to every language, so the second column must move at once.
 const twoBlocks = {
   ...bilingual,
   blocks: {
@@ -1041,8 +1012,7 @@ const twoBlocks = {
   },
 };
 const CARD = '.row-card, .block-card';
-// dnd-kit reads the cards' boxes to know where a key press lands; jsdom has none, so each card
-// is a 100px band in the order it sits in — the same stub the Fields tests use.
+// dnd-kit reads card boxes and jsdom has none, so each card is a 100px band in document order.
 const laidOut = () =>
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
     const found = this.closest(CARD);
@@ -1096,8 +1066,7 @@ test('a shared value typed in the source column reads in the second column as it
   vi.unstubAllGlobals();
 });
 
-// The mirror runs as the column opens too, so it has to agree that nothing has moved: a save
-// on open would make every side-by-side look an unpublished change.
+// The mirror runs on open too; a save there would make every side-by-side look like a change.
 test('opening the second column on an untouched entry writes nothing', async () => {
   vi.useFakeTimers();
   const fetchMock = autosaved();
@@ -1124,8 +1093,7 @@ test('the second language shows a shared field without offering to change it', (
   expect($(root, '#t-notes')).toBeNull();
 });
 
-// The second language is its own file, so its draft is its own reason to publish: the button
-// cannot go back to disabled the moment that save lands.
+// The second language is its own file, so its draft alone is a reason to publish.
 test('an edit made only in the second language is still something to publish', async () => {
   vi.stubGlobal('fetch', autosaved());
   const root = show({ entry: bilingual });
@@ -1141,9 +1109,7 @@ test('an edit made only in the second language is still something to publish', a
   vi.unstubAllGlobals();
 });
 
-// The second column is a component with its own copy of one language's file. Anything that
-// takes it off the screen — closing it, choosing another language — has to store what is in it
-// first, and anything that points it at another language has to give it that language's words.
+// The second column holds its own copy of one language, so leaving it must store it first.
 test('closing the second column stores what was typed in it', async () => {
   const fetchMock = autosaved();
   vi.stubGlobal('fetch', fetchMock);
@@ -1246,17 +1212,14 @@ test('a translation typed and then closed is still something to publish', async 
   vi.unstubAllGlobals();
 });
 
-// The other half of that: a translation already stored ahead of the repository when the screen
-// opens — which is what Create from English leaves behind — is the entry's to publish, without
-// anybody opening the column and typing in it.
+// Create from English leaves a draft ahead of the repository, which is the entry's to publish.
 test('a translation drafted before the screen opened is something to publish', () => {
   const root = show({ entry: { ...bilingual, pending: ['de'] } });
 
   expect($<HTMLButtonElement>(root, 'button.btn-primary')?.disabled).toBe(false);
 });
 
-// A language with no file: two ways out, and an empty form is neither — it would autosave a
-// file nobody asked for.
+// An empty form would autosave a file nobody asked for, so a missing language gets offers instead.
 const missing = { ...bilingual, translations: {} };
 const posted = () =>
   vi.fn(async (url: string, _init?: RequestInit) =>
@@ -1299,9 +1262,7 @@ test('turning a language off sends the ones the entry keeps', async () => {
   vi.unstubAllGlobals();
 });
 
-// The other way to turn a language off: on one that has a file, which is a delete of that file.
-// It is asked for where the column is — beside its close button — and through the dialog a
-// delete gets, naming the URL that goes and where its readers are sent.
+// Turning off a language with a file deletes it, so it gets a delete's dialog with a redirect.
 test('a language with a file is turned off from its own column, through a dialog', async () => {
   const fetchMock = posted();
   vi.stubGlobal('fetch', fetchMock);
@@ -1327,8 +1288,7 @@ test('a language with a file is turned off from its own column, through a dialog
   vi.unstubAllGlobals();
 });
 
-// The dialog is the one a hide gets: it asks where the readers of that language go, and the
-// answer rides with the turn-off rather than the route deciding on the overview.
+// The redirect answer rides with the turn-off rather than the route deciding on the overview.
 test('turning a language off asks where its readers go and sends the answer', async () => {
   const fetchMock = posted();
   vi.stubGlobal('fetch', fetchMock);
@@ -1353,8 +1313,7 @@ test('turning a language off asks where its readers go and sends the answer', as
   vi.unstubAllGlobals();
 });
 
-// The server refuses a turn-off that would leave the entry with no published file, and the
-// sentence it refuses with is the one worth reading: the dialog stays open and shows it.
+// The refusal's sentence is worth reading, so the dialog stays open and shows it.
 test('a turn-off the server refuses keeps the dialog open with its reason', async () => {
   const reason =
     'Turning de off would leave this entry with no published file: publish en first, or Delete the entry';
@@ -1388,9 +1347,7 @@ test('a turn-off the server refuses keeps the dialog open with its reason', asyn
   vi.unstubAllGlobals();
 });
 
-// Turning German off deletes the German file, so *Turn German back on* alone hands over an
-// empty form and the words are only in the repository. Where the CMS is what turned it off, the
-// log knows which commit to undo and the offer is to bring them back.
+// Turning German off deleted its file, so the log's commit is what brings the words back.
 test('a language the CMS turned off offers the words back rather than an empty form', async () => {
   const fetchMock = vi.fn(async (url: string, _init?: RequestInit) =>
     isLock(url)
@@ -1445,8 +1402,7 @@ test('a language turned off is struck through and offers no way to write it', ()
   expect($(root, 'button.btn-link')).toBeNull();
 });
 
-// An entry written in a language the site does not default to: no English file was ever made,
-// so German is where its structure is edited and what its English would be created from.
+// No English file was ever made, so German is where the structure is edited.
 const germanOnly = {
   ...bilingual,
   sourceLocale: 'de',
@@ -1466,8 +1422,7 @@ test('an entry opens on the language it is written in, not on the site default',
   expect($(root, 'button.btn-create')?.textContent?.trim()).toBe('Create from German');
 });
 
-// Machine translation. Nothing is drawn without something to translate with, and what a
-// machine wrote is badged in the column until somebody types over it.
+// Machine output is badged in the column until somebody types over it.
 const machine = { ...bilingual, translator: true };
 const filled = (data: Record<string, unknown>) =>
   vi.fn(async () => Response.json({ data, pending: true }));
@@ -1580,8 +1535,7 @@ test('typing over a machine-filled field takes its badge off there and then', ()
   expect($(root, '.badge-machine')).toBeNull();
 });
 
-// An address per language: its own row in the header rather than a field in the form, because
-// it is validated, has to be unique and owes a redirect when a published one moves.
+// An address is validated, unique and owes a redirect when it moves, so it is not a form field.
 const addressed = {
   ...bilingual,
   localizedSlugs: true,
@@ -1646,8 +1600,7 @@ test('the reason an address was refused is shown against the row', async () => {
   vi.unstubAllGlobals();
 });
 
-// The other half of a take-over, from the tab that lost the entry: it finds out because the
-// save it makes next comes back refused, and everything about the screen follows from that.
+// The losing tab finds out from the refused save it makes next.
 const refused = () =>
   vi.fn(async (url: string) =>
     isLock(url)
@@ -1679,8 +1632,7 @@ test('a save refused by a take-over says where the work went and stops the tab',
   vi.useRealTimers();
 });
 
-// 3.9 beat on every save, refused or not. Once a refusal means "you lost it", that beat would
-// push the lock the entry no longer has back out.
+// Once a refusal means "you lost it", the beat on that save would push the lost lock back out.
 test('a refused save does not push the lock back out', async () => {
   vi.useFakeTimers();
   const fetchMock = refused();
@@ -1699,8 +1651,7 @@ test('a refused save does not push the lock back out', async () => {
   vi.useRealTimers();
 });
 
-// Sitting still was the one way never to find out: the holder's tab only heard of a take-over
-// from the save it made next. Now it asks on its own, and again when it comes back to the front.
+// The holder polls on its own and on refocus, rather than learning of a take-over only on save.
 const takenMeanwhile = () =>
   vi.fn(async (url: string, init?: RequestInit) =>
     !isLock(url)
@@ -1751,8 +1702,7 @@ test('a tab coming back to the front asks about its lock at once', async () => {
   vi.useRealTimers();
 });
 
-// A lock that lapsed with nobody after it is not a take-over: the tab is still here, so it takes
-// its own lock back rather than telling the person somebody else has the entry.
+// A lock that lapsed with nobody after it is not a take-over, so nobody else is named.
 test('a lapsed idle lock stays released until the editor reloads', async () => {
   vi.useFakeTimers();
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) =>
@@ -1799,8 +1749,7 @@ test('Take over asks first, and reads the entry again once it is yours', async (
   vi.unstubAllGlobals();
 });
 
-// The hold is stored on the draft rows, so whatever is in the form goes first — otherwise the
-// entry is held back and the words that made somebody hold it are still in the browser.
+// The hold is stored on the draft rows, so the form's words have to be saved first.
 test('Not ready yet stores the edit, then holds the entry', async () => {
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (isLock(url)) return Response.json(HELD);
@@ -1837,8 +1786,7 @@ test('an entry somebody is already holding back opens with the toggle on', () =>
   expect($(root, '.hold-toggle')?.getAttribute('aria-pressed')).toBe('true');
 });
 
-// The lock is the entry's, so the second language surrenders on the same refusal — otherwise a
-// tab that lost the entry keeps typing German at a draft row it no longer holds.
+// The lock is the entry's, so a refusal in the second language surrenders the whole tab.
 test('a refused save in the second language loses the entry too', async () => {
   vi.useFakeTimers();
   vi.stubGlobal('fetch', refused());
@@ -1873,9 +1821,7 @@ test('the take-over confirm closes on Escape and hands focus back', async () => 
   vi.unstubAllGlobals();
 });
 
-// The header's status control. What one answer becomes — a rule per language — is the route's,
-// and api.test.ts holds it to each of the four; what the header owes is asking before it hides
-// and not asking when it shows.
+// The per-language rule is the route's (api.test.ts); the header only owes asking before it hides.
 const status = () =>
   vi.fn(async (url: string) =>
     isLock(url)
@@ -1929,8 +1875,7 @@ test('a hidden entry with no rule says so rather than naming nothing', () => {
   );
 });
 
-// The header's overflow menu: what the list row offers, from inside the entry. Hide comes
-// before Delete because it is the answer the delete dialog leads with.
+// Hide comes before Delete because it is the answer the delete dialog leads with.
 const menuItems = (root: ParentNode) =>
   $$(root, '[role="menu"][aria-label="More actions"] [role="menuitem"]').map((b) =>
     b.textContent?.trim(),
@@ -2033,8 +1978,7 @@ test('the header menu is closed while somebody else holds the entry', async () =
   vi.unstubAllGlobals();
 });
 
-// The SEO panel is a tab of its own: the field is drawn there and nowhere else, so one screen
-// never carries two boxes with the same id.
+// The SEO field is drawn on its own tab only, so no screen carries two boxes with one id.
 const withSeo = {
   ...entry,
   fields: [
@@ -2067,8 +2011,7 @@ test('the SEO tab draws the panel and nothing the Content tab draws', () => {
   expect($(root, 'input#f-title')).toBeNull();
 });
 
-// The site's pattern resolved by the same function the build runs, so the greyed value a client
-// types against is the tag the page will really carry.
+// The pattern is resolved by the build's own function, so the greyed value is the real tag.
 test('the panel greys the site\u2019s own default behind an empty search title', () => {
   const root = show({ entry: withSeo, section: 'seo' });
   expect($(root, 'input#f-seo\\.title')?.getAttribute('placeholder')).toBe(
@@ -2076,8 +2019,7 @@ test('the panel greys the site\u2019s own default behind an empty search title',
   );
 });
 
-// A count that names a field on the other tab has to take the reader there, or the jump lands
-// nowhere and reads as a broken button.
+// A count naming a field on the other tab has to take the reader there.
 test('the problem count jumps to the SEO tab for a problem the panel owns', async () => {
   const root = show({
     entry: { ...withSeo, problems: [{ path: 'seo.title', message: 'Required' }] },
@@ -2091,8 +2033,7 @@ test('the problem count jumps to the SEO tab for a problem the panel owns', asyn
   expect(location.pathname).toBe('/admin/c/listings/seaview-cottage/seo');
 });
 
-// Each language's preview is under the address that language serves the entry at, so the
-// German column shows the German address and not the English one with a flag on it.
+// The German column shows the German address, not the English one with a flag on it.
 test('the SEO previews carry the address each language serves this entry at', async () => {
   const root = show({
     entry: {
@@ -2121,9 +2062,7 @@ test('the SEO previews carry the address each language serves this entry at', as
   ]);
 });
 
-// The drawer's *Go to field* names the field the way `_machine` does — by the ids of the rows
-// above it — so the address still lands after the block has been moved, and the form draws
-// it by its position: the two are read together here.
+// The address names the field by row ids, as `_machine` does, so it still lands after a move.
 const movedBlock = {
   ...bilingual,
   data: {
@@ -2169,8 +2108,7 @@ test('the field is landed on when the address changes under an open entry', asyn
   expect(document.activeElement?.id).toBe('f-title');
 });
 
-// The screen under the dialog is not inert — the sidebar and the top bar stay reachable — so the
-// dialog must not claim a trap that is not there, the way every other dialog here declines to.
+// The screen under the dialog is not inert, so the dialog must not claim a modal trap.
 test('the take-over dialog claims no modal trap the screen does not have', async () => {
   vi.stubGlobal('fetch', heldBy());
   const root = show();

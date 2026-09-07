@@ -196,8 +196,7 @@ test.skipIf(!configured)(
     const diff = (await res.json()) as { total_commits: number; files: { filename: string }[] };
     expect(diff.total_commits).toBe(1);
     expect(diff.files.map((f) => f.filename).toSorted()).toEqual(paths.toSorted());
-    // The rows are re-seeded on the commit rather than deleted, so what says they went out is
-    // that nothing about them is waiting any more.
+    // The rows are re-seeded rather than deleted, so "went out" means nothing is pending any more.
     expect(await pendingDrafts('default', db)).toEqual([]);
 
     await git.publish(
@@ -209,8 +208,7 @@ test.skipIf(!configured)(
   60_000,
 );
 
-// The staleness walk on the real thing: the German is a translation of the English as it stood,
-// and the English moving on afterwards is what makes it stale — in the file, so a diff shows it.
+// Staleness on the real thing: the English moving on after the translation shows in the file.
 const TRANSLATED: Form = {
   fields: [
     { path: ['title'], label: 'Title', type: 'text', required: true },
@@ -251,8 +249,7 @@ test.skipIf(!configured)(
     const de = `src/content/listings/de/${name}.yaml`;
     const sourceOf = async (path: string) =>
       path === de ? { locale: 'en', path: en, form: TRANSLATED } : undefined;
-    // Both files as one commit has them: two reads of a moving branch are two repositories, and
-    // "has the source moved on since the translation" is a question about one.
+    // Both files as one commit has them: a moving branch read twice is two repositories.
     const stale = async (at: string) =>
       staleLocales('default', TRANSLATED, {
         en: parseEntry('default', (await git.getFile(en, at))?.contents ?? ''),
@@ -283,7 +280,6 @@ test.skipIf(!configured)(
     expect((await git.getFile(de, marked?.commit_sha ?? ''))?.contents).toContain('_i18n:');
     expect(await stale(marked?.commit_sha ?? '')).toEqual([]);
 
-    // The English moves on without it.
     await saveDraft('default', db, git, en, {
       title: `${name} EN`,
       summary: 'A restored mill above the weir.',
@@ -293,7 +289,6 @@ test.skipIf(!configured)(
 
     expect(await stale(moved?.commit_sha ?? '')).toEqual(['de']);
 
-    // And the German catches up.
     await saveDraft('default', db, git, de, {
       title: `${name} DE`,
       summary: 'Eine restaurierte Mühle am Wehr.',
@@ -312,13 +307,7 @@ test.skipIf(!configured)(
   120_000,
 );
 
-/**
- * 3.11's four cases, the ones the spec says will not happen by accident in development: a
- * publish that follows your own, a commit that rewrites a file with the bytes it already had,
- * one that changes it, and one that changes something else. A real repository is the only place
- * they mean anything — blob SHAs are git's, and a commit that moves HEAD without moving a file
- * is not something a fake can be trusted to reproduce.
- */
+// Only a real repository can be trusted to move HEAD without moving a file.
 const harness = async () => {
   const [owner, repo] = (env.GITHUB_REPO ?? '').split('/');
   const app = {
@@ -358,8 +347,7 @@ test.skipIf(!configured)(
     const name = `it-self-${(await git.getHead()).slice(0, 7)}`;
     const en = `src/content/listings/en/${name}.yaml`;
     const de = `src/content/listings/de/${name}.yaml`;
-    // The translation is the sequence that bites: the publish stamps the file on its way past,
-    // so the bytes in the repository are not the bytes the row was published from.
+    // The publish stamps the translation, so the repository's bytes are not the row's.
     const sourceOf = async (path: string) =>
       path === de ? { locale: 'en', path: en, form: TRANSLATED } : undefined;
     await git.publish(
@@ -422,8 +410,7 @@ test.skipIf(!configured)(
     });
     const published = await publishDrafts('default', db, git);
 
-    // The commit moved and the file did not, which is the whole of the case: the publish went
-    // on top of theirs rather than being refused over bytes that never changed.
+    // The commit moved and the file did not, so the publish went on top rather than being refused.
     expect(reformatted).not.toBe(seeded);
     expect(published?.paths).toEqual([path]);
     expect(await parentOf(published?.commit_sha ?? '')).toBe(reformatted);
@@ -462,8 +449,7 @@ test.skipIf(!configured)(
       [{ path, contents: LISTING(name).replace('A mill.', 'A mill above the weir.') }],
       { base_sha: seeded, message: `Edit ${name} in code` },
     );
-    // The precondition, not the assertion: what makes the publish below a conflict is that the
-    // blob at the commit it will be made against is no longer the one the draft was loaded from.
+    // The precondition: the blob at HEAD is no longer the one the draft was loaded from.
     expect((await git.getFile(path, theirs))?.blob_sha).not.toBe(loaded?.baseBlob);
     const caught = await publishDrafts('default', db, git).catch((err) => err);
 
@@ -521,8 +507,7 @@ test.skipIf(!configured)(
   120_000,
 );
 
-// The other half of the conflict above: the way out that is not giving up the draft. Both
-// shortcuts are one publish each, against a file the repository moved under them.
+// The way out of the conflict above that is not giving up the draft.
 const conflicted = async (name: string) => {
   const { git, db, parentOf, dispose } = await harness();
   const path = `src/content/listings/en/${name}.yaml`;

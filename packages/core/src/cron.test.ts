@@ -8,8 +8,7 @@ import type { Db } from './db.js';
 import type { R2Store } from './media.js';
 import * as tables from './tables.js';
 
-// The same harness the other D1 files use: a real database behind the real generated schema,
-// since what this file is about is the two tables a tick reads and writes.
+// The same harness the other D1 files use.
 const mf = new Miniflare({
   modules: true,
   script: 'export default {}',
@@ -209,8 +208,7 @@ test('the orphan sweep is given the repository the tick was called with', async 
   expect(await db.select().from(tables.drafts)).toEqual([]);
 });
 
-// The hidden check's answer is read later by the drawer, so its row carries the list and not
-// only the count — the one job whose "how many" is not the whole of what it did.
+// The hidden check's answer is read later by the drawer.
 test('the hidden job writes what it found into its activity row', async () => {
   const path = 'src/content/listings/en/old-barn.yaml';
   const since = new Date(NOW - 100 * DAY).toISOString();

@@ -1,9 +1,4 @@
-/**
- * One message, out, and the provider's own id for it where there is one — the diagnostics
- * "send test email" quotes that back, and a provider that hands out nothing identifiable says
- * so by leaving it off. A site swaps the provider the package ships for another service by
- * handing `mailer` its own function; nothing above here knows which one carried the message.
- */
+/** The provider's own id where there is one; a provider with nothing identifiable leaves it off. */
 export type Mailer = (message: {
   to: string;
   subject: string;
@@ -11,13 +6,7 @@ export type Mailer = (message: {
   html?: string;
 }) => Promise<{ id?: string }>;
 
-/**
- * Resend behind the interface. The key is the Worker's and `from` is the site's, because an
- * address is not a secret and the diagnostics page shows it. On an account with no verified
- * domain the only sender is `onboarding@resend.dev`, which delivers to the Resend account's
- * own address and refuses every other recipient — with a message saying exactly that, which
- * is why the refusal below is worth quoting rather than counting.
- */
+/** The refusal is quoted rather than counted: Resend's message says exactly what is wrong. */
 export function resendMailer(_siteId: string, key: string, from: string): Mailer {
   return async ({ to, subject, text, html }) => {
     const res = await fetch('https://api.resend.com/emails', {
@@ -35,11 +24,7 @@ export function resendMailer(_siteId: string, key: string, from: string): Mailer
   };
 }
 
-/**
- * The `send_email` binding, named here rather than pulled in from `workers-types`: one method,
- * the one that is called. Its shape is `SendEmail.send(EmailMessageBuilder)` from
- * `@cloudflare/workers-types@5.20260825.1`, narrowed to the fields a Handover message has.
- */
+/** `SendEmail.send` from `@cloudflare/workers-types@5.20260825.1`. */
 export interface EmailSender {
   send(message: {
     to: string;
@@ -50,13 +35,7 @@ export interface EmailSender {
   }): Promise<{ messageId: string }>;
 }
 
-/**
- * `Display Name <someone@example.com>` split into the two halves a provider that takes them
- * apart needs. Resend takes the whole string; the Cloudflare binding and SMTP do not, and an
- * unsplit `from` becomes `MAIL FROM: <Handover <admin@…>>` — a malformed envelope rather than
- * an error. Exported because the SMTP implementation lives in the Astro package and needs the
- * same split; getting it wrong in two places is the thing worth avoiding.
- */
+/** Cloudflare and SMTP take the halves apart, or `from` becomes `MAIL FROM. */
 export function senderAddress(
   _siteId: string,
   from: string,
@@ -68,15 +47,7 @@ export function senderAddress(
   return name ? { name, email } : email;
 }
 
-/**
- * Cloudflare Email Sending behind the interface. The binding is the credential — there is no
- * key to hold — which is why it arrives as an argument like every other resolved credential.
- * A refusal arrives as a plain `Error` whose message is the rule that was broken, and that
- * sentence is what the settings screen quotes back: an unonboarded sending domain, or the
- * recipient narrowing a plan imposes, has to read as itself rather than as a number. The
- * documented `E_*` codes are not on the error the runtime throws — checked against three
- * refusals, whose only own property is `remote`.
- */
+/** The runtime's error carries no `E_*` code, so its message is what the settings screen quotes. */
 export function cloudflareMailer(_siteId: string, binding: EmailSender, from: string): Mailer {
   return async ({ to, subject, text, html }) => {
     try {

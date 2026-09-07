@@ -16,19 +16,21 @@ let {
   onmade,
   onclose,
 }: {
-  /** The picture being cropped; its own dimensions are what a region is measured in. */
+  /** A region is measured in its own pixels. */
   item: MediaItem;
-  /** The site's own shapes, offered beside Free. */
   ratios?: string[];
-  /** The crop, once it is a row of its own. */
   onmade: (made: MediaItem) => void;
   onclose: () => void;
 } = $props();
 
+// svelte-ignore state_referenced_locally -- dialog dimensions are initial snapshots
 const width = item.width ?? 0;
+// svelte-ignore state_referenced_locally -- dialog dimensions are initial snapshots
 const height = item.height ?? 0;
 
+// svelte-ignore state_referenced_locally -- the selected shape is an initial snapshot
 let ratio = $state<string | undefined>(ratios[0]);
+// svelte-ignore state_referenced_locally -- the crop starts from the initial shape
 let region = $state<Region>(fitRegion(width, height, ratios[0]));
 let busy = $state(false);
 let failure = $state('');
@@ -42,7 +44,6 @@ $effect(() => {
   panel?.focus();
 });
 
-/** Where a pointer is on the photograph, in the photograph's own pixels. */
 function at(e: PointerEvent) {
   const box = stage?.getBoundingClientRect();
   if (!box?.width || !box.height) return { x: 0, y: 0 };
@@ -53,8 +54,7 @@ function at(e: PointerEvent) {
 }
 
 function grab(e: PointerEvent, corner?: 'nw' | 'ne' | 'sw' | 'se') {
-  // The stage keeps the pointer, not the handle, so a fast drag off a 12 px square is still this
-  // drag rather than the end of it.
+  // The stage captures the pointer, so a fast drag off a 12 px handle is still this drag.
   e.stopPropagation();
   stage?.setPointerCapture(e.pointerId);
   dragging = { corner, from: region, at: at(e) };
@@ -75,10 +75,9 @@ function lock(next: string | undefined) {
 
 const pc = (n: number, of: number) => (of > 0 ? (n / of) * 100 : 0);
 
-/** The floor a slider starts at; crop.ts refuses anything smaller either way. */
+/** crop.ts refuses anything smaller either way. */
 const MIN = 16;
 
-/** The corners, which are the pointer's affordance for the two size sliders. */
 const CORNERS = ['nw', 'ne', 'sw', 'se'] as const;
 
 async function make() {
@@ -100,8 +99,7 @@ async function make() {
     <h2 id="crop-h">Crop a copy — {item.filename ?? item.src}</h2>
     <p>This makes a new image. The original is kept and stays wherever it is used.</p>
     <div class="dialog-cols">
-      <!-- svelte-ignore a11y_no_static_element_interactions -- the sliders beside it are the
-           control; the box is the pointer's way to the same four numbers -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -- the sliders are the control -->
       <div class="focal-stage" bind:this={stage} onpointermove={drag} onpointerup={() => (dragging = undefined)} onpointercancel={() => (dragging = undefined)}>
         <img src={item.url} alt="" draggable="false" />
         <div class="crop-box" style="left: {pc(region.x, width)}%; top: {pc(region.y, height)}%; width: {pc(region.w, width)}%; height: {pc(region.h, height)}%" onpointerdown={(e) => grab(e)}>

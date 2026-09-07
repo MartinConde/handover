@@ -2,23 +2,17 @@ import { desc } from 'drizzle-orm';
 import { blob, index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import type { RedirectRule } from './lifecycle.js';
 
-// Better Auth owns those five. `auth-schema.ts` is written by
-// `npx auth generate` (see scripts/auth-config.ts) and is committed exactly as the
-// generator emits it — biome skips it — so the next upgrade's regenerate is a clean diff.
+// Better Auth owns those five; `auth-schema.ts` is committed as `npx auth generate` emits it.
 export * from './auth-schema.js';
 
-/**
- * Edits live here, not in git, until they are published. `contents` is the canonical
- * serialised file — the exact bytes a publish would commit — so "nothing pending" is a
- * blob-SHA comparison against `base_blob` rather than a deep-equal of form state.
- */
+/** `contents` is what a publish would commit, so "nothing pending" is a blob-SHA comparison. */
 export const drafts = sqliteTable(
   'drafts',
   {
     siteId: text('site_id').notNull().default('default'),
     path: text('path').notNull(),
     contents: text('contents').notNull(),
-    /** Opaque edit version. Writers assign a fresh UUID; the constant default upgrades existing rows. */
+    /** Writers assign a fresh UUID; the constant default upgrades existing rows. */
     revision: text('revision').notNull().default('legacy'),
     /** Commit the file was loaded from; the diff base of the three-way view. */
     baseSha: text('base_sha').notNull(),
@@ -29,7 +23,7 @@ export const drafts = sqliteTable(
     updatedBy: text('updated_by'),
     /** "Not ready yet": the user id holding the entry back, null when it is ready. */
     heldBy: text('held_by'),
-    /** When the hold was set, epoch milliseconds — the drawer's *· 2 days*. Null with `held_by`. */
+    /** Epoch milliseconds of the hold, for the drawer's *· 2 days*; null with `held_by`. */
     heldAt: integer('held_at'),
     /** Rules this entry adds to redirects.yaml when it is the one being published. */
     pendingRedirects: text('pending_redirects', { mode: 'json' }).$type<RedirectRule[]>(),
@@ -39,7 +33,7 @@ export const drafts = sqliteTable(
   (t) => [primaryKey({ columns: [t.siteId, t.path] })],
 );
 
-/** Uploaded originals. The bytes are in R2; this row is what the library and search read. */
+/** The bytes are in R2; this row is what the library and search read. */
 export const media = sqliteTable('media', {
   /** sha256 of the bytes, so uploading the same file twice is one object and one row. */
   id: text('id').primaryKey(),
@@ -93,7 +87,7 @@ export const activity = sqliteTable(
     detail: text('detail', { mode: 'json' }),
     commitSha: text('commit_sha'),
   },
-  // Every read is `WHERE site_id = ? ORDER BY at DESC LIMIT 50`; D1 bills rows scanned.
+  // Every read is one site's newest 50 by `at`, and D1 bills rows scanned.
   (t) => [index('activity_site_at').on(t.siteId, desc(t.at))],
 );
 
@@ -114,11 +108,7 @@ export const settings = sqliteTable(
   (t) => [primaryKey({ columns: [t.siteId, t.key] })],
 );
 
-/**
- * One row per registered cron job. The dispatcher runs on a single schedule and each job
- * declares its own interval, so `last_run` is what decides whether this tick is that job's.
- * Failures are not here — they are `cron-<job>` rows in the activity log.
- */
+/** Each job declares its own interval, so `last_run` decides whether this tick is that job's. */
 export const cronState = sqliteTable(
   'cron_state',
   {
@@ -130,11 +120,7 @@ export const cronState = sqliteTable(
   (t) => [primaryKey({ columns: [t.siteId, t.job] })],
 );
 
-/**
- * Bumped whenever a table above changes. `handover db generate` records it in
- * `migrations/handover.json`; the build refuses to go out with a stale one, so a package
- * upgrade that forgot to generate fails there rather than at the first query.
- */
+/** Bumped whenever a table changes; the build refuses a stale `migrations/handover.json`. */
 export const SCHEMA_VERSION = 5;
 
 const GENERATE = 'run `npx handover db generate` and commit migrations/';

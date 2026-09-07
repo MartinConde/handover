@@ -1,7 +1,7 @@
 <script lang="ts">
 import PagePicker, { type PickEntry } from './PagePicker.svelte';
 
-/** One answer, which the server turns into a rule per language on the way in. */
+/** The server turns one answer into a rule per language. */
 export type Target =
   | { kind: 'index' }
   | { kind: 'entry'; value: string }
@@ -22,24 +22,21 @@ let {
   onhide,
   onclose,
 }: {
-  /** Hiding keeps the files and waits for a publish; deleting removes them in a commit now, and
-      turning a language off removes that one language's file the same way. */
+  /** Hiding waits for a publish; deleting and turning off commit now. */
   action: 'hide' | 'delete' | 'off';
-  /** What is coming off the site: one entry's title, or "4 listings" for a batch. */
+  /** One entry's title, or "4 listings" for a batch. */
   what: string;
-  /** Turning off only: the language going, and the address it served the entry at. */
+  /** Turning off only. */
   language?: string;
   served?: string;
-  /** Whether `what` is a batch, which is only the difference between two verbs. */
   many?: boolean;
-  /** The collection these belong to: the overview is named for it, the button for one of them. */
   collection: string;
-  /** The collection's page above it, pre-chosen because it is right most of the time. */
+  /** Pre-chosen because it is right most of the time. */
   index?: string;
   busy?: boolean;
   error?: string;
   onconfirm: (target: Target) => void;
-  /** Deleting only: the way out the dialog leads with, since the client will want it back. */
+  /** Deleting only: led with, since the client will want it back. */
   onhide?: () => void;
   onclose: () => void;
 } = $props();
@@ -47,8 +44,6 @@ let {
 const singular = $derived(collection.replace(/s$/, ''));
 const verb = $derived(action === 'delete' ? 'Delete' : 'Hide');
 
-// The overview is the default where the collection has one; without it the honest default is
-// nowhere, since there is no page above this one to send anybody to.
 // svelte-ignore state_referenced_locally -- the collection's page above is the initial choice
 let kind = $state<Target['kind']>(index ? 'index' : 'none');
 let picked = $state<PickEntry>();
@@ -128,8 +123,7 @@ const ready = $derived(kind === 'entry' ? Boolean(picked) : kind !== 'url' || ur
           Nowhere — show “page not found” <span class="desc">404</span>
         </label>
       </fieldset>
-      <!-- One answer, several rules: the server writes each language's from the address that
-           language serves, which is why the dialog asks once however many languages there are. -->
+      <!-- The server writes a rule per language, so the dialog asks once. -->
       <p class="hint">
         The rule is written {action === 'hide' ? 'when you publish' : 'in the same commit'}{#if action !== 'off'},
           once per language, from the address each of them serves at{/if}.

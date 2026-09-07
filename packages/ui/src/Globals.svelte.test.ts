@@ -2,9 +2,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Globals from './Globals.svelte';
 
-// Testing: one card per declared global, in the order the API returned, with the pending dot
-// and a dashed chip for a language it has no file in.
-// Not testing: the card's styling, or the sidebar link that routes here.
+// Testing: one card per declared global, in the order the API returned.
 
 const GLOBALS = [
   {
@@ -43,8 +41,7 @@ test('one card per global, named and described by the schema', async () => {
   const root = show();
   await loaded();
 
-  // Redirects is last and is not a global: every site has one, so the card is drawn whatever
-  // the developer declared.
+  // Redirects is last and is not a global.
   expect(all(root, '.global-card h2 a').map((a) => a.textContent)).toEqual([
     'Site details',
     'Newsletter call-to-action',
@@ -88,8 +85,7 @@ test('a global somebody has open carries their name on the card', async () => {
   expect(cta?.querySelector('.badge')).toBeNull();
 });
 
-// Who last touched it, which the card had no line for until the dashboard gave every screen the
-// same one. A publish names the person who published rather than the person who typed it.
+// The card identifies its last editor.
 test('a card says who last edited it, and a card nobody has touched says nothing', async () => {
   const root = show([
     {

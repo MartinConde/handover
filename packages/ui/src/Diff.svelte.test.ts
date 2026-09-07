@@ -3,10 +3,6 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test } from 'vitest';
 import Diff from './Diff.svelte';
 
-// Testing: the two rules a reader would notice going wrong — a language with nothing in it saying
-// so out loud, and a moved block reading as one move rather than as a deletion and an addition.
-// Not testing: the other change shapes, which are the walker's output rendered straight.
-
 let app: ReturnType<typeof mount>;
 const show = (groups: DiffGroup[], mediaBase = '') => {
   app = mount(Diff, { target: document.body, props: { groups, mediaBase } });
@@ -64,8 +60,7 @@ test('a language that went is one line, not a deletion per field', () => {
   expect(german?.nextElementSibling?.textContent?.trim()).toBe('The German version was removed');
 });
 
-// A picture has no history of its own — it is a key into storage that never changes — so a
-// replaced one is the two pictures, named, and not two keys nobody can read.
+// A picture is a key into storage that never changes, so a replacement is two named pictures.
 test('a replaced picture is both thumbnails', () => {
   const root = show(
     [

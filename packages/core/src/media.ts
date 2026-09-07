@@ -7,74 +7,60 @@ import { entryKey } from './entries.js';
 import { media } from './tables.js';
 import { imageDimensions } from './upload-bytes.js';
 
-/**
- * The S3 credentials used to sign temporary uploads, verify their bytes, and write final assets.
- */
 export interface R2Store {
-  /** The Cloudflare account the bucket is in; the S3 endpoint is named after it. */
+  /** The S3 endpoint is named after it. */
   accountId: string;
   bucket: string;
   accessKeyId: string;
   secretAccessKey: string;
 }
 
-/** What the browser says it is about to upload, and what the object is then held to. */
+/** What the browser declares, and what the object is then held to. */
 export interface Upload {
-  /** sha-256 of the bytes, hex. The object is named by it, so it is also the row's id. */
+  /** sha-256 hex of the bytes; names the object, so it is also the row's id. */
   hash: string;
-  /** Temporary object returned by the upload request; never a public key. */
+  /** The temporary key from the upload request; never a public key. */
   key?: string;
   bytes: number;
   mime: string;
-  /** The name it was chosen under, kept for search rather than for addressing anything. */
+  /** Kept for search, never for addressing. */
   filename?: string;
   width?: number;
   height?: number;
-  /** The picture this one was cropped out of; an ordinary upload came from nothing. */
+  /** The picture this one was cropped out of. */
   derivedFrom?: string;
 }
 
 export type MediaRow = typeof media.$inferSelect;
 
-/** One cap for every field and every type; the client downscales a picture long before it. */
+/** The client downscales a picture long before this cap. */
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
-/** What a field does to a picture: the ratio it crops to, the cap on the way in, the floor on the way out. */
 export interface Preset {
-  /** `'16:9'`, `'1:1'`, `'1.91:1'` — what the field shows, whatever shape the picture is. */
+  /** `'16:9'`: what the field shows, whatever shape the picture is. */
   ratio?: string;
-  /** Longest side an upload is downscaled to in the browser, before a byte leaves it. */
+  /** Longest side an upload is downscaled to in the browser. */
   max?: number;
-  /** Narrowest crop the picker will take, in width. A field without one refuses nothing. */
+  /** Narrowest crop width the picker will take. */
   min?: number;
 }
 
-/** Longest side an upload is stored at where its field asks for nothing narrower. */
 export const DEFAULT_MAX = 2400;
 
-/**
- * The one preset a platform fixes rather than a designer: 1.91:1 at 1200 is the 1200 × 630
- * every social card asks for, so the cap and the floor are the same number.
- */
+/** 1.91:1 at 1200 is the 1200 × 630 every social card asks for, so cap and floor coincide. */
 export const SOCIAL_CARD: Preset = { ratio: '1.91:1', max: 1200, min: 1200 };
 
-/** `'16:9'` as the number a crop is measured with; nothing for a field that shows a picture whole. */
 export const ratioOf = (ratio: string | undefined) => {
   const [w, h] = (ratio ?? '').split(':').map(Number);
   return w && h ? w / h : undefined;
 };
 
-/**
- * The width of the widest crop at this ratio the picture can yield, which is what a field's floor
- * is measured against: a 900 × 1600 phone photo passes any longest-side test at 1600 and still
- * only makes a 900 px hero.
- */
+/** The floor is measured against this: a 900 × 1600 phone photo still only makes a 900 px hero. */
 export function cropWidth(width: number, height: number, ratio?: string): number {
   const r = ratioOf(ratio);
   return Math.floor(r ? Math.min(width, height * r) : width);
 }
 
-/** Why this picture cannot go in this field, in both numbers; nothing where it can. */
 export function tooSmall(preset: Preset, width: number, height: number): string | undefined {
   if (!preset.min) return undefined;
   const crop = cropWidth(width, height, preset.ratio);
@@ -85,8 +71,7 @@ export function tooSmall(preset: Preset, width: number, height: number): string 
   return `Too small for this field — ${what}, this field needs ${preset.min}`;
 }
 
-// The extension is the server's, from the type it will verify. A client's filename decides
-// nothing: the bucket has its own domain, and what that domain serves is not a browser's to name.
+// The extension comes from the verified type, never from the client's filename.
 const EXTENSIONS: Record<string, string> = {
   'image/webp': 'webp',
   'image/jpeg': 'jpg',
@@ -97,19 +82,13 @@ const EXTENSIONS: Record<string, string> = {
 };
 
 const SHA256 = /^[0-9a-f]{64}$/;
-/** Long enough for a slow phone on a train, short enough that a leaked url is worth nothing. */
+/** Long enough for a slow phone, short enough that a leaked url is worth nothing. */
 const TTL = 300;
 
-/** An upload the site will not take. The person who chose the file is told which rule it broke. */
+/** The message is shown to the person who chose the file. */
 export class UploadRefusedError extends Error {}
 
-/**
- * `media/<sha256>.<ext>` — content-addressed, so the same bytes are one object however many
- * times they are uploaded, and immutable, so it can be cached forever.
- *
- * Everything that can be checked before a signature is checked here: an unsigned PUT is a
- * write to the bucket, and R2 cannot bind a size to one.
- */
+/** Content-addressed and checked before signing: R2 cannot bind a size to a presigned PUT. */
 export function mediaKey(upload: Upload): string {
   const ext = EXTENSIONS[upload.mime];
   if (!ext)
@@ -122,12 +101,11 @@ export function mediaKey(upload: Upload): string {
     throw new UploadRefusedError(
       `an upload may be at most ${MAX_UPLOAD_BYTES / 1024 / 1024}MB, and this one is ${Math.round(upload.bytes / 1024 / 1024)}MB`,
     );
-  // Pictures and files are two prefixes, and the server picks between them from the type it
-  // will verify — a browser naming its own key is an overwrite waiting to happen.
+  // The server picks the prefix: a browser naming its own key is an overwrite waiting to happen.
   return `${upload.mime.startsWith('image/') ? 'media' : 'files'}/${upload.hash}.${ext}`;
 }
 
-/** The asset with these bytes, if the site already has it: the whole of the dedupe. */
+/** The whole of the dedupe. */
 export function findMedia(siteId: string, db: Db, id: string): Promise<MediaRow | undefined> {
   return db
     .select()
@@ -137,25 +115,18 @@ export function findMedia(siteId: string, db: Db, id: string): Promise<MediaRow 
     .then(([row]) => row);
 }
 
-/** Which slice of the library to read: the picker's is narrower than the library's own. */
 export interface MediaQuery {
-  /** Pictures or downloads. A `file` field has no business seeing the photographs. */
   kind: 'images' | 'files';
-  /** Matched anywhere in the file name or in one of the tags. */
   q?: string;
-  /** The library shows what it has put away, with the flag on it; the picker never offers it. */
+  /** The library shows archived rows flagged; the picker never offers them. */
   withArchived?: boolean;
 }
 
-// `%` and `_` are LIKE's own, and a client typing `IMG_2041` means the underscore.
+// `_` is LIKE's own, and a client typing `IMG_2041` means the underscore.
 const contains = (column: AnyColumn, q: string) =>
   sql`${column} like ${`%${q.replace(/[\\%_]/g, '\\$&')}%`} escape '\\'`;
 
-/**
- * What the library and the picker browse, newest first. The search is in the query rather than
- * in the browser: a name past the hundredth row would otherwise be a match nobody could find.
- * No index: a site's library is hundreds of rows, and the limit is what keeps the read small.
- */
+/** Searched in SQL, not the browser: a name past the hundredth row would otherwise never match. */
 export function mediaList(siteId: string, db: Db, query: MediaQuery): Promise<MediaRow[]> {
   const pictures = like(media.mime, 'image/%');
   const q = query.q?.trim();
@@ -167,8 +138,7 @@ export function mediaList(siteId: string, db: Db, query: MediaQuery): Promise<Me
         eq(media.siteId, siteId),
         query.withArchived ? undefined : eq(media.archived, 0),
         query.kind === 'images' ? pictures : not(pictures),
-        // Tags are stored as their own json, so the text of the array is what is searched:
-        // the alternative is a join table for a column holding three words.
+        // The tags' json text is searched rather than a join table for three words.
         q ? or(contains(media.filename, q), contains(media.tags, q)) : undefined,
       ),
     )
@@ -176,11 +146,7 @@ export function mediaList(siteId: string, db: Db, query: MediaQuery): Promise<Me
     .limit(100);
 }
 
-/**
- * The library's own words about an asset: the tags it is found by and the alt text a page falls
- * back to. Neither is content — they are the client's account of the picture rather than of a
- * page, so they live on the row and are never committed.
- */
+/** None of this is content, so it lives on the row and is never committed. */
 export async function setMediaDetails(
   siteId: string,
   db: Db,
@@ -191,13 +157,11 @@ export async function setMediaDetails(
     .update(media)
     .set({
       ...(details.tags ? { tags: details.tags } : {}),
-      // An alt somebody has emptied is no default at all, and null is what the column says that in.
+      // An emptied alt is no default at all, which the column says as null.
       ...(details.alt === undefined ? {} : { alt: details.alt || null }),
-      // Archiving is never gated on usage: a picture that is still used stays used, and putting
-      // it away only takes it out of the picker.
+      // Never gated on usage: archiving only takes the picture out of the picker.
       ...(details.archived === undefined ? {} : { archived: details.archived ? 1 : 0 }),
-      // Where every crop of this picture holds, as a fraction of its width and of its height.
-      // It is a default: a page that set its own dot keeps it.
+      // A default: a page that set its own focal dot keeps it.
       ...(details.focal ? { focalX: details.focal[0], focalY: details.focal[1] } : {}),
     })
     .where(and(eq(media.siteId, siteId), eq(media.id, id)))
@@ -205,10 +169,9 @@ export async function setMediaDetails(
   return row;
 }
 
-/** The key `mediaKey` writes, wherever a content file names one. */
+/** The key format `mediaKey` writes. */
 const STORED = /^(?:media|files)\/[0-9a-f]{64}\.[a-z0-9]+$/;
 
-/** Which assets each content file names, by the file's path. */
 export type MediaUses = Record<string, string[]>;
 
 function keysIn(node: unknown, found: Set<string>) {
@@ -218,16 +181,11 @@ function keysIn(node: unknown, found: Set<string>) {
   else if (node && typeof node === 'object') for (const v of Object.values(node)) keysIn(v, found);
 }
 
-/**
- * Every stored key each content file names. Built with the entry index rather than read per
- * request, because a usage count is a repo-wide scan and git is slow to list — the same reason
- * the titles are read at build time.
- */
+/** Built with the entry index: a usage count is a repo-wide scan and git is slow to list. */
 export function mediaUsesFrom(siteId: string, files: Iterable<ContentFile>): MediaUses {
   const uses: MediaUses = {};
   for (const file of files) {
-    // Entries only, the way the index is built: a starter under `_templates/` and
-    // `redirects.yaml` name no entry, so whatever they hold could never be counted anyway.
+    // Entries only, like the index: `_templates/` and `redirects.yaml` name no entry.
     if (!entryKey(file.path)) continue;
     const found = new Set<string>();
     keysIn(parseEntry(siteId, file.contents), found);
@@ -236,20 +194,14 @@ export function mediaUsesFrom(siteId: string, files: Iterable<ContentFile>): Med
   return uses;
 }
 
-/**
- * Which entries each asset is used in, drafts laid over the built map: a picture pulled out of
- * an entry this morning is not still used there, and one dropped in is, before either is
- * published. An entry counts once however many of its languages carry the picture — an asset is
- * locale-agnostic, and *used in 2 places* for one listing in two languages is a lie.
- */
+/** Drafts overlay the built map; an entry counts once however many languages carry the picture. */
 export function mediaUsage(
   siteId: string,
   uses: MediaUses,
   drafts: readonly ContentFile[],
 ): Record<string, string[]> {
   const files: MediaUses = { ...uses };
-  // The empty contents of a deleted file parse to nothing, which is the right answer for it:
-  // that path names no asset until the build catches up.
+  // A deleted file's empty contents parse to nothing, which is the right answer.
   for (const draft of drafts) {
     const found = new Set<string>();
     keysIn(parseEntry(siteId, draft.contents), found);
@@ -267,7 +219,6 @@ export function mediaUsage(
   return Object.fromEntries(Object.entries(used).map(([key, set]) => [key, [...set].sort()]));
 }
 
-/** Raw references in drafts or repository files; deletion also checks deployed media usage. */
 export function namedBy(key: string, files: Iterable<ContentFile>): string[] {
   const found = new Set<string>();
   for (const file of files)
@@ -286,12 +237,7 @@ const signer = (store: R2Store) =>
     region: 'auto',
   });
 
-/**
- * A five-minute PUT straight to the bucket. Neither the size nor the type is in the signature —
- * R2 has no `content-length-range` and `aws4fetch` will not sign either header — so what the
- * url actually promises is one object, at one key, for five minutes. `confirmUpload` is the
- * enforcement.
- */
+/** Neither size nor type can be signed on R2, so `confirmUpload` is the enforcement. */
 export async function presignUpload(store: R2Store, key: string): Promise<string> {
   if (!/^uploads\/[0-9a-f-]{36}\/(?:media|files)\/[0-9a-f]{64}\.[a-z]+$/.test(key))
     throw new UploadRefusedError('Only temporary upload keys may be signed');
@@ -304,15 +250,7 @@ export async function presignUpload(store: R2Store, key: string): Promise<string
   return signed.url;
 }
 
-/**
- * That the bucket is really there and these credentials may write to it: one small object put,
- * read back and deleted again, which is an upload's whole path through R2. Whichever step
- * refused is what it throws, in R2's own status, because that is what the person holding the
- * keys can act on.
- *
- * The key is deliberately not `mediaKey`'s shape: the reconciliation job adopts stray objects
- * that look like uploads, and this one is litter rather than somebody's work.
- */
+/** The key is deliberately not `mediaKey`'s shape, or the reconciliation job would adopt it. */
 export async function checkStore(
   store: R2Store,
   deps: { fetch?: typeof globalThis.fetch } = {},
@@ -325,8 +263,7 @@ export async function checkStore(
     throw new Error(`The bucket refused the upload (${put.status})${advice(store, put.status)}`);
   const read = await fetch(await aws.sign(url, { method: 'GET' }));
   const back = read.ok ? await read.text() : '';
-  // Deleted whatever the read said: a check that leaves its own object behind is worse than
-  // no check, and the bucket that failed the read is the one still holding it.
+  // Deleted whatever the read said: a check must not leave its own object behind.
   const gone = await fetch(await aws.sign(url, { method: 'DELETE' }));
   if (!read.ok) throw new Error(`The bucket would not read the object back (${read.status})`);
   if (back !== CHECK_BODY)
@@ -334,11 +271,7 @@ export async function checkStore(
   if (!gone.ok) throw new Error(`The bucket would not delete the object again (${gone.status})`);
 }
 
-/**
- * Which of the four values to look at. R2's two refusals say different things — 403 is the
- * credential and 404 is the bucket this site was pointed at — and a status on its own leaves
- * whoever holds the keys guessing between them.
- */
+/** 403 is the credential and 404 is the bucket; a bare status leaves the key holder guessing. */
 const advice = (store: R2Store, status: number) =>
   status === 403
     ? `: check R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY, and that the token has Object Read & Write on ${store.bucket}`
@@ -357,11 +290,7 @@ const object = async (
   headers?: Record<string, string>,
 ) => fetch(await signer(store).sign(objectUrl(store, key), { method, headers }));
 
-/**
- * Whether the bucket still has these bytes. Asked only for a key the table has no row for —
- * an object with no row is what the reconciliation job recovers within the hour, and a key
- * with neither is a picture the page would draw as a broken image.
- */
+/** Asked only for a key with no row; a key with neither is a broken image on the page. */
 export async function objectExists(
   store: R2Store,
   key: string,
@@ -371,9 +300,7 @@ export async function objectExists(
   return (await object(store, key, 'HEAD', fetch)).ok;
 }
 
-/** Verify a temporary upload, finalize the exact bytes, then register the public asset.
- * Existing rows are the cheap dedupe path and never delete another upload's final object.
- */
+/** An existing row is the dedupe path and never deletes another upload's final object. */
 export async function confirmUpload(
   siteId: string,
   db: Db,
@@ -398,8 +325,7 @@ export async function confirmUpload(
     if (error instanceof UploadRefusedError) await object(store, upload.key, 'DELETE', fetch);
     throw error;
   }
-  // Write the exact buffer that was verified. Copying the temporary key would race another PUT.
-  // Only the server can write final keys, and every such write verifies the same SHA-256.
+  // The verified buffer is written: copying the temporary key would race another PUT.
   const finalized = await fetch(
     await signer(store).sign(objectUrl(store, key), {
       method: 'PUT',
@@ -428,22 +354,15 @@ export async function confirmUpload(
     })
     .onConflictDoNothing()
     .returning();
-  // Two tabs confirming the same bytes at the same moment: the one that lost reads the row.
+  // Two tabs confirming the same bytes at once: the one that lost reads the row.
   const stored = written ?? (await findMedia(siteId, db, upload.hash));
   if (!stored) throw new Error(`the media row for ${upload.hash} was not written`);
-  // Keep staging through registration so a failed database write can retry immediately.
+  // Staging outlives registration so a failed database write can retry.
   await object(store, upload.key, 'DELETE', fetch).catch(() => undefined);
   return { media: stored, created: Boolean(written) };
 }
 
-/**
- * The one deletion that is somebody's decision rather than a rejected upload. Whether it is
- * allowed is `namedBy`'s answer and the caller's to ask; this is what carrying it out is.
- *
- * **The row goes first.** An object left in the bucket with no row is exactly what the hourly
- * reconciliation job is for, so a failed second half comes back as *Recovered* within the hour;
- * a row left pointing at bytes that are gone is a broken picture nothing ever repairs.
- */
+/** The row goes first: a stray object is recovered hourly; a row without bytes never is. */
 export async function deleteMedia(
   siteId: string,
   db: Db,
@@ -454,18 +373,17 @@ export async function deleteMedia(
   const { fetch = globalThis.fetch } = deps;
   await db.delete(media).where(and(eq(media.siteId, siteId), eq(media.id, row.id)));
   const gone = await object(store, row.r2Key, 'DELETE', fetch);
-  // R2 answers 204 for a key it never had, so anything else is the bucket refusing.
+  // R2 answers 204 for a key it never had, so anything else is a refusal.
   if (!gone.ok && gone.status !== 404)
     throw new Error(`R2 DELETE ${row.r2Key} failed: ${gone.status}`);
 }
 
-// The bucket's own list of itself, as XML. There is no parser in workerd and the keys this
-// reads are hex and a file extension, so the shapes below are read out rather than parsed.
+// workerd has no XML parser, and the keys read are hex and an extension, so regexes suffice.
 const CONTENTS = /<Contents>([\s\S]*?)<\/Contents>/g;
 const tag = (xml: string, name: string) =>
   xml.match(new RegExp(`<${name}>([\\s\\S]*?)</${name}>`))?.[1];
 
-/** The key format `mediaKey` writes, and nothing else: an id, and the type its extension names. */
+/** The key format `mediaKey` writes, and nothing else. */
 const OURS = /^(?:media|files)\/([0-9a-f]{64})\.([a-z0-9]+)$/;
 const MIMES: Record<string, string> = Object.fromEntries(
   Object.entries(EXTENSIONS).map(([mime, ext]) => [ext, mime]),
@@ -480,19 +398,17 @@ const listPage = async (store: R2Store, fetch: typeof globalThis.fetch, token?: 
   return res.text();
 };
 
-/** Recover verified final objects and abandoned temporary uploads after their PUT lease expires. */
+/** Adopts stray final objects and temporary uploads whose PUT lease has expired. */
 export async function reconcileMedia(
   siteId: string,
   db: Db,
   store: R2Store | undefined,
   deps: { fetch?: typeof globalThis.fetch; now?: number } = {},
 ): Promise<number> {
-  // A site with no bucket has nothing to reconcile; it is not a failure and writes no row.
+  // No bucket is not a failure and writes no row.
   if (!store) return 0;
   const { fetch = globalThis.fetch, now = Date.now() } = deps;
-  // One read of the table against one listing of the bucket. `onConflictDoNothing` below is
-  // what makes a second pass harmless; this set is what stops it costing a write per object
-  // per tick, on a table whose size is the bucket's.
+  // This set stops a second pass costing a write per object per tick.
   const known = new Set(
     (await db.select({ id: media.id }).from(media).where(eq(media.siteId, siteId))).map(
       (r) => r.id,
@@ -513,7 +429,7 @@ export async function reconcileMedia(
       if (!id) continue;
       if (staging) {
         const uploaded = Date.parse(tag(item, 'LastModified') ?? '');
-        // A live client may still be writing. Missing metadata is no permission to delete.
+        // A live client may still be writing; missing metadata is no permission to delete.
         if (!Number.isFinite(uploaded) || now - uploaded < TTL * 1000) continue;
         if (known.has(id)) {
           await object(store, storedKey, 'DELETE', fetch);
@@ -569,7 +485,7 @@ export async function reconcileMedia(
         })
         .onConflictDoNothing()
         .returning({ id: media.id });
-      // The count is rows written, not objects seen: a confirm arriving mid-listing wins.
+      // Rows written, not objects seen: a confirm arriving mid-listing wins.
       recovered += written.length;
       known.add(id);
     }

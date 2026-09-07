@@ -42,8 +42,7 @@ $effect(() => {
   opening?.focus();
 });
 
-// The search is the table's: a name past the hundredth row is a match nobody could otherwise
-// find. The wait is so a client typing a word does not spend a request per letter on it.
+// Debounced so typing a word does not spend a request per letter.
 $effect(() => {
   const kinds = kind;
   const q = query;
@@ -70,11 +69,9 @@ const count = (item: LibraryItem) => {
   const n = item.uses?.length ?? 0;
   return n === 0 ? 'not used yet' : n === 1 ? 'used in 1 place' : `used in ${n} places`;
 };
-// A row the reconciliation job wrote: an object that was in the bucket with nothing to say
-// what it is. A picture whose size nobody measured is the shape that takes.
+// A row the reconciliation job wrote has no measured size, which is how it is told apart.
 const recovered = (item: LibraryItem) => kind === 'images' && !(item.width && item.height);
-// Toggles over what is loaded: the list already carries the archived rows, and recovered and
-// unused are things the row itself says. On together they narrow together.
+// Filters over what is loaded: the list already carries the archived rows.
 let only = $state({ archived: false, recovered: false, unused: false });
 const shown = $derived(
   items.filter(
@@ -161,10 +158,7 @@ function addTag() {
   tag = '';
 }
 
-/**
- * The gate is the server's: this button is off while the count says the picture is used, and the
- * request is refused anyway if the count was a build behind what the repository holds.
- */
+/** The gate is the server's: the request is refused if the use count was a build behind. */
 async function remove() {
   const item = chosen;
   if (!item) return;
@@ -188,8 +182,7 @@ async function copyUrl(item: LibraryItem) {
 
 async function take(files: File[]) {
   for (const file of files) {
-    // The row is read back out of the array: what is in there is the reactive proxy, and the
-    // object that went in is not — writing to that one updates nothing on the screen.
+    // Read back out of the array: only the proxy in there is reactive, not the object pushed.
     const row = queue[
       queue.push({ name: file.name, state: kind === 'images' ? 'Converting…' : 'Uploading…' }) - 1
     ] as { name: string; state: string; failed?: boolean };
@@ -237,8 +230,7 @@ function show(next: 'images' | 'files') {
     <label class="visually-hidden" for="lib-file">Files to upload</label>
     <input class="visually-hidden" type="file" id="lib-file" multiple accept={kind === 'images' ? 'image/*' : 'application/pdf'} bind:this={chooser} onchange={(e) => { take(Array.from(e.currentTarget.files ?? [])); e.currentTarget.value = ''; }} />
   </div>
-  <!-- Buttons rather than links: the kind is not an address of its own, and the grid under
-       them is what changes. -->
+  <!-- Buttons rather than links: the kind is not an address of its own. -->
   <div class="tabs lib-tabs" role="tablist" aria-label="Media kind">
     <button type="button" role="tab" aria-selected={kind === 'images'} onclick={() => show('images')}>Images</button>
     <button type="button" role="tab" aria-selected={kind === 'files'} onclick={() => show('files')}>Files</button>
@@ -246,8 +238,7 @@ function show(next: 'images' | 'files') {
   {#if failure}<p class="notice notice-danger" role="alert">{failure}</p>{/if}
   <div class="lib-body" class:has-selection={!!chosen}>
     <div class="lib-main">
-      <!-- svelte-ignore a11y_no_static_element_interactions -- the toolbar's Upload is the
-           control; the zone is a drop target -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
       <div class="dropzone" class:is-big={!items.length} class:is-over={over} ondragover={(e) => { e.preventDefault(); over = true; }} ondragleave={() => (over = false)} ondrop={drop}>
         <svg class="dz-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0-4 4m4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
         <span class="dz-text">
@@ -326,8 +317,7 @@ function show(next: 'images' | 'files') {
               <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" /></svg>
               Focal point
             </button>
-            <!-- A picture nobody measured cannot be cropped: the region is in pixels the row
-                 does not have. The reconciliation job's rows are the ones this is about. -->
+            <!-- A picture nobody measured cannot be cropped. -->
             <button class="action" type="button" disabled={!(chosen.width && chosen.height)} onclick={() => (cropping = true)}>
               <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 2v14a2 2 0 0 0 2 2h14" /><path d="M18 22V8a2 2 0 0 0-2-2H2" /></svg>
               Crop
@@ -440,8 +430,7 @@ function show(next: 'images' | 'files') {
     ratios={presets.map((p) => p.preset.ratio ?? '').filter(Boolean)}
     onmade={(made) => {
       cropping = false;
-      // The copy is a picture of its own: it goes to the front of the library and the panel
-      // moves to it, which is also how the client sees that the original is still there.
+      // The panel moves to the copy, which is how the client sees the original is still there.
       items = [{ ...made, tags: [], uses: [] }, ...items.filter((i) => i.id !== made.id)];
       chosen = items[0];
     }}
@@ -449,8 +438,7 @@ function show(next: 'images' | 'files') {
   />
 {/if}
 
-<!-- Not aria-modal: the shell behind stays reachable, as it does on Members and the entry
-     list, and claiming a focus trap that is not there is worse than not claiming one. -->
+<!-- Not aria-modal: claiming a focus trap that is not there is worse than not claiming one. -->
 {#if confirming && chosen}
   <div class="scrim">
     <div class="dialog" role="alertdialog" aria-labelledby="del-h" aria-describedby="del-d">

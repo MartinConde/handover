@@ -6,11 +6,7 @@ import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Fields from './Fields.svelte';
 
-// Testing: every widget writes the documented value shape, proven by state → YAML → state
-// against the golden for the type; `array` and `blocks` add, remove and reorder while every
-// `_id` survives; labels on every control; a read-only structured field says why it is one;
-// a field the schema refuses is marked, named and still editable.
-// Not testing: Editor wiring (Editor.test.ts) or styling.
+// Testing: widget value shapes via the goldens, moves, labels and problems; not Editor wiring.
 
 // jsdom has no layout; ProseMirror asks for it when it scrolls the selection into view.
 Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
@@ -57,8 +53,7 @@ afterEach(() => {
 const golden = (name: string) =>
   readFileSync(resolve(__dirname, `../../core/test/golden/${name}.yaml`), 'utf8');
 
-// Everything the admin offers a picker, as `/admin/api/entries` answers it. Jane and James
-// are in a collection nothing renders, so neither has an address to link to.
+// Everything a picker is offered; the agents are in a collection nothing renders, so no address.
 const OFFERED = [
   {
     collection: 'pages',
@@ -289,8 +284,7 @@ test('link: switching type drops the other target; new tab off leaves no key', a
   expect(roundTrip()).toEqual({ _version: 1, button: { type: 'entry', ref: 'pages/contact' } });
 });
 
-// The allow-list is 1.20c's, and it is the schema's own: the widget refuses what a save
-// would refuse, so nobody types a target that only fails two screens later.
+// The allow-list is the schema's own: the widget refuses what a save would refuse.
 test('link: a scheme the site will not accept is named under the URL as it is typed', () => {
   show([{ path: ['button'], label: 'Button', type: 'link', required: true }], {
     _version: 1,
@@ -409,8 +403,7 @@ test('richtext: a body outside the tier is shown read-only and left untouched', 
   expect(roundTrip()).toEqual({ _version: 1, summary: body });
 });
 
-// The toolbar's link button opened a `window.prompt` until 3.26; the picker is where a
-// target is chosen now, and both halves of it answer here.
+// The picker took over from `window.prompt`; both halves of it answer here.
 test('rich text: a link points at the address the language being written serves', async () => {
   offering();
   show(
@@ -430,8 +423,7 @@ test('rich text: a link points at the address the language being written serves'
   });
 });
 
-// Nothing selected is the common case — the cursor is where the link should go — and a link
-// with no words is nothing to click, so the page's own title is the text.
+// Nothing selected is the common case, and a link with no words is nothing to click.
 test("rich text: Link with nothing selected inserts the picked page's title as the link text", async () => {
   offering();
   show(
@@ -540,7 +532,7 @@ test('every control has a label', () => {
   }
 });
 
-// --- 1.13: arrays, blocks and the read-only structured types ---
+// Arrays, blocks and the read-only structured types
 
 const rooms: Field = {
   path: ['rooms'],
@@ -574,10 +566,7 @@ const click = (sel: string) => {
   flushSync();
 };
 
-// jsdom lays nothing out, and dnd-kit finds the row under the pointer by its box: cards are
-// stacked 100 px tall in DOM order, and everything else is as wide as the viewport. A card
-// being dragged floats by the translate dnd-kit gives it; the copy parked in its place holds
-// the slot.
+// jsdom lays nothing out, so cards are stacked 100 px tall in DOM order for dnd-kit's hit test.
 const CARD = '.row-card, .block-card';
 const laidOut = () =>
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
@@ -731,8 +720,7 @@ test('array of scalars: rows are numbered, labelled and stay plain strings', () 
   expect(roundTrip()).toEqual({ _version: 1, tags: ['coastal', 'garden'] });
 });
 
-// The demo's registry, as `formOf` returns it. `textSection.body` is a `text` field so a
-// block move is tested on the YAML, not on TipTap's survival of a DOM move.
+// The demo's registry; `body` is a `text` field so block moves test the YAML, not TipTap.
 const TYPES = ['hero', 'textSection', 'cta', 'columns'];
 const registry: Record<string, Field[]> = {
   hero: [
@@ -865,8 +853,7 @@ test('embed: a pasted link and a typed title round-trip through the embed golden
   expect(stringifyEntry('default', snap())).toBe(golden('embed'));
 });
 
-// The URL is never what is stored, so a link nobody can read must not empty a field that is
-// already filled: the client would have to find the old video again.
+// The URL is never what is stored, so an unreadable link must not empty a filled field.
 test('embed: a link we do not recognise is refused under the box and the video is kept', () => {
   show([embedFields[0] as Field], embedData());
   click('#f-video .actions button');
@@ -896,8 +883,7 @@ test('embed: a recognised link replaces the whole value, title and all', () => {
   expect(document.querySelector('#f-video .thumb img')).toBeNull();
 });
 
-// axe scores nothing on this: a control that replaces itself takes the reader's place with it,
-// so a keyboard is left on the body in the middle of a long form.
+// axe scores nothing on this, but a control replacing itself drops keyboard focus on the body.
 test('embed: Change takes the focus into the box and Keep this one gives it back', async () => {
   show([embedFields[0] as Field], embedData());
   click('#f-video-change');
@@ -919,8 +905,7 @@ test('embed: Remove empties the field', () => {
   );
 });
 
-// The provider and the id are the same in every language; the title is what the shipped
-// `<Embed />` puts on the iframe for a screen reader, so it is the half a translation owns.
+// Provider and id are shared; the title reaches a screen reader, so a translation owns it.
 test('embed: a translation is offered the title and nothing else', () => {
   root = embedData();
   app = mount(Fields, {
@@ -976,15 +961,13 @@ test('seo: the panel draws what is stored and writes the file back unchanged', (
   expect(stringifyEntry('default', snap())).toBe(golden('seo'));
 });
 
-// The two previews are the page as a search result and as a shared card, under the address this
-// language serves it at: what is typed where something is, the site's own words where not.
+// The previews: the page as a search result and as a shared card, at this language's address.
 const AT = {
   site: 'https://coastalhomes.example',
   servedAt: '/listings/seaview-cottage',
   mediaBase: 'https://media.example.com',
 };
-// A 1.91:1 card cut from a 3:2 photo loses a band top and bottom, so the card gets the same dot
-// a field's picture has, and it is written into the same place.
+// A 1.91:1 card cut from a 3:2 photo loses a band, so it gets the same dot a picture has.
 test('seo: the social card has a focal point, written into the picture', async () => {
   show([seoField], seoData());
   click('#f-seo .media-card .actions .btn-sm');
@@ -1018,15 +1001,13 @@ test('seo: with nothing typed the previews say what the site would, and follow t
   expect(q('.snippet .title').textContent).toBe('Move to the coast');
 });
 
-// Without `site` in astro.config there is no address to print, and a preview under a made-up
-// one would be a lie: the greyed boxes stand on their own.
+// Without `site` in astro.config a preview under a made-up address would be a lie.
 test('seo: without a site origin there are no previews', () => {
   show([seoField], seoData(), {}, {}, INHERITED, { servedAt: '/listings/seaview-cottage' });
   expect(document.body.querySelector('.previews')).toBeNull();
 });
 
-// Guidance, never validation: the line says what is typed against the length Google cuts at,
-// and nothing on this panel can refuse a save.
+// Guidance, never validation: nothing on this panel can refuse a save.
 test('seo: the meters count what is typed and say when it will be cut off', () => {
   show([seoField], { _version: 1 });
   expect(q('#f-seo\\.title-meter').textContent).toBe('Up to about 60 characters');
@@ -1041,8 +1022,7 @@ test('seo: the meters count what is typed and say when it will be cut off', () =
   );
 });
 
-// The bar under the box is the meter drawn: how much of the room is used, in the warning
-// colour once it is over — the same state the words beside the label carry.
+// The gauge draws the meter: the same over-length state the words beside the label carry.
 test('seo: the gauge fills with what is typed and marks over-length', () => {
   show([seoField], { _version: 1 });
   type('input#f-seo\\.title', 'x'.repeat(30));
@@ -1057,8 +1037,7 @@ test('seo: the gauge fills with what is typed and marks over-length', () => {
   expect(q('#f-seo\\.title-meter').classList.contains('is-over')).toBe(true);
 });
 
-// The panel fills a hole rather than appending: a client who writes the canonical first and the
-// search title last must not leave a file whose keys are in the order they were typed in.
+// The panel fills a hole rather than appending, so keys never land in typing order.
 test('seo: a panel filled out of order writes the format’s order', () => {
   show([seoField], { _version: 1 });
   type('input#f-seo\\.canonical', 'https://example.com/listings/seaview-cottage');
@@ -1074,8 +1053,7 @@ test('seo: a panel filled out of order writes the format’s order', () => {
   );
 });
 
-// Empty is not blank: a client typing a title has to be able to see the site name being
-// appended, or they will type it themselves and get it twice.
+// Empty is not blank: a client who cannot see the site name appended will type it twice.
 test('seo: an empty box is greyed with what the site says instead', () => {
   show([seoField], { _version: 1 }, {}, {}, INHERITED);
   expect(q('input#f-seo\\.title').getAttribute('placeholder')).toBe(
@@ -1125,8 +1103,7 @@ test('seo: the canonical URL is folded away under what it is set to', () => {
   expect((snap() as unknown as { seo: Record<string, unknown> }).seo.canonical).toBeUndefined();
 });
 
-// A translation owns the words a page is found by, and nothing that would move the page or
-// take it off the site.
+// A translation owns the words a page is found by, nothing that would move or hide the page.
 test('seo: the second language writes the words and is offered nothing else', () => {
   root = seoData();
   app = mount(Fields, {
@@ -1173,8 +1150,7 @@ test('a field the schema refuses is marked, described and still editable', () =>
   expect(root).toEqual({ title: 'Morning Drift' });
 });
 
-// A structured field is a group of boxes, and what the schema refuses is refused about the
-// whole of it: the message is named on the panel rather than left beside it.
+// The schema refuses the whole structured field, so the message is named on its panel.
 test('a structured field the schema refuses names the message on its panel', () => {
   show(
     [{ path: ['tour'], label: 'Tour', type: 'seo', required: true }],
@@ -1188,8 +1164,7 @@ test('a structured field the schema refuses names the message on its panel', () 
   expect(q('#f-tour-err').textContent).toBe('Required');
 });
 
-// A reference has a picker now, so what an empty required one owes is the message and a way
-// to fill it in — not a hint about a release that has arrived.
+// A reference has a picker, so an empty required one owes a message and a way to fill it in.
 test('a required reference nobody has filled in says so on the box that opens the picker', () => {
   show(
     [
@@ -1254,8 +1229,7 @@ test('a field with nothing wrong carries no error markup', () => {
   expect(document.querySelector('.field.is-invalid')).toBeNull();
 });
 
-// TipTap owns the editable node, so the two attributes that change with the entry's problems
-// are written onto it rather than declared in the markup.
+// TipTap owns the editable node, so the problem attributes are written onto it, not in markup.
 test('an invalid richtext body is marked on the editable node itself', () => {
   show(
     [{ path: ['summary'], label: 'Summary', type: 'richtext', required: true, tier: 'basic' }],
@@ -1269,7 +1243,7 @@ test('an invalid richtext body is marked on the editable node itself', () => {
   expect(q('#f-summary-err').textContent).toBe('Required');
 });
 
-// --- 3.15: the image and file widgets ---
+// The image and file widgets
 
 const heroField: Field = {
   path: ['hero'],
@@ -1311,8 +1285,7 @@ test('an empty image field offers the library, and its two numbers are two lines
   expect(q('.dropzone button').textContent).toBe('Choose from library');
 });
 
-// The menus are one tree for the whole site: the second column draws the same tree with one
-// box a row, because the labels are the one thing in it that language owns.
+// The tree is one for the whole site; labels are the one thing in it a language owns.
 test('menus: the translated column draws the tree as labels, with nothing to move', () => {
   const field: Field = {
     path: ['menus'],
@@ -1372,8 +1345,7 @@ hero:
   height: 1600
 `,
   );
-  // The alt lands where the format puts it, rather than after the numbers: the widget wrote the
-  // whole shape and left it as a hole until somebody typed one.
+  // The widget wrote the whole shape with `alt` as a hole, so it lands where the format puts it.
   type('input#f-hero\\.alt', 'Front of the house');
   expect(stringifyEntry('default', snap())).toBe(
     `_version: 1
@@ -1388,8 +1360,7 @@ hero:
   expect(snap().hero).toBeUndefined();
 });
 
-// An array whose row is the picture: the picker takes several at once and each becomes a row,
-// so a client fills a gallery in one pass rather than Add-then-choose per picture.
+// The picker takes several at once so a gallery is filled in one pass, not Add-then-choose.
 test('a gallery field inserts every picked image as a row of its own', async () => {
   const galleryField: Field = {
     path: ['gallery'],
@@ -1451,10 +1422,9 @@ test('a translator gets the words and not the picture', () => {
   expect(document.body.textContent).toContain('The picture is the same in every language.');
 });
 
-// --- 4.4: the focal point on the field ---
+// The focal point on the field
 
-// The dot a page sets is this page's, and it wins over the library's default for it. The middle
-// is not a choice: a page cropping around the centre is a page saying nothing about the crop.
+// The page's dot wins over the library's; the middle is not a choice, so it takes the key out.
 test('the dot a page moves is written after the numbers, and centring it takes the key out', async () => {
   show([heroField], imageData());
   click('.media-card .actions .btn-sm');
@@ -1490,8 +1460,7 @@ hero:
   );
 });
 
-// The row's own dot comes with the picture: a client who framed it in the library does not
-// frame it again on every page that uses it.
+// The library's dot comes with the picture, so a client does not frame it again on every page.
 test('a picked picture brings the library’s dot with it, unless it is the middle', async () => {
   library([
     {
@@ -1537,8 +1506,7 @@ hero:
   );
 });
 
-// Per-field staleness. `stale` on the column says the file is behind; this says which fields,
-// and opening one shows the source language before and after.
+// `stale` on the column says the file is behind; the markers say which fields.
 const stalePane = (
   changed: Record<string, WordPart[]>,
   onretranslate?: (path: string) => void,
@@ -1602,8 +1570,7 @@ test('the marker opens the source language as it was and as it reads now', () =>
   expect(q('.stale').getAttribute('aria-expanded')).toBe('true');
 });
 
-// It says `role="dialog"`; a dialog that takes no focus and gives none back is one a keyboard
-// cannot reach or leave.
+// A `role="dialog"` that takes no focus and gives none back is one a keyboard cannot reach.
 test('the marker hands focus to the popover and takes it back on Escape', () => {
   stalePane(CHANGED);
   click('.stale');
@@ -1623,8 +1590,7 @@ test('Dismiss takes the marker off the field it was on', () => {
   expect(document.querySelector('.popover')).toBeNull();
 });
 
-// Re-translate is the one-field fill the Translate button already makes — the same route, named
-// for the reason somebody is pressing it here.
+// Re-translate is the Translate button's one-field fill, named for why somebody presses it here.
 test('Re-translate asks for the one field the marker is on', () => {
   const asked: string[] = [];
   stalePane(CHANGED, (path) => asked.push(path));
@@ -1634,8 +1600,7 @@ test('Re-translate asks for the one field the marker is on', () => {
   expect(document.querySelector('.popover')).toBeNull();
 });
 
-// Regression: the marker hung off the same condition as the Translate button, so a site with
-// nothing configured to translate with — which is most of them — never saw it at all.
+// Regression: the marker shared the Translate button's condition, so most sites never saw it.
 test('a site with no translator still gets the marker, with Dismiss alone', () => {
   stalePane(CHANGED, undefined, false);
   expect(document.querySelector('.btn-translate')).toBeNull();

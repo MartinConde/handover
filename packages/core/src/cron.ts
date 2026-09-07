@@ -6,7 +6,7 @@ import type { GitClient } from './git.js';
 import { type R2Store, reconcileMedia } from './media.js';
 import { cronState } from './tables.js';
 
-/** Everything any job could want. A job takes what it is about and ignores the rest. */
+/** Jobs receive shared dependencies and ignore what they do not need. */
 export interface JobDeps {
   db: Db;
   /** Where the site's uploads live, or nothing where it has no bucket at all. */
@@ -22,10 +22,7 @@ const HOUR = 60 * 60 * 1000;
 /** How many things a job did — and, for the one whose answer is read back later, what it found. */
 type JobDone = number | { done: number; [detail: string]: unknown };
 
-/**
- * The one Cron Trigger dispatches to these. A job says how often it wants to run and returns how
- * many things it did; adding one is a line here and never a second trigger in `wrangler.jsonc`.
- */
+/** Adding a job is a line here and never a second trigger in `wrangler.jsonc`. */
 const JOBS: Record<
   string,
   { every: number; run: (siteId: string, deps: JobDeps) => Promise<JobDone> }
@@ -39,7 +36,7 @@ const JOBS: Record<
 /** What this site runs, in the order the dispatcher walks them. */
 export const JOB_NAMES = Object.keys(JOBS);
 
-/** One named job, whatever the clock says. Nothing is registered under an unknown name. */
+/** Unknown job names are never registered. */
 export async function runJob(siteId: string, name: string, deps: JobDeps): Promise<JobDone> {
   const job = JOBS[name];
   if (!job)
@@ -50,11 +47,7 @@ export async function runJob(siteId: string, name: string, deps: JobDeps): Promi
 /** What each job this tick belonged to did, or the message it failed with. */
 export type CronReport = Record<string, number | string>;
 
-/**
- * The tick. Every job that is due runs inside its own `try`, so one that is failing cannot
- * starve the others, and each is logged as `cron-<job>` when it did something or when it threw
- * — a quiet tick writes nothing, because on a five-minute schedule that would bury the log.
- */
+/** A quiet tick logs nothing, because on a five-minute schedule that would bury the log. */
 export async function runDue(siteId: string, deps: JobDeps): Promise<CronReport> {
   const now = deps.now ?? Date.now();
   const state = await deps.db.select().from(cronState).where(eq(cronState.siteId, siteId));
@@ -78,11 +71,7 @@ export async function runDue(siteId: string, deps: JobDeps): Promise<CronReport>
       report[name] = message;
       await logActivity(siteId, deps.db, { kind: `cron-${name}`, detail: { error: message } });
     }
-    // Stamped whether it worked or not: a job failing on every tick must not be retried every
-    // five minutes, and its own interval is the only thing that can hold it back. A stamp that
-    // will not write costs this job its interval for one tick, and must not cost the next job
-    // its turn — the jobs are walked in a fixed order, so an unguarded throw here would mean
-    // the last one never runs at all.
+    // Stamped even on failure so a failing job keeps its interval; guarded so later jobs still run.
     try {
       await deps.db
         .insert(cronState)

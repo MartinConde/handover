@@ -22,15 +22,13 @@ const named = (locale: string) => {
 };
 
 const languages = $derived(groups.filter((g) => g.locale !== undefined).length);
-// The shared group is only worth a heading where it is holding something back; empty, it would
-// say a language has nothing without being one.
+// The shared group is only worth a heading where it is holding something back.
 const shown = $derived(groups.filter((g) => g.locale !== undefined || g.changes.length > 0));
 </script>
 
 <div class="change-diff">
   {#each shown as group (group.locale ?? '')}
-    <!-- h3 and not the mockup's h4: this sits directly under the drawer's own h2 and under the
-         history pane's, and a level nobody has is a level a screen reader reports as missing. -->
+    <!-- h3 follows the surrounding h2. -->
     <h3>{group.locale ? named(group.locale) : languages === 2 ? 'Both languages' : 'All languages'}</h3>
     <div class="diff">
       {#if group.removed}
@@ -71,8 +69,7 @@ const shown = $derived(groups.filter((g) => g.locale !== undefined || g.changes.
           >{:else if part.mark === 'ins'}<ins>{part.text}</ins>{:else}{part.text}{/if}{/each}
       </div>
     {:else if change.kind === 'picture'}
-      <!-- A picture has no history of its own — its key never changes — so the change is the
-           two pictures, named, and never the two keys. -->
+      <!-- A picture has no history of its own. -->
       <div class="row is-block">
         <small>{label}</small>
         <span>photo {change.before && change.after ? 'replaced' : change.after ? 'added' : 'removed'}</span>

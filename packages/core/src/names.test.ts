@@ -157,8 +157,7 @@ test('a collection with no route of its own has no URL', () => {
   expect(entryUrl('default', two, undefined, 'everything', 'de')).toBe(undefined);
 });
 
-// The allow-list in front of preview: a path the site's own routes cannot serve is not a
-// page anybody may render, whoever is asking.
+// Preview only allows paths the site's routes can serve.
 const site = {
   listings: { route: '/listings/[slug]', index: '/' },
   pages: { route: '/[slug]' },
@@ -183,9 +182,7 @@ test("a collection's index page is a target with no address", () => {
   expect(target('/')).toEqual({ collection: 'listings', locale: 'en' });
 });
 
-// `/de` is both the German index and, read as a page, the slug "de" in English. Astro serves
-// the first — a static segment beats a dynamic one — so the language is taken off the front
-// before any route is matched.
+// `/de` is both the German index and, read as a page, the slug "de" in English.
 test('a language segment is never read as a page slug', () => {
   expect(target('/de')).toEqual({ collection: 'listings', locale: 'de' });
 });
@@ -209,8 +206,7 @@ test('with prefixDefaultLocale the default language needs its segment too', () =
   expect(target('/home', prefixed)).toBe(undefined);
 });
 
-// Without it the site builds no /en/ pages at all, so previewing one would be previewing an
-// address the site does not have.
+// Without it the site builds no /en/ pages at all.
 test("without it the default language's segment is not a path", () => {
   expect(target('/en/home')).toBe(undefined);
 });
@@ -255,7 +251,6 @@ test('a file with no slug of its own is addressed by its name', () => {
 });
 
 // Astro defines one on every entry that has no `slug` of its own, to say the property is gone.
-// Reading it logs that on every render, so the address is read as a key and not as a property.
 test('a warning getter Astro left behind is never read', () => {
   const data = { title: 'Home' };
   const read = vi.fn(() => undefined);
@@ -272,8 +267,7 @@ test('localizedSlugs is true or false and says so when it is not', () => {
   ]);
 });
 
-// One page has one address on a site, and the site decides which: a link, an alternate or a
-// redirect written the other way is a hop through the redirect the site answers with.
+// One page has one address on a site, and the site decides which.
 test('withSlash writes a path the way the site serves it and leaves the rest alone', () => {
   expect(withSlash('/listings/coast', true)).toBe('/listings/coast/');
   expect(withSlash('/listings/coast/', false)).toBe('/listings/coast');

@@ -1,5 +1,4 @@
-// Letters NFD cannot reduce to ASCII: German/Nordic conventions and Cyrillic. Other
-// scripts (CJK, Arabic, …) drop out and the title falls back to `untitled`.
+// Letters NFD cannot reduce to ASCII; other scripts drop out and fall back to `untitled`.
 const LETTERS: Record<string, string> = {
   ä: 'ae',
   ö: 'oe',
@@ -53,9 +52,7 @@ const LETTERS: Record<string, string> = {
 
 const MAX = 80;
 
-// The filename is the entry's cross-locale id, so it must be readable in GitHub: never
-// percent-encoded, never random. `taken` is every name in the collection across locales,
-// published or drafted.
+// The filename is the entry's id in GitHub, so never percent-encoded, never random.
 export function entryName(_siteId: string, title: string, taken: Iterable<string>): string {
   const base =
     Array.from(title.toLowerCase())
@@ -82,8 +79,7 @@ export interface CollectionRoutes {
   localizedSlugs?: unknown;
 }
 
-// Every message names the key in cms.config.ts that is wrong; the integration throws
-// them joined, so a bad config fails the build before any page is served.
+// Every message names the config key, and the integration throws them joined at build.
 export function checkCollections(
   _siteId: string,
   collections: Record<string, CollectionRoutes>,
@@ -118,8 +114,7 @@ export function checkCollections(
       errors.push(
         `${at('index')}expected a fixed path starting with "/", like "/blog", got ${JSON.stringify(c.index)}`,
       );
-    // Whether the field exists and holds a string is the schema's business; this is the only
-    // place that sees the key, so it checks the shape of the name alone.
+    // Whether the field exists is the schema's business; this checks the name's shape alone.
     if (
       c.titleField !== undefined &&
       (typeof c.titleField !== 'string' || !/^[^_\s][^\s]*$/.test(c.titleField))
@@ -146,15 +141,10 @@ export interface I18nConfig {
   base?: unknown;
 }
 
-// Locales are folder names under src/content/<collection>/ and path segments in the URL,
-// so they are spelled the way Astro spells them: lowercase, dashes, never `en_US`.
+// Locales are folder names and URL segments, so spelled Astro's way: never `en_US`.
 const LOCALE = /^[a-z0-9-]+$/;
 
-/**
- * The `i18n` block's own shape. It is required even for one language: the file layout has
- * a locale folder either way, so a single-locale site is the same code path with one entry
- * in the list. What it has to agree with in astro.config.mjs is checked by the integration.
- */
+/** Required even for one language: the file layout has a locale folder either way. */
 export function checkI18n(_siteId: string, i18n: I18nConfig | undefined): string[] {
   const at = (key?: string) => `cms.config.ts › i18n${key ? `.${key}` : ''}: `;
   if (!i18n)
@@ -193,18 +183,11 @@ export interface I18nRouting {
   locales: string[];
   defaultLocale: string;
   prefixDefaultLocale?: boolean;
-  /** Astro's `base`, where the whole site is served under a path: `/site`. Absent at the root. */
+  /** Astro's base path, absent when served at the root. */
   base?: string;
 }
 
-/**
- * Where one entry is served: the collection's `route` with `[slug]` filled in, under the
- * language's own segment. The default language has none unless the site asked for one, which
- * is Astro's `prefixDefaultLocale`. The preview path is this path behind its own prefix, so
- * the segment is settled here rather than in each site's routes, and so is the site's `base`
- * where it has one. `undefined` for a collection with no route: nothing renders it, so there is
- * nowhere to link.
- */
+/** `undefined` for a collection with no route: nothing renders it, so there is nowhere to link. */
 export function entryUrl(
   _siteId: string,
   i18n: I18nRouting,
@@ -217,12 +200,7 @@ export function entryUrl(
   return (i18n.base ?? '').replace(/\/+$/, '') + prefix + route.replace('[slug]', slug);
 }
 
-/**
- * `path` written the way this site's pages answer — with the trailing slash under Astro's
- * default `build.format: 'directory'`, without it otherwise. A link, an alternate or a
- * redirect target written the other way is a hop through the redirect the asset server
- * answers with. The root, a query, a hash and an address on another site are left as they are.
- */
+/** A path written the other way is a hop through the asset server's redirect. */
 export function withSlash(path: string, slash: boolean): string {
   if (!path.startsWith('/')) return path;
   const cut = path.search(/[?#]/);
@@ -238,25 +216,14 @@ export interface PreviewTarget {
   address?: string;
 }
 
-/**
- * What a preview path is a preview *of*: the collection the page belongs to, the language it
- * is read in, and the entry's own address where it has one — an index page is a collection
- * without one. `undefined` is the whole of the allow-list in front of `/_preview`: a path the
- * site's own routes could not serve is not a page anybody may render there, which is what
- * keeps the route from being somewhere to put arbitrary content on the client's domain.
- *
- * The path is the site's own, `entryUrl`'s answer read backwards, so the language segment is
- * where the site puts it and `prefixDefaultLocale` is respected by construction.
- */
+/** The allow-list in front of `/_preview`: `undefined` for any path the site could not serve. */
 export function previewTarget(
   siteId: string,
   i18n: I18nRouting,
   collections: Record<string, { route?: string; index?: string }>,
   path: string,
 ): PreviewTarget | undefined {
-  // One trailing slash is the same page, which is Astro's `trailingSlash: 'ignore'`. Nothing
-  // else is tidied up: an allow-list that repairs what it is given ends up allowing more than
-  // it can name.
+  // Only one trailing slash is forgiven: an allow-list that repairs input allows too much.
   if (!path.startsWith('/') || path.includes('//')) return undefined;
   const base = (i18n.base ?? '').replace(/\/+$/, '');
   if (base && path !== base && !path.startsWith(`${base}/`)) return undefined;
@@ -264,9 +231,7 @@ export function previewTarget(
   const trimmed = path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path;
   const segments = trimmed === '/' ? [] : trimmed.slice(1).split('/');
 
-  // `/de` is the German index and, read as a page, the slug "de" in English; Astro serves the
-  // first, since a static segment beats a dynamic one. So the language comes off the front
-  // before any route is matched — and only where the site actually puts one there.
+  // `/de` is the German index, not the English slug "de": the language comes off first.
   const first = segments[0];
   const prefixed =
     first !== undefined &&
@@ -276,8 +241,7 @@ export function previewTarget(
   const locale = prefixed ? (first as string) : i18n.defaultLocale;
   const rest = `/${(prefixed ? segments.slice(1) : segments).join('/')}`;
 
-  // Indexes before routes, for the same reason: `/blog` is the blog index and not the page
-  // whose address happens to be "blog".
+  // Indexes before routes: `/blog` is the blog index, not the page addressed "blog".
   for (const [collection, c] of Object.entries(collections))
     if (c.index === rest) return { collection, locale };
   for (const [collection, c] of Object.entries(collections)) {
@@ -292,12 +256,7 @@ export function previewTarget(
 
 const ADDRESS = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-/**
- * Why this cannot be the web address of an entry, or nothing. Empty is not a mistake: a file
- * with no address of its own is served under its name. The rules are the file name's, since
- * the two are alternatives for the same URL segment — percent-encoding above all, which turns
- * a clean URL into garbage and every redirect into something nobody can read.
- */
+/** Empty is not a mistake; the rules are the file name's, since both fill the same URL segment. */
 export function addressError(_siteId: string, address: string): string | undefined {
   if (!address) return undefined;
   if (address.length > MAX) return `${JSON.stringify(address)} is longer than ${MAX} characters`;
@@ -306,15 +265,9 @@ export function addressError(_siteId: string, address: string): string | undefin
   return undefined;
 }
 
-/**
- * The address one file is served under: its own `slug` where the collection has localized
- * slugs, and its file name where it has none. The file name never changes because an address
- * did — it is the entry's id across the languages, and only the URL moved.
- */
+/** The file name never changes because an address did: it is the id across languages. */
 export function entryAddress(_siteId: string, data: unknown, name: string): string {
-  // Read as a key rather than a property: Astro's content layer defines a non-enumerable `slug`
-  // getter on every entry that has none, to warn that its own `slug` is gone, and touching that
-  // would log the warning on every page the site renders.
+  // Read as a key: Astro's non-enumerable `slug` getter logs a warning when touched.
   const found = data ? Object.getOwnPropertyDescriptor(data, 'slug') : undefined;
   const slug = found?.enumerable ? found.value : undefined;
   return typeof slug === 'string' && slug ? slug : name;

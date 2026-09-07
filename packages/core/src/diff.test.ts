@@ -2,8 +2,7 @@ import { expect, test } from 'vitest';
 import { type Change, diffEntry, sourceChanges } from './diff.js';
 import type { Form } from './schema.js';
 
-// A listing as a translated site has it: the price is the same in every language, the notes
-// live in the source language alone, and the picture splits — only its `alt` is retyped.
+// A translated listing: price shared, notes source-only, and only the picture's `alt` retyped.
 const listing: Form = {
   fields: [
     { path: ['title'], label: 'Title', type: 'text', required: true },
@@ -93,8 +92,7 @@ test('a rich text body says that it changed and nothing more', () => {
   expect(changesIn(groups, 'en')).toEqual([{ path: 'body', label: 'Body', kind: 'whole' }]);
 });
 
-// A picture is a key into storage that never changes, so a replaced one is two keys the reader
-// sees as two thumbnails — and its size is the picture's, never a change of its own.
+// A picture is an immutable key: a replacement reads as two thumbnails, its size as no change.
 test('only the properties a translator retypes are per-language', () => {
   const before = { image: { src: 'media/a.webp', alt: 'The front', width: 2400, height: 1600 } };
   const after = { image: { src: 'media/b.webp', alt: 'The garden', width: 1800, height: 1200 } };
@@ -501,9 +499,7 @@ test('a property inside a structured field is named by every step down to it', (
   ]);
 });
 
-// A language that was there and is not any more is one event, not one deletion per field:
-// "the German version was removed" is what happened, and the shared group must not read the
-// missing file as every shared value having gone either.
+// A removed language is one event, not a deletion per field, and no shared value went with it.
 test('a language present before and absent after is one removal, not a deletion per field', () => {
   const en = { title: 'Mill House', price: 450000 };
   const de = { title: 'Mühlenhaus', summary: 'Am Fluss', price: 450000 };
@@ -517,8 +513,7 @@ test('a language present before and absent after is one removal, not a deletion 
   ]);
 });
 
-// A row with nothing to say for itself is named by where it stood, never by its `_id`: the id
-// is the file's bookkeeping and reads as noise to the person who deleted the row.
+// The `_id` is the file's bookkeeping and reads as noise to the person who deleted the row.
 test('a removed row with no words of its own is named by its place, not its id', () => {
   const opening: Form = {
     fields: [
@@ -547,8 +542,7 @@ test('a removed row with no words of its own is named by its place, not its id',
   ]);
 });
 
-// The menus global: the tree is every language's, the labels are each language's own, and the
-// drawer has to say which of the two a change was.
+// The menus global: the tree is every language's, the labels each language's own.
 const navigation: Form = {
   fields: [{ path: ['menus'], label: 'Menus', type: 'menus', required: true, i18n: 'duplicate' }],
   blocks: {},
@@ -599,9 +593,7 @@ test('a menu label retyped in one language is that language’s change, not a sh
   ]);
 });
 
-// The drawer has no titles to hand, so an item that keeps no label of its own — most of them,
-// since a picked page is named by its title — is named by what it points at, and a swapped
-// target reads as the two targets rather than as *changed*.
+// The drawer has no titles to hand, so an unlabelled item is named by its target.
 test('a menu item with no label is named by its target, and a swapped target is both targets', () => {
   const en = header([home('Home'), { _id: 'x1', label: '', link: { type: 'url', href: '/' } }]);
   const after = header([
@@ -665,8 +657,7 @@ test('a menu item moved in both files is one move, said once', () => {
   expect(changesIn(groups, 'de')).toEqual([]);
 });
 
-// `sourceChanges` — the per-field staleness marker. The whole-file hash in `staleLocales` says
-// *a* language is behind; this says which of its fields, and what the source says now.
+// `staleLocales` says a language is behind; `sourceChanges` says which fields.
 test('a source value that moved comes back as the words that moved', () => {
   const changed = sourceChanges(
     'default',
@@ -691,8 +682,7 @@ test('a value the source has not touched is not marked', () => {
   expect(sourceChanges('default', listing, en, en)).toEqual({});
 });
 
-// The client retyped nothing here: a price is written into every file and translating it again
-// would say the same number back.
+// A price is written into every file, so retranslating it would say the same number back.
 test('a shared value that moved is not something to retranslate', () => {
   const changed = sourceChanges(
     'default',
@@ -717,8 +707,7 @@ test('a source value that went reads as the whole sentence going', () => {
   });
 });
 
-// The marker has to find the field the form drew, and a block is not at a position — it is at
-// its `_id`, which is what `_machine` and the translate route already address it by.
+// A block is addressed by `_id`, the way `_machine` and the translate route address it.
 test('a block field is marked at the address the form knows it by', () => {
   const changed = sourceChanges(
     'default',

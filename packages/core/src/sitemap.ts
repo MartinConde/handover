@@ -1,6 +1,4 @@
-// What the build tells a crawler: one sitemap per language, an index naming them, and a
-// robots.txt pointing at that. All three are static files, so a search engine reading them
-// costs the site nothing.
+// All three files are static, so a search engine reading them costs the site nothing.
 
 import { parseEntry } from './content.js';
 import { type ContentFile, entryParts } from './entries.js';
@@ -21,21 +19,14 @@ export interface SitemapSite {
   collections: Record<string, { route?: string; index?: string }>;
   /** Where the site is served, from `astro.config.mjs`: `https://example.com`. */
   base: string;
-  /**
-   * Whether an address is written with a trailing slash. A sitemap URL that redirects is one
-   * more hop for every crawler, so the form here is the form the site's own pages answer at.
-   */
+  /** A sitemap URL that redirects is one more hop per crawler, so match the site's slash form. */
   slash: boolean;
 }
 
 const href = (site: SitemapSite, path: string) =>
   new URL(withSlash(path, site.slash), site.base).href;
 
-/**
- * When each content file last changed, from `git log --format=%cI --name-only`: the log is
- * newest first, so the first date a path is listed under is its last change. A publish is a
- * commit, which makes this the date a crawler wants; a file the log has never seen has none.
- */
+/** The log is newest first, so the first date a path appears under is its last change. */
 export function modifiedFrom(_siteId: string, log: string): Map<string, string> {
   const modified = new Map<string, string>();
   let date = '';
@@ -49,14 +40,7 @@ export function modifiedFrom(_siteId: string, log: string): Map<string, string> 
 
 const newer = (a: string | undefined, b: string) => (!a || Date.parse(b) > Date.parse(a) ? b : a);
 
-/**
- * Every address the site serves, by language. An entry is in it once per language it is
- * written in, live in and not hidden from search in — the same three answers the page itself
- * gives, so a URL here is a page a crawler can index.
- *
- * The switch is read as `seo.noindex`, by that key: a site names its field `seo` the way it
- * names its defaults `defaultSeo`, and nothing else has to be configured.
- */
+/** Reads the switch as `seo.noindex` by that key, so nothing has to be configured. */
 export function sitemapFrom(
   siteId: string,
   files: Iterable<ContentFile>,
@@ -89,8 +73,7 @@ export function sitemapFrom(
       dates.set(`${index}:${parts.locale}`, newer(dates.get(`${index}:${parts.locale}`), date));
   }
 
-  // A listing page is the collection rather than one of its entries, so it is not in the walk
-  // above and is served in every language the site has.
+  // A listing page is not in the walk above and is served in every language the site has.
   for (const c of Object.values(site.collections)) {
     if (!c.index) continue;
     const locales = new Map<string, string>();
@@ -120,8 +103,7 @@ export function sitemapFrom(
       pages[locale]?.push({ loc, ...(lastmod ? { lastmod } : {}), alternates });
     }
   }
-  // Sorted so a build with no content change writes the same bytes, and deduplicated because
-  // two collections may share one index page even though no two share a route.
+  // Sorted so builds are byte-identical; deduplicated as two collections may share an index page.
   return Object.fromEntries(
     Object.entries(pages).map(([locale, list]) => [
       locale,
@@ -169,11 +151,7 @@ export function sitemapIndexXml(_siteId: string, locs: string[]): string {
   ].join('\n');
 }
 
-/**
- * The admin and the preview are pages a crawler has no business in — both already say so in a
- * header, and this says it before the request. A site with no address of its own gets the same
- * file without the sitemap line, since a relative one is not an address.
- */
+/** Without a site address the sitemap line is dropped: a relative one is not an address. */
 export function robotsText(_siteId: string, sitemap?: string): string {
   return [
     'User-agent: *',

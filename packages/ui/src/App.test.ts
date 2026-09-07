@@ -72,9 +72,7 @@ test('an editor is offered neither Members nor Settings', () => {
   expect(Array.from(links, (a) => a.textContent)).toEqual(['Media', 'Activity']);
 });
 
-// Settings was the last Manage destination with no screen behind it, so the shell's "not built
-// yet" placeholder went with it. An editor who types the route is not shown the screen: the
-// shell serves the same HTML for every /admin path, so the branch is the gate the sidebar is not.
+// The shell serves the same HTML for every /admin path, so the branch is the only gate.
 test('an owner on the settings route gets the diagnostics screen', () => {
   drafts();
   const root = show(session('owner'), '/admin/settings');
@@ -97,8 +95,7 @@ test('an owner on the members route gets the members screen, not the placeholder
   );
 });
 
-// The activity log is the one Manage screen with no role condition on its branch: an editor
-// sees it, and which events are in it is decided by the server.
+// The activity log has no role condition: which events an editor sees is the server's decision.
 test('an editor on the activity route gets the screen, not the placeholder', () => {
   drafts();
   const root = show(session('editor'), '/admin/activity');
@@ -114,8 +111,7 @@ test('the signed-in name and role are in the top bar', () => {
   expect(root.querySelector('.user-menu .role')?.textContent).toBe('Owner');
 });
 
-// The account menu. Name, email and role are context inside it and the role is never a control:
-// it is changed on the members screen.
+// The role is never a control here: it is changed on the members screen.
 test('the account menu opens from the top bar with the two things it offers', () => {
   drafts();
   const root = show(session('editor'));
@@ -163,8 +159,7 @@ test('the menu button opens the sidebar, and a link inside it closes it again', 
   expect(root.querySelector('.sidebar.is-open')).toBeNull();
 });
 
-// Beside the count, the two facts that decide whether to publish now: how long the oldest change
-// has been waiting, and how many are being held back.
+// The oldest change and the held count are what decide whether to publish now.
 test('the indicator names the oldest change and how many are held', async () => {
   vi.stubGlobal(
     'fetch',
@@ -190,8 +185,7 @@ test('the indicator names the oldest change and how many are held', async () => 
   expect(detail).toBe('· oldest 22 aug 2025 · 1 on hold');
 });
 
-// Regression: sign-out was posted with no content type, which Better Auth refuses with 415 —
-// the form came back while the cookie stayed valid.
+// Regression: sign-out posted with no content type, which Better Auth refuses with 415.
 test('signing out posts a request Better Auth accepts, and shows the login form', async () => {
   const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
     Response.json({ success: true }),
@@ -300,8 +294,7 @@ test("a collection path renders that collection's entry list", async () => {
   ).toBe('Listings');
 });
 
-// Site settings is its own group above the collections, and only where the site declares any:
-// with none there is nothing to list, and Manage's Settings is the developer's read-only config.
+// Manage's Settings is the developer's read-only config, so Site settings is its own group.
 test('the sidebar offers Site settings above the collections', async () => {
   drafts();
   const root = show(session('owner'));
@@ -311,8 +304,7 @@ test('the sidebar offers Site settings above the collections', async () => {
   expect([link?.textContent, link?.getAttribute('href')]).toEqual(['Site settings', '/admin/site']);
 });
 
-// Every site has redirects, and they are listed on that screen, so it is offered even where
-// the developer declared no globals at all.
+// Every site has redirects, listed on that screen, so it is offered with no globals declared.
 test('Site settings is offered on a site that declares no globals', async () => {
   drafts();
   const root = show(session(), '/admin/site/redirects');
@@ -323,8 +315,7 @@ test('Site settings is offered on a site that declares no globals', async () => 
   );
 });
 
-// A global is edited on the entry screen: /admin/site/site is entries/globals/site, which is
-// the whole of what "the same form path" means.
+// /admin/site/site is entries/globals/site, edited on the entry screen.
 test('a global path opens the entry editor on the globals collection', async () => {
   vi.stubGlobal(
     'fetch',
@@ -360,9 +351,7 @@ test('a global path opens the entry editor on the globals collection', async () 
   );
 });
 
-// The count in the top bar and the entry's own Publish button describe the same fact, so a save
-// that lights one has to move the other: without this the shell says "No unpublished changes"
-// beside a lit Publish until something else reloads it.
+// The top-bar count and the Publish button describe the same fact, so a save must move both.
 test('a save that makes an entry pending moves the count in the top bar', async () => {
   vi.useFakeTimers();
   let waiting: string[] = [];
@@ -411,8 +400,7 @@ test('a save that makes an entry pending moves the count in the top bar', async 
   vi.useRealTimers();
 });
 
-// The load-bearing half of the way out of a conflict: after the draft is gone the editor must
-// not keep the values it had, or the next keystroke saves them back over what was taken.
+// Once the draft is gone the editor must drop its values, or the next keystroke saves them back.
 test('discarding a draft loads the entry again instead of leaving the old one on screen', async () => {
   const PATH = 'src/content/listings/en/mill-house.yaml';
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
@@ -465,8 +453,7 @@ const settle = async () => {
   flushSync();
 };
 
-// A status that only changes colour is not a status: every state says what it is in words, and
-// the live region holds the state rather than the counter that ticks beside it.
+// The live region holds the state in words, not the counter that ticks beside it.
 test('a running build says so in words, inside a live region', async () => {
   buildBody = { commit_sha: 'c0ffee11', state: 'building', started_at: Date.now() - 80_000 };
   drafts();
@@ -515,7 +502,7 @@ test('a site with no build status draws no pill and no banner', async () => {
   expect(root.querySelector('.topbar [role="status"]')).not.toBeNull();
 });
 
-// The live pill says when the site last changed, not only that it is up — app-shell state 1.
+// The live pill says when the site last changed, not only that it is up.
 test('a live build says since when', async () => {
   buildBody = {
     commit_sha: 'c0ffee11',
@@ -531,8 +518,7 @@ test('a live build says since when', async () => {
   expect(pill?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Live since 02:02 PM');
 });
 
-// The pill on a site that has published nothing is the worker's own deploy: worth showing, but
-// there is no commit of the admin's behind it to take back.
+// With nothing published the pill is the worker's own deploy, with no commit to take back.
 test('a failed build with no commit of ours offers no revert', async () => {
   buildBody = { state: 'failed' };
   drafts();
@@ -544,8 +530,7 @@ test('a failed build with no commit of ours offers no revert', async () => {
   expect(pill?.querySelector('.btn-link')).toBeNull();
 });
 
-// After a revert the drawer's "Published 1 change" describes a commit that no longer stands, and
-// its Revert would be refused. The panel goes with the publish it was about.
+// After a revert the panel describes a commit that no longer stands, so it goes with the publish.
 test("a revert clears the drawer's account of the publish it undid", async () => {
   buildBody = { commit_sha: 'c0ffee11', state: 'building' };
   vi.stubGlobal(
@@ -577,8 +562,7 @@ test("a revert clears the drawer's account of the publish it undid", async () =>
   expect(root.querySelector('.drawer')).not.toBeNull();
 });
 
-// The shell is a single page: a sidebar click swaps the screen in place rather than fetching
-// the document again, and the address bar follows so a reload or a shared link still lands.
+// A sidebar click swaps the screen in place and the address bar follows, so a reload still lands.
 test('a sidebar click swaps the screen without a page load', async () => {
   drafts();
   history.replaceState({}, '', '/admin');
@@ -663,8 +647,7 @@ test('the seo tab is an address of the same entry', async () => {
   expect(root.querySelector('input#f-seo\\.title')).not.toBeNull();
 });
 
-// An entry's tabs are addresses of the same entry: moving between them must not re-read the
-// entry, or everything the person has typed and every switch they have set goes with it.
+// Moving between tabs must not re-read the entry, or everything typed goes with it.
 test('the history tab is an address of the same entry, not a second load of it', async () => {
   const fetchMock = vi.fn(async (url: string) => {
     if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
@@ -713,8 +696,7 @@ test('the history tab is an address of the same entry, not a second load of it',
   expect(loads()).toBe(1);
 });
 
-// App-shell state 9: the drawer's own result panel goes when the drawer closes, so the commit is
-// also said once in a notice that outlives it, with an explicit close.
+// The drawer's result panel goes with the drawer, so the commit is also said in a lasting notice.
 const publishing = () =>
   vi.stubGlobal(
     'fetch',

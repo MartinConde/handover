@@ -24,9 +24,7 @@ export interface ContentFile {
   contents: string;
 }
 
-// Collection names are lowercase, so `_templates/` never matches, and `redirects.yaml` has no
-// locale segment. `globals/` does match, and is meant to: a global is edited through the entry
-// path like anything else, so the list of them is answered from the index rather than from git.
+// `globals/` matches on purpose: a global is edited through the entry path like anything else.
 const ENTRY_PATH = /^src\/content\/([a-z0-9-]+)\/([^/]+)\/([^/]+)\.yaml$/;
 
 /** The three things an entry's path names, and nothing for a file that is not an entry. */
@@ -39,11 +37,7 @@ export const entryParts = (
     : undefined;
 };
 
-/**
- * `src/content/listings/en/mill-house.yaml` → `listings/mill-house`, and nothing for a file
- * that is not an entry. The key a lock and a hold are on: both are the entry's, since its
- * languages share a structure and are published together.
- */
+/** The key a lock and a hold are on: the entry's, since its languages publish together. */
 export const entryKey = (path: string): string | undefined => {
   const parts = entryParts(path);
   return parts && `${parts.collection}/${parts.name}`;
@@ -55,11 +49,7 @@ const TEMPLATE_PATH = /^src\/content\/_templates\/([a-z0-9-]+)\/([^/]+)\.yaml$/;
 // The site files that are not entries; globals already share the entry layout.
 const OTHER_PATHS = [/^src\/content\/redirects\.yaml$/, TEMPLATE_PATH];
 
-/**
- * Why a `.yaml` file under `src/content/` is neither an entry nor one of the site files —
- * empty when they all are. The build fails on these: the entry list promises every entry,
- * and a file the CMS cannot address by `collection/slug` would silently not be in it.
- */
+/** The build fails on these: a file the CMS cannot address would silently be off the list. */
 export function contentPathErrors(_siteId: string, paths: Iterable<string>): string[] {
   const errors: string[] = [];
   for (const path of paths) {
@@ -82,14 +72,12 @@ function indexFile(siteId: string, { path, contents }: ContentFile, titleFields:
   if (!found) return undefined;
   const [, collection = '', locale = '', id = ''] = found;
   const data = parseEntry(siteId, contents) as Record<string, unknown> | null;
-  // A collection that declares no title field, or an entry that has not filled it in yet,
-  // lists by filename rather than by nothing.
+  // Lists by filename rather than by nothing.
   const named = data?.[titleFields[collection] ?? 'title'];
   const title = typeof named === 'string' && named ? named : id;
   const info: EntryLocale = { title, path };
   if (data?._status === 'hidden') info.status = 'hidden';
-  // Read whatever the collection's flag turns out to be: a `slug` in a collection without
-  // localized slugs is an ordinary field, and nothing addresses an entry through this.
+  // Read regardless of the collection's flag: without localized slugs it is an ordinary field.
   if (typeof data?.slug === 'string' && data.slug) info.slug = data.slug;
   // Every file of the entry carries the same list, so whichever one is read says the same thing.
   const offered = Array.isArray(data?._locales) ? (data._locales as string[]) : undefined;
@@ -118,15 +106,7 @@ export function indexFrom(
   return Object.fromEntries([...index].map(([name, entries]) => [name, entries.sort(byId)]));
 }
 
-/**
- * Which languages of each entry were translated from a source that has moved on since, taken
- * over the whole repository at build: `"listings/mill-house" -> ["de"]`, and nothing at all for
- * an entry with nothing to report. `staleLocales` answers this per entry from the files
- * themselves, so a dashboard counting them would need every language of every entry — a git
- * read per tile. This is the same reading made once, where the files are already in hand.
- *
- * The form is asked for per entry rather than per collection, because a global's is its own.
- */
+/** Taken once over the whole repository, so the dashboard need not read git per tile. */
 export async function staleFrom(
   siteId: string,
   files: Iterable<ContentFile>,
@@ -152,11 +132,7 @@ export async function staleFrom(
   return stale;
 }
 
-/**
- * The built index for one collection with the pending drafts laid over it. A draft is what
- * the editor last saw, so its title and status win over the file the index was built from,
- * and a draft for an entry the index does not know is one that has never been committed.
- */
+/** A draft is what the editor last saw, so its title and status win over the built index. */
 export function collectionEntries(
   siteId: string,
   index: ContentIndex,
@@ -180,8 +156,7 @@ export function collectionEntries(
       else delete found.offered;
     } else entries.push(draft);
   }
-  // A rename or a delete writes to git without touching the index, so the file it removed is
-  // still in there: an empty row is what says the path has gone until the build catches up.
+  // A rename or delete does not touch the index, so an empty row says the path has gone.
   for (const entry of entries)
     for (const [locale, info] of Object.entries(entry.locales))
       if (gone.has(info.path)) delete entry.locales[locale];
@@ -194,16 +169,7 @@ export const indexHasPath = (index: ContentIndex, path: string): boolean =>
     entries.some((e) => Object.values(e.locales).some((l) => l.path === path)),
   );
 
-/**
- * The languages an entry is offered in, and what its own `_locales` gets wrong. The mark is
- * written into every file the entry has, so a language with a file that the mark leaves out is
- * a hand edit or a bad merge — the same contradiction a block's `_locales` has as drift, one
- * level up. **The file wins**: the entry list and the editor read one answer rather than two,
- * and the disagreement is reported instead of being drawn twice.
- *
- * A code the site does not declare is offered nowhere, so it is named here rather than leaving
- * an empty `offered` for the routes to refuse over.
- */
+/** The file wins over the mark: one answer is read, and the disagreement is reported. */
 export function entryOffer(
   _siteId: string,
   locales: string[],
@@ -232,10 +198,7 @@ export interface Template {
   data: unknown;
 }
 
-/**
- * The starters each collection ships, read at build time with everything else under
- * `src/content/`: they are the site's own files, so the admin has them without a git listing.
- */
+/** Read at build with everything under `src/content/`, so the admin needs no git listing. */
 export function templatesFrom(
   siteId: string,
   files: Iterable<ContentFile>,
