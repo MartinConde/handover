@@ -1216,6 +1216,37 @@ test('a field inside a block is marked by its own path, not the block’s', () =
   expect(document.querySelector('#f-blocks\\.1\\.heading-err')).toBeNull();
 });
 
+test('a problem on a key the widget draws itself marks the widget', () => {
+  // The schema names the link's missing target as `button.ref`; the form has one link widget.
+  show(
+    [{ path: ['button'], label: 'Button', type: 'link', required: true }],
+    { _version: 1, button: { type: 'entry', label: 'Book' } },
+    {},
+    { 'button.ref': 'Required' },
+  );
+  expect(q('#f-button\\.ref').closest('.field')?.classList.contains('is-invalid')).toBe(true);
+  expect(q('#f-button\\.ref').getAttribute('aria-describedby')).toBe('f-button-err');
+  expect(q('#f-button-err').textContent).toBe('Required');
+});
+
+test('a problem inside a block marks the field in the block, not the blocks list', () => {
+  show(pageFields, blocksData(), registry, { 'blocks.0.heading': 'Required' });
+  expect(q('#f-blocks').closest('.field')?.classList.contains('is-invalid')).toBe(false);
+  expect(document.querySelector('#f-blocks-err')).toBeNull();
+});
+
+test('a block with a problem inside cannot be folded away', () => {
+  laidOut();
+  show(pageFields, blocksData(), registry, { 'blocks.0.heading': 'Required' });
+  const fold = q<HTMLButtonElement>('#f-blocks\\.0 > header .fold');
+  expect(fold.disabled).toBe(true);
+  click('#f-blocks\\.0 > header .fold');
+  expect(fold.getAttribute('aria-expanded')).toBe('true');
+  expect(q('#f-blocks\\.0\\.heading-err').textContent).toBe('Required');
+  click('#f-blocks\\.1 > header .fold');
+  expect(q('#f-blocks\\.1 > header .fold').getAttribute('aria-expanded')).toBe('false');
+});
+
 test('a field with nothing wrong carries no error markup', () => {
   show([{ path: ['title'], label: 'Title', type: 'text', required: true }], { title: 'x' });
   expect(q('#f-title').getAttribute('aria-invalid')).toBeNull();

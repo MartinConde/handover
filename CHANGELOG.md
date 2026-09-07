@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Fix a problem inside a link or picture leaving its widget unmarked: the schema names the
+  missing target `button.ref`, and the form only looked up `button`. The widget now goes red
+  with the message under it and a red border on the empty target box, so the *problems* button
+  lands on something to see. A block with a problem inside stays open until it is fixed, so
+  the jump never lands on a collapsed card.
 - **The media library is pictures first.** Tiles are the thumbnails themselves with a ring on
   the chosen one, the drop zone is a strip with a *choose images* link in it, and the three
   toggles no longer wear a menu caret. The panel puts size, format and date under the name,

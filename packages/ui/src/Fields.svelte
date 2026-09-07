@@ -106,6 +106,19 @@ const structural = (field: Field) =>
 // language, and an unsupported field has no value to show. Neither is given to the second
 // language as a picture of the first language's value it cannot change.
 const FIXED = new Set(['reference', 'unsupported']);
+// The schema names a link's missing target `button.ref` and a picture's caption `image.alt`,
+// keys the one widget draws itself — so what it says is the widget's to show. A group or a
+// list leaves such a key to the field inside it that owns it.
+const problemOf = (field: Field, at: string[]) => {
+  const key = at.join('.');
+  if (problems[key] !== undefined || structural(field)) return problems[key];
+  return Object.entries(problems).find(([p]) => p.startsWith(`${key}.`))?.[1];
+};
+// A folded card hides the field the *problems* button jumps to, so a block with one stays open.
+const broken = (at: string[]) => {
+  const under = `${at.join('.')}.`;
+  return Object.keys(problems).some((p) => p.startsWith(under));
+};
 const shown = $derived(
   translating
     ? fields.filter((f) => structural(f) || (modeOf(f) !== false && !FIXED.has(f.type)))
@@ -557,7 +570,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   {@const id = `${prefix}-${at.join('.')}`}
   {@const mode = modeOf(field)}
   {@const text = field.label || rowLabel}
-  {@const err = problems[at.join('.')]}
+  {@const err = problemOf(field, at)}
   {@const bad = err ? 'true' : undefined}
   {@const says = err ? `${id}-err` : undefined}
   {@const marked = [address(at), `${address(at)}.label`].find((p) => opened === p)}
@@ -676,10 +689,11 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           {@const name = blockName(row)}
           {@const inner = blockFields(row)}
           {@const s = sortable(() => keyOf(items, i), () => i)}
-          {@const shut = folded[keyOf(items, i)] === true}
+          {@const open = broken([...at, String(i)])}
+          {@const shut = !open && folded[keyOf(items, i)] === true}
           <article class="block-card" id="{id}.{i}" aria-labelledby="{id}.{i}-h" class:is-dragging={s.isDragging} class:is-folded={shut} {@attach s.attach}>
             <header>
-              <button class="btn btn-ghost btn-icon fold" type="button" aria-expanded={!shut} aria-controls="{id}.{i}-b" aria-label="{shut ? 'Expand' : 'Collapse'} {name}" onclick={() => (folded[keyOf(items, i)] = !shut)}>{shut ? '▸' : '▾'}</button>
+              <button class="btn btn-ghost btn-icon fold" type="button" disabled={open} aria-expanded={!shut} aria-controls="{id}.{i}-b" aria-label="{shut ? 'Expand' : 'Collapse'} {name}" onclick={() => (folded[keyOf(items, i)] = !shut)}>{shut ? '▸' : '▾'}</button>
               <span class="label" id="{id}.{i}-h">{name}</span>
               <span class="type">{block(row)._type} · {block(row)._id}</span>
               {#if shut}<span class="excerpt">{excerpt(row, inner)}</span>{/if}
