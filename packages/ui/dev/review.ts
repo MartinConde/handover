@@ -266,6 +266,58 @@ window.fetch = async (input, init) => {
           ? []
           : media.filter((item) => item.filename.includes(url.searchParams.get('q') || '')),
     });
+  if (path === '/admin/api/redirects')
+    return json({
+      rules: [
+        [
+          '/listings/old-mill',
+          '/listings/mill-house',
+          301,
+          'slug-change',
+          'listings/mill-house',
+          'The Mill House',
+          42,
+        ],
+        ['/listings/harbour-bar-2026', '/', 301, 'deleted', undefined, undefined, 30],
+        [
+          '/listings/cafe-bar-2026',
+          '/listings',
+          301,
+          'hidden',
+          'listings/cafe-bar-2026',
+          'Café & Bar / 2026',
+          16,
+        ],
+        [
+          '/listings/seaview-cottage-2025',
+          '/listings/seaview-cottage',
+          301,
+          'slug-change',
+          'listings/seaview-cottage',
+          'Seaview Cottage, Port Isaac',
+          3,
+        ],
+        [
+          '/brochure',
+          'https://example.com/files/brochure-2026.pdf',
+          302,
+          'manual',
+          undefined,
+          undefined,
+          1,
+        ],
+      ].map(([from, to, status, reason, entry, title, days], i) => ({
+        _id: `rule${i}`,
+        from,
+        to,
+        status,
+        reason,
+        entry,
+        title,
+        createdAt: new Date(now - Number(days) * 86400000).toISOString(),
+        ...(i === 3 ? { pending: true } : {}),
+      })),
+    });
   return json({ entries: [], locales });
 };
 const target = document.getElementById('app');

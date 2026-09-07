@@ -100,9 +100,12 @@ const type = (sel: string, value: string) => {
   el.dispatchEvent(new Event('input', { bubbles: true }));
   flushSync();
 };
+// What a row says, in the order a reader meets it: old address, new address, code, reason, owner.
 const rows = () =>
   all('.table .row').map((row) =>
-    Array.from(row.querySelectorAll('.td'), (td) => td.textContent?.trim().replace(/\s+/g, ' ')),
+    ['.route .from', '.route .to', '.route .code', '.why .badge', '.why .owner'].map(
+      (sel) => row.querySelector(sel)?.textContent?.trim().replace(/\s+/g, ' ') ?? '',
+    ),
   );
 
 test('a row says where the rule came from and a rule waiting on a draft says it is not live', async () => {
@@ -126,19 +129,24 @@ test('a row says where the rule came from and a rule waiting on a draft says it 
   await show();
 
   const [first, second] = rows();
-  expect(first?.slice(0, 5)).toEqual([
+  expect(first).toEqual([
     '/old-mill',
     '/listings/mill-house',
     '301',
     'Slug change',
     'The Mill House',
   ]);
-  expect(second?.slice(0, 4)).toEqual([
-    '/campaign Not published yet',
+  // A temporary rule is the unusual one, so its code says so where a 301 is just the number.
+  expect(second).toEqual([
+    '/campaign',
     'https://example.com/x.pdf',
-    '302',
+    '302 · temporary',
     'Manual',
+    '',
   ]);
+  expect(all('.table .row')[1]?.querySelector('.route .badge-accent')?.textContent).toBe(
+    'Not published yet',
+  );
   expect(q('.notice-info').textContent).toContain('not live yet');
 });
 
@@ -312,6 +320,23 @@ test('Test reads a mismatch when a page answers or the address forwards elsewher
   expect(elsewhere.kind).toBe('is-bad');
   expect(elsewhere.line).toBe('/summer-offer → /de/');
   expect(elsewhere.text).toContain('somewhere else');
+});
+
+// The button is busy while the site is asked, not disabled: a disabled button drops focus, and
+// the keyboard would land back at the top of the page for every Test.
+test('Test keeps the focus on its button while the site is asked and after it answers', async () => {
+  rules = [rule()];
+  await show();
+  const button = q<HTMLButtonElement>('.menu-cell .btn-test');
+  button.focus();
+  button.click();
+  flushSync();
+  expect(button.getAttribute('aria-busy')).toBe('true');
+  expect(document.activeElement).toBe(button);
+  await settle();
+
+  expect(document.activeElement).toBe(button);
+  expect(button.getAttribute('aria-busy')).toBe(null);
 });
 
 // A rule pointing off this site: following it is a request to another origin, which the browser

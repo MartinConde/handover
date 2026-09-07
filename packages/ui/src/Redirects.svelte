@@ -219,7 +219,10 @@ async function probe(rule: Rule): Promise<Verdict> {
   };
 }
 
+// Busy rather than disabled while the site is asked: a disabled button drops the focus, and a
+// keyboard would land back at the top of the page for every Test.
 async function test(rule: Rule) {
+  if (tested?.id === rule._id && !tested.verdict) return;
   tested = { id: rule._id };
   const verdict = await probe(rule);
   if (tested?.id === rule._id) tested = { id: rule._id, verdict };
@@ -289,39 +292,46 @@ async function remove() {
             {/each}
           </select>
         </div>
+        {#if rules.length}
+          <span class="tally"
+            >{shown.length === rules.length ? '' : `${shown.length} of `}{rules.length}
+            {rules.length === 1 ? 'rule' : 'rules'}</span
+          >
+        {/if}
         <span class="spacer"></span>
         <button class="btn btn-primary" type="button" onclick={() => open()}>Add redirect</button>
       </div>
       {#if loading}
         <p class="placeholder">Loading…</p>
       {:else if shown.length}
-        <div class="table cols-7" role="table" aria-label="Redirects">
+        <div class="table is-redirects" role="table" aria-label="Redirects">
           <div class="row-head" role="row">
-            <div class="th" role="columnheader">From</div>
-            <div class="th" role="columnheader">To</div>
-            <div class="th" role="columnheader">Code</div>
+            <div class="th" role="columnheader">Redirect</div>
             <div class="th" role="columnheader">Reason</div>
-            <div class="th" role="columnheader">Entry</div>
             <div class="th" role="columnheader">Added</div>
             <div class="th" role="columnheader"><span class="visually-hidden">Actions</span></div>
           </div>
           {#each shown as rule (rule._id)}
             {@const asking = tested?.id === rule._id}
-            <div class="row" class:is-managed={managed(rule)} role="row">
-              <div class="td path" role="cell" data-label="From">
-                {rule.from}
-                {#if rule.pending}<span class="badge badge-accent">Not published yet</span>{/if}
+            {@const verdict = asking ? tested?.verdict : undefined}
+            <div class="row" class:is-managed={managed(rule)} class:has-verdict={verdict} role="row">
+              <div class="td route" role="cell">
+                <div class="hop">
+                  <span class="from">{rule.from}</span>
+                  {#if rule.pending}<span class="badge badge-accent">Not published yet</span>{/if}
+                </div>
+                <div class="hop is-to">
+                  <span class="arrow" aria-hidden="true">↳</span><span class="visually-hidden">to</span>
+                  <span class="to">{rule.to}</span>
+                  <span class="badge code" class:is-temp={rule.status === 302}
+                    >{rule.status === 302 ? '302 · temporary' : rule.status}</span
+                  >
+                </div>
               </div>
-              <div class="td path" role="cell" data-label="To">{rule.to}</div>
-              <div class="td num" role="cell" data-label="Code">{rule.status}</div>
-              <div class="td" role="cell" data-label="Reason">
+              <div class="td why" role="cell">
                 <span class="badge">{REASONS[rule.reason]}</span>
-              </div>
-              <div class="td entry" role="cell" data-label="Entry">
                 {#if rule.entry}
-                  <a href={sitePath(`/admin/c/${rule.entry}`)}>{rule.title ?? rule.entry}</a>
-                {:else}
-                  <span class="note">—</span>
+                  <a class="owner" href={sitePath(`/admin/c/${rule.entry}`)}>{rule.title ?? rule.entry}</a>
                 {/if}
                 {#if managed(rule)}
                   <span class="lock-note" id="owns-{rule._id}"
@@ -335,29 +345,18 @@ async function remove() {
               <div class="td menu-cell" role="cell">
                 <div class="row-menu">
                   <button
-                    class="btn btn-sm btn-test"
+                    class="btn btn-ghost btn-sm btn-test"
                     type="button"
-                    disabled={asking && !tested?.verdict}
+                    aria-busy={asking && !verdict ? 'true' : undefined}
                     onclick={() => test(rule)}
-                    >{asking && !tested?.verdict ? 'Testing…' : 'Test'}<span class="visually-hidden">
+                    >{asking && !verdict ? 'Testing…' : 'Test'}<span class="visually-hidden">
                       {rule.from}</span
                     ></button
                   >
-                  {#if asking && tested?.verdict}
-                    <div class="popover test-pop" role="status">
-                      <p class="verdict is-{tested.verdict.kind}">{VERDICT[tested.verdict.kind]}</p>
-                      <p class="line">{tested.verdict.line}</p>
-                      <p>{tested.verdict.text}</p>
-                      <div class="actions">
-                        <button class="btn btn-sm" type="button" onclick={() => test(rule)}>Test again</button>
-                        <button class="btn btn-ghost btn-sm" type="button" onclick={() => (tested = undefined)}>Close</button>
-                      </div>
-                    </div>
-                  {/if}
                   <!-- Greyed with aria-disabled rather than disabled: a disabled button takes no
                        focus, so a keyboard would walk past the reason without hearing it. -->
                   <button
-                    class="btn btn-sm"
+                    class="btn btn-ghost btn-sm"
                     type="button"
                     aria-disabled={managed(rule) ? 'true' : undefined}
                     aria-describedby={managed(rule) ? `owns-${rule._id}` : undefined}
@@ -365,7 +364,7 @@ async function remove() {
                     >Edit<span class="visually-hidden"> {rule.from}</span></button
                   >
                   <button
-                    class="btn btn-sm"
+                    class="btn btn-ghost btn-sm btn-delete"
                     type="button"
                     aria-disabled={managed(rule) ? 'true' : undefined}
                     aria-describedby={managed(rule) ? `owns-${rule._id}` : undefined}
@@ -377,6 +376,21 @@ async function remove() {
                   >
                 </div>
               </div>
+              <!-- The verdict sits under its row rather than floating over the next one: what the
+                   live site said belongs beside the rule it was asked about. -->
+              {#if verdict}
+                <div class="td verdict-cell" role="cell" aria-colspan="4">
+                  <div class="test-pop is-{verdict.kind}" role="status">
+                    <p class="verdict is-{verdict.kind}">{VERDICT[verdict.kind]}</p>
+                    <p class="line">{verdict.line}</p>
+                    <p>{verdict.text}</p>
+                    <div class="actions">
+                      <button class="btn btn-sm" type="button" onclick={() => test(rule)}>Test again</button>
+                      <button class="btn btn-ghost btn-sm" type="button" onclick={() => (tested = undefined)}>Close</button>
+                    </div>
+                  </div>
+                </div>
+              {/if}
             </div>
           {/each}
         </div>

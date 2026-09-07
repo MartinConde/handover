@@ -406,19 +406,43 @@ select.filter.is-on { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .table .td.title a { color: var(--ink); font-weight: 500; text-decoration: none; }
 .table .td.title a:hover { text-decoration: underline; }
 .table .td.num { font-size: var(--text-sm); color: var(--ink-2); white-space: nowrap; }
-/* Redirects — seven columns, because reason and entry are the two that make a row explainable
-   and dropping them would leave the client guessing which rules are theirs to delete. */
+/* Redirects — four columns. The two addresses stack in one cell so a path never breaks mid-word,
+   and the reason keeps the entry it came from beside it, which is what makes a row explainable. */
 .redirects { display: grid; gap: var(--s-4); align-content: start; min-width: 0; }
 .redirects .list-toolbar { margin-bottom: var(--s-1); }
-/* Entry is a fraction and not `auto`: a long title would otherwise take its full width first
-   and leave the two addresses a character a line. */
-.table.cols-7 { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.3fr) auto auto minmax(0, 1fr) auto auto; }
-.table .td.entry { min-width: 0; overflow-wrap: anywhere; }
-.table .td.path { min-width: 0; flex-wrap: wrap; font-family: var(--font-mono); font-size: var(--text-sm); overflow-wrap: anywhere; }
-.table .td.path .badge { flex: none; font-family: var(--font-sans); }
-.table .td.path a { color: var(--ink); }
+.redirects .tally { font-size: var(--text-sm); color: var(--ink-2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.entry-body:has(> .redirects) { max-width: 1040px; }
+.table.is-redirects { grid-template-columns: minmax(0, 1fr) minmax(140px, auto) auto auto; }
+.table .td.route { display: grid; gap: 2px; align-content: center; min-width: 0; font-family: var(--font-mono); font-size: var(--text-sm); }
+.table .td.route .hop { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2); min-width: 0; }
+.table .td.route .from { font-weight: 500; overflow-wrap: anywhere; }
+.table .td.route .is-to { color: var(--ink-2); }
+.table .td.route .to { overflow-wrap: anywhere; }
+.table .td.route .arrow { color: var(--ink-3); flex: none; }
+.table .td.route .badge { flex: none; font-family: var(--font-sans); }
+.table .td.route .code { font-family: inherit; }
+.table .td.route .code.is-temp { background: var(--info-soft); color: var(--info-ink); }
+.table .td.why { display: grid; gap: var(--s-1); align-content: center; justify-items: start; min-width: 0; max-width: 240px; }
+.table .td.why .owner { font-size: var(--text-sm); color: var(--accent-ink); text-decoration: none; overflow-wrap: anywhere; }
+.table .td.why .owner:hover { text-decoration: underline; }
 .table .row.is-managed .td { background: var(--surface-2); }
 .lock-note { display: inline-flex; align-items: center; gap: var(--s-1); font-size: var(--text-xs); color: var(--ink-2); }
+/* The actions are quiet until the row is hovered or a key lands in it; Delete goes red only on
+   its own hover, so a row full of buttons does not read as a row full of warnings. */
+.table.is-redirects .row-menu .btn-ghost:hover { background: var(--border); color: var(--ink); }
+.table.is-redirects .row-menu .btn-delete:hover { background: var(--danger-soft); color: var(--danger-ink); }
+.table .row.has-verdict .td:not(.verdict-cell) { border-bottom: 0; }
+.table .td.verdict-cell { grid-column: 1 / -1; min-height: 0; padding: 0 var(--s-3) var(--s-3); }
+.test-pop { display: grid; gap: var(--s-1); padding: var(--s-3) var(--s-4); border-radius: var(--radius); background: var(--surface-2); font-size: var(--text-sm); }
+.test-pop.is-ok { background: var(--success-soft); }
+.test-pop.is-wait { background: var(--info-soft); }
+.test-pop.is-bad { background: var(--danger-soft); }
+.test-pop .line { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-2); }
+.test-pop .verdict { font-weight: 600; }
+.test-pop .verdict.is-ok { color: var(--success-ink); }
+.test-pop .verdict.is-wait { color: var(--info-ink); }
+.test-pop .verdict.is-bad { color: var(--danger-ink); }
+.test-pop .actions { display: flex; gap: var(--s-2); margin-top: var(--s-1); }
 
 /* The reason a row cannot be restored, under the row it is about. */
 .table .row.row-note .td { grid-column: 1 / -1; }
@@ -446,17 +470,7 @@ select.filter.is-on { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .empty .btn { margin-top: var(--s-2); }
 .row-menu { position: relative; display: flex; gap: var(--s-1); align-items: center; }
 .row-menu .menu { top: calc(100% + 4px); }
-.row-menu .test-pop { left: auto; right: 0; }
-.test-pop { min-width: 320px; display: grid; gap: var(--s-2); font-size: var(--text-sm); }
-.test-pop .line { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s-2); font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink-2); }
-.test-pop .verdict { font-weight: 600; }
-.test-pop .verdict.is-ok { color: var(--success-ink); }
-.test-pop .verdict.is-wait { color: var(--info-ink); }
-.test-pop .verdict.is-bad { color: var(--danger-ink); }
 .menu hr { border: 0; border-top: 1px solid var(--border); margin: var(--s-2) 0; }
-
-/* The card rule above keys off `.table`, which `.cols-7` outranks, so the seven columns have to
-   be collapsed by name. From and To lead the card; the rest is a labelled line under them. */
 
 .sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 30; padding: var(--s-5) var(--s-5) var(--s-6); background: var(--surface); border-radius: var(--radius-lg) var(--radius-lg) 0 0; box-shadow: var(--shadow-toast); display: grid; gap: var(--s-4); }
 .sheet h2 { font-size: var(--text-lg); }
@@ -1613,18 +1627,17 @@ input[type="checkbox"] { accent-color: var(--accent-ink); }
   /* On a phone the menu tabs are the screen's own navigation, not the editor's Content/SEO/History
      strip the narrow rule hides — so this one stays. */
   :root .tabs.is-menus { display: flex; }
-  /* Narrow: the entry list's card rule keys off `.table`, which `.cols-7` outranks, so the seven
-     columns have to be collapsed by name. From and To lead the card; everything else is a labelled
-     line under them, and the actions sit top right where the row menu was. */
-  :root .table.cols-7 { grid-template-columns: 1fr; }
-  :root .table.cols-7 .row { grid-template-columns: minmax(0, 1fr) auto; gap: var(--s-1) var(--s-2); }
-  :root .table.cols-7 .row .td { grid-column: 1; flex-wrap: wrap; min-height: 0; padding: 0; border: 0; background: none; }
-  :root .table.cols-7 .row.is-managed { background: var(--surface-2); }
-  :root .table.cols-7 .row.is-managed .td { background: none; }
-  :root .table.cols-7 .row .td.menu-cell { grid-column: 2; grid-row: 1 / span 2; align-items: start; }
-  :root .table.cols-7 .row .td[data-label]::before { content: attr(data-label) " "; flex: none; color: var(--ink-3); font-family: var(--font-sans); font-size: var(--text-xs); }
-  :root .table.cols-7 .row .td.path { flex-wrap: wrap; }
-  :root .table.cols-7 .row-menu { display: flex; gap: var(--s-1); }
+  /* Narrow: the entry list's card rule keys off `.table`, which `.is-redirects` outranks, so its
+     columns are collapsed by name. The addresses lead the card, the reason and date follow, and
+     the actions take a line of their own — three buttons do not fit beside a path on a phone. */
+  :root .table.is-redirects { grid-template-columns: 1fr; }
+  :root .table.is-redirects .row { grid-template-columns: minmax(0, 1fr); gap: var(--s-2); }
+  :root .table.is-redirects .row .td { grid-column: 1; min-height: 0; padding: 0; border: 0; background: none; }
+  :root .table.is-redirects .row.is-managed { background: var(--surface-2); }
+  :root .table.is-redirects .row .td.why { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-1) var(--s-2); max-width: none; }
+  :root .table.is-redirects .row .td.why .lock-note { flex-basis: 100%; }
+  :root .table.is-redirects .row .td.menu-cell { grid-row: auto; padding-top: var(--s-1); }
+  :root .table.is-redirects .row .td.menu-cell .btn-ghost { border-color: var(--border); }
   .previews { grid-template-columns: minmax(0, 1fr); }
   /* Title, chips, path and Remove in one row is wider than a phone; the path takes its own line. */
   .ref-item { flex-wrap: wrap; }

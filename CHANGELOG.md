@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Redesign the redirects table. The old and new address stack in one column with the status code
+  beside them, so a path no longer breaks mid-word; the reason keeps the entry it came from under
+  it; the row's actions are quiet until the row is hovered; and *Test* answers under its own row
+  instead of in a popover. The toolbar counts the rules, and the design preview now shows the
+  screen with sample rules.
 - Reuse the GitHub installation token across requests. A token minted moments after a commit
   could read the branch head from before it, so a publish straight after your own was refused
   with `main moved past`.
