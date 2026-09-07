@@ -561,6 +561,12 @@ const tags: Field = {
 };
 const arrayData = () => parseEntry('default', golden('array')) as Record<string, unknown>;
 const snap = () => $state.snapshot(root) as Record<string, never>;
+const nudge = (key: string, times: number, shiftKey = false) => {
+  for (let i = 0; i < times; i++) {
+    q('.focal-handle').dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }));
+  }
+  flushSync();
+};
 const click = (sel: string) => {
   q<HTMLButtonElement>(sel).click();
   flushSync();
@@ -981,7 +987,7 @@ test('seo: the social card has a focal point, written into the picture', async (
   show([seoField], seoData());
   click('#f-seo .media-card .actions .btn-sm');
   await settle();
-  type('input#focal-y', '60');
+  nudge('ArrowDown', 1, true);
   click('.focal-dialog .btn-primary');
   expect(snap()).toMatchObject({ seo: { image: { focal: [0.5, 0.6] } } });
 });
@@ -1414,8 +1420,9 @@ test('the dot a page moves is written after the numbers, and centring it takes t
   show([heroField], imageData());
   click('.media-card .actions .btn-sm');
   await settle();
-  expect(q<HTMLInputElement>('input#focal-y').value).toBe('35');
-  type('input#focal-y', '60');
+  expect(q('.focal-handle').getAttribute('aria-label')).toBe('Focal point, 50% across, 35% down');
+  nudge('ArrowDown', 2, true);
+  nudge('ArrowDown', 5);
   click('.focal-dialog .btn-primary');
   expect(stringifyEntry('default', snap())).toBe(
     `_version: 1
@@ -1431,7 +1438,7 @@ hero:
   );
   click('.media-card .actions .btn-sm');
   await settle();
-  type('input#focal-y', '50');
+  nudge('ArrowUp', 1, true);
   click('.focal-dialog .btn-primary');
   expect(stringifyEntry('default', snap())).toBe(
     `_version: 1

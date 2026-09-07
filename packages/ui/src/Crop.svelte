@@ -99,7 +99,7 @@ async function make() {
     <!-- svelte-ignore a11y_no_static_element_interactions -- the four sliders below are the
          control; the box is the pointer's way to the same four numbers -->
     <div class="focal-stage" bind:this={stage} onpointermove={drag} onpointerup={() => (dragging = undefined)} onpointercancel={() => (dragging = undefined)}>
-      <img src={item.url} alt="" />
+      <img src={item.url} alt="" draggable="false" />
       <div class="crop-box" style="left: {pc(region.x, width)}%; top: {pc(region.y, height)}%; width: {pc(region.w, width)}%; height: {pc(region.h, height)}%" onpointerdown={(e) => grab(e)}>
         {#each CORNERS as corner (corner)}
           <!-- svelte-ignore a11y_no_static_element_interactions -- pointer affordance for the sliders -->

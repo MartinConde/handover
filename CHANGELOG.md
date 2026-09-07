@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Fix the focal point dot dragging a ghost of the picture instead of moving. The two sliders
+  under it are gone: the dot itself takes the arrow keys, one percent a step and ten with Shift.
+  The live previews end with a phone-shaped upright crop after the site's own shapes.
 - **Site settings is a list, not a grid of cards.** One row per global, the whole row the link,
   with languages, who has it open and who last edited it on the right. The entry lists' status
   and language filters sit side by side as chips like the other screens', with a rule between

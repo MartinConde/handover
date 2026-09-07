@@ -62,8 +62,8 @@ Nothing is written to a picture. Every crop the site renders is a delivery trans
 one stored original, framed around a **focal point** — two fractions saying where in the picture
 the crop has to hold. *Set focal point* in the library's panel opens the dot over the picture,
 with every shape this site's own fields crop to previewed live beside it: move it once and all of
-them move. Drag the dot, or use the two sliders under it — a place in a photograph is two numbers,
-and each one is a slider a keyboard can reach.
+them move, and a phone-shaped upright preview sits after the site's own shapes. Drag the dot, or
+focus it and move it with the arrow keys — one percent a step, ten with Shift.
 
 The dot in the library is what a picture is **inserted with**: choosing it for a field copies the
 two numbers into that entry, and moving the library's dot afterwards does not go back and change

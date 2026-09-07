@@ -302,6 +302,12 @@ test('the delete dialog takes focus and hands it back on cancel', async () => {
 
 const setFocal = '.lib-side .actions button:nth-child(1)';
 const cropButton = '.lib-side .actions button:nth-child(2)';
+const nudge = (key: string, times: number, shiftKey = false) => {
+  for (let i = 0; i < times; i++) {
+    q('.focal-handle').dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }));
+  }
+  flushSync();
+};
 
 // The dot is the picture's own default: every page that did not set one crops around it, so it
 // is written to the row and not to any file.
@@ -312,12 +318,9 @@ test('the dot moved in the dialog is saved to the row, and the panel draws it wh
   click('.tile .tile-link');
   click(setFocal);
   flushSync();
-  const across = q<HTMLInputElement>('input#focal-x');
-  across.value = '42';
-  across.dispatchEvent(new Event('input', { bubbles: true }));
-  const down = q<HTMLInputElement>('input#focal-y');
-  down.value = '30';
-  down.dispatchEvent(new Event('input', { bubbles: true }));
+  // From the middle: 8 left and 20 up, a big step being ten.
+  nudge('ArrowLeft', 8);
+  nudge('ArrowUp', 2, true);
   click('.focal-dialog .btn-primary');
   await settle();
   expect(asked.at(-1)).toMatchObject({
@@ -326,6 +329,31 @@ test('the dot moved in the dialog is saved to the row, and the panel draws it wh
     body: { focal: [0.42, 0.3] },
   });
   expect(q<HTMLElement>('.lib-side .preview .focal').style.left).toBe('42%');
+});
+
+// A browser drags a picture by default, and that drag used to swallow the dot's: the press landed
+// on the image, not the handle, and the pointer stream was cancelled for a ghost of the photo.
+test('the picture under the dot cannot be dragged as an image', async () => {
+  media = [item()];
+  await show();
+  click('.tile .tile-link');
+  click(setFocal);
+  flushSync();
+  expect(q('.focal-stage img').getAttribute('draggable')).toBe('false');
+});
+
+// A phone holds a picture upright, whatever shape the site's fields crop to, so that shape is
+// previewed beside the site's own.
+test('the previews end with a phone-shaped portrait beside the site’s own shapes', async () => {
+  media = [item()];
+  presets = [{ label: 'Hero image', preset: { ratio: '16:9', max: 2400 } }];
+  await show();
+  click('.tile .tile-link');
+  click(setFocal);
+  flushSync();
+  const labels = Array.from(document.querySelectorAll('.ratio-item .lbl'), (el) => el.textContent);
+  expect(labels).toEqual(['16:9', '9:16']);
+  expect(q('.ratio-item:last-child .sub').textContent).toBe('Phone, upright');
 });
 
 // A row the reconciliation job wrote has no dimensions, and a crop is a rectangle of pixels
