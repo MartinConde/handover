@@ -89,5 +89,8 @@ way nothing is written. The rows are deleted once the commit lands, so the next 
 the file that was just written. Commits carry no author, so GitHub signs them for the App
 and shows them as Verified.
 
-The GitHub client mints an installation token per request from the App's private key
-(RS256 via WebCrypto) and caches it on the client object only.
+The GitHub client mints an installation token from the App's private key (RS256 via
+WebCrypto) and keeps it in the Worker's memory until it is about to expire, shared by every
+request in the meantime. Nothing writes it anywhere. One token per isolate is also what keeps
+a publish straight after your own from reading a stale branch head: GitHub answers a token
+minted moments ago from a replica that can be seconds behind.

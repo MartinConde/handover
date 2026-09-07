@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Reuse the GitHub installation token across requests. A token minted moments after a commit
+  could read the branch head from before it, so a publish straight after your own was refused
+  with `main moved past`.
 - Redesign the admin workspace with a compact sidebar, restrained lime accent, clearer type
   hierarchy, consistent controls, and responsive layouts across content, media, and settings.
 - Search collections by file name or any translated title alongside the existing filters.

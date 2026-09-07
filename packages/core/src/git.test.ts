@@ -224,6 +224,15 @@ test('an expired installation token is minted again', async () => {
   expect(gh.minted()).toBe(2);
 });
 
+test('two clients on the same GitHub share one installation token', async () => {
+  const gh = fakeGitHub({ 'a.yaml': 'a' });
+
+  await createGitClient('default', app, { fetch: gh.fetch }).getFile('a.yaml');
+  await createGitClient('default', app, { fetch: gh.fetch }).getFile('a.yaml');
+
+  expect(gh.minted()).toBe(1);
+});
+
 // A fake Git Data API over one branch: records the ref PATCH body so a test can prove
 // the update is never forced, and moves the head underneath the client when asked.
 function fakeGitData(opts: { headMovesTo?: string } = {}) {

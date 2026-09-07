@@ -204,14 +204,28 @@ async function appJwt(app: GitHubApp, nowMs: number): Promise<string> {
   return `${header}.${payload}.${base64url(new Uint8Array(sig))}`;
 }
 
-// One client per request: the installation token is cached on it, never stored anywhere.
+interface TokenSlot {
+  cached?: { token: string; expiresAt: number };
+  pending?: Promise<string>;
+}
+
+// One installation token per GitHub, shared by every client made in this isolate, in memory
+// only. A token minted moments ago reads the branch head from a replica that can be seconds
+// behind (measured: a token minted after a commit read the head from before it in 8 of 28
+// reads, up to 2s; tokens minted before the commit never did), and a token per request is a
+// stale base for the publish that follows your own. A test's fake fetch is its own GitHub.
+const tokens = new WeakMap<typeof globalThis.fetch, Map<string, TokenSlot>>();
+
 export function createGitClient(
   _siteId: string,
   app: GitHubApp,
   deps: { fetch?: typeof globalThis.fetch; now?: () => number } = {},
 ): GitClient {
   const { fetch = globalThis.fetch, now = Date.now } = deps;
-  let cached: { token: string; expiresAt: number } | undefined;
+  const perGitHub = tokens.get(fetch) ?? new Map<string, TokenSlot>();
+  tokens.set(fetch, perGitHub);
+  const slot = perGitHub.get(`${app.appId}/${app.installationId}`) ?? {};
+  perGitHub.set(`${app.appId}/${app.installationId}`, slot);
 
   async function api(path: string, init: RequestInit = {}, token?: string): Promise<Response> {
     return fetch(`${API}${path}`, {
@@ -226,21 +240,20 @@ export function createGitClient(
     });
   }
 
-  let pendingToken: Promise<string> | undefined;
   async function token(): Promise<string> {
-    if (cached && cached.expiresAt - now() > 60_000) return cached.token;
-    pendingToken ??= (async () => {
+    if (slot.cached && slot.cached.expiresAt - now() > 60_000) return slot.cached.token;
+    slot.pending ??= (async () => {
       const res = await api(`/app/installations/${app.installationId}/access_tokens`, {
         method: 'POST',
       });
       if (!res.ok) throw new Error(`GitHub installation token failed: ${res.status}`);
       const body = (await res.json()) as { token: string; expires_at: string };
-      cached = { token: body.token, expiresAt: Date.parse(body.expires_at) };
-      return cached.token;
+      slot.cached = { token: body.token, expiresAt: Date.parse(body.expires_at) };
+      return slot.cached.token;
     })().finally(() => {
-      pendingToken = undefined;
+      slot.pending = undefined;
     });
-    return pendingToken;
+    return slot.pending;
   }
 
   const repo = `/repos/${app.owner}/${app.repo}`;
