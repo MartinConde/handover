@@ -23,6 +23,7 @@ import { tick } from 'svelte';
 import Fields from './Fields.svelte';
 import Focal from './Focal.svelte';
 import Media from './Media.svelte';
+import MediaImage from './MediaImage.svelte';
 import Menus, { type Menu } from './Menus.svelte';
 import PagePicker, { type Pickable, readPickable } from './PagePicker.svelte';
 import RichText from './RichText.svelte';
@@ -295,7 +296,10 @@ $effect(() => {
 
 // The picture as this field will show it: `16:9` is already what `aspect-ratio` wants.
 const aspect = (preset: Preset) => preset.ratio?.replace(':', ' / ') ?? '4 / 3';
-const src = (at: readonly string[]) => `${mediaBase}/${str([...at, 'src'])}`;
+const src = (at: readonly string[]) => {
+  const key = str([...at, 'src']);
+  return key ? `${mediaBase}/${key}` : '';
+};
 /** This page's own dot, in percentages; the middle is what a page that set none crops around. */
 const point = (at: readonly string[]): [number, number] => {
   const stored = read([...at, 'focal']);
@@ -482,7 +486,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
 
 {#snippet embedThumbnail(value: EmbedValue)}
   {@const still = embedThumb(value)}
-  <span class="thumb" style="aspect-ratio: 16 / 9">{#if still}<img src={still} alt="" loading="lazy" />{/if}</span>
+  <span class="thumb" style="aspect-ratio: 16 / 9">{#if still}<MediaImage src={still} alt="" loading="lazy" />{/if}</span>
 {/snippet}
 
 {#snippet titleField(id: string, at: readonly string[])}
@@ -508,7 +512,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     <div class="preview-box">
       <p class="variant-title">Social card · {of}</p>
       <div class="social-card" role="group" aria-label="Social card preview">
-        <div class="thumb">{#if picture}<img src={picture} alt="" />{/if}</div>
+        <div class="thumb">{#if picture}<MediaImage src={picture} alt="" />{/if}</div>
         <div class="body"><div class="domain">{host}</div><div class="title">{title}</div><div class="desc">{desc}</div></div>
       </div>
     </div>
@@ -574,7 +578,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   {@const bad = err ? 'true' : undefined}
   {@const says = err ? `${id}-err` : undefined}
   {@const marked = [address(at), `${address(at)}.label`].find((p) => opened === p)}
-  <div class="field" class:is-invalid={err} class:pop-anchor={marked}>
+  <div class="field" id="{id}-field" tabindex="-1" class:is-invalid={err} class:pop-anchor={marked}>
     {#if field.type === 'menus'}
       {@render groupLabel(id, field, text, at)}
       <Menus {id} labelId="{id}-l" menus={rows(at) as Menu[]} {locale} {translating} {sourceLabel} />
@@ -694,8 +698,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           <article class="block-card" id="{id}.{i}" aria-labelledby="{id}.{i}-h" class:is-dragging={s.isDragging} class:is-folded={shut} {@attach s.attach}>
             <header>
               <button class="btn btn-ghost btn-icon fold" type="button" disabled={open} aria-expanded={!shut} aria-controls="{id}.{i}-b" aria-label="{shut ? 'Expand' : 'Collapse'} {name}" onclick={() => (folded[keyOf(items, i)] = !shut)}>{shut ? '▸' : '▾'}</button>
-              <span class="label" id="{id}.{i}-h">{name}</span>
-              <span class="type">{block(row)._type} · {block(row)._id}</span>
+              <span class="label" id="{id}.{i}-h" title="{block(row)._type} · {block(row)._id}">{block(row)._label || name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (letter) => letter.toUpperCase())}</span>
               {#if shut}<span class="excerpt">{excerpt(row, inner)}</span>{/if}
               {#if !translating}{@render controls(at, i, name, s.attachHandle)}{/if}
             </header>
@@ -730,7 +733,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <!-- A translation owns the words and not the picture: the alt, and nothing else. -->
       {@render groupLabel(id, field, text, at)}
       <div class="media-card" {id} role="group" tabindex="-1" aria-labelledby="{id}-l">
-        <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><img src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></span>
+        <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><MediaImage src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></span>
         <div class="meta">
           <div><div class="sub">{str([...at, 'src'])}</div></div>
           {@render altField(id, at)}
@@ -740,7 +743,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'image' && read(at) !== undefined}
       {@render groupLabel(id, field, text, at)}
       <div class="media-card" {id} role="group" tabindex="-1" aria-labelledby="{id}-l">
-        <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><img src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></span>
+        <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><MediaImage src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></span>
         <div class="meta">
           <div><div class="sub">{str([...at, 'src'])} · {num([...at, 'width'])} × {num([...at, 'height'])}</div></div>
           {@render altField(id, at)}
@@ -857,7 +860,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {@render seoWords(id, at, 'description', 'Description', SEO_DESCRIPTION_LIMIT, inheritedSeo?.description ?? '', '')}
         {#if read([...at, 'image']) !== undefined}
           <div class="media-card">
-            <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"><img src={src([...at, 'image'])} alt="" style="object-position: {dot([...at, 'image'])[0]}% {dot([...at, 'image'])[1]}%" /></span>
+            <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"><MediaImage src={src([...at, 'image'])} alt="" style="object-position: {dot([...at, 'image'])[0]}% {dot([...at, 'image'])[1]}%" /></span>
             <div class="meta">
               {@render altField(`${id}.image`, [...at, 'image'])}
               <p class="hint">The same picture in every language.</p>
@@ -878,7 +881,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           <div class="label-row"><span id="{id}.image-l">Social image</span><span class="mode">Same in every language</span></div>
           {#if read(image) !== undefined}
             <div class="media-card" id="{id}.image" role="group" tabindex="-1" aria-labelledby="{id}.image-l">
-              <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"><img src={src(image)} alt="" style="object-position: {dot(image)[0]}% {dot(image)[1]}%" /><span class="focal" style="left: {dot(image)[0]}%; top: {dot(image)[1]}%" aria-hidden="true"></span></span>
+              <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"><MediaImage src={src(image)} alt="" style="object-position: {dot(image)[0]}% {dot(image)[1]}%" /><span class="focal" style="left: {dot(image)[0]}%; top: {dot(image)[1]}%" aria-hidden="true"></span></span>
               <div class="meta">
                 <div><div class="sub">{str([...image, 'src'])} · {num([...image, 'width'])} × {num([...image, 'height'])}</div></div>
                 {@render altField(`${id}.image`, image)}

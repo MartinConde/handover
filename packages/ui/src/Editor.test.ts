@@ -1068,7 +1068,7 @@ test('a block moved in the source column moves in the second column at once', as
   const root = show({ entry: twoBlocks });
   $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
   flushSync();
-  expect(germanBlocks(root)).toEqual(['hero', 'cta']);
+  expect(germanBlocks(root)).toEqual(['Hero', 'Cta']);
 
   const handle = $<HTMLButtonElement>(root, '[aria-label="Reorder hero"]');
   if (!handle) throw new Error('no handle');
@@ -1076,7 +1076,7 @@ test('a block moved in the source column moves in the second column at once', as
   await press(document.body, 'ArrowDown');
   await press(document.body, 'Space');
 
-  expect(germanBlocks(root)).toEqual(['cta', 'hero']);
+  expect(germanBlocks(root)).toEqual(['Cta', 'Hero']);
   // Its words went with it: the German heading is still the hero's.
   expect($<HTMLInputElement>(root, 'input#t-body\\.1\\.heading')?.value).toBe('Über dem Hafen');
   expect(wrote(fetchMock)).toHaveLength(0);
@@ -2487,5 +2487,62 @@ test('a rejected status action becomes retryable without discarding the editor',
   await tick();
   flushSync();
   expect(changed).toHaveBeenCalledOnce();
+  vi.unstubAllGlobals();
+});
+
+test('the editor starts focused and opens its second pane only when requested', async () => {
+  vi.stubGlobal('fetch', autosaved());
+  const root = show({ entry: { ...bilingual, route: '/listings/[slug]' } });
+  expect($(root, '.entry-body.has-pane')).toBeNull();
+  expect($(root, '[aria-label="Right pane"]')).toBeNull();
+  expect($(root, '.crumbs a')?.getAttribute('href')).toBe('/admin/c/listings');
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  expect($(root, '.entry-body.has-pane .pane.is-locale')).not.toBeNull();
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  expect($(root, '.entry-body.has-pane')).toBeNull();
+  vi.unstubAllGlobals();
+});
+
+test('the outline reaches empty media, choice and grouped fields as well as text', () => {
+  vi.stubGlobal('fetch', autosaved());
+  const fields: Field[] = [
+    ...entry.fields,
+    { path: ['photo'], label: 'Photo', type: 'image', required: false, preset: { max: 2400 } },
+    {
+      path: ['brochure'],
+      label: 'Brochure',
+      type: 'file',
+      required: false,
+      accept: ['application/pdf'],
+    },
+    {
+      path: ['category'],
+      label: 'Category',
+      type: 'select',
+      required: false,
+      options: ['home', 'office'],
+    },
+    { path: ['summary'], label: 'Summary', type: 'richtext', required: false, tier: 'basic' },
+  ];
+  const root = show({ entry: { ...entry, fields } });
+  flushSync();
+  const jump = (label: string, selector: string) => {
+    $$<HTMLButtonElement>(root, '.editor-outline button')
+      .find((b) => b.textContent === label)
+      ?.click();
+    expect(document.activeElement).toBe($(root, selector));
+  };
+  jump('Title', '#f-title');
+  jump('Photo', '#f-photo-field .dropzone button');
+  jump('Brochure', '#f-brochure-field .dropzone button');
+  jump('Category', '#f-category-field input[type="radio"]');
+  jump('Summary', '#f-summary-field [contenteditable="true"]');
+  jump('Seo', '#f-seo-field input');
+  const group = $<HTMLDetailsElement>(root, '#f-seo-field details');
+  if (group) group.open = false;
+  jump('Seo', '#f-seo-field summary');
+  jump('Photos', '#f-photos-field');
   vi.unstubAllGlobals();
 });

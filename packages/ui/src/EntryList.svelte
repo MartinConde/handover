@@ -104,6 +104,7 @@ const isHidden = (entry: Entry) => Object.values(entry.locales).some((l) => l.st
 // Two filters in the toolbar: the rows the site shows, the ones it does not, or every row; and
 // the rows a language is still owed in — no file yet, or a translation the build marked stale.
 // The dashboard's *Show* arrives as `?locale=de`, read once, when the list opens.
+let search = $state('');
 let showing = $state<'all' | 'live' | 'hidden'>('all');
 let language = $state(new URLSearchParams(location.search).get('locale') ?? '');
 const owes = (entry: Entry, locale: string) =>
@@ -112,10 +113,14 @@ const shown = $derived(
   entries.filter(
     (e) =>
       (showing === 'all' || isHidden(e) === (showing === 'hidden')) &&
-      (!language || owes(e, language)),
+      (!language || owes(e, language)) &&
+      (!search.trim() ||
+        [e.id, ...Object.values(e.locales).map((value) => value.title)].some((value) =>
+          value.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
+        )),
   ),
 );
-const filtered = $derived(showing !== 'all' || language !== '');
+const filtered = $derived(showing !== 'all' || language !== '' || search.trim() !== '');
 const chipTitle = (entry: Entry, locale: string) =>
   !offered(entry, locale)
     ? 'turned off for this entry'
@@ -285,10 +290,33 @@ async function done() {
   onclick={(e) => menuFor && !(e.target as HTMLElement).closest('.row-menu') && (menuFor = '')}
 />
 
-<main class="main">
+<main class="main collection-page">
   <div class="list-toolbar">
     <h1>{capitalise(collection)} <span class="count">{filtered ? `${shown.length} of ${entries.length}` : entries.length}</span></h1>
     <span class="spacer"></span>
+    <button class="btn btn-primary" type="button" onclick={() => open('new')}>New {singular}</button>
+  </div>
+  <div class="tabs list-tabs" role="tablist" aria-label="Which {collection}">
+    <button
+      type="button"
+      role="tab"
+      aria-selected={tab === 'all'}
+      onclick={() => (tab = 'all')}>All</button
+    >
+    <button
+      type="button"
+      role="tab"
+      aria-selected={tab === 'deleted'}
+      onclick={() => (tab = 'deleted')}>Deleted</button
+    >
+  </div>
+  {#if tab === 'all'}
+    <div class="collection-controls">
+      <div class="search-field">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+        <label class="visually-hidden" for="entry-search">Search {collection}</label>
+        <input class="input" id="entry-search" type="search" placeholder="Search {collection}…" bind:value={search} />
+      </div>
     <div class="filters">
       <label class="visually-hidden" for="list-status">Status</label>
       <select class="filter" class:is-on={showing !== 'all'} id="list-status" bind:value={showing}>
@@ -306,22 +334,9 @@ async function done() {
         </select>
       {/if}
     </div>
-    <button class="btn btn-primary" type="button" onclick={() => open('new')}>New {singular}</button>
-  </div>
-  <div class="tabs list-tabs" role="tablist" aria-label="Which {collection}">
-    <button
-      type="button"
-      role="tab"
-      aria-selected={tab === 'all'}
-      onclick={() => (tab = 'all')}>All</button
-    >
-    <button
-      type="button"
-      role="tab"
-      aria-selected={tab === 'deleted'}
-      onclick={() => (tab = 'deleted')}>Deleted</button
-    >
-  </div>
+      {#if filtered}<button class="btn btn-ghost btn-sm" type="button" onclick={() => { search = ''; showing = 'all'; language = ''; }}>Clear filters</button>{/if}
+    </div>
+  {/if}
   {#if error && !dialog}<p class="notice notice-danger" role="alert">{error}</p>{/if}
   {#if tab === 'deleted'}
     <p class="list-note">
@@ -396,7 +411,9 @@ async function done() {
     <p class="placeholder">Loading…</p>
   {:else if entries.length && !shown.length}
     <p class="placeholder">
-      {language
+      {search.trim()
+        ? `No results for “${search.trim()}”. Try another search or clear the filters.`
+        : language
         ? `Nothing is missing or stale in ${language.toUpperCase()}.`
         : `No ${showing} ${collection}.`}
     </p>
@@ -521,7 +538,7 @@ async function done() {
     <div class="empty">
       <div>
         <h2>No {collection} yet</h2>
-        <p>Every {singular} is one file under <code>src/content/{collection}/</code>.</p>
+        <p>Create your first {singular} to start adding content to your site.</p>
         <button class="btn btn-primary" type="button" onclick={() => open('new')}>
           New {singular}
         </button>

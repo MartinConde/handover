@@ -751,3 +751,32 @@ test('restoring undoes the commit the row names', async () => {
   });
   expect(changed).toHaveBeenCalled();
 });
+
+test('search matches titles in any language and file names, and can be cleared', async () => {
+  api(
+    [
+      ENTRIES[0],
+      {
+        ...ENTRIES[1],
+        locales: { ...ENTRIES[1]?.locales, de: { title: 'Küstenhaus', path: '/de/kuestenhaus' } },
+      },
+    ],
+    {},
+    ['en', 'de'],
+  );
+  const root = show();
+  await tick();
+  type(root, '#entry-search', ' KÜSTENHAUS ');
+  expect(q(root, '.list-toolbar .count')?.textContent).toBe('1 of 2');
+  expect(q(root, '.td.title a')?.getAttribute('href')).toContain('seaview-cottage');
+  type(root, '#entry-search', 'mill-house');
+  expect(q(root, '.td.title a')?.textContent).toBe('The Mill House');
+  type(root, '#entry-search', 'unmatched');
+  expect(root.textContent).toContain('No results for “unmatched”');
+  const reset = Array.from(root.querySelectorAll('button')).find(
+    (b) => b.textContent === 'Clear filters',
+  );
+  reset?.click();
+  flushSync();
+  expect(root.querySelectorAll('.td.title a')).toHaveLength(2);
+});

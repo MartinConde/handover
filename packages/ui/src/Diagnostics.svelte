@@ -284,12 +284,10 @@ const MAILERS: Record<string, string> = {
 };
 </script>
 
-<main class="main">
+<main class="main diagnostics-page">
   <div class="list-toolbar"><h1>Settings</h1></div>
   <p class="list-note">
-    Everything on this page is read-only. The settings themselves live in your site's code
-    (<code>cms.config.ts</code>) — this page shows what they came out as, and checks that what
-    they point at answers.
+    Your site's configuration and connected services. Configuration is managed by your developer in <code>cms.config.ts</code>.
   </p>
   {#await load()}
     <p class="placeholder">Loading…</p>

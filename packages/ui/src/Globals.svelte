@@ -36,12 +36,12 @@ async function load() {
 }
 </script>
 
-<main class="main">
-  <h1>Site settings</h1>
+<main class="main site-settings-page">
+  <div class="page-heading"><h1>Site settings</h1>
   <p class="list-note">
-    Your site's own content: the things that are the same on every page. Pages and listings live
-    under Content.
-  </p>
+    Manage the details, navigation, and content shared across your website.
+  </p></div>
+  <div class="section-label">Website content</div>
   {#if error}<p class="notice notice-danger" role="alert">{error}</p>{/if}
   {#if loading}
     <p class="placeholder">Loading…</p>
@@ -55,6 +55,7 @@ async function load() {
     <div class="settings-list">
       {#each globals as global (global.key)}
         <div class="global-card">
+          <span class="global-symbol" aria-hidden="true">{global.label.slice(0, 1).toUpperCase()}</span>
           <h2>
             {#if global.pending}
               <span class="pdot" aria-hidden="true"></span>
@@ -101,6 +102,7 @@ async function load() {
            the way the menus are, and not a different kind of thing. Every site has one, so it
            is here whether or not the dev declared any globals. -->
       <div class="global-card">
+        <span class="global-symbol" aria-hidden="true">↗</span>
         <h2><a href={sitePath(`/admin/site/redirects`)}>Redirects</a></h2>
         <p>Old addresses that forward to new ones</p>
         <div class="meta"><span class="sub">One list, no languages</span></div>

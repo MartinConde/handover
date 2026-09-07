@@ -1,7 +1,9 @@
 <script lang="ts">
 import type { Preset } from '@handover/core';
+import { tick } from 'svelte';
 import Crop from './Crop.svelte';
 import Focal from './Focal.svelte';
+import MediaImage from './MediaImage.svelte';
 import { request as fetch, sitePath } from './request.js';
 import { fileSize, type LibraryItem, uploadFile, uploadImage } from './upload.js';
 
@@ -19,6 +21,8 @@ let kind = $state<'images' | 'files'>('images');
 let query = $state('');
 let items = $state<LibraryItem[]>([]);
 let chosen = $state<LibraryItem>();
+let detailsPanel = $state<HTMLElement>();
+let selectedTile: HTMLElement | undefined;
 let loading = $state(true);
 let failure = $state('');
 let copied = $state('');
@@ -93,11 +97,22 @@ const dot = (item: LibraryItem) => [(item.focal?.[0] ?? 0.5) * 100, (item.focal?
 const when = (at?: number) =>
   at ? new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'long' }) : '';
 
-function pick(item: LibraryItem) {
+async function pick(item: LibraryItem) {
+  selectedTile = document.activeElement as HTMLElement;
   chosen = item;
   tag = '';
   copied = '';
   closeDialog();
+  await tick();
+  if (window.matchMedia?.('(max-width: 720px)').matches) {
+    detailsPanel?.scrollIntoView({ block: 'start', behavior: 'instant' });
+    detailsPanel?.focus({ preventScroll: true });
+  }
+}
+
+function closeDetails() {
+  chosen = undefined;
+  selectedTile?.focus();
 }
 
 function ask() {
@@ -203,7 +218,7 @@ function show(next: 'images' | 'files') {
 }
 </script>
 
-<main class="main">
+<main class="main media-page">
   <div class="list-toolbar">
     <h1>Media <span class="count">{heading}</span></h1>
     <span class="spacer"></span>
@@ -229,7 +244,7 @@ function show(next: 'images' | 'files') {
     <button type="button" role="tab" aria-selected={kind === 'files'} onclick={() => show('files')}>Files</button>
   </div>
   {#if failure}<p class="notice notice-danger" role="alert">{failure}</p>{/if}
-  <div class="lib-body">
+  <div class="lib-body" class:has-selection={!!chosen}>
     <div class="lib-main">
       <!-- svelte-ignore a11y_no_static_element_interactions -- the toolbar's Upload is the
            control; the zone is a drop target -->
@@ -257,7 +272,7 @@ function show(next: 'images' | 'files') {
           {#each shown as item (item.id)}
             <article class="tile" class:is-archived={item.archived} class:is-selected={chosen?.id === item.id}>
               <span class="thumb">
-                <img src={item.url} alt="" />
+                <MediaImage src={item.url} alt="" />
                 {#if item.archived}<span class="badge flag">Archived</span>
                 {:else if recovered(item)}<span class="badge badge-warn flag">Recovered</span>{/if}
               </span>
@@ -293,20 +308,16 @@ function show(next: 'images' | 'files') {
         </div>
       {/if}
     </div>
-    {#if !chosen}
-      <aside class="lib-side" aria-label="Selected item">
-        <p class="side-title">Nothing selected</p>
-        <p class="empty-side">Choose {kind === 'images' ? 'an image' : 'a file'} to see where it is used and what it is called.</p>
-      </aside>
-    {:else}
-      <aside class="lib-side" class:is-recovered={recovered(chosen)} aria-labelledby="lib-side-h">
+    {#if chosen}
+      <aside class="lib-side" tabindex="-1" bind:this={detailsPanel} class:is-recovered={recovered(chosen)} aria-labelledby="lib-side-h">
         <div class="side-head">
+          <button class="btn btn-ghost btn-icon inspector-close" type="button" aria-label="Close media details" onclick={closeDetails}>×</button>
           <p class="side-title" id="lib-side-h">{name(chosen)}</p>
           <p class="side-meta">{[chosen.width ? `${chosen.width} × ${chosen.height}` : '', fileSize(chosen.bytes), extension(chosen), chosen.createdAt ? `uploaded ${when(chosen.createdAt)}` : ''].filter(Boolean).join(' · ')}</p>
         </div>
         {#if kind === 'images'}
           <div class="preview">
-            <img src={chosen.url} alt="" />
+            <MediaImage src={chosen.url} alt="" />
             <span class="focal" style="left: {dot(chosen)[0]}%; top: {dot(chosen)[1]}%" aria-hidden="true"></span>
           </div>
           <p class="hint">The dot is this picture's default focal point. A page that set its own keeps it.</p>

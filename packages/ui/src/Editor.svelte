@@ -663,6 +663,19 @@ function land(field: HTMLElement | null) {
   field?.scrollIntoView({ block: 'center' });
   field?.focus();
 }
+function focusField(path: readonly string[]) {
+  const target = document.getElementById(`f-${path.join('.')}-field`);
+  if (!target) return;
+  target.scrollIntoView({ block: 'center', behavior: 'instant' });
+  const control =
+    target.querySelector<HTMLElement>(':scope > details:not([open]) > summary') ??
+    target.querySelector<HTMLElement>(
+      'input:not([type="hidden"]):not([hidden]):not(:disabled), textarea:not(:disabled), select:not(:disabled), [contenteditable="true"]',
+    ) ??
+    target.querySelector<HTMLElement>('button:not(:disabled), summary') ??
+    target;
+  control.focus({ preventScroll: true });
+}
 // A picture's `src` is a key its card draws itself, with no control of its own: the jump lands
 // on the nearest thing drawn up the path.
 function drawn(prefix: string, path: string | undefined) {
@@ -1006,7 +1019,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   {/if}
   <header class="entry-header" class:is-held={held}>
     <div class="crumbs">
-      <span>{entry.singleton ? 'Site settings' : capitalise(collection)}</span><span class="sep" aria-hidden="true">/</span><span>{title}</span>
+      <a href={sitePath(entry.singleton ? '/admin/site' : `/admin/c/${collection}`)}>{entry.singleton ? 'Site settings' : capitalise(collection)}</a><span class="sep" aria-hidden="true">/</span><span>{title}</span>
       <span class="autosave" class:is-saving={saving} class:is-offline={saveFailed}>
         {#if saving}Saving…{:else if saveFailed}Not saved{:else if json !== saved}Unsaved changes{:else}Saved{/if}
       </span>
@@ -1058,6 +1071,52 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           </button>
         {/if}
       </div>
+
+    </div>
+    {#if conflicted}
+      <p class="subline">
+        Somebody changed this in the repository after you opened it. Open Unpublished changes to
+        resolve it field by field, or to discard yours and take what is there now.
+      </p>
+    {/if}
+    {#if held}
+      <p class="subline">On hold — won't be included when others publish</p>
+    {/if}
+    {#if hidden}
+      <p class="subline">
+        {#if entry.redirects?.[locale]}Redirecting to {entry.redirects[locale]} while hidden{:else}Off the site — visitors to its old address see “page not found”{/if}
+      </p>
+    {/if}
+    {#if statusFailed}<p class="subline is-bad" role="alert">{statusFailed}</p>{/if}
+    {#if addressable}
+      <p class="slug-row">
+        {#if editing}
+          <span class="url">{before}</span>
+          <label class="visually-hidden" for="entry-address">Web address in {language(locale)}</label>
+          <input class="input" id="entry-address" type="text" bind:value={typed} placeholder={slug} />
+          <button class="btn btn-sm" type="button" disabled={busy} onclick={saveAddress}>Save</button>
+          <button class="btn btn-ghost btn-sm" type="button" onclick={() => (editing = false)}>Cancel</button>
+          {#if addressFailed}<span class="mode is-bad">{addressFailed}</span>{/if}
+        {:else}
+          <span class="url">{url}</span>
+          {#if !address}<span class="mode">Same as the file name</span>{/if}
+          <button class="btn-link" type="button" disabled={locked} onclick={editAddress}>Edit web address</button>
+        {/if}
+      </p>
+    {/if}
+    <!-- A global holds the site-wide SEO defaults rather than having its own, and there is no
+         second version of a file the schema names: no tabs at all rather than three dead ones. -->
+    <!-- Links and not a `role="tablist"`, which the mockup draws: each of these is an address
+         the browser's back button and a shared link both have to land on, and a tab that
+         navigates is not the widget that role claims. 4.16 must not port the roles back. -->
+    <div class="editor-toolbar">
+    {#if !entry.singleton}
+      <nav class="tabs" aria-label="Entry sections">
+        <a href={sitePath(`/admin/c/${collection}/${slug}`)} aria-current={section === '' ? 'page' : undefined}>Content</a>
+        {#if seoField}<a href={sitePath(`/admin/c/${collection}/${slug}/seo`)} aria-current={section === 'seo' ? 'page' : undefined}>SEO</a>{/if}
+        <a href={sitePath(`/admin/c/${collection}/${slug}/history`)} aria-current={section === 'history' ? 'page' : undefined}>History</a>
+      </nav>
+    {/if}
       <div class="actions">
         {#if many}
           {#if entry.locales.length < 5}
@@ -1126,49 +1185,6 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         {/if}
       </div>
     </div>
-    {#if conflicted}
-      <p class="subline">
-        Somebody changed this in the repository after you opened it. Open Unpublished changes to
-        resolve it field by field, or to discard yours and take what is there now.
-      </p>
-    {/if}
-    {#if held}
-      <p class="subline">On hold — won't be included when others publish</p>
-    {/if}
-    {#if hidden}
-      <p class="subline">
-        {#if entry.redirects?.[locale]}Redirecting to {entry.redirects[locale]} while hidden{:else}Off the site — visitors to its old address see “page not found”{/if}
-      </p>
-    {/if}
-    {#if statusFailed}<p class="subline is-bad" role="alert">{statusFailed}</p>{/if}
-    {#if addressable}
-      <p class="slug-row">
-        {#if editing}
-          <span class="url">{before}</span>
-          <label class="visually-hidden" for="entry-address">Web address in {language(locale)}</label>
-          <input class="input" id="entry-address" type="text" bind:value={typed} placeholder={slug} />
-          <button class="btn btn-sm" type="button" disabled={busy} onclick={saveAddress}>Save</button>
-          <button class="btn btn-ghost btn-sm" type="button" onclick={() => (editing = false)}>Cancel</button>
-          {#if addressFailed}<span class="mode is-bad">{addressFailed}</span>{/if}
-        {:else}
-          <span class="url">{url}</span>
-          {#if !address}<span class="mode">Same as the file name</span>{/if}
-          <button class="btn-link" type="button" disabled={locked} onclick={editAddress}>Edit web address</button>
-        {/if}
-      </p>
-    {/if}
-    <!-- A global holds the site-wide SEO defaults rather than having its own, and there is no
-         second version of a file the schema names: no tabs at all rather than three dead ones. -->
-    <!-- Links and not a `role="tablist"`, which the mockup draws: each of these is an address
-         the browser's back button and a shared link both have to land on, and a tab that
-         navigates is not the widget that role claims. 4.16 must not port the roles back. -->
-    {#if !entry.singleton}
-      <nav class="tabs" aria-label="Entry sections">
-        <a href={sitePath(`/admin/c/${collection}/${slug}`)} aria-current={section === '' ? 'page' : undefined}>Content</a>
-        {#if seoField}<a href={sitePath(`/admin/c/${collection}/${slug}/seo`)} aria-current={section === 'seo' ? 'page' : undefined}>SEO</a>{/if}
-        <a href={sitePath(`/admin/c/${collection}/${slug}/history`)} aria-current={section === 'history' ? 'page' : undefined}>History</a>
-      </nav>
-    {/if}
   </header>
   {#if section === 'history'}
     <History
@@ -1188,7 +1204,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   {:else}
   <!-- A decision to make, not a form to fill: the panel stands where the form would be, because
        every field on it belongs to a structure the languages have not agreed on yet. -->
-  <div class="entry-body" class:has-pane={!entry.drift.length && (!alone || previewing) && !(!previewable && shown === undefined)}>
+  <div class="entry-body" class:has-pane={!entry.drift.length && (previewing || (!alone && shown !== undefined))} class:has-outline={!entry.drift.length && !alone && shown === undefined && !previewing && fields.length > 4}>
     {#if entry.drift.length}
       <DriftPanel
         {collection}
@@ -1212,12 +1228,13 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {#if previewing && !alone}
         {@render previewPane()}
       {:else if shown === undefined}
-        <!-- The placeholder offers Preview, so where there is none — every global — the form has
-             the width and the right column exists once Side by side asks for one. -->
-        {#if previewable}
-          <aside class="pane" aria-label="Right pane">
-            <div><strong>Right pane</strong>Preview to see the page, or Side by side for another language.</div>
-          </aside>
+        {#if fields.length > 4}
+          <nav class="editor-outline" aria-label="On this page">
+            <p>On this page</p>
+            {#each fields as field (field.path.join('.'))}
+              <button type="button" onclick={() => focusField(field.path)}>{field.label || field.path.at(-1)}</button>
+            {/each}
+          </nav>
         {/if}
       {:else if untranslated(shown)}
         <!-- An empty form here would autosave a file nobody asked for, so the language with no

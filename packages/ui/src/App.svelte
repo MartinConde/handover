@@ -327,6 +327,7 @@ const initial = $derived(
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -- it only
      hears clicks the links inside already make keyboard-reachable -->
 <div class="shell" onclick={follow}>
+  <a class="skip-link" href="#workspace" onclick={(event) => { event.preventDefault(); document.getElementById('workspace')?.focus(); }}>Skip to content</a>
   <!-- The reload note outlives a page load, so it is a banner and not a toast. It does not
        announce: the pill beside it is the live region, and two of them would talk over
        each other about the same thing. -->
@@ -339,7 +340,7 @@ const initial = $derived(
     <div class="banner banner-warn" role="alert">{revertError}</div>
   {/if}
   <aside class="sidebar" class:is-open={menu} aria-label="Main" inert={drawer}>
-    <div class="site-name"><span class="site-mark" aria-hidden="true">H</span> Handover</div>
+    <a class="site-name" href={sitePath(`/admin`)}><span class="site-mark" aria-hidden="true">H</span><span>Handover<span class="workspace-label">Content workspace</span></span></a>
     <nav class="nav">
       <div class="nav-group">
         <a href={sitePath(`/admin`)} data-icon="dashboard" aria-current={path === '/admin' ? 'page' : undefined}>Dashboard</a>
@@ -364,7 +365,7 @@ const initial = $derived(
         {#each collections as name (name)}
           <a
             href={sitePath(`/admin/c/${name}`)}
-            data-icon={name}
+            data-icon={['listings', 'pages', 'team', 'blog'].includes(name) ? name : 'collection'}
             aria-current={(listRoute ?? entryRoute)?.[1] === name ? 'page' : undefined}
           >{capitalise(name)}</a>
         {/each}
@@ -382,8 +383,11 @@ const initial = $derived(
         {/each}
       </div>
     </nav>
+    {#if session.site}
+      <div class="sidebar-footer"><a class="site-link" href={session.site} target="_blank" rel="noreferrer">View website <span aria-hidden="true">↗</span></a></div>
+    {/if}
   </aside>
-  <div class="shell-body" inert={drawer}>
+  <div class="shell-body" id="workspace" tabindex="-1" inert={drawer}>
     <header class="topbar">
       <!-- Only on a phone, where the narrow rule has taken the sidebar away. -->
       <button

@@ -769,7 +769,7 @@ const blocksData = () => parseEntry('default', golden('blocks')) as Record<strin
 test('blocks: the golden renders through the registry, nesting and all, unchanged', () => {
   show(pageFields, blocksData(), registry);
   expect(q<HTMLInputElement>('input#f-blocks\\.0\\.heading').value).toBe('Move to the coast');
-  expect(q('#f-blocks\\.1 header .type').textContent).toBe('columns · a1b2c3d4');
+  expect(q('#f-blocks\\.1 header .label').getAttribute('title')).toBe('columns · a1b2c3d4');
   expect(q('#f-blocks\\.1 header .label').textContent).toBe('Two columns');
   expect(
     q<HTMLTextAreaElement>('textarea#f-blocks\\.1\\.columns\\.0\\.blocks\\.0\\.body').value,
@@ -825,7 +825,7 @@ test('blocks: the picker lists the registry types and adds one with a fresh _id'
   expect(added[0]?._id).toMatch(/^[0-9a-z]{8}$/);
   expect(document.querySelector('.block-picker')).toBeNull();
   type('input#f-blocks\\.0\\.heading', 'Call us');
-  expect(q('#f-blocks\\.0 header .label').textContent).toBe('cta');
+  expect(q('#f-blocks\\.0 header .label').textContent).toBe('Cta');
 });
 
 test('blocks: removing a block drops it and its children', () => {
@@ -1286,6 +1286,12 @@ const brochureField: Field = {
   accept: ['application/pdf'],
 };
 const imageData = () => parseEntry('default', golden('image')) as Record<string, unknown>;
+
+test('an empty translated image has a placeholder without requesting the media root', () => {
+  show([heroField], {}, {}, {}, undefined, { translating: true, mediaBase: '/media' });
+  expect(document.querySelector('.thumb img')).toBeNull();
+  expect(q('.thumb [role="img"]').getAttribute('aria-label')).toBe('No image selected');
+});
 /** The library endpoint the picker opens on, and a turn of the loop for it to arrive. */
 const library = (media: unknown[]) =>
   vi.stubGlobal(

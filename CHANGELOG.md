@@ -4,6 +4,16 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Redesign the admin workspace with a compact sidebar, restrained lime accent, clearer type
+  hierarchy, consistent controls, and responsive layouts across content, media, and settings.
+- Search collections by file name or any translated title alongside the existing filters.
+- Open entries in a focused form, with a field outline for long forms and preview or translation
+  panes on demand. Editor section links, preview, and translation remain available on phones.
+- Simplify block headers, compact the rich-text toolbar, and show a useful fallback for missing
+  images. Media details open on selection and can be dismissed.
+- Add a development-only design preview at `packages/ui/review.html`, using sample content and
+  local API responses. It is excluded from the production admin build.
+
 - **A check error is a problem the editor shows.** A picture with nothing behind it used to
   surface only in the publish dialog, where *Go to field* landed on an unmarked card and the
   header's *problems* count left it out. The checks now run when a drafted entry opens and

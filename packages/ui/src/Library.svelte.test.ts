@@ -380,3 +380,15 @@ test('the crop opens locked to the site’s own shape, and Free is the whole pic
   click('.crop-shape button:nth-child(1)');
   expect(q('.crop-meta span').textContent).toBe('2400 × 1600 px of 2400 × 1600');
 });
+
+test('media details open on selection and can close without changing the library', async () => {
+  media = [item()];
+  await show();
+  expect(document.querySelector('.lib-side')).toBeNull();
+  click('.tile-link');
+  expect(document.querySelector('.lib-body.has-selection')).not.toBeNull();
+  click('[aria-label="Close media details"]');
+  expect(document.querySelector('.lib-side')).toBeNull();
+  expect(document.querySelectorAll('.tile')).toHaveLength(1);
+  expect(asked.every((request) => request.method === 'GET')).toBe(true);
+});
