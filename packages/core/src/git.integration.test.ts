@@ -17,22 +17,6 @@ import { deleteEntry, renameEntry } from './lifecycle.js';
 import type { Form } from './schema.js';
 import * as tables from './tables.js';
 
-/**
- * Wait for the branch to report a commit. The ref endpoint answers from a replica, so a read
- * straight after a publish can still be the commit before it — and a test that seeds a file and
- * saves a draft against a head from before the seed is testing nothing. It is the only wait
- * left: everything the code under test reads, it reads **at a commit** (git.ts, `getFile`), and
- * a commit is the same answer forever. It gives up loudly rather than letting an assertion
- * further down report the replica instead of the code.
- */
-const settled = async (git: { getHead: () => Promise<string> }, sha: string) => {
-  for (let i = 0; i < 60; i++) {
-    if ((await git.getHead()) === sha) return;
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  throw new Error(`GitHub is still not reporting ${sha} as the branch after 30s`);
-};
-
 // Opt-in: needs a real GitHub App installed on the throwaway repo, see .env.test.example.
 try {
   process.loadEnvFile(new URL('../../../.env.test', import.meta.url));
@@ -287,7 +271,6 @@ test.skipIf(!configured)(
       ],
       { base_sha: await git.getHead(), message: `Seed ${name}` },
     );
-    await settled(git, seeded.commit_sha);
 
     // Somebody translates the German, and the publish writes down which English it came from.
     await saveDraft('default', db, git, de, {
@@ -368,22 +351,6 @@ const harness = async () => {
 const LISTING = (name: string) =>
   `_version: 1\ntitle: "${name}"\nsummary: "A mill."\nprice: 425000\n`;
 
-/**
- * A publish, with the branch read again when the ref update was refused. A ref that has not
- * caught up with the commit before it is the replica lag above and not somebody else's push —
- * one retry tells them apart, and a conflict is never retried, since that is what these tests
- * are about.
- */
-const publishing = async (...args: Parameters<typeof publishDrafts>) => {
-  try {
-    return await publishDrafts(...args);
-  } catch (err) {
-    if (!(err instanceof RefMovedError)) throw err;
-    await new Promise((r) => setTimeout(r, 2000));
-    return publishDrafts(...args);
-  }
-};
-
 test.skipIf(!configured)(
   'a publish that follows your own is not a conflict with it',
   async () => {
@@ -395,28 +362,26 @@ test.skipIf(!configured)(
     // so the bytes in the repository are not the bytes the row was published from.
     const sourceOf = async (path: string) =>
       path === de ? { locale: 'en', path: en, form: TRANSLATED } : undefined;
-    const seed = await git.publish(
+    await git.publish(
       [
         { path: en, contents: LISTING(name) },
         { path: de, contents: LISTING(`${name} DE`) },
       ],
       { base_sha: await git.getHead(), message: `Seed ${name}` },
     );
-    await settled(git, seed.commit_sha);
 
     await saveDraft('default', db, git, de, {
       title: `${name} DE`,
       summary: 'Eine Mühle.',
       price: 425000,
     });
-    const first = await publishing('default', db, git, sourceOf);
-    await settled(git, first?.commit_sha ?? '');
+    const first = await publishDrafts('default', db, git, sourceOf);
     await saveDraft('default', db, git, de, {
       title: `${name} DE`,
       summary: 'Eine restaurierte Mühle.',
       price: 425000,
     });
-    const second = await publishing('default', db, git, sourceOf);
+    const second = await publishDrafts('default', db, git, sourceOf);
 
     expect(second?.paths).toEqual([de]);
     expect(await parentOf(second?.commit_sha ?? '')).toBe(first?.commit_sha);
@@ -444,7 +409,6 @@ test.skipIf(!configured)(
       base_sha: await git.getHead(),
       message: `Seed ${name}`,
     });
-    await settled(git, seeded);
     await saveDraft('default', db, git, path, {
       title: name,
       summary: 'A restored mill.',
@@ -456,8 +420,7 @@ test.skipIf(!configured)(
       base_sha: seeded,
       message: `Reformat ${name}`,
     });
-    await settled(git, reformatted);
-    const published = await publishing('default', db, git);
+    const published = await publishDrafts('default', db, git);
 
     // The commit moved and the file did not, which is the whole of the case: the publish went
     // on top of theirs rather than being refused over bytes that never changed.
@@ -487,7 +450,6 @@ test.skipIf(!configured)(
       base_sha: await git.getHead(),
       message: `Seed ${name}`,
     });
-    await settled(git, seeded);
     await saveDraft('default', db, git, path, {
       title: name,
       summary: 'A restored mill.',
@@ -500,11 +462,10 @@ test.skipIf(!configured)(
       [{ path, contents: LISTING(name).replace('A mill.', 'A mill above the weir.') }],
       { base_sha: seeded, message: `Edit ${name} in code` },
     );
-    await settled(git, theirs);
     // The precondition, not the assertion: what makes the publish below a conflict is that the
     // blob at the commit it will be made against is no longer the one the draft was loaded from.
     expect((await git.getFile(path, theirs))?.blob_sha).not.toBe(loaded?.baseBlob);
-    const caught = await publishing('default', db, git).catch((err) => err);
+    const caught = await publishDrafts('default', db, git).catch((err) => err);
 
     expect(caught).toBeInstanceOf(DraftConflictError);
     expect((caught as DraftConflictError).paths).toEqual([path]);
@@ -531,7 +492,6 @@ test.skipIf(!configured)(
       [mine, theirs].map((path) => ({ path, contents: LISTING(name) })),
       { base_sha: await git.getHead(), message: `Seed ${name}` },
     );
-    await settled(git, seeded);
     await saveDraft('default', db, git, mine, {
       title: name,
       summary: 'A restored mill.',
@@ -542,8 +502,7 @@ test.skipIf(!configured)(
       [{ path: theirs, contents: LISTING(name).replace('A mill.', 'Somebody else.') }],
       { base_sha: seeded, message: `Edit ${name}-theirs in code` },
     );
-    await settled(git, elsewhere);
-    const published = await publishing('default', db, git);
+    const published = await publishDrafts('default', db, git);
 
     expect(published?.paths).toEqual([mine]);
     const res = await git.request(
@@ -571,7 +530,6 @@ const conflicted = async (name: string) => {
     base_sha: await git.getHead(),
     message: `Seed ${name}`,
   });
-  await settled(git, seeded);
   // Ours: the price, and a summary nobody else touches.
   await saveDraft('default', db, git, path, {
     title: name,
@@ -590,8 +548,7 @@ const conflicted = async (name: string) => {
     ],
     { base_sha: seeded, message: `Edit ${name} in code` },
   );
-  await settled(git, theirs);
-  await expect(publishing('default', db, git)).rejects.toBeInstanceOf(DraftConflictError);
+  await expect(publishDrafts('default', db, git)).rejects.toBeInstanceOf(DraftConflictError);
   const conflict = await entryConflict('default', db, git, TRANSLATED, { en: path });
   if (!conflict) throw new Error('the commit above is what makes this a conflict');
   return { git, db, path, theirs, conflict, parentOf, dispose };
@@ -611,7 +568,7 @@ test.skipIf(!configured)(
       conflict,
       conflict.questions.map((q) => ({ path: q.path, locale: q.locale, side: 'ours' as const })),
     );
-    const published = await publishing('default', db, git);
+    const published = await publishDrafts('default', db, git);
 
     expect(published?.paths).toEqual([path]);
     expect(await parentOf(published?.commit_sha ?? '')).toBe(conflict.head);
@@ -643,7 +600,7 @@ test.skipIf(!configured)(
       conflict,
       conflict.questions.map((q) => ({ path: q.path, locale: q.locale, side: 'theirs' as const })),
     );
-    const published = await publishing('default', db, git);
+    const published = await publishDrafts('default', db, git);
 
     expect(published?.paths).toEqual([path]);
     expect(await parentOf(published?.commit_sha ?? '')).toBe(conflict.head);
