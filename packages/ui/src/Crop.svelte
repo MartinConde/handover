@@ -73,7 +73,10 @@ function lock(next: string | undefined) {
   region = fitRegion(width, height, next);
 }
 
-const pc = (n: number, of: number) => (of ? (n / of) * 100 : 0);
+const pc = (n: number, of: number) => (of > 0 ? (n / of) * 100 : 0);
+
+/** The floor a slider starts at; crop.ts refuses anything smaller either way. */
+const MIN = 16;
 
 /** The corners, which are the pointer's affordance for the two size sliders. */
 const CORNERS = ['nw', 'ne', 'sw', 'se'] as const;
@@ -93,48 +96,59 @@ async function make() {
 <svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
 
 <div class="scrim">
-  <div class="dialog focal-dialog" role="dialog" aria-labelledby="crop-h" tabindex="-1" bind:this={panel}>
+  <div class="dialog focal-dialog crop-dialog" role="dialog" aria-labelledby="crop-h" tabindex="-1" bind:this={panel}>
     <h2 id="crop-h">Crop a copy — {item.filename ?? item.src}</h2>
     <p>This makes a new image. The original is kept and stays wherever it is used.</p>
-    <!-- svelte-ignore a11y_no_static_element_interactions -- the four sliders below are the
-         control; the box is the pointer's way to the same four numbers -->
-    <div class="focal-stage" bind:this={stage} onpointermove={drag} onpointerup={() => (dragging = undefined)} onpointercancel={() => (dragging = undefined)}>
-      <img src={item.url} alt="" draggable="false" />
-      <div class="crop-box" style="left: {pc(region.x, width)}%; top: {pc(region.y, height)}%; width: {pc(region.w, width)}%; height: {pc(region.h, height)}%" onpointerdown={(e) => grab(e)}>
-        {#each CORNERS as corner (corner)}
-          <!-- svelte-ignore a11y_no_static_element_interactions -- pointer affordance for the sliders -->
-          <span class="crop-handle h-{corner}" aria-hidden="true" onpointerdown={(e) => grab(e, corner)}></span>
-        {/each}
-      </div>
-    </div>
-    <div class="crop-sliders">
-      <div class="field">
-        <label for="crop-x">Left</label>
-        <input id="crop-x" type="range" min="0" max={Math.max(0, width - region.w)} value={region.x} oninput={(e) => (region = { ...region, x: Number(e.currentTarget.value) })} />
-      </div>
-      <div class="field">
-        <label for="crop-y">Top</label>
-        <input id="crop-y" type="range" min="0" max={Math.max(0, height - region.h)} value={region.y} oninput={(e) => (region = { ...region, y: Number(e.currentTarget.value) })} />
-      </div>
-      <div class="field">
-        <label for="crop-w">Width</label>
-        <input id="crop-w" type="range" min="16" max={width} value={region.w} oninput={(e) => (region = sizeRegion(region, width, height, Number(e.currentTarget.value), region.h, ratio))} />
-      </div>
-      {#if !ratio}
-        <div class="field">
-          <label for="crop-h">Height</label>
-          <input id="crop-h" type="range" min="16" max={height} value={region.h} oninput={(e) => (region = sizeRegion(region, width, height, region.w, Number(e.currentTarget.value)))} />
+    <div class="dialog-cols">
+      <!-- svelte-ignore a11y_no_static_element_interactions -- the sliders beside it are the
+           control; the box is the pointer's way to the same four numbers -->
+      <div class="focal-stage" bind:this={stage} onpointermove={drag} onpointerup={() => (dragging = undefined)} onpointercancel={() => (dragging = undefined)}>
+        <img src={item.url} alt="" draggable="false" />
+        <div class="crop-box" style="left: {pc(region.x, width)}%; top: {pc(region.y, height)}%; width: {pc(region.w, width)}%; height: {pc(region.h, height)}%" onpointerdown={(e) => grab(e)}>
+          {#each CORNERS as corner (corner)}
+            <!-- svelte-ignore a11y_no_static_element_interactions -- pointer affordance for the sliders -->
+            <span class="crop-handle h-{corner}" aria-hidden="true" onpointerdown={(e) => grab(e, corner)}></span>
+          {/each}
         </div>
-      {/if}
-    </div>
-    <div class="crop-meta">
-      <span aria-live="polite">{region.w} × {region.h} px of {width} × {height}</span>
-      <span>Saved as <code>{cropName(item.filename)}</code>, linked to the original</span>
-      <div class="seg" role="group" aria-label="Ratio">
-        <button type="button" aria-pressed={!ratio} onclick={() => lock(undefined)}>Free</button>
-        {#each ratios as r (r)}
-          <button type="button" aria-pressed={ratio === r} onclick={() => lock(r)}>{r}</button>
-        {/each}
+      </div>
+      <div class="crop-side">
+        <div class="crop-group">
+          <h3 class="variant-title" id="crop-shape-h">Shape</h3>
+          <div class="seg crop-shape" role="group" aria-labelledby="crop-shape-h">
+            <button type="button" aria-pressed={!ratio} onclick={() => lock(undefined)}>Free</button>
+            {#each ratios as r (r)}
+              <button type="button" aria-pressed={ratio === r} onclick={() => lock(r)}>{r}</button>
+            {/each}
+          </div>
+        </div>
+        <div class="crop-group">
+          <h3 class="variant-title">Position</h3>
+          <div class="field">
+            <div class="label-row"><label for="crop-x">Left</label><output for="crop-x">{region.x} px</output></div>
+            <input class="range" id="crop-x" type="range" min="0" max={Math.max(0, width - region.w)} value={region.x} disabled={width <= region.w} style="--fill: {pc(region.x, width - region.w)}%" oninput={(e) => (region = { ...region, x: Number(e.currentTarget.value) })} />
+          </div>
+          <div class="field">
+            <div class="label-row"><label for="crop-y">Top</label><output for="crop-y">{region.y} px</output></div>
+            <input class="range" id="crop-y" type="range" min="0" max={Math.max(0, height - region.h)} value={region.y} disabled={height <= region.h} style="--fill: {pc(region.y, height - region.h)}%" oninput={(e) => (region = { ...region, y: Number(e.currentTarget.value) })} />
+          </div>
+        </div>
+        <div class="crop-group">
+          <h3 class="variant-title">Size</h3>
+          <div class="field">
+            <div class="label-row"><label for="crop-w">Width</label><output for="crop-w">{region.w} px</output></div>
+            <input class="range" id="crop-w" type="range" min={MIN} max={width} value={region.w} style="--fill: {pc(region.w - MIN, width - MIN)}%" oninput={(e) => (region = sizeRegion(region, width, height, Number(e.currentTarget.value), region.h, ratio))} />
+          </div>
+          {#if !ratio}
+            <div class="field">
+              <div class="label-row"><label for="crop-hgt">Height</label><output for="crop-hgt">{region.h} px</output></div>
+              <input class="range" id="crop-hgt" type="range" min={MIN} max={height} value={region.h} style="--fill: {pc(region.h - MIN, height - MIN)}%" oninput={(e) => (region = sizeRegion(region, width, height, region.w, Number(e.currentTarget.value)))} />
+            </div>
+          {/if}
+        </div>
+        <div class="crop-meta">
+          <span aria-live="polite"><b>{region.w} × {region.h} px</b> of {width} × {height}</span>
+          <span>Saved as <code>{cropName(item.filename)}</code>, linked to the original</span>
+        </div>
       </div>
     </div>
     {#if failure}<p class="notice notice-danger" role="alert">{failure}</p>{/if}

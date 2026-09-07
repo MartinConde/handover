@@ -377,6 +377,6 @@ test('the crop opens locked to the site’s own shape, and Free is the whole pic
   flushSync();
   expect(q('.crop-meta span').textContent).toBe('2400 × 1350 px of 2400 × 1600');
   expect(q('.crop-meta code').textContent).toBe('front-of-house-crop.webp');
-  click('.crop-meta .seg button:nth-child(1)');
+  click('.crop-shape button:nth-child(1)');
   expect(q('.crop-meta span').textContent).toBe('2400 × 1600 px of 2400 × 1600');
 });
