@@ -42,7 +42,8 @@ the object without a row and brings it back as *Recovered* within the hour.
 ## The library
 
 `/admin/media` is everything in the bucket as the table sees it: a grid of pictures, a list of
-files, and a panel for whichever one is open. Search matches the file name and the tags, and it
+files, and a panel for whichever one is open. Upload with the toolbar button, the *choose images*
+link in the strip above the grid, or by dropping files on it. Search matches the file name and the tags, and it
 is the table that searches — a name past the hundredth row is still found. Three toggles narrow
 the grid: **Archived**, **Recovered** (an object the hourly job found in the bucket with no
 record) and **Unused**; an archived tile carries its own **Unarchive** button.
@@ -91,7 +92,7 @@ dashboard → Images → Transformations). Without them that url answers 404 and
 
 The secondary action, and the only one in the library that makes a new thing. *Crop* opens a box
 over the picture, locked to one of the site's own shapes or free, moved and resized with the
-pointer or with the sliders under it. *Create cropped copy* writes a **new asset**: its own bytes,
+pointer or with the sliders beside it, each showing its value in pixels. *Create cropped copy* writes a **new asset**: its own bytes,
 its own row, its own key, with `derived_from` pointing at the picture it came from. **The original
 is untouched** and stays wherever it is used — which is the whole reason cropping is offered at
 all.

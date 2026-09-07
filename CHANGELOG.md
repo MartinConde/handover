@@ -4,6 +4,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **The media library is pictures first.** Tiles are the thumbnails themselves with a ring on
+  the chosen one, the drop zone is a strip with a *choose images* link in it, and the three
+  toggles no longer wear a menu caret. The panel puts size, format and date under the name,
+  the focal point, crop and copy actions under the preview as icon tiles, where it is used and
+  its key in two columns, and archive and delete at the end.
+- **The crop dialog is a picture with an inspector beside it.** Shape, then position and size
+  sliders that show their value and fill to it, then what the copy will be; the box carries a
+  rule-of-thirds grid and corner brackets. A slider with no room to move is greyed out.
 - Fix the focal point dot dragging a ghost of the picture instead of moving. The two sliders
   under it are gone: the dot itself takes the arrow keys, one percent a step and ten with Shift.
   The live previews end with a phone-shaped upright crop after the site's own shapes.

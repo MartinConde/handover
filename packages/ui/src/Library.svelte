@@ -208,11 +208,11 @@ function show(next: 'images' | 'files') {
     <h1>Media <span class="count">{heading}</span></h1>
     <span class="spacer"></span>
     <div class="filters">
-      <button class="filter" class:is-on={only.archived} type="button" aria-pressed={only.archived} onclick={() => (only.archived = !only.archived)}>Archived</button>
+      <button class="filter is-toggle" class:is-on={only.archived} type="button" aria-pressed={only.archived} onclick={() => (only.archived = !only.archived)}>Archived</button>
       {#if kind === 'images'}
-        <button class="filter" class:is-on={only.recovered} type="button" aria-pressed={only.recovered} onclick={() => (only.recovered = !only.recovered)}>Recovered</button>
+        <button class="filter is-toggle" class:is-on={only.recovered} type="button" aria-pressed={only.recovered} onclick={() => (only.recovered = !only.recovered)}>Recovered</button>
       {/if}
-      <button class="filter" class:is-on={only.unused} type="button" aria-pressed={only.unused} onclick={() => (only.unused = !only.unused)}>Unused</button>
+      <button class="filter is-toggle" class:is-on={only.unused} type="button" aria-pressed={only.unused} onclick={() => (only.unused = !only.unused)}>Unused</button>
     </div>
     <div class="field search">
       <label class="visually-hidden" for="lib-q">Search media</label>
@@ -234,8 +234,11 @@ function show(next: 'images' | 'files') {
       <!-- svelte-ignore a11y_no_static_element_interactions -- the toolbar's Upload is the
            control; the zone is a drop target -->
       <div class="dropzone" class:is-big={!items.length} class:is-over={over} ondragover={(e) => { e.preventDefault(); over = true; }} ondragleave={() => (over = false)} ondrop={drop}>
-        <span>Drop {kind === 'images' ? 'images' : 'files'} here to upload</span>
-        <span class="hint">{kind === 'images' ? 'JPEG, PNG, WebP or HEIC' : 'PDF'} up to 10 MB</span>
+        <svg class="dz-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0-4 4m4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
+        <span class="dz-text">
+          <span><b>Drop {kind === 'images' ? 'images' : 'files'} here</b> or <button class="btn-link" type="button" onclick={() => chooser?.click()}>choose {kind === 'images' ? 'images' : 'files'}</button></span>
+          <span class="hint">{kind === 'images' ? 'JPEG, PNG, WebP or HEIC' : 'PDF'} up to 10 MB</span>
+        </span>
       </div>
       {#if queue.length}
         <ul class="upload-queue">
@@ -262,7 +265,7 @@ function show(next: 'images' | 'files') {
               <button class="tile-link name" type="button" onclick={() => pick(item)}>{name(item)}</button>
               <span class="sub">
                 <span>{item.width ? `${item.width} × ${item.height}` : fileSize(item.bytes)}</span>
-                <span class="badge">{count(item)}</span>
+                <span class="badge" class:is-used={!!item.uses?.length}>{count(item)}</span>
               </span>
               <!-- Above the stretched link, so both are reachable. -->
               {#if item.archived}
@@ -297,24 +300,55 @@ function show(next: 'images' | 'files') {
       </aside>
     {:else}
       <aside class="lib-side" class:is-recovered={recovered(chosen)} aria-labelledby="lib-side-h">
-        <p class="side-title" id="lib-side-h">{name(chosen)}</p>
+        <div class="side-head">
+          <p class="side-title" id="lib-side-h">{name(chosen)}</p>
+          <p class="side-meta">{[chosen.width ? `${chosen.width} × ${chosen.height}` : '', fileSize(chosen.bytes), extension(chosen), chosen.createdAt ? `uploaded ${when(chosen.createdAt)}` : ''].filter(Boolean).join(' · ')}</p>
+        </div>
         {#if kind === 'images'}
           <div class="preview">
             <img src={chosen.url} alt="" />
             <span class="focal" style="left: {dot(chosen)[0]}%; top: {dot(chosen)[1]}%" aria-hidden="true"></span>
           </div>
+          <p class="hint">The dot is this picture's default focal point. A page that set its own keeps it.</p>
+          <div class="actions">
+            <button class="action" type="button" onclick={() => (framing = true)}>
+              <svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" /></svg>
+              Focal point
+            </button>
+            <!-- A picture nobody measured cannot be cropped: the region is in pixels the row
+                 does not have. The reconciliation job's rows are the ones this is about. -->
+            <button class="action" type="button" disabled={!(chosen.width && chosen.height)} onclick={() => (cropping = true)}>
+              <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 2v14a2 2 0 0 0 2 2h14" /><path d="M18 22V8a2 2 0 0 0-2-2H2" /></svg>
+              Crop
+            </button>
+            <button class="action" type="button" onclick={() => chosen && copyUrl(chosen)}>
+              {#if copied === chosen.id}
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></svg>
+                Copied
+              {:else}
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
+                Copy URL
+              {/if}
+            </button>
+          </div>
         {:else}
           <span class="file-icon is-big" aria-hidden="true">{extension(chosen)}</span>
+          <div class="actions">
+            <button class="action" type="button" onclick={() => chosen && copyUrl(chosen)}>
+              {#if copied === chosen.id}
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" /></svg>
+                Copied
+              {:else}
+                <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" /></svg>
+                Copy URL
+              {/if}
+            </button>
+          </div>
         {/if}
         {#if recovered(chosen)}
           <p class="notice">Recovered: this file was found in storage without a record, probably from an interrupted upload.</p>
         {/if}
         <dl class="facts">
-          <div>
-            <dt>{kind === 'images' ? 'Image' : 'File'}</dt>
-            <dd>{[chosen.width ? `${chosen.width} × ${chosen.height}` : '', fileSize(chosen.bytes), extension(chosen)].filter(Boolean).join(' · ')}</dd>
-          </div>
-          <div><dt>Stored as</dt><dd class="sub">{chosen.src}</dd></div>
           <div class="usage">
             <dt>Used</dt>
             <dd>
@@ -332,7 +366,7 @@ function show(next: 'images' | 'files') {
               {/if}
             </dd>
           </div>
-          {#if chosen.createdAt}<div><dt>Uploaded</dt><dd>{when(chosen.createdAt)}</dd></div>{/if}
+          <div class="stored"><dt>Stored as</dt><dd class="sub" title={chosen.src}>{chosen.src}</dd></div>
         </dl>
         <div class="field">
           <label for="lib-tags">Tags</label>
@@ -351,19 +385,20 @@ function show(next: 'images' | 'files') {
             <span class="hint">Each page can override this — and its own alt text, in its own language, wins there.</span>
           </div>
         {/if}
-        {#if kind === 'images'}
-          <p class="hint">The dot is this picture's default focal point. A page that set its own keeps it.</p>
-        {/if}
-        <div class="actions">
-          {#if kind === 'images'}
-            <button class="btn btn-sm" type="button" onclick={() => (framing = true)}>Set focal point</button>
-            <!-- A picture nobody measured cannot be cropped: the region is in pixels the row
-                 does not have. The reconciliation job's rows are the ones this is about. -->
-            <button class="btn btn-sm" type="button" disabled={!(chosen.width && chosen.height)} onclick={() => (cropping = true)}>Crop</button>
-          {/if}
-          <button class="btn btn-sm archive" type="button" onclick={() => describe({ archived: !chosen?.archived })}>{chosen.archived ? 'Unarchive' : 'Archive'}</button>
-          <button class="btn btn-sm" type="button" onclick={() => chosen && copyUrl(chosen)}>{copied === chosen.id ? 'Copied' : 'Copy URL'}</button>
-          <button class="btn btn-ghost btn-quiet-danger delete" type="button" disabled={!!chosen.uses?.length} onclick={ask}>Delete</button>
+        <div class="actions is-keep">
+          <button class="btn btn-sm btn-ghost archive" type="button" onclick={() => describe({ archived: !chosen?.archived })}>
+            {#if chosen.archived}
+              <svg aria-hidden="true" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h2" /><path d="M20 8v11a2 2 0 0 1-2 2h-2" /><path d="m9 15 3-3 3 3" /><path d="M12 12v9" /></svg>
+              Unarchive
+            {:else}
+              <svg aria-hidden="true" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg>
+              Archive
+            {/if}
+          </button>
+          <button class="btn btn-sm btn-ghost btn-quiet-danger delete" type="button" disabled={!!chosen.uses?.length} onclick={ask}>
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><path d="M10 11v6" /><path d="M14 11v6" /></svg>
+            Delete
+          </button>
         </div>
         <p class="hint delete-hint">
           {#if chosen.uses?.length}
