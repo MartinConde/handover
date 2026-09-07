@@ -60,6 +60,11 @@ What is missing is named instead. The field is marked and carries the reason und
 the header counts them — "2 problems", which jumps to the first one. The count comes back
 with every autosave, so it clears as you fill things in.
 
+An error from the [pre-publish checks](pending-changes.md#checks-before-a-publish) — a picture whose file is
+gone — is counted and marked the same way, since it holds the publish back the same way. The
+checks run when a drafted entry opens and after every save. Warnings and notes are the
+dialog's and the drawer's; nothing stops on them.
+
 **The schema decides at the publish.** *Publish…* on an entry with problems is disabled,
 and a publish from the drawer is refused whole while any file in the set is missing
 something: nothing is committed, and those rows are marked *Not ready to publish*. Finish

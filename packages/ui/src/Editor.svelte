@@ -146,7 +146,25 @@ let held = $state(entry.held === true);
 // A draft stores whatever was typed, so what the schema still wants is the server's answer to
 // every save rather than a reason to refuse one; the publish is where it blocks.
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
-let problems = $state(byPath(entry.problems));
+let schemaProblems = $state(byPath(entry.problems));
+/** What the pre-publish checks found over this entry: read when it opens and after every save. */
+let checks = $state<CheckItem[]>([]);
+// A check error — a picture with nothing behind it — holds the publish back the way a schema
+// refusal does, so it is counted and marked the same way rather than kept for the dialog.
+// Warnings and notes stay there: nothing stops on them. The check names the field by row id;
+// the form draws rows by position, so it is read against where that row sits now. The one
+// error is about a key every language shares, so a result from any file marks this form.
+const checkProblems = $derived(
+  Object.fromEntries(
+    checks
+      .filter((c) => c.severity === 'error')
+      .flatMap((c) => {
+        const at = fieldPosition('default', c.fieldPath, data);
+        return at ? [[at.join('.'), c.message]] : [];
+      }),
+  ),
+);
+const problems = $derived({ ...checkProblems, ...schemaProblems });
 // Which language the switcher has, and whether the second column is open. Two independent
 // things: the second column is always the default language beside a translation.
 // svelte-ignore state_referenced_locally -- the language the entry is written in is where it opens
@@ -485,7 +503,11 @@ async function writeSave(sent: string): Promise<boolean> {
     renew();
     if (body.pending !== drafted) onpending?.();
     drafted = body.pending;
-    problems = byPath(body.problems);
+    schemaProblems = byPath(body.problems);
+    // The checks read the draft rows, so they are asked once the row is there; a save that left
+    // nothing pending has nothing for them to find.
+    if (body.pending) void lint();
+    else checks = [];
     return true;
   } catch {
     saveError = 'Your changes are still here. Check your connection and try saving again.';
@@ -641,14 +663,24 @@ function land(field: HTMLElement | null) {
   field?.scrollIntoView({ block: 'center' });
   field?.focus();
 }
+// A picture's `src` is a key its card draws itself, with no control of its own: the jump lands
+// on the nearest thing drawn up the path.
+function drawn(prefix: string, path: string | undefined) {
+  const steps = path?.split('.') ?? [];
+  for (; steps.length; steps.pop()) {
+    const field = document.getElementById(`${prefix}-${steps.join('.')}`);
+    if (field) return field;
+  }
+  return null;
+}
 function goTo(path: string | undefined) {
-  const field = document.getElementById(`f-${path}`);
+  const field = drawn('f', path);
   // A field the other tab draws is not on screen at all, and a jump that lands nowhere reads as
   // a broken count. Go to the tab that has it, then land on it once — and once only: a second
   // miss is a field nothing draws, and looking again would never stop.
   if (!field && path && seoField && path.split('.')[0] === seoAt) {
     navigate(`/admin/c/${collection}/${slug}/seo`);
-    void tick().then(() => land(document.getElementById(`f-${path}`)));
+    void tick().then(() => land(drawn('f', path)));
     return;
   }
   land(field);
@@ -678,9 +710,13 @@ function fromAddress() {
   }
   const at = fieldPosition('default', field, inColumn ? (entry.translations[of] ?? {}) : data);
   if (!at) return;
-  void tick().then(() => land(document.getElementById(`${inColumn ? 't' : 'f'}-${at.join('.')}`)));
+  void tick().then(() => land(drawn(inColumn ? 't' : 'f', at.join('.'))));
 }
-onMount(fromAddress);
+onMount(() => {
+  fromAddress();
+  // Only a draft gets linted, so an entry with nothing pending is not asked about.
+  if (entry.pending.length) void lint();
+});
 
 // Publishing is the drawer's job, over every draft at once; the entry's own edit only has
 // to be in D1 before it opens, so a click inside the autosave window is not lost.
@@ -689,10 +725,9 @@ onMount(fromAddress);
 let confirming = $state(false);
 let sending = $state(false);
 let publishFailed = $state('');
-/** What the pre-publish checks found over this entry, read when the dialog opens and on the press. */
-let checks = $state<CheckItem[]>([]);
 /** The pass could not be run at all — which holds nothing back: it is a lint, not a gate. */
 let checksFailed = $state(false);
+let pass = 0;
 const lines = $derived(merged(checks));
 const errors = $derived(lines.filter((c) => c.severity === 'error'));
 const warnings = $derived(lines.filter((c) => c.severity === 'warn'));
@@ -729,14 +764,17 @@ async function askToPublish() {
  */
 async function lint() {
   const key = `${collection}/${slug}`;
+  const mine = ++pass;
   const res = await fetch('/admin/api/publish/checks', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ entries: [key] }),
   }).catch(() => undefined);
-  checksFailed = !res?.ok;
   // The daily hidden check's note about some other page is the drawer's to list, not this entry's.
   const results = (res?.ok && ((await res.json()) as { results?: CheckItem[] }).results) || [];
+  // A save since asked again; the older answer would put back what the newer one cleared.
+  if (mine !== pass) return;
+  checksFailed = !res?.ok;
   checks = results.filter((c) => c.entry === key);
 }
 

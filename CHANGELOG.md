@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **A check error is a problem the editor shows.** A picture with nothing behind it used to
+  surface only in the publish dialog, where *Go to field* landed on an unmarked card and the
+  header's *problems* count left it out. The checks now run when a drafted entry opens and
+  after every save, and what they find wrong enough to hold the publish back is counted in the
+  header, marks its widget red with the reason under it, and is where the count and *Go to
+  field* land. Warnings and notes stay in the dialog and the drawer.
 - Fix a problem inside a link or picture leaving its widget unmarked: the schema names the
   missing target `button.ref`, and the form only looked up `button`. The widget now goes red
   with the message under it and a red border on the empty target box, so the *problems* button

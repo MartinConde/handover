@@ -729,7 +729,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'image' && translating}
       <!-- A translation owns the words and not the picture: the alt, and nothing else. -->
       {@render groupLabel(id, field, text, at)}
-      <div class="media-card" role="group" aria-labelledby="{id}-l">
+      <div class="media-card" {id} role="group" tabindex="-1" aria-labelledby="{id}-l">
         <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><img src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></span>
         <div class="meta">
           <div><div class="sub">{str([...at, 'src'])}</div></div>
@@ -739,7 +739,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       </div>
     {:else if field.type === 'image' && read(at) !== undefined}
       {@render groupLabel(id, field, text, at)}
-      <div class="media-card" role="group" aria-labelledby="{id}-l">
+      <div class="media-card" {id} role="group" tabindex="-1" aria-labelledby="{id}-l">
         <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><img src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></span>
         <div class="meta">
           <div><div class="sub">{str([...at, 'src'])} · {num([...at, 'width'])} × {num([...at, 'height'])}</div></div>
@@ -764,7 +764,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'file' && translating}
       <!-- The download is one file for every language; what it is called is not. -->
       {@render groupLabel(id, field, text, at)}
-      <div class="media-card is-file" role="group" aria-labelledby="{id}-l">
+      <div class="media-card is-file" {id} role="group" tabindex="-1" aria-labelledby="{id}-l">
         <div class="file-icon" aria-hidden="true">{(str([...at, 'mime']).split('/').pop() ?? '').toUpperCase()}</div>
         <div class="meta">
           <div><div class="sub">{str([...at, 'src'])}</div></div>
@@ -774,7 +774,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       </div>
     {:else if field.type === 'file' && read(at) !== undefined}
       {@render groupLabel(id, field, text, at)}
-      <div class="media-card is-file" role="group" aria-labelledby="{id}-l">
+      <div class="media-card is-file" {id} role="group" tabindex="-1" aria-labelledby="{id}-l">
         <div class="file-icon" aria-hidden="true">{(str([...at, 'mime']).split('/').pop() ?? '').toUpperCase()}</div>
         <div class="meta">
           <div><div class="sub">{str([...at, 'src'])} · {bytes(at)} · {str([...at, 'mime'])}</div></div>
@@ -877,7 +877,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         <div class="field">
           <div class="label-row"><span id="{id}.image-l">Social image</span><span class="mode">Same in every language</span></div>
           {#if read(image) !== undefined}
-            <div class="media-card" role="group" aria-labelledby="{id}.image-l">
+            <div class="media-card" id="{id}.image" role="group" tabindex="-1" aria-labelledby="{id}.image-l">
               <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"><img src={src(image)} alt="" style="object-position: {dot(image)[0]}% {dot(image)[1]}%" /><span class="focal" style="left: {dot(image)[0]}%; top: {dot(image)[1]}%" aria-hidden="true"></span></span>
               <div class="meta">
                 <div><div class="sub">{str([...image, 'src'])} · {num([...image, 'width'])} × {num([...image, 'height'])}</div></div>

@@ -1231,7 +1231,7 @@ select.filter.is-on { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .field .gauge.is-long > span { background: var(--warn-ink); }
 .field .error::before { content: "!"; display: inline-grid; place-items: center; width: 14px; height: 14px; margin-right: var(--s-1); border-radius: 50%; background: var(--danger-ink); color: var(--on-danger); font-size: 10px; line-height: 1; }
 .field.is-invalid .picker, .field.is-invalid .list-empty { border-color: var(--danger); }
-.field.is-invalid .ref-item { box-shadow: inset 0 0 0 1.5px var(--danger); }
+.field.is-invalid .ref-item, .field.is-invalid .media-card { box-shadow: inset 0 0 0 1.5px var(--danger); }
 .input.is-focus { border-color: var(--accent); outline: 3px solid var(--accent-soft); outline-offset: 0; }
 .stale { display: inline-flex; align-items: center; gap: var(--s-1); padding: 1px var(--s-2); border: 0; border-radius: var(--radius-sm); background: var(--warn-soft); color: var(--warn-ink); font-size: var(--text-xs); font-weight: 500; cursor: pointer; }
 .stale::before { content: "↻"; }

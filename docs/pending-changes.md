@@ -73,7 +73,8 @@ the collection schema is not done with, and languages that have drifted apart.
 - Every item but the machine-translation note carries **Go to field**, which opens the entry
   with that field focused — on its SEO tab for a search field, and with the language the result
   is about open beside the form when it is not the one the entry is written in. A problem found
-  in several languages is one line, and its link opens the site's default language
+  in several languages is one line, and its link opens the site's default language. An error's
+  field is marked red there with the reason under it, and the header counts it as a problem
 - A pass that could not be run says so and holds nothing back: a lint nobody could run is not
   a reason to stop you publishing your own site
 - **Publish this entry** in the entry header runs the same pass over its one entry — when the

@@ -144,9 +144,11 @@ sessionStorage.setItem('handover-tab', 'tab-1');
 // of any other shape reads as somebody else holding it, and the screen would go read-only.
 const HELD = { held_by: null, mine: true, expires_at: 1755864120000 };
 const isLock = (url: unknown) => String(url).startsWith('/admin/api/locks/');
-/** The writes a test is about: the beat rides on the same fetch and is none of them. */
+/** The checks pass a save that left a draft asks for; it rides on the same fetch as the save. */
+const isLint = (url: unknown) => url === '/admin/api/publish/checks';
+/** The writes a test is about: the beat and the lint ride on the same fetch and are none of them. */
 const wrote = (mock: { mock: { calls: unknown[][] } }) =>
-  mock.mock.calls.filter((call) => !isLock(call[0]));
+  mock.mock.calls.filter((call) => !isLock(call[0]) && !isLint(call[0]));
 const autosaved = () =>
   vi.fn(async (url: string) =>
     isLock(url)
@@ -382,7 +384,8 @@ test('Publish this entry lists what the checks found and an error disables the b
 });
 
 test('an error found on the press refuses with the drawer’s sentence and commits nothing', async () => {
-  const fetchMock = checking([[], [BROKEN]]);
+  // Three passes: the entry opening, the dialog opening, the press.
+  const fetchMock = checking([[], [], [BROKEN]]);
   vi.stubGlobal('fetch', fetchMock);
   const root = show({ entry: { ...entry, pending: ['en'] } });
   $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
@@ -432,6 +435,62 @@ test('a pass that could not be run says so and holds nothing back', async () => 
   button?.click();
   await settled();
   expect(publishCalls(fetchMock)).toHaveLength(1);
+  vi.unstubAllGlobals();
+});
+
+// A check error is a page the visitor sees broken, and it holds the publish back the way a
+// schema problem does — so the editor counts and marks it the same way, from the moment the
+// entry opens and after every save, rather than only once the publish dialog is up.
+const pictured = {
+  ...entry,
+  fields: [
+    ...entry.fields,
+    { path: ['photo'], label: 'Photo', type: 'image', required: false, preset: { max: 2400 } },
+  ] satisfies Field[],
+  data: { ...entry.data, photo: { src: 'media/9f3a2c7e.webp', width: 2400, height: 1600 } },
+  pending: ['en'],
+};
+
+test('a check error is counted as a problem and marks the widget its field is drawn in', async () => {
+  vi.stubGlobal('fetch', checking([[BROKEN]]));
+  const root = show({ entry: pictured });
+  await settled();
+
+  expect($(root, '.problems')?.textContent).toBe('1 problem');
+  expect($(root, '#f-photo')?.closest('.field')?.classList.contains('is-invalid')).toBe(true);
+  expect($(root, '#f-photo-err')?.textContent).toBe(BROKEN.message);
+  // `photo.src` has no control of its own, so the jump lands on the picture's card.
+  $<HTMLButtonElement>(root, '.problems')?.click();
+  flushSync();
+  expect(document.activeElement?.id).toBe('f-photo');
+  vi.unstubAllGlobals();
+});
+
+test('the checks run again after a save and the count follows what they find', async () => {
+  vi.useFakeTimers();
+  vi.stubGlobal('fetch', checking([[BROKEN], []]));
+  const root = show({ entry: pictured });
+  // Svelte's own tick never settles under fake timers; an empty advance drains the same queue.
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync();
+  expect($(root, '.problems')?.textContent).toBe('1 problem');
+
+  type(root, 'input#f-title', 'Seaview');
+  await vi.advanceTimersByTimeAsync(2000);
+  flushSync();
+  expect($(root, '.problems')).toBeNull();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+test('an entry with nothing pending asks the checks nothing when it opens', async () => {
+  const fetchMock = checking([[BROKEN]]);
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: { ...pictured, pending: [] } });
+  await settled();
+
+  expect(fetchMock.mock.calls.some((call) => call[0] === '/admin/api/publish/checks')).toBe(false);
+  expect($(root, '.problems')).toBeNull();
   vi.unstubAllGlobals();
 });
 
@@ -2197,6 +2256,7 @@ test('a slow save drains the latest source edit with the returned revision befor
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
       if (isLock(url)) return Response.json(HELD);
+      if (isLint(url)) return Response.json({ results: [] });
       calls.push(JSON.parse(String(init?.body)));
       if (calls.length === 1)
         return new Promise<Response>((r) => {
@@ -2299,6 +2359,7 @@ test('the source and translation share a save lane and propagate sibling revisio
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
       if (isLock(url)) return Response.json(HELD);
+      if (isLint(url)) return Response.json({ results: [] });
       calls.push({ url, revision: JSON.parse(String(init?.body)).revision });
       if (calls.length === 1)
         return new Promise<Response>((r) => {
