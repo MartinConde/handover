@@ -936,95 +936,54 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         {#if saving}Saving…{:else if saveFailed}Not saved{:else if json !== saved}Unsaved changes{:else}Saved{/if}
       </span>
     </div>
-    <div class="title-row">
-      <h1>{title}</h1>
-      <div class="meta">
-        <!-- Nothing lists a global, so there is nothing to take it off the site from. -->
-        {#if !entry.singleton}
-          <div class="pop-anchor">
-            <button
-              class="status"
-              class:status-hidden={hidden}
-              type="button"
-              aria-haspopup="menu"
-              aria-expanded={statusMenu}
-              disabled={locked || busy}
-              onclick={() => (statusMenu = !statusMenu)}
-            ><span class="dot" aria-hidden="true"></span> {hidden ? 'Hidden' : 'Live'} ▾</button>
-            {#if statusMenu}
-              <div class="menu status-menu" role="menu" aria-label="Status">
-                <button type="button" role="menuitem" aria-current={hidden ? undefined : 'true'} onclick={() => (hidden ? setStatus(false) : (statusMenu = false))}>
-                  <span class="dot dot-live" aria-hidden="true"></span> Live
-                  <span class="sub">{url ? `on the site at ${url}` : 'on the site'}</span>
-                </button>
-                <button type="button" role="menuitem" aria-current={hidden ? 'true' : undefined} onclick={() => { statusMenu = false; if (!hidden) hiding = true; }}>
-                  <span class="dot dot-hidden" aria-hidden="true"></span> Hidden
-                  <span class="sub">off the site, kept here — we’ll ask where visitors should go</span>
-                </button>
-              </div>
-            {/if}
-          </div>
-        {/if}
-        {#if conflicted}
-          <span class="badge badge-danger">Changed in the repository since you opened it</span>
-        {/if}
-        <button
-          class="hold-toggle"
-          type="button"
-          aria-pressed={held}
-          disabled={locked || lost || busy || (!dirty && !held)}
-          title={dirty || held ? undefined : 'There is nothing unpublished to hold back yet'}
-          onclick={toggleHold}
-        ><span class="dot" aria-hidden="true"></span> Not ready yet</button>
-        {#if missing.length}
-          <button class="problems" type="button" onclick={goToFirst}>
-            {missing.length} problem{missing.length === 1 ? '' : 's'}
-          </button>
-        {/if}
+    <div class="heading-row">
+      <div class="title-row">
+        <h1>{title}</h1>
+        <div class="meta">
+          <!-- Nothing lists a global, so there is nothing to take it off the site from. -->
+          {#if !entry.singleton}
+            <div class="pop-anchor">
+              <button
+                class="status"
+                class:status-hidden={hidden}
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={statusMenu}
+                disabled={locked || busy}
+                onclick={() => (statusMenu = !statusMenu)}
+              ><span class="dot" aria-hidden="true"></span> {hidden ? 'Hidden' : 'Live'} ▾</button>
+              {#if statusMenu}
+                <div class="menu status-menu" role="menu" aria-label="Status">
+                  <button type="button" role="menuitem" aria-current={hidden ? undefined : 'true'} onclick={() => (hidden ? setStatus(false) : (statusMenu = false))}>
+                    <span class="dot dot-live" aria-hidden="true"></span> Live
+                    <span class="sub">{url ? `on the site at ${url}` : 'on the site'}</span>
+                  </button>
+                  <button type="button" role="menuitem" aria-current={hidden ? 'true' : undefined} onclick={() => { statusMenu = false; if (!hidden) hiding = true; }}>
+                    <span class="dot dot-hidden" aria-hidden="true"></span> Hidden
+                    <span class="sub">off the site, kept here — we’ll ask where visitors should go</span>
+                  </button>
+                </div>
+              {/if}
+            </div>
+          {/if}
+          {#if conflicted}
+            <span class="badge badge-danger">Changed in the repository since you opened it</span>
+          {/if}
+          <button
+            class="hold-toggle"
+            type="button"
+            aria-pressed={held}
+            disabled={locked || lost || busy || (!dirty && !held)}
+            title={dirty || held ? undefined : 'There is nothing unpublished to hold back yet'}
+            onclick={toggleHold}
+          ><span class="dot" aria-hidden="true"></span> Not ready yet</button>
+          {#if missing.length}
+            <button class="problems" type="button" onclick={goToFirst}>
+              {missing.length} problem{missing.length === 1 ? '' : 's'}
+            </button>
+          {/if}
+        </div>
       </div>
-
-    </div>
-    {#if conflicted}
-      <p class="subline">
-        Somebody changed this in the repository after you opened it. Open Unpublished changes to
-        resolve it field by field, or to discard yours and take what is there now.
-      </p>
-    {/if}
-    {#if held}
-      <p class="subline">On hold — won't be included when others publish</p>
-    {/if}
-    {#if hidden}
-      <p class="subline">
-        {#if entry.redirects?.[locale]}Redirecting to {entry.redirects[locale]} while hidden{:else}Off the site — visitors to its old address see “page not found”{/if}
-      </p>
-    {/if}
-    {#if statusFailed}<p class="subline is-bad" role="alert">{statusFailed}</p>{/if}
-    {#if addressable}
-      <p class="slug-row">
-        {#if editing}
-          <span class="url">{before}</span>
-          <label class="visually-hidden" for="entry-address">Web address in {language(locale)}</label>
-          <input class="input" id="entry-address" type="text" bind:value={typed} placeholder={slug} />
-          <button class="btn btn-sm" type="button" disabled={busy} onclick={saveAddress}>Save</button>
-          <button class="btn btn-ghost btn-sm" type="button" onclick={() => (editing = false)}>Cancel</button>
-          {#if addressFailed}<span class="mode is-bad">{addressFailed}</span>{/if}
-        {:else}
-          <span class="url">{url}</span>
-          {#if !address}<span class="mode">Same as the file name</span>{/if}
-          <button class="btn-link" type="button" disabled={locked} onclick={editAddress}>Edit web address</button>
-        {/if}
-      </p>
-    {/if}
-    <!-- A global has no SEO or versions of its own: no tabs rather than three dead ones. -->
-    <!-- Links, not a tablist: each is an address the back button lands on; keep the roles off. -->
-    <div class="editor-toolbar">
-    {#if !entry.singleton}
-      <nav class="tabs" aria-label="Entry sections">
-        <a href={sitePath(`/admin/c/${collection}/${slug}`)} aria-current={section === '' ? 'page' : undefined}>Content</a>
-        {#if seoField}<a href={sitePath(`/admin/c/${collection}/${slug}/seo`)} aria-current={section === 'seo' ? 'page' : undefined}>SEO</a>{/if}
-        <a href={sitePath(`/admin/c/${collection}/${slug}/history`)} aria-current={section === 'history' ? 'page' : undefined}>History</a>
-      </nav>
-    {/if}
       <div class="actions">
         {#if many}
           {#if entry.locales.length < 5}
@@ -1093,6 +1052,46 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         {/if}
       </div>
     </div>
+    {#if conflicted}
+      <p class="subline">
+        Somebody changed this in the repository after you opened it. Open Unpublished changes to
+        resolve it field by field, or to discard yours and take what is there now.
+      </p>
+    {/if}
+    {#if held}
+      <p class="subline">On hold — won't be included when others publish</p>
+    {/if}
+    {#if hidden}
+      <p class="subline">
+        {#if entry.redirects?.[locale]}Redirecting to {entry.redirects[locale]} while hidden{:else}Off the site — visitors to its old address see “page not found”{/if}
+      </p>
+    {/if}
+    {#if statusFailed}<p class="subline is-bad" role="alert">{statusFailed}</p>{/if}
+    {#if addressable}
+      <p class="slug-row">
+        {#if editing}
+          <span class="url">{before}</span>
+          <label class="visually-hidden" for="entry-address">Web address in {language(locale)}</label>
+          <input class="input" id="entry-address" type="text" bind:value={typed} placeholder={slug} />
+          <button class="btn btn-sm" type="button" disabled={busy} onclick={saveAddress}>Save</button>
+          <button class="btn btn-ghost btn-sm" type="button" onclick={() => (editing = false)}>Cancel</button>
+          {#if addressFailed}<span class="mode is-bad">{addressFailed}</span>{/if}
+        {:else}
+          <span class="url">{url}</span>
+          {#if !address}<span class="mode">Same as the file name</span>{/if}
+          <button class="btn-link" type="button" disabled={locked} onclick={editAddress}>Edit web address</button>
+        {/if}
+      </p>
+    {/if}
+    <!-- A global has no SEO or versions of its own: no tabs rather than three dead ones. -->
+    <!-- Links, not a tablist: each is an address the back button lands on; keep the roles off. -->
+    {#if !entry.singleton}
+      <nav class="tabs" aria-label="Entry sections">
+        <a href={sitePath(`/admin/c/${collection}/${slug}`)} aria-current={section === '' ? 'page' : undefined}>Content</a>
+        {#if seoField}<a href={sitePath(`/admin/c/${collection}/${slug}/seo`)} aria-current={section === 'seo' ? 'page' : undefined}>SEO</a>{/if}
+        <a href={sitePath(`/admin/c/${collection}/${slug}/history`)} aria-current={section === 'history' ? 'page' : undefined}>History</a>
+      </nav>
+    {/if}
   </header>
   {#if section === 'history'}
     <History
@@ -1110,7 +1109,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     />
   {:else}
   <!-- Stands where the form would be: every field belongs to a structure not yet agreed on. -->
-  <div class="entry-body" class:has-pane={!entry.drift.length && (previewing || (!alone && shown !== undefined))} class:has-outline={!entry.drift.length && !alone && shown === undefined && !previewing && fields.length > 4}>
+  <div class="entry-body" class:has-pane={!entry.drift.length && (previewing || (!alone && shown !== undefined))} class:has-outline={!entry.drift.length && !alone && shown === undefined && !previewing && fields.length > 5}>
     {#if entry.drift.length}
       <DriftPanel
         {collection}
@@ -1132,7 +1131,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {#if previewing && !alone}
         {@render previewPane()}
       {:else if shown === undefined}
-        {#if fields.length > 4}
+        {#if fields.length > 5}
           <nav class="editor-outline" aria-label="On this page">
             <p>On this page</p>
             {#each fields as field (field.path.join('.'))}

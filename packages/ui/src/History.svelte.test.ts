@@ -142,6 +142,18 @@ test('the locale filter leaves the commits that touched that language', async ()
   expect(rows().map((r) => r[0])).toEqual(['Update price', 'Translate']);
 });
 
+test('an empty locale filter explains the result and offers the full history again', async () => {
+  versions = [{ sha: 'aaa111', date: ago(2), summary: 'Update price', locales: ['en'] }];
+  await show();
+
+  const [, , de] = all('.version-tools .seg button');
+  await click(de as Element);
+
+  expect(q('.history-filter-empty').textContent).toContain('No versions in German');
+  await click(q('.history-filter-empty button'));
+  expect(rows().map((r) => r[0])).toEqual(['Update price']);
+});
+
 // Not an error: the tab is reachable so the client learns where history will be.
 test('an entry with no commits says nothing is published yet', async () => {
   await show();

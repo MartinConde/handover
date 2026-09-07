@@ -107,6 +107,20 @@ test('a global is drawn without the status chip, the overflow menu or the tab ba
   expect($(root, '.btn-primary')?.textContent).toContain('Publish this entry');
 });
 
+test('a global keeps its title state and publishing controls in one header row', () => {
+  const root = show({
+    collection: 'globals',
+    slug: 'site',
+    entry: { ...bilingual, singleton: true, label: 'Site details' },
+  });
+
+  const row = $(root, '.entry-header > .heading-row');
+  expect(row?.querySelector('h1')?.textContent).toBe('Site details');
+  expect(row?.querySelector('.hold-toggle')).not.toBeNull();
+  expect(row?.querySelector('.seg[aria-label="Language"]')).not.toBeNull();
+  expect(row?.querySelector('.btn-primary')?.textContent).toContain('Publish this entry');
+});
+
 test("a global is named by the dev's label, under Site settings", () => {
   const root = show({
     collection: 'globals',
@@ -2441,6 +2455,22 @@ test('the editor starts focused and opens its second pane only when requested', 
   flushSync();
   expect($(root, '.entry-body.has-pane')).toBeNull();
   vi.unstubAllGlobals();
+});
+
+test('a short settings form stays single-column without an outline', () => {
+  const fields: Field[] = [
+    ...entry.fields,
+    { path: ['phone'], label: 'Phone', type: 'text', required: false },
+    { path: ['email'], label: 'Email', type: 'text', required: false },
+  ];
+  const root = show({
+    collection: 'globals',
+    slug: 'site',
+    entry: { ...entry, fields, singleton: true, label: 'Site details' },
+  });
+
+  expect($(root, '.entry-body.has-outline')).toBeNull();
+  expect($(root, '.editor-outline')).toBeNull();
 });
 
 test('the outline reaches empty media, choice and grouped fields as well as text', () => {

@@ -258,7 +258,72 @@ window.fetch = async (input, init) => {
     });
   if (path.startsWith('/admin/api/activity')) return json({ events: [], cursor: null });
   if (path.startsWith('/admin/api/deleted/')) return json({ deleted: [] });
-  if (path.startsWith('/admin/api/history/')) return json({ versions: [] });
+  if (path.startsWith('/admin/api/history/') && path.endsWith('/diff'))
+    return json({
+      groups: [
+        {
+          changes: [
+            {
+              kind: 'value',
+              path: 'seo.description',
+              label: 'Description',
+              before: 'Browse distinctive homes along the Cornish coast.',
+              after: 'Find a place to call your own along the Cornish coast.',
+            },
+          ],
+        },
+        {
+          locale: 'en',
+          changes: [
+            {
+              kind: 'words',
+              path: 'blocks.a1b2c3d4.body',
+              label: 'Text section · Body',
+              parts: [
+                { text: 'Find a place to call your own. Explore our ', mark: 'same' },
+                { text: 'hand-picked ', mark: 'ins' },
+                { text: 'collection of coastal homes.', mark: 'same' },
+              ],
+            },
+          ],
+        },
+        { locale: 'de', changes: [] },
+      ],
+    });
+  if (path.startsWith('/admin/api/history/'))
+    return json({
+      versions: [
+        {
+          sha: '2a7e51f4bd1',
+          date: new Date(now - 2 * 3600000).toISOString(),
+          summary: 'Refine the homepage introduction',
+          locales: ['en', 'de'],
+          author: 'Martin Conde',
+        },
+        {
+          sha: '91c082e726a',
+          date: new Date(now - 26 * 3600000).toISOString(),
+          summary: 'Update German homepage copy',
+          locales: ['de'],
+          author: 'Anna Weber',
+        },
+        {
+          sha: 'fd36b914e0c',
+          date: new Date(now - 74 * 3600000).toISOString(),
+          summary: 'Add the featured listings section',
+          locales: ['en'],
+          author: 'Martin Conde',
+        },
+        {
+          sha: '601c42989be',
+          date: new Date(now - 8 * 86400000).toISOString(),
+          summary: 'Create the homepage',
+          locales: ['en', 'de'],
+          author: 'Anna Weber',
+        },
+      ],
+      more: false,
+    });
   if (path === '/admin/api/media')
     return json({
       media:

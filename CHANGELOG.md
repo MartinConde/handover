@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Compact the shared entry editor header by keeping its title, state, language controls, preview,
+  and publish action on one responsive row when space allows. Short forms stay single-column;
+  field jump links now appear only once a form has more than five sections.
 - Shorten internal source comments, simplify dividers, and mark intentional Svelte snapshots.
 - Redesign the redirects table. The old and new address stack in one column with the status code
   beside them, so a path no longer breaks mid-word; the reason keeps the entry it came from under
