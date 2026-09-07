@@ -1,4 +1,4 @@
-import { type ContentSource, entryAt, getEntryLocales, menusAt } from '@handover/core';
+import { type ContentSource, entryAt, getEntryLocales, globalsAt, menusAt } from '@handover/core';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { preview } from './preview.js';
 
@@ -8,10 +8,19 @@ vi.mock('../auth.js', () => ({
   createAuth: () => ({ api: { getSession: async () => session } }),
 }));
 
-const { listing, rows } = await vi.hoisted(async () => {
+const { listing, pageSchema, globalSchemas, rows } = await vi.hoisted(async () => {
   const { z } = await import('astro/zod');
   return {
     listing: z.object({ title: z.string() }),
+    pageSchema: z.object({ title: z.string(), blocks: z.array(z.unknown()).optional() }),
+    globalSchemas: {
+      site: z.object({ name: z.string() }),
+      navigation: z.object({ menus: z.array(z.unknown()) }),
+      'new-cta': z.object({ heading: z.string().transform((value) => value.toUpperCase()) }),
+      'cta-newsletter': z.object({
+        button: z.object({ type: z.literal('entry'), ref: z.string() }),
+      }),
+    },
     // The D1 boundary: the rows preview lays over the build, filled per test.
     rows: [] as { path: string; contents: string }[],
   };
@@ -20,9 +29,10 @@ const { listing, rows } = await vi.hoisted(async () => {
 vi.mock('virtual:handover/config', () => ({
   default: {
     i18n: { locales: ['en', 'de'], defaultLocale: 'en' },
+    globals: globalSchemas,
     collections: {
       listings: { schema: listing, route: '/listings/[slug]', index: '/', load: 'listing' },
-      pages: { schema: listing, route: '/[slug]', localizedSlugs: true, load: 'page' },
+      pages: { schema: pageSchema, route: '/[slug]', localizedSlugs: true, load: 'page' },
       unwired: { schema: listing, route: '/unwired/[slug]' },
       samples: { schema: listing },
     },
@@ -76,13 +86,29 @@ const pageSite = {
   i18n: { locales: ['en', 'de'], defaultLocale: 'en' },
   collections: { pages: { route: '/[slug]', localizedSlugs: true } },
 };
+const globalsBuilt: Record<string, unknown> = {
+  'en/site': { name: 'Handover' },
+  'de/site': { name: 'Handover DE' },
+  'en/navigation': {
+    menus: [{ key: 'header', items: [{ link: { type: 'entry', ref: 'pages/impressum' } }] }],
+  },
+  'de/navigation': {
+    menus: [{ key: 'header', items: [{ link: { type: 'entry', ref: 'pages/impressum' } }] }],
+  },
+  'en/cta-newsletter': { button: { type: 'entry', ref: 'pages/home' } },
+};
 // The demo's actual read pattern: page, language switcher, then shared navigation.
 const pageLoader = {
   Page,
   load: async (source: ContentSource, { locale, slug }: { locale: string; slug: string }) => {
     const entry = await entryAt('default', source, pageSite, 'pages', locale, slug);
     if (!entry) return undefined;
+    const globals = await globalsAt('default', source, locale, {
+      required: ['site', 'navigation'],
+      blocks: (entry.data as { blocks?: unknown }).blocks,
+    });
     return {
+      globals,
       data: entry.data,
       locales: await getEntryLocales(
         'default',
@@ -91,15 +117,7 @@ const pageLoader = {
         'pages',
         entry.id.slice(locale.length + 1),
       ),
-      menus: await menusAt(
-        'default',
-        source,
-        pageSite,
-        {
-          menus: [{ key: 'header', items: [{ link: { type: 'entry', ref: 'pages/impressum' } }] }],
-        },
-        locale,
-      ),
+      menus: await menusAt('default', source, pageSite, globals.navigation, locale),
     };
   },
 };
@@ -116,11 +134,14 @@ const get = (path: string) => {
       },
       {
         getEntry: async (collection: string, id: string) => {
-          const entries = collection === 'pages' ? pagesBuilt : built;
+          const entries =
+            collection === 'globals' ? globalsBuilt : collection === 'pages' ? pagesBuilt : built;
           return entries[id] ? { id, data: entries[id] } : undefined;
         },
         getCollection: async (collection: string) =>
-          Object.entries(collection === 'pages' ? pagesBuilt : built).map(([id, data]) => ({
+          Object.entries(
+            collection === 'globals' ? globalsBuilt : collection === 'pages' ? pagesBuilt : built,
+          ).map(([id, data]) => ({
             id,
             data,
           })),
@@ -292,4 +313,96 @@ test('a loader missing the pair the page needs says which one', async () => {
   const { result } = await get('');
   expect((result as Response).status).toBe(500);
   expect(await (result as Response).text()).toContain('loadIndex and Index');
+});
+
+const invalidCta = {
+  path: 'src/content/globals/en/cta-newsletter.yaml',
+  contents: 'button:\n  type: entry\n',
+};
+
+test('an incomplete unused global does not block Home preview', async () => {
+  rows.push(invalidCta);
+  const { result } = await get('home');
+  expect(result).toMatchObject({
+    Component: Page,
+    props: { globals: { site: { name: 'Handover' } } },
+  });
+  expect(result).not.toHaveProperty('props.globals.cta-newsletter');
+});
+
+test.each([
+  [{ _type: 'cta', _ref: 'globals/cta-newsletter' }],
+  [{ _type: 'columns', columns: [{ blocks: [{ _type: 'cta', _ref: 'globals/cta-newsletter' }] }] }],
+])(
+  'a referenced invalid global, at any block depth, is a 422 with the field path: %j',
+  async (block) => {
+    rows.push(invalidCta, {
+      path: 'src/content/pages/en/home.yaml',
+      contents: JSON.stringify({ title: 'Home', blocks: [block] }),
+    });
+    const { result } = await get('home');
+    expect((result as Response).status).toBe(422);
+    expect(await (result as Response).text()).toContain(
+      'This draft cannot be rendered:\nsrc/content/globals/en/cta-newsletter.yaml › button.ref:',
+    );
+    expect((result as Response).headers.get('cache-control')).toBe('private, no-store');
+    expect((result as Response).headers.get('x-robots-tag')).toBe('noindex, nofollow');
+    expect((result as Response).headers.get('content-security-policy')).toBe(
+      "frame-ancestors 'self'",
+    );
+    expect((result as Response).headers.get('referrer-policy')).toBe('no-referrer');
+  },
+);
+
+test.each([
+  ['site', 'name'],
+  ['navigation', 'menus'],
+])(
+  'the layout still validates its required %s global without block references',
+  async (name, field) => {
+    rows.push({ path: `src/content/globals/en/${name}.yaml`, contents: '{}' });
+    const { result } = await get('home');
+    expect((result as Response).status).toBe(422);
+    expect(await (result as Response).text()).toContain(
+      `src/content/globals/en/${name}.yaml › ${field}:`,
+    );
+  },
+);
+
+test.each(['site', 'navigation', 'cta-newsletter'])(
+  'a required global deleted in the draft is a readable 422: %s',
+  async (name) => {
+    rows.push(
+      { path: `src/content/globals/en/${name}.yaml`, contents: '' },
+      {
+        path: 'src/content/pages/en/home.yaml',
+        contents: JSON.stringify({
+          title: 'Home',
+          blocks: [{ _type: 'cta', _ref: 'globals/cta-newsletter' }],
+        }),
+      },
+    );
+    const { result } = await get('home');
+    expect((result as Response).status).toBe(422);
+    expect(await (result as Response).text()).toContain(
+      `src/content/globals/en/${name}.yaml: No global "${name}" in this language`,
+    );
+  },
+);
+
+test('a nested reference renders validated draft data for a global absent from the build', async () => {
+  rows.push(
+    { path: 'src/content/globals/en/new-cta.yaml', contents: 'heading: New CTA\n' },
+    {
+      path: 'src/content/pages/en/home.yaml',
+      contents: JSON.stringify({
+        title: 'Home',
+        blocks: [{ columns: [{ blocks: [{ _ref: 'globals/new-cta' }] }] }],
+      }),
+    },
+  );
+  expect((await get('home')).result).toMatchObject({
+    Component: Page,
+    props: { globals: { 'new-cta': { heading: 'NEW CTA' } } },
+  });
 });

@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Add selective global loading to `globalsAt()`: loaders can name layout dependencies and
+  supply the rendered block tree, including nested `_ref` targets. Preview validates only
+  those drafts, so an incomplete unused global no longer blocks a page. Required invalid or
+  missing globals return a readable `422`; existing whole-collection calls remain compatible.
+
 - Compact the shared entry editor header by keeping its title, state, language controls, preview,
   and publish action on one responsive row when space allows. Short forms stay single-column;
   field jump links now appear only once a form has more than five sections.

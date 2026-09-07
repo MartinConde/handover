@@ -50,6 +50,7 @@ export type {
   AstroContent,
   ContentEntry,
   ContentSource,
+  GlobalsSelection,
   LocaleLink,
   Mailer,
   NavLink,
@@ -58,6 +59,7 @@ export type {
   Translate,
 } from '@handover/core';
 export {
+  ContentError,
   entryAddress,
   entryAt,
   entryUrl,

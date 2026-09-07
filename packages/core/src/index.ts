@@ -46,6 +46,7 @@ export type {
   ContentSource,
   Drift,
   DriftChoice,
+  GlobalsSelection,
   I18nMark,
   LocaleLink,
   LocaleSite,
@@ -53,6 +54,7 @@ export type {
 } from './content.js';
 export {
   applyDrift,
+  ContentError,
   draftSource,
   driftReport,
   entryAt,

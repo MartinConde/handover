@@ -192,7 +192,10 @@ export const staticSource: Source = createStaticSource('default', {
 export async function load(source: Source, { locale, slug }: { locale: string; slug: string }) {
   const entry = await entryAt('default', source, cms, 'pages', locale, slug);
   if (!entry) return undefined;
-  const globals = await globalsAt('default', source, locale);
+  const globals = await globalsAt(
+    'default', source, locale,
+    source.preview ? { required: ['site'], blocks: entry.data.blocks } : undefined,
+  );
   return { data: entry.data, locale, globals, site: globals.site as Site };
 }
 `;

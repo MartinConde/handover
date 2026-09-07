@@ -94,7 +94,7 @@ else a page needs:
 
 ```ts
 // src/loaders/globals.ts — the global is read, then resolved
-const globals = await globalsAt('default', source, locale);
+const globals = await globalsAt('default', source, locale, { required: ['navigation'] });
 const menus = await menusAt('default', source, cms, globals.navigation, locale);
 ```
 

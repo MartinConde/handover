@@ -100,8 +100,13 @@ export async function loadIndex(source: Source, { locale }: { locale: string }) 
 }
 ```
 
-**[Globals](site-files.md) are gathered here too** — `globalsAt('default', source, locale)` — and
-passed down as props. A layout that fetches its own reads the *published* file, so the one thing
+**[Globals](site-files.md) are gathered here too** and passed down as props.
+`globalsAt('default', source, locale)` reads the entire collection. For preview, pass a fourth
+argument such as `{ required: ['site', 'navigation'], blocks: entry.data.blocks }` to read only
+the layout's globals and references in the rendered block tree. Required drafts still validate;
+invalid unused globals are never read. See [Blocks](blocks.md) for the shared loader example.
+
+A layout that fetches its own reads the *published* file, so the one thing
 preview would not show is the change the client just made to it.
 
 ## A page with an address per language

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import {
   applyDrift,
   draftSource,
@@ -58,6 +58,72 @@ test('the globals of one language are keyed by file name, without the locale fol
     site: { name: 'Coastal Homes GmbH' },
   });
 });
+
+test('selected globals read each required name once, including nested block references', async () => {
+  const getEntry = vi.fn(async (_collection: string, id: string) => ({ id, data: { id } }));
+  const getCollection = vi.fn(async () => []);
+  const globals = await globalsAt('default', { getEntry, getCollection }, 'de', {
+    required: ['site', 'globals/site', 'navigation'],
+    blocks: [
+      { _ref: 'globals/cta-newsletter' },
+      { columns: [{ blocks: [{ _ref: 'cta-newsletter' }, { _ref: 'footer' }] }] },
+    ],
+  });
+  expect(globals).toEqual({
+    site: { id: 'de/site' },
+    navigation: { id: 'de/navigation' },
+    'cta-newsletter': { id: 'de/cta-newsletter' },
+    footer: { id: 'de/footer' },
+  });
+  expect(getEntry.mock.calls).toEqual([
+    ['globals', 'de/site'],
+    ['globals', 'de/navigation'],
+    ['globals', 'de/cta-newsletter'],
+    ['globals', 'de/footer'],
+  ]);
+  expect(getCollection).not.toHaveBeenCalled();
+});
+
+test('an empty global selection reads no content', async () => {
+  const getEntry = vi.fn(async () => undefined);
+  const getCollection = vi.fn(async () => [{ id: 'en/unused', data: {} }]);
+  expect(await globalsAt('default', { getEntry, getCollection }, 'en', {})).toEqual({});
+  expect(getEntry).not.toHaveBeenCalled();
+  expect(getCollection).not.toHaveBeenCalled();
+});
+
+test('global discovery follows Blocks: values and a ref replacement are not walked', async () => {
+  const getEntry = vi.fn(async (_collection: string, id: string) => ({
+    id,
+    data: { _ref: 'globals/not-recursive' },
+  }));
+  const getCollection = vi.fn(async () => []);
+  const date = Object.assign(new Date('2026-01-01'), { _ref: 'globals/not-a-block' });
+  expect(
+    await globalsAt('default', { getEntry, getCollection }, 'en', {
+      blocks: [null, 'text', date, { _ref: 'globals/cta', child: { _ref: 'not-walked' } }],
+    }),
+  ).toEqual({ cta: { _ref: 'globals/not-recursive' } });
+  expect(getEntry.mock.calls).toEqual([['globals', 'en/cta']]);
+});
+
+test.each([undefined, ''])(
+  'a required global absent from the build or deleted in a draft names its locale and file',
+  async (contents) => {
+    const source = draftSource(
+      'default',
+      {
+        getEntry: async () => undefined,
+        getCollection: async () => [],
+      },
+      contents === undefined ? [] : [{ path: 'src/content/globals/de/site.yaml', contents }],
+      (_collection, data) => data,
+    );
+    await expect(globalsAt('default', source, 'de', { required: ['site'] })).rejects.toThrow(
+      'src/content/globals/de/site.yaml: No global "site" in this language',
+    );
+  },
+);
 
 // Without `generateId` Astro's glob loader files an entry under its `slug` (F7 in 02-i18n.md).
 test('an entry filed under its address rather than its path names the loader option', async () => {

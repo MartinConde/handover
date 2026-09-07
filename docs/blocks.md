@@ -13,34 +13,42 @@ A block with `_ref` is filled from that global, so `<Blocks />` also takes the l
 globals — `globalsAt()` builds the map, keyed by file name:
 
 ```ts
-// src/loaders/globals.ts — the same shape as any other loader
-import { type ContentSource, globalsAt, staticSource as createStaticSource } from 'astro-handover';
-import { getCollection, getEntry } from 'astro:content';
+// src/loaders/globals.ts
+import { type ContentSource, globalsAt, menusAt } from 'astro-handover';
+import cms from '../../cms.config';
+import type { Site } from '../content/schemas';
 
 type Source = ContentSource<{ globals: unknown }>;
 
-export const staticSource: Source = createStaticSource('default', {
-  getEntry: async (collection, id) => getEntry(collection, id),
-  getCollection: (collection) => getCollection(collection),
-});
-
-export const load = (source: Source, { locale }: { locale: string }) =>
-  globalsAt('default', source, locale);
+export async function load(
+  source: Source,
+  { locale, blocks }: { locale: string; blocks?: unknown },
+) {
+  const globals = await globalsAt(
+    'default', source, locale,
+    source.preview ? { required: ['site', 'navigation'], blocks } : undefined,
+  );
+  const menus = await menusAt('default', source, cms, globals.navigation, locale);
+  return { globals, menus, site: globals.site as Site };
+}
 ```
 
-```astro
----
-// src/layouts/BlocksPage.astro
-import Blocks from 'astro-handover/Blocks.astro';
-import { components } from '../blocks/registry';
-import { load, staticSource } from '../loaders/globals';
+The page loader passes its rendered tree to this shared loader:
+`await loadGlobals(source, { locale, blocks: entry.data.blocks })`. The layout receives the
+result as props and renders `<Blocks blocks={data.blocks} components={components} globals={globals} />`.
+It does not fetch content itself, so preview uses the draft source throughout.
 
-const { data, locale } = Astro.props;
-const globals = await load(staticSource, { locale });
----
+The optional fourth argument selects globals: `required` names content the layout reads
+directly, and `blocks` discovers `_ref` through nested arrays and plain objects. Names may be
+bare (`site`) or prefixed (`globals/site`); each is read once through `source.getEntry()`, so
+required drafts are validated. A missing selected global throws `ContentError`, naming its
+locale and file; preview turns it into a readable `422`.
 
-<Blocks blocks={data.blocks} components={components} globals={globals} />
-```
+Selection works with any content source. The example opts in for preview only, keeping the
+public collection read unchanged. Omitting the argument preserves the existing whole-collection
+behavior; `{}` selects nothing. Pass every tree you render (an array of trees works too), and
+list every global the layout reads directly. Discovery follows `<Blocks />`: a `_ref` is a
+replacement boundary, and the replacement's own content is not walked recursively.
 
 `globals` is a collection like any other in `src/content.config.ts`, with the same
 `generateId` — the file name is the key, and the `<locale>/` folder is what `globalsAt`
@@ -49,7 +57,7 @@ reads ([Site files](site-files.md#globals)).
 Every `_ref` in the tree is filled here, however deep it sits, so a block component that
 nests `<Blocks />` passes on `components` and nothing more. A `_ref` naming a global that
 `cms.config.ts` does not declare fails the build; one whose file this language does not have
-throws when the page renders, naming the file to write.
+fails, naming the file to write.
 
 ```ts
 // src/blocks/registry.ts

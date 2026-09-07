@@ -304,14 +304,53 @@ export function refErrors(
   return errors;
 }
 
-/** The globals in one language keyed by file name, read in one collection call. */
+/** Content a loader requires cannot be rendered; preview reports it as a readable 422. */
+export class ContentError extends Error {}
+
+export interface GlobalsSelection {
+  /** Globals read directly by the layout, such as site details and navigation. */
+  required?: readonly string[];
+  /** The tree passed to Blocks; references are discovered through nested arrays and objects. */
+  blocks?: unknown;
+}
+
+/** Omit selection to read the whole collection; selected globals use validated entry reads. */
 export async function globalsAt<C extends Record<string, unknown>>(
   _siteId: string,
   source: ContentSource<C>,
   locale: string,
+  selection?: GlobalsSelection,
 ): Promise<Record<string, unknown>> {
-  const found = await source.getCollection('globals' as keyof C & string, locale);
-  return Object.fromEntries(found.map((e) => [e.id.slice(locale.length + 1), e.data]));
+  if (!selection) {
+    const found = await source.getCollection('globals' as keyof C & string, locale);
+    return Object.fromEntries(found.map((e) => [e.id.slice(locale.length + 1), e.data]));
+  }
+  const names = new Set(selection.required?.map((name) => name.replace(/^globals\//, '')));
+  const walk = (value: unknown): void => {
+    if (Array.isArray(value)) {
+      value.forEach(walk);
+      return;
+    }
+    if (!value || typeof value !== 'object') return;
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== Object.prototype && proto !== null) return;
+    const block = value as Record<string, unknown>;
+    // Match Blocks: a ref is replaced as a whole, without walking the replacement again.
+    if (typeof block._ref === 'string') names.add(block._ref.replace(/^globals\//, ''));
+    else Object.values(block).forEach(walk);
+  };
+  walk(selection.blocks);
+  const found = await Promise.all(
+    [...names].map(async (name) => {
+      const entry = await source.getEntry('globals' as keyof C & string, `${locale}/${name}`);
+      if (!entry)
+        throw new ContentError(
+          `src/content/globals/${locale}/${name}.yaml: No global "${name}" in this language`,
+        );
+      return [name, entry.data] as const;
+    }),
+  );
+  return Object.fromEntries(found);
 }
 
 export function parseEntry(_siteId: string, contents: string): unknown {

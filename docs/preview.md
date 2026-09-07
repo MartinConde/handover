@@ -92,7 +92,14 @@ This validation applies to content the loader renders. Navigation links, languag
 and localized address lookups read draft metadata separately, so an incomplete English
 Impressum does not block the English homepage just because its menu links there. Following
 that link still reports the Impressum's own validation errors. Collections whose contents
-are rendered, and globals read by the loader, still require valid drafts.
+are rendered still require valid drafts.
+
+For globals, use the [selective `globalsAt()` argument](blocks.md) in the loader: declare
+layout dependencies (such as `site` and `navigation`) and pass the rendered block tree. Only
+those names and its nested `_ref` targets are loaded and validated. An incomplete unused
+newsletter global cannot block Home; a referenced one still returns `422` with its field path.
+A missing required global also returns `422`, naming the locale and file. Three-argument
+`globalsAt()` calls keep reading and validating the entire collection.
 
 An address the site could serve but has no entry at is `404`, the same answer the page itself
 would give. A collection with no `load`, or a loader that exports no component, is `500` saying

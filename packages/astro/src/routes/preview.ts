@@ -3,6 +3,7 @@ import config from 'virtual:handover/config';
 import loaders from 'virtual:handover/loaders';
 import {
   type AstroContent,
+  ContentError,
   type ContentSource,
   draftFiles,
   draftSource,
@@ -53,9 +54,6 @@ interface Ctx {
   response: { headers: Headers };
 }
 
-// A collection with no declared schema is read as it stands, which is what the build does too.
-class DraftInvalid extends Error {}
-
 function schemaFor(
   collection: string,
   path: string,
@@ -76,7 +74,7 @@ function validate(collection: string, data: unknown, path: string): unknown {
   };
   if (parsed.success) return parsed.data;
   const [issue] = parsed.error?.issues ?? [];
-  throw new DraftInvalid(
+  throw new ContentError(
     `${path} › ${issue?.path.join('.') || collection}: ${issue?.message ?? 'does not match the schema'}`,
   );
 }
@@ -121,7 +119,7 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
     for (const [key, value] of Object.entries(GATE)) ctx.response.headers.set(key, value);
     return { Component, props };
   } catch (error) {
-    if (!(error instanceof DraftInvalid)) throw error;
+    if (!(error instanceof ContentError)) throw error;
     return answer(422, `This draft cannot be rendered:\n${error.message}`);
   }
 }
