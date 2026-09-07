@@ -30,7 +30,7 @@ function heightOf(item: MenuItem): number {
 <script lang="ts">
 import { type DragDropEventHandlers, DragDropProvider, DragOverlay } from '@dnd-kit/svelte';
 import { createSortable } from '@dnd-kit/svelte/sortable';
-import { newId, unsafeLinkScheme } from '@handover/core';
+import { newId } from '@handover/core';
 import { tick } from 'svelte';
 import PagePicker, { type Pickable, type PickEntry, readPickable } from './PagePicker.svelte';
 
@@ -40,6 +40,7 @@ let {
   menus,
   locale = '',
   translating = false,
+  sourceLabel = '',
 }: {
   /** The field's own id; every control on the screen is named under it. */
   id: string;
@@ -51,43 +52,40 @@ let {
   locale?: string;
   /** A second language's column: the tree is read, and its labels are what can be typed. */
   translating?: boolean;
+  /** The source language's display name, supplied by the translation pane. */
+  sourceLabel?: string;
 } = $props();
 
 let tab = $state(0);
-/** The item whose form has taken the tree's place, by `_id`. */
+/** The item whose editor is open under its row, by `_id`. */
 let editing = $state('');
-/** What that item was when the form opened, so Cancel puts it back. */
+/** What that item was when the editor opened, so Cancel puts it back. */
 let before: MenuItem | undefined;
 /** The item waiting to be confirmed away, and the button to give focus back to. */
 let removing = $state<MenuItem>();
 let trigger: HTMLElement | undefined;
-/** The item form's picker is open over the link summary. */
+/** The editor's picker is open over the link summary. */
 let changing = $state(false);
-let custom = $state({ label: '', href: '', newTab: false });
-// On a phone the tree is the screen and the add pane is a sheet opened from a button; wider
-// than that the stylesheet hides the button and the pane is simply there. One disclosure
-// either way, so nothing here asks how wide the screen is.
-let adding = $state(false);
-let addButton = $state<HTMLButtonElement>();
-async function openAdd() {
-  adding = true;
-  await tick();
-  document.getElementById(`${id}-add-h`)?.focus();
-}
-function closeAdd() {
-  adding = false;
-  addButton?.focus();
-}
+/** The row whose ⋯ is open, by `_id`. A disclosure and not `role="menu"`, as on the entry list. */
+let menuFor = $state('');
+/** Feedback stays beside the library, so adding several pages never loses your place. */
+let addedMessage = $state('');
+let lastAdded = $state('');
 
 const menu = $derived(menus[tab]);
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-// The pages and entries an item can point at, for the left pane's list and for saying what a
-// row already points at — the same read the link field makes.
+// The pages and entries an item can point at, for the picker and for saying what a row
+// already points at — the same read the link field makes.
 let known = $state<Pickable>({ entries: [], locales: [] });
 $effect(() => {
   readPickable().then((p) => (known = p));
 });
 const language = $derived(locale || known.locales[0] || '');
+const languageNames = new Intl.DisplayNames(['en'], { type: 'language' });
+const languageName = (of: string) => {
+  try { return languageNames.of(of) ?? of.toUpperCase(); }
+  catch { return of.toUpperCase(); }
+};
 
 /** What a link names in the picker's list: the entry's path, the collection of an index. */
 const keyOf = (link: MenuItem['link']) =>
@@ -100,21 +98,30 @@ const entryOf = (item: MenuItem) => {
 };
 /** What the row is called when nobody has typed a label: the page's own title. */
 const fallback = (item: MenuItem) =>
-  item.link.type === 'url' ? item.link.href : (entryOf(item)?.title ?? keyOf(item.link));
+  item.link.type === 'url' ? item.link.href : (entryOf(item)?.titles?.[language] ?? entryOf(item)?.title ?? keyOf(item.link));
 const name = (item: MenuItem) => item.label || fallback(item);
 /** Where it goes in this language, which is what the client recognises the page by. */
 const target = (item: MenuItem) =>
   item.link.type === 'url' ? item.link.href : (entryOf(item)?.urls[language] ?? keyOf(item.link));
-// Why the site will skip this row. The renderer drops it either way; the editor is where
-// somebody can see that it is going to and tidy the menu.
-const flag = (item: MenuItem) => {
+/** The quiet word after the name: what kind of thing the row points at. */
+const kind = (item: MenuItem) => {
+  const link = item.link;
+  if (link.type === 'url') return 'Custom link';
+  if (link.type === 'index') return `${capitalise(link.collection)} index`;
+  return capitalise(entryOf(item)?.collection ?? link.ref.split('/')[0] ?? '');
+};
+// Why the site will skip this row: a word on the row, the sentence in its editor. The renderer
+// drops it either way; the editor is where somebody can see that it is going to and tidy the menu.
+const flag = (item: MenuItem): { chip: string; why: string } | undefined => {
   if (item.link.type === 'url') return undefined;
   const entry = entryOf(item);
-  if (!entry) return 'That page is gone — the site skips this item';
+  if (!entry) return { chip: 'Page missing', why: 'That page is gone — the site skips this item' };
   if (item.link.type === 'index') return undefined;
-  if (entry.hidden) return 'Hidden — the site skips this item';
-  if (language && !entry.locales.includes(language))
-    return `Not available in ${language.toUpperCase()} — the site skips this item here`;
+  if (entry.hiddenLocales?.includes(language) ?? entry.hidden) return { chip: 'Hidden', why: 'Hidden — the site skips this item' };
+  if (language && !entry.locales.includes(language)) {
+    const lang = language.toUpperCase();
+    return { chip: `Not in ${lang}`, why: `Not available in ${lang} — the site skips this item here` };
+  }
   return undefined;
 };
 
@@ -161,7 +168,6 @@ function prune(path: number[]) {
 }
 function remove(item: MenuItem, path: number[]) {
   if (item.children?.length) {
-    trigger = document.activeElement as HTMLElement;
     removing = item;
     return;
   }
@@ -175,6 +181,14 @@ function drop(path: number[]) {
     trigger?.focus();
   }
 }
+// A row's ⋯ closes on the choice; what was chosen runs, and focus comes back to the ⋯ if the
+// row is still there to hold it.
+function act(item: MenuItem, what: () => void) {
+  menuFor = '';
+  trigger = document.getElementById(`${id}-more-${item._id}`) ?? undefined;
+  what();
+  tick().then(() => trigger?.isConnected && trigger.focus());
+}
 /** Where the item waiting to be confirmed away sits now — it can be moved from under a dialog. */
 const pathOf = (item: MenuItem, list = menu?.items ?? [], at: number[] = []): number[] => {
   for (const [i, row] of list.entries()) {
@@ -185,26 +199,27 @@ const pathOf = (item: MenuItem, list = menu?.items ?? [], at: number[] = []): nu
   return [];
 };
 
-const scheme = $derived(custom.href ? unsafeLinkScheme('default', custom.href) : undefined);
-function add(item: MenuItem) {
-  menu?.items.push(item);
-}
 // A picked page keeps no label of its own: renaming the page then moves the menu with it, and
 // typing over the greyed title is what writes one.
 const linkTo = (entry: PickEntry): MenuItem['link'] =>
   entry.index
     ? { type: 'index', collection: entry.collection }
     : { type: 'entry', ref: entry.path };
-const addEntry = (entry: PickEntry) => add({ _id: newId('default'), label: '', link: linkTo(entry) });
-function addCustom() {
-  if (!custom.href || scheme) return;
-  add({
-    _id: newId('default'),
-    label: custom.label,
-    link: { type: 'url', href: custom.href },
-    ...(custom.newTab ? { newTab: true } : {}),
-  });
-  custom = { label: '', href: '', newTab: false };
+function addEntry(entry: PickEntry) {
+  const item = { _id: newId('default'), label: '', link: linkTo(entry) };
+  menu?.items.push(item);
+  lastAdded = item._id;
+  addedMessage = `${entry.title} added to ${capitalise(menu?.key ?? '')}.`;
+}
+// An address has no title to fall back on, so the row opens straight away for its label.
+async function addUrl(href: string) {
+  const item: MenuItem = { _id: newId('default'), label: '', link: { type: 'url', href } };
+  menu?.items.push(item);
+  lastAdded = item._id;
+  addedMessage = 'Custom link added. Give it a label in the menu.';
+  edit(item);
+  await tick();
+  document.getElementById(`${id}-ed-label`)?.focus();
 }
 
 function edit(item: MenuItem) {
@@ -217,7 +232,12 @@ function cancelEdit(item: MenuItem | undefined) {
     for (const key of Object.keys(item)) if (!(key in before)) delete item[key as keyof MenuItem];
     Object.assign(item, before);
   }
+  closeEditor();
+}
+function closeEditor() {
+  const key = editing;
   editing = '';
+  document.getElementById(`${id}-row-${key}`)?.focus();
 }
 const found = $derived(editing ? find(menu?.items ?? [], editing) : undefined);
 function find(list: MenuItem[], key: string): MenuItem | undefined {
@@ -268,6 +288,8 @@ function rowsOf(list: MenuItem[], skip?: MenuItem, depth = 1, parent?: Row): Row
   }
   return rows;
 }
+const flatItems = $derived(rowsOf(menu?.items ?? []).map((row) => row.item));
+const included = $derived(flatItems.map((item) => keyOf(item.link)).filter(Boolean));
 
 // Nothing moves while a drag is live — the mockup's model, not 4.1's: the slot the row would
 // land in is drawn where the pointer is, and the drop is the one move. The gap is the target
@@ -391,6 +413,7 @@ function walkTabs(event: KeyboardEvent) {
   event.preventDefault();
   tab = (tab + by + menus.length) % menus.length;
   editing = '';
+  addedMessage = '';
   (event.currentTarget as HTMLElement).parentElement?.querySelectorAll('button')[tab]?.focus();
 }
 </script>
@@ -401,34 +424,37 @@ function walkTabs(event: KeyboardEvent) {
     {#each list as item, i (item._id)}
       {@const here = [...path, i]}
       {@const says = flag(item)}
+      {@const open = editing === item._id}
       {@const s = sortable(() => item._id, () => i)}
       <li>
-        <div class="menu-item" class:is-lifted={s.isDragging} class:is-flagged={says} {@attach s.attach}>
+        <div class="menu-item" class:is-lifted={s.isDragging} class:is-open={open} class:is-added={lastAdded === item._id} {@attach s.attach}>
           <button class="grip" type="button" aria-label="Reorder {name(item)} — press space, then the arrow keys" {@attach s.attachHandle}>⠿</button>
-          <span class="lbl">
-            {#if item.label}
-              {item.label}
-            {:else}
-              <span class="default-label">{fallback(item)}</span>
-              <span class="badge">Uses the page title</span>
-            {/if}
+          <button class="row-open" id="{id}-row-{item._id}" type="button" aria-expanded={open} onclick={() => (open ? (editing = '') : edit(item))}>
+            <span class="row-copy">
+              <span class="lbl" class:is-default={!item.label}>{name(item)}</span>
+              <span class="row-detail"><span class="kind">{kind(item)}</span><span class="row-path">{target(item)}</span></span>
+            </span>
+            <span class="row-status">
             {#if item._locales?.length === 1}<span class="badge badge-info">{(item._locales[0] ?? '').toUpperCase()} only</span>{/if}
-          </span>
-          <span class="target">
-            {item.link.type === 'url' ? 'Link' : 'Page'} <code>{target(item)}</code>
-            {#if says}<span class="badge badge-warn">{says}</span>{/if}
-          </span>
-          <div class="item-actions">
-            <div class="move-controls">
-              <button class="btn btn-ghost btn-icon btn-sm" type="button" disabled={i === 0} aria-label="Move {name(item)} up" onclick={() => step(here, -1)}>↑</button>
-              <button class="btn btn-ghost btn-icon btn-sm" type="button" disabled={i === list.length - 1} aria-label="Move {name(item)} down" onclick={() => step(here, 1)}>↓</button>
-              <button class="btn btn-ghost btn-icon btn-sm" type="button" disabled={!canIndent(item, here)} aria-label="Indent {name(item)} — make it a sub-item" onclick={() => indent(item, here)}>→</button>
-              <button class="btn btn-ghost btn-icon btn-sm" type="button" disabled={path.length === 0} aria-label="Outdent {name(item)}" onclick={() => outdent(here)}>←</button>
-            </div>
-            <button class="btn btn-ghost btn-sm" type="button" onclick={() => edit(item)}>Edit<span class="visually-hidden"> {name(item)}</span></button>
-            <button class="btn btn-ghost btn-icon btn-sm" type="button" aria-label="Remove {name(item)}" onclick={() => remove(item, here)}>×</button>
+            {#if says}<span class="badge badge-warn" title={says.why}>{says.chip}</span>{/if}
+            </span>
+            <span class="row-edit">{open ? 'Close' : 'Edit'}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d={open ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} /></svg></span>
+          </button>
+          <div class="item-actions row-menu">
+            <button class="btn btn-ghost btn-icon btn-sm" id="{id}-more-{item._id}" type="button" aria-expanded={menuFor === item._id} aria-label="Actions for {name(item)}" onclick={() => (menuFor = menuFor === item._id ? '' : item._id)}>⋯</button>
+            {#if menuFor === item._id}
+              <div class="menu">
+                <button type="button" disabled={i === 0} aria-label="Move {name(item)} up" onclick={() => act(item, () => step(here, -1))}>Move up</button>
+                <button type="button" disabled={i === list.length - 1} aria-label="Move {name(item)} down" onclick={() => act(item, () => step(here, 1))}>Move down</button>
+                <button type="button" disabled={!canIndent(item, here)} aria-label="Indent {name(item)} — make it a sub-item" onclick={() => act(item, () => indent(item, here))}>Make a sub-item</button>
+                <button type="button" disabled={path.length === 0} aria-label="Outdent {name(item)}" onclick={() => act(item, () => outdent(here))}>Move out a level</button>
+                <hr />
+                <button type="button" aria-label="Remove {name(item)}" onclick={() => act(item, () => remove(item, here))}>Remove</button>
+              </div>
+            {/if}
           </div>
         </div>
+        {#if open && found}{@render editor(found, says)}{/if}
         {#if item.children?.length}
           {@render branch(item.children, here)}
         {/if}
@@ -436,6 +462,51 @@ function walkTabs(event: KeyboardEvent) {
       {#if mark && mark.list === list && mark.after === item}{@render indicator()}{/if}
     {/each}
   </ul>
+{/snippet}
+
+<!-- Under its row rather than over the tree: the row it edits stays in sight, and so do the
+     rows around it. -->
+{#snippet editor(row: MenuItem, says: { chip: string; why: string } | undefined)}
+  <div class="item-editor" role="group" aria-label="Edit {name(row)}">
+    {#if says}<p class="notice notice-warn">{says.why}</p>{/if}
+    <div class="field">
+      <div class="label-row"><label for="{id}-ed-label">Label</label><span class="mode">Per language</span></div>
+      <input class="input" id="{id}-ed-label" type="text" value={row.label} oninput={(e) => (row.label = e.currentTarget.value)} placeholder={fallback(row)} aria-describedby="{id}-ed-label-hint" />
+      <p class="hint" id="{id}-ed-label-hint">{row.link.type === 'url' ? 'Empty shows the address itself,' : "Empty uses the page's own title,"} <b>{fallback(row)}</b>.</p>
+    </div>
+    <div class="field">
+      <div class="label-row"><span id="{id}-ed-link-l">Links to</span><span class="mode">Same in every language</span></div>
+      {#if changing}
+        <PagePicker id="{id}-ed-link" label="a page or entry" labelId="{id}-ed-link-l" indexes chosen={keyOf(row.link)} onpick={(e) => { row.link = linkTo(e); changing = false; }} onurl={(href) => { row.link = { type: 'url', href }; changing = false; }} onclose={() => (changing = false)} />
+      {:else}
+        <div class="link-summary" role="group" aria-labelledby="{id}-ed-link-l">
+          <span class="name">{fallback(row)}</span>
+          <button class="btn btn-sm" type="button" onclick={() => (changing = true)}>Change</button>
+          <span class="sub">{row.link.type === 'url' ? 'Link' : 'Page'} <code>{target(row)}</code></span>
+        </div>
+      {/if}
+      <p class="hint">{row.link.type === 'url' ? 'Custom links use this exact address in every language.' : 'Visitors go to the linked page in their language automatically.'}</p>
+    </div>
+    <label class="choice" for="{id}-ed-tab"><input type="checkbox" id="{id}-ed-tab" checked={row.newTab === true} onchange={(e) => { if (e.currentTarget.checked) row.newTab = true; else delete row.newTab; }} /><span>Open in a new tab</span></label>
+    {#if known.locales.length > 1}
+      <details class="nav-visibility" open={shownIn(row) !== ''}>
+        <summary>Language visibility<span>{shownIn(row) ? `${languageName(shownIn(row))} only` : 'All languages'}</span></summary>
+        <fieldset>
+        <legend>Show this item in</legend>
+        <label class="choice"><input type="radio" name="{id}-ed-loc" checked={shownIn(row) === ''} onchange={() => showIn(row, '')} /><span>All languages</span></label>
+        {#each known.locales as of (of)}
+          <label class="choice"><input type="radio" name="{id}-ed-loc" checked={shownIn(row) === of} onchange={() => showIn(row, of)} /><span>{languageName(of)} only</span></label>
+        {/each}
+        </fieldset>
+        <p class="hint">Most items belong in all languages. Limit an item only for language-specific content, such as a legal link. This also applies to its sub-items.</p>
+        {#if row.link.type !== 'url'}<p class="hint">The item only appears where its linked page is available. This setting does not create a translation.</p>{/if}
+      </details>
+    {/if}
+    <div class="actions">
+      <button class="btn btn-primary" type="button" onclick={closeEditor}>Done</button>
+      <button class="btn" type="button" onclick={() => cancelEdit(row)}>Cancel</button>
+    </div>
+  </div>
 {/snippet}
 
 {#snippet indicator()}
@@ -453,12 +524,12 @@ function walkTabs(event: KeyboardEvent) {
     {#each list as item (item._id)}
       {@const says = flag(item)}
       <li>
-        <div class="menu-item is-label" class:is-flagged={says}>
+        <div class="menu-item is-label">
           <label class="lbl" for="{id}-lbl-{item._id}">{fallback(item)}</label>
           <input class="input" id="{id}-lbl-{item._id}" type="text" value={item.label} oninput={(e) => (item.label = e.currentTarget.value)} placeholder={fallback(item)} aria-describedby="{id}-tgt-{item._id}" />
-          <span class="target" id="{id}-tgt-{item._id}">
-            {item.link.type === 'url' ? 'Link' : 'Page'} <code>{target(item)}</code>
-            {#if says}<span class="badge badge-warn">{says}</span>{/if}
+          <span class="kind" id="{id}-tgt-{item._id}">
+            {kind(item)}
+            {#if says}<span class="badge badge-warn" title={says.why}>{says.chip}</span>{/if}
           </span>
         </div>
         {#if item.children?.length}
@@ -469,7 +540,10 @@ function walkTabs(event: KeyboardEvent) {
   </ul>
 {/snippet}
 
-<svelte:window onkeydown={(e) => { if (e.key !== 'Escape') return; if (removing) { removing = undefined; trigger?.focus(); } else if (adding) closeAdd(); }} />
+<svelte:window
+  onkeydown={(e) => { if (e.key !== 'Escape') return; if (removing) { removing = undefined; trigger?.focus(); } else if (menuFor) menuFor = ''; }}
+  onclick={(e) => { const at = e.target as HTMLElement; if (menuFor && !at.closest('.row-menu')) menuFor = ''; }}
+/>
 
 <div class="nav-build" class:is-labels={translating} {id} role="group" aria-labelledby={labelId}>
   {#if !menu}
@@ -486,80 +560,32 @@ function walkTabs(event: KeyboardEvent) {
     {#if menus.length > 1}
       <div class="tabs is-menus" role="tablist" aria-label="Menus">
         {#each menus as one, i (one._id)}
-          <button type="button" role="tab" id="{id}-tab-{i}" aria-selected={i === tab} aria-controls="{id}-menu" tabindex={i === tab ? 0 : -1} onkeydown={walkTabs} onclick={() => { tab = i; editing = ''; }}>{capitalise(one.key)}</button>
+          <button type="button" role="tab" id="{id}-tab-{i}" aria-selected={i === tab} aria-controls="{id}-menu" tabindex={i === tab ? 0 : -1} onkeydown={walkTabs} onclick={() => { tab = i; editing = ''; addedMessage = ''; }}>{capitalise(one.key)}</button>
         {/each}
       </div>
     {/if}
-    {#if !translating}
-      <button class="btn btn-primary nav-add-open" type="button" aria-expanded={adding} aria-controls="{id}-add" bind:this={addButton} onclick={openAdd}>Add to menu</button>
-      {#if adding}
-        <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -- Escape is the keyboard's way out; the scrim is the pointer's -->
-        <div class="nav-scrim" aria-hidden="true" onclick={closeAdd}></div>
-      {/if}
-      <div class="nav-add" class:is-open={adding} id="{id}-add">
-        <h2 class="side-title" id="{id}-add-h" tabindex="-1">Add to menu</h2>
-        <PagePicker id="{id}-pick" label="pages and entries" labelId="{id}-add-h" indexes onpick={addEntry} />
-        <p class="hint">Choosing one puts it at the bottom of the menu; move it from there.</p>
-        <div class="custom-link">
-          <h3 class="side-title" id="{id}-cl-h">Custom link</h3>
-          <div class="field">
-            <div class="label-row"><label for="{id}-cl-label">Label</label></div>
-            <input class="input" id="{id}-cl-label" type="text" bind:value={custom.label} placeholder="Book a viewing" />
-          </div>
-          <div class="field" class:is-invalid={scheme}>
-            <div class="label-row"><label for="{id}-cl-url">Address</label></div>
-            <input class="input" id="{id}-cl-url" type="text" bind:value={custom.href} placeholder="/contact or https://…" aria-invalid={scheme ? 'true' : undefined} aria-describedby={scheme ? `${id}-cl-err` : undefined} />
-            {#if scheme}<p class="error" id="{id}-cl-err">{scheme}: links are not allowed</p>{/if}
-          </div>
-          <label class="choice" for="{id}-cl-tab"><input type="checkbox" id="{id}-cl-tab" bind:checked={custom.newTab} /><span>Open in a new tab</span></label>
-          <button class="btn btn-sm" type="button" disabled={!custom.href || !!scheme} onclick={addCustom}>Add to menu</button>
-        </div>
-        <button class="btn nav-add-close" type="button" onclick={closeAdd}>Done</button>
-      </div>
-    {/if}
     <div class="nav-main" id="{id}-menu" role={menus.length > 1 ? 'tabpanel' : undefined} aria-labelledby={menus.length > 1 ? `${id}-tab-${tab}` : undefined}>
-      {#if found}
-        <!-- Editing takes the tree's place rather than floating over it: a form over a tree
-             somebody is reading is the worst of both. -->
-        <div class="form" aria-labelledby="{id}-ed-h">
-          <h2 class="side-title" id="{id}-ed-h">{name(found)}</h2>
-          <div class="field">
-            <div class="label-row"><label for="{id}-ed-label">Label</label><span class="mode">Per language</span></div>
-            <input class="input" id="{id}-ed-label" type="text" value={found.label} oninput={(e) => { if (found) found.label = e.currentTarget.value; }} placeholder={fallback(found)} aria-describedby="{id}-ed-label-hint" />
-            <p class="hint" id="{id}-ed-label-hint">Empty uses the page's own title, <b>{fallback(found)}</b>.</p>
-          </div>
-          <div class="field">
-            <div class="label-row"><span id="{id}-ed-link-l">Links to</span><span class="mode">Same in every language</span></div>
-            {#if changing}
-              <PagePicker id="{id}-ed-link" label="a page or entry" labelId="{id}-ed-link-l" indexes chosen={keyOf(found.link)} onpick={(e) => { found.link = linkTo(e); changing = false; }} onurl={(href) => { found.link = { type: 'url', href }; changing = false; }} onclose={() => (changing = false)} />
-            {:else}
-              <div class="link-summary" role="group" aria-labelledby="{id}-ed-link-l">
-                <span class="name">{fallback(found)}</span>
-                <button class="btn btn-sm" type="button" onclick={() => (changing = true)}>Change</button>
-                <span class="sub">{found.link.type === 'url' ? 'Link' : 'Page'} <code>{target(found)}</code></span>
-              </div>
-            {/if}
-          </div>
-          <label class="choice" for="{id}-ed-tab"><input type="checkbox" id="{id}-ed-tab" checked={found.newTab === true} onchange={(e) => { if (e.currentTarget.checked) found.newTab = true; else delete found.newTab; }} /><span>Open in a new tab</span></label>
-          {#if known.locales.length > 1}
-            <fieldset>
-              <legend>Show in<span class="mode">Same in every language</span></legend>
-              <label class="choice"><input type="radio" name="{id}-ed-loc" checked={shownIn(found) === ''} onchange={() => showIn(found, '')} /><span>All languages</span></label>
-              {#each known.locales as of (of)}
-                <label class="choice"><input type="radio" name="{id}-ed-loc" checked={shownIn(found) === of} onchange={() => showIn(found, of)} /><span>{of.toUpperCase()} only</span></label>
-              {/each}
-            </fieldset>
-          {/if}
-          <div class="actions">
-            <button class="btn btn-primary" type="button" onclick={() => (editing = '')}>Save</button>
-            <button class="btn" type="button" onclick={() => cancelEdit(found)}>Cancel</button>
-          </div>
-        </div>
-      {:else if translating}
+      {#if !translating}
+        <section class="nav-library" aria-labelledby="{id}-add-h">
+          <header class="nav-panel-heading">
+            <h2 id="{id}-add-h">Add to menu</h2>
+            <p>Choose a page or add your own link.</p>
+            <a class="nav-jump" href="#{id}-structure-h">Go to menu structure ↓</a>
+          </header>
+          <PagePicker id="{id}-pick" label="pages and entries" labelId="{id}-add-h" indexes library {included} onpick={addEntry} onurl={addUrl} />
+          <p class="nav-feedback" role="status">{addedMessage || 'Pages keep their titles up to date automatically.'}</p>
+        </section>
+      {/if}
+      <section class="nav-workspace" aria-labelledby="{id}-structure-h">
+        <header class="nav-structure-heading">
+          <div><h2 id="{id}-structure-h" tabindex="-1">{translating ? `${languageName(language)} menu labels` : 'Menu structure'}</h2><p>{translating ? 'Translate the labels visitors see in this language.' : 'Shared across languages. Drag to reorder; move right to nest.'}</p></div>
+          <span class="nav-count">{flatItems.length} {flatItems.length === 1 ? 'item' : 'items'}</span>
+        </header>
+      {#if translating}
         <!-- The shape is one tree for the whole site, and this column cannot save one: a save of
              a translation writes the words this language owns and nothing else. -->
         <div class="menu-tree">
-          <p class="notice notice-info">The shape of this menu is shared with every language. Items are added, moved and removed in the other column; the labels here are this language's own.</p>
+          <p class="notice notice-info">Edit labels here. To add, remove or arrange items, switch to {sourceLabel || 'the source language'}. The menu structure is shared across languages.</p>
           {@render labelled(menu.items)}
         </div>
         <p class="tree-note">An empty box uses the page's own title in this language.</p>
@@ -575,15 +601,16 @@ function walkTabs(event: KeyboardEvent) {
             {/snippet}
           </DragOverlay>
         </DragDropProvider>
-        <p class="tree-note">Up to {MAX_DEPTH} levels. Drag a row where it should go — carrying it right makes it a sub-item — or use the arrow buttons on it.</p>
       {:else}
         <div class="empty tree-empty">
           <div>
             <h2>Nothing in this menu yet</h2>
-            <p>Choose a page on the left, or write a custom link.</p>
+            <p>Choose a page from Add to menu to get started.<br />You can arrange it and change its label here.</p>
           </div>
         </div>
       {/if}
+        {#if !translating && menu.items.length}<p class="nav-tree-help">Select an item to edit its label and destination. The ⋯ menu has move and remove options.</p>{/if}
+      </section>
     </div>
   {/if}
 </div>

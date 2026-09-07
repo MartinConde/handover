@@ -3,8 +3,8 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Menus, { type Menu } from './Menus.svelte';
 
-// Testing: what the tree writes into the global — adding from the picker and from the custom
-// link form, reordering by mouse and by keyboard, indent and outdent under the depth cap, an
+// Testing: what the tree writes into the global — adding a page and an address from the picker,
+// reordering by mouse and by keyboard, indent and outdent under the depth cap, an
 // item removed with its children, and the label an item does not store; plus the badge on an
 // item the site is going to skip.
 // Not testing: the Fields dispatch (glue) or styling.
@@ -29,6 +29,8 @@ const OFFERED = [
     collection: 'listings',
     path: 'listings/mill-house',
     title: 'Old Mill House',
+    titles: { en: 'Old Mill House', de: 'Das Mühlenhaus' },
+    hiddenLocales: ['en'],
     locales: ['en', 'de'],
     hidden: true,
     urls: { en: '/listings/mill-house', de: '/de/objekte/muehlenhaus' },
@@ -49,7 +51,7 @@ const INDEXES = [
 
 let app: ReturnType<typeof mount>;
 let menus: Menu[] = $state([]);
-const show = (items: unknown[] = [], keys = ['header'], translating = false) => {
+const show = (items: unknown[] = [], keys = ['header'], translating = false, locale = 'en') => {
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => Response.json({ entries: OFFERED, indexes: INDEXES, locales: ['en', 'de'] })),
@@ -61,7 +63,14 @@ const show = (items: unknown[] = [], keys = ['header'], translating = false) => 
   })) as Menu[];
   app = mount(Menus, {
     target: document.body,
-    props: { id: 'f-menus', labelId: 'f-menus-l', locale: 'en', menus, translating },
+    props: {
+      id: 'f-menus',
+      labelId: 'f-menus-l',
+      locale,
+      menus,
+      translating,
+      sourceLabel: 'English',
+    },
   });
   flushSync();
   return document.body;
@@ -83,18 +92,18 @@ const q = <T extends Element = HTMLElement>(sel: string): T => {
   return found;
 };
 const byLabel = (label: string) => q<HTMLButtonElement>(`[aria-label="${label}"]`);
-/** The row's Edit, which is named by its own text and not by a label. */
-const editButton = () => {
-  const found = Array.from(
-    document.querySelectorAll<HTMLButtonElement>('.item-actions button'),
-  ).find((b) => b.textContent?.trim().startsWith('Edit'));
-  if (!found) throw new Error('no Edit button');
-  return found;
-};
 const click = (el: HTMLElement) => {
   el.click();
   flushSync();
 };
+/** A row's move or remove, which lives in its ⋯: opened if it is not already. */
+const action = (name: string, label: string) => {
+  const more = byLabel(`Actions for ${name}`);
+  if (more.getAttribute('aria-expanded') !== 'true') click(more);
+  return byLabel(label);
+};
+/** The first row's name, which is the button that opens its editor. */
+const rowOpen = () => q<HTMLButtonElement>('.menu-item .row-open');
 const labels = () =>
   Array.from(document.querySelectorAll('.menu-item .lbl')).map((el) =>
     (el.textContent ?? '').replace(/\s+/g, ' ').trim(),
@@ -108,6 +117,10 @@ const item = (over: Record<string, unknown>) => ({
   link: { type: 'url', href: '/' },
   ...over,
 });
+/** The persistent library reads its entries on mount. */
+const openAdd = async () => {
+  await loaded();
+};
 const pickRow = (path: string) => {
   const row = Array.from(document.querySelectorAll<HTMLButtonElement>('.picker-list button')).find(
     (b) => b.querySelector('.path')?.textContent === path,
@@ -124,10 +137,11 @@ const type = (sel: string, value: string) => {
 
 test('a page chosen from the list joins the menu, named by the page until somebody renames it', async () => {
   show();
-  await loaded();
+  await openAdd();
   pickRow('pages/contact');
 
-  expect(labels()).toEqual(['Contact Uses the page title']);
+  expect(labels()).toEqual(['Contact']);
+  expect(document.querySelector('.nav-library')).not.toBeNull();
   // The title is what the row shows and not what the file holds: renaming the page moves the
   // menu with it.
   const added = menus[0]?.items[0] as { _id: string };
@@ -147,11 +161,13 @@ test('a page chosen from the list joins the menu, named by the page until somebo
 // index page — where a url item would send every language to the same address.
 test("a collection's index chosen from the list is written as an index item", async () => {
   show();
-  await loaded();
+  await openAdd();
   pickRow('listings');
 
-  expect(labels()).toEqual(['Listings Uses the page title']);
-  expect(q('.menu-item .target code').textContent).toBe('/listings');
+  expect(labels()).toEqual(['Listings']);
+  expect(q('.menu-item .kind').textContent).toBe('Listings index');
+  click(rowOpen());
+  expect(q('.link-summary .sub code').textContent).toBe('/listings');
   const added = menus[0]?.items[0] as { _id: string };
   expect(written()).toBe(`menus:
   - _id: "menu0aaa"
@@ -167,16 +183,23 @@ test("a collection's index chosen from the list is written as an index item", as
 
 test('a custom link is written as a url item, and a scheme that runs code is refused', async () => {
   show();
+  await openAdd();
+  type('#f-menus-pick-url', 'javascript:alert(1)');
+
+  expect(q('#f-menus-pick-url-err').textContent).toContain('links are not allowed');
+  expect(q<HTMLButtonElement>('.nav-library .actions .btn-primary').disabled).toBe(true);
+
+  type('#f-menus-pick-url', '/contact');
+  click(q('.nav-library .actions .btn-primary'));
+
+  // An address has no title to fall back on, so the row opens for its label at once.
+  expect(document.querySelector('.nav-library')).not.toBeNull();
   await loaded();
-  type('#f-menus-cl-label', 'Book a viewing');
-  type('#f-menus-cl-url', 'javascript:alert(1)');
+  expect(document.activeElement?.id).toBe('f-menus-ed-label');
+  type('#f-menus-ed-label', 'Book a viewing');
+  click(q('.item-editor .actions .btn-primary'));
 
-  expect(q('#f-menus-cl-err').textContent).toContain('links are not allowed');
-  expect(q<HTMLButtonElement>('.custom-link .btn').disabled).toBe(true);
-
-  type('#f-menus-cl-url', '/contact');
-  click(q('.custom-link .btn'));
-
+  expect(labels()).toEqual(['Book a viewing']);
   expect(menus[0]?.items).toHaveLength(1);
   expect($state.snapshot(menus[0]?.items[0])).toMatchObject({
     label: 'Book a viewing',
@@ -197,13 +220,18 @@ test('an item the site will skip says so on the row', async () => {
   ]);
   await loaded();
 
-  expect(
-    Array.from(document.querySelectorAll('.menu-item .badge-warn')).map((b) => b.textContent),
-  ).toEqual([
+  const chips = Array.from(document.querySelectorAll<HTMLElement>('.menu-item .badge-warn'));
+  expect(chips.map((b) => b.textContent)).toEqual(['Not in EN', 'Hidden', 'Page missing']);
+  expect(chips.map((b) => b.title)).toEqual([
     'Not available in EN — the site skips this item here',
     'Hidden — the site skips this item',
     'That page is gone — the site skips this item',
   ]);
+  // The row's editor says it in full.
+  click(rowOpen());
+  expect(q('.item-editor .notice-warn').textContent).toBe(
+    'Not available in EN — the site skips this item here',
+  );
 });
 
 const three = () => [
@@ -212,14 +240,18 @@ const three = () => [
   item({ _id: 'c3d4e5f6', label: 'Contact', link: { type: 'url', href: '/contact' } }),
 ];
 
-test('the move buttons reorder a level, and the ends of it cannot be moved off', () => {
+test('the move buttons reorder a level, and the ends of it cannot be moved off', async () => {
   show(three());
 
-  expect(byLabel('Move Home up').disabled).toBe(true);
-  expect(byLabel('Move Contact down').disabled).toBe(true);
-  click(byLabel('Move Listings up'));
+  expect(action('Home', 'Move Home up').disabled).toBe(true);
+  expect(action('Contact', 'Move Contact down').disabled).toBe(true);
+  click(action('Listings', 'Move Listings up'));
   expect(labels()).toEqual(['Listings', 'Home', 'Contact']);
-  click(byLabel('Move Listings down'));
+  // The ⋯ closes on the choice, and focus comes back to it.
+  expect(document.querySelector('.row-menu .menu')).toBeNull();
+  await loaded();
+  expect(document.activeElement).toBe(byLabel('Actions for Listings'));
+  click(action('Listings', 'Move Listings down'));
   expect(labels()).toEqual(['Home', 'Listings', 'Contact']);
 });
 
@@ -227,12 +259,12 @@ test('indent makes the row a sub-item of the one above it, and outdent brings it
   show(three());
   const flat = written();
 
-  click(byLabel('Indent Listings — make it a sub-item'));
+  click(action('Listings', 'Indent Listings — make it a sub-item'));
   expect(document.querySelectorAll('.branch .branch .menu-item')).toHaveLength(1);
   expect(menus[0]?.items).toHaveLength(2);
   expect($state.snapshot(menus[0]?.items[0]?.children?.[0])).toMatchObject({ label: 'Listings' });
 
-  click(byLabel('Outdent Listings'));
+  click(action('Listings', 'Outdent Listings'));
   expect(written()).toBe(flat);
 });
 
@@ -257,12 +289,12 @@ test('the third level is the last: indent is off for a row that would push past 
   ]);
 
   // 'Sold' is two levels of its own at depth 2: indenting it would put 'Last year' at four.
-  expect(byLabel('Indent Sold — make it a sub-item').disabled).toBe(true);
+  expect(action('Sold', 'Indent Sold — make it a sub-item').disabled).toBe(true);
   // Take its child away and the same row can be indented.
-  click(byLabel('Remove Last year'));
-  expect(byLabel('Indent Sold — make it a sub-item').disabled).toBe(false);
-  click(byLabel('Indent Sold — make it a sub-item'));
-  expect(byLabel('Indent Sold — make it a sub-item').disabled).toBe(true);
+  click(action('Last year', 'Remove Last year'));
+  expect(action('Sold', 'Indent Sold — make it a sub-item').disabled).toBe(false);
+  click(action('Sold', 'Indent Sold — make it a sub-item'));
+  expect(action('Sold', 'Indent Sold — make it a sub-item').disabled).toBe(true);
 });
 
 test('a row with sub-items is not removed until somebody says so; a leaf goes at once', () => {
@@ -276,10 +308,10 @@ test('a row with sub-items is not removed until somebody says so; a leaf goes at
     item({ _id: 'c3d4e5f6', label: 'Contact', link: { type: 'url', href: '/contact' } }),
   ]);
 
-  click(byLabel('Remove Contact'));
+  click(action('Contact', 'Remove Contact'));
   expect(labels()).toEqual(['Listings', 'For sale']);
 
-  click(byLabel('Remove Listings'));
+  click(action('Listings', 'Remove Listings'));
   expect(q('[role="alertdialog"] h2').textContent).toContain(
     'Remove Listings and what is under it?',
   );
@@ -298,16 +330,18 @@ test('the label typed over the page title is what gets stored, and Cancel puts t
   show([item({ label: '', link: { type: 'entry', ref: 'pages/contact' } })]);
   await loaded();
 
-  click(editButton());
+  click(rowOpen());
+  expect(rowOpen().getAttribute('aria-expanded')).toBe('true');
   expect(q<HTMLInputElement>('#f-menus-ed-label').placeholder).toBe('Contact');
   type('#f-menus-ed-label', 'Talk to us');
-  click(q<HTMLElement>('.nav-main .actions .btn-primary'));
+  click(q<HTMLElement>('.item-editor .actions .btn-primary'));
+  expect(document.querySelector('.item-editor')).toBeNull();
   expect(labels()).toEqual(['Talk to us']);
 
-  click(editButton());
+  click(rowOpen());
   type('#f-menus-ed-label', 'Something else');
   click(
-    Array.from(document.querySelectorAll<HTMLButtonElement>('.nav-main .actions button')).at(
+    Array.from(document.querySelectorAll<HTMLButtonElement>('.item-editor .actions button')).at(
       -1,
     ) as HTMLElement,
   );
@@ -432,48 +466,48 @@ test('reordering by keyboard and by mouse write the same menu', async () => {
   expect(written()).toBe(moved);
 });
 
-// On a phone the tree is the screen and the add pane is a sheet opened from a button; the
-// stylesheet hides the button wider than that, and the pane is a plain pane. One disclosure
-// either way, so the button's state and the focus contract are what is tested here.
-test('Add to menu opens the add pane as a sheet, focus lands in it, and Escape gives it back', async () => {
-  show(three());
-  const open = q<HTMLButtonElement>('.nav-add-open');
-  expect(open.getAttribute('aria-expanded')).toBe('false');
-  expect(open.getAttribute('aria-controls')).toBe('f-menus-add');
-
-  open.click();
+test('the library stays visible, preserves search, and marks pages already in any menu level', async () => {
+  show([
+    item({
+      label: 'Home',
+      children: [
+        item({ _id: 'child001', label: 'Contact', link: { type: 'entry', ref: 'pages/contact' } }),
+      ],
+    }),
+  ]);
   await loaded();
-  expect(q('#f-menus-add').classList.contains('is-open')).toBe(true);
-  expect(open.getAttribute('aria-expanded')).toBe('true');
-  expect(document.activeElement?.id).toBe('f-menus-add-h');
+  expect(document.querySelector('.nav-library')).not.toBeNull();
+  expect(document.activeElement?.id).not.toBe('f-menus-pick-q');
+  expect(byLabel('Add Contact again').textContent).toContain('In menu');
+
+  type('#f-menus-pick-q', 'Impressum');
+  pickRow('pages/impressum');
+  expect(labels()).toEqual(['Home', 'Contact', 'Impressum']);
+  expect(q<HTMLInputElement>('#f-menus-pick-q').value).toBe('Impressum');
+  expect(byLabel('Add Impressum again').textContent).toContain('In menu');
+  expect(q('[role="status"]').textContent).toContain('Impressum added');
 
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-  flushSync();
-  expect(q('#f-menus-add').classList.contains('is-open')).toBe(false);
-  expect(document.activeElement).toBe(open);
+  click(document.body);
+  expect(document.querySelector('.nav-library')).not.toBeNull();
 });
 
-test('a tap outside the sheet lands on the scrim, which closes it', async () => {
-  show(three());
-  q<HTMLButtonElement>('.nav-add-open').click();
+test('the library reflects removal and the active menu when switching tabs', async () => {
+  show(
+    [item({ label: 'Contact', link: { type: 'entry', ref: 'pages/contact' } })],
+    ['header', 'footer'],
+  );
   await loaded();
-  expect(q('#f-menus-add').classList.contains('is-open')).toBe(true);
-
-  q<HTMLElement>('.nav-scrim').click();
-  flushSync();
-  expect(q('#f-menus-add').classList.contains('is-open')).toBe(false);
-  expect(document.activeElement).toBe(q('.nav-add-open'));
-});
-
-test('Done closes the sheet and gives focus back to the button that opened it', async () => {
-  show(three());
-  q<HTMLButtonElement>('.nav-add-open').click();
-  await loaded();
-
-  q<HTMLButtonElement>('.nav-add .nav-add-close').click();
-  flushSync();
-  expect(q('#f-menus-add').classList.contains('is-open')).toBe(false);
-  expect(document.activeElement).toBe(q('.nav-add-open'));
+  expect(byLabel('Add Contact again').textContent).toContain('In menu');
+  click(action('Contact', 'Remove Contact'));
+  expect(byLabel('Add Contact').textContent).not.toContain('In menu');
+  pickRow('pages/contact');
+  const tabs = document.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+  click(tabs[1] as HTMLButtonElement);
+  expect(byLabel('Add Contact').textContent).not.toContain('In menu');
+  pickRow('pages/contact');
+  expect(menus[0]?.items).toHaveLength(1);
+  expect(menus[1]?.items).toHaveLength(1);
 });
 
 // One provider spans the tree now, but a drag that keeps its own indent stays in its own
@@ -679,7 +713,7 @@ test('the second language types one label a row and cannot move anything', async
   expect(boxes().map((b) => b.value)).toEqual(['Kontakt', 'Angebote', '']);
   expect(document.querySelectorAll('.grip')).toHaveLength(0);
   expect(document.querySelectorAll('.item-actions')).toHaveLength(0);
-  expect(document.querySelector('.nav-add')).toBeNull();
+  expect(document.querySelector('.nav-library')).toBeNull();
 
   type('#f-menus-lbl-a1b2c3d4', 'Kontakt und Anfahrt');
 
@@ -717,7 +751,33 @@ test('a label box is named by the page it points at, and empty means that page�
   expect(child?.placeholder).toBe('Old Mill House');
   // The badge the tree draws is drawn here too: a row the site is going to skip is one nobody
   // should spend a translation on.
-  expect(document.querySelector('.menu-item.is-flagged .badge-warn')?.textContent).toBe(
+  expect(document.querySelector<HTMLElement>('.menu-item .badge-warn')?.title).toBe(
     'Hidden — the site skips this item',
   );
+});
+
+test('German label fallbacks and hidden status belong to German, with clear source-language guidance', async () => {
+  show(translated, ['header'], true, 'de');
+  await loaded();
+  expect(boxes()[2]?.placeholder).toBe('Das Mühlenhaus');
+  expect(document.querySelector('.menu-item .badge-warn')).toBeNull();
+  expect(q('.nav-structure-heading h2').textContent).toBe('German menu labels');
+  expect(q('.notice-info').textContent).toContain('switch to English');
+  expect(q('.notice-info').textContent).not.toContain('other column');
+});
+
+test('language visibility is an optional exception and Cancel restores the original setting', async () => {
+  show([item({ label: 'Contact', link: { type: 'entry', ref: 'pages/contact' } })]);
+  await loaded();
+  click(rowOpen());
+  expect(q<HTMLDetailsElement>('.nav-visibility').open).toBe(false);
+  expect(q('.nav-visibility summary').textContent).toContain('All languages');
+  const german = Array.from(
+    document.querySelectorAll<HTMLLabelElement>('.nav-visibility label'),
+  ).find((label) => label.textContent === 'German only');
+  click(german?.querySelector('input') as HTMLInputElement);
+  expect(menus[0]?.items[0]?._locales).toEqual(['de']);
+  expect(q('.nav-visibility summary').textContent).toContain('German only');
+  click(q('.item-editor .actions button:last-child'));
+  expect(menus[0]?.items[0]?._locales).toBeUndefined();
 });

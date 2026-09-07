@@ -4,18 +4,24 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Fix the navigation translation pane collapsing to a narrow column in locale-only view.
+  Clarify the shared-menu workflow and make language visibility an optional item setting.
+  Navigation label placeholders and hidden-page warnings now use the selected locale.
+
 - **Globals lose the empty right pane.** The dashed placeholder offered Preview, which a global
-  never has; the right column now appears when Side by side is on. The navigation builder takes
-  the whole width with it: it no longer sits in a 640px form, the tree gets the room, the add pane stays in view while a long menu scrolls,
-  a row's move buttons keep their space rather than widening the row under the pointer, and
-  narrower than about 800px — a phone, or beside a second language — the add pane opens as a
-  sheet from a button. The second language's rows stack title, box and address instead of
+  never has; the right column now appears when Side by side is on. The navigation builder no
+  longer sits in a 640px form. The second language's rows stack title, box and address instead of
   squeezing the title beside the box.
 - Preview navigation, language switchers and localized address lookups no longer validate
   unrelated page bodies. An incomplete linked draft no longer blocks the homepage; the
   page being previewed and other content its loader renders still require valid drafts.
 
 - Pin Better Auth to the tested 1.7.1 account schema. Packed installations can no longer
+- **A visible navigation library beside the menu.** Search pages, entries and collection
+  pages, then add them without reopening a picker. “In menu” indicators include nested items
+  and update for the active menu. Rows show destinations, nesting guides and an explicit Edit
+  control, with inline label and link editing. The library stacks above the tree on narrow
+  screens. Existing drag, keyboard, language and removal behavior is preserved.
   silently select 1.7.3, whose removed `issuer` writes prevent authentication from starting.
 
 - Saves use server-seeded edit snapshots and revisions, preserve newer work during publication,

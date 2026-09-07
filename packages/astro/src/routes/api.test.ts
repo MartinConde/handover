@@ -2908,6 +2908,8 @@ test('the picker list carries every collection with the address each language se
       hidden: false,
       path: 'listings/mill-house',
       title: 'The Mill House',
+      titles: { en: 'The Mill House' },
+      hiddenLocales: [],
       locales: ['en'],
       urls: { en: '/listings/mill-house' },
     },
@@ -2916,6 +2918,8 @@ test('the picker list carries every collection with the address each language se
       hidden: false,
       path: 'listings/seaview-cottage',
       title: 'Seaview Cottage',
+      titles: { en: 'Seaview Cottage' },
+      hiddenLocales: [],
       locales: ['en'],
       urls: { en: '/listings/seaview-cottage' },
     },
@@ -2924,6 +2928,8 @@ test('the picker list carries every collection with the address each language se
       hidden: false,
       path: 'presenters/rosa-hale',
       title: 'Rosa Hale',
+      titles: { en: 'Rosa Hale' },
+      hiddenLocales: [],
       locales: ['en'],
       urls: {},
     },
@@ -2932,6 +2938,8 @@ test('the picker list carries every collection with the address each language se
       hidden: false,
       path: 'posts/hello',
       title: 'Hello',
+      titles: { en: 'Hello' },
+      hiddenLocales: [],
       locales: ['en'],
       urls: { en: '/blog/hello' },
     },
@@ -2940,6 +2948,8 @@ test('the picker list carries every collection with the address each language se
       hidden: false,
       path: 'posts/taken',
       title: 'Taken',
+      titles: { en: 'Taken', de: 'Belegt' },
+      hiddenLocales: [],
       locales: ['en', 'de'],
       urls: { en: '/blog/taken', de: '/de/blog/belegt' },
     },
@@ -2956,9 +2966,12 @@ test('the picker says which of its rows is off the site', async () => {
     },
   ]);
 
-  const body = (await (await GET(ctx('entries'))).json()) as { entries: { hidden: boolean }[] };
+  const body = (await (await GET(ctx('entries'))).json()) as {
+    entries: { hidden: boolean; hiddenLocales: string[] }[];
+  };
 
   expect(body.entries.map((e) => e.hidden)).toEqual([true, false, false, false, false]);
+  expect(body.entries.map((e) => e.hiddenLocales)).toEqual([['en'], [], [], [], []]);
 });
 
 test('a save of a translation goes to that language and takes only the words it owns', async () => {

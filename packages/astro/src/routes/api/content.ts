@@ -313,6 +313,12 @@ export async function pickable(ctx: RequestContext) {
         // What a reference or an entry link stores, and what the picker shows under the title.
         path: `${collection}/${entry.id}`,
         title: (entry.locales[config.i18n.defaultLocale] ?? entry.locales[locales[0] ?? ''])?.title,
+        titles: Object.fromEntries(
+          Object.entries(entry.locales).map(([locale, info]) => [locale, info.title]),
+        ),
+        hiddenLocales: Object.entries(entry.locales)
+          .filter(([, info]) => info.status === 'hidden')
+          .map(([locale]) => locale),
         locales,
         urls,
       };

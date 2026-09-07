@@ -54,13 +54,34 @@ moves it in all of them, and the German file keeps its German words while it hap
 
 ## In the admin
 
-The client edits this file in **Site settings → Navigation**: pages, entries and each
-collection's index page on the left, the tree on the right. Rows move by dragging the handle — a hairline marks a slot between
+The client edits this file in **Site settings → Navigation**. A persistent **Add to menu**
+library sits beside the menu structure, with searchable pages, entries, collection index pages
+and a custom-link form. Each page has an add button; **In menu** marks pages already used,
+including nested items. The library keeps the current search after an addition. On narrow
+screens the library stacks above the tree, with a shortcut to the menu structure.
+
+Rows show a label, destination and an explicit **Edit** control. Clicking a row opens its
+editor underneath: label, link, new tab and language visibility. **Done** closes the editor;
+**Cancel** restores the row to how it was when opened. Rows move by dragging the handle — a hairline marks a slot between
 siblings, a tinted well names the parent a drop would go inside, and a slot past three levels
-refuses in place — or with each row's buttons (up, down, indent, outdent). The second language's column draws the same tree as one box a row,
-for the labels alone. A row pointing at something this language cannot show is flagged
-there and dropped by [`<Nav />`](#rendering-the-menus). Which menus a site has is the
+refuses in place — or from the row's ⋯ (up, down, make a sub-item, move out a level, remove).
+The second language's column draws the same tree as one box a row, for the labels alone. A
+row pointing at something this language cannot show carries a chip there — *Hidden*, *Not in
+EN*, *Page missing* — and is dropped by [`<Nav />`](#rendering-the-menus). Which menus a site has is the
 developer's: they are declared in this file, and the client fills them.
+
+### Working across languages
+
+Build and arrange the menu in its source language (usually English). Switch to another
+language to edit its labels, or use **Side by side** for reference. Leaving a label empty
+uses the linked page's own title in that language. Page and collection links resolve the
+localized destination automatically; a custom URL uses the exact same address everywhere.
+
+**Language visibility** is an optional setting inside the item editor. Keep **All languages**
+for normal navigation; choose a single language for exceptions such as a German-only legal
+link. It controls where the item and its sub-items belong, not whether a page is translated.
+Missing or hidden pages are still omitted in that language. Label placeholders and hidden-page
+warnings use the selected language's title and status.
 
 ## Rendering the menus
 

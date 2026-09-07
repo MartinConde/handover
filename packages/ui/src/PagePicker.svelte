@@ -7,6 +7,10 @@ export interface PickEntry {
   /** `collection/name` — what a reference or an entry link stores. */
   path: string;
   title: string;
+  /** Each available language's title, for localized navigation label placeholders. */
+  titles?: Record<string, string>;
+  /** Hidden status per language; older responses only carry the aggregate `hidden`. */
+  hiddenLocales?: string[];
   /** The languages this entry has a file in. */
   locales: string[];
   /** Where each of them serves it; empty for a collection nothing renders. */
@@ -50,6 +54,8 @@ let {
   locale,
   indexes = false,
   chosen,
+  library = false,
+  included = [],
   onpick,
   onurl,
   onclose,
@@ -71,6 +77,9 @@ let {
   indexes?: boolean;
   /** What the field holds now, so the list says which row that is. */
   chosen?: string;
+  /** A persistent library offers repeatable add actions instead of a single selection. */
+  library?: boolean;
+  included?: string[];
   onpick: (entry: PickEntry) => void;
   /** Given when a typed web address is an answer too; without it the list is the only way. */
   onurl?: (href: string) => void;
@@ -85,7 +94,7 @@ let list = $state<HTMLElement>();
 let box = $state<HTMLInputElement>();
 
 $effect(() => {
-  box?.focus();
+  if (!library) box?.focus();
   readPickable().then((p) => (all = p));
 });
 
@@ -130,6 +139,7 @@ const refused = $derived(typed ? unsafeLinkScheme('default', typed) : undefined)
 // Tab reaches them all whether or not this runs.
 function step(e: KeyboardEvent) {
   if (e.key === 'Escape') return onclose?.();
+  if (e.target !== box && e.target !== e.currentTarget && !list?.contains(e.target as Node)) return;
   if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
   const rows = Array.from(list?.querySelectorAll('button') ?? []);
   if (!rows.length) return;
@@ -141,10 +151,10 @@ function step(e: KeyboardEvent) {
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -- the keys move focus between the controls inside -->
-<div class="picker" role="group" aria-labelledby={labelId} onkeydown={step}>
+<div class="picker" class:is-library={library} role="group" aria-labelledby={labelId} onkeydown={step}>
   <label class="visually-hidden" for="{id}-q">Search {label}</label>
   <input class="input" id="{id}-q" type="search" placeholder="Search pages and entries" bind:value={query} bind:this={box} />
-  <div class="picker-list" bind:this={list} role="listbox" aria-label={label}>
+  <div class="picker-list" bind:this={list} role={library ? 'group' : 'listbox'} aria-label={label}>
     {#each groups as group (group.name)}
       <!-- The collection's name is what the rows under it have in common, not a step in the
            page's outline: a heading here reads as one level below whatever opened the picker,
@@ -156,7 +166,19 @@ function step(e: KeyboardEvent) {
         {@const says = no ?? note(row)}
         <!-- Refused with aria-disabled rather than disabled: a disabled button takes no focus,
              so a keyboard would walk past the row and never hear the reason. -->
-        <button type="button" role="option" aria-selected={row.path === chosen ? 'true' : 'false'} aria-disabled={no ? 'true' : undefined} aria-describedby={says ? `${id}-why-${row.path}` : undefined} onclick={() => !no && onpick(row)}>
+        <button type="button" role={library ? undefined : 'option'} aria-label={library ? `Add ${row.title}${included.includes(row.path) ? ' again' : ''}` : undefined} aria-selected={library ? undefined : row.path === chosen ? 'true' : 'false'} aria-disabled={no ? 'true' : undefined} aria-describedby={says && (!library || !row.index) ? `${id}-why-${row.path}` : undefined} onclick={() => !no && onpick(row)}>
+          {#if library}
+            <span class="library-entry">
+              <span class="library-title">{row.title}</span>
+              <span class="path">{row.path}</span>
+              <span class="library-meta">
+                {#if included.includes(row.path)}<span class="library-included">✓ In menu</span>{/if}
+                {#if row.index}<span>Collection page</span>{/if}
+                {#each all.locales as of (of)}<span class="library-locale" class:is-missing={!row.locales.includes(of)} title={row.locales.includes(of) ? `Available in ${of.toUpperCase()}` : `Not available in ${of.toUpperCase()}`}>{of.toUpperCase()}</span>{/each}
+              </span>
+            </span>
+            <span class="library-add" aria-hidden="true">+</span>
+          {:else}
           <span>{row.title}</span>
           <span class="chips">
             {#each all.locales as of (of)}
@@ -164,8 +186,9 @@ function step(e: KeyboardEvent) {
             {/each}
           </span>
           <span class="path">{locale ? (row.urls[locale] ?? row.path) : row.path}</span>
+          {/if}
         </button>
-        {#if says}<p class="why" id="{id}-why-{row.path}">{says}</p>{/if}
+        {#if says && (!library || !row.index)}<p class="why" id="{id}-why-{row.path}">{library && row.hidden && !no ? 'Hidden page — visitors won’t see this item.' : says}</p>{/if}
       {/each}
       </div>
     {:else}
@@ -186,7 +209,7 @@ function step(e: KeyboardEvent) {
     <div class="actions">
       {#if onclose}<button class="btn btn-sm" type="button" onclick={onclose}>Cancel</button>{/if}
       {#if onurl}
-        <button class="btn btn-sm btn-primary" type="button" disabled={!typed || !!refused} onclick={() => onurl?.(typed)}>Use this address</button>
+        <button class="btn btn-sm btn-primary" type="button" disabled={!typed.trim() || !!refused} onclick={() => { onurl?.(typed.trim()); if (library) typed = ''; }}>{library ? 'Add custom link' : 'Use this address'}</button>
       {/if}
     </div>
   {/if}

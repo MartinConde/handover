@@ -1301,7 +1301,7 @@ test('menus: the translated column draws the tree as labels, with nothing to mov
   expect(document.querySelector('.nav-build.is-labels')).not.toBeNull();
   expect(document.querySelectorAll('.grip')).toHaveLength(0);
   expect(q<HTMLInputElement>('.menu-item .input').value).toBe('Home');
-  expect(q('#f-menus').textContent).toContain('The shape of this menu is shared');
+  expect(q('#f-menus').textContent).toContain('The menu structure is shared across languages');
 });
 
 test('a picked image is written as the format stores it, and Remove empties the field', async () => {

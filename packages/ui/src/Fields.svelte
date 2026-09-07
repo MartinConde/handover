@@ -564,7 +564,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   <div class="field" class:is-invalid={err} class:pop-anchor={marked}>
     {#if field.type === 'menus'}
       {@render groupLabel(id, field, text, at)}
-      <Menus {id} labelId="{id}-l" menus={rows(at) as Menu[]} {locale} {translating} />
+      <Menus {id} labelId="{id}-l" menus={rows(at) as Menu[]} {locale} {translating} {sourceLabel} />
     {:else if translating && mode === 'duplicate' && !structural(field)}
       {@render groupLabel(id, field, text, at)}
       <div class="readonly" {id} role="region" tabindex="-1" aria-labelledby="{id}-l">{read(at) ?? ''}</div>
