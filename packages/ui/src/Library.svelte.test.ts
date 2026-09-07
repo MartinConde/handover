@@ -304,7 +304,9 @@ const setFocal = '.lib-side .actions button:nth-child(1)';
 const cropButton = '.lib-side .actions button:nth-child(2)';
 const nudge = (key: string, times: number, shiftKey = false) => {
   for (let i = 0; i < times; i++) {
-    q('.focal-handle').dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }));
+    q('.focal-handle').dispatchEvent(
+      new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }),
+    );
   }
   flushSync();
 };

@@ -563,7 +563,9 @@ const arrayData = () => parseEntry('default', golden('array')) as Record<string,
 const snap = () => $state.snapshot(root) as Record<string, never>;
 const nudge = (key: string, times: number, shiftKey = false) => {
   for (let i = 0; i < times; i++) {
-    q('.focal-handle').dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }));
+    q('.focal-handle').dispatchEvent(
+      new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }),
+    );
   }
   flushSync();
 };

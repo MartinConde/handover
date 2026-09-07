@@ -32,7 +32,9 @@ $effect(() => {
 // A phone holds a picture upright whatever the site's fields crop to, so that shape is always
 // previewed after the site's own.
 const PHONE = { label: 'Phone, upright', preset: { ratio: '9:16' } as Preset };
-const shapes = $derived(presets.some((p) => p.preset.ratio === PHONE.preset.ratio) ? presets : [...presets, PHONE]);
+const shapes = $derived(
+  presets.some((p) => p.preset.ratio === PHONE.preset.ratio) ? presets : [...presets, PHONE],
+);
 
 function point(e: PointerEvent) {
   const box = stage?.getBoundingClientRect();
