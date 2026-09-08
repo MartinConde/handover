@@ -1,0 +1,42 @@
+---
+import Blocks from 'astro-handover/Blocks.astro';
+
+const { block, components } = Astro.props;
+---
+
+<section class="fixture-block" data-fixture-block data-type={block._type}>
+  {block._type === 'repeated' && (
+    <>
+      <h2 data-repeated-heading>{block.heading}</h2>
+      <p data-repeated-heading>{block.heading}</p>
+    </>
+  )}
+  {block._type === 'promo' && <p data-shared-promo>{block.heading}</p>}
+  {block._type === 'columns' && (
+    <div class="columns" data-nested-list>
+      {block.columns.map((column: { _id: string; blocks: unknown[] }) => (
+        <div class="column" data-column={column._id}>
+          {column.blocks.length ? (
+            <Blocks blocks={column.blocks} {components} />
+          ) : (
+            <p data-empty-list>Empty nested list</p>
+          )}
+        </div>
+      ))}
+    </div>
+  )}
+</section>
+
+<style>
+  .fixture-block {
+    border-left: 4px solid rgb(16 185 129);
+    margin-block: 1rem;
+    padding: 0.75rem;
+  }
+
+  .columns {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+</style>

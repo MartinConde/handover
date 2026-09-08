@@ -1,6 +1,8 @@
 node_modules/
 dist/
+.astro/
 .env
 .env.test
 *.tsbuildinfo
 .DS_Store
+test-results/

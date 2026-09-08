@@ -1,0 +1,41 @@
+---
+import Blocks from 'astro-handover/Blocks.astro';
+import FixtureBlock from './FixtureBlock.astro';
+import Island from './Island.svelte';
+
+const { data, locale, globals } = Astro.props;
+const components = {
+  repeated: FixtureBlock,
+  promo: FixtureBlock,
+  columns: FixtureBlock,
+};
+---
+
+<!doctype html>
+<html lang={locale}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>{data.title}</title>
+  </head>
+  <body>
+    <main class="fixture-shell">
+      <h1>{data.title}</h1>
+      <Blocks blocks={data.blocks} {components} {globals} />
+      <Island client:load />
+    </main>
+  </body>
+</html>
+
+<style>
+  :global(body) {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+  }
+
+  .fixture-shell {
+    margin: 2rem auto;
+    max-width: 60rem;
+    padding: 0 1rem;
+  }
+</style>

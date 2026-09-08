@@ -1,0 +1,16 @@
+_version: 1
+title: "Canvas-Testseite"
+blocks:
+  - _type: "repeated"
+    _id: "repeat01"
+    heading: "Wiederholtes Quellfeld"
+  - _type: "columns"
+    _id: "columns1"
+    columns:
+      - _id: "column01"
+        blocks:
+          - _type: "promo"
+            _id: "promo001"
+            _ref: "globals/shared-promo"
+      - _id: "column02"
+        blocks: []

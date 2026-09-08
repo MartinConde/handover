@@ -1,0 +1,14 @@
+---
+import FixturePage from '../components/FixturePage.astro';
+import { load, staticSource } from '../loaders/page';
+
+export const prerender = false;
+
+const parts = (Astro.params.path ?? '').split('/');
+const locale = parts[0] === 'de' ? String(parts.shift()) : 'en';
+const slug = parts.join('/');
+const page = await load(staticSource, { locale, slug });
+if (!page) return new Response('Not found', { status: 404 });
+---
+
+<FixturePage {...page} />
