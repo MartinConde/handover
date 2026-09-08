@@ -1,5 +1,11 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { flushEntry, type SaveState, saveCoordinator, saveLane } from './save';
+import {
+  classifyDraftSaveRefusal,
+  flushEntry,
+  type SaveState,
+  saveCoordinator,
+  saveLane,
+} from './save';
 
 afterEach(() => vi.useRealTimers());
 
@@ -160,4 +166,88 @@ test('accepting persisted machine translation does not resave the same snapshot'
   expect(await saves.flush()).toBe(true);
   expect(write).not.toHaveBeenCalled();
   expect(state()).toEqual({ saved: 'translated', phase: 'idle' });
+});
+
+test('closing the save gate cancels a pending debounce and rejects later flushes', async () => {
+  vi.useFakeTimers();
+  const write = vi.fn(async () => true);
+  const { saves, edit } = editor(write);
+  edit('kept locally');
+  saves.change();
+
+  saves.close();
+  await vi.advanceTimersByTimeAsync(3000);
+
+  expect(write).not.toHaveBeenCalled();
+  expect(await saves.flush()).toBe(false);
+  expect(saves.unsaved()).toBe(true);
+});
+
+test('closing the save gate prevents queued work from dispatching', async () => {
+  const lane = saveLane();
+  const pending = deferred<boolean>();
+  const first = editor(() => pending.promise, lane);
+  const queuedWrite = vi.fn(async () => true);
+  const queued = editor(queuedWrite, lane);
+  first.edit('first locale');
+  queued.edit('second locale');
+
+  const firstFlush = first.saves.flush();
+  const queuedFlush = queued.saves.flush();
+  await Promise.resolve();
+  queued.saves.close();
+  pending.resolve(true);
+
+  expect(await firstFlush).toBe(true);
+  expect(await queuedFlush).toBe(false);
+  expect(queuedWrite).not.toHaveBeenCalled();
+  expect(queued.saves.unsaved()).toBe(true);
+});
+
+test('an in-flight acknowledgement saves only the version that was sent after the gate closes', async () => {
+  const pending = deferred<boolean>();
+  const write = vi.fn(() => pending.promise);
+  const { saves, edit, state } = editor(write);
+  edit('sent');
+  const flushed = saves.flush();
+  await Promise.resolve();
+  edit('not sent');
+  saves.change();
+  saves.close();
+  pending.resolve(true);
+
+  expect(await flushed).toBe(false);
+  expect(write.mock.calls).toEqual([['sent']]);
+  expect(state()).toEqual({ saved: 'sent', phase: 'idle' });
+  expect(saves.unsaved()).toBe(true);
+});
+
+test('draft-save refusals distinguish lock loss, revision conflict, and other failures', async () => {
+  await expect(
+    classifyDraftSaveRefusal(
+      Response.json(
+        {
+          held_by: { id: 'u2', name: 'Anna Berg' },
+          mine: false,
+          expires_at: 123,
+        },
+        { status: 409 },
+      ),
+    ),
+  ).resolves.toEqual({
+    kind: 'lock',
+    lock: {
+      held_by: { id: 'u2', name: 'Anna Berg' },
+      mine: false,
+      expires_at: 123,
+    },
+  });
+  await expect(
+    classifyDraftSaveRefusal(
+      Response.json({ error: 'The draft changed.', reason: 'revision' }, { status: 409 }),
+    ),
+  ).resolves.toEqual({ kind: 'revision', error: 'The draft changed.' });
+  await expect(
+    classifyDraftSaveRefusal(Response.json({ reason: 'drift' }, { status: 409 })),
+  ).resolves.toEqual({ kind: 'other' });
 });

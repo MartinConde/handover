@@ -147,6 +147,13 @@ const type = (root: ParentNode, sel: string, value: string) => {
   flushSync();
 };
 const tick = () => new Promise((r) => setTimeout(r, 0));
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+};
 // The tab token lives in session storage, so pinning it makes the request bodies below literal.
 sessionStorage.setItem('handover-tab', 'tab-1');
 // Every editor takes the lock on open; any other answer shape reads as somebody else holding it.
@@ -1661,6 +1668,127 @@ test('a refused save does not push the lock back out', async () => {
   flushSync();
 
   expect(fetchMock.mock.calls.filter((call) => isLock(call[0])).length).toBe(before);
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+test('lock loss before the debounce cancels the pending save', async () => {
+  vi.useFakeTimers();
+  let taken = false;
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (!isLock(url))
+      return Response.json({ pending: true, problems: [], revisions: { en: 'next' } });
+    if (init?.method === 'POST' || !taken) return Response.json(HELD);
+    return Response.json({
+      held_by: { id: 'u2', name: 'Anna Berg' },
+      mine: false,
+      expires_at: Date.now() + LOCK_TTL,
+    });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: { ...entry, revisions: { en: 'legacy' } } });
+  await vi.advanceTimersByTimeAsync(0);
+  type(root, 'input#f-title', 'Keep this locally');
+  taken = true;
+  window.dispatchEvent(new Event('focus'));
+  await vi.advanceTimersByTimeAsync(0);
+  await vi.advanceTimersByTimeAsync(3000);
+  flushSync();
+
+  expect(wrote(fetchMock)).toHaveLength(0);
+  expect($(root, '.lock-banner.is-lost')).not.toBeNull();
+  expect($<HTMLInputElement>(root, 'input#f-title')?.value).toBe('Keep this locally');
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+test('lock loss stops a queued locale save from dispatching', async () => {
+  vi.useFakeTimers();
+  const source = deferred<Response>();
+  let taken = false;
+  const drafts: string[] = [];
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (isLock(url)) {
+      if (init?.method === 'POST' || !taken) return Response.json(HELD);
+      return Response.json({
+        held_by: { id: 'u2', name: 'Anna Berg' },
+        mine: false,
+        expires_at: Date.now() + LOCK_TTL,
+      });
+    }
+    if (isLint(url)) return Response.json({ results: [] });
+    drafts.push(String(url));
+    return drafts.length === 1
+      ? source.promise
+      : Response.json({ pending: true, problems: [], revision: 'de-next' });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({
+    entry: { ...bilingual, revisions: { en: 'legacy', de: 'de-opened' } },
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  type(root, 'input#f-title', 'Source edit');
+  type(root, 'input#t-title', 'German edit');
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(drafts).toEqual(['/admin/api/drafts/listings/seaview-cottage']);
+
+  taken = true;
+  window.dispatchEvent(new Event('focus'));
+  await vi.advanceTimersByTimeAsync(0);
+  source.resolve(
+    Response.json({
+      pending: true,
+      problems: [],
+      revisions: { en: 'en-next', de: 'de-synced' },
+    }),
+  );
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync();
+
+  expect(drafts).toEqual(['/admin/api/drafts/listings/seaview-cottage']);
+  expect($(root, '.lock-banner.is-lost')).not.toBeNull();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
+
+test('lock loss during a request acknowledges its sent version without draining a later edit', async () => {
+  vi.useFakeTimers();
+  const response = deferred<Response>();
+  let taken = false;
+  const bodies: { data: { title: string }; revision: string }[] = [];
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (isLock(url)) {
+      if (init?.method === 'POST' || !taken) return Response.json(HELD);
+      return Response.json({
+        held_by: { id: 'u2', name: 'Anna Berg' },
+        mine: false,
+        expires_at: Date.now() + LOCK_TTL,
+      });
+    }
+    if (isLint(url)) return Response.json({ results: [] });
+    bodies.push(JSON.parse(String(init?.body)));
+    return response.promise;
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: { ...entry, revisions: { en: 'legacy' } } });
+  await vi.advanceTimersByTimeAsync(0);
+  type(root, 'input#f-title', 'Sent version');
+  await vi.advanceTimersByTimeAsync(2000);
+  type(root, 'input#f-title', 'Still local');
+  taken = true;
+  window.dispatchEvent(new Event('focus'));
+  await vi.advanceTimersByTimeAsync(0);
+  response.resolve(Response.json({ pending: true, problems: [], revisions: { en: 'after-sent' } }));
+  await vi.advanceTimersByTimeAsync(3000);
+  flushSync();
+
+  expect(bodies.map((body) => [body.data.title, body.revision])).toEqual([
+    ['Sent version', 'legacy'],
+  ]);
+  expect($<HTMLInputElement>(root, 'input#f-title')?.value).toBe('Still local');
+  expect($(root, '.lock-banner.is-lost')).not.toBeNull();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });

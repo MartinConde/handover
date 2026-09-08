@@ -14,13 +14,14 @@ import { onMount, tick, untrack } from 'svelte';
 import { when } from './activity-line';
 import CheckLines, { type CheckItem, merged, plural, verdict } from './CheckLines.svelte';
 import DriftPanel from './Drift.svelte';
+import { createEntrySession } from './entry-session.svelte';
 import Fields from './Fields.svelte';
 import History from './History.svelte';
 import { guardNavigation, navigate } from './navigate';
 import OffsiteDialog, { type Target } from './Offsite.svelte';
 import PreviewPane from './Preview.svelte';
 import { request as fetch, sitePath } from './request.js';
-import { flushEntry, type SaveState, saveCoordinator, saveLane } from './save';
+import { classifyDraftSaveRefusal } from './save';
 import Translation from './Translation.svelte';
 
 type Data = Record<string, unknown>;
@@ -120,15 +121,15 @@ let {
   restored?: string;
 } = $props();
 
-// svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
-let data = $state<Data>(structuredClone(entry.data));
-// svelte-ignore state_referenced_locally -- versions and languages belong to this opened editor
-let revisions = $state({ ...entry.revisions });
-// svelte-ignore state_referenced_locally -- retain saved translations across pane switches
-let translations = $state(structuredClone(entry.translations));
-const lane = saveLane();
-// svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
-let saveState = $state<SaveState>({ saved: JSON.stringify(entry.data), phase: 'idle' });
+// svelte-ignore state_referenced_locally -- the loaded files seed this opened entry's session
+const entrySession = createEntrySession({
+  sourceLocale: entry.sourceLocale,
+  data: entry.data,
+  translations: entry.translations,
+  revisions: entry.revisions,
+});
+const data = $derived(entrySession.snapshot(entry.sourceLocale));
+const saveState = $derived(entrySession.saveState(entry.sourceLocale));
 const saved = $derived(saveState.saved);
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let drafted = $state(entry.pending.includes(entry.sourceLocale));
@@ -162,6 +163,7 @@ let savedAt = $state(0);
 let pane = $state<ReturnType<typeof Translation>>();
 // Lives here rather than in the column, which is thrown away whenever the screen changes.
 let translated = $state(false);
+let translationProblems = $state<Record<string, Record<string, string>>>({});
 
 // A site with one language draws none of the language controls.
 const many = $derived(entry.locales.length > 1);
@@ -172,7 +174,7 @@ const shown = $derived(side ? target : locale === entry.sourceLocale ? undefined
 // A translation on its own: the switcher is on another language and the second column is shut.
 const alone = $derived(!side && shown !== undefined);
 // The entry always has the file it was opened on; the others are the ones that can be absent.
-const untranslated = (of: string) => of !== entry.sourceLocale && !(of in entry.translations);
+const untranslated = (of: string) => of !== entry.sourceLocale && !entrySession.hasSnapshot(of);
 // Turned off for this entry: no file is written for it and the site does not offer it.
 const off = (of: string) => !entry.offered.includes(of);
 let busy = $state(false);
@@ -288,9 +290,7 @@ const inherited = (of: string, values: Data) =>
 // Another language already pending when the entry was read; stands until it is read again.
 const elsewhere = $derived(entry.pending.some((l) => l !== entry.sourceLocale));
 // The second column is its own file, so an edit only made there is still something to publish.
-const dirty = $derived(
-  drafted || elsewhere || translated || json !== saved || (pane?.unsaved() ?? false),
-);
+const dirty = $derived(drafted || elsewhere || translated || entrySession.unsaved());
 const LANGUAGES = new Intl.DisplayNames(['en'], { type: 'language' });
 const language = (of: string) => {
   try {
@@ -321,6 +321,12 @@ const tab = (() => {
 })();
 // Separate from the lock: the lost and locked banners say different things about the same fact.
 let lost = $state(false);
+function loseLock(next?: Lock) {
+  if (next) lock = next;
+  if (lost) return;
+  lost = true;
+  entrySession.closeSaveGate();
+}
 let taking = $state(false);
 let takePanel = $state<HTMLElement>();
 let takeTrigger = $state<HTMLButtonElement>();
@@ -335,7 +341,7 @@ function cancelTake() {
 // When the last answer came back, and when this tab last extended a lock of its own.
 let asked = $state(0);
 let beatAt = 0;
-const locked = $derived(lock !== undefined && !lock.mine);
+const locked = $derived(lost || (lock !== undefined && !lock.mine));
 const holder = $derived(lock?.held_by?.name || 'Somebody else');
 // The holder is this same person, in another tab.
 const otherTab = $derived(lock?.held_by?.id !== undefined && lock?.held_by?.id === userId);
@@ -361,7 +367,7 @@ let renewing = false;
 function renew() {
   if (!lock?.mine || lost || renewing || Date.now() - beatAt < 45000) return;
   if (lock.expires_at !== null && Date.now() >= lock.expires_at) {
-    lost = true;
+    loseLock();
     return;
   }
   renewing = true;
@@ -387,9 +393,15 @@ async function beat(claim: boolean) {
   if (lock.mine && claim) beatAt = asked;
   else if (had && !lock.mine) {
     // Expiry and takeover both require a fresh read before this tab can resume editing.
-    lost = true;
+    loseLock();
   }
 }
+
+entrySession.configureAutosave((of, snapshot, revision) =>
+  of === entry.sourceLocale
+    ? writeSourceSave(snapshot, revision)
+    : writeTranslationSave(of, snapshot, revision),
+);
 
 // The same skeleton sync the server runs for stored siblings, applied to the column on screen.
 $effect(() => {
@@ -404,24 +416,13 @@ $effect(() => {
 // Subscribe only to snapshots; failure-state updates must not schedule another retry.
 $effect(() => {
   const dirty = json !== saved;
-  return untrack(() => {
+  untrack(() => {
     if (dirty) renew();
-    return saves.change();
+    entrySession.change(entry.sourceLocale);
   });
 });
 
-// svelte-ignore state_referenced_locally -- this coordinator belongs to the opened file
-const saves = saveCoordinator({
-  current: () => json,
-  saved,
-  lane,
-  write: writeSave,
-  onstate: (state) => {
-    saveState = state;
-  },
-});
-
-async function writeSave(sent: string): Promise<boolean> {
+async function writeSourceSave(sent: string, revision: string | undefined): Promise<boolean> {
   saveError = '';
   try {
     const res = await fetch(`/admin/api/drafts/${collection}/${slug}`, {
@@ -430,20 +431,16 @@ async function writeSave(sent: string): Promise<boolean> {
       body: JSON.stringify({
         data: JSON.parse(sent),
         tab,
-        revision: revisions[entry.sourceLocale],
+        revision,
       }),
     });
     if (!res.ok) {
       saveError = 'Your changes are still here. Try saving again before leaving.';
-      if (res.status === 409) {
-        const body = await res.json();
-        if (body.reason !== 'revision') {
-          lost = true;
-          lock = body as Lock;
-        } else
-          saveError =
-            body.error ?? 'This entry changed elsewhere. Copy your unsaved text before reloading.';
-      }
+      const refusal = await classifyDraftSaveRefusal(res);
+      if (refusal.kind === 'lock') loseLock(refusal.lock);
+      else if (refusal.kind === 'revision')
+        saveError =
+          refusal.error ?? 'This entry changed elsewhere. Copy your unsaved text before reloading.';
       return false;
     }
     const body = (await res.json()) as {
@@ -451,7 +448,7 @@ async function writeSave(sent: string): Promise<boolean> {
       problems: Problem[];
       revisions?: Record<string, string>;
     };
-    revisions = { ...revisions, ...body.revisions };
+    entrySession.mergeRevisions(body.revisions);
     savedAt = Date.now();
     renew();
     if (body.pending !== drafted) onpending?.();
@@ -467,10 +464,43 @@ async function writeSave(sent: string): Promise<boolean> {
   }
 }
 
-export function flush(): Promise<boolean> {
-  return flushEntry(saves, () => pane);
+async function writeTranslationSave(
+  of: string,
+  sent: string,
+  revision: string | undefined,
+): Promise<boolean> {
+  try {
+    const res = await fetch(`/admin/api/drafts/${collection}/${slug}/${of}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ data: JSON.parse(sent), tab, revision }),
+    });
+    if (!res.ok) {
+      const refusal = await classifyDraftSaveRefusal(res);
+      if (refusal.kind === 'lock') loseLock(refusal.lock);
+      return false;
+    }
+    const body = (await res.json()) as {
+      pending: boolean;
+      problems: Problem[];
+      revision?: string;
+    };
+    if (body.revision) entrySession.setRevision(of, body.revision);
+    translationProblems[of] = byPath(body.problems);
+    renew();
+    if (body.pending !== translated) onpending?.();
+    translated = body.pending;
+    savedAt = Date.now();
+    return true;
+  } catch {
+    return false;
+  }
 }
-const unsaved = () => saves.unsaved() || (pane?.unsaved() ?? false);
+
+export function flush(): Promise<boolean> {
+  return entrySession.flush();
+}
+const unsaved = () => entrySession.unsaved();
 onMount(() => {
   const release = guardNavigation(flush);
   const warn = (event: BeforeUnloadEvent) => {
@@ -481,6 +511,7 @@ onMount(() => {
   };
   addEventListener('beforeunload', warn);
   return () => {
+    entrySession.closeSaveGate();
     release();
     removeEventListener('beforeunload', warn);
   };
@@ -659,7 +690,7 @@ function fromAddress() {
       locale = entry.sourceLocale;
     });
   }
-  const at = fieldPosition('default', field, inColumn ? (entry.translations[of] ?? {}) : data);
+  const at = fieldPosition('default', field, inColumn ? entrySession.snapshot(of) : data);
   if (!at) return;
   void tick().then(() => land(drawn(inColumn ? 't' : 'f', at.join('.'))));
 }
@@ -1123,7 +1154,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {#if !alone}
         <form class="form" onsubmit={(e) => e.preventDefault()}>
           <fieldset disabled={locked}>
-            <Fields {fields} blocks={entry.blocks} {problems} {mediaBase} {locale} inheritedSeo={inherited(locale, data)} {site} servedAt={localeUrl(locale)} bind:root={data} />
+            <Fields {fields} blocks={entry.blocks} {problems} {mediaBase} {locale} inheritedSeo={inherited(locale, data)} {site} servedAt={localeUrl(locale)} bind:root={entrySession.snapshots[entry.sourceLocale]!} />
           </fieldset>
         </form>
       {/if}
@@ -1210,14 +1241,12 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             {collection}
             {slug}
             locale={shown}
-            {tab}
+            session={entrySession}
             {fields}
             blocks={entry.blocks}
-            data={translations[shown] ?? {}}
-            {lane}
-            revision={revisions[shown]}
-            onrevision={(next) => { revisions[shown] = next; }}
-            inheritedSeo={inherited(shown, entry.translations[shown] ?? {})}
+            bind:data={entrySession.snapshots[shown]!}
+            problems={translationProblems[shown] ?? {}}
+            inheritedSeo={inherited(shown, entrySession.snapshot(shown))}
             source={entry.sourceLocale}
             {locked}
             stale={entry.stale.includes(shown)}
@@ -1225,19 +1254,12 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             url={localeUrl(shown)}
             {site}
             onactivity={renew}
-            onsaved={(pending, snapshot) => {
+            onsaved={(pending) => {
               renew();
-              if (snapshot) translations[shown] = snapshot;
               if (pending !== translated) onpending?.();
               translated = pending;
               // The preview shows this language too, so a save here redraws it.
               savedAt = Date.now();
-            }}
-            onrefused={(taken) => {
-              if (!(taken as { reason?: string }).reason) {
-                lost = true;
-                lock = taken as Lock;
-              }
             }}
             {mediaBase}
             onclose={side ? () => leaving(() => (side = false)) : undefined}

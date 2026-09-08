@@ -1,22 +1,20 @@
 <script lang="ts">
 import { type Field, keptMachine, type ResolvedSeo, type WordPart } from '@handover/core';
 import { untrack } from 'svelte';
+import type { EntrySession } from './entry-session.svelte';
 import Fields from './Fields.svelte';
 import { request as fetch } from './request.js';
-import { type SaveState, saveCoordinator, saveLane } from './save';
 
 type Data = Record<string, unknown>;
 let {
   collection,
   slug,
   locale,
-  tab = '',
-  revision,
-  onrevision,
-  lane = saveLane(),
+  session,
   fields,
   blocks,
-  data: loaded,
+  data = $bindable(),
+  problems = {},
   source,
   locked = false,
   stale = false,
@@ -27,7 +25,6 @@ let {
   site,
   onsaved,
   onactivity,
-  onrefused,
   onclose,
   onturnoff,
 }: {
@@ -35,16 +32,14 @@ let {
   slug: string;
   /** Never the language the entry's structure is edited in. */
   locale: string;
-  /** The editor's tab token: this column's saves are the tab's saves. */
-  tab?: string;
-  revision?: string;
-  onrevision?: (revision: string) => void;
-  lane?: ReturnType<typeof saveLane>;
+  /** Entry-lifetime state: this pane may mount and unmount without losing its draft. */
+  session: EntrySession;
   fields: readonly Field[];
   blocks: Record<string, Field[]>;
+  data: Data;
+  problems?: Record<string, string>;
   mediaBase?: string;
   inheritedSeo?: ResolvedSeo;
-  data: Data;
   source: string;
   /** The lock is on all of the entry's languages, so this column reads like the other one. */
   locked?: boolean;
@@ -55,25 +50,21 @@ let {
   /** The entry keeps `pending`: this column is thrown away on a screen change, its edit is not. */
   onsaved?: (pending: boolean, data?: Data) => void;
   onactivity?: () => void;
-  /** The lock is the entry's, so what the screen does about a refusal belongs to the entry. */
-  onrefused?: (lock: unknown) => void;
   onclose?: () => void;
   /** Absent when the language cannot go. */
   onturnoff?: () => void;
 } = $props();
 
-// svelte-ignore state_referenced_locally -- the loaded file is the initial value on purpose
-let data = $state<Data>($state.snapshot(loaded));
-// svelte-ignore state_referenced_locally -- the loaded file is the initial value on purpose
-let saveState = $state<SaveState>({ saved: JSON.stringify(loaded), phase: 'idle' });
+const saveState = $derived(session.saveState(locale));
 const saved = $derived(saveState.saved);
 // svelte-ignore state_referenced_locally -- the loaded file is the initial value on purpose
-let base = $state<Data>(loaded);
+let base = $state<Data>(structuredClone($state.snapshot(session.snapshot(locale))));
 const saving = $derived(saveState.phase === 'saving');
 let fillFailed = $state(false);
 const failed = $derived(saveState.phase === 'failed' || fillFailed);
-// The server's answer to the last save; the publish is where these block.
-let problems = $state<Record<string, string>>({});
+$effect(() => {
+  if (saveState.phase === 'saving') fillFailed = false;
+});
 
 // Only read for a stale file, so an entry nobody has translated pays nothing for the marker.
 let behind = $state<{ translatedAt?: string; changed: Record<string, WordPart[]> }>({
@@ -110,60 +101,22 @@ async function fill(paths?: string[]) {
   fillFailed = !res.ok;
   if (!res.ok) return;
   const body = (await res.json()) as { data: Data; pending: boolean; revision?: string };
-  if (body.revision) {
-    revision = body.revision;
-    onrevision?.(body.revision);
-  }
+  if (body.revision) session.setRevision(locale, body.revision);
   base = structuredClone(body.data);
-  data = body.data;
-  saves.accept(JSON.stringify(body.data));
+  session.replaceSnapshot(locale, body.data);
+  data = session.snapshot(locale);
+  session.accept(locale, JSON.stringify(body.data));
   onsaved?.(body.pending, body.data);
 }
 
 // Subscribes only to the snapshot: a failure-state update must not schedule another retry.
 $effect(() => {
   const dirty = json !== saved;
-  return untrack(() => {
+  untrack(() => {
     if (dirty) onactivity?.();
-    return saves.change();
+    session.change(locale);
   });
 });
-
-// svelte-ignore state_referenced_locally -- this coordinator belongs to the opened file
-const saves = saveCoordinator({
-  current: () => json,
-  saved,
-  lane,
-  write: writeSave,
-  onstate: (state) => {
-    saveState = state;
-  },
-});
-
-async function writeSave(sent: string): Promise<boolean> {
-  fillFailed = false;
-  const res = await fetch(`/admin/api/drafts/${collection}/${slug}/${locale}`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ data: JSON.parse(sent), tab, revision }),
-  });
-  if (!res.ok) {
-    if (res.status === 409) onrefused?.(await res.json());
-    return false;
-  }
-  const body = (await res.json()) as {
-    pending: boolean;
-    problems: { path: string; message: string }[];
-    revision?: string;
-  };
-  if (body.revision) {
-    revision = body.revision;
-    onrevision?.(body.revision);
-  }
-  onsaved?.(body.pending, JSON.parse(sent));
-  problems = Object.fromEntries(body.problems.map((p) => [p.path, p.message]));
-  return true;
-}
 
 // Two objects that differ only in key order are the same words.
 const canon = (v: unknown): string =>
@@ -185,16 +138,19 @@ export function sync(reshape: (target: Data) => Data): void {
   const next = reshape(target);
   // A `_version` added on open would be a save on open; stamping it is the save's business.
   if (!('_version' in target)) delete next._version;
-  if (canon(next) !== canon(target)) data = next;
+  if (canon(next) !== canon(target)) {
+    session.replaceSnapshot(locale, next);
+    data = session.snapshot(locale);
+  }
 }
 
 export function unsaved(): boolean {
-  return saves.unsaved();
+  return session.unsaved(locale);
 }
 
 /** The publish reads D1, so a click a second after typing must find this language there. */
 export async function flush(): Promise<boolean> {
-  return saves.flush();
+  return session.flush();
 }
 
 const LANGUAGES = new Intl.DisplayNames(['en'], { type: 'language' });
