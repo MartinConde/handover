@@ -145,7 +145,11 @@ const close = (path: string, then: (path: string) => void) => {
 };
 
 // `_machine` and the translation route name a field by file address, not form position.
-const address = (at: readonly string[]) => fieldAddress('default', at, root);
+const address = (at: readonly string[]) => fieldAddress('default', at, root) ?? '';
+const childAddress = (at: readonly string[], child: string) => {
+  const parent = address(at);
+  return parent ? `${parent}.${child}` : '';
+};
 // Not conditional on a machine: the stale marker and badge are worth having without one.
 const prose = (field: Field) => translating && (field.type === 'text' || field.type === 'richtext');
 // A `site` that is not a URL prints no host rather than throwing.
@@ -391,7 +395,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       >{sourceLabel} changed since this was translated</button
     >
   {/if}
-  {#if ontranslate}
+  {#if ontranslate && path}
     <button class="btn btn-ghost btn-translate" type="button" aria-label="Translate {text} from the source language" onclick={() => ontranslate?.(path)}>Translate</button>
   {/if}
 {/snippet}
@@ -538,7 +542,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   {@const err = problemOf(field, at)}
   {@const bad = err ? 'true' : undefined}
   {@const says = err ? `${id}-err` : undefined}
-  {@const marked = [address(at), `${address(at)}.label`].find((p) => opened === p)}
+  {@const marked = [address(at), childAddress(at, 'label')].find((p) => p && opened === p)}
   <div class="field" id="{id}-field" tabindex="-1" class:is-invalid={err} class:pop-anchor={marked}>
     {#if field.type === 'menus'}
       {@render groupLabel(id, field, text, at)}
@@ -582,7 +586,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'link' && translating}
       <!-- A link's label is the half a translation owns. -->
       {@render groupLabel(id, field, text, at)}
-      <div class="field"><div class="label-row"><label for="{id}.label">Label</label>{@render machineMark(`${address(at)}.label`, `${text} label`)}</div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
+      <div class="field"><div class="label-row"><label for="{id}.label">Label</label>{@render machineMark(childAddress(at, 'label'), `${text} label`)}</div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
     {:else if field.type === 'link'}
       {@render groupLabel(id, field, text, at)}
       <div class="seg" role="group" aria-label="Link type">

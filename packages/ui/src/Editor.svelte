@@ -26,8 +26,6 @@ import Translation from './Translation.svelte';
 
 type Data = Record<string, unknown>;
 type Problem = { path: string; message: string };
-const byPath = (problems: Problem[]) =>
-  Object.fromEntries(problems.map((p) => [p.path, p.message]));
 let {
   collection,
   slug,
@@ -122,11 +120,15 @@ let {
 } = $props();
 
 // svelte-ignore state_referenced_locally -- the loaded files seed this opened entry's session
+const entryForm = { fields: [...entry.fields], blocks: entry.blocks };
+// svelte-ignore state_referenced_locally -- the loaded files seed this opened entry's session
 const entrySession = createEntrySession({
   sourceLocale: entry.sourceLocale,
   data: entry.data,
   translations: entry.translations,
   revisions: entry.revisions,
+  form: entryForm,
+  problems: { [entry.sourceLocale]: entry.problems },
 });
 const data = $derived(entrySession.snapshot(entry.sourceLocale));
 const saveState = $derived(entrySession.saveState(entry.sourceLocale));
@@ -138,8 +140,7 @@ const saveFailed = $derived(saveState.phase === 'failed');
 let saveError = $state('');
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let held = $state(entry.held === true);
-// svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
-let schemaProblems = $state(byPath(entry.problems));
+const schemaProblems = $derived(entrySession.positionalProblems(entry.sourceLocale));
 /** What the pre-publish checks found over this entry: read when it opens and after every save. */
 let checks = $state<CheckItem[]>([]);
 // Only check errors block the publish; they name rows by id, so the position is looked up now.
@@ -163,7 +164,6 @@ let savedAt = $state(0);
 let pane = $state<ReturnType<typeof Translation>>();
 // Lives here rather than in the column, which is thrown away whenever the screen changes.
 let translated = $state(false);
-let translationProblems = $state<Record<string, Record<string, string>>>({});
 
 // A site with one language draws none of the language controls.
 const many = $derived(entry.locales.length > 1);
@@ -397,10 +397,10 @@ async function beat(claim: boolean) {
   }
 }
 
-entrySession.configureAutosave((of, snapshot, revision) =>
+entrySession.configureAutosave((of, snapshot, revision, contentVersion) =>
   of === entry.sourceLocale
-    ? writeSourceSave(snapshot, revision)
-    : writeTranslationSave(of, snapshot, revision),
+    ? writeSourceSave(snapshot, revision, contentVersion)
+    : writeTranslationSave(of, snapshot, revision, contentVersion),
 );
 
 // The same skeleton sync the server runs for stored siblings, applied to the column on screen.
@@ -422,7 +422,11 @@ $effect(() => {
   });
 });
 
-async function writeSourceSave(sent: string, revision: string | undefined): Promise<boolean> {
+async function writeSourceSave(
+  sent: string,
+  revision: string | undefined,
+  contentVersion: number,
+): Promise<boolean> {
   saveError = '';
   try {
     const res = await fetch(`/admin/api/drafts/${collection}/${slug}`, {
@@ -453,7 +457,7 @@ async function writeSourceSave(sent: string, revision: string | undefined): Prom
     renew();
     if (body.pending !== drafted) onpending?.();
     drafted = body.pending;
-    schemaProblems = byPath(body.problems);
+    entrySession.acceptProblems(entry.sourceLocale, body.problems, sent, contentVersion);
     // The checks read the draft rows, so a save that left nothing pending has nothing to lint.
     if (body.pending) void lint();
     else checks = [];
@@ -468,6 +472,7 @@ async function writeTranslationSave(
   of: string,
   sent: string,
   revision: string | undefined,
+  contentVersion: number,
 ): Promise<boolean> {
   try {
     const res = await fetch(`/admin/api/drafts/${collection}/${slug}/${of}`, {
@@ -486,7 +491,7 @@ async function writeTranslationSave(
       revision?: string;
     };
     if (body.revision) entrySession.setRevision(of, body.revision);
-    translationProblems[of] = byPath(body.problems);
+    entrySession.acceptProblems(of, body.problems, sent, contentVersion);
     renew();
     if (body.pending !== translated) onpending?.();
     translated = body.pending;
@@ -1245,7 +1250,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             {fields}
             blocks={entry.blocks}
             bind:data={entrySession.snapshots[shown]!}
-            problems={translationProblems[shown] ?? {}}
+            problems={entrySession.positionalProblems(shown)}
             inheritedSeo={inherited(shown, entrySession.snapshot(shown))}
             source={entry.sourceLocale}
             {locked}

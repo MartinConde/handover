@@ -1,10 +1,12 @@
 import { afterEach, expect, test, vi } from 'vitest';
+import type { Form } from './schema.js';
 import {
   deeplTranslate,
   fieldAddress,
   fieldPosition,
   keptMachine,
   machineFilled,
+  resolveFieldTarget,
 } from './translate.js';
 
 afterEach(() => {
@@ -148,4 +150,90 @@ test('an address whose row is gone has no position', () => {
   expect(
     fieldPosition('default', 'blocks[_id=q1w2e3r4].body', { ...page, blocks: [page.blocks[0]] }),
   ).toBeUndefined();
+});
+
+const nestedForm: Form = {
+  fields: [
+    {
+      path: ['sections'],
+      label: 'Sections',
+      type: 'array',
+      required: true,
+      item: [
+        { path: ['title'], label: 'Title', type: 'text', required: true },
+        { path: ['blocks'], label: 'Blocks', type: 'blocks', required: true, types: ['quote'] },
+      ],
+    },
+  ],
+  blocks: {
+    quote: [{ path: ['body'], label: 'Body', type: 'text', required: true }],
+  },
+};
+
+const nested = {
+  sections: [
+    {
+      _id: 'section-a',
+      title: 'First',
+      blocks: [{ _id: 'quote-a', _type: 'quote', body: 'One' }],
+    },
+    {
+      _id: 'section-b',
+      title: 'Second',
+      blocks: [{ _id: 'quote-b', _type: 'quote', body: 'Two' }],
+    },
+  ],
+};
+
+test('a schema-aware nested address survives reordering at every list level', () => {
+  const address = fieldAddress(
+    'default',
+    ['sections', '1', 'blocks', '0', 'body'],
+    nested,
+    nestedForm,
+  );
+  expect(address).toBe('sections[_id=section-b].blocks[_id=quote-b].body');
+
+  const moved = structuredClone(nested);
+  moved.sections.reverse();
+  moved.sections[0]?.blocks.reverse();
+  expect(fieldPosition('default', address ?? '', moved, nestedForm)).toEqual([
+    'sections',
+    '0',
+    'blocks',
+    '0',
+    'body',
+  ]);
+  expect(resolveFieldTarget('default', nestedForm, address ?? '', moved)).toMatchObject({
+    ok: true,
+    target: { path: ['sections', '0', 'blocks', '0', 'body'], field: { type: 'text' } },
+  });
+});
+
+test('duplicate row ids are ambiguous rather than resolving to the first row', () => {
+  const duplicate = structuredClone(nested);
+  const second = duplicate.sections[1];
+  if (!second) throw new Error('second section missing');
+  second._id = 'section-a';
+  const address = 'sections[_id=section-a].title';
+
+  expect(
+    fieldAddress('default', ['sections', '0', 'title'], duplicate, nestedForm),
+  ).toBeUndefined();
+  expect(fieldPosition('default', address, duplicate, nestedForm)).toBeUndefined();
+  expect(resolveFieldTarget('default', nestedForm, address, duplicate)).toEqual({
+    ok: false,
+    reason: 'ambiguous',
+  });
+  expect(machineFilled('default', duplicate, { [address]: 'Do not guess' })).toEqual(duplicate);
+});
+
+test('deleted and non-schema targets have distinct resolution failures', () => {
+  expect(resolveFieldTarget('default', nestedForm, 'sections[_id=missing].title', nested)).toEqual({
+    ok: false,
+    reason: 'deleted',
+  });
+  expect(
+    resolveFieldTarget('default', nestedForm, 'sections[_id=section-a].unknown', nested),
+  ).toEqual({ ok: false, reason: 'schema' });
 });

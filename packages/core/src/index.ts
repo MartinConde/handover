@@ -272,11 +272,12 @@ export {
   user,
   verification,
 } from './tables.js';
-export type { Translate } from './translate.js';
+export type { FieldTarget, FieldTargetFailure, FieldTargetResult, Translate } from './translate.js';
 export {
   deeplTranslate,
   fieldAddress,
   fieldPosition,
   keptMachine,
   machineFilled,
+  resolveFieldTarget,
 } from './translate.js';

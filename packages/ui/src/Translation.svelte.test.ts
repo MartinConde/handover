@@ -83,6 +83,7 @@ test('an unmounted locale still autosaves through its entry session', async () =
     'de',
     JSON.stringify({ title: 'Bleibt gespeichert' }),
     'translation-revision',
+    1,
   );
   expect(session.unsaved()).toBe(false);
 });
