@@ -282,7 +282,26 @@ test('the child accepts a current parent selection and publishes validated navig
     }),
   );
 
-  expect(onSelect).toHaveBeenCalledWith(selected);
+  expect(onSelect).toHaveBeenCalledWith(selected, { scroll: true });
+  child.receive(
+    event(parent, 'https://cms.example', {
+      ...ready,
+      type: 'handover:canvas:select',
+      selection: selected,
+      scroll: false,
+    }),
+  );
+  expect(onSelect).toHaveBeenLastCalledWith(selected, { scroll: false });
+  onSelect.mockClear();
+  child.receive(
+    event(parent, 'https://cms.example', {
+      ...ready,
+      type: 'handover:canvas:select',
+      selection: selected,
+      scroll: 'false',
+    }),
+  );
+  expect(onSelect).not.toHaveBeenCalled();
   expect(parent.postMessage).toHaveBeenCalledWith(
     expect.objectContaining({ type: 'handover:canvas:selection', selection: selected }),
     'https://cms.example',
@@ -575,7 +594,37 @@ test('plain-text capability and editing state cross only the current selected br
   expect(
     bridge.textField({ kind: 'richtext', target, value: '**A brighter coast**', tier: 'basic' }),
   ).toBe(true);
-  expect(candidate.postMessage).toHaveBeenLastCalledWith(
+  expect(
+    bridge.textField({
+      kind: 'link',
+      target,
+      value: {
+        type: 'url',
+        ref: '',
+        href: 'https://example.com',
+        label: 'Visit',
+        newTab: false,
+      },
+    }),
+  ).toBe(true);
+  expect(candidate.postMessage).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: 'handover:canvas:text-field',
+      field: {
+        kind: 'link',
+        target,
+        value: {
+          type: 'url',
+          ref: '',
+          href: 'https://example.com',
+          label: 'Visit',
+          newTab: false,
+        },
+      },
+    }),
+    'https://cms.example',
+  );
+  expect(candidate.postMessage).toHaveBeenCalledWith(
     expect.objectContaining({
       type: 'handover:canvas:text-field',
       field: {

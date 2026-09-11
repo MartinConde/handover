@@ -1,6 +1,6 @@
-import { richtextErrors, unsafeLinkScheme } from '@handover/core';
+import { richtextErrors } from '@handover/core';
 import { Editor, Extension } from '@tiptap/core';
-import type { Selection } from '@tiptap/pm/state';
+import { type Selection, TextSelection } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import type {
   CanvasAcknowledgement,
@@ -12,6 +12,7 @@ import type {
   CanvasTextHistory,
   CanvasTextSelection,
 } from './canvas-bridge';
+import { createCanvasLinkEditor } from './canvas-link-editor';
 import { proseSelection, restoreProseSelection, richTextExtensions } from './rich-text-kit';
 
 type RichField = Extract<CanvasTextField, { kind: 'richtext' }>;
@@ -87,6 +88,7 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
   let generation = 0;
   let queued = 0;
   let lane = Promise.resolve();
+  const linkEditor = createCanvasLinkEditor({ root, owner });
 
   const style = root.createElement('style');
   style.dataset.handoverCanvasRichText = '';
@@ -169,8 +171,7 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
       delete held.element.dataset.handoverInlineRefusal;
       status.textContent = '';
       const hasNewerLocalInput = queued > 1;
-      if (reply.update && (command.type === 'history' || !hasNewerLocalInput))
-        apply(reply.update.value, reply.update.selection);
+      if (reply.update && !hasNewerLocalInput) apply(reply.update.value, reply.update.selection);
     });
     lane = run
       .catch(() => refusal('handler-error'))
@@ -263,6 +264,86 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
     }
   };
 
+  const openLink = (editor: Editor, anchor?: HTMLAnchorElement) => {
+    if (editor.isActive('link')) editor.chain().focus().extendMarkRange('link').run();
+    if (editor.state.selection.empty) return false;
+    const selection = editor.state.selection;
+    const selectedRange = { from: selection.from, to: selection.to };
+    const label = editor.state.doc.textBetween(selection.from, selection.to, ' ');
+    const href = String(editor.getAttributes('link').href ?? anchor?.getAttribute('href') ?? '');
+    const range = root.getSelection()?.rangeCount ? root.getSelection()?.getRangeAt(0) : undefined;
+    const measured =
+      range && typeof range.getBoundingClientRect === 'function'
+        ? range.getBoundingClientRect()
+        : undefined;
+    const bounds =
+      measured?.width || measured?.height ? measured : active?.element.getBoundingClientRect();
+    if (!bounds) return false;
+    const remove = Boolean(href);
+    toolbar.hidden = true;
+    linkEditor.open({
+      anchor: () => bounds,
+      value: { type: 'url', ref: '', href, label, newTab: false },
+      locale: active?.target.locale ?? '',
+      allowLabel: true,
+      allowRemove: remove,
+      onApply: (value) => {
+        nextIntent = 'format';
+        pendingBefore = historySelection(selection);
+        let applied = false;
+        try {
+          const linkType = editor.schema.marks.link;
+          if (!linkType) throw new Error('Rich-text link mark is unavailable.');
+          const link = linkType.create({ href: value.href });
+          const retained = editor.state.doc
+            .resolve(selectedRange.from)
+            .marks()
+            .filter((mark) => mark.type.name !== 'link');
+          const content = editor.schema.text(value.label, [...retained, link]);
+          const transaction = editor.state.tr.replaceWith(
+            selectedRange.from,
+            selectedRange.to,
+            content,
+          );
+          transaction.setSelection(
+            TextSelection.create(transaction.doc, selectedRange.from + content.nodeSize),
+          );
+          editor.view.dispatch(transaction);
+          editor.view.focus();
+          applied = true;
+        } catch {
+          applied = false;
+        }
+        nextIntent = undefined;
+        return applied ? undefined : 'This link could not be updated.';
+      },
+      onRemove: () => {
+        nextIntent = 'format';
+        pendingBefore = historySelection(selection);
+        const linkType = editor.schema.marks.link;
+        if (!linkType) {
+          nextIntent = undefined;
+          return;
+        }
+        const transaction = editor.state.tr.removeMark(
+          selectedRange.from,
+          selectedRange.to,
+          linkType,
+        );
+        editor.view.dispatch(transaction);
+        editor.view.focus();
+        nextIntent = undefined;
+      },
+      onClose: () => {
+        if (!active) return;
+        toolbar.hidden = false;
+        editor.view.focus();
+        refreshToolbar();
+      },
+    });
+    return true;
+  };
+
   const buttons = (field: RichField) => {
     const specs = [
       {
@@ -281,13 +362,7 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
         label: 'Link',
         text: 'Link',
         mark: 'link',
-        run: (editor: Editor) => {
-          if (editor.isActive('link')) return editor.chain().focus().unsetLink().run();
-          if (editor.state.selection.empty) return false;
-          const href = owner.prompt('Link URL')?.trim();
-          if (!href || unsafeLinkScheme('default', href)) return false;
-          return editor.chain().focus().setLink({ href }).run();
-        },
+        run: (editor: Editor) => openLink(editor),
       },
       {
         label: 'Bullet list',
@@ -363,6 +438,7 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
     held.element.removeAttribute('data-handover-inline-refusal');
     held.editor.destroy();
     held.element.replaceChildren(content);
+    if (linkEditor.active()) linkEditor.close('cancel');
     toolbar.hidden = true;
     toolbar.replaceChildren();
     options.interaction(held.target, { inlineEditing: false, composing: false });
@@ -377,7 +453,7 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
     });
   };
 
-  const activate = (selection: CanvasSelection, element: Element) => {
+  const activate = (selection: CanvasSelection, element: Element, trigger?: Element) => {
     if (
       disposed ||
       selection.kind !== 'field' ||
@@ -390,6 +466,10 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
     if (active?.element === element) return true;
     if (active) deactivate();
     const field = configured;
+    const triggeredLink =
+      trigger instanceof HTMLAnchorElement && element.contains(trigger)
+        ? { href: trigger.getAttribute('href') ?? '' }
+        : undefined;
     // TipTap appends its own editable root; detach the rendered prose first.
     const original = root.createDocumentFragment();
     original.append(...Array.from(element.childNodes));
@@ -406,6 +486,16 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
             'aria-multiline': 'true',
           },
           handleDOMEvents: {
+            click: (_view, event) => {
+              const anchor =
+                event.target instanceof Element ? event.target.closest('a') : undefined;
+              if (!(anchor instanceof HTMLAnchorElement) || !element.contains(anchor)) return false;
+              event.preventDefault();
+              queueMicrotask(() => {
+                if (active?.editor === editor) openLink(editor, anchor);
+              });
+              return true;
+            },
             beforeinput: (view, event) => {
               const intent = event as InputEvent;
               const direction =
@@ -484,10 +574,27 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
     element.dataset.handoverRichtextEditing = '';
     buttons(field);
     toolbar.hidden = false;
-    editor.commands.setTextSelection(editor.state.doc.content.size);
+    let linkRange: { from: number; to: number } | undefined;
+    if (triggeredLink) {
+      editor.state.doc.descendants((node, position) => {
+        if (!node.isText) return;
+        const sameLink = node.marks.some(
+          (mark) =>
+            mark.type.name === 'link' && String(mark.attrs.href ?? '') === triggeredLink.href,
+        );
+        if (!sameLink) return;
+        if (!linkRange) linkRange = { from: position, to: position + node.nodeSize };
+        else if (position === linkRange.to) linkRange.to = position + node.nodeSize;
+      });
+    }
+    editor.commands.setTextSelection(linkRange ?? editor.state.doc.content.size);
     editor.view.focus();
     refreshToolbar();
     publish({ inlineEditing: true, composing: false });
+    if (linkRange)
+      queueMicrotask(() => {
+        if (active?.editor === editor) openLink(editor);
+      });
     return true;
   };
 
@@ -496,7 +603,9 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
     const target = event.target;
     if (
       !(target instanceof Node) ||
-      (!active.element.contains(target) && !toolbar.contains(target))
+      (!active.element.contains(target) &&
+        !toolbar.contains(target) &&
+        !linkEditor.contains(target))
     )
       return;
     if (event.key !== 'Escape') return;
@@ -507,12 +616,19 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
 
   const onFocusOut = () => {
     if (!active) return;
-    queueMicrotask(() => {
+    owner.setTimeout(() => {
       if (!active) return;
+      if (linkEditor.active()) return;
       const focused = root.activeElement;
-      if (focused && (active.element.contains(focused) || toolbar.contains(focused))) return;
+      if (
+        focused &&
+        (active.element.contains(focused) ||
+          toolbar.contains(focused) ||
+          linkEditor.contains(focused))
+      )
+        return;
       finish();
-    });
+    }, 0);
   };
 
   return {
@@ -556,6 +672,7 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
       style.remove();
       toolbar.remove();
       status.remove();
+      linkEditor.dispose();
     },
   };
 }

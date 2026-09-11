@@ -88,10 +88,11 @@ export interface CanvasNavigationRuntimeOptions {
   root?: Document;
   owner?: Window;
   documentUrl?: string | URL;
+  mode?: () => CanvasInteractionMode;
   onNavigate: (request: CanvasNavigationRequest) => void;
 }
 
-/** Owns browser intents before editing overlays can consume the same pointer event. */
+/** Mediates browser intents that the editing overlay did not consume. */
 export function createCanvasNavigationRuntime(options: CanvasNavigationRuntimeOptions) {
   const root = options.root ?? document;
   const owner = options.owner ?? window;
@@ -104,6 +105,11 @@ export function createCanvasNavigationRuntime(options: CanvasNavigationRuntimeOp
     if (!(anchor instanceof HTMLAnchorElement)) return;
     const raw = anchor.getAttribute('href');
     if (!raw) return;
+    if ((options.mode?.() ?? 'interact') === 'edit') {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     let target: URL;
     try {
       target = new URL(raw, pageUrl);
@@ -147,6 +153,7 @@ export function createCanvasNavigationRuntime(options: CanvasNavigationRuntimeOp
     if (!(form instanceof HTMLFormElement)) return;
     event.preventDefault();
     event.stopImmediatePropagation();
+    if ((options.mode?.() ?? 'interact') === 'edit') return;
     const submitter = event.submitter;
     const action =
       submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement

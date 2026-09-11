@@ -33,7 +33,7 @@ export interface CanvasSelectionRuntimeOptions {
   onSelection?: (selection: CanvasSelection) => void;
   onStructure?: (nodes: CanvasStructureNode[]) => void;
   /** The inline editor returns true only for a selected, schema-approved text field. */
-  onActivate?: (selection: CanvasSelection, element: Element) => boolean;
+  onActivate?: (selection: CanvasSelection, element: Element, trigger?: Element) => boolean;
   onAction?: (
     action: CanvasBlockAction,
     selection: CanvasSelection,
@@ -281,6 +281,29 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
   };
   const closestMarker = (value: EventTarget | null) =>
     value instanceof Element ? (value.closest(SELECTOR) ?? undefined) : undefined;
+  const markerAtPointer = (event: MouseEvent) => {
+    const direct = closestMarker(event.target);
+    if (nodeForElement(direct)?.kind === 'field') return direct;
+
+    // A full-bleed image is often stacked behind its block's copy and gradient. In that case the
+    // browser targets the wrapper even though the annotated image is what the editor sees. Prefer
+    // a field whose painted rectangle contains the pointer before falling back to that wrapper.
+    const scope = direct ?? (event.target instanceof Element ? event.target : root.documentElement);
+    const fields = Array.from(scope.querySelectorAll<HTMLElement>('[data-handover-field]'));
+    return (
+      fields.findLast((field) => {
+        const bounds = field.getBoundingClientRect();
+        return (
+          bounds.width > 0 &&
+          bounds.height > 0 &&
+          event.clientX >= bounds.left &&
+          event.clientX <= bounds.right &&
+          event.clientY >= bounds.top &&
+          event.clientY <= bounds.bottom
+        );
+      }) ?? direct
+    );
+  };
   const parents = (node: InternalNode) => {
     const result: InternalNode[] = [];
     let next: InternalNode | undefined = node;
@@ -558,6 +581,15 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
           );
         });
       }
+    } else if (selectedNode.kind === 'field' && allowedActions.includes('replace-media')) {
+      addAction(
+        'replace-media',
+        `Replace ${selectedNode.label}`,
+        Math.min(selectedBounds.right - 112, owner.innerWidth - 116),
+        selectedBounds.top + 8,
+        'field-action',
+        'Replace image',
+      );
     } else if (
       selectedNode.kind === 'list' &&
       selectedNode.empty &&
@@ -658,7 +690,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
   const onPointerMove = (event: PointerEvent) => {
     if (!enabled || actionsOpen || event.composedPath().includes(host)) return;
     if (projectDrag(event)) return;
-    const element = closestMarker(event.target);
+    const element = markerAtPointer(event);
     if (element === hoveredElement) return;
     hoveredElement = element;
     cursor = nodeForElement(element);
@@ -689,18 +721,29 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       options.isEditing?.() &&
       event.target instanceof Node &&
       selectedElement?.contains(event.target)
-    )
+    ) {
+      if (event.target instanceof Element && event.target.closest('a, button'))
+        event.preventDefault();
       return;
+    }
     actionsOpen = false;
-    const element = closestMarker(event.target);
+    const element = markerAtPointer(event);
     const node = nodeForElement(element);
     if (!node || !element) {
       scheduleDraw();
       return;
     }
     event.preventDefault();
-    event.stopPropagation();
+    event.stopImmediatePropagation();
     choose(node, element);
+    const control = event.target instanceof Element ? event.target.closest('a, button') : undefined;
+    if (
+      node.kind === 'field' &&
+      control &&
+      element.contains(control) &&
+      options.onActivate?.({ kind: node.kind, target: node.target }, element, control)
+    )
+      event.stopImmediatePropagation();
   };
   const onDoubleClick = (event: MouseEvent) => {
     if (!enabled) return;

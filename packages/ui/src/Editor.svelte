@@ -13,7 +13,6 @@ import { onMount, tick } from 'svelte';
 import { when } from './activity-line';
 import CanvasWorkspace from './CanvasWorkspace.svelte';
 import CheckLines, { type CheckItem, merged, plural, verdict } from './CheckLines.svelte';
-import type { CanvasTarget } from './canvas-bridge';
 import type { CanvasRenderRequest } from './canvas-renderer';
 import DriftPanel from './Drift.svelte';
 import { createEntrySession, type StructuralSaveEnvelope } from './entry-session.svelte';
@@ -722,9 +721,10 @@ const goToFirst = () => {
 
 function reviewCanvasProblems() {
   const of = locale;
-  const path = Object.keys(
-    of === entry.sourceLocale ? problems : entrySession.positionalProblems(of),
-  )[0];
+  const path = Object.keys({
+    ...entrySession.incompleteFields(of),
+    ...(of === entry.sourceLocale ? problems : entrySession.positionalProblems(of)),
+  })[0];
   setMode('form');
   if (of !== entry.sourceLocale) side = true;
   void tick().then(() => {
@@ -926,22 +926,6 @@ function canvasCompleted() {
   void tick().then(() => canvasPane?.schedule());
 }
 
-function openCanvasTarget(target: CanvasTarget) {
-  if (target.document.collection !== collection || target.document.id !== slug) return;
-  const of = target.locale;
-  const inColumn = of !== entry.sourceLocale && entry.locales.includes(of) && !untranslated(of);
-  setMode('form');
-  locale = inColumn ? of : entry.sourceLocale;
-  if (inColumn) side = true;
-  const at = fieldPosition(
-    'default',
-    target.address,
-    entrySession.snapshot(inColumn ? of : entry.sourceLocale),
-  );
-  if (!at) return;
-  void tick().then(() => land(drawn(inColumn ? 't' : 'f', at.join('.'))));
-}
-
 function navigateCanvasEntry(target: {
   collection: string;
   id: string;
@@ -1041,7 +1025,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {:else}
         {holder} took over this entry. Saved changes are in the shared draft. Any unsaved text remains here; copy it before reloading.
       {/if}
-      <button class="btn-link" type="button" onclick={onchanged}>Reload</button>
+      <button class="btn-link" type="button" onclick={() => void (onreload ? onreload() : onchanged())}>Reload</button>
     </div>
   {:else if locked}
     <div class="lock-banner">
@@ -1058,7 +1042,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         <button class="btn-link" type="button" bind:this={takeTrigger} onclick={() => (taking = true)}>Take over</button>
       {:else}
         Nobody is editing this entry any more.
-        <button class="btn-link" type="button" onclick={onchanged}>Reload</button>
+        <button class="btn-link" type="button" onclick={() => void (onreload ? onreload() : onchanged())}>Reload</button>
       {/if}
     </div>
   {/if}
@@ -1450,7 +1434,6 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           servedAt={localeUrl(locale)}
           {locked}
           onform={() => setMode('form')}
-          onformtarget={openCanvasTarget}
           onnavigateentry={navigateCanvasEntry}
           mobileHidden={mode === 'split' && mobilePane === 'form'}
         />

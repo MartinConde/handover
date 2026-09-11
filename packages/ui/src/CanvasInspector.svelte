@@ -1,8 +1,8 @@
 <script lang="ts">
 import type { Field } from '@handover/core';
-import { type Snippet, tick, untrack } from 'svelte';
+import { tick, untrack } from 'svelte';
 import CanvasIcon from './CanvasIcon.svelte';
-import type { CanvasDocumentIdentity, CanvasSelection, CanvasTarget } from './canvas-bridge';
+import type { CanvasDocumentIdentity, CanvasSelection } from './canvas-bridge';
 import type { EntrySession, FieldCommandResult, ListCommandResult } from './entry-session.svelte';
 import Fields from './Fields.svelte';
 import { sitePath } from './request';
@@ -10,9 +10,9 @@ import { sitePath } from './request';
 let {
   selection,
   selectionLabel,
-  inlineRichtext = false,
   context,
-  blockActions,
+  mediaPickerRequest = 0,
+  blockInspection,
   entryDocument,
   ownerLabel,
   locale,
@@ -26,13 +26,13 @@ let {
   locked = false,
   onschedule,
   onclose,
-  onform,
 }: {
   selection: CanvasSelection;
   selectionLabel?: string;
-  inlineRichtext?: boolean;
   context?: string;
-  blockActions?: Snippet;
+  /** A changing request opens the selected image's library directly from the Canvas overlay. */
+  mediaPickerRequest?: number;
+  blockInspection?: { fields: Field[]; path: string[]; type: string };
   entryDocument: CanvasDocumentIdentity;
   ownerLabel: string;
   locale: string;
@@ -46,7 +46,6 @@ let {
   locked?: boolean;
   onschedule: () => void;
   onclose: () => void;
-  onform: (target: CanvasTarget) => void;
 } = $props();
 
 const sameDocument = $derived(
@@ -70,13 +69,17 @@ const mutationBlocked = $derived(locked || session.localeMutationBlocked(locale)
 const fieldLabel = $derived(
   resolvedTarget?.field.label || resolvedTarget?.field.path.at(-1) || 'Content',
 );
-const heading = $derived(sameDocument ? fieldLabel : selection.target.document.id);
+const heading = $derived(
+  sameDocument ? (blockInspection?.type ?? fieldLabel) : selection.target.document.id,
+);
 const fieldType = $derived(
-  resolvedTarget
-    ? `${resolvedTarget.field.type.charAt(0).toUpperCase()}${resolvedTarget.field.type.slice(1)}`
-    : selection.target.document.collection === 'globals'
-      ? 'Shared'
-      : 'Entry',
+  blockInspection
+    ? 'Block'
+    : resolvedTarget
+      ? `${resolvedTarget.field.type.charAt(0).toUpperCase()}${resolvedTarget.field.type.slice(1)}`
+      : selection.target.document.collection === 'globals'
+        ? 'Shared'
+        : 'Entry',
 );
 
 const language = (value: string) => {
@@ -113,6 +116,7 @@ $effect(() => {
 
 function command(result: FieldCommandResult | ListCommandResult) {
   refusal = result.ok ? '' : result.reason;
+  if (result.ok) void completed();
 }
 
 async function completed() {
@@ -142,14 +146,16 @@ function completionEvents(node: HTMLFormElement) {
   aria-labelledby="canvas-inspector-heading"
 >
   <header>
-    <h2 id="canvas-inspector-heading">Inspector</h2>
+    <div class="canvas-inspector-title">
+      <span class="canvas-selection-icon"><CanvasIcon name={['Image', 'File'].includes(fieldType) ? 'image' : selection.kind === 'field' ? 'text' : 'block'} /></span>
+      <div>
+        <span class="canvas-inspector-kicker">Inspector · {fieldType === 'Richtext' ? 'Rich text' : fieldType}</span>
+        <h2 id="canvas-inspector-heading">{selectionLabel || heading}</h2>
+      </div>
+    </div>
     <button class="btn btn-ghost btn-sm" type="button" aria-label="Close Inspector" onclick={onclose}><CanvasIcon name="collapse-right" /></button>
   </header>
-  <div class="canvas-inspector-selection">
-    <span class="canvas-selection-icon"><CanvasIcon name={['Image', 'File'].includes(fieldType) ? 'image' : selection.kind === 'field' ? 'text' : 'block'} /></span>
-    <div><h3>{selectionLabel || heading}</h3><span>{fieldType === 'Richtext' ? 'Rich text' : fieldType}</span></div>
-  </div>
-  {#if context}<p class="canvas-inspector-context">{context}</p>{/if}
+  {#if context}<p class="canvas-inspector-context" title={context}>{context}</p>{/if}
 
   {#if !sameDocument}
     <div class="canvas-inspector-message">
@@ -158,20 +164,13 @@ function completionEvents(node: HTMLFormElement) {
         {selection.target.document.collection === 'globals' ? 'Edit shared content' : 'Open entry'} ↗
       </a>
     </div>
-  {:else if inspected}
+  {:else if inspected || blockInspection}
     {#if locked}
       <p class="notice notice-danger" role="status">Editing is disabled because this entry is locked.</p>
     {/if}
     {#if refusal}
       <p class="notice notice-danger" role="alert">This change was not applied ({refusal}).</p>
     {/if}
-    {#if inlineRichtext}
-      <div class="canvas-inspector-message"><strong>Content</strong><p>Double-click text on the canvas to edit it.</p>
-        <button class="btn btn-sm" type="button" onclick={() => onform(selection.target)}>Open in form <CanvasIcon name="external" /></button>
-      </div>
-    {/if}
-    <details class="canvas-field-details" class:is-collapsible={inlineRichtext} open={!inlineRichtext}>
-      <summary>Edit in Inspector</summary>
     <form
       class="form canvas-inspector-form"
       onsubmit={(event) => event.preventDefault()}
@@ -179,9 +178,9 @@ function completionEvents(node: HTMLFormElement) {
     >
       <fieldset disabled={mutationBlocked}>
         <Fields
-          fields={[inspected.field]}
+          fields={blockInspection?.fields ?? (inspected ? [inspected.field] : [])}
           root={session.snapshot(locale)}
-          path={parentPath}
+          path={blockInspection?.path ?? parentPath}
           {blocks}
           {problems}
           {mediaBase}
@@ -190,22 +189,20 @@ function completionEvents(node: HTMLFormElement) {
           {servedAt}
           {session}
           translating={translating}
-          inherited={inspected.mode}
+          inherited={inspected?.mode ?? true}
           prefix="canvas-inspector"
+          openMediaPicker={mediaPickerRequest}
           oncommand={command}
           structureLocked={session.structureMutationBlocked()}
           textOnly={session.sourceTextOnly(locale)}
         />
       </fieldset>
     </form>
-    </details>
   {:else}
     <div class="canvas-inspector-message">
-      <p>Select a field inside this block to edit its content, or open it in the form.</p>
-      <button class="btn btn-sm" type="button" onclick={() => onform(selection.target)}>Edit in Form</button>
+      <p>Select a field inside this block to edit its content.</p>
     </div>
   {/if}
-  {@render blockActions?.()}
   <div class="canvas-inspector-owner">
     <span class="visually-hidden">Owned by</span>
     <strong>{sameDocument ? ownerLabel : `${selection.target.document.collection}/${selection.target.document.id}`} · {language(selection.target.locale)}</strong>

@@ -26,6 +26,16 @@ const edit = createEditContext(Astro);
       <h1 {...edit.field('title')}>{data.title}</h1>
       {data.summary && <div data-fixture-summary {...edit.field('summary')}><Markdown content={data.summary} /></div>}
       {data.body && <div data-fixture-body {...edit.field('body')}><Markdown content={data.body} /></div>}
+      {data.button && (
+        <a
+          data-fixture-button
+          href={data.button.type === 'url' ? data.button.href : '#'}
+          target={data.button.newTab ? '_blank' : undefined}
+          {...edit.field('button')}
+        >
+          {data.button.label}
+        </a>
+      )}
       {data.legacy && <div data-fixture-legacy {...edit.field('legacy')}><Markdown content={data.legacy} /></div>}
       <Blocks blocks={data.blocks} {components} {globals} edit={edit.list('blocks')} />
       <Island client:load />

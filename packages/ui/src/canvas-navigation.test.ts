@@ -109,3 +109,28 @@ test('the iframe intercepts relative, absolute, modified and form navigation int
   ]);
   runtime.dispose();
 });
+
+test('edit mode consumes links and forms without raising navigation intents', () => {
+  document.body.innerHTML = `
+    <a id="cta" href="https://outside.example/book">Book now</a>
+    <form id="form" action="/search"><button>Search</button></form>
+  `;
+  const onNavigate = vi.fn();
+  const runtime = createCanvasNavigationRuntime({
+    mode: () => 'edit',
+    onNavigate,
+  });
+  runtime.start();
+
+  const clicked = document
+    .querySelector('#cta')
+    ?.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+  const submitted = document
+    .querySelector('#form')
+    ?.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
+
+  expect(clicked).toBe(false);
+  expect(submitted).toBe(false);
+  expect(onNavigate).not.toHaveBeenCalled();
+  runtime.dispose();
+});

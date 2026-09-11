@@ -115,10 +115,12 @@ Use `isCanvas(Astro)` to omit or disable behavior that must happen only on the p
 analytics, autoplay, autonomous polling, autofocus, and submissions or requests with external
 effects. Click interception is not enough to stop code that sends a request on its own.
 
-Interact mode permits normal controls and mediates links, but forms do not submit from Canvas.
-Use **Open preview** to test a real submission after dirty locales have saved. Internal links to
-another editable entry also save first and open a new editing session; links to indexes, downloads,
-and external sites require an explicit open action.
+Edit mode consumes links and form controls as editing selections, so working on linked text or a
+CTA never navigates away or shifts the canvas with a confirmation banner. Interact mode permits
+normal controls and mediates links, but forms do not submit from Canvas. Use **Open preview** to
+test a real submission after dirty locales have saved. Internal links to another editable entry
+also save first and open a new editing session; links to indexes, downloads, and external sites
+require an explicit open action.
 
 ## Boundaries
 
@@ -130,7 +132,9 @@ and external sites require an explicit open action.
   Canvas does not write through the current page as if it owned them.
 - Blocks reorder only within their current list. Cross-container movement, freeform layout or style
   controls, and collaborative editing are not included.
-- A promoted render restores the logical selection and scroll position, not arbitrary state inside
+- A promoted render restores the logical selection without scrolling it into view, preserving the
+  viewport even if the editor scrolled away while editing. Explicit Structure selections still scroll
+  to their target. A refresh does not preserve arbitrary state inside
   hydrated islands.
 - Collection indexes have no single active entry, so they remain ordinary previews rather than
   editable Canvas documents.
@@ -143,17 +147,32 @@ source metadata, bridge scripts, or Canvas styles.
 ## Editor feedback and panels
 
 Canvas fills the available viewport below the entry header. Structure and Inspector can stay open
-side by side on wide workspaces. On narrow workspaces, opening Inspector temporarily hides
-Structure; closing it or choosing Structure returns to the same selection.
+side by side on wide workspaces. Drag either divider to resize its panel; the browser remembers both
+widths, and a focused divider also accepts the arrow keys, Home, and End. The Canvas takes the space
+released by either panel, while minimum widths keep all three surfaces usable. On narrow workspaces,
+opening Inspector temporarily hides Structure; closing it or choosing Structure returns to the same
+selection.
 
 Structure lists blocks by the same name the form editor gives them — a block's `_label`, else its
 type — and a row with children collapses from its own arrow, or with `←` and `→` while it has
-focus. Selecting content in the page opens whatever branch it sits in.
+focus. Selecting content in the page opens whatever branch it sits in. Adding a block commits the
+chosen type immediately, selects the new block, and opens its fields in Inspector; replacement
+continues to use the staged block form so existing data is not discarded accidentally.
 
-Field validation appears above the canvas even when Inspector is closed. **Review fields** opens
+Incomplete required fields pause Canvas rendering while draft autosave continues. The last working
+page and the new block’s Inspector remain available, with one neutral completion hint instead of
+validation and render-error banners. Completing the fields resumes rendering automatically.
+Server validation remains authoritative; other field problems and genuine render failures keep
+their existing feedback. Field validation appears above the canvas even when Inspector is closed. **Review fields** opens
 Form and focuses the affected field in the current language. The header problem count also opens
 Form when needed. Validation still prevents publishing; it does not disable unrelated field edits.
 
 Selected content uses a short field label; the full path stays in the editor rail. During inline
 editing, the label recedes and a single selection boundary remains. Rich-text editing replaces the
-rendered prose in place and keeps accepted content visible until the updated page is ready.
+rendered prose in place and keeps accepted content visible until the updated page is ready. Its
+Inspector fields are also immediately visible without a second disclosure or a Form detour. Image
+selections expose **Replace image** on the canvas. Clicking an annotated CTA or an existing link in
+rich text opens the same compact Canvas link editor for its label, Page/Entry or URL destination,
+and (where the schema supports it) new-tab behavior; edit mode never follows the link. The
+Inspector presents those destination choices as a full-width control and truncates long entry
+titles and paths without widening the panel.

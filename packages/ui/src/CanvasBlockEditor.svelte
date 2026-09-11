@@ -1,57 +1,13 @@
 <script lang="ts" module>
 import type { Field } from '@handover/core';
+import { requiredFieldProblems } from './required-fields';
 
 type Data = Record<string, unknown>;
 
 const object = (value: unknown): value is Data =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const read = (root: unknown, path: readonly string[]) =>
-  path.reduce<unknown>((value, key) => (object(value) ? value[key] : undefined), root);
-
-const filled = (value: unknown) => typeof value === 'string' && value.trim().length > 0;
-
-function requiredProblems(fields: readonly Field[], root: unknown, prefix: readonly string[] = []) {
-  const problems: Record<string, string> = {};
-  for (const field of fields) {
-    if (field.type === 'unsupported') {
-      continue;
-    }
-    const path = [...prefix, ...field.path];
-    const value = read(root, field.path);
-    if (field.type === 'group') {
-      if (value !== undefined || field.required)
-        Object.assign(problems, requiredProblems(field.fields, object(value) ? value : {}, path));
-      continue;
-    }
-    if (!field.required) continue;
-    const present =
-      field.type === 'text' || field.type === 'richtext' || field.type === 'date'
-        ? filled(value)
-        : field.type === 'number'
-          ? typeof value === 'number' && Number.isFinite(value)
-          : field.type === 'boolean'
-            ? typeof value === 'boolean'
-            : field.type === 'select'
-              ? typeof value === 'string' && field.options.includes(value)
-              : field.type === 'reference'
-                ? filled(value)
-                : field.type === 'array' || field.type === 'blocks' || field.type === 'menus'
-                  ? Array.isArray(value)
-                  : field.type === 'image' || field.type === 'file'
-                    ? object(value) && filled(value.src)
-                    : field.type === 'link'
-                      ? object(value) &&
-                        ((value.type === 'entry' && filled(value.ref)) ||
-                          (value.type === 'url' && filled(value.href)))
-                      : object(value);
-    if (!present) problems[path.join('.')] = `${field.label || 'This field'} is required`;
-  }
-  return problems;
-}
-
-export const canvasBlockProblems = (fields: readonly Field[], root: unknown) =>
-  requiredProblems(fields, root);
+export const canvasBlockProblems = requiredFieldProblems;
 
 export function canvasBlockDraft(type: string, id: string, fields: readonly Field[]) {
   const draft: Data = { _type: type, _id: id };
@@ -109,7 +65,7 @@ let {
   servedAt?: string;
   locked?: boolean;
   onapply: (value: Record<string, unknown>) => ListCommandResult;
-  onclose: () => void;
+  onclose: (reason?: 'applied') => void;
 } = $props();
 
 const offered = $derived(types.filter((type) => blocks[type] !== undefined));
@@ -118,7 +74,7 @@ let draft = $state<Record<string, unknown>>({});
 let refusal = $state('');
 let panel = $state<HTMLElement>();
 const fields = $derived(blocks[chosen] ?? []);
-const problems = $derived(chosen ? canvasBlockProblems(fields, draft) : {});
+const problems = $derived(chosen ? canvasBlockProblems(fields, draft, blocks) : {});
 const ready = $derived(chosen && Object.keys(problems).length === 0 && !locked);
 
 $effect(() => {
@@ -127,8 +83,15 @@ $effect(() => {
 
 function choose(type: string) {
   if (!offered.includes(type)) return;
+  const next = canvasBlockDraft(type, newId('default'), blocks[type] ?? []);
+  if (mode === 'insert') {
+    const result = onapply(next);
+    refusal = result.ok ? '' : result.reason;
+    if (result.ok) onclose('applied');
+    return;
+  }
   chosen = type;
-  draft = canvasBlockDraft(type, newId('default'), blocks[type] ?? []);
+  draft = next;
   refusal = '';
 }
 
@@ -147,7 +110,7 @@ function apply() {
   bind:this={panel}
 >
   <header>
-    <button class="btn btn-ghost btn-sm canvas-block-editor-back" type="button" aria-label="Back to Structure" onclick={onclose}><CanvasIcon name="back" /></button>
+    <button class="btn btn-ghost btn-sm canvas-block-editor-back" type="button" aria-label="Back to Structure" onclick={() => onclose()}><CanvasIcon name="back" /></button>
     <div>
       <span class="badge">Block</span>
       <h2 id="canvas-block-editor-heading">{mode === 'replace' ? 'Replace block' : 'Add block'}</h2>
@@ -158,12 +121,16 @@ function apply() {
     <p class="canvas-block-context">Replacing <strong>{currentType}</strong>. Fields are not converted between block types.</p>
   {/if}
 
+  {#if refusal}
+    <p class="notice notice-danger" role="alert">This block was not applied ({refusal}).</p>
+  {/if}
+
   {#if !chosen}
     <div class="canvas-block-picker" role="list" aria-label="Allowed block types">
       {#each offered as type (type)}
         <button class="type-card" type="button" disabled={locked} onclick={() => choose(type)}>
           <strong>{type}</strong>
-          <span>Add and configure this block</span>
+          <span>{mode === 'insert' ? 'Add this block' : 'Configure replacement'}</span>
         </button>
       {:else}
         <p class="canvas-inspector-message">This list has no configurable block types.</p>
@@ -174,9 +141,6 @@ function apply() {
       <strong>{chosen}</strong>
       <button class="btn btn-ghost btn-sm" type="button" onclick={() => (chosen = '')}>Change type</button>
     </div>
-    {#if refusal}
-      <p class="notice notice-danger" role="alert">This block was not applied ({refusal}).</p>
-    {/if}
     <form class="form canvas-inspector-form" onsubmit={(event) => { event.preventDefault(); apply(); }}>
       <fieldset disabled={locked}>
         <Fields
@@ -195,7 +159,7 @@ function apply() {
         <p class="hint" role="status">Complete the required fields before applying this block.</p>
       {/if}
       <div class="actions canvas-block-editor-actions">
-        <button class="btn" type="button" onclick={onclose}>Cancel</button>
+        <button class="btn" type="button" onclick={() => onclose()}>Cancel</button>
         <button class="btn btn-primary" type="submit" disabled={!ready}>Apply</button>
       </div>
     </form>

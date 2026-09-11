@@ -40,14 +40,14 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-test('offers only destination types and waits for required fields before one Apply', () => {
+test('replacement offers only destination types and waits for required fields before one Apply', () => {
   expect(
     canvasBlockDraft('settings', 'settings1', [
       { path: ['enabled'], label: 'Enabled', type: 'boolean', required: true },
       { path: ['items'], label: 'Items', type: 'array', required: true, item: [] },
     ]),
   ).toEqual({ _type: 'settings', _id: 'settings1', enabled: false, items: [] });
-  const { root, onapply, onclose } = show();
+  const { root, onapply, onclose } = show({ mode: 'replace' });
   const types = Array.from(root.querySelectorAll<HTMLButtonElement>('.type-card'));
   expect(types.map((button) => button.textContent?.trim().split(/\s+/)[0])).toEqual([
     'hero',
@@ -82,8 +82,8 @@ test('offers only destination types and waits for required fields before one App
   expect(onclose).toHaveBeenCalledOnce();
 });
 
-test('Cancel discards a configured insertion without calling the structural command', () => {
-  const { root, onapply, onclose } = show();
+test('Cancel discards a configured replacement without calling the structural command', () => {
+  const { root, onapply, onclose } = show({ mode: 'replace' });
   root.querySelector<HTMLButtonElement>('.type-card')?.click();
   flushSync();
   const heading = root.querySelector<HTMLInputElement>('input[id$="heading"]');
@@ -103,6 +103,17 @@ test('offers an explicit path back to Structure', () => {
   const { root, onclose } = show();
   root.querySelector<HTMLButtonElement>('button[aria-label="Back to Structure"]')?.click();
   expect(onclose).toHaveBeenCalledOnce();
+});
+
+test('insertion creates a draft immediately so its fields can be completed in Inspector', () => {
+  const { root, onapply, onclose } = show({ mode: 'insert' });
+  root.querySelector<HTMLButtonElement>('.type-card')?.click();
+
+  expect(onapply).toHaveBeenCalledWith(
+    expect.objectContaining({ _type: 'hero', _id: expect.any(String) }),
+  );
+  expect(onapply.mock.calls[0]?.[0]).not.toHaveProperty('heading');
+  expect(onclose).toHaveBeenCalledWith('applied');
 });
 
 test('replacement starts a fresh allowed type instead of converting the old block', () => {

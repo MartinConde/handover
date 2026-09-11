@@ -213,7 +213,11 @@ const restoreView = (held: RenderFrame, state: CanvasViewState | undefined) => {
     left = view.scrollX + bounds.left - state.anchor.left;
     top = view.scrollY + bounds.top - state.anchor.top;
   }
-  view.scrollTo(clamp(left, maximumLeft), clamp(top, maximumTop));
+  view.scrollTo({
+    left: clamp(left, maximumLeft),
+    top: clamp(top, maximumTop),
+    behavior: 'instant',
+  });
 };
 
 /**
@@ -324,7 +328,7 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
     const wanted = options.currentSelection?.() ?? held.selection;
     if (wanted && held.structure.length) {
       if (held.structure.some((node) => sameSelection(node, wanted))) {
-        held.bridge.select(wanted);
+        held.bridge.select(wanted, { scroll: false });
         options.onSelectionChange?.(wanted, 'restore');
       } else {
         options.onSelectionChange?.(undefined);
@@ -434,8 +438,10 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
           options.onStructureChange?.(nodes);
           const wanted = options.currentSelection?.();
           if (wanted && nodes.some((node) => sameSelection(node, wanted)))
-            held.bridge.select(wanted);
-          else if (wanted) options.onSelectionChange?.(undefined);
+            held.bridge.select(wanted, { scroll: false });
+          // An older visible page cannot disprove a newly inserted draft selection.
+          else if (wanted && held.manifest.contentVersion === options.contentVersion())
+            options.onSelectionChange?.(undefined);
         }
       },
       onAction: (message) => {
@@ -580,6 +586,28 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
           timer: setTimeout(launchPending, renderDelayMs),
         };
       });
+    },
+    /** Incomplete content still autosaves; discard renders that can no longer represent it. */
+    pause() {
+      if (disposed) return;
+      if (pending) {
+        const held = pending;
+        pending = undefined;
+        clearTimeout(held.timer);
+        held.waiters.forEach(({ resolve }) => {
+          resolve({ ok: false, requestId: held.requestId, reason: 'superseded' });
+        });
+      }
+      if (candidate) finishFailure(candidate, 'superseded', {}, false);
+      update(
+        active
+          ? {
+              phase: 'ready',
+              requestId: active.manifest.requestId,
+              contentVersion: active.manifest.contentVersion,
+            }
+          : { phase: 'idle' },
+      );
     },
     setInteractionState(next: Partial<CanvasInteractionState>) {
       setInteractionState(next);

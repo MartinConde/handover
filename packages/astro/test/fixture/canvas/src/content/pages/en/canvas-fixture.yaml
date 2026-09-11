@@ -1,5 +1,9 @@
 _version: 1
 title: "Canvas fixture"
+button:
+  type: "url"
+  href: "https://example.com/book"
+  label: "Book a viewing"
 blocks:
   - _type: "repeated"
     _id: "repeat01"

@@ -35,6 +35,14 @@ import { request as fetch, previewPath } from './request';
 
 type Renderer = ReturnType<typeof createCanvasRenderer>;
 type Width = 'desktop' | 'tablet' | 'phone';
+type ResizablePanel = 'structure' | 'inspector';
+
+const PANEL_WIDTHS = {
+  structure: { default: 250, min: 210, max: 420 },
+  inspector: { default: 380, min: 320, max: 640 },
+} as const;
+const PANEL_WIDTH_STORAGE = 'handover.canvas.panel-widths';
+const MIN_CANVAS_WIDTH = 360;
 
 let {
   active,
@@ -56,7 +64,6 @@ let {
   servedAt,
   locked = false,
   onform,
-  onformtarget,
   onreviewproblems,
   onnavigateentry,
   mobileHidden = false,
@@ -81,7 +88,6 @@ let {
   locked?: boolean;
   onform: () => void;
   onreviewproblems: () => void;
-  onformtarget: (target: NonNullable<CanvasSelection>['target']) => void;
   onnavigateentry: (target: {
     collection: string;
     id: string;
@@ -97,8 +103,8 @@ let narrow = $state(false);
 let renderer: Renderer | undefined;
 let rendererState = $state<CanvasRendererState>({ phase: 'idle' });
 let width = $state<Width>('desktop');
-let sizing = $state('fit');
 let structureOpen = $state(false);
+let structureWidth = $state<number>(PANEL_WIDTHS.structure.default);
 let initializedPanels = false;
 $effect(() => {
   if (active && fullscreen && !initializedPanels) {
@@ -107,7 +113,23 @@ $effect(() => {
   }
 });
 let inspectorOpen = $state(false);
-const issues = $derived(Object.entries(problems));
+let inspectorWidth = $state<number>(PANEL_WIDTHS.inspector.default);
+let resizing = $state<{
+  panel: ResizablePanel;
+  pointerId: number;
+  startX: number;
+  startWidth: number;
+}>();
+const incomplete = $derived(session.incompleteFields(locale));
+const incompletePaths = $derived(Object.keys(incomplete));
+const issues = $derived(Object.entries({ ...incomplete, ...problems }));
+// Untouched required fields are an ordinary work-in-progress state. Review fields reveals
+// their validation in Form; unrelated schema errors remain visible beside their controls.
+const inspectorProblems = $derived(
+  Object.fromEntries(Object.entries(problems).filter(
+    ([path]) => !incompletePaths.some((missing) => path === missing || path.startsWith(`${missing}.`)),
+  )),
+);
 let structure = $state<CanvasStructureNode[]>([]);
 let selected = $state<CanvasSelection>();
 let loading = $state(true);
@@ -120,6 +142,7 @@ let interactionMode = $state<CanvasInteractionMode>('edit');
 let actionRefusal = $state('');
 let navigationError = $state('');
 let navigationBusy = false;
+let mediaPickerRequest = $state(0);
 let navigationAction = $state<{
   destination: CanvasNavigationDestination;
   download: boolean;
@@ -144,7 +167,9 @@ const WIDTHS: { value: Width; label: string }[] = [
 const status = $derived(
   loading
     ? 'Preparing Canvas…'
-    : rendererState.phase === 'rendering'
+    : incompletePaths.length
+      ? 'Complete required fields to update Canvas'
+      : rendererState.phase === 'rendering'
       ? 'Updating Canvas…'
       : rendererState.phase === 'ready'
         ? 'Canvas updated'
@@ -258,6 +283,10 @@ const breadcrumb = $derived.by(() => {
 
 async function submit(kind: 'render' | 'schedule', force = false) {
   if (!active || !renderer) return;
+  if (untrack(() => incompletePaths.length)) {
+    renderer.pause();
+    return;
+  }
   const next = untrack(request);
   const version = next.snapshot.contentVersion;
   if (!force && next.snapshot.locale === lastLocale && version === lastVersion) return;
@@ -265,6 +294,10 @@ async function submit(kind: 'render' | 'schedule', force = false) {
   lastVersion = version;
   await tick();
   if (!active || disposed) return;
+  if (untrack(() => incompletePaths.length)) {
+    renderer.pause();
+    return;
+  }
   try {
     await renderer[kind](next);
   } catch (error) {
@@ -283,8 +316,7 @@ export function schedule() {
 }
 
 function retry() {
-  if (!renderer) return;
-  void renderer.retry();
+  void submit('render', true);
 }
 
 function selectNode(node: CanvasStructureNode) {
@@ -302,9 +334,111 @@ function toggleStructure() {
 }
 
 function toggleInspector() {
-  if (!selected) return;
   inspectorOpen = !inspectorOpen;
 }
+
+const clamp = (value: number, minimum: number, maximum: number) =>
+  Math.min(Math.max(value, minimum), maximum);
+
+function panelMaximum(panel: ResizablePanel) {
+  const available = workspace?.clientWidth ?? window.innerWidth;
+  const other =
+    panel === 'structure'
+      ? inspectorOpen
+        ? inspectorWidth
+        : 0
+      : structureVisible
+        ? structureWidth
+        : 0;
+  return Math.max(
+    PANEL_WIDTHS[panel].min,
+    Math.min(PANEL_WIDTHS[panel].max, available - other - MIN_CANVAS_WIDTH),
+  );
+}
+
+function setPanelWidth(panel: ResizablePanel, value: number) {
+  const width = Math.round(clamp(value, PANEL_WIDTHS[panel].min, panelMaximum(panel)));
+  if (panel === 'structure') structureWidth = width;
+  else inspectorWidth = width;
+}
+
+function storePanelWidths() {
+  try {
+    localStorage.setItem(
+      PANEL_WIDTH_STORAGE,
+      JSON.stringify({ structure: structureWidth, inspector: inspectorWidth }),
+    );
+  } catch {
+    // Private browsing can disable storage; resizing still works for the current session.
+  }
+}
+
+function beginPanelResize(panel: ResizablePanel, event: PointerEvent) {
+  if (narrow || event.button !== 0) return;
+  event.preventDefault();
+  const handle = event.currentTarget as HTMLElement;
+  handle.setPointerCapture(event.pointerId);
+  resizing = {
+    panel,
+    pointerId: event.pointerId,
+    startX: event.clientX,
+    startWidth: panel === 'structure' ? structureWidth : inspectorWidth,
+  };
+}
+
+function continuePanelResize(event: PointerEvent) {
+  const activeResize = resizing;
+  if (!activeResize || activeResize.pointerId !== event.pointerId) return;
+  const movement = event.clientX - activeResize.startX;
+  setPanelWidth(
+    activeResize.panel,
+    activeResize.startWidth + (activeResize.panel === 'structure' ? movement : -movement),
+  );
+}
+
+function finishPanelResize(event: PointerEvent) {
+  if (!resizing || resizing.pointerId !== event.pointerId) return;
+  const handle = event.currentTarget as HTMLElement;
+  if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+  resizing = undefined;
+  storePanelWidths();
+}
+
+function resizePanelWithKeyboard(panel: ResizablePanel, event: KeyboardEvent) {
+  if (event.key === 'Home' || event.key === 'End') {
+    event.preventDefault();
+    setPanelWidth(panel, event.key === 'Home' ? PANEL_WIDTHS[panel].min : panelMaximum(panel));
+    storePanelWidths();
+    return;
+  }
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+  event.preventDefault();
+  const movement = event.key === 'ArrowRight' ? 16 : -16;
+  const current = panel === 'structure' ? structureWidth : inspectorWidth;
+  setPanelWidth(panel, current + (panel === 'structure' ? movement : -movement));
+  storePanelWidths();
+}
+
+function resetPanelWidth(panel: ResizablePanel) {
+  setPanelWidth(panel, PANEL_WIDTHS[panel].default);
+  storePanelWidths();
+}
+
+// A saved wide-screen preference must not squeeze the Canvas out when a smaller desktop opens
+// both panels. Reduce the Inspector first, then Structure, while keeping both usable.
+$effect(() => {
+  if (narrow || !workspace || !structureVisible || !inspectorOpen) return;
+  const available = workspace.clientWidth - MIN_CANVAS_WIDTH;
+  if (structureWidth + inspectorWidth <= available) return;
+  inspectorWidth = Math.max(
+    PANEL_WIDTHS.inspector.min,
+    Math.min(inspectorWidth, available - structureWidth),
+  );
+  structureWidth = Math.max(
+    PANEL_WIDTHS.structure.min,
+    Math.min(structureWidth, available - inspectorWidth),
+  );
+});
 
 function selectionChanged(next: CanvasSelection | undefined, reason?: 'restore') {
   if (interactionMode !== 'edit') return;
@@ -313,10 +447,7 @@ function selectionChanged(next: CanvasSelection | undefined, reason?: 'restore')
     renderer?.textField(textField(next));
     if (next) renderer?.actions(next, blockActionsFor(next));
   });
-  if (!next) {
-    inspectorOpen = false;
-    return;
-  }
+  if (!next) return;
   // A background render restores selection without overriding panels the editor closed.
   if (reason === 'restore') return;
   const owner = next.target.document;
@@ -384,12 +515,57 @@ function blockLocation(selection: CanvasSelection) {
   };
 }
 
+function blockInspectorFor(selection: CanvasSelection | undefined) {
+  if (
+    selection?.kind !== 'block' ||
+    !sameDocument(selection.target) ||
+    selection.target.locale !== locale
+  )
+    return;
+  const match = /^(.*)\[_id=([^\]]+)\]$/.exec(selection.target.address);
+  if (!match) return;
+  const address = match[1] ?? '';
+  const inspected = session.inspectField(locale, address);
+  if (!inspected.ok || inspected.target.field.type !== 'blocks') return;
+  const rows = read(session.snapshot(locale), inspected.target.path);
+  if (!Array.isArray(rows)) return;
+  const index = rows.findIndex(
+    (row) =>
+      typeof row === 'object' &&
+      row !== null &&
+      !Array.isArray(row) &&
+      (row as Record<string, unknown>)._id === match[2],
+  );
+  if (index < 0) return;
+  const row = rows[index];
+  const type =
+    typeof row === 'object' && row !== null && !Array.isArray(row)
+      ? String((row as Record<string, unknown>)._type ?? '')
+      : '';
+  const fields = blocks[type];
+  if (!type || !fields) return;
+  return { fields, path: [...inspected.target.path, String(index)], type };
+}
+
 const blockActionsFor = (selection: CanvasSelection): CanvasBlockAction[] => {
   if (interactionMode !== 'edit') return [];
   const history: CanvasBlockAction[] = [
     ...(session.canUndo() ? (['undo'] as const) : []),
     ...(session.canRedo() ? (['redo'] as const) : []),
   ];
+  if (selection.kind === 'field') {
+    const resolved =
+      sameDocument(selection.target) && selection.target.locale === locale
+        ? session.inspectField(locale, selection.target.address)
+        : undefined;
+    const canReplaceImage =
+      resolved?.ok &&
+      resolved.target.field.type === 'image' &&
+      locale === sourceLocale &&
+      !locked &&
+      !session.localeMutationBlocked(locale);
+    return [...(canReplaceImage ? (['replace-media'] as const) : []), ...history];
+  }
   if (selection.kind === 'list')
     return blockEditorFor('insert-empty', selection) ? ['insert-empty', ...history] : history;
   if (selection.kind !== 'block') return history;
@@ -457,8 +633,9 @@ function openBlockEditor(
 }
 
 let addBlockButton = $state<HTMLButtonElement>();
-function closeBlockEditor() {
+function closeBlockEditor(reason?: 'applied') {
   blockEditor = undefined;
+  if (reason === 'applied') return;
   const delay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 280;
   window.setTimeout(() => addBlockButton?.focus(), delay);
 }
@@ -487,12 +664,23 @@ function applyBlock(value: Record<string, unknown>) {
       },
     };
   }
+  if (editing.mode === 'insert') {
+    inspectorOpen = true;
+    mediaPickerRequest = 0;
+  }
   void submit('schedule');
   return result;
 }
 
 function canvasAction(message: Pick<CanvasActionMessage, 'action' | 'destination' | 'selection'>) {
   if (interactionMode !== 'edit') return;
+  if (message.action === 'replace-media') {
+    selected = message.selection;
+    blockEditor = undefined;
+    inspectorOpen = true;
+    mediaPickerRequest += 1;
+    return;
+  }
   if (message.action === 'undo' || message.action === 'redo') {
     replay(message.action);
     return;
@@ -635,12 +823,35 @@ function textField(value: CanvasSelection | undefined = selected): CanvasTextFie
   const resolved = session.inspectField(locale, value.target.address);
   if (
     !resolved.ok ||
-    !['text', 'richtext'].includes(resolved.target.field.type) ||
+    !['text', 'richtext', 'link'].includes(resolved.target.field.type) ||
     resolved.target.address !== value.target.address ||
     (locale !== sourceLocale && resolved.target.mode !== true)
   )
     return;
   const current = read(session.snapshot(locale), resolved.target.path);
+  if (resolved.target.field.type === 'link') {
+    if (
+      current !== undefined &&
+      (typeof current !== 'object' || current === null || Array.isArray(current))
+    )
+      return;
+    const link = (current as Record<string, unknown> | undefined) ?? {};
+    const label = link.label;
+    if (label !== undefined && typeof label !== 'string') return;
+    if (locale === sourceLocale)
+      return {
+        kind: 'link' as const,
+        target: value.target,
+        value: {
+          type: link.type === 'url' ? ('url' as const) : ('entry' as const),
+          ref: typeof link.ref === 'string' ? link.ref : '',
+          href: typeof link.href === 'string' ? link.href : '',
+          label: label ?? '',
+          newTab: link.newTab === true,
+        },
+      };
+    return { kind: 'text' as const, target: value.target, value: label ?? '' };
+  }
   if (current !== undefined && typeof current !== 'string') return;
   const text = current ?? '';
   if (resolved.target.field.type === 'richtext') {
@@ -672,20 +883,22 @@ const updateFor = (
   selection?: import('./entry-session.svelte').LogicalSelection,
 ) => {
   const resolved = session.resolveField(target.locale, target.address);
-  if (
-    !resolved.ok ||
-    (resolved.target.field.type !== 'text' && resolved.target.field.type !== 'richtext')
-  )
-    return;
+  if (!resolved.ok || !['text', 'richtext', 'link'].includes(resolved.target.field.type)) return;
   const value = read(session.snapshot(target.locale), resolved.target.path);
-  if (value !== undefined && typeof value !== 'string') return;
+  const text =
+    resolved.target.field.type === 'link'
+      ? typeof value === 'object' && value !== null && !Array.isArray(value)
+        ? (value as Record<string, unknown>).label
+        : undefined
+      : value;
+  if (text !== undefined && typeof text !== 'string') return;
   const matches =
     selection?.document === session.documentIdentity() &&
     selection.locale === target.locale &&
     selection.address === target.address &&
     (selection.kind === 'text' || selection.kind === 'node');
   return {
-    value: value ?? '',
+    value: text ?? '',
     ...(matches && selection.anchor !== undefined && selection.head !== undefined
       ? { selection: { kind: selection.kind, anchor: selection.anchor, head: selection.head } }
       : {}),
@@ -708,10 +921,18 @@ function canvasCommand(message: CanvasCommandMessage): CanvasCommandResult {
     };
   }
   const history = message.command.history;
+  const resolved = session.inspectField(target.locale, target.address);
+  const changes =
+    resolved.ok && resolved.target.field.type === 'link' && editable.kind === 'text'
+      ? message.command.changes.map((change) => ({
+          ...change,
+          path: ['label', ...(change.path ?? [])],
+        }))
+      : message.command.changes;
   const result = session.fieldCommand(target.locale, {
     address: target.address,
     contentVersion: message.contentVersion,
-    changes: message.command.changes,
+    changes,
     ...(history
       ? {
           history: {
@@ -839,6 +1060,16 @@ $effect(() => {
 });
 
 onMount(() => {
+  try {
+    const stored = JSON.parse(localStorage.getItem(PANEL_WIDTH_STORAGE) ?? '{}') as Record<
+      string,
+      unknown
+    >;
+    if (typeof stored.structure === 'number') setPanelWidth('structure', stored.structure);
+    if (typeof stored.inspector === 'number') setPanelWidth('inspector', stored.inspector);
+  } catch {
+    // Ignore malformed or unavailable local storage and keep the considered defaults.
+  }
   const fitWorkspace = () => {
     if (!workspace || !active) return;
     const bounds = workspace.getBoundingClientRect();
@@ -865,7 +1096,9 @@ onMount(() => {
       onCommand: canvasCommand,
       commandRecovery: (message) => {
         const field = textField({ kind: 'field', target: message.target });
-        return field ? { value: field.value } : undefined;
+        return field
+          ? { value: field.kind === 'link' ? field.value.label : field.value }
+          : undefined;
       },
       onSelectionChange: selectionChanged,
       onStructureChange: (next) => (structure = next),
@@ -890,30 +1123,6 @@ onMount(() => {
 });
 </script>
 
-{#snippet inspectorBlockActions()}
-  {#if actionNode && blockActionsFor(actionNode).length}
-    <section class="canvas-block-actions" aria-label="Block actions">
-      <h3>Block actions <span>{actionNode.label}</span></h3>
-      {#each [{ action: 'duplicate', label: 'Duplicate', icon: 'duplicate' }, { action: 'move-up', label: 'Move up', icon: 'up' }, { action: 'move-down', label: 'Move down', icon: 'down' }] as item}
-        {#if blockActionsFor(actionNode).includes(item.action as CanvasBlockAction)}
-          <button class="btn btn-sm" type="button" onclick={() => { if (actionNode) canvasAction({ action: item.action as CanvasBlockAction, selection: actionNode }); }}><CanvasIcon name={item.icon} />{item.label}</button>
-        {/if}
-      {/each}
-      <details class="canvas-more-actions">
-        <summary>More actions <span aria-hidden="true">⋯</span></summary>
-        {#each [{ action: 'insert-before', label: 'Insert before' }, { action: 'insert-after', label: 'Insert after' }, { action: 'replace', label: 'Replace block' }] as item}
-          {#if blockActionsFor(actionNode).includes(item.action as CanvasBlockAction)}
-            <button class="btn btn-sm" type="button" onclick={() => { if (actionNode) openBlockEditor(item.action as 'insert-before' | 'insert-after' | 'replace', actionNode); }}>{item.label}</button>
-          {/if}
-        {/each}
-        {#if blockActionsFor(actionNode).includes('delete')}
-          <button class="btn btn-ghost btn-sm canvas-delete" type="button" onclick={() => { if (actionNode) canvasAction({ action: 'delete', selection: actionNode }); }}>Delete block</button>
-        {/if}
-      </details>
-    </section>
-  {/if}
-{/snippet}
-
 <section
   bind:this={workspace}
   class="canvas-workspace"
@@ -931,10 +1140,12 @@ onMount(() => {
       <div class="canvas-identity"><strong title={ownerLabel}>{ownerLabel}</strong><span>Canvas</span></div>
     {/if}
     <div class="canvas-tools">
-      <button class="btn btn-ghost canvas-icon-button" type="button" aria-label="Structure" title="Toggle Structure"
-        disabled={interactionMode !== 'edit'} aria-expanded={structureVisible} aria-controls="canvas-structure" onclick={toggleStructure}><CanvasIcon name="structure" /></button>
-      <button class="btn btn-ghost canvas-icon-button" type="button" aria-label="Inspector" title={selected ? 'Toggle Inspector' : 'Select content to inspect it'}
-        disabled={!selected || interactionMode !== 'edit'} aria-expanded={inspectorOpen} aria-controls="canvas-inspector" onclick={toggleInspector}><CanvasIcon name="inspector" /></button>
+      <div class="canvas-panel-tools" role="group" aria-label="Editor panels">
+        <button class="btn btn-ghost canvas-panel-toggle" type="button" title="Show or hide Structure"
+          disabled={interactionMode !== 'edit'} aria-expanded={structureVisible} aria-controls="canvas-structure" onclick={toggleStructure}><CanvasIcon name="structure" /><span>Structure</span></button>
+        <button class="btn btn-ghost canvas-panel-toggle" type="button" title="Show or hide Inspector"
+          disabled={interactionMode !== 'edit'} aria-expanded={inspectorOpen} aria-controls="canvas-inspector" onclick={toggleInspector}><CanvasIcon name="inspector" /><span>Inspector</span></button>
+      </div>
       <span class="canvas-tool-divider"></span>
       <button class="btn btn-ghost canvas-icon-button" type="button" aria-label="Undo" title="Undo (⌘Z / Ctrl+Z)" disabled={interactionMode !== 'edit' || !session.canUndo()}
         aria-keyshortcuts="Control+Z Meta+Z" onclick={() => replay('undo')}><CanvasIcon name="undo" /></button>
@@ -947,9 +1158,6 @@ onMount(() => {
           <button type="button" aria-label={item.label} title={item.label} aria-pressed={width === item.value} onclick={() => (width = item.value)}><CanvasIcon name={item.value} /></button>
         {/each}
       </div>
-      <select class="canvas-sizing" aria-label="Canvas size" bind:value={sizing} disabled={width !== 'desktop'}>
-        <option value="fit">Fit width</option><option value="actual">1280 px</option>
-      </select>
       <div class="seg" role="group" aria-label="Canvas interaction">
         <button type="button" aria-pressed={interactionMode === 'edit'} onclick={() => setInteractionMode('edit')}>Edit</button>
         <button type="button" aria-pressed={interactionMode === 'interact'} onclick={() => setInteractionMode('interact')}>Interact</button>
@@ -961,14 +1169,19 @@ onMount(() => {
         onclick={(event) => { event.preventDefault(); void openCurrentPreview(); }}>Preview <CanvasIcon name="external" /></a>
       {#if fullscreen}{@render publishAction?.()}{/if}
     </div>
+    <span class="visually-hidden canvas-render-state" class:is-busy={loading || rendererState.phase === 'rendering'} class:is-failed={rendererState.phase === 'failed'} role="status">{status}</span>
   </div>
   {#if actionRefusal}<div class="canvas-action-refusal" role="alert">Action refused ({actionRefusal})</div>{/if}
 
   {#if issues.length}
-    <div class="canvas-validation" role="status">
+    <div class="canvas-validation" class:is-incomplete={incompletePaths.length > 0} role="status">
       <div>
-        <strong>{issues.length} {issues.length === 1 ? 'field needs' : 'fields need'} attention</strong>
-        <span>{issues[0]?.[1]}{issues.length > 1 ? ` · and ${issues.length - 1} more` : ''}. Review the fields to keep Canvas up to date.</span>
+        {#if incompletePaths.length}
+          <span>Complete required fields to update Canvas. You can keep editing; draft saving continues.</span>
+        {:else}
+          <strong>{issues.length} {issues.length === 1 ? 'field needs' : 'fields need'} attention</strong>
+          <span>{issues[0]?.[1]}{issues.length > 1 ? ` · and ${issues.length - 1} more` : ''}. Review the fields to keep Canvas up to date.</span>
+        {/if}
       </div>
       <button class="btn btn-sm" type="button" onclick={onreviewproblems}>Review fields</button>
     </div>
@@ -995,7 +1208,7 @@ onMount(() => {
     </div>
   {/if}
 
-  {#if failure}
+  {#if failure && !incompletePaths.length}
     <div class="canvas-failure" role="alert">
       <div>
         <strong>Canvas could not update</strong>
@@ -1006,12 +1219,21 @@ onMount(() => {
     </div>
   {/if}
 
-  <div class:has-structure={structureVisible} class:has-inspector={inspectorOpen && !!selected} class="canvas-workarea">
+  <div
+    class:has-structure={structureVisible}
+    class:has-inspector={inspectorOpen}
+    class:is-resizing={!!resizing}
+    class="canvas-workarea"
+    style={`--canvas-structure-width:${structureWidth}px;--canvas-inspector-width:${inspectorWidth}px`}
+  >
     <div class="canvas-panel-slot canvas-structure-slot" class:is-open={structureVisible} aria-hidden={!structureVisible} inert={!structureVisible}>
       <aside class="canvas-structure" class:is-block-editor={!!blockEditor} id="canvas-structure" aria-labelledby="canvas-structure-title">
         <div class="canvas-structure-home">
           <header>
-            <h2 id="canvas-structure-title">Structure</h2>
+            <div>
+              <h2 id="canvas-structure-title">Structure</h2>
+              <span>{structure.length} editable {structure.length === 1 ? 'item' : 'items'}</span>
+            </div>
             <button class="btn btn-ghost btn-sm" type="button" aria-label="Close Structure" onclick={() => (structureOpen = false)}><CanvasIcon name="collapse-left" /></button>
           </header>
           {#if structure.length}
@@ -1030,7 +1252,7 @@ onMount(() => {
                   aria-expanded={branch ? !shut : undefined}
                   aria-current={sameSelection(node, selected) ? 'true' : undefined}
                   data-target-address={node.target.occurrence?.address ?? node.target.address}
-                  style={`--canvas-indent:${8 + (treeDepth(node) - 1) * 14}px`}
+                  style={`--canvas-indent:${7 + (treeDepth(node) - 1) * 12}px`}
                   onclick={(event) => {
                     if (branch && (event.target as Element).closest('.canvas-structure-twisty')) toggleBranch(node);
                     else selectNode(node);
@@ -1080,40 +1302,99 @@ onMount(() => {
           </div>
         {/if}
       </aside>
+      {#if structureVisible && !narrow}
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -- ARIA's adjustable separator pattern is keyboard interactive. -->
+        <div
+          class="canvas-panel-resizer canvas-structure-resizer"
+          class:is-active={resizing?.panel === 'structure'}
+          role="separator"
+          aria-label="Resize Structure panel"
+          aria-orientation="vertical"
+          aria-valuemin={PANEL_WIDTHS.structure.min}
+          aria-valuemax={panelMaximum('structure')}
+          aria-valuenow={structureWidth}
+          aria-valuetext={`${structureWidth} pixels`}
+          tabindex="0"
+          title="Drag to resize · Double-click to reset"
+          onpointerdown={(event) => beginPanelResize('structure', event)}
+          onpointermove={continuePanelResize}
+          onpointerup={finishPanelResize}
+          onpointercancel={finishPanelResize}
+          onkeydown={(event) => resizePanelWithKeyboard('structure', event)}
+          ondblclick={() => resetPanelWidth('structure')}
+        ></div>
+      {/if}
     </div>
     <div class="canvas-stage-shell">
-      <div class="canvas-stage is-{width}" class:is-actual={sizing === 'actual'} bind:this={stage} aria-label="Editable page Canvas"></div>
+      <div class="canvas-stage is-{width}" bind:this={stage} aria-label="Editable page Canvas"></div>
     </div>
-    <div class="canvas-panel-slot canvas-inspector-slot" class:is-open={inspectorOpen && !!selected} aria-hidden={!(inspectorOpen && selected)} inert={!(inspectorOpen && selected)}>
-      {#if inspectorOpen && selected}
+    <div class="canvas-panel-slot canvas-inspector-slot" class:is-open={inspectorOpen} aria-hidden={!inspectorOpen} inert={!inspectorOpen}>
+      {#if inspectorOpen}
+        {#if !narrow}
+          <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -- ARIA's adjustable separator pattern is keyboard interactive. -->
+          <div
+            class="canvas-panel-resizer canvas-inspector-resizer"
+            class:is-active={resizing?.panel === 'inspector'}
+            role="separator"
+            aria-label="Resize Inspector panel"
+            aria-orientation="vertical"
+            aria-valuemin={PANEL_WIDTHS.inspector.min}
+            aria-valuemax={panelMaximum('inspector')}
+            aria-valuenow={inspectorWidth}
+            aria-valuetext={`${inspectorWidth} pixels`}
+            tabindex="0"
+            title="Drag to resize · Double-click to reset"
+            onpointerdown={(event) => beginPanelResize('inspector', event)}
+            onpointermove={continuePanelResize}
+            onpointerup={finishPanelResize}
+            onpointercancel={finishPanelResize}
+            onkeydown={(event) => resizePanelWithKeyboard('inspector', event)}
+            ondblclick={() => resetPanelWidth('inspector')}
+          ></div>
+        {/if}
         <div class="canvas-inspector-motion" transition:fly={{ x: 20, duration: 200, easing: cubicOut }}>
-          <CanvasInspector
-            selection={selected}
-            inlineRichtext={textField(selected)?.kind === 'richtext'}
-            selectionLabel={selectedNode?.label}
-            context={breadcrumb}
-            blockActions={inspectorBlockActions}
-            {entryDocument}
-            {ownerLabel}
-            {locale}
-            {sourceLocale}
-            {session}
-            {blocks}
-            {problems}
-            {mediaBase}
-            {site}
-            {servedAt}
-            {locked}
-            onschedule={() => void submit('schedule')}
-            onclose={() => (inspectorOpen = false)}
-            onform={onformtarget}
-          />
+          {#if selected}
+            <CanvasInspector
+              selection={selected}
+              selectionLabel={selectedNode?.label}
+              context={breadcrumb}
+              {mediaPickerRequest}
+              blockInspection={blockInspectorFor(selected)}
+              {entryDocument}
+              {ownerLabel}
+              {locale}
+              {sourceLocale}
+              {session}
+              {blocks}
+              problems={inspectorProblems}
+              {mediaBase}
+              {site}
+              {servedAt}
+              {locked}
+              onschedule={() => void submit('schedule')}
+              onclose={() => (inspectorOpen = false)}
+            />
+          {:else}
+            <aside class="canvas-inspector canvas-inspector-empty" id="canvas-inspector" aria-labelledby="canvas-inspector-heading">
+              <header>
+                <div class="canvas-inspector-title">
+                  <span class="canvas-selection-icon"><CanvasIcon name="inspector" /></span>
+                  <div>
+                    <span class="canvas-inspector-kicker">Inspector</span>
+                    <h2 id="canvas-inspector-heading">Nothing selected</h2>
+                  </div>
+                </div>
+                <button class="btn btn-ghost btn-sm" type="button" aria-label="Close Inspector" onclick={() => (inspectorOpen = false)}><CanvasIcon name="collapse-right" /></button>
+              </header>
+              <div class="canvas-inspector-empty-state">
+                <span class="canvas-inspector-empty-mark" aria-hidden="true"><CanvasIcon name="block" /></span>
+                <strong>Select an element to edit</strong>
+                <p>Choose an element on the canvas or in Structure. Its settings will appear here.</p>
+              </div>
+            </aside>
+          {/if}
         </div>
       {/if}
     </div>
   </div>
-  <footer class="canvas-statusbar">
-    <span class="canvas-breadcrumb" title={breadcrumb}>{breadcrumb || 'Select content to edit · Double-click text to write'}</span>
-    <span class="canvas-render-state" class:is-busy={loading || rendererState.phase === 'rendering'} class:is-failed={rendererState.phase === 'failed'} role="status">{status}</span>
-  </footer>
 </section>

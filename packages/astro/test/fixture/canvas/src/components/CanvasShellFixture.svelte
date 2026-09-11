@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { Field } from '@handover/core';
 import App from '../../../../../../ui/src/App.svelte';
+import { requiredFieldProblems } from '../../../../../../ui/src/required-fields';
 import '../../../../../../ui/src/tokens.css';
 
 const editorEntry = {
@@ -15,6 +16,7 @@ const editorEntry = {
     },
     { path: ['summary'], label: 'Summary', type: 'richtext', required: false, tier: 'basic' },
     { path: ['body'], label: 'Body', type: 'richtext', required: false, tier: 'full' },
+    { path: ['button'], label: 'Button', type: 'link', required: false },
     { path: ['legacy'], label: 'Legacy prose', type: 'richtext', required: false, tier: 'basic' },
     {
       path: ['blocks'],
@@ -50,6 +52,7 @@ const editorEntry = {
     hero: { src: 'canvas-fixture-image.svg', width: 1200, height: 800, alt: 'Harbour at dusk' },
     summary: 'Harbour home',
     body: 'Room for **everyone**.',
+    button: { type: 'url', href: 'https://example.com/book', label: 'Book a viewing' },
     legacy: '# Code-owned heading',
     blocks: [
       { _type: 'repeated', _id: 'repeat01', heading: 'Repeated source field' },
@@ -191,7 +194,7 @@ if (typeof window !== 'undefined') {
       return Response.json({});
     }
     if (path === '/admin/api/drafts/pages/canvas-fixture' && init?.method === 'PUT') {
-      const body = JSON.parse(String(init.body ?? '{}')) as unknown;
+      const body = JSON.parse(String(init.body ?? '{}')) as { data: Record<string, unknown> };
       fixtureWindow.canvasDraftWrites.push(body);
       if (failNextSave) {
         failNextSave = false;
@@ -200,12 +203,12 @@ if (typeof window !== 'undefined') {
       draftRevision += 1;
       return Response.json({
         pending: true,
-        problems: [],
+        problems: Object.entries(requiredFieldProblems(editorEntry.fields, body.data, editorEntry.blocks)).map(([path, message]) => ({ path, message })),
         revisions: { en: `fixture-en-${draftRevision}`, de: `fixture-de-${draftRevision}` },
       });
     }
     if (path === '/admin/api/drafts/pages/canvas-fixture/de' && init?.method === 'PUT') {
-      const body = JSON.parse(String(init.body ?? '{}')) as unknown;
+      const body = JSON.parse(String(init.body ?? '{}')) as { data: Record<string, unknown> };
       fixtureWindow.canvasDraftWrites.push(body);
       draftRevision += 1;
       return Response.json({

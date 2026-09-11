@@ -90,6 +90,61 @@ test('hit testing selects the nearest annotation and outlines every root for one
   runtime.dispose();
 });
 
+test('hit testing reaches a full-bleed image and exposes its direct replacement action', async () => {
+  document.body.innerHTML = `<section id="hero" ${mark('block', 'blocks[_id=hero]')}>
+    <h1 ${mark('field', 'blocks[_id=hero].heading')}>Home</h1>
+    <img id="hero-image" ${mark('field', 'blocks[_id=hero].image')} alt="Harbour" />
+  </section>`;
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+    return this.id === 'hero-image' ? new DOMRect(0, 0, 800, 500) : new DOMRect(20, 20, 240, 80);
+  });
+  const selected = vi.fn();
+  const action = vi.fn();
+  const runtime = createCanvasSelectionRuntime({ onSelection: selected, onAction: action });
+  runtime.start();
+
+  document
+    .querySelector('#hero')
+    ?.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 700, clientY: 400 }));
+
+  expect(selected).toHaveBeenCalledWith({
+    kind: 'field',
+    target: target('blocks[_id=hero].image'),
+  });
+  const selection = { kind: 'field' as const, target: target('blocks[_id=hero].image') };
+  runtime.actions(selection, ['replace-media']);
+  await settle();
+  const replace = document
+    .querySelector<HTMLElement>('[data-handover-canvas-overlay]')
+    ?.shadowRoot?.querySelector<HTMLButtonElement>('[aria-label="Replace Image"]');
+  expect(replace?.textContent).toBe('Replace image');
+  replace?.click();
+  expect(action).toHaveBeenCalledWith('replace-media', selection);
+
+  runtime.dispose();
+});
+
+test('a single click activates an annotated link control without navigating it', () => {
+  document.body.innerHTML = `<a id="cta" href="https://example.com" ${mark('field', 'button')}>Book now</a>`;
+  const selected = vi.fn();
+  const activate = vi.fn(() => true);
+  const anchor = document.querySelector<HTMLAnchorElement>('#cta');
+  const runtime = createCanvasSelectionRuntime({ onSelection: selected, onActivate: activate });
+  runtime.start();
+
+  const event = new MouseEvent('click', { bubbles: true, cancelable: true });
+  anchor?.dispatchEvent(event);
+
+  expect(event.defaultPrevented).toBe(true);
+  expect(selected).toHaveBeenCalledWith({ kind: 'field', target: target('button') });
+  expect(activate).toHaveBeenCalledWith(
+    { kind: 'field', target: target('button') },
+    anchor,
+    anchor,
+  );
+  runtime.dispose();
+});
+
 test('arrow keys preview siblings, Enter selects, and Shift+ArrowUp reaches the parent list', () => {
   document.body.innerHTML = `<main ${mark('list', 'blocks')}>
     <section id="one" ${mark('block', 'blocks[_id=one]')}>One</section>

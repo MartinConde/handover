@@ -2130,7 +2130,9 @@ test('a lapsed idle lock stays released until the editor reloads', async () => {
         : Response.json({ held_by: null, mine: false, expires_at: null }),
   );
   vi.stubGlobal('fetch', fetchMock);
-  const root = show();
+  const reload = vi.fn();
+  const changed = vi.fn();
+  const root = show({ onreload: reload, onchanged: changed });
   await vi.advanceTimersByTimeAsync(16_000);
   flushSync();
 
@@ -2138,6 +2140,9 @@ test('a lapsed idle lock stays released until the editor reloads', async () => {
   expect(claims).toHaveLength(1);
   expect($(root, '.lock-banner.is-lost')).not.toBeNull();
   expect($<HTMLFieldSetElement>(root, '.form > fieldset')?.disabled).toBe(true);
+  $<HTMLButtonElement>(root, '.lock-banner .btn-link')?.click();
+  expect(reload).toHaveBeenCalledOnce();
+  expect(changed).not.toHaveBeenCalled();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });

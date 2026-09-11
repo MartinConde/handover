@@ -4,6 +4,7 @@
  * asks for it.
  */
 import { createCanvasChildBridge, readCanvasManifest } from './canvas-bridge';
+import { createCanvasLinkRuntime } from './canvas-link';
 import { createCanvasNavigationRuntime } from './canvas-navigation';
 import { createCanvasSelectionRuntime } from './canvas-selection';
 import { createCanvasPlainTextRuntime } from './canvas-text';
@@ -20,6 +21,7 @@ if (typeof window !== 'undefined' && window.parent !== window) {
   const manifest = readCanvasManifest();
   if (manifest) {
     let selection: ReturnType<typeof createCanvasSelectionRuntime> | undefined;
+    let link: ReturnType<typeof createCanvasLinkRuntime> | undefined;
     let text: ReturnType<typeof createCanvasPlainTextRuntime> | undefined;
     let richText:
       | ReturnType<typeof import('./canvas-rich-text').createCanvasRichTextRuntime>
@@ -28,7 +30,11 @@ if (typeof window !== 'undefined' && window.parent !== window) {
     let field: import('./canvas-bridge').CanvasTextField | undefined;
     let mode: import('./canvas-navigation').CanvasInteractionMode = 'edit';
     let requested:
-      | { selection: import('./canvas-bridge').CanvasSelection; element: Element }
+      | {
+          selection: import('./canvas-bridge').CanvasSelection;
+          element: Element;
+          trigger?: Element;
+        }
       | undefined;
     const sameTarget = (
       a: import('./canvas-bridge').CanvasTarget,
@@ -37,14 +43,18 @@ if (typeof window !== 'undefined' && window.parent !== window) {
     const activateRequested = () => {
       const pending = requested;
       if (!pending || !field || !sameTarget(pending.selection.target, field.target)) return;
-      if (field.kind === 'text') {
-        if (richText?.active()) return;
+      if (field.kind === 'link') {
+        if (text?.active() || richText?.active()) return;
+        requested = undefined;
+        link?.activate(pending.selection, pending.element);
+      } else if (field.kind === 'text') {
+        if (richText?.active() || link?.active()) return;
         requested = undefined;
         text?.activate(pending.selection, pending.element);
       } else {
-        if (!richText || text?.active()) return;
+        if (!richText || text?.active() || link?.active()) return;
         requested = undefined;
-        richText.activate(pending.selection, pending.element);
+        richText.activate(pending.selection, pending.element, pending.trigger);
       }
     };
     const interaction = (
@@ -58,12 +68,13 @@ if (typeof window !== 'undefined' && window.parent !== window) {
       if (mode !== 'edit') next = undefined;
       field = next;
       text?.configure(next?.kind === 'text' ? next : undefined);
+      link?.configure(next?.kind === 'link' ? next : undefined);
       richText?.configure(next?.kind === 'richtext' ? next : undefined);
       if (!next) {
         requested = undefined;
         return;
       }
-      if (next.kind === 'text') return activateRequested();
+      if (next.kind === 'text' || next.kind === 'link') return activateRequested();
       if (richText) return activateRequested();
       richTextLoad ??= loadCanvasRichTextEditor();
       void richTextLoad
@@ -86,7 +97,7 @@ if (typeof window !== 'undefined' && window.parent !== window) {
       manifest,
       parent: window.parent,
       origin: window.location.origin,
-      onSelect: (value) => selection?.select(value, { scroll: true }),
+      onSelect: (value, settings) => selection?.select(value, settings),
       onTextField: configureField,
       onActions: ({ selection: value, actions }) => selection?.actions(value, actions),
       onMode: (next) => {
@@ -102,6 +113,10 @@ if (typeof window !== 'undefined' && window.parent !== window) {
       command: (target, command) => bridge.command(target, command),
       interaction,
     });
+    link = createCanvasLinkRuntime({
+      command: (target, command) => bridge.command(target, command),
+      interaction,
+    });
     selection = createCanvasSelectionRuntime({
       onSelection: (value) => bridge.selection(value),
       onStructure: (nodes) => bridge.structure(nodes),
@@ -112,21 +127,24 @@ if (typeof window !== 'undefined' && window.parent !== window) {
           composing: false,
           dragging: state.dragging,
         }),
-      onActivate: (value, element) => {
+      onActivate: (value, element, trigger) => {
         bridge.selection(value);
         if (value.kind !== 'field') return false;
-        requested = { selection: value, element };
+        requested = { selection: value, element, trigger };
         field = undefined;
         return true;
       },
-      isEditing: () => (text?.active() ?? false) || (richText?.active() ?? false),
+      isEditing: () =>
+        (text?.active() ?? false) || (link?.active() ?? false) || (richText?.active() ?? false),
     });
     const navigation = createCanvasNavigationRuntime({
+      mode: () => mode,
       onNavigate: (request) => bridge.navigate(request),
     });
     bridge.start();
     text.start();
-    navigation.start();
+    link.start();
     selection.start();
+    navigation.start();
   }
 }

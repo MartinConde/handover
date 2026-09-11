@@ -14,6 +14,7 @@ const fields = [
     preset: { ratio: '3:2', max: 2400 },
   },
   { path: ['button'], label: 'Button', type: 'link', required: false },
+  { path: ['body'], label: 'Body', type: 'richtext', required: false, tier: 'basic' },
 ] satisfies Field[];
 
 const data = () => ({
@@ -24,6 +25,7 @@ const data = () => ({
     alt: 'Harbour at dusk',
   },
   button: { type: 'url', href: 'https://example.com', label: 'Book now' },
+  body: 'Book a [viewing](https://example.com).',
 });
 
 const target = (address: string, locale = 'en'): CanvasSelection => ({
@@ -53,7 +55,6 @@ const show = (selection: CanvasSelection, over: Record<string, unknown> = {}) =>
       blocks: {},
       onschedule,
       onclose: () => {},
-      onform: () => {},
       ...over,
     },
   });
@@ -155,8 +156,7 @@ test('opens shared content in its owning editor instead of borrowing the page se
   expect(root.querySelector('.canvas-inspector input')).toBeNull();
 });
 
-test('sends a derived structural selection to its owning Form field', () => {
-  const onform = vi.fn();
+test('a selected block exposes all of its fields without sending the editor back to Form', () => {
   const selection: CanvasSelection = {
     kind: 'block',
     target: {
@@ -165,13 +165,40 @@ test('sends a derived structural selection to its owning Form field', () => {
       address: 'blocks[_id=hero01]',
     },
   };
-  const { root } = show(selection, { onform });
-  const button = Array.from(root.querySelectorAll<HTMLButtonElement>('button')).find((item) =>
-    item.textContent?.includes('Edit in Form'),
-  );
-  button?.click();
+  const { root } = show(selection, {
+    blockInspection: {
+      fields: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }],
+      path: ['blocks', '0'],
+      type: 'cta',
+    },
+  });
 
-  expect(onform).toHaveBeenCalledWith(selection.target);
+  expect(root.querySelector('input[id$="heading"]')).not.toBeNull();
+  expect(root.textContent).not.toContain('Edit in Form');
+});
+
+test('rich text is immediately available in Inspector without disclosure or Form detours', () => {
+  const { root } = show(target('body'));
+
+  expect(root.querySelector('.canvas-field-details')).toBeNull();
+  expect(root.querySelector('[contenteditable="true"]')).not.toBeNull();
+  expect(root.textContent).not.toContain('Open in form');
+  expect(root.textContent).not.toContain('Edit in Inspector');
+});
+
+test('an on-canvas image action opens the media library without a second inspector click', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ items: [] })),
+  );
+  const { root } = show(target('hero'), { mediaPickerRequest: 1 });
+  await tick();
+  flushSync();
+
+  expect(root.querySelector('[role="dialog"][aria-labelledby="picker-h"]')).not.toBeNull();
+  expect(root.querySelector('#picker-h')?.textContent).toContain(
+    'Choose an image for “Hero image”',
+  );
 });
 
 test('disables every reused widget when the entry lock is lost', () => {

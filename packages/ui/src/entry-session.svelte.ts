@@ -11,6 +11,7 @@ import {
   syncLocale,
   TRANSLATED_PROPS,
 } from '@handover/core';
+import { requiredFieldProblems } from './required-fields';
 import { type SaveState, saveCoordinator, saveLane } from './save';
 
 export type EntryData = Record<string, unknown>;
@@ -1023,6 +1024,18 @@ export function createEntrySession({
         return false;
       validation[locale] = normalize(JSON.parse(validatedSnapshot) as EntryData, found);
       return true;
+    },
+    /** Missing required content pauses Canvas rendering, never draft persistence. */
+    incompleteFields(locale: string): Record<string, string> {
+      return form
+        ? requiredFieldProblems(
+            form.fields,
+            snapshots[locale],
+            form.blocks,
+            [],
+            locale !== sourceLocale,
+          )
+        : {};
     },
     /** Stable addresses are consumed directly by Canvas and future session commands. */
     problemAddresses(locale: string): Record<string, string> {

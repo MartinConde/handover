@@ -114,6 +114,58 @@ test('uses the shared basic tier, formats through the command lane, and restores
   runtime.dispose();
 });
 
+test('uses the Canvas link editor to create and revisit a rich-text link', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ entries: [], indexes: [], locales: ['en'] })),
+  );
+  const element = fixture();
+  const commands: CanvasMutation[] = [];
+  let version = 0;
+  const runtime = createCanvasRichTextRuntime({
+    command: async (_target, mutation) => {
+      commands.push(mutation);
+      version += 1;
+      const value = mutation.type === 'field' ? String(mutation.changes[0]?.value ?? '') : '';
+      return reply(version, { ok: true, update: { value } });
+    },
+    interaction: vi.fn(),
+  });
+  runtime.start();
+  runtime.configure({ kind: 'richtext', target, value: 'Harbour home', tier: 'basic' });
+  runtime.activate(selected, element);
+  const prose = element.querySelector<HTMLElement>('[contenteditable="true"]');
+  if (!prose) throw new Error('TipTap editable missing');
+  selectAll(prose);
+  document.querySelector<HTMLButtonElement>('[aria-label="Link"]')?.click();
+
+  const dialog = document.querySelector<HTMLElement>('[data-handover-canvas-link-editor]');
+  const address = dialog?.querySelector<HTMLInputElement>('#handover-canvas-link-url');
+  if (!dialog || !address) throw new Error('Canvas link editor missing');
+  expect(dialog.hidden).toBe(false);
+  expect(
+    document.querySelector('[aria-label="Rich text formatting"]')?.hasAttribute('hidden'),
+  ).toBe(true);
+  address.value = '/contact';
+  address.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  dialog.querySelector<HTMLButtonElement>('[data-link-apply]')?.click();
+
+  await vi.waitFor(() => expect(commands).toHaveLength(1));
+  expect(commands[0]).toMatchObject({
+    type: 'field',
+    changes: [{ value: expect.stringContaining('](/contact)') }],
+    history: { kind: 'format' },
+  });
+  const link = element.querySelector<HTMLAnchorElement>('a[href="/contact"]');
+  if (!link) throw new Error('created rich-text link missing');
+  link.click();
+  await vi.waitFor(() => expect(dialog.hidden).toBe(false));
+  expect(dialog.querySelector<HTMLInputElement>('#handover-canvas-link-url')?.value).toBe(
+    '/contact',
+  );
+  runtime.dispose();
+});
+
 test('full tier adds only its supported controls and composition commits once', async () => {
   vi.spyOn(Element.prototype, 'getClientRects').mockReturnValue([] as unknown as DOMRectList);
   Object.defineProperty(Range.prototype, 'getClientRects', {

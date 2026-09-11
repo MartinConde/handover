@@ -34,7 +34,7 @@ async function openCanvas(page: Page, query = '') {
     const data = snapshot.snapshots[snapshot.locale];
     await route.fulfill({
       contentType: 'text/html',
-      body: `<!doctype html><html><head><style>body{margin:0;background:#f4f0e6;color:#15343a;font:18px/1.6 system-ui}main{padding:48px;max-width:1100px;margin:auto}h1{font:48px Georgia}img{width:100%;max-height:240px;object-fit:cover}section{margin:32px 0}h2{font:36px Georgia}p{margin:16px 0}</style></head><body><main><h1 data-handover-field='${marker('title')}'>${escaped(data.title)}</h1><img alt="Harbour at dusk" src="/canvas-fixture-image.svg" data-handover-field='${marker('hero')}'/><section data-prose data-handover-field='${marker('body')}'><p>${escaped(data.body).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}</p></section></main><script type="application/json" data-handover-canvas-manifest>${manifest}</script><script type="module" src="${script}"></script></body></html>`,
+      body: `<!doctype html><html><head><style>body{margin:0;background:#f4f0e6;color:#15343a;font:18px/1.6 system-ui}main{padding:48px;max-width:1100px;margin:auto}section[data-hero]{position:relative;isolation:isolate;min-height:240px;margin:0 0 32px;overflow:hidden;color:white}section[data-hero] h1{position:relative;z-index:1;margin:0;padding:32px;font:48px Georgia}section[data-hero] img{position:absolute;z-index:-1;inset:0;width:100%;height:100%;object-fit:cover}section[data-prose]{margin:32px 0}h2{font:36px Georgia}p{margin:16px 0}</style></head><body><main><section data-hero><h1 data-handover-field='${marker('title')}'>${escaped(data.title)}</h1><img alt="Harbour at dusk" src="/canvas-fixture-image.svg" data-handover-field='${marker('hero')}'/></section><section data-prose data-handover-field='${marker('body')}'><p>${escaped(data.body).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}</p></section></main><script type="application/json" data-handover-canvas-manifest>${manifest}</script><script type="module" src="${script}"></script></body></html>`,
     });
   });
   await page.goto(`/canvas-shell${query}`);
@@ -51,21 +51,92 @@ test('Canvas fills the viewport and keeps Structure beside a contained media ins
   await expect
     .poll(async () => {
       const rect = await canvas.boundingBox();
-      return rect ? Math.abs(rect.y + rect.height - (1100 - 60)) : 1100;
+      return rect ? Math.abs(rect.y + rect.height - (1100 - 28)) : 1100;
     })
     .toBeLessThan(20);
+  await expect(page.locator('.canvas-statusbar')).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: 'Canvas size' })).toHaveCount(0);
   await expect(page.locator('.entry-header')).toBeHidden();
   await expect(page.locator('.canvas-rail')).toBeVisible();
   expect((await page.locator('.canvas-rail').boundingBox())?.y).toBe(0);
-  await page.getByRole('treeitem', { name: 'Hero', exact: true }).click();
+  expect(
+    await page.locator('.canvas-stage-shell').evaluate((shell) => {
+      const canvas = shell.querySelector<HTMLElement>('.canvas-stage');
+      if (!canvas) return Number.POSITIVE_INFINITY;
+      const style = getComputedStyle(shell);
+      const availableWidth =
+        shell.getBoundingClientRect().width -
+        Number.parseFloat(style.paddingLeft) -
+        Number.parseFloat(style.paddingRight);
+      return Math.abs(canvas.getBoundingClientRect().width - availableWidth);
+    }),
+  ).toBeLessThan(2);
+  const inspectorButton = page.getByRole('button', { name: 'Inspector', exact: true });
+  await expect(inspectorButton).toBeEnabled();
+  await inspectorButton.click();
   const inspector = page.locator('#canvas-inspector');
+  await expect(inspector.getByRole('heading', { name: 'Nothing selected' })).toBeVisible();
+  await expect(inspector).toContainText('Choose an element on the canvas or in Structure');
+  const frame = page.locator('iframe[data-handover-canvas-frame="active"]').contentFrame();
+  await page.getByRole('treeitem', { name: 'Hero', exact: true }).click();
   await expect(inspector).toBeVisible();
+  await expect(inspector.getByRole('heading', { name: 'Hero', exact: true })).toBeVisible();
+  await expect(inspector.getByLabel('Block actions')).toHaveCount(0);
   await expect
     .poll(async () => (await page.locator('.canvas-inspector-slot').boundingBox())?.width ?? 0)
     .toBeGreaterThan(280);
+  const inspectorSlot = page.locator('.canvas-inspector-slot');
+  const stageShell = page.locator('.canvas-stage-shell');
+  const inspectorResize = page.getByRole('separator', { name: 'Resize Inspector panel' });
+  await expect.poll(async () => (await inspectorSlot.boundingBox())?.width ?? 0).toBe(380);
+  const stageBeforeResize = await stageShell.boundingBox();
+  const inspectorBeforeResize = await inspectorSlot.boundingBox();
+  const inspectorHandle = await inspectorResize.boundingBox();
+  if (!stageBeforeResize || !inspectorBeforeResize || !inspectorHandle)
+    throw new Error('Resizable Canvas panels were not laid out');
+  await page.mouse.move(
+    inspectorHandle.x + inspectorHandle.width / 2,
+    inspectorHandle.y + inspectorHandle.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    inspectorHandle.x + inspectorHandle.width / 2 - 160,
+    inspectorHandle.y + inspectorHandle.height / 2,
+  );
+  await page.mouse.up();
+  await expect
+    .poll(async () => (await inspectorSlot.boundingBox())?.width ?? 0)
+    .toBeGreaterThan(inspectorBeforeResize.width + 140);
+  await expect
+    .poll(async () => (await stageShell.boundingBox())?.width ?? 0)
+    .toBeLessThan(stageBeforeResize.width - 140);
+  await inspectorResize.press('ArrowRight');
+  await expect(inspectorResize).toHaveAttribute('aria-valuenow', '524');
+
+  const structureResize = page.getByRole('separator', { name: 'Resize Structure panel' });
+  await structureResize.press('ArrowRight');
+  await expect(structureResize).toHaveAttribute('aria-valuenow', '266');
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const stored = JSON.parse(localStorage.getItem('handover.canvas.panel-widths') ?? '{}');
+        return [stored.structure, stored.inspector];
+      }),
+    )
+    .toEqual([266, 524]);
   await expect(inspector.locator('.thumb img')).toBeVisible();
   await expect(page.locator('#canvas-structure')).toBeVisible();
   await expect(page.getByLabel('Alt text')).toHaveValue('Harbour at dusk');
+  await frame.locator('[data-handover-canvas-overlay]').evaluate((host) => {
+    const replace = host.shadowRoot?.querySelector<HTMLButtonElement>(
+      '[aria-label="Replace Hero"]',
+    );
+    if (!replace) throw new Error('On-canvas image replacement action is missing');
+    replace.click();
+  });
+  const picker = page.getByRole('dialog', { name: /Choose an image for/ });
+  await expect(picker).toBeVisible();
+  await picker.getByRole('button', { name: 'Cancel' }).click();
   expect(await inspector.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
     true,
   );
@@ -111,6 +182,9 @@ test('rich text remains one copy while editing and the toolbar fits a phone canv
   await expect(prose).toHaveText('Room by the coast.');
   await prose.dblclick();
   await expect(editor).toHaveText('Room by the coast.');
+  const inspector = page.locator('#canvas-inspector');
+  await expect(inspector.getByText('Edit in Inspector', { exact: true })).toHaveCount(0);
+  await expect(inspector.getByText('Open in form', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Close Inspector' }).click();
   await page.getByRole('button', { name: 'Close Structure' }).click();
   await page.setViewportSize({ width: 390, height: 844 });

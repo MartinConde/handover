@@ -61,6 +61,7 @@ let {
   servedAt,
   session,
   oncommand,
+  openMediaPicker = 0,
   viewRoot,
   structureLocked = false,
   textOnly = false,
@@ -106,6 +107,8 @@ let {
   session?: EntrySession;
   /** Receives acknowledgements and explicit refusals for inspector/Canvas consumers. */
   oncommand?: (result: FieldCommandResult | ListCommandResult) => void;
+  /** A changing request opens this level's single image field without an extra inspector click. */
+  openMediaPicker?: number;
   /** A drag-only rendering copy shared with recursive field levels. */
   viewRoot?: Data;
   /** A persisted action may allow prose edits while freezing list structure. */
@@ -139,6 +142,14 @@ const shown = $derived(
 
 // One picker at a time per form level; the field id says which is open.
 let picker = $state('');
+let openedMediaRequest = 0;
+$effect(() => {
+  const request = openMediaPicker;
+  const image = shown.find((field) => field.type === 'image');
+  if (!request || request === openedMediaRequest || !image) return;
+  openedMediaRequest = request;
+  picker = `${prefix}-${[...path, ...image.path].join('.')}`;
+});
 
 // Dismiss lasts for the screen's life: what would bring the marker back is a reload anyway.
 let opened = $state('');
@@ -637,13 +648,15 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   {@const found = known.entries.find((e) => e.path === ref)}
   <div class="ref-list" {id} role="group" aria-labelledby={labelId} aria-describedby={says}>
     <div class="ref-item">
-      <span class="title">{found?.title ?? ref}</span>
+      <span class="ref-copy">
+        <span class="title">{found?.title ?? ref}</span>
+        <span class="path">{ref}</span>
+      </span>
       {#if found}
         <span class="chips">
           {#each known.locales as of (of)}<span class="chip" class:chip-missing={!found.locales.includes(of)}>{of.toUpperCase()}</span>{/each}
         </span>
       {/if}
-      <span class="path">{ref}</span>
       <button class="btn btn-ghost btn-sm remove" type="button" onclick={open}>Change</button>
     </div>
   </div>
@@ -672,7 +685,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   {@const bad = err ? 'true' : undefined}
   {@const says = err ? `${id}-err` : undefined}
   {@const marked = [address(at), childAddress(at, 'label')].find((p) => p && opened === p)}
-  <div class="field" id="{id}-field" tabindex="-1" class:is-invalid={err} class:pop-anchor={marked} inert={textOnly && !structural(field) && ((field.type !== 'text' && field.type !== 'richtext') || mode !== true) ? true : undefined}>
+  <div class="field" data-field-type={field.type} id="{id}-field" tabindex="-1" class:is-invalid={err} class:pop-anchor={marked} inert={textOnly && !structural(field) && ((field.type !== 'text' && field.type !== 'richtext') || mode !== true) ? true : undefined}>
     {#if field.type === 'menus'}
       {@render groupLabel(id, field, text, at)}
       <Menus {id} labelId="{id}-l" menus={rows(at) as Menu[]} {locale} {translating} {sourceLabel} />
@@ -718,26 +731,31 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <div class="field"><div class="label-row"><label for="{id}.label">Label</label>{@render machineMark(childAddress(at, 'label'), `${text} label`)}</div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
     {:else if field.type === 'link'}
       {@render groupLabel(id, field, text, at)}
-      <div class="seg" role="group" aria-label="Link type">
-        <button type="button" aria-pressed={linkType(at) === 'entry'} onclick={() => setLinkType(at, 'entry')}>Page / Entry</button>
-        <button type="button" aria-pressed={linkType(at) === 'url'} onclick={() => setLinkType(at, 'url')}>URL</button>
+      <div class="link-field-controls">
+        <fieldset class="link-destination">
+          <legend>Destination</legend>
+          <div class="seg" role="group" aria-label="Link type">
+            <button type="button" aria-pressed={linkType(at) === 'entry'} onclick={() => setLinkType(at, 'entry')}>Page / Entry</button>
+            <button type="button" aria-pressed={linkType(at) === 'url'} onclick={() => setLinkType(at, 'url')}>URL</button>
+          </div>
+          {#if linkType(at) === 'url'}
+            {@const scheme = unsafeLinkScheme('default', str([...at, 'href']))}
+            <div class="field" class:is-invalid={scheme}>
+              <div class="label-row"><label for="{id}.href">Address</label></div>
+              <input class="input" id="{id}.href" type="url" placeholder="/contact or https://…" aria-invalid={scheme ? 'true' : undefined} aria-describedby={scheme ? `${id}.href-err` : undefined} value={str([...at, 'href'])} oninput={(e) => writeMany(at, [{ path: ['type'], value: 'url' }, { path: ['href'], value: e.currentTarget.value }])} />
+              {#if scheme}<p class="error" id="{id}.href-err">{scheme}: links are not allowed</p>{/if}
+            </div>
+          {:else if picker === id}
+            <PagePicker {id} label={text} labelId="{id}-l" chosen={str([...at, 'ref'])} onpick={(e) => { writeMany(at, [{ path: ['type'], value: 'entry' }, { path: ['ref'], value: e.path }]); picker = ''; }} onclose={() => (picker = '')} />
+          {:else if str([...at, 'ref'])}
+            {@render chosenEntry(`${id}.ref`, `${id}-l`, says, str([...at, 'ref']), () => (picker = id))}
+          {:else}
+            {@render noEntry(`${id}.ref`, `${id}-l`, says, 'a page or entry', () => (picker = id))}
+          {/if}
+        </fieldset>
+        <div class="field"><div class="label-row"><label for="{id}.label">Label</label></div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
+        <label class="check" for="{id}.newTab"><input type="checkbox" id="{id}.newTab" checked={read([...at, 'newTab']) === true} onchange={(e) => write([...at, 'newTab'], e.currentTarget.checked || undefined)} /><span>Open in new tab</span></label>
       </div>
-      {#if linkType(at) === 'url'}
-        {@const scheme = unsafeLinkScheme('default', str([...at, 'href']))}
-        <div class="field" class:is-invalid={scheme}>
-          <div class="label-row"><label for="{id}.href">URL</label></div>
-          <input class="input" id="{id}.href" type="url" aria-invalid={scheme ? 'true' : undefined} aria-describedby={scheme ? `${id}.href-err` : undefined} value={str([...at, 'href'])} oninput={(e) => writeMany(at, [{ path: ['type'], value: 'url' }, { path: ['href'], value: e.currentTarget.value }])} />
-          {#if scheme}<p class="error" id="{id}.href-err">{scheme}: links are not allowed</p>{/if}
-        </div>
-      {:else if picker === id}
-        <PagePicker {id} label={text} labelId="{id}-l" chosen={str([...at, 'ref'])} onpick={(e) => { writeMany(at, [{ path: ['type'], value: 'entry' }, { path: ['ref'], value: e.path }]); picker = ''; }} onclose={() => (picker = '')} />
-      {:else if str([...at, 'ref'])}
-        {@render chosenEntry(`${id}.ref`, `${id}-l`, says, str([...at, 'ref']), () => (picker = id))}
-      {:else}
-        {@render noEntry(`${id}.ref`, `${id}-l`, says, 'a page or entry', () => (picker = id))}
-      {/if}
-      <div class="field"><div class="label-row"><label for="{id}.label">Label</label></div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
-      <label class="check" for="{id}.newTab"><input type="checkbox" id="{id}.newTab" checked={read([...at, 'newTab']) === true} onchange={(e) => write([...at, 'newTab'], e.currentTarget.checked || undefined)} /><span>Open in new tab</span></label>
     {:else if field.type === 'richtext'}
       {@render groupLabel(id, field, text, at)}
       <RichText {id} labelId="{id}-l" {locale} tier={field.tier} invalid={!!err} describedby={says} value={str(at)} address={address(at)} {session} onchange={(md, history) => write(at, md, history)} />

@@ -1,5 +1,12 @@
 import { z } from 'astro/zod';
-import { type BlockRegistry, blocks, defineBlock, defineConfig, richtext } from 'astro-handover';
+import {
+  type BlockRegistry,
+  blocks,
+  defineBlock,
+  defineConfig,
+  link,
+  richtext,
+} from 'astro-handover';
 
 const repeated = defineBlock('repeated', { heading: z.string() });
 const promo = defineBlock('promo', { heading: z.string() });
@@ -12,6 +19,7 @@ export const page = z.object({
   title: z.string(),
   summary: richtext().optional(),
   body: richtext('full').optional(),
+  button: link.optional(),
   // Deliberately unrefined here: the browser fixture exercises a code-edited value that the
   // editor-facing basic rich-text field must preserve without activating TipTap.
   legacy: z.string().optional(),

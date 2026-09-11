@@ -25,6 +25,7 @@ export type CanvasBlockAction =
   | 'move'
   | 'move-down'
   | 'move-up'
+  | 'replace-media'
   | 'redo'
   | 'undo'
   | 'replace';
@@ -90,9 +91,17 @@ interface CanvasFieldCapability {
   target: CanvasTarget;
   value: string;
 }
+export interface CanvasLinkValue {
+  type: 'entry' | 'url';
+  ref: string;
+  href: string;
+  label: string;
+  newTab: boolean;
+}
 export type CanvasTextField =
   | (CanvasFieldCapability & { kind: 'text' })
-  | (CanvasFieldCapability & { kind: 'richtext'; tier: RichtextTier });
+  | (CanvasFieldCapability & { kind: 'richtext'; tier: RichtextTier })
+  | { kind: 'link'; target: CanvasTarget; value: CanvasLinkValue };
 export interface CanvasTextUpdate {
   value: string;
   selection?: CanvasTextSelection;
@@ -218,6 +227,7 @@ const blockAction = (value: unknown): value is CanvasBlockAction =>
   value === 'move' ||
   value === 'move-down' ||
   value === 'move-up' ||
+  value === 'replace-media' ||
   value === 'redo' ||
   value === 'undo' ||
   value === 'replace';
@@ -321,16 +331,28 @@ const textUpdate = (value: unknown): value is CanvasTextUpdate =>
   keys(value, value.selection === undefined ? ['value'] : ['value', 'selection']) &&
   typeof value.value === 'string' &&
   (value.selection === undefined || textSelection(value.selection));
-const textField = (value: unknown): value is CanvasTextField =>
+const linkValue = (value: unknown): value is CanvasLinkValue =>
   record(value) &&
-  keys(
-    value,
-    value.kind === 'richtext' ? ['target', 'value', 'kind', 'tier'] : ['target', 'value', 'kind'],
-  ) &&
-  target(value.target) &&
-  typeof value.value === 'string' &&
-  (value.kind === 'text' ||
-    (value.kind === 'richtext' && (value.tier === 'basic' || value.tier === 'full')));
+  keys(value, ['type', 'ref', 'href', 'label', 'newTab']) &&
+  (value.type === 'entry' || value.type === 'url') &&
+  typeof value.ref === 'string' &&
+  typeof value.href === 'string' &&
+  typeof value.label === 'string' &&
+  typeof value.newTab === 'boolean';
+const textField = (value: unknown): value is CanvasTextField => {
+  if (!record(value) || !target(value.target)) return false;
+  if (value.kind === 'link')
+    return keys(value, ['target', 'value', 'kind']) && linkValue(value.value);
+  return (
+    keys(
+      value,
+      value.kind === 'richtext' ? ['target', 'value', 'kind', 'tier'] : ['target', 'value', 'kind'],
+    ) &&
+    typeof value.value === 'string' &&
+    (value.kind === 'text' ||
+      (value.kind === 'richtext' && (value.tier === 'basic' || value.tier === 'full')))
+  );
+};
 const editingState = (value: unknown): value is CanvasEditingState =>
   record(value) &&
   keys(
@@ -586,18 +608,29 @@ const actionCapabilityMessage = (
 const selectMessage = (
   value: unknown,
 ):
-  | (CanvasIdentity & { type: 'handover:canvas:select'; selection: CanvasSelection })
+  | (CanvasIdentity & {
+      type: 'handover:canvas:select';
+      selection: CanvasSelection;
+      scroll?: boolean;
+    })
   | undefined => {
   if (
     record(value) &&
-    keys(value, ['type', ...BASE, 'selection']) &&
+    keys(value, [
+      'type',
+      ...BASE,
+      'selection',
+      ...(value.scroll === undefined ? [] : ['scroll']),
+    ]) &&
     value.type === 'handover:canvas:select' &&
     identity(value) &&
-    selection(value.selection)
+    selection(value.selection) &&
+    (value.scroll === undefined || typeof value.scroll === 'boolean')
   )
     return value as unknown as CanvasIdentity & {
       type: 'handover:canvas:select';
       selection: CanvasSelection;
+      scroll?: boolean;
     };
 };
 const modeMessage = (
@@ -652,7 +685,9 @@ const copyTextField = (value: CanvasTextField): CanvasTextField =>
         value: value.value,
         tier: value.tier,
       }
-    : { kind: value.kind, target: copyTarget(value.target), value: value.value };
+    : value.kind === 'link'
+      ? { kind: value.kind, target: copyTarget(value.target), value: { ...value.value } }
+      : { kind: value.kind, target: copyTarget(value.target), value: value.value };
 const base = (manifest: CanvasSuccessManifest, contentVersion: number) => ({
   protocol: CANVAS_PROTOCOL,
   requestId: manifest.requestId,
@@ -857,13 +892,14 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
   return {
     connected: () => connected && !disposed,
     receive,
-    select(value: CanvasSelection) {
+    select(value: CanvasSelection, settings: { scroll?: boolean } = {}) {
       if (disposed || !connected || !selection(value)) return false;
       frame.postMessage(
         {
           ...base(manifest, options.contentVersion()),
           type: 'handover:canvas:select',
           selection: copySelection(value),
+          ...(settings.scroll === undefined ? {} : { scroll: settings.scroll }),
         },
         origin,
       );
@@ -932,7 +968,7 @@ export interface CanvasChildBridgeOptions {
   owner?: Window;
   commandId?: () => string;
   listen?: boolean;
-  onSelect?: (selection: CanvasSelection) => void;
+  onSelect?: (selection: CanvasSelection, settings: { scroll: boolean }) => void;
   onTextField?: (field: CanvasTextField | undefined) => void;
   onActions?: (capability: CanvasActionCapability) => void;
   onMode?: (mode: CanvasInteractionMode) => void;
@@ -983,7 +1019,8 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
     const configuredActions = actionCapabilityMessage(event.data);
     const configuredMode = modeMessage(event.data);
     if (requested) {
-      if (!stale(requested, manifest, version)) options.onSelect?.(requested.selection);
+      if (!stale(requested, manifest, version))
+        options.onSelect?.(requested.selection, { scroll: requested.scroll !== false });
       return;
     }
     if (configured) {
