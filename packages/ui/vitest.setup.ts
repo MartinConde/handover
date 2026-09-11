@@ -1,3 +1,6 @@
+import { afterEach } from 'vitest';
+import { invalidateEntryDirectory } from './src/entry-directory';
+
 // dnd-kit reaches for these as it loads and as a drag starts; jsdom has none of them.
 class Observer {
   observe() {}
@@ -26,3 +29,6 @@ Element.prototype.setPointerCapture = () => {};
 Element.prototype.releasePointerCapture = () => {};
 document.elementFromPoint = () => null;
 HTMLFormElement.prototype.submit = () => {};
+
+// The real catalogue cache lives for the authenticated app. Tests replace fetch between cases.
+afterEach(() => invalidateEntryDirectory());

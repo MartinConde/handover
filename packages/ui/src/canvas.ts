@@ -3,46 +3,48 @@
  * public page. The rich editor remains a separate lazy boundary until an annotated rich-text field
  * asks for it.
  */
-import { createCanvasChildBridge, readCanvasManifest } from './canvas-bridge';
-import { createCanvasLinkRuntime } from './canvas-link';
-import { createCanvasNavigationRuntime } from './canvas-navigation';
-import { createCanvasSelectionRuntime } from './canvas-selection';
-import { createCanvasPlainTextRuntime } from './canvas-text';
+import { createCanvasChildBridge, readCanvasManifest } from './canvas/canvas-bridge';
+import { sameCanvasTarget } from './canvas/canvas-target';
+import { createCanvasLinkRuntime } from './canvas/runtime/canvas-link';
+import { createCanvasNavigationRuntime } from './canvas/runtime/canvas-navigation';
+import { createCanvasSelectionRuntime } from './canvas/runtime/canvas-selection';
+import { createCanvasPlainTextRuntime } from './canvas/runtime/canvas-text';
+import { createEntryDirectoryReader } from './entry-directory';
 
-export * from './canvas-bridge';
-export * from './canvas-renderer';
-export * from './canvas-selection';
-export * from './canvas-text';
-export const loadCanvasRichTextEditor = () => import('./canvas-rich-text');
+export * from './canvas/canvas-bridge';
+export * from './canvas/canvas-renderer';
+export * from './canvas/runtime/canvas-selection';
+export * from './canvas/runtime/canvas-text';
+export const loadCanvasRichTextEditor = () => import('./canvas/runtime/canvas-rich-text');
 
 // A successful Canvas POST is same-origin and carries the route-verified identity in its manifest.
 // Public pages and ordinary previews load no Canvas entry; a top-level asset fixture stays inert.
 if (typeof window !== 'undefined' && window.parent !== window) {
   const manifest = readCanvasManifest();
   if (manifest) {
+    const entryDirectory = createEntryDirectoryReader(
+      window.fetch.bind(window),
+      manifest.entryDirectory ?? '/admin/api/entries',
+    );
     let selection: ReturnType<typeof createCanvasSelectionRuntime> | undefined;
     let link: ReturnType<typeof createCanvasLinkRuntime> | undefined;
     let text: ReturnType<typeof createCanvasPlainTextRuntime> | undefined;
     let richText:
-      | ReturnType<typeof import('./canvas-rich-text').createCanvasRichTextRuntime>
+      | ReturnType<typeof import('./canvas/runtime/canvas-rich-text').createCanvasRichTextRuntime>
       | undefined;
     let richTextLoad: ReturnType<typeof loadCanvasRichTextEditor> | undefined;
-    let field: import('./canvas-bridge').CanvasTextField | undefined;
-    let mode: import('./canvas-navigation').CanvasInteractionMode = 'edit';
+    let field: import('./canvas/canvas-bridge').CanvasTextField | undefined;
+    let mode: import('./canvas/runtime/canvas-navigation').CanvasInteractionMode = 'edit';
     let requested:
       | {
-          selection: import('./canvas-bridge').CanvasSelection;
+          selection: import('./canvas/canvas-bridge').CanvasSelection;
           element: Element;
           trigger?: Element;
         }
       | undefined;
-    const sameTarget = (
-      a: import('./canvas-bridge').CanvasTarget,
-      b: import('./canvas-bridge').CanvasTarget,
-    ) => JSON.stringify(a) === JSON.stringify(b);
     const activateRequested = () => {
       const pending = requested;
-      if (!pending || !field || !sameTarget(pending.selection.target, field.target)) return;
+      if (!pending || !field || !sameCanvasTarget(pending.selection.target, field.target)) return;
       if (field.kind === 'link') {
         if (text?.active() || richText?.active()) return;
         requested = undefined;
@@ -58,13 +60,13 @@ if (typeof window !== 'undefined' && window.parent !== window) {
       }
     };
     const interaction = (
-      target: import('./canvas-bridge').CanvasTarget,
-      state: import('./canvas-bridge').CanvasEditingState,
+      target: import('./canvas/canvas-bridge').CanvasTarget,
+      state: import('./canvas/canvas-bridge').CanvasEditingState,
     ) => {
       bridge.interaction(target, state);
       if (!state.inlineEditing) queueMicrotask(activateRequested);
     };
-    const configureField = (next: import('./canvas-bridge').CanvasTextField | undefined) => {
+    const configureField = (next: import('./canvas/canvas-bridge').CanvasTextField | undefined) => {
       if (mode !== 'edit') next = undefined;
       field = next;
       text?.configure(next?.kind === 'text' ? next : undefined);
@@ -83,6 +85,7 @@ if (typeof window !== 'undefined' && window.parent !== window) {
           richText = createCanvasRichTextRuntime({
             command: (target, command) => bridge.command(target, command),
             interaction,
+            readDirectory: entryDirectory.read,
           });
           richText.start();
           richText.configure(field?.kind === 'richtext' ? field : undefined);
@@ -116,6 +119,7 @@ if (typeof window !== 'undefined' && window.parent !== window) {
     link = createCanvasLinkRuntime({
       command: (target, command) => bridge.command(target, command),
       interaction,
+      readDirectory: entryDirectory.read,
     });
     selection = createCanvasSelectionRuntime({
       onSelection: (value) => bridge.selection(value),

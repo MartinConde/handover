@@ -1,7 +1,10 @@
 <script lang="ts">
 import type { DiffGroup } from '@handover/core';
 import Diff from './Diff.svelte';
-import type { HistoricalRestoreResponse, HistoricalRestoreResult } from './entry-session.svelte';
+import type {
+  HistoricalRestoreResponse,
+  HistoricalRestoreResult,
+} from './editor/entry-session.svelte';
 import { request as fetch, sitePath, uncertainResponse } from './request.js';
 
 /** One version as `/admin/api/history/:collection/:slug` answers it. */

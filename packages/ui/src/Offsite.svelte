@@ -1,5 +1,6 @@
 <script lang="ts">
-import PagePicker, { type PickEntry } from './PagePicker.svelte';
+import type { PickEntry } from './entry-directory.js';
+import PagePicker from './PagePicker.svelte';
 
 /** The server turns one answer into a rule per language. */
 export type Target =

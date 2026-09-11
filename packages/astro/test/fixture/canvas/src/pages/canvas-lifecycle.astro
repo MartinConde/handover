@@ -35,8 +35,7 @@ const canvasUrl = `/admin/_assets/${canvas.script}`;
         locale: 'en',
         address: selectedAddress,
       });
-      const request = (title, behavior, layout = {}) => {
-        version += 1;
+      const request = (title, behavior, layout = {}, contentVersion = ++version) => {
         return {
           url: '/canvas-candidate',
           snapshot: {
@@ -45,7 +44,7 @@ const canvasUrl = `/admin/_assets/${canvas.script}`;
             epoch: 'fixture-session',
             entry: { collection: 'pages', id: 'canvas-fixture' },
             locale: 'en',
-            contentVersion: version,
+            contentVersion,
             snapshots: {
               en: { title, behavior, layout },
               de: { title: `${title} DE`, behavior, layout },
@@ -97,7 +96,8 @@ const canvasUrl = `/admin/_assets/${canvas.script}`;
           return renderer.render(request(title, behavior, layout));
         },
         schedule(title, behavior = 'success', layout) {
-          return renderer.schedule(request(title, behavior, layout));
+          const contentVersion = ++version;
+          return renderer.schedule(() => request(title, behavior, layout, contentVersion));
         },
         interaction(state) {
           renderer.setInteractionState(state);

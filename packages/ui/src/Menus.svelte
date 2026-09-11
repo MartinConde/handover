@@ -32,7 +32,13 @@ import { type DragDropEventHandlers, DragDropProvider, DragOverlay } from '@dnd-
 import { createSortable } from '@dnd-kit/svelte/sortable';
 import { newId } from '@handover/core';
 import { tick } from 'svelte';
-import PagePicker, { type Pickable, type PickEntry, readPickable } from './PagePicker.svelte';
+import {
+  EMPTY_ENTRY_DIRECTORY,
+  type Pickable,
+  type PickEntry,
+  readEntryDirectory,
+} from './entry-directory.js';
+import PagePicker from './PagePicker.svelte';
 
 let {
   id,
@@ -76,7 +82,9 @@ const menu = $derived(menus[tab]);
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 let known = $state<Pickable>({ entries: [], locales: [] });
 $effect(() => {
-  readPickable().then((p) => (known = p));
+  readEntryDirectory()
+    .then((p) => (known = p))
+    .catch(() => (known = EMPTY_ENTRY_DIRECTORY));
 });
 const language = $derived(locale || known.locales[0] || '');
 const languageNames = new Intl.DisplayNames(['en'], { type: 'language' });

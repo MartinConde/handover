@@ -1,6 +1,7 @@
 <script lang="ts">
 import { entryName } from '@handover/core';
 import { EXACT, when } from './activity-line';
+import { invalidateEntryDirectory } from './entry-directory.js';
 import NewEntry, { nameOf } from './NewEntry.svelte';
 import { navigate } from './navigate';
 import OffsiteDialog, { type Target } from './Offsite.svelte';
@@ -235,6 +236,7 @@ async function duplicate(event: Event) {
   const res = await send(url, json({ to: text, ...(withDrafts ? { drafts: true } : {}) }));
   if (!res) return;
   const { slug } = (await res.json()) as { slug: string };
+  invalidateEntryDirectory();
   navigate(`/admin/c/${collection}/${slug}`);
 }
 
@@ -266,6 +268,7 @@ async function remove(id: string, redirect: Target) {
 
 // The list and the unpublished-changes count both moved; neither is this component's to keep.
 async function done() {
+  invalidateEntryDirectory();
   close();
   await load(collection);
   onchanged();

@@ -71,6 +71,7 @@ export {
   staticSource,
   stringifyEntry,
   syncLocale,
+  syncLocaleField,
   TRANSLATED_PROPS,
   timestampErrors,
   translatableText,

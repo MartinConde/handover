@@ -7,6 +7,7 @@ export const nameOf = (collection: string) => collection.replace(/s$/, '');
 import { request as fetch } from './request.js';
 
 import { entryName } from '@handover/core';
+import { invalidateEntryDirectory } from './entry-directory.js';
 import { navigate } from './navigate';
 
 let { collection, onclose }: { collection: string; onclose: () => void } = $props();
@@ -63,6 +64,7 @@ async function create(event: Event) {
     return;
   }
   const { slug } = (await res.json()) as { slug: string };
+  invalidateEntryDirectory();
   navigate(`/admin/c/${collection}/${slug}`);
 }
 </script>

@@ -18,6 +18,7 @@ import {
   staticSource,
   stringifyEntry,
   syncLocale,
+  syncLocaleField,
   timestampErrors,
   translatableText,
 } from './content.js';
@@ -501,6 +502,35 @@ test('a translated save of an embed writes the title and leaves the video alone'
     _version: 1,
     video: { provider: 'youtube', id: 'dQw4w9WgXcQ', title: 'Rundgang durchs Haus', start: 42 },
   });
+});
+
+test('one-field locale projection preserves translated properties and copies shared ones', () => {
+  const field = listing.fields.find((candidate) => candidate.path[0] === 'image');
+  if (!field) throw new Error('image field missing');
+  const source = {
+    src: 'media/new.webp',
+    alt: 'New source words',
+    width: 1800,
+    height: 1200,
+  };
+  const target = {
+    src: 'media/old.webp',
+    alt: 'Bestehende Übersetzung',
+    width: 1200,
+    height: 800,
+  };
+
+  expect(syncLocaleField(field, true, source, target)).toEqual({
+    src: 'media/new.webp',
+    alt: 'Bestehende Übersetzung',
+    width: 1800,
+    height: 1200,
+  });
+  expect(syncLocaleField(field, true, undefined, target)).toEqual({
+    alt: 'Bestehende Übersetzung',
+  });
+  expect(syncLocaleField(field, 'duplicate', source, target)).toBe(source);
+  expect(syncLocaleField(field, false, source, target)).toBe(target);
 });
 
 test('a save of a translated entry keeps the fields its form does not show', () => {

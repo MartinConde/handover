@@ -552,6 +552,20 @@ export function syncLocale(
   return out;
 }
 
+/** Project one non-structural field without walking either locale's complete document. */
+export function syncLocaleField(
+  field: Field,
+  mode: Translation,
+  source: unknown,
+  target: unknown,
+): unknown {
+  if (mode === 'duplicate') return source;
+  const translated = TRANSLATED_PROPS[field.type];
+  return mode === true && translated
+    ? overlayProps(source, target, translated, (candidate) => candidate === 'duplicate')
+    : target;
+}
+
 function translatedString(
   siteId: string,
   form: Form,

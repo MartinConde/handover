@@ -242,6 +242,7 @@ test.each(['editor', 'owner'])(
       entry: { collection: 'listings', id: 'mill-house' },
       locale: 'en',
       contentVersion: 3,
+      entryDirectory: '/nested/site/admin/api/entries',
     });
     expect(rows).toEqual(stored);
   },

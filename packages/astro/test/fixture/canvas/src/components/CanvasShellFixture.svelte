@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { Field } from '@handover/core';
 import App from '../../../../../../ui/src/App.svelte';
-import { requiredFieldProblems } from '../../../../../../ui/src/required-fields';
+import { requiredFieldProblems } from '../../../../../../ui/src/editor/required-fields';
 import '../../../../../../ui/src/tokens.css';
 
 const editorEntry = {

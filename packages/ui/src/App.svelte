@@ -7,6 +7,7 @@ import BuildPill, { type Build } from './BuildPill.svelte';
 import Dashboard from './Dashboard.svelte';
 import Diagnostics from './Diagnostics.svelte';
 import EntryList from './EntryList.svelte';
+import { invalidateEntryDirectory } from './entry-directory.js';
 import Globals from './Globals.svelte';
 import Library from './Library.svelte';
 import Login, { type LoginMethods } from './Login.svelte';
@@ -254,6 +255,7 @@ async function revert() {
         : `That publish was not reverted (${res.status}). Nothing was changed.`;
     return;
   }
+  invalidateEntryDirectory();
   await Promise.all([loadPending(), loadBuild()]);
   notify('Reverted that publish — building');
   // The drawer describes a commit just undone, so it goes with the publish it was about.
@@ -423,7 +425,7 @@ const initial = $derived(
     <!-- Keyed on the entry rather than on the address, for the reason `editingAt` gives. -->
     {#key `${editingAt || path}#${reload}`}
     {#if editing}
-      {#await Promise.all([openEntry, import('./Editor.svelte')])}
+      {#await Promise.all([openEntry, import('./editor/Editor.svelte')])}
         <main class="main"><p class="placeholder">Loading…</p></main>
       {:then [entry, { default: Editor }]}
         <Editor
@@ -436,17 +438,22 @@ const initial = $derived(
           site={session?.site}
           userId={session?.user.id}
           onchanged={async () => {
+            invalidateEntryDirectory();
             await loadPending();
             if (await flushNavigation()) reload += 1;
           }}
           onreload={async () => {
+            invalidateEntryDirectory();
             await loadPending();
             // Restore/reconciliation already closed the old session. A fresh entry read is what
             // establishes the next save epoch, so it must not ask that closed session to flush.
             reload += 1;
           }}
           onpending={loadPending}
-          onpublished={(title) => notify(`Published ${title} — building`)}
+          onpublished={(title) => {
+            invalidateEntryDirectory();
+            notify(`Published ${title} — building`);
+          }}
           onrestored={(date) => (restored = { entry: editingAt, date })}
           restored={restored?.entry === editingAt ? restored.date : undefined}
           onmode={(mode) => (editorMode = mode)}
@@ -458,7 +465,10 @@ const initial = $derived(
       <EntryList
         collection={listRoute[1] ?? ''}
         role={session.role}
-        onchanged={loadPending}
+        onchanged={() => {
+          invalidateEntryDirectory();
+          return loadPending();
+        }}
         onsaved={(name) => notify(`Saved the template ${name}`)}
       />
     {:else if redirectRoute}
@@ -500,10 +510,12 @@ const initial = $derived(
         indicator?.focus();
       }}
       onpublished={async (count) => {
+        invalidateEntryDirectory();
         notify(`Published ${count} change${count === 1 ? '' : 's'} — building`);
         await Promise.all([loadPending(), loadBuild()]);
       }}
       ondiscarded={async () => {
+        invalidateEntryDirectory();
         await loadPending();
         if (await flushNavigation()) reload += 1;
       }}

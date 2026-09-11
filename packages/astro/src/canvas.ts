@@ -57,6 +57,8 @@ export interface EditContext extends EditAttributes {
 export interface CanvasSuccessManifest extends HandoverCanvas {
   mode: 'canvas';
   status: 'success';
+  /** Authenticated, base-aware route used by the iframe's page and entry pickers. */
+  entryDirectory: string;
 }
 
 export interface CanvasErrorManifest {
@@ -211,8 +213,11 @@ export function createEditContext(astro: AstroWithLocals): EditContext {
   return editContext(handoverCanvas(astro));
 }
 
-export function successManifest(canvas: HandoverCanvas): CanvasSuccessManifest {
-  return { mode: 'canvas', status: 'success', ...canvas };
+export function successManifest(
+  canvas: HandoverCanvas,
+  entryDirectory: string,
+): CanvasSuccessManifest {
+  return { mode: 'canvas', status: 'success', entryDirectory, ...canvas };
 }
 
 export function errorManifest(

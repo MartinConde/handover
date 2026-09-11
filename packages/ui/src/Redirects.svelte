@@ -1,5 +1,6 @@
 <script lang="ts">
-import PagePicker, { type Pickable, readPickable } from './PagePicker.svelte';
+import { EMPTY_ENTRY_DIRECTORY, type Pickable, readEntryDirectory } from './entry-directory.js';
+import PagePicker from './PagePicker.svelte';
 import { request as fetch, sitePath } from './request.js';
 
 /** One rule as `/admin/api/redirects` answers it. */
@@ -40,7 +41,9 @@ let trigger: HTMLElement | undefined;
 
 $effect(() => {
   load();
-  readPickable().then((p) => (known = p));
+  readEntryDirectory()
+    .then((p) => (known = p))
+    .catch(() => (known = EMPTY_ENTRY_DIRECTORY));
 });
 
 $effect(() => {

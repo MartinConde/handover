@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { Field } from '@handover/core';
-import { createEntrySession } from '../../../../../../ui/src/entry-session.svelte';
-import Fields from '../../../../../../ui/src/Fields.svelte';
+import { createEntrySession } from '../../../../../../ui/src/editor/entry-session.svelte';
+import Fields from '../../../../../../ui/src/editor/fields/Fields.svelte';
 import '../../../../../../ui/src/tokens.css';
 
 const fields: Field[] = [

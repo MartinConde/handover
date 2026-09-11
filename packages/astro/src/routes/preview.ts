@@ -322,7 +322,16 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
     return {
       Component,
       props,
-      ...(canvas ? { canvasManifest: serializeCanvasManifest(successManifest(canvas)) } : {}),
+      ...(canvas
+        ? {
+            canvasManifest: serializeCanvasManifest(
+              successManifest(
+                canvas,
+                `${(config.i18n.base ?? '').replace(/\/+$/, '')}/admin/api/entries`,
+              ),
+            ),
+          }
+        : {}),
     };
   } catch (error) {
     if (!(error instanceof ContentError)) throw error;
