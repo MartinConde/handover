@@ -15,6 +15,10 @@ export function sitePath(path: string): string {
 }
 export const previewPath = (path: string) => sitePath(`/_preview${localPath(path)}`);
 
+const UNCERTAIN = 'x-handover-request-uncertain';
+export const uncertainResponse = (response: Response): boolean =>
+  response.headers.get(UNCERTAIN) === 'true';
+
 /** Treat a disconnected request like an unavailable server in every existing refusal flow. */
 export const request: typeof globalThis.fetch = async (input, init) => {
   const target = typeof input === 'string' ? sitePath(input) : input;
@@ -29,6 +33,7 @@ export const request: typeof globalThis.fetch = async (input, init) => {
   } catch {
     return new Response('Connection lost. Your changes were kept. Please try again.', {
       status: 503,
+      headers: { [UNCERTAIN]: 'true' },
     });
   }
 };

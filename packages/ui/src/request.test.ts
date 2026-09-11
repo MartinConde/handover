@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { localPath, previewPath, request, sitePath } from './request.js';
+import { localPath, previewPath, request, sitePath, uncertainResponse } from './request.js';
 
 afterEach(() => {
   document.body.innerHTML = '';
@@ -27,8 +27,11 @@ test('a disconnected API request becomes a retryable refusal; a retry can succee
   );
   const response = await request('/admin/api/publish', { method: 'POST' });
   expect(response.status).toBe(503);
+  expect(uncertainResponse(response)).toBe(true);
   expect(await response.text()).toContain('try again');
-  expect((await request('/admin/api/publish', { method: 'POST' })).ok).toBe(true);
+  const retry = await request('/admin/api/publish', { method: 'POST' });
+  expect(retry.ok).toBe(true);
+  expect(uncertainResponse(retry)).toBe(false);
 });
 
 test('a response body disconnected after headers also reports failure', async () => {
@@ -45,7 +48,9 @@ test('a response body disconnected after headers also reports failure', async ()
         ),
     ),
   );
-  expect((await request('/admin/api/drafts/pages/home', { method: 'PUT' })).status).toBe(503);
+  const response = await request('/admin/api/drafts/pages/home', { method: 'PUT' });
+  expect(response.status).toBe(503);
+  expect(uncertainResponse(response)).toBe(true);
 });
 
 test('a base beginning with admin is not added twice to navigation', () => {

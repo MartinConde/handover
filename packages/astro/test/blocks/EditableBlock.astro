@@ -1,0 +1,47 @@
+---
+import type { AstroComponentFactory } from 'astro/runtime/server/index.js';
+import Blocks from '../../components/Blocks.astro';
+import type { EditContext } from '../../src/canvas.js';
+
+interface Column {
+  _id: string;
+  blocks: EditableBlock[];
+}
+
+type EditableBlock =
+  | { _type: 'repeated' | 'promo'; _id: string; heading: string }
+  | { _type: 'columns'; _id: string; columns: Column[] };
+
+const { block, components, edit } = Astro.props as {
+  block: EditableBlock;
+  components: Record<string, AstroComponentFactory>;
+  edit?: EditContext;
+};
+---
+
+<article {...(edit ?? {})} data-editable-block={block._id}>
+  {block._type === 'repeated' && (
+    <>
+      <h2 {...(edit?.field('heading') ?? {})} data-repeated-heading>{block.heading}</h2>
+      <p {...(edit?.field('heading') ?? {})} data-repeated-heading>{block.heading}</p>
+    </>
+  )}
+  {block._type === 'promo' && (
+    <p {...(edit?.field('heading') ?? {})} data-shared-promo>{block.heading}</p>
+  )}
+  {block._type === 'columns' && (
+    <div {...(edit?.list('columns') ?? {})} data-columns>
+      {block.columns.map((column) => {
+        const columnEdit = edit?.list('columns').block(column);
+        const blocksEdit = columnEdit?.list('blocks');
+        return (
+          <section {...(columnEdit ?? {})} data-column={column._id}>
+            <div {...(blocksEdit ?? {})} data-column-blocks>
+              <Blocks blocks={column.blocks} {components} edit={blocksEdit} />
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  )}
+</article>

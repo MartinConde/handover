@@ -16,6 +16,7 @@
 - [Template convention](template-convention.md) — the three rules, `schemas.ts` and `content.config.ts`.
 - [Loaders and pages](loaders.md) — `load()` and `ContentSource`, what a loader returns and what renders it, an address per language, layouts that take their data as props.
 - [Blocks](blocks.md) — `<Blocks />`, the component registry, blocks that nest, and `_ref` blocks filled from a global.
+- [Canvas editing](canvas.md) — annotate page fields, blocks, nested and empty lists; guard site-side effects during editable renders.
 - [Rendering content](rendering.md) — `<Markdown />`, `<Embed />`, `<Seo />` and hidden entries.
 - [The language switcher](language-switcher.md) — `getEntryLocales()`, `<LocaleSwitcher />`, and a URL per language for a page that is not an entry.
 - [Drafts and publishing](publishing.md) — autosave into D1, what a draft holds, publishing an entry on its own, creating, renaming and deleting, the content index.

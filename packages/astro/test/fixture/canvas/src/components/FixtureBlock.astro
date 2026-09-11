@@ -1,28 +1,54 @@
 ---
+import type { AstroComponentFactory } from 'astro/runtime/server/index.js';
+import type { EditContext } from 'astro-handover';
 import Blocks from 'astro-handover/Blocks.astro';
 
-const { block, components } = Astro.props;
+interface Column {
+  _id: string;
+  blocks: FixtureBlock[];
+}
+
+type FixtureBlock =
+  | { _type: 'repeated' | 'promo'; _id: string; heading: string }
+  | { _type: 'columns'; _id: string; columns: Column[] };
+
+const { block, components, edit } = Astro.props as {
+  block: FixtureBlock;
+  components: Record<string, AstroComponentFactory>;
+  edit?: EditContext;
+};
 ---
 
-<section class="fixture-block" data-fixture-block data-type={block._type}>
+<section class="fixture-block" data-fixture-block data-type={block._type} {...(edit ?? {})}>
   {block._type === 'repeated' && (
     <>
-      <h2 data-repeated-heading>{block.heading}</h2>
-      <p data-repeated-heading>{block.heading}</p>
+      <h2 data-repeated-heading {...(edit?.field('heading') ?? {})}>{block.heading}</h2>
+      <p data-repeated-heading {...(edit?.field('heading') ?? {})}>{block.heading}</p>
     </>
   )}
-  {block._type === 'promo' && <p data-shared-promo>{block.heading}</p>}
+  {block._type === 'promo' && (
+    <p data-shared-promo {...(edit?.field('heading') ?? {})}>{block.heading}</p>
+  )}
   {block._type === 'columns' && (
-    <div class="columns" data-nested-list>
-      {block.columns.map((column: { _id: string; blocks: unknown[] }) => (
-        <div class="column" data-column={column._id}>
-          {column.blocks.length ? (
-            <Blocks blocks={column.blocks} {components} />
-          ) : (
-            <p data-empty-list>Empty nested list</p>
-          )}
-        </div>
-      ))}
+    <div class="columns" data-nested-list {...(edit?.list('columns') ?? {})}>
+      {block.columns.map((column) => {
+        const columnEdit = edit?.list('columns').block(column);
+        const blocksEdit = columnEdit?.list('blocks');
+        return (
+          <div
+            class="column"
+            data-column={column._id}
+            {...(columnEdit ?? {})}
+            {...(blocksEdit ?? {})}
+          >
+            {column.blocks.length ? (
+              <Blocks blocks={column.blocks} {components} edit={blocksEdit} />
+            ) : (
+              <p data-empty-list>Empty nested list</p>
+            )}
+          </div>
+        );
+      })}
     </div>
   )}
 </section>

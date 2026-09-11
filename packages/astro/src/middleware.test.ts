@@ -91,3 +91,23 @@ test('a link on a preview page to a page on this site stays in the preview', asy
   );
   expect(getSession).not.toHaveBeenCalled();
 });
+
+test('a Canvas POST keeps the site links real for its browser bridge', async () => {
+  const url = new URL('/_preview/listings/mill-house', 'https://x');
+  const page = '<a href="/listings/barn">Barn</a><a href="/">Home</a>';
+  const next = vi.fn(
+    async () => new Response(page, { headers: { 'content-type': 'text/html; charset=utf-8' } }),
+  );
+
+  const res = (await onRequest(
+    {
+      request: new Request(url, { method: 'POST', body: 'snapshot={}' }),
+      url,
+      locals: {},
+    } as unknown as APIContext,
+    next,
+  )) as Response;
+
+  expect(await res.text()).toBe(page);
+  expect(next).toHaveBeenCalledOnce();
+});

@@ -70,6 +70,15 @@ export {
   menusAt,
   staticSource,
 } from '@handover/core';
+export type {
+  CanvasDocumentIdentity,
+  EditAttributes,
+  EditContext,
+  EditLocation,
+  EditTarget,
+  HandoverCanvas,
+} from './canvas.js';
+export { createEditContext, isCanvas } from './canvas.js';
 
 // Only the first offending construct is reported, so the editor can say what was dropped.
 export const richtext = (tier: RichtextTier = 'basic') =>
@@ -385,13 +394,72 @@ export function loadersModule(root: URL, collections: HandoverConfig['collection
   ].join('\n');
 }
 
-// Inlined into the Worker bundle: a Worker has no filesystem.
+interface UiBuildChunk {
+  file: string;
+  name?: string;
+  isEntry?: boolean;
+  imports?: string[];
+  dynamicImports?: string[];
+  css?: string[];
+}
+
+interface UiBuildManifest {
+  [source: string]: UiBuildChunk;
+}
+
+async function uiAssetNames(dir: string, at = ''): Promise<string[]> {
+  const names: string[] = [];
+  for (const item of await readdir(join(dir, at), { withFileTypes: true })) {
+    const name = at ? `${at}/${item.name}` : item.name;
+    if (item.isDirectory()) {
+      if (name !== '.vite') names.push(...(await uiAssetNames(dir, name)));
+    } else if (/\.(js|css)$/.test(name)) names.push(name);
+  }
+  return names;
+}
+
+// Inlined into the Worker bundle: a Worker has no filesystem. Keep every JS/CSS output available
+// to the asset route, but expose entry closures separately so a document loads only its own entry.
 export async function uiAssetsModule(dir: string): Promise<string> {
-  const names = (await readdir(dir)).filter((n) => /\.(js|css)$/.test(n)).sort();
+  const manifest = JSON.parse(
+    await readFile(join(dir, 'manifest.json'), 'utf8'),
+  ) as UiBuildManifest;
+  const names = (await uiAssetNames(dir)).sort();
   const files = await Promise.all(
     names.map(async (n) => [n, await readFile(join(dir, n), 'utf8')]),
   );
-  return `export default ${JSON.stringify(Object.fromEntries(files))};`;
+  const contents = Object.fromEntries(files) as Record<string, string>;
+
+  for (const [source, chunk] of Object.entries(manifest)) {
+    if (/\.(js|css)$/.test(chunk.file) && contents[chunk.file] === undefined)
+      throw new Error(`UI manifest output is missing ${chunk.file} (${source})`);
+    for (const css of chunk.css ?? [])
+      if (contents[css] === undefined)
+        throw new Error(`UI manifest stylesheet is missing ${css} (${source})`);
+    for (const imported of [...(chunk.imports ?? []), ...(chunk.dynamicImports ?? [])])
+      if (!manifest[imported])
+        throw new Error(`UI manifest import is missing ${imported} (${source})`);
+  }
+
+  const stylesFor = (source: string, seen = new Set<string>()): string[] => {
+    if (seen.has(source)) return [];
+    seen.add(source);
+    const chunk = manifest[source];
+    if (!chunk) return [];
+    return [
+      ...(chunk.css ?? []),
+      ...(chunk.imports ?? []).flatMap((imported) => stylesFor(imported, seen)),
+    ];
+  };
+  const entries = Object.fromEntries(
+    Object.entries(manifest)
+      .filter(([, chunk]) => chunk.isEntry && chunk.name)
+      .map(([source, chunk]) => [
+        chunk.name as string,
+        { script: chunk.file, styles: [...new Set(stylesFor(source))] },
+      ]),
+  );
+  return `export default ${JSON.stringify({ entries, files: contents })};`;
 }
 
 // The adapter's own hook runs after this one and appends Astro's redirects to the same file.

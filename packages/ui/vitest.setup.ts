@@ -25,3 +25,4 @@ Element.prototype.animate = () =>
 Element.prototype.setPointerCapture = () => {};
 Element.prototype.releasePointerCapture = () => {};
 document.elementFromPoint = () => null;
+HTMLFormElement.prototype.submit = () => {};

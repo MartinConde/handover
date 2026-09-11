@@ -11,7 +11,10 @@ vi.mock('virtual:handover/config', () => ({
   },
 }));
 vi.mock('virtual:handover/ui', () => ({
-  default: { 'main.js': 'export {}', 'main.css': 'body{}' },
+  default: {
+    entries: { admin: { script: 'admin.js', styles: ['admin.css'] } },
+    files: { 'admin.js': 'export {}', 'admin.css': 'body{}' },
+  },
 }));
 vi.mock('../auth.js', () => ({
   loginMethods: () => ({ emailLink: false, github: false }),
@@ -31,10 +34,10 @@ const ctx = (path: string, params = '') => {
 
 test('nested-base shell loads assets and supplies the same base to the browser', async () => {
   const html = await (await GET(ctx('/nested/site/admin'))).text();
-  expect(html).toContain('src="/nested/site/admin/_assets/main.js"');
-  expect(html).toContain('href="/nested/site/admin/_assets/main.css"');
+  expect(html).toContain('src="/nested/site/admin/_assets/admin.js"');
+  expect(html).toContain('href="/nested/site/admin/_assets/admin.css"');
   expect(html).toContain("data-base='/nested/site'");
-  expect((await GET(ctx('/nested/site/admin/_assets/main.js', '_assets/main.js'))).status).toBe(
+  expect((await GET(ctx('/nested/site/admin/_assets/admin.js', '_assets/admin.js'))).status).toBe(
     200,
   );
 });

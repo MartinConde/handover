@@ -342,7 +342,7 @@ test('a global path opens the entry editor on the globals collection', async () 
     }),
   );
   const root = show(session('owner'), '/admin/site/site');
-  await new Promise((r) => setTimeout(r, 0));
+  await vi.dynamicImportSettled();
   flushSync();
 
   expect(root.querySelector('.entry-header h1')?.textContent).toBe('Site details');
@@ -694,6 +694,146 @@ test('the history tab is an address of the same entry, not a second load of it',
   expect(root.querySelector('.history')).not.toBeNull();
   expect(root.querySelector('.form')).toBeNull();
   expect(loads()).toBe(1);
+});
+
+const historyEntry = (title: string, drift: unknown[] = []) => ({
+  fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+  blocks: {},
+  data: { title },
+  revisions: { en: `${title}-en`, de: `${title}-de` },
+  pending: ['en'],
+  published: ['en', 'de'],
+  problems: [],
+  locales: ['en', 'de'],
+  defaultLocale: 'en',
+  sourceLocale: 'en',
+  offered: ['en', 'de'],
+  translations: { de: { title: `${title} DE` } },
+  stale: [],
+  drift,
+});
+const clickRequired = (root: ParentNode, selector: string) => {
+  const button = root.querySelector<HTMLButtonElement>(selector);
+  if (!button) throw new Error(`${selector} missing`);
+  button.click();
+};
+
+test('a historical restore reloads every locale and exposes drift from the restored version', async () => {
+  let entryLoads = 0;
+  const restore = vi.fn(async () => Response.json({ paths: ['content/en/mill-house.yaml'] }));
+  const fetchMock = vi.fn(async (url: string) => {
+    if (url === '/admin/api/drafts') return Response.json({ entries: [] });
+    if (url === '/admin/api/build') return Response.json({});
+    if (url === '/admin/api/entries/listings/mill-house') {
+      entryLoads += 1;
+      return Response.json(
+        entryLoads === 1
+          ? historyEntry('Before restore')
+          : historyEntry('Restored', [
+              {
+                path: 'body[_id=restored]',
+                in: ['en'],
+                expected: ['en', 'de'],
+                values: { en: ['Restored block'] },
+              },
+            ]),
+      );
+    }
+    if (url === '/admin/api/history/listings/mill-house?page=1')
+      return Response.json({
+        versions: [
+          {
+            sha: 'abc1234',
+            date: '2026-08-20T12:00:00.000Z',
+            summary: 'Earlier words',
+            locales: ['en'],
+          },
+        ],
+        more: false,
+      });
+    if (url.startsWith('/admin/api/history/listings/mill-house/diff?'))
+      return Response.json({ groups: [] });
+    if (url === '/admin/api/history/listings/mill-house/restore') return restore();
+    if (url.startsWith('/admin/api/locks/'))
+      return Response.json({ held_by: null, mine: true, expires_at: 1755864120000 });
+    return Response.json({});
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const settleRestore = async () => {
+    for (let i = 0; i < 6; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      flushSync();
+    }
+  };
+
+  const root = show(session(), '/admin/c/listings/mill-house/history');
+  await settleRestore();
+  clickRequired(root, '.version-row .summary');
+  await settleRestore();
+  clickRequired(root, '.version-head .btn-primary');
+  flushSync();
+  clickRequired(root, '.dialog .btn-primary');
+  await settleRestore();
+
+  expect(restore).toHaveBeenCalledOnce();
+  expect(entryLoads).toBe(2);
+  expect(location.pathname).toBe('/admin/c/listings/mill-house');
+  expect(root.querySelector('.drift')).not.toBeNull();
+  expect(root.textContent).toContain("languages disagree about this entry's blocks");
+});
+
+test('an uncertain historical restore authoritatively reloads before editing resumes', async () => {
+  let entryLoads = 0;
+  const fetchMock = vi.fn(async (url: string) => {
+    if (url === '/admin/api/drafts') return Response.json({ entries: [] });
+    if (url === '/admin/api/build') return Response.json({});
+    if (url === '/admin/api/entries/listings/mill-house') {
+      entryLoads += 1;
+      return Response.json(
+        historyEntry(entryLoads === 1 ? 'Possibly stale' : 'Authoritative after retry'),
+      );
+    }
+    if (url === '/admin/api/history/listings/mill-house?page=1')
+      return Response.json({
+        versions: [
+          {
+            sha: 'abc1234',
+            date: '2026-08-20T12:00:00.000Z',
+            summary: 'Earlier words',
+            locales: ['en'],
+          },
+        ],
+        more: false,
+      });
+    if (url.startsWith('/admin/api/history/listings/mill-house/diff?'))
+      return Response.json({ groups: [] });
+    if (url === '/admin/api/history/listings/mill-house/restore')
+      throw new TypeError('connection ended without a response');
+    if (url.startsWith('/admin/api/locks/'))
+      return Response.json({ held_by: null, mine: true, expires_at: 1755864120000 });
+    return Response.json({});
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const settleRestore = async () => {
+    for (let i = 0; i < 6; i++) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      flushSync();
+    }
+  };
+
+  const root = show(session(), '/admin/c/listings/mill-house/history');
+  await settleRestore();
+  clickRequired(root, '.version-row .summary');
+  await settleRestore();
+  clickRequired(root, '.version-head .btn-primary');
+  flushSync();
+  clickRequired(root, '.dialog .btn-primary');
+  await settleRestore();
+
+  expect(entryLoads).toBe(2);
+  expect(location.pathname).toBe('/admin/c/listings/mill-house');
+  expect(root.querySelector<HTMLInputElement>('#f-title')?.value).toBe('Authoritative after retry');
+  expect(root.textContent).not.toContain('Restored the version from');
 });
 
 // The drawer's result panel goes with the drawer, so the commit is also said in a lasting notice.

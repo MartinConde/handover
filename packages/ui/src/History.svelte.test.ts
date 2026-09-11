@@ -55,6 +55,13 @@ const show = async (locales = ['en', 'de'], drafted = false) => {
       slug: 'mill-house',
       locales,
       drafted,
+      onrestore: async (request, reload) => {
+        const response = await request();
+        if (!response.ok)
+          return { ok: false as const, reason: 'refused' as const, error: response.error };
+        await reload('restored');
+        return { ok: true as const };
+      },
       onrestored: (date: string) => {
         handedOff += 1;
         handedDates.push(date);

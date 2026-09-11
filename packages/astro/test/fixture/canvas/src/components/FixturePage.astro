@@ -1,5 +1,7 @@
 ---
+import { createEditContext } from 'astro-handover';
 import Blocks from 'astro-handover/Blocks.astro';
+import Markdown from 'astro-handover/Markdown.astro';
 import FixtureBlock from './FixtureBlock.astro';
 import Island from './Island.svelte';
 
@@ -9,6 +11,7 @@ const components = {
   promo: FixtureBlock,
   columns: FixtureBlock,
 };
+const edit = createEditContext(Astro);
 ---
 
 <!doctype html>
@@ -19,9 +22,12 @@ const components = {
     <title>{data.title}</title>
   </head>
   <body>
-    <main class="fixture-shell">
-      <h1>{data.title}</h1>
-      <Blocks blocks={data.blocks} {components} {globals} />
+    <main class="fixture-shell" {...edit.list('blocks')}>
+      <h1 {...edit.field('title')}>{data.title}</h1>
+      {data.summary && <div data-fixture-summary {...edit.field('summary')}><Markdown content={data.summary} /></div>}
+      {data.body && <div data-fixture-body {...edit.field('body')}><Markdown content={data.body} /></div>}
+      {data.legacy && <div data-fixture-legacy {...edit.field('legacy')}><Markdown content={data.legacy} /></div>}
+      <Blocks blocks={data.blocks} {components} {globals} edit={edit.list('blocks')} />
       <Island client:load />
     </main>
   </body>

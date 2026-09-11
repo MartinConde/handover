@@ -1,6 +1,6 @@
 import config from 'virtual:handover/config';
 import index, { stale, templates } from 'virtual:handover/index';
-import type { Db, EntryEdit, IndexEntry } from '@handover/core';
+import type { Db, EntryEdit, Form, IndexEntry, LocaleSeed } from '@handover/core';
 import {
   addressError,
   claimLock,
@@ -47,6 +47,7 @@ import {
   renameEntry,
   reservePaths,
   resolveDrift,
+  resolveFieldTarget,
   saveDraft,
   savedTemplates,
   saveTranslated,
@@ -283,6 +284,120 @@ function editable(value: unknown): Record<string, unknown> | undefined {
   return Object.fromEntries(Object.entries(value).filter(([key]) => !key.startsWith('_')));
 }
 
+type StructuralSave = {
+  containers: string[];
+  revisions: Record<string, string>;
+  seeds: Record<string, LocaleSeed[]>;
+};
+
+const object = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);
+
+const rowField = (type: string) => type === 'blocks' || type === 'array' || type === 'menus';
+
+// Structural history may restore locale-owned rows, but never arbitrary entry metadata.
+function structuralSave(
+  value: unknown,
+  form: Form,
+  data: Record<string, unknown>,
+  source: string,
+): StructuralSave | undefined {
+  if (!object(value)) return undefined;
+  const keys = Object.keys(value);
+  if (keys.length !== 3 || !keys.every((key) => ['containers', 'revisions', 'seeds'].includes(key)))
+    return undefined;
+  const containers = value.containers;
+  if (
+    !Array.isArray(containers) ||
+    !containers.length ||
+    containers.some((address) => typeof address !== 'string' || !address) ||
+    new Set(containers).size !== containers.length
+  )
+    return undefined;
+  for (const address of containers) {
+    const resolved = resolveFieldTarget('default', form, address, data);
+    if (
+      !resolved.ok ||
+      resolved.target.address !== address ||
+      !rowField(resolved.target.field.type)
+    )
+      return undefined;
+  }
+
+  if (!object(value.revisions)) return undefined;
+  const revisionEntries = Object.entries(value.revisions);
+  if (
+    !revisionEntries.length ||
+    !revisionEntries.some(([locale]) => locale === source) ||
+    revisionEntries.some(
+      ([locale, revision]) =>
+        !config.i18n.locales.includes(locale) || typeof revision !== 'string' || !revision,
+    )
+  )
+    return undefined;
+  const revisions = Object.fromEntries(revisionEntries) as Record<string, string>;
+
+  if (!object(value.seeds)) return undefined;
+  const seeds: Record<string, LocaleSeed[]> = {};
+  for (const [locale, candidates] of Object.entries(value.seeds)) {
+    if (
+      locale === source ||
+      !config.i18n.locales.includes(locale) ||
+      !(locale in value.revisions) ||
+      !Array.isArray(candidates)
+    )
+      return undefined;
+    const seen = new Set<string>();
+    seeds[locale] = [];
+    for (const candidate of candidates) {
+      if (!object(candidate)) return undefined;
+      const seedKeys = Object.keys(candidate);
+      if (
+        !seedKeys.every((key) => ['address', 'value', 'machine'].includes(key)) ||
+        !seedKeys.includes('address') ||
+        !seedKeys.includes('value') ||
+        typeof candidate.address !== 'string' ||
+        !candidate.address ||
+        !object(candidate.value) ||
+        typeof candidate.value._id !== 'string' ||
+        !candidate.value._id ||
+        '_machine' in candidate.value ||
+        seen.has(candidate.address)
+      )
+        return undefined;
+      const suffix = `[_id=${candidate.value._id}]`;
+      const container = candidate.address.endsWith(suffix)
+        ? candidate.address.slice(0, -suffix.length)
+        : undefined;
+      const resolved = resolveFieldTarget('default', form, candidate.address, data);
+      if (
+        !container ||
+        !containers.includes(container) ||
+        !resolved.ok ||
+        resolved.target.address !== candidate.address ||
+        !rowField(resolved.target.field.type)
+      )
+        return undefined;
+      if (
+        candidate.machine !== undefined &&
+        (!Array.isArray(candidate.machine) ||
+          new Set(candidate.machine).size !== candidate.machine.length ||
+          candidate.machine.some(
+            (path) => typeof path !== 'string' || !path.startsWith(`${candidate.address}.`),
+          ))
+      )
+        return undefined;
+      seen.add(candidate.address);
+      seeds[locale].push({
+        address: candidate.address,
+        value: candidate.value,
+        ...(candidate.machine === undefined ? {} : { machine: candidate.machine as string[] }),
+      });
+    }
+  }
+  return { containers: containers as string[], revisions, seeds };
+}
+
 /** Drafts keep what was typed whether the schema accepts it or not; publish decides. */
 export async function autosave(
   ctx: RequestContext,
@@ -298,7 +413,7 @@ export async function autosave(
   // The lock is enforced here: a tab that lost a take-over keeps typing and finds out on save.
   const holder = await lockHolder('default', ctx.db(), `${collection}/${slug}`);
   const body = (await request.json().catch(() => undefined)) as
-    | { data?: unknown; tab?: unknown; revision?: unknown }
+    | { data?: unknown; tab?: unknown; revision?: unknown; structure?: unknown }
     | undefined;
   if (holder && !isHolder(holder, session, tabOf(body)))
     return Response.json(
@@ -323,6 +438,28 @@ export async function autosave(
   const at = locale ?? source;
   // Only a source-language save carries structure into the sibling files.
   const translation = at !== source;
+  if (translation && body?.structure !== undefined)
+    return new Response('Bad request', { status: 400 });
+  const structure =
+    body?.structure === undefined
+      ? undefined
+      : structuralSave(body.structure, formFor(collection, slug), data, source);
+  if (body?.structure !== undefined && !structure)
+    return new Response('Bad request', { status: 400 });
+  if (!translation && config.i18n.locales.length > 1) {
+    // Re-read every current file at dispatch: a tab may have opened before external drift appeared.
+    // Intentional locale-only rows and entries with one file produce no report and keep saving.
+    const files = localeData(await entryLocales(ctx, collection, slug, config.i18n.locales));
+    if (driftReport('default', formFor(collection, slug), files).length)
+      return Response.json(
+        {
+          error:
+            "This entry's languages disagree about which blocks it has. Reconcile them before editing.",
+          reason: 'drift',
+        },
+        { status: 409 },
+      );
+  }
   const siblings = translation ? {} : siblingPaths(collection, slug, source);
   let saved: Awaited<ReturnType<typeof saveDraft>>;
   try {
@@ -332,8 +469,16 @@ export async function autosave(
       ctx.git(),
       entryPath(collection, slug, at),
       data,
-      translation || Object.keys(siblings).length
-        ? { form: formFor(collection, slug), locale: at, siblings, translation }
+      translation || Object.keys(siblings).length || structure
+        ? {
+            form: formFor(collection, slug),
+            locale: at,
+            siblings,
+            translation,
+            ...(structure
+              ? { restoration: { revisions: structure.revisions, seeds: structure.seeds } }
+              : {}),
+          }
         : undefined,
       session?.user.id,
       body.revision,

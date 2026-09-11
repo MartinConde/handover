@@ -28,7 +28,7 @@ export const onRequest: MiddlewareHandler = async ({ request, url, locals }, nex
       : b
         ? ''
         : url.pathname;
-  if (/^\/_preview(?:\/|$)/.test(path)) {
+  if (request.method === 'GET' && /^\/_preview(?:\/|$)/.test(path)) {
     const res = await next();
     if (!res.ok || !res.headers.get('content-type')?.includes('text/html')) return res;
     const headers = new Headers(res.headers);

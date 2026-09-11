@@ -1,6 +1,5 @@
 <script lang="ts">
 import { type Field, keptMachine, type ResolvedSeo, type WordPart } from '@handover/core';
-import { untrack } from 'svelte';
 import type { EntrySession } from './entry-session.svelte';
 import Fields from './Fields.svelte';
 import { request as fetch } from './request.js';
@@ -21,10 +20,10 @@ let {
   mediaBase = '',
   inheritedSeo,
   translator = false,
+  actionBlocked = false,
   url,
   site,
   onsaved,
-  onactivity,
   onclose,
   onturnoff,
 }: {
@@ -45,18 +44,18 @@ let {
   locked?: boolean;
   stale?: boolean;
   translator?: boolean;
+  /** Another entry-wide persisted action is already in flight. */
+  actionBlocked?: boolean;
   url?: string;
   site?: string;
   /** The entry keeps `pending`: this column is thrown away on a screen change, its edit is not. */
   onsaved?: (pending: boolean, data?: Data) => void;
-  onactivity?: () => void;
   onclose?: () => void;
   /** Absent when the language cannot go. */
   onturnoff?: () => void;
 } = $props();
 
 const saveState = $derived(session.saveState(locale));
-const saved = $derived(saveState.saved);
 // svelte-ignore state_referenced_locally -- the loaded file is the initial value on purpose
 let base = $state<Data>(structuredClone($state.snapshot(session.snapshot(locale))));
 const saving = $derived(saveState.phase === 'saving');
@@ -84,39 +83,30 @@ $effect(() => {
   };
 });
 
-const json = $derived(JSON.stringify(data));
+const isUnsaved = $derived(session.unsaved(locale));
 const machine = $derived(keptMachine('default', base, data));
-let filling = $state(false);
+const filling = $derived(session.machineTranslationPending(locale));
+const mutationBlocked = $derived(locked || actionBlocked || session.localeMutationBlocked(locale));
 
-// Flushed first: the fill is written against the stored draft and would overwrite a waiting edit.
+// The session reserves the entry before flushing, then owns the request and acknowledgement.
 async function fill(paths?: string[]) {
-  if (!(await flush())) return;
-  filling = true;
-  const res = await fetch(`/admin/api/translate/${collection}/${slug}/${locale}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(paths ? { paths } : {}),
+  fillFailed = false;
+  const result = await session.machineTranslate(locale, async () => {
+    const res = await fetch(`/admin/api/translate/${collection}/${slug}/${locale}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(paths ? { paths } : {}),
+    });
+    if (!res.ok) return undefined;
+    return (await res.json()) as { data: Data; pending: boolean; revision?: string };
   });
-  filling = false;
-  fillFailed = !res.ok;
-  if (!res.ok) return;
-  const body = (await res.json()) as { data: Data; pending: boolean; revision?: string };
-  if (body.revision) session.setRevision(locale, body.revision);
+  fillFailed = !result.ok && (result.reason === 'request' || result.reason === 'stale');
+  if (!result.ok) return;
+  const body = result.response;
   base = structuredClone(body.data);
-  session.replaceSnapshot(locale, body.data);
   data = session.snapshot(locale);
-  session.accept(locale, JSON.stringify(body.data));
   onsaved?.(body.pending, body.data);
 }
-
-// Subscribes only to the snapshot: a failure-state update must not schedule another retry.
-$effect(() => {
-  const dirty = json !== saved;
-  untrack(() => {
-    if (dirty) onactivity?.();
-    session.change(locale);
-  });
-});
 
 // Two objects that differ only in key order are the same words.
 const canon = (v: unknown): string =>
@@ -134,12 +124,13 @@ const isPlain = (v: unknown): v is Record<string, unknown> =>
 
 /** `reshape` walks this column's own data, so words typed here and not yet saved are kept. */
 export function sync(reshape: (target: Data) => Data): void {
+  if (session.localeMutationBlocked(locale)) return;
   const target = $state.snapshot(data) as Data;
   const next = reshape(target);
   // A `_version` added on open would be a save on open; stamping it is the save's business.
   if (!('_version' in target)) delete next._version;
   if (canon(next) !== canon(target)) {
-    session.replaceSnapshot(locale, next);
+    session.synchronizeSnapshot(locale, next);
     data = session.snapshot(locale);
   }
 }
@@ -170,11 +161,11 @@ const named = (of: string) => {
       <span class="mode">{named(source)} changed since this was translated</span>
     {/if}
     <span class="autosave" class:is-saving={saving} class:is-offline={failed}>
-      {#if saving}Saving…{:else if failed}Not saved <button type="button" class="btn-link" onclick={() => flush()}>Retry save</button>{:else if json !== saved}Unsaved changes{:else}Saved{/if}
+      {#if saving}Saving…{:else if failed}Not saved <button type="button" class="btn-link" onclick={() => flush()}>Retry save</button>{:else if isUnsaved}Unsaved changes{:else}Saved{/if}
     </span>
     <span class="spacer"></span>
     {#if translator}
-      <button class="btn btn-sm btn-fill" type="button" disabled={filling || locked} onclick={() => fill()}>
+      <button class="btn btn-sm btn-fill" type="button" disabled={filling || locked || actionBlocked} onclick={() => fill()}>
         Translate what's empty
       </button>
     {/if}
@@ -193,7 +184,7 @@ const named = (of: string) => {
     {/if}
   </div>
   <form class="form" onsubmit={(e) => e.preventDefault()}>
-    <fieldset disabled={locked}>
+    <fieldset disabled={mutationBlocked}>
       <Fields
         {fields}
         {blocks}
@@ -202,6 +193,7 @@ const named = (of: string) => {
         {mediaBase}
         {inheritedSeo}
         {locale}
+        {session}
         bind:root={data}
         translating
         ontranslate={translator ? (path) => fill([path]) : undefined}

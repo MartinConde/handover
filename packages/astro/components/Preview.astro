@@ -1,6 +1,8 @@
 ---
 // An .astro file because it renders the site's own components; every decision is in `preview()`.
 import { getCollection, getEntry } from 'astro:content';
+import config from 'virtual:handover/config';
+import assets from 'virtual:handover/ui';
 import { preview } from '../dist/routes/preview.js';
 
 const result = await preview(Astro, {
@@ -8,7 +10,17 @@ const result = await preview(Astro, {
   getCollection: (collection) => getCollection(collection),
 });
 if (result instanceof Response) return result;
-const { Component, props } = result;
+const { Component, props, canvasManifest } = result;
+const canvas = canvasManifest ? assets.entries.canvas : undefined;
+const base = (config.i18n.base ?? '').replace(/\/+$/, '');
+const asset = (path: string) => `${base}/admin/_assets/${path}`;
 ---
 
 <Component {...props} />
+{canvasManifest && canvas && (
+  <>
+    {canvas.styles.map((style) => <link rel="stylesheet" href={asset(style)} />)}
+    <script type="application/json" data-handover-canvas-manifest set:html={canvasManifest}></script>
+    <script is:inline type="module" src={asset(canvas.script)}></script>
+  </>
+)}

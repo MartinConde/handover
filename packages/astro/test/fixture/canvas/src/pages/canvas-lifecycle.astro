@@ -1,0 +1,128 @@
+---
+import assets from 'virtual:handover/ui';
+
+export const prerender = false;
+
+const canvas = assets.entries.canvas;
+if (!canvas) return new Response('Canvas entry missing', { status: 500 });
+const canvasUrl = `/admin/_assets/${canvas.script}`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Canvas lifecycle fixture</title>
+  </head>
+  <body>
+    <button id="inspector-control" type="button">Inspector control</button>
+    <aside id="selection-structure" aria-label="Page structure"></aside>
+    <output id="selection-state" aria-live="polite"></output>
+    <div id="canvas-stage" aria-label="Canvas stage"></div>
+    <output id="canvas-state" aria-live="polite"></output>
+    <script is:inline type="module" define:vars={{ canvasUrl }}>
+      const canvas = await import(canvasUrl);
+      const stage = document.querySelector('#canvas-stage');
+      const output = document.querySelector('#canvas-state');
+      const structure = document.querySelector('#selection-structure');
+      const selectionOutput = document.querySelector('#selection-state');
+      let version = 0;
+      let selectedAddress = 'title';
+      let selectedSelection;
+      const target = () => ({
+        document: { collection: 'pages', id: 'canvas-fixture' },
+        locale: 'en',
+        address: selectedAddress,
+      });
+      const request = (title, behavior, layout = {}) => {
+        version += 1;
+        return {
+          url: '/canvas-candidate',
+          snapshot: {
+            mode: 'canvas',
+            protocol: 1,
+            epoch: 'fixture-session',
+            entry: { collection: 'pages', id: 'canvas-fixture' },
+            locale: 'en',
+            contentVersion: version,
+            snapshots: {
+              en: { title, behavior, layout },
+              de: { title: `${title} DE`, behavior, layout },
+            },
+          },
+        };
+      };
+      const renderer = canvas.createCanvasRenderer({
+        stage,
+        timeoutMs: 1500,
+        contentVersion: () => version,
+        currentTarget: target,
+        currentSelection: () => selectedSelection,
+        onCommand: () => ({ ok: false, reason: 'readonly' }),
+        onSelectionChange: (selection) => {
+          selectedSelection = selection;
+          selectedAddress = selection?.target.address ?? '';
+          selectionOutput.value = selection ? `${selection.kind}:${selection.target.address}` : '';
+          for (const button of structure.querySelectorAll('button'))
+            button.setAttribute(
+              'aria-current',
+              button.dataset.targetAddress === selectedAddress ? 'true' : 'false',
+            );
+        },
+        onStructureChange: (nodes) => {
+          structure.replaceChildren();
+          for (const node of nodes) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.dataset.targetAddress = node.target.address;
+            button.dataset.targetKind = node.kind;
+            button.style.paddingLeft = `${node.depth * 12}px`;
+            button.textContent = `${node.label}${node.empty ? ' · Empty' : ''}${node.occurrences > 1 ? ` · ${node.occurrences} occurrences` : ''}`;
+            button.addEventListener('click', () => {
+              selectedSelection = { kind: node.kind, target: node.target };
+              selectedAddress = node.target.address;
+              renderer.select(selectedSelection);
+            });
+            structure.append(button);
+          }
+        },
+        onStateChange: (state) => {
+          output.value = JSON.stringify(state);
+          output.dataset.phase = state.phase;
+        },
+      });
+      window.canvasLifecycle = {
+        render(title, behavior = 'success', layout) {
+          return renderer.render(request(title, behavior, layout));
+        },
+        schedule(title, behavior = 'success', layout) {
+          return renderer.schedule(request(title, behavior, layout));
+        },
+        interaction(state) {
+          renderer.setInteractionState(state);
+        },
+        select(address) {
+          selectedAddress = address;
+        },
+        resize(width, height) {
+          stage.style.width = `${width}px`;
+          stage.style.height = `${height}px`;
+        },
+        advance() {
+          version += 1;
+        },
+        state: renderer.state,
+      };
+      document.documentElement.dataset.lifecycleReady = 'true';
+    </script>
+  </body>
+</html>
+
+<style>
+  #canvas-stage {
+    position: relative;
+    width: 720px;
+    height: 360px;
+  }
+</style>

@@ -1,21 +1,19 @@
 <script lang="ts">
-// The only file importing TipTap; the tier's extensions are what sanitise a paste.
+// Form and the lazy Canvas surface share the tier extensions that sanitize prose input.
 import type { RichtextTier } from '@handover/core';
 import { richtextErrors } from '@handover/core';
-import { Editor } from '@tiptap/core';
-import { Blockquote } from '@tiptap/extension-blockquote';
-import { Bold } from '@tiptap/extension-bold';
-import { Document } from '@tiptap/extension-document';
-import { Heading } from '@tiptap/extension-heading';
-import { Italic } from '@tiptap/extension-italic';
-import { Link } from '@tiptap/extension-link';
-import { BulletList, ListItem, OrderedList } from '@tiptap/extension-list';
-import { Paragraph } from '@tiptap/extension-paragraph';
-import { Text } from '@tiptap/extension-text';
-import { UndoRedo } from '@tiptap/extensions';
-import { Markdown } from '@tiptap/markdown';
-import { onMount } from 'svelte';
+import { Editor, Extension } from '@tiptap/core';
+import type { Selection } from '@tiptap/pm/state';
+import type { EditorView } from '@tiptap/pm/view';
+import { onMount, untrack } from 'svelte';
+import type {
+  EntrySession,
+  FieldCommandResult,
+  FieldHistory,
+  LogicalSelection,
+} from './entry-session.svelte';
 import PagePicker from './PagePicker.svelte';
+import { proseSelection, restoreProseSelection, richTextExtensions } from './rich-text-kit';
 
 let {
   id,
@@ -25,6 +23,8 @@ let {
   locale = '',
   invalid = false,
   describedby,
+  address = '',
+  session,
   onchange,
 }: {
   id: string;
@@ -36,25 +36,80 @@ let {
   /** The schema will not accept what is in here; the message sits under the field. */
   invalid?: boolean;
   describedby?: string;
-  onchange: (markdown: string) => void;
+  /** Stable owner of this prose field; required when the entry session owns history. */
+  address?: string;
+  session?: EntrySession;
+  onchange: (markdown: string, history?: FieldHistory) => FieldCommandResult | undefined;
 } = $props();
+
+const logical = (selection: Selection): LogicalSelection | undefined =>
+  session && address
+    ? {
+        document: session.documentIdentity(),
+        locale,
+        address,
+        ...proseSelection(selection),
+      }
+    : undefined;
+
+const matches = (selection: LogicalSelection | undefined) =>
+  selection !== undefined &&
+  selection.document === session?.documentIdentity() &&
+  selection.locale === locale &&
+  selection.address === address;
+
+function logicalFromDom(view: EditorView): LogicalSelection | undefined {
+  const selection = view.dom.ownerDocument.getSelection();
+  const anchorNode = selection?.anchorNode;
+  const focusNode = selection?.focusNode;
+  if (
+    !session ||
+    !address ||
+    !selection ||
+    !anchorNode ||
+    !focusNode ||
+    !view.dom.contains(anchorNode) ||
+    !view.dom.contains(focusNode)
+  )
+    return undefined;
+  try {
+    return {
+      document: session.documentIdentity(),
+      locale,
+      address,
+      kind: 'text',
+      anchor: view.posAtDOM(anchorNode, selection.anchorOffset),
+      head: view.posAtDOM(focusNode, selection.focusOffset),
+    };
+  } catch {
+    return undefined;
+  }
+}
 
 // svelte-ignore state_referenced_locally -- initialized once to avoid dropping content
 const foreign = richtextErrors('default', value, tier).length > 0;
 
 const BASIC = [
-  { label: 'Bold', mark: 'bold', run: (e: Editor) => e.chain().focus().toggleBold().run() },
-  { label: 'Italic', mark: 'italic', run: (e: Editor) => e.chain().focus().toggleItalic().run() },
+  {
+    label: 'Bold',
+    mark: 'bold',
+    run: (e: Editor) => formatted(() => e.chain().focus().toggleBold().run()),
+  },
+  {
+    label: 'Italic',
+    mark: 'italic',
+    run: (e: Editor) => formatted(() => e.chain().focus().toggleItalic().run()),
+  },
   { label: 'Link', mark: 'link', run: (e: Editor) => toggleLink(e) },
   {
     label: 'Bullet list',
     mark: 'bulletList',
-    run: (e: Editor) => e.chain().focus().toggleBulletList().run(),
+    run: (e: Editor) => formatted(() => e.chain().focus().toggleBulletList().run()),
   },
   {
     label: 'Numbered list',
     mark: 'orderedList',
-    run: (e: Editor) => e.chain().focus().toggleOrderedList().run(),
+    run: (e: Editor) => formatted(() => e.chain().focus().toggleOrderedList().run()),
   },
 ];
 const FULL = [
@@ -62,18 +117,18 @@ const FULL = [
     label: 'Heading 2',
     mark: 'heading',
     attrs: { level: 2 },
-    run: (e: Editor) => e.chain().focus().toggleHeading({ level: 2 }).run(),
+    run: (e: Editor) => formatted(() => e.chain().focus().toggleHeading({ level: 2 }).run()),
   },
   {
     label: 'Heading 3',
     mark: 'heading',
     attrs: { level: 3 },
-    run: (e: Editor) => e.chain().focus().toggleHeading({ level: 3 }).run(),
+    run: (e: Editor) => formatted(() => e.chain().focus().toggleHeading({ level: 3 }).run()),
   },
   {
     label: 'Quote',
     mark: 'blockquote',
-    run: (e: Editor) => e.chain().focus().toggleBlockquote().run(),
+    run: (e: Editor) => formatted(() => e.chain().focus().toggleBlockquote().run()),
   },
 ];
 // svelte-ignore state_referenced_locally -- the tier is fixed per field
@@ -81,8 +136,27 @@ const buttons = tier === 'full' ? [...BASIC, ...FULL] : BASIC;
 
 // A target the site would refuse is refused while typed, not on the way to the repository.
 let linking = $state(false);
+let nextIntent: FieldHistory['kind'];
+let composition = '';
+let compositionNumber = 0;
+let reconciling = false;
+let pendingBefore: LogicalSelection | undefined;
+let previousSelection: LogicalSelection | undefined;
+let reconcileTick = $state(0);
+
+function formatted(run: () => boolean) {
+  session?.historyBoundary();
+  nextIntent = 'format';
+  try {
+    return run();
+  } finally {
+    nextIntent = undefined;
+  }
+}
+
 function toggleLink(e: Editor) {
-  if (e.isActive('link')) return e.chain().focus().unsetLink().run();
+  if (e.isActive('link')) return formatted(() => e.chain().focus().unsetLink().run());
+  session?.historyBoundary();
   linking = true;
   return true;
 }
@@ -91,16 +165,62 @@ function linkTo(href: string, text = href) {
   linking = false;
   if (!editor) return;
   if (editor.state.selection.empty)
-    editor
-      .chain()
-      .focus()
-      .insertContent({ type: 'text', text, marks: [{ type: 'link', attrs: { href } }] })
-      .run();
-  else editor.chain().focus().setLink({ href }).run();
+    formatted(
+      () =>
+        editor
+          ?.chain()
+          .focus()
+          .insertContent({ type: 'text', text, marks: [{ type: 'link', attrs: { href } }] })
+          .run() ?? false,
+    );
+  else formatted(() => editor?.chain().focus().setLink({ href }).run() ?? false);
 }
 
 let element = $state<HTMLDivElement>();
 let editor = $state<Editor>();
+
+function replay(direction: 'redo' | 'undo') {
+  if (!session) return false;
+  if (direction === 'undo') session.undo();
+  else session.redo();
+  // The session owns history even when the stack is empty or frozen. Never let the browser
+  // mutate the contenteditable DOM through a second, private undo path.
+  return true;
+}
+
+const SessionHistory = Extension.create({
+  name: 'handoverSessionHistory',
+  priority: 1000,
+  addKeyboardShortcuts() {
+    return {
+      'Mod-z': () => replay('undo'),
+      'Mod-Shift-z': () => replay('redo'),
+      'Mod-y': () => replay('redo'),
+    };
+  },
+});
+
+function reconcile(e: Editor, next: string, wanted: LogicalSelection | undefined) {
+  if (composition || reconciling) return;
+  const current = logical(e.state.selection);
+  const restore = matches(wanted) ? wanted : current;
+  reconciling = true;
+  try {
+    if (e.getMarkdown() !== next)
+      e.commands.setContent(next, { contentType: 'markdown', emitUpdate: false });
+    if (restore) {
+      const selection = restoreProseSelection(e.state.doc, {
+        kind: restore.kind ?? 'text',
+        anchor: restore.anchor ?? 0,
+        head: restore.head ?? restore.anchor ?? 0,
+      });
+      if (selection && !selection.eq(e.state.selection))
+        e.view.dispatch(e.state.tr.setSelection(selection));
+    }
+  } finally {
+    reconciling = false;
+  }
+}
 
 // TipTap fixes the editable node's attributes on build, so the changing two are written directly.
 $effect(() => {
@@ -118,25 +238,20 @@ $effect(() => {
 // Bumped on every transaction so `isActive` re-runs; the Editor itself is not reactive.
 let tick = $state(0);
 
+$effect(() => {
+  reconcileTick;
+  tick;
+  const e = editor;
+  const next = value;
+  const selection = session?.historySelection();
+  if (e) untrack(() => reconcile(e, next, selection));
+});
+
 onMount(() => {
   if (foreign || !element) return;
-  const extensions = [
-    Document,
-    Paragraph,
-    Text,
-    Bold,
-    Italic,
-    Link.configure({ openOnClick: false }),
-    BulletList,
-    OrderedList,
-    ListItem,
-    UndoRedo,
-    Markdown,
-    ...(tier === 'full' ? [Heading.configure({ levels: [2, 3] }), Blockquote] : []),
-  ];
   const e = new Editor({
     element,
-    extensions,
+    extensions: richTextExtensions(tier, [SessionHistory]),
     content: value,
     contentType: 'markdown',
     editorProps: {
@@ -146,12 +261,76 @@ onMount(() => {
         'aria-multiline': 'true',
         class: 'input rte-body',
       },
+      handleDOMEvents: {
+        beforeinput: (view, event) => {
+          const intent = event as InputEvent;
+          const direction =
+            intent.inputType === 'historyUndo'
+              ? 'undo'
+              : intent.inputType === 'historyRedo'
+                ? 'redo'
+                : undefined;
+          if (!direction) {
+            pendingBefore = logicalFromDom(view) ?? logical(view.state.selection);
+            return false;
+          }
+          if (!session) return false;
+          event.preventDefault();
+          replay(direction);
+          return true;
+        },
+        compositionstart: (view) => {
+          session?.historyBoundary();
+          pendingBefore = logicalFromDom(view) ?? logical(view.state.selection);
+          composition = `${id}:${++compositionNumber}`;
+          return false;
+        },
+        compositionend: () => {
+          const ended = composition;
+          queueMicrotask(() => {
+            if (composition !== ended) return;
+            composition = '';
+            session?.historyBoundary();
+            reconcileTick += 1;
+          });
+          return false;
+        },
+      },
     },
-    onTransaction: () => {
+    onTransaction: ({ editor, transaction }) => {
       tick += 1;
+      if (transaction.docChanged && !reconciling && !pendingBefore)
+        pendingBefore = previousSelection;
+      previousSelection = logical(editor.state.selection);
     },
-    onUpdate: ({ editor }) => onchange(editor.getMarkdown()),
+    onSelectionUpdate: ({ editor, transaction }) => {
+      if (!reconciling && !transaction.docChanged)
+        session?.setHistorySelection(logical(editor.state.selection));
+    },
+    onPaste: () => {
+      session?.historyBoundary();
+      if (editor) pendingBefore = logicalFromDom(editor.view) ?? logical(editor.state.selection);
+      nextIntent = 'paste';
+      queueMicrotask(() => {
+        if (nextIntent === 'paste') nextIntent = undefined;
+      });
+    },
+    onBlur: () => session?.historyBoundary(),
+    onUpdate: ({ editor }) => {
+      if (reconciling) return;
+      const after = logical(editor.state.selection);
+      const kind = composition ? 'composition' : (nextIntent ?? 'typing');
+      onchange(editor.getMarkdown(), {
+        kind,
+        ...(composition ? { group: composition } : {}),
+        before: pendingBefore,
+        after,
+      });
+      pendingBefore = undefined;
+      nextIntent = undefined;
+    },
   });
+  previousSelection = logical(e.state.selection);
   editor = e;
   return () => e.destroy();
 });

@@ -1,6 +1,7 @@
 import {
   applyDrift,
   createGitClient,
+  DraftRevisionError,
   type EmailSender,
   formOf,
   loadDraft,
@@ -2720,6 +2721,14 @@ const home = {
   ].join('\n'),
 };
 
+const alignedHome = () => {
+  locales = ['en', 'de'];
+  files['src/content/pages/en/home.yaml'] = home.en;
+  files['src/content/pages/de/home.yaml'] = home.de
+    .replace('  - _type: "quote"\n    _id: "z9y8x7w6"\n    body: "Ein seltener Fund."\n', '')
+    .replace('title: "Startseite"', 'title: "Home"');
+};
+
 // The German file as a publish of a translation leaves it.
 const translated = [
   '_version: 1',
@@ -2911,6 +2920,254 @@ test('a save of a translation goes to that language and takes only the words it 
     undefined,
     'opened',
   );
+});
+
+test('a structural source save passes scoped locale restoration beside filtered entry data', async () => {
+  alignedHome();
+  saveDraft.mockClear();
+  saveDraft.mockImplementationOnce(async () => ({
+    updated_at: 1755864000000,
+    pending: true,
+    revision: 'next-en',
+    revisions: { en: 'next-en', de: 'next-de' },
+  }));
+  const data = {
+    title: 'Home',
+    _machine: ['blocks[_id=z9y8x7w6].body'],
+    blocks: [
+      { _type: 'hero', _id: 'k3nf9a2p', heading: 'Move to the coast' },
+      { _type: 'quote', _id: 'z9y8x7w6', body: 'A rare find.' },
+    ],
+  };
+  const seed = {
+    address: 'blocks[_id=z9y8x7w6]',
+    value: {
+      _type: 'quote',
+      _id: 'z9y8x7w6',
+      body: 'Ein seltener Fund.',
+      legacyTheme: 'paper',
+    },
+    machine: ['blocks[_id=z9y8x7w6].body'],
+  };
+
+  const res = await PUT(
+    put(
+      'drafts/pages/home',
+      JSON.stringify({
+        data,
+        structure: {
+          containers: ['blocks'],
+          revisions: { en: 'opened', de: 'legacy' },
+          seeds: { de: [seed] },
+        },
+      }),
+    ),
+  );
+
+  expect(res.status).toBe(200);
+  expect(saveDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/pages/en/home.yaml',
+    { title: 'Home', blocks: data.blocks },
+    {
+      form: expect.anything(),
+      locale: 'en',
+      siblings: { de: 'src/content/pages/de/home.yaml' },
+      translation: false,
+      restoration: {
+        revisions: { en: 'opened', de: 'legacy' },
+        seeds: { de: [seed] },
+      },
+    },
+    undefined,
+    'opened',
+  );
+  expect(await res.json()).toEqual({
+    updated_at: 1755864000000,
+    pending: true,
+    revision: 'next-en',
+    revisions: { en: 'next-en', de: 'next-de' },
+    problems: [],
+  });
+});
+
+test('a restoration seed outside the affected container is refused', async () => {
+  alignedHome();
+  saveDraft.mockClear();
+  const data = {
+    title: 'Home',
+    blocks: [
+      { _type: 'hero', _id: 'k3nf9a2p', heading: 'Move to the coast' },
+      { _type: 'quote', _id: 'z9y8x7w6', body: 'A rare find.' },
+    ],
+  };
+
+  const res = await PUT(
+    put(
+      'drafts/pages/home',
+      JSON.stringify({
+        data,
+        structure: {
+          containers: ['blocks'],
+          revisions: { en: 'opened', de: 'legacy' },
+          seeds: {
+            de: [
+              {
+                address: 'blocks[_id=z9y8x7w6]',
+                value: { _type: 'quote', _id: 'z9y8x7w6', body: 'Ein seltener Fund.' },
+                machine: ['blocks[_id=k3nf9a2p].heading'],
+              },
+            ],
+          },
+        },
+      }),
+    ),
+  );
+
+  expect(res.status).toBe(400);
+  expect(saveDraft).not.toHaveBeenCalled();
+});
+
+test('entry metadata cannot be smuggled through a structural restoration seed', async () => {
+  alignedHome();
+  saveDraft.mockClear();
+  const data = {
+    title: 'Home',
+    blocks: [
+      { _type: 'hero', _id: 'k3nf9a2p', heading: 'Move to the coast' },
+      { _type: 'quote', _id: 'z9y8x7w6', body: 'A rare find.' },
+    ],
+  };
+
+  const res = await PUT(
+    put(
+      'drafts/pages/home',
+      JSON.stringify({
+        data,
+        structure: {
+          containers: ['blocks'],
+          revisions: { en: 'opened', de: 'legacy' },
+          seeds: {
+            de: [
+              {
+                address: 'blocks[_id=z9y8x7w6]',
+                value: {
+                  _type: 'quote',
+                  _id: 'z9y8x7w6',
+                  _machine: ['blocks[_id=z9y8x7w6].body'],
+                  body: 'Ein seltener Fund.',
+                },
+              },
+            ],
+          },
+        },
+      }),
+    ),
+  );
+
+  expect(res.status).toBe(400);
+  expect(saveDraft).not.toHaveBeenCalled();
+});
+
+test('a structural save keeps the draft revision refusal contract', async () => {
+  alignedHome();
+  saveDraft.mockClear();
+  saveDraft.mockImplementationOnce(async () => {
+    throw new DraftRevisionError();
+  });
+  const res = await PUT(
+    put(
+      'drafts/pages/home',
+      JSON.stringify({
+        data: { title: 'Home', blocks: [] },
+        structure: {
+          containers: ['blocks'],
+          revisions: { en: 'opened', de: 'stale' },
+          seeds: {},
+        },
+      }),
+    ),
+  );
+
+  expect(res.status).toBe(409);
+  expect(await res.json()).toEqual({
+    error: new DraftRevisionError().message,
+    reason: 'revision',
+  });
+});
+
+test('a structural save is refused by the existing drift gate', async () => {
+  drifted();
+  saveDraft.mockClear();
+
+  const res = await PUT(
+    put(
+      'drafts/pages/home',
+      JSON.stringify({
+        data: { title: 'Home', blocks: [] },
+        structure: {
+          containers: ['blocks'],
+          revisions: { en: 'opened', de: 'legacy' },
+          seeds: {},
+        },
+      }),
+    ),
+  );
+
+  expect(res.status).toBe(409);
+  expect(await res.json()).toEqual({
+    error:
+      "This entry's languages disagree about which blocks it has. Reconcile them before editing.",
+    reason: 'drift',
+  });
+  expect(saveDraft).not.toHaveBeenCalled();
+});
+
+test('a source save rechecks drift and refuses to persist over an unresolved structure', async () => {
+  drifted();
+  saveDraft.mockClear();
+
+  const res = await PUT(
+    put('drafts/pages/home', JSON.stringify({ data: { title: 'Home changed' } })),
+  );
+
+  expect(res.status).toBe(409);
+  expect(await res.json()).toEqual({
+    error:
+      "This entry's languages disagree about which blocks it has. Reconcile them before editing.",
+    reason: 'drift',
+  });
+  expect(saveDraft).not.toHaveBeenCalled();
+});
+
+test('an intentional locale-only row does not block a source save', async () => {
+  drifted();
+  files['src/content/pages/de/home.yaml'] = home.de.replace(
+    '    body: "Ein seltener Fund."',
+    '    _locales:\n      - "de"\n    body: "Ein seltener Fund."',
+  );
+  saveDraft.mockClear();
+
+  const res = await PUT(
+    put('drafts/pages/home', JSON.stringify({ data: { title: 'Home changed' } })),
+  );
+
+  expect(res.status).toBe(200);
+  expect(saveDraft).toHaveBeenCalledOnce();
+});
+
+test('a single-file entry has no drift gate to block its source save', async () => {
+  untranslated();
+  saveDraft.mockClear();
+
+  const res = await PUT(
+    put('drafts/pages/home', JSON.stringify({ data: { title: 'Home changed' } })),
+  );
+
+  expect(res.status).toBe(200);
+  expect(saveDraft).toHaveBeenCalledOnce();
 });
 
 test('a save to a language the site does not declare is refused', async () => {

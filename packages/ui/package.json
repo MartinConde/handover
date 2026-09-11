@@ -24,7 +24,6 @@
     "@tiptap/extension-list": "^3.30.2",
     "@tiptap/extension-paragraph": "^3.30.2",
     "@tiptap/extension-text": "^3.30.2",
-    "@tiptap/extensions": "^3.30.2",
     "@tiptap/markdown": "^3.30.2",
     "@tiptap/pm": "^3.30.2",
     "jsdom": "^30.0.1",

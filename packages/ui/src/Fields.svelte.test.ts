@@ -4,6 +4,7 @@ import type { Field, ResolvedSeo, WordPart } from '@handover/core';
 import { parseEntry, stringifyEntry } from '@handover/core';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { createEntrySession } from './entry-session.svelte';
 import Fields from './Fields.svelte';
 
 // Testing: widget value shapes via the goldens, moves, labels and problems; not Editor wiring.
@@ -14,6 +15,7 @@ Range.prototype.getBoundingClientRect = () => new DOMRect();
 
 let app: ReturnType<typeof mount>;
 let root: Record<string, unknown> = $state({});
+let activeSession: ReturnType<typeof createEntrySession>;
 const show = (
   fields: Field[],
   data: Record<string, unknown>,
@@ -22,7 +24,16 @@ const show = (
   inheritedSeo?: ResolvedSeo,
   over: Record<string, unknown> = {},
 ) => {
-  root = data;
+  const translating = over.translating === true;
+  const locale = typeof over.locale === 'string' ? over.locale : translating ? 'de' : 'en';
+  const session = createEntrySession({
+    sourceLocale: translating ? 'en' : locale,
+    data: translating ? {} : data,
+    translations: translating ? { [locale]: data } : {},
+    form: { fields, blocks },
+  });
+  activeSession = session;
+  root = session.snapshot(locale);
   app = mount(Fields, {
     target: document.body,
     props: {
@@ -30,9 +41,10 @@ const show = (
       blocks,
       problems,
       inheritedSeo,
-      ...over,
+      session,
       // The form is showing English: what a link typed into rich text has to point at.
-      locale: 'en',
+      locale,
+      ...over,
       get root() {
         return root;
       },
@@ -133,6 +145,23 @@ test('text: a typed value round-trips through the text golden', () => {
   type('input#f-title', 'Seaview Cottage');
   expect(root).toEqual({ _version: 1, title: 'Seaview Cottage' });
   expect(roundTrip()).toEqual(root);
+});
+
+test('a field widget keeps its value when the session mutation gate refuses its command', () => {
+  const results: unknown[] = [];
+  show(
+    [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+    { title: 'Current title' },
+    {},
+    {},
+    undefined,
+    { oncommand: (result: unknown) => results.push(result) },
+  );
+  activeSession.closeSaveGate();
+  type('input#f-title', 'Refused title');
+
+  expect(root.title).toBe('Current title');
+  expect(results).toEqual([{ ok: false, reason: 'closed' }]);
 });
 
 test('text: a value with line breaks is a textarea and survives the round trip', () => {
@@ -387,6 +416,145 @@ test('richtext: a toolbar command writes Markdown back and the button reads as p
   flushSync();
   expect(q('[aria-label="Bullet list"]').getAttribute('aria-pressed')).toBe('true');
   expect(roundTrip()).toEqual({ _version: 1, summary: '- Two bedrooms.' });
+});
+
+const richtextField = () =>
+  [
+    { path: ['summary'], label: 'Summary', type: 'richtext', required: false, tier: 'basic' },
+  ] satisfies Field[];
+
+const historyKey = (key: string, shiftKey = false) => {
+  const event = new KeyboardEvent('keydown', {
+    key,
+    code: `Key${key.toUpperCase()}`,
+    keyCode: key.toLowerCase() === 'z' ? 90 : 89,
+    ctrlKey: true,
+    shiftKey,
+    bubbles: true,
+    cancelable: true,
+  });
+  q<HTMLElement>('#f-summary').dispatchEvent(event);
+  flushSync();
+  return event;
+};
+
+test('richtext: session undo and redo reconcile Markdown, formatting, and selection', async () => {
+  show(richtextField(), { summary: 'Two bedrooms.' });
+  selectAll('#f-summary');
+  const selected = activeSession.historySelection();
+  q<HTMLButtonElement>('[aria-label="Bold"]').click();
+  flushSync();
+  expect(root.summary).toBe('**Two bedrooms.**');
+  expect(q('#f-summary strong').textContent).toBe('Two bedrooms.');
+
+  expect(historyKey('z').defaultPrevented).toBe(true);
+  await tick();
+  flushSync();
+  expect(root.summary).toBe('Two bedrooms.');
+  expect(document.querySelector('#f-summary strong')).toBeNull();
+  expect(activeSession.historySelection()).toEqual(selected);
+  expect(window.getSelection()?.toString()).toBe('Two bedrooms.');
+
+  expect(historyKey('z', true).defaultPrevented).toBe(true);
+  await tick();
+  flushSync();
+  expect(root.summary).toBe('**Two bedrooms.**');
+  expect(q('#f-summary strong').textContent).toBe('Two bedrooms.');
+  expect(window.getSelection()?.toString()).toBe('Two bedrooms.');
+});
+
+test('richtext: a native beforeinput undo intent uses session history', async () => {
+  show(richtextField(), { summary: 'Two bedrooms.' });
+  q<HTMLButtonElement>('[aria-label="Bullet list"]').click();
+  flushSync();
+  expect(root.summary).toBe('- Two bedrooms.');
+
+  const event = new InputEvent('beforeinput', {
+    inputType: 'historyUndo',
+    bubbles: true,
+    cancelable: true,
+  });
+  q<HTMLElement>('#f-summary').dispatchEvent(event);
+  flushSync();
+  await tick();
+  expect(event.defaultPrevented).toBe(true);
+  expect(root.summary).toBe('Two bedrooms.');
+  expect(document.querySelector('#f-summary ul')).toBeNull();
+});
+
+test('richtext: paste is a separate session transaction and stays plain within the tier', async () => {
+  show(richtextField(), { summary: '' });
+  q<HTMLElement>('#f-summary').focus();
+  const event = new Event('paste', { bubbles: true, cancelable: true });
+  Object.defineProperty(event, 'clipboardData', {
+    value: {
+      files: [],
+      getData: (type: string) => (type === 'text/plain' ? 'Pasted words' : ''),
+      items: [],
+      types: ['text/plain'],
+    },
+  });
+  q<HTMLElement>('#f-summary').dispatchEvent(event);
+  await tick();
+  flushSync();
+  expect(root.summary).toBe('Pasted words');
+
+  expect(activeSession.undo()).toMatchObject({ ok: true });
+  await tick();
+  flushSync();
+  expect(root.summary).toBe('');
+  expect(q('#f-summary').textContent).toBe('');
+});
+
+test('richtext: composition updates are one session transaction', async () => {
+  show(richtextField(), { summary: '' });
+  const editor = q<HTMLElement>('#f-summary');
+  editor.focus();
+  editor.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true, data: '' }));
+
+  const compose = async (value: string) => {
+    q('#f-summary p').textContent = value;
+    editor.dispatchEvent(
+      new InputEvent('input', {
+        bubbles: true,
+        data: value,
+        inputType: 'insertCompositionText',
+        isComposing: true,
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve));
+    flushSync();
+  };
+  await compose('に');
+  await compose('日本');
+  editor.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '日本' }));
+  await tick();
+  flushSync();
+  expect(root.summary).toBe('日本');
+
+  expect(activeSession.undo()).toMatchObject({ ok: true });
+  await tick();
+  flushSync();
+  expect(root.summary).toBe('');
+  expect(editor.textContent).toBe('');
+  expect(activeSession.canUndo()).toBe(false);
+});
+
+test('richtext: a refused editor transaction reconciles to the controlled session value', async () => {
+  const results: unknown[] = [];
+  show(richtextField(), { summary: 'Two bedrooms.' }, {}, {}, undefined, {
+    oncommand: (result: unknown) => results.push(result),
+  });
+  activeSession.closeSaveGate();
+  q<HTMLButtonElement>('[aria-label="Bullet list"]').click();
+  flushSync();
+  await tick();
+  flushSync();
+
+  expect(results).toEqual([{ ok: false, reason: 'closed' }]);
+  expect(root.summary).toBe('Two bedrooms.');
+  expect(document.querySelector('#f-summary ul')).toBeNull();
+  expect(q('#f-summary').textContent).toBe('Two bedrooms.');
 });
 
 test('richtext: a body outside the tier is shown read-only and left untouched', () => {
@@ -657,15 +825,21 @@ test('array: reordering by mouse emits the same YAML as the keyboard', async () 
   expect(stringifyEntry('default', snap())).toBe(golden('array'));
 });
 
-test('array: the rows make room while the card is still in the air', async () => {
+test('array: drag projection moves the cards without changing or saving the entry', async () => {
   laidOut();
-  show([rooms, tags], arrayData());
+  const commands: unknown[] = [];
+  show([rooms, tags], arrayData(), {}, {}, undefined, {
+    oncommand: (result: unknown) => commands.push(result),
+  });
   await key(q('[aria-label="Reorder Rooms row 1"]'), 'Space');
   await key(document, 'ArrowDown');
-  expect(stringifyEntry('default', snap())).toBe(MOVED);
+  expect(stringifyEntry('default', snap())).toBe(golden('array'));
+  expect(q<HTMLInputElement>('input#f-rooms\\.0\\.name').value).toBe('Master bedroom');
+  expect(commands).toEqual([]);
   expect(document.querySelector('#f-rooms [data-dnd-placeholder]')).not.toBeNull();
   await key(document, 'Space');
   expect(stringifyEntry('default', snap())).toBe(MOVED);
+  expect(commands).toEqual([{ ok: true, contentVersion: 1 }]);
 });
 
 test('array of scalars: a row moves as a card, and its words go with it', async () => {
@@ -678,11 +852,16 @@ test('array of scalars: a row moves as a card, and its words go with it', async 
 
 test('array: Escape puts a picked-up row back where it was', async () => {
   laidOut();
-  show([rooms, tags], arrayData());
+  const commands: unknown[] = [];
+  show([rooms, tags], arrayData(), {}, {}, undefined, {
+    oncommand: (result: unknown) => commands.push(result),
+  });
   await key(q('[aria-label="Reorder Rooms row 1"]'), 'Space');
   await key(document, 'ArrowDown');
   await key(document, 'Escape');
   expect(stringifyEntry('default', snap())).toBe(golden('array'));
+  expect(q<HTMLInputElement>('input#f-rooms\\.0\\.name').value).toBe('Kitchen');
+  expect(commands).toEqual([]);
 });
 
 test('array: an added row gets a fresh _id and its own inputs', () => {
@@ -780,6 +959,29 @@ test('blocks: moving a block keeps every nested _id and moving back restores the
   expect(order.map((b) => `${b._type} ${b._id}`)).toEqual(['columns a1b2c3d4', 'hero k3nf9a2p']);
   await mouseMove('hero', -100);
   expect(stringifyEntry('default', snap())).toBe(golden('blocks'));
+});
+
+test('blocks: duplicate copies only that subtree with fresh descendant ids', () => {
+  show(pageFields, blocksData(), registry);
+  const before = (snap() as unknown as { blocks: { _id: string }[] }).blocks;
+  const original = structuredClone(before[1]);
+  click('[aria-label="Duplicate Two columns"]');
+  const after = (
+    snap() as unknown as {
+      blocks: { _id: string; columns?: { _id: string; blocks: { _id: string }[] }[] }[];
+    }
+  ).blocks;
+  expect(after).toHaveLength(3);
+  expect(after[0]?._id).toBe('k3nf9a2p');
+  expect(after[1]).toEqual(original);
+  expect(after[2]?._id).toMatch(/^[0-9a-z]{8}$/);
+  expect(after[2]?._id).not.toBe(after[1]?._id);
+  expect(after[2]?.columns?.map((column) => column._id)).not.toEqual(
+    after[1]?.columns?.map((column) => column._id),
+  );
+  expect(
+    after[2]?.columns?.flatMap((column) => column.blocks.map((block) => block._id)),
+  ).not.toEqual(after[1]?.columns?.flatMap((column) => column.blocks.map((block) => block._id)));
 });
 
 test('blocks: a collapsed block keeps its header, shows its first words and stays put on a move', async () => {

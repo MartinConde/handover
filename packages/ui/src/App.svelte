@@ -6,7 +6,6 @@ import { when } from './activity-line';
 import BuildPill, { type Build } from './BuildPill.svelte';
 import Dashboard from './Dashboard.svelte';
 import Diagnostics from './Diagnostics.svelte';
-import Editor from './Editor.svelte';
 import EntryList from './EntryList.svelte';
 import Globals from './Globals.svelte';
 import Library from './Library.svelte';
@@ -111,6 +110,7 @@ let menu = $state(false);
 let account = $state(false);
 // Bumped when a screen's data has moved under it — the screen is thrown away and made again.
 let reload = $state(0);
+let editorMode = $state<'form' | 'split' | 'canvas'>('form');
 // The container is always in the DOM, so a new notice is announced rather than missed.
 let notices = $state<{ id: number; text: string }[]>([]);
 let noticeSeq = 0;
@@ -287,7 +287,7 @@ const initial = $derived(
   <Login {methods} {path} {query} onlogin={loadSession} />
 {:else}
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -- nested links handle keyboard input -->
-<div class="shell" onclick={follow}>
+<div class="shell" class:is-canvas={Boolean(editing) && editorMode === 'canvas'} onclick={follow}>
   <a class="skip-link" href="#workspace" onclick={(event) => { event.preventDefault(); document.getElementById('workspace')?.focus(); }}>Skip to content</a>
   <!-- A banner, not a toast, since it outlives a page load; the pill is the live region. -->
   {#if building}
@@ -423,9 +423,9 @@ const initial = $derived(
     <!-- Keyed on the entry rather than on the address, for the reason `editingAt` gives. -->
     {#key `${editingAt || path}#${reload}`}
     {#if editing}
-      {#await openEntry}
+      {#await Promise.all([openEntry, import('./Editor.svelte')])}
         <main class="main"><p class="placeholder">Loading…</p></main>
-      {:then entry}
+      {:then [entry, { default: Editor }]}
         <Editor
           collection={editing.collection}
           slug={editing.slug}
@@ -439,10 +439,17 @@ const initial = $derived(
             await loadPending();
             if (await flushNavigation()) reload += 1;
           }}
+          onreload={async () => {
+            await loadPending();
+            // Restore/reconciliation already closed the old session. A fresh entry read is what
+            // establishes the next save epoch, so it must not ask that closed session to flush.
+            reload += 1;
+          }}
           onpending={loadPending}
           onpublished={(title) => notify(`Published ${title} — building`)}
           onrestored={(date) => (restored = { entry: editingAt, date })}
           restored={restored?.entry === editingAt ? restored.date : undefined}
+          onmode={(mode) => (editorMode = mode)}
         />
       {:catch error}
         <main class="main"><p class="notice notice-danger" role="alert">{error.message}</p></main>

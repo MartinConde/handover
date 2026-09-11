@@ -8,19 +8,20 @@ import {
   LOCK_TTL,
   resolveSeo,
   type SeoDefaultsValue,
-  syncLocale,
 } from '@handover/core';
-import { onMount, tick, untrack } from 'svelte';
+import { onMount, tick } from 'svelte';
 import { when } from './activity-line';
+import CanvasWorkspace from './CanvasWorkspace.svelte';
 import CheckLines, { type CheckItem, merged, plural, verdict } from './CheckLines.svelte';
+import type { CanvasTarget } from './canvas-bridge';
+import type { CanvasRenderRequest } from './canvas-renderer';
 import DriftPanel from './Drift.svelte';
-import { createEntrySession } from './entry-session.svelte';
+import { createEntrySession, type StructuralSaveEnvelope } from './entry-session.svelte';
 import Fields from './Fields.svelte';
 import History from './History.svelte';
-import { guardNavigation, navigate } from './navigate';
+import { guardNavigation, navigate, navigateAfterAuthoritativeChange } from './navigate';
 import OffsiteDialog, { type Target } from './Offsite.svelte';
-import PreviewPane from './Preview.svelte';
-import { request as fetch, sitePath } from './request.js';
+import { request as fetch, previewPath, siteBase, sitePath } from './request.js';
 import { classifyDraftSaveRefusal } from './save';
 import Translation from './Translation.svelte';
 
@@ -35,11 +36,13 @@ let {
   preview = false,
   userId = '',
   onchanged,
+  onreload,
   onpending,
   onpublished,
   onrestored,
   restored,
   site,
+  onmode,
 }: {
   collection: string;
   slug: string;
@@ -108,7 +111,9 @@ let {
   /** The site's origin, for the SEO previews; none, and the panel draws none. */
   site?: string;
   /** A file of this entry was made, removed or settled, so the entry has to be read again. */
-  onchanged: () => void;
+  onchanged: () => void | Promise<void>;
+  /** Re-read the whole entry without flushing the session whose authoritative data changed. */
+  onreload?: () => void | Promise<void>;
   /** Fires only on the save that flips whether this entry has something to publish. */
   onpending?: () => void;
   /** This entry went out from its header, named the way the shell should say it. */
@@ -117,22 +122,27 @@ let {
   onrestored?: (date: string) => void;
   /** The date of the version the unpublished changes were restored from, while they wait. */
   restored?: string;
+  /** Lets the application shell collapse its navigation only for full-width Canvas. */
+  onmode?: (mode: EditorMode) => void;
 } = $props();
 
 // svelte-ignore state_referenced_locally -- the loaded files seed this opened entry's session
 const entryForm = { fields: [...entry.fields], blocks: entry.blocks };
 // svelte-ignore state_referenced_locally -- the loaded files seed this opened entry's session
 const entrySession = createEntrySession({
+  document: `${collection}/${slug}`,
   sourceLocale: entry.sourceLocale,
   data: entry.data,
   translations: entry.translations,
   revisions: entry.revisions,
   form: entryForm,
   problems: { [entry.sourceLocale]: entry.problems },
+  drift: entry.drift,
+  onactivity: renew,
+  onreconciled: () => (onreload ? onreload() : onchanged()),
 });
 const data = $derived(entrySession.snapshot(entry.sourceLocale));
 const saveState = $derived(entrySession.saveState(entry.sourceLocale));
-const saved = $derived(saveState.saved);
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let drafted = $state(entry.pending.includes(entry.sourceLocale));
 const saving = $derived(saveState.phase === 'saving');
@@ -158,12 +168,53 @@ const problems = $derived({ ...checkProblems, ...schemaProblems });
 // svelte-ignore state_referenced_locally -- the language the entry is written in is where it opens
 let locale = $state(entry.sourceLocale);
 let side = $state(false);
-// The pane is one thing at a time: the preview, or the second language.
-let previewing = $state(false);
-let savedAt = $state(0);
 let pane = $state<ReturnType<typeof Translation>>();
+let canvasPane = $state<ReturnType<typeof CanvasWorkspace>>();
 // Lives here rather than in the column, which is thrown away whenever the screen changes.
 let translated = $state(false);
+
+type EditorMode = 'form' | 'split' | 'canvas';
+const MODES: { value: EditorMode; label: string }[] = [
+  { value: 'form', label: 'Form' },
+  { value: 'split', label: 'Split' },
+  { value: 'canvas', label: 'Canvas' },
+];
+// svelte-ignore state_referenced_locally -- one authenticated editor instance owns one preference key
+const modeKey = `handover:canvas-mode:v1:${siteBase() || '/'}:${userId}`;
+const readMode = (): EditorMode => {
+  try {
+    const value = localStorage.getItem(modeKey);
+    return MODES.some((mode) => mode.value === value) ? (value as EditorMode) : 'form';
+  } catch {
+    return 'form';
+  }
+};
+let preferredMode = $state<EditorMode>(readMode());
+const canvasSupported = $derived(preview && Boolean(entry.route));
+const mode = $derived(section === '' && canvasSupported ? preferredMode : ('form' as EditorMode));
+let canvasVisited = $state(false);
+let mobilePane = $state<'form' | 'page'>('form');
+const canvasEpoch = crypto.randomUUID();
+
+function setMode(next: EditorMode) {
+  if (next !== 'form' && !canvasSupported) return;
+  preferredMode = next;
+  if (next !== 'form') {
+    canvasVisited = true;
+    mobilePane = next === 'canvas' ? 'page' : mobilePane;
+  }
+  try {
+    localStorage.setItem(modeKey, next);
+  } catch {
+    // A blocked browser preference must never block editing.
+  }
+  if (section !== '') navigate(`/admin/c/${collection}/${slug}`);
+}
+
+$effect(() => {
+  if (mode !== 'form') canvasVisited = true;
+  onmode?.(mode);
+});
 
 // A site with one language draws none of the language controls.
 const many = $derived(entry.locales.length > 1);
@@ -178,6 +229,7 @@ const untranslated = (of: string) => of !== entry.sourceLocale && !entrySession.
 // Turned off for this entry: no file is written for it and the site does not offer it.
 const off = (of: string) => !entry.offered.includes(of);
 let busy = $state(false);
+const actionBusy = $derived(busy || entrySession.persistedActionPending());
 
 // Both change which files the entry has, so the screen is read again rather than patched.
 async function ask(url: string, init: RequestInit = {}) {
@@ -263,7 +315,7 @@ async function offer(of: string, on: boolean, redirect?: Target) {
   return res !== undefined;
 }
 
-const json = $derived(JSON.stringify(data));
+const sourceUnsaved = $derived(entrySession.unsaved(entry.sourceLocale));
 const missing = $derived(Object.keys(problems));
 const named = $derived(data[entry.titleField ?? 'title']);
 const title = $derived(entry.label ?? (typeof named === 'string' && named ? named : slug));
@@ -397,35 +449,17 @@ async function beat(claim: boolean) {
   }
 }
 
-entrySession.configureAutosave((of, snapshot, revision, contentVersion) =>
+entrySession.configureAutosave((of, snapshot, revision, contentVersion, structure) =>
   of === entry.sourceLocale
-    ? writeSourceSave(snapshot, revision, contentVersion)
+    ? writeSourceSave(snapshot, revision, contentVersion, structure)
     : writeTranslationSave(of, snapshot, revision, contentVersion),
 );
-
-// The same skeleton sync the server runs for stored siblings, applied to the column on screen.
-$effect(() => {
-  const column = pane;
-  const of = shown;
-  if (!column || of === undefined || untranslated(of)) return;
-  const after = JSON.parse(json) as Data;
-  const form = { fields: [...entry.fields], blocks: entry.blocks };
-  column.sync((target) => syncLocale('default', form, of, { before: entry.data, after }, target));
-});
-
-// Subscribe only to snapshots; failure-state updates must not schedule another retry.
-$effect(() => {
-  const dirty = json !== saved;
-  untrack(() => {
-    if (dirty) renew();
-    entrySession.change(entry.sourceLocale);
-  });
-});
 
 async function writeSourceSave(
   sent: string,
   revision: string | undefined,
   contentVersion: number,
+  structure?: StructuralSaveEnvelope,
 ): Promise<boolean> {
   saveError = '';
   try {
@@ -436,15 +470,18 @@ async function writeSourceSave(
         data: JSON.parse(sent),
         tab,
         revision,
+        ...(structure ? { structure } : {}),
       }),
     });
     if (!res.ok) {
       saveError = 'Your changes are still here. Try saving again before leaving.';
       const refusal = await classifyDraftSaveRefusal(res);
       if (refusal.kind === 'lock') loseLock(refusal.lock);
-      else if (refusal.kind === 'revision')
+      else if (refusal.kind === 'revision') {
+        entrySession.freezeHistory();
         saveError =
           refusal.error ?? 'This entry changed elsewhere. Copy your unsaved text before reloading.';
+      }
       return false;
     }
     const body = (await res.json()) as {
@@ -453,7 +490,6 @@ async function writeSourceSave(
       revisions?: Record<string, string>;
     };
     entrySession.mergeRevisions(body.revisions);
-    savedAt = Date.now();
     renew();
     if (body.pending !== drafted) onpending?.();
     drafted = body.pending;
@@ -483,6 +519,7 @@ async function writeTranslationSave(
     if (!res.ok) {
       const refusal = await classifyDraftSaveRefusal(res);
       if (refusal.kind === 'lock') loseLock(refusal.lock);
+      else if (refusal.kind === 'revision') entrySession.freezeHistory();
       return false;
     }
     const body = (await res.json()) as {
@@ -495,7 +532,6 @@ async function writeTranslationSave(
     renew();
     if (body.pending !== translated) onpending?.();
     translated = body.pending;
-    savedAt = Date.now();
     return true;
   } catch {
     return false;
@@ -676,14 +712,34 @@ function goTo(path: string | undefined) {
   }
   land(field);
 }
-const goToFirst = () => goTo(missing[0]);
+const goToFirst = () => {
+  if (mode === 'canvas') {
+    setMode('form');
+    locale = entry.sourceLocale;
+    void tick().then(() => goTo(missing[0]));
+  } else goTo(missing[0]);
+};
+
+function reviewCanvasProblems() {
+  const of = locale;
+  const path = Object.keys(
+    of === entry.sourceLocale ? problems : entrySession.positionalProblems(of),
+  )[0];
+  setMode('form');
+  if (of !== entry.sourceLocale) side = true;
+  void tick().then(() => {
+    if (of === entry.sourceLocale) goTo(path);
+    else land(drawn('t', path));
+  });
+}
 
 // The drawer's `?field=…&locale=…`: open the column first, then look for the control once drawn.
 function fromAddress() {
   const query = new URLSearchParams(location.search);
   const field = query.get('field');
-  if (!field) return;
-  const of = query.get('locale') || entry.sourceLocale;
+  const requestedLocale = query.get('locale');
+  if (!field && !requestedLocale) return;
+  const of = requestedLocale || entry.sourceLocale;
   const inColumn = of !== entry.sourceLocale && entry.locales.includes(of) && !untranslated(of);
   if (inColumn && shown !== of) {
     leaving(() => {
@@ -695,6 +751,7 @@ function fromAddress() {
       locale = entry.sourceLocale;
     });
   }
+  if (!field) return;
   const at = fieldPosition('default', field, inColumn ? entrySession.snapshot(of) : data);
   if (!at) return;
   void tick().then(() => land(drawn(inColumn ? 't' : 'f', at.join('.'))));
@@ -718,6 +775,7 @@ const warnings = $derived(lines.filter((c) => c.severity === 'warn'));
 // Detection only; resolving it is the drawer's job.
 let conflicted = $state(false);
 let publishButton = $state<HTMLButtonElement>();
+let canvasPublishButton = $state<HTMLButtonElement>();
 let publishPanel = $state<HTMLElement>();
 $effect(() => {
   if (confirming) publishPanel?.focus();
@@ -758,10 +816,11 @@ async function lint() {
 
 function closePublish() {
   confirming = false;
-  publishButton?.focus();
+  (mode === 'canvas' ? canvasPublishButton : publishButton)?.focus();
 }
 
 async function publishEntry() {
+  if (entrySession.persistedActionPending()) return;
   sending = true;
   publishFailed = '';
   // Again on the press: the dialog may have been open a while.
@@ -849,22 +908,59 @@ const localeUrl = (of: string) =>
   entryUrl('default', routing, entry.route, entry.addresses?.[of] || slug, of) ?? undefined;
 const localeIndex = (of: string) => entryUrl('default', routing, entry.index, '', of) ?? undefined;
 
-// A collection with no route renders nowhere, so Preview is absent rather than refusing.
-const previewable = $derived(Boolean(entry.route));
-// A language with no file is an offer to create one, not a page.
-const previewLocales = $derived(
-  entry.locales
-    .filter((of) => of === entry.sourceLocale || !untranslated(of))
-    .map((of) => ({ locale: of, label: language(of), url: localeUrl(of) ?? '' })),
-);
-// Nested paths answer under the top field, which is where the form scrolls to anyway.
-const labelOf = (path: string) => {
-  const head = path.split('.')[0] ?? path;
-  return entry.fields.find((f) => f.path.join('.') === head)?.label ?? head;
-};
-const previewProblems = $derived(
-  missing.map((path) => ({ path, label: labelOf(path), message: problems[path] ?? '' })),
-);
+const canvasRequest = (): CanvasRenderRequest => ({
+  url: previewPath(localeUrl(locale) ?? '/'),
+  snapshot: {
+    mode: 'canvas',
+    protocol: 1,
+    epoch: canvasEpoch,
+    entry: { collection, id: slug },
+    locale,
+    contentVersion: entrySession.contentVersion(locale),
+    snapshots: entrySession.renderSnapshots(),
+  },
+});
+
+function canvasCompleted() {
+  if (mode !== 'split') return;
+  void tick().then(() => canvasPane?.schedule());
+}
+
+function openCanvasTarget(target: CanvasTarget) {
+  if (target.document.collection !== collection || target.document.id !== slug) return;
+  const of = target.locale;
+  const inColumn = of !== entry.sourceLocale && entry.locales.includes(of) && !untranslated(of);
+  setMode('form');
+  locale = inColumn ? of : entry.sourceLocale;
+  if (inColumn) side = true;
+  const at = fieldPosition(
+    'default',
+    target.address,
+    entrySession.snapshot(inColumn ? of : entry.sourceLocale),
+  );
+  if (!at) return;
+  void tick().then(() => land(drawn(inColumn ? 't' : 'f', at.join('.'))));
+}
+
+function navigateCanvasEntry(target: {
+  collection: string;
+  id: string;
+  locale: string;
+  href: string;
+}) {
+  if (target.collection !== collection || target.id !== slug) {
+    const query = new URLSearchParams({ locale: target.locale });
+    navigateAfterAuthoritativeChange(
+      `/admin/c/${target.collection}/${target.id}?${query.toString()}`,
+    );
+    return;
+  }
+  if (!entry.locales.includes(target.locale) || untranslated(target.locale)) return;
+  locale = target.locale;
+  side = target.locale !== entry.sourceLocale;
+  if (mode === 'split') mobilePane = 'page';
+  void tick().then(() => canvasPane?.schedule());
+}
 
 function editAddress() {
   typed = address;
@@ -907,7 +1003,26 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 />
 <svelte:document onvisibilitychange={recheck} />
 
-<main class="main main-editor">
+{#snippet canvasEntryActions()}
+  <select class="canvas-locale" aria-label="Language" value={locale}
+    onchange={(event) => { const nextLocale = event.currentTarget.value; void leaving(() => (locale = nextLocale)); }}>
+    {#each entry.locales as of (of)}
+      <option value={of}>{of.toUpperCase()}{off(of) ? ' · Off' : untranslated(of) ? ' · New' : entry.stale.includes(of) ? ' · Changed' : ''}</option>
+    {/each}
+  </select>
+  <span class="autosave" class:is-saving={entrySession.saveState(locale).phase === 'saving'}
+    class:is-offline={entrySession.saveState(locale).phase === 'failed'} role="status">
+    {entrySession.saveState(locale).phase === 'saving' ? 'Saving…' : entrySession.saveState(locale).phase === 'failed' ? 'Not saved' : entrySession.unsaved(locale) ? 'Unsaved' : 'Saved'}
+  </span>
+{/snippet}
+
+{#snippet canvasPublish()}
+  <button class="btn btn-primary canvas-publish" type="button" aria-haspopup="dialog" aria-expanded={confirming}
+    disabled={!dirty || saving || missing.length > 0 || entry.drift.length > 0 || locked || actionBusy}
+    onclick={askToPublish} bind:this={canvasPublishButton}>Publish</button>
+{/snippet}
+
+<main class="main main-editor" class:is-canvas-fullscreen={mode === 'canvas'}>
   {#if actionFailed && !renaming && !deleting && !offing}<p class="notice notice-danger" role="alert">{actionFailed}</p>{/if}
   {#if saveError}<p class="notice notice-danger" role="alert">{saveError} <button class="btn-link" type="button" onclick={() => flush()}>Retry save</button></p>{/if}
   {#each entry.offerProblems ?? [] as problem (problem)}
@@ -969,7 +1084,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     <div class="crumbs">
       <a href={sitePath(entry.singleton ? '/admin/site' : `/admin/c/${collection}`)}>{entry.singleton ? 'Site settings' : capitalise(collection)}</a><span class="sep" aria-hidden="true">/</span><span>{title}</span>
       <span class="autosave" class:is-saving={saving} class:is-offline={saveFailed}>
-        {#if saving}Saving…{:else if saveFailed}Not saved{:else if json !== saved}Unsaved changes{:else}Saved{/if}
+        {#if saving}Saving…{:else if saveFailed}Not saved{:else if sourceUnsaved}Unsaved changes{:else}Saved{/if}
       </span>
     </div>
     <div class="heading-row">
@@ -985,7 +1100,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
                 type="button"
                 aria-haspopup="menu"
                 aria-expanded={statusMenu}
-                disabled={locked || busy}
+                disabled={locked || actionBusy}
                 onclick={() => (statusMenu = !statusMenu)}
               ><span class="dot" aria-hidden="true"></span> {hidden ? 'Hidden' : 'Live'} ▾</button>
               {#if statusMenu}
@@ -1009,7 +1124,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             class="hold-toggle"
             type="button"
             aria-pressed={held}
-            disabled={locked || lost || busy || (!dirty && !held)}
+            disabled={locked || lost || actionBusy || (!dirty && !held)}
             title={dirty || held ? undefined : 'There is nothing unpublished to hold back yet'}
             onclick={toggleHold}
           ><span class="dot" aria-hidden="true"></span> Not ready yet</button>
@@ -1043,17 +1158,31 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
               {/each}
             </select>
           {/if}
-          <button class="btn btn-sbs" type="button" aria-pressed={side} onclick={() => leaving(() => (side = !side))}>Side by side</button>
+          {#if mode === 'form'}
+            <button class="btn btn-sbs" type="button" aria-pressed={side} onclick={() => leaving(() => (side = !side))}>Side by side</button>
+          {/if}
         {/if}
-        {#if previewable}
-          <button class="btn btn-preview" type="button" aria-pressed={previewing} onclick={() => leaving(() => (previewing = !previewing))}>Preview</button>
+        {#if !entry.singleton}
+          <div class="seg editor-modes" role="group" aria-label="Editor view">
+            {#each MODES as item (item.value)}
+              <button
+                type="button"
+                aria-pressed={mode === item.value}
+                disabled={entry.drift.length > 0 || (item.value !== 'form' && !canvasSupported)}
+                title={item.value !== 'form' && !canvasSupported
+                  ? 'Canvas needs this site’s preview route'
+                  : undefined}
+                onclick={() => setMode(item.value)}
+              >{item.label}</button>
+            {/each}
+          </div>
         {/if}
         <button
           class="btn btn-primary"
           type="button"
           aria-haspopup="dialog"
           aria-expanded={confirming}
-          disabled={!dirty || saving || missing.length > 0 || entry.drift.length > 0 || locked}
+          disabled={!dirty || saving || missing.length > 0 || entry.drift.length > 0 || locked || actionBusy}
           title={locked
             ? 'Somebody else is editing this entry'
             : entry.drift.length
@@ -1072,7 +1201,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
               aria-haspopup="menu"
               aria-expanded={moreMenu}
               aria-label="More actions"
-              disabled={locked || busy}
+              disabled={locked || actionBusy}
               onclick={() => (moreMenu = !moreMenu)}
             >⋯</button>
             {#if moreMenu}
@@ -1136,37 +1265,54 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {mediaBase}
       locales={entry.locales}
       drafted={entry.pending.length > 0}
-      onrestored={(date) => {
-        // The address changes first so the reload lands on the form the restore rewrote.
-        onrestored?.(date);
-        navigate(`/admin/c/${collection}/${slug}`);
-        onchanged();
+      onrestore={entrySession.historicalRestore}
+      onrestored={async (date, outcome) => {
+        if (outcome === 'restored') onrestored?.(date);
+        // The old session is already closed, so this authoritative replacement bypasses its
+        // navigation guard and lands on Content before the parent re-reads every locale.
+        navigateAfterAuthoritativeChange(`/admin/c/${collection}/${slug}`);
+        await (onreload ? onreload() : onchanged());
       }}
     />
   {:else}
   <!-- Stands where the form would be: every field belongs to a structure not yet agreed on. -->
-  <div class="entry-body" class:has-pane={!entry.drift.length && (previewing || (!alone && shown !== undefined))} class:has-outline={!entry.drift.length && !alone && shown === undefined && !previewing && fields.length > 5}>
+  <div
+    class="entry-body"
+    class:has-pane={!entry.drift.length && (mode === 'split' || (mode === 'form' && !alone && shown !== undefined))}
+    class:has-outline={!entry.drift.length && mode === 'form' && !alone && shown === undefined && fields.length > 5}
+    class:is-canvas={mode === 'canvas'}
+  >
     {#if entry.drift.length}
       <DriftPanel
         {collection}
         {slug}
         drift={entry.drift}
         locales={entry.locales}
-        onresolved={onchanged}
+        onresolved={entrySession.afterReconciliation}
       />
     {:else}
+      {#if mode === 'split'}
+        <div class="canvas-mobile-tabs seg" role="group" aria-label="Split view pane">
+          <button type="button" aria-pressed={mobilePane === 'form'} onclick={() => (mobilePane = 'form')}>Form</button>
+          <button type="button" aria-pressed={mobilePane === 'page'} onclick={() => (mobilePane = 'page')}>Page</button>
+        </div>
+      {/if}
       <!-- Not drawn when a translation is on its own. -->
-      {#if !alone}
-        <form class="form" onsubmit={(e) => e.preventDefault()}>
-          <fieldset disabled={locked}>
-            <Fields {fields} blocks={entry.blocks} {problems} {mediaBase} {locale} inheritedSeo={inherited(locale, data)} {site} servedAt={localeUrl(locale)} bind:root={entrySession.snapshots[entry.sourceLocale]!} />
+      {#if mode !== 'canvas' && !alone}
+        <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+        <form
+          class="form"
+          class:is-mobile-hidden={mode === 'split' && mobilePane === 'page'}
+          onsubmit={(e) => e.preventDefault()}
+          onfocusout={canvasCompleted}
+        >
+          <fieldset disabled={locked || entrySession.localeMutationBlocked(entry.sourceLocale)}>
+            <Fields {fields} blocks={entry.blocks} {problems} {mediaBase} {locale} session={entrySession} inheritedSeo={inherited(locale, data)} {site} servedAt={localeUrl(locale)} bind:root={entrySession.snapshots[entry.sourceLocale]!} structureLocked={entrySession.structureMutationBlocked()} textOnly={entrySession.sourceTextOnly(entry.sourceLocale)} />
           </fieldset>
         </form>
       {/if}
-      <!-- Previewing beside a translation keeps that column. -->
-      {#if previewing && !alone}
-        {@render previewPane()}
-      {:else if shown === undefined}
+      <!-- Split replaces a comparison pane rather than adding a third column. -->
+      {#if mode !== 'canvas' && !(mode === 'split' && !alone) && shown === undefined}
         {#if fields.length > 5}
           <nav class="editor-outline" aria-label="On this page">
             <p>On this page</p>
@@ -1175,9 +1321,14 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             {/each}
           </nav>
         {/if}
-      {:else if untranslated(shown)}
+      {:else if mode !== 'canvas' && !(mode === 'split' && !alone) && shown && untranslated(shown)}
         <!-- An empty form here would autosave a file nobody asked for. -->
-        <section class="pane is-locale" aria-labelledby="pane-{shown}">
+        <section
+          class="pane is-locale"
+          class:is-mobile-hidden={mode === 'split' && mobilePane === 'page'}
+          aria-labelledby="pane-{shown}"
+          onfocusout={canvasCompleted}
+        >
           <div class="pane-head"><h2 id="pane-{shown}">{language(shown)}</h2></div>
           <div class="empty">
             {#if off(shown)}
@@ -1194,7 +1345,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
                   <button
                     class="btn btn-primary"
                     type="button"
-                    disabled={busy || locked}
+                    disabled={actionBusy || locked}
                     onclick={() =>
                       ask('/admin/api/restore', {
                         headers: { 'content-type': 'application/json' },
@@ -1204,10 +1355,10 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
                     Bring the {language(shown)} words back
                   </button>
                   <p>
-                    Or <button class="btn-link" type="button" disabled={busy || locked} onclick={() => offer(shown, true)}>turn {language(shown)} back on with an empty form</button>.
+                    Or <button class="btn-link" type="button" disabled={actionBusy || locked} onclick={() => offer(shown, true)}>turn {language(shown)} back on with an empty form</button>.
                   </p>
                 {:else}
-                  <button class="btn" type="button" disabled={busy || locked} onclick={() => offer(shown, true)}>
+                  <button class="btn" type="button" disabled={actionBusy || locked} onclick={() => offer(shown, true)}>
                     Turn {language(shown)} back on
                   </button>
                 {/if}
@@ -1218,17 +1369,17 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
                   Creating it copies the structure and everything that reads the same in every
                   language. The text fields start empty.
                 </p>
-                <button class="btn btn-primary btn-create" type="button" disabled={busy || locked} onclick={() => createFrom(shown)}>
+                <button class="btn btn-primary btn-create" type="button" disabled={actionBusy || locked} onclick={() => createFrom(shown)}>
                   Create from {language(entry.sourceLocale)}
                 </button>
                 {#if entry.translator}
-                  <button class="btn btn-fill" type="button" disabled={busy || locked} onclick={() => createFilled(shown)}>
+                  <button class="btn btn-fill" type="button" disabled={actionBusy || locked} onclick={() => createFilled(shown)}>
                     Create and pre-fill
                   </button>
                 {/if}
                 {#if !entry.singleton}
                   <p>
-                    Or <button class="btn-link" type="button" disabled={busy || locked} onclick={() => offer(shown, false)}>don't offer this entry in {language(shown)}</button> — no file is written for it.
+                    Or <button class="btn-link" type="button" disabled={actionBusy || locked} onclick={() => offer(shown, false)}>don't offer this entry in {language(shown)}</button> — no file is written for it.
                   </p>
                 {/if}
               </div>
@@ -1238,40 +1389,71 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             {/if}
           </div>
         </section>
-      {:else}
+      {:else if mode !== 'canvas' && !(mode === 'split' && !alone) && shown}
         <!-- Keyed: another language is another file, not the same one under a new name. -->
         {#key shown}
-          <Translation
-            bind:this={pane}
-            {collection}
-            {slug}
-            locale={shown}
-            session={entrySession}
-            {fields}
-            blocks={entry.blocks}
-            bind:data={entrySession.snapshots[shown]!}
-            problems={entrySession.positionalProblems(shown)}
-            inheritedSeo={inherited(shown, entrySession.snapshot(shown))}
-            source={entry.sourceLocale}
-            {locked}
-            stale={entry.stale.includes(shown)}
-            translator={entry.translator}
-            url={localeUrl(shown)}
-            {site}
-            onactivity={renew}
-            onsaved={(pending) => {
-              renew();
-              if (pending !== translated) onpending?.();
-              translated = pending;
-              // The preview shows this language too, so a save here redraws it.
-              savedAt = Date.now();
-            }}
-            {mediaBase}
-            onclose={side ? () => leaving(() => (side = false)) : undefined}
-            onturnoff={entry.singleton ? undefined : () => { actionFailed = ''; offing = shown; }}
-          />
+          <div
+            class="canvas-form-surface"
+            class:is-mobile-hidden={mode === 'split' && mobilePane === 'page'}
+            onfocusout={canvasCompleted}
+          >
+            <Translation
+              bind:this={pane}
+              {collection}
+              {slug}
+              locale={shown}
+              session={entrySession}
+              {fields}
+              blocks={entry.blocks}
+              bind:data={entrySession.snapshots[shown]!}
+              problems={entrySession.positionalProblems(shown)}
+              inheritedSeo={inherited(shown, entrySession.snapshot(shown))}
+              source={entry.sourceLocale}
+              {locked}
+              stale={entry.stale.includes(shown)}
+              translator={entry.translator}
+              actionBlocked={busy || sending}
+              url={localeUrl(shown)}
+              {site}
+              onsaved={(pending) => {
+                renew();
+                if (pending !== translated) onpending?.();
+                translated = pending;
+              }}
+              {mediaBase}
+              onclose={side ? () => leaving(() => (side = false)) : undefined}
+              onturnoff={entry.singleton ? undefined : () => { actionFailed = ''; offing = shown; }}
+            />
+          </div>
         {/key}
-        {#if previewing}{@render previewPane()}{/if}
+      {/if}
+      {#if canvasVisited}
+        <CanvasWorkspace
+          bind:this={canvasPane}
+          fullscreen={mode === 'canvas'}
+          entryActions={canvasEntryActions}
+          publishAction={canvasPublish}
+          active={mode === 'split' || mode === 'canvas'}
+          {locale}
+          {url}
+          request={canvasRequest}
+          currentVersion={() => entrySession.contentVersion(locale)}
+          entryDocument={{ collection, id: slug }}
+          ownerLabel={title}
+          sourceLocale={entry.sourceLocale}
+          session={entrySession}
+          blocks={entry.blocks}
+          problems={locale === entry.sourceLocale ? problems : entrySession.positionalProblems(locale)}
+          onreviewproblems={reviewCanvasProblems}
+          {mediaBase}
+          {site}
+          servedAt={localeUrl(locale)}
+          {locked}
+          onform={() => setMode('form')}
+          onformtarget={openCanvasTarget}
+          onnavigateentry={navigateCanvasEntry}
+          mobileHidden={mode === 'split' && mobilePane === 'form'}
+        />
       {/if}
     {/if}
   </div>
@@ -1321,7 +1503,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           <button
             class="btn btn-primary"
             type="button"
-            disabled={sending || errors.length > 0}
+            disabled={sending || errors.length > 0 || entrySession.persistedActionPending()}
             onclick={publishEntry}
           >
             {#if sending}Publishing…
@@ -1413,20 +1595,3 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     </div>
   {/if}
 </main>
-
-<!-- Choosing a language here moves the whole screen, not only the frame. -->
-{#snippet previewPane()}
-  <PreviewPane
-    url={localeUrl(locale) ?? ''}
-    {locale}
-    locales={previewLocales}
-    onlocale={(of) => leaving(() => (locale = of))}
-    enabled={preview}
-    published={entry.published.includes(locale)}
-    {hidden}
-    stale={saveFailed}
-    problems={previewProblems}
-    ongo={goTo}
-    {savedAt}
-  />
-{/snippet}

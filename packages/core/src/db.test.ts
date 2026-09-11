@@ -538,6 +538,163 @@ test('a language the entry does not have yet is not created by a save of another
   expect((await db.select().from(drafts)).map((r) => r.path)).toEqual([PAGE_EN]);
 });
 
+test('a saved deletion can restore a sibling locale subtree in the same atomic save', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({
+    [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?'),
+    [PAGE_DE]: page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?'),
+  });
+  const deleted = await saveDraft(
+    'default',
+    db,
+    repo,
+    PAGE_EN,
+    { title: 'Home', blocks: [MOVED.blocks[1]] },
+    SYNC,
+  );
+  expect(deleted).toBeDefined();
+  if (!deleted) throw new Error('Expected the deletion to save');
+
+  const restored = await saveDraft(
+    'default',
+    db,
+    repo,
+    PAGE_EN,
+    MOVED,
+    {
+      ...SYNC,
+      restoration: {
+        revisions: deleted.revisions,
+        seeds: {
+          de: [
+            {
+              address: 'blocks[_id=q1w2e3r4]',
+              value: {
+                _type: 'cta',
+                _id: 'q1w2e3r4',
+                heading: 'Bereit für den Umzug?',
+                providerState: { restored: true },
+              },
+            },
+          ],
+        },
+      },
+    },
+    undefined,
+    deleted.revision,
+  );
+
+  const rows = (await db.select().from(drafts)).toSorted((a, b) => a.path.localeCompare(b.path));
+  expect(rows.map((row) => row.path)).toEqual([PAGE_DE, PAGE_EN]);
+  const germanRow = rows[0];
+  if (!germanRow) throw new Error('Expected the German draft');
+  expect(parseEntry('default', germanRow.contents)).toEqual({
+    _version: 1,
+    title: 'Startseite',
+    blocks: [
+      {
+        _type: 'cta',
+        _id: 'q1w2e3r4',
+        heading: 'Bereit für den Umzug?',
+        providerState: { restored: true },
+      },
+      { _type: 'hero', _id: 'k3nf9a2p', heading: 'Zieh an die Küste' },
+    ],
+  });
+  expect(restored?.revisions).toEqual({ en: expect.any(String), de: expect.any(String) });
+});
+
+test('a stale sibling restoration revision rejects the complete locale batch', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({
+    [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?'),
+    [PAGE_DE]: page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?'),
+  });
+  const deleted = await saveDraft(
+    'default',
+    db,
+    repo,
+    PAGE_EN,
+    { title: 'Home', blocks: [MOVED.blocks[1]] },
+    SYNC,
+  );
+  expect(deleted).toBeDefined();
+  if (!deleted) throw new Error('Expected the deletion to save');
+  await saveDraft(
+    'default',
+    db,
+    repo,
+    PAGE_DE,
+    { title: 'Neue Startseite', blocks: [{ ...MOVED.blocks[1], heading: 'Neue Küste' }] },
+    { form: PAGE_FORM, locale: 'de', siblings: {}, translation: true },
+    undefined,
+    deleted.revisions.de,
+  );
+  const before = await db.select().from(drafts);
+
+  await expect(
+    saveDraft(
+      'default',
+      db,
+      repo,
+      PAGE_EN,
+      MOVED,
+      {
+        ...SYNC,
+        restoration: {
+          revisions: deleted.revisions,
+          seeds: {
+            de: [
+              {
+                address: 'blocks[_id=q1w2e3r4]',
+                value: { _type: 'cta', _id: 'q1w2e3r4', heading: 'Bereit für den Umzug?' },
+              },
+            ],
+          },
+        },
+      },
+      undefined,
+      deleted.revision,
+    ),
+  ).rejects.toThrow('This entry changed while you were editing');
+  expect(await db.select().from(drafts)).toEqual(before);
+});
+
+test('restoration revisions preserve the locale files captured by the client', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?') });
+  const opened = await saveDraft('default', db, repo, PAGE_EN, MOVED, SYNC);
+  expect(opened).toBeDefined();
+  if (!opened) throw new Error('Expected the source draft to open');
+
+  await expect(
+    saveDraft(
+      'default',
+      db,
+      repo,
+      PAGE_EN,
+      { ...MOVED, blocks: [...MOVED.blocks, { _type: 'quote', _id: 'new00001', body: 'Hi' }] },
+      {
+        ...SYNC,
+        restoration: {
+          revisions: { ...opened.revisions, de: 'missing-file' },
+          seeds: {
+            de: [
+              {
+                address: 'blocks[_id=new00001]',
+                value: { _type: 'quote', _id: 'new00001', body: 'Hallo' },
+              },
+            ],
+          },
+        },
+      },
+      undefined,
+      opened.revision,
+    ),
+  ).rejects.toThrow('This entry changed while you were editing');
+  expect((await db.select().from(drafts)).map((row) => row.path)).toEqual([PAGE_EN]);
+});
+
 // A translation owns only its words; the rest is the file's (decap-cms#6978).
 const LISTING_DE = 'src/content/listings/de/mill-house.yaml';
 const DE_FORM: Form = {

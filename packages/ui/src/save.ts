@@ -51,6 +51,8 @@ export function saveLane() {
 /** Debounce changes, serialize writes and drain edits made during an outstanding request. */
 export function saveCoordinator(options: {
   current: () => string;
+  /** Cheap mutation signal; snapshot bytes are materialized only when a write begins. */
+  dirty?: () => boolean;
   saved: string;
   write: (snapshot: string) => Promise<boolean>;
   onstate: (state: SaveState) => void;
@@ -69,7 +71,7 @@ export function saveCoordinator(options: {
     clearTimeout(timer);
     timer = undefined;
   };
-  const dirty = () => options.current() !== state.saved;
+  const dirty = () => options.dirty?.() ?? options.current() !== state.saved;
   const flush = (): Promise<boolean> => {
     cancel();
     if (!open) return Promise.resolve(false);

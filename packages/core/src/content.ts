@@ -4,7 +4,7 @@ import { blobSha } from './git.js';
 import { entryAddress, entryUrl, type I18nRouting } from './names.js';
 import { checkReserved, isLive, RESERVED_KEYS } from './reserved.js';
 import { type Field, type Form, humanise, rowFields, type Translation } from './schema.js';
-import { keptMachine } from './translate.js';
+import { fieldAddress, fieldPosition, keptMachine } from './translate.js';
 
 export interface ContentEntry<T = unknown> {
   id: string;
@@ -76,6 +76,22 @@ export function draftSource<C extends Record<string, unknown>>(
   validate: (collection: string, data: unknown, path: string) => unknown,
 ): ContentSource<C> {
   const pathOf = (collection: string, id: string) => `src/content/${collection}/${id}.yaml`;
+  const byPath = new Map<string, ContentFile>();
+  const byCollectionLocale = new Map<string, { id: string; row: ContentFile }[]>();
+  for (const row of rows) {
+    // Canvas snapshots precede stored drafts, so the first row at a path intentionally wins.
+    if (byPath.has(row.path)) continue;
+    byPath.set(row.path, row);
+    const match = /^src\/content\/([^/]+)\/([^/]+)\/([^/]+)\.yaml$/.exec(row.path);
+    if (!match) continue;
+    const [, collection, locale, name] = match;
+    const key = `${collection}\0${locale}`;
+    const found = byCollectionLocale.get(key) ?? [];
+    found.push({ id: `${locale}/${name}`, row });
+    byCollectionLocale.set(key, found);
+  }
+  const parsed = new Map<string, unknown>();
+  const validated = new Map<string, unknown>();
   const read = <K extends keyof C & string>(
     collection: K,
     id: string,
@@ -83,30 +99,31 @@ export function draftSource<C extends Record<string, unknown>>(
     checked: boolean,
   ) => {
     const path = pathOf(collection, id);
-    const data = parseEntry(siteId, contents);
-    return { id, data: (checked ? validate(collection, data, path) : data) as C[K] };
+    if (!parsed.has(path)) parsed.set(path, parseEntry(siteId, contents));
+    const data = parsed.get(path);
+    if (checked && !validated.has(path))
+      validated.set(path, validate(collection, structuredClone(data), path));
+    return { id, data: (checked ? validated.get(path) : data) as C[K] };
   };
   const overlay = (checked: boolean): ContentSource<C> => ({
     preview: true,
     getEntry: async (collection, id) => {
-      const row = rows.find((r) => r.path === pathOf(collection, id));
+      const row = byPath.get(pathOf(collection, id));
       if (!row) return built.getEntry(collection, id);
       return row.contents ? read(collection, id, row.contents, checked) : undefined;
     },
     getCollection: async (collection, locale) => {
-      const prefix = `src/content/${collection}/${locale}/`;
-      const mine = rows.flatMap((r) => {
-        const name = r.path.startsWith(prefix) ? r.path.slice(prefix.length, -'.yaml'.length) : '';
-        return name && !name.includes('/') ? [{ id: `${locale}/${name}`, row: r }] : [];
-      });
+      const mine = byCollectionLocale.get(`${collection}\0${locale}`) ?? [];
       const snapshot = await built.getCollection(collection, locale);
+      const drafted = new Map(mine.map((item) => [item.id, item.row]));
       const kept = snapshot.flatMap((e) => {
-        const drafted = mine.find((m) => m.id === e.id);
-        if (!drafted) return [e];
-        return drafted.row.contents ? [read(collection, e.id, drafted.row.contents, checked)] : [];
+        const row = drafted.get(e.id);
+        if (!row) return [e];
+        return row.contents ? [read(collection, e.id, row.contents, checked)] : [];
       });
       // An entry the snapshot has never seen is new since the build, so it goes at the end.
-      const added = mine.filter((m) => m.row.contents && !snapshot.some((e) => e.id === m.id));
+      const builtIds = new Set(snapshot.map((entry) => entry.id));
+      const added = mine.filter((item) => item.row.contents && !builtIds.has(item.id));
       return [...kept, ...added.map((m) => read(collection, m.id, m.row.contents, checked))];
     },
   });
@@ -478,19 +495,84 @@ export function mergeEntry(
   return out;
 }
 
+/** One saved locale-owned row that can fill a subtree reintroduced by a structural edit. */
+export interface LocaleSeed {
+  /** Stable address of the row in the source edit's `after` tree. */
+  address: string;
+  /** The same row as this locale last knew it, including translated and opaque values. */
+  value: unknown;
+  /** Entry-level `_machine` paths scoped to this row. */
+  machine?: readonly string[];
+}
+
+export interface LocaleSyncOptions {
+  /** Seeds are considered only for rows absent from both source-before and this target. */
+  seeds?: readonly LocaleSeed[];
+}
+
 /** The skeleton follows `after`; rows only `target` has stay put, as drift is somebody's call. */
 export function syncLocale(
-  _siteId: string,
+  siteId: string,
   form: Form,
   locale: string,
   edit: { before: unknown; after: unknown },
   target: unknown,
+  options: LocaleSyncOptions = {},
 ): Record<string, unknown> {
+  const seeds = seedMap(options.seeds ?? []);
+  const state: SeedState = { seeds, used: new Set() };
   const synced = overlay(form, form.fields, edit.after, target, (m) => m === 'duplicate', true, {
     locale,
     was: edit.before,
+    at: '',
+    state,
   });
-  return { _version: FORMAT_VERSION, ...synced };
+  const out: Record<string, unknown> = { _version: FORMAT_VERSION, ...synced };
+  delete out._machine;
+
+  // Structural changes can remove a marked subtree. Existing marks survive only while their
+  // translated string does; new marks additionally have to be proven by the accepted seed.
+  const translated = new Set(translatedValues(form, out).map(([path]) => path));
+  const machine = keptMachine(siteId, target, out).filter(
+    (path) => translatedString(siteId, form, out, path, translated) !== undefined,
+  );
+  const marked = new Set(machine);
+  for (const seed of state.used)
+    for (const path of seed.machine ?? []) {
+      if (marked.has(path)) continue;
+      const prefix = `${seed.address}.`;
+      if (!path.startsWith(prefix)) continue;
+      const seeded = valueAt(siteId, seed.value, path.slice(prefix.length));
+      const current = translatedString(siteId, form, out, path, translated);
+      if (typeof seeded !== 'string' || current !== seeded) continue;
+      machine.push(path);
+      marked.add(path);
+    }
+  if (machine.length) out._machine = machine;
+  return out;
+}
+
+function translatedString(
+  siteId: string,
+  form: Form,
+  root: unknown,
+  address: string,
+  translated: ReadonlySet<string>,
+): string | undefined {
+  const position = fieldPosition(siteId, address, root, form);
+  const canonical = position && fieldAddress(siteId, position, root, form);
+  const value =
+    canonical && translated.has(canonical) ? valueAt(siteId, root, address, form) : undefined;
+  return typeof value === 'string' ? value : undefined;
+}
+
+function valueAt(siteId: string, root: unknown, address: string, form?: Form): unknown {
+  const position = fieldPosition(siteId, address, root, form);
+  return position?.reduce<unknown>(
+    (value, key) =>
+      Array.isArray(value) ? value[Number(key)] : isObject(value) ? value[key] : undefined,
+    root,
+  );
 }
 
 /** One row of drift as somebody answered it: the languages it should end up in. */
@@ -943,10 +1025,35 @@ export const isObject = (v: unknown): v is Record<string, unknown> =>
 interface Skeleton {
   locale: string;
   was: unknown;
+  /** Stable address of the field whose rows are being synchronized. */
+  at?: string;
+  state?: SeedState;
+}
+
+interface SeedState {
+  seeds: Map<string, LocaleSeed>;
+  used: Set<LocaleSeed>;
+}
+
+function seedMap(seeds: readonly LocaleSeed[]): Map<string, LocaleSeed> {
+  const unique = new Map<string, LocaleSeed>();
+  const repeated = new Set<string>();
+  for (const seed of seeds) {
+    if (repeated.has(seed.address)) continue;
+    if (unique.has(seed.address)) {
+      unique.delete(seed.address);
+      repeated.add(seed.address);
+    } else unique.set(seed.address, seed);
+  }
+  return unique;
 }
 
 const into = (sync: Skeleton | undefined, key: string): Skeleton | undefined =>
-  sync && { ...sync, was: isObject(sync.was) ? sync.was[key] : undefined };
+  sync && {
+    ...sync,
+    was: isObject(sync.was) ? sync.was[key] : undefined,
+    at: sync.at ? `${sync.at}.${key}` : key,
+  };
 
 /** `pick` claims fields from `from`, absent ones included; `sync` takes its structure too. */
 function overlay(
@@ -1136,18 +1243,33 @@ function syncRows(
   for (const { row, key } of source) {
     const fields = isObject(row) ? fieldsOf(row) : undefined;
     const there = target.get(key);
+    const address = `${sync.at ?? ''}[${key.startsWith('#') ? key.slice(1) : `_id=${key}`}]`;
+    const candidate =
+      sync.state && !key.startsWith('#') && !before.has(key) && there === undefined
+        ? sync.state.seeds.get(address)
+        : undefined;
+    const seed = candidate && seedMatches(candidate, row, key) ? candidate : undefined;
+    if (seed) sync.state?.used.add(seed);
+    const localeRow = there ?? seed?.value;
     // An unknown block type cannot be split, so the file keeps its row and a new one arrives whole.
     out.push(
       fields && isObject(row)
-        ? overlay(form, fields, row, skeletonOf(row, there), pick, mode, {
+        ? overlay(form, fields, row, skeletonOf(row, localeRow), pick, mode, {
             locale: sync.locale,
             was: before.get(key),
+            at: address,
+            state: sync.state,
           })
         : (there ?? row),
     );
     out.push(...(kept.get(key) ?? []));
   }
   return out;
+}
+
+function seedMatches(seed: LocaleSeed, source: unknown, key: string): boolean {
+  if (!isObject(seed.value) || seed.value._id !== key || !isObject(source)) return false;
+  return typeof source._type !== 'string' || seed.value._type === source._type;
 }
 
 // The `_` keys are the skeleton and come from the saved language; values are the other's own.

@@ -411,18 +411,64 @@ test('virtual:handover/config resolves to the root cms.config.ts', () => {
   expect(plugin.resolveId('something-else')).toBeUndefined();
 });
 
-test('virtual:handover/ui inlines every file in dist/ui', async () => {
+test('virtual:handover/ui inlines entry-aware assets and every served chunk', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'handover-ui-'));
-  await writeFile(join(dir, 'main-abc.js'), 'js();');
-  await writeFile(join(dir, 'main-abc.css'), 'b{}');
+  await mkdir(join(dir, 'chunks'), { recursive: true });
+  await writeFile(join(dir, 'admin.js'), 'admin();');
+  await writeFile(join(dir, 'admin.css'), 'admin{}');
+  await writeFile(join(dir, 'canvas.js'), 'canvas();');
+  await writeFile(join(dir, 'chunks/shared.js'), 'shared();');
+  await writeFile(join(dir, 'chunks/shared.css'), 'shared{}');
+  await writeFile(join(dir, 'chunks/rich-text.js'), 'editor();');
+  await writeFile(
+    join(dir, 'manifest.json'),
+    JSON.stringify({
+      'src/admin.ts': {
+        file: 'admin.js',
+        name: 'admin',
+        src: 'src/admin.ts',
+        isEntry: true,
+        imports: ['_shared'],
+        css: ['admin.css'],
+      },
+      'src/canvas.ts': {
+        file: 'canvas.js',
+        name: 'canvas',
+        src: 'src/canvas.ts',
+        isEntry: true,
+        imports: ['_shared'],
+        dynamicImports: ['src/canvas/rich-text.ts'],
+      },
+      _shared: { file: 'chunks/shared.js', css: ['chunks/shared.css'] },
+      'src/canvas/rich-text.ts': {
+        file: 'chunks/rich-text.js',
+        src: 'src/canvas/rich-text.ts',
+        isDynamicEntry: true,
+      },
+      'admin.css': { file: 'admin.css', src: 'admin.css' },
+    }),
+  );
   const { updateConfig } = runSetup({ name: 'fake-adapter', hooks: {} });
   const plugin = updateConfig.mock.calls[0]?.[0].vite.plugins[2];
   expect(plugin.resolveId('virtual:handover/ui')).toBe('\0virtual:handover/ui');
   expect(plugin.resolveId('other')).toBeUndefined();
   expect(await plugin.load('other')).toBeUndefined();
-  expect(await uiAssetsModule(dir)).toBe(
-    `export default ${JSON.stringify({ 'main-abc.css': 'b{}', 'main-abc.js': 'js();' })};`,
-  );
+  const source = await uiAssetsModule(dir);
+  const built = (
+    await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`)
+  ).default;
+  expect(built.entries).toEqual({
+    admin: { script: 'admin.js', styles: ['admin.css', 'chunks/shared.css'] },
+    canvas: { script: 'canvas.js', styles: ['chunks/shared.css'] },
+  });
+  expect(built.files).toEqual({
+    'admin.css': 'admin{}',
+    'admin.js': 'admin();',
+    'canvas.js': 'canvas();',
+    'chunks/rich-text.js': 'editor();',
+    'chunks/shared.css': 'shared{}',
+    'chunks/shared.js': 'shared();',
+  });
 });
 
 test('richtext is detected with its tier, basic by default', () => {

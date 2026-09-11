@@ -1,0 +1,24 @@
+---
+import assets from 'virtual:handover/ui';
+
+export const prerender = false;
+
+const entry = assets.entries.canvas;
+if (!entry) return new Response('Canvas entry missing', { status: 500 });
+const prefix = '/admin/_assets/';
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Canvas asset smoke</title>
+    {entry.styles.map((file) => <link rel="stylesheet" href={`${prefix}${file}`} />)}
+  </head>
+  <body
+    data-entries={JSON.stringify(assets.entries)}
+    data-files={JSON.stringify(Object.keys(assets.files))}
+  >
+    <script is:inline type="module" src={`${prefix}${entry.script}`}></script>
+  </body>
+</html>

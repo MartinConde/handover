@@ -1,7 +1,8 @@
 <script lang="ts">
 import type { DiffGroup } from '@handover/core';
 import Diff from './Diff.svelte';
-import { request as fetch, sitePath } from './request.js';
+import type { HistoricalRestoreResponse, HistoricalRestoreResult } from './entry-session.svelte';
+import { request as fetch, sitePath, uncertainResponse } from './request.js';
 
 /** One version as `/admin/api/history/:collection/:slug` answers it. */
 interface Version {
@@ -24,6 +25,7 @@ let {
   drafted = false,
   mediaBase = '',
   onrestored,
+  onrestore,
 }: {
   collection: string;
   slug: string;
@@ -34,7 +36,12 @@ let {
   /** Whether the entry has unpublished changes a restore would write over. */
   drafted?: boolean;
   /** The version is in the drafts now: the editor reloads and the Content tab takes over. */
-  onrestored: (date: string) => void;
+  onrestored: (date: string, outcome: 'restored' | 'uncertain') => void | Promise<void>;
+  /** The entry session reserves autosave and owns the restore through authoritative reload. */
+  onrestore: (
+    request: () => Promise<HistoricalRestoreResponse>,
+    reload: (outcome: 'restored' | 'uncertain') => void | Promise<void>,
+  ) => Promise<HistoricalRestoreResult>;
 } = $props();
 
 let versions = $state<Version[]>([]);
@@ -115,23 +122,41 @@ function closeConfirm() {
 async function restore() {
   if (!confirming) return;
   restoring = true;
-  const res = await fetch(`/admin/api/history/${collection}/${slug}/restore`, {
-    method: 'POST',
-    body: JSON.stringify({
-      commit_sha: confirming.sha,
-      ...(confirming.name ? { name: confirming.name } : {}),
-    }),
-  });
+  const version = confirming;
+  const result = await onrestore(
+    async () => {
+      const res = await fetch(`/admin/api/history/${collection}/${slug}/restore`, {
+        method: 'POST',
+        body: JSON.stringify({
+          commit_sha: version.sha,
+          ...(version.name ? { name: version.name } : {}),
+        }),
+      });
+      if (uncertainResponse(res)) throw new TypeError('The restore response was not confirmed.');
+      if (res.ok) return { ok: true };
+      return {
+        ok: false,
+        // The server's own sentence: somebody holding the entry, or a version it cannot read.
+        error: (await res.text()) || 'That version could not be restored.',
+      };
+    },
+    (outcome) => onrestored(version.date, outcome),
+  );
   restoring = false;
-  if (!res.ok) {
-    // The server's own sentence: somebody holding the entry, or a version it cannot read.
-    restoreError = (await res.text()) || 'That version could not be restored.';
+  if (!result.ok) {
+    restoreError =
+      result.error ??
+      (result.reason === 'save'
+        ? 'Your changes could not be saved, so the version was not restored.'
+        : result.reason === 'uncertain'
+          ? 'The restore was not confirmed. The entry is being reloaded before editing can continue.'
+          : result.reason === 'reload'
+            ? 'The version was restored, but the entry could not be reloaded. Reload the page before editing.'
+            : 'That version could not be restored.');
     return;
   }
-  const { date } = confirming;
   confirming = undefined;
   restoreError = '';
-  onrestored(date);
 }
 
 function open(version: Version) {

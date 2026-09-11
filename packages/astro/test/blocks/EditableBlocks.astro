@@ -1,0 +1,13 @@
+---
+import Blocks from '../../components/Blocks.astro';
+import { createEditContext } from '../../src/canvas.js';
+import EditableBlock from './EditableBlock.astro';
+
+const { blocks, globals = {} } = Astro.props;
+const components = { repeated: EditableBlock, promo: EditableBlock, columns: EditableBlock };
+const edit = createEditContext(Astro).list('blocks');
+---
+
+<main {...edit}>
+  <Blocks {blocks} {components} {globals} {edit} />
+</main>

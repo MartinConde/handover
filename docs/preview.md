@@ -105,34 +105,24 @@ An address the site could serve but has no entry at is `404`, the same answer th
 would give. A collection with no `load`, or a loader that exports no component, is `500` saying
 which line to write: those are the site's own wiring, and only preview reads it.
 
-## The pane in the editor
+## Form, Split, and Canvas
 
-**Preview** in the entry header opens the page beside the form, in the language on screen. It
-renders what is *stored*, so it follows the autosave rather than the keystrokes: every settled
-save asks the site for the page again, and **Refresh** asks for the same address whenever you
-want it. **Open in new tab** is the address on its own, and the three width buttons letterbox
-the page inside the pane rather than resizing it.
+Entries with a `route`, a [loader](loaders.md), and preview enabled offer three editor views.
+**Form** is the initial view and retains side-by-side language comparison. **Split** places the
+form beside the editable page; **Canvas** gives the page the workspace width and collapses the
+normal navigation. Tablet and phone controls set the iframe's real width rather than scaling it.
 
-The pane is offered where the site has a page to show — a collection with a `route` and a
-[loader](loaders.md). A global has neither, so its editor has no Preview button: what changing
-a global looks like is seen by previewing a page that reads it.
+Canvas renders the current working snapshots, including changes that autosave has not sent yet.
+Completed edits are coalesced into a fresh render; autosave by itself does not reload the page.
+If a render fails, the last working page and the current form data remain available with Retry and
+Form actions. **Open preview** first saves every dirty locale, then opens the ordinary authenticated
+GET in a new tab without putting snapshot data or a Canvas signal in its URL.
 
-Three things the pane says that the site does not, above the frame:
+A global has no route of its own, so its editor offers Form only. To see a global in context, open
+an entry whose loader reads it. A site without [template annotations](canvas.md) can still use Form
+and the rendered page, but its content is not selectable in place.
 
-- **Hidden — not on the live site.** The entry is hidden. The page still renders here — looking
-  at it before it goes back on is what previewing a hidden page is for — and nowhere else until
-  it is shown again.
-- **Not published yet — previewing at `/listings/harbour-loft`.** The repository has no file
-  for this language of this entry, so the pane is the only place the page exists and the
-  address is the one it will get. A brand-new entry previews like any other: the draft is the
-  whole page, and it appears in the collection's index preview too.
-- **Not everything you have typed is saved.** An autosave did not land, so what is rendered is
-  the last version that did.
-
-A draft the schema still refuses is a card in place of the frame, one line per field with a
-button back to it — the same refusal the route answers `422` with, said before the request.
-
-A link inside a preview stays in the preview: every link to a page on this site is rewritten to
-that page's `/_preview` address on the way out, so clicking through a draft site keeps showing
-drafts. Links elsewhere are left alone. The site's own language switcher inside the frame moves
-the frame only; the pane's **DE** moves the whole screen.
+A link inside an ordinary preview stays in preview: every link to a page on this site is rewritten
+to that page's `/_preview` address on the way out, so clicking through a draft site keeps showing
+drafts. Links elsewhere are left alone. Canvas keeps the site's real links and mediates them through
+the editor instead; its navigation and external-effect rules are in the [Canvas guide](canvas.md).

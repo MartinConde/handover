@@ -26,7 +26,10 @@ declare module 'virtual:handover/loaders' {
 }
 
 declare module 'virtual:handover/ui' {
-  const assets: Record<string, string>;
+  const assets: {
+    entries: Record<string, { script: string; styles: string[] }>;
+    files: Record<string, string>;
+  };
   export default assets;
 }
 
@@ -38,6 +41,7 @@ declare module 'cloudflare:workers' {
 declare namespace App {
   interface Locals {
     handover?: import('./auth.js').Session;
+    handoverCanvas?: import('./canvas.js').HandoverCanvas;
     cfContext?: import('./auth.js').CloudflareContext;
   }
 }

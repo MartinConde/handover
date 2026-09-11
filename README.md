@@ -13,4 +13,4 @@ between releases, and every change is in [CHANGELOG.md](CHANGELOG.md).
 pnpm add astro-handover   # not on npm yet — install from a checkout, see docs/getting-started.md
 ```
 
-Docs: [Getting started](docs/getting-started.md) · [Setting a site up](docs/init.md) · [Template convention](docs/template-convention.md) · [Deploy](docs/deploy.md) · [How it works](docs/how-it-works.md)
+Docs: [Getting started](docs/getting-started.md) · [Setting a site up](docs/init.md) · [Template convention](docs/template-convention.md) · [Canvas editing](docs/canvas.md) · [Deploy](docs/deploy.md) · [How it works](docs/how-it-works.md)

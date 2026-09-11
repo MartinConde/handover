@@ -76,6 +76,8 @@ const show = (over: Record<string, unknown> = {}) => {
 afterEach(() => {
   unmount(app);
   opened.mockClear();
+  localStorage.clear();
+  document.body.innerHTML = '';
 });
 
 // jsdom has no layout, so nothing scrolls; the count still has to move focus.
@@ -185,32 +187,131 @@ const withProblems = (problems: { path: string; message: string }[]) => {
   return document.body;
 };
 
-// Preview is a page on the site, so an entry nothing renders has nowhere to open.
-test('Preview is offered only where the site has a page to show', () => {
-  expect($(show(), 'button.btn-preview')).toBeNull();
+// Canvas needs both the injected preview route and a page address to POST into.
+test('Canvas modes are enabled only where the site has a page to show', () => {
+  expect(
+    $<HTMLButtonElement>(show({ preview: true }), '.editor-modes button:last-child')?.disabled,
+  ).toBe(true);
   unmount(app);
-  const root = show({ entry: { ...entry, route: '/listings/[slug]' } });
-  expect($<HTMLButtonElement>(root, 'button.btn-preview')?.getAttribute('aria-pressed')).toBe(
-    'false',
-  );
+  const root = show({ entry: { ...entry, route: '/listings/[slug]' }, preview: true });
+  expect(
+    $<HTMLButtonElement>(root, '.editor-modes button:last-child')?.getAttribute('aria-pressed'),
+  ).toBe('false');
+  expect($<HTMLButtonElement>(root, '.editor-modes button:last-child')?.disabled).toBe(false);
 });
 
-test('pressing Preview puts the page beside the form, at the address this language serves it', () => {
+test('pressing Split puts Canvas beside the form at the address this language serves', () => {
   const root = show({
     entry: { ...entry, route: '/listings/[slug]', published: [] },
     preview: true,
   });
 
-  $<HTMLButtonElement>(root, 'button.btn-preview')?.click();
+  $$<HTMLButtonElement>(root, '.editor-modes button')[1]?.click();
   flushSync();
 
-  expect($<HTMLIFrameElement>(root, '.pane.is-preview iframe')?.getAttribute('src')).toContain(
-    '/_preview/listings/seaview-cottage',
-  );
-  // The entry has never been published, so the pane says the address is one it will get.
-  expect($(root, '.preview-banner')?.textContent).toContain('Not published yet');
-  // And the form it is beside is still there: previewing is not a second screen.
+  expect(
+    $<HTMLAnchorElement>(root, '.canvas-workspace a[target="_blank"]')?.getAttribute('href'),
+  ).toContain('/_preview/listings/seaview-cottage');
+  expect($(root, '.canvas-workspace')).not.toBeNull();
   expect($(root, 'input#f-title')).not.toBeNull();
+  const structure = $<HTMLButtonElement>(
+    root,
+    '.canvas-rail button[aria-controls="canvas-structure"]',
+  );
+  expect(structure?.disabled).toBe(false);
+  expect(structure?.getAttribute('aria-expanded')).toBe('false');
+  structure?.click();
+  flushSync();
+  expect(structure?.getAttribute('aria-expanded')).toBe('true');
+  expect($(root, '#canvas-structure[aria-labelledby="canvas-structure-title"]')).not.toBeNull();
+});
+
+test('the saved editor mode is scoped to the site base and signed-in user', () => {
+  document.body.innerHTML = '<div id="app" data-base="/coastal"></div>';
+  localStorage.setItem('handover:canvas-mode:v1:/coastal:u1', 'canvas');
+  const root = show({
+    entry: { ...entry, route: '/listings/[slug]' },
+    preview: true,
+    userId: 'u1',
+  });
+
+  expect(
+    $<HTMLButtonElement>(root, '[aria-label="Editor view"] button[aria-pressed="true"]')
+      ?.textContent,
+  ).toBe('Canvas');
+  $<HTMLButtonElement>(root, '[aria-label="Editor view"] button')?.click();
+  flushSync();
+  expect(localStorage.getItem('handover:canvas-mode:v1:/coastal:u1')).toBe('form');
+});
+
+test('invalid or unsupported Canvas preferences fall back to Form without being overwritten', () => {
+  document.body.innerHTML = '<div id="app" data-base="/coastal/"></div>';
+  const key = 'handover:canvas-mode:v1:/coastal:u1';
+  localStorage.setItem(key, 'canvas');
+  const root = show({
+    entry: { ...entry, route: '/listings/[slug]' },
+    preview: false,
+    userId: 'u1',
+  });
+
+  expect(
+    $<HTMLButtonElement>(root, '[aria-label="Editor view"] button[aria-pressed="true"]')
+      ?.textContent,
+  ).toBe('Form');
+  expect($<HTMLButtonElement>(root, '[aria-label="Editor view"] button:last-child')?.disabled).toBe(
+    true,
+  );
+  expect(localStorage.getItem(key)).toBe('canvas');
+
+  unmount(app);
+  localStorage.setItem(key, 'anything-else');
+  const invalid = show({
+    entry: { ...entry, route: '/listings/[slug]' },
+    preview: true,
+    userId: 'u1',
+  });
+  expect(
+    $<HTMLButtonElement>(invalid, '[aria-label="Editor view"] button[aria-pressed="true"]')
+      ?.textContent,
+  ).toBe('Form');
+});
+
+test('Form to Canvas to Form retains unsaved field state in the same entry session', () => {
+  const root = show({
+    entry: { ...entry, route: '/listings/[slug]' },
+    preview: true,
+    userId: 'u1',
+  });
+  type(root, 'input#f-title', 'Unsaved harbour edit');
+
+  $$<HTMLButtonElement>(root, '[aria-label="Editor view"] button')[2]?.click();
+  flushSync();
+  expect($(root, '.canvas-workspace')).not.toBeNull();
+  expect($(root, 'input#f-title')).toBeNull();
+
+  $$<HTMLButtonElement>(root, '[aria-label="Editor view"] button')[0]?.click();
+  flushSync();
+  expect($<HTMLInputElement>(root, 'input#f-title')?.value).toBe('Unsaved harbour edit');
+});
+
+test('Split replaces comparison with Canvas and Form restores the unsaved translation', () => {
+  const root = show({
+    entry: { ...bilingual, route: '/listings/[slug]' },
+    preview: true,
+    userId: 'u1',
+  });
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  type(root, 'input#t-title', 'Ungespeicherte Hätte');
+
+  $$<HTMLButtonElement>(root, '[aria-label="Editor view"] button')[1]?.click();
+  flushSync();
+  expect($(root, '.canvas-workspace')).not.toBeNull();
+  expect($(root, 'input#t-title')).toBeNull();
+
+  $$<HTMLButtonElement>(root, '[aria-label="Editor view"] button')[0]?.click();
+  flushSync();
+  expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Ungespeicherte Hätte');
 });
 
 test('the header shows the entry title; Publish is disabled until something changes', () => {
@@ -913,6 +1014,42 @@ test('an entry whose languages disagree gets the panel where its form would be',
   expect($<HTMLButtonElement>(root, 'header button.btn-primary')?.disabled).toBe(true);
 });
 
+test('applying drift answers reloads the entry instead of reopening an old locale snapshot', async () => {
+  const changed = vi.fn(async () => {});
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string | URL | Request) =>
+      String(url).includes('/admin/api/drift/')
+        ? Response.json({})
+        : Response.json({ held_by: null, mine: true, expires_at: null }),
+    ),
+  );
+  const root = show({
+    onchanged: changed,
+    entry: {
+      ...entry,
+      drift: [
+        {
+          path: 'blocks[_id=z9y8x7w6]',
+          type: 'quote',
+          in: ['de'],
+          expected: ['en', 'de'],
+          values: { de: ['Ein seltener Fund.'] },
+        },
+      ],
+      locales: ['en', 'de'],
+    },
+  });
+
+  $<HTMLInputElement>(root, '.drift .choice input')?.click();
+  flushSync();
+  $<HTMLButtonElement>(root, '.drift .actions .btn-primary')?.click();
+  await tick();
+
+  expect(changed).toHaveBeenCalledOnce();
+  vi.unstubAllGlobals();
+});
+
 // The file wins over `_locales`, and the disagreement is said above the form.
 test('an entry whose _locales its files contradict says so', () => {
   const root = show({
@@ -983,8 +1120,8 @@ test('side by side edits the second language and saves it to its own file', asyn
   vi.unstubAllGlobals();
 });
 
-// The second column stores its own file, so its save is as much a reason to redraw the page.
-test('a save in the second language asks the preview for the page again', async () => {
+// Autosave is independent of rendering: the live Canvas shell must stay mounted through it.
+test('a save in the second language keeps the Canvas workspace mounted', async () => {
   vi.stubGlobal('fetch', autosaved());
   const root = show({
     entry: { ...bilingual, route: '/listings/[slug]', published: ['en', 'de'] },
@@ -993,18 +1130,15 @@ test('a save in the second language asks the preview for the page again', async 
 
   $$<HTMLButtonElement>(root, '.entry-header .seg button')[1]?.click();
   flushSync();
-  $<HTMLButtonElement>(root, 'button.btn-preview')?.click();
+  $$<HTMLButtonElement>(root, '.editor-modes button')[1]?.click();
   flushSync();
-  const before = $<HTMLIFrameElement>(root, '.pane.is-preview iframe')?.getAttribute('src');
+  const canvas = $(root, '.canvas-workspace');
   type(root, 'input#t-title', 'Seeblick-Häuschen');
-  // Publishing flushes the column's draft, which is the settled save without waiting two seconds.
   $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
   await tick();
   flushSync();
 
-  expect($<HTMLIFrameElement>(root, '.pane.is-preview iframe')?.getAttribute('src')).not.toBe(
-    before,
-  );
+  expect($(root, '.canvas-workspace')).toBe(canvas);
   vi.unstubAllGlobals();
 });
 
@@ -1073,6 +1207,56 @@ test('a block moved in the source column moves in the second column at once', as
   expect(wrote(fetchMock)).toHaveLength(0);
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+test('a duplicated block autosaves its scoped locale subtree and captured revisions', async () => {
+  vi.useFakeTimers();
+  const fetchMock = vi.fn(async (url: string) =>
+    isLock(url)
+      ? Response.json(HELD)
+      : Response.json({
+          updated_at: 1755864000000,
+          pending: true,
+          problems: [],
+          revisions: { en: 'en-next', de: 'de-next' },
+        }),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({
+    entry: { ...twoBlocks, revisions: { en: 'en-opened', de: 'de-opened' } },
+  });
+
+  $<HTMLButtonElement>(root, '[aria-label="Duplicate cta"]')?.click();
+  flushSync();
+  await vi.advanceTimersByTimeAsync(2100);
+
+  const [, init] = wrote(fetchMock)[0] as [string, RequestInit];
+  const body = JSON.parse(String(init.body)) as {
+    data: { body: { _id: string; label?: string }[] };
+    structure: {
+      containers: string[];
+      revisions: Record<string, string>;
+      seeds: Record<string, { address: string; value: { _id: string; label: string } }[]>;
+    };
+  };
+  const copy = body.data.body[2];
+  if (!copy) throw new Error('duplicated block missing');
+  expect(copy).toMatchObject({ label: 'Book a viewing' });
+  expect(copy._id).toMatch(/^[0-9a-z]{8}$/);
+  expect(body.structure).toEqual({
+    containers: ['body'],
+    revisions: { en: 'en-opened', de: 'de-opened' },
+    seeds: {
+      de: [
+        {
+          address: `body[_id=${copy._id}]`,
+          value: { _type: 'cta', _id: copy._id, label: 'Besichtigung buchen' },
+        },
+      ],
+    },
+  });
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 test('a shared value typed in the source column reads in the second column as it is typed', () => {
@@ -1498,6 +1682,97 @@ test('one field is translated on its own and the answer lands in the input', asy
   expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Meerblick-Häuschen');
   expect($(root, '.badge-machine')).not.toBeNull();
   vi.unstubAllGlobals();
+});
+
+test('translation reserves preflush, freezes target and structure, then saves newer source prose', async () => {
+  vi.useFakeTimers();
+  const preflush = deferred<Response>();
+  const translatedReply = deferred<Response>();
+  let sourceWrites = 0;
+  const fetchMock = vi.fn(async (url: string) => {
+    if (isLock(url)) return Response.json(HELD);
+    if (isLint(url)) return Response.json({ results: [] });
+    if (url === '/admin/api/drafts/listings/seaview-cottage') {
+      sourceWrites += 1;
+      if (sourceWrites === 1) return preflush.promise;
+      return Response.json({
+        pending: true,
+        problems: [],
+        revisions: { en: 'source-3', de: 'target-2' },
+      });
+    }
+    if (url === '/admin/api/translate/listings/seaview-cottage/de') return translatedReply.promise;
+    return Response.json({ pending: true, problems: [] });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({
+    entry: {
+      ...machine,
+      revisions: { en: 'source-1', de: 'target-1' },
+    },
+  });
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  type(root, 'input#f-title', 'Source before translation');
+  $<HTMLButtonElement>(root, 'button.btn-fill')?.click();
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync();
+
+  expect(
+    fetchMock.mock.calls.some(([url]) =>
+      String(url).includes('/admin/api/translate/listings/seaview-cottage/de'),
+    ),
+  ).toBe(false);
+  expect($<HTMLFieldSetElement>(root, '.entry-body > .form > fieldset')?.disabled).toBe(true);
+  expect($<HTMLFieldSetElement>(root, '.pane.is-locale fieldset')?.disabled).toBe(true);
+
+  preflush.resolve(
+    Response.json({
+      pending: true,
+      problems: [],
+      revisions: { en: 'source-2', de: 'target-1' },
+    }),
+  );
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync();
+
+  expect(
+    fetchMock.mock.calls.some(([url]) =>
+      String(url).includes('/admin/api/translate/listings/seaview-cottage/de'),
+    ),
+  ).toBe(true);
+  expect($<HTMLFieldSetElement>(root, '.entry-body > .form > fieldset')?.disabled).toBe(false);
+  expect($<HTMLFieldSetElement>(root, '.pane.is-locale fieldset')?.disabled).toBe(true);
+  expect($<HTMLButtonElement>(root, '#f-body button.add')?.disabled).toBe(true);
+
+  type(root, 'input#f-title', 'Source typed during translation');
+  await vi.advanceTimersByTimeAsync(2000);
+  expect(sourceWrites).toBe(1);
+
+  translatedReply.resolve(
+    Response.json({
+      data: {
+        title: 'Von der Maschine',
+        price: '£1,200 per week',
+        body: [{ _type: 'hero', _id: 'k3nf9a2p', heading: 'Über dem Hafen' }],
+        _machine: ['title'],
+      },
+      pending: true,
+      revision: 'target-2',
+    }),
+  );
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync();
+  await vi.waitFor(() => expect(sourceWrites).toBe(2));
+
+  expect($<HTMLInputElement>(root, 'input#f-title')?.value).toBe('Source typed during translation');
+  expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Von der Maschine');
+  expect(
+    wrote(fetchMock).filter(([url]) => url === '/admin/api/drafts/listings/seaview-cottage/de'),
+  ).toHaveLength(0);
+  expect($<HTMLFieldSetElement>(root, '.pane.is-locale fieldset')?.disabled).toBe(false);
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 test('a block a machine filled is badged where the block is, not at the top', () => {
@@ -2237,6 +2512,16 @@ test('a result about another language opens that language beside the form and la
   expect(document.activeElement?.id).toBe('t-body.0.heading');
 });
 
+test('a Canvas entry navigation opens the localized session even without a field target', async () => {
+  at('/admin/c/listings/seaview-cottage?locale=de');
+  const root = show({ entry: movedBlock });
+  await tick();
+  flushSync();
+
+  expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Seaview Cottage');
+  expect($(root, 'input#f-title')).not.toBeNull();
+});
+
 test('the field is landed on when the address changes under an open entry', async () => {
   show({ entry: movedBlock });
   await tick();
@@ -2641,4 +2926,23 @@ test('the outline reaches empty media, choice and grouped fields as well as text
   jump('Seo', '#f-seo-field summary');
   jump('Photos', '#f-photos-field');
   vi.unstubAllGlobals();
+});
+
+test('Canvas exposes validation problems with a working jump to the affected field', async () => {
+  const root = show({
+    entry: {
+      ...entry,
+      route: '/listings/[slug]',
+      problems: [{ path: 'title', message: 'Required' }],
+    },
+    preview: true,
+    userId: 'u1',
+  });
+  $$<HTMLButtonElement>(root, '[aria-label="Editor view"] button')[2]?.click();
+  flushSync();
+  expect($(root, '.canvas-validation')?.textContent).toContain('1 field needs attention');
+  expect($(root, '.canvas-validation')?.textContent).toContain('Required');
+  $<HTMLButtonElement>(root, '.canvas-validation button')?.click();
+  await vi.waitFor(() => expect(document.activeElement?.id).toBe('f-title'));
+  expect($(root, '[aria-label="Editor view"] [aria-pressed="true"]')?.textContent).toBe('Form');
 });

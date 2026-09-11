@@ -1,0 +1,189 @@
+---
+import assets from 'virtual:handover/ui';
+
+export const prerender = false;
+
+if (Astro.request.method !== 'POST') return new Response('POST required', { status: 405 });
+const form = await Astro.request.formData();
+interface FixtureSnapshot {
+  requestId?: string;
+  epoch?: string;
+  entry?: { collection?: string; id?: string };
+  locale?: string;
+  contentVersion?: number;
+  snapshots?: {
+    en?: {
+      title?: string;
+      behavior?: string;
+      layout?: { before?: number; between?: number; after?: number; count?: number };
+    };
+  };
+}
+let snapshot: FixtureSnapshot | undefined;
+try {
+  snapshot = JSON.parse(String(form.get('snapshot') ?? '')) as FixtureSnapshot;
+} catch {
+  snapshot = undefined;
+}
+const values = snapshot?.snapshots?.en;
+const behavior = values?.behavior;
+if (behavior === 'slow') await new Promise((resolve) => setTimeout(resolve, 100));
+if (behavior === 'late') await new Promise((resolve) => setTimeout(resolve, 450));
+const error = behavior === 'invalid';
+const manifest = error
+  ? {
+      mode: 'canvas',
+      status: 'error',
+      protocol: 1,
+      requestId: snapshot?.requestId,
+      epoch: snapshot?.epoch,
+      contentVersion: snapshot?.contentVersion,
+      error: { status: 422, message: 'The fixture snapshot is invalid.' },
+    }
+  : {
+      mode: 'canvas',
+      status: 'success',
+      protocol: 1,
+      requestId: snapshot?.requestId,
+      epoch: snapshot?.epoch,
+      entry: snapshot?.entry,
+      locale: snapshot?.locale,
+      contentVersion: snapshot?.contentVersion,
+    };
+const serialized = JSON.stringify(manifest).replace(
+  /[<>&\u2028\u2029]/g,
+  (character) => `\\u${character.codePointAt(0)?.toString(16).padStart(4, '0')}`,
+);
+const canvas = assets.entries.canvas;
+const titleTarget = JSON.stringify({
+  document: { collection: 'pages', id: 'canvas-fixture' },
+  locale: 'en',
+  address: 'title',
+});
+const secondaryTarget = JSON.stringify({
+  document: { collection: 'pages', id: 'canvas-fixture' },
+  locale: 'en',
+  address: 'secondary',
+});
+const selectionTarget = (
+  address: string,
+  document = { collection: 'pages', id: 'canvas-fixture' },
+) => JSON.stringify({ document, locale: 'en', address });
+const blocksTarget = selectionTarget('blocks');
+const firstBlockTarget = selectionTarget('blocks[_id=repeat01]');
+const firstHeadingTarget = selectionTarget('blocks[_id=repeat01].heading');
+const columnsBlockTarget = selectionTarget('blocks[_id=columns1]');
+const columnsTarget = selectionTarget('blocks[_id=columns1].columns');
+const firstColumnTarget = selectionTarget('blocks[_id=columns1].columns[_id=column01]');
+const firstColumnBlocksTarget = selectionTarget(
+  'blocks[_id=columns1].columns[_id=column01].blocks',
+);
+const nestedBlockTarget = selectionTarget(
+  'blocks[_id=columns1].columns[_id=column01].blocks[_id=repeat02]',
+);
+const nestedHeadingTarget = selectionTarget(
+  'blocks[_id=columns1].columns[_id=column01].blocks[_id=repeat02].heading',
+);
+const emptyColumnTarget = selectionTarget('blocks[_id=columns1].columns[_id=column02]');
+const emptyBlocksTarget = selectionTarget('blocks[_id=columns1].columns[_id=column02].blocks');
+const layout = values?.layout ?? {};
+const performanceBlocks = Array.from({ length: layout.count ?? 0 }, (_, index) => {
+  const id = `perf${String(index + 1).padStart(3, '0')}`;
+  const address = `blocks[_id=${id}]`;
+  return {
+    id,
+    block: selectionTarget(address),
+    heading: selectionTarget(`${address}.heading`),
+    nested: selectionTarget(`${address}.items`),
+    child: selectionTarget(`${address}.items[_id=${id}-child]`),
+    childHeading: selectionTarget(`${address}.items[_id=${id}-child].heading`),
+  };
+});
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>{error ? 'Invalid Canvas candidate' : values?.title}</title>
+  </head>
+  <body data-method={Astro.request.method}>
+    {error ? (
+      <p role="alert">The fixture snapshot is invalid.</p>
+    ) : behavior === 'performance' ? (
+      <main class="performance-page" data-performance-blocks={performanceBlocks.length} data-handover-list={blocksTarget}>
+        <h1 data-handover-field={titleTarget}>{values?.title}</h1>
+        {performanceBlocks.map((block, index) => (
+          <section data-performance-block={block.id} data-handover-block={block.block}>
+            <h2 data-handover-field={block.heading}>Block {index + 1}</h2>
+            {index % 10 === 0 && (
+              <div data-handover-list={block.nested}>
+                <article data-handover-block={block.child}>
+                  <p data-handover-field={block.childHeading}>Nested block {index + 1}</p>
+                </article>
+              </div>
+            )}
+          </section>
+        ))}
+      </main>
+    ) : behavior === 'selection' ? (
+      <>
+        <main class="selection-page" data-handover-list={blocksTarget}>
+          <h1 data-handover-field={titleTarget}>{values?.title}</h1>
+          <section data-selection-block="first" data-handover-block={firstBlockTarget}>
+            <h2 data-repeated-heading data-handover-field={firstHeadingTarget}>Repeated heading</h2>
+            <p data-repeated-heading data-handover-field={firstHeadingTarget}>Repeated heading again</p>
+          </section>
+          <div class="selection-spacer"></div>
+          <section data-selection-block="columns" data-handover-block={columnsBlockTarget}>
+            <div class="selection-columns" data-handover-list={columnsTarget}>
+              <div
+                data-selection-column="first"
+                data-handover-block={firstColumnTarget}
+                data-handover-list={firstColumnBlocksTarget}
+              >
+                <article data-handover-block={nestedBlockTarget}>
+                  <h3 data-nested-heading data-handover-field={nestedHeadingTarget}>Nested heading</h3>
+                </article>
+              </div>
+              <div
+                data-selection-column="empty"
+                data-handover-block={emptyColumnTarget}
+                data-handover-list={emptyBlocksTarget}
+              >
+                <p data-empty-list>Empty nested list</p>
+              </div>
+            </div>
+          </section>
+        </main>
+        <aside class="unsupported-region">Template-owned controls</aside>
+      </>
+    ) : (
+      <>
+        <div style={`height:${layout.before ?? 0}px`}></div>
+        <h1 data-handover-field={titleTarget}>{values?.title}</h1>
+        <div style={`height:${layout.between ?? 0}px`}></div>
+        <h2 data-handover-field={secondaryTarget}>Secondary target</h2>
+        <div style={`height:${layout.after ?? 0}px`}></div>
+      </>
+    )}
+    <script
+      type="application/json"
+      data-handover-canvas-manifest
+      set:html={serialized}
+    ></script>
+    {!error && behavior !== 'bootstrap-failure' && canvas && (
+      <script is:inline type="module" src={`/admin/_assets/${canvas.script}`}></script>
+    )}
+  </body>
+</html>
+
+<style>
+  .selection-page { font: 16px/1.5 system-ui, sans-serif; padding: 24px; }
+  [data-selection-block] { border: 1px solid #bbb; padding: 20px; }
+  .selection-spacer { height: 900px; }
+  .selection-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  [data-selection-column] { min-height: 180px; border: 1px dashed #999; padding: 16px; }
+  .performance-page { font: 16px/1.5 system-ui, sans-serif; padding: 16px; }
+  [data-performance-block] { min-height: 52px; padding: 8px; border-bottom: 1px solid #ddd; }
+</style>

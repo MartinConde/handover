@@ -832,6 +832,357 @@ test('a block added in one language arrives in the others with its shared values
   });
 });
 
+test('a restored block takes translated and opaque values from its locale seed', () => {
+  const before = {
+    _version: 1,
+    title: 'Home',
+    blocks: [
+      { _type: 'hero', _id: 'lead0001', heading: 'Welcome' },
+      { _type: 'cta', _id: 'gone0001', heading: 'Book now' },
+    ],
+  };
+  const after = {
+    _version: 1,
+    title: 'Home',
+    blocks: [
+      { _type: 'hero', _id: 'lead0001', heading: 'Welcome' },
+      {
+        _type: 'hero',
+        _id: 'back0001',
+        heading: 'Welcome back',
+        image: { src: 'media/new.webp', alt: 'River', width: 1800, height: 1200 },
+      },
+    ],
+  };
+  const target = {
+    _version: 1,
+    title: 'Startseite',
+    blocks: [
+      { _type: 'hero', _id: 'lead0001', heading: 'Willkommen' },
+      { _type: 'quote', _id: 'local001', body: 'Nur auf Deutsch.' },
+      { _type: 'cta', _id: 'gone0001', heading: 'Jetzt buchen' },
+    ],
+  };
+
+  expect(
+    syncLocale('default', page, 'de', { before, after }, target, {
+      seeds: [
+        {
+          address: 'blocks[_id=back0001]',
+          value: {
+            _type: 'hero',
+            _id: 'back0001',
+            heading: 'Willkommen zurück',
+            image: {
+              src: 'media/old.webp',
+              alt: 'Der Fluss',
+              width: 900,
+              height: 600,
+            },
+            providerState: { crop: 'kept', token: 17 },
+          },
+        },
+        {
+          address: 'blocks[_id=gone0001]',
+          value: { _type: 'cta', _id: 'gone0001', heading: 'Nicht wiederherstellen' },
+        },
+      ],
+    }),
+  ).toEqual({
+    _version: 1,
+    title: 'Startseite',
+    blocks: [
+      { _type: 'hero', _id: 'lead0001', heading: 'Willkommen' },
+      { _type: 'quote', _id: 'local001', body: 'Nur auf Deutsch.' },
+      {
+        _type: 'hero',
+        _id: 'back0001',
+        heading: 'Willkommen zurück',
+        image: {
+          src: 'media/new.webp',
+          alt: 'Der Fluss',
+          width: 1800,
+          height: 1200,
+        },
+        providerState: { crop: 'kept', token: 17 },
+      },
+    ],
+  });
+});
+
+test('a seed cannot overwrite a surviving row or repair a row missing through drift', () => {
+  const before = {
+    blocks: [
+      {
+        _type: 'hero',
+        _id: 'stay0001',
+        heading: 'Stay',
+        image: { src: 'media/old.webp', alt: 'Old' },
+      },
+      { _type: 'hero', _id: 'drift001', heading: 'Drifted' },
+    ],
+  };
+  const after = {
+    blocks: [
+      {
+        _type: 'hero',
+        _id: 'stay0001',
+        heading: 'Stay edited',
+        image: { src: 'media/new.webp', alt: 'New' },
+      },
+      { _type: 'hero', _id: 'drift001', heading: 'Drifted' },
+    ],
+  };
+  const target = {
+    blocks: [
+      {
+        _type: 'hero',
+        _id: 'stay0001',
+        heading: 'Bleibt',
+        image: { src: 'media/old.webp', alt: 'Bleibt alt' },
+        opaque: 'survives',
+      },
+    ],
+  };
+
+  expect(
+    syncLocale('default', page, 'de', { before, after }, target, {
+      seeds: [
+        {
+          address: 'blocks[_id=stay0001]',
+          value: { _type: 'hero', _id: 'stay0001', heading: 'Seeded', opaque: 'seeded' },
+        },
+        {
+          address: 'blocks[_id=drift001]',
+          value: { _type: 'hero', _id: 'drift001', heading: 'Not a drift answer' },
+        },
+      ],
+    }),
+  ).toEqual({
+    _version: 1,
+    blocks: [
+      {
+        _type: 'hero',
+        _id: 'stay0001',
+        heading: 'Bleibt',
+        image: { src: 'media/new.webp', alt: 'Bleibt alt' },
+        opaque: 'survives',
+      },
+      { _type: 'hero', _id: 'drift001' },
+    ],
+  });
+});
+
+test('locale exclusions discard a seed rather than inserting its row', () => {
+  const before = { blocks: [] };
+  const after = {
+    blocks: [
+      {
+        _type: 'hero',
+        _id: 'onlyen01',
+        _locales: ['en'],
+        heading: 'English only',
+      },
+    ],
+  };
+
+  expect(
+    syncLocale(
+      'default',
+      page,
+      'de',
+      { before, after },
+      { blocks: [] },
+      {
+        seeds: [
+          {
+            address: 'blocks[_id=onlyen01]',
+            value: { _type: 'hero', _id: 'onlyen01', heading: 'Nicht einfügen' },
+          },
+        ],
+      },
+    ),
+  ).toEqual({ _version: 1, blocks: [] });
+});
+
+test('duplicate seed addresses are ambiguous and restore nothing locale-owned', () => {
+  const before = { blocks: [] };
+  const after = {
+    blocks: [
+      {
+        _type: 'hero',
+        _id: 'back0001',
+        heading: 'Welcome back',
+        image: { src: 'media/new.webp', alt: 'River' },
+      },
+    ],
+  };
+  const seeds = ['Erste Fassung', 'Zweite Fassung'].map((heading) => ({
+    address: 'blocks[_id=back0001]',
+    value: { _type: 'hero', _id: 'back0001', heading },
+  }));
+
+  expect(syncLocale('default', page, 'de', { before, after }, { blocks: [] }, { seeds })).toEqual({
+    _version: 1,
+    blocks: [
+      {
+        _type: 'hero',
+        _id: 'back0001',
+        image: { src: 'media/new.webp' },
+      },
+    ],
+  });
+});
+
+test('only translated string markers belonging to an accepted seed are restored', () => {
+  const before = {
+    blocks: [
+      { _type: 'hero', _id: 'lead0001', heading: 'Welcome' },
+      { _type: 'hero', _id: 'gone0001', heading: 'Gone' },
+    ],
+  };
+  const after = {
+    blocks: [
+      { _type: 'hero', _id: 'lead0001', heading: 'Welcome' },
+      {
+        _type: 'hero',
+        _id: 'back0001',
+        heading: 'Welcome back',
+        image: { src: 'media/new.webp', alt: 'River' },
+      },
+    ],
+  };
+  const target = {
+    _machine: ['blocks[lead0001].heading', 'blocks[_id=gone0001].heading'],
+    blocks: [
+      { _type: 'hero', _id: 'lead0001', heading: 'Willkommen' },
+      { _type: 'hero', _id: 'gone0001', heading: 'Fort' },
+    ],
+  };
+
+  expect(
+    syncLocale('default', page, 'de', { before, after }, target, {
+      seeds: [
+        {
+          address: 'blocks[_id=back0001]',
+          value: {
+            _type: 'hero',
+            _id: 'back0001',
+            heading: 'Willkommen zurück',
+            image: { src: 'media/old.webp', alt: 'Der Fluss' },
+          },
+          machine: [
+            'blocks[_id=back0001].heading',
+            'blocks[_id=back0001].image.alt',
+            'blocks[_id=back0001].image.src',
+            'blocks[_id=back0001].missing',
+            'blocks[_id=lead0001].heading',
+          ],
+        },
+      ],
+    }),
+  ).toEqual({
+    _version: 1,
+    _machine: [
+      'blocks[lead0001].heading',
+      'blocks[_id=back0001].heading',
+      'blocks[_id=back0001].image.alt',
+    ],
+    blocks: [
+      { _type: 'hero', _id: 'lead0001', heading: 'Willkommen' },
+      {
+        _type: 'hero',
+        _id: 'back0001',
+        heading: 'Willkommen zurück',
+        image: { src: 'media/new.webp', alt: 'Der Fluss' },
+      },
+    ],
+  });
+});
+
+test('a duplicated nested subtree restores markers already remapped to its new ids', () => {
+  const nested: Form = {
+    fields: [
+      { path: ['sections'], label: 'Sections', type: 'blocks', required: true, types: ['columns'] },
+    ],
+    blocks: {
+      columns: [
+        {
+          path: ['items'],
+          label: 'Items',
+          type: 'blocks',
+          required: true,
+          types: ['hero'],
+        },
+      ],
+      hero: [
+        { path: ['heading'], label: 'Heading', type: 'text', required: true },
+        { path: ['rank'], label: 'Rank', type: 'number', required: true, i18n: 'duplicate' },
+      ],
+    },
+  };
+  const before = { sections: [] };
+  const after = {
+    sections: [
+      {
+        _type: 'columns',
+        _id: 'newouter',
+        items: [{ _type: 'hero', _id: 'newinner', heading: 'Copy', rank: 2 }],
+      },
+    ],
+  };
+  const marker = 'sections[_id=newouter].items[_id=newinner].heading';
+
+  expect(
+    syncLocale(
+      'default',
+      nested,
+      'de',
+      { before, after },
+      { sections: [] },
+      {
+        seeds: [
+          {
+            address: 'sections[_id=newouter]',
+            value: {
+              _type: 'columns',
+              _id: 'newouter',
+              items: [
+                {
+                  _type: 'hero',
+                  _id: 'newinner',
+                  heading: 'Kopie',
+                  rank: 1,
+                  opaque: { from: 'duplicate' },
+                },
+              ],
+            },
+            machine: [marker],
+          },
+        ],
+      },
+    ),
+  ).toEqual({
+    _version: 1,
+    _machine: [marker],
+    sections: [
+      {
+        _type: 'columns',
+        _id: 'newouter',
+        items: [
+          {
+            _type: 'hero',
+            _id: 'newinner',
+            heading: 'Kopie',
+            rank: 2,
+            opaque: { from: 'duplicate' },
+          },
+        ],
+      },
+    ],
+  });
+});
+
 test('a block deleted in one language is deleted in every language', () => {
   const before = drifted('en');
   const after = { ...before, blocks: [(before.blocks as unknown[])[0]] };
@@ -1525,6 +1876,46 @@ test('metadata overlays draft edits, additions and deletions without validating 
   ]);
   await expect(source.getEntry('listings', 'en/mill-house')).rejects.toThrow('Invalid body');
   await expect(source.getCollection('listings', 'en')).rejects.toThrow('Invalid body');
+});
+
+test('one draft source parses and validates each changed path once while keeping metadata raw', async () => {
+  const validate = vi.fn((_collection: string, data: unknown) => {
+    (data as Record<string, unknown>).checked = true;
+    return data;
+  });
+  const rows = [{ path: 'src/content/listings/en/mill-house.yaml', contents: 'title: The Mill\n' }];
+  const first = draftSource('default', built, rows, validate);
+
+  expect(await first.getEntry('listings', 'en/mill-house')).toEqual({
+    id: 'en/mill-house',
+    data: { title: 'The Mill', checked: true },
+  });
+  expect(await first.getEntryMetadata?.('listings', 'en/mill-house')).toEqual({
+    id: 'en/mill-house',
+    data: { title: 'The Mill' },
+  });
+  expect(await first.getCollection('listings', 'en')).toContainEqual({
+    id: 'en/mill-house',
+    data: { title: 'The Mill', checked: true },
+  });
+  expect(validate).toHaveBeenCalledTimes(1);
+
+  const second = draftSource(
+    'default',
+    built,
+    [
+      {
+        path: 'src/content/listings/en/mill-house.yaml',
+        contents: 'title: The Mill House\n',
+      },
+    ],
+    validate,
+  );
+  expect(await second.getEntry('listings', 'en/mill-house')).toEqual({
+    id: 'en/mill-house',
+    data: { title: 'The Mill House', checked: true },
+  });
+  expect(validate).toHaveBeenCalledTimes(2);
 });
 
 test.each(['_status: hidden\ntitle: null\n', ''])(

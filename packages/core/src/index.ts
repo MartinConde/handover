@@ -49,7 +49,9 @@ export type {
   GlobalsSelection,
   I18nMark,
   LocaleLink,
+  LocaleSeed,
   LocaleSite,
+  LocaleSyncOptions,
   NavLink,
 } from './content.js';
 export {
@@ -69,6 +71,7 @@ export {
   staticSource,
   stringifyEntry,
   syncLocale,
+  TRANSLATED_PROPS,
   timestampErrors,
   translatableText,
 } from './content.js';

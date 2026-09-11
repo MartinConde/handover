@@ -1,0 +1,16 @@
+---
+import { createEditContext, isCanvas } from '../../src/canvas.js';
+
+const edit = createEditContext(Astro);
+---
+
+<main data-is-canvas={String(isCanvas(Astro))}>
+  <h1 {...edit.field('title')}>Title</h1>
+  <section {...edit.list('blocks')}>
+    <article {...edit.list('blocks').block('hero-1')}>
+      <h2 {...edit.list('blocks').block('hero-1').field('heading')}>Heading</h2>
+    </article>
+    <article {...edit.list('blocks').block({ _id: 'grid-1', _type: 'featureGrid' })}>Typed</article>
+    <article {...edit.list('blocks').block({ _id: 'grid-2', _type: 'featureGrid', _label: 'Walk to the harbour' })}>Named</article>
+  </section>
+</main>

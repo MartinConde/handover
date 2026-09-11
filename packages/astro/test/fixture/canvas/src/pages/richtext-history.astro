@@ -1,0 +1,23 @@
+---
+export const prerender = false;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Rich text history fixture</title>
+  </head>
+  <body>
+    <div id="richtext-history"></div>
+    <script>
+      import { mount } from 'svelte';
+      import RichTextHistory from '../components/RichTextHistory.svelte';
+
+      const target = document.getElementById('richtext-history');
+      if (!target) throw new Error('rich-text fixture target missing');
+      mount(RichTextHistory, { target });
+    </script>
+  </body>
+</html>

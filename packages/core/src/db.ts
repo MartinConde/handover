@@ -3,6 +3,7 @@ import { drizzle } from 'drizzle-orm/d1';
 import {
   applyDrift,
   type DriftChoice,
+  type LocaleSeed,
   markTranslation,
   mergeEntry,
   offeredEntry,
@@ -132,6 +133,13 @@ export interface LocaleSync {
   siblings: Record<string, string>;
   /** A translation's save takes only the values its language owns, never the structure. */
   translation?: boolean;
+  /** Locale-owned subtrees used only when structural history restores or duplicates rows. */
+  restoration?: {
+    /** The complete locale revision set captured with the restoration seeds. */
+    revisions: Readonly<Record<string, string>>;
+    /** locale → saved rows that may fill newly inserted source rows. */
+    seeds: Readonly<Record<string, readonly LocaleSeed[]>>;
+  };
 }
 
 /** Every write re-asserts the revision in SQL, synced siblings included. */
@@ -153,9 +161,34 @@ export async function saveDraft(
   if (!loaded) return undefined;
   if (expectedRevision !== undefined && loaded.revision !== expectedRevision)
     throw new DraftRevisionError();
+  const locale = sync?.locale ?? path.split('/').at(-2) ?? '';
+  const siblings = Object.entries(sync?.translation ? {} : (sync?.siblings ?? {}));
+  const loadedSiblings = sync?.restoration
+    ? await Promise.all(
+        siblings.map(
+          async ([siblingLocale, sibling]) =>
+            [siblingLocale, await load(siteId, db, git, sibling)] as const,
+        ),
+      )
+    : undefined;
+  if (sync?.restoration) {
+    const present = new Map<string, Loaded>([[locale, loaded]]);
+    for (const [siblingLocale, other] of loadedSiblings ?? [])
+      if (other) present.set(siblingLocale, other);
+    const expected = sync.restoration.revisions;
+    if (
+      Object.keys(expected).length !== present.size ||
+      [...present].some(
+        ([presentLocale, file]) =>
+          expected[presentLocale] === undefined || expected[presentLocale] !== file.revision,
+      ) ||
+      Object.keys(sync.restoration.seeds).some((seedLocale) => !present.has(seedLocale))
+    )
+      throw new DraftRevisionError();
+  }
   const revision = crypto.randomUUID();
   const revisions: Record<string, string> = {
-    [sync?.locale ?? path.split('/').at(-2) ?? '']: revision,
+    [locale]: revision,
   };
   const before = loaded.entry;
   const translated = sync?.translation ? sync.form : undefined;
@@ -169,13 +202,17 @@ export async function saveDraft(
   const stamp = { ...stampOf(by), revision };
   const writes = [upsert(db, siteId, path, contents, loaded, updatedAt, stamp)];
   // A translation changes no structure, so the other languages have nothing to follow.
-  for (const [locale, sibling] of Object.entries(translated ? {} : (sync?.siblings ?? {}))) {
+  for (const [locale, sibling] of translated ? [] : siblings) {
     if (!sync) break;
     const projection = (data: unknown) => skeleton(siteId, sync.form, locale, data);
     if (projection(before) === projection(after)) continue;
-    const other = await load(siteId, db, git, sibling);
+    const other = loadedSiblings
+      ? loadedSiblings.find(([loadedLocale]) => loadedLocale === locale)?.[1]
+      : await load(siteId, db, git, sibling);
     if (!other) continue;
-    const synced = syncLocale(siteId, sync.form, locale, edit, other.entry);
+    const synced = syncLocale(siteId, sync.form, locale, edit, other.entry, {
+      seeds: sync.restoration?.seeds[locale],
+    });
     const siblingRevision = crypto.randomUUID();
     revisions[locale] = siblingRevision;
     writes.push(

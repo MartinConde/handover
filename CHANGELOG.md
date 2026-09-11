@@ -4,6 +4,124 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Renew an entry's editing lease from the shared session mutation boundary, so Canvas text,
+  history, and block operations keep the lock alive immediately just like Form and translation
+  edits instead of waiting for a background-throttled autosave.
+
+- Name Canvas blocks in the Structure panel the way the form editor does — a block's `_label`,
+  else its type — instead of numbering every row, and let a row with children collapse. Templates
+  that already pass a whole block row to `edit.block(row)`, `<Blocks />` among them, get the names
+  with no change. Structure and Inspector drop their internal hairlines for a lighter panel.
+  A list annotated on the same element as the block that owns it, as nested block lists usually
+  are, no longer appears above that block under the wrong parent.
+
+- Polish Canvas editing: show field validation with a direct Form recovery action, fill the
+  available viewport, preserve Structure alongside the media Inspector on wide screens, and
+  contain image controls and formatting toolbars on narrow screens. Rich-text activation replaces
+  the rendered prose without a duplicate and keeps accepted text visible while refreshing. Quiet
+  selection outlines and short field labels replace stacked outlines and full-path overlays.
+
+- Document the Canvas template contract with build-checked page and nested-block patterns, the
+  public locals and annotation helpers, rules for Canvas-aware site side effects, and the release's
+  editing boundaries. The block and preview guides now match the Form/Split/Canvas implementation.
+
+- Bound Canvas work on large entries. Entry versions and dirty state now advance without
+  serializing the whole document on each keystroke; snapshots materialize only for saves and
+  renders. Preview draft paths are indexed and each changed file is parsed and validated once per
+  request, while visible overlay geometry shares observers and one animation-frame measurement
+  pass.
+
+- Coordinate Canvas navigation without letting the iframe leave its snapshot session. Edit and
+  Interact both resolve real relative and localized site links through the versioned bridge and
+  flush every dirty locale before opening another editable entry. Interact disables editing
+  overlays while preserving site controls; hash links stay local, non-editable pages, external
+  links, and downloads use explicit open actions, and new-tab previews remain ordinary
+  authenticated GETs with no snapshot data in their URLs.
+
+- Add duplicate, delete, and same-list reorder controls to selected Canvas blocks. Pointer drags
+  remain a reversible visual projection until drop, Escape cancels without changing content, and
+  labelled move controls plus `Alt` + arrow keys provide keyboard parity. Referenced blocks remove
+  only their page occurrence, recursive duplication keeps fresh IDs across locales, and shared
+  undo/redo restores translated subtrees even after deletion has autosaved.
+
+- Add schema-filtered Canvas block insertion and replacement. Selected blocks expose before/after
+  controls and the keyboard insert shortcut, while annotated empty block lists expose their own
+  insertion point. A temporary Inspector keeps configuration local until required fields are
+  complete; Cancel changes nothing and Apply creates one undoable structural transaction. Failed
+  candidate renders retain both the last working Canvas and the newly edited Form state.
+
+- Add lazy rich-text editing to selected Canvas prose annotations. Canvas and Form now share the
+  same TipTap extension tiers, Markdown serializer, controlled reconciliation, and session-owned
+  undo/redo selections. Formatting and IME composition cross the versioned command bridge, while
+  code-edited Markdown outside its configured tier stays read-only and unchanged.
+
+- Add focused plain-text editing to selected Canvas text annotations. Double-click or Enter begins
+  editing, paste remains plain text, IME composition commits atomically, and Escape or blur exits
+  before the established fresh render. Serialized, versioned acknowledgements share Form's session
+  undo/redo and cursor history; refused stale edits restore the authoritative Form value without
+  relaxing the bridge's origin, frame, locale, document, version, or target checks.
+
+- Reuse the existing schema widgets in a right-side Canvas Inspector. Stable selections resolve
+  structured child addresses back to their owning field, retain source/translation restrictions,
+  lock disablement, validation and atomic session commands, and schedule a fresh render only after
+  a completed change. Referenced globals and other entries link to their owning editor instead of
+  borrowing the active page's write authority; derived structural selections can return to Form.
+
+- Add Canvas selection and structure navigation. Explicit field, block, and list annotations now
+  produce isolated in-frame hover and selection overlays, nested breadcrumbs, grouped repeated
+  roots, and selectable empty lists. A versioned bridge keeps the parent Structure tree and
+  logical target in sync; pointer selection, arrow-key sibling traversal, Shift+arrow ancestry,
+  Enter selection, accessible position announcements, and tree-driven scrolling share the same
+  stable targets without inferring editable content from ordinary HTML.
+
+- Add one shared Form/Split/Canvas entry shell. The versioned view preference is scoped to the
+  site's normalized base and signed-in editor, unsupported sites safely fall back to Form, and
+  full Canvas collapses the application sidebar. Split and narrow-screen pane switches retain the
+  same unsaved session while Canvas renders its current locale snapshot through the preview POST.
+
+- Coalesce completed Canvas edits and block actions into one render after 200 ms while retaining
+  only the latest pending snapshot. Ready documents now wait for inline editing, composition, and
+  dragging to finish before promotion; obsolete responses cannot replace the active page, and
+  promotion restores the selected annotation's scroll anchor across layout or viewport changes
+  without taking focus from parent inspector controls.
+
+- Render each Canvas update through a fresh, uniquely named iframe and native snapshot POST. A
+  candidate replaces the visible document only after its matching bridge handshake and load have
+  completed at the current content version; render errors, bootstrap timeouts, and obsolete replies
+  dispose the candidate while retaining the active page, and repeated renders leave Back/Forward
+  history intact.
+
+- Add the versioned Canvas browser bridge. Handshakes and commands are bound to the expected
+  origin, iframe, render request, entry, locale, session epoch, content version, and selected
+  target; every accepted or refused command is acknowledged, and exact retries cannot run twice.
+
+- Let `<Blocks />` carry an optional Canvas edit context through custom block components without
+  adding wrapper markup. Fields and explicit empty lists can annotate existing elements, repeated
+  shared-global occurrences retain both their source owner and page location, duplicate block IDs
+  are refused in Canvas, and public rendering remains marker-free.
+
+- Carry verified Canvas document identity through typed request locals. Site templates can use
+  `createEditContext(Astro)` and `isCanvas(Astro)` without changing public or ordinary preview
+  output, while Canvas success and known-error documents expose escaped result manifests.
+
+- Render Canvas previews from authenticated, same-origin form POSTs carrying the current locale
+  snapshots. The preview route overlays that transient data in memory without saving it, accepts
+  both editors and owners, and rejects malformed or encoded bodies larger than 5 MiB.
+
+- Split the browser build into manifest-backed admin and Canvas entries. The admin shell now loads
+  only its own entry and associated styles while the asset route keeps shared and lazy chunks
+  available; entry editing and Canvas rich text load from explicit on-demand boundaries.
+
+- Make block and row structure edits part of entry-session undo/redo, including after autosave.
+  Duplication now copies only the selected subtree across loaded locales, reuses one recursive ID
+  map for every descendant, preserves unrelated parent identities and machine markers, and sends
+  locale-owned restoration data through the scoped structural save envelope.
+
+- Accept a scoped `structure` envelope on source draft saves. Structural history can restore
+  locale-owned row data and valid machine-translation markers while the route validates stable
+  container addresses, locale revisions, seed identity, and marker scope. Ordinary saves retain
+  their existing filtering, lock, drift, conflict, and response behavior.
+
 - Add selective global loading to `globalsAt()`: loaders can name layout dependencies and
   supply the rendered block tree, including nested `_ref` targets. Preview validates only
   those drafts, so an incomplete unused global no longer blocks a page. Required invalid or

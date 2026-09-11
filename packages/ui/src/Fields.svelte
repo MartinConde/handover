@@ -20,6 +20,14 @@ import {
   type WordPart,
 } from '@handover/core';
 import { tick } from 'svelte';
+import type {
+  EntrySession,
+  FieldChange,
+  FieldCommandResult,
+  FieldHistory,
+  ListCommandResult,
+  ListOperation,
+} from './entry-session.svelte';
 import Fields from './Fields.svelte';
 import Focal from './Focal.svelte';
 import Media from './Media.svelte';
@@ -51,6 +59,11 @@ let {
   inheritedSeo,
   site,
   servedAt,
+  session,
+  oncommand,
+  viewRoot,
+  structureLocked = false,
+  textOnly = false,
 }: {
   fields: readonly Field[];
   root: Data;
@@ -89,6 +102,16 @@ let {
   site?: string;
   /** The path this language serves the entry at, which the previews print under the origin. */
   servedAt?: string;
+  /** Production writes cross this entry-lifetime boundary; omission is for isolated fixtures. */
+  session?: EntrySession;
+  /** Receives acknowledgements and explicit refusals for inspector/Canvas consumers. */
+  oncommand?: (result: FieldCommandResult | ListCommandResult) => void;
+  /** A drag-only rendering copy shared with recursive field levels. */
+  viewRoot?: Data;
+  /** A persisted action may allow prose edits while freezing list structure. */
+  structureLocked?: boolean;
+  /** During machine translation, only plain and rich source prose remains editable. */
+  textOnly?: boolean;
 } = $props();
 
 const modeOf = (field: Field): Translation => field.i18n ?? inherited;
@@ -164,12 +187,18 @@ const crumbs = $derived(
   [host, ...(servedAt ?? '').split('/').filter(Boolean).map(decodeURIComponent)].join(' › '),
 );
 
+let projection = $state<Data>();
+const displayedRoot = $derived(projection ?? viewRoot ?? root);
+
+function readFrom(data: Data, at: readonly string[]): unknown {
+  return at.reduce<unknown>((node, key) => (node as Data | undefined)?.[key], data);
+}
 function read(at: readonly string[]): unknown {
-  return at.reduce<unknown>((node, key) => (node as Data | undefined)?.[key], root);
+  return readFrom(displayedRoot, at);
 }
 
 // `undefined` removes the key so an optional field left empty is absent, not null.
-function write(at: readonly string[], value: unknown) {
+function directWrite(at: readonly string[], value: unknown) {
   let node = root;
   for (const key of at.slice(0, -1)) {
     if (typeof node[key] !== 'object' || node[key] === null) node[key] = {};
@@ -178,6 +207,33 @@ function write(at: readonly string[], value: unknown) {
   const last = at[at.length - 1] as string;
   if (value === undefined) delete node[last];
   else node[last] = value;
+}
+
+/** One widget action is one command even when it changes several stored properties. */
+function writeMany(
+  at: readonly string[],
+  changes: readonly FieldChange[],
+  history?: FieldHistory,
+): FieldCommandResult | undefined {
+  if (!session) {
+    for (const change of changes) directWrite([...at, ...(change.path ?? [])], change.value);
+    return;
+  }
+  const stable = address(at);
+  const result = stable
+    ? session.fieldCommand(locale, {
+        address: stable,
+        contentVersion: session.contentVersion(locale),
+        changes,
+        history,
+      })
+    : ({ ok: false, reason: 'ambiguous' } as const);
+  oncommand?.(result);
+  return result;
+}
+
+function write(at: readonly string[], value: unknown, history?: FieldHistory) {
+  return writeMany(at, [{ value }], history);
 }
 
 const str = (at: readonly string[]) => {
@@ -196,9 +252,36 @@ const rows = (at: readonly string[]): unknown[] => {
 };
 const list = (at: readonly string[]) => read(at) as unknown[];
 
+function directList(at: readonly string[], operation: ListOperation) {
+  const held = readFrom(root, at);
+  if (operation.type === 'insert') {
+    if (Array.isArray(held)) held.splice(operation.index, 0, operation.value);
+    else directWrite(at, [operation.value]);
+  } else if (Array.isArray(held) && operation.type === 'remove') {
+    held.splice(operation.index, 1);
+  } else if (Array.isArray(held) && operation.type === 'move') {
+    move(held, operation.from, operation.to);
+  }
+}
+function listCommand(at: readonly string[], operation: ListOperation) {
+  if (!session) {
+    directList(at, operation);
+    return;
+  }
+  const stable = address(at);
+  const result = stable
+    ? session.listCommand(locale, {
+        address: stable,
+        contentVersion: session.contentVersion(locale),
+        operation,
+      })
+    : ({ ok: false, reason: 'ambiguous' } as const);
+  oncommand?.(result);
+  return result;
+}
 function add(at: readonly string[], item: unknown) {
-  if (Array.isArray(read(at))) list(at).push(item);
-  else write(at, [item]);
+  const held = readFrom(root, at);
+  listCommand(at, { type: 'insert', index: Array.isArray(held) ? held.length : 0, value: item });
 }
 // A scalar row has no `_id`; without a key that moves with it a reorder swaps words, not cards.
 const names = new WeakMap<object, string[]>();
@@ -215,25 +298,67 @@ function move(items: unknown[], from: number, to: number) {
   names.get(items)?.splice(to, 0, ...(names.get(items)?.splice(from, 1) ?? []));
 }
 function drop(at: readonly string[], index: number) {
-  list(at).splice(index, 1);
-  names.get(list(at))?.splice(index, 1);
+  const held = readFrom(root, at);
+  const result = listCommand(at, { type: 'remove', index });
+  if (Array.isArray(held) && (!session || result?.ok)) names.get(held)?.splice(index, 1);
+}
+function duplicate(at: readonly string[], index: number) {
+  listCommand(at, { type: 'duplicate', index });
 }
 type Handlers = Required<DragDropEventHandlers>;
-// The list is rewritten as the card passes over each slot, so an escaped drag must put it back.
 let origin = -1;
-function begun(event: Parameters<Handlers['onDragStart']>[0]) {
+let dragAddress = '';
+let dragVersion = -1;
+let dragId = '';
+// Hover order lives only in this rendering copy; the entry changes once, on a successful drop.
+function begun(at: readonly string[], event: Parameters<Handlers['onDragStart']>[0]) {
   const { source } = event.operation;
   origin = isSortable(source) ? source.index : -1;
+  dragId = source ? String(source.id) : '';
+  dragAddress = address(at);
+  dragVersion = session?.contentVersion(locale) ?? -1;
+  if (origin < 0 || !dragAddress) return;
+  const next = structuredClone($state.snapshot(root) as Data);
+  const before = readFrom(root, at);
+  const projected = readFrom(next, at);
+  if (!Array.isArray(before) || !Array.isArray(projected)) return;
+  const keys = names.get(before);
+  projection = next;
+  // `$state` proxies the clone on assignment, so attach scalar-row identities to that array.
+  const held = readFrom(projection, at);
+  if (keys && Array.isArray(held)) names.set(held, [...keys]);
 }
 function over(at: readonly string[], event: Parameters<Handlers['onDragOver']>[0]) {
   const { source, target } = event.operation;
-  if (!isSortable(source) || !isSortable(target) || source.index === target.index) return;
+  if (!projection || !isSortable(source) || !isSortable(target) || source.index === target.index)
+    return;
   move(list(at), source.index, target.index);
 }
 function ended(at: readonly string[], event: Parameters<Handlers['onDragEnd']>[0]) {
-  const { source } = event.operation;
-  if (!event.canceled || !isSortable(source) || origin < 0 || source.index === origin) return;
-  move(list(at), source.index, origin);
+  const from = origin;
+  const projected = projection ? readFrom(projection, at) : undefined;
+  const to = Array.isArray(projected)
+    ? projected.findIndex((_row, i) => keyOf(projected, i) === dragId)
+    : -1;
+  const stable = dragAddress;
+  const version = dragVersion;
+  projection = undefined;
+  origin = -1;
+  dragAddress = '';
+  dragVersion = -1;
+  dragId = '';
+  if (event.canceled || from < 0 || to < 0 || from === to) return;
+  if (!session) directList(at, { type: 'move', from, to });
+  else {
+    const result = stable
+      ? session.listCommand(locale, {
+          address: stable,
+          contentVersion: version,
+          operation: { type: 'move', from, to },
+        })
+      : ({ ok: false, reason: 'ambiguous' } as const);
+    oncommand?.(result);
+  }
 }
 // Read lazily: an eager read would remake the sortable on every reorder, losing the animation.
 const sortable = (id: () => string, index: () => number) =>
@@ -245,7 +370,7 @@ const sortable = (id: () => string, index: () => number) =>
       return index();
     },
     get disabled() {
-      return translating;
+      return translating || structureLocked;
     },
   });
 
@@ -327,8 +452,9 @@ const SEO_SHAPE = {
 };
 function seoWrite(at: readonly string[], key: string, value: unknown) {
   const held = read(at) as Record<string, unknown> | undefined;
-  if (held === undefined || !(key in held)) write(at, { ...SEO_SHAPE, ...held });
-  write([...at, key], value);
+  if (!translating && (held === undefined || !(key in held)))
+    write(at, { ...SEO_SHAPE, ...held, [key]: value });
+  else write([...at, key], value);
 }
 
 const bytes = (at: readonly string[]) => fileSize(read([...at, 'bytes']) as number | undefined);
@@ -377,8 +503,10 @@ function dropOn(id: string, e: DragEvent) {
 
 const linkType = (at: readonly string[]) => (read([...at, 'type']) === 'url' ? 'url' : 'entry');
 function setLinkType(at: readonly string[], type: 'url' | 'entry') {
-  write([...at, 'type'], type);
-  write([...at, type === 'url' ? 'ref' : 'href'], undefined);
+  writeMany(at, [
+    { path: ['type'], value: type },
+    { path: [type === 'url' ? 'ref' : 'href'], value: undefined },
+  ]);
 }
 </script>
 
@@ -438,10 +566,11 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   <div class="label-row"><span id="{id}-l">{text}{#if 'required' in field && field.required}<span class="req" aria-hidden="true">*</span>{/if}</span>{#if prose(field)}{@render machineMark(address(at), text)}{/if}</div>
 {/snippet}
 
-{#snippet controls(at: readonly string[], i: number, name: string, handle: (node: HTMLElement) => () => void)}
+{#snippet controls(at: readonly string[], i: number, name: string, handle: (node: HTMLElement) => () => void, duplicable = false)}
   <div class="row-controls">
-    <button class="btn btn-ghost btn-icon handle" type="button" aria-label="Reorder {name}" {@attach handle}>⋮⋮</button>
-    <button class="btn btn-ghost btn-icon" type="button" aria-label="Remove {name}" onclick={() => drop(at, i)}>×</button>
+    <button class="btn btn-ghost btn-icon handle" type="button" aria-label="Reorder {name}" disabled={structureLocked} {@attach handle}>⋮⋮</button>
+    {#if duplicable}<button class="btn btn-ghost btn-icon" type="button" aria-label="Duplicate {name}" disabled={structureLocked} onclick={() => duplicate(at, i)}>⧉</button>{/if}
+    <button class="btn btn-ghost btn-icon" type="button" aria-label="Remove {name}" disabled={structureLocked} onclick={() => drop(at, i)}>×</button>
   </div>
 {/snippet}
 
@@ -543,7 +672,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   {@const bad = err ? 'true' : undefined}
   {@const says = err ? `${id}-err` : undefined}
   {@const marked = [address(at), childAddress(at, 'label')].find((p) => p && opened === p)}
-  <div class="field" id="{id}-field" tabindex="-1" class:is-invalid={err} class:pop-anchor={marked}>
+  <div class="field" id="{id}-field" tabindex="-1" class:is-invalid={err} class:pop-anchor={marked} inert={textOnly && !structural(field) && ((field.type !== 'text' && field.type !== 'richtext') || mode !== true) ? true : undefined}>
     {#if field.type === 'menus'}
       {@render groupLabel(id, field, text, at)}
       <Menus {id} labelId="{id}-l" menus={rows(at) as Menu[]} {locale} {translating} {sourceLabel} />
@@ -597,11 +726,11 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {@const scheme = unsafeLinkScheme('default', str([...at, 'href']))}
         <div class="field" class:is-invalid={scheme}>
           <div class="label-row"><label for="{id}.href">URL</label></div>
-          <input class="input" id="{id}.href" type="url" aria-invalid={scheme ? 'true' : undefined} aria-describedby={scheme ? `${id}.href-err` : undefined} value={str([...at, 'href'])} oninput={(e) => { write([...at, 'type'], 'url'); write([...at, 'href'], e.currentTarget.value); }} />
+          <input class="input" id="{id}.href" type="url" aria-invalid={scheme ? 'true' : undefined} aria-describedby={scheme ? `${id}.href-err` : undefined} value={str([...at, 'href'])} oninput={(e) => writeMany(at, [{ path: ['type'], value: 'url' }, { path: ['href'], value: e.currentTarget.value }])} />
           {#if scheme}<p class="error" id="{id}.href-err">{scheme}: links are not allowed</p>{/if}
         </div>
       {:else if picker === id}
-        <PagePicker {id} label={text} labelId="{id}-l" chosen={str([...at, 'ref'])} onpick={(e) => { write([...at, 'type'], 'entry'); write([...at, 'ref'], e.path); picker = ''; }} onclose={() => (picker = '')} />
+        <PagePicker {id} label={text} labelId="{id}-l" chosen={str([...at, 'ref'])} onpick={(e) => { writeMany(at, [{ path: ['type'], value: 'entry' }, { path: ['ref'], value: e.path }]); picker = ''; }} onclose={() => (picker = '')} />
       {:else if str([...at, 'ref'])}
         {@render chosenEntry(`${id}.ref`, `${id}-l`, says, str([...at, 'ref']), () => (picker = id))}
       {:else}
@@ -611,11 +740,11 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <label class="check" for="{id}.newTab"><input type="checkbox" id="{id}.newTab" checked={read([...at, 'newTab']) === true} onchange={(e) => write([...at, 'newTab'], e.currentTarget.checked || undefined)} /><span>Open in new tab</span></label>
     {:else if field.type === 'richtext'}
       {@render groupLabel(id, field, text, at)}
-      <RichText {id} labelId="{id}-l" {locale} tier={field.tier} invalid={!!err} describedby={says} value={str(at)} onchange={(md) => write(at, md)} />
+      <RichText {id} labelId="{id}-l" {locale} tier={field.tier} invalid={!!err} describedby={says} value={str(at)} address={address(at)} {session} onchange={(md, history) => write(at, md, history)} />
     {:else if field.type === 'group'}
       <details class="group" open>
         <summary>{text}<span class="count">{field.fields.length} fields</span></summary>
-        <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {site} {servedAt} inherited={mode} /></div>
+        <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
       </details>
     {:else if field.type === 'array'}
       {@const items = rows(at)}
@@ -623,11 +752,11 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       {@const isGallery = gallery(field)}
       {@render groupLabel(id, field, text, at)}
       <div class="list" {id} role="group" aria-labelledby="{id}-l">
-        <DragDropProvider onDragStart={begun} onDragOver={(e) => over(at, e)} onDragEnd={(e) => ended(at, e)}>
+        <DragDropProvider onDragStart={(e) => begun(at, e)} onDragOver={(e) => over(at, e)} onDragEnd={(e) => ended(at, e)}>
         {#each items as row, i (keyOf(items, i))}
           {@const s = sortable(() => keyOf(items, i), () => i)}
           <div class="row-card" class:is-dragging={s.isDragging} {@attach s.attach}>
-            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {site} {servedAt} inherited={mode} /></div>
+            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
             {#if !translating}{@render controls(at, i, `${text} row ${i + 1}`, s.attachHandle)}{/if}
           </div>
         {:else}
@@ -635,7 +764,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {/each}
         </DragDropProvider>
         {#if !translating}
-          <button class="btn btn-sm add" type="button" onclick={() => (isGallery ? (picker = id) : add(at, scalar ? '' : { _id: newId('default') }))}>Add to {text}</button>
+          <button class="btn btn-sm add" type="button" disabled={structureLocked} onclick={() => (isGallery ? (picker = id) : add(at, scalar ? '' : { _id: newId('default') }))}>Add to {text}</button>
         {/if}
       </div>
       {#if isGallery && picker === id}
@@ -653,7 +782,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       {@const items = rows(at)}
       {@render groupLabel(id, field, text, at)}
       <div class="list" {id} role="group" aria-labelledby="{id}-l">
-        <DragDropProvider onDragStart={begun} onDragOver={(e) => over(at, e)} onDragEnd={(e) => ended(at, e)}>
+        <DragDropProvider onDragStart={(e) => begun(at, e)} onDragOver={(e) => over(at, e)} onDragEnd={(e) => ended(at, e)}>
         {#each items as row, i (keyOf(items, i))}
           {@const name = blockName(row)}
           {@const inner = blockFields(row)}
@@ -665,12 +794,12 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
               <button class="btn btn-ghost btn-icon fold" type="button" disabled={open} aria-expanded={!shut} aria-controls="{id}.{i}-b" aria-label="{shut ? 'Expand' : 'Collapse'} {name}" onclick={() => (folded[keyOf(items, i)] = !shut)}>{shut ? '▸' : '▾'}</button>
               <span class="label" id="{id}.{i}-h" title="{block(row)._type} · {block(row)._id}">{block(row)._label || name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (letter) => letter.toUpperCase())}</span>
               {#if shut}<span class="excerpt">{excerpt(row, inner)}</span>{/if}
-              {#if !translating}{@render controls(at, i, name, s.attachHandle)}{/if}
+              {#if !translating}{@render controls(at, i, name, s.attachHandle, true)}{/if}
             </header>
             {#if shut}
               <!-- folded: the header is the whole card -->
             {:else if inner}
-              <div class="form" id="{id}.{i}-b"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {site} {servedAt} inherited={mode} /></div>
+              <div class="form" id="{id}.{i}-b"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
             {:else}
               <p class="ref-note" id="{id}.{i}-b">{block(row)._ref ?? `No “${block(row)._type}” block in the registry`} — not editable here</p>
             {/if}
@@ -681,12 +810,12 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         </DragDropProvider>
         {#if !translating}
         <div class="pop-anchor">
-          <button class="btn btn-sm add" type="button" aria-expanded={picker === id} onclick={() => (picker = picker === id ? '' : id)}>Add block</button>
+          <button class="btn btn-sm add" type="button" disabled={structureLocked} aria-expanded={picker === id} onclick={() => (picker = picker === id ? '' : id)}>Add block</button>
           {#if picker === id}
             <div class="popover block-picker">
               <div class="types">
                 {#each field.types as type (type)}
-                  <button class="type-card" type="button" value={type} onclick={() => { add(at, { _type: type, _id: newId('default') }); picker = ''; }}>{type}</button>
+                  <button class="type-card" type="button" value={type} disabled={structureLocked} onclick={() => { add(at, { _type: type, _id: newId('default') }); picker = ''; }}>{type}</button>
                 {/each}
               </div>
             </div>

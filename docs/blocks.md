@@ -5,8 +5,9 @@ and the site-wide globals a `_ref` block is filled from. The rest of what a temp
 rich text, the language switcher, hidden entries — is [Rendering content](rendering.md).
 
 It takes the list and a `{ _type: component }` map.
-Each component receives the stored block as `block` and the map as `components`, so a
-block that nests `blocks` renders them by calling `<Blocks />` again with the same map.
+Each component receives the stored block as `block`, the map as `components`, and an optional
+`edit` context when the caller has enabled [Canvas editing](canvas.md). A block that nests `blocks`
+renders them by calling `<Blocks />` again with the same map and its derived edit context.
 A `_type` with no component throws at build, naming the type.
 
 A block with `_ref` is filled from that global, so `<Blocks />` also takes the language's
@@ -55,9 +56,9 @@ replacement boundary, and the replacement's own content is not walked recursivel
 reads ([Site files](site-files.md#globals)).
 
 Every `_ref` in the tree is filled here, however deep it sits, so a block component that
-nests `<Blocks />` passes on `components` and nothing more. A `_ref` naming a global that
-`cms.config.ts` does not declare fails the build; one whose file this language does not have
-fails, naming the file to write.
+nests `<Blocks />` passes on `components` and, when present, the nested `edit` context. A `_ref`
+naming a global that `cms.config.ts` does not declare fails the build; one whose file this language
+does not have fails, naming the file to write.
 
 ```ts
 // src/blocks/registry.ts
@@ -78,6 +79,7 @@ export const components = { hero: Hero, columns: Columns } satisfies Record<Bloc
 ---
 // src/blocks/Columns.astro — a block that nests blocks
 import Blocks from 'astro-handover/Blocks.astro';
+import type { EditContext } from 'astro-handover';
 import type { z } from 'astro/zod';
 import type { columns } from '../content/schemas';
 import type { components } from './registry';
@@ -85,14 +87,25 @@ import type { components } from './registry';
 interface Props {
   block: z.infer<typeof columns>;
   components: typeof components;
+  edit?: EditContext;
 }
 
-const { block, components: registry } = Astro.props;
+const { block, components: registry, edit } = Astro.props;
 ---
 
-<section>
-  {block.columns.map((column) => <div><Blocks blocks={column.blocks} components={registry} /></div>)}
+<section {...(edit ?? {})}>
+  {block.columns.map((column) => {
+    const columnEdit = edit?.list('columns').block(column);
+    const blocksEdit = columnEdit?.list('blocks');
+    return (
+      <div {...(columnEdit ?? {})} {...(blocksEdit ?? {})}>
+        <Blocks blocks={column.blocks} components={registry} edit={blocksEdit} />
+      </div>
+    );
+  })}
 </section>
 ```
 
-The layout renders the top level: `<Blocks blocks={data.blocks} components={components} />`.
+The layout renders the top level. Without Canvas annotations it remains
+`<Blocks blocks={data.blocks} components={components} />`; the [Canvas guide](canvas.md) shows the
+annotated call and the explicit empty-list container.

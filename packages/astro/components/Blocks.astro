@@ -1,15 +1,29 @@
 ---
-import type { Block } from '@handover/core';
 import type { AstroComponentFactory } from 'astro/runtime/server/index.js';
+import type { Block } from '../dist/index.js';
 
 interface Props {
   blocks: Block[];
   components: Record<string, AstroComponentFactory>;
   /** This page's language's globals, keyed by file name — `globalsAt()` builds it. */
   globals?: Record<string, unknown>;
+  /** Stable list context from `createEditContext(Astro)`; inert outside Canvas. */
+  edit?: {
+    readonly active: boolean;
+    block(block: { _id: string; _ref?: string; _type?: string; _label?: string }): object;
+  };
 }
 
-const { blocks, components, globals = {} } = Astro.props;
+const { blocks, components, globals = {}, edit } = Astro.props;
+
+const reference = Symbol.for('astro-handover.canvas-reference');
+type ReferencedBlock = Block & { [reference]?: string };
+const referenceOf = (block: Block) => (block as ReferencedBlock)[reference];
+const rememberReference = <T extends object>(value: T, from: unknown): T => {
+  const ref = typeof from === 'string' ? from : undefined;
+  if (ref) Object.defineProperty(value, reference, { value: ref });
+  return value;
+};
 
 /** The whole tree is filled here; the content replacing a `_ref` is not walked again. */
 const fill = (value: unknown): unknown => {
@@ -20,7 +34,10 @@ const fill = (value: unknown): unknown => {
   if (proto !== Object.prototype && proto !== null) return value;
   const block = value as Block;
   if (typeof block._ref !== 'string') {
-    return Object.fromEntries(Object.entries(block).map(([key, v]) => [key, fill(v)]));
+    return rememberReference(
+      Object.fromEntries(Object.entries(block).map(([key, v]) => [key, fill(v)])),
+      referenceOf(block),
+    );
   }
   const key = block._ref.replace(/^globals\//, '');
   const global = globals[key];
@@ -29,10 +46,18 @@ const fill = (value: unknown): unknown => {
       `No global "${key}" in this language: a _ref block is filled from src/content/globals/<locale>/${key}.yaml`,
     );
   const { _ref, ...page } = block;
-  return { ...global, ...page };
+  return rememberReference({ ...global, ...page }, _ref);
 };
 
 const own = fill(blocks) as Block[];
+if (edit?.active) {
+  const ids = new Set<string>();
+  for (const block of own) {
+    if (ids.has(block._id))
+      throw new Error(`Canvas cannot annotate duplicate block _id "${block._id}".`);
+    ids.add(block._id);
+  }
+}
 for (const block of own) {
   if (!(block._type in components)) throw new Error(`No component for block type "${block._type}"`);
 }
@@ -40,5 +65,6 @@ for (const block of own) {
 
 {own.map((block) => {
   const Component = components[block._type];
-  return <Component block={block} components={components} />;
+  const blockEdit = edit?.block({ _id: block._id, _ref: referenceOf(block), _type: block._type, _label: block._label });
+  return <Component block={block} components={components} {...(blockEdit ? { edit: blockEdit } : {})} />;
 })}

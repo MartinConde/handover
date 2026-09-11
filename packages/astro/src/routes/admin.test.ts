@@ -3,7 +3,20 @@ import { expect, test, vi } from 'vitest';
 import { GET } from './admin.js';
 
 vi.mock('virtual:handover/ui', () => ({
-  default: { 'main-abc123.js': 'console.log("shell")', 'main-abc123.css': 'body{margin:0}' },
+  default: {
+    entries: {
+      admin: { script: 'admin.js', styles: ['admin.css', 'shared.css'] },
+      canvas: { script: 'canvas.js', styles: ['canvas.css', 'shared.css'] },
+    },
+    files: {
+      'admin.js': 'console.log("shell")',
+      'admin.css': 'body{margin:0}',
+      'canvas.js': 'console.log("canvas")',
+      'canvas.css': '.canvas{}',
+      'shared.css': ':root{}',
+      'chunks/editor.js': 'export {}',
+    },
+  },
 }));
 // The shell reads the same env the login is mounted from; a site with none is the default here.
 let baseUrl: string | undefined;
@@ -25,13 +38,17 @@ vi.mock('virtual:handover/config', () => ({
 
 const ctx = (path?: string) => ({ params: { path } }) as unknown as APIContext;
 
-test('the shell HTML links the hashed script and stylesheet', async () => {
+test('the shell HTML links only the admin entry and its stylesheet closure', async () => {
   const res = await GET(ctx(undefined));
   expect(res.status).toBe(200);
   expect(res.headers.get('content-type')).toBe('text/html; charset=utf-8');
   const html = await res.text();
-  expect(html).toContain('<script type="module" src="/admin/_assets/main-abc123.js"></script>');
-  expect(html).toContain('<link rel="stylesheet" href="/admin/_assets/main-abc123.css">');
+  expect(html).toContain('<script type="module" src="/admin/_assets/admin.js"></script>');
+  expect(html).toContain('<link rel="stylesheet" href="/admin/_assets/admin.css">');
+  expect(html).toContain('<link rel="stylesheet" href="/admin/_assets/shared.css">');
+  expect(html).not.toContain('canvas.js');
+  expect(html).not.toContain('canvas.css');
+  expect(html).not.toContain('chunks/editor.js');
   expect(html).toContain(
     `<div id="app" data-base='' data-methods='{"emailLink":false,"github":false}'></div>`,
   );
@@ -41,13 +58,15 @@ test('any non-asset path gets the same shell', async () => {
   expect(await (await GET(ctx('listings/villa'))).text()).toBe(await (await GET(ctx())).text());
 });
 
-test('hashed assets are served immutable with their content type', async () => {
-  const js = await GET(ctx('_assets/main-abc123.js'));
+test('entry, shared, Canvas, and lazy assets are served immutable with their content type', async () => {
+  const js = await GET(ctx('_assets/admin.js'));
   expect(js.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
   expect(js.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
   expect(await js.text()).toBe('console.log("shell")');
-  const css = await GET(ctx('_assets/main-abc123.css'));
+  const css = await GET(ctx('_assets/shared.css'));
   expect(css.headers.get('content-type')).toBe('text/css; charset=utf-8');
+  expect((await GET(ctx('_assets/canvas.js'))).status).toBe(200);
+  expect((await GET(ctx('_assets/chunks/editor.js'))).status).toBe(200);
 });
 
 test('unknown assets are 404, not the shell', async () => {
