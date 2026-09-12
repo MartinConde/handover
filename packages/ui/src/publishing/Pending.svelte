@@ -1,7 +1,10 @@
 <script lang="ts">
 import type { DiffGroup } from '@handover/core';
-import { age } from './activity-line';
-import BuildPill, { type Build } from './BuildPill.svelte';
+import { coordinateEntryPublish, coordinateEntryReplacement } from '../navigate';
+import { request as fetch, uncertainResponse } from '../request.js';
+import { age } from '../shared/activity-line';
+import Modal from '../shared/Modal.svelte';
+import BuildPill, { type Build } from '../shell/BuildPill.svelte';
 import CheckLines, {
   type CheckItem,
   type CheckLine,
@@ -13,12 +16,9 @@ import CheckLines, {
   WORST,
 } from './CheckLines.svelte';
 import Diff from './Diff.svelte';
-import Modal from './Modal.svelte';
-import { coordinateEntryPublish, coordinateEntryReplacement } from './navigate';
 import Resolve from './Resolve.svelte';
-import { request as fetch, uncertainResponse } from './request.js';
 
-type Entry = {
+export type PendingEntry = {
   /** `listings/mill-house` — what a publish is of, since the languages go out together. */
   key: string;
   title: string;
@@ -42,7 +42,7 @@ let {
   onrevert,
   ondiscarded,
 }: {
-  entries: Entry[];
+  entries: PendingEntry[];
   /** The language a check found in several files opens. */
   defaultLocale?: string;
   /** Where a stored media key is served from, for a replaced picture's thumbnails. */
@@ -77,11 +77,11 @@ let unready = $state<string[]>([]);
 /** Entries whose languages disagree about their structure; nothing here can settle that. */
 let drifted = $state<string[]>([]);
 /** The entry whose discard is waiting to be confirmed, and whether it is being thrown away. */
-let confirming = $state<Entry>();
+let confirming = $state<PendingEntry>();
 let confirmTrigger = $state<HTMLElement>();
 let discarding = $state(false);
 /** The entry whose three-way view is open, which takes the place of the list while it is. */
-let resolving = $state<Entry>();
+let resolving = $state<PendingEntry>();
 /** The entry whose changes are being read, and what came back per entry. */
 let opened = $state('');
 let changes = $state<
@@ -94,10 +94,10 @@ let toggled = $state<string[]>([]);
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 // Only this drawer's commit gets the pill, or a publish elsewhere would show its build here.
 const ours = $derived(build && committed && build.commit_sha === committed ? build : undefined);
-const named = (entry: Entry) => entry.title;
+const named = (entry: PendingEntry) => entry.title;
 
 const blocked = $derived([...conflicts, ...unready, ...drifted]);
-const checked = (entry: Entry) =>
+const checked = (entry: PendingEntry) =>
   !blocked.includes(entry.key) && !entry.held_by !== toggled.includes(entry.key);
 
 // A held entry is a promise not to ship half a page, so it is listed rather than missing.
@@ -320,7 +320,7 @@ async function discard() {
 }
 
 // Read once and kept: the list does not move while the drawer is open.
-async function open(entry: Entry) {
+async function open(entry: PendingEntry) {
   opened = opened === entry.key ? '' : entry.key;
   if (!opened || changes[entry.key]) return;
   reading = entry.key;
@@ -341,7 +341,7 @@ function closeResolver() {
 }
 
 // The draft now sits on the file at HEAD, so the row can be published with the rest.
-function resolved(entry: Entry) {
+function resolved(entry: PendingEntry) {
   closeResolver();
   conflicts = conflicts.filter((k) => k !== entry.key);
   error = conflicts.length ? refusal('', conflicts) : '';
@@ -350,7 +350,7 @@ function resolved(entry: Entry) {
   ondiscarded();
 }
 
-function toggle(entry: Entry) {
+function toggle(entry: PendingEntry) {
   if (busy) return;
   toggled = toggled.includes(entry.key)
     ? toggled.filter((k) => k !== entry.key)
@@ -364,7 +364,7 @@ const selectNone = () => {
   if (!busy) toggled = ready.map((e) => e.key);
 };
 
-function askDiscard(entry: Entry) {
+function askDiscard(entry: PendingEntry) {
   confirmTrigger = document.activeElement as HTMLElement;
   confirming = entry;
 }
@@ -381,7 +381,7 @@ function askDiscard(entry: Entry) {
   </p>
 {/snippet}
 
-{#snippet change(entry: Entry)}
+{#snippet change(entry: PendingEntry)}
   <li>
     <div class="change-row" class:is-held={entry.held_by} class:is-blocked={blocked.includes(entry.key)}>
       <label class="lead" for="pending-{entry.key}">

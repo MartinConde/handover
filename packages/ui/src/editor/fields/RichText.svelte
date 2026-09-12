@@ -6,7 +6,7 @@ import { Editor, Extension } from '@tiptap/core';
 import type { Selection } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import { onMount, untrack } from 'svelte';
-import PagePicker from '../../PagePicker.svelte';
+import PagePicker from '../../content/PagePicker.svelte';
 import type {
   EntrySession,
   FieldCommandResult,

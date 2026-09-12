@@ -10,13 +10,21 @@ const result = await preview(Astro, {
   getCollection: (collection) => getCollection(collection),
 });
 if (result instanceof Response) return result;
-const { Component, props, canvasManifest } = result;
+const { Component, props, previewResult, canvasManifest } = result;
 const canvas = canvasManifest ? assets.entries.canvas : undefined;
 const base = (config.i18n.base ?? '').replace(/\/+$/, '');
 const asset = (path: string) => `${base}/admin/_assets/${path}`;
 ---
 
 <Component {...props} />
+{previewResult && (
+  <span
+    hidden
+    data-handover-preview-result={previewResult.status}
+    data-handover-preview-url={previewResult.url}
+    data-handover-preview-version={previewResult.version}
+  ></span>
+)}
 {canvasManifest && canvas && (
   <>
     {canvas.styles.map((style) => <link rel="stylesheet" href={asset(style)} />)}

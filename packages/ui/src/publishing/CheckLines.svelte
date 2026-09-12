@@ -51,7 +51,7 @@ export function verdict(lines: CheckLine[]): string {
 </script>
 
 <script lang="ts">
-import { sitePath } from './request.js';
+import { sitePath } from '../request.js';
 
 let {
   lines,

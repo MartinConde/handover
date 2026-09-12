@@ -1,12 +1,12 @@
 <script lang="ts">
 import { entryName } from '@handover/core';
-import { EXACT, when } from './activity-line';
-import { invalidateEntryDirectory } from './entry-directory.js';
-import Modal from './Modal.svelte';
+import { invalidateEntryDirectory } from '../entry-directory.js';
+import { navigate } from '../navigate';
+import { request as fetch, sitePath } from '../request.js';
+import { EXACT, when } from '../shared/activity-line';
+import Modal from '../shared/Modal.svelte';
 import NewEntry, { nameOf } from './NewEntry.svelte';
-import { navigate } from './navigate';
 import OffsiteDialog, { type Target } from './Offsite.svelte';
-import { request as fetch, sitePath } from './request.js';
 
 type Entry = {
   id: string;

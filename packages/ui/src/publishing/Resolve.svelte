@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { Change, MergedChange, Question } from '@handover/core';
-import { coordinateEntryReplacement } from './navigate';
-import { request as fetch, uncertainResponse } from './request.js';
+import { coordinateEntryReplacement } from '../navigate';
+import { request as fetch, uncertainResponse } from '../request.js';
 
 let {
   entry,

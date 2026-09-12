@@ -1,12 +1,12 @@
 <script lang="ts">
 import type { DiffGroup } from '@handover/core';
-import Diff from './Diff.svelte';
 import type {
   HistoricalRestoreResponse,
   HistoricalRestoreResult,
-} from './editor/entry-session.svelte';
-import Modal from './Modal.svelte';
-import { request as fetch, sitePath, uncertainResponse } from './request.js';
+} from '../editor/entry-session.svelte';
+import { request as fetch, sitePath, uncertainResponse } from '../request.js';
+import Modal from '../shared/Modal.svelte';
+import Diff from './Diff.svelte';
 
 /** One version as `/admin/api/history/:collection/:slug` answers it. */
 interface Version {

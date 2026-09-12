@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Preset } from '@handover/core';
-import Modal from './Modal.svelte';
+import Modal from '../shared/Modal.svelte';
 
 let {
   name,

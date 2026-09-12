@@ -20,13 +20,13 @@ import {
   type WordPart,
 } from '@handover/core';
 import { tick } from 'svelte';
+import Menus, { type Menu } from '../../content/Menus.svelte';
+import PagePicker from '../../content/PagePicker.svelte';
 import { EMPTY_ENTRY_DIRECTORY, type Pickable, readEntryDirectory } from '../../entry-directory.js';
-import Focal from '../../Focal.svelte';
-import Media from '../../Media.svelte';
-import MediaImage from '../../MediaImage.svelte';
-import Menus, { type Menu } from '../../Menus.svelte';
-import PagePicker from '../../PagePicker.svelte';
-import { fileSize, type MediaItem } from '../../upload.js';
+import Focal from '../../media/Focal.svelte';
+import Media from '../../media/Media.svelte';
+import { fileSize, type MediaItem } from '../../media/upload.js';
+import MediaImage from '../../shared/MediaImage.svelte';
 import type {
   EntrySession,
   FieldChange,

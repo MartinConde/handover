@@ -1,6 +1,6 @@
 <script lang="ts">
 import { onDestroy } from 'svelte';
-import { request as fetch, sitePath } from './request.js';
+import { request as fetch, sitePath } from '../request.js';
 
 export interface LoginMethods {
   /** The site has a base URL and a mailer, so both "email me a link" and "forgot password" work. */

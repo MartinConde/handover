@@ -1,8 +1,8 @@
 <script lang="ts">
-import { type Pickable, readEntryDirectory } from './entry-directory.js';
-import Modal from './Modal.svelte';
+import { type Pickable, readEntryDirectory } from '../entry-directory.js';
+import { request as fetch, sitePath } from '../request.js';
+import Modal from '../shared/Modal.svelte';
 import PagePicker from './PagePicker.svelte';
-import { request as fetch, sitePath } from './request.js';
 
 let { oncommitted }: { oncommitted?: () => void | Promise<void> } = $props();
 

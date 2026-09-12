@@ -4,6 +4,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Read build content once per virtual-index generation, preserving explicit development
+  invalidation and byte-identical index, template, media-usage, and translation-staleness output.
+
+- Bind ordinary preview success to the exact requested address and saved version. Failed renders
+  now stay failed, stalled renders time out with Retry, and an expired session offers to reload the
+  admin, without another page fetch or any change to the Canvas renderer protocol.
+
+- Keep the local design preview's build, member, pending-entry, media, form, and session samples
+  checked against the UI contracts. Its live timestamp and sign-in method now use the route
+  shapes, and its pending sample names the two files it represents. Getting started now describes
+  entry and batch publishing, checks, Resolve, and Discard as the current admin presents them.
+
 - Restore the CI lint baseline with mechanical formatting and import ordering; no runtime
   behavior changes.
 

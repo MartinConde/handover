@@ -1,11 +1,11 @@
 <script lang="ts">
 import type { Preset } from '@handover/core';
 import { tick } from 'svelte';
+import { request as fetch, sitePath } from '../request.js';
+import MediaImage from '../shared/MediaImage.svelte';
+import Modal from '../shared/Modal.svelte';
 import Crop from './Crop.svelte';
 import Focal from './Focal.svelte';
-import MediaImage from './MediaImage.svelte';
-import Modal from './Modal.svelte';
-import { request as fetch, sitePath } from './request.js';
 import { fileSize, type LibraryItem, uploadFile, uploadImage } from './upload.js';
 
 let {

@@ -1,5 +1,5 @@
 <script lang="ts">
-import { request as fetch } from './request.js';
+import { request as fetch } from '../request.js';
 
 interface Facts {
   hasPassword: boolean;

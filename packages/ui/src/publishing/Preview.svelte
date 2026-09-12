@@ -1,5 +1,5 @@
 <script lang="ts">
-import { previewPath, sitePath } from './request.js';
+import { previewPath } from '../request.js';
 
 // Toolbar and banners sit outside the frame: a band drawn inside would read as the site's own.
 interface Problem {
@@ -48,17 +48,28 @@ const WIDTHS: { value: Width; label: string }[] = [
 let width = $state<Width>('desktop');
 // Refresh must change `src`, or the same address would not be asked for again.
 let refreshed = $state(0);
-let busy = $state(true);
+type RenderPhase = 'idle' | 'updating' | 'success' | 'failed' | 'expired' | 'timeout';
+let phase = $state<RenderPhase>('updating');
 let renderedAt = $state(0);
 let now = $state(Date.now());
 
-const src = $derived(`${previewPath(url ?? '/')}?at=${Math.max(savedAt, refreshed)}`);
+const requestedUrl = $derived(previewPath(url ?? '/'));
+const requestedVersion = $derived(String(Math.max(savedAt, refreshed)));
+const src = $derived(`${requestedUrl}?at=${requestedVersion}`);
 // No render is in flight while the schema is unhappy: the frame is not on screen.
-const working = $derived(busy && problems.length === 0);
+const working = $derived(phase === 'updating' && problems.length === 0);
 // A render takes about a second, so the pane says it is working.
 $effect(() => {
-  void src;
-  busy = true;
+  const request = src;
+  if (!enabled || problems.length) {
+    phase = 'idle';
+    return;
+  }
+  phase = 'updating';
+  const timeout = setTimeout(() => {
+    if (src === request && phase === 'updating') phase = 'timeout';
+  }, 15_000);
+  return () => clearTimeout(timeout);
 });
 // "Updated 2 seconds ago" has to stay true without a render behind it.
 $effect(() => {
@@ -74,15 +85,50 @@ function ago(since: number): string {
   const hours = Math.round(minutes / 60);
   return `${hours} hour${hours === 1 ? '' : 's'} ago`;
 }
+
+function refresh() {
+  refreshed = Math.max(Date.now(), Number(requestedVersion) + 1);
+}
+
+function loaded(event: Event) {
+  const frame = event.currentTarget;
+  if (!(frame instanceof HTMLIFrameElement)) return;
+  let marker: HTMLElement | null = null;
+  try {
+    marker =
+      frame.contentDocument?.querySelector<HTMLElement>('[data-handover-preview-result]') ?? null;
+  } catch {
+    // The preview route is same-origin; a document that escaped it is not a successful render.
+  }
+  if (
+    marker &&
+    (marker.dataset.handoverPreviewUrl !== requestedUrl ||
+      marker.dataset.handoverPreviewVersion !== requestedVersion)
+  )
+    return;
+  if (marker?.dataset.handoverPreviewResult === 'success') {
+    phase = 'success';
+    renderedAt = Date.now();
+    now = Date.now();
+    return;
+  }
+  phase = marker?.dataset.handoverPreviewCode === '401' ? 'expired' : 'failed';
+}
 // While the schema is unhappy the count is the state, not a render that never comes back.
 const status = $derived(
   problems.length
     ? `Not updated — ${problems.length} problem${problems.length === 1 ? '' : 's'}`
     : working
       ? 'Updating…'
-      : stale
-        ? `Showing the last saved version — ${ago(renderedAt)}`
-        : `Updated ${ago(renderedAt)}`,
+      : phase === 'expired'
+        ? 'Preview stopped — sign in again'
+        : phase === 'timeout'
+          ? 'Preview took too long'
+          : phase === 'failed'
+            ? 'Preview could not be updated'
+            : stale
+              ? `Showing the last saved version — ${ago(renderedAt)}`
+              : `Updated ${ago(renderedAt)}`,
 );
 </script>
 
@@ -115,9 +161,9 @@ const status = $derived(
         </div>
       {/if}
       <div class="preview-acts">
-        <p class="preview-status" class:is-busy={working} class:is-warn={!working && (stale || problems.length > 0)} role="status">{status}</p>
+        <p class="preview-status" class:is-busy={working} class:is-warn={!working && (stale || problems.length > 0 || phase === 'failed' || phase === 'expired' || phase === 'timeout')} role="status">{status}</p>
         <span class="spacer"></span>
-        <button class="btn btn-ghost btn-sm" type="button" onclick={() => (refreshed = Date.now())}>Refresh</button>
+        <button class="btn btn-ghost btn-sm" type="button" onclick={refresh}>Refresh</button>
         <a class="btn btn-ghost btn-sm" href={previewPath(url ?? '/')} target="_blank" rel="noreferrer">Open in new tab ↗</a>
       </div>
     </div>
@@ -144,11 +190,29 @@ const status = $derived(
       {#if stale}
         <p class="preview-banner is-stale">Not everything you have typed is saved, so this is the last version that was.</p>
       {/if}
-      <div class="preview-stage" class:is-updating={working}>
-        <div class="preview-frame is-{width}">
-          <iframe {src} title="The page as the site would serve it" onload={() => { busy = false; renderedAt = Date.now(); now = Date.now(); }}></iframe>
+      {#if phase === 'expired'}
+        <div class="preview-error">
+          <h3>Your sign-in expired</h3>
+          <p>Reload the admin to sign in again. Saved changes will still be in the shared draft.</p>
+          <div class="actions">
+            <button class="btn" type="button" onclick={() => location.reload()}>Reload admin</button>
+          </div>
         </div>
-      </div>
+      {:else if phase === 'failed' || phase === 'timeout'}
+        <div class="preview-error">
+          <h3>{phase === 'timeout' ? 'The preview took too long' : "The preview couldn't be shown"}</h3>
+          <p>{phase === 'timeout' ? 'The page did not finish rendering within 15 seconds.' : 'The site refused the page or could not render it.'}</p>
+          <div class="actions">
+            <button class="btn" type="button" onclick={refresh}>Try again</button>
+          </div>
+        </div>
+      {:else}
+        <div class="preview-stage" class:is-updating={working}>
+          <div class="preview-frame is-{width}">
+            <iframe {src} title="The page as the site would serve it" onload={loaded}></iframe>
+          </div>
+        </div>
+      {/if}
     {/if}
   {/if}
 </aside>

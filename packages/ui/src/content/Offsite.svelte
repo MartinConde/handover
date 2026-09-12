@@ -1,6 +1,6 @@
 <script lang="ts">
-import type { PickEntry } from './entry-directory.js';
-import Modal from './Modal.svelte';
+import type { PickEntry } from '../entry-directory.js';
+import Modal from '../shared/Modal.svelte';
 import PagePicker from './PagePicker.svelte';
 
 /** The server turns one answer into a rule per language. */

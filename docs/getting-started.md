@@ -141,10 +141,14 @@ An `image` or `file` field opens the media picker ([Pictures and files in a fiel
 an `embed` field takes a pasted YouTube, Vimeo or Google Maps link; a `seo` field is a tab of
 its own with the search and sharing panel on it ([Search and sharing](seo.md)). Change a value: two
 seconds later the edit is saved into D1, and it is still there if you reload — see
-[Drafts and publishing](publishing.md). Click **Publish…**: the pending-changes
-drawer lists every edit waiting to go out, and **Publish 1 file** writes them back as one
-commit on `main`. If someone changed one of those files in the repository since you opened
-it, the publish is refused and nothing is overwritten; **Discard** on that row gives up
-your changes to it and takes theirs, which is the only way out of that refusal today.
+[Drafts and publishing](publishing.md). Use **Publish this entry** in the editor to commit that
+entry on its own. To publish several entries together, open **Unpublished changes** in the top
+bar, choose the entries, and press **Publish N changes**. Both paths save the open entry first
+and run the same pre-publish checks.
+
+If someone changed one of those files in the repository since you opened it, the publish is
+refused and nothing is overwritten. **Resolve** keeps your work while you choose between the
+conflicting fields; **Discard** gives up your changes to that entry and takes the repository's
+version.
 
 Your build pipeline picks the commit up like any other push.

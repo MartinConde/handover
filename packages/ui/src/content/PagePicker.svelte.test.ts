@@ -1,6 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
-import { invalidateEntryDirectory, type PickEntry } from './entry-directory.js';
+import { invalidateEntryDirectory, type PickEntry } from '../entry-directory.js';
 import PagePicker from './PagePicker.svelte';
 
 // Testing: what the list is filtered and grouped by, that the keyboard walks it without a pointer.

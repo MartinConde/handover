@@ -10,22 +10,27 @@ import {
   type SeoDefaultsValue,
 } from '@handover/core';
 import { onMount, tick } from 'svelte';
-import { when } from '../activity-line';
-import CheckLines, { type CheckItem, merged, plural, verdict } from '../CheckLines.svelte';
 import CanvasWorkspace from '../canvas/CanvasWorkspace.svelte';
 import type { CanvasRenderRequest } from '../canvas/canvas-renderer';
-import DriftPanel from '../Drift.svelte';
+import OffsiteDialog, { type Target } from '../content/Offsite.svelte';
 import { invalidateEntryDirectory } from '../entry-directory.js';
-import History from '../History.svelte';
-import Modal from '../Modal.svelte';
 import {
   guardEntryActions,
   guardNavigation,
   navigate,
   navigateAfterAuthoritativeChange,
 } from '../navigate';
-import OffsiteDialog, { type Target } from '../Offsite.svelte';
+import CheckLines, {
+  type CheckItem,
+  merged,
+  plural,
+  verdict,
+} from '../publishing/CheckLines.svelte';
+import DriftPanel from '../publishing/Drift.svelte';
+import History from '../publishing/History.svelte';
 import { request as fetch, previewPath, siteBase, sitePath } from '../request.js';
+import { when } from '../shared/activity-line';
+import Modal from '../shared/Modal.svelte';
 import { createEntrySession, type StructuralSaveEnvelope } from './entry-session.svelte';
 import Fields from './fields/Fields.svelte';
 import { classifyDraftSaveRefusal } from './save';

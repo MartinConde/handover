@@ -21,7 +21,9 @@ The address is the first owner's. Everything is named after the project — `nam
 `package.json`, or the folder — so `my-site` gets a D1 database called `my-site` and an R2
 bucket called `my-site-media`.
 
-```
+Example output follows; the schema version is the one shipped by the installed package:
+
+```text
 Wrote src/content/schemas.ts
 Wrote src/content.config.ts
 Wrote src/blocks/registry.ts

@@ -4,12 +4,12 @@ export const nameOf = (collection: string) => collection.replace(/s$/, '');
 </script>
 
 <script lang="ts">
-import { request as fetch } from './request.js';
+import { request as fetch } from '../request.js';
 
 import { entryName } from '@handover/core';
-import { invalidateEntryDirectory } from './entry-directory.js';
-import Modal from './Modal.svelte';
-import { navigate } from './navigate';
+import { invalidateEntryDirectory } from '../entry-directory.js';
+import { navigate } from '../navigate';
+import Modal from '../shared/Modal.svelte';
 
 let { collection, onclose }: { collection: string; onclose: () => void } = $props();
 

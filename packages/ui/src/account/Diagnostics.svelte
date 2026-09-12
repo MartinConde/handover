@@ -1,7 +1,7 @@
 <script lang="ts">
 import { untrack } from 'svelte';
-import Modal from './Modal.svelte';
-import { request as fetch } from './request.js';
+import { request as fetch } from '../request.js';
+import Modal from '../shared/Modal.svelte';
 
 let { oncommitted }: { oncommitted?: () => void | Promise<void> } = $props();
 

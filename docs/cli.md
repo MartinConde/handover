@@ -18,7 +18,9 @@ See what would happen first:
 npx handover migrate --dry-run
 ```
 
-```
+For example, with the current content-format migration:
+
+```text
 src/content/listings/en/mill-house.yaml  none → 1
 src/content/pages/en/home.yaml           1
 src/content/redirects.yaml               1
@@ -66,9 +68,10 @@ version in `migrations/handover.json`. Commit both. The deploy command applies t
 
 `astro build` refuses to run while `migrations/handover.json` is missing or behind the
 installed package, so an upgrade that forgot this step fails in the build log rather than
-on the first request:
+on the first request. For example, version numbers from any mismatched pair are reported like
+this:
 
-```
+```text
 astro-handover's tables are at schema version 3 but migrations/ was generated for 2: run `npx handover db generate` and commit migrations/
 ```
 

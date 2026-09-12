@@ -33,11 +33,36 @@ export const GATE = {
   'referrer-policy': 'no-referrer',
 };
 
-const answer = (status: number, body: string) =>
-  new Response(body, {
-    status,
-    headers: { ...GATE, 'content-type': 'text/plain; charset=utf-8' },
+const escapeHtml = (value: string) =>
+  value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#39;',
+    };
+    return entities[character] ?? character;
   });
+const escapeText = (value: string) =>
+  value.replace(/[&<>]/g, (character) => {
+    const entities: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+    return entities[character] ?? character;
+  });
+
+const previewIdentity = (url: URL) => ({
+  url: url.pathname,
+  version: url.searchParams.get('at') ?? '',
+});
+
+const answer = (url: URL, status: number, body: string) => {
+  const identity = previewIdentity(url);
+  const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>Preview failed</title></head><body><main><h1>Preview failed</h1><p>${escapeText(body)}</p></main><span hidden data-handover-preview-result="error" data-handover-preview-url="${escapeHtml(identity.url)}" data-handover-preview-version="${escapeHtml(identity.version)}" data-handover-preview-code="${status}"></span></body></html>`;
+  return new Response(html, {
+    status,
+    headers: { ...GATE, 'content-type': 'text/html; charset=utf-8' },
+  });
+};
 
 const canvasAnswer = (
   status: number,
@@ -191,6 +216,8 @@ export interface PageModule {
 export interface Rendered {
   Component: unknown;
   props: Record<string, unknown>;
+  /** A passive marker lets the ordinary preview pane verify the exact completed navigation. */
+  previewResult?: { status: 'success'; url: string; version: string };
   /** Escaped JSON consumed by the separately bundled Canvas runtime. */
   canvasManifest?: string;
 }
@@ -235,7 +262,7 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
   if (!session)
     return ctx.request.method === 'POST'
       ? canvasAnswer(401, 'Sign in to the admin to see a preview.')
-      : answer(401, 'Sign in to the admin to see a preview.');
+      : answer(ctx.url, 401, 'Sign in to the admin to see a preview.');
   let snapshot: CanvasSnapshot | undefined;
   if (ctx.request.method === 'POST') {
     if (!new Set(['editor', 'owner']).has(roleOf('default', session.user)))
@@ -244,10 +271,10 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
     if (parsed instanceof Response) return parsed;
     snapshot = parsed;
   } else if (ctx.request.method !== 'GET') {
-    return answer(405, 'Preview supports GET and Canvas POST requests.');
+    return answer(ctx.url, 405, 'Preview supports GET and Canvas POST requests.');
   }
   const fail = (status: number, message: string) =>
-    snapshot ? canvasAnswer(status, message, snapshot) : answer(status, message);
+    snapshot ? canvasAnswer(status, message, snapshot) : answer(ctx.url, status, message);
   const path = `${(config.i18n.base ?? '').replace(/\/+$/, '')}/${ctx.params.path ?? ''}`;
   const target = previewTarget('default', config.i18n, config.collections, path);
   if (!target) return fail(404, 'This site serves no page at that address.');
@@ -331,7 +358,7 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
               ),
             ),
           }
-        : {}),
+        : { previewResult: { status: 'success' as const, ...previewIdentity(ctx.url) } }),
     };
   } catch (error) {
     if (!(error instanceof ContentError)) throw error;

@@ -1,7 +1,7 @@
 import { parseEntry, stringifyEntry } from '@handover/core';
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
-import { invalidateEntryDirectory } from './entry-directory.js';
+import { invalidateEntryDirectory } from '../entry-directory.js';
 import Menus, { type Menu } from './Menus.svelte';
 
 // Not tested: the Fields dispatch (glue) or styling.

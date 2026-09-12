@@ -1,6 +1,6 @@
 <script lang="ts">
-import { EXACT, when } from './activity-line';
-import { request as fetch, sitePath } from './request.js';
+import { request as fetch, sitePath } from '../request.js';
+import { EXACT, when } from '../shared/activity-line';
 
 type Global = {
   key: string;

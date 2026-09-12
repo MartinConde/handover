@@ -129,15 +129,15 @@ const pageLoader = {
   },
 };
 
-const get = (path: string) => {
+const get = (path: string, search = '') => {
   const response = { headers: new Headers() };
   const locals: Record<string, unknown> = {};
   return Promise.resolve(
     preview(
       {
         params: { path },
-        request: new Request(`https://demo.example/_preview/${path}`),
-        url: new URL(`https://demo.example/_preview/${path}`),
+        request: new Request(`https://demo.example/_preview/${path}${search}`),
+        url: new URL(`https://demo.example/_preview/${path}${search}`),
         response,
         locals,
       },
@@ -297,8 +297,15 @@ test.each([
 });
 
 test('ordinary preview GET never creates Canvas request-local identity', async () => {
-  const { result, locals } = await get('listings/mill-house');
-  expect(result).toMatchObject({ Component: Page });
+  const { result, locals } = await get('listings/mill-house', '?at=42');
+  expect(result).toMatchObject({
+    Component: Page,
+    previewResult: {
+      status: 'success',
+      url: '/_preview/listings/mill-house',
+      version: '42',
+    },
+  });
   expect(locals.handoverCanvas).toBeUndefined();
 });
 
@@ -359,8 +366,14 @@ test('Canvas rejects an encoded body over 5 MiB even when it arrives as a stream
 
 test('a signed-out request never learns whether the page exists', async () => {
   session = null;
-  const { result } = await get('listings/mill-house');
+  const { result } = await get('listings/mill-house', '?at=42');
   expect((result as Response).status).toBe(401);
+  expect((result as Response).headers.get('content-type')).toContain('text/html');
+  const html = await (result as Response).text();
+  expect(html).toContain('data-handover-preview-result="error"');
+  expect(html).toContain('data-handover-preview-url="/_preview/listings/mill-house"');
+  expect(html).toContain('data-handover-preview-version="42"');
+  expect(html).toContain('data-handover-preview-code="401"');
 });
 
 test('a path the site serves no page at is not found', async () => {
@@ -400,6 +413,11 @@ test('an entry renders its own component from the draft, not from the build', as
   expect((await get('de/listings/mill-house')).result).toEqual({
     Component: Page,
     props: { data: { title: 'Die alte Mühle' }, locale: 'de' },
+    previewResult: {
+      status: 'success',
+      url: '/_preview/de/listings/mill-house',
+      version: '',
+    },
   });
 });
 
@@ -409,6 +427,7 @@ test("an index renders the collection's index component with the drafts in the l
   expect((await get('')).result).toEqual({
     Component: Index,
     props: { listings: ['en/mill-house', 'en/barn'], locale: 'en' },
+    previewResult: { status: 'success', url: '/_preview/', version: '' },
   });
 });
 
@@ -419,6 +438,7 @@ test('an entry the build has never seen renders from its draft alone', async () 
   expect((await get('listings/barn')).result).toEqual({
     Component: Page,
     props: { data: { title: 'The Barn' }, locale: 'en' },
+    previewResult: { status: 'success', url: '/_preview/listings/barn', version: '' },
   });
 });
 

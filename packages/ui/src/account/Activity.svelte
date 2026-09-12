@@ -5,9 +5,9 @@ import {
   activityGroupOf,
   type DiffGroup,
 } from '@handover/core';
-import { ENTRY, EXACT, initials, type Person, said, when } from './activity-line';
-import Diff from './Diff.svelte';
-import { request as fetch, sitePath } from './request.js';
+import Diff from '../publishing/Diff.svelte';
+import { request as fetch, sitePath } from '../request.js';
+import { ENTRY, EXACT, initials, type Person, said, when } from '../shared/activity-line';
 
 let {
   role,

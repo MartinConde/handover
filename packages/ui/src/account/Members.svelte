@@ -1,20 +1,12 @@
 <script lang="ts">
-import Modal from './Modal.svelte';
-import { request as fetch, sitePath, uncertainResponse } from './request.js';
+import type { Member as CoreMember } from '@handover/core';
+import { request as fetch, sitePath, uncertainResponse } from '../request.js';
+import Modal from '../shared/Modal.svelte';
 
-interface Member {
-  id: string;
-  name: string;
-  email: string;
-  role: 'owner' | 'editor';
-  /** An invite nobody has opened yet; computed by the server, since there is no invite table. */
-  pending: boolean;
-  method: 'github' | 'password' | 'link' | null;
+export type Member = CoreMember & {
   /** The entries they are holding a lock on right now, by the name the list shows. */
   editing: string[];
-  lastSignIn: number | null;
-  invitedAt: number;
-}
+};
 
 let { user }: { user: { id: string; name: string; email: string } } = $props();
 

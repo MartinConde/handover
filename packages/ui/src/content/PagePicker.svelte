@@ -1,6 +1,6 @@
 <script lang="ts">
 import { unsafeLinkScheme } from '@handover/core';
-import { type Pickable, type PickEntry, readEntryDirectory } from './entry-directory.js';
+import { type Pickable, type PickEntry, readEntryDirectory } from '../entry-directory.js';
 
 let {
   id,

@@ -1,8 +1,8 @@
 <script lang="ts">
 import { type Preset, tooSmall } from '@handover/core';
-import MediaImage from './MediaImage.svelte';
-import Modal from './Modal.svelte';
-import { request as fetch, sitePath } from './request.js';
+import { request as fetch, sitePath } from '../request.js';
+import MediaImage from '../shared/MediaImage.svelte';
+import Modal from '../shared/Modal.svelte';
 import { fileSize, type MediaItem, uploadFile, uploadImage } from './upload.js';
 
 let {

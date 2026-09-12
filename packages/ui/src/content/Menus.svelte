@@ -36,8 +36,8 @@ import {
   type Pickable,
   type PickEntry,
   readEntryDirectory,
-} from './entry-directory.js';
-import Modal from './Modal.svelte';
+} from '../entry-directory.js';
+import Modal from '../shared/Modal.svelte';
 import PagePicker from './PagePicker.svelte';
 
 let {

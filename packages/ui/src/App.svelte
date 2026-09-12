@@ -1,22 +1,22 @@
 <script lang="ts">
 import type { Preset } from '@handover/core';
-import Account from './Account.svelte';
-import Activity from './Activity.svelte';
-import { when } from './activity-line';
-import BuildPill, { type Build } from './BuildPill.svelte';
-import Dashboard from './Dashboard.svelte';
-import Diagnostics from './Diagnostics.svelte';
-import EntryList from './EntryList.svelte';
+import Account from './account/Account.svelte';
+import Activity from './account/Activity.svelte';
+import Diagnostics from './account/Diagnostics.svelte';
+import Login, { type LoginMethods } from './account/Login.svelte';
+import Members from './account/Members.svelte';
+import EntryList from './content/EntryList.svelte';
+import Globals from './content/Globals.svelte';
+import Redirects from './content/Redirects.svelte';
 import { invalidateEntryDirectory } from './entry-directory.js';
-import Globals from './Globals.svelte';
-import Library from './Library.svelte';
-import Login, { type LoginMethods } from './Login.svelte';
-import Members from './Members.svelte';
-import Modal from './Modal.svelte';
+import Library from './media/Library.svelte';
 import { coordinateEntryReplacement, flushNavigation, navigate } from './navigate';
-import Pending from './Pending.svelte';
-import Redirects from './Redirects.svelte';
+import Pending from './publishing/Pending.svelte';
 import { request as fetch, localPath, sitePath, uncertainResponse } from './request.js';
+import { when } from './shared/activity-line';
+import Modal from './shared/Modal.svelte';
+import BuildPill, { type Build } from './shell/BuildPill.svelte';
+import Dashboard from './shell/Dashboard.svelte';
 
 export interface Session {
   collections: string[];

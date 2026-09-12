@@ -1,10 +1,10 @@
 <script lang="ts">
 import type { ActivityEvent } from '@handover/core';
 import { activityGroupOf } from '@handover/core';
-import { EXACT, initials, said, when } from './activity-line';
+import NewEntry, { nameOf } from '../content/NewEntry.svelte';
+import { request as fetch, sitePath } from '../request.js';
+import { EXACT, initials, said, when } from '../shared/activity-line';
 import BuildPill, { type Build } from './BuildPill.svelte';
-import NewEntry, { nameOf } from './NewEntry.svelte';
-import { request as fetch, sitePath } from './request.js';
 
 type Recent = {
   key: string;

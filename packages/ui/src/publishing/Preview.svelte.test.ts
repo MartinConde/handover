@@ -2,7 +2,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Preview from './Preview.svelte';
 
-// Testing: what the pane shows instead of a page.
+// Testing: what the pane shows instead of a page, and the exact render result it trusts.
 
 const chosen = vi.fn();
 const went = vi.fn();
@@ -31,6 +31,7 @@ const show = (over: Partial<typeof props> = {}) => {
 };
 afterEach(() => {
   unmount(app);
+  vi.useRealTimers();
   Object.assign(props, {
     url: '/listings/seaview-cottage',
     locale: 'en',
@@ -48,6 +49,25 @@ afterEach(() => {
 const q = <T extends Element>(root: ParentNode, sel: string) => root.querySelector<T>(sel);
 const all = (root: ParentNode, sel: string) => Array.from(root.querySelectorAll(sel));
 const src = (root: ParentNode) => q<HTMLIFrameElement>(root, 'iframe')?.getAttribute('src');
+const result = (
+  root: ParentNode,
+  status: 'success' | 'error',
+  overrides: { url?: string; version?: string; code?: string } = {},
+) => {
+  const frame = q<HTMLIFrameElement>(root, 'iframe');
+  if (!frame) throw new Error('no preview frame');
+  const marker = document.createElement('i');
+  marker.dataset.handoverPreviewResult = status;
+  marker.dataset.handoverPreviewUrl = overrides.url ?? '/_preview/listings/seaview-cottage';
+  marker.dataset.handoverPreviewVersion = overrides.version ?? '1755864000000';
+  if (overrides.code) marker.dataset.handoverPreviewCode = overrides.code;
+  Object.defineProperty(frame, 'contentDocument', {
+    configurable: true,
+    value: { querySelector: () => marker },
+  });
+  frame.dispatchEvent(new Event('load'));
+  flushSync();
+};
 
 test('the frame is the page as the site serves it, in the language on screen', () => {
   const root = show({ locale: 'de', url: '/de/listings/strandhaus-nord' });
@@ -77,6 +97,63 @@ test('Refresh asks for the same address again', () => {
   flushSync();
 
   expect(src(root)).not.toBe(before);
+});
+
+test('only a success signal for the requested URL and saved version marks the preview updated', () => {
+  const root = show();
+
+  result(root, 'success', { version: '1755863999999' });
+  expect(q(root, '.preview-status')?.textContent?.trim()).toBe('Updating…');
+
+  result(root, 'success', { url: '/_preview/listings/another-cottage' });
+  expect(q(root, '.preview-status')?.textContent?.trim()).toBe('Updating…');
+
+  result(root, 'success');
+  expect(q(root, '.preview-status')?.textContent?.trim()).toBe('Updated 0 seconds ago');
+});
+
+test('an iframe load without a successful preview result is reported as failed', () => {
+  const root = show();
+  const frame = q<HTMLIFrameElement>(root, 'iframe');
+  if (!frame) throw new Error('no preview frame');
+  Object.defineProperty(frame, 'contentDocument', {
+    configurable: true,
+    value: { querySelector: () => null },
+  });
+
+  frame.dispatchEvent(new Event('load'));
+  flushSync();
+
+  expect(q(root, '.preview-status')?.textContent?.trim()).toBe('Preview could not be updated');
+  expect(q(root, '.preview-error')?.textContent).toContain('Try again');
+});
+
+test('a render that never finishes times out and can be retried', async () => {
+  vi.useFakeTimers();
+  const root = show();
+
+  await vi.advanceTimersByTimeAsync(15_000);
+  flushSync();
+
+  expect(q(root, '.preview-status')?.textContent?.trim()).toBe('Preview took too long');
+  expect(q(root, '.preview-error')?.textContent).toContain('Try again');
+  q<HTMLButtonElement>(root, '.preview-error button')?.click();
+  flushSync();
+  expect(q(root, 'iframe')).not.toBeNull();
+  expect(q(root, '.preview-status')?.textContent?.trim()).toBe('Updating…');
+});
+
+test('an unauthorized result for the current render offers to restore the expired session', () => {
+  const root = show();
+
+  result(root, 'error', { code: '401', version: '1755863999999' });
+  expect(q(root, '.preview-status')?.textContent?.trim()).toBe('Updating…');
+
+  result(root, 'error', { code: '401' });
+
+  expect(q(root, '.preview-status')?.textContent?.trim()).toBe('Preview stopped — sign in again');
+  expect(q(root, '.preview-error')?.textContent).toContain('Your sign-in expired');
+  expect(q(root, '.preview-error button')?.textContent).toContain('Reload admin');
 });
 
 test('a build with no preview route says whose job turning it on is', () => {

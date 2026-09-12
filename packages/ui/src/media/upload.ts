@@ -1,5 +1,5 @@
 import { DEFAULT_MAX } from '@handover/core';
-import { request } from './request.js';
+import { request } from '../request.js';
 /** One asset as the admin answers for it: the key a content file stores, and where it is served. */
 export interface MediaItem {
   id: string;

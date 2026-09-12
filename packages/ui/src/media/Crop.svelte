@@ -1,4 +1,5 @@
 <script lang="ts">
+import Modal from '../shared/Modal.svelte';
 import {
   cropName,
   dragRegion,
@@ -8,7 +9,6 @@ import {
   sizeRegion,
   uploadCrop,
 } from './crop.js';
-import Modal from './Modal.svelte';
 import type { MediaItem } from './upload.js';
 
 let {

@@ -1,6 +1,11 @@
 /** Local design preview with stubbed API traffic. */
+import type { Field, Form } from '@handover/core';
 import { mount } from 'svelte';
-import App from '../src/App.svelte';
+import App, { type Session } from '../src/App.svelte';
+import type { Member } from '../src/account/Members.svelte';
+import type { LibraryItem } from '../src/media/upload.js';
+import type { PendingEntry } from '../src/publishing/Pending.svelte';
+import type { Build } from '../src/shell/BuildPill.svelte';
 import '../src/tokens.css';
 
 if (!import.meta.env.DEV) throw new Error('The design preview is only available in development');
@@ -50,22 +55,28 @@ const pending = [
     title: 'Seaview Cottage, Port Isaac',
     collection: 'listings',
     locales,
-    files: [],
+    files: [
+      'src/content/listings/en/seaview-cottage.yaml',
+      'src/content/listings/de/seaview-cottage.yaml',
+    ],
     updated_at: now - 3600000,
   },
-];
-const fields = [
-  { path: ['title'], label: 'Title', type: 'text', required: true },
+] satisfies PendingEntry[];
+const titleField: Field = { path: ['title'], label: 'Title', type: 'text', required: true };
+const photoField: Field = {
+  path: ['photo'],
+  label: 'Photo',
+  type: 'image',
+  required: false,
+  preset: { ratio: '3:2', min: 1200, max: 2400 },
+};
+const seoField: Field = { path: ['seo'], label: 'SEO', type: 'seo', required: false };
+const fields: Form['fields'] = [
+  titleField,
   { path: ['location'], label: 'Location', type: 'text', required: true },
   { path: ['price'], label: 'Price', type: 'text', required: true },
   { path: ['summary'], label: 'Summary', type: 'text', required: true },
-  {
-    path: ['photo'],
-    label: 'Photo',
-    type: 'image',
-    required: false,
-    preset: { ratio: '3:2', min: 1200, max: 2400 },
-  },
+  photoField,
   {
     path: ['brochure'],
     label: 'Brochure',
@@ -75,10 +86,10 @@ const fields = [
   },
   { path: ['phone'], label: 'Phone', type: 'text', required: false },
   { path: ['note'], label: 'Internal note', type: 'text', required: false, i18n: false },
-  { path: ['seo'], label: 'SEO', type: 'seo', required: false },
+  seoField,
 ];
-const pageFields = [
-  fields[0],
+const pageFields: Form['fields'] = [
+  titleField,
   {
     path: ['blocks'],
     label: 'Blocks',
@@ -86,10 +97,10 @@ const pageFields = [
     required: true,
     types: ['hero', 'textSection'],
   },
-  fields.at(-1),
+  seoField,
 ];
-const blocks = {
-  hero: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }, fields[4]],
+const blocks: Form['blocks'] = {
+  hero: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }, photoField],
   textSection: [{ path: ['body'], label: 'Body', type: 'richtext', required: true, tier: 'full' }],
 };
 const pageData = {
@@ -121,7 +132,7 @@ const session = {
   user: { id: 'preview', name: 'Martin', email: 'martin@example.com' },
   role: 'owner' as const,
   preview: false,
-};
+} satisfies Session;
 const media = ['Coastal blue', 'Garden green', 'Sandstone'].map((label, i) => ({
   id: String(i + 1).repeat(64),
   src: `media/sample-${i}.svg`,
@@ -136,7 +147,25 @@ const media = ['Coastal blue', 'Garden green', 'Sandstone'].map((label, i) => ({
   archived: false,
   createdAt: now - 86400000,
   uses: i === 0 ? [{ entry: 'pages/home', title: 'Home', href: '/admin/c/pages/home' }] : [],
-}));
+})) satisfies LibraryItem[];
+const build = {
+  state: 'live',
+  started_at: now - 7200000,
+  live_at: now - 7100000,
+} satisfies Build;
+const members = [
+  {
+    id: 'preview',
+    name: 'Martin',
+    email: 'martin@example.com',
+    role: 'owner',
+    pending: false,
+    method: 'password',
+    editing: [],
+    lastSignIn: now - 3600000,
+    invitedAt: now - 86400000,
+  },
+] satisfies Member[];
 const actualFetch = window.fetch.bind(window);
 window.fetch = async (input, init) => {
   const url = new URL(
@@ -160,8 +189,7 @@ window.fetch = async (input, init) => {
       { status: 403 },
     );
   if (path === '/admin/api/drafts') return json({ entries: pending, defaultLocale: 'en' });
-  if (path === '/admin/api/build')
-    return json({ state: 'live', started_at: now - 7200000, completed_at: now - 7100000 });
+  if (path === '/admin/api/build') return json(build);
   if (path === '/admin/api/globals') return json({ globals, locales });
   if (path === '/admin/api/entries/listings') return json({ entries, locales, templates: [] });
   if (path === '/admin/api/entries/pages')
@@ -229,7 +257,7 @@ window.fetch = async (input, init) => {
     return json({
       recent: entries.map((row) => ({
         key: `listings/${row.id}`,
-        title: row.locales.en.title,
+        title: row.locales.en?.title ?? row.id,
         collection: 'listings',
         href: `/admin/c/listings/${row.id}`,
         at: row.edited.at,
@@ -242,20 +270,7 @@ window.fetch = async (input, init) => {
         locales: [{ locale: 'de', missing: 1, stale: 1, where: ['listings', 'pages'] }],
       },
     });
-  if (path === '/admin/api/members')
-    return json({
-      members: [
-        {
-          id: 'preview',
-          name: 'Martin',
-          email: 'martin@example.com',
-          role: 'owner',
-          pending: false,
-          methods: ['password'],
-          lastSignIn: now - 3600000,
-        },
-      ],
-    });
+  if (path === '/admin/api/members') return json({ members });
   if (path.startsWith('/admin/api/activity')) return json({ events: [], cursor: null });
   if (path.startsWith('/admin/api/deleted/')) return json({ deleted: [] });
   if (path.startsWith('/admin/api/history/') && path.endsWith('/diff'))
