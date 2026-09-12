@@ -792,7 +792,7 @@ export interface I18nMark {
   translatedAt: string;
 }
 
-/** One entry's source language, as the publish about to commit the translation leaves it. */
+/** One immutable source-language snapshot a translation was based on. */
 export interface TranslationSource {
   locale: string;
   contents: string;
@@ -806,14 +806,22 @@ export async function markTranslation(
   source: TranslationSource,
   contents: string,
   was: string | undefined,
+  preserveStampedSource = false,
 ): Promise<string> {
   const data = parseEntry(siteId, contents);
   if (!isObject(data)) return contents;
   const before = new Map(was ? translatedValues(form, parseEntry(siteId, was)) : []);
-  const typed = translatedValues(form, data).some(
-    ([path, value]) => before.has(path) && before.get(path) !== value,
-  );
+  const after = new Map(translatedValues(form, data));
+  const typed =
+    before.size !== after.size ||
+    [...after].some(([path, value]) => !before.has(path) || before.get(path) !== value);
   if (was !== undefined && !typed) return contents;
+  // API saves stamp the exact source snapshot the translator saw. Publishing must carry that
+  // mark forward instead of silently replacing it with a source that moved in the meantime.
+  const stamped = completeMark(data._i18n);
+  const previousData = was === undefined ? undefined : parseEntry(siteId, was);
+  const previous = completeMark(isObject(previousData) ? previousData._i18n : undefined);
+  if (preserveStampedSource && stamped && !sameMark(stamped, previous)) return contents;
   const mark: I18nMark = {
     sourceLocale: source.locale,
     sourceBlob: source.blob_sha,
@@ -822,6 +830,24 @@ export async function markTranslation(
   };
   return stringifyEntry(siteId, { ...data, _i18n: mark });
 }
+
+const completeMark = (value: unknown): I18nMark | undefined => {
+  if (!isObject(value)) return undefined;
+  const { sourceLocale, sourceBlob, sourceHash, translatedAt } = value;
+  return typeof sourceLocale === 'string' &&
+    typeof sourceBlob === 'string' &&
+    typeof sourceHash === 'string' &&
+    typeof translatedAt === 'string'
+    ? { sourceLocale, sourceBlob, sourceHash, translatedAt }
+    : undefined;
+};
+
+const sameMark = (left: I18nMark, right: I18nMark | undefined) =>
+  right !== undefined &&
+  left.sourceLocale === right.sourceLocale &&
+  left.sourceBlob === right.sourceBlob &&
+  left.sourceHash === right.sourceHash &&
+  left.translatedAt === right.translatedAt;
 
 /** A file with no `_i18n`, no hash, or a source the entry has no file in is never stale. */
 export async function staleLocales(
@@ -1119,6 +1145,11 @@ function overlay(
 }
 
 export function stringifyEntry(_siteId: string, data: unknown): string {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    const kind = Array.isArray(data) ? 'an array' : data === null ? 'null' : typeof data;
+    throw new Error(`Entry: expected an object, got ${kind}`);
+  }
+  checkReserved(data);
   const doc = new Document(canonical(data, ''));
   // QUOTE_DOUBLE as the default would also quote multiline prose; opt those into `|`.
   visit(doc, {

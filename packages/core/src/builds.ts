@@ -4,6 +4,8 @@ export type BuildState = 'building' | 'live' | 'failed';
 export interface BuildStatus {
   /** The requested commit, or the worker's newest when absent. */
   commit_sha?: string;
+  /** The newest successful build: the repository version the Worker is actually serving. */
+  deployed_sha?: string;
   state: BuildState;
   /** Epoch ms the build was created, so the pill can say how long it has been going. */
   started_at?: number;
@@ -87,6 +89,12 @@ export async function commitBuild(
   // Once the answer is no longer about the commit it is the newest build, first in the list.
   const named = !!commit && (!!matched || now - commit.at <= NAMED_WITHIN);
   const found = named ? matched : result[0];
+  const deployedSha = result.find(
+    (build) =>
+      build.status === 'stopped' &&
+      build.build_outcome === 'success' &&
+      build.build_trigger_metadata?.commit_hash,
+  )?.build_trigger_metadata?.commit_hash;
   const started = found?.created_on ? Date.parse(found.created_on) : undefined;
   // An unbuilt worker is live only when no commit is named; a commit nothing built is building.
   const state: BuildState =
@@ -100,6 +108,7 @@ export async function commitBuild(
   const stopped = state === 'live' && found?.stopped_on ? Date.parse(found.stopped_on) : undefined;
   return {
     ...(named && commit ? { commit_sha: commit.sha } : {}),
+    ...(deployedSha ? { deployed_sha: deployedSha } : {}),
     state,
     ...(started ? { started_at: started } : {}),
     ...(stopped ? { live_at: stopped } : {}),

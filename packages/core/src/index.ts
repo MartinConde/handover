@@ -53,6 +53,7 @@ export type {
   LocaleSite,
   LocaleSyncOptions,
   NavLink,
+  TranslationSource,
 } from './content.js';
 export {
   applyDrift,
@@ -95,10 +96,12 @@ export {
   heldDrafts,
   holdEntry,
   isDraftRace,
+  isMediaRace,
   loadDraft,
   openDb,
   openDraft,
   overlayRows,
+  type PathReservation,
   pendingDrafts,
   publishDrafts,
   RevertConflictError,
@@ -106,6 +109,8 @@ export {
   recordDelete,
   recordOffer,
   recordRename,
+  recordRenames,
+  releaseOperationPaths,
   releasePaths,
   reservePaths,
   resolveConflict,
@@ -135,6 +140,7 @@ export type {
 export {
   collectionEntries,
   contentPathErrors,
+  ENTRY_SEGMENT_SOURCE,
   entryKey,
   entryOffer,
   indexFrom,
@@ -142,6 +148,7 @@ export {
   templatesFrom,
 } from './entries.js';
 export type {
+  CommitComparison,
   CommitPage,
   EntryVersion,
   FileCommit,
@@ -169,8 +176,10 @@ export {
   REDIRECTS,
   RenameCollisionError,
   readRedirects,
+  redirectDestinationError,
   redirectError,
   redirectRule,
+  redirectSourceError,
   redirectsText,
   renamedFrom,
   renameEntry,
@@ -199,6 +208,8 @@ export {
   deleteMedia,
   findMedia,
   MAX_UPLOAD_BYTES,
+  MediaInUseError,
+  MediaUnavailableError,
   mediaKey,
   mediaList,
   mediaUsage,
@@ -225,6 +236,17 @@ export {
   previewTarget,
   withSlash,
 } from './names.js';
+export type { Operation, OperationIntent } from './operations.js';
+export {
+  beginOperation,
+  finalizeOperation,
+  findOperation,
+  markOperationCommitted,
+  OperationFinalizationError,
+  operationMessage,
+  recentOperations,
+  recoverOperationCommit,
+} from './operations.js';
 export { filterLive, isLive, newId, RESERVED_KEYS, regenerateIds } from './reserved.js';
 export type { Answer, MergedChange, Question, ThreeWay } from './resolve.js';
 export type { RichtextTier } from './richtext.js';
@@ -267,6 +289,7 @@ export {
   drafts,
   locks,
   media,
+  operations,
   pathReservations,
   rateLimit,
   SCHEMA_VERSION,

@@ -2,6 +2,7 @@ import config from 'virtual:handover/config';
 import index from 'virtual:handover/index';
 import type { CheckEntry, ContentIndex, SeoDefaultsValue } from '@handover/core';
 import {
+  beginOperation,
   clearPublished,
   collapseRedirects,
   collectionEntries,
@@ -12,10 +13,13 @@ import {
   editRedirects,
   entryKey,
   entryOffer,
+  finalizeOperation,
   heldDrafts,
   lastCommit,
   lastHiddenLong,
   logActivity,
+  markOperationCommitted,
+  OperationFinalizationError,
   parseEntry,
   pendingDrafts,
   publishDrafts,
@@ -23,6 +27,8 @@ import {
   RefMovedError,
   readRedirects,
   readyDrafts,
+  recentOperations,
+  recoverOperationCommit,
   redirectError,
   redirectRule,
   restoreCommit,
@@ -89,6 +95,17 @@ const typedRule = async (request: Request) => {
   };
 };
 
+const ruleDetail = (value: unknown): RedirectRule | undefined => {
+  if (!value || typeof value !== 'object' || !('rule' in value)) return undefined;
+  const rule = value.rule;
+  return rule && typeof rule === 'object' && '_id' in rule ? (rule as RedirectRule) : undefined;
+};
+
+const sameTypedRule = (
+  rule: RedirectRule | undefined,
+  typed: { from: string; to: string; status: 301 | 302 },
+) => rule?.from === typed.from && rule.to === typed.to && rule.status === typed.status;
+
 /** Committed on add: a rule with no entry to ride on has nowhere to wait for a publish. */
 export async function addRedirect(
   ctx: RequestContext,
@@ -97,18 +114,75 @@ export async function addRedirect(
 ): Promise<Response> {
   const typed = await typedRule(request);
   const git = ctx.git();
-  const [rules, entries] = await Promise.all([readRedirects('default', git), pickable(ctx)]);
+  const database = ctx.db();
+  const head = await git.getHead();
+  const current = await readRedirects('default', git, head);
+  const prior = (await recentOperations('default', database, 'redirect-added')).find(
+    (operation) => {
+      const rule = ruleDetail(operation.detail);
+      return (
+        sameTypedRule(rule, typed) &&
+        (operation.state !== 'finalized' ||
+          current.some(
+            (candidate) => candidate._id === rule?._id && sameTypedRule(candidate, typed),
+          ))
+      );
+    },
+  );
+  const baseSha = prior?.baseSha ?? head;
+  const [rules, entries] = await Promise.all([
+    prior ? readRedirects('default', git, baseSha) : current,
+    pickable(ctx),
+  ]);
   const bad = redirectError('default', typed, { pages: sitePages(entries), rules });
   if (bad) return Response.json(bad, { status: 422 });
-  const typed_ = redirectRule('default', { ...typed, reason: 'manual' }, Date.now());
+  const typed_ =
+    ruleDetail(prior?.detail) ??
+    redirectRule('default', { ...typed, reason: 'manual' }, Date.now());
+  const operation =
+    prior ??
+    (await beginOperation('default', database, {
+      retryKey: `redirect-added:${baseSha}:${typed_.from}:${typed_.to}:${typed_.status}`,
+      kind: 'redirect-added',
+      paths: ['src/content/redirects.yaml'],
+      baseSha,
+      userId: session?.user.id,
+      subject: typed_._id,
+      detail: { rule: typed_ },
+    }));
+  const completed = operation.result as { commit_sha?: unknown; rule?: unknown } | null;
+  if (operation.state === 'finalized' && completed?.rule)
+    return Response.json({ rule: completed.rule });
   // Read back from the file: a destination that already forwarded is collapsed onto its target.
   let rule = typed_;
-  const { commit_sha } = await editRedirects('default', git, `Add redirect ${rule.from}`, (all) => {
-    const written = collapseRedirects(all, [typed_]);
-    rule = written.find((r) => r._id === typed_._id) ?? typed_;
-    return written;
-  });
-  await logActivity('default', ctx.db(), {
+  let commit_sha: string | undefined = operation.commitSha ?? undefined;
+  if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
+  if (!commit_sha) {
+    const committed = await editRedirects(
+      'default',
+      git,
+      `Add redirect ${rule.from}`,
+      (all) => {
+        const written = collapseRedirects(all, [typed_]);
+        rule = written.find((candidate) => candidate._id === typed_._id) ?? typed_;
+        return written;
+      },
+      { baseSha: operation.baseSha, operationId: operation.id },
+    );
+    commit_sha = committed.commit_sha;
+  } else {
+    rule =
+      (await readRedirects('default', git, commit_sha)).find(
+        (candidate) => candidate._id === typed_._id,
+      ) ?? typed_;
+  }
+  await markOperationCommitted('default', database, operation.id, commit_sha, { commit_sha, rule });
+  try {
+    await finalizeOperation('default', database, operation.id);
+  } catch (cause) {
+    throw new OperationFinalizationError(operation.id, commit_sha, { cause });
+  }
+  await logActivity('default', database, {
     userId: session?.user.id,
     kind: 'redirect-added',
     subject: rule._id,
@@ -127,16 +201,57 @@ export async function changeRedirect(
 ): Promise<Response> {
   const typed = await typedRule(request);
   const git = ctx.git();
-  const [rules, entries] = await Promise.all([readRedirects('default', git), pickable(ctx)]);
+  const database = ctx.db();
+  const head = await git.getHead();
+  const current = await readRedirects('default', git, head);
+  const prior = (await recentOperations('default', database, 'redirect-changed')).find(
+    (operation) =>
+      operation.subject === id &&
+      sameTypedRule(ruleDetail(operation.detail), typed) &&
+      (operation.state !== 'finalized' ||
+        current.some((rule) => rule._id === id && sameTypedRule(rule, typed))),
+  );
+  const baseSha = prior?.baseSha ?? head;
+  const [rules, entries] = await Promise.all([
+    prior ? readRedirects('default', git, baseSha) : current,
+    pickable(ctx),
+  ]);
   const found = rules.find((rule) => rule._id === id);
   if (!found) return new Response('Not found', { status: 404 });
   if (found.reason === 'hidden') return Response.json({ error: MANAGED }, { status: 409 });
   const bad = redirectError('default', typed, { pages: sitePages(entries), rules }, id);
   if (bad) return Response.json(bad, { status: 422 });
-  const { commit_sha } = await editRedirects('default', git, `Edit redirect ${found.from}`, (all) =>
-    collapseRedirects(all, [{ ...found, ...typed }]),
-  );
-  await logActivity('default', ctx.db(), {
+  const operation =
+    prior ??
+    (await beginOperation('default', database, {
+      retryKey: `redirect-changed:${baseSha}:${id}:${typed.from}:${typed.to}:${typed.status}`,
+      kind: 'redirect-changed',
+      paths: ['src/content/redirects.yaml'],
+      baseSha,
+      userId: session?.user.id,
+      subject: id,
+      detail: { rule: { ...found, ...typed } },
+    }));
+  if (operation.state === 'finalized') return Response.json({});
+  let commit_sha: string | undefined = operation.commitSha ?? undefined;
+  if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
+  if (!commit_sha) {
+    const committed = await editRedirects(
+      'default',
+      git,
+      `Edit redirect ${found.from}`,
+      (all) => collapseRedirects(all, [{ ...found, ...typed }]),
+      { baseSha: operation.baseSha, operationId: operation.id },
+    );
+    commit_sha = committed.commit_sha;
+  }
+  await markOperationCommitted('default', database, operation.id, commit_sha, { commit_sha });
+  try {
+    await finalizeOperation('default', database, operation.id);
+  } catch (cause) {
+    throw new OperationFinalizationError(operation.id, commit_sha, { cause });
+  }
+  await logActivity('default', database, {
     userId: session?.user.id,
     kind: 'redirect-changed',
     subject: id,
@@ -153,17 +268,50 @@ export async function removeRedirect(
   session: App.Locals['handover'],
 ): Promise<Response> {
   const git = ctx.git();
-  const rules = await readRedirects('default', git);
+  const database = ctx.db();
+  const head = await git.getHead();
+  const current = await readRedirects('default', git, head);
+  const prior = (await recentOperations('default', database, 'redirect-deleted')).find(
+    (operation) =>
+      operation.subject === id &&
+      (operation.state !== 'finalized' || !current.some((rule) => rule._id === id)),
+  );
+  if (prior?.state === 'finalized') return Response.json({ deleted: id });
+  const baseSha = prior?.baseSha ?? head;
+  const rules = prior ? await readRedirects('default', git, baseSha) : current;
   const found = rules.find((rule) => rule._id === id);
   if (!found) return new Response('Not found', { status: 404 });
   if (found.reason === 'hidden') return Response.json({ error: MANAGED }, { status: 409 });
-  const { commit_sha } = await editRedirects(
-    'default',
-    git,
-    `Delete redirect ${found.from}`,
-    (all) => all.filter((rule) => rule._id !== id),
-  );
-  await logActivity('default', ctx.db(), {
+  const operation =
+    prior ??
+    (await beginOperation('default', database, {
+      retryKey: `redirect-deleted:${baseSha}:${id}`,
+      kind: 'redirect-deleted',
+      paths: ['src/content/redirects.yaml'],
+      baseSha,
+      userId: session?.user.id,
+      subject: id,
+      detail: { rule: found },
+    }));
+  let commit_sha: string | undefined = operation.commitSha ?? undefined;
+  if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
+  if (!commit_sha) {
+    const committed = await editRedirects(
+      'default',
+      git,
+      `Delete redirect ${found.from}`,
+      (all) => all.filter((rule) => rule._id !== id),
+      { baseSha: operation.baseSha, operationId: operation.id },
+    );
+    commit_sha = committed.commit_sha;
+  }
+  await markOperationCommitted('default', database, operation.id, commit_sha, { commit_sha });
+  try {
+    await finalizeOperation('default', database, operation.id);
+  } catch (cause) {
+    throw new OperationFinalizationError(operation.id, commit_sha, { cause });
+  }
+  await logActivity('default', database, {
     userId: session?.user.id,
     kind: 'redirect-deleted',
     subject: id,
@@ -187,11 +335,13 @@ export async function buildStatus(ctx: RequestContext): Promise<Response> {
     console.error('build status: the Workers Builds API could not be asked', err);
     return Response.json({});
   }
-  // The one moment the Worker learns the build went green, so the published rows go here.
-  if (last && status.state === 'live' && status.commit_sha === last.sha)
-    await clearPublished('default', database, last.sha);
+  const { deployed_sha, ...visible } = status;
+  // Reconcile against what is serving, even while a newer build is running or has failed.
+  if (deployed_sha) await clearPublished('default', database, deployed_sha, ctx.git());
   // `committed_at` only while the answer is about our commit, or the pill counts from another.
-  return Response.json(last && status.commit_sha ? { ...status, committed_at: last.at } : status);
+  return Response.json(
+    last && visible.commit_sha ? { ...visible, committed_at: last.at } : visible,
+  );
 }
 
 /** Any admin commit, not only the last; 409 with paths when one of its files has moved since. */
@@ -206,7 +356,9 @@ export async function revert(
   const scope = await commitScope('default', database, sha);
   if (scope.kind.startsWith('redirect-') && session?.role !== 'owner')
     return new Response('Forbidden', { status: 403 });
-  const result = await revertCommit('default', database, ctx.git(), sha, undoPath(session));
+  const result = await revertCommit('default', database, ctx.git(), sha, undoPath(session), false, {
+    userId: session?.user.id,
+  });
   await logActivity('default', database, {
     userId: session?.user.id,
     kind: 'revert',
@@ -253,24 +405,33 @@ export async function restore(
     const held = await heldByAnother(ctx, collection, slug, session, 'restored');
     if (held) return held;
   }
-  const result = await restoreCommit('default', database, git, sha, undoPath(session));
+  const result = await restoreCommit('default', database, git, sha, undoPath(session), {
+    userId: session?.user.id,
+  });
   // A draft-only language was never in the turn-off commit, so the inverse cannot put it back.
   const entry = entryKey(result.paths[0] ?? '');
   const [collection = '', slug = ''] = entry ? entry.split('/') : [];
-  if (config.collections[collection]) {
-    const loaded = await entryLocales(ctx, collection, slug, config.i18n.locales);
-    const written = Object.entries(loaded).filter(([, l]) => l.live);
-    const { offered } = entryOffer(
-      'default',
-      config.i18n.locales,
-      (written[0]?.[1].data as { _locales?: unknown } | undefined)?._locales,
-      written.map(([locale]) => locale),
-    );
-    const drafted = Object.entries(loaded)
-      .filter(([, l]) => !l.live)
-      .map(([locale]) => entryPath(collection, slug, locale));
-    if (drafted.length)
-      await setEntryLocales('default', database, git, drafted, offered, config.i18n.locales);
+  try {
+    if (config.collections[collection]) {
+      const loaded = await entryLocales(ctx, collection, slug, config.i18n.locales);
+      const written = Object.entries(loaded).filter(([, l]) => l.live);
+      const { offered } = entryOffer(
+        'default',
+        config.i18n.locales,
+        (written[0]?.[1].data as { _locales?: unknown } | undefined)?._locales,
+        written.map(([locale]) => locale),
+      );
+      const drafted = Object.entries(loaded)
+        .filter(([, l]) => !l.live)
+        .map(([locale]) => entryPath(collection, slug, locale));
+      if (drafted.length)
+        await setEntryLocales('default', database, git, drafted, offered, config.i18n.locales);
+    }
+    if (result.operation_id) await finalizeOperation('default', database, result.operation_id);
+  } catch (cause) {
+    if (result.operation_id)
+      throw new OperationFinalizationError(result.operation_id, result.commit_sha, { cause });
+    throw cause;
   }
   await logActivity('default', database, {
     userId: session?.user.id,
@@ -462,6 +623,7 @@ export async function publish(
       (path) => sourceOf(ctx, path),
       chosen,
       pending,
+      { userId: session?.user.id },
     );
   } catch (err) {
     // Only a repository refusal is logged: a schema or drift refusal is this person's own drafts.

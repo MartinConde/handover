@@ -36,7 +36,7 @@ const {
   publish,
   saveDraft,
   createDraft,
-  recordRename,
+  recordRenames,
   recordDelete,
   recordOffer,
   discardDraft,
@@ -202,7 +202,7 @@ const {
     translate: vi.fn(async (texts: string[], _from: string, to: string) =>
       texts.map((t) => `[${to}] ${t}`),
     ),
-    recordRename: vi.fn(async () => {}),
+    recordRenames: vi.fn(async () => {}),
     recordDelete: vi.fn(async () => {}),
     recordOffer: vi.fn(async () => {}),
     discardDraft: vi.fn(async () => {}),
@@ -579,8 +579,26 @@ const dropped: string[] = [];
 let asked: unknown[] = [];
 vi.mock('@handover/core', async (original) => ({
   ...(await original<typeof import('@handover/core')>()),
+  findOperation: async () => undefined,
+  recentOperations: async () => [],
+  beginOperation: async (_site: string, _db: unknown, intent: Record<string, unknown>) => ({
+    id: 'operation-1',
+    state: 'intent',
+    commitSha: null,
+    result: null,
+    revisions: intent.revisions ?? {},
+    baseSha: intent.baseSha,
+  }),
+  recoverOperationCommit: async () => undefined,
+  markOperationCommitted: async () => {},
+  finalizeOperation: async () => {},
   commitScope: async () => ({ kind: 'publish', allows: () => true }),
-  reservePaths: async () => 'reservation',
+  reservePaths: async (_site: string, _db: unknown, paths: string[], operationId: string) => ({
+    operationId,
+    paths,
+    token: 'reservation',
+  }),
+  releaseOperationPaths: async () => {},
   releasePaths: async () => {},
   openDraft: async (_site: string, _db: unknown, path: string) => rows[path] ?? draft,
   memberList: async () => memberRows,
@@ -692,7 +710,7 @@ vi.mock('@handover/core', async (original) => ({
   ) => {
     for (const file of files) await createDraft(site, database, git, file.path, file.values);
   },
-  recordRename,
+  recordRenames,
   recordDelete,
   recordOffer,
   discardDraft,
@@ -1008,7 +1026,7 @@ test('the database check answers with the schema version the tables are at', asy
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
     ok: true,
-    detail: "The database answered — the admin's tables are there. Schema version 5.",
+    detail: "The database answered — the admin's tables are there. Schema version 8.",
   });
 });
 
@@ -1773,6 +1791,43 @@ test('reserved keys in the posted data are dropped before the draft is stored', 
   );
 });
 
+test('autosave marks localized addresses as managed by their dedicated operation', async () => {
+  saveDraft.mockClear();
+  const data = { title: 'Hello', slug: 'taken-address' };
+
+  const res = await PUT(put('drafts/posts/hello', JSON.stringify({ data })));
+
+  expect(res.status).toBe(200);
+  expect(saveDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/posts/en/hello.yaml',
+    data,
+    {
+      form: expect.anything(),
+      locale: 'en',
+      siblings: {},
+      translation: false,
+      managed: ['slug'],
+    },
+    undefined,
+    'opened',
+  );
+});
+
+test('autosave leaves ordinary slug fields in the editable write contract', async () => {
+  saveDraft.mockClear();
+  const data = { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' }, slug: 'mill' };
+
+  const res = await PUT(put('drafts/listings/mill-house', JSON.stringify({ data })));
+
+  expect(res.status).toBe(200);
+  const call = saveDraft.mock.calls[0] as unknown[] | undefined;
+  expect(call?.[4]).toEqual(data);
+  expect(call?.[5]).toBeUndefined();
+});
+
 test('an autosave for an entry that is not in the repo is 404', async () => {
   saveDraft.mockImplementationOnce(async () => undefined);
   const data = { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } };
@@ -2175,6 +2230,13 @@ test('opening an entry names the field its collection is keyed on', async () => 
   draft = undefined;
 });
 
+test('entry routing accepts every repository-addressable name segment and rejects punctuation', async () => {
+  draft = { contents: 'name: "Addressable"\n', baseSha: 'head789', baseBlob: '' };
+  expect((await GET(ctx('entries/presenters/About_Us-2'))).status).toBe(200);
+  expect((await GET(ctx('entries/presenters/about.us'))).status).toBe(404);
+  expect((await GET(ctx('history/presenters/about.us'))).status).toBe(404);
+});
+
 test('a collection keyed on another field lists its drafts by that field', async () => {
   overlayRows.mockImplementationOnce(async () => [
     {
@@ -2398,7 +2460,10 @@ test('saving as a template commits one stripped file and logs it', async () => {
         contents: '_version: 1\ntitle: "Home"\nblocks:\n  - _type: "hero"\n    heading: "Hi"\n',
       },
     ],
-    { base_sha: 'head789', message: 'Save pages/home as the template landing-page' },
+    {
+      base_sha: 'head789',
+      message: expect.stringContaining('Save pages/home as the template landing-page'),
+    },
   );
   expect(logged).toEqual([
     {
@@ -2471,7 +2536,7 @@ test('creating from a saved template reads its file from the repository', async 
 
 test('renaming moves the entry in one commit and takes its unpublished edits with it', async () => {
   publish.mockClear();
-  recordRename.mockClear();
+  recordRenames.mockClear();
   const res = await POST(
     post('entries/listings/mill-house/rename', JSON.stringify({ to: 'The Old Mill' })),
   );
@@ -2486,14 +2551,19 @@ test('renaming moves the entry in one commit and takes its unpublished edits wit
   ]);
   expect(files[0]?.contents).toBe(null);
   expect(files[2]?.contents).toContain('from: "/listings/mill-house"');
-  expect(recordRename).toHaveBeenCalledWith(
+  expect(recordRenames).toHaveBeenCalledWith(
     'default',
     expect.anything(),
-    'src/content/listings/en/mill-house.yaml',
-    'src/content/listings/en/the-old-mill.yaml',
-    'title: The Mill House\nlocation: Bakewell\nrooms: 3\n',
+    [
+      {
+        from: 'src/content/listings/en/mill-house.yaml',
+        to: 'src/content/listings/en/the-old-mill.yaml',
+        contents: 'title: The Mill House\nlocation: Bakewell\nrooms: 3\n',
+      },
+    ],
     'def456',
     undefined,
+    expect.objectContaining({ operationId: 'operation-1', token: 'reservation' }),
   );
 });
 
@@ -2536,6 +2606,7 @@ test('deleting commits the removal with a redirect and says the file has gone', 
     expect.anything(),
     'src/content/listings/en/mill-house.yaml',
     'def456',
+    '',
   );
 });
 
@@ -2693,6 +2764,7 @@ test('deleting discards the draft of a language that has no file', async () => {
     'default',
     expect.anything(),
     'src/content/listings/de/mill-house.yaml',
+    '',
   );
 });
 
@@ -2916,7 +2988,17 @@ test('a save of a translation goes to that language and takes only the words it 
     expect.anything(),
     'src/content/pages/de/home.yaml',
     data,
-    { form: expect.anything(), locale: 'de', siblings: {}, translation: true },
+    {
+      form: expect.anything(),
+      locale: 'de',
+      siblings: {},
+      translation: true,
+      source: {
+        locale: 'en',
+        contents: home.en,
+        blob_sha: 'blob-src/content/pages/en/home.yaml',
+      },
+    },
     undefined,
     'opened',
   );
@@ -3524,6 +3606,7 @@ test('turning off a language that has a file removes it in one commit, with its 
     expect.anything(),
     'src/content/posts/de/taken.yaml',
     'def456',
+    '',
   );
 });
 
@@ -3727,7 +3810,47 @@ test('a machine is asked for the fields the translation has not got, and no othe
     { 'blocks[_id=k3nf9a2p].heading': '[de] Move to the coast' },
     undefined,
     undefined,
+    {
+      form: expect.anything(),
+      source: {
+        locale: 'en',
+        contents: home.en,
+        blob_sha: 'blob-src/content/pages/en/home.yaml',
+      },
+    },
   );
+});
+
+test('a machine fill keeps the source snapshot sent before the provider round trip', async () => {
+  machine();
+  saveTranslated.mockClear();
+  const moved = home.en.replace('Move to the coast', 'Move to the water');
+  translate.mockImplementationOnce(async (texts: string[], _from: string, to: string) => {
+    files['src/content/pages/en/home.yaml'] = moved;
+    return texts.map((text) => `[${to}] ${text}`);
+  });
+
+  const res = await POST(post('translate/pages/home/de', ''));
+
+  expect(res.status).toBe(200);
+  expect(saveTranslated).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/pages/de/home.yaml',
+    { 'blocks[_id=k3nf9a2p].heading': '[de] Move to the coast' },
+    undefined,
+    undefined,
+    {
+      form: expect.anything(),
+      source: {
+        locale: 'en',
+        contents: home.en,
+        blob_sha: 'blob-src/content/pages/en/home.yaml',
+      },
+    },
+  );
+  expect(files['src/content/pages/en/home.yaml']).toBe(moved);
 });
 
 test('a named field is translated whether it is empty or not', async () => {
@@ -3747,6 +3870,14 @@ test('a named field is translated whether it is empty or not', async () => {
     { title: '[de] Home' },
     undefined,
     undefined,
+    {
+      form: expect.anything(),
+      source: {
+        locale: 'en',
+        contents: home.en,
+        blob_sha: 'blob-src/content/pages/en/home.yaml',
+      },
+    },
   );
 });
 
@@ -3789,6 +3920,14 @@ test('a site with no hook of its own translates with the DEEPL_API_KEY it holds'
     { 'blocks[_id=k3nf9a2p].heading': '[de] Move to the coast' },
     undefined,
     undefined,
+    {
+      form: expect.anything(),
+      source: {
+        locale: 'en',
+        contents: home.en,
+        blob_sha: 'blob-src/content/pages/en/home.yaml',
+      },
+    },
   );
 });
 
@@ -5292,12 +5431,18 @@ test('the rows a live build carries are cleared when it reports live', async () 
   commitBuild.mockImplementationOnce(
     async (_cfg: unknown, commit: { sha: string } | undefined) => ({
       commit_sha: commit?.sha,
+      deployed_sha: 'live123',
       state: 'live',
       started_at: 1755864100000,
     }),
   );
   await GET(ctx('build'));
-  expect(clearPublished).toHaveBeenCalledWith('default', expect.anything(), 'def456');
+  expect(clearPublished).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    'live123',
+    expect.anything(),
+  );
 });
 
 // `committed_at` is what the pill's counter runs from.
@@ -5370,6 +5515,8 @@ test('revert undoes the commit the body names and logs it', async () => {
     expect.anything(),
     'def456',
     expect.any(Function),
+    false,
+    { userId: 'u1' },
   );
   expect(logged.at(-1)).toMatchObject({
     kind: 'revert',
@@ -5456,6 +5603,7 @@ test('restore undoes the commit the body names and says so in the log', async ()
     expect.anything(),
     'del111',
     expect.any(Function),
+    { userId: undefined },
   );
   // The same kind a revert writes — it is the same inverse commit — with what it was over.
   expect(logged.at(-1)).toMatchObject({
@@ -6187,7 +6335,7 @@ test('a manual rule is committed as it is added, on its own', async () => {
   expect(publish).toHaveBeenCalledTimes(1);
   expect(publish.mock.calls[0]?.[1]).toEqual({
     base_sha: 'head789',
-    message: 'Add redirect /summer-offer',
+    message: expect.stringContaining('Add redirect /summer-offer'),
   });
   expect(((publish.mock.calls[0]?.[0] ?? []) as { path: string }[]).map((f) => f.path)).toEqual([
     'src/content/redirects.yaml',
@@ -6200,6 +6348,25 @@ test('a manual rule is committed as it is added, on its own', async () => {
     reason: 'manual',
     createdAt: expect.stringMatching(/Z$/),
   });
+});
+
+test('a manual rule cannot inject another redirects line', async () => {
+  const res = await POST(
+    post(
+      'redirects',
+      JSON.stringify({
+        from: '/old\n/shadow https://outside.example 302\n/another',
+        to: '/new',
+      }),
+    ),
+  );
+
+  expect(res.status).toBe(422);
+  expect(await res.json()).toEqual({
+    field: 'from',
+    message: 'An old address cannot contain spaces or control characters.',
+  });
+  expect(publish).not.toHaveBeenCalled();
 });
 
 // The refusal that matters: a redirect over a page that exists takes that page off the site.
@@ -6280,7 +6447,7 @@ test('a rule is edited in place and the commit says which one', async () => {
   expect(res.status).toBe(200);
   expect(publish.mock.calls[0]?.[1]).toEqual({
     base_sha: 'head789',
-    message: 'Edit redirect /old',
+    message: expect.stringContaining('Edit redirect /old'),
   });
   expect(committed().rules).toEqual([
     {

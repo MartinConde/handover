@@ -1,9 +1,10 @@
 import { and, desc, eq, inArray, isNotNull, like, lt, or } from 'drizzle-orm';
 import type { Role } from './auth.js';
+import { chunksOf, D1_MAX_BOUND_PARAMETERS } from './d1-limits.js';
 import type { Db } from './db.js';
 import { entryKey } from './entries.js';
 import { newId } from './reserved.js';
-import { activity, user } from './tables.js';
+import { activity, operations, user } from './tables.js';
 
 /** `at` and the id are this file's, so no caller can date a row. */
 export interface ActivityEntry {
@@ -268,7 +269,7 @@ export async function lastCommit(
   siteId: string,
   db: Db,
 ): Promise<{ sha: string; at: number; kind: string; by: string | null } | undefined> {
-  const [row] = await db
+  const [telemetry] = await db
     // Name and never address: this row is read by everybody, not only the person it is about.
     .select({ sha: activity.commitSha, at: activity.at, kind: activity.kind, by: user.name })
     .from(activity)
@@ -276,7 +277,22 @@ export async function lastCommit(
     .where(and(eq(activity.siteId, siteId), isNotNull(activity.commitSha)))
     .orderBy(desc(activity.at), desc(activity.id))
     .limit(1);
-  return row?.sha ? { sha: row.sha, at: row.at, kind: row.kind, by: row.by ?? null } : undefined;
+  const [durable] = await db
+    .select({
+      sha: operations.commitSha,
+      at: operations.committedAt,
+      kind: operations.kind,
+      by: user.name,
+    })
+    .from(operations)
+    .leftJoin(user, eq(operations.userId, user.id))
+    .where(and(eq(operations.siteId, siteId), isNotNull(operations.commitSha)))
+    .orderBy(desc(operations.committedAt), desc(operations.id))
+    .limit(1);
+  const row = durable?.sha && (durable.at ?? 0) >= (telemetry?.at ?? 0) ? durable : telemetry;
+  return row?.sha
+    ? { sha: row.sha, at: row.at ?? 0, kind: row.kind, by: row.by ?? null }
+    : undefined;
 }
 
 /** Git cannot answer this: an admin commit is the installation's, so the name lives only here. */
@@ -286,14 +302,30 @@ export async function commitAuthors(
   shas: readonly string[],
 ): Promise<Record<string, string>> {
   if (shas.length === 0) return {};
-  const rows = await db
-    .select({ sha: activity.commitSha, name: user.name })
-    .from(activity)
-    .innerJoin(user, eq(activity.userId, user.id))
-    .where(and(eq(activity.siteId, siteId), inArray(activity.commitSha, [...shas])));
+  // The site id takes one binding, leaving 99 for commit SHAs in each D1 statement.
+  const chunks = chunksOf([...new Set(shas)], D1_MAX_BOUND_PARAMETERS - 1);
+  const rows: { sha: string | null; name: string }[] = [];
+  const durable: { sha: string | null; name: string }[] = [];
+  for (const chunk of chunks) {
+    const [activityRows, operationRows] = await Promise.all([
+      db
+        .select({ sha: activity.commitSha, name: user.name })
+        .from(activity)
+        .innerJoin(user, eq(activity.userId, user.id))
+        .where(and(eq(activity.siteId, siteId), inArray(activity.commitSha, chunk))),
+      db
+        .select({ sha: operations.commitSha, name: user.name })
+        .from(operations)
+        .innerJoin(user, eq(operations.userId, user.id))
+        .where(and(eq(operations.siteId, siteId), inArray(operations.commitSha, chunk))),
+    ]);
+    rows.push(...activityRows);
+    durable.push(...operationRows);
+  }
   const found: Record<string, string> = {};
   // A commit can carry several events by the same person, so the first row to name it wins.
-  for (const row of rows) if (row.sha && row.name && !(row.sha in found)) found[row.sha] = row.name;
+  for (const row of [...durable, ...rows])
+    if (row.sha && row.name && !(row.sha in found)) found[row.sha] = row.name;
   return found;
 }
 

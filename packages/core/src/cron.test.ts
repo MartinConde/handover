@@ -47,6 +47,14 @@ const store: R2Store = {
 const NOW = 1_800_000_000_000;
 const DAY = 24 * 60 * 60 * 1000;
 
+const deferred = () => {
+  let resolve = () => {};
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+};
+
 /** A bucket holding exactly these keys, listed the way R2's S3 API lists one. */
 const listing = (keys: string[]) =>
   (async () =>
@@ -137,7 +145,7 @@ test('work done is logged as cron-<job> with its count', async () => {
   expect(await kinds()).toEqual(['cron-reconcile {"done":1}', 'cron-retention {"done":1}']);
 });
 
-test('a job that throws is logged, stamped, and does not stop the next one', async () => {
+test('a job that throws is logged, scheduled for retry, and does not stop the next one', async () => {
   const refused = (async () => new Response('no', { status: 403 })) as unknown as typeof fetch;
 
   const report = await runDue('default', { db, store, fetch: refused, now: NOW });
@@ -150,37 +158,111 @@ test('a job that throws is logged, stamped, and does not stop the next one', asy
   });
   expect(await kinds()).toEqual(['cron-reconcile {"error":"R2 LIST site-media failed: 403"}']);
   expect(await cronRows()).toEqual([
-    { job: 'reconcile', lastRun: NOW },
+    { job: 'reconcile', lastRun: 0 },
     { job: 'retention', lastRun: NOW },
     { job: 'orphans', lastRun: NOW },
     { job: 'hidden', lastRun: NOW },
   ]);
 });
 
-/** The same database, except that writing a stamp fails: a D1 that is refusing writes. */
-const stampFails = (real: Db): Db =>
+test('simultaneous due ticks claim each job once', async () => {
+  let lists = 0;
+  const fetch = (async () => {
+    lists += 1;
+    return new Response('<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>');
+  }) as unknown as typeof globalThis.fetch;
+
+  const reports = await Promise.all([
+    runDue('default', { db, store, fetch, now: NOW }),
+    runDue('default', { db, store, fetch, now: NOW }),
+  ]);
+
+  expect(reports.filter((report) => 'reconcile' in report)).toHaveLength(1);
+  expect(lists).toBe(1);
+});
+
+test('a failed job retries after five minutes instead of waiting for its normal interval', async () => {
+  const refused = (async () => new Response('no', { status: 503 })) as unknown as typeof fetch;
+  await runDue('default', { db, store, fetch: refused, now: NOW });
+
+  expect(await runDue('default', { db, store, fetch: listing([]), now: NOW + 4 * 60_000 })).toEqual(
+    {},
+  );
+  expect(await runDue('default', { db, store, fetch: listing([]), now: NOW + 5 * 60_000 })).toEqual(
+    { reconcile: 0 },
+  );
+});
+
+test('repeated failures back off exponentially but never wait more than one hour', async () => {
+  let attempts = 0;
+  const refused = (async () => {
+    attempts += 1;
+    return new Response('no', { status: 503 });
+  }) as unknown as typeof fetch;
+
+  for (const minutes of [0, 5, 15, 35, 75, 135]) {
+    await runDue('default', { db, store, fetch: refused, now: NOW + minutes * 60_000 });
+  }
+  expect(await runDue('default', { db, store, fetch: refused, now: NOW + 194 * 60_000 })).toEqual(
+    {},
+  );
+  await runDue('default', { db, store, fetch: refused, now: NOW + 195 * 60_000 });
+
+  expect(attempts).toBe(7);
+});
+
+test('a worker finishing after its expired lease cannot overwrite the replacement schedule', async () => {
+  const firstGate = deferred();
+  const secondGate = deferred();
+  const firstStarted = deferred();
+  const secondStarted = deferred();
+  let lists = 0;
+  const fetch = (async () => {
+    lists += 1;
+    if (lists === 1) {
+      firstStarted.resolve();
+      await firstGate.promise;
+    } else {
+      secondStarted.resolve();
+      await secondGate.promise;
+    }
+    return new Response('<ListBucketResult><IsTruncated>false</IsTruncated></ListBucketResult>');
+  }) as unknown as typeof globalThis.fetch;
+
+  const stale = runDue('default', { db, store, fetch, now: NOW });
+  await firstStarted.promise;
+  const replacementAt = NOW + 16 * 60_000;
+  const replacement = runDue('default', { db, store, fetch, now: replacementAt });
+  await secondStarted.promise;
+  secondGate.resolve();
+  await replacement;
+  firstGate.resolve();
+  await stale;
+
+  expect((await cronRows()).find((row) => row.job === 'reconcile')?.lastRun).toBe(replacementAt);
+});
+
+/** The same database, except that acquiring a claim fails: a D1 that is refusing writes. */
+const claimFails = (real: Db): Db =>
   Object.create(real, {
     insert: {
       value: (table: unknown) =>
         table === tables.cronState
           ? {
               values: () => ({
-                onConflictDoUpdate: () => Promise.reject(new Error('d1 is not taking writes')),
+                onConflictDoUpdate: () => ({
+                  returning: () => Promise.reject(new Error('d1 is not taking writes')),
+                }),
               }),
             }
           : real.insert(table as Parameters<Db['insert']>[0]),
     },
   }) as Db;
 
-test('a stamp that cannot be written does not stop the job after it', async () => {
-  const deps = { db: stampFails(db), store, fetch: listing([]), now: NOW };
+test('a claim that cannot be written does not run work or stop checking independent jobs', async () => {
+  const deps = { db: claimFails(db), store, fetch: listing([]), now: NOW };
 
-  expect(await runDue('default', deps)).toEqual({
-    reconcile: 0,
-    retention: 0,
-    orphans: 0,
-    hidden: 0,
-  });
+  expect(await runDue('default', deps)).toEqual({});
 });
 
 test('a name nothing is registered under is refused', async () => {
@@ -197,7 +279,7 @@ test('the orphan sweep is given the repository the tick was called with', async 
     path: 'src/content/listings/en/gone.yaml',
     contents: 'title: "Gone"\n',
     baseSha: 'commit-A',
-    baseBlob: 'blob-of-the-file-that-was-there',
+    baseBlob: '766d5be5170f6a0caa58cc9cb09aaef0d003e862',
     updatedAt: NOW - 2 * DAY,
   });
   const git = { getHead: async () => 'commit-B', getFile: async () => undefined } as never;

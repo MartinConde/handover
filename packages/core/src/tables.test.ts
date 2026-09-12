@@ -43,6 +43,7 @@ test('the migration creates every table and index the docs specify', async () =>
     'drafts',
     'locks',
     'media',
+    'operations',
     'path_reservations',
     'rate_limit',
     'session',
@@ -51,6 +52,51 @@ test('the migration creates every table and index the docs specify', async () =>
     'verification',
   ]);
   expect(await names('index')).toContain('activity_site_at');
+  expect(await names('index')).toEqual(
+    expect.arrayContaining([
+      'operations_site_retry',
+      'operations_site_commit',
+      'operations_site_created',
+      'path_reservations_site_operation',
+    ]),
+  );
+});
+
+test('destination reservations carry their durable recovery owner and fence token', async () => {
+  expect(await columns('path_reservations')).toEqual(['site_id', 'path', 'token', 'operation_id']);
+});
+
+test('cron state separates successful cadence, retry timing, and the active lease', async () => {
+  expect(await columns('cron_state')).toEqual([
+    'site_id',
+    'job',
+    'last_run',
+    'retry_at',
+    'failures',
+    'lease_token',
+    'lease_until',
+  ]);
+});
+
+test('operation records carry durable retry, scope and finalization state', async () => {
+  expect(await columns('operations')).toEqual([
+    'id',
+    'site_id',
+    'retry_key',
+    'kind',
+    'state',
+    'paths',
+    'revisions',
+    'base_sha',
+    'commit_sha',
+    'result',
+    'user_id',
+    'subject',
+    'detail',
+    'created_at',
+    'committed_at',
+    'finalized_at',
+  ]);
 });
 
 // One migration only, so a plugin turned on later has no table to arrive in.

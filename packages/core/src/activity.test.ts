@@ -288,6 +288,37 @@ test('a log with no commit in it has no last commit', async () => {
   expect(await lastCommit('default', db)).toBe(undefined);
 });
 
+test('durable operations keep build tracking and authorship when activity telemetry is absent', async () => {
+  await seedUser('u1', 'Anna Berg', 'anna@example.com');
+  await db.insert(tables.operations).values({
+    id: 'op1',
+    siteId: 'default',
+    retryKey: 'publish:one',
+    kind: 'publish',
+    state: 'finalized',
+    paths: ['src/content/pages/en/home.yaml'],
+    revisions: {},
+    baseSha: 'base111',
+    commitSha: 'commit222',
+    userId: 'u1',
+    createdAt: 900,
+    committedAt: 1000,
+    finalizedAt: 1001,
+  });
+
+  expect(await lastCommit('default', db)).toEqual({
+    sha: 'commit222',
+    at: 1000,
+    kind: 'publish',
+    by: 'Anna Berg',
+  });
+  expect(await commitAuthors('default', db, ['commit222'])).toEqual({
+    commit222: 'Anna Berg',
+  });
+  await expireActivity('default', db, 2_000_000_000_000);
+  expect(await db.select().from(tables.operations)).toHaveLength(1);
+});
+
 test('retention deletes rows past 180 days and keeps the day before the cut', async () => {
   const now = 1_800_000_000_000;
   const day = 24 * 60 * 60 * 1000;
@@ -398,6 +429,24 @@ test('commit authors are the people the log recorded against those commits', asy
     aaa111: 'Anna Weber',
   });
 });
+
+test.each([99, 100, 300])(
+  'commit authors stay within D1 limits for %i requested SHAs',
+  async (count) => {
+    await seedUser('u1', 'Anna Weber', 'anna@example.com');
+    const shas = Array.from({ length: count }, (_, i) => `commit-${i}`);
+    const named = shas.at(-1);
+    await seedEvent({
+      id: 'large-history',
+      at: 1,
+      userId: 'u1',
+      kind: 'publish',
+      commitSha: named,
+    });
+
+    expect(await commitAuthors('default', db, shas)).toEqual({ [named ?? '']: 'Anna Weber' });
+  },
+);
 
 test('the entries a publish carried are one row each, newest first', async () => {
   await seedUser('u1', 'Anna Berg', 'anna@example.com');

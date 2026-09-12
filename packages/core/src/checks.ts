@@ -488,11 +488,12 @@ async function assetResults(
 ): Promise<CheckResult[]> {
   if (!assets.length) return [];
   const ids = [...new Set(assets.flatMap((a) => STORED.exec(a.key)?.[1] ?? []))];
-  const rows: { id: string; archived: number | null }[] = [];
+  const rows: { id: string; archived: number | null; state: 'active' | 'deleting' | 'deleted' }[] =
+    [];
   for (let i = 0; i < ids.length; i += PER_QUERY)
     rows.push(
       ...(await db
-        .select({ id: media.id, archived: media.archived })
+        .select({ id: media.id, archived: media.archived, state: media.state })
         .from(media)
         .where(and(eq(media.siteId, siteId), inArray(media.id, ids.slice(i, i + PER_QUERY))))),
     );
@@ -509,6 +510,16 @@ async function assetResults(
     const said = (check: CheckName, message: string) => [
       { check, path: asset.path, fieldPath: asset.fieldPath, severity: CHECKS[check], message },
     ];
+    if (row?.state === 'deleting')
+      return said(
+        'media-missing',
+        `${asset.label} is being deleted and cannot be used — choose another asset`,
+      );
+    if (row?.state === 'deleted')
+      return said(
+        'media-missing',
+        `${asset.label} has been deleted — the page would show a broken image (${asset.key})`,
+      );
     if (row?.archived)
       return said(
         'media-archived',

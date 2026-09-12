@@ -34,6 +34,40 @@ const hero = { _type: 'hero', _id: 'aaaa1111', heading: 'Seaview Cottage' };
 const cta = { _type: 'cta', _id: 'bbbb2222', heading: 'Newsletter signup' };
 const gallery = { _type: 'hero', _id: 'cccc3333', heading: 'Gallery' };
 
+const navigation: Form = {
+  fields: [
+    { path: ['title'], label: 'Title', type: 'text', required: true },
+    { path: ['menus'], label: 'Menus', type: 'menus', required: true, i18n: 'duplicate' },
+  ],
+  blocks: {},
+};
+
+const mediaPage: Form = {
+  fields: [
+    { path: ['title'], label: 'Title', type: 'text', required: true },
+    { path: ['image'], label: 'Image', type: 'image', required: false, preset: { max: 2400 } },
+    { path: ['seo'], label: 'SEO', type: 'seo', required: false },
+  ],
+  blocks: {},
+};
+
+const image = (src: string, alt: string, width: number, height: number) => ({
+  src,
+  alt,
+  width,
+  height,
+});
+const menu = (items: unknown[]) => ({
+  title: 'Navigation',
+  menus: [{ _id: 'menu0001', key: 'header', items }],
+});
+const menuItem = (id: string, label: string, href: string, children?: unknown[]) => ({
+  _id: id,
+  label,
+  link: { type: 'url', href },
+  ...(children ? { children } : {}),
+});
+
 test('a field only one side changed is merged rather than asked about', () => {
   const base = { title: 'Mill House', summary: 'A mill.', price: 450000 };
 
@@ -232,6 +266,173 @@ test('an answer about a shared value is written into every language', () => {
   const resolved = applyResolution('default', listing, files, [{ path: 'price', side: 'ours' }]);
 
   expect([resolved.en, resolved.de]).toMatchObject([{ price: 435000 }, { price: 435000 }]);
+});
+
+test('an automatically merged image keeps its own dimensions while alt text stays per-language', () => {
+  const base = {
+    en: { title: 'Home', image: image('media/old.png', 'Old front', 100, 200) },
+    de: { title: 'Start', image: image('media/old.png', 'Alte Front', 100, 200) },
+  };
+  const files = {
+    en: {
+      base: base.en,
+      ours: { ...base.en, image: image('media/new.png', 'Old front', 300, 400) },
+      theirs: { ...base.en, image: image('media/old.png', 'New front', 100, 200) },
+    },
+    de: {
+      base: base.de,
+      ours: { ...base.de, image: image('media/new.png', 'Alte Front', 300, 400) },
+      theirs: { ...base.de, image: image('media/old.png', 'Neue Front', 100, 200) },
+    },
+  };
+
+  const resolved = applyResolution('default', mediaPage, files, []);
+
+  expect(resolved).toEqual({
+    en: { title: 'Home', image: image('media/new.png', 'New front', 300, 400) },
+    de: { title: 'Start', image: image('media/new.png', 'Neue Front', 300, 400) },
+  });
+});
+
+test('an explicit image choice carries that source dimensions without taking its alt text', () => {
+  const base = { title: 'Home', image: image('media/old.png', 'Old front', 100, 200) };
+  const files = {
+    en: {
+      base,
+      ours: { ...base, image: image('media/ours.png', 'Our front', 300, 400) },
+      theirs: { ...base, image: image('media/theirs.png', 'Their front', 500, 600) },
+    },
+  };
+
+  const resolved = applyResolution('default', mediaPage, files, [
+    { path: 'image.src', locale: 'en', side: 'ours' },
+    { path: 'image.alt', locale: 'en', side: 'theirs' },
+  ]);
+
+  expect(resolved.en).toEqual({
+    title: 'Home',
+    image: image('media/ours.png', 'Their front', 300, 400),
+  });
+});
+
+test('SEO image choices carry dimensions for additions and remove the whole deleted image', () => {
+  const added = {
+    en: {
+      base: { title: 'Home', seo: { title: 'Welcome' } },
+      ours: {
+        title: 'Home',
+        seo: { title: 'Welcome', image: image('media/ours.png', 'Ours', 1200, 630) },
+      },
+      theirs: {
+        title: 'Home',
+        seo: { title: 'Welcome', image: image('media/theirs.png', 'Theirs', 1600, 900) },
+      },
+    },
+  };
+  const old = image('media/old.png', 'Old', 100, 200);
+  const removed = {
+    en: {
+      base: { title: 'Home', seo: { title: 'Welcome', image: old } },
+      ours: { title: 'Home', seo: { title: 'Welcome' } },
+      theirs: {
+        title: 'Home',
+        seo: { title: 'Welcome', image: image('media/theirs.png', 'Theirs', 1600, 900) },
+      },
+    },
+  };
+
+  const chosen = applyResolution('default', mediaPage, added, [
+    { path: 'seo.image.src', locale: 'en', side: 'theirs' },
+    { path: 'seo.image.alt', locale: 'en', side: 'ours' },
+  ]);
+  const deleted = applyResolution('default', mediaPage, removed, [
+    { path: 'seo.image.src', locale: 'en', side: 'ours' },
+  ]);
+
+  expect(chosen.en).toEqual({
+    title: 'Home',
+    seo: { title: 'Welcome', image: image('media/theirs.png', 'Ours', 1600, 900) },
+  });
+  expect(deleted.en).toEqual({ title: 'Home', seo: { title: 'Welcome' } });
+  expect((deleted.en as { seo: object }).seo).not.toHaveProperty('image');
+});
+
+test('a draft menu edit reported as merged is present in the resolved entry', () => {
+  const base = menu([menuItem('home0001', 'Home', '/')]);
+  const ours = menu([menuItem('home0001', 'Welcome', '/')]);
+  const theirs = { ...base, title: 'Main navigation' };
+  const files = { en: { base, ours, theirs } };
+
+  const report = conflictReport('default', navigation, files);
+  const resolved = applyResolution('default', navigation, files, []);
+
+  expect(report.questions).toEqual([]);
+  expect(report.merged.map((change) => [change.change.path, change.side])).toEqual([
+    ['menus[_id=menu0001].items[_id=home0001].label', 'ours'],
+    ['title', 'theirs'],
+  ]);
+  expect(resolved.en).toEqual({
+    title: 'Main navigation',
+    menus: [
+      {
+        _id: 'menu0001',
+        key: 'header',
+        items: [menuItem('home0001', 'Welcome', '/')],
+      },
+    ],
+  });
+});
+
+test('menu answers independently choose nested labels and links', () => {
+  const base = menu([menuItem('home0001', 'Home', '/', [menuItem('team0001', 'Team', '/team')])]);
+  const ours = menu([
+    menuItem('home0001', 'Home', '/', [menuItem('team0001', 'Our team', '/people')]),
+  ]);
+  const theirs = menu([
+    menuItem('home0001', 'Home', '/', [menuItem('team0001', 'Meet us', '/about')]),
+  ]);
+  const files = { en: { base, ours, theirs } };
+
+  const report = conflictReport('default', navigation, files);
+  const resolved = applyResolution('default', navigation, files, [
+    {
+      path: 'menus[_id=menu0001].items[_id=home0001].children[_id=team0001].label',
+      locale: 'en',
+      side: 'ours',
+    },
+    {
+      path: 'menus[_id=menu0001].items[_id=home0001].children[_id=team0001].link',
+      locale: 'en',
+      side: 'theirs',
+    },
+  ]);
+
+  expect(report.questions.map((question) => question.path)).toEqual([
+    'menus[_id=menu0001].items[_id=home0001].children[_id=team0001].label',
+    'menus[_id=menu0001].items[_id=home0001].children[_id=team0001].link',
+  ]);
+  expect(resolved.en).toEqual(
+    menu([menuItem('home0001', 'Home', '/', [menuItem('team0001', 'Our team', '/about')])]),
+  );
+});
+
+test('menu additions, removals, and root and child order follow the reported draft changes', () => {
+  const team = menuItem('team0001', 'Team', '/team');
+  const jobs = menuItem('jobs0001', 'Jobs', '/jobs');
+  const contact = menuItem('cont0001', 'Contact', '/contact');
+  const home = (children: unknown[]) => menuItem('home0001', 'Home', '/', children);
+  const news = menuItem('news0001', 'News', '/news');
+  const base = menu([home([team, jobs]), news]);
+  const ours = menu([news, home([jobs, contact])]);
+  const theirs = { ...base, title: 'Main navigation' };
+  const files = { en: { base, ours, theirs } };
+
+  const report = conflictReport('default', navigation, files);
+  const resolved = applyResolution('default', navigation, files, []);
+
+  expect(report.questions).toEqual([]);
+  expect(report.merged.some((change) => change.change.kind === 'row')).toBe(true);
+  expect(resolved.en).toEqual({ ...ours, title: 'Main navigation' });
 });
 
 test('the marks a file carries are the ones the side it came from had', () => {

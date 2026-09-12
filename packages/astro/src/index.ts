@@ -24,6 +24,8 @@ import {
   type Preset,
   parseEntry,
   type RichtextTier,
+  redirectDestinationError,
+  redirectSourceError,
   redirectsText,
   refErrors,
   richtextErrors,
@@ -141,8 +143,14 @@ export const redirects = z.object({
   rules: z.array(
     z.object({
       _id: z.string(),
-      from: z.string().regex(/^\//, 'a path starting with "/"'),
-      to: z.string().regex(/^(\/|https?:\/\/)/, 'a path or an absolute URL'),
+      from: z.string().superRefine((value, ctx) => {
+        const message = redirectSourceError(value);
+        if (message) ctx.addIssue({ code: 'custom', message });
+      }),
+      to: z.string().superRefine((value, ctx) => {
+        const message = redirectDestinationError(value);
+        if (message) ctx.addIssue({ code: 'custom', message });
+      }),
       status: z.union([z.literal(301), z.literal(302)]),
       reason: z.enum(['slug-change', 'hidden', 'deleted', 'manual']),
       entry: z.string().optional(),

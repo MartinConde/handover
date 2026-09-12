@@ -1,10 +1,10 @@
 import { AwsClient } from 'aws4fetch';
-import { type AnyColumn, and, desc, eq, like, not, or, sql } from 'drizzle-orm';
+import { type AnyColumn, and, desc, eq, like, ne, not, or, sql } from 'drizzle-orm';
 import { parseEntry } from './content.js';
 import type { Db } from './db.js';
 import type { ContentFile } from './entries.js';
 import { entryKey } from './entries.js';
-import { media } from './tables.js';
+import { drafts, media } from './tables.js';
 import { imageDimensions } from './upload-bytes.js';
 
 export interface R2Store {
@@ -88,6 +88,22 @@ const TTL = 300;
 /** The message is shown to the person who chose the file. */
 export class UploadRefusedError extends Error {}
 
+/** A stale picker must not bring back bytes whose deletion already owns the key. */
+export class MediaUnavailableError extends Error {
+  override name = 'MediaUnavailableError';
+  constructor() {
+    super('That media item is being deleted. Choose another file before saving.');
+  }
+}
+
+/** The usage snapshot lost its race, so the draft is authoritative and deletion stops. */
+export class MediaInUseError extends Error {
+  override name = 'MediaInUseError';
+  constructor() {
+    super('This media item became used while it was being deleted. Archive it instead.');
+  }
+}
+
 /** Content-addressed and checked before signing: R2 cannot bind a size to a presigned PUT. */
 export function mediaKey(upload: Upload): string {
   const ext = EXTENSIONS[upload.mime];
@@ -136,7 +152,9 @@ export function mediaList(siteId: string, db: Db, query: MediaQuery): Promise<Me
     .where(
       and(
         eq(media.siteId, siteId),
+        ne(media.state, 'deleted'),
         query.withArchived ? undefined : eq(media.archived, 0),
+        query.withArchived ? undefined : eq(media.state, 'active'),
         query.kind === 'images' ? pictures : not(pictures),
         // The tags' json text is searched rather than a join table for three words.
         q ? or(contains(media.filename, q), contains(media.tags, q)) : undefined,
@@ -164,7 +182,7 @@ export async function setMediaDetails(
       // A default: a page that set its own focal dot keeps it.
       ...(details.focal ? { focalX: details.focal[0], focalY: details.focal[1] } : {}),
     })
-    .where(and(eq(media.siteId, siteId), eq(media.id, id)))
+    .where(and(eq(media.siteId, siteId), eq(media.id, id), eq(media.state, 'active')))
     .returning();
   return row;
 }
@@ -311,7 +329,8 @@ export async function confirmUpload(
   const { fetch = globalThis.fetch, now = Date.now() } = deps;
   const key = mediaKey(upload);
   const known = await findMedia(siteId, db, upload.hash);
-  if (known) return { media: known, created: false };
+  if (known?.state === 'active') return { media: known, created: false };
+  if (known?.state === 'deleting') throw new MediaUnavailableError();
 
   if (
     !upload.key ||
@@ -338,44 +357,79 @@ export async function confirmUpload(
     }),
   );
   if (!finalized.ok) throw new Error(`R2 finalization failed: ${finalized.status}`);
-  const [written] = await db
-    .insert(media)
-    .values({
-      id: upload.hash,
-      siteId,
-      r2Key: key,
-      filename: upload.filename ?? null,
-      mime: upload.mime,
-      bytes: upload.bytes,
-      width: verified.width ?? null,
-      height: verified.height ?? null,
-      derivedFrom: upload.derivedFrom ?? null,
-      createdAt: now,
-    })
-    .onConflictDoNothing()
-    .returning();
+  const values = {
+    id: upload.hash,
+    siteId,
+    r2Key: key,
+    filename: upload.filename ?? null,
+    mime: upload.mime,
+    bytes: upload.bytes,
+    width: verified.width ?? null,
+    height: verified.height ?? null,
+    derivedFrom: upload.derivedFrom ?? null,
+    state: 'active' as const,
+    deletingAt: null,
+    createdAt: now,
+  };
+  const [written] = await db.insert(media).values(values).onConflictDoNothing().returning();
+  const [restored] = written
+    ? []
+    : await db
+        .update(media)
+        .set(values)
+        .where(and(eq(media.siteId, siteId), eq(media.id, upload.hash), eq(media.state, 'deleted')))
+        .returning();
   // Two tabs confirming the same bytes at once: the one that lost reads the row.
-  const stored = written ?? (await findMedia(siteId, db, upload.hash));
+  const stored = written ?? restored ?? (await findMedia(siteId, db, upload.hash));
   if (!stored) throw new Error(`the media row for ${upload.hash} was not written`);
+  if (stored.state !== 'active') throw new MediaUnavailableError();
   // Staging outlives registration so a failed database write can retry.
   await object(store, upload.key, 'DELETE', fetch).catch(() => undefined);
-  return { media: stored, created: Boolean(written) };
+  return { media: stored, created: Boolean(written ?? restored) };
 }
 
-/** The row goes first: a stray object is recovered hourly; a row without bytes never is. */
+/** D1 orders the claim against draft saves; the tombstone keeps stale pickers from reviving it. */
 export async function deleteMedia(
   siteId: string,
   db: Db,
   store: R2Store,
   row: { id: string; r2Key: string },
-  deps: { fetch?: typeof globalThis.fetch } = {},
+  deps: { fetch?: typeof globalThis.fetch; now?: number } = {},
 ): Promise<void> {
-  const { fetch = globalThis.fetch } = deps;
-  await db.delete(media).where(and(eq(media.siteId, siteId), eq(media.id, row.id)));
+  const { fetch = globalThis.fetch, now = Date.now() } = deps;
+  const [claimed] = await db
+    .update(media)
+    .set({
+      state: 'deleting',
+      deletingAt: sql`coalesce(${media.deletingAt}, ${now})`,
+    })
+    .where(
+      and(
+        eq(media.siteId, siteId),
+        eq(media.id, row.id),
+        or(
+          eq(media.state, 'deleting'),
+          and(
+            eq(media.state, 'active'),
+            sql`not exists (select 1 from ${drafts} where ${drafts.siteId} = ${siteId} and instr(${drafts.contents}, ${row.r2Key}) > 0)`,
+          ),
+        ),
+      ),
+    )
+    .returning({ id: media.id });
+  if (!claimed) {
+    const current = await findMedia(siteId, db, row.id);
+    if (!current || current.state === 'deleted') return;
+    throw new MediaInUseError();
+  }
   const gone = await object(store, row.r2Key, 'DELETE', fetch);
   // R2 answers 204 for a key it never had, so anything else is a refusal.
   if (!gone.ok && gone.status !== 404)
     throw new Error(`R2 DELETE ${row.r2Key} failed: ${gone.status}`);
+  await db
+    .update(media)
+    .set({ state: 'deleted' })
+    .where(and(eq(media.siteId, siteId), eq(media.id, row.id), eq(media.state, 'deleting')));
 }
 
 // workerd has no XML parser, and the keys read are hex and an extension, so regexes suffice.

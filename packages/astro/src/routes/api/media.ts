@@ -7,6 +7,7 @@ import {
   draftFiles,
   findMedia,
   logActivity,
+  MediaUnavailableError,
   mediaKey,
   mediaList,
   mediaUsage,
@@ -129,7 +130,7 @@ export async function deleteAsset(
   if (!store) return Response.json({ error: NO_BUCKET }, { status: 503 });
   const database = ctx.db();
   const row = await findMedia('default', database, id);
-  if (!row) return new Response('Not found', { status: 404 });
+  if (!row || row.state === 'deleted') return new Response('Not found', { status: 404 });
   const [tree, drafts] = await Promise.all([
     ctx.git().contentFiles(),
     draftFiles('default', database),
@@ -200,7 +201,9 @@ export async function askUpload(ctx: RequestContext, request: Request): Promise<
   if (!upload)
     return Response.json({ error: 'an upload declares { hash, bytes, mime }' }, { status: 400 });
   const known = await findMedia('default', ctx.db(), upload.hash);
-  if (known) return Response.json({ media: mediaItem(known) });
+  if (known && known.state !== 'deleting' && known.state !== 'deleted')
+    return Response.json({ media: mediaItem(known) });
+  if (known?.state === 'deleting') throw new MediaUnavailableError();
   const key = `uploads/${crypto.randomUUID()}/${mediaKey(upload)}`;
   return Response.json({ upload: { key, url: await presignUpload(store, key) } });
 }

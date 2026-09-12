@@ -78,6 +78,8 @@ export interface GitCommit {
   paths: string[];
 }
 
+export type CommitComparison = 'ahead' | 'behind' | 'diverged' | 'identical';
+
 export interface GitClient {
   /** Authenticated call against api.github.com; `path` starts with `/`. */
   request(path: string, init?: RequestInit): Promise<Response>;
@@ -87,7 +89,9 @@ export interface GitClient {
   /** One blob's text by its object id, for bytes no branch names any more. */
   getBlob(sha: string): Promise<string | undefined>;
   /** One request for every file: per-file reads would exhaust the Free plan's fifty subrequests. */
-  contentFiles(): Promise<ContentFile[]>;
+  contentFiles(ref?: string): Promise<ContentFile[]>;
+  /** Whether `head` contains `base`, is behind it, or belongs to another history. */
+  compareCommits(base: string, head: string): Promise<CommitComparison>;
   /** A caller merging several paths asks each for the same depth — see `mergeFileCommits`. */
   fileCommits(path: string, opts?: { perPage?: number; page?: number }): Promise<FileCommit[]>;
   getCommit(sha: string): Promise<GitCommit>;
@@ -290,7 +294,7 @@ export function createGitClient(
     },
 
     /** GraphQL makes this one request; three levels because the build refuses deeper paths. */
-    async contentFiles() {
+    async contentFiles(ref) {
       const res = await request('/graphql', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -299,7 +303,7 @@ export function createGitClient(
           variables: {
             owner: app.owner,
             name: app.repo,
-            expr: `${app.branch ?? 'main'}:src/content`,
+            expr: `${ref ?? app.branch ?? 'main'}:src/content`,
           },
         }),
       });
@@ -315,6 +319,23 @@ export function createGitClient(
       const found: ContentFile[] = [];
       collect(body.data?.repository?.object ?? undefined, 'src/content/', found);
       return found;
+    },
+
+    async compareCommits(base, head) {
+      if (base === head) return 'identical';
+      const body = await json<{ status?: unknown }>(
+        `${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`,
+        {},
+        'compare commits',
+      );
+      if (
+        body.status !== 'ahead' &&
+        body.status !== 'behind' &&
+        body.status !== 'diverged' &&
+        body.status !== 'identical'
+      )
+        throw new Error('GitHub compare commits returned an unknown status');
+      return body.status;
     },
 
     async fileCommits(path, { perPage = 30, page = 1 } = {}) {

@@ -4,6 +4,47 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Database schema version 9 claims scheduled maintenance jobs atomically, recovers abandoned
+  claims after 15 minutes, and retries transient failures after exponential five-minute delays
+  capped at one hour without changing the normal hourly or daily cadence after success.
+
+- Validate redirect sources and destinations consistently in editor commands, lifecycle changes,
+  build schemas, and `_redirects` emission so whitespace and control characters cannot inject
+  additional routing directives.
+
+- Reconcile every published draft overlay when a later commit becomes live. Cleanup now verifies
+  deployed ancestry or exact content, preserves rollbacks and divergent deployments, and retries
+  rows deferred by active editing locks without losing newer saves.
+
+- Keep an image's source and dimensions together during conflict resolution while translated alt
+  text remains independently mergeable, including added and deleted direct and SEO images.
+
+- Coordinate permanent media deletion with draft writes. Deletion now leaves a durable tombstone,
+  refuses references from stale pickers, survives object-store failures for safe retry, and cannot
+  be undone by upload confirmation or reconciliation while it is pending.
+
+- Make repository mutations recoverable across Git and D1. Publish, rename, delete, locale,
+  redirect, template, revert, and restore operations now record their exact intent before Git,
+  recover tagged commits after lost responses, and retry database finalization without another
+  commit or losing newer drafts. Durable operation records now provide build and undo authority;
+  the expiring activity log remains best-effort telemetry.
+
+- Keep menu conflict resolution in step with its report. Draft edits to nested labels, links,
+  children, row membership, and order now survive rebasing over unrelated repository changes,
+  while explicit field choices still decide genuine conflicts.
+
+- Reject unreadable reserved metadata, non-object documents, and duplicate row IDs before content
+  reaches the draft store. Save, create, translation, restore, conflict resolution, and imported
+  repository content now share the same structural write boundary while incomplete and unknown
+  fields remain editable.
+
+- Move unpublished translations with their entry during rename. All affected locale rows now
+  finalize atomically from the files in the rename commit, while draft-only content, holds, and
+  translation metadata remain unpublished at the new name.
+
+- Preserve aged draft work after its repository file disappears. Orphan cleanup now removes only
+  unchanged, unheld, inactive rows and rechecks concurrent saves and editing locks before deletion.
+
 - Renew an entry's editing lease from the shared session mutation boundary, so Canvas text,
   history, and block operations keep the lock alive immediately just like Form and translation
   edits instead of waiting for a background-throttled autosave.

@@ -293,6 +293,28 @@ test('a picture that has been archived is a warning, and the bucket is not asked
   expect(found?.message).toContain('Photo');
 });
 
+test('a deletion tombstone is missing media and is never adopted from a stray object', async () => {
+  const hash = 'e'.repeat(64);
+  await db.insert(tables.media).values({
+    id: hash,
+    siteId: 'default',
+    r2Key: picture(hash),
+    mime: 'image/webp',
+    state: 'deleted',
+    deletingAt: Date.now(),
+    createdAt: Date.now(),
+  });
+  const r2 = bucket([picture(hash)]);
+  const results = await run(
+    [entryOf('listings/mill-house', { en: title + image(hash) })],
+    { store },
+    { fetch: r2.fetch },
+  );
+
+  expect(r2.asked).toEqual([]);
+  expect(shown(results)).toContain('media-missing photo.src');
+});
+
 test('a picture with no alt text is a warning against the alt, not the picture', async () => {
   const hash = 'd'.repeat(64);
   const r2 = bucket([picture(hash)]);

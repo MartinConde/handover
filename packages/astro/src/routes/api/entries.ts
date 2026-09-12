@@ -3,6 +3,7 @@ import index, { stale, templates } from 'virtual:handover/index';
 import type { Db, EntryEdit, Form, IndexEntry, LocaleSeed } from '@handover/core';
 import {
   addressError,
+  beginOperation,
   claimLock,
   collectionEntries,
   createDraft,
@@ -22,27 +23,36 @@ import {
   entryOffer,
   entryUrl,
   FORMAT_VERSION,
+  finalizeOperation,
+  findOperation,
   formOf,
   heldDrafts,
   holdEntry,
   humanise,
   isDraftRace,
   isLive,
+  isMediaRace,
   lastCommit,
   loadDraft,
   lockHolder,
   lockHolders,
   logActivity,
+  markOperationCommitted,
   moveLock,
+  OperationFinalizationError,
+  operationMessage,
   overlayRows,
   parseEntry,
   pendingDrafts,
   publishedEntries,
+  RenameCollisionError,
   readRedirects,
   recordDelete,
   recordOffer,
-  recordRename,
+  recordRenames,
+  recoverOperationCommit,
   regenerateIds,
+  releaseOperationPaths,
   releasePaths,
   renameEntry,
   reservePaths,
@@ -87,6 +97,7 @@ import {
   sourceOrder,
   tabOf,
   takenNames,
+  translationSource,
   translator,
 } from './content.js';
 import type { RequestContext } from './context.js';
@@ -438,6 +449,11 @@ export async function autosave(
   const at = locale ?? source;
   // Only a source-language save carries structure into the sibling files.
   const translation = at !== source;
+  const managed = config.collections[collection]?.localizedSlugs ? ['slug'] : [];
+  const provenance = translation
+    ? await translationSource(ctx, collection, slug, source)
+    : undefined;
+  if (translation && !provenance) return new Response('Not found', { status: 404 });
   if (translation && body?.structure !== undefined)
     return new Response('Bad request', { status: 400 });
   const structure =
@@ -469,12 +485,14 @@ export async function autosave(
       ctx.git(),
       entryPath(collection, slug, at),
       data,
-      translation || Object.keys(siblings).length || structure
+      translation || managed.length || Object.keys(siblings).length || structure
         ? {
             form: formFor(collection, slug),
             locale: at,
             siblings,
             translation,
+            ...(managed.length ? { managed } : {}),
+            ...(provenance ? { source: provenance } : {}),
             ...(structure
               ? { restoration: { revisions: structure.revisions, seeds: structure.seeds } }
               : {}),
@@ -487,6 +505,14 @@ export async function autosave(
     if (err instanceof DraftRevisionError || isDraftRace(err))
       return Response.json(
         { error: new DraftRevisionError().message, reason: 'revision' },
+        { status: 409 },
+      );
+    if (isMediaRace(err))
+      return Response.json(
+        {
+          error: 'That media item is being deleted. Choose another file before saving.',
+          reason: 'media',
+        },
         { status: 409 },
       );
     // A shape the serialiser cannot write (a nested array) is refused with its reason.
@@ -545,7 +571,8 @@ export async function machineTranslate(
     );
   const loaded = await entryLocales(ctx, collection, slug, config.i18n.locales);
   const from = sourceIn(loaded);
-  const source = from === undefined ? undefined : loaded[from];
+  const source =
+    from === undefined ? undefined : await translationSource(ctx, collection, slug, from);
   if (!from || !source || from === locale || !loaded[locale])
     return new Response('Not found', { status: 404 });
   const body = (await request.json().catch(() => undefined)) as { paths?: unknown } | undefined;
@@ -555,8 +582,8 @@ export async function machineTranslate(
   const written = new Set(
     translatableText('default', form, loaded[locale].data).map((v) => v.path),
   );
-  const wanted = translatableText('default', form, source.data).filter((v) =>
-    named ? named.includes(v.path) : !written.has(v.path),
+  const wanted = translatableText('default', form, parseEntry('default', source.contents)).filter(
+    (v) => (named ? named.includes(v.path) : !written.has(v.path)),
   );
   if (wanted.length) {
     const answers = await translate(
@@ -572,6 +599,7 @@ export async function machineTranslate(
       Object.fromEntries(wanted.map((v, i) => [v.path, answers[i] ?? v.text])),
       session?.user.id,
       loaded[locale].revision,
+      { form, source },
     );
   }
   // The column redraws from this, so an edit in the other column survives a pre-fill.
@@ -594,13 +622,26 @@ export async function offering(
     | undefined;
   const wanted = Array.isArray(body?.locales) ? body.locales : [];
   const offered = config.i18n.locales.filter((locale) => wanted.includes(locale));
-  const written = Object.keys(await entryLocales(ctx, collection, slug, config.i18n.locales));
+  const answer = body?.redirect ?? { kind: 'index' };
+  const retryKey = `locale-off:${collection}/${slug}:${offered.join(',')}:${JSON.stringify(answer)}`;
+  const database = ctx.db();
+  const git = ctx.git();
+  const existing = await findOperation('default', database, retryKey);
+  const completed = existing?.result as { commit_sha?: unknown } | null;
+  if (existing?.state === 'finalized' && typeof completed?.commit_sha === 'string')
+    return Response.json({ commit_sha: completed.commit_sha });
+  const baseSha = existing?.baseSha ?? (await git.getHead());
+  const capturedFiles = await entryFiles(git, collection, slug, baseSha);
+  const capturedRows = await Promise.all(
+    capturedFiles.map(({ path }) => loadDraft('default', database, path)),
+  );
+  const written = capturedFiles
+    .filter(({ file }, index) => file || capturedRows[index])
+    .map(({ locale }) => locale);
   if (!written.length) return new Response('Not found', { status: 404 });
   const going = written.filter((locale) => !offered.includes(locale));
   const staying = written.filter((locale) => offered.includes(locale));
-  const git = ctx.git();
-  const database = ctx.db();
-  const files = going.length ? await entryFiles(git, collection, slug) : [];
+  const files = going.length ? capturedFiles : [];
   // A draft-only language cannot stand in for a published one this commit takes away.
   const published = files.filter((f) => f.file).map((f) => f.locale);
   const left = published.length ? published.filter((l) => !going.includes(l)) : staying;
@@ -614,7 +655,6 @@ export async function offering(
   const pathsOf = (locales: string[]) => locales.map((l) => entryPath(collection, slug, l));
   if (published.some((locale) => going.includes(locale))) {
     // The same question a hide asks, resolved the same way per language.
-    const answer = body?.redirect ?? { kind: 'index' };
     const picked =
       answer.kind === 'entry'
         ? collectionEntries(
@@ -624,35 +664,76 @@ export async function offering(
             await overlayRows('default', database, index),
           )
         : undefined;
-    const { commit_sha, kept } = await deleteLocales(
-      'default',
-      git,
-      locationOf(collection),
-      slug,
-      going,
-      offered,
-      (locale) => redirectTarget(answer, collected, picked, locale),
+    const revisions = Object.fromEntries(
+      files.map(({ path }, index) => [path, capturedRows[index]?.revision ?? '']),
     );
-    for (const { locale, path, file } of files) {
-      if (!going.includes(locale)) continue;
-      // A language with a draft and a file loses both, or the row would republish the file.
-      if (file) await recordDelete('default', database, path, commit_sha);
-      else await discardDraft('default', database, path);
-    }
-    const offer = { offered, locales: config.i18n.locales, gone: going };
-    for (const file of kept)
-      await recordOffer('default', database, file.path, file.contents, offer, commit_sha);
-    // A staying language with only a draft is not in the commit, so its draft takes the mark.
-    const drafted = staying.filter((l) => !files.some((f) => f.locale === l && f.file));
-    if (drafted.length)
-      await setEntryLocales(
+    const operation =
+      existing ??
+      (await beginOperation('default', database, {
+        retryKey,
+        kind: 'locale-off',
+        paths: [...files.map((file) => file.path), 'src/content/redirects.yaml'],
+        revisions,
+        baseSha,
+        userId: session?.user.id,
+        subject: files.find((file) => file.file)?.path ?? files[0]?.path ?? null,
+        detail: { locales: going },
+      }));
+    let commit_sha: string | undefined = operation.commitSha ?? undefined;
+    if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
+    let kept: { path: string; contents: string }[];
+    if (!commit_sha) {
+      const committed = await deleteLocales(
         'default',
-        database,
         git,
-        pathsOf(drafted),
+        locationOf(collection),
+        slug,
+        going,
         offered,
-        config.i18n.locales,
+        (locale) => redirectTarget(answer, collected, picked, locale),
+        { baseSha: operation.baseSha, operationId: operation.id },
       );
+      commit_sha = committed.commit_sha;
+      kept = committed.kept;
+    } else {
+      kept = (
+        await Promise.all(
+          staying.map(async (locale) => {
+            const path = entryPath(collection, slug, locale);
+            const file = await git.getFile(path, commit_sha);
+            return file ? { path, contents: file.contents } : undefined;
+          }),
+        )
+      ).filter((file): file is { path: string; contents: string } => Boolean(file));
+    }
+    const result = { commit_sha };
+    await markOperationCommitted('default', database, operation.id, commit_sha, result);
+    const offer = { offered, locales: config.i18n.locales, gone: going };
+    try {
+      for (const { locale, path, file } of files) {
+        if (!going.includes(locale)) continue;
+        // A language with a draft and a file loses both, or the row would republish the file.
+        if (file)
+          await recordDelete('default', database, path, commit_sha, operation.revisions[path]);
+        else await discardDraft('default', database, path, operation.revisions[path]);
+      }
+      for (const file of kept)
+        await recordOffer('default', database, file.path, file.contents, offer, commit_sha);
+      // A staying language with only a draft is not in the commit, so its draft takes the mark.
+      const drafted = staying.filter((l) => !files.some((f) => f.locale === l && f.file));
+      if (drafted.length)
+        await setEntryLocales(
+          'default',
+          database,
+          git,
+          pathsOf(drafted),
+          offered,
+          config.i18n.locales,
+        );
+      await finalizeOperation('default', database, operation.id);
+    } catch (cause) {
+      throw new OperationFinalizationError(operation.id, commit_sha, { cause });
+    }
     // Logged so the Deleted view can say what it would put back without asking git.
     await logActivity('default', database, {
       userId: session?.user.id,
@@ -661,7 +742,7 @@ export async function offering(
       detail: { locales: going },
       commitSha: commit_sha,
     });
-    return Response.json({ commit_sha });
+    return Response.json(result);
   }
   // Nothing that goes is in the repository, so there is nothing to commit or redirect.
   for (const { locale, path } of files)
@@ -1210,15 +1291,52 @@ export async function saveTemplate(
     return new Response('Publish this entry before saving it as a template', { status: 409 });
   const wanted = typeof body?.to === 'string' && body.to ? body.to : slug;
   const name = entryName('default', wanted, await templateNames(collection, database));
+  const retryKey = `template-saved:${collection}/${slug}:${name}`;
+  const existing = await findOperation('default', database, retryKey);
+  const completed = existing?.result as { commit_sha?: unknown; name?: unknown } | null;
+  if (
+    existing?.state === 'finalized' &&
+    typeof completed?.commit_sha === 'string' &&
+    completed.name === name
+  )
+    return Response.json({ name });
   const values = withoutIds(parseEntry('default', from.file.contents)) as Record<string, unknown>;
   for (const key of ['_i18n', '_locales', '_status', '_machine', 'slug']) delete values[key];
-  const { commit_sha } = await git.publish(
-    [{ path: templatePath(collection, name), contents: stringifyEntry('default', values) }],
-    {
-      base_sha: await git.getHead(),
-      message: `Save ${collection}/${slug} as the template ${name}`,
-    },
-  );
+  const baseSha = existing?.baseSha ?? (await git.getHead());
+  const path = templatePath(collection, name);
+  const operation =
+    existing ??
+    (await beginOperation('default', database, {
+      retryKey,
+      kind: 'template-saved',
+      paths: [path],
+      baseSha,
+      userId: session?.user.id,
+      subject: from.path,
+      detail: { template: name },
+    }));
+  let commit_sha: string | undefined = operation.commitSha ?? undefined;
+  if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
+  if (!commit_sha)
+    ({ commit_sha } = await git.publish(
+      [{ path: templatePath(collection, name), contents: stringifyEntry('default', values) }],
+      {
+        base_sha: operation.baseSha,
+        message: operationMessage(
+          `Save ${collection}/${slug} as the template ${name}`,
+          operation.id,
+        ),
+      },
+    ));
+  await markOperationCommitted('default', database, operation.id, commit_sha, {
+    commit_sha,
+    name,
+  });
+  try {
+    await finalizeOperation('default', database, operation.id);
+  } catch (cause) {
+    throw new OperationFinalizationError(operation.id, commit_sha, { cause });
+  }
   await logActivity('default', database, {
     userId: session?.user.id,
     kind: 'template-saved',
@@ -1273,33 +1391,113 @@ export async function rename(
   const body = (await request.json().catch(() => undefined)) as { to?: unknown } | undefined;
   const database = ctx.db();
   const git = ctx.git();
-  const files = await entryFiles(git, collection, slug);
-  if (!files.some((f) => f.file))
-    return new Response('Publish this entry before renaming it', { status: 409 });
   const taken = (await takenNames(collection, database)).filter((id) => id !== slug);
   const to = entryName('default', typeof body?.to === 'string' ? body.to : '', taken);
   if (to === slug) return Response.json({ slug });
+  const retryKey = `entry-rename:${collection}/${slug}:${to}`;
+  const existing = await findOperation('default', database, retryKey);
+  const completed = existing?.result as { commit_sha?: unknown; slug?: unknown } | null;
+  if (
+    existing?.state === 'finalized' &&
+    typeof completed?.commit_sha === 'string' &&
+    completed.slug === to
+  ) {
+    await releaseOperationPaths('default', database, existing.id);
+    return Response.json({ slug: to, commit_sha: completed.commit_sha });
+  }
+  const baseSha = existing?.baseSha ?? (await git.getHead());
+  const files = await entryFiles(git, collection, slug, baseSha);
+  if (!files.some((f) => f.file) && !existing)
+    return new Response('Publish this entry before renaming it', { status: 409 });
+  const revisionEntries = await Promise.all(
+    files.map(async ({ path }) => {
+      const row = await loadDraft('default', database, path);
+      return row ? ([path, `${row.revision}:${row.baseSha}:${row.baseBlob}`] as const) : undefined;
+    }),
+  );
+  const revisions = Object.fromEntries(revisionEntries.flatMap((entry) => (entry ? [entry] : [])));
+  const operation =
+    existing ??
+    (await beginOperation('default', database, {
+      retryKey,
+      kind: 'entry-rename',
+      paths: [
+        ...config.i18n.locales.flatMap((locale) => [
+          entryPath(collection, slug, locale),
+          entryPath(collection, to, locale),
+        ]),
+        'src/content/redirects.yaml',
+      ],
+      revisions,
+      baseSha,
+      userId: session?.user.id,
+      subject: entryPath(collection, to, config.i18n.defaultLocale),
+      detail: { from: slug },
+    }));
   const reservation = await reservePaths(
     'default',
     database,
     config.i18n.locales.map((locale) => entryPath(collection, to, locale)),
+    operation.id,
   );
+  let finalized = false;
+  let safelyAborted = false;
   try {
-    const { commit_sha } = await renameEntry('default', git, locationOf(collection), slug, to);
-    for (const { locale, path, file } of files) {
-      if (!file) continue;
-      await recordRename(
+    let commit_sha: string | undefined = operation.commitSha ?? undefined;
+    if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
+    if (!commit_sha) {
+      let committed: Awaited<ReturnType<typeof renameEntry>>;
+      try {
+        committed = await renameEntry('default', git, locationOf(collection), slug, to, {
+          baseSha: operation.baseSha,
+          operationId: operation.id,
+        });
+      } catch (error) {
+        // This check happens before publish, so unlike an unknown provider failure it proves
+        // that no external mutation needs recovery and the destination can be released.
+        if (error instanceof RenameCollisionError) safelyAborted = true;
+        throw error;
+      }
+      commit_sha = committed.commit_sha;
+    }
+    const result = { slug: to, commit_sha };
+    await markOperationCommitted('default', database, operation.id, commit_sha, result);
+    const latest = await findOperation('default', database, retryKey);
+    if (latest?.state === 'finalized') {
+      finalized = true;
+      return Response.json(result);
+    }
+    const committed = (
+      await Promise.all(
+        config.i18n.locales.map(async (locale) => {
+          const file = await git.getFile(entryPath(collection, to, locale), commit_sha);
+          return file ? { locale, contents: file.contents } : undefined;
+        }),
+      )
+    ).filter((file): file is { locale: string; contents: string } => Boolean(file));
+    const contents = new Map(committed.map((file) => [file.locale, file.contents]));
+    try {
+      await recordRenames(
         'default',
         database,
-        path,
-        entryPath(collection, to, locale),
-        file.contents,
+        files.map(({ locale, path, file }) => ({
+          from: path,
+          to: entryPath(collection, to, locale),
+          // The retry reads the committed result; the first request can reuse its
+          // already captured base bytes if a test double or provider omits that read.
+          contents: contents.get(locale) ?? file?.contents,
+        })),
         commit_sha,
         session?.user.id,
+        reservation,
       );
+      // Whoever has the entry open keeps it under its new name.
+      await moveLock('default', database, `${collection}/${slug}`, `${collection}/${to}`);
+      await finalizeOperation('default', database, operation.id);
+      finalized = true;
+    } catch (cause) {
+      throw new OperationFinalizationError(operation.id, commit_sha, { cause });
     }
-    // Whoever has the entry open keeps it under its new name.
-    await moveLock('default', database, `${collection}/${slug}`, `${collection}/${to}`);
     await logActivity('default', database, {
       userId: session?.user.id,
       kind: 'entry-rename',
@@ -1307,9 +1505,10 @@ export async function rename(
       detail: { from: slug },
       commitSha: commit_sha,
     });
-    return Response.json({ slug: to, commit_sha });
+    return Response.json(result);
   } finally {
-    await releasePaths('default', database, reservation);
+    // A committed-but-unfinalized operation keeps owning its destination across restarts.
+    if (finalized || safelyAborted) await releasePaths('default', database, reservation);
   }
 }
 
@@ -1379,15 +1578,42 @@ export async function remove(
   const answer = body?.redirect ?? { kind: 'index' };
   const git = ctx.git();
   const database = ctx.db();
-  const files = await entryFiles(git, collection, slug);
   const entry = `${collection}/${slug}`;
+  const retryKey = `entry-delete:${entry}:${JSON.stringify(answer)}`;
+  const existing = await findOperation('default', database, retryKey);
+  const completed = existing?.result as { commit_sha?: unknown } | null;
+  if (existing?.state === 'finalized' && typeof completed?.commit_sha === 'string')
+    return Response.json({ commit_sha: completed.commit_sha });
+  const baseSha = existing?.baseSha ?? (await git.getHead());
+  const files = await entryFiles(git, collection, slug, baseSha);
   if (!files.some((f) => f.file)) {
+    if (existing) throw new Error('The recorded delete no longer has its captured files');
     for (const { path } of files) await discardDraft('default', database, path);
     await dropLock('default', database, entry);
     return Response.json({});
   }
   // Read before the commit: afterwards no language is left to name the entry by.
   const subject = await entrySubject(ctx, collection, slug);
+  const revisions = Object.fromEntries(
+    await Promise.all(
+      files.map(async ({ path }) => {
+        const row = await loadDraft('default', database, path);
+        return [path, row?.revision ?? ''] as const;
+      }),
+    ),
+  );
+  const operation =
+    existing ??
+    (await beginOperation('default', database, {
+      retryKey,
+      kind: 'entry-delete',
+      paths: [...files.map((file) => file.path), 'src/content/redirects.yaml'],
+      revisions,
+      baseSha,
+      userId: session?.user.id,
+      subject,
+      detail: { locales: files.filter((file) => file.file).map((file) => file.locale) },
+    }));
   const picked =
     answer.kind === 'entry'
       ? collectionEntries(
@@ -1397,20 +1623,38 @@ export async function remove(
           await overlayRows('default', database, index),
         )
       : undefined;
-  const result = await deleteEntry('default', git, locationOf(collection), slug, (locale) =>
-    redirectTarget(answer, collected, picked, locale),
-  );
-  // A draft-only language is not in the commit, so its row goes here.
-  for (const { path, file } of files)
-    if (file) await recordDelete('default', database, path, result.commit_sha);
-    else await discardDraft('default', database, path);
-  await dropLock('default', database, entry);
+  let commit_sha: string | undefined = operation.commitSha ?? undefined;
+  if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
+  if (!commit_sha) {
+    const committed = await deleteEntry(
+      'default',
+      git,
+      locationOf(collection),
+      slug,
+      (locale) => redirectTarget(answer, collected, picked, locale),
+      { baseSha: operation.baseSha, operationId: operation.id },
+    );
+    commit_sha = committed.commit_sha;
+  }
+  const result = { commit_sha };
+  await markOperationCommitted('default', database, operation.id, commit_sha, result);
+  try {
+    // A draft-only language is not in the commit, so its captured row goes here.
+    for (const { path, file } of files)
+      if (file)
+        await recordDelete('default', database, path, commit_sha, operation.revisions[path]);
+      else await discardDraft('default', database, path, operation.revisions[path]);
+    await dropLock('default', database, entry);
+    await finalizeOperation('default', database, operation.id);
+  } catch (cause) {
+    throw new OperationFinalizationError(operation.id, commit_sha, { cause });
+  }
   await logActivity('default', database, {
     userId: session?.user.id,
     kind: 'entry-delete',
     subject,
     detail: { locales: files.filter((f) => f.file).map((f) => f.locale) },
-    commitSha: result.commit_sha,
+    commitSha: commit_sha,
   });
   return Response.json(result);
 }

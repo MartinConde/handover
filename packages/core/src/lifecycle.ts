@@ -2,6 +2,7 @@ import { offeredEntry, parseEntry, stringifyEntry, writtenEntry } from './conten
 import type { ContentFile } from './entries.js';
 import type { GitClient, PublishFile } from './git.js';
 import { entryAddress, entryUrl, type I18nRouting, withSlash } from './names.js';
+import { operationMessage } from './operations.js';
 import { newId, regenerateIds } from './reserved.js';
 
 export interface RedirectRule {
@@ -32,6 +33,50 @@ export const REDIRECTS = 'src/content/redirects.yaml';
 const entryPath = (collection: string, locale: string, name: string) =>
   `src/content/${collection}/${locale}/${name}.yaml`;
 
+const unsafeRedirectText = (value: string) =>
+  [...value].some((character) => {
+    const code = character.codePointAt(0) ?? 0;
+    return /\s/u.test(character) || code < 32 || (code >= 127 && code <= 159);
+  });
+
+export function redirectSourceError(value: string): string | undefined {
+  if (!value.startsWith('/')) return 'a path starting with "/"';
+  if (unsafeRedirectText(value)) return 'a path without whitespace or control characters';
+  return undefined;
+}
+
+export function redirectDestinationError(value: string): string | undefined {
+  if (unsafeRedirectText(value))
+    return 'a path or absolute HTTP(S) URL without whitespace or control characters';
+  if (value.startsWith('/')) return undefined;
+  if (!/^https?:\/\//i.test(value)) return 'a path or an absolute HTTP(S) URL';
+  try {
+    const parsed = new URL(value);
+    if ((parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.hostname)
+      return undefined;
+  } catch {
+    // The field-level error below is more useful than the URL parser's implementation detail.
+  }
+  return 'a path or an absolute HTTP(S) URL';
+}
+
+const assertRedirectRule = (rule: Pick<RedirectRule, 'from' | 'to'>) => {
+  const from = redirectSourceError(rule.from);
+  if (from)
+    throw new Error(
+      from.includes('whitespace')
+        ? 'redirect source cannot contain whitespace or control characters'
+        : `redirect source must be ${from}`,
+    );
+  const to = redirectDestinationError(rule.to);
+  if (to)
+    throw new Error(
+      to.includes('whitespace')
+        ? 'redirect destination cannot contain whitespace or control characters'
+        : `redirect destination must be ${to}`,
+    );
+};
+
 // `at` is the caller's base commit: bytes from any other would put somebody else's work back.
 async function localeFiles(
   git: GitClient,
@@ -59,11 +104,14 @@ export const redirectRule = (
   siteId: string,
   rule: Omit<RedirectRule, '_id' | 'createdAt'>,
   at: number,
-): RedirectRule => ({
-  _id: newId(siteId),
-  ...rule,
-  createdAt: new Date(at).toISOString().replace(/\.\d{3}Z$/, 'Z'),
-});
+): RedirectRule => {
+  assertRedirectRule(rule);
+  return {
+    _id: newId(siteId),
+    ...rule,
+    createdAt: new Date(at).toISOString().replace(/\.\d{3}Z$/, 'Z'),
+  };
+};
 
 /** Appends in the same commit as the entry; `undefined` when there is nothing to write. */
 export async function appendRedirects(
@@ -145,14 +193,18 @@ export async function editRedirects(
   git: GitClient,
   message: string,
   change: (rules: RedirectRule[]) => RedirectRule[],
+  deps: { baseSha?: string; operationId?: string } = {},
 ): Promise<{ commit_sha: string }> {
-  const base_sha = await git.getHead();
+  const base_sha = deps.baseSha ?? (await git.getHead());
   const file = await git.getFile(REDIRECTS, base_sha);
   const doc = (file ? parseEntry(siteId, file.contents) : { _version: 1 }) as {
     rules?: RedirectRule[];
   };
   const contents = stringifyEntry(siteId, { ...doc, rules: change(doc.rules ?? []) });
-  return git.publish([{ path: REDIRECTS, contents }], { base_sha, message });
+  return git.publish([{ path: REDIRECTS, contents }], {
+    base_sha,
+    message: deps.operationId ? operationMessage(message, deps.operationId) : message,
+  });
 }
 
 /** Every served page by URL, so a `from` can be told it shadows one. */
@@ -180,8 +232,13 @@ export function redirectError(
     );
   if (!from.startsWith('/'))
     return at('from', `An address has to start with "/" — did you mean "/${from}"?`);
+  if (redirectSourceError(from))
+    return at('from', 'An old address cannot contain spaces or control characters.');
   if (!to) return at('to', 'A destination is needed.');
-  if (!/^(\/|https?:\/\/)/.test(to))
+  const toError = redirectDestinationError(to);
+  if (toError?.includes('whitespace'))
+    return at('to', 'A destination cannot contain spaces or control characters.');
+  if (toError)
     return at(
       'to',
       `A destination is a path on this site or a full web address — did you mean "/${to.replace(/^\/+/, '')}"?`,
@@ -298,9 +355,9 @@ export async function renameEntry(
   loc: EntryLocation,
   from: string,
   to: string,
-  deps: { now?: () => number } = {},
-): Promise<{ commit_sha: string }> {
-  const base_sha = await git.getHead();
+  deps: { now?: () => number; baseSha?: string; operationId?: string } = {},
+): Promise<{ commit_sha: string; files: { locale: string; contents: string }[] }> {
+  const base_sha = deps.baseSha ?? (await git.getHead());
   const destinations = await Promise.all(
     loc.i18n.locales.map((locale) => git.getFile(entryPath(loc.collection, locale, to), base_sha)),
   );
@@ -328,7 +385,13 @@ export async function renameEntry(
   });
   if (rules.length)
     changes.push(...(await redirectsFile(siteId, git, rules, deps.now ?? Date.now, base_sha)));
-  return git.publish(changes, { base_sha, message: `Rename ${loc.collection}/${from} to ${to}` });
+  const published = await git.publish(changes, {
+    base_sha,
+    message: deps.operationId
+      ? operationMessage(`Rename ${loc.collection}/${from} to ${to}`, deps.operationId)
+      : `Rename ${loc.collection}/${from} to ${to}`,
+  });
+  return { ...published, files };
 }
 
 /** `redirectTo` is asked per language so German readers land on a German page, or nowhere. */
@@ -338,9 +401,9 @@ export async function deleteEntry(
   loc: EntryLocation,
   name: string,
   redirectTo: ((locale: string) => string | undefined) | undefined,
-  deps: { now?: () => number } = {},
+  deps: { now?: () => number; baseSha?: string; operationId?: string } = {},
 ): Promise<{ commit_sha: string }> {
-  const base_sha = await git.getHead();
+  const base_sha = deps.baseSha ?? (await git.getHead());
   const files = await localeFiles(git, loc, name, base_sha);
   const changes: PublishFile[] = files.map(({ locale }) => ({
     path: entryPath(loc.collection, locale, name),
@@ -357,7 +420,11 @@ export async function deleteEntry(
       });
   if (rules.length)
     changes.push(...(await redirectsFile(siteId, git, rules, deps.now ?? Date.now, base_sha)));
-  return git.publish(changes, { base_sha, message: `Delete ${loc.collection}/${name}` });
+  const message = `Delete ${loc.collection}/${name}`;
+  return git.publish(changes, {
+    base_sha,
+    message: deps.operationId ? operationMessage(message, deps.operationId) : message,
+  });
 }
 
 /** One commit; the caller has already refused the last language, which would be a delete. */
@@ -369,9 +436,9 @@ export async function deleteLocales(
   going: string[],
   offered: string[],
   redirectTo: ((locale: string) => string | undefined) | undefined,
-  deps: { now?: () => number } = {},
+  deps: { now?: () => number; baseSha?: string; operationId?: string } = {},
 ): Promise<{ commit_sha: string; kept: ContentFile[] }> {
-  const base_sha = await git.getHead();
+  const base_sha = deps.baseSha ?? (await git.getHead());
   const files = await localeFiles(git, loc, name, base_sha);
   const gone = files.filter((file) => going.includes(file.locale));
   const kept = files
@@ -407,20 +474,27 @@ export async function deleteLocales(
     changes.push(...(await redirectsFile(siteId, git, rules, deps.now ?? Date.now, base_sha)));
   const { commit_sha } = await git.publish(changes, {
     base_sha,
-    message: `Turn off ${going.join(', ')} for ${loc.collection}/${name}`,
+    message: deps.operationId
+      ? operationMessage(
+          `Turn off ${going.join(', ')} for ${loc.collection}/${name}`,
+          deps.operationId,
+        )
+      : `Turn off ${going.join(', ')} for ${loc.collection}/${name}`,
   });
   return { commit_sha, kept };
 }
 
 /** Static Assets matches `from` exactly, so each is written with and without a trailing slash. */
-export const redirectsText = (_siteId: string, rules: RedirectRule[], slash: boolean): string =>
-  rules
+export const redirectsText = (_siteId: string, rules: RedirectRule[], slash: boolean): string => {
+  for (const rule of rules) assertRedirectRule(rule);
+  return rules
     .flatMap((r) => {
       const to = withSlash(r.to, slash);
       const forms = new Set([withSlash(r.from, false), withSlash(r.from, true)]);
       return [...forms].map((from) => `${from} ${to} ${r.status}\n`);
     })
     .join('');
+};
 
 /** One `_id` map across locales keeps the copy one entry; the address stays with the original. */
 export async function duplicateEntry(

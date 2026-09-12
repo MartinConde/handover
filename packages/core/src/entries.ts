@@ -24,8 +24,15 @@ export interface ContentFile {
   contents: string;
 }
 
+/** The source shared with HTTP routing: repository-backed identifiers are literal URL segments. */
+export const ENTRY_SEGMENT_SOURCE = '[A-Za-z0-9_-]+';
+const ENTRY_SEGMENT = new RegExp(`^${ENTRY_SEGMENT_SOURCE}$`);
+
 // `globals/` matches on purpose: a global is edited through the entry path like anything else.
-const ENTRY_PATH = /^src\/content\/([a-z0-9-]+)\/([^/]+)\/([^/]+)\.yaml$/;
+const ENTRY_PATH = new RegExp(
+  `^src/content/([a-z0-9-]+)/(${ENTRY_SEGMENT_SOURCE})/(${ENTRY_SEGMENT_SOURCE})\\.yaml$`,
+);
+const ENTRY_PATH_SHAPE = /^src\/content\/([^/]+)\/([^/]+)\/([^/]+)\.yaml$/;
 
 /** The three things an entry's path names, and nothing for a file that is not an entry. */
 export const entryParts = (
@@ -44,7 +51,10 @@ export const entryKey = (path: string): string | undefined => {
 };
 
 /** A starter for new entries: one file per collection folder, outside every glob. */
-const TEMPLATE_PATH = /^src\/content\/_templates\/([a-z0-9-]+)\/([^/]+)\.yaml$/;
+const TEMPLATE_PATH = new RegExp(
+  `^src/content/_templates/([a-z0-9-]+)/(${ENTRY_SEGMENT_SOURCE})\\.yaml$`,
+);
+const TEMPLATE_PATH_SHAPE = /^src\/content\/_templates\/([^/]+)\/([^/]+)\.yaml$/;
 
 // The site files that are not entries; globals already share the entry layout.
 const OTHER_PATHS = [/^src\/content\/redirects\.yaml$/, TEMPLATE_PATH];
@@ -54,6 +64,14 @@ export function contentPathErrors(_siteId: string, paths: Iterable<string>): str
   const errors: string[] = [];
   for (const path of paths) {
     if (ENTRY_PATH.test(path) || OTHER_PATHS.some((p) => p.test(path))) continue;
+    const shaped = ENTRY_PATH_SHAPE.exec(path) ?? TEMPLATE_PATH_SHAPE.exec(path);
+    const segment = shaped?.slice(1).find((part) => !ENTRY_SEGMENT.test(part));
+    if (segment !== undefined) {
+      errors.push(
+        `${path}: ${JSON.stringify(segment)} is not an addressable path segment; use only ASCII letters, digits, underscores, and dashes`,
+      );
+      continue;
+    }
     errors.push(
       `${path}: an entry is src/content/<collection>/<locale>/<name>.yaml, one folder per locale and no folders below it`,
     );

@@ -9,6 +9,7 @@ import {
   type RedirectRule,
   readRedirects,
   redirectError,
+  redirectRule,
   redirectsText,
   renamedFrom,
   renameEntry,
@@ -25,6 +26,7 @@ function fakeGit(files: Record<string, string>) {
     getCommit: () => Promise.reject(new Error('not used')),
     getBlob: () => Promise.reject(new Error('not used')),
     contentFiles: () => Promise.reject(new Error('not used')),
+    compareCommits: () => Promise.reject(new Error('not used')),
     fileCommits: () => Promise.reject(new Error('not used')),
     getFile: async (path, at) => {
       read.push({ path, at });
@@ -58,7 +60,13 @@ test('rename moves every locale file and appends a rule per language in one comm
 
   const result = await renameEntry('default', git, listings, 'seaview', 'seaview-cottage', { now });
 
-  expect(result).toEqual({ commit_sha: 'commit-B' });
+  expect(result).toEqual({
+    commit_sha: 'commit-B',
+    files: [
+      { locale: 'en', contents: '_version: 1\ntitle: "Seaview"\n' },
+      { locale: 'de', contents: '_version: 1\ntitle: "Meerblick"\n' },
+    ],
+  });
   expect(published).toHaveLength(1);
   expect(published[0]?.message).toBe('Rename listings/seaview to seaview-cottage');
   expect(published[0]?.base_sha).toBe('commit-A');
@@ -606,6 +614,37 @@ test('a path and an absolute destination are both accepted', () => {
   expect(
     redirectError('default', { from: '/a', to: 'https://example.com/b.pdf' }, site),
   ).toBeUndefined();
+});
+
+test('redirect fields cannot contain whitespace or control characters', () => {
+  for (const value of ['/old\n/shadow', '/old\r/shadow', '/old\t/shadow', '/old shadow']) {
+    expect(redirectError('default', { from: value, to: '/new' }, site)).toEqual({
+      field: 'from',
+      message: 'An old address cannot contain spaces or control characters.',
+    });
+    expect(redirectError('default', { from: '/old', to: value }, site)).toEqual({
+      field: 'to',
+      message: 'A destination cannot contain spaces or control characters.',
+    });
+  }
+});
+
+test('lifecycle redirects reject unsafe generated targets before they are stored or emitted', () => {
+  expect(() =>
+    redirectRule(
+      'default',
+      { from: '/old', to: '/new\n/shadow', status: 301, reason: 'slug-change' },
+      Date.parse('2026-01-01T00:00:00Z'),
+    ),
+  ).toThrow('redirect destination cannot contain whitespace or control characters');
+
+  expect(() =>
+    redirectsText(
+      'default',
+      [manual('/old\n/shadow https://outside.example 302\n/another', '/new', 'unsafe')],
+      true,
+    ),
+  ).toThrow('redirect source cannot contain whitespace or control characters');
 });
 
 // The rename commit's message is the one place the old name is written down.

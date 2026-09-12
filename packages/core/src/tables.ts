@@ -1,5 +1,14 @@
 import { desc } from 'drizzle-orm';
-import { blob, index, integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import {
+  blob,
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 import type { RedirectRule } from './lifecycle.js';
 
 // Better Auth owns those five; `auth-schema.ts` is committed as `npx auth generate` emits it.
@@ -52,6 +61,10 @@ export const media = sqliteTable('media', {
   tags: text('tags', { mode: 'json' }).$type<string[]>(),
   derivedFrom: text('derived_from'),
   archived: integer('archived').default(0),
+  /** Active assets may be referenced; deleting/deleted rows are durable exclusion markers. */
+  state: text('state').$type<'active' | 'deleting' | 'deleted'>().notNull().default('active'),
+  /** Kept on a failed delete so the same request can safely finish later. */
+  deletingAt: integer('deleting_at'),
   createdAt: integer('created_at').notNull(),
 });
 
@@ -91,6 +104,39 @@ export const activity = sqliteTable(
   (t) => [index('activity_site_at').on(t.siteId, desc(t.at))],
 );
 
+/** Durable authority and retry state for commits that cross the Git/D1 boundary. */
+export const operations = sqliteTable(
+  'operations',
+  {
+    id: text('id').primaryKey(),
+    siteId: text('site_id').notNull().default('default'),
+    /** Stable for an ordinary retry of the same captured mutation. */
+    retryKey: text('retry_key').notNull(),
+    kind: text('kind').notNull(),
+    /** intent -> committed -> finalized; only finalized means every D1 effect is complete. */
+    state: text('state').notNull(),
+    /** The complete path authority captured before Git is allowed to write. */
+    paths: text('paths', { mode: 'json' }).$type<string[]>().notNull(),
+    /** Draft revisions/base blobs captured at intent time; never file contents. */
+    revisions: text('revisions', { mode: 'json' }).$type<Record<string, string>>().notNull(),
+    baseSha: text('base_sha').notNull(),
+    commitSha: text('commit_sha'),
+    /** Small response metadata makes a completed retry return the original result. */
+    result: text('result', { mode: 'json' }),
+    userId: text('user_id'),
+    subject: text('subject'),
+    detail: text('detail', { mode: 'json' }),
+    createdAt: integer('created_at').notNull(),
+    committedAt: integer('committed_at'),
+    finalizedAt: integer('finalized_at'),
+  },
+  (t) => [
+    uniqueIndex('operations_site_retry').on(t.siteId, t.retryKey),
+    index('operations_site_commit').on(t.siteId, t.commitSha),
+    index('operations_site_created').on(t.siteId, desc(t.createdAt)),
+  ],
+);
+
 /** The one writable settings section: credentials the client owns and may swap themselves. */
 export const settings = sqliteTable(
   'settings',
@@ -108,20 +154,24 @@ export const settings = sqliteTable(
   (t) => [primaryKey({ columns: [t.siteId, t.key] })],
 );
 
-/** Each job declares its own interval, so `last_run` decides whether this tick is that job's. */
+/** Small scheduler state: normal cadence, retry timing, and one fenced in-flight worker. */
 export const cronState = sqliteTable(
   'cron_state',
   {
     siteId: text('site_id').notNull().default('default'),
     job: text('job').notNull(),
-    /** Epoch milliseconds of the last run the dispatcher completed. */
+    /** Epoch milliseconds of the last successful completion. */
     lastRun: integer('last_run').notNull(),
+    retryAt: integer('retry_at'),
+    failures: integer('failures').notNull().default(0),
+    leaseToken: text('lease_token'),
+    leaseUntil: integer('lease_until'),
   },
   (t) => [primaryKey({ columns: [t.siteId, t.job] })],
 );
 
 /** Bumped whenever a table changes; the build refuses a stale `migrations/handover.json`. */
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 9;
 
 const GENERATE = 'run `npx handover db generate` and commit migrations/';
 
@@ -142,6 +192,11 @@ export const pathReservations = sqliteTable(
     siteId: text('site_id').notNull(),
     path: text('path').notNull(),
     token: text('token').notNull(),
+    /** Durable recovery owner. A retry joins this operation rather than bypassing its claim. */
+    operationId: text('operation_id').notNull(),
   },
-  (t) => [primaryKey({ columns: [t.siteId, t.path] })],
+  (t) => [
+    primaryKey({ columns: [t.siteId, t.path] }),
+    index('path_reservations_site_operation').on(t.siteId, t.operationId),
+  ],
 );

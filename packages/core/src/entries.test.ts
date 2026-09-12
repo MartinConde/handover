@@ -102,6 +102,32 @@ test('a content file below the locale folder fails rather than going missing', (
   ]);
 });
 
+test('entry and template path segments use the API addressability grammar', () => {
+  expect(
+    contentPathErrors('default', [
+      'src/content/pages/en/about_us-2.yaml',
+      'src/content/pages/pt-br/About_Us.yaml',
+      'src/content/_templates/pages/landing_2.yaml',
+    ]),
+  ).toEqual([]);
+
+  const rejected = [
+    'src/content/pages/en/about.us.yaml',
+    'src/content/pages/en/about us.yaml',
+    'src/content/pages/en/über-uns.yaml',
+    'src/content/pages/en/..yaml',
+    'src/content/pages/en.US/about.yaml',
+    'src/content/pages/en%2Fde/about.yaml',
+    'src/content/_templates/pages/landing.page.yaml',
+  ];
+  const errors = contentPathErrors('default', rejected);
+  expect(errors).toHaveLength(rejected.length);
+  for (const [at, path] of rejected.entries()) {
+    expect(errors[at]).toContain(`${path}: `);
+    expect(errors[at]).toContain('is not an addressable path segment');
+  }
+});
+
 test('templates and redirects are not entries', () => {
   expect(
     indexFrom('default', [

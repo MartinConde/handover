@@ -45,10 +45,25 @@ test('a commit whose build succeeded is live', async () => {
   const cf = cloudflare([build()], 'w-live');
   expect(await commitBuild(worker('w-live'), commit(), { fetch: cf.fetch })).toEqual({
     commit_sha: SHA,
+    deployed_sha: SHA,
     state: 'live',
     started_at: Date.parse('2026-08-25T16:36:24.712Z'),
     // What the pill's "Live since 14:02" reads.
     live_at: Date.parse('2026-08-25T16:37:51.781Z'),
+  });
+});
+
+test('the newest successful build names what is deployed after a rollback', async () => {
+  const rolledBack = 'f'.repeat(40);
+  const cf = cloudflare(
+    [build({ build_trigger_metadata: { commit_hash: rolledBack } }), build()],
+    'w-rollback',
+  );
+
+  expect(await commitBuild(worker('w-rollback'), commit(), { fetch: cf.fetch })).toMatchObject({
+    commit_sha: SHA,
+    deployed_sha: rolledBack,
+    state: 'live',
   });
 });
 
@@ -74,7 +89,7 @@ test('a commit no build has been made for yet is building', async () => {
   );
   expect(
     await commitBuild(worker('w-none'), commit(), { fetch: cf.fetch, now: AT + 60_000 }),
-  ).toEqual({ commit_sha: SHA, state: 'building' });
+  ).toEqual({ commit_sha: SHA, deployed_sha: 'f'.repeat(40), state: 'building' });
 });
 
 test("the builds are asked for by the worker's tag, which its name is looked up for", async () => {
@@ -111,6 +126,7 @@ test('an API that refuses is an error rather than a state', async () => {
 test('with no commit named it is the worker’s newest build', async () => {
   const cf = cloudflare([build({ status: 'running', build_outcome: null }), build()], 'w-newest');
   expect(await commitBuild(worker('w-newest'), undefined, { fetch: cf.fetch })).toEqual({
+    deployed_sha: SHA,
     state: 'building',
     started_at: Date.parse('2026-08-25T16:36:24.712Z'),
   });
@@ -132,6 +148,7 @@ test('a commit older than the window no build names it reads as the newest build
   expect(
     await commitBuild(worker('w-stale'), commit(), { fetch: cf.fetch, now: AT + 16 * HOUR }),
   ).toEqual({
+    deployed_sha: 'f'.repeat(40),
     state: 'live',
     started_at: Date.parse('2026-08-25T16:36:24.712Z'),
     live_at: Date.parse('2026-08-25T16:37:51.781Z'),

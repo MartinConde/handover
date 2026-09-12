@@ -1,6 +1,8 @@
 import {
+  beginOperation,
   blobSha,
   claimLock,
+  createDraft,
   draftFiles,
   draftSource,
   entryAt,
@@ -9,10 +11,12 @@ import {
   openDb,
   type PublishFile,
   parseEntry,
+  reservePaths,
   staticSource,
 } from '@handover/core';
 import type { APIContext } from 'astro';
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
+import { eq } from 'drizzle-orm';
 import { Miniflare } from 'miniflare';
 import { afterAll, beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import * as tables from '../../../core/src/tables.js';
@@ -92,6 +96,7 @@ let writes: PublishFile[][];
 let deployed: string | undefined;
 let buildState: 'building' | 'failed' | 'live';
 let storageDeletes: string[];
+let storagePause: (() => Promise<void>) | undefined;
 function push(files: PublishFile[], message = 'Developer change') {
   const parent = head;
   head = String(Object.keys(trees).length).padStart(40, '0');
@@ -150,9 +155,11 @@ beforeAll(async () => {
     .join('; ');
 });
 beforeEach(async () => {
+  boundary.binding = binding;
   await db.delete(tables.media);
   await db.delete(tables.drafts);
   await db.delete(tables.activity);
+  await db.delete(tables.operations);
   await db.delete(tables.locks);
   await db.delete(tables.pathReservations);
   trees = { ['0'.repeat(40)]: { [PATH]: INITIAL } };
@@ -164,6 +171,7 @@ beforeEach(async () => {
   deployed = undefined;
   buildState = 'live';
   storageDeletes = [];
+  storagePause = undefined;
   for (const path of Object.keys(boundary.uses)) delete boundary.uses[path];
   vi.stubGlobal(
     'fetch',
@@ -171,6 +179,7 @@ beforeEach(async () => {
       const url = typeof request === 'string' ? request : request.url;
       if (url.includes('r2.cloudflarestorage.com')) {
         storageDeletes.push(url);
+        await storagePause?.();
         return new Response(null, { status: 204 });
       }
       if (url.includes('/workers/services/'))
@@ -203,8 +212,19 @@ beforeEach(async () => {
       return contents === undefined ? undefined : { contents, blob_sha: await blobSha(contents) };
     },
     getCommit: async (sha: string) => commits[sha],
-    contentFiles: async () =>
-      Object.entries(trees[head] ?? {}).map(([path, contents]) => ({ path, contents })),
+    contentFiles: async (sha = head) =>
+      Object.entries(trees[sha] ?? {}).map(([path, contents]) => ({ path, contents })),
+    compareCommits: async (base: string, tip: string) => {
+      const descendsFrom = (candidate: string, ancestor: string) => {
+        for (let at: string | undefined = candidate; at; at = commits[at]?.parent)
+          if (at === ancestor) return true;
+        return false;
+      };
+      if (base === tip) return 'identical';
+      if (descendsFrom(tip, base)) return 'ahead';
+      if (descendsFrom(base, tip)) return 'behind';
+      return 'diverged';
+    },
     publish: async (files: PublishFile[], opts: { base_sha: string; message: string }) => {
       await pause?.();
       expect(head).toBe(opts.base_sha);
@@ -212,6 +232,43 @@ beforeEach(async () => {
       return { commit_sha: push(files, opts.message) };
     },
   };
+});
+
+test('a publish whose D1 finalization fails resumes the same Git commit on retry', async () => {
+  const entry = await opened();
+  await save('Committed once', entry.revisions.en ?? '');
+  let fail = true;
+  boundary.binding = new Proxy(binding, {
+    get(target, key) {
+      if (key !== 'batch') {
+        const value = Reflect.get(target, key, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      }
+      return async (...args: Parameters<typeof binding.batch>) => {
+        if (fail) {
+          fail = false;
+          throw new Error('D1 finalization unavailable');
+        }
+        return target.batch(...args);
+      };
+    },
+  });
+
+  const first = await call('POST', 'publish', { entries: ['pages/home'] });
+
+  expect(first.status).toBe(503);
+  expect(await first.json()).toMatchObject({ reason: 'needs-finalization', commit_sha: head });
+  expect(writes).toHaveLength(1);
+  expect((await db.select().from(tables.operations))[0]?.state).toBe('committed');
+
+  boundary.binding = binding;
+  const retry = await call('POST', 'publish', { entries: ['pages/home'] });
+
+  expect(retry.status).toBe(200);
+  expect(((await retry.json()) as { commit_sha: string }).commit_sha).toBe(head);
+  expect(writes).toHaveLength(1);
+  expect((await db.select().from(tables.operations))[0]?.state).toBe('finalized');
+  expect((await loadDraft('default', db, PATH))?.publishedSha).toBe(head);
 });
 async function call(method: string, path: string, body?: unknown, cookies = cookie) {
   const url = new URL(`http://localhost/admin/api/${path}`);
@@ -316,6 +373,44 @@ test('stale client revisions are refused without replacing the winning save', as
   expect((await loadDraft('default', db, PATH))?.contents).not.toContain('Stale retry');
 });
 
+test('autosave refuses unreadable nested metadata without changing the opened draft', async () => {
+  const entry = await opened();
+  const before = await loadDraft('default', db, PATH);
+
+  const response = await call('PUT', 'drafts/pages/home', {
+    data: { title: 'Home', opaque: { rows: [{ _id: 'bad' }] } },
+    revision: entry.revisions.en,
+  });
+
+  expect(response.status).toBe(400);
+  expect(await response.text()).toBe(
+    'opaque.rows[0]._id: expected eight characters from 0-9a-z, got "bad"',
+  );
+  expect(await loadDraft('default', db, PATH)).toEqual(before);
+});
+
+test('autosave refuses duplicate row identities without changing the opened draft', async () => {
+  const entry = await opened();
+  const before = await loadDraft('default', db, PATH);
+
+  const response = await call('PUT', 'drafts/pages/home', {
+    data: {
+      title: '',
+      opaque: [
+        { _id: 'same0001', text: 'One' },
+        { _id: 'same0001', text: 'Two' },
+      ],
+    },
+    revision: entry.revisions.en,
+  });
+
+  expect(response.status).toBe(400);
+  expect(await response.text()).toContain(
+    'opaque[1]._id: duplicate row identity "same0001"; already used at opaque[0]._id',
+  );
+  expect(await loadDraft('default', db, PATH)).toEqual(before);
+});
+
 test('S01 direct admin HTTP cannot bypass guarded member mutations', async () => {
   expect(
     (await call('POST', 'auth/admin/set-role', { userId: 'owner', role: 'editor' })).status,
@@ -377,11 +472,68 @@ test('rename refuses a destination added since the built index', async () => {
   expect(await db.select().from(tables.pathReservations)).toEqual([]);
 });
 
+test('a rename resumes an operation-owned destination claim after the request is terminated', async () => {
+  const destination = ['en', 'de'].map((locale) => `src/content/pages/${locale}/moved.yaml`);
+  const operation = await beginOperation('default', db, {
+    retryKey: 'entry-rename:pages/home:moved',
+    kind: 'entry-rename',
+    paths: [PATH, 'src/content/pages/de/home.yaml', ...destination, 'src/content/redirects.yaml'],
+    baseSha: head,
+    subject: destination[0],
+    detail: { from: 'home' },
+  });
+  const claim = await reservePaths('default', db, destination, operation.id);
+
+  const resumed = await call('POST', 'entries/pages/home/rename', { to: 'moved' });
+
+  expect(resumed.status).toBe(200);
+  expect(writes).toHaveLength(1);
+  expect((await db.select().from(tables.operations))[0]?.state).toBe('finalized');
+  expect(await db.select().from(tables.pathReservations)).toEqual([]);
+  expect(claim.operationId).toBe(operation.id);
+  expect(trees[head]?.[destination[0] ?? '']).toContain('Home');
+});
+
+test('rename moves a draft-only translation and preserves its unpublished state', async () => {
+  const from = 'src/content/pages/de/home.yaml';
+  const to = 'src/content/pages/de/moved.yaml';
+  await createDraft('default', db, boundary.repo as never, from, {
+    _version: 1,
+    _i18n: { sourceLocale: 'en' },
+    title: 'Startseite',
+  });
+  const heldAt = Date.now() - 1000;
+  await db
+    .update(tables.drafts)
+    .set({ heldBy: 'owner', heldAt })
+    .where(eq(tables.drafts.path, from));
+
+  const res = await call('POST', 'entries/pages/home/rename', { to: 'moved' });
+
+  expect(res.status).toBe(200);
+  expect(await loadDraft('default', db, from)).toBeUndefined();
+  const moved = await loadDraft('default', db, to);
+  expect(parseEntry('default', moved?.contents ?? '')).toMatchObject({
+    _i18n: { sourceLocale: 'en' },
+    title: 'Startseite',
+  });
+  expect(moved).toMatchObject({
+    baseSha: head,
+    baseBlob: '',
+    publishedSha: null,
+    heldBy: 'owner',
+    heldAt,
+  });
+  expect(trees[head]?.[from]).toBeUndefined();
+  expect(trees[head]?.[to]).toBeUndefined();
+});
+
 test('an unrelated successful build cannot clean overlays for an unbuilt commit', async () => {
   const entry = await opened();
   await save('Undeployed', entry.revisions.en ?? '');
   await call('POST', 'publish', { entries: ['pages/home'] });
   await db.update(tables.activity).set({ at: Date.now() - 700000 });
+  await db.update(tables.operations).set({ committedAt: Date.now() - 700000 });
   deployed = 'f'.repeat(40);
   const build = (await (await call('GET', 'build')).json()) as {
     state: string;
@@ -390,6 +542,25 @@ test('an unrelated successful build cannot clean overlays for an unbuilt commit'
   expect(build.state).toBe('live');
   expect(build.commit_sha).toBeUndefined();
   expect(await loadDraft('default', db, PATH)).toBeDefined();
+});
+
+test('a later redirect deployment cleans an earlier published content overlay', async () => {
+  const entry = await opened();
+  await save('Published before redirect', entry.revisions.en ?? '');
+  const published = (await (await call('POST', 'publish', { entries: ['pages/home'] })).json()) as {
+    commit_sha: string;
+  };
+  const redirected = await call('POST', 'redirects', {
+    from: '/summer-offer',
+    to: '/',
+    status: 302,
+  });
+  expect(redirected.status).toBe(200);
+  expect(head).not.toBe(published.commit_sha);
+
+  deployed = head;
+  expect((await call('GET', 'build')).status).toBe(200);
+  expect(await loadDraft('default', db, PATH)).toBeUndefined();
 });
 
 test('restore accepts a recorded deletion and refuses an ordinary publish', async () => {
@@ -525,7 +696,40 @@ test('media stays protected until the running deployment removes its final usage
   delete boundary.uses[PATH];
   expect((await call('DELETE', `media/${id}`)).status).toBe(200);
   expect(storageDeletes).toHaveLength(1);
-  expect(await db.select().from(tables.media)).toEqual([]);
+  expect(await db.select().from(tables.media)).toEqual([
+    expect.objectContaining({ id, state: 'deleted' }),
+  ]);
+});
+
+test('asset deletion refuses a draft reference saved after its usage snapshot', async () => {
+  const id = 'b'.repeat(64);
+  const key = `media/${id}.webp`;
+  await db.insert(tables.media).values({
+    siteId: 'default',
+    id,
+    r2Key: key,
+    filename: 'race.webp',
+    mime: 'image/webp',
+    bytes: 10,
+    createdAt: Date.now(),
+  });
+  const entered = gate();
+  const finish = gate();
+  storagePause = async () => {
+    entered.release();
+    await finish.promise;
+  };
+
+  const deleting = call('DELETE', `media/${id}`);
+  await entered.promise;
+  const entry = await opened();
+  const saved = await save('Home', entry.revisions.en ?? '', key);
+
+  expect(saved.status).toBe(409);
+  expect(await saved.json()).toMatchObject({ reason: 'media' });
+  expect((await loadDraft('default', db, PATH))?.contents).not.toContain(key);
+  finish.release();
+  expect((await deleting).status).toBe(200);
 });
 
 test.each(['building', 'failed', 'live'] as const)(

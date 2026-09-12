@@ -338,10 +338,10 @@ test('reserved keys come first in fixed order, then fields in schema order', () 
     title: 'Home',
     _id: 'k3nf9a2p',
     _version: 1,
-    blocks: [{ heading: 'Hi', _id: 'x', _type: 'cta' }],
+    blocks: [{ heading: 'Hi', _id: 'x0000000', _type: 'cta' }],
   });
   expect(out).toBe(
-    '_version: 1\n_id: "k3nf9a2p"\ntitle: "Home"\nblocks:\n  - _type: "cta"\n    _id: "x"\n    heading: "Hi"\n',
+    '_version: 1\n_id: "k3nf9a2p"\ntitle: "Home"\nblocks:\n  - _type: "cta"\n    _id: "x0000000"\n    heading: "Hi"\n',
   );
 });
 
@@ -358,9 +358,60 @@ test('strings are normalised so the literal block never falls back to quotes', (
 });
 
 test('an array directly inside an array is rejected at serialise time', () => {
-  expect(() => stringifyEntry('default', { blocks: [{ _id: 'a', columns: [['x']] }] })).toThrow(
-    'blocks[0].columns[0]',
+  expect(() =>
+    stringifyEntry('default', { blocks: [{ _id: 'a0000000', columns: [['x']] }] }),
+  ).toThrow('blocks[0].columns[0]');
+});
+
+test('reserved metadata that would make saved bytes unreadable is rejected before serialising', () => {
+  expect(() =>
+    stringifyEntry('default', {
+      title: 'Still an incomplete but valid draft',
+      opaque: { imported: [{ _id: 'bad' }] },
+    }),
+  ).toThrow('opaque.imported[0]._id: expected eight characters from 0-9a-z, got "bad"');
+});
+
+test('duplicate row identities are rejected with both ambiguous paths named', () => {
+  const contents = [
+    '_version: 1',
+    'sections:',
+    '  - _id: "same0001"',
+    '    title: "One"',
+    '  - _id: "same0001"',
+    '    title: "Two"',
+    '',
+  ].join('\n');
+
+  expect(() => parseEntry('default', contents)).toThrow(
+    'sections[1]._id: duplicate row identity "same0001"; already used at sections[0]._id. Give each row in sections a unique _id and keep matching IDs aligned across locale files.',
   );
+  expect(() =>
+    stringifyEntry('default', {
+      sections: [
+        { _id: 'same0001', title: 'One' },
+        { _id: 'same0001', title: 'Two' },
+      ],
+    }),
+  ).toThrow('sections[1]._id: duplicate row identity "same0001"');
+});
+
+test('the same row identity remains valid in separate addressed collections', () => {
+  const data = {
+    primary: [{ _id: 'same0001', title: 'One' }],
+    secondary: [{ _id: 'same0001', title: 'The matching row in another collection' }],
+  };
+
+  expect(parseEntry('default', stringifyEntry('default', data))).toEqual(data);
+});
+
+test('a persisted entry must be an object while incomplete and opaque fields remain valid', () => {
+  expect(() => stringifyEntry('default', ['not', 'an', 'entry'])).toThrow(
+    'Entry: expected an object, got an array',
+  );
+  expect(
+    parseEntry('default', stringifyEntry('default', { title: '', opaque: { kept: true } })),
+  ).toEqual({ title: '', opaque: { kept: true } });
 });
 
 // A template carries no `_id`s; they are generated when an entry is created from it.
@@ -1595,6 +1646,37 @@ test('a translation somebody typed into is marked with the source language as it
       de: parseEntry('default', marked),
     }),
   ).toEqual([]);
+});
+
+test('adding the first translated value refreshes an existing provenance mark', async () => {
+  const oldSource = localeFile('en');
+  const empty = stringifyEntry('default', { _version: 1 });
+  const was = await translate(oldSource, empty, undefined);
+  const moved = oldSource.replace('Mill House', 'The Mill House');
+  const filled = stringifyEntry('default', {
+    ...(parseEntry('default', was) as object),
+    title: 'Das Mühlenhaus',
+  });
+
+  const marked = await translate(moved, filled, was);
+
+  expect(marks(marked).sourceHash).not.toBe(marks(was).sourceHash);
+});
+
+test('deleting the last translated value refreshes its provenance mark', async () => {
+  const oldSource = localeFile('en');
+  const was = await translate(
+    oldSource,
+    stringifyEntry('default', { _version: 1, title: 'Das Mühlenhaus' }),
+    undefined,
+  );
+  const moved = oldSource.replace('Mill House', 'The Mill House');
+  const withoutTitle = parseEntry('default', was) as Record<string, unknown>;
+  delete withoutTitle.title;
+
+  const marked = await translate(moved, stringifyEntry('default', withoutTitle), was);
+
+  expect(marks(marked).sourceHash).not.toBe(marks(was).sourceHash);
 });
 
 test('a mark that says nothing about the values is not a claim to be stale', async () => {

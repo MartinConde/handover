@@ -106,6 +106,13 @@ export async function takeLock(
 
 /** The row a free name might still carry goes first, the way `recordRename` clears the draft. */
 export async function moveLock(siteId: string, db: Db, from: string, to: string): Promise<void> {
+  const [source] = await db
+    .select({ entry: locks.entry })
+    .from(locks)
+    .where(and(eq(locks.siteId, siteId), eq(locks.entry, from)))
+    .limit(1);
+  // A retried finalization has already moved it; never erase the destination on replay.
+  if (!source) return;
   await db.delete(locks).where(and(eq(locks.siteId, siteId), eq(locks.entry, to)));
   await db
     .update(locks)

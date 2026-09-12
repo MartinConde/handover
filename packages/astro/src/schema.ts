@@ -6,6 +6,7 @@ export {
   drafts,
   locks,
   media,
+  operations,
   pathReservations,
   rateLimit,
   session,

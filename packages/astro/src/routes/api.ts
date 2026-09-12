@@ -5,9 +5,14 @@ import {
   CommitScopeError,
   DraftConflictError,
   DraftRevisionError,
+  ENTRY_SEGMENT_SOURCE,
   formOf,
   imagePresets,
   isDraftRace,
+  isMediaRace,
+  MediaInUseError,
+  MediaUnavailableError,
+  OperationFinalizationError,
   RefMovedError,
   RenameCollisionError,
   RepoUnreachableError,
@@ -90,31 +95,33 @@ export { db, gitClient, mediaStore } from './api/environment.js';
 const MEMBER = /^members\/([\w-]+)$/;
 const MEMBER_ROLE = /^members\/([\w-]+)\/role$/;
 const MEMBER_INVITE = /^members\/([\w-]+)\/invite$/;
-const ENTRIES = /^entries\/([\w-]+)$/;
-const DELETED = /^deleted\/([\w-]+)$/;
-const ENTRY = /^entries\/([\w-]+)\/([\w-]+)$/;
-const DRAFT = /^drafts\/([\w-]+)\/([\w-]+)$/;
-const TRANSLATION = /^drafts\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
-const RENAME = /^entries\/([\w-]+)\/([\w-]+)\/rename$/;
-const DUPLICATE = /^entries\/([\w-]+)\/([\w-]+)\/duplicate$/;
-const TEMPLATE = /^entries\/([\w-]+)\/([\w-]+)\/template$/;
-const LOCALES = /^entries\/([\w-]+)\/([\w-]+)\/locales$/;
-const ADDRESS = /^entries\/([\w-]+)\/([\w-]+)\/address\/([\w-]+)$/;
-const DRIFT = /^drift\/([\w-]+)\/([\w-]+)$/;
-const DIFF = /^diff\/([\w-]+)\/([\w-]+)$/;
-const HISTORY = /^history\/([\w-]+)\/([\w-]+)$/;
-const RESTORE_VERSION = /^history\/([\w-]+)\/([\w-]+)\/restore$/;
-const VERSION = /^history\/([\w-]+)\/([\w-]+)\/diff$/;
-const CONFLICT = /^conflict\/([\w-]+)\/([\w-]+)$/;
-const LOCK = /^locks\/([\w-]+)\/([\w-]+)$/;
-const HOLD = /^hold\/([\w-]+)\/([\w-]+)$/;
-const STATUS = /^status\/([\w-]+)$/;
+const entryRoute = (path: string) =>
+  new RegExp(`^${path.replaceAll('<segment>', `(${ENTRY_SEGMENT_SOURCE})`)}$`);
+const ENTRIES = entryRoute('entries/<segment>');
+const DELETED = entryRoute('deleted/<segment>');
+const ENTRY = entryRoute('entries/<segment>/<segment>');
+const DRAFT = entryRoute('drafts/<segment>/<segment>');
+const TRANSLATION = entryRoute('drafts/<segment>/<segment>/<segment>');
+const RENAME = entryRoute('entries/<segment>/<segment>/rename');
+const DUPLICATE = entryRoute('entries/<segment>/<segment>/duplicate');
+const TEMPLATE = entryRoute('entries/<segment>/<segment>/template');
+const LOCALES = entryRoute('entries/<segment>/<segment>/locales');
+const ADDRESS = entryRoute('entries/<segment>/<segment>/address/<segment>');
+const DRIFT = entryRoute('drift/<segment>/<segment>');
+const DIFF = entryRoute('diff/<segment>/<segment>');
+const HISTORY = entryRoute('history/<segment>/<segment>');
+const RESTORE_VERSION = entryRoute('history/<segment>/<segment>/restore');
+const VERSION = entryRoute('history/<segment>/<segment>/diff');
+const CONFLICT = entryRoute('conflict/<segment>/<segment>');
+const LOCK = entryRoute('locks/<segment>/<segment>');
+const HOLD = entryRoute('hold/<segment>/<segment>');
+const STATUS = entryRoute('status/<segment>');
 const MEDIA = /^media\/([0-9a-f]{64})$/;
 const CHECK = /^checks\/([\w-]+)$/;
 const SETTING = /^settings\/([\w-]+)$/;
 const REDIRECT = /^redirects\/([\w-]+)$/;
-const TRANSLATE = /^translate\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
-const SOURCE = /^source\/([\w-]+)\/([\w-]+)\/([\w-]+)$/;
+const TRANSLATE = entryRoute('translate/<segment>/<segment>/<segment>');
+const SOURCE = entryRoute('source/<segment>/<segment>/<segment>');
 
 // The middleware exempts Better Auth's paths, so this is the only thing in front of the login.
 const mounted = (pathname: string) =>
@@ -246,11 +253,29 @@ async function answering(work: () => Promise<Response>): Promise<Response> {
         { error: new DraftRevisionError().message, reason: 'revision' },
         { status: 409 },
       );
+    if (err instanceof MediaInUseError || err instanceof MediaUnavailableError || isMediaRace(err))
+      return Response.json(
+        {
+          error: err instanceof Error ? err.message : new MediaUnavailableError().message,
+          reason: 'media',
+        },
+        { status: 409 },
+      );
     // A refused revert names its files the way a publish's conflict does.
     if (err instanceof RevertConflictError)
       return Response.json({ error: err.message, paths: err.paths }, { status: 409 });
     if (err instanceof RenameCollisionError) return new Response(err.message, { status: 409 });
     if (err instanceof RefMovedError) return new Response(err.message, { status: 409 });
+    if (err instanceof OperationFinalizationError)
+      return Response.json(
+        {
+          error: err.message,
+          reason: 'needs-finalization',
+          operation_id: err.operationId,
+          commit_sha: err.commitSha,
+        },
+        { status: 503 },
+      );
     // A refused upload is the chooser's own file, so it is answered to them by the rule it broke.
     if (err instanceof UploadRefusedError)
       return Response.json({ error: err.message }, { status: 422 });

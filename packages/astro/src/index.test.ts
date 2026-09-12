@@ -654,6 +654,10 @@ test('the redirects golden parses; from must be a path and to a path or absolute
   expect(file({ ...rule, status: 302 })).toBe(true);
   expect(file({ ...rule, status: 307 })).toBe(false);
   expect(file({ ...rule, reason: 'moved' })).toBe(false);
+  for (const value of ['/old\n/shadow', '/old\r/shadow', '/old\t/shadow', '/old shadow']) {
+    expect(file({ ...rule, from: value })).toBe(false);
+    expect(file({ ...rule, to: value })).toBe(false);
+  }
 });
 
 const fixture = new URL('../test/fixture/', import.meta.url);
@@ -683,6 +687,19 @@ test('emitRedirects fails the build on a bad rule, naming the path', async () =>
   await expect(emitRedirects(root, root, true)).rejects.toThrow(
     'src/content/redirects.yaml › rules[0].from: a path starting with "/"',
   );
+});
+
+test('emitRedirects rejects a rule that could add output lines', async () => {
+  const root = new URL(`${await mkdtemp(join(tmpdir(), 'handover-site-'))}/`, 'file://');
+  await mkdir(new URL('src/content/', root), { recursive: true });
+  await writeFile(
+    new URL('src/content/redirects.yaml', root),
+    '_version: 1\nrules:\n  - _id: "aaaaaaaa"\n    from: "/old\\n/shadow https://outside.example 302\\n/another"\n    to: "/new"\n    status: 301\n    reason: "manual"\n    createdAt: "2026-01-01T00:00:00Z"\n',
+  );
+  await expect(emitRedirects(root, root, true)).rejects.toThrow(
+    'src/content/redirects.yaml › rules[0].from: a path without whitespace or control characters',
+  );
+  await expect(readFile(new URL('_redirects', root), 'utf8')).rejects.toThrow();
 });
 
 const crawl = {
@@ -909,6 +926,16 @@ test('buildIndex fails on a content file below the locale folder, naming it', as
   );
   await expect(buildIndex(root)).rejects.toThrow(
     'src/content/listings/en/devon/seaview.yaml: an entry is src/content/<collection>/<locale>/<name>.yaml',
+  );
+});
+
+test('buildIndex refuses entry names that no API endpoint can address', async () => {
+  const root = new URL(`${await mkdtemp(join(tmpdir(), 'handover-site-'))}/`, 'file://');
+  await mkdir(new URL('src/content/pages/en/', root), { recursive: true });
+  await writeFile(new URL('src/content/pages/en/about.us.yaml', root), 'title: "About"\n');
+
+  await expect(buildIndex(root)).rejects.toThrow(
+    'src/content/pages/en/about.us.yaml: "about.us" is not an addressable path segment',
   );
 });
 

@@ -45,6 +45,7 @@ function fakeGitHub(
   commits: Record<string, unknown> = {},
   log: Record<string, unknown[]> = {},
   blobs: Record<string, string> = {},
+  comparisons: Record<string, string> = {},
 ) {
   const calls: string[] = [];
   let minted = 0;
@@ -67,6 +68,16 @@ function fakeGitHub(
     if (!visible) return new Response('{"message":"Not Found"}', { status: 404 });
     if (url === 'https://api.github.com/repos/acme/site')
       return Response.json({ full_name: 'acme/site' });
+    const comparison = url.match(
+      /^https:\/\/api\.github\.com\/repos\/acme\/site\/compare\/(.+)\.\.\.(.+)$/,
+    );
+    if (comparison) {
+      const key = `${decodeURIComponent(comparison[1] ?? '')}...${decodeURIComponent(comparison[2] ?? '')}`;
+      const status = comparisons[key];
+      return status
+        ? Response.json({ status })
+        : new Response('{"message":"Not Found"}', { status: 404 });
+    }
     const listed = url.match(/^https:\/\/api\.github\.com\/repos\/acme\/site\/commits\?(.+)$/)?.[1];
     if (listed) {
       const query = new URLSearchParams(listed);
@@ -131,6 +142,17 @@ test('getFile reads the commit it is given rather than the branch', async () => 
   expect(gh.calls).toContain(
     'GET https://api.github.com/repos/acme/site/contents/src/content/listings/en/mill-house.yaml?ref=a1b2c3d',
   );
+});
+
+test('compareCommits asks whether the deployed head contains the published base', async () => {
+  const gh = fakeGitHub({}, true, {}, {}, {}, { 'published...deployed': 'ahead' });
+  const git = createGitClient('default', app, { fetch: gh.fetch });
+
+  expect(await git.compareCommits('published', 'deployed')).toBe('ahead');
+  expect(gh.calls).toContain(
+    'GET https://api.github.com/repos/acme/site/compare/published...deployed',
+  );
+  expect(await git.compareCommits('same', 'same')).toBe('identical');
 });
 
 // Bytes no branch names any more, addressed by the id the translation wrote down.
@@ -355,6 +377,7 @@ test('getCommit names the parent and both names of a rename', async () => {
 // Answers the nested tree query from a flat map of paths, so the walk is what is under test.
 function fakeGraphQL(files: Record<string, string | null>, opts: { truncated?: string } = {}) {
   const queries: string[] = [];
+  const expressions: string[] = [];
   // The query asks three levels deep, so a folder below that comes back matching no fragment.
   const tree = (prefix: string, depth = 3): unknown => {
     if (depth === 0) return {};
@@ -378,12 +401,17 @@ function fakeGraphQL(files: Record<string, string | null>, opts: { truncated?: s
     if (url.endsWith('/access_tokens'))
       return Response.json({ token: 'ghs_1', expires_at: '2099-01-01T00:00:00Z' }, { status: 201 });
     if (url === 'https://api.github.com/graphql') {
-      queries.push(JSON.parse(String(init.body)).query);
+      const body = JSON.parse(String(init.body)) as {
+        query: string;
+        variables: { expr: string };
+      };
+      queries.push(body.query);
+      expressions.push(body.variables.expr);
       return Response.json({ data: { repository: { object: tree('src/content/') } } });
     }
     return new Response('{"message":"Not Found"}', { status: 404 });
   };
-  return { fetch: fetch as unknown as typeof globalThis.fetch, queries };
+  return { fetch: fetch as unknown as typeof globalThis.fetch, queries, expressions };
 }
 
 test('contentFiles reads every yaml under src/content in one request', async () => {
@@ -396,7 +424,7 @@ test('contentFiles reads every yaml under src/content in one request', async () 
   });
   const git = createGitClient('default', app, { fetch: gh.fetch });
 
-  const files = await git.contentFiles();
+  const files = await git.contentFiles('deployed-sha');
 
   expect(files.sort((a, b) => a.path.localeCompare(b.path))).toEqual([
     { path: 'src/content/_templates/listings/holiday-let.yaml', contents: 'title: New let\n' },
@@ -405,6 +433,7 @@ test('contentFiles reads every yaml under src/content in one request', async () 
     { path: 'src/content/redirects.yaml', contents: 'rules: []\n' },
   ]);
   expect(gh.queries).toHaveLength(1);
+  expect(gh.expressions).toEqual(['deployed-sha:src/content']);
 });
 
 // A folder the walk cannot see into is refused: a file nobody read is a file nobody counted.

@@ -81,6 +81,48 @@ test('a text field is diffed word by word, not replaced whole', () => {
   ]);
 });
 
+test('a long text with a small middle edit is trimmed before word comparison', () => {
+  const before = Array.from({ length: 4_000 }, (_, i) => `word${i}`);
+  const after = [...before];
+  after[2_000] = 'replacement';
+
+  const changes = changesIn(
+    diffEntry(
+      'default',
+      listing,
+      { en: { summary: before.join(' ') } },
+      { en: { summary: after.join(' ') } },
+    ),
+    'en',
+  );
+
+  expect(changes).toEqual([
+    {
+      path: 'summary',
+      label: 'Summary',
+      kind: 'words',
+      parts: [
+        { text: `${before.slice(0, 2_000).join(' ')} ` },
+        { text: 'word2000', mark: 'del' },
+        { text: 'replacement', mark: 'ins' },
+        { text: ` ${before.slice(2_001).join(' ')}` },
+      ],
+    },
+  ]);
+});
+
+test('adversarial long text falls back to a whole-field change', () => {
+  const before = Array.from({ length: 10_000 }, (_, i) => `before${i}`).join(' ');
+  const after = Array.from({ length: 10_000 }, (_, i) => `after${i}`).join(' ');
+
+  expect(
+    changesIn(
+      diffEntry('default', listing, { en: { summary: before } }, { en: { summary: after } }),
+      'en',
+    ),
+  ).toEqual([{ path: 'summary', label: 'Summary', kind: 'whole' }]);
+});
+
 test('a rich text body says that it changed and nothing more', () => {
   const groups = diffEntry(
     'default',
@@ -189,6 +231,22 @@ test('a block that moved says it moved, not that it was deleted and added again'
       changes: [],
     },
   ]);
+});
+
+test('adversarial row order uses a bounded deterministic movement summary', () => {
+  const rows = Array.from({ length: 1_500 }, (_, i) => ({
+    _type: 'hero',
+    _id: `row${String(i).padStart(5, '0')}`,
+    heading: `Row ${i}`,
+  }));
+  const changes = changesIn(
+    diffEntry('default', page, { en: { blocks: rows } }, { en: { blocks: [...rows].reverse() } }),
+    'en',
+  );
+
+  expect(changes).toHaveLength(1_500);
+  expect(changes[0]).toMatchObject({ path: 'blocks[_id=row01499]', at: 'moved-up' });
+  expect(changes.at(-1)).toMatchObject({ path: 'blocks[_id=row00000]', at: 'moved-down' });
 });
 
 test('a block that arrived and one that went are named by what they say', () => {
@@ -672,6 +730,18 @@ test('a source value that moved comes back as the words that moved', () => {
       { text: 'harbour', mark: 'del' },
       { text: 'fish market', mark: 'ins' },
       { text: '.' },
+    ],
+  });
+});
+
+test('an adversarial long source comparison returns a bounded whole-value summary', () => {
+  const before = Array.from({ length: 10_000 }, (_, i) => `before${i}`).join(' ');
+  const after = Array.from({ length: 10_000 }, (_, i) => `after${i}`).join(' ');
+
+  expect(sourceChanges('default', listing, { summary: before }, { summary: after })).toEqual({
+    summary: [
+      { text: before, mark: 'del' },
+      { text: after, mark: 'ins' },
     ],
   });
 });

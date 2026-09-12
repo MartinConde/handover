@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
 import { Miniflare } from 'miniflare';
-import { afterAll, beforeAll, expect, test } from 'vitest';
+import { afterAll, beforeAll, expect, test, vi } from 'vitest';
 import { openDb } from './db.js';
 import {
   checkStore,
@@ -10,6 +10,8 @@ import {
   deleteMedia,
   findMedia,
   MAX_UPLOAD_BYTES,
+  MediaInUseError,
+  MediaUnavailableError,
   mediaKey,
   mediaList,
   mediaUsage,
@@ -465,6 +467,33 @@ test('reconciliation verifies orphans and skips bad hashes, types, sizes and tem
   expect(await reconcileMedia('recover', db, store, { fetch: list.fetch })).toBe(0);
 });
 
+test('reconciliation does not adopt an object whose deletion tombstone owns the hash', async () => {
+  const f = fixture('deleted-reconcile');
+  f.objects.set(f.key, { data: f.data, mime: f.upload.mime });
+  const db = openDb('deleted-reconcile', binding);
+  await db.insert(tables.media).values({
+    id: f.upload.hash,
+    siteId: 'deleted-reconcile',
+    r2Key: f.key,
+    mime: f.upload.mime,
+    bytes: f.data.length,
+    createdAt: 1,
+    state: 'deleted',
+    deletingAt: 2,
+  });
+  const fetch = (async (input: Request) =>
+    new URL(input.url).searchParams.has('list-type')
+      ? new Response(
+          `<ListBucketResult><Contents><Key>${f.key}</Key><Size>${f.data.length}</Size></Contents></ListBucketResult>`,
+        )
+      : f.fetch(input)) as unknown as typeof globalThis.fetch;
+
+  expect(await reconcileMedia('deleted-reconcile', db, store, { fetch })).toBe(0);
+  expect(await findMedia('deleted-reconcile', db, f.upload.hash)).toMatchObject({
+    state: 'deleted',
+  });
+});
+
 test('a truncated listing is followed to the end', async () => {
   const { fetch, seen } = lister([
     { keys: ['foreign'], next: 'page-2' },
@@ -571,8 +600,7 @@ test('archiving is a flag on the row, and unarchiving takes it off again', async
   expect((await setMediaDetails('archive', db, id, { alt: 'A mill' }))?.archived).toBe(1);
 });
 
-// The row goes first: an orphan object is recovered hourly, a row over missing bytes never is.
-test('a delete takes the row before the object, and both are gone', async () => {
+test('a delete leaves a tombstone after the object is gone', async () => {
   const db = openDb('delete', binding);
   const id = 'f6'.repeat(32);
   const key = `media/${id}.webp`;
@@ -589,9 +617,93 @@ test('a delete takes the row before the object, and both are gone', async () => 
 
   await deleteMedia('delete', db, store, { id, r2Key: key }, { fetch });
 
-  expect(await findMedia('delete', db, id)).toBeUndefined();
+  expect(await findMedia('delete', db, id)).toMatchObject({ state: 'deleted' });
   expect(objects[key]).toBeUndefined();
   expect(order).toEqual(['r2 DELETE']);
+});
+
+test('a draft that wins the database race prevents object deletion', async () => {
+  const db = openDb('delete-used', binding);
+  const id = 'c7'.repeat(32);
+  const key = `media/${id}.webp`;
+  const fetch = vi.fn<typeof globalThis.fetch>();
+  await db
+    .insert(tables.media)
+    .values({ id, siteId: 'delete-used', r2Key: key, mime: 'image/webp', createdAt: 1 });
+  await db.insert(tables.drafts).values({
+    siteId: 'delete-used',
+    path: 'src/content/pages/en/home.yaml',
+    contents: `title: "Home"\nimage: "${key}"\n`,
+    revision: 'draft-reference',
+    baseSha: 'head',
+    baseBlob: '',
+    updatedAt: 1,
+  });
+
+  await expect(
+    deleteMedia('delete-used', db, store, { id, r2Key: key }, { fetch }),
+  ).rejects.toThrow(MediaInUseError);
+
+  expect(await findMedia('delete-used', db, id)).toMatchObject({ state: 'active' });
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+test('a failed object deletion keeps the media record for a safe retry', async () => {
+  const db = openDb('delete-retry', binding);
+  const id = 'd7'.repeat(32);
+  const key = `media/${id}.webp`;
+  await db
+    .insert(tables.media)
+    .values({ id, siteId: 'delete-retry', r2Key: key, mime: 'image/webp', createdAt: 1 });
+
+  await expect(
+    deleteMedia(
+      'delete-retry',
+      db,
+      store,
+      { id, r2Key: key },
+      {
+        fetch: (async () => new Response(null, { status: 503 })) as typeof globalThis.fetch,
+      },
+    ),
+  ).rejects.toThrow(`R2 DELETE ${key} failed: 503`);
+
+  expect(await findMedia('delete-retry', db, id)).toMatchObject({
+    id,
+    r2Key: key,
+    state: 'deleting',
+    deletingAt: expect.any(Number),
+  });
+
+  await deleteMedia(
+    'delete-retry',
+    db,
+    store,
+    { id, r2Key: key },
+    {
+      fetch: (async () => new Response(null, { status: 204 })) as typeof globalThis.fetch,
+    },
+  );
+  expect(await findMedia('delete-retry', db, id)).toMatchObject({ state: 'deleted' });
+});
+
+test('upload confirmation refuses a hash while its deletion is pending', async () => {
+  const f = fixture('deleting-confirmation');
+  const db = openDb('deleting-confirmation', binding);
+  await db.insert(tables.media).values({
+    id: f.upload.hash,
+    siteId: 'deleting-confirmation',
+    r2Key: f.key,
+    mime: f.upload.mime,
+    createdAt: 1,
+    state: 'deleting',
+    deletingAt: 2,
+  });
+
+  await expect(
+    confirmUpload('deleting-confirmation', db, store, f.upload, { fetch: f.fetch }),
+  ).rejects.toThrow(MediaUnavailableError);
+  expect(f.calls).toEqual([]);
 });
 
 // The dot is the row's default rather than a page's; centre is what "nobody set one" looks like.

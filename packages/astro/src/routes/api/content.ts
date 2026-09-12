@@ -1,7 +1,14 @@
 import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
 import index from 'virtual:handover/index';
-import type { Db, EntryLocation, Form, GitClient, Translate } from '@handover/core';
+import type {
+  Db,
+  EntryLocation,
+  Form,
+  GitClient,
+  Translate,
+  TranslationSource,
+} from '@handover/core';
 import {
   blobSha,
   collectionEntries,
@@ -72,6 +79,22 @@ export async function sourceFor(
   return undefined;
 }
 
+/** Exact source bytes a translated save or provider request is based on. */
+export async function translationSource(
+  ctx: RequestContext,
+  collection: string,
+  slug: string,
+  locale: string,
+): Promise<TranslationSource | undefined> {
+  const path = entryPath(collection, slug, locale);
+  const row = await loadDraft('default', ctx.db(), path);
+  if (row?.contents)
+    return { locale, contents: row.contents, blob_sha: await blobSha(row.contents) };
+  const head = await ctx.git().getHead();
+  const file = await ctx.git().getFile(path, head);
+  return file ? { locale, contents: file.contents, blob_sha: file.blob_sha } : undefined;
+}
+
 // Empty on a one-language site, which keeps that site's save exactly the write it was.
 export const siblingPaths = (collection: string, slug: string, source: string) =>
   Object.fromEntries(
@@ -81,10 +104,15 @@ export const siblingPaths = (collection: string, slug: string, source: string) =
   );
 
 // Every file must be recorded in D1 too, or a draft at the old path publishes it back.
-export const entryFiles = async (git: GitClient, collection: string, slug: string) => {
+export const entryFiles = async (
+  git: GitClient,
+  collection: string,
+  slug: string,
+  ref?: string,
+) => {
   const locales = config.i18n.locales;
   const files = await Promise.all(
-    locales.map((locale) => git.getFile(entryPath(collection, slug, locale))),
+    locales.map((locale) => git.getFile(entryPath(collection, slug, locale), ref)),
   );
   return locales.map((locale, i) => ({
     locale,

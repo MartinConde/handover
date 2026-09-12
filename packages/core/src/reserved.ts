@@ -26,10 +26,23 @@ export function newId(_siteId: string): string {
   return id;
 }
 
-// Entry-level keys are rejected on blocks and vice versa; unprefixed keys are not looked at.
+// Entry-level keys stay out of rows, and row IDs stay unambiguous inside each addressed list.
 export function checkReserved(value: unknown, path = ''): void {
   if (Array.isArray(value)) {
-    for (const [i, item] of value.entries()) checkReserved(item, `${path}[${i}]`);
+    const identities = new Map<string, string>();
+    for (const [i, item] of value.entries()) {
+      const itemPath = `${path}[${i}]`;
+      checkReserved(item, itemPath);
+      if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+      const id = (item as Record<string, unknown>)._id;
+      if (typeof id !== 'string') continue;
+      const first = identities.get(id);
+      if (first)
+        throw new Error(
+          `${itemPath}._id: duplicate row identity ${JSON.stringify(id)}; already used at ${first}._id. Give each row in ${path || 'this collection'} a unique _id and keep matching IDs aligned across locale files.`,
+        );
+      identities.set(id, itemPath);
+    }
     return;
   }
   if (!value || typeof value !== 'object') return;
