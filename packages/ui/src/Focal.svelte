@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { Preset } from '@handover/core';
+import Modal from './Modal.svelte';
 
 let {
   name,
@@ -23,12 +24,7 @@ let {
 let across = $state(Math.round(focal[0] * 100));
 // svelte-ignore state_referenced_locally -- the dialog edits an initial snapshot
 let down = $state(Math.round(focal[1] * 100));
-let panel = $state<HTMLElement>();
 let stage = $state<HTMLElement>();
-
-$effect(() => {
-  panel?.focus();
-});
 
 // A phone holds a picture upright whatever the site's fields crop to.
 const PHONE = { label: 'Phone, upright', preset: { ratio: '9:16' } as Preset };
@@ -63,11 +59,7 @@ function nudge(e: KeyboardEvent) {
 const aspect = (preset: Preset) => preset.ratio?.replace(':', ' / ') ?? '4 / 3';
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
-
-<!-- The screen behind is not inert, as on every other dialog here, so this claims no trap. -->
-<div class="scrim">
-  <div class="dialog focal-dialog" role="dialog" aria-labelledby="focal-h" tabindex="-1" bind:this={panel}>
+<Modal labelledby="focal-h" panelClass="dialog focal-dialog" {onclose}>
     <h2 id="focal-h">Focal point — {name}</h2>
     <p>Put the dot on the part that has to stay in every crop. Drag it, or move it with the arrow keys.</p>
     <div class="dialog-cols">
@@ -109,5 +101,4 @@ const aspect = (preset: Preset) => preset.ratio?.replace(':', ' / ') ?? '4 / 3';
       <button class="btn" type="button" onclick={onclose}>Cancel</button>
       <button class="btn btn-primary" type="button" onclick={() => onsave([across / 100, down / 100])}>Save focal point</button>
     </div>
-  </div>
-</div>
+</Modal>

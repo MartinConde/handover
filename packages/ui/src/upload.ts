@@ -11,13 +11,14 @@ export interface MediaItem {
   bytes?: number | null;
   width?: number | null;
   height?: number | null;
+  /** The library default copied into content when this picture is first chosen. */
+  alt?: string | null;
   /** Where every crop of this picture holds, as a fraction of its width and of its height. */
   focal?: [number, number] | null;
 }
 
 /** The same asset as the library screen knows it: what it is called, and where it is used. */
 export interface LibraryItem extends MediaItem {
-  alt?: string | null;
   tags?: string[];
   archived?: boolean;
   createdAt?: number;

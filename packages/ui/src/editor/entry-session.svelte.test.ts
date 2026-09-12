@@ -1002,6 +1002,73 @@ test('final publish never requests after a failed save and releases a refused op
   expect(reload).not.toHaveBeenCalled();
 });
 
+test('an authoritative outside change drains old writes and retires the session through reload', async () => {
+  const saved = deferred<boolean>();
+  const changed = deferred<boolean>();
+  const reloaded = deferred<void>();
+  const order: string[] = [];
+  const session = translationSession();
+  session.configureAutosave(async (locale) => {
+    order.push(`save:${locale}`);
+    return locale === 'en' ? saved.promise : true;
+  });
+  session.fieldCommand('en', {
+    address: 'sections[_id=first].title',
+    contentVersion: 0,
+    changes: [{ value: 'Last local words' }],
+  });
+  const request = vi.fn(async () => {
+    order.push('replace');
+    return changed.promise;
+  });
+  const reload = vi.fn(async () => {
+    order.push('reload');
+    return reloaded.promise;
+  });
+
+  const replacing = session.authoritativeChange(request, reload);
+  await vi.waitFor(() => expect(order).toEqual(['save:en']));
+  expect(session.persistedActionPending()).toBe(true);
+  expect(request).not.toHaveBeenCalled();
+  expect(
+    session.fieldCommand('en', {
+      address: 'sections[_id=second].title',
+      contentVersion: 1,
+      changes: [{ value: 'Cannot race the replacement' }],
+    }),
+  ).toEqual({ ok: false, reason: 'closed' });
+
+  saved.resolve(true);
+  await vi.waitFor(() => expect(order).toEqual(['save:en', 'replace']));
+  changed.resolve(true);
+  await vi.waitFor(() => expect(order).toEqual(['save:en', 'replace', 'reload']));
+  expect(session.persistedActionPending()).toBe(true);
+  reloaded.resolve();
+
+  expect(await replacing).toEqual({ ok: true });
+  expect(session.persistedActionPending()).toBe(true);
+  expect(reload).toHaveBeenCalledWith('changed');
+});
+
+test('an authoritative outside change never starts after the final save is refused', async () => {
+  const session = translationSession();
+  session.configureAutosave(async () => false);
+  session.fieldCommand('en', {
+    address: 'sections[_id=first].title',
+    contentVersion: 0,
+    changes: [{ value: 'Keep this local edit' }],
+  });
+  const request = vi.fn(async () => true);
+
+  expect(await session.authoritativeChange(request, vi.fn())).toEqual({
+    ok: false,
+    reason: 'save',
+  });
+  expect(request).not.toHaveBeenCalled();
+  expect(session.persistedActionPending()).toBe(false);
+  expect(session.localeMutationBlocked('en')).toBe(false);
+});
+
 test('machine translation closes admission before its preflush and dispatches after old writes', async () => {
   const sourceSaved = deferred<boolean>();
   const order: string[] = [];

@@ -38,7 +38,10 @@ rule belonging to no entry has nowhere to wait. It reaches visitors after the bu
 **Test** on a row asks the live site for the old address, from the browser, and says what came
 back rather than what the file says: *Working* (it forwards where the rule points), *Not there
 yet* (a 404 — the rule is unpublished or the site is still building) or *Not what this rule says*
-(a page answers at the old address, or it forwards somewhere else).
+(a page answers at the old address, or it forwards somewhere else). If the browser cannot observe
+the result — for example, while offline or when the destination blocks a cross-origin check — it
+says *Could not verify* and offers the old address to open directly. A verified destination
+includes its query parameters.
 
 A rule with `reason: hidden` belongs to the entry that is hidden — showing that entry again
 removes the rule in the same commit — so the table draws it but neither edits nor deletes it.

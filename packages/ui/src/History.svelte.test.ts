@@ -24,6 +24,7 @@ let asked: string[] = [];
 let versions: Version[] = [];
 let more = false;
 let refusal: number | undefined;
+let diffResponse: ((url: string) => Response | Promise<Response>) | undefined;
 /** What a restore sent, and what the server said to it. */
 let restored: string[] = [];
 let restoreRefusal: string | undefined;
@@ -44,7 +45,8 @@ const show = async (locales = ['en', 'de'], drafted = false) => {
           : Response.json({ paths: ['src/content/listings/en/mill-house.yaml'] });
       }
       if (refusal) return new Response('nope', { status: refusal });
-      if (url.includes('/diff?')) return Response.json({ groups: [] });
+      if (url.includes('/diff?'))
+        return diffResponse ? diffResponse(url) : Response.json({ groups: [] });
       return Response.json({ versions, more });
     }),
   );
@@ -84,6 +86,7 @@ afterEach(() => {
   versions = [];
   more = false;
   refusal = undefined;
+  diffResponse = undefined;
   restored = [];
   restoreRefusal = undefined;
   handedOff = 0;
@@ -105,6 +108,24 @@ const rows = () =>
     row.querySelector('.summary')?.textContent?.trim(),
     row.querySelector('.sub')?.textContent?.trim().replace(/\s+/g, ' '),
   ]);
+
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+};
+
+const diff = (after: string) =>
+  Response.json({
+    groups: [
+      {
+        locale: 'en',
+        changes: [{ kind: 'value', path: 'title', label: 'Title', before: 'Old', after }],
+      },
+    ],
+  });
 
 // The sha is a tooltip rather than a column, because this is an editor's history.
 test('a version says what changed, when, who and which languages', async () => {
@@ -193,6 +214,92 @@ test('opening a version asks for its changes against what is live now', async ()
   expect(asked.at(-1)).toBe('/admin/api/history/listings/mill-house/diff?to=aaa111');
   expect(q('.version-head h2').textContent).toContain('Version from 2 days ago');
   expect(q('.version-head .by').textContent).toContain('compared with what is live now');
+});
+
+test('a late diff cannot replace the newer selected version', async () => {
+  versions = [
+    { sha: 'aaa111', date: ago(50), summary: 'First version', locales: ['en'] },
+    { sha: 'bbb222', date: ago(2), summary: 'Second version', locales: ['en'] },
+  ];
+  const pending: ReturnType<typeof deferred<Response>>[] = [];
+  diffResponse = () => {
+    const request = deferred<Response>();
+    pending.push(request);
+    return request.promise;
+  };
+  await show();
+
+  await click(all('.summary')[0] as Element);
+  await click(all('.summary')[1] as Element);
+  pending[1]?.resolve(diff('Second content'));
+  await settle();
+
+  expect(q('.version-head .by').textContent).toContain('Second version');
+  expect(q('.change-diff').textContent).toContain('Second content');
+
+  pending[0]?.resolve(diff('First content'));
+  await settle();
+
+  expect(q('.version-head .by').textContent).toContain('Second version');
+  expect(q('.change-diff').textContent).toContain('Second content');
+  expect(q('.change-diff').textContent).not.toContain('First content');
+});
+
+test('an older failed diff cannot end or replace the current read', async () => {
+  versions = [
+    { sha: 'aaa111', date: ago(50), summary: 'First version', locales: ['en'] },
+    { sha: 'bbb222', date: ago(2), summary: 'Second version', locales: ['en'] },
+  ];
+  const pending: ReturnType<typeof deferred<Response>>[] = [];
+  diffResponse = () => {
+    const request = deferred<Response>();
+    pending.push(request);
+    return request.promise;
+  };
+  await show();
+
+  await click(all('.summary')[0] as Element);
+  await click(all('.summary')[1] as Element);
+  pending[0]?.resolve(new Response('nope', { status: 503 }));
+  await settle();
+
+  expect(q('.version-view [role="status"]').textContent).toBe('Reading that version…');
+  expect(all('.version-view [role="alert"]')).toHaveLength(0);
+
+  pending[1]?.resolve(diff('Second content'));
+  await settle();
+
+  expect(q('.version-head .by').textContent).toContain('Second version');
+  expect(q('.change-diff').textContent).toContain('Second content');
+});
+
+test('closing a comparison cancels its pending diff state', async () => {
+  versions = [
+    { sha: 'aaa111', date: ago(2), summary: 'Update price', locales: ['en'] },
+    { sha: 'bbb222', date: ago(50), summary: 'Create', locales: ['en'] },
+  ];
+  const pending = deferred<Response>();
+  diffResponse = () => pending.promise;
+  await show();
+  const boxes = all('.version-row input') as HTMLInputElement[];
+
+  boxes[0]?.click();
+  await settle();
+  boxes[1]?.click();
+  await settle();
+  expect(q('.version-view [role="status"]').textContent).toBe('Reading that version…');
+
+  boxes[1]?.click();
+  await settle();
+
+  expect(all('.version-view [role="status"]')).toHaveLength(0);
+  expect(q('.form-placeholder').textContent).toContain('Choose a version to inspect');
+
+  pending.resolve(diff('Closed comparison'));
+  await settle();
+
+  expect(all('.change-diff')).toHaveLength(0);
+  expect(all('.version-view [role="alert"]')).toHaveLength(0);
 });
 
 // Two chosen is a pair, and the older of them is the side the newer is read against.

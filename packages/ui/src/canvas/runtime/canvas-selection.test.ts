@@ -1,7 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import type { CanvasTarget } from '../canvas-bridge';
-import { createCanvasSelectionRuntime } from './canvas-selection';
 import { canvasNodeKey, visibleCanvasNodes } from '../canvas-structure';
+import { createCanvasSelectionRuntime } from './canvas-selection';
 
 const target = (address: string): CanvasTarget => ({
   document: { collection: 'pages', id: 'home' },

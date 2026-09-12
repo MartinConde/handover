@@ -6,11 +6,7 @@ import {
   type CanvasTarget,
   isCanvasTarget,
 } from '../canvas-bridge';
-import {
-  canvasSelectionKey,
-  sameCanvasDocument,
-  sameCanvasSelection,
-} from '../canvas-target';
+import { canvasSelectionKey, sameCanvasDocument, sameCanvasSelection } from '../canvas-target';
 
 const MARKERS = [
   ['data-handover-field', 'field'],

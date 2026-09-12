@@ -4,6 +4,63 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Restore the CI lint baseline with mechanical formatting and import ordering; no runtime
+  behavior changes.
+
+- Document the supported checkout-link and three-archive installation paths while Handover's
+  packages remain unpublished. A CI smoke test now installs those archives without workspace
+  fallback, runs the packaged CLI, checks public types and components, and builds an Astro site.
+
+- Make `handover init` safely resumable across resource creation, migration generation and
+  application, and owner seeding. Existing Wrangler and Drizzle configs are validated before
+  provisioning, user-owned bindings pause with an exact continuation command, and retries verify
+  recorded Cloudflare resources instead of duplicating them.
+
+- Resolve the starter Hero's stored image key through `media.publicBase`, preserve its alt and
+  dimensions, and carry its focal point into cover-crop positioning.
+
+- Report rejected or opaque live redirect checks as unverified instead of working, offer the old
+  address for a direct check, and include query parameters when comparing observed destinations.
+
+- Let a rate-limited login recover after the server's retry interval, with a one-minute fallback,
+  while preserving the entered email. Failed password-reset requests now show a retryable error.
+
+- Distinguish unavailable admin reads from valid empty, signed-out, and fully published states.
+  The shell, dashboard, media and page pickers, entry creation, redirects, conflicts, and account
+  page now retain useful last-known data and offer targeted retries. Uncertain invitations are no
+  longer diagnosed as broken email configuration, and failed account actions use error styling.
+
+- Keep cropped-image upload negotiation and confirmation on the configured site base while the
+  original image and signed bucket upload continue to use their external URLs.
+
+- Copy a media-library default alt into content when an image is chosen. Existing page and
+  translated overrides stay authoritative, and later library edits do not rewrite content.
+
+- Keep an asset's real usage attached to media-library metadata-save responses, so editing tags,
+  alt text, focal position, or archive state cannot make a used asset appear deletable.
+
+- Preserve consecutive media-library metadata edits with optimistic per-asset save queues. Failed
+  saves keep later input intact and can be retried without another edit.
+
+- Keep media picker and library results bound to the latest search and media tab. Image and file
+  upload batches now retain the mode they started with and refresh only their matching view.
+
+- Refresh the shell's build, pending-change, and entry-directory state after every successful
+  repository commit. Entry publishing, redirects, rename/delete/template/restore actions, locale
+  removal, reverts, and the developer conflict simulator now share the existing build poller;
+  draft-only and failed actions do not start one.
+
+- Coordinate drawer publishing, discard, conflict resolution, and publish reverts with the open
+  entry's save lane. Final edits now save before an outside action runs, and authoritative
+  replacements retire and reload the old editor session before editing resumes.
+
+- Freeze the pending drawer's selected entries while final publication checks run, decide from
+  that exact response, and ignore obsolete background check results even when the selection
+  returns to the same set.
+
+- Keep history diffs bound to the current entry and selected version or comparison. Late responses
+  and closed comparisons can no longer replace the visible diff, error, or loading state.
+
 - Database schema version 9 claims scheduled maintenance jobs atomically, recovers abandoned
   claims after 15 minutes, and retries transient failures after exponential five-minute delays
   capped at one hour without changing the normal hourly or daily cadence after success.

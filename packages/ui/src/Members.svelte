@@ -1,5 +1,6 @@
 <script lang="ts">
-import { request as fetch, sitePath } from './request.js';
+import Modal from './Modal.svelte';
+import { request as fetch, sitePath, uncertainResponse } from './request.js';
 
 interface Member {
   id: string;
@@ -30,15 +31,10 @@ let notice = $state('');
 let failure = $state('');
 /** The dialog's own refusal, which belongs beside the button that was pressed. */
 let error = $state('');
-/** Whatever the open dialog wants focus on: its first field, or Cancel where the answer is no. */
-let opening = $state<HTMLElement>();
-let trigger: HTMLElement | undefined;
+let trigger = $state<HTMLElement>();
 
 $effect(() => {
   load();
-});
-$effect(() => {
-  opening?.focus();
 });
 
 const initials = (member: Member) =>
@@ -91,7 +87,6 @@ function start(kind: 'invite' | 'role' | 'remove', member?: Member) {
 function close() {
   dialog = '';
   error = '';
-  trigger?.focus();
 }
 
 /** What a refusal from any of the four routes says, in the server's words where it has them. */
@@ -118,6 +113,13 @@ async function invite(event: SubmitEvent) {
   const res = await fetch('/admin/api/members', json({ email, role }));
   const body = (await res.json().catch(() => ({}))) as { error?: string; to?: string };
   busy = false;
+  if (uncertainResponse(res)) {
+    close();
+    notice = '';
+    failure = inviteUncertain;
+    await load();
+    return;
+  }
   // The row exists whether the mailer refused (502) or is unwired (503), so the list is reloaded.
   if (res.status === 502 || res.status === 503) {
     close();
@@ -138,6 +140,8 @@ async function invite(event: SubmitEvent) {
 
 // Settings names the missing credential, so the notice points there rather than repeating it.
 const mailerFailure = "Couldn't send the invite — email isn't set up correctly on this site.";
+const inviteUncertain =
+  'The invite result could not be confirmed. The member list was refreshed; check it before trying again.';
 
 async function resend(member: Member) {
   open = '';
@@ -146,7 +150,10 @@ async function resend(member: Member) {
   busy = true;
   const res = await fetch(`/admin/api/members/${member.id}/invite`, json({}));
   busy = false;
-  if (res.status === 502 || res.status === 503) failure = mailerFailure;
+  if (uncertainResponse(res)) {
+    failure = inviteUncertain;
+    await load();
+  } else if (res.status === 502 || res.status === 503) failure = mailerFailure;
   else if (res.ok) notice = `Invite sent to ${member.email}.`;
   else failure = `That invite was not sent (${res.status}).`;
 }
@@ -172,7 +179,7 @@ async function remove() {
 </script>
 
 <svelte:window
-  onkeydown={(e) => e.key === 'Escape' && (dialog ? close() : (open = ''))}
+  onkeydown={(e) => e.key === 'Escape' && !dialog && (open = '')}
   onclickcapture={(e) =>
     open && !(e.target as HTMLElement).closest('.row-menu') && (open = '')}
 />
@@ -262,10 +269,8 @@ async function remove() {
   {/if}
 </main>
 
-<!-- Not aria-modal: the shell behind stays reachable, so claiming a trap would be false. -->
 {#if dialog === 'invite'}
-  <div class="scrim">
-    <div class="dialog" role="dialog" aria-labelledby="invite-h">
+  <Modal labelledby="invite-h" initialFocus="#invite-email" returnTo={trigger} dismissible={!busy} onclose={close}>
       <h2 id="invite-h">Invite someone</h2>
       <form onsubmit={invite}>
         <div class="field">
@@ -279,7 +284,6 @@ async function remove() {
             required
             aria-describedby="invite-email-hint"
             bind:value={email}
-            bind:this={opening}
           />
           <p class="hint" id="invite-email-hint">
             They get a sign-in link. This is the only way an account comes to exist.
@@ -298,17 +302,15 @@ async function remove() {
         </fieldset>
         {#if error}<p class="notice notice-danger" role="alert">{error}</p>{/if}
         <div class="actions">
-          <button class="btn" type="button" onclick={close}>Cancel</button>
+          <button class="btn" type="button" disabled={busy} onclick={close}>Cancel</button>
           <button class="btn btn-primary" type="submit" disabled={busy}>
             {busy ? 'Sending…' : 'Send invite'}
           </button>
         </div>
       </form>
-    </div>
-  </div>
+  </Modal>
 {:else if dialog === 'role'}
-  <div class="scrim">
-    <div class="dialog is-slim" role="dialog" aria-labelledby="role-h">
+  <Modal labelledby="role-h" panelClass="dialog is-slim" initialFocus="input" returnTo={trigger} dismissible={!busy} onclose={close}>
       <h2 id="role-h">Change role for {target?.name || target?.email}</h2>
       <form onsubmit={changeRole}>
         <fieldset>
@@ -319,7 +321,6 @@ async function remove() {
               name="member-role"
               value="editor"
               bind:group={role}
-              bind:this={opening}
             />
             Editor <span class="desc">Edit, upload and publish</span>
           </label>
@@ -330,15 +331,13 @@ async function remove() {
         </fieldset>
         {#if error}<p class="notice notice-danger" role="alert">{error}</p>{/if}
         <div class="actions">
-          <button class="btn" type="button" onclick={close}>Cancel</button>
+          <button class="btn" type="button" disabled={busy} onclick={close}>Cancel</button>
           <button class="btn btn-primary" type="submit" disabled={busy}>Save</button>
         </div>
       </form>
-    </div>
-  </div>
+  </Modal>
 {:else if dialog === 'remove'}
-  <div class="scrim">
-    <div class="dialog" role="alertdialog" aria-labelledby="remove-h" aria-describedby="remove-d">
+  <Modal labelledby="remove-h" describedby="remove-d" role="alertdialog" returnTo={trigger} dismissible={!busy} onclose={close}>
       <h2 id="remove-h">
         {#if target?.pending}
           Revoke the invite to {target.email}?
@@ -369,11 +368,10 @@ async function remove() {
       </div>
       {#if error}<p class="notice notice-danger" role="alert">{error}</p>{/if}
       <div class="actions">
-        <button class="btn" type="button" bind:this={opening} onclick={close}>Cancel</button>
+        <button class="btn" type="button" disabled={busy} onclick={close}>Cancel</button>
         <button class="btn btn-danger" type="button" disabled={busy} onclick={remove}>
           {target?.pending ? 'Revoke' : 'Remove'}
         </button>
       </div>
-    </div>
-  </div>
+  </Modal>
 {/if}

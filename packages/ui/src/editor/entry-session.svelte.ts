@@ -121,6 +121,18 @@ export type FinalPublishFailure =
   | 'uncertain';
 export type FinalPublishResult = { ok: true } | { ok: false; reason: FinalPublishFailure };
 
+export type AuthoritativeChangeFailure =
+  | 'busy'
+  | 'closed'
+  | 'refused'
+  | 'reload'
+  | 'save'
+  | 'stale'
+  | 'uncertain';
+export type AuthoritativeChangeResult =
+  | { ok: true }
+  | { ok: false; reason: AuthoritativeChangeFailure };
+
 type FieldContext = {
   field: Field;
   mode: true | 'duplicate' | false;
@@ -451,6 +463,12 @@ export function createEntrySession({
     | {
         id: number;
         kind: 'final-publish';
+        phase: 'preflush' | 'running' | 'reloading';
+        epoch: number;
+      }
+    | {
+        id: number;
+        kind: 'authoritative-change';
         phase: 'preflush' | 'running' | 'reloading';
         epoch: number;
       }
@@ -1426,6 +1444,72 @@ export function createEntrySession({
           for (const saves of coordinators.values()) saves.close();
           try {
             await reload('published');
+          } catch {
+            return { ok: false, reason: 'reload' };
+          }
+          return { ok: true };
+        });
+      } catch {
+        return { ok: false, reason: keepClosed ? 'reload' : 'stale' };
+      } finally {
+        if (!keepClosed && persistedAction?.id === admitted.id) persistedAction = undefined;
+      }
+    },
+    /** Drain local writes, run an outside replacement, then retire this session before reload. */
+    async authoritativeChange(
+      request: () => Promise<boolean>,
+      reload: (outcome: 'changed' | 'uncertain') => void | Promise<void>,
+    ): Promise<AuthoritativeChangeResult> {
+      if (!mutationOpen) return { ok: false, reason: 'closed' };
+      if (persistedAction) return { ok: false, reason: 'busy' };
+      if (!lane) return { ok: false, reason: 'closed' };
+
+      const admitted = {
+        id: ++nextActionId,
+        kind: 'authoritative-change' as const,
+        phase: 'preflush' as const,
+        epoch,
+      };
+      persistedAction = admitted;
+      if (!(await drain())) {
+        if (persistedAction?.id === admitted.id) persistedAction = undefined;
+        return { ok: false, reason: 'save' };
+      }
+
+      const running = { ...admitted, phase: 'running' as const };
+      let keepClosed = false;
+      try {
+        return await lane(async (): Promise<AuthoritativeChangeResult> => {
+          if (!mutationOpen || epoch !== admitted.epoch) return { ok: false, reason: 'stale' };
+          persistedAction = running;
+
+          let changed: boolean;
+          try {
+            changed = await request();
+          } catch {
+            keepClosed = true;
+            mutationOpen = false;
+            freezeHistory();
+            epoch += 1;
+            persistedAction = { ...running, phase: 'reloading' };
+            for (const saves of coordinators.values()) saves.close();
+            try {
+              await reload('uncertain');
+            } catch {
+              // The old session stays closed; a later page reload is the only safe recovery.
+            }
+            return { ok: false, reason: 'uncertain' };
+          }
+          if (!changed) return { ok: false, reason: 'refused' };
+
+          keepClosed = true;
+          mutationOpen = false;
+          freezeHistory();
+          epoch += 1;
+          persistedAction = { ...running, phase: 'reloading' };
+          for (const saves of coordinators.values()) saves.close();
+          try {
+            await reload('changed');
           } catch {
             return { ok: false, reason: 'reload' };
           }

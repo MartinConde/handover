@@ -4,6 +4,7 @@ import { tick } from 'svelte';
 import Crop from './Crop.svelte';
 import Focal from './Focal.svelte';
 import MediaImage from './MediaImage.svelte';
+import Modal from './Modal.svelte';
 import { request as fetch, sitePath } from './request.js';
 import { fileSize, type LibraryItem, uploadFile, uploadImage } from './upload.js';
 
@@ -31,34 +32,53 @@ let queue = $state<{ name: string; state: string; failed?: boolean }[]>([]);
 let over = $state(false);
 let chooser = $state<HTMLInputElement>();
 let confirming = $state(false);
+let deleting = $state(false);
 /** The two dialogs the panel opens, and neither is open until a picture is. */
 let framing = $state(false);
 let cropping = $state(false);
-/** Cancel, where the answer is no; and the button that opened the dialog, to give focus back. */
-let opening = $state<HTMLElement>();
-let trigger: HTMLElement | undefined;
-
-$effect(() => {
-  opening?.focus();
-});
+type MetadataChange = {
+  tags?: string[];
+  alt?: string;
+  archived?: boolean;
+  focal?: [number, number];
+};
+type MetadataLane = {
+  acknowledged: LibraryItem;
+  draft: LibraryItem;
+  pending: MetadataChange[];
+  failed?: MetadataChange;
+  writing: boolean;
+};
+const metadataLanes = new Map<string, MetadataLane>();
+let metadataFailures = $state<Record<string, { message: string; name: string }>>({});
+let trigger = $state<HTMLElement>();
+let readEpoch = 0;
 
 // Debounced so typing a word does not spend a request per letter.
 $effect(() => {
   const kinds = kind;
   const q = query;
-  const wait = setTimeout(() => load(kinds, q), 200);
-  return () => clearTimeout(wait);
+  const epoch = ++readEpoch;
+  const wait = setTimeout(() => load(kinds, q, epoch), 200);
+  return () => {
+    clearTimeout(wait);
+    if (readEpoch === epoch) readEpoch++;
+  };
 });
 
-async function load(kinds: 'images' | 'files', q: string) {
+async function load(kinds: 'images' | 'files', q: string, epoch: number) {
   const res = await fetch(`/admin/api/media?kind=${kinds}&archived=1&q=${encodeURIComponent(q)}`);
-  loading = false;
+  if (epoch !== readEpoch) return;
   if (!res.ok) {
+    loading = false;
     failure = `Could not load the library (${res.status}).`;
     return;
   }
+  const next = ((await res.json()) as { media: LibraryItem[] }).media;
+  if (epoch !== readEpoch) return;
+  loading = false;
   failure = '';
-  items = ((await res.json()) as { media: LibraryItem[] }).media;
+  items = next;
   // The panel is about a picture that may no longer be in the list under this search.
   if (chosen) chosen = items.find((i) => i.id === chosen?.id) ?? chosen;
 }
@@ -96,7 +116,8 @@ const when = (at?: number) =>
 
 async function pick(item: LibraryItem) {
   selectedTile = document.activeElement as HTMLElement;
-  chosen = item;
+  const lane = metadataLanes.get(item.id);
+  chosen = lane && (lane.writing || lane.failed || lane.pending.length) ? lane.draft : item;
   tag = '';
   copied = '';
   closeDialog();
@@ -118,34 +139,91 @@ function ask() {
 }
 
 function closeDialog() {
-  const back = confirming ? trigger : undefined;
   confirming = false;
-  back?.focus();
+}
+
+function showMetadataDraft(id: string, draft: LibraryItem) {
+  items = items.map((item) => (item.id === id ? { ...item, ...draft } : item));
+  if (chosen?.id === id) chosen = draft;
+}
+
+function laneFor(item: LibraryItem) {
+  const held = metadataLanes.get(item.id);
+  if (held) {
+    if (!held.writing && !held.failed && !held.pending.length) {
+      held.acknowledged = item;
+      held.draft = item;
+    }
+    return held;
+  }
+  const lane: MetadataLane = {
+    acknowledged: item,
+    draft: item,
+    pending: [],
+    writing: false,
+  };
+  metadataLanes.set(item.id, lane);
+  return lane;
+}
+
+async function writeMetadata(id: string, lane: MetadataLane) {
+  if (lane.writing) return;
+  lane.writing = true;
+  try {
+    while (lane.failed || lane.pending.length) {
+      const details = lane.failed ?? lane.pending.shift();
+      if (!details) break;
+      const res = await fetch(`/admin/api/media/${id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(details),
+      });
+      if (!res.ok) {
+        lane.failed = details;
+        metadataFailures = {
+          ...metadataFailures,
+          [id]: {
+            message: `That change was not saved (${res.status}).`,
+            name: name(lane.draft),
+          },
+        };
+        break;
+      }
+      const saved = ((await res.json()) as { media: LibraryItem }).media;
+      lane.acknowledged = { ...lane.acknowledged, ...saved };
+      lane.failed = undefined;
+      const optimistic = lane.draft;
+      lane.draft = { ...optimistic, ...saved };
+      for (const waiting of lane.pending) {
+        for (const key of Object.keys(waiting) as (keyof MetadataChange)[]) {
+          Object.assign(lane.draft, { [key]: optimistic[key] });
+        }
+      }
+      const { [id]: _, ...rest } = metadataFailures;
+      metadataFailures = rest;
+      showMetadataDraft(id, lane.draft);
+    }
+  } finally {
+    lane.writing = false;
+  }
 }
 
 /** Tags and the default alt are the library's own words, so they are saved as they are typed. */
-async function describe(
-  details: {
-    tags?: string[];
-    alt?: string;
-    archived?: boolean;
-    focal?: [number, number];
-  },
-  item = chosen,
-) {
+function describe(details: MetadataChange, item = chosen) {
   if (!item) return;
-  const res = await fetch(`/admin/api/media/${item.id}`, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(details),
-  });
-  if (!res.ok) {
-    failure = `That change was not saved (${res.status}).`;
-    return;
-  }
-  const saved = ((await res.json()) as { media: LibraryItem }).media;
-  items = items.map((i) => (i.id === saved.id ? { ...i, ...saved } : i));
-  if (chosen?.id === item.id) chosen = { ...item, ...saved };
+  const lane = laneFor(item);
+  lane.draft = { ...lane.draft, ...details };
+  lane.pending.push(details);
+  showMetadataDraft(item.id, lane.draft);
+  if (!lane.failed) void writeMetadata(item.id, lane);
+}
+
+function retryMetadata(id: string) {
+  const lane = metadataLanes.get(id);
+  if (!lane?.failed) return;
+  const { [id]: _, ...rest } = metadataFailures;
+  metadataFailures = rest;
+  void writeMetadata(id, lane);
 }
 
 function addTag() {
@@ -162,7 +240,9 @@ function addTag() {
 async function remove() {
   const item = chosen;
   if (!item) return;
+  deleting = true;
   const res = await fetch(`/admin/api/media/${item.id}`, { method: 'DELETE' });
+  deleting = false;
   confirming = false;
   // Not `closeDialog`: the tile the button belonged to is about to go with the picture.
   if (!res.ok) {
@@ -181,20 +261,32 @@ async function copyUrl(item: LibraryItem) {
 }
 
 async function take(files: File[]) {
+  const batchKind = kind;
+  const batchQuery = query;
+  const batchEpoch = readEpoch;
+  const rows = queue;
+  const known = new Set(items.map((item) => item.id));
   for (const file of files) {
     // Read back out of the array: only the proxy in there is reactive, not the object pushed.
-    const row = queue[
-      queue.push({ name: file.name, state: kind === 'images' ? 'Converting…' : 'Uploading…' }) - 1
+    const row = rows[
+      rows.push({
+        name: file.name,
+        state: batchKind === 'images' ? 'Converting…' : 'Uploading…',
+      }) - 1
     ] as { name: string; state: string; failed?: boolean };
     try {
-      const media = kind === 'images' ? await uploadImage(file) : await uploadFile(file);
-      const held = items.some((i) => i.id === media.id);
+      const media = batchKind === 'images' ? await uploadImage(file) : await uploadFile(file);
+      const held = known.has(media.id);
+      known.add(media.id);
       row.state = held ? 'Already in your library — reused, nothing uploaded' : 'Uploaded';
-      items = [{ ...media, tags: [], uses: [] }, ...items.filter((i) => i.id !== media.id)];
     } catch (err) {
       row.state = err instanceof Error ? err.message : 'The upload failed';
       row.failed = true;
     }
+  }
+  if (kind === batchKind && query === batchQuery && readEpoch === batchEpoch) {
+    const epoch = ++readEpoch;
+    await load(batchKind, batchQuery, epoch);
   }
 }
 
@@ -205,9 +297,14 @@ function drop(e: DragEvent) {
 }
 
 function show(next: 'images' | 'files') {
+  if (kind === next) return;
+  readEpoch++;
   kind = next;
   chosen = undefined;
   queue = [];
+  items = [];
+  loading = true;
+  failure = '';
 }
 </script>
 
@@ -236,6 +333,12 @@ function show(next: 'images' | 'files') {
     <button type="button" role="tab" aria-selected={kind === 'files'} onclick={() => show('files')}>Files</button>
   </div>
   {#if failure}<p class="notice notice-danger" role="alert">{failure}</p>{/if}
+  {#each Object.entries(metadataFailures) as [id, metadataFailure] (id)}
+    <p class="notice notice-danger metadata-failure" role="alert">
+      {metadataFailure.message}
+      <button class="btn btn-sm" type="button" onclick={() => retryMetadata(id)}>Retry save for “{metadataFailure.name}”</button>
+    </p>
+  {/each}
   <div class="lib-body" class:has-selection={!!chosen}>
     <div class="lib-main">
       <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
@@ -438,19 +541,26 @@ function show(next: 'images' | 'files') {
   />
 {/if}
 
-<!-- Not aria-modal: claiming a focus trap that is not there is worse than not claiming one. -->
 {#if confirming && chosen}
-  <div class="scrim">
-    <div class="dialog" role="alertdialog" aria-labelledby="del-h" aria-describedby="del-d">
+  <Modal
+    labelledby="del-h"
+    describedby="del-d"
+    role="alertdialog"
+    initialFocus=".actions .btn"
+    returnTo={trigger}
+    dismissible={!deleting}
+    onclose={closeDialog}
+  >
       <h2 id="del-h">Delete “{name(chosen)}” permanently?</h2>
       <div id="del-d">
         <p>Nothing on the site uses it. This removes the file from storage and cannot be undone.</p>
         <p>If you might want it back, archive it instead — an archived {kind === 'images' ? 'picture' : 'file'} costs nothing and never appears in the picker.</p>
       </div>
       <div class="actions">
-        <button class="btn" type="button" bind:this={opening} onclick={closeDialog}>Cancel</button>
-        <button class="btn btn-danger" type="button" onclick={remove}>Delete permanently</button>
+        <button class="btn" type="button" disabled={deleting} onclick={closeDialog}>Cancel</button>
+        <button class="btn btn-danger" type="button" disabled={deleting} onclick={remove}>
+          {deleting ? 'Deleting…' : 'Delete permanently'}
+        </button>
       </div>
-    </div>
-  </div>
+  </Modal>
 {/if}

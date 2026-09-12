@@ -12,10 +12,13 @@ import { request as fetch, sitePath } from './request.js';
 let {
   role,
   mediaBase = '',
+  oncommitted,
 }: {
   role: 'owner' | 'editor';
   /** Where a stored media key is served from, for a replaced picture's thumbnails. */
   mediaBase?: string;
+  /** Restoring a removed entry makes a new commit, so the shell can refresh its build state. */
+  oncommitted?: () => void | Promise<void>;
 } = $props();
 
 let events = $state<ActivityEvent[]>([]);
@@ -126,6 +129,7 @@ async function putBack(event: ActivityEvent) {
     return;
   }
   await load();
+  await oncommitted?.();
 }
 
 function clear() {

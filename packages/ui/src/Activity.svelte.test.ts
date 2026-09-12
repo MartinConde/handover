@@ -3,6 +3,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import Activity from './Activity.svelte';
 
 let app: ReturnType<typeof mount>;
+const committed = vi.fn();
 
 interface Event {
   id: string;
@@ -57,7 +58,7 @@ function server(
 }
 
 const show = async (role: 'owner' | 'editor' = 'owner') => {
-  app = mount(Activity, { target: document.body, props: { role } });
+  app = mount(Activity, { target: document.body, props: { role, oncommitted: committed } });
   flushSync();
   await settle();
   return document.body;
@@ -89,6 +90,7 @@ afterEach(() => {
   unmount(app);
   vi.unstubAllGlobals();
   vi.useRealTimers();
+  committed.mockClear();
   document.body.innerHTML = '';
 });
 
@@ -828,6 +830,7 @@ test('restore is offered on a removal and sends the commit that row named', asyn
   });
   // The list is read again so the row can say what it says now.
   expect(activityCalls(calls).length).toBe(2);
+  expect(committed).toHaveBeenCalledOnce();
 });
 
 // A restore is refused only when something is at the path again; the server names the file.
@@ -854,4 +857,5 @@ test('a refused restore says what the server said', async () => {
   await settle();
 
   expect(root.querySelector('.notice-warn')?.textContent).toContain('has changed since');
+  expect(committed).not.toHaveBeenCalled();
 });

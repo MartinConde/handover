@@ -33,11 +33,11 @@ import { createSortable } from '@dnd-kit/svelte/sortable';
 import { newId } from '@handover/core';
 import { tick } from 'svelte';
 import {
-  EMPTY_ENTRY_DIRECTORY,
   type Pickable,
   type PickEntry,
   readEntryDirectory,
 } from './entry-directory.js';
+import Modal from './Modal.svelte';
 import PagePicker from './PagePicker.svelte';
 
 let {
@@ -69,7 +69,7 @@ let editing = $state('');
 let before: MenuItem | undefined;
 /** The item waiting to be confirmed away, and the button to give focus back to. */
 let removing = $state<MenuItem>();
-let trigger: HTMLElement | undefined;
+let trigger = $state<HTMLElement>();
 /** The editor's picker is open over the link summary. */
 let changing = $state(false);
 /** A disclosure and not `role="menu"`, as on the entry list. */
@@ -81,11 +81,21 @@ let lastAdded = $state('');
 const menu = $derived(menus[tab]);
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 let known = $state<Pickable>({ entries: [], locales: [] });
+let knownCurrent = $state(false);
+let knownError = $state('');
 $effect(() => {
-  readEntryDirectory()
-    .then((p) => (known = p))
-    .catch(() => (known = EMPTY_ENTRY_DIRECTORY));
+  void loadDirectory();
 });
+async function loadDirectory() {
+  knownError = '';
+  try {
+    known = await readEntryDirectory();
+    knownCurrent = true;
+  } catch {
+    knownCurrent = false;
+    knownError = 'Page details are unavailable. Existing menu targets have not been marked missing.';
+  }
+}
 const language = $derived(locale || known.locales[0] || '');
 const languageNames = new Intl.DisplayNames(['en'], { type: 'language' });
 const languageName = (of: string) => {
@@ -119,6 +129,7 @@ const kind = (item: MenuItem) => {
 // The renderer drops the row either way; the editor is where somebody can see why and tidy up.
 const flag = (item: MenuItem): { chip: string; why: string } | undefined => {
   if (item.link.type === 'url') return undefined;
+  if (!knownCurrent) return undefined;
   const entry = entryOf(item);
   if (!entry) return { chip: 'Page missing', why: 'That page is gone — the site skips this item' };
   if (item.link.type === 'index') return undefined;
@@ -535,11 +546,17 @@ function walkTabs(event: KeyboardEvent) {
 {/snippet}
 
 <svelte:window
-  onkeydown={(e) => { if (e.key !== 'Escape') return; if (removing) { removing = undefined; trigger?.focus(); } else if (menuFor) menuFor = ''; }}
+  onkeydown={(e) => { if (e.key === 'Escape' && !removing && menuFor) menuFor = ''; }}
   onclick={(e) => { const at = e.target as HTMLElement; if (menuFor && !at.closest('.row-menu')) menuFor = ''; }}
 />
 
 <div class="nav-build" class:is-labels={translating} {id} role="group" aria-labelledby={labelId}>
+  {#if knownError}
+    <div class="notice notice-danger menu-directory-error" role="alert">
+      {knownError}
+      <button class="btn-link" type="button" onclick={loadDirectory}>Retry</button>
+    </div>
+  {/if}
   {#if !menu}
     <div class="empty is-wide">
       <div>
@@ -609,17 +626,20 @@ function walkTabs(event: KeyboardEvent) {
 </div>
 
 {#if removing}
-  <!-- Not aria-modal: the shell behind stays reachable, as it does on the other screens. -->
-  <div class="scrim">
-    <div class="dialog" role="alertdialog" aria-labelledby="{id}-rm-h" aria-describedby="{id}-rm-d">
+  <Modal
+    labelledby={`${id}-rm-h`}
+    describedby={`${id}-rm-d`}
+    role="alertdialog"
+    returnTo={trigger}
+    onclose={() => (removing = undefined)}
+  >
       <h2 id="{id}-rm-h">Remove {name(removing)} and what is under it?</h2>
       <p id="{id}-rm-d">
         {removing.children?.length === 1 ? 'The item under it goes too' : `The ${removing.children?.length} items under it go too`}. Nothing is removed from the site — the pages stay where they are, they just stop being in this menu.
       </p>
       <div class="actions">
-        <button class="btn" type="button" {@attach (node) => node.focus()} onclick={() => { removing = undefined; trigger?.focus(); }}>Cancel</button>
+        <button class="btn" type="button" onclick={() => (removing = undefined)}>Cancel</button>
         <button class="btn btn-danger" type="button" onclick={() => removing && drop(pathOf(removing))}>Remove</button>
       </div>
-    </div>
-  </div>
+  </Modal>
 {/if}

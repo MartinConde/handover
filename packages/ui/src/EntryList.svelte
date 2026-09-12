@@ -2,6 +2,7 @@
 import { entryName } from '@handover/core';
 import { EXACT, when } from './activity-line';
 import { invalidateEntryDirectory } from './entry-directory.js';
+import Modal from './Modal.svelte';
 import NewEntry, { nameOf } from './NewEntry.svelte';
 import { navigate } from './navigate';
 import OffsiteDialog, { type Target } from './Offsite.svelte';
@@ -37,11 +38,14 @@ type Deleted = {
 let {
   collection,
   onchanged,
+  oncommitted,
   role,
   onsaved,
 }: {
   collection: string;
   onchanged: () => void;
+  /** A successful action made a repository commit, so the shell can refresh its build state. */
+  oncommitted?: () => void | Promise<void>;
   /** Saving a template shapes every entry made after it, so the item is the owner's. */
   role?: 'owner' | 'editor';
   onsaved?: (name: string) => void;
@@ -74,7 +78,7 @@ let target = $state<Entry>();
 let text = $state('');
 let busy = $state(false);
 let error = $state('');
-let field = $state<HTMLInputElement>();
+let trigger = $state<HTMLElement>();
 
 $effect(() => {
   load(collection);
@@ -82,9 +86,6 @@ $effect(() => {
 // Asked for only when it is looked at: an entry list nobody opens the tab on costs no query.
 $effect(() => {
   if (tab === 'deleted') loadDeleted(collection);
-});
-$effect(() => {
-  field?.focus();
 });
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -184,11 +185,19 @@ async function status(ids: string[], hidden: boolean, redirect?: Target) {
 }
 
 function open(kind: 'new' | 'rename' | 'duplicate' | 'template', entry?: Entry) {
+  const here = document.activeElement as HTMLElement | null;
+  trigger = here?.closest('.row-menu')?.querySelector('button') ?? here ?? undefined;
   dialog = kind;
   target = entry;
   text = kind === 'new' ? '' : kind === 'duplicate' ? `${entry?.id ?? ''}-copy` : (entry?.id ?? '');
   withDrafts = false;
   error = '';
+}
+function startOffsite(action: 'hide' | 'delete', ids: string[]) {
+  const here = document.activeElement as HTMLElement | null;
+  trigger = here?.closest('.row-menu')?.querySelector('button') ?? here ?? undefined;
+  menuFor = '';
+  offsite = { action, ids };
 }
 const close = () => {
   dialog = '';
@@ -223,10 +232,12 @@ const said = (body: string) =>
 
 // The same inverse commit as a revert; both lists move, so both are read again.
 async function restore(row: Deleted) {
-  if (!(await send('/admin/api/restore', json({ commit_sha: row.commit_sha })))) return;
+  const res = await send('/admin/api/restore', json({ commit_sha: row.commit_sha }));
+  if (!res) return;
   close();
   await Promise.all([load(collection), loadDeleted(collection)]);
   onchanged();
+  await announceCommit(res);
 }
 
 // The copy is a draft like a new entry, so it opens the same way with its own lock.
@@ -250,20 +261,33 @@ async function saveTemplate(event: Event) {
   close();
   await load(collection);
   onsaved?.(name);
+  await oncommitted?.();
 }
 
 async function rename(event: Event) {
   event.preventDefault();
   const url = `/admin/api/entries/${collection}/${target?.id}/rename`;
-  if (!(await send(url, json({ to: text })))) return;
+  const res = await send(url, json({ to: text }));
+  if (!res) return;
   await done();
+  await announceCommit(res);
 }
 
 // A delete commits now, so the redirect rules ride in that commit, not a later publish.
 async function remove(id: string, redirect: Target) {
   const url = `/admin/api/entries/${collection}/${id}`;
-  if (!(await send(url, { ...json({ redirect }), method: 'DELETE' }))) return;
+  const res = await send(url, { ...json({ redirect }), method: 'DELETE' });
+  if (!res) return;
   await done();
+  await announceCommit(res);
+}
+
+async function announceCommit(res: Response) {
+  const body = (await res
+    .clone()
+    .json()
+    .catch(() => ({}))) as { commit_sha?: unknown };
+  if (typeof body.commit_sha === 'string' && body.commit_sha) await oncommitted?.();
 }
 
 // The list and the unpublished-changes count both moved; neither is this component's to keep.
@@ -276,7 +300,7 @@ async function done() {
 </script>
 
 <svelte:window
-  onkeydown={(e) => e.key === 'Escape' && (menuFor ? (menuFor = '') : close())}
+  onkeydown={(e) => e.key === 'Escape' && menuFor && (menuFor = '')}
   onclick={(e) => menuFor && !(e.target as HTMLElement).closest('.row-menu') && (menuFor = '')}
 />
 
@@ -369,7 +393,11 @@ async function done() {
                 type="button"
                 aria-disabled={Boolean(row.blocked)}
                 aria-describedby={row.blocked ? `why-${row.id}` : undefined}
-                onclick={() => !row.blocked && (putting = row)}
+                onclick={() => {
+                  if (row.blocked) return;
+                  trigger = document.activeElement as HTMLElement;
+                  putting = row;
+                }}
                 >Restore<span class="visually-hidden"> {row.slug}</span></button
               >
             </div>
@@ -493,11 +521,11 @@ async function done() {
                     onclick={() => {
                       menuFor = '';
                       if (isHidden(entry)) status([entry.id], false);
-                      else offsite = { action: 'hide', ids: [entry.id] };
+                      else startOffsite('hide', [entry.id]);
                     }}>{isHidden(entry) ? 'Show' : 'Hide'}</button
                   >
                   <hr />
-                  <button type="button" onclick={() => { menuFor = ''; offsite = { action: 'delete', ids: [entry.id] }; }}>Delete</button>
+                  <button type="button" onclick={() => startOffsite('delete', [entry.id])}>Delete</button>
                 </div>
               {/if}
             </div>
@@ -514,7 +542,7 @@ async function done() {
           class="btn btn-sm"
           type="button"
           disabled={busy}
-          onclick={() => (offsite = { action: 'hide', ids: chosen })}
+          onclick={() => startOffsite('hide', chosen)}
         >
           Hide {chosen.length} {chosen.length === 1 ? singular : collection}
         </button>
@@ -535,8 +563,7 @@ async function done() {
 
 {#if putting}
   {@const row = putting}
-  <div class="scrim">
-    <div class="dialog" role="dialog" aria-labelledby="restore-h">
+  <Modal labelledby="restore-h" returnTo={trigger} dismissible={!busy} onclose={close}>
       <h2 id="restore-h">Restore {row.slug}?</h2>
       <p>
         The files come back as they were on {WHEN.format(row.at)}, in a commit of its own — the
@@ -559,13 +586,12 @@ async function done() {
       </p>
       {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
       <div class="actions">
-        <button class="btn" type="button" onclick={close}>Cancel</button>
+        <button class="btn" type="button" disabled={busy} onclick={close}>Cancel</button>
         <button class="btn btn-primary" type="button" disabled={busy} onclick={() => restore(row)}>
           {busy ? 'Restoring…' : 'Restore'}
         </button>
       </div>
-    </div>
-  </div>
+  </Modal>
 {/if}
 
 {#if offsite}
@@ -579,6 +605,7 @@ async function done() {
     {index}
     {busy}
     {error}
+    returnTo={trigger}
     onconfirm={(target) =>
       action === 'delete' ? remove(ids[0] ?? '', target) : status(ids, true, target)}
     onhide={() => (offsite = { action: 'hide', ids })}
@@ -586,12 +613,16 @@ async function done() {
   />
 {/if}
 
-<!-- Not aria-modal: the shell behind stays reachable, so claiming a trap would be false. -->
 {#if dialog === 'new'}
   <NewEntry {collection} onclose={close} />
 {:else if dialog}
-  <div class="scrim">
-    <div class="dialog" role="dialog" aria-labelledby="entry-dialog-h">
+  <Modal
+    labelledby="entry-dialog-h"
+    initialFocus="input.input"
+    returnTo={trigger}
+    dismissible={!busy}
+    onclose={close}
+  >
       {#if dialog === 'rename'}
         <h2 id="entry-dialog-h">Rename {titleOf(target as Entry)}</h2>
         <form onsubmit={rename}>
@@ -602,7 +633,6 @@ async function done() {
               id="rename-to"
               type="text"
               bind:value={text}
-              bind:this={field}
               aria-describedby="rename-hint"
             />
             <p class="hint" id="rename-hint">
@@ -612,7 +642,7 @@ async function done() {
           </div>
           {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
           <div class="actions">
-            <button class="btn" type="button" onclick={close}>Cancel</button>
+            <button class="btn" type="button" disabled={busy} onclick={close}>Cancel</button>
             <button class="btn btn-primary" type="submit" disabled={busy}>
               {busy ? 'Renaming…' : 'Rename'}
             </button>
@@ -628,7 +658,6 @@ async function done() {
               id="template-to"
               type="text"
               bind:value={text}
-              bind:this={field}
               aria-describedby="template-hint"
             />
             <p class="hint" id="template-hint">
@@ -638,7 +667,7 @@ async function done() {
           </div>
           {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
           <div class="actions">
-            <button class="btn" type="button" onclick={close}>Cancel</button>
+            <button class="btn" type="button" disabled={busy} onclick={close}>Cancel</button>
             <button class="btn btn-primary" type="submit" disabled={busy}>
               {busy ? 'Saving…' : 'Save as template'}
             </button>
@@ -654,7 +683,6 @@ async function done() {
               id="copy-to"
               type="text"
               bind:value={text}
-              bind:this={field}
               aria-describedby="copy-hint"
             />
             <p class="hint" id="copy-hint">
@@ -671,13 +699,12 @@ async function done() {
           {/if}
           {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
           <div class="actions">
-            <button class="btn" type="button" onclick={close}>Cancel</button>
+            <button class="btn" type="button" disabled={busy} onclick={close}>Cancel</button>
             <button class="btn btn-primary" type="submit" disabled={busy}>
               {busy ? 'Duplicating…' : 'Duplicate'}
             </button>
           </div>
         </form>
       {/if}
-    </div>
-  </div>
+  </Modal>
 {/if}

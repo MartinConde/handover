@@ -13,8 +13,10 @@ import CheckLines, {
   WORST,
 } from './CheckLines.svelte';
 import Diff from './Diff.svelte';
+import Modal from './Modal.svelte';
+import { coordinateEntryPublish, coordinateEntryReplacement } from './navigate';
 import Resolve from './Resolve.svelte';
-import { request as fetch } from './request.js';
+import { request as fetch, uncertainResponse } from './request.js';
 
 type Entry = {
   /** `listings/mill-house` — what a publish is of, since the languages go out together. */
@@ -48,17 +50,14 @@ let {
   /** The shell's build status, repeated here beside the commit it is of. */
   build?: Build | null;
   onclose: () => void;
-  onpublished: (count: number) => void;
+  onpublished: (count: number) => void | Promise<void>;
   /** Undo the commit this drawer just made; the shell owns the confirmation. */
   onrevert: (commitSha: string) => void;
   /** A draft was discarded or overwritten, so the entry must be reread wherever it is open. */
   ondiscarded: () => void;
 } = $props();
 
-// The inert shell would lose the focus, so the drawer takes it and the confirmation in turn.
 let panel = $state<HTMLElement>();
-let confirmPanel = $state<HTMLElement>();
-$effect(() => (confirmPanel ?? panel)?.focus());
 
 let busy = $state(false);
 let error = $state('');
@@ -72,13 +71,14 @@ let checks = $state<CheckItem[]>([]);
 /** The pass could not be run at all — which holds nothing back: it is a lint, not a gate. */
 let checksFailed = $state(false);
 // Plain, not state: it only decides which answer to keep and nothing draws it.
-let asked = '';
+let asked = 0;
 /** Entries whose stored file is not everything their schema needs; fixed where they are edited. */
 let unready = $state<string[]>([]);
 /** Entries whose languages disagree about their structure; nothing here can settle that. */
 let drifted = $state<string[]>([]);
 /** The entry whose discard is waiting to be confirmed, and whether it is being thrown away. */
 let confirming = $state<Entry>();
+let confirmTrigger = $state<HTMLElement>();
 let discarding = $state(false);
 /** The entry whose three-way view is open, which takes the place of the list while it is. */
 let resolving = $state<Entry>();
@@ -172,56 +172,87 @@ $effect(() => {
 });
 
 /** A check nobody could run is no reason to stop a publish, so the lint holds nothing back. */
-async function lint(keys: string[]): Promise<void> {
-  const of = keys.join(' ');
-  asked = of;
+async function lint(keys: string[]): Promise<CheckItem[]> {
+  const request = ++asked;
   if (!keys.length) {
     checks = [];
     checksFailed = false;
-    return;
+    return [];
   }
   const res = await fetch('/admin/api/publish/checks', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ entries: keys }),
   }).catch(() => undefined);
-  // The selection moved on while this was in flight, so the answer is about nobody's set.
-  if (asked !== of) return;
-  checksFailed = !res?.ok;
-  checks = (res?.ok && ((await res.json()) as { results?: CheckItem[] }).results) || [];
+  const failed = !res?.ok;
+  const results = (res?.ok && ((await res.json()) as { results?: CheckItem[] }).results) || [];
+  // Returning to the same selection must not make an older answer current again.
+  if (asked === request) {
+    checksFailed = failed;
+    checks = results;
+  }
+  return results;
 }
 
 async function publish() {
-  const going = selected;
+  const going = selected.map((entry) => ({ key: entry.key, files: [...entry.files] }));
+  const keys = going.map((entry) => entry.key);
   // Busy from the press, not the commit: a button live through the lint publishes the set twice.
   busy = true;
   error = '';
   unready = [];
   drifted = [];
-  // Linted again over exactly what goes out: the drawer may have been open a while.
-  await lint(going.map((e) => e.key));
-  if (errors.length) {
-    busy = false;
-    // A disabled button drops the focus that pressed it, and nothing else says why.
-    error =
-      'Nothing was published. The checks found something in the way just now — it is listed above.';
-    panel?.focus();
-    return;
-  }
-  const res = await fetch('/admin/api/publish', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ entries: going.map((e) => e.key) }),
+  let res: Response | undefined;
+  let checksBlocked = false;
+  const outcome = await coordinateEntryPublish(async () => {
+    // Linted again after reserving the open entry, so its saved revision cannot trail the commit.
+    const finalChecks = await lint(keys);
+    if (finalChecks.some((item) => item.severity === 'error' && keys.includes(item.entry))) {
+      checksBlocked = true;
+      return false;
+    }
+    res = await fetch('/admin/api/publish', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ entries: keys }),
+    });
+    if (uncertainResponse(res)) throw new TypeError('The publish response was not confirmed.');
+    return res.ok;
   });
   busy = false;
-  if (res.ok) {
+  if (outcome.ok && res?.ok) {
     const { paths, commit_sha } = (await res.json()) as { paths: string[]; commit_sha?: string };
     committed = commit_sha ?? '';
     // Counted before the reload reads the list again without what just went out.
     published = going.filter((e) => e.files.some((f) => paths.includes(f))).length;
     // Selection is per publish: what is left behind starts from the defaults again.
     toggled = [];
-    onpublished(published);
+    await onpublished(published);
+    return;
+  }
+  if (!outcome.ok && outcome.reason === 'save') {
+    error =
+      'Nothing was published. Your latest changes could not be saved — check your connection and try again.';
+    panel?.focus();
+    return;
+  }
+  if (checksBlocked) {
+    error =
+      'Nothing was published. The checks found something in the way just now — it is listed above.';
+    panel?.focus();
+    return;
+  }
+  if (!outcome.ok && outcome.reason === 'uncertain') {
+    error =
+      'The publish response was lost, so the open entry is being reloaded before you continue.';
+    return;
+  }
+  if (!outcome.ok && outcome.reason === 'reload') {
+    error = 'The changes were published, but the open entry could not reload. Reload the page.';
+    return;
+  }
+  if (!res) {
+    error = 'Nothing was published. Try again.';
     return;
   }
   if (res.status === 422) {
@@ -258,10 +289,27 @@ async function discard() {
   const entry = confirming;
   if (!entry) return;
   discarding = true;
-  const res = await fetch(`/admin/api/drafts/${entry.key}`, { method: 'DELETE' });
+  let res: Response | undefined;
+  const outcome = await coordinateEntryReplacement(entry.key, async () => {
+    res = await fetch(`/admin/api/drafts/${entry.key}`, { method: 'DELETE' });
+    if (uncertainResponse(res)) throw new TypeError('The discard response was not confirmed.');
+    return res.ok;
+  });
   discarding = false;
   confirming = undefined;
-  if (!res.ok) {
+  if (!outcome.ok && outcome.reason === 'save') {
+    error = 'Those changes were not discarded because the open entry could not finish saving.';
+    return;
+  }
+  if (!outcome.ok && (outcome.reason === 'uncertain' || outcome.reason === 'reload')) {
+    error = 'The discard result could not be confirmed. Reload the page before continuing.';
+    return;
+  }
+  if (!outcome.ok) {
+    if (!res) {
+      error = 'Those changes may have changed remotely. Reload the page before continuing.';
+      return;
+    }
     error = `Those changes were not discarded (${res.status}).`;
     return;
   }
@@ -303,20 +351,24 @@ function resolved(entry: Entry) {
 }
 
 function toggle(entry: Entry) {
+  if (busy) return;
   toggled = toggled.includes(entry.key)
     ? toggled.filter((k) => k !== entry.key)
     : [...toggled, entry.key];
 }
 // The store is changes of mind: all turns every hold on, none turns every ready entry off.
-const selectAll = () => (toggled = held.map((e) => e.key));
-const selectNone = () => (toggled = ready.map((e) => e.key));
-</script>
+const selectAll = () => {
+  if (!busy) toggled = held.map((e) => e.key);
+};
+const selectNone = () => {
+  if (!busy) toggled = ready.map((e) => e.key);
+};
 
-<svelte:window
-  onkeydown={(e) =>
-    e.key === 'Escape' &&
-    (confirming ? (confirming = undefined) : resolving ? closeResolver() : onclose())}
-/>
+function askDiscard(entry: Entry) {
+  confirmTrigger = document.activeElement as HTMLElement;
+  confirming = entry;
+}
+</script>
 
 {#snippet result()}
   <p class="result-actions">
@@ -338,7 +390,7 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
           type="checkbox"
           id="pending-{entry.key}"
           checked={checked(entry)}
-          disabled={blocked.includes(entry.key)}
+          disabled={busy || blocked.includes(entry.key)}
           onchange={() => toggle(entry)}
         >
       </label>
@@ -387,7 +439,7 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
             type="button"
             disabled={busy || discarding}
             aria-label="Discard your changes to {named(entry)}"
-            onclick={() => (confirming = entry)}
+            onclick={() => askDiscard(entry)}
           >Discard</button>
         {/if}
         <button
@@ -428,19 +480,24 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
   </li>
 {/snippet}
 
-<div class="scrim is-right">
-  <div
-    class="drawer"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="pending-h"
-    tabindex="-1"
-    bind:this={panel}
-  >
+<Modal
+  labelledby="pending-h"
+  panelClass="drawer"
+  scrimClass="is-right"
+  dismissible={!busy && !discarding}
+  bind:panel
+  onclose={resolving ? closeResolver : onclose}
+>
     <header class="drawer-head">
       <div class="head-row">
         <h2 id="pending-h">Unpublished changes</h2>
-        <button class="btn btn-ghost btn-icon" type="button" aria-label="Close" onclick={onclose}>✕</button>
+        <button
+          class="btn btn-ghost btn-icon"
+          type="button"
+          aria-label="Close"
+          disabled={busy || discarding}
+          onclick={resolving ? closeResolver : onclose}
+        >✕</button>
       </div>
       {#if entries.length}
         <p class="drawer-meta">
@@ -457,9 +514,9 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
         <p class="drawer-meta is-summary">{summary}</p>
         <div class="drawer-tools">
           <span>Select</span>
-          <button class="btn-link" type="button" aria-label="Select all the changes" onclick={selectAll}>all</button>
+          <button class="btn-link" type="button" disabled={busy} aria-label="Select all the changes" onclick={selectAll}>all</button>
           <span class="sep" aria-hidden="true">·</span>
-          <button class="btn-link" type="button" aria-label="Select none of the changes" onclick={selectNone}>none</button>
+          <button class="btn-link" type="button" disabled={busy} aria-label="Select none of the changes" onclick={selectNone}>none</button>
         </div>
       {:else}
         <p class="drawer-meta">Nothing to publish</p>
@@ -590,24 +647,25 @@ const selectNone = () => (toggled = ready.map((e) => e.key));
         </p>
       </footer>
     {/if}
-  </div>
-</div>
+</Modal>
 
-<!-- Not aria-modal: the drawer under it is not inert, so claiming a trap would be false. -->
 {#if confirming}
-  <div class="scrim">
-    <div class="dialog" role="dialog" aria-labelledby="discard-h" tabindex="-1" bind:this={confirmPanel}>
+  <Modal
+    labelledby="discard-h"
+    returnTo={confirmTrigger}
+    dismissible={!discarding}
+    onclose={() => (confirming = undefined)}
+  >
       <h2 id="discard-h">Discard your changes to {named(confirming)}?</h2>
       <p>
         Your unpublished changes to this entry are thrown away and it is read from the repository
         again, with whatever was changed there. The published page is not affected.
       </p>
       <div class="actions">
-        <button class="btn" type="button" onclick={() => (confirming = undefined)}>Cancel</button>
+        <button class="btn" type="button" disabled={discarding} onclick={() => (confirming = undefined)}>Cancel</button>
         <button class="btn btn-danger" type="button" disabled={discarding} onclick={discard}>
           {discarding ? 'Discarding…' : 'Discard changes'}
         </button>
       </div>
-    </div>
-  </div>
+  </Modal>
 {/if}

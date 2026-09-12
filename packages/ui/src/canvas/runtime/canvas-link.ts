@@ -1,3 +1,4 @@
+import type { Pickable } from '../../entry-directory';
 import type {
   CanvasAcknowledgement,
   CanvasEditingState,
@@ -6,9 +7,8 @@ import type {
   CanvasTarget,
   CanvasTextField,
 } from '../canvas-bridge';
-import { type CanvasLinkDraft, createCanvasLinkEditor } from './canvas-link-editor';
 import { sameCanvasTarget } from '../canvas-target';
-import type { Pickable } from '../../entry-directory';
+import { type CanvasLinkDraft, createCanvasLinkEditor } from './canvas-link-editor';
 
 type LinkField = Extract<CanvasTextField, { kind: 'link' }>;
 

@@ -1,9 +1,9 @@
 import type { Field } from '@handover/core';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { createEntrySession } from '../editor/entry-session.svelte';
 import CanvasInspector from './CanvasInspector.svelte';
 import type { CanvasSelection } from './canvas-bridge';
-import { createEntrySession } from '../editor/entry-session.svelte';
 
 const fields = [
   {
@@ -87,12 +87,8 @@ const inspectedFields: Field[] = [
   },
 ];
 const inspectedBlocks = {
-  basic: [
-    { path: ['body'], label: 'Body', type: 'richtext', required: false, tier: 'basic' },
-  ],
-  full: [
-    { path: ['body'], label: 'Body', type: 'richtext', required: false, tier: 'full' },
-  ],
+  basic: [{ path: ['body'], label: 'Body', type: 'richtext', required: false, tier: 'basic' }],
+  full: [{ path: ['body'], label: 'Body', type: 'richtext', required: false, tier: 'full' }],
 } satisfies Record<string, Field[]>;
 const inspectedData = (basic = 'Plain basic copy', full = '## Full heading') => ({
   blocks: [

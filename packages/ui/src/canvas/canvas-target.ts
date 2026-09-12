@@ -1,20 +1,11 @@
-import type {
-  CanvasDocumentIdentity,
-  CanvasSelection,
-  CanvasTarget,
-} from './canvas-bridge';
+import type { CanvasDocumentIdentity, CanvasSelection, CanvasTarget } from './canvas-bridge';
 
 type CanvasLocation = Omit<CanvasTarget, 'occurrence'>;
 
-export const sameCanvasDocument = (
-  a: CanvasDocumentIdentity,
-  b: CanvasDocumentIdentity,
-) => a === b || (a.collection === b.collection && a.id === b.id);
+export const sameCanvasDocument = (a: CanvasDocumentIdentity, b: CanvasDocumentIdentity) =>
+  a === b || (a.collection === b.collection && a.id === b.id);
 
-export const sameCanvasLocation = (
-  a: CanvasLocation | undefined,
-  b: CanvasLocation | undefined,
-) =>
+export const sameCanvasLocation = (a: CanvasLocation | undefined, b: CanvasLocation | undefined) =>
   a === b ||
   (!!a &&
     !!b &&
@@ -23,8 +14,7 @@ export const sameCanvasLocation = (
     a.address === b.address);
 
 export const sameCanvasTarget = (a: CanvasTarget, b: CanvasTarget) =>
-  a === b ||
-  (sameCanvasLocation(a, b) && sameCanvasLocation(a.occurrence, b.occurrence));
+  a === b || (sameCanvasLocation(a, b) && sameCanvasLocation(a.occurrence, b.occurrence));
 
 export const sameCanvasSelection = (
   a: CanvasSelection | undefined,

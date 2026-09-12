@@ -1,6 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
-import type { PickEntry } from './entry-directory.js';
+import { invalidateEntryDirectory, type PickEntry } from './entry-directory.js';
 import PagePicker from './PagePicker.svelte';
 
 // Testing: what the list is filtered and grouped by, that the keyboard walks it without a pointer.
@@ -62,6 +62,7 @@ const show = async (entries: PickEntry[] = OFFERED, extra: Record<string, unknow
 
 afterEach(() => {
   unmount(app);
+  invalidateEntryDirectory();
   vi.unstubAllGlobals();
 });
 
@@ -162,4 +163,33 @@ test('a typed address is its own Custom link form, not an afterthought under the
   expect(q('.picker .custom-link .side-title').textContent).toBe('Custom link');
   expect(q<HTMLLabelElement>('label[for="p-url"]').textContent).toBe('Address');
   expect(q<HTMLInputElement>('#p-url').placeholder).toBe('/contact or https://…');
+});
+
+test('a failed catalogue read is unavailable rather than empty and retry recovers', async () => {
+  invalidateEntryDirectory();
+  let attempts = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => {
+      attempts += 1;
+      return attempts === 1
+        ? new Response('unavailable', { status: 503 })
+        : Response.json({ entries: OFFERED, locales: ['en', 'de'] });
+    }),
+  );
+  app = mount(PagePicker, {
+    target: document.body,
+    props: { id: 'p', label: 'pages and entries', labelId: 'p-l', onpick: () => {} },
+  });
+  await new Promise((r) => setTimeout(r));
+  flushSync();
+
+  expect(q('.directory-read-error').textContent).toContain('Could not load pages and entries');
+  expect(document.body.textContent).not.toContain('Nothing to choose from yet');
+  q<HTMLButtonElement>('.directory-read-error button').click();
+  await new Promise((r) => setTimeout(r));
+  flushSync();
+
+  expect(titles()).toContain('Contact');
+  expect(document.querySelector('.directory-read-error')).toBeNull();
 });

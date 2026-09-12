@@ -1,11 +1,6 @@
 <script lang="ts">
 import { unsafeLinkScheme } from '@handover/core';
-import {
-  EMPTY_ENTRY_DIRECTORY,
-  type Pickable,
-  type PickEntry,
-  readEntryDirectory,
-} from './entry-directory.js';
+import { type Pickable, type PickEntry, readEntryDirectory } from './entry-directory.js';
 
 let {
   id,
@@ -50,13 +45,28 @@ let query = $state('');
 let typed = $state('');
 let list = $state<HTMLElement>();
 let box = $state<HTMLInputElement>();
+let directoryLoading = $state(true);
+let directoryCurrent = $state(false);
+let directoryError = $state('');
 
 $effect(() => {
   if (!library) box?.focus();
-  readEntryDirectory()
-    .then((p) => (all = p))
-    .catch(() => (all = EMPTY_ENTRY_DIRECTORY));
+  void loadDirectory();
 });
+
+async function loadDirectory() {
+  directoryLoading = true;
+  directoryError = '';
+  try {
+    all = await readEntryDirectory();
+    directoryCurrent = true;
+  } catch {
+    directoryCurrent = false;
+    directoryError = `Could not load ${label}. Check the connection and try again.`;
+  } finally {
+    directoryLoading = false;
+  }
+}
 
 // Why this entry is no answer: it has no address in the language being written.
 const why = (entry: PickEntry) => {
@@ -103,7 +113,10 @@ function step(e: KeyboardEvent) {
   const at = rows.indexOf(document.activeElement as HTMLButtonElement);
   const by = e.key === 'ArrowDown' ? 1 : -1;
   e.preventDefault();
-  (at < 0 ? rows[by > 0 ? 0 : rows.length - 1] : rows[(at + by + rows.length) % rows.length])?.focus();
+  (at < 0
+    ? rows[by > 0 ? 0 : rows.length - 1]
+    : rows[(at + by + rows.length) % rows.length]
+  )?.focus();
 }
 </script>
 
@@ -111,7 +124,16 @@ function step(e: KeyboardEvent) {
 <div class="picker" class:is-library={library} role="group" aria-labelledby={labelId} onkeydown={step}>
   <label class="visually-hidden" for="{id}-q">Search {label}</label>
   <input class="input" id="{id}-q" type="search" placeholder="Search pages and entries" bind:value={query} bind:this={box} />
+  {#if directoryError}
+    <div class="notice notice-danger directory-read-error" role="alert">
+      {directoryError}{all.entries.length ? ' The choices below are the last result.' : ''}
+      <button class="btn-link" type="button" onclick={loadDirectory}>Retry</button>
+    </div>
+  {/if}
   <div class="picker-list" bind:this={list} role={library ? 'group' : 'listbox'} aria-label={label}>
+    {#if directoryLoading && !all.entries.length}
+      <p class="hint">Loading pages and entries…</p>
+    {:else}
     {#each groups as group (group.name)}
       <!-- Not a heading: the picker opens under a different outline level on every screen. -->
       <div role="group" aria-labelledby="{id}-g-{group.name}">
@@ -120,7 +142,7 @@ function step(e: KeyboardEvent) {
         {@const no = why(row)}
         {@const says = no ?? note(row)}
         <!-- aria-disabled: a disabled button takes no focus, so the reason goes unheard. -->
-        <button type="button" role={library ? undefined : 'option'} aria-label={library ? `Add ${row.title}${included.includes(row.path) ? ' again' : ''}` : undefined} aria-selected={library ? undefined : row.path === chosen ? 'true' : 'false'} aria-disabled={no ? 'true' : undefined} aria-describedby={says && (!library || !row.index) ? `${id}-why-${row.path}` : undefined} onclick={() => !no && onpick(row)}>
+        <button type="button" role={library ? undefined : 'option'} aria-label={library ? `Add ${row.title}${included.includes(row.path) ? ' again' : ''}` : undefined} aria-selected={library ? undefined : row.path === chosen ? 'true' : 'false'} aria-disabled={no || !directoryCurrent ? 'true' : undefined} aria-describedby={says && (!library || !row.index) ? `${id}-why-${row.path}` : undefined} onclick={() => directoryCurrent && !no && onpick(row)}>
           {#if library}
             <span class="library-entry">
               <span class="library-title">{row.title}</span>
@@ -146,8 +168,9 @@ function step(e: KeyboardEvent) {
       {/each}
       </div>
     {:else}
-      <p class="hint">{query ? `Nothing here matches “${query}”` : 'Nothing to choose from yet'}</p>
+      {#if !directoryError}<p class="hint">{query ? `Nothing here matches “${query}”` : 'Nothing to choose from yet'}</p>{/if}
     {/each}
+    {/if}
   </div>
   {#if onurl}
     <div class="custom-link">

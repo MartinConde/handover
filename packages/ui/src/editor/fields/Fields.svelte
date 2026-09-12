@@ -20,11 +20,13 @@ import {
   type WordPart,
 } from '@handover/core';
 import { tick } from 'svelte';
-import {
-  EMPTY_ENTRY_DIRECTORY,
-  type Pickable,
-  readEntryDirectory,
-} from '../../entry-directory.js';
+import { EMPTY_ENTRY_DIRECTORY, type Pickable, readEntryDirectory } from '../../entry-directory.js';
+import Focal from '../../Focal.svelte';
+import Media from '../../Media.svelte';
+import MediaImage from '../../MediaImage.svelte';
+import Menus, { type Menu } from '../../Menus.svelte';
+import PagePicker from '../../PagePicker.svelte';
+import { fileSize, type MediaItem } from '../../upload.js';
 import type {
   EntrySession,
   FieldChange,
@@ -34,14 +36,8 @@ import type {
   ListOperation,
 } from '../entry-session.svelte';
 import Fields from './Fields.svelte';
-import Focal from '../../Focal.svelte';
-import Media from '../../Media.svelte';
-import MediaImage from '../../MediaImage.svelte';
-import Menus, { type Menu } from '../../Menus.svelte';
-import PagePicker from '../../PagePicker.svelte';
 import RichText from './RichText.svelte';
 import TextField from './TextField.svelte';
-import { fileSize, type MediaItem } from '../../upload.js';
 
 type Data = Record<string, unknown>;
 let {
@@ -479,12 +475,12 @@ function seoWrite(at: readonly string[], key: string, value: unknown) {
 const bytes = (at: readonly string[]) => fileSize(read([...at, 'bytes']) as number | undefined);
 
 /** One picked asset as the format stores it — and in that order. */
-const stored = (type: 'image' | 'file', item: MediaItem) =>
+const stored = (type: 'image' | 'file', item: MediaItem, pageAlt?: unknown) =>
   type === 'image'
-    ? // `alt` is a hole so it keeps its place in the file; a centred focal is the same as none.
+    ? // A page keeps its own words; otherwise selection takes a snapshot of the library default.
       {
         src: item.src,
-        alt: undefined,
+        alt: typeof pageAlt === 'string' ? pageAlt : item.alt || undefined,
         width: item.width,
         height: item.height,
         focal: centred(item.focal) ? undefined : item.focal,
@@ -496,7 +492,8 @@ const centred = (focal?: [number, number] | null) =>
   !focal || (focal[0] === 0.5 && focal[1] === 0.5);
 
 function picked(at: readonly string[], type: 'image' | 'file', items: MediaItem[]) {
-  write(at, stored(type, items[0] as MediaItem));
+  const held = read(at) as { alt?: unknown } | undefined;
+  write(at, stored(type, items[0] as MediaItem, held?.alt));
   picker = '';
 }
 

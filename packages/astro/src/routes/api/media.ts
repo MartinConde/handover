@@ -114,7 +114,9 @@ export async function describeMedia(
       subject: id,
       detail: { archived, name: row.filename },
     });
-  return Response.json({ media: libraryItem(row) });
+  const drafts = await draftFiles('default', database);
+  const used = mediaUsage('default', uses, drafts);
+  return Response.json({ media: libraryItem(row, used[row.r2Key]) });
 }
 
 const places = (uses: readonly string[]) =>

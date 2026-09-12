@@ -24,6 +24,7 @@ let confirm = $state('');
 let reveal = $state(false);
 let passwordError = $state('');
 let notice = $state('');
+let noticeError = $state(false);
 let busy = $state(false);
 let reload = $state(0);
 
@@ -47,17 +48,22 @@ async function post(path: string, body: unknown) {
 async function saveName(event: SubmitEvent) {
   event.preventDefault();
   notice = '';
+  noticeError = false;
   const res = await post('/admin/api/auth/update-user', { name });
   if (res.ok) {
     notice = 'Your name is saved.';
     onname();
-  } else notice = `Your name could not be saved (${res.status}).`;
+  } else {
+    notice = `Your name could not be saved (${res.status}).`;
+    noticeError = true;
+  }
 }
 
 /** One form, two endpoints: setting a first password is server-only and refuses once one exists. */
 async function savePassword(event: SubmitEvent, hasPassword: boolean) {
   event.preventDefault();
   notice = '';
+  noticeError = false;
   passwordError = '';
   if (next.length < 12) {
     passwordError = 'Must be at least 12 characters';
@@ -94,8 +100,10 @@ async function savePassword(event: SubmitEvent, hasPassword: boolean) {
 
 async function signOutEverywhere() {
   notice = '';
+  noticeError = false;
   const res = await post('/admin/api/auth/revoke-other-sessions', {});
   notice = res.ok ? 'Your other devices are signed out.' : 'Those sessions could not be ended.';
+  noticeError = !res.ok;
   reload += 1;
 }
 
@@ -201,7 +209,12 @@ function when(at: number): string {
         </div>
       {/if}
       {#if notice}
-        <p class="notice notice-success" role="status">{notice}</p>
+        <p
+          class="notice"
+          class:notice-success={!noticeError}
+          class:notice-danger={noticeError}
+          role={noticeError ? 'alert' : 'status'}
+        >{notice}</p>
       {/if}
       <div class="settings">
         <section class="settings-section">
@@ -331,7 +344,10 @@ function when(at: number): string {
         </section>
       </div>
     {:catch error}
-      <p class="notice notice-danger" role="alert">{error.message}</p>
+      <div class="account-read-error">
+        <p class="notice notice-danger" role="alert">{error.message}</p>
+        <button class="btn" type="button" onclick={() => (reload += 1)}>Retry</button>
+      </div>
     {/await}
   {/key}
 </main>

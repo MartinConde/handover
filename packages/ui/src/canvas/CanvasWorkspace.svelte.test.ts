@@ -1,9 +1,9 @@
 import type { Field } from '@handover/core';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { createEntrySession } from '../editor/entry-session.svelte';
 import CanvasWorkspace from './CanvasWorkspace.svelte';
 import type { CanvasRenderRequest } from './canvas-renderer';
-import { createEntrySession } from '../editor/entry-session.svelte';
 
 const fields = [
   { path: ['title'], label: 'Title', type: 'text', required: false },

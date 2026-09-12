@@ -1720,10 +1720,18 @@ test('turning a language off sends the ones the entry keeps', async () => {
 
 // Turning off a language with a file deletes it, so it gets a delete's dialog with a redirect.
 test('a language with a file is turned off from its own column, through a dialog', async () => {
-  const fetchMock = posted();
+  const committed = vi.fn();
+  const fetchMock = vi.fn(async (url: string, _init?: RequestInit) =>
+    isLock(url)
+      ? Response.json(HELD)
+      : url === '/admin/api/entries/listings/seaview-cottage/locales'
+        ? Response.json({ commit_sha: 'off123' })
+        : Response.json({}),
+  );
   vi.stubGlobal('fetch', fetchMock);
   const root = show({
     entry: { ...bilingual, route: '/listings/[slug]', index: '/listings' },
+    oncommitted: committed,
   });
 
   $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
@@ -1741,6 +1749,7 @@ test('a language with a file is turned off from its own column, through a dialog
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ locales: ['en'], redirect: { kind: 'index' } }),
   });
+  expect(committed).toHaveBeenCalledOnce();
   vi.unstubAllGlobals();
 });
 
@@ -1784,9 +1793,11 @@ test('a turn-off the server refuses keeps the dialog open with its reason', asyn
     ),
   );
   const changed = vi.fn();
+  const committed = vi.fn();
   const root = show({
     entry: { ...bilingual, route: '/listings/[slug]', index: '/listings' },
     onchanged: changed,
+    oncommitted: committed,
   });
 
   $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
@@ -1800,11 +1811,13 @@ test('a turn-off the server refuses keeps the dialog open with its reason', asyn
   expect($(root, '.dialog [role="alert"]')?.textContent).toContain('publish en first');
   expect($<HTMLButtonElement>(root, '.dialog button.btn-danger')?.disabled).toBe(false);
   expect(changed).not.toHaveBeenCalled();
+  expect(committed).not.toHaveBeenCalled();
   vi.unstubAllGlobals();
 });
 
 // Turning German off deleted its file, so the log's commit is what brings the words back.
 test('a language the CMS turned off offers the words back rather than an empty form', async () => {
+  const committed = vi.fn();
   const fetchMock = vi.fn(async (url: string, _init?: RequestInit) =>
     isLock(url)
       ? Response.json(HELD)
@@ -1822,10 +1835,12 @@ test('a language the CMS turned off offers the words back rather than an empty f
               },
             ],
           })
-        : Response.json({}),
+        : url === '/admin/api/restore'
+          ? Response.json({ commit_sha: 'restore123' })
+          : Response.json({}),
   );
   vi.stubGlobal('fetch', fetchMock);
-  const root = show({ entry: { ...missing, offered: ['en'] } });
+  const root = show({ entry: { ...missing, offered: ['en'] }, oncommitted: committed });
   $$<HTMLButtonElement>(root, '[aria-label="Language"] button')[1]?.click();
   flushSync();
   await tick();
@@ -1840,6 +1855,7 @@ test('a language the CMS turned off offers the words back rather than an empty f
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ commit_sha: 'off222' }),
   });
+  expect(committed).toHaveBeenCalledOnce();
   // The empty form is still there for a language the CMS never had the words for.
   expect($(root, '.pane button.btn-link')?.textContent).toContain('empty form');
   vi.unstubAllGlobals();
@@ -2566,9 +2582,16 @@ test('the header menu offers Rename, Hide and Delete, in that order', async () =
 });
 
 test('renaming from the header sends the new file name', async () => {
-  const fetchMock = autosaved();
+  const committed = vi.fn();
+  const fetchMock = vi.fn(async (url: string) =>
+    isLock(url)
+      ? Response.json(HELD)
+      : url === '/admin/api/entries/listings/seaview-cottage/rename'
+        ? Response.json({ slug: 'seaview-house', commit_sha: 'rename123' })
+        : Response.json({ updated_at: 1755864000000, pending: true, problems: [] }),
+  );
   vi.stubGlobal('fetch', fetchMock);
-  const root = show();
+  const root = show({ oncommitted: committed });
   await tick();
   $<HTMLButtonElement>(root, '[aria-label="More actions"]')?.click();
   flushSync();
@@ -2588,6 +2611,7 @@ test('renaming from the header sends the new file name', async () => {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ to: 'Seaview House' }),
   });
+  expect(committed).toHaveBeenCalledOnce();
   vi.unstubAllGlobals();
 });
 
@@ -2620,9 +2644,16 @@ test('deleting from the header leads with Hide it instead?, and Hide instead ask
 });
 
 test('a delete from the header sends where its readers go with the DELETE', async () => {
-  const fetchMock = autosaved();
+  const committed = vi.fn();
+  const fetchMock = vi.fn(async (url: string) =>
+    isLock(url)
+      ? Response.json(HELD)
+      : url === '/admin/api/entries/listings/seaview-cottage'
+        ? Response.json({ commit_sha: 'delete123' })
+        : Response.json({ updated_at: 1755864000000, pending: true, problems: [] }),
+  );
   vi.stubGlobal('fetch', fetchMock);
-  const root = show();
+  const root = show({ oncommitted: committed });
   await tick();
   $<HTMLButtonElement>(root, '[aria-label="More actions"]')?.click();
   flushSync();
@@ -2638,6 +2669,7 @@ test('a delete from the header sends where its readers go with the DELETE', asyn
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ redirect: { kind: 'none' } }),
   });
+  expect(committed).toHaveBeenCalledOnce();
   vi.unstubAllGlobals();
 });
 
@@ -2793,8 +2825,7 @@ test('the field is landed on when the address changes under an open entry', asyn
   expect(document.activeElement?.id).toBe('f-title');
 });
 
-// The screen under the dialog is not inert, so the dialog must not claim a modal trap.
-test('the take-over dialog claims no modal trap the screen does not have', async () => {
+test('the take-over dialog exposes the modal boundary it now enforces', async () => {
   vi.stubGlobal('fetch', heldBy());
   const root = show();
   await tick();
@@ -2804,7 +2835,7 @@ test('the take-over dialog claims no modal trap the screen does not have', async
   flushSync();
   const dialog = $(root, '[aria-labelledby="take-h"]');
   expect(dialog).not.toBeNull();
-  expect(dialog?.getAttribute('aria-modal')).toBeNull();
+  expect(dialog?.getAttribute('aria-modal')).toBe('true');
   vi.unstubAllGlobals();
 });
 

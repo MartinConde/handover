@@ -1,10 +1,7 @@
 import type { RichtextTier } from '@handover/core';
-import type {
-  CanvasInteractionMode,
-  CanvasNavigationRequest,
-} from './runtime/canvas-navigation';
-import { sameCanvasDocument, sameCanvasTarget } from './canvas-target';
 import type { FieldCommandFailure } from '../editor/entry-session.svelte';
+import { sameCanvasDocument, sameCanvasTarget } from './canvas-target';
+import type { CanvasInteractionMode, CanvasNavigationRequest } from './runtime/canvas-navigation';
 
 export const CANVAS_PROTOCOL = 1 as const;
 export interface CanvasDocumentIdentity {

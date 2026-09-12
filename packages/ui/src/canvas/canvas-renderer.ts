@@ -15,12 +15,8 @@ import {
   createCanvasParentBridge,
   readCanvasResultManifest,
 } from './canvas-bridge';
+import { sameCanvasDocument, sameCanvasSelection, sameCanvasTarget } from './canvas-target';
 import type { CanvasInteractionMode } from './runtime/canvas-navigation';
-import {
-  sameCanvasDocument,
-  sameCanvasSelection,
-  sameCanvasTarget,
-} from './canvas-target';
 
 export interface CanvasRenderSnapshot {
   mode: 'canvas';

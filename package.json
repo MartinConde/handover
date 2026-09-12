@@ -10,6 +10,7 @@
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel dev",
     "test": "pnpm -r test",
+    "test:package": "pnpm --filter astro-handover test:package",
     "typecheck": "pnpm -r typecheck",
     "lint": "biome check .",
     "format": "biome format --write ."

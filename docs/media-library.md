@@ -54,8 +54,10 @@ same picture in English and German is *used in 1 place*, and the panel expands t
 the entries themselves. A picture nothing uses says *not used yet*.
 
 The panel is also where an asset is given tags and a default alt text, where it is archived, and
-where the gated Delete is. The alt default is what a page falls back to: a page that writes its
-own alt, in its own language, keeps it.
+where the gated Delete is. Choosing a picture copies its current default alt into the page's
+content. A page that already writes its own alt, in its own language, keeps it when the picture is
+replaced. The copied value belongs to the page: changing the library default later does not change
+existing content or a deployed page.
 
 ## The focal point
 

@@ -1,8 +1,8 @@
 <script lang="ts">
 import { type Field, keptMachine, type ResolvedSeo, type WordPart } from '@handover/core';
+import { request as fetch } from '../request.js';
 import type { EntrySession } from './entry-session.svelte';
 import Fields from './fields/Fields.svelte';
-import { request as fetch } from '../request.js';
 
 type Data = Record<string, unknown>;
 let {

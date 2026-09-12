@@ -8,7 +8,7 @@ const session = (role: 'owner' | 'editor' = 'owner') => ({
   user: { id: 'u1', name: 'Martin', email: 'martin@example.com' },
   role,
 });
-const show = (signedIn: ReturnType<typeof session> | null, path = '/admin') => {
+const show = (signedIn: ReturnType<typeof session> | null | undefined, path = '/admin') => {
   app = mount(App, { target: document.body, props: { session: signedIn, path } });
   flushSync();
   return document.body;
@@ -214,6 +214,66 @@ test('without a session only the login form renders', () => {
   expect(root.querySelector('.sidebar')).toBeNull();
 });
 
+test('an unavailable session check is not presented as signed out and can be retried', async () => {
+  const fetchMock = vi.fn(async (url: string) => {
+    if (url === '/admin/api/ping') return Response.json(session());
+    if (url === '/admin/api/build') return Response.json({});
+    if (url === '/admin/api/dashboard')
+      return Response.json({ recent: [], published: null, translations: null });
+    if (url === '/admin/api/activity') return Response.json({ events: [] });
+    return Response.json({ entries: [] });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show(undefined);
+
+  expect(root.querySelector('input#password')).toBeNull();
+  expect(root.querySelector('[role="alert"]')?.textContent).toContain(
+    'Could not check whether you are signed in',
+  );
+  root.querySelector<HTMLButtonElement>('.session-unavailable button')?.click();
+  await vi.waitFor(() => {
+    flushSync();
+    expect(root.querySelector('.sidebar')).not.toBeNull();
+  });
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/ping');
+});
+
+test('a failed pending read is unknown rather than fully published and retry recovers', async () => {
+  let attempts = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/drafts') {
+        attempts += 1;
+        return attempts === 1
+          ? new Response('Repository unavailable', { status: 503 })
+          : Response.json({ entries: [pendingEntry('pages/home')] });
+      }
+      if (url === '/admin/api/build') return Response.json({});
+      if (url === '/admin/api/dashboard')
+        return Response.json({ recent: [], published: null, translations: null });
+      if (url === '/admin/api/activity') return Response.json({ events: [] });
+      return Response.json({});
+    }),
+  );
+  const root = show(session());
+  await vi.waitFor(() => {
+    flushSync();
+    expect(root.querySelector('.pending-read-error')).not.toBeNull();
+  });
+
+  expect(root.querySelector('.indicator')?.textContent).toContain(
+    'Unpublished changes unavailable',
+  );
+  expect(root.textContent).not.toContain('Everything is published');
+  root.querySelector<HTMLButtonElement>('.pending-read-error button')?.click();
+  await vi.waitFor(() => {
+    flushSync();
+    expect(root.querySelector('.indicator')?.textContent).toContain('1 unpublished change');
+  });
+  expect(root.querySelector('.pending-read-error')).toBeNull();
+});
+
 test.each(['network', 'server'])(
   'a %s sign-out failure keeps the session visible for retry',
   async (failure) => {
@@ -254,9 +314,7 @@ test('the indicator counts the pending entries and opens the drawer', async () =
   await new Promise((r) => setTimeout(r, 0));
   flushSync();
   const indicator = root.querySelector<HTMLButtonElement>('button.indicator');
-  expect(indicator?.firstElementChild?.nextSibling?.textContent?.trim()).toBe(
-    '1 unpublished change',
-  );
+  expect(indicator?.textContent).toContain('1 unpublished change');
   expect(root.querySelector('.drawer')).toBeNull();
 
   indicator?.click();
@@ -403,24 +461,49 @@ test('a save that makes an entry pending moves the count in the top bar', async 
 // Once the draft is gone the editor must drop its values, or the next keystroke saves them back.
 test('discarding a draft loads the entry again instead of leaving the old one on screen', async () => {
   const PATH = 'src/content/listings/en/mill-house.yaml';
+  let entryLoads = 0;
+  let discarded = false;
+  const mutationOrder: string[] = [];
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
     if (url === '/admin/api/drafts')
-      return Response.json({ entries: [pendingEntry('listings/mill-house')] });
-    if (url === '/admin/api/publish')
+      return Response.json({ entries: discarded ? [] : [pendingEntry('listings/mill-house')] });
+    if (url === '/admin/api/publish/checks') return Response.json({ results: [] });
+    if (url === '/admin/api/publish') {
+      mutationOrder.push('publish');
       return Response.json({ error: 'refused', paths: [PATH] }, { status: 409 });
-    if (init?.method === 'DELETE') return Response.json({});
-    return Response.json({
-      fields: [],
-      blocks: {},
-      data: { title: 'The Mill House' },
-      pending: ['en'],
-      problems: [],
-      locales: ['en'],
-      defaultLocale: 'en',
-      sourceLocale: 'en',
-      drift: [],
-    });
+    }
+    if (url === '/admin/api/drafts/listings/mill-house' && init?.method === 'PUT') {
+      mutationOrder.push(`save:${JSON.parse(String(init.body)).data.title}`);
+      return Response.json({ pending: true, problems: [], revisions: { en: 'saved-latest' } });
+    }
+    if (init?.method === 'DELETE') {
+      mutationOrder.push('discard');
+      discarded = true;
+      return Response.json({});
+    }
+    if (url.startsWith('/admin/api/locks/'))
+      return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
+    if (url === '/admin/api/entries/listings/mill-house') {
+      entryLoads += 1;
+      return Response.json({
+        fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+        blocks: {},
+        data: { title: entryLoads === 1 ? 'Draft title' : 'Repository title' },
+        revisions: { en: entryLoads === 1 ? 'opened' : 'reloaded' },
+        pending: discarded ? [] : ['en'],
+        published: ['en'],
+        problems: [],
+        locales: ['en'],
+        defaultLocale: 'en',
+        sourceLocale: 'en',
+        offered: ['en'],
+        translations: {},
+        stale: [],
+        drift: [],
+      });
+    }
+    return Response.json({});
   });
   vi.stubGlobal('fetch', fetchMock);
   const settle = async () => {
@@ -429,12 +512,15 @@ test('discarding a draft loads the entry again instead of leaving the old one on
       flushSync();
     }
   };
-  const loads = () =>
-    fetchMock.mock.calls.filter(([url]) => url === '/admin/api/entries/listings/mill-house').length;
-
   const root = show(session(), '/admin/c/listings/mill-house');
+  await vi.dynamicImportSettled();
   await settle();
-  expect(loads()).toBe(1);
+  expect(entryLoads).toBe(1);
+  const input = root.querySelector<HTMLInputElement>('#f-title');
+  if (!input) throw new Error(`Editor did not open: ${root.textContent}`);
+  input.value = 'Final local title';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  flushSync();
 
   root.querySelector<HTMLButtonElement>('button.indicator')?.click();
   flushSync();
@@ -445,7 +531,9 @@ test('discarding a draft loads the entry again instead of leaving the old one on
   root.querySelector<HTMLButtonElement>('.dialog .btn-danger')?.click();
   await settle();
 
-  expect(loads()).toBe(2);
+  expect(mutationOrder).toEqual(['save:Final local title', 'publish', 'discard']);
+  expect(entryLoads).toBe(2);
+  expect(root.querySelector<HTMLInputElement>('#f-title')?.value).toBe('Repository title');
 });
 
 const settle = async () => {
@@ -516,6 +604,66 @@ test('a live build says since when', async () => {
   const pill = root.querySelector('.topbar .pill');
   expect(pill?.className).toContain('pill-live');
   expect(pill?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Live since 02:02 PM');
+});
+
+test('a successful commit refreshes a live build and polls only until it settles', async () => {
+  vi.useFakeTimers();
+  let committed = false;
+  let buildReads = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === '/admin/api/build') {
+        buildReads += 1;
+        if (!committed)
+          return Response.json({ commit_sha: 'before123', state: 'live', live_at: Date.now() });
+        return buildReads === 2
+          ? Response.json({ commit_sha: 'after456', state: 'building', committed_at: Date.now() })
+          : Response.json({ commit_sha: 'after456', state: 'live', live_at: Date.now() });
+      }
+      if (url === '/admin/api/redirects' && init?.method === 'POST') {
+        committed = true;
+        return Response.json({});
+      }
+      if (url === '/admin/api/entries')
+        return Response.json({ entries: [], locales: ['en'], defaultLocale: 'en' });
+      if (url === '/admin/api/redirects') return Response.json({ rules: [] });
+      if (url === '/admin/api/drafts') return Response.json({ entries: [] });
+      return Response.json({});
+    }),
+  );
+  const root = show(session(), '/admin/site/redirects');
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync();
+  expect(root.querySelector('.topbar .pill')?.className).toContain('pill-live');
+
+  root.querySelector<HTMLButtonElement>('.list-toolbar .btn-primary')?.click();
+  flushSync();
+  const from = root.querySelector<HTMLInputElement>('#rd-from');
+  if (!from) throw new Error('redirect dialog did not open');
+  from.value = '/old-address';
+  from.dispatchEvent(new Event('input', { bubbles: true }));
+  root.querySelector<HTMLInputElement>('input[name="rd-kind"][value="url"]')?.click();
+  flushSync();
+  const to = root.querySelector<HTMLInputElement>('#rd-url');
+  if (!to) throw new Error('redirect URL field did not open');
+  to.value = 'https://example.com/new-address';
+  to.dispatchEvent(new Event('input', { bubbles: true }));
+  root.querySelector<HTMLFormElement>('.dialog form')?.requestSubmit();
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync();
+
+  expect(root.querySelector('.topbar .pill')?.className).toContain('pill-building');
+  expect(buildReads).toBe(2);
+
+  await vi.advanceTimersByTimeAsync(10_000);
+  flushSync();
+  expect(root.querySelector('.topbar .pill')?.className).toContain('pill-live');
+  expect(buildReads).toBe(3);
+
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(buildReads).toBe(3);
+  vi.useRealTimers();
 });
 
 // With nothing published the pill is the worker's own deploy, with no commit to take back.
@@ -873,6 +1021,139 @@ test('a publish from the drawer is said in a notice that outlives the drawer', a
   root.querySelector<HTMLButtonElement>('.toast .close')?.click();
   flushSync();
   expect(toasts(root)).toEqual([]);
+});
+
+test('publishing one entry refreshes the shell from Live to the returned build state', async () => {
+  let published = false;
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url === '/admin/api/build')
+      return Response.json(
+        published
+          ? { commit_sha: 'entry456', state: 'building', committed_at: Date.now() }
+          : { commit_sha: 'before123', state: 'live', live_at: Date.now() },
+      );
+    if (url === '/admin/api/drafts')
+      return Response.json({ entries: published ? [] : [pendingEntry('listings/mill-house')] });
+    if (url === '/admin/api/entries/listings/mill-house')
+      return Response.json({
+        fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+        blocks: {},
+        data: { title: 'The Mill House' },
+        revisions: { en: 'opened' },
+        pending: published ? [] : ['en'],
+        published: ['en'],
+        problems: [],
+        locales: ['en'],
+        defaultLocale: 'en',
+        sourceLocale: 'en',
+        offered: ['en'],
+        translations: {},
+        stale: [],
+        drift: [],
+      });
+    if (url.startsWith('/admin/api/locks/'))
+      return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
+    if (url === '/admin/api/publish/checks') return Response.json({ results: [] });
+    if (url === '/admin/api/publish' && init?.method === 'POST') {
+      published = true;
+      return Response.json({
+        commit_sha: 'entry456',
+        paths: ['src/content/listings/en/mill-house.yaml'],
+      });
+    }
+    return Response.json({});
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show(session(), '/admin/c/listings/mill-house');
+  await vi.dynamicImportSettled();
+  await settle();
+  expect(root.querySelector('.topbar .pill')?.className).toContain('pill-live');
+
+  Array.from(root.querySelectorAll<HTMLButtonElement>('.entry-header button'))
+    .find((button) => button.textContent?.trim() === 'Publish this entry')
+    ?.click();
+  await settle();
+  root.querySelector<HTMLButtonElement>('.dialog .btn-primary')?.click();
+  await settle();
+
+  expect(root.querySelector('.topbar .pill')?.className).toContain('pill-building');
+  expect(root.querySelector('.indicator')?.textContent).toContain('No unpublished changes');
+});
+
+test('drawer publish waits for the mounted entry to save and publishes its latest revision', async () => {
+  const start = '/admin/c/listings/mill-house';
+  history.replaceState({}, '', start);
+  let refuseSave = true;
+  let savedTitle = 'Saved draft';
+  let published = false;
+  const publish = vi.fn(async () => {
+    published = true;
+    return Response.json({
+      commit_sha: 'latest123',
+      paths: ['src/content/listings/en/mill-house.yaml'],
+    });
+  });
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url === '/admin/api/entries/listings/mill-house')
+      return Response.json({
+        fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+        blocks: {},
+        data: { title: savedTitle },
+        revisions: { en: 'opened' },
+        pending: published ? [] : ['en'],
+        published: ['en'],
+        problems: [],
+        locales: ['en'],
+        defaultLocale: 'en',
+        sourceLocale: 'en',
+        offered: ['en'],
+        translations: {},
+        stale: [],
+        drift: [],
+      });
+    if (url.startsWith('/admin/api/locks/'))
+      return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
+    if (url === '/admin/api/drafts' && !init?.method)
+      return Response.json({
+        entries: published ? [] : [pendingEntry('listings/mill-house')],
+      });
+    if (url === '/admin/api/drafts/listings/mill-house' && init?.method === 'PUT') {
+      savedTitle = JSON.parse(String(init.body)).data.title;
+      return refuseSave
+        ? new Response('offline', { status: 500 })
+        : Response.json({ pending: true, problems: [], revisions: { en: 'latest' } });
+    }
+    if (url === '/admin/api/publish/checks') return Response.json({ results: [] });
+    if (url === '/admin/api/publish') return publish();
+    if (url === '/admin/api/build') return Response.json({});
+    return Response.json({});
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show(session(), start);
+  await settle();
+  const input = root.querySelector<HTMLInputElement>('#f-title');
+  if (!input) throw new Error('Editor did not open');
+  input.value = 'Latest words';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  flushSync();
+
+  root.querySelector<HTMLButtonElement>('.indicator')?.click();
+  flushSync();
+  root.querySelector<HTMLButtonElement>('.drawer-foot .btn-primary')?.click();
+  await settle();
+
+  expect(publish).not.toHaveBeenCalled();
+  expect(root.querySelector('.drawer [role="alert"]')?.textContent).toContain(
+    'latest changes could not be saved',
+  );
+  expect(input.value).toBe('Latest words');
+
+  refuseSave = false;
+  root.querySelector<HTMLButtonElement>('.drawer-foot .btn-primary')?.click();
+  await settle();
+
+  expect(savedTitle).toBe('Latest words');
+  expect(publish).toHaveBeenCalledOnce();
 });
 
 test('a revert is said in a notice', async () => {

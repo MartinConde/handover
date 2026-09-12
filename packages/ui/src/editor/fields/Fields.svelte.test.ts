@@ -194,7 +194,11 @@ test('text: typing across the expansion threshold keeps the input focus and sele
   input.value = `${'x'.repeat(81)}日`;
   input.setSelectionRange(82, 82);
   input.dispatchEvent(
-    new InputEvent('input', { bubbles: true, inputType: 'insertCompositionText', isComposing: true }),
+    new InputEvent('input', {
+      bubbles: true,
+      inputType: 'insertCompositionText',
+      isComposing: true,
+    }),
   );
   input.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '日' }));
   flushSync();
@@ -1651,6 +1655,57 @@ hero:
   );
   click('.media-card .btn-ghost');
   expect(snap().hero).toBeUndefined();
+});
+
+test('a picked image copies the library default alt into content', async () => {
+  library([
+    {
+      id: 'a'.repeat(64),
+      src: 'media/9f3a2c7e.webp',
+      filename: 'front.webp',
+      alt: 'Front of the house from the harbour',
+      width: 2400,
+      height: 1600,
+    },
+  ]);
+  show([heroField], { _version: 1 });
+  click('.dropzone button');
+  await settle();
+  click('.tile');
+  click('.picker-foot .btn-primary');
+
+  expect(stringifyEntry('default', snap())).toBe(
+    `_version: 1
+hero:
+  src: "media/9f3a2c7e.webp"
+  alt: "Front of the house from the harbour"
+  width: 2400
+  height: 1600
+`,
+  );
+});
+
+test('replacing an image keeps the page alt override', async () => {
+  library([
+    {
+      id: 'b'.repeat(64),
+      src: 'media/garden.webp',
+      filename: 'garden.webp',
+      alt: 'Library description of the garden',
+      width: 2400,
+      height: 1600,
+    },
+  ]);
+  show([heroField], imageData());
+  click('.media-card .actions button:nth-child(2)');
+  await settle();
+  click('.tile');
+  click('.picker-foot .btn-primary');
+
+  expect(snap().hero).toMatchObject({
+    src: 'media/garden.webp',
+    alt: 'Front of the house',
+  });
 });
 
 // The picker takes several at once so a gallery is filled in one pass, not Add-then-choose.

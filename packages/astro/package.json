@@ -6,6 +6,7 @@
   "files": [
     "dist",
     "components",
+    "!components/**/*.test.ts",
     "bin"
   ],
   "bin": {
@@ -37,6 +38,7 @@
     "fixture:build": "pnpm -w build && pnpm --filter @handover/ui build && astro build --root test/fixture/canvas",
     "fixture:start": "node test/fixture/canvas/dist/server/entry.mjs",
     "test": "vitest run",
+    "test:package": "node test/package-smoke.mjs",
     "test:browser": "playwright test",
     "typecheck": "tsc -p tsconfig.json"
   },

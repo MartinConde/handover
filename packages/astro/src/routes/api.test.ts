@@ -1026,7 +1026,7 @@ test('the database check answers with the schema version the tables are at', asy
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
     ok: true,
-    detail: "The database answered — the admin's tables are there. Schema version 8.",
+    detail: "The database answered — the admin's tables are there. Schema version 9.",
   });
 });
 
@@ -5901,6 +5901,20 @@ test('tags and a default alt are written to the row, and the empty alt is no def
     tags: undefined,
     alt: '',
   });
+});
+
+test('saving metadata returns the asset usage instead of marking it unused', async () => {
+  const res = await PATCH(patch(`media/${PHOTO}`, { alt: 'Front of the house' }));
+
+  expect(res.status).toBe(200);
+  expect(((await res.json()) as { media: { uses: { entry: string }[] } }).media.uses).toEqual([
+    { entry: 'listings/mill-house', title: 'The Mill House', href: '/admin/c/listings/mill-house' },
+    {
+      entry: 'listings/seaview-cottage',
+      title: 'Seaview Cottage',
+      href: '/admin/c/listings/seaview-cottage',
+    },
+  ]);
 });
 
 test('a write with nothing the row holds is refused, and an unknown asset is a 404', async () => {

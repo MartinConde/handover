@@ -2,6 +2,12 @@ import { richtextErrors } from '@handover/core';
 import { Editor, Extension } from '@tiptap/core';
 import { type Selection, TextSelection } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
+import {
+  proseSelection,
+  restoreProseSelection,
+  richTextExtensions,
+} from '../../editor/fields/rich-text-kit';
+import type { Pickable } from '../../entry-directory';
 import type {
   CanvasAcknowledgement,
   CanvasEditingState,
@@ -12,14 +18,8 @@ import type {
   CanvasTextHistory,
   CanvasTextSelection,
 } from '../canvas-bridge';
-import { createCanvasLinkEditor } from './canvas-link-editor';
 import { sameCanvasTarget } from '../canvas-target';
-import type { Pickable } from '../../entry-directory';
-import {
-  proseSelection,
-  restoreProseSelection,
-  richTextExtensions,
-} from '../../editor/fields/rich-text-kit';
+import { createCanvasLinkEditor } from './canvas-link-editor';
 
 type RichField = Extract<CanvasTextField, { kind: 'richtext' }>;
 

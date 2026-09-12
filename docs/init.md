@@ -1,9 +1,10 @@
 # Setting a site up: `handover init`
 
-Run once, on a site that has never had Handover. It scaffolds the site's own files, creates
-the Cloudflare resources, writes the files that point at them, generates and applies the
-migrations, puts the first owner in the database, and prints what is left to do. The CLI's
-other two commands are on their own page: [CLI](cli.md).
+Start it on a site that has never had Handover. It scaffolds the site's own files, creates or
+verifies the Cloudflare resources, writes the files that point at them, generates and applies
+the migrations, puts the first owner in the database, and prints what is left to do. If a step
+is interrupted, run the same command again; initialization verifies completed work before it
+continues. The CLI's other two commands are on their own page: [CLI](cli.md).
 
 ```sh
 npx handover init you@example.com
@@ -35,25 +36,58 @@ you@example.com is an owner. They sign in with an emailed link and set a passwor
 
 In order, it:
 
-1. writes the site's own files ([below](#what-it-writes)) — all of them local, and all of
-   them before anything exists in Cloudflare, so a run that stops here leaves nothing behind
-2. reads the account from `wrangler whoami`. With more than one, it stops and lists them —
+1. checks both command-line tools and validates any existing Wrangler and Drizzle config. A
+   conflicting `DB`, bucket/account value, schema source or migrations output stops before
+   anything is provisioned
+2. writes the site's own files ([below](#what-it-writes)) — all of them local, and all of
+   them before anything exists in Cloudflare
+3. reads the account from `wrangler whoami`. With more than one, it stops and lists them —
    set `CLOUDFLARE_ACCOUNT_ID` to the one you want and run it again, rather than have the
    database created in the wrong account
-3. creates the database and the bucket
-4. writes `wrangler.jsonc` with the `DB` binding and the bucket's two vars, `src/worker.ts`
+4. looks up the database and bucket in that account, reuses an exact name/identity recorded by
+   this initialization, or creates the missing resource
+5. writes `wrangler.jsonc` with the `DB` binding and the bucket's two vars, `src/worker.ts`
    ([the schedule](deploy.md#the-schedule)) and `drizzle.config.ts`
-5. runs [`db generate`](cli.md#handover-db-generate) and applies the result with
+6. runs [`db generate`](cli.md#handover-db-generate) and applies the result with
    `wrangler d1 migrations apply`, once `--local` and once `--remote`
-6. inserts one `user` row — an owner, no password
-7. prints the [checklist](#what-is-left-to-you)
+7. inserts or promotes one `user` row — an owner, no password
+8. prints the [checklist](#what-is-left-to-you)
 
 A file it would write that is already there is left alone and named on stdout. That
 includes `wrangler.jsonc`: a config file you wrote is yours, so the block to paste into it
-is printed instead. It refuses outright on a project that already has a `migrations/`
-folder, before creating anything, rather than guess how to merge the numbering.
+is printed instead. Initialization stops there, before migration generation, application or
+owner creation. Merge the block and run the continuation command it prints.
+
+It refuses outright on a project that already has a `migrations/` folder without the matching
+initialization record, rather than guess how to merge the numbering. It also validates an
+existing `drizzle.config.ts` before recording a schema version: the dialect must be SQLite, the
+schema must be `./node_modules/astro-handover/dist/schema.js`, and output must be
+`./migrations`.
 
 Commit everything it wrote, `migrations/` included.
+
+## If initialization stops
+
+Every recoverable failure ends with the same deliberate continuation:
+
+```sh
+npx handover init you@example.com
+```
+
+While work is incomplete, `.handover-init.json` records the selected account, exact D1 database,
+bucket, owner address and generated owner id. It contains no secrets and is removed only after
+both databases have the owner. A retry therefore lists and verifies the recorded D1 database,
+checks the bucket with
+`wrangler r2 bucket info`, and refuses a different account, project name, owner address or
+binding instead of creating around it.
+
+Initial Drizzle output is generated under `.handover-migrations/`. Initialization verifies that
+every journal entry has its SQL file before moving the whole directory to `migrations/`; a retry
+can regenerate only this temporary output without touching real migrations. D1 migration
+application is safe to repeat because Wrangler records applied migrations. Owner insertion uses
+the same recorded id and an email conflict clause, so a retry after either local or remote
+insertion does not create a second user and still completes the other database. Do not delete
+`migrations/` to recover an interrupted run.
 
 ## What it writes
 
@@ -77,6 +111,10 @@ src/pages/[slug].astro                    the route; a second language gets de/[
 src/content/pages/en/home.yaml            something to open in the admin
 src/content/globals/en/site.yaml          one per language, because a declared global owes a file
 ```
+
+The generated Hero resolves its stored `media/…` key through `media.publicBase`. It also maps the
+image's focal point to `object-position`, so styling the image as a cover crop keeps the chosen
+subject in frame while retaining the stored alt text and dimensions.
 
 The layout, the loader and the routes are the [template convention](template-convention.md),
 which is what lets [preview](preview.md) render an unpublished draft through your own pages.

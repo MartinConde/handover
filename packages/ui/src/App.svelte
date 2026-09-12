@@ -12,10 +12,11 @@ import Globals from './Globals.svelte';
 import Library from './Library.svelte';
 import Login, { type LoginMethods } from './Login.svelte';
 import Members from './Members.svelte';
-import { flushNavigation, navigate } from './navigate';
+import Modal from './Modal.svelte';
+import { coordinateEntryReplacement, flushNavigation, navigate } from './navigate';
 import Pending from './Pending.svelte';
 import Redirects from './Redirects.svelte';
-import { request as fetch, localPath, sitePath } from './request.js';
+import { request as fetch, localPath, sitePath, uncertainResponse } from './request.js';
 
 export interface Session {
   collections: string[];
@@ -37,13 +38,18 @@ let {
   query = '',
   methods = { emailLink: false, github: false },
 }: {
-  session: Session | null;
+  session?: Session | null;
   path: string;
   query?: string;
   methods?: LoginMethods;
 } = $props();
 // svelte-ignore state_referenced_locally -- the prop is only the initial value
 let session = $state(signedIn);
+let sessionBusy = $state(false);
+// svelte-ignore state_referenced_locally -- the prop is the result of the one bootstrap request
+let sessionError = $state(
+  signedIn === undefined ? 'Could not check whether you are signed in.' : '',
+);
 // svelte-ignore state_referenced_locally -- the prop is only where the page loaded
 let path = $state(landedAt);
 
@@ -93,15 +99,16 @@ let pending = $state<
   }[]
 >([]);
 let defaultLocale = $state('');
+let pendingStatus = $state<'loading' | 'ready' | 'error'>('loading');
+let pendingKnown = $state(false);
 let indicator = $state<HTMLButtonElement>();
 /** Where the site's newest commit has got to; null on a site with no build status. */
 let build = $state<Build | null>(null);
+let buildStatus = $state<'loading' | 'ready' | 'error'>('loading');
 /** Bumped after a revert: the drawer's account of the publish it undid has to go with it. */
 let drawerKey = $state(0);
-/** The commit whose revert is waiting to be confirmed, and where to put focus back. */
+/** The commit whose revert is waiting to be confirmed. */
 let confirmRevert = $state<string>();
-let returnTo: HTMLElement | undefined;
-let revertPanel = $state<HTMLElement>();
 let reverting = $state(false);
 let revertError = $state('');
 let drawer = $state(false);
@@ -180,14 +187,23 @@ $effect(() => {
   const poll = setInterval(() => void loadBuild(), 10_000);
   return () => clearInterval(poll);
 });
-$effect(() => {
-  if (confirmRevert) revertPanel?.focus();
-});
-
 // Ping answers 401 until there is a session, so the shell's data arrives after the login form.
 async function loadSession() {
+  sessionBusy = true;
   const res = await fetch('/admin/api/ping');
-  session = res.ok ? ((await res.json()) as Session) : null;
+  sessionBusy = false;
+  if (res.ok) {
+    session = (await res.json()) as Session;
+    sessionError = '';
+    return;
+  }
+  if (res.status === 401) {
+    session = null;
+    sessionError = '';
+    return;
+  }
+  if (!session) session = undefined;
+  sessionError = 'Could not check whether you are signed in. Check the connection and try again.';
 }
 
 // Without the content type Better Auth answers 415 and the session outlives the click.
@@ -205,33 +221,55 @@ async function signOut() {
   session = null;
 }
 
+let pendingRequest = 0;
 async function loadPending() {
+  const mine = ++pendingRequest;
+  pendingStatus = 'loading';
   const res = await fetch('/admin/api/drafts');
-  // Falls back to [] because the indicator reads the list and there is no shape for "unknown".
-  if (!res.ok) return;
+  if (mine !== pendingRequest) return;
+  if (!res.ok) {
+    pendingStatus = 'error';
+    return;
+  }
   const body = (await res.json()) as { entries?: typeof pending; defaultLocale?: string };
+  if (mine !== pendingRequest) return;
   pending = body.entries ?? [];
   defaultLocale = body.defaultLocale ?? '';
+  pendingKnown = true;
+  pendingStatus = 'ready';
 }
 
 /** A publish redeploys the Worker, so this tab may be reloaded before the build finishes. */
+let buildRequest = 0;
 async function loadBuild() {
+  const mine = ++buildRequest;
+  buildStatus = 'loading';
   const res = await fetch('/admin/api/build');
-  if (!res.ok) return;
+  if (mine !== buildRequest) return;
+  if (!res.ok) {
+    buildStatus = 'error';
+    return;
+  }
   const body = (await res.json()) as Partial<NonNullable<typeof build>>;
+  if (mine !== buildRequest) return;
   // Without `commit_sha` nothing was published yet and the pill reports the worker's own build.
   build = body.state ? { ...body, state: body.state } : null;
+  buildStatus = 'ready';
+}
+
+/** Every repository commit refreshes the shell-owned views that can move because of it. */
+async function commitChanged() {
+  invalidateEntryDirectory();
+  await Promise.all([loadPending(), loadBuild()]);
 }
 
 function askRevert(sha: string) {
-  returnTo = document.activeElement as HTMLElement;
   revertError = '';
   confirmRevert = sha;
 }
 
 function closeRevert() {
   confirmRevert = undefined;
-  returnTo?.focus();
 }
 
 // The pill's and the drawer's Revert are the same inverse commit over whichever sha is named.
@@ -239,14 +277,31 @@ async function revert() {
   const sha = confirmRevert;
   if (!sha) return;
   reverting = true;
-  const res = await fetch('/admin/api/revert', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ commit_sha: sha }),
+  let res: Response | undefined;
+  const outcome = await coordinateEntryReplacement(undefined, async () => {
+    res = await fetch('/admin/api/revert', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ commit_sha: sha }),
+    });
+    if (uncertainResponse(res)) throw new TypeError('The revert response was not confirmed.');
+    return res.ok;
   });
   reverting = false;
   closeRevert();
-  if (!res.ok) {
+  if (!outcome.ok && outcome.reason === 'save') {
+    revertError = 'That publish was not reverted because the open entry could not finish saving.';
+    return;
+  }
+  if (!outcome.ok && (outcome.reason === 'uncertain' || outcome.reason === 'reload')) {
+    revertError = 'The revert result could not be confirmed. Reload the page before continuing.';
+    return;
+  }
+  if (!outcome.ok) {
+    if (!res) {
+      revertError = 'The revert result could not be confirmed. Reload the page before continuing.';
+      return;
+    }
     const body = await res.text();
     // A file that has moved on since is the server's own sentence, and it names the file.
     revertError =
@@ -255,12 +310,10 @@ async function revert() {
         : `That publish was not reverted (${res.status}). Nothing was changed.`;
     return;
   }
-  invalidateEntryDirectory();
-  await Promise.all([loadPending(), loadBuild()]);
+  await commitChanged();
   notify('Reverted that publish — building');
   // The drawer describes a commit just undone, so it goes with the publish it was about.
   drawerKey += 1;
-  if (await flushNavigation()) reload += 1;
 }
 
 async function loadEntry(collection: string, slug: string) {
@@ -285,7 +338,14 @@ const initial = $derived(
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && ((account = false), (menu = false))} />
 
-{#if !session}
+{#if session === undefined}
+  <main class="main session-unavailable">
+    <p class="notice notice-danger" role="alert">{sessionError}</p>
+    <button class="btn" type="button" disabled={sessionBusy} onclick={loadSession}>
+      {sessionBusy ? 'Checking…' : 'Retry'}
+    </button>
+  </main>
+{:else if !session}
   <Login {methods} {path} {query} onlogin={loadSession} />
 {:else}
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -- nested links handle keyboard input -->
@@ -358,16 +418,23 @@ const initial = $derived(
       >
       <button
         class="indicator"
-        class:is-lit={pending.length}
+        class:is-lit={pending.length && pendingKnown}
         type="button"
         aria-haspopup="dialog"
         aria-expanded={drawer}
+        disabled={pendingStatus !== 'ready'}
         onclick={() => (drawer = true)}
         bind:this={indicator}
       >
         <span class="dot" aria-hidden="true"></span>
-        {pending.length ? `${pending.length} unpublished change${pending.length === 1 ? '' : 's'}` : 'No unpublished changes'}
-        {#if pending.length}
+        {#if pendingStatus === 'loading' && !pendingKnown}
+          Checking unpublished changes…
+        {:else if pendingStatus === 'error' && !pending.length}
+          Unpublished changes unavailable
+        {:else}
+          {pending.length ? `${pending.length} unpublished change${pending.length === 1 ? '' : 's'}` : 'No unpublished changes'}
+        {/if}
+        {#if pending.length && pendingKnown}
           <span class="detail">
             <span class="sep" aria-hidden="true">·</span>
             oldest {when(oldest).toLowerCase()}
@@ -375,6 +442,12 @@ const initial = $derived(
           </span>
         {/if}
       </button>
+      {#if pendingStatus === 'error'}
+        <span class="pending-read-error" role="alert">
+          {pendingKnown ? 'Count may be out of date.' : 'Could not check unpublished changes.'}
+          <button class="btn-link" type="button" onclick={loadPending}>Retry</button>
+        </span>
+      {/if}
       <span class="spacer"></span>
       <!-- Always in the DOM so the first state is announced; the ticking clock stays out of it. -->
       <span class="build-status" role="status">
@@ -390,6 +463,12 @@ const initial = $derived(
           </BuildPill>
         {/if}
       </span>
+      {#if buildStatus === 'error'}
+        <span class="build-read-error" role="alert">
+          {build ? 'Build status may be out of date.' : 'Build status is unavailable.'}
+          <button class="btn-link" type="button" onclick={loadBuild}>Retry</button>
+        </span>
+      {/if}
       <div class="user-menu">
         <button
           class="btn"
@@ -450,9 +529,10 @@ const initial = $derived(
             reload += 1;
           }}
           onpending={loadPending}
-          onpublished={(title) => {
-            invalidateEntryDirectory();
+          oncommitted={commitChanged}
+          onpublished={async (title) => {
             notify(`Published ${title} — building`);
+            await commitChanged();
           }}
           onrestored={(date) => (restored = { entry: editingAt, date })}
           restored={restored?.entry === editingAt ? restored.date : undefined}
@@ -469,10 +549,11 @@ const initial = $derived(
           invalidateEntryDirectory();
           return loadPending();
         }}
+        oncommitted={commitChanged}
         onsaved={(name) => notify(`Saved the template ${name}`)}
       />
     {:else if redirectRoute}
-      <Redirects />
+      <Redirects oncommitted={commitChanged} />
     {:else if path === '/admin/site'}
       <Globals />
     {:else if path === '/admin/media'}
@@ -483,16 +564,24 @@ const initial = $derived(
       <Members user={session.user} />
     {:else if path === '/admin/activity'}
       <!-- No role condition: which events an editor sees is the server's filter. -->
-      <Activity role={session.role} mediaBase={session.mediaBase ?? ''} />
+      <Activity
+        role={session.role}
+        mediaBase={session.mediaBase ?? ''}
+        oncommitted={commitChanged}
+      />
     {:else if path === '/admin/settings' && session.role === 'owner'}
-      <Diagnostics />
+      <Diagnostics oncommitted={commitChanged} />
     {:else}
       <Dashboard
         {pending}
+        {pendingStatus}
         {build}
+        {buildStatus}
         {collections}
         onreview={() => (drawer = true)}
         onrevert={askRevert}
+        onretryPending={loadPending}
+        onretryBuild={loadBuild}
       />
     {/if}
     {/key}
@@ -510,14 +599,12 @@ const initial = $derived(
         indicator?.focus();
       }}
       onpublished={async (count) => {
-        invalidateEntryDirectory();
         notify(`Published ${count} change${count === 1 ? '' : 's'} — building`);
-        await Promise.all([loadPending(), loadBuild()]);
+        await commitChanged();
       }}
       ondiscarded={async () => {
         invalidateEntryDirectory();
         await loadPending();
-        if (await flushNavigation()) reload += 1;
       }}
     />
     {/key}
@@ -530,35 +617,25 @@ const initial = $derived(
       </div>
     {/each}
   </div>
-  <!-- Not aria-modal: the drawer stays live; Escape is stopped so one press closes only this. -->
   {#if confirmRevert}
-    <div class="scrim">
-      <div
-        class="dialog"
-        role="dialog"
-        aria-labelledby="revert-h"
-        aria-describedby="revert-p"
-        tabindex="-1"
-        bind:this={revertPanel}
-        onkeydown={(e) => {
-          if (e.key !== 'Escape') return;
-          e.stopPropagation();
-          closeRevert();
-        }}
-      >
+    <Modal
+      labelledby="revert-h"
+      describedby="revert-p"
+      dismissible={!reverting}
+      onclose={closeRevert}
+    >
         <h2 id="revert-h">Revert this publish?</h2>
         <p id="revert-p">
           The site goes back to how it was before that commit. The changes it carried stay as
           unpublished changes, so you can fix them and publish again.
         </p>
         <div class="actions">
-          <button class="btn" type="button" onclick={closeRevert}>Cancel</button>
+          <button class="btn" type="button" disabled={reverting} onclick={closeRevert}>Cancel</button>
           <button class="btn btn-danger" type="button" disabled={reverting} onclick={revert}>
             {reverting ? 'Reverting…' : 'Revert'}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   {/if}
 </div>
 {/if}

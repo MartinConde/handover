@@ -114,14 +114,10 @@ export async function uploadCrop(
     canvas.toBlob(resolve, 'image/webp', 0.9),
   );
   if (!blob) throw new Error('the crop could not be made');
-  return uploadBlob(
-    blob,
-    {
-      filename: cropName(item.filename),
-      width: region.w,
-      height: region.h,
-      derivedFrom: item.id,
-    },
-    { fetch },
-  );
+  return uploadBlob(blob, {
+    filename: cropName(item.filename),
+    width: region.w,
+    height: region.h,
+    derivedFrom: item.id,
+  });
 }

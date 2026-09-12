@@ -1,8 +1,6 @@
 <script lang="ts">
 import type { Field } from '@handover/core';
 import { untrack } from 'svelte';
-import CanvasIcon from './CanvasIcon.svelte';
-import type { CanvasDocumentIdentity, CanvasSelection } from './canvas-bridge';
 import type {
   EntrySession,
   FieldCommandResult,
@@ -10,6 +8,8 @@ import type {
 } from '../editor/entry-session.svelte';
 import Fields from '../editor/fields/Fields.svelte';
 import { sitePath } from '../request';
+import CanvasIcon from './CanvasIcon.svelte';
+import type { CanvasDocumentIdentity, CanvasSelection } from './canvas-bridge';
 
 let {
   selection,

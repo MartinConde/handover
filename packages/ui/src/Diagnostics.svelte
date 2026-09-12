@@ -1,6 +1,9 @@
 <script lang="ts">
 import { untrack } from 'svelte';
+import Modal from './Modal.svelte';
 import { request as fetch } from './request.js';
+
+let { oncommitted }: { oncommitted?: () => void | Promise<void> } = $props();
 
 interface Config {
   collections: { name: string; route?: string }[];
@@ -89,8 +92,7 @@ let typed = $state('');
 let saving = $state(false);
 let keyError = $state('');
 let keySaid = $state('');
-let field = $state<HTMLInputElement>();
-let trigger: HTMLElement | null = null;
+let trigger = $state<HTMLElement | null>(null);
 
 // Untracked because `run` reads and writes `results`, so a tracking effect would loop for ever.
 $effect(() => {
@@ -98,9 +100,6 @@ $effect(() => {
     for (const check of CHECKS) if (!check.sends) void run(check.key);
     void loadKeys();
   });
-});
-$effect(() => {
-  field?.focus();
 });
 
 async function load(): Promise<Config> {
@@ -156,7 +155,6 @@ function close() {
   typing = undefined;
   typed = '';
   keyError = '';
-  trigger?.focus();
 }
 
 async function saveKey(event: SubmitEvent) {
@@ -202,6 +200,7 @@ async function simulate() {
   conflict = res.ok
     ? `Conflict made on ${body.entry}. Open Unpublished changes to resolve it, and delete that entry when you are done.`
     : (body.error ?? `Nothing was made (${res.status}).`);
+  if (res.ok) await oncommitted?.();
 }
 
 const failing = $derived(CHECKS.filter((check) => results[check.key]?.state === 'failed'));
@@ -448,22 +447,25 @@ const MAILERS: Record<string, string> = {
     {#if removing}
       {@const name = NAMES[removing.key] ?? removing.key}
       {@const row = removing}
-      <div class="scrim">
-        <div class="dialog" role="dialog" aria-labelledby="remove-h">
+      <Modal labelledby="remove-h" onclose={() => (removing = undefined)}>
           <h2 id="remove-h">Remove the {name} key?</h2>
           <p>{says(row)}</p>
           <div class="actions">
             <button class="btn" type="button" onclick={() => (removing = undefined)}>Cancel</button>
             <button class="btn btn-danger" type="button" onclick={() => removeKey(row)}>Remove</button>
           </div>
-        </div>
-      </div>
+      </Modal>
     {/if}
     {#if typing}
       {@const name = NAMES[typing.key] ?? typing.key}
       {@const tried = typing.key === 'deepl' && config.locales.length > 1}
-      <div class="scrim">
-        <div class="dialog" role="dialog" aria-labelledby="key-h">
+      <Modal
+        labelledby="key-h"
+        initialFocus="#key-value"
+        returnTo={trigger}
+        dismissible={!saving}
+        onclose={close}
+      >
           <h2 id="key-h">{typing.hint ? `Replace the ${name} key` : `Add the ${name} key`}</h2>
           <form onsubmit={saveKey}>
             <p>
@@ -482,7 +484,6 @@ const MAILERS: Record<string, string> = {
                 type="password"
                 autocomplete="off"
                 bind:value={typed}
-                bind:this={field}
                 aria-describedby={tried ? 'key-tried' : undefined}
               />
               {#if tried}
@@ -491,14 +492,13 @@ const MAILERS: Record<string, string> = {
             </div>
             {#if keyError}<div class="notice notice-danger" role="alert">{keyError}</div>{/if}
             <div class="actions">
-              <button class="btn" type="button" onclick={close}>Cancel</button>
+              <button class="btn" type="button" disabled={saving} onclick={close}>Cancel</button>
               <button class="btn btn-primary" type="submit" disabled={saving}>
                 {saving ? 'Saving…' : tried ? 'Save and test' : 'Save'}
               </button>
             </div>
           </form>
-        </div>
-      </div>
+      </Modal>
     {/if}
   {:catch error}
     <p class="notice notice-danger" role="alert">{error.message}</p>

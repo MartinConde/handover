@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { Change, MergedChange, Question } from '@handover/core';
-import { request as fetch } from './request.js';
+import { coordinateEntryReplacement } from './navigate';
+import { request as fetch, uncertainResponse } from './request.js';
 
 let {
   entry,
@@ -32,6 +33,8 @@ let answers = $state<Record<string, 'ours' | 'theirs'>>({});
 let loading = $state(true);
 let busy = $state(false);
 let error = $state('');
+let reportKnown = $state(false);
+let reportCurrent = $state(false);
 
 // A question is one field of one language, or one every language shares.
 const key = (q: { path: string; locale?: string }) => `${q.locale ?? ''} ${q.path}`;
@@ -45,7 +48,7 @@ $effect(() => {
 async function load() {
   loading = true;
   error = '';
-  answers = {};
+  reportCurrent = false;
   const res = await fetch(`/admin/api/conflict/${entry}`);
   loading = false;
   if (!res.ok) {
@@ -58,10 +61,13 @@ async function load() {
     head: string;
     version: string;
   };
+  answers = {};
   questions = body.questions;
   merged = body.merged;
   head = body.head;
   version = body.version;
+  reportKnown = true;
+  reportCurrent = true;
 }
 
 // A conflict somebody else settled, or a repository out of reach.
@@ -72,27 +78,48 @@ const refusal = async (res: Response) =>
 
 /** Every question at once, for the client who does not want to read them. */
 async function all(side: 'ours' | 'theirs') {
+  if (!reportCurrent) return;
   for (const q of questions) answers[key(q)] = side;
   await done();
 }
 
 async function done() {
+  if (!reportCurrent) return;
   busy = true;
   error = '';
-  const res = await fetch(`/admin/api/conflict/${entry}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      version,
-      answers: questions.map((q) => ({
-        path: q.path,
-        ...(q.locale ? { locale: q.locale } : {}),
-        side: answers[key(q)],
-      })),
-    }),
+  let res: Response | undefined;
+  const outcome = await coordinateEntryReplacement(entry, async () => {
+    res = await fetch(`/admin/api/conflict/${entry}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        version,
+        answers: questions.map((q) => ({
+          path: q.path,
+          ...(q.locale ? { locale: q.locale } : {}),
+          side: answers[key(q)],
+        })),
+      }),
+    });
+    if (uncertainResponse(res)) throw new TypeError('The conflict response was not confirmed.');
+    return res.ok;
   });
   busy = false;
-  if (!res.ok) {
+  if (!outcome.ok && outcome.reason === 'save') {
+    error = 'The open entry could not finish saving, so the conflict was not resolved.';
+    return;
+  }
+  if (!outcome.ok && (outcome.reason === 'uncertain' || outcome.reason === 'reload')) {
+    reportCurrent = false;
+    error = 'The result could not be confirmed. Reload the page before continuing.';
+    return;
+  }
+  if (!outcome.ok) {
+    reportCurrent = false;
+    if (!res) {
+      error = 'The result could not be confirmed. Reload the page before continuing.';
+      return;
+    }
     error = await refusal(res);
     return;
   }
@@ -156,6 +183,8 @@ const said = (change: Change): string => {
     <p>
       {#if loading}
         Reading what changed…
+      {:else if !reportKnown}
+        The conflict report is unavailable. Reload it before choosing what to keep.
       {:else}
         Your developer changed this in the code while you were editing it.
         {#if merged.length}{plural(merged.length, 'fields')} only one of you touched
@@ -239,7 +268,7 @@ const said = (change: Change): string => {
     <button
       class="btn btn-primary"
       type="button"
-      disabled={busy || loading || answered !== questions.length}
+      disabled={busy || loading || !reportCurrent || answered !== questions.length}
       onclick={() => done()}
     >
       {#if busy}Saving…

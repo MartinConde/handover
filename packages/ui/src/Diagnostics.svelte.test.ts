@@ -3,6 +3,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import Diagnostics from './Diagnostics.svelte';
 
 let app: ReturnType<typeof mount>;
+const committed = vi.fn();
 
 const CONFIG = {
   collections: [{ name: 'pages' }, { name: 'listings', route: '/listings/[slug]' }],
@@ -61,7 +62,7 @@ const show = async (
   keys: Key[] = NOTHING_SET,
 ) => {
   server(answers, config, keys);
-  app = mount(Diagnostics, { target: document.body });
+  app = mount(Diagnostics, { target: document.body, props: { oncommitted: committed } });
   flushSync();
   await settle();
   return document.body;
@@ -96,6 +97,7 @@ const press = (within: ParentNode, label: string) => {
 
 afterEach(() => {
   unmount(app);
+  committed.mockClear();
   vi.unstubAllGlobals();
   document.body.innerHTML = '';
 });
@@ -190,6 +192,7 @@ test('simulating a conflict is offered in development and nowhere else', async (
   press(root, 'Simulate a conflict');
   await settle();
   expect(text(root)).toContain('Open Unpublished changes to resolve it');
+  expect(committed).toHaveBeenCalledOnce();
 });
 
 // --- Integrations: the one section of this page that writes ---

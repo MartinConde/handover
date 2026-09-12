@@ -1,7 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Media from './Media.svelte';
-import type { MediaItem } from './upload.js';
+import { type MediaItem, uploadImage } from './upload.js';
 
 // jsdom has no canvas, so the upload result is the one boundary faked; upload.ts is tested alone.
 let uploaded: MediaItem;
@@ -22,10 +22,12 @@ const item = (over: Partial<MediaItem>): MediaItem => ({
 
 let app: ReturnType<typeof mount>;
 let picked: MediaItem[] | undefined;
+let closed = vi.fn();
 /** Every library read the picker made, newest last. */
 let asked: string[] = [];
 const open = async (media: MediaItem[], preset: Record<string, unknown> = {}, many = false) => {
   picked = undefined;
+  closed = vi.fn();
   asked = [];
   vi.stubGlobal(
     'fetch',
@@ -45,11 +47,17 @@ const open = async (media: MediaItem[], preset: Record<string, unknown> = {}, ma
       onpick: (m: MediaItem[]) => {
         picked = m;
       },
-      onclose: () => {},
+      onclose: closed,
     },
   });
   await new Promise((r) => setTimeout(r));
   flushSync();
+};
+
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => (resolve = done));
+  return { promise, resolve };
 };
 afterEach(() => {
   unmount(app);
@@ -61,6 +69,21 @@ const q = <T extends Element>(sel: string) => {
   if (!el) throw new Error(`${sel} missing`);
   return el;
 };
+
+test('the picker is modal and cycles Tab from its last action to its search', async () => {
+  await open([item({ filename: 'front-of-house.jpg' })]);
+  const dialog = q<HTMLDialogElement>('[aria-labelledby="picker-h"]');
+  const search = q<HTMLInputElement>('#picker-q');
+  const cancel = q<HTMLButtonElement>('.picker-foot .btn');
+  expect(dialog.getAttribute('aria-modal')).toBe('true');
+  expect(document.activeElement).toBe(q('.picker-dialog'));
+
+  cancel.focus();
+  cancel.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }),
+  );
+  expect(document.activeElement).toBe(search);
+});
 
 test('a picture too narrow for the field is shown, refused, and says both numbers', async () => {
   await open(
@@ -121,6 +144,28 @@ test('a picture uploaded into a field too narrow for it is listed, not selected'
   expect(q<HTMLButtonElement>('.picker-foot .btn-primary').disabled).toBe(true);
 });
 
+test('the picker stays open until an in-flight upload settles', async () => {
+  const upload = deferred<MediaItem>();
+  await open([]);
+  vi.mocked(uploadImage).mockImplementationOnce(() => upload.promise);
+  const chooser = q<HTMLInputElement>('input[type="file"]');
+  Object.defineProperty(chooser, 'files', {
+    value: [new File([new Uint8Array([1])], 'garden.jpg', { type: 'image/jpeg' })],
+  });
+  chooser.dispatchEvent(new Event('change', { bubbles: true }));
+  flushSync();
+
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+  expect(closed).not.toHaveBeenCalled();
+  expect(q<HTMLButtonElement>('.picker-foot .btn').disabled).toBe(true);
+
+  upload.resolve(item({ filename: 'garden.jpg' }));
+  await new Promise((resolve) => setTimeout(resolve));
+  flushSync();
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+  expect(closed).toHaveBeenCalledOnce();
+});
+
 // Reconciliation recovers objects with no row, and a HEAD cannot say how wide a picture is.
 test('a picture whose size the library does not know cannot be chosen', async () => {
   await open([item({ width: null, height: null })], { ratio: '16:9', max: 2400 });
@@ -176,6 +221,85 @@ test('clearing the search asks for the whole library again', async () => {
   expect(asked.at(-1)).toBe('/admin/api/media?kind=images&q=seaview');
   await search('');
   expect(asked.at(-1)).toBe('/admin/api/media?kind=images&q=');
+});
+
+test('a late older search cannot replace the latest picker results', async () => {
+  const reads: { url: string; answer: (response: Response) => void }[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      (url: string) =>
+        new Promise<Response>((answer) => {
+          reads.push({ url, answer });
+        }),
+    ),
+  );
+  app = mount(Media, {
+    target: document.body,
+    props: {
+      kind: 'images',
+      label: 'Hero image',
+      onpick: () => {},
+      onclose: () => {},
+    },
+  });
+  await new Promise((r) => setTimeout(r));
+  reads[0]?.answer(Response.json({ media: [] }));
+  await new Promise((r) => setTimeout(r));
+
+  const box = q<HTMLInputElement>('#picker-q');
+  box.value = 'old';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 250));
+  box.value = 'new';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 250));
+
+  expect(reads.map((read) => read.url)).toEqual([
+    '/admin/api/media?kind=images&q=',
+    '/admin/api/media?kind=images&q=old',
+    '/admin/api/media?kind=images&q=new',
+  ]);
+  reads[2]?.answer(Response.json({ media: [item({ filename: 'new.webp' })] }));
+  await new Promise((r) => setTimeout(r));
+  reads[1]?.answer(Response.json({ media: [item({ filename: 'old.webp' })] }));
+  await new Promise((r) => setTimeout(r));
+  flushSync();
+
+  expect(q('.tile .name').textContent).toBe('new.webp');
+});
+
+test('a failed library read is not an empty library and retry recovers', async () => {
+  let attempts = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => {
+      attempts += 1;
+      return attempts === 1
+        ? new Response('unavailable', { status: 503 })
+        : Response.json({ media: [item({ filename: 'recovered.webp' })] });
+    }),
+  );
+  app = mount(Media, {
+    target: document.body,
+    props: {
+      kind: 'images',
+      label: 'Hero image',
+      onpick: () => {},
+      onclose: () => {},
+    },
+  });
+  await new Promise((r) => setTimeout(r));
+  flushSync();
+
+  expect(q('.media-read-error').textContent).toContain('Could not load the media library');
+  expect(document.body.textContent).not.toContain('Nothing here yet');
+  q<HTMLButtonElement>('.media-read-error button').click();
+  await new Promise((r) => setTimeout(r));
+  flushSync();
+
+  expect(q('.tile .name').textContent).toBe('recovered.webp');
+  expect(document.querySelector('.media-read-error')).toBeNull();
 });
 
 // The mockup reused one id on two elements, which points every aria reference at the wrong one.

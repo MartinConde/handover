@@ -11,17 +11,23 @@ import {
 } from '@handover/core';
 import { onMount, tick } from 'svelte';
 import { when } from '../activity-line';
+import CheckLines, { type CheckItem, merged, plural, verdict } from '../CheckLines.svelte';
 import CanvasWorkspace from '../canvas/CanvasWorkspace.svelte';
 import type { CanvasRenderRequest } from '../canvas/canvas-renderer';
-import CheckLines, { type CheckItem, merged, plural, verdict } from '../CheckLines.svelte';
 import DriftPanel from '../Drift.svelte';
 import { invalidateEntryDirectory } from '../entry-directory.js';
-import { createEntrySession, type StructuralSaveEnvelope } from './entry-session.svelte';
-import Fields from './fields/Fields.svelte';
 import History from '../History.svelte';
-import { guardNavigation, navigate, navigateAfterAuthoritativeChange } from '../navigate';
+import Modal from '../Modal.svelte';
+import {
+  guardEntryActions,
+  guardNavigation,
+  navigate,
+  navigateAfterAuthoritativeChange,
+} from '../navigate';
 import OffsiteDialog, { type Target } from '../Offsite.svelte';
 import { request as fetch, previewPath, siteBase, sitePath } from '../request.js';
+import { createEntrySession, type StructuralSaveEnvelope } from './entry-session.svelte';
+import Fields from './fields/Fields.svelte';
 import { classifyDraftSaveRefusal } from './save';
 import Translation from './Translation.svelte';
 
@@ -38,6 +44,7 @@ let {
   onchanged,
   onreload,
   onpending,
+  oncommitted,
   onpublished,
   onrestored,
   restored,
@@ -116,8 +123,10 @@ let {
   onreload?: () => void | Promise<void>;
   /** Fires only on the save that flips whether this entry has something to publish. */
   onpending?: () => void;
+  /** A successful entry action made a repository commit outside the ordinary publish control. */
+  oncommitted?: () => void | Promise<void>;
   /** This entry went out from its header, named the way the shell should say it. */
-  onpublished?: (title: string) => void;
+  onpublished?: (title: string) => void | Promise<void>;
   /** A version went into the drafts; the shell remembers its git date past the reload. */
   onrestored?: (date: string) => void;
   /** The date of the version the unpublished changes were restored from, while they wait. */
@@ -236,9 +245,19 @@ async function ask(url: string, init: RequestInit = {}) {
   busy = true;
   const res = await fetch(url, { method: 'POST', ...init });
   busy = false;
-  if (res.ok) onchanged();
-  else actionFailed = await res.text();
+  if (res.ok) {
+    await announceCommit(res);
+    onchanged();
+  } else actionFailed = await res.text();
   return res.ok;
+}
+
+async function announceCommit(res: Response) {
+  const body = (await res
+    .clone()
+    .json()
+    .catch(() => ({}))) as { commit_sha?: unknown };
+  if (typeof body.commit_sha === 'string' && body.commit_sha) await oncommitted?.();
 }
 
 /** The turn-off this language can be brought back from, when the CMS is what turned it off. */
@@ -310,7 +329,10 @@ async function offer(of: string, on: boolean, redirect?: Target) {
       ...(redirect ? { redirect } : {}),
     }),
   });
-  if (res) onchanged();
+  if (res) {
+    await announceCommit(res);
+    onchanged();
+  }
   return res !== undefined;
 }
 
@@ -384,15 +406,9 @@ function loseLock(next?: Lock) {
   entrySession.closeSaveGate();
 }
 let taking = $state(false);
-let takePanel = $state<HTMLElement>();
 let takeTrigger = $state<HTMLButtonElement>();
-$effect(() => {
-  if (taking) takePanel?.focus();
-});
-// Taking over reads the entry again, so only Cancel has a button to give focus back to.
 function cancelTake() {
   taking = false;
-  takeTrigger?.focus();
 }
 // When the last answer came back, and when this tab last extended a lock of its own.
 let asked = $state(0);
@@ -548,6 +564,12 @@ export function flush(): Promise<boolean> {
 const unsaved = () => entrySession.unsaved();
 onMount(() => {
   const release = guardNavigation(flush);
+  const reloadAfterExternalAction = () => (onreload ? onreload() : onchanged());
+  const releaseActions = guardEntryActions({
+    key: `${collection}/${slug}`,
+    publish: (request) => entrySession.finalPublish(request, reloadAfterExternalAction),
+    replace: (request) => entrySession.authoritativeChange(request, reloadAfterExternalAction),
+  });
   const warn = (event: BeforeUnloadEvent) => {
     if (unsaved()) {
       event.preventDefault();
@@ -557,6 +579,7 @@ onMount(() => {
   addEventListener('beforeunload', warn);
   return () => {
     entrySession.closeSaveGate();
+    releaseActions();
     release();
     removeEventListener('beforeunload', warn);
   };
@@ -614,15 +637,36 @@ async function setStatus(next: boolean, redirect?: Target) {
 let moreMenu = $state(false);
 let renaming = $state(false);
 let deleting = $state(false);
+let actionTrigger = $state<HTMLElement>();
 let newName = $state('');
 let actionFailed = $state('');
 const willBe = $derived(entryName('default', newName, []));
 
 function openRename() {
+  rememberActionTrigger();
   moreMenu = false;
   newName = slug;
   actionFailed = '';
   renaming = true;
+}
+
+function rememberActionTrigger() {
+  const here = document.activeElement as HTMLElement | null;
+  actionTrigger = here?.closest('.pop-anchor')?.querySelector('button') ?? here ?? undefined;
+}
+
+function startHiding() {
+  rememberActionTrigger();
+  statusMenu = false;
+  moreMenu = false;
+  hiding = true;
+}
+
+function startDeleting() {
+  rememberActionTrigger();
+  moreMenu = false;
+  actionFailed = '';
+  deleting = true;
 }
 
 // A 409 body is the server's own sentence, which reads better than a generic one.
@@ -648,6 +692,7 @@ async function rename(event: Event) {
     body: JSON.stringify({ to: newName }),
   });
   if (!res) return;
+  await announceCommit(res);
   const { slug: to } = (await res.json()) as { slug: string };
   invalidateEntryDirectory();
   navigate(`/admin/c/${collection}/${to}`);
@@ -660,6 +705,7 @@ async function remove(redirect: Target) {
     body: JSON.stringify({ redirect }),
   });
   if (res) {
+    await announceCommit(res);
     invalidateEntryDirectory();
     navigate(`/admin/c/${collection}`);
   }
@@ -786,9 +832,6 @@ let conflicted = $state(false);
 let publishButton = $state<HTMLButtonElement>();
 let canvasPublishButton = $state<HTMLButtonElement>();
 let publishPanel = $state<HTMLElement>();
-$effect(() => {
-  if (confirming) publishPanel?.focus();
-});
 
 const going = $derived(entry.locales.filter((of) => pendingByLocale[of]));
 
@@ -819,7 +862,6 @@ async function lint() {
 function closePublish() {
   if (sending) return;
   confirming = false;
-  (mode === 'canvas' ? canvasPublishButton : publishButton)?.focus();
 }
 
 async function publishEntry() {
@@ -841,7 +883,7 @@ async function publishEntry() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ entries: [`${collection}/${slug}`] }),
       });
-      if (res.ok) onpublished?.(title);
+      if (res.ok) await onpublished?.(title);
       return res.ok;
     },
     () => (onreload ? onreload() : onchanged()),
@@ -1009,11 +1051,6 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 </script>
 
 <svelte:window
-  onkeydown={(e) => {
-    if (e.key !== 'Escape') return;
-    if (confirming) closePublish();
-    else if (taking) cancelTake();
-  }}
   onfocus={recheck}
   onpopstate={fromAddress}
 />
@@ -1125,7 +1162,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
                     <span class="dot dot-live" aria-hidden="true"></span> Live
                     <span class="sub">{url ? `on the site at ${url}` : 'on the site'}</span>
                   </button>
-                  <button type="button" role="menuitem" aria-current={hidden ? 'true' : undefined} onclick={() => { statusMenu = false; if (!hidden) hiding = true; }}>
+                  <button type="button" role="menuitem" aria-current={hidden ? 'true' : undefined} onclick={() => { if (!hidden) startHiding(); else statusMenu = false; }}>
                     <span class="dot dot-hidden" aria-hidden="true"></span> Hidden
                     <span class="sub">off the site, kept here — we’ll ask where visitors should go</span>
                   </button>
@@ -1223,10 +1260,10 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             {#if moreMenu}
               <div class="menu" role="menu" aria-label="More actions">
                 <button type="button" role="menuitem" onclick={openRename}>Rename</button>
-                <button type="button" role="menuitem" onclick={() => { moreMenu = false; if (hidden) setStatus(false); else hiding = true; }}>
+                <button type="button" role="menuitem" onclick={() => { if (hidden) { moreMenu = false; setStatus(false); } else startHiding(); }}>
                   {hidden ? 'Show' : 'Hide'}
                 </button>
-                <button type="button" role="menuitem" onclick={() => { moreMenu = false; actionFailed = ''; deleting = true; }}>Delete</button>
+                <button type="button" role="menuitem" onclick={startDeleting}>Delete</button>
               </div>
             {/if}
           </div>
@@ -1436,7 +1473,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
               }}
               {mediaBase}
               onclose={side ? () => leaving(() => (side = false)) : undefined}
-              onturnoff={entry.singleton ? undefined : () => { actionFailed = ''; offing = shown; }}
+              onturnoff={entry.singleton ? undefined : () => { rememberActionTrigger(); actionFailed = ''; offing = shown; }}
             />
           </div>
         {/key}
@@ -1473,9 +1510,13 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   {/if}
   <!-- Publishes whole or not at all: picking languages is what the drawer is for. -->
   {#if confirming}
-    <div class="scrim">
-      <!-- Not aria-modal: the screen under it is not inert. -->
-      <div class="dialog" role="dialog" aria-labelledby="publish-h" tabindex="-1" bind:this={publishPanel}>
+    <Modal
+      labelledby="publish-h"
+      returnTo={mode === 'canvas' ? canvasPublishButton : publishButton}
+      dismissible={!sending}
+      bind:panel={publishPanel}
+      onclose={closePublish}
+    >
         <h2 id="publish-h">Publish {title}?</h2>
         <p>
           This publishes it on its own. Anything else you have been working on stays unpublished.
@@ -1525,8 +1566,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             {:else}Publish this entry{/if}
           </button>
         </div>
-      </div>
-    </div>
+    </Modal>
   {/if}
   {#if hiding}
     <OffsiteDialog
@@ -1536,13 +1576,13 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       index={entryUrl('default', routing, entry.index, '', locale) ?? undefined}
       {busy}
       error={statusFailed}
+      returnTo={actionTrigger}
       onconfirm={(target: Target) => setStatus(true, target)}
       onclose={() => (hiding = false)}
     />
   {/if}
   {#if renaming}
-    <div class="scrim">
-      <div class="dialog" role="dialog" aria-labelledby="rename-h">
+    <Modal labelledby="rename-h" initialFocus="#rename-to" returnTo={actionTrigger} dismissible={!busy} onclose={() => (renaming = false)}>
         <h2 id="rename-h">Rename {title}</h2>
         <form onsubmit={rename}>
           <div class="field">
@@ -1555,12 +1595,11 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           </div>
           {#if actionFailed}<div class="notice notice-danger" role="alert">{actionFailed}</div>{/if}
           <div class="actions">
-            <button class="btn" type="button" onclick={() => (renaming = false)}>Cancel</button>
+            <button class="btn" type="button" disabled={busy} onclick={() => (renaming = false)}>Cancel</button>
             <button class="btn btn-primary" type="submit" disabled={busy}>{busy ? 'Renaming…' : 'Rename'}</button>
           </div>
         </form>
-      </div>
-    </div>
+    </Modal>
   {/if}
   {#if deleting}
     <OffsiteDialog
@@ -1570,6 +1609,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       index={entryUrl('default', routing, entry.index, '', locale) ?? undefined}
       {busy}
       error={actionFailed}
+      returnTo={actionTrigger}
       onconfirm={remove}
       onhide={() => { deleting = false; hiding = true; }}
       onclose={() => (deleting = false)}
@@ -1586,14 +1626,13 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       index={localeIndex(going)}
       {busy}
       error={actionFailed}
+      returnTo={actionTrigger}
       onconfirm={(target: Target) => turnOff(going, target)}
       onclose={() => (offing = undefined)}
     />
   {/if}
   {#if taking}
-    <div class="scrim">
-      <!-- Not aria-modal: the shell behind stays reachable, as on every other dialog here. -->
-      <div class="dialog" role="dialog" aria-labelledby="take-h" tabindex="-1" bind:this={takePanel}>
+    <Modal labelledby="take-h" returnTo={takeTrigger} dismissible={!busy} onclose={cancelTake}>
         <h2 id="take-h">Take over editing from {holder}?</h2>
         <p>
           Nothing {holder} has written is lost — there is one shared draft and you carry on from
@@ -1601,10 +1640,9 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         </p>
         <p>Their next save is refused and they are told you took over.</p>
         <div class="actions">
-          <button class="btn" type="button" onclick={cancelTake}>Cancel</button>
+          <button class="btn" type="button" disabled={busy} onclick={cancelTake}>Cancel</button>
           <button class="btn btn-primary" type="button" disabled={busy} onclick={takeOver}>Take over</button>
         </div>
-      </div>
-    </div>
+    </Modal>
   {/if}
 </main>

@@ -51,6 +51,7 @@ const type = (root: HTMLElement, id: string, value: string) => {
 
 afterEach(() => {
   unmount(app);
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   document.body.innerHTML = '';
 });
@@ -88,15 +89,146 @@ test('asking for a link says check your inbox for any address at all', async () 
 });
 
 test('too many attempts is named rather than shown as a failure', async () => {
+  vi.useFakeTimers();
   server(() => new Response('', { status: 429 }));
   const root = show(BOTH);
   type(root, 'email', 'owner@example.com');
 
   click(root, 'Email me a link');
-  await settle();
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync();
 
   expect(text(root)).toContain('Too many attempts');
   expect(text(root)).not.toContain('Check your inbox');
+
+  const submit = root.querySelector('button[type="submit"]') as HTMLButtonElement;
+  await vi.advanceTimersByTimeAsync(59_999);
+  flushSync();
+  expect(submit.disabled).toBe(true);
+
+  await vi.advanceTimersByTimeAsync(1);
+  flushSync();
+  expect(submit.disabled).toBe(false);
+});
+
+test('a rate-limited form keeps its email and unlocks after Retry-After', async () => {
+  vi.useFakeTimers();
+  server(() => new Response('', { status: 429, headers: { 'retry-after': '2' } }));
+  const root = show(PASSWORD_ONLY);
+  type(root, 'email', 'owner@example.com');
+  type(root, 'password', 'correct horse battery staple');
+
+  click(root, 'Sign in');
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync();
+
+  const submit = root.querySelector('button[type="submit"]') as HTMLButtonElement;
+  expect(submit.disabled).toBe(true);
+  expect((root.querySelector('input#email') as HTMLInputElement).value).toBe('owner@example.com');
+
+  await vi.advanceTimersByTimeAsync(1_999);
+  flushSync();
+  expect(submit.disabled).toBe(true);
+
+  await vi.advanceTimersByTimeAsync(1);
+  flushSync();
+  expect(submit.disabled).toBe(false);
+});
+
+test('an HTTP-date Retry-After also controls when the form unlocks', async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-09-12T08:00:00Z'));
+  server(
+    () =>
+      new Response('', {
+        status: 429,
+        headers: { 'retry-after': 'Sat, 12 Sep 2026 08:00:02 GMT' },
+      }),
+  );
+  const root = show(PASSWORD_ONLY);
+  type(root, 'email', 'owner@example.com');
+  type(root, 'password', 'correct horse battery staple');
+
+  click(root, 'Sign in');
+  await vi.advanceTimersByTimeAsync(1_999);
+  flushSync();
+
+  const submit = root.querySelector('button[type="submit"]') as HTMLButtonElement;
+  expect(submit.disabled).toBe(true);
+
+  await vi.advanceTimersByTimeAsync(1);
+  flushSync();
+  expect(submit.disabled).toBe(false);
+});
+
+test('a repeated rate limit replaces the previous retry interval', async () => {
+  vi.useFakeTimers();
+  let attempts = 0;
+  server(() => {
+    attempts += 1;
+    return new Response('', {
+      status: 429,
+      headers: { 'retry-after': attempts === 1 ? '1' : '3' },
+    });
+  });
+  const root = show(PASSWORD_ONLY);
+  type(root, 'email', 'owner@example.com');
+  type(root, 'password', 'correct horse battery staple');
+
+  click(root, 'Sign in');
+  await vi.advanceTimersByTimeAsync(1_000);
+  flushSync();
+  click(root, 'Sign in');
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync();
+
+  const submit = root.querySelector('button[type="submit"]') as HTMLButtonElement;
+  await vi.advanceTimersByTimeAsync(2_999);
+  flushSync();
+  expect(submit.disabled).toBe(true);
+
+  await vi.advanceTimersByTimeAsync(1);
+  flushSync();
+  expect(submit.disabled).toBe(false);
+});
+
+test('leaving the login page clears its rate-limit timer', async () => {
+  vi.useFakeTimers();
+  server(() => new Response('', { status: 429, headers: { 'retry-after': '60' } }));
+  const root = show(PASSWORD_ONLY);
+  type(root, 'email', 'owner@example.com');
+  type(root, 'password', 'correct horse battery staple');
+
+  click(root, 'Sign in');
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync();
+  expect(vi.getTimerCount()).toBe(1);
+
+  unmount(app);
+  flushSync();
+  expect(vi.getTimerCount()).toBe(0);
+  show(PASSWORD_ONLY);
+});
+
+test('an unsuccessful password-reset request stays recoverable', async () => {
+  const calls = server(() => new Response('', { status: 503 }));
+  const root = show(BOTH);
+  type(root, 'email', 'owner@example.com');
+  click(root, 'Use password');
+  flushSync();
+
+  click(root, 'Forgot password?');
+  await settle();
+
+  expect(root.querySelector('#sign-in-message')?.textContent).toContain(
+    "We couldn't send a reset link. Please try again.",
+  );
+  expect((root.querySelector('input#email') as HTMLInputElement).value).toBe('owner@example.com');
+  expect((root.querySelector('button[type="submit"]') as HTMLButtonElement).disabled).toBe(false);
+
+  click(root, 'Forgot password?');
+  await settle();
+  expect(calls).toHaveLength(2);
 });
 
 test('a dead link lands back here saying so, with one tap to a fresh one', () => {

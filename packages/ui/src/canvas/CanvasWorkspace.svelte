@@ -3,6 +3,8 @@ import { richtextErrors } from '@handover/core';
 import { onMount, type Snippet, tick, untrack } from 'svelte';
 import { cubicOut } from 'svelte/easing';
 import { fly } from 'svelte/transition';
+import { readEntryDirectory } from '../entry-directory';
+import { previewPath } from '../request';
 import CanvasBlockEditor from './CanvasBlockEditor.svelte';
 import CanvasIcon from './CanvasIcon.svelte';
 import CanvasInspector from './CanvasInspector.svelte';
@@ -20,12 +22,6 @@ import type {
   CanvasTextField,
   CanvasTextSelection,
 } from './canvas-bridge';
-import {
-  type CanvasInteractionMode,
-  type CanvasNavigationDestination,
-  type CanvasNavigationIndex,
-  classifyCanvasNavigation,
-} from './runtime/canvas-navigation';
 import type {
   CanvasRendererState,
   CanvasRenderRequest,
@@ -33,8 +29,12 @@ import type {
 } from './canvas-renderer';
 import { canvasNodeKey, visibleCanvasNodes } from './canvas-structure';
 import { sameCanvasSelection } from './canvas-target';
-import { readEntryDirectory } from '../entry-directory';
-import { previewPath } from '../request';
+import {
+  type CanvasInteractionMode,
+  type CanvasNavigationDestination,
+  type CanvasNavigationIndex,
+  classifyCanvasNavigation,
+} from './runtime/canvas-navigation';
 
 type Renderer = ReturnType<typeof createCanvasRenderer>;
 type Width = 'desktop' | 'tablet' | 'phone';
@@ -129,9 +129,12 @@ const issues = $derived(Object.entries({ ...incomplete, ...problems }));
 // Untouched required fields are an ordinary work-in-progress state. Review fields reveals
 // their validation in Form; unrelated schema errors remain visible beside their controls.
 const inspectorProblems = $derived(
-  Object.fromEntries(Object.entries(problems).filter(
-    ([path]) => !incompletePaths.some((missing) => path === missing || path.startsWith(`${missing}.`)),
-  )),
+  Object.fromEntries(
+    Object.entries(problems).filter(
+      ([path]) =>
+        !incompletePaths.some((missing) => path === missing || path.startsWith(`${missing}.`)),
+    ),
+  ),
 );
 let structure = $state<CanvasStructureNode[]>([]);
 let selected = $state<CanvasSelection>();
@@ -171,12 +174,12 @@ const status = $derived(
     : incompletePaths.length
       ? 'Complete required fields to update Canvas'
       : rendererState.phase === 'rendering'
-      ? 'Updating Canvas…'
-      : rendererState.phase === 'ready'
-        ? 'Canvas updated'
-        : rendererState.phase === 'failed'
-          ? 'Canvas update failed'
-          : 'Canvas ready',
+        ? 'Updating Canvas…'
+        : rendererState.phase === 'ready'
+          ? 'Canvas updated'
+          : rendererState.phase === 'failed'
+            ? 'Canvas update failed'
+            : 'Canvas ready',
 );
 const failure = $derived(rendererState.phase === 'failed' ? rendererState : undefined);
 const selectedNode = $derived(structure.find((node) => sameCanvasSelection(node, selected)));

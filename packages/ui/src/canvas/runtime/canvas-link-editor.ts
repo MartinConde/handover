@@ -1,9 +1,5 @@
 import { unsafeLinkScheme } from '@handover/core';
-import {
-  createEntryDirectoryReader,
-  type Pickable,
-  type PickEntry,
-} from '../../entry-directory';
+import { createEntryDirectoryReader, type Pickable, type PickEntry } from '../../entry-directory';
 
 export interface CanvasLinkDraft {
   type: 'entry' | 'url';

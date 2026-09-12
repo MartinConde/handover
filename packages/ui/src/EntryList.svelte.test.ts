@@ -38,10 +38,17 @@ const api = (
 };
 
 const saved = vi.fn();
+const committed = vi.fn();
 const show = (role?: 'owner' | 'editor') => {
   app = mount(EntryList, {
     target: document.body,
-    props: { collection: 'listings', onchanged: changed, role, onsaved: saved },
+    props: {
+      collection: 'listings',
+      onchanged: changed,
+      oncommitted: committed,
+      role,
+      onsaved: saved,
+    },
   });
   flushSync();
   return document.body;
@@ -49,6 +56,8 @@ const show = (role?: 'owner' | 'editor') => {
 afterEach(() => {
   unmount(app);
   changed.mockClear();
+  committed.mockClear();
+  saved.mockClear();
   vi.unstubAllGlobals();
   history.replaceState({}, '', '/');
 });
@@ -152,6 +161,23 @@ test('the new entry dialog shows the file name the title will produce', async ()
   expect(q(root, '.dialog .filename')?.textContent).toBe('cafe-bar-2026');
 });
 
+test('Escape closes creation and restores its trigger', async () => {
+  api(ENTRIES);
+  const root = show();
+  await tick();
+  const trigger = q<HTMLButtonElement>(root, '.list-toolbar .btn-primary');
+  trigger?.focus();
+  trigger?.click();
+  await tick();
+  expect(document.activeElement?.id).toBe('new-title');
+
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+  flushSync();
+
+  expect(q(root, '.dialog')).toBeNull();
+  expect(document.activeElement).toBe(trigger);
+});
+
 test('a title already used in the collection previews the collision suffix', async () => {
   api(ENTRIES);
   const root = show();
@@ -245,6 +271,7 @@ test('an owner can save a row as a template under a derived name', async () => {
     body: JSON.stringify({ to: 'House' }),
   });
   expect(saved).toHaveBeenCalledWith('mill-house');
+  expect(committed).toHaveBeenCalledOnce();
   expect(q(root, '.dialog')).toBeNull();
 });
 
@@ -268,8 +295,8 @@ test('only an entry with unpublished changes is asked whether to include them', 
   });
 });
 
-test('renaming sends the new file name and reloads the list', async () => {
-  const fetcher = api(ENTRIES, { slug: 'the-old-mill' });
+test('renaming sends the new file name, reloads the list and announces its commit', async () => {
+  const fetcher = api(ENTRIES, { slug: 'the-old-mill', commit_sha: 'rename123' });
   const root = show();
   await tick();
   await act(root, 'The Mill House', 'Rename');
@@ -283,12 +310,13 @@ test('renaming sends the new file name and reloads the list', async () => {
     body: JSON.stringify({ to: 'The Old Mill' }),
   });
   expect(changed).toHaveBeenCalled();
+  expect(committed).toHaveBeenCalledOnce();
   expect(q(root, '.dialog')).toBeNull();
 });
 
 // A delete asks the hide question, and answers it in the commit that removes the files.
-test('deleting asks where its readers go and sends the answer with the DELETE', async () => {
-  const fetcher = api(ENTRIES);
+test('deleting asks where its readers go, sends the answer and announces its commit', async () => {
+  const fetcher = api(ENTRIES, { commit_sha: 'delete123' });
   const root = show();
   await tick();
   await act(root, 'The Mill House', 'Delete');
@@ -302,6 +330,7 @@ test('deleting asks where its readers go and sends the answer with the DELETE', 
     body: JSON.stringify({ redirect: { kind: 'index' } }),
   });
   expect(changed).toHaveBeenCalled();
+  expect(committed).toHaveBeenCalledOnce();
 });
 
 // Principle #5: the client will want it back, so the dialog says so before the question.
@@ -603,6 +632,7 @@ test('hiding a row asks where its readers go and sends the answer', async () => 
     body: JSON.stringify({ entries: ['mill-house'], hidden: true, redirect: { kind: 'index' } }),
   });
   expect(changed).toHaveBeenCalled();
+  expect(committed).not.toHaveBeenCalled();
 });
 
 // Nothing goes away, so there is nothing to ask about: the page comes back at its own address.
@@ -734,6 +764,7 @@ test('restoring undoes the commit the row names', async () => {
     body: JSON.stringify({ commit_sha: 'del111' }),
   });
   expect(changed).toHaveBeenCalled();
+  expect(committed).toHaveBeenCalledOnce();
 });
 
 test('search matches titles in any language and file names, and can be cleared', async () => {

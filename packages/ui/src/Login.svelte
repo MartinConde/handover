@@ -1,4 +1,5 @@
 <script lang="ts">
+import { onDestroy } from 'svelte';
 import { request as fetch, sitePath } from './request.js';
 
 export interface LoginMethods {
@@ -28,6 +29,9 @@ const refused = Boolean(params.get('error'));
 
 // One message for both causes, so the form never confirms which addresses have an account.
 const REFUSED = "We couldn't sign you in. Check your email and password.";
+const RESET_REFUSED = "We couldn't send a reset link. Please try again.";
+const DEFAULT_RETRY_DELAY = 60_000;
+const MAX_TIMER_DELAY = 2_147_483_647;
 
 type View = 'sign-in' | 'link-sent' | 'reset-sent' | 'link-dead' | 'reset';
 // svelte-ignore state_referenced_locally -- the login view is chosen once per page load
@@ -47,12 +51,33 @@ let fieldError = $state('');
 let notice = $state('');
 let limited = $state(false);
 let busy = $state(false);
+let limitTimer: ReturnType<typeof setTimeout> | undefined;
+
+function retryDelay(response: Response): number {
+  const value = response.headers.get('retry-after');
+  if (!value) return DEFAULT_RETRY_DELAY;
+  const seconds = Number(value);
+  const delay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - Date.now();
+  return Number.isFinite(delay) && delay >= 0
+    ? Math.min(delay, MAX_TIMER_DELAY)
+    : DEFAULT_RETRY_DELAY;
+}
+
+function clearLimit() {
+  if (limitTimer !== undefined) clearTimeout(limitTimer);
+  limitTimer = undefined;
+  limited = false;
+}
+
+onDestroy(() => {
+  if (limitTimer !== undefined) clearTimeout(limitTimer);
+});
 
 async function post(path: string, body: unknown) {
   busy = true;
   error = '';
   fieldError = '';
-  limited = false;
+  clearLimit();
   const res = await fetch(path, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -60,7 +85,10 @@ async function post(path: string, body: unknown) {
   });
   busy = false;
   // Retrying too fast is the one failure worth naming: the user did nothing wrong.
-  if (res.status === 429) limited = true;
+  if (res.status === 429) {
+    limited = true;
+    limitTimer = setTimeout(clearLimit, retryDelay(res));
+  }
   return res;
 }
 
@@ -89,7 +117,10 @@ async function forgot() {
     email,
     redirectTo: sitePath('/admin/reset'),
   });
-  if (!limited) view = res.ok ? 'reset-sent' : 'sign-in';
+  if (!limited) {
+    view = res.ok ? 'reset-sent' : 'sign-in';
+    if (!res.ok) error = RESET_REFUSED;
+  }
 }
 
 async function withGitHub() {

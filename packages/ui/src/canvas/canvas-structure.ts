@@ -4,8 +4,7 @@ import type { CanvasStructureNode } from './canvas-bridge';
 import { canvasSelectionKey } from './canvas-target';
 
 /** Node ids are renumbered on every render, so a collapsed branch is remembered by its target. */
-export const canvasNodeKey = (node: CanvasStructureNode) =>
-  canvasSelectionKey(node);
+export const canvasNodeKey = (node: CanvasStructureNode) => canvasSelectionKey(node);
 
 /** A row under a collapsed ancestor is not in the tree, however deep the branch it sits in. */
 export function visibleCanvasNodes(

@@ -29,8 +29,9 @@ let app: ReturnType<typeof mount>;
 let asked: { url: string; method: string; body: unknown }[] = [];
 let rules: Rule[] = [];
 let refusal: { status: number; body: unknown } | undefined;
+const committed = vi.fn();
 /** What fetching the old address answers: the fields the verdict reads, or a network failure. */
-let live: { status: number; redirected: boolean; url: string } | Error = {
+let live: { status: number; redirected: boolean; url: string; type?: ResponseType } | Error = {
   status: 404,
   redirected: false,
   url: `${location.origin}/summer-offer`,
@@ -60,7 +61,7 @@ const show = async () => {
       return Response.json({ rules });
     }),
   );
-  app = mount(Redirects, { target: document.body, props: {} });
+  app = mount(Redirects, { target: document.body, props: { oncommitted: committed } });
   await settle();
   return document.body;
 };
@@ -76,6 +77,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   rules = [];
   refusal = undefined;
+  committed.mockClear();
   live = { status: 404, redirected: false, url: `${location.origin}/summer-offer` };
 });
 
@@ -189,6 +191,31 @@ test('the reason filter keeps only the rules of that kind', async () => {
   expect(rows().map((r) => r[0])).toEqual(['/two']);
 });
 
+test('a failed redirect read is unavailable rather than an empty redirect file', async () => {
+  let attempts = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/entries')
+        return Response.json({ entries: [], locales: ['en'], defaultLocale: 'en' });
+      attempts += 1;
+      return attempts === 1
+        ? new Response('unavailable', { status: 503 })
+        : Response.json({ rules: [rule()] });
+    }),
+  );
+  app = mount(Redirects, { target: document.body, props: { oncommitted: committed } });
+  await settle();
+
+  expect(q('.redirects-read-error').textContent).toContain('Could not load the redirects');
+  expect(document.body.textContent).not.toContain('No redirects yet');
+  q<HTMLButtonElement>('.redirects-read-error button').click();
+  await settle();
+
+  expect(rows()).toHaveLength(1);
+  expect(document.querySelector('.redirects-read-error')).toBeNull();
+});
+
 test('adding a rule posts what was typed and reloads the table', async () => {
   await show();
   click('.list-toolbar .btn-primary');
@@ -208,6 +235,7 @@ test('adding a rule posts what was typed and reloads the table', async () => {
     },
   ]);
   expect(document.body.querySelector('.dialog')).toBe(null);
+  expect(committed).toHaveBeenCalledOnce();
 });
 
 // The server owns every refusal, and the sentence belongs under the box it is about.
@@ -227,6 +255,7 @@ test('a refusal is shown under the box the server names', async () => {
 
   expect(q('#rd-from-e').textContent).toContain('would hide Harbour Flat');
   expect(q<HTMLInputElement>('#rd-from').getAttribute('aria-invalid')).toBe('true');
+  expect(committed).not.toHaveBeenCalled();
 });
 
 test('a rule already pointing at the address being claimed is named before it is rewritten', async () => {
@@ -253,6 +282,7 @@ test('deleting a rule younger than a year warns with its age and then deletes it
   expect(asked.filter((a) => a.method === 'DELETE')).toEqual([
     { url: '/admin/api/redirects/a', method: 'DELETE', body: undefined },
   ]);
+  expect(committed).toHaveBeenCalledOnce();
 });
 
 test('a rule older than a year is deleted without the warning', async () => {
@@ -314,6 +344,21 @@ test('Test reads a mismatch when a page answers or the address forwards elsewher
   expect(elsewhere.text).toContain('somewhere else');
 });
 
+test('Test rejects an observed redirect with the wrong query destination', async () => {
+  rules = [rule({ to: '/listings?offer=summer' })];
+  live = {
+    status: 200,
+    redirected: true,
+    url: `${location.origin}/listings?offer=winter`,
+  };
+  await show();
+
+  const seen = await verdict();
+  expect(seen.kind).toBe('is-bad');
+  expect(seen.line).toBe('/summer-offer → /listings?offer=winter');
+  expect(seen.text).toContain('somewhere else');
+});
+
 // A disabled button drops focus, so the button is busy instead while the site is asked.
 test('Test keeps the focus on its button while the site is asked and after it answers', async () => {
   rules = [rule()];
@@ -330,13 +375,25 @@ test('Test keeps the focus on its button while the site is asked and after it an
   expect(button.getAttribute('aria-busy')).toBe(null);
 });
 
-// A cross-origin follow the browser refuses is the rule doing its job.
-test('Test on a rule pointing off the site counts a refused cross-origin follow as Working', async () => {
+test('Test cannot verify a failed external check and offers the old address to open', async () => {
   rules = [rule({ to: 'https://example.com/brochure.pdf' })];
   live = new TypeError('Failed to fetch');
   await show();
 
   const seen = await verdict();
-  expect(seen.kind).toBe('is-ok');
-  expect(seen.text).toContain('off this site');
+  expect(seen.kind).toBe('is-unknown');
+  expect(seen.text).toContain('could not verify');
+  const open = q<HTMLAnchorElement>('.test-pop .open-address');
+  expect(open.getAttribute('href')).toBe('/summer-offer');
+  expect(open.getAttribute('target')).toBe('_blank');
+});
+
+test('Test cannot verify an opaque redirect response', async () => {
+  rules = [rule({ to: 'https://example.com/brochure.pdf' })];
+  live = { status: 0, redirected: false, url: '', type: 'opaque' };
+  await show();
+
+  const seen = await verdict();
+  expect(seen.kind).toBe('is-unknown');
+  expect(seen.text).toContain('could not verify');
 });

@@ -218,3 +218,37 @@ test('a conflict somebody else has already settled says so in the server’s wor
   );
   expect(q(root, '.resolve-list')).toBe(null);
 });
+
+test('a failed conflict refresh leaves the previous report visible but not actionable', async () => {
+  let reads = 0;
+  const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+    if (init?.method === 'POST')
+      return new Response('The repository changed again', { status: 409 });
+    reads += 1;
+    return reads === 1
+      ? Response.json({ head: 'abc1234', version: 'old-report', questions: [], merged: [] })
+      : reads === 2
+        ? new Response('Repository unavailable', { status: 503 })
+        : Response.json({ head: 'def5678', version: 'new-report', questions: [], merged: [] });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  await tick();
+  flushSync();
+
+  q<HTMLButtonElement>(root, '.actions .btn-primary')?.click();
+  await tick();
+  q<HTMLButtonElement>(root, '[role="alert"] + button')?.click();
+  await tick();
+  flushSync();
+
+  const done = q<HTMLButtonElement>(root, '.actions .btn-primary');
+  expect(done?.disabled).toBe(true);
+  expect(root.textContent).toContain('Repository unavailable');
+  expect(root.textContent).toContain('Nothing was changed by both of you');
+
+  q<HTMLButtonElement>(root, '[role="alert"] + button')?.click();
+  await tick();
+  flushSync();
+  expect(done?.disabled).toBe(false);
+});

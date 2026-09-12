@@ -5,11 +5,23 @@ files from the site's GitHub repository and commits edits back; your normal buil
 publishes them. Nothing else runs.
 
 Requirements: Astro 7, `@astrojs/cloudflare` 14, a GitHub repository for the site, and a
-Cloudflare account with a D1 database for the site's unpublished edits ([Deploy](deploy.md#the-database)). Until the package is on npm, install it from a checkout:
+Cloudflare account with a D1 database for the site's unpublished edits ([Deploy](deploy.md#the-database)).
+
+## Install the unpublished package
+
+Until Handover is on npm, use a checkout that has had its dependencies installed and all
+four workspace packages built:
 
 ```sh
-pnpm add ../handover/packages/astro   # or a tarball from `pnpm pack` in that folder
+pnpm -C ../handover install --frozen-lockfile
+pnpm -C ../handover build
+pnpm add --save-prod link:../handover/packages/astro
 ```
+
+The link is convenient for local development and must keep the Handover checkout available.
+For a build machine that cannot see it, follow [Install from archives](unpublished-install.md):
+the install needs `astro-handover`, `@handover/core`, and `@handover/cli`, not only the first
+tarball.
 
 ## 1. Add the integration
 

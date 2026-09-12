@@ -71,6 +71,12 @@ const boxes = (root: ParentNode) =>
   Array.from(root.querySelectorAll<HTMLInputElement>('.change-row .lead input'));
 const tick = () => new Promise((r) => setTimeout(r, 0));
 
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => (resolve = done));
+  return { promise, resolve };
+};
+
 test('the drawer counts the pending entries and lists one row per entry', () => {
   const root = show();
   expect(q(root, '.drawer-meta')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
@@ -229,6 +235,29 @@ test('discarding the conflicted entry asks first, then drops that draft alone', 
   expect(discarded).toHaveBeenCalled();
   expect(q(root, '.dialog')).toBeNull();
   expect(q(root, '.change-row.is-blocked')).toBeNull();
+});
+
+test('Escape closes only the nested confirmation and returns to the drawer', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init?: RequestInit) =>
+      init?.method === 'DELETE' ? Response.json({}) : CONFLICT.clone(),
+    ),
+  );
+  const root = show();
+  await refused(root);
+  const discard = q<HTMLButtonElement>(root, '.change-row.is-blocked .change-actions .btn');
+  discard?.focus();
+  discard?.click();
+  flushSync();
+  expect(root.querySelectorAll('dialog.modal-host[open]')).toHaveLength(2);
+
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+  flushSync();
+
+  expect(q(root, '#discard-h')).toBeNull();
+  expect(q(root, '.drawer')).not.toBeNull();
+  expect(document.activeElement).toBe(discard);
 });
 
 test('a branch that moved under the publish is reported in the words the server used', async () => {
@@ -612,11 +641,14 @@ test('a resolved entry loses the badge and is read again wherever it is open', a
   expect(q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.disabled).toBe(false);
 });
 
-// axe: `aria-allowed-role` — an aside is a landmark and a dialog is not, so the drawer is a div.
-test('the drawer is a div with the dialog role, not an aside', () => {
+// The panel stays a div so it is not a nested landmark; the native dialog owns modality.
+test('the drawer panel sits inside the shared native modal boundary', () => {
   const root = show();
 
   expect(root.querySelector('.drawer')?.tagName).toBe('DIV');
+  expect(
+    root.querySelector('dialog[aria-labelledby="pending-h"]')?.getAttribute('aria-modal'),
+  ).toBe('true');
 });
 
 // Pre-publish checks: the rules are the server's; the drawer groups them and lets errors block.
@@ -822,6 +854,79 @@ test('Publish runs the checks again and an error stops the commit', async () => 
     'Nothing was published. The checks found something in the way just now — it is listed above.',
   );
   expect(document.activeElement).toBe(q(root, '.drawer'));
+});
+
+test('final checks freeze their selected set and block its publish on an error', async () => {
+  const finalChecks = deferred<void>();
+  let holdFinalChecks = false;
+  const fetchMock = vi.fn(async (url: string) => {
+    if (url !== '/admin/api/publish') {
+      if (holdFinalChecks) {
+        await finalChecks.promise;
+        return Response.json({
+          results: [
+            {
+              ...CHECKS.results[2],
+              entry: 'pages/home',
+              path: 'src/content/pages/en/home.yaml',
+            },
+          ],
+        });
+      }
+      return Response.json({ results: [] });
+    }
+    return Response.json({ commit_sha: 'def4567890', paths: [] });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  await settled();
+  boxes(root)[1]?.click();
+  await settled();
+
+  holdFinalChecks = true;
+  q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.click();
+  flushSync();
+  expect(boxes(root).every((box) => box.disabled)).toBe(true);
+  expect(
+    Array.from(root.querySelectorAll<HTMLButtonElement>('.drawer-tools button')).every(
+      (button) => button.disabled,
+    ),
+  ).toBe(true);
+
+  boxes(root)[0]?.click();
+  finalChecks.resolve();
+  await settled();
+
+  expect(fetchMock.mock.calls.filter(([url]) => url === '/admin/api/publish')).toHaveLength(0);
+  expect(q(root, '[role="alert"]')?.textContent).toContain('checks found something in the way');
+});
+
+test('an obsolete check response cannot replace the latest A to B to A result', async () => {
+  const requests = [deferred<Response>(), deferred<Response>(), deferred<Response>()];
+  let request = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => requests[request++]?.promise ?? Response.json({ results: [] })),
+  );
+  const root = show();
+  flushSync();
+
+  boxes(root)[1]?.click();
+  flushSync();
+  boxes(root)[1]?.click();
+  flushSync();
+
+  requests[2]?.resolve(Response.json({ results: [] }));
+  await settled();
+  requests[1]?.resolve(Response.json({ results: [] }));
+  await settled();
+  requests[0]?.resolve(Response.json({ results: [CHECKS.results[2]] }));
+  await settled();
+
+  expect(q(root, '.checks')).toBeNull();
+  expect(q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.textContent?.trim()).toBe(
+    'Publish 2 changes',
+  );
 });
 
 // The checks pass is a round trip, so a live button through it would commit the same set twice.

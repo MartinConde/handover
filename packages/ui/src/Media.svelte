@@ -1,6 +1,7 @@
 <script lang="ts">
 import { type Preset, tooSmall } from '@handover/core';
 import MediaImage from './MediaImage.svelte';
+import Modal from './Modal.svelte';
 import { request as fetch, sitePath } from './request.js';
 import { fileSize, type MediaItem, uploadFile, uploadImage } from './upload.js';
 
@@ -37,33 +38,57 @@ let items = $state<MediaItem[]>([]);
 /** In the order they were ticked: that is the order a gallery inserts them in. */
 let chosen = $state<MediaItem[]>([]);
 let query = $state('');
-let queue = $state<{ name: string; state: string; failed?: boolean }[]>([]);
+let queue = $state<{ name: string; state: string; busy: boolean; failed?: boolean }[]>([]);
 let over = $state(false);
-let panel = $state<HTMLElement>();
 let chooser = $state<HTMLInputElement>();
-
-$effect(() => {
-  panel?.focus();
-});
+let readEpoch = 0;
+let readLoading = $state(true);
+let readKnown = $state(false);
+let readError = $state('');
 
 let opened = false;
 // Searching is the same load with the words on it: tags are not in what was loaded here.
 $effect(() => {
+  const kinds = kind;
   const q = query;
+  const epoch = ++readEpoch;
   // Opening waits for nothing, and what was dropped on the field goes up once.
   if (!opened) {
     opened = true;
-    load('').then(() => take(dropped));
-    return;
+    load(kinds, '', epoch).then(() => take(dropped));
+    return () => {
+      if (readEpoch === epoch) readEpoch++;
+    };
   }
   // A client typing a word should not spend a request per letter on it.
-  const wait = setTimeout(() => load(q), 200);
-  return () => clearTimeout(wait);
+  const wait = setTimeout(() => load(kinds, q, epoch), 200);
+  return () => {
+    clearTimeout(wait);
+    if (readEpoch === epoch) readEpoch++;
+  };
 });
 
-async function load(q: string) {
-  const res = await fetch(`/admin/api/media?kind=${kind}&q=${encodeURIComponent(q)}`);
-  if (res.ok) items = ((await res.json()) as { media: MediaItem[] }).media;
+async function load(kinds: 'images' | 'files', q: string, epoch: number) {
+  readLoading = true;
+  readError = '';
+  const res = await fetch(`/admin/api/media?kind=${kinds}&q=${encodeURIComponent(q)}`);
+  if (epoch !== readEpoch) return;
+  if (!res.ok) {
+    readLoading = false;
+    readError = 'Could not load the media library. Check the connection and try again.';
+    return;
+  }
+  const next = ((await res.json()) as { media: MediaItem[] }).media;
+  if (epoch === readEpoch) {
+    items = next;
+    readKnown = true;
+    readLoading = false;
+  }
+}
+
+function retryRead() {
+  const epoch = ++readEpoch;
+  void load(kind, query, epoch);
 }
 
 // Measured on the crop at the field's ratio, so a tall phone photo cannot pass a floor sideways.
@@ -82,13 +107,18 @@ const extensions = $derived(
 const aspect = $derived(preset.ratio?.replace(':', ' / ') ?? '4 / 3');
 /** The one picture a single-value field is about, which is the whole of what its panel shows. */
 const one = $derived(chosen[0]);
+const uploading = $derived(queue.some((row) => row.busy));
 
 async function take(files: File[]) {
   for (const file of files) {
     // Read back out of the array: only the proxy in there updates the screen.
     const row = queue[
-      queue.push({ name: file.name, state: kind === 'images' ? 'Converting…' : 'Uploading…' }) - 1
-    ] as { name: string; state: string; failed?: boolean };
+      queue.push({
+        name: file.name,
+        state: kind === 'images' ? 'Converting…' : 'Uploading…',
+        busy: true,
+      }) - 1
+    ] as { name: string; state: string; busy: boolean; failed?: boolean };
     try {
       const media =
         kind === 'images' ? await uploadImage(file, { max: preset.max }) : await uploadFile(file);
@@ -101,6 +131,8 @@ async function take(files: File[]) {
     } catch (err) {
       row.state = err instanceof Error ? err.message : 'The upload failed';
       row.failed = true;
+    } finally {
+      row.busy = false;
     }
   }
 }
@@ -123,11 +155,7 @@ function drop(e: DragEvent) {
 }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
-
-<!-- The editor behind is not inert, so this claims no trap it does not have. -->
-<div class="scrim">
-  <div class="dialog picker-dialog" role="dialog" aria-labelledby="picker-h" tabindex="-1" bind:this={panel}>
+<Modal labelledby="picker-h" panelClass="dialog picker-dialog" dismissible={!uploading} {onclose}>
     <div class="picker-head">
       <div class="head-row">
         <h2 id="picker-h">Choose {many ? 'images' : kind === 'images' ? 'an image' : 'a file'} for “{label}”</h2>
@@ -173,7 +201,16 @@ function drop(e: DragEvent) {
         {/if}
         <fieldset class="picker-group">
           <legend>{kind === 'images' ? 'All images' : 'All files'}</legend>
+          {#if readError}
+            <div class="notice notice-danger media-read-error" role="alert">
+              {readError}{readKnown ? ' The items below are the last result.' : ''}
+              <button class="btn-link" type="button" onclick={retryRead}>Retry</button>
+            </div>
+          {/if}
           <div class="media-grid">
+            {#if readLoading && !readKnown}
+              <p class="hint">Loading media…</p>
+            {:else}
             {#each items as item (item.id)}
               {@const refused = why(item)}
               <label class="tile">
@@ -189,8 +226,9 @@ function drop(e: DragEvent) {
                 {#if refused}<span class="why" id="why-{item.id}">{refused}</span>{/if}
               </label>
             {:else}
-              <p class="hint">{query ? 'Nothing here matches that.' : `Nothing here yet — drop ${kind === 'images' ? 'a picture' : 'a file'} on the box above.`}</p>
+              {#if !readError}<p class="hint">{query ? 'Nothing here matches that.' : `Nothing here yet — drop ${kind === 'images' ? 'a picture' : 'a file'} on the box above.`}</p>{/if}
             {/each}
+            {/if}
           </div>
         </fieldset>
       </div>
@@ -233,10 +271,9 @@ function drop(e: DragEvent) {
       <a href={sitePath(`/admin/media`)}>Manage in Media library</a>
       <span class="spacer"></span>
       <span class="count">{chosen.length ? `${chosen.length} selected` : 'Nothing selected'}</span>
-      <button class="btn" type="button" onclick={onclose}>Cancel</button>
-      <button class="btn btn-primary" type="button" disabled={!chosen.length} onclick={() => onpick(chosen)}>
-        {many && chosen.length > 1 ? `Insert ${chosen.length} images` : 'Insert'}
+      <button class="btn" type="button" disabled={uploading} onclick={onclose}>Cancel</button>
+      <button class="btn btn-primary" type="button" disabled={uploading || !chosen.length} onclick={() => onpick(chosen)}>
+        {uploading ? 'Uploading…' : many && chosen.length > 1 ? `Insert ${chosen.length} images` : 'Insert'}
       </button>
     </div>
-  </div>
-</div>
+</Modal>

@@ -1,9 +1,13 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Library from './Library.svelte';
-import type { LibraryItem } from './upload.js';
+import { type LibraryItem, uploadFile, uploadImage } from './upload.js';
 
-// Not tested: uploading through the component, since jsdom has no canvas.
+vi.mock('./upload.js', async (original) => ({
+  ...(await original<typeof import('./upload.js')>()),
+  uploadFile: vi.fn(),
+  uploadImage: vi.fn(),
+}));
 
 const item = (over: Partial<LibraryItem> = {}): LibraryItem => ({
   id: 'a'.repeat(64),
@@ -70,6 +74,8 @@ const settle = async () => {
 afterEach(() => {
   unmount(app);
   vi.unstubAllGlobals();
+  vi.mocked(uploadFile).mockReset();
+  vi.mocked(uploadImage).mockReset();
   media = [];
   saved = undefined;
   refusal = undefined;
@@ -138,6 +144,106 @@ test('a search is asked of the server, with the archived shown', async () => {
   expect(asked.at(-1)?.url).toBe('/admin/api/media?kind=images&archived=1&q=seaview');
 });
 
+test('a late older search cannot replace the latest library results', async () => {
+  const reads: { url: string; answer: (response: Response) => void }[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      (url: string) =>
+        new Promise<Response>((answer) => {
+          reads.push({ url, answer });
+        }),
+    ),
+  );
+  app = mount(Library, { target: document.body });
+  await settle();
+  reads[0]?.answer(Response.json({ media: [] }));
+  await new Promise((r) => setTimeout(r));
+
+  const box = q<HTMLInputElement>('#lib-q');
+  box.value = 'old';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  await settle();
+  box.value = 'new';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  await settle();
+
+  expect(reads.map((read) => read.url)).toEqual([
+    '/admin/api/media?kind=images&archived=1&q=',
+    '/admin/api/media?kind=images&archived=1&q=old',
+    '/admin/api/media?kind=images&archived=1&q=new',
+  ]);
+  reads[2]?.answer(Response.json({ media: [item({ filename: 'new.webp' })] }));
+  await new Promise((r) => setTimeout(r));
+  reads[1]?.answer(Response.json({ media: [item({ filename: 'old.webp' })] }));
+  await new Promise((r) => setTimeout(r));
+  flushSync();
+
+  expect(names()).toEqual(['new.webp']);
+});
+
+test('a failed older tab read cannot replace the current library view', async () => {
+  const reads: { url: string; answer: (response: Response) => void }[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      (url: string) =>
+        new Promise<Response>((answer) => {
+          reads.push({ url, answer });
+        }),
+    ),
+  );
+  app = mount(Library, { target: document.body });
+  await settle();
+  reads[0]?.answer(Response.json({ media: [] }));
+  await new Promise((r) => setTimeout(r));
+
+  click('[role="tab"]:nth-child(2)');
+  await settle();
+  click('[role="tab"]:nth-child(1)');
+  await settle();
+  reads[2]?.answer(Response.json({ media: [item({ filename: 'current.webp' })] }));
+  await new Promise((r) => setTimeout(r));
+  reads[1]?.answer(new Response(null, { status: 503 }));
+  await new Promise((r) => setTimeout(r));
+  flushSync();
+
+  expect(names()).toEqual(['current.webp']);
+  expect(document.querySelector('[role="alert"]')).toBeNull();
+});
+
+test('an upload batch keeps its starting mode and does not enter another tab', async () => {
+  let finishFirst: (media: LibraryItem) => void = () => {};
+  vi.mocked(uploadImage)
+    .mockImplementationOnce(
+      () =>
+        new Promise<LibraryItem>((resolve) => {
+          finishFirst = resolve;
+        }),
+    )
+    .mockResolvedValueOnce(item({ id: 'c'.repeat(64), filename: 'second.webp' }));
+  media = [];
+  await show();
+
+  const chooser = q<HTMLInputElement>('#lib-file');
+  Object.defineProperty(chooser, 'files', {
+    value: [
+      new File([new Uint8Array([1])], 'first.jpg', { type: 'image/jpeg' }),
+      new File([new Uint8Array([2])], 'second.jpg', { type: 'image/jpeg' }),
+    ],
+  });
+  chooser.dispatchEvent(new Event('change', { bubbles: true }));
+  await new Promise((r) => setTimeout(r));
+  click('[role="tab"]:nth-child(2)');
+  finishFirst(item({ id: 'b'.repeat(64), filename: 'first.webp' }));
+  await new Promise((r) => setTimeout(r));
+  flushSync();
+
+  expect(uploadImage).toHaveBeenCalledTimes(2);
+  expect(uploadFile).not.toHaveBeenCalled();
+  expect(document.querySelectorAll('.file-row')).toHaveLength(0);
+});
+
 test('a tag typed into the panel is saved to the row and shown on it', async () => {
   media = [item()];
   saved = item({ tags: ['seaview'] });
@@ -154,6 +260,183 @@ test('a tag typed into the panel is saved to the row and shown on it', async () 
     body: { tags: ['seaview'] },
   });
   expect(q('.tag-row .badge').textContent?.trim()).toBe('seaview ×');
+});
+
+test('consecutive tag additions and removals keep the optimistic tag list', async () => {
+  const patches: {
+    body: { tags: string[] };
+    answer: (response: Response) => void;
+  }[] = [];
+  media = [item({ tags: ['spring'] })];
+  server();
+  vi.mocked(fetch).mockImplementation(async (_url: string | URL | Request, init?: RequestInit) => {
+    if (init?.method !== 'PATCH') return Response.json({ media });
+    return new Promise<Response>((answer) => {
+      patches.push({ body: JSON.parse(String(init.body)), answer });
+    });
+  });
+  app = mount(Library, { target: document.body });
+  await settle();
+  click('.tile .tile-link');
+
+  const box = q<HTMLInputElement>('#lib-tags');
+  box.value = 'garden';
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  click('[aria-label="Remove tag spring"]');
+
+  expect(
+    Array.from(document.querySelectorAll('.tag-row .badge'), (el) => el.textContent?.trim()),
+  ).toEqual(['garden ×']);
+  expect(patches.map((patch) => patch.body)).toEqual([{ tags: ['spring', 'garden'] }]);
+
+  patches[0]?.answer(Response.json({ media: item({ tags: ['spring', 'garden'] }) }));
+  await new Promise((r) => setTimeout(r));
+  expect(patches.map((patch) => patch.body)).toEqual([
+    { tags: ['spring', 'garden'] },
+    { tags: ['garden'] },
+  ]);
+  expect(
+    Array.from(document.querySelectorAll('.tag-row .badge'), (el) => el.textContent?.trim()),
+  ).toEqual(['garden ×']);
+  patches[1]?.answer(Response.json({ media: item({ tags: ['garden'] }) }));
+  await new Promise((r) => setTimeout(r));
+});
+
+test('a failed metadata save keeps later edits and offers to retry them', async () => {
+  const patches: {
+    body: { alt?: string; tags?: string[] };
+    answer: (response: Response) => void;
+  }[] = [];
+  media = [item()];
+  server();
+  vi.mocked(fetch).mockImplementation(async (_url: string | URL | Request, init?: RequestInit) => {
+    if (init?.method !== 'PATCH') return Response.json({ media });
+    return new Promise<Response>((answer) => {
+      patches.push({ body: JSON.parse(String(init.body)), answer });
+    });
+  });
+  app = mount(Library, { target: document.body });
+  await settle();
+  click('.tile .tile-link');
+
+  const tags = q<HTMLInputElement>('#lib-tags');
+  tags.value = 'garden';
+  tags.dispatchEvent(new Event('input', { bubbles: true }));
+  tags.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  const alt = q<HTMLTextAreaElement>('#lib-alt');
+  alt.value = 'A summer garden';
+  alt.dispatchEvent(new Event('change', { bubbles: true }));
+  patches[0]?.answer(new Response(null, { status: 503 }));
+  await new Promise((r) => setTimeout(r));
+  flushSync();
+
+  expect(document.body.textContent).toContain('Retry save');
+  expect(q<HTMLTextAreaElement>('#lib-alt').value).toBe('A summer garden');
+  click('.metadata-failure button');
+  expect(patches.map((patch) => patch.body)).toEqual([{ tags: ['garden'] }, { tags: ['garden'] }]);
+
+  patches[1]?.answer(Response.json({ media: item({ tags: ['garden'] }) }));
+  await new Promise((r) => setTimeout(r));
+  expect(patches.map((patch) => patch.body)).toEqual([
+    { tags: ['garden'] },
+    { tags: ['garden'] },
+    { alt: 'A summer garden' },
+  ]);
+  expect(q<HTMLTextAreaElement>('#lib-alt').value).toBe('A summer garden');
+  patches[2]?.answer(Response.json({ media: item({ tags: ['garden'], alt: 'A summer garden' }) }));
+  await new Promise((r) => setTimeout(r));
+  expect(document.querySelector('.metadata-failure')).toBeNull();
+});
+
+test('alt and focal edits are saved in order without older metadata replacing either', async () => {
+  const patches: {
+    body: { alt?: string; focal?: [number, number] };
+    answer: (response: Response) => void;
+  }[] = [];
+  media = [item()];
+  server();
+  vi.mocked(fetch).mockImplementation(async (_url: string | URL | Request, init?: RequestInit) => {
+    if (init?.method !== 'PATCH') return Response.json({ media });
+    return new Promise<Response>((answer) => {
+      patches.push({ body: JSON.parse(String(init.body)), answer });
+    });
+  });
+  app = mount(Library, { target: document.body });
+  await settle();
+  click('.tile .tile-link');
+
+  const alt = q<HTMLTextAreaElement>('#lib-alt');
+  alt.value = 'Front garden in summer';
+  alt.dispatchEvent(new Event('change', { bubbles: true }));
+  click(setFocal);
+  flushSync();
+  nudge('ArrowLeft', 8);
+  nudge('ArrowUp', 2, true);
+  click('.focal-dialog .btn-primary');
+
+  expect(patches.map((patch) => patch.body)).toEqual([{ alt: 'Front garden in summer' }]);
+  patches[0]?.answer(Response.json({ media: item({ alt: 'Front garden in summer' }) }));
+  await new Promise((r) => setTimeout(r));
+  expect(patches.map((patch) => patch.body)).toEqual([
+    { alt: 'Front garden in summer' },
+    { focal: [0.42, 0.3] },
+  ]);
+
+  patches[1]?.answer(
+    Response.json({
+      media: item({ alt: 'Front garden in summer', focal: [0.42, 0.3] }),
+    }),
+  );
+  await new Promise((r) => setTimeout(r));
+  flushSync();
+  expect(q<HTMLTextAreaElement>('#lib-alt').value).toBe('Front garden in summer');
+  expect(q<HTMLElement>('.lib-side .preview .focal').style.left).toBe('42%');
+});
+
+test('switching assets keeps each metadata queue bound to its own asset', async () => {
+  const patches: {
+    url: string;
+    body: { alt: string };
+    answer: (response: Response) => void;
+  }[] = [];
+  media = [item(), item({ id: 'b'.repeat(64), src: 'media/b.webp', filename: 'back-garden.jpg' })];
+  server();
+  vi.mocked(fetch).mockImplementation(async (url: string | URL | Request, init?: RequestInit) => {
+    if (init?.method !== 'PATCH') return Response.json({ media });
+    return new Promise<Response>((answer) => {
+      patches.push({ url: String(url), body: JSON.parse(String(init.body)), answer });
+    });
+  });
+  app = mount(Library, { target: document.body });
+  await settle();
+
+  click('.tile:nth-child(1) .tile-link');
+  let alt = q<HTMLTextAreaElement>('#lib-alt');
+  alt.value = 'Front garden';
+  alt.dispatchEvent(new Event('change', { bubbles: true }));
+  click('.tile:nth-child(2) .tile-link');
+  alt = q<HTMLTextAreaElement>('#lib-alt');
+  alt.value = 'Back garden';
+  alt.dispatchEvent(new Event('change', { bubbles: true }));
+
+  expect(patches.map(({ url, body }) => ({ url, body }))).toEqual([
+    { url: `/admin/api/media/${'a'.repeat(64)}`, body: { alt: 'Front garden' } },
+    { url: `/admin/api/media/${'b'.repeat(64)}`, body: { alt: 'Back garden' } },
+  ]);
+  patches[0]?.answer(Response.json({ media: item({ alt: 'Front garden' }) }));
+  await new Promise((r) => setTimeout(r));
+  flushSync();
+
+  expect(q('.side-title').textContent).toBe('back-garden.jpg');
+  expect(q<HTMLTextAreaElement>('#lib-alt').value).toBe('Back garden');
+
+  patches[1]?.answer(
+    Response.json({
+      media: item({ id: 'b'.repeat(64), filename: 'back-garden.jpg', alt: 'Back garden' }),
+    }),
+  );
+  await new Promise((r) => setTimeout(r));
 });
 
 test('archiving is one button, and an archived picture is offered the way back', async () => {

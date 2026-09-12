@@ -1,6 +1,7 @@
 import { parseEntry, stringifyEntry } from '@handover/core';
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { invalidateEntryDirectory } from './entry-directory.js';
 import Menus, { type Menu } from './Menus.svelte';
 
 // Not tested: the Fields dispatch (glue) or styling.
@@ -73,8 +74,43 @@ const show = (items: unknown[] = [], keys = ['header'], translating = false, loc
 };
 afterEach(() => {
   unmount(app);
+  invalidateEntryDirectory();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+test('an unavailable catalogue does not label stored menu targets as missing', async () => {
+  invalidateEntryDirectory();
+  let attempts = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => {
+      attempts += 1;
+      return attempts === 1
+        ? new Response('unavailable', { status: 503 })
+        : Response.json({ entries: OFFERED, indexes: INDEXES, locales: ['en', 'de'] });
+    }),
+  );
+  menus = [
+    {
+      _id: 'menu0aaa',
+      key: 'header',
+      items: [item({ label: 'Gone', link: { type: 'entry', ref: 'pages/nowhere' } })],
+    },
+  ] as Menu[];
+  app = mount(Menus, {
+    target: document.body,
+    props: { id: 'f-menus', labelId: 'f-menus-l', locale: 'en', menus },
+  });
+  await loaded();
+
+  expect(document.body.textContent).not.toContain('Page missing');
+  expect(q('.menu-directory-error').textContent).toContain('Page details are unavailable');
+  q<HTMLButtonElement>('.menu-directory-error button').click();
+  await loaded();
+
+  expect(document.body.textContent).toContain('Page missing');
+  expect(document.querySelector('.menu-directory-error')).toBeNull();
 });
 
 /** The list has been read, and whatever it changed on screen has settled. */

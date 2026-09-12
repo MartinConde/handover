@@ -8,6 +8,7 @@ import { request as fetch } from './request.js';
 
 import { entryName } from '@handover/core';
 import { invalidateEntryDirectory } from './entry-directory.js';
+import Modal from './Modal.svelte';
 import { navigate } from './navigate';
 
 let { collection, onclose }: { collection: string; onclose: () => void } = $props();
@@ -19,21 +20,32 @@ let text = $state('');
 let starter = $state('');
 let busy = $state(false);
 let error = $state('');
-let field = $state<HTMLInputElement>();
+let directoryLoading = $state(true);
+let directoryCurrent = $state(false);
+let directoryError = $state('');
+let loadRequest = 0;
 
-$effect(() => {
-  field?.focus();
-});
 $effect(() => {
   load(collection);
 });
 
 async function load(name: string) {
+  const mine = ++loadRequest;
+  directoryLoading = true;
+  directoryError = '';
   const res = await fetch(`/admin/api/entries/${name}`);
-  if (!res.ok) return;
+  if (mine !== loadRequest) return;
+  directoryLoading = false;
+  if (!res.ok) {
+    directoryCurrent = false;
+    directoryError = `Could not check existing ${name}. Check the connection and try again.`;
+    return;
+  }
   const body = (await res.json()) as { entries?: { id: string }[]; templates?: string[] };
+  if (mine !== loadRequest) return;
   taken = (body.entries ?? []).map((entry) => entry.id);
   templates = body.templates ?? [];
+  directoryCurrent = true;
 }
 
 const singular = $derived(nameOf(collection));
@@ -48,6 +60,7 @@ const starterLabel = (name: string) => {
 // A 409 or a 503 is the server's own sentence and reads better than anything said here.
 async function create(event: Event) {
   event.preventDefault();
+  if (!directoryCurrent) return;
   busy = true;
   error = '';
   const res = await fetch(`/admin/api/entries/${collection}`, {
@@ -69,11 +82,7 @@ async function create(event: Event) {
 }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
-
-<!-- Not aria-modal: the shell behind stays reachable, so claiming a trap would be a lie. -->
-<div class="scrim">
-  <div class="dialog" role="dialog" aria-labelledby="new-entry-h">
+<Modal labelledby="new-entry-h" initialFocus="#new-title" dismissible={!busy} {onclose}>
     <h2 id="new-entry-h">New {singular}</h2>
     <form onsubmit={create}>
       <div class="field">
@@ -83,13 +92,24 @@ async function create(event: Event) {
           id="new-title"
           type="text"
           bind:value={text}
-          bind:this={field}
           aria-describedby="new-hint"
         />
         <p class="hint" id="new-hint">
-          Saved as <span class="filename">{preview}</span>. This becomes the web address.
+          {#if directoryCurrent}
+            Saved as <span class="filename">{preview}</span>. This becomes the web address.
+          {:else if directoryLoading}
+            Checking the available file name…
+          {:else}
+            The available file name could not be checked.
+          {/if}
         </p>
       </div>
+      {#if directoryError}
+        <div class="notice notice-danger entry-read-error" role="alert">
+          {directoryError}
+          <button class="btn-link" type="button" onclick={() => load(collection)}>Retry</button>
+        </div>
+      {/if}
       {#if templates.length}
         <fieldset>
           <legend>Start from</legend>
@@ -106,11 +126,10 @@ async function create(event: Event) {
       {/if}
       {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
       <div class="actions">
-        <button class="btn" type="button" onclick={onclose}>Cancel</button>
-        <button class="btn btn-primary" type="submit" disabled={busy}>
+        <button class="btn" type="button" disabled={busy} onclick={onclose}>Cancel</button>
+        <button class="btn btn-primary" type="submit" disabled={busy || !directoryCurrent}>
           {busy ? 'Creating…' : 'Create'}
         </button>
       </div>
     </form>
-  </div>
-</div>
+</Modal>

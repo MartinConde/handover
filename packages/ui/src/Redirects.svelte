@@ -1,7 +1,10 @@
 <script lang="ts">
-import { EMPTY_ENTRY_DIRECTORY, type Pickable, readEntryDirectory } from './entry-directory.js';
+import { type Pickable, readEntryDirectory } from './entry-directory.js';
+import Modal from './Modal.svelte';
 import PagePicker from './PagePicker.svelte';
 import { request as fetch, sitePath } from './request.js';
+
+let { oncommitted }: { oncommitted?: () => void | Promise<void> } = $props();
 
 /** One rule as `/admin/api/redirects` answers it. */
 interface Rule {
@@ -22,7 +25,11 @@ interface Rule {
 let rules = $state<Rule[]>([]);
 let known = $state<Pickable>({ entries: [], locales: [] });
 let loading = $state(true);
+let rulesKnown = $state(false);
+let readError = $state('');
 let error = $state('');
+let knownCurrent = $state(false);
+let knownError = $state('');
 let query = $state('');
 let reason = $state('');
 /** The rule being written; nothing when neither dialog is open. */
@@ -36,29 +43,38 @@ let writing = $state<{
 let bad = $state<{ field: 'from' | 'to'; message: string }>();
 let saving = $state(false);
 let dropping = $state<Rule>();
-let opening = $state<HTMLElement>();
-let trigger: HTMLElement | undefined;
+let trigger = $state<HTMLElement>();
 
 $effect(() => {
-  load();
-  readEntryDirectory()
-    .then((p) => (known = p))
-    .catch(() => (known = EMPTY_ENTRY_DIRECTORY));
-});
-
-$effect(() => {
-  opening?.focus();
+  void load();
+  void loadDirectory();
 });
 
 async function load() {
+  loading = true;
+  readError = '';
   const res = await fetch('/admin/api/redirects');
   loading = false;
   if (!res.ok) {
-    error = res.status === 503 ? await res.text() : `Could not load the redirects (${res.status}).`;
+    readError =
+      res.status === 503
+        ? `Could not load the redirects. ${await res.text()}`
+        : `Could not load the redirects (${res.status}).`;
     return;
   }
-  error = '';
   rules = ((await res.json()) as { rules?: Rule[] }).rules ?? [];
+  rulesKnown = true;
+}
+
+async function loadDirectory() {
+  knownError = '';
+  try {
+    known = await readEntryDirectory();
+    knownCurrent = true;
+  } catch {
+    knownCurrent = false;
+    knownError = 'Could not load page destinations. Check the connection and try again.';
+  }
 }
 
 const REASONS = {
@@ -119,7 +135,6 @@ function open(rule?: Rule) {
 function close() {
   writing = undefined;
   dropping = undefined;
-  trigger?.focus();
 }
 
 async function save() {
@@ -137,6 +152,7 @@ async function save() {
   if (res.ok) {
     close();
     await load();
+    await oncommitted?.();
     return;
   }
   const body = (await res.json().catch(() => ({}))) as {
@@ -151,38 +167,43 @@ async function save() {
 }
 
 /** What the live site said about one rule's old address; no verdict while it is being asked. */
-type Verdict = { kind: 'ok' | 'wait' | 'bad'; line: string; text: string };
-const VERDICT = { ok: 'Working', wait: 'Not there yet', bad: 'Not what this rule says' };
+type Verdict = { kind: 'ok' | 'wait' | 'bad' | 'unknown'; line: string; text: string };
+const VERDICT = {
+  ok: 'Working',
+  wait: 'Not there yet',
+  bad: 'Not what this rule says',
+  unknown: 'Could not verify',
+};
 let tested = $state<{ id: string; verdict?: Verdict }>();
 const trimmed = (path: string) => path.replace(/\/+$/, '');
 const lands = (rule: Rule, at: string) => {
   const to = new URL(rule.to, location.origin);
   const there = new URL(at);
-  return there.origin === to.origin && trimmed(there.pathname) === trimmed(to.pathname);
+  return (
+    there.origin === to.origin &&
+    trimmed(there.pathname) === trimmed(to.pathname) &&
+    there.search === to.search
+  );
 };
 
 // Asked of the live site, cache bypassed: the file is only live after a publish and a build.
 async function probe(rule: Rule): Promise<Verdict> {
+  const unverified: Verdict = {
+    kind: 'unknown',
+    line: `${rule.from} → no answer`,
+    text: 'The browser could not verify this redirect. Open the old address to check it directly, or try again when the connection is available.',
+  };
   let res: Response;
   try {
     res = await fetch(rule.from, { cache: 'no-store' });
   } catch {
-    // The browser hides a cross-origin redirect; for a rule pointing off the site that is success.
-    return rule.to.startsWith('/')
-      ? {
-          kind: 'wait',
-          line: `${rule.from} → no answer`,
-          text: 'The site could not be reached just now. Try again in a moment.',
-        }
-      : {
-          kind: 'ok',
-          line: `${rule.from} → ${rule.to}`,
-          text: 'Asked the live site just now: the old address sends visitors off this site, where this rule points.',
-        };
+    return unverified;
   }
+  if (res.type === 'opaque') return unverified;
   if (res.redirected) {
     const landed = new URL(res.url);
-    const shown = landed.origin === location.origin ? landed.pathname : landed.href;
+    const shown =
+      landed.origin === location.origin ? `${landed.pathname}${landed.search}` : landed.href;
     if (!lands(rule, res.url))
       return {
         kind: 'bad',
@@ -235,6 +256,7 @@ async function remove() {
     return;
   }
   await load();
+  await oncommitted?.();
 }
 </script>
 
@@ -257,6 +279,12 @@ async function remove() {
   <div class="entry-body">
     <div class="redirects">
       {#if error}<p class="notice notice-danger" role="alert">{error}</p>{/if}
+      {#if readError}
+        <div class="notice notice-danger redirects-read-error" role="alert">
+          {readError}{rulesKnown ? ' The rules below are the last result.' : ''}
+          <button class="btn-link" type="button" onclick={load}>Retry</button>
+        </div>
+      {/if}
       {#if waiting}
         <div class="notice notice-info">
           {waiting === 1 ? 'One rule is' : `${waiting} rules are`} not live yet: {waiting === 1
@@ -295,8 +323,10 @@ async function remove() {
         <span class="spacer"></span>
         <button class="btn btn-primary" type="button" onclick={() => open()}>Add redirect</button>
       </div>
-      {#if loading}
+      {#if loading && !rulesKnown}
         <p class="placeholder">Loading…</p>
+      {:else if readError && !rulesKnown}
+        <p class="placeholder">Redirects are unavailable.</p>
       {:else if shown.length}
         <div class="table is-redirects" role="table" aria-label="Redirects">
           <div class="row-head" role="row">
@@ -377,6 +407,12 @@ async function remove() {
                     <p class="line">{verdict.line}</p>
                     <p>{verdict.text}</p>
                     <div class="actions">
+                      <a
+                        class="btn btn-ghost btn-sm open-address"
+                        href={rule.from}
+                        target="_blank"
+                        rel="noreferrer">Open old address ↗</a
+                      >
                       <button class="btn btn-sm" type="button" onclick={() => test(rule)}>Test again</button>
                       <button class="btn btn-ghost btn-sm" type="button" onclick={() => (tested = undefined)}>Close</button>
                     </div>
@@ -404,10 +440,15 @@ async function remove() {
   </div>
 </main>
 
-<!-- Not aria-modal: the shell behind stays reachable, as on the library and Members. -->
 {#if writing}
-  <div class="scrim">
-    <div class="dialog is-wide" role="dialog" aria-labelledby="rd-h">
+  <Modal
+    labelledby="rd-h"
+    panelClass="dialog is-wide"
+    initialFocus="#rd-from"
+    returnTo={trigger}
+    dismissible={!saving}
+    onclose={close}
+  >
       <h2 id="rd-h">{writing.id ? 'Edit this redirect' : 'Add a redirect'}</h2>
       <form
         onsubmit={(e) => {
@@ -415,6 +456,12 @@ async function remove() {
           save();
         }}
       >
+        {#if knownError && writing.kind === 'page'}
+          <div class="notice notice-danger redirect-directory-error" role="alert">
+            {knownError}
+            <button class="btn-link" type="button" onclick={loadDirectory}>Retry</button>
+          </div>
+        {/if}
         <div class="field" class:is-invalid={bad?.field === 'from'}>
           <div class="label-row"><label for="rd-from">Old address</label></div>
           <input
@@ -422,7 +469,6 @@ async function remove() {
             id="rd-from"
             type="text"
             bind:value={writing.from}
-            bind:this={opening}
             aria-invalid={bad?.field === 'from' ? 'true' : undefined}
             aria-describedby={bad?.field === 'from' ? 'rd-from-e' : 'rd-from-hint'}
           />
@@ -497,19 +543,28 @@ async function remove() {
           </div>
         {/if}
         <div class="actions">
-          <button class="btn" type="button" onclick={close}>Cancel</button>
-          <button class="btn btn-primary" type="submit" disabled={saving}>
+          <button class="btn" type="button" disabled={saving} onclick={close}>Cancel</button>
+          <button
+            class="btn btn-primary"
+            type="submit"
+            disabled={saving || (writing.kind === 'page' && !knownCurrent)}
+          >
             {saving ? 'Saving…' : writing.id ? 'Save redirect' : 'Add redirect'}
           </button>
         </div>
       </form>
-    </div>
-  </div>
+  </Modal>
 {/if}
 
 {#if dropping}
-  <div class="scrim">
-    <div class="dialog" role="alertdialog" aria-labelledby="rd-del-h" aria-describedby="rd-del-d">
+  <Modal
+    labelledby="rd-del-h"
+    describedby="rd-del-d"
+    role="alertdialog"
+    returnTo={trigger}
+    dismissible={!saving}
+    onclose={close}
+  >
       <h2 id="rd-del-h">Delete this redirect?</h2>
       <div id="rd-del-d">
         <p><code>{dropping.from}</code> → <code>{dropping.to}</code></p>
@@ -523,11 +578,10 @@ async function remove() {
         {/if}
       </div>
       <div class="actions">
-        <button class="btn" type="button" bind:this={opening} onclick={close}>Keep it</button>
+        <button class="btn" type="button" disabled={saving} onclick={close}>Keep it</button>
         <button class="btn btn-danger" type="button" disabled={saving} onclick={remove}
           >{saving ? 'Deleting…' : 'Delete anyway'}</button
         >
       </div>
-    </div>
-  </div>
+  </Modal>
 {/if}

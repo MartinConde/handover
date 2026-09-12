@@ -25,20 +25,28 @@ type Health = {
 // The two big tiles are handed the shell's own counts, so a count and the drawer never disagree.
 let {
   pending,
+  pendingStatus = 'ready',
   build,
+  buildStatus = 'ready',
   collections,
   onreview,
   onrevert,
+  onretryPending = () => {},
+  onretryBuild = () => {},
 }: {
   pending: {
     key: string;
     updated_at: number;
     held_by?: { id: string; name: string | null } | null;
   }[];
+  pendingStatus?: 'loading' | 'ready' | 'error';
   build: Build | null;
+  buildStatus?: 'loading' | 'ready' | 'error';
   collections: string[];
   onreview: () => void;
   onrevert: (sha: string) => void;
+  onretryPending?: () => void;
+  onretryBuild?: () => void;
 } = $props();
 
 // The collection whose New entry dialog is open — the list's own dialog, opened from here.
@@ -48,19 +56,26 @@ let recent = $state<Recent[]>([]);
 let health = $state<Health | null>(null);
 let published = $state<{ at: number; by: string | null } | null>(null);
 let events = $state<ActivityEvent[]>([]);
-let loading = $state(true);
+let dashboardLoading = $state(true);
+let activityLoading = $state(true);
+let dashboardKnown = $state(false);
+let activityKnown = $state(false);
+let dashboardError = $state('');
+let activityError = $state('');
 
 $effect(() => {
   load();
 });
 
 async function load() {
-  const [own, log] = await Promise.all([
-    fetch('/admin/api/dashboard'),
-    // The log's own endpoint, cut to ten here: the tile is the top of that list.
-    fetch('/admin/api/activity'),
-  ]);
-  // Every read falls back to nothing, so a surprising answer empties a tile, not the admin.
+  await Promise.all([loadDashboard(), loadActivity()]);
+}
+
+async function loadDashboard() {
+  dashboardLoading = true;
+  dashboardError = '';
+  const own = await fetch('/admin/api/dashboard');
+  dashboardLoading = false;
   if (own.ok) {
     const body = (await own.json()) as {
       recent?: Recent[];
@@ -70,10 +85,24 @@ async function load() {
     recent = body.recent ?? [];
     published = body.published ?? null;
     health = body.translations ?? null;
+    dashboardKnown = true;
+    return;
   }
-  if (log.ok)
+  dashboardError = 'Recently edited is unavailable. The last result may be out of date.';
+}
+
+async function loadActivity() {
+  activityLoading = true;
+  activityError = '';
+  // The log's own endpoint, cut to ten here: the tile is the top of that list.
+  const log = await fetch('/admin/api/activity');
+  activityLoading = false;
+  if (log.ok) {
     events = (((await log.json()) as { events?: ActivityEvent[] }).events ?? []).slice(0, 10);
-  loading = false;
+    activityKnown = true;
+    return;
+  }
+  activityError = 'Recent activity is unavailable. The last result may be out of date.';
 }
 
 const held = $derived(pending.filter((entry) => entry.held_by).length);
@@ -94,7 +123,14 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
   <div class="dash">
     <section class="dtile" class:is-lit={pending.length} aria-labelledby="d-pending">
       <header><h2 id="d-pending">Unpublished changes</h2></header>
-      {#if pending.length}
+      {#if pendingStatus === 'loading'}
+        <p class="line">Checking unpublished changes…</p>
+      {:else if pendingStatus === 'error'}
+        <div class="notice notice-danger pending-read-error" role="alert">
+          Could not check unpublished changes.{pending.length ? ` Last known: ${pending.length}.` : ''}
+          <button class="btn-link" type="button" onclick={onretryPending}>Retry</button>
+        </div>
+      {:else if pending.length}
         <p class="big">{pending.length} <small>{pending.length === 1 ? 'change' : 'changes'}</small></p>
         <p class="line">
           {#if held}{`${held} on hold · `}{/if}{`oldest ${when(oldest).toLowerCase()}`}
@@ -119,7 +155,14 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
         <h2 id="d-build">Build status</h2>
         <a href={sitePath(`/admin/activity`)}>Activity</a>
       </header>
-      {#if build}
+      {#if buildStatus === 'loading'}
+        <p class="line">Checking build status…</p>
+      {:else if buildStatus === 'error'}
+        <div class="notice notice-danger build-read-error" role="alert">
+          Could not check build status.{build ? ' The displayed result may be out of date.' : ''}
+          <button class="btn-link" type="button" onclick={onretryBuild}>Retry</button>
+        </div>
+      {:else if build}
         <p class="big"><BuildPill {build} /></p>
         {#if published}
           <p class="line">
@@ -147,8 +190,20 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
 
     <section class="dtile span-2" aria-labelledby="d-recent">
       <header><h2 id="d-recent">Recently edited</h2></header>
-      {#if loading}
+      {#if dashboardLoading && !dashboardKnown}
         <p class="line">Loading…</p>
+      {:else if dashboardError}
+        <div class="notice notice-danger dashboard-read-error" role="alert">
+          {dashboardError}
+          <button class="btn-link" type="button" onclick={loadDashboard}>Retry</button>
+        </div>
+        {#if recent.length}
+          <ul class="recent">
+            {#each recent as row (row.key)}
+              <li><a href={sitePath(row.href)}>{row.title}</a> <span class="badge">{row.collection}</span></li>
+            {/each}
+          </ul>
+        {/if}
       {:else if recent.length}
         <ul class="recent">
           {#each recent as row (row.key)}
@@ -215,8 +270,16 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
         <h2 id="d-act">Recent activity</h2>
         <a href={sitePath(`/admin/activity`)}>All activity</a>
       </header>
-      {#if loading}
+      {#if activityLoading && !activityKnown}
         <p class="line">Loading…</p>
+      {:else if activityError}
+        <div class="notice notice-danger activity-read-error" role="alert">
+          {activityError}
+          <button class="btn-link" type="button" onclick={loadActivity}>Retry</button>
+        </div>
+        {#if events.length}
+          <p class="line">Showing the last activity read.</p>
+        {/if}
       {:else if events.length}
         <ul class="activity">
           {#each events as event (event.id)}

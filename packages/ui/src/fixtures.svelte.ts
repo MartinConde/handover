@@ -1,8 +1,8 @@
 import { diffEntry, type Form } from '@handover/core';
 import { mount } from 'svelte';
 import Diff from './Diff.svelte';
-import type { PickEntry } from './entry-directory.js';
 import Fields from './editor/fields/Fields.svelte';
+import type { PickEntry } from './entry-directory.js';
 import PagePicker from './PagePicker.svelte';
 import './tokens.css';
 

@@ -169,6 +169,29 @@ test('an invite the mailer refused sends the owner to Settings', async () => {
   expect(failure.querySelector('a')?.getAttribute('href')).toBe('/admin/settings');
 });
 
+test('an uncertain invite is not diagnosed as broken email or sent again', async () => {
+  const calls = server([row('u1', 'martin@example.com', { role: 'owner' })], {
+    '/admin/api/members': new Response('Connection lost', {
+      status: 503,
+      headers: { 'x-handover-request-uncertain': 'true' },
+    }),
+  });
+  const root = await show();
+
+  click(root, 'Invite');
+  const field = root.querySelector('input#invite-email') as HTMLInputElement;
+  field.value = 'lea@example.com';
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+  flushSync();
+  (root.querySelector('.dialog form') as HTMLFormElement).requestSubmit();
+  await settle();
+
+  const failure = root.querySelector('.notice-danger') as HTMLElement;
+  expect(text(failure)).toContain('could not be confirmed');
+  expect(failure.querySelector('a[href="/admin/settings"]')).toBeNull();
+  expect(calls.filter((call) => call.url === '/admin/api/members')).toHaveLength(1);
+});
+
 test('the viewer has no actions menu on their own row, whether or not there is another owner', async () => {
   server([
     row('u1', 'martin@example.com', { role: 'owner' }),

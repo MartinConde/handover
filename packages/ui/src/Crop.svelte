@@ -8,6 +8,7 @@ import {
   sizeRegion,
   uploadCrop,
 } from './crop.js';
+import Modal from './Modal.svelte';
 import type { MediaItem } from './upload.js';
 
 let {
@@ -34,15 +35,10 @@ let ratio = $state<string | undefined>(ratios[0]);
 let region = $state<Region>(fitRegion(width, height, ratios[0]));
 let busy = $state(false);
 let failure = $state('');
-let panel = $state<HTMLElement>();
 let stage = $state<HTMLElement>();
 let dragging:
   | { corner?: 'nw' | 'ne' | 'sw' | 'se'; from: Region; at: { x: number; y: number } }
   | undefined;
-
-$effect(() => {
-  panel?.focus();
-});
 
 function at(e: PointerEvent) {
   const box = stage?.getBoundingClientRect();
@@ -92,10 +88,7 @@ async function make() {
 }
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
-
-<div class="scrim">
-  <div class="dialog focal-dialog crop-dialog" role="dialog" aria-labelledby="crop-h" tabindex="-1" bind:this={panel}>
+<Modal labelledby="crop-h" panelClass="dialog focal-dialog crop-dialog" dismissible={!busy} {onclose}>
     <h2 id="crop-h">Crop a copy — {item.filename ?? item.src}</h2>
     <p>This makes a new image. The original is kept and stays wherever it is used.</p>
     <div class="dialog-cols">
@@ -151,8 +144,7 @@ async function make() {
     </div>
     {#if failure}<p class="notice notice-danger" role="alert">{failure}</p>{/if}
     <div class="actions">
-      <button class="btn" type="button" onclick={onclose}>Cancel</button>
+      <button class="btn" type="button" disabled={busy} onclick={onclose}>Cancel</button>
       <button class="btn btn-primary" type="button" disabled={busy} onclick={make}>{busy ? 'Cropping…' : 'Create cropped copy'}</button>
     </div>
-  </div>
-</div>
+</Modal>

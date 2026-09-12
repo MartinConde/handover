@@ -203,7 +203,9 @@ if (typeof window !== 'undefined') {
       draftRevision += 1;
       return Response.json({
         pending: true,
-        problems: Object.entries(requiredFieldProblems(editorEntry.fields, body.data, editorEntry.blocks)).map(([path, message]) => ({ path, message })),
+        problems: Object.entries(
+          requiredFieldProblems(editorEntry.fields, body.data, editorEntry.blocks),
+        ).map(([path, message]) => ({ path, message })),
         revisions: { en: `fixture-en-${draftRevision}`, de: `fixture-de-${draftRevision}` },
       });
     }

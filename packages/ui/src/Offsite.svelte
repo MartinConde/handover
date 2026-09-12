@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { PickEntry } from './entry-directory.js';
+import Modal from './Modal.svelte';
 import PagePicker from './PagePicker.svelte';
 
 /** The server turns one answer into a rule per language. */
@@ -19,6 +20,7 @@ let {
   index,
   busy = false,
   error = '',
+  returnTo,
   onconfirm,
   onhide,
   onclose,
@@ -36,6 +38,7 @@ let {
   index?: string;
   busy?: boolean;
   error?: string;
+  returnTo?: HTMLElement | null;
   onconfirm: (target: Target) => void;
   /** Deleting only: led with, since the client will want it back. */
   onhide?: () => void;
@@ -59,10 +62,13 @@ const target = (): Target =>
 const ready = $derived(kind === 'entry' ? Boolean(picked) : kind !== 'url' || url.trim() !== '');
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && onclose()} />
-
-<div class="scrim">
-  <div class="dialog is-wide" role="dialog" aria-labelledby="offsite-h">
+<Modal
+  labelledby="offsite-h"
+  panelClass="dialog is-wide"
+  {returnTo}
+  dismissible={!busy}
+  {onclose}
+>
     <h2 id="offsite-h">Where should visitors to this page go now?</h2>
     <form onsubmit={(e) => { e.preventDefault(); onconfirm(target()); }}>
       {#if action === 'delete' && onhide}
@@ -131,9 +137,9 @@ const ready = $derived(kind === 'entry' ? Boolean(picked) : kind !== 'url' || ur
       </p>
       {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
       <div class="actions">
-        <button class="btn" type="button" onclick={onclose}>Cancel</button>
+        <button class="btn" type="button" disabled={busy} onclick={onclose}>Cancel</button>
         {#if action === 'delete' && onhide}
-          <button class="btn btn-primary" type="button" onclick={onhide}>Hide instead</button>
+          <button class="btn btn-primary" type="button" disabled={busy} onclick={onhide}>Hide instead</button>
         {/if}
         <button
           class="btn {action === 'hide' ? 'btn-primary' : 'btn-danger'}"
@@ -150,5 +156,4 @@ const ready = $derived(kind === 'entry' ? Boolean(picked) : kind !== 'url' || ur
         </button>
       </div>
     </form>
-  </div>
-</div>
+</Modal>

@@ -256,3 +256,49 @@ test('every id on the filled dashboard is unique', async () => {
   for (const tile of all(root, '[aria-labelledby]'))
     expect(root.querySelector(`#${tile.getAttribute('aria-labelledby')}`)).not.toBeNull();
 });
+
+test('failed dashboard reads are unavailable rather than empty and retry recovers', async () => {
+  let dashboardAttempts = 0;
+  let activityAttempts = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/dashboard') {
+        dashboardAttempts += 1;
+        return dashboardAttempts === 1
+          ? new Response('unavailable', { status: 503 })
+          : Response.json({ recent: RECENT, published: null, translations: null });
+      }
+      activityAttempts += 1;
+      return activityAttempts === 1
+        ? new Response('unavailable', { status: 503 })
+        : Response.json({ events: [] });
+    }),
+  );
+  app = mount(Dashboard, {
+    target: document.body,
+    props: {
+      pending: [],
+      pendingStatus: 'ready',
+      build: null,
+      buildStatus: 'ready',
+      collections: [],
+      onreview: () => {},
+      onrevert: () => {},
+      onretryPending: () => {},
+      onretryBuild: () => {},
+    },
+  });
+  await loaded();
+
+  expect(tile(document.body, 'd-recent')?.textContent).toContain('Recently edited is unavailable');
+  expect(tile(document.body, 'd-recent')?.textContent).not.toContain('Nothing has been edited yet');
+  expect(tile(document.body, 'd-act')?.textContent).toContain('Recent activity is unavailable');
+
+  tile(document.body, 'd-recent')?.querySelector<HTMLButtonElement>('button')?.click();
+  tile(document.body, 'd-act')?.querySelector<HTMLButtonElement>('button')?.click();
+  await loaded();
+
+  expect(tile(document.body, 'd-recent')?.textContent).toContain('The Mill House');
+  expect(tile(document.body, 'd-act')?.textContent).toContain('Nothing has been recorded yet');
+});

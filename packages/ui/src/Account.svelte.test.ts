@@ -158,3 +158,47 @@ test('the role is a fact on the page, not a control', async () => {
   expect(root.querySelector('.facts .badge')?.textContent).toBe('Editor');
   expect(root.querySelector('.facts select, .facts input')).toBeNull();
 });
+
+test('a failed account action is announced and styled as a failure', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init?: RequestInit) =>
+      init
+        ? new Response('unavailable', { status: 503 })
+        : Response.json({ hasPassword: true, sessions: [HERE] }),
+    ),
+  );
+  const root = await show();
+  type(root, 'display-name', 'Changed name');
+  click(root, 'Save name');
+  await settle();
+
+  const notice = root.querySelector('.notice');
+  expect(notice?.textContent).toContain('could not be saved');
+  expect(notice?.classList.contains('notice-danger')).toBe(true);
+  expect(notice?.getAttribute('role')).toBe('alert');
+  expect(notice?.classList.contains('notice-success')).toBe(false);
+});
+
+test('an unavailable account read has a retry that recovers without reloading the page', async () => {
+  let attempts = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => {
+      attempts += 1;
+      return attempts === 1
+        ? new Response('unavailable', { status: 503 })
+        : Response.json({ hasPassword: true, sessions: [HERE] });
+    }),
+  );
+  const root = await show();
+
+  expect(root.querySelector('.account-read-error')?.textContent).toContain(
+    'Could not load your account',
+  );
+  root.querySelector<HTMLButtonElement>('.account-read-error button')?.click();
+  await settle();
+
+  expect(root.querySelector('.settings')).not.toBeNull();
+  expect(root.querySelector('.account-read-error')).toBeNull();
+});

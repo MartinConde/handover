@@ -5,6 +5,7 @@ import type {
   HistoricalRestoreResponse,
   HistoricalRestoreResult,
 } from './editor/entry-session.svelte';
+import Modal from './Modal.svelte';
 import { request as fetch, sitePath, uncertainResponse } from './request.js';
 
 /** One version as `/admin/api/history/:collection/:slug` answers it. */
@@ -60,24 +61,22 @@ let chosen = $state<Version[]>([]);
 let groups = $state<DiffGroup[]>([]);
 let reading = $state(false);
 let diffError = $state('');
+let diffEpoch = 0;
+let diffIdentity = '';
 /** The version the confirmation is about, and Cancel, which is where the answer is no. */
 let confirming = $state<Version>();
-let opening = $state<HTMLElement>();
 let restoreButton = $state<HTMLElement>();
 let restoring = $state(false);
 let restoreError = $state('');
 
 $effect(() => {
-  opening?.focus();
+  resetDiffSelection();
+  load(1, collection, slug);
 });
 
-$effect(() => {
-  load(1);
-});
-
-async function load(want: number) {
+async function load(want: number, entryCollection = collection, entrySlug = slug) {
   loading = true;
-  const res = await fetch(`/admin/api/history/${collection}/${slug}?page=${want}`);
+  const res = await fetch(`/admin/api/history/${entryCollection}/${entrySlug}?page=${want}`);
   loading = false;
   if (!res.ok) {
     // A 503 is the server's own sentence; anything else is GitHub refusing for a few minutes.
@@ -94,8 +93,30 @@ async function load(want: number) {
   more = body.more === true;
 }
 
+function cancelDiff() {
+  diffEpoch += 1;
+  diffIdentity = '';
+  groups = [];
+  reading = false;
+  diffError = '';
+}
+
+function resetDiffSelection() {
+  selected = undefined;
+  chosen = [];
+  confirming = undefined;
+  restoreError = '';
+  cancelDiff();
+}
+
 /** With one version the other side is what is live now; with two it is the older of them. */
 async function readDiff(to: Version, from?: Version) {
+  const entryCollection = collection;
+  const entrySlug = slug;
+  const epoch = ++diffEpoch;
+  const identity = `${entryCollection}/${entrySlug}/${from?.sha ?? 'live'}..${to.sha}`;
+  diffIdentity = identity;
+  groups = [];
   reading = true;
   diffError = '';
   // A version from before a rename has its files under the name the entry had then.
@@ -105,20 +126,28 @@ async function readDiff(to: Version, from?: Version) {
     ...(from ? { from: from.sha } : {}),
     ...(from?.name ? { fromName: from.name } : {}),
   });
-  const res = await fetch(`/admin/api/history/${collection}/${slug}/diff?${query}`);
-  reading = false;
+  const current = () =>
+    epoch === diffEpoch &&
+    identity === diffIdentity &&
+    entryCollection === collection &&
+    entrySlug === slug;
+  const res = await fetch(`/admin/api/history/${entryCollection}/${entrySlug}/diff?${query}`);
+  if (!current()) return;
   if (!res.ok) {
+    reading = false;
     groups = [];
     diffError = 'Those versions could not be read from GitHub.';
     return;
   }
-  groups = ((await res.json()) as { groups?: DiffGroup[] }).groups ?? [];
+  const body = (await res.json()) as { groups?: DiffGroup[] };
+  if (!current()) return;
+  groups = body.groups ?? [];
+  reading = false;
 }
 
 function closeConfirm() {
   confirming = undefined;
   restoreError = '';
-  restoreButton?.focus();
 }
 
 /** Into the drafts, never a rewrite of git: publishing it is the ordinary forward commit. */
@@ -163,16 +192,20 @@ async function restore() {
 }
 
 function open(version: Version) {
+  confirming = undefined;
+  restoreError = '';
   selected = version;
   chosen = [];
   readDiff(version);
 }
 
 function compare(version: Version, on: boolean) {
+  confirming = undefined;
+  restoreError = '';
   chosen = on ? [...chosen, version] : chosen.filter((v) => v.sha !== version.sha);
   selected = undefined;
   if (chosen.length !== 2) {
-    groups = [];
+    cancelDiff();
     return;
   }
   const [older, newer] = [...chosen].sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
@@ -414,12 +447,15 @@ const initials = (name: string) =>
   </div>
 </div>
 
-<svelte:window onkeydown={(e) => { if (e.key === 'Escape' && confirming) closeConfirm(); }} />
-
-<!-- Not aria-modal: the shell behind stays reachable, so claiming a focus trap would be false. -->
 {#if confirming}
-  <div class="scrim">
-    <div class="dialog is-slim" role="dialog" aria-labelledby="rs-h" aria-describedby="rs-d">
+  <Modal
+    labelledby="rs-h"
+    describedby="rs-d"
+    panelClass="dialog is-slim"
+    returnTo={restoreButton}
+    dismissible={!restoring}
+    onclose={closeConfirm}
+  >
       <h2 id="rs-h">Restore the version from {when(confirming.date)}?</h2>
       <div id="rs-d">
         <p>
@@ -434,11 +470,10 @@ const initials = (name: string) =>
       </div>
       {#if restoreError}<p class="notice notice-danger" role="alert">{restoreError}</p>{/if}
       <div class="actions">
-        <button class="btn" type="button" bind:this={opening} onclick={closeConfirm}>Cancel</button>
+        <button class="btn" type="button" disabled={restoring} onclick={closeConfirm}>Cancel</button>
         <button class="btn btn-primary" type="button" disabled={restoring} onclick={restore}>
           {restoring ? 'Restoring…' : 'Restore as unpublished changes'}
         </button>
       </div>
-    </div>
-  </div>
+  </Modal>
 {/if}
