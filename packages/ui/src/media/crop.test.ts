@@ -168,3 +168,108 @@ test('a failed canvas render keeps its crop recovery identity', async () => {
   ).rejects.toMatchObject({ descriptor: { code: 'CROP_RENDER_FAILED' } });
   expect(source.close).toHaveBeenCalledOnce();
 });
+
+test('a rejected source request retains its diagnostic and stops before processing', async () => {
+  const decode = vi.fn();
+  const uploadFetch = vi.fn();
+  vi.stubGlobal('createImageBitmap', decode);
+  vi.stubGlobal('fetch', uploadFetch);
+  const sourceFetch = vi.fn(async () => {
+    throw new Error('source network diagnostic');
+  });
+
+  await expect(
+    uploadCrop(
+      { id: 'original', src: 'media/original.webp', url: 'https://cdn/original.webp' },
+      { x: 10, y: 20, w: 320, h: 180 },
+      { fetch: sourceFetch },
+    ),
+  ).rejects.toMatchObject({
+    descriptor: { code: 'CROP_SOURCE_FAILED', detail: 'source network diagnostic' },
+  });
+  expect(sourceFetch).toHaveBeenCalledWith('https://cdn/original.webp', { cache: 'reload' });
+  expect(decode).not.toHaveBeenCalled();
+  expect(uploadFetch).not.toHaveBeenCalled();
+});
+
+test('a rejected source decode retains its diagnostic and stops before rendering', async () => {
+  const render = vi.spyOn(HTMLCanvasElement.prototype, 'getContext');
+  const uploadFetch = vi.fn();
+  vi.stubGlobal('fetch', uploadFetch);
+  vi.stubGlobal(
+    'createImageBitmap',
+    vi.fn(async () => {
+      throw new Error('bitmap decode diagnostic');
+    }),
+  );
+  const sourceFetch = vi.fn(async () => new Response(bytes));
+
+  await expect(
+    uploadCrop(
+      { id: 'original', src: 'media/original.webp', url: 'https://cdn/original.webp' },
+      { x: 10, y: 20, w: 320, h: 180 },
+      { fetch: sourceFetch },
+    ),
+  ).rejects.toMatchObject({
+    descriptor: { code: 'CROP_SOURCE_FAILED', detail: 'bitmap decode diagnostic' },
+  });
+  expect(sourceFetch).toHaveBeenCalledWith('https://cdn/original.webp', { cache: 'reload' });
+  expect(render).not.toHaveBeenCalled();
+  expect(uploadFetch).not.toHaveBeenCalled();
+});
+
+test('a missing canvas context releases the source and stops before upload', async () => {
+  const source = { close: vi.fn() };
+  const encode = vi.spyOn(HTMLCanvasElement.prototype, 'toBlob');
+  const uploadFetch = vi.fn();
+  vi.stubGlobal('fetch', uploadFetch);
+  vi.stubGlobal(
+    'createImageBitmap',
+    vi.fn(async () => source),
+  );
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+  const sourceFetch = vi.fn(async () => new Response(bytes));
+
+  await expect(
+    uploadCrop(
+      { id: 'original', src: 'media/original.webp', url: 'https://cdn/original.webp' },
+      { x: 10, y: 20, w: 320, h: 180 },
+      { fetch: sourceFetch },
+    ),
+  ).rejects.toHaveProperty('descriptor', { code: 'CROP_RENDER_FAILED' });
+  expect(sourceFetch).toHaveBeenCalledWith('https://cdn/original.webp', { cache: 'reload' });
+  expect(encode).not.toHaveBeenCalled();
+  expect(uploadFetch).not.toHaveBeenCalled();
+  expect(source.close).toHaveBeenCalledOnce();
+});
+
+test('a throwing canvas draw retains its diagnostic and releases the source', async () => {
+  const source = { close: vi.fn() };
+  const encode = vi.spyOn(HTMLCanvasElement.prototype, 'toBlob');
+  const uploadFetch = vi.fn();
+  vi.stubGlobal('fetch', uploadFetch);
+  vi.stubGlobal(
+    'createImageBitmap',
+    vi.fn(async () => source),
+  );
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
+    drawImage: vi.fn(() => {
+      throw new Error('canvas draw diagnostic');
+    }),
+  } as unknown as CanvasRenderingContext2D);
+  const sourceFetch = vi.fn(async () => new Response(bytes));
+
+  await expect(
+    uploadCrop(
+      { id: 'original', src: 'media/original.webp', url: 'https://cdn/original.webp' },
+      { x: 10, y: 20, w: 320, h: 180 },
+      { fetch: sourceFetch },
+    ),
+  ).rejects.toMatchObject({
+    descriptor: { code: 'CROP_RENDER_FAILED', detail: 'canvas draw diagnostic' },
+  });
+  expect(sourceFetch).toHaveBeenCalledWith('https://cdn/original.webp', { cache: 'reload' });
+  expect(encode).not.toHaveBeenCalled();
+  expect(uploadFetch).not.toHaveBeenCalled();
+  expect(source.close).toHaveBeenCalledOnce();
+});
