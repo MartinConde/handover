@@ -17,9 +17,9 @@ validation that already carries a Handover descriptor, and retained editor save/
 reformat when the language changes. Structured-field wrappers now include group/list/block controls,
 link and reference presentation, image/file cards, embed recovery, SEO controls and their open field
 popovers and notices. Required fields and built-in scalar type, date, selection, text-length and
-number-bound validation emit descriptors; rich-text/media-widget controls and their own validation
-remain staged follow-up work. Dashboard, collection, picker, and open-entry data are
-not reread, and typed
+number-bound validation emit descriptors. Rich-text toolbar names, link controls and
+foreign-formatting guidance are bilingual; rich-text validation and media-widget controls remain
+staged follow-up work. Dashboard, collection, picker, and open-entry data are not reread, and typed
 values, queued saves, undo history, filters, selected rows, creation starters, custom URLs, the
 signed-in session, editor content language, and the active editor field remain in place.
 Activity-event sentences and the remaining admin screens are being converted in stages and can
