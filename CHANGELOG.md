@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Add the pinned, locally loaded Paraglide compiler and Svelte markup workflow for future admin UI
+  translations, with initial English/German catalogs, explicit locale helpers, and reproducible
+  ignored generated output. No interface language preference or translated product screen ships
+  yet.
+
 - Document and automate repeatable decoded, gzip, and Brotli measurements for the admin, Canvas,
   lazy rich-text, embedded UI asset, and packaged Worker graphs; no runtime behavior changes.
 

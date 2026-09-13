@@ -1,0 +1,18 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "account_interface_language": "Interface language",
+  "account_language_english": "English",
+  "account_language_german": "Deutsch",
+  "common_retry": "Retry",
+  "common_save_failed": "Could not save {field}.",
+  "publishing_pending_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} pending change",
+        "countPlural=other": "{count} pending changes"
+      }
+    }
+  ]
+}

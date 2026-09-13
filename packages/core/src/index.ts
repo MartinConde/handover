@@ -308,3 +308,5 @@ export {
   machineFilled,
   resolveFieldTarget,
 } from './translate.js';
+export type { UiLocale } from './ui-locale.js';
+export { DEFAULT_UI_LOCALE, isUiLocale, UI_LOCALES } from './ui-locale.js';

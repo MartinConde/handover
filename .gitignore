@@ -6,3 +6,8 @@ dist/
 *.tsbuildinfo
 .DS_Store
 test-results/
+packages/ui/src/paraglide/
+packages/ui/.inlang/
+packages/ui/project.inlang/.cache/
+packages/ui/project.inlang/.lix/
+packages/ui/project.inlang/.meta.json
