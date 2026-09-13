@@ -18,6 +18,7 @@ test('saved interface language wins before first paint and a live switch preserv
     observer.observe(document, { childList: true, subtree: true });
   });
   let entryReads = 0;
+  let dashboardReads = 0;
   await page.route('**/admin/api/**', async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -62,16 +63,25 @@ test('saved interface language wins before first paint and a live switch preserv
     } else if (path === '/admin/api/account')
       await route.fulfill({ json: { hasPassword: true, sessions: [] } });
     else if (path === '/admin/api/build') await route.fulfill({ json: {} });
-    else if (path === '/admin/api/dashboard')
+    else if (path === '/admin/api/dashboard') {
+      dashboardReads += 1;
       await route.fulfill({ json: { recent: [], published: null, translations: null } });
-    else await route.fulfill({ json: { entries: [] } });
+    } else await route.fulfill({ json: { entries: [] } });
   });
 
   await page.goto('/admin/c/pages/canvas-fixture');
   await expect(page.locator('.shell')).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-first-admin-lang', 'en');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await page.goto('/admin');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dashboard');
+  const dashboardReadsBeforeSwitch = dashboardReads;
   await page.locator('.user-menu > button').click();
+  await page.getByLabel('Interface language').selectOption('de');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Übersicht');
+  expect(dashboardReads).toBe(dashboardReadsBeforeSwitch);
+  await page.getByLabel('Sprache der Benutzeroberfläche').selectOption('en');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dashboard');
   await page.getByRole('link', { name: 'Account' }).click();
   await expect(page.locator('main').getByLabel('Interface language')).toHaveValue('en');
   const accountName = page.locator('#display-name');

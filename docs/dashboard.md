@@ -4,6 +4,12 @@
 out and how far behind the translations are. Nothing on it is configurable, and it adds no
 tables — every tile is a read the admin already makes.
 
+The dashboard and surrounding navigation follow the account's **Interface language**. Switching
+between English and Deutsch updates tile headings, counts, loading/empty/error states, build
+status, controls, dates, and accessibility labels in place. It does not reread dashboard data.
+Entry titles, collection names, member names, content-language codes, and provider diagnostics
+stay exactly as authored. Activity-event sentences are still English during the staged migration.
+
 ## Quick actions
 
 Above the tiles, one button per collection — *New page*, *New listing* — opens the same New

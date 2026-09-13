@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import type { UiLocale } from '../i18n.js';
 import Dashboard from './Dashboard.svelte';
 
 // Testing: each tile's two states, buttons deferring to the shell; not the grid or activity lines.
@@ -48,6 +49,7 @@ const reverted: string[] = [];
 const show = (
   body: Record<string, unknown> = { recent: RECENT, published: null, translations: null },
   props: Record<string, unknown> = {},
+  uiLocale: UiLocale = 'en',
 ) => {
   vi.stubGlobal(
     'fetch',
@@ -63,6 +65,7 @@ const show = (
       pending: [],
       build: null,
       collections: [],
+      uiLocale,
       onreview: () => reviewed.push(1),
       onrevert: (sha: string) => reverted.push(sha),
       ...props,
@@ -130,7 +133,7 @@ test('the build tile names who published and hands a revert back to the shell', 
   const built = tile(root, 'd-build');
   expect(built?.querySelector('.pill-live')).not.toBeNull();
   expect(built?.querySelector('.line')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-    'Last published by Anna Berg 1h ago',
+    'Last published by Anna Berg 1 hr ago',
   );
   built?.querySelector<HTMLButtonElement>('.tile-actions button')?.click();
 
@@ -159,7 +162,7 @@ test('a recently edited row is named, addressed and says who and when', async ()
   ]);
   expect(rows[0]?.querySelector('.lock')?.textContent).toBe('Anna Berg is editing');
   expect(rows[0]?.querySelector('.sub')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-    'Edited by Anna Berg · 2h ago',
+    'Edited by Anna Berg · 2 hr ago',
   );
   // The verb is the difference: a publish names the person who published, not who typed it.
   expect(rows[1]?.querySelector('.sub')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
@@ -301,4 +304,54 @@ test('failed dashboard reads are unavailable rather than empty and retry recover
 
   expect(tile(document.body, 'd-recent')?.textContent).toContain('The Mill House');
   expect(tile(document.body, 'd-act')?.textContent).toContain('Nothing has been recorded yet');
+});
+
+test('malformed dashboard reads use the same retained error states', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('not json', { status: 200 })),
+  );
+  app = mount(Dashboard, {
+    target: document.body,
+    props: {
+      pending: [],
+      build: null,
+      collections: [],
+      onreview: () => {},
+      onrevert: () => {},
+    },
+  });
+
+  await vi.waitFor(() =>
+    expect(tile(document.body, 'd-recent')?.querySelector('[role="alert"]')).not.toBeNull(),
+  );
+  expect(tile(document.body, 'd-act')?.querySelector('[role="alert"]')).not.toBeNull();
+  expect(document.body.textContent).not.toContain('Nothing has been edited yet');
+});
+
+test('the dashboard switches its live chrome and dates without rereading data', async () => {
+  const root = show(
+    {
+      recent: RECENT,
+      published: { at: Date.now() - 3600_000, by: 'Anna Berg' },
+      translations: HEALTH,
+    },
+    {
+      pending: [pendingEntry('listings/mill-house'), pendingEntry('pages/home', 'Anna Berg')],
+      build: { state: 'live', commit_sha: 'def456', live_at: Date.now() - 3600_000 },
+      collections: ['ferienhaeuser'],
+    },
+    'de',
+  );
+  await loaded();
+
+  expect(root.querySelector('h1')?.textContent).toBe('Übersicht');
+  expect(tile(root, 'd-pending')?.textContent?.replace(/\s+/g, ' ')).toContain('2 Änderungen');
+  expect(tile(root, 'd-build')?.textContent?.replace(/\s+/g, ' ')).toContain(
+    'Zuletzt veröffentlicht von Anna Berg vor 1 Std.',
+  );
+  expect(root.querySelector('.quick .btn')?.textContent?.trim()).toBe('Neu: ferienhaeuser');
+  expect(root.textContent).toContain('The Mill House');
+  expect(root.textContent).toContain('listings');
+  expect(fetch).toHaveBeenCalledTimes(2);
 });

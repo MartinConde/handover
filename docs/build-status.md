@@ -4,6 +4,12 @@ A commit is not a live site: what the top bar says while the host builds it, and
 commit that undoes a publish. The drawer that makes the commits is
 [Pending changes](pending-changes.md).
 
+Build states, the publishing banner, revert confirmation, retained recovery messages, and their
+times follow the selected [interface language](interface-language.md) without restarting the
+poller. A visible build or revert result re-renders after a language switch; its commit identity,
+server diagnostic, and outcome do not change. Dates and clock times use the interface locale but
+keep the browser's existing timezone.
+
 ## When a commit goes live
 
 **A commit is not a live site.** Publishing pushes to `main`, and the host builds and deploys

@@ -1,5 +1,7 @@
 <script lang="ts">
 import type { Snippet } from 'svelte';
+import { formatClockTime, messageOptions, type UiLocale } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 
 export type Build = {
   commit_sha?: string;
@@ -11,9 +13,12 @@ export type Build = {
 };
 
 // One pill for the top bar and the drawer; `children` is the shell's Revert button inside it.
-let { build, children }: { build: Build; children?: Snippet } = $props();
-
-const LABEL = { building: 'Building…', live: 'Live', failed: 'Build failed' } as const;
+let {
+  build,
+  uiLocale = 'en',
+  children,
+}: { build: Build; uiLocale?: UiLocale; children?: Snippet } = $props();
+const options = $derived(messageOptions(uiLocale));
 
 // The counter ticks in here rather than in either parent, so neither has to hold a clock for it.
 let now = $state(Date.now());
@@ -30,16 +35,13 @@ const elapsed = (from: number) => {
   const total = Math.max(0, Math.round((now - from) / 1000));
   return `${Math.floor(total / 60)}m ${String(total % 60).padStart(2, '0')}s`;
 };
-// "Live since 14:02" — when the site last changed, which is more use than that it is up.
-const since = (at: number) =>
-  new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 </script>
 
 <span class="pill pill-{build.state}">
   <span class="dot" aria-hidden="true"></span>
-  {LABEL[build.state]}
+  {build.state === 'building' ? m.build_building({}, options) : build.state === 'live' ? m.build_live({}, options) : m.build_failed({}, options)}
   {#if build.state === 'live' && build.live_at}
-    <span class="detail">since {since(build.live_at)}</span>
+    <span class="detail">{m.build_live_since({ time: formatClockTime(build.live_at, uiLocale) }, options)}</span>
   {:else if build.state === 'building' && from}
     <!-- Hidden from the live region: it ticks every second and would re-announce the pill. -->
     <span class="detail" aria-hidden="true">{elapsed(from)}</span>

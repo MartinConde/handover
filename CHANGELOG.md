@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate the signed-in shell, navigation, dashboard, pending/build indicators, revert flow,
+  retained shell feedback, dates, and accessibility labels into English and German. Live language
+  changes preserve dashboard data, build polling, authored labels and diagnostics, and open editor
+  state.
+
 - Translate the complete Account, sign-in, reset-password, and expired-link surfaces into English
   and German. Visible account/authentication feedback now follows live language changes without
   clearing forms or sessions; known auth codes, actionable password limits, malformed account-read

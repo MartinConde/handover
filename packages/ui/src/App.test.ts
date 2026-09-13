@@ -1,7 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import App from './App.svelte';
-import { rememberUiLocale } from './i18n.js';
+import { rememberUiLocale, type UiLocale } from './i18n.js';
 
 let app: ReturnType<typeof mount>;
 const session = (role: 'owner' | 'editor' = 'owner') => ({
@@ -9,10 +9,14 @@ const session = (role: 'owner' | 'editor' = 'owner') => ({
   user: { id: 'u1', name: 'Martin', email: 'martin@example.com', uiLocale: null },
   role,
 });
-const show = (signedIn: ReturnType<typeof session> | null | undefined, path = '/admin') => {
+const show = (
+  signedIn: ReturnType<typeof session> | null | undefined,
+  path = '/admin',
+  initialUiLocale: UiLocale = signedIn?.user.uiLocale ?? 'en',
+) => {
   app = mount(App, {
     target: document.body,
-    props: { session: signedIn, path, initialUiLocale: signedIn?.user.uiLocale ?? 'en' },
+    props: { session: signedIn, path, initialUiLocale },
   });
   flushSync();
   return document.body;
@@ -53,7 +57,7 @@ afterEach(() => {
 test('the shell renders sidebar, top bar and main regions once logged in', () => {
   drafts();
   const root = show(session());
-  expect(root.querySelector('aside.sidebar[aria-label="Main"]')).not.toBeNull();
+  expect(root.querySelector('aside.sidebar[aria-label="Main navigation"]')).not.toBeNull();
   expect(root.querySelector('header.topbar')).not.toBeNull();
   expect(root.querySelector('main.main')).not.toBeNull();
   expect(root.querySelector('input[type="password"]')).toBeNull();
@@ -164,6 +168,43 @@ test('a status-only preference save switches live and writes the installation-sc
   const save = calls.find(({ url }) => url === '/admin/api/auth/update-user');
   expect(JSON.parse(String(save?.init?.body))).toEqual({ uiLocale: 'de' });
   expect(document.cookie).toContain('handover_ui_locale=de');
+});
+
+test('a live switch retranslates shell feedback and dashboard without rereading it', async () => {
+  let dashboardReads = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/auth/sign-out') return new Response('Unavailable', { status: 503 });
+      if (url === '/admin/api/auth/update-user') return Response.json({ status: true });
+      if (url === '/admin/api/build')
+        return Response.json({ state: 'failed', commit_sha: 'bad123' });
+      if (url === '/admin/api/dashboard') {
+        dashboardReads += 1;
+        return Response.json({ recent: [], published: null, translations: null });
+      }
+      if (url === '/admin/api/activity') return Response.json({ events: [] });
+      return Response.json({ entries: [] });
+    }),
+  );
+  const root = show(session());
+  await vi.waitFor(() => expect(root.querySelector('main h1')?.textContent).toBe('Dashboard'));
+  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
+  flushSync();
+  root.querySelector<HTMLButtonElement>('.user-menu .menu button:last-child')?.click();
+  await vi.waitFor(() => expect(toasts(root)).toEqual(['Could not sign out. Please try again.']));
+  const notice = root.querySelector('.toast');
+  const select = root.querySelector<HTMLSelectElement>('.user-menu select');
+  if (!select) throw new Error('Language picker did not open');
+  select.value = 'de';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+
+  await vi.waitFor(() => expect(root.querySelector('main h1')?.textContent).toBe('Übersicht'));
+  expect(root.querySelector('.toast')).toBe(notice);
+  expect(toasts(root)).toEqual(['Abmelden fehlgeschlagen. Bitte versuchen Sie es erneut.']);
+  expect(root.querySelector('.topbar .pill')?.textContent).toContain('Build fehlgeschlagen');
+  expect(root.querySelector('.sidebar')?.getAttribute('aria-label')).toBe('Hauptnavigation');
+  expect(dashboardReads).toBe(1);
 });
 
 test('an uncertain save reconciles before changing the confirmed language', async () => {
@@ -540,7 +581,7 @@ test('the indicator names the oldest change and how many are held', async () => 
   flushSync();
 
   const detail = root.querySelector('.indicator .detail')?.textContent?.replace(/\s+/g, ' ').trim();
-  expect(detail).toBe('· oldest 22 aug 2025 · 1 on hold');
+  expect(detail).toBe('· oldest 22 Aug 2025 · 1 on hold');
 });
 
 // Regression: sign-out posted with no content type, which Better Auth refuses with 415.
@@ -597,6 +638,48 @@ test('an unavailable session check is not presented as signed out and can be ret
   expect(fetchMock).toHaveBeenCalledWith('/admin/api/ping');
 });
 
+test('an unavailable session check follows the initial interface language', () => {
+  const root = show(undefined, '/admin', 'de');
+
+  expect(root.querySelector('[role="alert"]')?.textContent).toContain(
+    'Es konnte nicht geprüft werden, ob Sie angemeldet sind.',
+  );
+  expect(root.querySelector('.session-unavailable button')?.textContent?.trim()).toBe(
+    'Erneut versuchen',
+  );
+});
+
+test('an entry-load failure retranslates without another content request', async () => {
+  let entryReads = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/entries/pages/missing') {
+        entryReads += 1;
+        return new Response('Not found', { status: 404 });
+      }
+      if (url === '/admin/api/auth/update-user') return Response.json({ status: true });
+      if (url === '/admin/api/build') return Response.json({});
+      return Response.json({ entries: [] });
+    }),
+  );
+  const root = show(session(), '/admin/c/pages/missing');
+  await vi.waitFor(() =>
+    expect(root.querySelector('main [role="alert"]')?.textContent).toBe('No such entry'),
+  );
+  const failure = root.querySelector('main [role="alert"]');
+  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
+  flushSync();
+  const select = root.querySelector<HTMLSelectElement>('.user-menu select');
+  if (!select) throw new Error('Language picker did not open');
+  select.value = 'de';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+
+  await vi.waitFor(() => expect(failure?.textContent).toBe('Eintrag nicht gefunden'));
+  expect(root.querySelector('main [role="alert"]')).toBe(failure);
+  expect(entryReads).toBe(1);
+});
+
 test('a failed pending read is unknown rather than fully published and retry recovers', async () => {
   let attempts = 0;
   vi.stubGlobal(
@@ -631,6 +714,25 @@ test('a failed pending read is unknown rather than fully published and retry rec
     expect(root.querySelector('.indicator')?.textContent).toContain('1 unpublished change');
   });
   expect(root.querySelector('.pending-read-error')).toBeNull();
+});
+
+test('malformed shell status reads become retryable errors', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/drafts' || url === '/admin/api/build')
+        return new Response('<html>not json</html>', { status: 200 });
+      if (url === '/admin/api/dashboard')
+        return Response.json({ recent: [], published: null, translations: null });
+      if (url === '/admin/api/activity') return Response.json({ events: [] });
+      return Response.json({});
+    }),
+  );
+  const root = show(session());
+
+  await vi.waitFor(() => expect(root.querySelector('.pending-read-error')).not.toBeNull());
+  expect(root.querySelector('.build-read-error')).not.toBeNull();
+  expect(root.textContent).not.toContain('Everything is published');
 });
 
 test.each(['network', 'server'])(
@@ -962,7 +1064,7 @@ test('a live build says since when', async () => {
 
   const pill = root.querySelector('.topbar .pill');
   expect(pill?.className).toContain('pill-live');
-  expect(pill?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Live since 02:02 PM');
+  expect(pill?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Live since 14:02');
 });
 
 test('a successful commit refreshes a live build and polls only until it settles', async () => {
@@ -1526,6 +1628,48 @@ test('a revert is said in a notice', async () => {
   await settle();
 
   expect(toasts(root)).toEqual(['Reverted that publish — building']);
+});
+
+test('a retained revert conflict retranslates and preserves its diagnostic', async () => {
+  buildBody = { commit_sha: 'c0ffee11', state: 'failed' };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/build') return Response.json(buildBody);
+      if (url === '/admin/api/revert')
+        return Response.json({ error: 'src/content/pages/en/home.yaml changed' }, { status: 409 });
+      if (url === '/admin/api/dashboard')
+        return Response.json({ recent: [], published: null, translations: null });
+      if (url === '/admin/api/activity') return Response.json({ events: [] });
+      if (url === '/admin/api/auth/update-user') return Response.json({ status: true });
+      return Response.json({ entries: [] });
+    }),
+  );
+  const root = show(session());
+  await settle();
+  root.querySelector<HTMLButtonElement>('.topbar .pill .btn-link')?.click();
+  flushSync();
+  document.querySelector<HTMLButtonElement>('[aria-labelledby="revert-h"] .btn-danger')?.click();
+  await vi.waitFor(() => expect(root.querySelector('.banner-warn')).not.toBeNull());
+  const banner = root.querySelector('.banner-warn');
+  expect(banner?.textContent).toContain(
+    'That publish was not reverted (409). Nothing was changed.',
+  );
+  expect(banner?.textContent).toContain('src/content/pages/en/home.yaml changed');
+  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
+  flushSync();
+  const select = root.querySelector<HTMLSelectElement>('.user-menu select');
+  if (!select) throw new Error('Language picker did not open');
+  select.value = 'de';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+
+  await vi.waitFor(() =>
+    expect(banner?.textContent).toContain(
+      'Die Veröffentlichung wurde nicht rückgängig gemacht (409).',
+    ),
+  );
+  expect(root.querySelector('.banner-warn')).toBe(banner);
+  expect(banner?.textContent).toContain('src/content/pages/en/home.yaml changed');
 });
 
 test('a notice leaves on its own after a few seconds', async () => {

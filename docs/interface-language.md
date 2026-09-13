@@ -9,11 +9,12 @@ and expired-link screens, have a device-only picker so they remain readable befo
 
 ## What is translated now
 
-Language controls, sign-in, password-reset and expired-link flows, and the complete Account screen
-are bilingual. Their already-visible notices and known authentication failures reformat when the
-language changes. Typed credentials and profile values, the signed-in session, and an open editor
-remain in place. The rest of the admin is being converted screen by screen and can still contain
-English.
+Language controls, sign-in, password-reset and expired-link flows, the complete Account screen,
+the signed-in shell, and the dashboard are bilingual. Navigation, pending/build indicators,
+dashboard states, dates, accessibility labels, and already-visible shell notices or failures
+reformat when the language changes. Dashboard data is not reread, and typed values, the signed-in
+session, and an open editor remain in place. Activity-event sentences and the remaining admin
+screens are being converted in stages and can still contain English.
 
 Handover-owned interface text is translated. Content and site configuration are not: collection
 labels, schema descriptions, custom validation messages, entry titles, names, URLs, provider

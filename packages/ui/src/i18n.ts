@@ -10,6 +10,66 @@ export { DEFAULT_UI_LOCALE, isUiLocale, UI_LOCALES };
 
 export const messageOptions = (locale: UiLocale) => ({ locale }) as const;
 
+const relativeFormatters = new Map<UiLocale, Intl.RelativeTimeFormat>();
+const dateFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
+const exactFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
+const clockFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
+const languageTag = (locale: UiLocale) => (locale === 'de' ? 'de-DE' : 'en-GB');
+
+const formatter = <T>(cache: Map<UiLocale, T>, locale: UiLocale, make: () => T): T => {
+  const cached = cache.get(locale);
+  if (cached) return cached;
+  const created = make();
+  cache.set(locale, created);
+  return created;
+};
+
+const midnight = (at: number) => {
+  const day = new Date(at);
+  day.setHours(0, 0, 0, 0);
+  return day.getTime();
+};
+
+/** Day buckets stay in the browser timezone; changing UI language never changes timezone. */
+export function formatRelativeTime(at: number, locale: UiLocale): string {
+  const format = formatter(
+    relativeFormatters,
+    locale,
+    () => new Intl.RelativeTimeFormat(languageTag(locale), { numeric: 'auto', style: 'short' }),
+  );
+  const minutes = Math.floor((Date.now() - at) / 60_000);
+  if (minutes < 1) return format.format(0, 'second');
+  if (minutes < 60) return format.format(-minutes, 'minute');
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return format.format(-hours, 'hour');
+  const days = Math.round((midnight(Date.now()) - midnight(at)) / 86_400_000);
+  if (days < 7) return format.format(-days, 'day');
+  return formatter(
+    dateFormatters,
+    locale,
+    () =>
+      new Intl.DateTimeFormat(languageTag(locale), {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      }),
+  ).format(at);
+}
+
+export const formatExactTime = (at: number, locale: UiLocale): string =>
+  formatter(
+    exactFormatters,
+    locale,
+    () => new Intl.DateTimeFormat(languageTag(locale), { dateStyle: 'long', timeStyle: 'short' }),
+  ).format(at);
+
+export const formatClockTime = (at: number, locale: UiLocale): string =>
+  formatter(
+    clockFormatters,
+    locale,
+    () => new Intl.DateTimeFormat(languageTag(locale), { hour: '2-digit', minute: '2-digit' }),
+  ).format(at);
+
 export const DEVICE_LOCALE_COOKIE = 'handover_ui_locale';
 
 const supportedLanguage = (value: unknown): UiLocale | undefined => {

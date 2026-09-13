@@ -2,8 +2,10 @@
 import type { ActivityEvent } from '@handover/core';
 import { activityGroupOf } from '@handover/core';
 import NewEntry, { nameOf } from '../content/NewEntry.svelte';
+import { formatExactTime, formatRelativeTime, messageOptions, type UiLocale } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
-import { EXACT, initials, said, when } from '../shared/activity-line';
+import { initials, said } from '../shared/activity-line';
 import BuildPill, { type Build } from './BuildPill.svelte';
 
 type Recent = {
@@ -29,6 +31,7 @@ let {
   build,
   buildStatus = 'ready',
   collections,
+  uiLocale = 'en',
   onreview,
   onrevert,
   onretryPending = () => {},
@@ -43,11 +46,13 @@ let {
   build: Build | null;
   buildStatus?: 'loading' | 'ready' | 'error';
   collections: string[];
+  uiLocale?: UiLocale;
   onreview: () => void;
   onrevert: (sha: string) => void;
   onretryPending?: () => void;
   onretryBuild?: () => void;
 } = $props();
+const options = $derived(messageOptions(uiLocale));
 
 // The collection whose New entry dialog is open — the list's own dialog, opened from here.
 let creating = $state('');
@@ -60,8 +65,8 @@ let dashboardLoading = $state(true);
 let activityLoading = $state(true);
 let dashboardKnown = $state(false);
 let activityKnown = $state(false);
-let dashboardError = $state('');
-let activityError = $state('');
+let dashboardError = $state(false);
+let activityError = $state(false);
 
 $effect(() => {
   load();
@@ -73,36 +78,43 @@ async function load() {
 
 async function loadDashboard() {
   dashboardLoading = true;
-  dashboardError = '';
+  dashboardError = false;
   const own = await fetch('/admin/api/dashboard');
   dashboardLoading = false;
   if (own.ok) {
-    const body = (await own.json()) as {
-      recent?: Recent[];
-      published?: typeof published;
-      translations?: Health | null;
-    };
+    let body: { recent?: Recent[]; published?: typeof published; translations?: Health | null };
+    try {
+      body = (await own.json()) as typeof body;
+    } catch {
+      dashboardError = true;
+      return;
+    }
     recent = body.recent ?? [];
     published = body.published ?? null;
     health = body.translations ?? null;
     dashboardKnown = true;
     return;
   }
-  dashboardError = 'Recently edited is unavailable. The last result may be out of date.';
+  dashboardError = true;
 }
 
 async function loadActivity() {
   activityLoading = true;
-  activityError = '';
+  activityError = false;
   // The log's own endpoint, cut to ten here: the tile is the top of that list.
   const log = await fetch('/admin/api/activity');
   activityLoading = false;
   if (log.ok) {
-    events = (((await log.json()) as { events?: ActivityEvent[] }).events ?? []).slice(0, 10);
+    try {
+      events = (((await log.json()) as { events?: ActivityEvent[] }).events ?? []).slice(0, 10);
+    } catch {
+      activityError = true;
+      return;
+    }
     activityKnown = true;
     return;
   }
-  activityError = 'Recent activity is unavailable. The last result may be out of date.';
+  activityError = true;
 }
 
 const held = $derived(pending.filter((entry) => entry.held_by).length);
@@ -111,36 +123,36 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
 </script>
 
 <main class="main">
-  <h1>Dashboard</h1>
-  <p class="list-note">What changed, and what is waiting to go out.</p>
+  <h1>{m.dashboard_title({}, options)}</h1>
+  <p class="list-note">{m.dashboard_intro({}, options)}</p>
   {#if collections.length}
     <div class="quick">
       {#each collections as name (name)}
-        <button class="btn" type="button" onclick={() => (creating = name)}>New {nameOf(name)}</button>
+        <button class="btn" type="button" onclick={() => (creating = name)}>{m.dashboard_new_collection({ collection: nameOf(name) }, options)}</button>
       {/each}
     </div>
   {/if}
   <div class="dash">
     <section class="dtile" class:is-lit={pending.length} aria-labelledby="d-pending">
-      <header><h2 id="d-pending">Unpublished changes</h2></header>
+      <header><h2 id="d-pending">{m.shell_unpublished_changes({}, options)}</h2></header>
       {#if pendingStatus === 'loading'}
-        <p class="line">Checking unpublished changes…</p>
+        <p class="line">{m.shell_pending_checking({}, options)}</p>
       {:else if pendingStatus === 'error'}
         <div class="notice notice-danger pending-read-error" role="alert">
-          Could not check unpublished changes.{pending.length ? ` Last known: ${pending.length}.` : ''}
-          <button class="btn-link" type="button" onclick={onretryPending}>Retry</button>
+          {pending.length ? m.shell_pending_failed_known({ count: pending.length }, options) : m.shell_pending_failed({}, options)}
+          <button class="btn-link" type="button" onclick={onretryPending}>{m.common_retry({}, options)}</button>
         </div>
       {:else if pending.length}
-        <p class="big">{pending.length} <small>{pending.length === 1 ? 'change' : 'changes'}</small></p>
+        <p class="big">{m.shell_change_count({ count: pending.length }, options)}</p>
         <p class="line">
-          {#if held}{`${held} on hold · `}{/if}{`oldest ${when(oldest).toLowerCase()}`}
+          {#if held}{m.shell_on_hold({ count: held }, options)} ·{' '}{/if}{m.shell_oldest({ when: formatRelativeTime(oldest, uiLocale) }, options)}
         </p>
         <div class="tile-actions">
-          <button class="btn btn-primary" type="button" onclick={onreview}>Review and publish</button>
+          <button class="btn btn-primary" type="button" onclick={onreview}>{m.dashboard_review_publish({}, options)}</button>
         </div>
       {:else}
-        <p class="big is-quiet">Everything is published</p>
-        <p class="line">Nothing waiting. Changes you make appear here until you publish them.</p>
+        <p class="big is-quiet">{m.dashboard_everything_published({}, options)}</p>
+        <p class="line">{m.dashboard_nothing_waiting({}, options)}</p>
       {/if}
     </section>
 
@@ -152,23 +164,23 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
       aria-labelledby="d-build"
     >
       <header>
-        <h2 id="d-build">Build status</h2>
-        <a href={sitePath(`/admin/activity`)}>Activity</a>
+        <h2 id="d-build">{m.build_status({}, options)}</h2>
+        <a href={sitePath(`/admin/activity`)}>{m.shell_activity({}, options)}</a>
       </header>
       {#if buildStatus === 'loading'}
-        <p class="line">Checking build status…</p>
+        <p class="line">{m.build_checking({}, options)}</p>
       {:else if buildStatus === 'error'}
         <div class="notice notice-danger build-read-error" role="alert">
-          Could not check build status.{build ? ' The displayed result may be out of date.' : ''}
-          <button class="btn-link" type="button" onclick={onretryBuild}>Retry</button>
+          {build ? m.build_check_failed_known({}, options) : m.build_check_failed({}, options)}
+          <button class="btn-link" type="button" onclick={onretryBuild}>{m.common_retry({}, options)}</button>
         </div>
       {:else if build}
-        <p class="big"><BuildPill {build} /></p>
+        <p class="big"><BuildPill {build} {uiLocale} /></p>
         {#if published}
           <p class="line">
-            Last published{#if published.by}{' by '}<b>{published.by}</b>{/if}{' '}<time
+            {#if published.by}{m.dashboard_last_published_by({ name: published.by }, options)}{:else}{m.dashboard_last_published({}, options)}{/if}{' '}<time
               datetime={new Date(published.at).toISOString()}
-              title={EXACT.format(published.at)}>{when(published.at).toLowerCase()}</time
+              title={formatExactTime(published.at, uiLocale)}>{formatRelativeTime(published.at, uiLocale)}</time
             >
           </p>
         {/if}
@@ -176,26 +188,24 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
         {#if build.commit_sha && published}
           <div class="tile-actions">
             <button class="btn-link" type="button" onclick={() => onrevert(build?.commit_sha ?? '')}>
-              Revert this publish
+              {m.build_revert_this({}, options)}
             </button>
           </div>
         {/if}
       {:else}
-        <p class="big is-quiet">No build status</p>
-        <p class="line">
-          This site has published nothing yet, or its Cloudflare token cannot read the builds.
-        </p>
+        <p class="big is-quiet">{m.build_no_status({}, options)}</p>
+        <p class="line">{m.build_no_status_hint({}, options)}</p>
       {/if}
     </section>
 
     <section class="dtile span-2" aria-labelledby="d-recent">
-      <header><h2 id="d-recent">Recently edited</h2></header>
+      <header><h2 id="d-recent">{m.dashboard_recently_edited({}, options)}</h2></header>
       {#if dashboardLoading && !dashboardKnown}
-        <p class="line">Loading…</p>
+        <p class="line">{m.common_loading({}, options)}</p>
       {:else if dashboardError}
         <div class="notice notice-danger dashboard-read-error" role="alert">
-          {dashboardError}
-          <button class="btn-link" type="button" onclick={loadDashboard}>Retry</button>
+          {m.dashboard_recent_failed({}, options)}
+          <button class="btn-link" type="button" onclick={loadDashboard}>{m.common_retry({}, options)}</button>
         </div>
         {#if recent.length}
           <ul class="recent">
@@ -211,47 +221,47 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
               <a href={sitePath(row.href)}>{row.title}</a>
               <span class="badge">{row.collection}</span>
               {#if row.editing}
-                <span class="lock">{row.editing.name || 'Somebody'} is editing</span>
+                <span class="lock">{m.dashboard_is_editing({ name: row.editing.name || m.dashboard_somebody({}, options) }, options)}</span>
               {/if}
               <span class="sub">
-                {row.kind === 'edit' ? 'Edited' : 'Published'}{#if row.by}{` by ${row.by}`}{/if}{' · '}<time
+                {row.kind === 'edit' ? (row.by ? m.dashboard_edited_by({ name: row.by }, options) : m.dashboard_edited({}, options)) : (row.by ? m.dashboard_published_by({ name: row.by }, options) : m.dashboard_published({}, options))}{' · '}<time
                   datetime={new Date(row.at).toISOString()}
-                  title={EXACT.format(row.at)}>{when(row.at).toLowerCase()}</time
+                  title={formatExactTime(row.at, uiLocale)}>{formatRelativeTime(row.at, uiLocale)}</time
                 >
               </span>
             </li>
           {/each}
         </ul>
       {:else}
-        <p class="line">Nothing has been edited yet. Pages you change appear here.</p>
+        <p class="line">{m.dashboard_recent_empty({}, options)}</p>
       {/if}
     </section>
 
     <!-- Absent on a one-language site, which has nothing to report. -->
     {#if health}
       <section class="dtile" aria-labelledby="d-tr">
-        <header><h2 id="d-tr">Translation health</h2></header>
+        <header><h2 id="d-tr">{m.dashboard_translation_health({}, options)}</h2></header>
         <div class="locales">
           {#each health.locales as row (row.locale)}
             {@const where = row.where ?? []}
             <div class="locale-line">
               <span class="chip" class:chip-missing={row.missing}>{row.locale.toUpperCase()}</span>
               {#if row.locale === health.defaultLocale && !row.missing && !row.stale}
-                <span class="ok">Source language</span>
+                <span class="ok">{m.dashboard_source_language({}, options)}</span>
               {:else if !row.missing && !row.stale}
-                <span class="ok">Up to date</span>
+                <span class="ok">{m.dashboard_up_to_date({}, options)}</span>
               {:else}
                 <span
-                  >{#if row.missing}<b>{`${row.missing} missing`}</b>{/if}{row.missing && row.stale
+                  >{#if row.missing}<b>{m.dashboard_missing_count({ count: row.missing }, options)}</b>{/if}{row.missing && row.stale
                     ? ' · '
-                    : ''}{row.stale ? `${row.stale} stale` : ''}</span
+                    : ''}{row.stale ? m.dashboard_stale_count({ count: row.stale }, options) : ''}</span
                 >
               {/if}
               <!-- One list is *Show*; several are named, since a list is one collection's. -->
               {#if where.length}
                 <span class="show">
                   {#each where as name (name)}
-                    <a href={sitePath(`/admin/c/${name}?locale=${row.locale}`)}>Show{where.length > 1 ? ` ${name}` : ''}</a>
+                    <a href={sitePath(`/admin/c/${name}?locale=${row.locale}`)}>{where.length > 1 ? m.dashboard_show_collection({ collection: name }, options) : m.dashboard_show({}, options)}</a>
                   {/each}
                 </span>
               {/if}
@@ -259,26 +269,25 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
           {/each}
         </div>
         <p class="line">
-          Stale means the language it was translated from has changed since. The count is the last
-          build's, so a translation you have fixed but not published is still in it.
+          {m.dashboard_stale_hint({}, options)}
         </p>
       </section>
     {/if}
 
     <section class="dtile span-2" aria-labelledby="d-act">
       <header>
-        <h2 id="d-act">Recent activity</h2>
-        <a href={sitePath(`/admin/activity`)}>All activity</a>
+        <h2 id="d-act">{m.dashboard_recent_activity({}, options)}</h2>
+        <a href={sitePath(`/admin/activity`)}>{m.dashboard_all_activity({}, options)}</a>
       </header>
       {#if activityLoading && !activityKnown}
-        <p class="line">Loading…</p>
+        <p class="line">{m.common_loading({}, options)}</p>
       {:else if activityError}
         <div class="notice notice-danger activity-read-error" role="alert">
-          {activityError}
-          <button class="btn-link" type="button" onclick={loadActivity}>Retry</button>
+          {m.dashboard_activity_failed({}, options)}
+          <button class="btn-link" type="button" onclick={loadActivity}>{m.common_retry({}, options)}</button>
         </div>
         {#if events.length}
-          <p class="line">Showing the last activity read.</p>
+          <p class="line">{m.dashboard_activity_stale({}, options)}</p>
         {/if}
       {:else if events.length}
         <ul class="activity">
@@ -297,8 +306,8 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
                   {#if activityGroupOf(event.kind)}
                     <span class="badge">{activityGroupOf(event.kind)}</span>
                   {/if}
-                  <time class="when" datetime={new Date(event.at).toISOString()} title={EXACT.format(event.at)}
-                    >{when(event.at)}</time
+                  <time class="when" datetime={new Date(event.at).toISOString()} title={formatExactTime(event.at, uiLocale)}
+                    >{formatRelativeTime(event.at, uiLocale)}</time
                   >
                 </span>
               </div>
@@ -306,7 +315,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
           {/each}
         </ul>
       {:else}
-        <p class="line">Nothing has been recorded yet.</p>
+        <p class="line">{m.dashboard_activity_empty({}, options)}</p>
       {/if}
     </section>
   </div>
