@@ -14,7 +14,9 @@ export const DEVICE_LOCALE_COOKIE = 'handover_ui_locale';
 
 const supportedLanguage = (value: unknown): UiLocale | undefined => {
   if (typeof value !== 'string') return undefined;
-  const language = value.trim().toLowerCase().split('-')[0];
+  const tag = value.trim().toLowerCase();
+  if (!/^[a-z]{2,3}(?:-[a-z0-9]{1,8})*$/.test(tag)) return undefined;
+  const language = tag.split('-')[0];
   return isUiLocale(language) ? language : undefined;
 };
 
@@ -28,6 +30,14 @@ export function deviceLocale(cookie: string): UiLocale | undefined {
     } catch {
       return undefined;
     }
+  }
+}
+
+export function readDeviceLocale(): UiLocale | undefined {
+  try {
+    return deviceLocale(document.cookie);
+  } catch {
+    return undefined;
   }
 }
 

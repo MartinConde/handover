@@ -167,6 +167,7 @@ test('a status-only preference save switches live and writes the installation-sc
 });
 
 test('an uncertain save reconciles before changing the confirmed language', async () => {
+  document.documentElement.lang = 'en';
   let ping = 0;
   vi.stubGlobal(
     'fetch',
@@ -196,6 +197,79 @@ test('an uncertain save reconciles before changing the confirmed language', asyn
   expect(document.documentElement.lang).toBe('en');
   await vi.waitFor(() => expect(document.documentElement.lang).toBe('de'));
   expect(ping).toBe(1);
+});
+
+test.each([
+  ['non-JSON response', new Response('<html>upstream error</html>', { status: 200 })],
+  ['response without a user', Response.json({})],
+])('an uncertain save recovers from a %s', async (_label, pingResponse) => {
+  const start = '/admin/c/pages/home';
+  history.replaceState({}, '', start);
+  rememberUiLocale('en');
+  let saves = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/auth/update-user') {
+        saves += 1;
+        return new Response('Connection lost', {
+          status: 503,
+          headers: { 'x-handover-request-uncertain': 'true' },
+        });
+      }
+      if (url === '/admin/api/ping') return pingResponse.clone();
+      if (url === '/admin/api/entries/pages/home')
+        return Response.json({
+          fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+          blocks: {},
+          data: { title: 'Home' },
+          revisions: { en: 'opened' },
+          pending: [],
+          published: ['en'],
+          problems: [],
+          locales: ['en'],
+          defaultLocale: 'en',
+          sourceLocale: 'en',
+          offered: ['en'],
+          translations: {},
+          stale: [],
+          drift: [],
+        });
+      if (url.startsWith('/admin/api/locks/'))
+        return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
+      if (url === '/admin/api/build') return Response.json({});
+      if (url === '/admin/api/dashboard')
+        return Response.json({ recent: [], published: null, translations: null });
+      return Response.json({ entries: [] });
+    }),
+  );
+  const root = show(session(), start);
+  await vi.waitFor(() => expect(root.querySelector('#f-title')).not.toBeNull());
+  const input = root.querySelector<HTMLInputElement>('#f-title');
+  if (!input) throw new Error('Editor did not open');
+  input.value = 'Uncommitted copy';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
+  flushSync();
+  const select = root.querySelector<HTMLSelectElement>('.user-menu select');
+  if (!select) throw new Error('Language picker did not open');
+  select.value = 'de';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+
+  await vi.waitFor(() =>
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain('Could not save'),
+  );
+  expect(select.disabled).toBe(false);
+  expect(document.documentElement.lang).toBe('en');
+  expect(document.cookie).toContain('handover_ui_locale=en');
+  expect(root.querySelector('.user-menu .name')?.textContent).toBe('Martin');
+  expect(root.querySelector('#f-title')).toBe(input);
+  expect(input.value).toBe('Uncommitted copy');
+  expect(location.pathname).toBe(start);
+
+  select.value = 'de';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  await vi.waitFor(() => expect(saves).toBe(2));
 });
 
 test('a failed preference save keeps the confirmed language and choice', async () => {
@@ -240,6 +314,31 @@ test('a newly signed-in account preference replaces the device hint before the s
   root.querySelector<HTMLButtonElement>('.session-unavailable button')?.click();
   await vi.waitFor(() => expect(root.querySelector('.shell')).not.toBeNull());
   expect(document.documentElement.lang).toBe('de');
+});
+
+test('a blocked cookie read does not prevent a newly signed-in preference from loading', async () => {
+  const read = vi.spyOn(document, 'cookie', 'get').mockImplementation(() => {
+    throw new DOMException('Cookies disabled', 'SecurityError');
+  });
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/ping')
+        return Response.json({ ...session(), user: { ...session().user, uiLocale: 'de' } });
+      if (url === '/admin/api/build') return Response.json({});
+      if (url === '/admin/api/dashboard')
+        return Response.json({ recent: [], published: null, translations: null });
+      return Response.json({ entries: [] });
+    }),
+  );
+  try {
+    const root = show(undefined);
+    root.querySelector<HTMLButtonElement>('.session-unavailable button')?.click();
+    await vi.waitFor(() => expect(root.querySelector('.shell')).not.toBeNull());
+    expect(document.documentElement.lang).toBe('de');
+  } finally {
+    read.mockRestore();
+  }
 });
 
 test('switching language keeps the open editor node, draft, URL, and content request', async () => {

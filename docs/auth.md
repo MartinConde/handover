@@ -113,10 +113,11 @@ facts, a password form, and their sessions with *Sign out everywhere*. Somebody 
 with a link and has no password yet is offered one there instead of the password form — that is
 how an invited person gets one. Changing a password signs the other devices out.
 
-The account row can now store an optional English or German interface preference. An unset value
-stays `null`; Handover does not backfill English. This release provides the validated storage API
-and includes the value in the signed-in bootstrap response. The account and sign-in language
-controls ship in a later update, so there is no new editor-facing control yet.
+The account row can store an optional English or German interface preference. An unset value stays
+`null`; Handover does not backfill English. The [interface-language controls](interface-language.md)
+are available on sign-in and reset screens, in the account menu, and on the account page. A signed-in
+choice is saved to the account; a signed-out choice is only a device hint. Only the picker and its
+save error are bilingual in this stage, while the remaining admin copy is translated in later work.
 
 ## Signing in too often
 

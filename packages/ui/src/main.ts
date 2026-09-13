@@ -1,6 +1,6 @@
 import { mount } from 'svelte';
 import App from './App.svelte';
-import { deviceLocale, resolveUiLocale, showUiLocale } from './i18n.js';
+import { readDeviceLocale, resolveUiLocale, showUiLocale } from './i18n.js';
 import { request as fetch, localPath } from './request.js';
 import './tokens.css';
 
@@ -13,7 +13,7 @@ const methods = JSON.parse(target.dataset.methods || '{}');
 const session = res.ok ? await res.json() : res.status === 401 ? null : undefined;
 const initialUiLocale = resolveUiLocale(
   session?.user?.uiLocale,
-  deviceLocale(document.cookie),
+  readDeviceLocale(),
   navigator.languages,
 );
 showUiLocale(initialUiLocale);

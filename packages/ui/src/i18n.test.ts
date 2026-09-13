@@ -5,6 +5,7 @@ import {
   deviceLocaleCookie,
   isUiLocale,
   messageOptions,
+  readDeviceLocale,
   rememberUiLocale,
   resolveUiLocale,
   UI_LOCALES,
@@ -33,6 +34,7 @@ describe('interface locale resolution', () => {
 
   test('invalid stored and device hints fall through to supported regional browser preferences', () => {
     expect(resolveUiLocale('fr', '%E0%A4%A', ['fr-FR', 'de-CH', 'en-GB'])).toBe('de');
+    expect(resolveUiLocale(undefined, undefined, ['de-@@', 'en-GB'])).toBe('en');
   });
 
   test('device choice wins only without a saved account preference', () => {
@@ -61,5 +63,16 @@ describe('interface locale resolution', () => {
     });
     expect(() => rememberUiLocale('de')).not.toThrow();
     write.mockRestore();
+  });
+
+  test('a refused device cookie read is treated as an absent hint', () => {
+    const read = vi.spyOn(document, 'cookie', 'get').mockImplementation(() => {
+      throw new DOMException('Cookies disabled', 'SecurityError');
+    });
+    try {
+      expect(readDeviceLocale()).toBeUndefined();
+    } finally {
+      read.mockRestore();
+    }
   });
 });

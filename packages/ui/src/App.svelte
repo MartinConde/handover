@@ -10,10 +10,10 @@ import Globals from './content/Globals.svelte';
 import Redirects from './content/Redirects.svelte';
 import { invalidateEntryDirectory } from './entry-directory.js';
 import {
-  deviceLocale,
   type UiLocale as InterfaceLocale,
   isUiLocale,
   messageOptions,
+  readDeviceLocale,
   rememberUiLocale,
   resolveUiLocale,
   showUiLocale,
@@ -221,9 +221,7 @@ async function loadSession() {
   sessionBusy = false;
   if (res.ok) {
     const next = (await res.json()) as Session;
-    useLocale(
-      resolveUiLocale(next.user.uiLocale, deviceLocale(document.cookie), navigator.languages),
-    );
+    useLocale(resolveUiLocale(next.user.uiLocale, readDeviceLocale(), navigator.languages));
     session = next;
     sessionError = '';
     return;
@@ -242,27 +240,46 @@ async function saveLocale(next: InterfaceLocale) {
   const userId = session.user.id;
   localeBusy = true;
   localeError = false;
-  const res = await fetch('/admin/api/auth/update-user', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ uiLocale: next }),
-  });
-  const confirmed =
-    res.ok &&
-    ((await res.json().catch(() => null)) as { status?: unknown } | null)?.status === true;
-  if (confirmed && session?.user.id === userId) {
-    session.user.uiLocale = next;
-    useLocale(next, true);
-  } else if (uncertainResponse(res)) {
-    const ping = await fetch('/admin/api/ping');
-    const reconciled = ping.ok ? ((await ping.json()) as Session) : undefined;
-    if (reconciled && session?.user.id === userId && reconciled.user.id === userId) {
-      session = reconciled;
-      if (isUiLocale(reconciled.user.uiLocale)) useLocale(reconciled.user.uiLocale, true);
-      localeError = reconciled.user.uiLocale !== next;
-    } else localeError = true;
-  } else localeError = true;
-  localeBusy = false;
+  try {
+    const res = await fetch('/admin/api/auth/update-user', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ uiLocale: next }),
+    });
+    const confirmed =
+      res.ok &&
+      ((await res.json().catch(() => null)) as { status?: unknown } | null)?.status === true;
+    if (confirmed && session?.user.id === userId) {
+      session.user.uiLocale = next;
+      useLocale(next, true);
+    } else if (uncertainResponse(res)) {
+      const ping = await fetch('/admin/api/ping');
+      const body = ping.ok ? await ping.json().catch(() => undefined) : undefined;
+      const user =
+        body &&
+        typeof body === 'object' &&
+        'user' in body &&
+        body.user &&
+        typeof body.user === 'object'
+          ? body.user
+          : undefined;
+      const reconciledId = user && 'id' in user ? user.id : undefined;
+      const reconciledLocale = user && 'uiLocale' in user ? user.uiLocale : undefined;
+      if (
+        session?.user.id === userId &&
+        reconciledId === userId &&
+        (reconciledLocale === null || isUiLocale(reconciledLocale))
+      ) {
+        session.user.uiLocale = reconciledLocale;
+        if (isUiLocale(reconciledLocale)) useLocale(reconciledLocale, true);
+        localeError = reconciledLocale !== next;
+      } else if (session?.user.id === userId) localeError = true;
+    } else if (session?.user.id === userId) localeError = true;
+  } catch {
+    if (session?.user.id === userId) localeError = true;
+  } finally {
+    localeBusy = false;
+  }
 }
 
 // Without the content type Better Auth answers 415 and the session outlives the click.

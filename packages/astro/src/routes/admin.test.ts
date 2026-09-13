@@ -91,6 +91,12 @@ test('weighted language negotiation respects regional tags, order, exclusions, a
   expect(await (await GET(ctx(undefined, { 'accept-language': 'de;q=wat' }))).text()).toContain(
     '<html lang="en">',
   );
+  expect(
+    await (await GET(ctx(undefined, { 'accept-language': 'en;q=0, *;q=1' }))).text(),
+  ).toContain('<html lang="de">');
+  expect(
+    await (await GET(ctx(undefined, { 'accept-language': 'de-@@;q=1, en;q=0.5' }))).text(),
+  ).toContain('<html lang="en">');
 });
 
 test('entry, shared, Canvas, and lazy assets are served immutable with their content type', async () => {
