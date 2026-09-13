@@ -14,13 +14,14 @@ import CanvasWorkspace from '../canvas/CanvasWorkspace.svelte';
 import type { CanvasRenderRequest } from '../canvas/canvas-renderer';
 import OffsiteDialog, { type Target } from '../content/Offsite.svelte';
 import { invalidateEntryDirectory } from '../entry-directory.js';
-import type { UiLocale } from '../i18n.js';
+import { formatExactTime, messageOptions, type UiLocale } from '../i18n.js';
 import {
   guardEntryActions,
   guardNavigation,
   navigate,
   navigateAfterAuthoritativeChange,
 } from '../navigate';
+import * as m from '../paraglide/messages.js';
 import CheckLines, {
   type CheckItem,
   merged,
@@ -142,6 +143,7 @@ let {
   /** Lets the application shell collapse its navigation only for full-width Canvas. */
   onmode?: (mode: EditorMode) => void;
 } = $props();
+const options = $derived(messageOptions(uiLocale));
 
 // svelte-ignore state_referenced_locally -- the loaded files seed this opened entry's session
 const entryForm = { fields: [...entry.fields], blocks: entry.blocks };
@@ -190,17 +192,19 @@ let side = $state(false);
 let canvasPane = $state<ReturnType<typeof CanvasWorkspace>>();
 
 type EditorMode = 'form' | 'split' | 'canvas';
-const MODES: { value: EditorMode; label: string }[] = [
-  { value: 'form', label: 'Form' },
-  { value: 'split', label: 'Split' },
-  { value: 'canvas', label: 'Canvas' },
-];
+const MODES: EditorMode[] = ['form', 'split', 'canvas'];
+const modeLabel = (value: EditorMode) =>
+  value === 'form'
+    ? m.editor_view_form({}, options)
+    : value === 'split'
+      ? m.editor_view_split({}, options)
+      : m.editor_view_canvas({}, options);
 // svelte-ignore state_referenced_locally -- one authenticated editor instance owns one preference key
 const modeKey = `handover:canvas-mode:v1:${siteBase() || '/'}:${userId}`;
 const readMode = (): EditorMode => {
   try {
     const value = localStorage.getItem(modeKey);
-    return MODES.some((mode) => mode.value === value) ? (value as EditorMode) : 'form';
+    return MODES.includes(value as EditorMode) ? (value as EditorMode) : 'form';
   } catch {
     return 'form';
   }
@@ -297,8 +301,6 @@ async function findRestore(of: string) {
   // The answer to a language nobody is looking at any more is not this pane's.
   if (found && of === shown) putBack = found;
 }
-
-const WHEN = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
 const createFrom = (of: string) => ask(`/admin/api/drafts/${collection}/${slug}/${of}`);
 // The file has to exist before a machine's draft can be written into it.
@@ -1080,7 +1082,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 {#snippet canvasPublish()}
   <button class="btn btn-primary canvas-publish" type="button" aria-haspopup="dialog" aria-expanded={confirming}
     disabled={!dirty || saving || missing.length > 0 || entry.drift.length > 0 || locked || actionBusy}
-    onclick={askToPublish} bind:this={canvasPublishButton}>Publish</button>
+    onclick={askToPublish} bind:this={canvasPublishButton}>{m.editor_publish_short({}, options)}</button>
 {/snippet}
 
 <main class="main main-editor" class:is-canvas-fullscreen={mode === 'canvas'}>
@@ -1143,7 +1145,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   {/if}
   <header class="entry-header" class:is-held={held}>
     <div class="crumbs">
-      <a href={sitePath(entry.singleton ? '/admin/site' : `/admin/c/${collection}`)}>{entry.singleton ? 'Site settings' : capitalise(collection)}</a><span class="sep" aria-hidden="true">/</span><span>{title}</span>
+      <a href={sitePath(entry.singleton ? '/admin/site' : `/admin/c/${collection}`)}>{entry.singleton ? m.editor_site_settings({}, options) : capitalise(collection)}</a><span class="sep" aria-hidden="true">/</span><span>{title}</span>
       <span class="autosave" class:is-saving={saving} class:is-offline={saveFailed}>
         {#if saving}Saving…{:else if saveFailed}Not saved{:else if sourceUnsaved}Unsaved changes{:else}Saved{/if}
       </span>
@@ -1163,16 +1165,16 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
                 aria-expanded={statusMenu}
                 disabled={locked || actionBusy}
                 onclick={() => (statusMenu = !statusMenu)}
-              ><span class="dot" aria-hidden="true"></span> {hidden ? 'Hidden' : 'Live'} ▾</button>
+              ><span class="dot" aria-hidden="true"></span> {hidden ? m.editor_status_hidden({}, options) : m.editor_status_live({}, options)} ▾</button>
               {#if statusMenu}
-                <div class="menu status-menu" role="menu" aria-label="Status">
+                <div class="menu status-menu" role="menu" aria-label={m.editor_status_menu({}, options)}>
                   <button type="button" role="menuitem" aria-current={hidden ? undefined : 'true'} onclick={() => (hidden ? setStatus(false) : (statusMenu = false))}>
-                    <span class="dot dot-live" aria-hidden="true"></span> Live
-                    <span class="sub">{url ? `on the site at ${url}` : 'on the site'}</span>
+                    <span class="dot dot-live" aria-hidden="true"></span> {m.editor_status_live({}, options)}
+                    <span class="sub">{url ? m.editor_status_live_detail({ url }, options) : m.editor_status_live_no_url({}, options)}</span>
                   </button>
                   <button type="button" role="menuitem" aria-current={hidden ? 'true' : undefined} onclick={() => { if (!hidden) startHiding(); else statusMenu = false; }}>
-                    <span class="dot dot-hidden" aria-hidden="true"></span> Hidden
-                    <span class="sub">off the site, kept here — we’ll ask where visitors should go</span>
+                    <span class="dot dot-hidden" aria-hidden="true"></span> {m.editor_status_hidden({}, options)}
+                    <span class="sub">{m.editor_status_hidden_detail({}, options)}</span>
                   </button>
                 </div>
               {/if}
@@ -1186,9 +1188,9 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             type="button"
             aria-pressed={held}
             disabled={locked || lost || actionBusy || (!dirty && !held)}
-            title={dirty || held ? undefined : 'There is nothing unpublished to hold back yet'}
+            title={dirty || held ? undefined : m.editor_hold_unavailable({}, options)}
             onclick={toggleHold}
-          ><span class="dot" aria-hidden="true"></span> Not ready yet</button>
+          ><span class="dot" aria-hidden="true"></span> {m.editor_hold({}, options)}</button>
           {#if missing.length}
             <button class="problems" type="button" onclick={goToFirst}>
               {missing.length} problem{missing.length === 1 ? '' : 's'}
@@ -1224,17 +1226,17 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           {/if}
         {/if}
         {#if !entry.singleton}
-          <div class="seg editor-modes" role="group" aria-label="Editor view">
-            {#each MODES as item (item.value)}
+          <div class="seg editor-modes" role="group" aria-label={m.editor_view({}, options)}>
+            {#each MODES as item (item)}
               <button
                 type="button"
-                aria-pressed={mode === item.value}
-                disabled={entry.drift.length > 0 || (item.value !== 'form' && !canvasSupported)}
-                title={item.value !== 'form' && !canvasSupported
-                  ? 'Canvas needs this site’s preview route'
+                aria-pressed={mode === item}
+                disabled={entry.drift.length > 0 || (item !== 'form' && !canvasSupported)}
+                title={item !== 'form' && !canvasSupported
+                  ? m.editor_canvas_unavailable({}, options)
                   : undefined}
-                onclick={() => setMode(item.value)}
-              >{item.label}</button>
+                onclick={() => setMode(item)}
+              >{modeLabel(item)}</button>
             {/each}
           </div>
         {/if}
@@ -1253,7 +1255,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
               : undefined}
           onclick={askToPublish}
           bind:this={publishButton}
-        >Publish this entry</button>
+        >{m.editor_publish({}, options)}</button>
         {#if !entry.singleton}
           <div class="pop-anchor">
             <button
@@ -1261,17 +1263,17 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
               type="button"
               aria-haspopup="menu"
               aria-expanded={moreMenu}
-              aria-label="More actions"
+              aria-label={m.editor_more_actions({}, options)}
               disabled={locked || actionBusy}
               onclick={() => (moreMenu = !moreMenu)}
             >⋯</button>
             {#if moreMenu}
-              <div class="menu" role="menu" aria-label="More actions">
-                <button type="button" role="menuitem" onclick={openRename}>Rename</button>
+              <div class="menu" role="menu" aria-label={m.editor_more_actions({}, options)}>
+                <button type="button" role="menuitem" onclick={openRename}>{m.editor_rename({}, options)}</button>
                 <button type="button" role="menuitem" onclick={() => { if (hidden) { moreMenu = false; setStatus(false); } else startHiding(); }}>
-                  {hidden ? 'Show' : 'Hide'}
+                  {hidden ? m.editor_show({}, options) : m.editor_hide({}, options)}
                 </button>
-                <button type="button" role="menuitem" onclick={startDeleting}>Delete</button>
+                <button type="button" role="menuitem" onclick={startDeleting}>{m.editor_delete({}, options)}</button>
               </div>
             {/if}
           </div>
@@ -1297,25 +1299,25 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       <p class="slug-row">
         {#if editing}
           <span class="url">{before}</span>
-          <label class="visually-hidden" for="entry-address">Web address in {language(locale)}</label>
+          <label class="visually-hidden" for="entry-address">{m.editor_address_label({ language: language(locale) }, options)}</label>
           <input class="input" id="entry-address" type="text" bind:value={typed} placeholder={slug} />
-          <button class="btn btn-sm" type="button" disabled={busy} onclick={saveAddress}>Save</button>
-          <button class="btn btn-ghost btn-sm" type="button" onclick={() => (editing = false)}>Cancel</button>
+          <button class="btn btn-sm" type="button" disabled={busy} onclick={saveAddress}>{m.editor_address_save({}, options)}</button>
+          <button class="btn btn-ghost btn-sm" type="button" onclick={() => (editing = false)}>{m.editor_address_cancel({}, options)}</button>
           {#if addressFailed}<span class="mode is-bad">{addressFailed}</span>{/if}
         {:else}
           <span class="url">{url}</span>
-          {#if !address}<span class="mode">Same as the file name</span>{/if}
-          <button class="btn-link" type="button" disabled={locked} onclick={editAddress}>Edit web address</button>
+          {#if !address}<span class="mode">{m.editor_address_file_name({}, options)}</span>{/if}
+          <button class="btn-link" type="button" disabled={locked} onclick={editAddress}>{m.editor_address_edit({}, options)}</button>
         {/if}
       </p>
     {/if}
     <!-- A global has no SEO or versions of its own: no tabs rather than three dead ones. -->
     <!-- Links, not a tablist: each is an address the back button lands on; keep the roles off. -->
     {#if !entry.singleton}
-      <nav class="tabs" aria-label="Entry sections">
-        <a href={sitePath(`/admin/c/${collection}/${slug}`)} aria-current={section === '' ? 'page' : undefined}>Content</a>
-        {#if seoField}<a href={sitePath(`/admin/c/${collection}/${slug}/seo`)} aria-current={section === 'seo' ? 'page' : undefined}>SEO</a>{/if}
-        <a href={sitePath(`/admin/c/${collection}/${slug}/history`)} aria-current={section === 'history' ? 'page' : undefined}>History</a>
+      <nav class="tabs" aria-label={m.editor_sections({}, options)}>
+        <a href={sitePath(`/admin/c/${collection}/${slug}`)} aria-current={section === '' ? 'page' : undefined}>{m.editor_section_content({}, options)}</a>
+        {#if seoField}<a href={sitePath(`/admin/c/${collection}/${slug}/seo`)} aria-current={section === 'seo' ? 'page' : undefined}>{m.editor_section_seo({}, options)}</a>{/if}
+        <a href={sitePath(`/admin/c/${collection}/${slug}/history`)} aria-current={section === 'history' ? 'page' : undefined}>{m.editor_section_history({}, options)}</a>
       </nav>
     {/if}
   </header>
@@ -1353,9 +1355,9 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       />
     {:else}
       {#if mode === 'split'}
-        <div class="canvas-mobile-tabs seg" role="group" aria-label="Split view pane">
-          <button type="button" aria-pressed={mobilePane === 'form'} onclick={() => (mobilePane = 'form')}>Form</button>
-          <button type="button" aria-pressed={mobilePane === 'page'} onclick={() => (mobilePane = 'page')}>Page</button>
+        <div class="canvas-mobile-tabs seg" role="group" aria-label={m.editor_split_pane({}, options)}>
+          <button type="button" aria-pressed={mobilePane === 'form'} onclick={() => (mobilePane = 'form')}>{m.editor_split_form({}, options)}</button>
+          <button type="button" aria-pressed={mobilePane === 'page'} onclick={() => (mobilePane = 'page')}>{m.editor_split_page({}, options)}</button>
         </div>
       {/if}
       <!-- Not drawn when a translation is on its own. -->
@@ -1375,8 +1377,8 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       <!-- Split replaces a comparison pane rather than adding a third column. -->
       {#if mode !== 'canvas' && !(mode === 'split' && !alone) && shown === undefined}
         {#if fields.length > 5}
-          <nav class="editor-outline" aria-label="On this page">
-            <p>On this page</p>
+          <nav class="editor-outline" aria-label={m.editor_outline({}, options)}>
+            <p>{m.editor_outline({}, options)}</p>
             {#each fields as field (field.path.join('.'))}
               <button type="button" onclick={() => focusField(field.path)}>{field.label || field.path.at(-1)}</button>
             {/each}
@@ -1400,8 +1402,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
                 </p>
                 {#if putBack}
                   <p>
-                    It was turned off here on {WHEN.format(putBack.at)}, and the {language(shown)}
-                    words are still in the repository.
+                    It was turned off here on <time datetime={new Date(putBack.at).toISOString()}>{formatExactTime(putBack.at, uiLocale)}</time>, and the {language(shown)} words are still in the repository.
                   </p>
                   <button
                     class="btn btn-primary"
@@ -1594,20 +1595,19 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   {/if}
   {#if renaming}
     <Modal labelledby="rename-h" initialFocus="#rename-to" returnTo={actionTrigger} dismissible={!busy} onclose={() => (renaming = false)}>
-        <h2 id="rename-h">Rename {title}</h2>
+        <h2 id="rename-h">{m.entry_list_rename_question({ title }, options)}</h2>
         <form onsubmit={rename}>
           <div class="field">
-            <div class="label-row"><label for="rename-to">File name</label></div>
+            <div class="label-row"><label for="rename-to">{m.entry_list_file_name({}, options)}</label></div>
             <input class="input filename" id="rename-to" type="text" bind:value={newName} aria-describedby="rename-hint" />
             <p class="hint" id="rename-hint">
-              Saved as <span class="filename">{willBe}</span>. The old address redirects to the new
-              one.
+              {m.entry_list_saved_as({}, options)} <span class="filename">{willBe}</span>. {m.entry_list_rename_hint({}, options)}
             </p>
           </div>
           {#if actionFailed}<div class="notice notice-danger" role="alert">{actionFailed}</div>{/if}
           <div class="actions">
-            <button class="btn" type="button" disabled={busy} onclick={() => (renaming = false)}>Cancel</button>
-            <button class="btn btn-primary" type="submit" disabled={busy}>{busy ? 'Renaming…' : 'Rename'}</button>
+            <button class="btn" type="button" disabled={busy} onclick={() => (renaming = false)}>{m.common_cancel({}, options)}</button>
+            <button class="btn btn-primary" type="submit" disabled={busy}>{busy ? m.entry_list_renaming({}, options) : m.editor_rename({}, options)}</button>
           </div>
         </form>
     </Modal>

@@ -10,13 +10,14 @@ and expired-link screens, have a device-only picker so they remain readable befo
 ## What is translated now
 
 Language controls, sign-in, password-reset and expired-link flows, the complete Account screen,
-the signed-in shell, the dashboard, collection entry lists, entry creation, and shared page/entry
-pickers are bilingual. Navigation, pending/build indicators, list and picker states, dates,
-language names, accessibility labels, validation, and retained failures reformat when the language
-changes. Dashboard, collection, and picker data are not reread, and typed values, filters, selected
-rows, creation starters, custom URLs, the signed-in session, and an open editor remain in place.
-Activity-event sentences and the remaining admin screens are being converted in stages and can
-still contain English.
+the signed-in shell, the dashboard, collection entry lists, entry creation, shared page/entry
+pickers, and the entry editor's tabs and header controls are bilingual. Navigation, pending/build
+indicators, list and picker states, editor URL metadata, converted dates, accessibility labels,
+validation, and retained failures reformat when the language changes. Dashboard, collection,
+picker, and open-entry data are not reread, and typed values, filters, selected rows, creation
+starters, custom URLs, the signed-in session, editor content language, and the active editor field
+remain in place. Save, lock and hold-result feedback plus activity-event sentences and the
+remaining admin screens are being converted in stages and can still contain English.
 
 Handover-owned interface text is translated. Content and site configuration are not: collection
 labels, schema descriptions, custom validation messages, entry titles, names, URLs, provider
@@ -53,6 +54,11 @@ reconcile the stored value; it does not reload the page or recreate the editor.
 Changing interface language does not navigate, refetch content, change a list's content-language
 `?locale=`, clear search/status/language filters or selected rows, remount an open editor, or
 replace a local action draft. A new sign-in resolves the newly signed-in account's preference.
+
+In an open entry, the Content/SEO/History tabs, Form/Split/Canvas controls, status and overflow
+actions, URL metadata, outline labels, and the date of a language removed through Handover update
+in place. The collection identifier, entry title, field labels, filenames, URLs, content-language
+selection, and typed content remain authored data.
 
 Connection failures retain the existing uncertain-result behavior. Handover renders a localized
 summary from a stable error descriptor, not from an English sentence or status code. Known

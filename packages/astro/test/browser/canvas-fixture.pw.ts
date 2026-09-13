@@ -183,6 +183,16 @@ test('saved interface language wins before first paint and live switches preserv
   await page.locator('.user-menu > button').click();
   await page.getByLabel('Interface language').selectOption('de');
   await expect(page.locator('html')).toHaveAttribute('lang', 'de');
+  await expect(page.getByRole('group', { name: 'Editoransicht' }).getByRole('button')).toHaveText([
+    'Formular',
+    'Geteilt',
+    'Canvas',
+  ]);
+  await expect(
+    page.getByRole('navigation', { name: 'Eintragsbereiche' }).getByRole('link'),
+  ).toHaveText(['Inhalt', 'Verlauf']);
+  await expect(page.getByRole('button', { name: 'Diesen Eintrag veröffentlichen' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Weitere Aktionen' })).toBeVisible();
   await expect(title).toHaveValue('Unsaved words');
   await expect(title).toHaveAttribute('data-locale-proof', 'same-node');
   await page.locator('#f-related button').click();

@@ -34,6 +34,12 @@ blocked for everyone else**: Rename, Delete, Hide and Show on the list, and Rest
 the Deleted view or the Activity log, all answer *Anna Berg is editing this entry — it can
 be renamed once they are done* rather than writing under her.
 
+Changing the account's [interface language](interface-language.md) while an entry is open updates
+its tabs, view controls, status and overflow actions, URL metadata and converted dates in place.
+It does not reread the entry, move its content-language selection, release or retake the lock, or
+replace the focused field and its unsaved value. Lock, save and hold-result messages are still part
+of the staged interface-language conversion and can currently remain in English.
+
 When the lock runs out while somebody is waiting on it, the banner says so and offers
 **Reload**, which opens the entry with the lock theirs.
 
