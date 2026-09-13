@@ -626,7 +626,16 @@
   "media_picker_manage": "Manage in Media library",
   "media_picker_selected_count": "{count} selected",
   "media_picker_nothing_selected": "Nothing selected",
-  "media_picker_insert_images": "Insert {count} images",
+  "media_picker_insert_images": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Insert {count} image",
+        "countPlural=other": "Insert {count} images"
+      }
+    }
+  ],
   "media_picker_insert": "Insert",
   "media_upload_converting": "Converting…",
   "media_upload_uploading": "Uploading…",

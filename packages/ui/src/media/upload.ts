@@ -34,8 +34,15 @@ export const fileSize = (bytes?: number | null, locale: UiLocale = 'en') => {
     bytes < 1024 * 1024
       ? Math.max(1, Math.round(bytes / 1024))
       : Math.round(bytes / 104_857.6) / 10;
-  return `${new Intl.NumberFormat(locale === 'de' ? 'de-DE' : 'en-GB').format(value)} ${bytes < 1024 * 1024 ? 'KB' : 'MB'}`;
+  let formatter = fileSizeFormatters.get(locale);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale === 'de' ? 'de-DE' : 'en-GB');
+    fileSizeFormatters.set(locale, formatter);
+  }
+  return `${formatter.format(value)} ${bytes < 1024 * 1024 ? 'KB' : 'MB'}`;
 };
+
+const fileSizeFormatters = new Map<UiLocale, Intl.NumberFormat>();
 
 const hex = (buffer: ArrayBuffer) =>
   [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -43,25 +50,30 @@ const hex = (buffer: ArrayBuffer) =>
 export class MediaUploadError extends Error {
   constructor(
     readonly descriptor: UiMessage,
-    cause?: unknown,
+    message = descriptor.detail ?? descriptor.code,
   ) {
-    super(cause instanceof Error ? cause.message : (descriptor.detail ?? descriptor.code));
+    super(message);
     this.name = 'MediaUploadError';
   }
 }
 
 const detailOf = (error: unknown) => (error instanceof Error ? error.message : undefined);
-const failure = (code: string, error?: unknown, status?: number) =>
+const failure = (code: string, error?: unknown, status?: number, message?: string) =>
   new MediaUploadError(
     {
       code,
       ...(status ? { status } : {}),
       ...(detailOf(error) ? { detail: detailOf(error) } : {}),
     },
-    error,
+    message ?? detailOf(error),
   );
-const responseFailure = async (response: Response, code: string) =>
-  new MediaUploadError(await responseMessage(response, code));
+const responseFailure = async (response: Response, code: string) => {
+  const descriptor = await responseMessage(response, code);
+  return new MediaUploadError(
+    descriptor,
+    descriptor.detail ?? `the upload failed (${response.status})`,
+  );
+};
 const mediaItem = (value: unknown): value is MediaItem => {
   if (!value || typeof value !== 'object') return false;
   const item = value as Partial<MediaItem>;
@@ -102,12 +114,14 @@ export async function uploadBlob(
       throw failure('MEDIA_UPLOAD_DECLARATION_UNCONFIRMED', undefined, asked.status);
     throw await responseFailure(asked, 'MEDIA_UPLOAD_DECLARATION_FAILED');
   }
-  let answer: { media?: unknown; upload?: { url?: unknown; key?: unknown } };
+  let body: unknown;
   try {
-    answer = (await asked.json()) as typeof answer;
+    body = await asked.json();
   } catch (error) {
     throw failure('MEDIA_UPLOAD_DECLARATION_INVALID', error);
   }
+  if (!body || typeof body !== 'object') throw failure('MEDIA_UPLOAD_DECLARATION_INVALID');
+  const answer = body as { media?: unknown; upload?: { url?: unknown; key?: unknown } };
   if (answer.media !== undefined) {
     if (!mediaItem(answer.media)) throw failure('MEDIA_UPLOAD_DECLARATION_INVALID');
     return answer.media;
@@ -133,7 +147,13 @@ export async function uploadBlob(
   } catch (error) {
     throw failure('MEDIA_UPLOAD_BUCKET_UNCONFIRMED', error);
   }
-  if (!put.ok) throw failure('MEDIA_UPLOAD_BUCKET_FAILED', undefined, put.status);
+  if (!put.ok)
+    throw failure(
+      'MEDIA_UPLOAD_BUCKET_FAILED',
+      undefined,
+      put.status,
+      `the bucket would not take the upload (${put.status})`,
+    );
   let confirmed: Response;
   try {
     confirmed = await fetch(`/admin/api/media/${hash}`, {
@@ -149,12 +169,15 @@ export async function uploadBlob(
       throw failure('MEDIA_UPLOAD_CONFIRMATION_UNCONFIRMED', undefined, confirmed.status);
     throw await responseFailure(confirmed, 'MEDIA_UPLOAD_CONFIRMATION_FAILED');
   }
-  let result: { media?: unknown };
+  let confirmedBody: unknown;
   try {
-    result = (await confirmed.json()) as typeof result;
+    confirmedBody = await confirmed.json();
   } catch (error) {
     throw failure('MEDIA_UPLOAD_CONFIRMATION_INVALID', error);
   }
+  if (!confirmedBody || typeof confirmedBody !== 'object')
+    throw failure('MEDIA_UPLOAD_CONFIRMATION_INVALID');
+  const result = confirmedBody as { media?: unknown };
   if (!mediaItem(result.media)) throw failure('MEDIA_UPLOAD_CONFIRMATION_INVALID');
   return result.media;
 }

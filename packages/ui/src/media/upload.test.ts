@@ -1,4 +1,5 @@
 import { expect, test, vi } from 'vitest';
+import * as m from '../paraglide/messages.js';
 import { fileSize, uploadBlob, uploadFile, uploadImage } from './upload.js';
 
 const bytes = new Uint8Array([1, 2, 3, 4]);
@@ -121,6 +122,11 @@ test.each([
     expected: { code: 'MEDIA_UPLOAD_DECLARATION_INVALID' },
   },
   {
+    name: 'null declaration success',
+    answers: { 'POST /admin/api/media': null },
+    expected: { code: 'MEDIA_UPLOAD_DECLARATION_INVALID' },
+  },
+  {
     name: 'bucket refusal',
     answers: {
       ...signed,
@@ -170,11 +176,54 @@ test.each([
     },
     expected: { code: 'MEDIA_UPLOAD_CONFIRMATION_INVALID' },
   },
-])('$name has a stable recovery descriptor', async ({ answers, expected }) => {
-  const { fetch } = server(answers);
-  expect(await descriptorOf(uploadBlob(blob(), { filename: 'mill.webp' }, { fetch }))).toEqual(
-    expected,
+  {
+    name: 'null confirmation success',
+    answers: {
+      ...signed,
+      [`PUT /admin/api/media/${HASH}`]: null,
+    },
+    expected: { code: 'MEDIA_UPLOAD_CONFIRMATION_INVALID' },
+  },
+])('$name has a stable recovery descriptor', async ({ name, answers, expected }) => {
+  const { fetch, calls } = server(answers);
+  const descriptor = await descriptorOf(uploadBlob(blob(), { filename: 'mill.webp' }, { fetch }));
+  if (name === 'null declaration success') expect(calls).toHaveLength(1);
+  if (name === 'null confirmation success') expect(calls).toHaveLength(3);
+  expect(descriptor).toEqual(expected);
+});
+
+test('bucket refusal keeps useful text for existing upload callers', async () => {
+  const { fetch } = server({
+    ...signed,
+    'PUT https://bucket/put': new Response('full', { status: 507 }),
+  });
+  await expect(uploadBlob(blob(), {}, { fetch })).rejects.toThrow(
+    'the bucket would not take the upload (507)',
   );
+});
+
+test.each([
+  {
+    stage: 'declaration',
+    answers: { 'POST /admin/api/media': new Response('gateway', { status: 502 }) },
+  },
+  {
+    stage: 'confirmation',
+    answers: {
+      ...signed,
+      [`PUT /admin/api/media/${HASH}`]: new Response('gateway', { status: 502 }),
+    },
+  },
+])('a non-JSON $stage refusal keeps the legacy status fallback', async ({ answers }) => {
+  const { fetch } = server(answers);
+  await expect(uploadBlob(blob(), {}, { fetch })).rejects.toThrow('the upload failed (502)');
+});
+
+test.each([
+  { locale: 'en' as const, expected: 'Insert 1 image' },
+  { locale: 'de' as const, expected: '1 Bild einfügen' },
+])('one selected image has a singular $locale action', ({ locale, expected }) => {
+  expect(m.media_picker_insert_images({ count: 1 }, { locale })).toBe(expected);
 });
 
 test('image normalization failure has a stable descriptor and keeps the diagnostic', async () => {

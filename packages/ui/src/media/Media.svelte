@@ -119,14 +119,8 @@ const queueText = (state: QueueState) => {
   return m.media_upload_uploaded({}, options);
 };
 const uploadMessage = (error: unknown): UiMessage =>
-  error instanceof MediaUploadError ||
-  (error instanceof Error &&
-    'descriptor' in error &&
-    typeof error.descriptor === 'object' &&
-    error.descriptor !== null &&
-    'code' in error.descriptor &&
-    typeof error.descriptor.code === 'string')
-    ? (error.descriptor as UiMessage)
+  error instanceof MediaUploadError
+    ? error.descriptor
     : error instanceof Error
       ? { code: 'MEDIA_UPLOAD_FAILED', detail: error.message }
       : { code: 'MEDIA_UPLOAD_FAILED' };
