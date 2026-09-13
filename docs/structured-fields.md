@@ -140,6 +140,9 @@ values stay where they are; no entry-directory reread or content write is caused
 Schema labels and option values, block type names, entry titles, paths, filenames, URLs and edited
 content remain exactly as authored. “Same in every language” describes shared structure; it changes
 language as interface text but does not duplicate or rewrite the stored value.
+Link-choice and row-action sentences translate as complete phrases around authored field names and
+row numbers. SEO meters always describe the plural configured limit, even when one character has
+been entered.
 
 `image` and `file` are a card: the picture at the field's own ratio, or the file's type and
 size, with the translatable half beside it and Replace and Remove under it. An empty one is a

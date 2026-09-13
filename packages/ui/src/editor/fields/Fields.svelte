@@ -671,10 +671,10 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   </div>
 {/snippet}
 
-{#snippet noEntry(id: string, labelId: string, says: string | undefined, text: string, open: () => void)}
+{#snippet noEntry(id: string, labelId: string, says: string | undefined, action: string, open: () => void)}
   <div class="list-empty" {id} role="group" aria-labelledby={labelId} aria-describedby={says}>
     <span>{m.field_nothing_chosen({}, messageOptions(uiLocale))}</span>
-    <button class="btn btn-sm" type="button" onclick={open}>{m.field_choose_named({ field: text }, messageOptions(uiLocale))}</button>
+    <button class="btn btn-sm" type="button" onclick={open}>{action}</button>
   </div>
 {/snippet}
 
@@ -755,7 +755,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           {:else if str([...at, 'ref'])}
             {@render chosenEntry(`${id}.ref`, `${id}-l`, says, str([...at, 'ref']), () => (picker = id))}
           {:else}
-            {@render noEntry(`${id}.ref`, `${id}-l`, says, 'a page or entry', () => (picker = id))}
+            {@render noEntry(`${id}.ref`, `${id}-l`, says, m.field_link_choose({}, messageOptions(uiLocale)), () => (picker = id))}
           {/if}
         </fieldset>
         <div class="field"><div class="label-row"><label for="{id}.label">{m.field_link_label({}, messageOptions(uiLocale))}</label></div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
@@ -780,7 +780,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           {@const s = sortable(() => keyOf(items, i), () => i)}
           <div class="row-card" class:is-dragging={s.isDragging} {@attach s.attach}>
             <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
-            {#if !translating}{@render controls(at, i, `${text} row ${i + 1}`, s.attachHandle)}{/if}
+            {#if !translating}{@render controls(at, i, m.field_row_name({ field: text, index: i + 1 }, messageOptions(uiLocale)), s.attachHandle)}{/if}
           </div>
         {:else}
           <p class="hint">{m.field_list_empty({}, messageOptions(uiLocale))}</p>
@@ -920,7 +920,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       {:else if str(at)}
         {@render chosenEntry(id, `${id}-l`, says, str(at), () => (picker = id))}
       {:else}
-        {@render noEntry(id, `${id}-l`, says, text, () => (picker = id))}
+        {@render noEntry(id, `${id}-l`, says, m.field_choose_named({ field: text }, messageOptions(uiLocale)), () => (picker = id))}
       {/if}
     {:else if field.type === 'embed' && translating}
       {@const value = embedValue(at)}

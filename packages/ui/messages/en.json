@@ -480,6 +480,8 @@
   "field_change": "Change",
   "field_nothing_chosen": "Nothing chosen yet",
   "field_choose_named": "Choose {field}",
+  "field_link_choose": "Choose a page or entry",
+  "field_row_name": "{field} row {index}",
   "field_reorder": "Reorder {item}",
   "field_duplicate": "Duplicate {item}",
   "field_remove": "Remove {item}",
@@ -537,16 +539,7 @@
   "field_seo_canonical": "Canonical URL",
   "field_seo_canonical_hint": "Only set this when the same page lives at another address.",
   "field_seo_meter_empty": "Up to about {limit} characters",
-  "field_seo_meter": [
-    {
-      "declarations": ["input count", "input limit", "local countPlural = count: plural"],
-      "selectors": ["countPlural"],
-      "match": {
-        "countPlural=one": "About {count} of ≈{limit} character",
-        "countPlural=other": "About {count} of ≈{limit} characters"
-      }
-    }
-  ],
+  "field_seo_meter": "About {count} of ≈{limit} characters",
   "field_seo_may_cut": "may be cut off",
   "editor_view": "Editor view",
   "editor_view_form": "Form",
