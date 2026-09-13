@@ -50,7 +50,14 @@ editor, or replace its draft. A new sign-in resolves the newly signed-in account
 Connection failures retain the existing uncertain-result behavior. Handover renders a localized
 summary from a stable error descriptor, not from an English sentence or status code. Known
 authentication codes select specific recovery text. Unknown technical detail stays separate from
-the translated summary where it is useful and safe to show.
+the translated summary where it is useful and safe to show. In particular, an entry read uses the
+specific not-found message only when the response carries `x-handover-error-code:
+ENTRY_NOT_FOUND`; an unidentified `404` keeps the generic localized load summary and status.
+
+Pending, build, dashboard, and activity reads validate their small response envelopes as well as
+their JSON syntax. `null`, a non-array collection, or an unknown build state enters the same
+localized retry state as another failed read without replacing last-known values. The empty build
+response `{}` remains valid and means that no build status is available.
 
 Password-length failures keep the entered values and give the supported 12–128-character range.
 Only an invalid, expired, or already-used reset token asks for a new link. A malformed Account read

@@ -124,6 +124,12 @@ async function hideTargets(
 }
 
 // The draft wins over the file; no sha goes to the browser, bases are compared server-side.
+const entryNotFound = () =>
+  new Response('Not found', {
+    status: 404,
+    headers: { 'x-handover-error-code': 'ENTRY_NOT_FOUND' },
+  });
+
 export async function getEntry(
   ctx: RequestContext,
   collection: string,
@@ -131,13 +137,13 @@ export async function getEntry(
 ): Promise<Response> {
   const collected = config.collections[collection];
   const global = globalOf(collection, slug);
-  if (!collected && !global) return new Response('Not found', { status: 404 });
+  if (!collected && !global) return entryNotFound();
   const schema = global ?? collected?.schema;
-  if (!schema) return new Response('Not found', { status: 404 });
+  if (!schema) return entryNotFound();
   // One read of every language answers drift, staleness and pending drafts alike.
   const loaded = await entryLocales(ctx, collection, slug, config.i18n.locales, true);
   const source = sourceIn(loaded);
-  if (!source) return new Response('Not found', { status: 404 });
+  if (!source) return entryNotFound();
   const data = loaded[source]?.data;
   const hidden = !isLive('default', data);
   const form = formFor(collection, slug);

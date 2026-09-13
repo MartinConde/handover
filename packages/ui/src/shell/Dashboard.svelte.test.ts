@@ -329,6 +329,48 @@ test('malformed dashboard reads use the same retained error states', async () =>
   expect(document.body.textContent).not.toContain('Nothing has been edited yet');
 });
 
+test.each([
+  ['null dashboard', '/admin/api/dashboard', null],
+  ['non-array recent entries', '/admin/api/dashboard', { recent: {} }],
+  ['null activity', '/admin/api/activity', null],
+  ['non-array activity events', '/admin/api/activity', { events: {} }],
+] as const)(
+  '%s keep dashboard collections unknown and retryable',
+  async (_label, malformedUrl, body) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url === malformedUrl) return Response.json(body);
+        if (url === '/admin/api/dashboard')
+          return Response.json({ recent: RECENT, published: null, translations: null });
+        return Response.json({ events: [] });
+      }),
+    );
+    app = mount(Dashboard, {
+      target: document.body,
+      props: {
+        pending: [],
+        build: null,
+        collections: [],
+        onreview: () => {},
+        onrevert: () => {},
+      },
+    });
+
+    if (malformedUrl.endsWith('/dashboard')) {
+      await vi.waitFor(() =>
+        expect(tile(document.body, 'd-recent')?.querySelector('[role="alert"]')).not.toBeNull(),
+      );
+      expect(tile(document.body, 'd-act')?.textContent).toContain('Nothing has been recorded yet');
+    } else {
+      await vi.waitFor(() =>
+        expect(tile(document.body, 'd-act')?.querySelector('[role="alert"]')).not.toBeNull(),
+      );
+      expect(tile(document.body, 'd-recent')?.textContent).toContain('The Mill House');
+    }
+  },
+);
+
 test('the dashboard switches its live chrome and dates without rereading data', async () => {
   const root = show(
     {

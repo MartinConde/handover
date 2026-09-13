@@ -345,6 +345,16 @@ async function signOut() {
 }
 
 let pendingRequest = 0;
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const isPendingEnvelope = (
+  value: unknown,
+): value is { entries?: typeof pending; defaultLocale?: string } =>
+  isRecord(value) &&
+  (value.entries === undefined || Array.isArray(value.entries)) &&
+  (value.defaultLocale === undefined || typeof value.defaultLocale === 'string');
+
 async function loadPending() {
   const mine = ++pendingRequest;
   pendingStatus = 'loading';
@@ -354,7 +364,7 @@ async function loadPending() {
     pendingStatus = 'error';
     return;
   }
-  let body: { entries?: typeof pending; defaultLocale?: string };
+  let body: unknown;
   try {
     body = (await res.json()) as typeof body;
   } catch {
@@ -362,6 +372,10 @@ async function loadPending() {
     return;
   }
   if (mine !== pendingRequest) return;
+  if (!isPendingEnvelope(body)) {
+    pendingStatus = 'error';
+    return;
+  }
   pending = body.entries ?? [];
   defaultLocale = body.defaultLocale ?? '';
   pendingKnown = true;
@@ -370,6 +384,13 @@ async function loadPending() {
 
 /** A publish redeploys the Worker, so this tab may be reloaded before the build finishes. */
 let buildRequest = 0;
+const isBuildEnvelope = (value: unknown): value is Partial<NonNullable<typeof build>> =>
+  isRecord(value) &&
+  (value.state === undefined ||
+    value.state === 'building' ||
+    value.state === 'live' ||
+    value.state === 'failed');
+
 async function loadBuild() {
   const mine = ++buildRequest;
   buildStatus = 'loading';
@@ -379,7 +400,7 @@ async function loadBuild() {
     buildStatus = 'error';
     return;
   }
-  let body: Partial<NonNullable<typeof build>>;
+  let body: unknown;
   try {
     body = (await res.json()) as typeof body;
   } catch {
@@ -387,6 +408,10 @@ async function loadBuild() {
     return;
   }
   if (mine !== buildRequest) return;
+  if (!isBuildEnvelope(body)) {
+    buildStatus = 'error';
+    return;
+  }
   // Without `commit_sha` nothing was published yet and the pill reports the worker's own build.
   build = body.state ? { ...body, state: body.state } : null;
   buildStatus = 'ready';
@@ -467,7 +492,10 @@ async function loadEntry(collection: string, slug: string) {
       detail: await res.text(),
     } satisfies ShellMessage;
   throw {
-    code: res.status === 404 ? 'ENTRY_NOT_FOUND' : 'ENTRY_LOAD_FAILED',
+    code:
+      res.headers.get('x-handover-error-code') === 'ENTRY_NOT_FOUND'
+        ? 'ENTRY_NOT_FOUND'
+        : 'ENTRY_LOAD_FAILED',
     status: res.status,
   } satisfies ShellMessage;
 }

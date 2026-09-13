@@ -1449,8 +1449,12 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
 });
 
 test('an unknown collection or missing entry is 404', async () => {
-  expect((await GET(ctx('entries/nope/mill-house'))).status).toBe(404);
-  expect((await GET(ctx('entries/listings/nope'))).status).toBe(404);
+  for (const path of ['entries/nope/mill-house', 'entries/listings/nope']) {
+    const res = await GET(ctx(path));
+    expect(res.status).toBe(404);
+    expect(await res.text()).toBe('Not found');
+    expect(res.headers.get('x-handover-error-code')).toBe('ENTRY_NOT_FOUND');
+  }
   expect(getFile).not.toHaveBeenCalledWith(expect.stringContaining('nope/'));
 });
 

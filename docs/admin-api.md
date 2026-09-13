@@ -12,7 +12,9 @@ Conventions across all of them:
 - **`:collection` is a key from `cms.config.ts` and `:slug` is an entry's file name.**
   `404` whenever the collection is not configured, and generally when the entry has no
   file at all. A [global](site-files.md#globals) is addressed the same way, with `globals`
-  as the collection and its file name as the slug
+  as the collection and its file name as the slug. The entry-read route preserves the `Not found`
+  body and adds `x-handover-error-code: ENTRY_NOT_FOUND`; clients must not infer that specific
+  condition from an unidentified `404`
 - **The browser never sends file contents to a publish.** What is committed is what the
   server has stored; a body says only *which* of it
 - **`409` is somebody else's work in the way** — a lock, a file that moved in the

@@ -9,6 +9,8 @@ between English and Deutsch updates tile headings, counts, loading/empty/error s
 status, controls, dates, and accessibility labels in place. It does not reread dashboard data.
 Entry titles, collection names, member names, content-language codes, and provider diagnostics
 stay exactly as authored. Activity-event sentences are still English during the staged migration.
+Malformed successful dashboard and activity responses stay unavailable and retryable; they do not
+erase an already-known tile value or masquerade as an empty result.
 
 ## Quick actions
 

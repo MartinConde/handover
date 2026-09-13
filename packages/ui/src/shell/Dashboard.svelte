@@ -76,16 +76,38 @@ async function load() {
   await Promise.all([loadDashboard(), loadActivity()]);
 }
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+const isDashboardEnvelope = (
+  value: unknown,
+): value is { recent?: Recent[]; published?: typeof published; translations?: Health | null } =>
+  isRecord(value) &&
+  (value.recent === undefined || Array.isArray(value.recent)) &&
+  (value.published === undefined || value.published === null || isRecord(value.published)) &&
+  (value.translations === undefined ||
+    value.translations === null ||
+    (isRecord(value.translations) && Array.isArray(value.translations.locales)));
+const isActivityEnvelope = (value: unknown): value is { events?: ActivityEvent[] } =>
+  isRecord(value) && (value.events === undefined || Array.isArray(value.events));
+
+let dashboardRequest = 0;
 async function loadDashboard() {
+  const mine = ++dashboardRequest;
   dashboardLoading = true;
   dashboardError = false;
   const own = await fetch('/admin/api/dashboard');
+  if (mine !== dashboardRequest) return;
   dashboardLoading = false;
   if (own.ok) {
-    let body: { recent?: Recent[]; published?: typeof published; translations?: Health | null };
+    let body: unknown;
     try {
       body = (await own.json()) as typeof body;
     } catch {
+      dashboardError = true;
+      return;
+    }
+    if (mine !== dashboardRequest) return;
+    if (!isDashboardEnvelope(body)) {
       dashboardError = true;
       return;
     }
@@ -98,19 +120,29 @@ async function loadDashboard() {
   dashboardError = true;
 }
 
+let activityRequest = 0;
 async function loadActivity() {
+  const mine = ++activityRequest;
   activityLoading = true;
   activityError = false;
   // The log's own endpoint, cut to ten here: the tile is the top of that list.
   const log = await fetch('/admin/api/activity');
+  if (mine !== activityRequest) return;
   activityLoading = false;
   if (log.ok) {
+    let body: unknown;
     try {
-      events = (((await log.json()) as { events?: ActivityEvent[] }).events ?? []).slice(0, 10);
+      body = await log.json();
     } catch {
       activityError = true;
       return;
     }
+    if (mine !== activityRequest) return;
+    if (!isActivityEnvelope(body)) {
+      activityError = true;
+      return;
+    }
+    events = (body.events ?? []).slice(0, 10);
     activityKnown = true;
     return;
   }

@@ -7,7 +7,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Translate the signed-in shell, navigation, dashboard, pending/build indicators, revert flow,
   retained shell feedback, dates, and accessibility labels into English and German. Live language
   changes preserve dashboard data, build polling, authored labels and diagnostics, and open editor
-  state.
+  state. Successful shell reads now reject invalid response envelopes without replacing last-known
+  status, and entry reads identify their specific not-found response with a stable header.
 
 - Translate the complete Account, sign-in, reset-password, and expired-link surfaces into English
   and German. Visible account/authentication feedback now follows live language changes without

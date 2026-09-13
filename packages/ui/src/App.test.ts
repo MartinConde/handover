@@ -313,6 +313,37 @@ test.each([
   await vi.waitFor(() => expect(saves).toBe(2));
 });
 
+test('an invalid later pending envelope retains the last-known count', async () => {
+  history.replaceState({}, '', '/admin');
+  let draftsReads = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/drafts') {
+        draftsReads += 1;
+        return Response.json(draftsReads === 1 ? { entries: [pendingEntry('pages/home')] } : null);
+      }
+      if (url === '/admin/api/build') return Response.json({});
+      if (url === '/admin/api/dashboard')
+        return Response.json({ recent: [], published: null, translations: null });
+      if (url === '/admin/api/activity') return Response.json({ events: [] });
+      return Response.json({});
+    }),
+  );
+  const root = show(session());
+  await vi.waitFor(() =>
+    expect(root.querySelector('.indicator')?.textContent).toContain('1 unpublished change'),
+  );
+
+  dispatchEvent(new Event('handover:navigate'));
+
+  await vi.waitFor(() => expect(root.querySelector('.pending-read-error')).not.toBeNull());
+  expect(root.querySelector('.indicator')?.textContent).toContain('1 unpublished change');
+  expect(root.querySelector('.pending-read-error')?.textContent).toContain(
+    'Count may be out of date.',
+  );
+});
+
 test('a failed preference save keeps the confirmed language and choice', async () => {
   vi.stubGlobal(
     'fetch',
@@ -656,7 +687,10 @@ test('an entry-load failure retranslates without another content request', async
     vi.fn(async (url: string) => {
       if (url === '/admin/api/entries/pages/missing') {
         entryReads += 1;
-        return new Response('Not found', { status: 404 });
+        return new Response('Not found', {
+          status: 404,
+          headers: { 'x-handover-error-code': 'ENTRY_NOT_FOUND' },
+        });
       }
       if (url === '/admin/api/auth/update-user') return Response.json({ status: true });
       if (url === '/admin/api/build') return Response.json({});
@@ -678,6 +712,25 @@ test('an entry-load failure retranslates without another content request', async
   await vi.waitFor(() => expect(failure?.textContent).toBe('Eintrag nicht gefunden'));
   expect(root.querySelector('main [role="alert"]')).toBe(failure);
   expect(entryReads).toBe(1);
+});
+
+test('an unidentified legacy 404 stays a generic localized entry-load failure', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/entries/pages/missing')
+        return new Response('Not found', { status: 404 });
+      if (url === '/admin/api/build') return Response.json({});
+      return Response.json({ entries: [] });
+    }),
+  );
+  const root = show(session(), '/admin/c/pages/missing');
+
+  await vi.waitFor(() =>
+    expect(root.querySelector('main [role="alert"]')?.textContent).toBe(
+      'Could not load the entry (404)',
+    ),
+  );
 });
 
 test('a failed pending read is unknown rather than fully published and retry recovers', async () => {
@@ -733,6 +786,37 @@ test('malformed shell status reads become retryable errors', async () => {
   await vi.waitFor(() => expect(root.querySelector('.pending-read-error')).not.toBeNull());
   expect(root.querySelector('.build-read-error')).not.toBeNull();
   expect(root.textContent).not.toContain('Everything is published');
+});
+
+test.each([
+  ['null drafts', '/admin/api/drafts', null],
+  ['non-array drafts', '/admin/api/drafts', { entries: {} }],
+  ['null build', '/admin/api/build', null],
+  ['unknown build state', '/admin/api/build', { state: 'queued' }],
+] as const)('%s become a retained retryable shell error', async (_label, malformedUrl, body) => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === malformedUrl) return Response.json(body);
+      if (url === '/admin/api/drafts')
+        return Response.json({ entries: [pendingEntry('pages/home')] });
+      if (url === '/admin/api/build')
+        return Response.json({ state: 'live', commit_sha: 'abc123', live_at: Date.now() });
+      if (url === '/admin/api/dashboard')
+        return Response.json({ recent: [], published: null, translations: null });
+      if (url === '/admin/api/activity') return Response.json({ events: [] });
+      return Response.json({});
+    }),
+  );
+  const root = show(session());
+
+  if (malformedUrl.endsWith('/drafts')) {
+    await vi.waitFor(() => expect(root.querySelector('.pending-read-error')).not.toBeNull());
+    expect(root.querySelector('.topbar .pill')?.textContent).toContain('Live');
+  } else {
+    await vi.waitFor(() => expect(root.querySelector('.build-read-error')).not.toBeNull());
+    expect(root.querySelector('.indicator')?.textContent).toContain('1 unpublished change');
+  }
 });
 
 test.each(['network', 'server'])(
