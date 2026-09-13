@@ -1,5 +1,5 @@
 import { DEFAULT_MAX } from '@handover/core';
-import { responseMessage, type UiMessage } from '../errors.js';
+import { messageText, responseMessage, type UiMessage } from '../errors.js';
 import type { UiLocale } from '../i18n.js';
 import { request, uncertainResponse } from '../request.js';
 /** One asset as the admin answers for it: the key a content file stores, and where it is served. */
@@ -50,7 +50,7 @@ const hex = (buffer: ArrayBuffer) =>
 export class MediaUploadError extends Error {
   constructor(
     readonly descriptor: UiMessage,
-    message = descriptor.detail ?? descriptor.code,
+    message = descriptor.detail ?? messageText(descriptor, 'en'),
   ) {
     super(message);
     this.name = 'MediaUploadError';

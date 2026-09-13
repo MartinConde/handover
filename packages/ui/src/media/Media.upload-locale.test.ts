@@ -93,6 +93,7 @@ test('live language switching preserves real pending upload work and recovery', 
     document.querySelectorAll('.picker-side .upload-row .name'),
     (node) => node.textContent,
   );
+  expect(selected).toEqual(['garden.jpg', 'harbour.jpg']);
   const beforeSwitch = calls.map(({ method, url }) => `${method} ${url}`);
   q<HTMLButtonElement>('[data-locale-switch]').click();
   flushSync();

@@ -1,6 +1,6 @@
 import { expect, test, vi } from 'vitest';
 import * as m from '../paraglide/messages.js';
-import { fileSize, uploadBlob, uploadFile, uploadImage } from './upload.js';
+import { fileSize, MediaUploadError, uploadBlob, uploadFile, uploadImage } from './upload.js';
 
 const bytes = new Uint8Array([1, 2, 3, 4]);
 // sha-256 of those four bytes, hand-computed with `printf '\x01\x02\x03\x04' | shasum -a 256`.
@@ -218,6 +218,43 @@ test.each([
   const { fetch } = server(answers);
   await expect(uploadBlob(blob(), {}, { fetch })).rejects.toThrow('the upload failed (502)');
 });
+
+test.each([
+  {
+    stage: 'declaration',
+    responses: [new TypeError('connection lost')],
+    descriptor: { code: 'MEDIA_UPLOAD_DECLARATION_UNCONFIRMED', status: 503 },
+    message: 'The upload request could not be confirmed. Check the library before trying again.',
+  },
+  {
+    stage: 'confirmation',
+    responses: [
+      Response.json({ upload: { key: `media/${HASH}.webp`, url: 'https://bucket/put' } }),
+      new Response(null),
+      new TypeError('connection lost'),
+    ],
+    descriptor: { code: 'MEDIA_UPLOAD_CONFIRMATION_UNCONFIRMED', status: 503 },
+    message:
+      'The file may have been stored, but registration could not be confirmed. Check the library before trying again.',
+  },
+])(
+  'a real request uncertainty at $stage gives existing callers readable recovery',
+  async ({ responses, descriptor, message }) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        const response = responses.shift();
+        if (response instanceof Error) throw response;
+        return response;
+      }),
+    );
+    const error = await uploadBlob(blob(), {}).catch((reason: unknown) => reason);
+    vi.unstubAllGlobals();
+    expect(error).toBeInstanceOf(MediaUploadError);
+    expect(error).toMatchObject({ message, descriptor });
+    expect((error as MediaUploadError).descriptor.detail).toBeUndefined();
+  },
+);
 
 test.each([
   { locale: 'en' as const, expected: 'Insert 1 image' },
