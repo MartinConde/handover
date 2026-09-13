@@ -477,6 +477,67 @@ async function sessionCookie(email: string, password: string) {
   return (res.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
 }
 
+async function sessionUser(cookie: string) {
+  const res = await open(`${SITE}${AUTH_BASE_PATH}/get-session`, cookie);
+  expect(res.status).toBe(200);
+  return ((await res.json()) as { user: Record<string, unknown> }).user;
+}
+
+test('an owner saves English as a durable interface preference', async () => {
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+  const cookie = await sessionCookie('owner@example.com', 'correct-horse-battery');
+
+  const updated = await call('/update-user', { uiLocale: 'en' }, { cookie });
+
+  expect(updated.status).toBe(200);
+  expect(await updated.json()).toEqual({ status: true });
+  expect(await sessionUser(cookie)).toMatchObject({ uiLocale: 'en' });
+});
+
+test('an editor saves German as a durable interface preference', async () => {
+  await seed('editor@example.com', 'correct-horse-battery', 'editor');
+  const cookie = await sessionCookie('editor@example.com', 'correct-horse-battery');
+
+  const updated = await call('/update-user', { uiLocale: 'de' }, { cookie });
+
+  expect(updated.status).toBe(200);
+  expect(await updated.json()).toEqual({ status: true });
+  expect(await sessionUser(cookie)).toMatchObject({ uiLocale: 'de' });
+});
+
+test('profile updates reject every supplied invalid interface preference', async () => {
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+  const cookie = await sessionCookie('owner@example.com', 'correct-horse-battery');
+
+  for (const uiLocale of ['fr', 42, ['de'], null]) {
+    const updated = await call('/update-user', { uiLocale }, { cookie });
+    const body = (await updated.json()) as { code?: string };
+    expect({ status: updated.status, code: body.code }, JSON.stringify(uiLocale)).toEqual({
+      status: 400,
+      code: 'VALIDATION_ERROR',
+    });
+  }
+});
+
+test('a name-only update preserves the saved interface preference', async () => {
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+  const cookie = await sessionCookie('owner@example.com', 'correct-horse-battery');
+  await call('/update-user', { uiLocale: 'de' }, { cookie });
+
+  const updated = await call('/update-user', { name: 'Renamed Owner' }, { cookie });
+
+  expect(updated.status).toBe(200);
+  expect(await updated.json()).toEqual({ status: true });
+  expect(await sessionUser(cookie)).toMatchObject({ name: 'Renamed Owner', uiLocale: 'de' });
+});
+
+test('a user without a saved interface preference remains unset', async () => {
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+  const cookie = await sessionCookie('owner@example.com', 'correct-horse-battery');
+
+  expect(await sessionUser(cookie)).toMatchObject({ uiLocale: null });
+});
+
 test('an invited user sets a first password from their account and signs in with it', async () => {
   emailing();
   await seedUser('invited@example.com', 'editor');

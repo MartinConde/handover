@@ -3,7 +3,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import Account from './Account.svelte';
 
 let app: ReturnType<typeof mount>;
-const USER = { id: 'u1', name: 'Martin', email: 'martin@example.com' };
+const USER = { id: 'u1', name: 'Martin', email: 'martin@example.com', uiLocale: null };
 
 interface Facts {
   hasPassword: boolean;

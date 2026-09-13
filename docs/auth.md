@@ -113,6 +113,11 @@ facts, a password form, and their sessions with *Sign out everywhere*. Somebody 
 with a link and has no password yet is offered one there instead of the password form — that is
 how an invited person gets one. Changing a password signs the other devices out.
 
+The account row can now store an optional English or German interface preference. An unset value
+stays `null`; Handover does not backfill English. This release provides the validated storage API
+and includes the value in the signed-in bootstrap response. The account and sign-in language
+controls ship in a later update, so there is no new editor-facing control yet.
+
 ## Signing in too often
 
 Password sign-in allows **3 attempts per 10 seconds** from one address, then answers `429` and the

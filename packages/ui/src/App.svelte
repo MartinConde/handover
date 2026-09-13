@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { Preset } from '@handover/core';
+import type { Preset, UiLocale } from '@handover/core';
 import Account from './account/Account.svelte';
 import Activity from './account/Activity.svelte';
 import Diagnostics from './account/Diagnostics.svelte';
@@ -28,7 +28,7 @@ export interface Session {
   preview?: boolean;
   /** `site` from astro.config, which the SEO previews print each language's address under. */
   site?: string;
-  user: { id: string; name: string; email: string };
+  user: { id: string; name: string; email: string; uiLocale: UiLocale | null };
   role: 'owner' | 'editor';
 }
 

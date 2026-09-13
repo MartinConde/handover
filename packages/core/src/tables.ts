@@ -171,7 +171,7 @@ export const cronState = sqliteTable(
 );
 
 /** Bumped whenever a table changes; the build refuses a stale `migrations/handover.json`. */
-export const SCHEMA_VERSION = 9;
+export const SCHEMA_VERSION = 10;
 
 const GENERATE = 'run `npx handover db generate` and commit migrations/';
 

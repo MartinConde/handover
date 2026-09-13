@@ -6,7 +6,13 @@ import { onRequest } from './middleware.js';
 vi.mock('virtual:handover/config', () => ({ default: { i18n: {} } }));
 
 let session: {
-  user: { id: string; name: string; email: string; role: string | null };
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string | null;
+    uiLocale?: 'en' | 'de' | null;
+  };
   session: { id: string };
 } | null = null;
 const getSession = vi.fn(async () => session);
@@ -40,14 +46,20 @@ test("the login's own endpoints are reachable without a session", async () => {
 
 test('a signed-in call passes through carrying the user and the role', async () => {
   session = {
-    user: { id: 'u1', name: 'Martin', email: 'martin@example.com', role: 'owner' },
+    user: {
+      id: 'u1',
+      name: 'Martin',
+      email: 'martin@example.com',
+      role: 'owner',
+      uiLocale: 'de',
+    },
     session: { id: 's1' },
   };
   const { status, passed, locals } = await run('/admin/api/drafts');
   expect({ status, passed }).toEqual({ status: 200, passed: true });
   // The session id rides along so the account page can mark "this device" without a token.
   expect(locals.handover).toEqual({
-    user: { id: 'u1', name: 'Martin', email: 'martin@example.com' },
+    user: { id: 'u1', name: 'Martin', email: 'martin@example.com', uiLocale: 'de' },
     role: 'owner',
     sessionId: 's1',
   });
@@ -60,6 +72,17 @@ test('a session whose row carries no role is an editor', async () => {
   };
   const { locals } = await run('/admin/api/drafts');
   expect((locals.handover as { role: string }).role).toBe('editor');
+});
+
+test('a signed-in user can carry an unset interface preference', async () => {
+  session = {
+    user: { id: 'u2', name: 'Anna', email: 'anna@example.com', role: 'editor', uiLocale: null },
+    session: { id: 's2' },
+  };
+
+  const { locals } = await run('/admin/api/ping');
+
+  expect(locals.handover).toMatchObject({ user: { uiLocale: null } });
 });
 
 test('the shell and the public site are not gated', async () => {

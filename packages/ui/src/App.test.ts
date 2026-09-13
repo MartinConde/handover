@@ -5,7 +5,7 @@ import App from './App.svelte';
 let app: ReturnType<typeof mount>;
 const session = (role: 'owner' | 'editor' = 'owner') => ({
   collections: ['listings', 'pages'],
-  user: { id: 'u1', name: 'Martin', email: 'martin@example.com' },
+  user: { id: 'u1', name: 'Martin', email: 'martin@example.com', uiLocale: null },
   role,
 });
 const show = (signedIn: ReturnType<typeof session> | null | undefined, path = '/admin') => {

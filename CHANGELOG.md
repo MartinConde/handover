@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Add validated, optional English/German account preference storage to the existing profile API
+  and bootstrap response. Upgrades require the additive nullable `user.ui_locale` D1 migration;
+  language controls follow in a later update.
+
 - Add a pinned, noninteractive contributor command that reproducibly generates the committed
   Better Auth schema from explicit configuration and output paths.
 

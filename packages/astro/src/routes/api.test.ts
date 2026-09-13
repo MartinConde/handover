@@ -849,7 +849,7 @@ const patch = (path: string, body: unknown, locals: Record<string, unknown> = {}
 
 test('ping returns the collection names and who is signed in', async () => {
   const session = {
-    user: { id: 'u1', name: 'Anna Berg', email: 'anna@example.com' },
+    user: { id: 'u1', name: 'Anna Berg', email: 'anna@example.com', uiLocale: 'de' },
     role: 'editor',
   };
   const res = await GET(ctx('ping', undefined, { handover: session }));
@@ -872,6 +872,18 @@ test('ping returns the collection names and who is signed in', async () => {
     // `site` from astro.config, which is what the SEO panel's previews print addresses under.
     site: 'https://coastalhomes.example',
   });
+});
+
+test('ping exposes an unset interface preference', async () => {
+  const session = {
+    user: { id: 'u1', name: 'Anna Berg', email: 'anna@example.com', uiLocale: null },
+    role: 'editor',
+  };
+
+  const res = await GET(ctx('ping', undefined, { handover: session }));
+
+  const body = (await res.json()) as { user: unknown };
+  expect(body.user).toEqual(session.user);
 });
 
 const owner = { user: { id: 'u1', name: 'Martin', email: 'martin@example.com' }, role: 'owner' };
@@ -1026,7 +1038,7 @@ test('the database check answers with the schema version the tables are at', asy
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
     ok: true,
-    detail: "The database answered — the admin's tables are there. Schema version 9.",
+    detail: "The database answered — the admin's tables are there. Schema version 10.",
   });
 });
 

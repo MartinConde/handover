@@ -1,5 +1,5 @@
 import config from 'virtual:handover/config';
-import { AUTH_BASE_PATH, roleOf } from '@handover/core';
+import { AUTH_BASE_PATH, roleOf, type UiLocale } from '@handover/core';
 import type { MiddlewareHandler } from 'astro';
 import { createAuth } from './auth.js';
 
@@ -43,9 +43,15 @@ export const onRequest: MiddlewareHandler = async ({ request, url, locals }, nex
     headers: request.headers,
   });
   if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  const user = session.user as typeof session.user & { uiLocale: UiLocale | null };
   locals.handover = {
-    user: { id: session.user.id, name: session.user.name, email: session.user.email },
-    role: roleOf('default', session.user),
+    user: {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      uiLocale: user.uiLocale,
+    },
+    role: roleOf('default', user),
     sessionId: session.session.id,
   };
   return next();

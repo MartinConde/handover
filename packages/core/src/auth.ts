@@ -6,10 +6,12 @@ import { admin } from 'better-auth/plugins/admin';
 import { adminAc, defaultStatements, userAc } from 'better-auth/plugins/admin/access';
 import { magicLink } from 'better-auth/plugins/magic-link';
 import { and, desc, eq, exists, gt, isNotNull, max, ne, or, sql } from 'drizzle-orm';
+import { z } from 'zod';
 import { logActivity } from './activity.js';
 import * as authTables from './auth-schema.js';
 import type { Db } from './db.js';
 import { activity } from './tables.js';
+import { UI_LOCALES } from './ui-locale.js';
 
 /** The one path no session assert may cover. */
 export const AUTH_BASE_PATH = '/admin/api/auth';
@@ -57,6 +59,16 @@ export function authOptions(siteId: string, db: Db, config: AuthConfig): BetterA
     baseURL: config.baseURL,
     secret: config.secret,
     database: drizzleAdapter(db, { provider: 'sqlite', schema: { ...authTables } }),
+    user: {
+      additionalFields: {
+        uiLocale: {
+          type: [...UI_LOCALES],
+          required: false,
+          input: true,
+          validator: { input: z.enum(UI_LOCALES) },
+        },
+      },
+    },
     // Signup is closed on every method separately; the only way in is an invite.
     emailAndPassword: {
       enabled: true,

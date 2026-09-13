@@ -36,6 +36,14 @@ code; what it records is [Activity log](activity.md).
 
 Locks and the activity read are below.
 
+## Profile preference and bootstrap
+
+`POST /admin/api/auth/update-user` accepts the signed-in user's display name and an optional
+`uiLocale` of `"en"` or `"de"`. A successful update answers `{ "status": true }`; read the
+saved value from the next `GET /admin/api/ping`, where `user.uiLocale` is `null` until the user
+chooses one. Unsupported values answer `400` with code `VALIDATION_ERROR`. Omitting `uiLocale`
+leaves the stored preference unchanged.
+
 ## Locks
 
 The soft lock on an entry, and what it does to a save. What it means for two people

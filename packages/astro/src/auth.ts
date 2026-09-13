@@ -12,6 +12,7 @@ import {
   type Role,
   resendMailer,
   senderAddress,
+  type UiLocale,
   userExists,
 } from '@handover/core';
 
@@ -22,7 +23,7 @@ export interface CloudflareContext {
 
 /** Handlers receive this shape after middleware verifies the session. */
 export interface Session {
-  user: { id: string; name: string; email: string };
+  user: { id: string; name: string; email: string; uiLocale: UiLocale | null };
   role: Role;
   /** Which of this person's sessions is asking — the account page marks it "this device". */
   sessionId: string;

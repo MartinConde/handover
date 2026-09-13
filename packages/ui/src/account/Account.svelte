@@ -1,4 +1,5 @@
 <script lang="ts">
+import type { UiLocale } from '@handover/core';
 import { request as fetch } from '../request.js';
 
 interface Facts {
@@ -11,7 +12,7 @@ let {
   role,
   onname,
 }: {
-  user: { id: string; name: string; email: string };
+  user: { id: string; name: string; email: string; uiLocale: UiLocale | null };
   role: 'owner' | 'editor';
   onname: () => void;
 } = $props();

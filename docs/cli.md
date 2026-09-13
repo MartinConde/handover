@@ -66,6 +66,11 @@ when a table changed, "nothing to migrate" when not — and records the package'
 version in `migrations/handover.json`. Commit both. The deploy command applies the SQL
 ([deploy](deploy.md#the-database)).
 
+The interface-preference update adds the nullable `user.ui_locale` column. Existing sites get an
+additive `ALTER TABLE`; fresh sites generate the column in their initial schema. Generate and
+apply that migration before deploying code that reads the updated account schema. Existing users
+remain unset until they choose a language.
+
 `astro build` refuses to run while `migrations/handover.json` is missing or behind the
 installed package, so an upgrade that forgot this step fails in the build log rather than
 on the first request. For example, version numbers from any mismatched pair are reported like

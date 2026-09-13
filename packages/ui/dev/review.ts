@@ -129,7 +129,7 @@ const config = {
 };
 const session = {
   collections: ['listings', 'pages', 'samples'],
-  user: { id: 'preview', name: 'Martin', email: 'martin@example.com' },
+  user: { id: 'preview', name: 'Martin', email: 'martin@example.com', uiLocale: null },
   role: 'owner' as const,
   preview: false,
 } satisfies Session;

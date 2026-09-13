@@ -106,6 +106,10 @@ new SQL file is part of the upgrade's diff, and the build fails until it exists
 ([CLI](cli.md#handover-db-generate)). Applying is idempotent, which is why it belongs in
 the deploy command below.
 
+The interface-preference schema adds nullable `user.ui_locale`. Apply its additive migration to
+local and remote D1 before deploying the package version that selects this column. It has no
+default and does not rewrite existing users.
+
 ## The GitHub App
 
 Handover commits as a GitHub App, so every commit shows as **Verified** and the site's
