@@ -1,5 +1,8 @@
 <script lang="ts">
 import type { Preset } from '@handover/core';
+import type { UiLocale } from '../i18n.js';
+import { messageOptions } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 import Modal from '../shared/Modal.svelte';
 
 let {
@@ -7,6 +10,7 @@ let {
   url,
   focal,
   presets = [],
+  uiLocale = 'en',
   onsave,
   onclose,
 }: {
@@ -16,6 +20,7 @@ let {
   focal: [number, number];
   /** The crops this dot is previewed in: the whole site's in the library. */
   presets?: { label: string; preset: Preset }[];
+  uiLocale?: UiLocale;
   onsave: (focal: [number, number]) => void;
   onclose: () => void;
 } = $props();
@@ -27,9 +32,13 @@ let down = $state(Math.round(focal[1] * 100));
 let stage = $state<HTMLElement>();
 
 // A phone holds a picture upright whatever the site's fields crop to.
-const PHONE = { label: 'Phone, upright', preset: { ratio: '9:16' } as Preset };
+const options = $derived(messageOptions(uiLocale));
+const phone = $derived({
+  label: m.focal_phone_upright({}, options),
+  preset: { ratio: '9:16' } as Preset,
+});
 const shapes = $derived(
-  presets.some((p) => p.preset.ratio === PHONE.preset.ratio) ? presets : [...presets, PHONE],
+  presets.some((p) => p.preset.ratio === phone.preset.ratio) ? presets : [...presets, phone],
 );
 
 function point(e: PointerEvent) {
@@ -60,8 +69,8 @@ const aspect = (preset: Preset) => preset.ratio?.replace(':', ' / ') ?? '4 / 3';
 </script>
 
 <Modal labelledby="focal-h" panelClass="dialog focal-dialog" {onclose}>
-    <h2 id="focal-h">Focal point — {name}</h2>
-    <p>Put the dot on the part that has to stay in every crop. Drag it, or move it with the arrow keys.</p>
+    <h2 id="focal-h">{m.focal_title({ name }, options)}</h2>
+    <p>{m.focal_intro({}, options)}</p>
     <div class="dialog-cols">
       <div>
         <!-- svelte-ignore a11y_no_static_element_interactions -- the handle is the control -->
@@ -71,18 +80,18 @@ const aspect = (preset: Preset) => preset.ratio?.replace(':', ' / ') ?? '4 / 3';
             class="focal-handle"
             type="button"
             style="left: {across}%; top: {down}%"
-            aria-label="Focal point, {across}% across, {down}% down"
+            aria-label={m.focal_position({ across, down }, options)}
             onkeydown={nudge}
           ></button>
         </div>
       </div>
       <div class="side-note">
-        <p><b>Every crop, framed around the dot.</b> These are the shapes this site renders, and a phone held upright; nothing is written to the picture itself.</p>
-        <p>This dot is what a page starts with when this picture is put on it. A page that has its own keeps it — moving this one does not go back and change those.</p>
+        <p><b>{m.focal_preview_intro({}, options)}</b></p>
+        <p>{m.focal_page_hint({}, options)}</p>
       </div>
     </div>
     {#if presets.length}
-      <h3 class="variant-title">Live previews</h3>
+      <h3 class="variant-title">{m.focal_live_previews({}, options)}</h3>
       <div class="ratio-strip">
         {#each shapes as p (p.preset.ratio)}
           <div class="ratio-item">
@@ -95,10 +104,10 @@ const aspect = (preset: Preset) => preset.ratio?.replace(':', ' / ') ?? '4 / 3';
         {/each}
       </div>
     {:else}
-      <p class="hint">This site shows its pictures whole, so the dot only matters where a page crops one.</p>
+      <p class="hint">{m.focal_no_presets({}, options)}</p>
     {/if}
     <div class="actions">
-      <button class="btn" type="button" onclick={onclose}>Cancel</button>
-      <button class="btn btn-primary" type="button" onclick={() => onsave([across / 100, down / 100])}>Save focal point</button>
+      <button class="btn" type="button" onclick={onclose}>{m.common_cancel({}, options)}</button>
+      <button class="btn btn-primary" type="button" onclick={() => onsave([across / 100, down / 100])}>{m.focal_save({}, options)}</button>
     </div>
 </Modal>

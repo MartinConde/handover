@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate crop and focal-point dialogs, live control labels and retained source/render/upload
+  recovery into English and German. Live switching preserves dialog nodes, focus, crop geometry,
+  focal coordinates, authored filenames and preset labels without image processing, content writes
+  or upload restarts.
+
 - Translate media-picker guidance, limits, selections, upload queues and retained recovery into
   English and German. Stable upload-stage descriptors preserve server diagnostics and distinguish
   refused, malformed and unconfirmed outcomes; live switching keeps search, focus, chosen order and

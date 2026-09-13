@@ -1,4 +1,5 @@
 import { ratioOf } from '@handover/core';
+import { messageText, type UiMessage } from '../errors.js';
 import { type MediaItem, uploadBlob } from './upload.js';
 
 /** A rectangle of the original, in its own pixels: what a crop is before it is any bytes. */
@@ -89,6 +90,25 @@ export function dragRegion(
 export const cropName = (filename?: string | null) =>
   `${(filename ?? '').replace(/\.[^.]+$/, '') || 'crop'}${filename ? '-crop' : ''}.webp`;
 
+export class CropError extends Error {
+  constructor(readonly descriptor: UiMessage) {
+    super(descriptor.detail ?? messageText(descriptor, 'en'));
+    this.name = 'CropError';
+  }
+}
+
+const detailOf = (error: unknown) => (error instanceof Error ? error.message : undefined);
+const cropFailure = (
+  code: 'CROP_SOURCE_FAILED' | 'CROP_RENDER_FAILED',
+  error?: unknown,
+  status?: number,
+) =>
+  new CropError({
+    code,
+    ...(status ? { status } : {}),
+    ...(detailOf(error) ? { detail: detailOf(error) } : {}),
+  });
+
 /** The crop as its own asset: the original's bytes are read back from the bucket. */
 export async function uploadCrop(
   item: MediaItem,
@@ -97,23 +117,35 @@ export async function uploadCrop(
 ): Promise<MediaItem> {
   const { fetch = globalThis.fetch } = deps;
   // CORS must permit reading the stored original.
-  const res = await fetch(item.url ?? '', { cache: 'reload' }).catch(() => undefined);
-  if (!res?.ok)
-    throw new Error(
-      'the original could not be read back from storage — the bucket needs GET in its CORS rule for this site',
-    );
-  const source = await createImageBitmap(await res.blob());
+  let res: Response;
+  try {
+    res = await fetch(item.url ?? '', { cache: 'reload' });
+  } catch (error) {
+    throw cropFailure('CROP_SOURCE_FAILED', error);
+  }
+  if (!res.ok) throw cropFailure('CROP_SOURCE_FAILED', undefined, res.status);
+  let source: ImageBitmap;
+  try {
+    source = await createImageBitmap(await res.blob());
+  } catch (error) {
+    throw cropFailure('CROP_SOURCE_FAILED', error);
+  }
   const canvas = document.createElement('canvas');
   canvas.width = region.w;
   canvas.height = region.h;
-  canvas
-    .getContext('2d')
-    ?.drawImage(source, region.x, region.y, region.w, region.h, 0, 0, region.w, region.h);
-  source.close();
-  const blob = await new Promise<Blob | null>((resolve) =>
-    canvas.toBlob(resolve, 'image/webp', 0.9),
-  );
-  if (!blob) throw new Error('the crop could not be made');
+  let blob: Blob | null;
+  try {
+    const context = canvas.getContext('2d');
+    if (!context) throw cropFailure('CROP_RENDER_FAILED');
+    context.drawImage(source, region.x, region.y, region.w, region.h, 0, 0, region.w, region.h);
+    blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/webp', 0.9));
+  } catch (error) {
+    if (error instanceof CropError) throw error;
+    throw cropFailure('CROP_RENDER_FAILED', error);
+  } finally {
+    source.close();
+  }
+  if (!blob) throw cropFailure('CROP_RENDER_FAILED');
   return uploadBlob(blob, {
     filename: cropName(item.filename),
     width: region.w,

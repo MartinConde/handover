@@ -219,6 +219,14 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
       return m.media_upload_normalization_failed({}, options);
     case 'MEDIA_UPLOAD_FAILED':
       return m.media_upload_failed({}, options);
+    case 'CROP_SOURCE_FAILED':
+      return message.status
+        ? m.crop_source_failed_status({ status: message.status }, options)
+        : m.crop_source_failed({}, options);
+    case 'CROP_RENDER_FAILED':
+      return m.crop_render_failed({}, options);
+    case 'CROP_FAILED':
+      return m.crop_failed({}, options);
     default:
       return m.common_unknown_error({}, options);
   }

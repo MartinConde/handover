@@ -18,11 +18,17 @@ reformat when the language changes. Structured-field wrappers now include group/
 link and reference presentation, image/file cards, embed recovery, SEO controls and their open field
 popovers and notices. Required fields and built-in scalar type, date, selection, text-length and
 number-bound validation emit descriptors. Rich-text toolbar names, link controls and
-foreign-formatting guidance are bilingual. Media-picker presentation, selection queues and upload
-recovery are bilingual; crop/focal dialogs and the full media-library screen remain staged follow-up
-work. Dashboard, collection, picker, and open-entry data are not reread, and typed
+foreign-formatting guidance are bilingual. Media-picker presentation, selection queues, upload
+recovery, and crop/focal dialogs are bilingual; the full media-library screen remains staged
+follow-up work. Dashboard, collection, picker, and open-entry data are not reread, and typed
 values, queued saves, undo history, filters, selected rows, creation starters, custom URLs, the
 signed-in session, editor content language, and the active editor field remain in place.
+
+An open crop or focal-point dialog keeps its node, focus, crop region, ratio and focal coordinates
+when the interface language changes. Live slider and focal-handle labels update, while filenames and
+site-authored preset labels remain unchanged. Switching does not process an image, write content or
+restart an upload. Already-visible source-read, render and upload failures reformat from stable
+descriptors, with useful technical detail kept separate.
 Activity-event sentences and the remaining admin screens are being converted in stages and can
 still contain English.
 

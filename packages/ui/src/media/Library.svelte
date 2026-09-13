@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { Preset } from '@handover/core';
 import { tick } from 'svelte';
+import type { UiLocale } from '../i18n.js';
 import { request as fetch, sitePath } from '../request.js';
 import MediaImage from '../shared/MediaImage.svelte';
 import Modal from '../shared/Modal.svelte';
@@ -11,11 +12,13 @@ import { fileSize, type LibraryItem, uploadFile, uploadImage } from './upload.js
 let {
   base = '',
   presets = [],
+  uiLocale = 'en',
 }: {
   /** Where a stored key is served from. */
   base?: string;
   /** Every shape this site crops a picture to: what the focal picker previews and Crop offers. */
   presets?: { label: string; preset: Preset }[];
+  uiLocale?: UiLocale;
 } = $props();
 
 let kind = $state<'images' | 'files'>('images');
@@ -522,6 +525,7 @@ function show(next: 'images' | 'files') {
     url={chosen.url ?? `${base}/${chosen.src}`}
     focal={chosen.focal ?? [0.5, 0.5]}
     {presets}
+    {uiLocale}
     onsave={(point) => { describe({ focal: point }); framing = false; }}
     onclose={() => (framing = false)}
   />
@@ -531,6 +535,7 @@ function show(next: 'images' | 'files') {
   <Crop
     item={chosen}
     ratios={presets.map((p) => p.preset.ratio ?? '').filter(Boolean)}
+    {uiLocale}
     onmade={(made) => {
       cropping = false;
       // The panel moves to the copy, which is how the client sees the original is still there.

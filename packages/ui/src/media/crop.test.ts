@@ -121,3 +121,50 @@ test('a crop bases CMS requests without changing storage URLs', async () => {
   expect(media).toMatchObject({ id: HASH });
   expect(source.close).toHaveBeenCalledOnce();
 });
+
+test('a refused source read keeps its crop recovery identity', async () => {
+  await expect(
+    uploadCrop(
+      {
+        id: 'original',
+        src: 'media/original.webp',
+        url: 'https://cdn/original.webp',
+        filename: 'mill.webp',
+      },
+      { x: 10, y: 20, w: 320, h: 180 },
+      { fetch: vi.fn(async () => new Response(null, { status: 403 })) },
+    ),
+  ).rejects.toMatchObject({ descriptor: { code: 'CROP_SOURCE_FAILED', status: 403 } });
+});
+
+test('a failed canvas render keeps its crop recovery identity', async () => {
+  const source = { close: vi.fn() };
+  vi.stubGlobal(
+    'createImageBitmap',
+    vi.fn(async () => source),
+  );
+  const createElement = document.createElement.bind(document);
+  vi.spyOn(document, 'createElement').mockImplementation(((name: string) => {
+    if (name !== 'canvas') return createElement(name);
+    return {
+      width: 0,
+      height: 0,
+      getContext: () => ({ drawImage: vi.fn() }),
+      toBlob: (done: BlobCallback) => done(null),
+    } as unknown as HTMLCanvasElement;
+  }) as typeof document.createElement);
+
+  await expect(
+    uploadCrop(
+      {
+        id: 'original',
+        src: 'media/original.webp',
+        url: 'https://cdn/original.webp',
+        filename: 'mill.webp',
+      },
+      { x: 10, y: 20, w: 320, h: 180 },
+      { fetch: vi.fn(async () => new Response(bytes)) },
+    ),
+  ).rejects.toMatchObject({ descriptor: { code: 'CROP_RENDER_FAILED' } });
+  expect(source.close).toHaveBeenCalledOnce();
+});

@@ -155,6 +155,12 @@ selection order, queue progress and upload recovery. Switching language leaves i
 media, pending files, filenames and focus in place and causes no library reread or upload restart.
 An upload completing after the switch reports its result in the latest language.
 
+Focal-point and crop dialogs update their headings, instructions, controls, live accessibility
+labels and retained failures in place. Their DOM nodes, focus, focal coordinates, crop region and
+ratio remain unchanged; authored filenames and preset labels do not translate. Changing interface
+language causes no image processing, content write or geometry reset. Crop source-read, render and
+upload failures keep separate recovery identities and safe diagnostics.
+
 `image` and `file` are a card: the picture at the field's own ratio, or the file's type and
 size, with the translatable half beside it and Replace and Remove under it. An empty one is a
 drop zone that takes a file dropped on it and opens the

@@ -757,7 +757,7 @@ const initial = $derived(
     {:else if path === '/admin/site'}
       <Globals />
     {:else if path === '/admin/media'}
-      <Library base={session?.mediaBase ?? ''} presets={session?.presets ?? []} />
+      <Library base={session?.mediaBase ?? ''} presets={session?.presets ?? []} {uiLocale} />
     {:else if path === '/admin/account'}
       <Account
         user={session.user}

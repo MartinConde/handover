@@ -1049,6 +1049,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         url={src(at)}
         focal={point(at)}
         presets={field.preset.ratio ? [{ label: text, preset: field.preset }] : []}
+        {uiLocale}
         onsave={(moved) => { write([...at, 'focal'], centred(moved) ? undefined : moved); framing = ''; }}
         onclose={() => (framing = '')}
       />
@@ -1061,6 +1062,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         url={src(image)}
         focal={point(image)}
         presets={[{ label: m.field_seo_social_image({}, messageOptions(uiLocale)), preset: SOCIAL_CARD }]}
+        {uiLocale}
         onsave={(moved) => { write([...image, 'focal'], centred(moved) ? undefined : moved); framing = ''; }}
         onclose={() => (framing = '')}
       />

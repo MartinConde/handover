@@ -65,6 +65,13 @@ it. It is written as `focal` on the value and wins over the picture's own defaul
 page renders it; a dot left in the middle is written as nothing. Moving the default for every
 page that did not set one is the library's ([The media library](media-library.md#the-focal-point)).
 
+The focal and crop dialogs follow the account's interface language, including their live control
+labels and recovery. Switching English/Deutsch keeps the same dialog, focus, focal coordinates,
+crop region and selected ratio. Filenames and preset labels stay as authored. A switch does not
+process an image, write content or restart an upload. If creating a cropped copy fails while reading
+or rendering the source, the dialog keeps a stable recovery reason; upload-stage failures retain
+the same refused, unconfirmed and diagnostic distinctions as the picker.
+
 What a translation owns is the alt text of a picture and the display name of a file. Every
 other part is the same in every language, so a language being translated is shown those two
 and nothing else: no picker, no Replace, no Remove.
