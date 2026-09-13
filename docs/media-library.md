@@ -59,6 +59,27 @@ content. A page that already writes its own alt, in its own language, keeps it w
 replaced. The copied value belongs to the page: changing the library default later does not change
 existing content or a deployed page.
 
+The library follows the account's **Interface language** for search, filters, counts, dates and
+byte sizes, the detail panel, metadata recovery and deletion guidance. Switching English/Deutsch
+keeps the same selected asset, search, filter state, focused control, unsaved tag input, optimistic
+metadata and pending uploads. Filenames, alt text, tags, storage keys, MIME values, URLs and site
+preset labels remain authored data.
+
+## Failure and recovery
+
+A failed or malformed library read keeps the last valid result and offers a safe retry. Metadata
+edits are optimistic and serialized per asset. A refused save keeps the draft and retries the same
+idempotent metadata change; a lost connection or malformed success says that the result is
+unconfirmed rather than claiming it failed. An asset that disappeared asks for a library reload.
+
+Deletion independently rechecks current and published usage. `MEDIA_IN_USE` recommends Archive;
+`MEDIA_PUBLISHED_IN_USE` requires publishing the removal and waiting for that deployment. A
+confirmed storage refusal can retry, while `MEDIA_DELETE_UNCONFIRMED` and a malformed successful
+reply reload the library before another mutation so an already-completed delete is not repeated
+blindly. The API preserves its existing statuses and `error` text while adding stable `code` values
+for these known media outcomes. Unknown response detail is shown separately from Handover's
+translated summary.
+
 ## The focal point
 
 Nothing is written to a picture. Every crop the site renders is a delivery transformation of the

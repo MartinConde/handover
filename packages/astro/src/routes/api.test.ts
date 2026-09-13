@@ -5935,9 +5935,20 @@ test('saving metadata returns the asset usage instead of marking it unused', asy
 });
 
 test('a write with nothing the row holds is refused, and an unknown asset is a 404', async () => {
-  expect((await PATCH(patch(`media/${PHOTO}`, { focal: 0.5 }))).status).toBe(400);
+  const invalid = await PATCH(patch(`media/${PHOTO}`, { focal: 0.5 }));
+  expect({ status: invalid.status, body: await invalid.json() }).toEqual({
+    status: 400,
+    body: {
+      code: 'MEDIA_METADATA_INVALID',
+      error: 'a focal point is [x, y], each 0 to 1',
+    },
+  });
   setMediaDetails.mockResolvedValueOnce(undefined);
-  expect((await PATCH(patch(`media/${PHOTO}`, { tags: ['x'] }))).status).toBe(404);
+  const missing = await PATCH(patch(`media/${PHOTO}`, { tags: ['x'] }));
+  expect({ status: missing.status, body: await missing.json() }).toEqual({
+    status: 404,
+    body: { code: 'MEDIA_NOT_FOUND', error: 'Not found' },
+  });
 });
 
 // Archiving is the answer to "get rid of it" and is never gated on usage.
@@ -5988,6 +5999,7 @@ test('a picture a file in the repository names cannot be deleted', async () => {
 
   expect(res.status).toBe(409);
   expect(await res.json()).toMatchObject({
+    code: 'MEDIA_IN_USE',
     error: expect.stringContaining('used in 1 place'),
     uses: ['pages/about'],
   });
@@ -6024,6 +6036,7 @@ test('a picture only the published site still uses says so in those words', asyn
 
   expect(res.status).toBe(409);
   expect(await res.json()).toMatchObject({
+    code: 'MEDIA_PUBLISHED_IN_USE',
     error: expect.stringContaining('The published site still uses this in 3 places'),
     uses: ['listings/mill-house', 'listings/seaview-cottage', 'pages/about'],
   });
@@ -6074,6 +6087,19 @@ test('a repository that cannot be read refuses the delete rather than allowing i
 test('an asset the site does not have is a 404, and nothing is read to answer it', async () => {
   expect((await deleteAsset(PHOTO)).status).toBe(404);
   expect(contentFiles).not.toHaveBeenCalled();
+});
+
+test('an asset delete without a bucket keeps the setup detail and a stable code', async () => {
+  bucketed = false;
+  const res = await deleteAsset(PHOTO);
+  expect({ status: res.status, body: await res.json() }).toEqual({
+    status: 503,
+    body: {
+      code: 'MEDIA_STORAGE_UNAVAILABLE',
+      error: expect.stringContaining('R2_ACCOUNT_ID and R2_BUCKET in wrangler.jsonc'),
+    },
+  });
+  expect(findMedia).not.toHaveBeenCalled();
 });
 
 test('a site that has not been told where its bucket is names all four values', async () => {

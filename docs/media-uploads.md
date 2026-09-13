@@ -43,6 +43,10 @@ connection loss or malformed success after a possible write is reported as uncon
 library before starting another upload. Server or provider diagnostics remain separate from the
 localized recovery sentence. Changing **Interface language** reformats an already-visible failure
 and an upload that finishes afterwards uses the latest language; it does not restart the upload.
+The same contract applies on the full media-library screen: its selected asset, search, metadata
+draft and queue stay in place, and a pending upload completes in the language currently selected.
+The library reload after completion keeps the selected detail panel and authored metadata rather
+than treating the locale change as a new request.
 
 ## Keys are content-addressed
 

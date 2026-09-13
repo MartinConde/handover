@@ -588,6 +588,143 @@
       }
     }
   ],
+  "media_library_title": "Media",
+  "media_library_image_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} image",
+        "countPlural=other": "{count} images"
+      }
+    }
+  ],
+  "media_library_file_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} file",
+        "countPlural=other": "{count} files"
+      }
+    }
+  ],
+  "media_library_filtered_image_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} matching image",
+        "countPlural=other": "{count} matching images"
+      }
+    }
+  ],
+  "media_library_filtered_file_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} matching file",
+        "countPlural=other": "{count} matching files"
+      }
+    }
+  ],
+  "media_library_archived": "Archived",
+  "media_library_recovered": "Recovered",
+  "media_library_unused": "Unused",
+  "media_library_search": "Search media",
+  "media_library_search_placeholder": "Search by file name or tag",
+  "media_library_upload": "Upload",
+  "media_library_files_to_upload": "Files to upload",
+  "media_library_kind": "Media kind",
+  "media_library_images": "Images",
+  "media_library_files": "Files",
+  "media_library_drop_choose_images": "{#drop}Drop images here{/drop} or {#choose}choose images{/choose}",
+  "media_library_drop_choose_files": "{#drop}Drop files here{/drop} or {#choose}choose files{/choose}",
+  "media_library_image_hint": "JPEG, PNG, WebP or HEIC up to 10 MB",
+  "media_library_file_hint": "PDF up to 10 MB",
+  "media_library_loading": "Loading…",
+  "media_library_no_matches": "Nothing here matches that.",
+  "media_library_empty_images": "Nothing here yet — drop a picture on the box above.",
+  "media_library_empty_files": "Nothing here yet — drop a file on the box above.",
+  "media_library_not_used": "not used yet",
+  "media_library_used_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "used in {count} place",
+        "countPlural=other": "used in {count} places"
+      }
+    }
+  ],
+  "media_library_unarchive": "Unarchive",
+  "media_library_unarchive_named": "Unarchive {filename}",
+  "media_library_close_details": "Close media details",
+  "media_library_uploaded": "uploaded {date}",
+  "media_library_focal_hint": "The dot is this picture’s default focal point. A page that set its own keeps it.",
+  "media_library_focal": "Focal point",
+  "media_library_crop": "Crop",
+  "media_library_copied": "Copied",
+  "media_library_copy_url": "Copy URL",
+  "media_library_recovered_hint": "Recovered: this file was found in storage without a record, probably from an interrupted upload.",
+  "media_library_used": "Used",
+  "media_library_stored_as": "Stored as",
+  "media_library_tags": "Tags",
+  "media_library_remove_tag": "Remove tag {tag}",
+  "media_library_add_tag": "Add a tag",
+  "media_library_tags_hint": "Tags are what the search above finds a picture by.",
+  "media_library_default_alt": "Default alt text",
+  "media_library_alt_hint": "Each page can override this — and its own alt text, in its own language, wins there.",
+  "media_library_archive": "Archive",
+  "media_library_delete": "Delete",
+  "media_library_delete_used_image": "Delete is off while this picture is {usage}. Archiving hides it from the picker and keeps every page working.",
+  "media_library_delete_used_file": "Delete is off while this file is {usage}. Archiving hides it from the picker and keeps every page working.",
+  "media_library_delete_unused_image": "Not used anywhere, so Delete is available. It asks first — and archiving keeps the picture instead.",
+  "media_library_delete_unused_file": "Not used anywhere, so Delete is available. It asks first — and archiving keeps the file instead.",
+  "media_library_delete_title": "Delete “{filename}” permanently?",
+  "media_library_delete_intro": "Nothing on the site uses it. This removes the file from storage and cannot be undone.",
+  "media_library_delete_archive_image": "If you might want it back, archive it instead — an archived picture costs nothing and never appears in the picker.",
+  "media_library_delete_archive_file": "If you might want it back, archive it instead — an archived file costs nothing and never appears in the picker.",
+  "media_library_cancel": "Cancel",
+  "media_library_deleting": "Deleting…",
+  "media_library_delete_permanently": "Delete permanently",
+  "media_library_read_failed": "Could not load the media library. Check the connection and try again.",
+  "media_library_read_failed_status": "Could not load the media library ({status}). Check the connection and try again.",
+  "media_library_read_invalid": "The media-library response could not be verified. The previous result was kept.",
+  "media_library_metadata_failed": "That change was not saved. Try the same change again.",
+  "media_library_metadata_failed_status": "That change was not saved ({status}). Try the same change again.",
+  "media_library_metadata_unconfirmed": "It could not be confirmed whether that change was saved. Reapplying the same metadata is safe.",
+  "media_library_metadata_invalid": "The save response could not be verified. Reapplying the same metadata is safe.",
+  "media_library_not_found": "That asset is no longer in the media library.",
+  "media_library_storage_unavailable": "Media storage is unavailable.",
+  "media_library_delete_in_use": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "This asset is used in {count} place and cannot be deleted. Archive it instead.",
+        "countPlural=other": "This asset is used in {count} places and cannot be deleted. Archive it instead."
+      }
+    }
+  ],
+  "media_library_delete_published_in_use": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "The published site still uses this asset in {count} place. Publish its removal and wait for that deployment before deleting it.",
+        "countPlural=other": "The published site still uses this asset in {count} places. Publish its removal and wait for that deployment before deleting it."
+      }
+    }
+  ],
+  "media_library_delete_failed": "The asset could not be deleted. Try again.",
+  "media_library_delete_failed_status": "The asset could not be deleted ({status}). Try again.",
+  "media_library_delete_unconfirmed": "It could not be confirmed whether the asset was deleted. Reload the library before taking another action.",
+  "media_library_delete_invalid": "The delete response could not be verified. Reload the library before taking another action.",
+  "media_library_retry_metadata": "Retry save for “{filename}”",
+  "media_library_retry_delete": "Retry delete",
+  "media_library_reload": "Reload library",
   "media_picker_title_many": "Choose images for “{field}”",
   "media_picker_title_image": "Choose an image for “{field}”",
   "media_picker_title_file": "Choose a file for “{field}”",

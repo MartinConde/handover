@@ -591,6 +591,143 @@
       }
     }
   ],
+  "media_library_title": "Medien",
+  "media_library_image_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} Bild",
+        "countPlural=other": "{count} Bilder"
+      }
+    }
+  ],
+  "media_library_file_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} Datei",
+        "countPlural=other": "{count} Dateien"
+      }
+    }
+  ],
+  "media_library_filtered_image_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} passendes Bild",
+        "countPlural=other": "{count} passende Bilder"
+      }
+    }
+  ],
+  "media_library_filtered_file_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} passende Datei",
+        "countPlural=other": "{count} passende Dateien"
+      }
+    }
+  ],
+  "media_library_archived": "Archiviert",
+  "media_library_recovered": "Wiederhergestellt",
+  "media_library_unused": "Unbenutzt",
+  "media_library_search": "Medien durchsuchen",
+  "media_library_search_placeholder": "Nach Dateiname oder Schlagwort suchen",
+  "media_library_upload": "Hochladen",
+  "media_library_files_to_upload": "Hochzuladende Dateien",
+  "media_library_kind": "Medienart",
+  "media_library_images": "Bilder",
+  "media_library_files": "Dateien",
+  "media_library_drop_choose_images": "{#drop}Bilder hier ablegen{/drop} oder {#choose}Bilder auswählen{/choose}",
+  "media_library_drop_choose_files": "{#drop}Dateien hier ablegen{/drop} oder {#choose}Dateien auswählen{/choose}",
+  "media_library_image_hint": "JPEG, PNG, WebP oder HEIC bis 10 MB",
+  "media_library_file_hint": "PDF bis 10 MB",
+  "media_library_loading": "Wird geladen…",
+  "media_library_no_matches": "Keine Medien entsprechen der Suche.",
+  "media_library_empty_images": "Noch keine Bilder vorhanden — lege ein Bild im Feld oben ab.",
+  "media_library_empty_files": "Noch keine Dateien vorhanden — lege eine Datei im Feld oben ab.",
+  "media_library_not_used": "noch nicht verwendet",
+  "media_library_used_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "an {count} Stelle verwendet",
+        "countPlural=other": "an {count} Stellen verwendet"
+      }
+    }
+  ],
+  "media_library_unarchive": "Wieder einblenden",
+  "media_library_unarchive_named": "{filename} wieder einblenden",
+  "media_library_close_details": "Mediendetails schließen",
+  "media_library_uploaded": "hochgeladen am {date}",
+  "media_library_focal_hint": "Der Punkt ist der Standard-Fokuspunkt dieses Bildes. Eine Seite mit eigenem Fokuspunkt behält ihn.",
+  "media_library_focal": "Fokuspunkt",
+  "media_library_crop": "Zuschneiden",
+  "media_library_copied": "Kopiert",
+  "media_library_copy_url": "URL kopieren",
+  "media_library_recovered_hint": "Wiederhergestellt: Diese Datei wurde im Speicher ohne Datensatz gefunden, wahrscheinlich nach einem unterbrochenen Upload.",
+  "media_library_used": "Verwendet",
+  "media_library_stored_as": "Gespeichert als",
+  "media_library_tags": "Schlagwörter",
+  "media_library_remove_tag": "Schlagwort {tag} entfernen",
+  "media_library_add_tag": "Schlagwort hinzufügen",
+  "media_library_tags_hint": "Über Schlagwörter findet die Suche oben ein Bild.",
+  "media_library_default_alt": "Standard-Alternativtext",
+  "media_library_alt_hint": "Jede Seite kann ihn überschreiben — ihr eigener Alternativtext in ihrer eigenen Sprache hat dort Vorrang.",
+  "media_library_archive": "Archivieren",
+  "media_library_delete": "Löschen",
+  "media_library_delete_used_image": "Löschen ist nicht möglich, solange dieses Bild {usage} wird. Durch Archivieren verschwindet es aus der Auswahl und alle Seiten funktionieren weiter.",
+  "media_library_delete_used_file": "Löschen ist nicht möglich, solange diese Datei {usage} wird. Durch Archivieren verschwindet sie aus der Auswahl und alle Seiten funktionieren weiter.",
+  "media_library_delete_unused_image": "Nirgendwo verwendet, daher ist Löschen möglich. Du wirst vorher gefragt — durch Archivieren bleibt das Bild stattdessen erhalten.",
+  "media_library_delete_unused_file": "Nirgendwo verwendet, daher ist Löschen möglich. Du wirst vorher gefragt — durch Archivieren bleibt die Datei stattdessen erhalten.",
+  "media_library_delete_title": "„{filename}“ dauerhaft löschen?",
+  "media_library_delete_intro": "Nichts auf der Website verwendet diese Datei. Sie wird aus dem Speicher entfernt; dies kann nicht rückgängig gemacht werden.",
+  "media_library_delete_archive_image": "Wenn du das Bild vielleicht noch brauchst, archiviere es stattdessen — ein archiviertes Bild kostet nichts und erscheint nie in der Auswahl.",
+  "media_library_delete_archive_file": "Wenn du die Datei vielleicht noch brauchst, archiviere sie stattdessen — eine archivierte Datei kostet nichts und erscheint nie in der Auswahl.",
+  "media_library_cancel": "Abbrechen",
+  "media_library_deleting": "Wird gelöscht…",
+  "media_library_delete_permanently": "Dauerhaft löschen",
+  "media_library_read_failed": "Die Medienbibliothek konnte nicht geladen werden. Prüfe die Verbindung und versuche es erneut.",
+  "media_library_read_failed_status": "Die Medienbibliothek konnte nicht geladen werden ({status}). Prüfe die Verbindung und versuche es erneut.",
+  "media_library_read_invalid": "Die Antwort der Medienbibliothek konnte nicht überprüft werden. Das vorherige Ergebnis wurde beibehalten.",
+  "media_library_metadata_failed": "Die Änderung wurde nicht gespeichert. Versuche dieselbe Änderung erneut.",
+  "media_library_metadata_failed_status": "Die Änderung wurde nicht gespeichert ({status}). Versuche dieselbe Änderung erneut.",
+  "media_library_metadata_unconfirmed": "Es konnte nicht bestätigt werden, ob die Änderung gespeichert wurde. Dieselben Metadaten können sicher erneut angewendet werden.",
+  "media_library_metadata_invalid": "Die Antwort zum Speichern konnte nicht überprüft werden. Dieselben Metadaten können sicher erneut angewendet werden.",
+  "media_library_not_found": "Dieses Medium ist nicht mehr in der Medienbibliothek vorhanden.",
+  "media_library_storage_unavailable": "Der Medienspeicher ist nicht verfügbar.",
+  "media_library_delete_in_use": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Dieses Medium wird an {count} Stelle verwendet und kann nicht gelöscht werden. Archiviere es stattdessen.",
+        "countPlural=other": "Dieses Medium wird an {count} Stellen verwendet und kann nicht gelöscht werden. Archiviere es stattdessen."
+      }
+    }
+  ],
+  "media_library_delete_published_in_use": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Die veröffentlichte Website verwendet dieses Medium noch an {count} Stelle. Veröffentliche das Entfernen und warte auf die Bereitstellung, bevor du es löschst.",
+        "countPlural=other": "Die veröffentlichte Website verwendet dieses Medium noch an {count} Stellen. Veröffentliche das Entfernen und warte auf die Bereitstellung, bevor du es löschst."
+      }
+    }
+  ],
+  "media_library_delete_failed": "Das Medium konnte nicht gelöscht werden. Versuche es erneut.",
+  "media_library_delete_failed_status": "Das Medium konnte nicht gelöscht werden ({status}). Versuche es erneut.",
+  "media_library_delete_unconfirmed": "Es konnte nicht bestätigt werden, ob das Medium gelöscht wurde. Lade die Bibliothek neu, bevor du etwas Weiteres unternimmst.",
+  "media_library_delete_invalid": "Die Antwort zum Löschen konnte nicht überprüft werden. Lade die Bibliothek neu, bevor du etwas Weiteres unternimmst.",
+  "media_library_retry_metadata": "Speichern für „{filename}“ erneut versuchen",
+  "media_library_retry_delete": "Löschen erneut versuchen",
+  "media_library_reload": "Bibliothek neu laden",
   "media_picker_title_many": "Bilder für „{field}“ auswählen",
   "media_picker_title_image": "Ein Bild für „{field}“ auswählen",
   "media_picker_title_file": "Eine Datei für „{field}“ auswählen",

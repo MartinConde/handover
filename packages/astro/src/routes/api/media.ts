@@ -97,15 +97,21 @@ export async function describeMedia(
       ? ([point[0], point[1]] as [number, number])
       : undefined;
   if (point !== undefined && !focal)
-    return Response.json({ error: 'a focal point is [x, y], each 0 to 1' }, { status: 400 });
+    return Response.json(
+      { code: 'MEDIA_METADATA_INVALID', error: 'a focal point is [x, y], each 0 to 1' },
+      { status: 400 },
+    );
   if (tags === undefined && alt === undefined && archived === undefined && focal === undefined)
     return Response.json(
-      { error: 'send { tags }, { alt }, { archived } or { focal }' },
+      {
+        code: 'MEDIA_METADATA_INVALID',
+        error: 'send { tags }, { alt }, { archived } or { focal }',
+      },
       { status: 400 },
     );
   const database = ctx.db();
   const row = await setMediaDetails('default', database, id, { tags, alt, archived, focal });
-  if (!row) return new Response('Not found', { status: 404 });
+  if (!row) return Response.json({ code: 'MEDIA_NOT_FOUND', error: 'Not found' }, { status: 404 });
   // Putting an asset away is a decision about what the site offers, so only that is logged.
   if (archived !== undefined)
     await logActivity('default', database, {
@@ -129,10 +135,12 @@ export async function deleteAsset(
   session: App.Locals['handover'],
 ): Promise<Response> {
   const store = mediaStore();
-  if (!store) return Response.json({ error: NO_BUCKET }, { status: 503 });
+  if (!store)
+    return Response.json({ code: 'MEDIA_STORAGE_UNAVAILABLE', error: NO_BUCKET }, { status: 503 });
   const database = ctx.db();
   const row = await findMedia('default', database, id);
-  if (!row || row.state === 'deleted') return new Response('Not found', { status: 404 });
+  if (!row || row.state === 'deleted')
+    return Response.json({ code: 'MEDIA_NOT_FOUND', error: 'Not found' }, { status: 404 });
   const [tree, drafts] = await Promise.all([
     ctx.git().contentFiles(),
     draftFiles('default', database),
@@ -149,6 +157,7 @@ export async function deleteAsset(
   if (now.length)
     return Response.json(
       {
+        code: 'MEDIA_IN_USE',
         error: `This is used in ${places(now)} and cannot be deleted. Archive it instead — that hides it from the picker and keeps every page working.`,
         uses: now,
       },
@@ -157,6 +166,7 @@ export async function deleteAsset(
   if (live.length)
     return Response.json(
       {
+        code: 'MEDIA_PUBLISHED_IN_USE',
         error: `The published site still uses this in ${places(live)}. Publish the change that takes it out and wait for that deployment to be live, then it can be deleted.`,
         uses: live,
       },

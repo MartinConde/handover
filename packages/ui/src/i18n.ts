@@ -15,6 +15,7 @@ const dateFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const exactFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const clockFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const fieldTimeFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
+const mediaDateFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const languageFormatters = new Map<UiLocale, Intl.DisplayNames>();
 const languageTag = (locale: UiLocale) => (locale === 'de' ? 'de-DE' : 'en-GB');
 
@@ -83,6 +84,17 @@ export const formatFieldTime = (at: number, locale: UiLocale): string =>
         month: 'short',
         hour: '2-digit',
         minute: '2-digit',
+      }),
+  ).format(at);
+
+export const formatMediaDate = (at: number, locale: UiLocale): string =>
+  formatter(
+    mediaDateFormatters,
+    locale,
+    () =>
+      new Intl.DateTimeFormat(languageTag(locale), {
+        day: 'numeric',
+        month: 'long',
       }),
   ).format(at);
 

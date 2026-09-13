@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate the full media library into English and German, including filters, counts, dates, byte
+  sizes, details, metadata recovery and deletion guidance. Stable media codes distinguish current
+  and published usage, missing assets and unavailable storage while preserving API statuses and
+  legacy error text. Live switching keeps selection, search, filters, focus, authored metadata and
+  pending uploads; uncertain or malformed deletes reload before another mutation.
+
 - Translate crop and focal-point dialogs, live control labels and retained source/render/upload
   recovery into English and German. Live switching preserves dialog nodes, focus, crop geometry,
   focal coordinates, authored filenames and preset labels without image processing, content writes

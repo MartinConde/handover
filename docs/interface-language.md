@@ -19,8 +19,9 @@ link and reference presentation, image/file cards, embed recovery, SEO controls 
 popovers and notices. Required fields and built-in scalar type, date, selection, text-length and
 number-bound validation emit descriptors. Rich-text toolbar names, link controls and
 foreign-formatting guidance are bilingual. Media-picker presentation, selection queues, upload
-recovery, and crop/focal dialogs are bilingual; the full media-library screen remains staged
-follow-up work. Dashboard, collection, picker, and open-entry data are not reread, and typed
+recovery, crop/focal dialogs and the full media-library screen are bilingual. Library filters,
+dates, byte sizes, metadata recovery and delete/in-use guidance update in place while selection,
+authored metadata and pending uploads remain intact. Dashboard, collection, picker, and open-entry data are not reread, and typed
 values, queued saves, undo history, filters, selected rows, creation starters, custom URLs, the
 signed-in session, editor content language, and the active editor field remain in place.
 

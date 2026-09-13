@@ -46,7 +46,7 @@ const server = () => {
       if (init?.method === 'DELETE')
         return refusal
           ? Response.json(refusal.body, { status: refusal.status })
-          : Response.json({ deleted: 'a' });
+          : Response.json({ deleted: 'a'.repeat(64) });
       if (init?.method === 'PATCH') return Response.json({ media: saved });
       return Response.json({ media });
     }),
@@ -481,7 +481,7 @@ test('the filters narrow the grid to the archived, the recovered and the unused'
 
   click('.filters [aria-pressed]:nth-of-type(3)');
   expect(names()).toEqual(['old-banner.jpg', 'lighthouse.jpg']);
-  expect(q('.list-toolbar .count').textContent?.trim()).toBe('2 unused images');
+  expect(q('.list-toolbar .count').textContent?.trim()).toBe('2 matching images');
 });
 
 // On the tile too, so clearing out the archive need not open every picture.
@@ -489,7 +489,9 @@ test('an archived tile offers Unarchive on the tile itself', async () => {
   media = [item({ archived: true })];
   saved = item({ archived: false });
   await show();
-  expect(q('.tile .tile-actions button').textContent?.trim()).toBe('Unarchive front-of-house.jpg');
+  expect(q('.tile .tile-actions button').getAttribute('aria-label')).toBe(
+    'Unarchive front-of-house.jpg',
+  );
 
   click('.tile .tile-actions button');
   await settle();

@@ -9,6 +9,7 @@ export interface UiMessage {
   limit?: number;
   inclusive?: boolean;
   exact?: boolean;
+  count?: number;
 }
 
 export interface UiProblem {
@@ -47,6 +48,11 @@ const KNOWN_CODES = new Set([
   'EDITOR_SAVE_REFUSED',
   'EDITOR_SAVE_REVISION',
   'FIELD_REQUIRED',
+  'MEDIA_METADATA_INVALID',
+  'MEDIA_NOT_FOUND',
+  'MEDIA_STORAGE_UNAVAILABLE',
+  'MEDIA_IN_USE',
+  'MEDIA_PUBLISHED_IN_USE',
 ]);
 
 const numberFormats = new Map<UiLocale, Intl.NumberFormat>();
@@ -219,6 +225,36 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
       return m.media_upload_normalization_failed({}, options);
     case 'MEDIA_UPLOAD_FAILED':
       return m.media_upload_failed({}, options);
+    case 'MEDIA_LIBRARY_READ_FAILED':
+      return message.status
+        ? m.media_library_read_failed_status({ status: message.status }, options)
+        : m.media_library_read_failed({}, options);
+    case 'MEDIA_LIBRARY_READ_INVALID':
+      return m.media_library_read_invalid({}, options);
+    case 'MEDIA_METADATA_FAILED':
+      return message.status
+        ? m.media_library_metadata_failed_status({ status: message.status }, options)
+        : m.media_library_metadata_failed({}, options);
+    case 'MEDIA_METADATA_UNCONFIRMED':
+      return m.media_library_metadata_unconfirmed({}, options);
+    case 'MEDIA_METADATA_INVALID':
+      return m.media_library_metadata_invalid({}, options);
+    case 'MEDIA_NOT_FOUND':
+      return m.media_library_not_found({}, options);
+    case 'MEDIA_STORAGE_UNAVAILABLE':
+      return m.media_library_storage_unavailable({}, options);
+    case 'MEDIA_IN_USE':
+      return m.media_library_delete_in_use({ count: message.count ?? 0 }, options);
+    case 'MEDIA_PUBLISHED_IN_USE':
+      return m.media_library_delete_published_in_use({ count: message.count ?? 0 }, options);
+    case 'MEDIA_DELETE_FAILED':
+      return message.status
+        ? m.media_library_delete_failed_status({ status: message.status }, options)
+        : m.media_library_delete_failed({}, options);
+    case 'MEDIA_DELETE_UNCONFIRMED':
+      return m.media_library_delete_unconfirmed({}, options);
+    case 'MEDIA_DELETE_INVALID':
+      return m.media_library_delete_invalid({}, options);
     case 'CROP_SOURCE_FAILED':
       return message.status
         ? m.crop_source_failed_status({ status: message.status }, options)
