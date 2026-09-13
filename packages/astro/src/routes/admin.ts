@@ -3,6 +3,7 @@ import assets from 'virtual:handover/ui';
 
 const base = (config.i18n.base ?? '').replace(/\/+$/, '');
 
+import { DEFAULT_UI_LOCALE, isUiLocale, type UiLocale } from '@handover/core';
 import type { APIRoute } from 'astro';
 import { loginMethods } from '../auth.js';
 
@@ -19,8 +20,8 @@ const tags = [
 ].join('\n    ');
 
 // The one value in the shell that is not the same on every site.
-const shell = (methods: string) => `<!doctype html>
-<html lang="en">
+const shell = (methods: string, locale: UiLocale) => `<!doctype html>
+<html lang="${locale}">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -34,7 +35,38 @@ const shell = (methods: string) => `<!doctype html>
 </html>
 `;
 
-export const GET: APIRoute = ({ params }) => {
+const cookieLocale = (header: string | null): UiLocale | undefined => {
+  for (const part of (header ?? '').slice(0, 4096).split(';')) {
+    const [name, ...rest] = part.trim().split('=');
+    if (name !== 'handover_ui_locale') continue;
+    try {
+      const value = decodeURIComponent(rest.join('='));
+      return isUiLocale(value) ? value : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+};
+
+const acceptedLocale = (header: string | null): UiLocale | undefined =>
+  (header ?? '')
+    .slice(0, 4096)
+    .split(',')
+    .map((part, order) => {
+      const [tag = '', ...parameters] = part.trim().split(';');
+      let quality = 1;
+      for (const parameter of parameters) {
+        const match = parameter.trim().match(/^q=(0(?:\.\d{0,3})?|1(?:\.0{0,3})?)$/i);
+        if (!match) return { locale: undefined, quality: 0, order };
+        quality = Number(match[1]);
+      }
+      const language = tag.toLowerCase().split('-')[0];
+      return { locale: isUiLocale(language) ? language : undefined, quality, order };
+    })
+    .filter((preference) => preference.locale && preference.quality > 0)
+    .sort((a, b) => b.quality - a.quality || a.order - b.order)[0]?.locale;
+
+export const GET: APIRoute = ({ params, request }) => {
   const path = params.path ?? '';
   if (path.startsWith(ASSET_PREFIX)) {
     const name = path.slice(ASSET_PREFIX.length);
@@ -48,7 +80,15 @@ export const GET: APIRoute = ({ params }) => {
       },
     });
   }
-  return new Response(shell(JSON.stringify(loginMethods())), {
-    headers: { 'content-type': 'text/html; charset=utf-8' },
+  const locale =
+    cookieLocale(request.headers.get('cookie')) ??
+    acceptedLocale(request.headers.get('accept-language')) ??
+    DEFAULT_UI_LOCALE;
+  return new Response(shell(JSON.stringify(loginMethods()), locale), {
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'private, no-store',
+      vary: 'Cookie, Accept-Language',
+    },
   });
 };

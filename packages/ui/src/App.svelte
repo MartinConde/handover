@@ -9,11 +9,22 @@ import EntryList from './content/EntryList.svelte';
 import Globals from './content/Globals.svelte';
 import Redirects from './content/Redirects.svelte';
 import { invalidateEntryDirectory } from './entry-directory.js';
+import {
+  deviceLocale,
+  type UiLocale as InterfaceLocale,
+  isUiLocale,
+  messageOptions,
+  rememberUiLocale,
+  resolveUiLocale,
+  showUiLocale,
+} from './i18n.js';
 import Library from './media/Library.svelte';
 import { coordinateEntryReplacement, flushNavigation, navigate } from './navigate';
+import * as m from './paraglide/messages.js';
 import Pending from './publishing/Pending.svelte';
 import { request as fetch, localPath, sitePath, uncertainResponse } from './request.js';
 import { when } from './shared/activity-line';
+import LanguageControl from './shared/LanguageControl.svelte';
 import Modal from './shared/Modal.svelte';
 import BuildPill, { type Build } from './shell/BuildPill.svelte';
 import Dashboard from './shell/Dashboard.svelte';
@@ -37,21 +48,37 @@ let {
   path: landedAt,
   query = '',
   methods = { emailLink: false, github: false },
+  initialUiLocale = 'en',
 }: {
   session?: Session | null;
   path: string;
   query?: string;
   methods?: LoginMethods;
+  initialUiLocale?: InterfaceLocale;
 } = $props();
 // svelte-ignore state_referenced_locally -- the prop is only the initial value
 let session = $state(signedIn);
 let sessionBusy = $state(false);
+// svelte-ignore state_referenced_locally -- bootstrap resolves this before the first mount
+let uiLocale = $state(initialUiLocale);
+let localeBusy = $state(false);
+let localeError = $state(false);
 // svelte-ignore state_referenced_locally -- the prop is the result of the one bootstrap request
 let sessionError = $state(
   signedIn === undefined ? 'Could not check whether you are signed in.' : '',
 );
 // svelte-ignore state_referenced_locally -- the prop is only where the page loaded
 let path = $state(landedAt);
+
+function useLocale(locale: InterfaceLocale, remember = false) {
+  uiLocale = locale;
+  showUiLocale(locale);
+  if (remember) rememberUiLocale(locale);
+}
+
+function useDeviceLocale(locale: InterfaceLocale) {
+  useLocale(locale, true);
+}
 
 const entryRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)\/([\w-]+)(?:\/(history|seo))?$/));
 const listRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)$/));
@@ -193,7 +220,11 @@ async function loadSession() {
   const res = await fetch('/admin/api/ping');
   sessionBusy = false;
   if (res.ok) {
-    session = (await res.json()) as Session;
+    const next = (await res.json()) as Session;
+    useLocale(
+      resolveUiLocale(next.user.uiLocale, deviceLocale(document.cookie), navigator.languages),
+    );
+    session = next;
     sessionError = '';
     return;
   }
@@ -204,6 +235,34 @@ async function loadSession() {
   }
   if (!session) session = undefined;
   sessionError = 'Could not check whether you are signed in. Check the connection and try again.';
+}
+
+async function saveLocale(next: InterfaceLocale) {
+  if (!session || localeBusy || next === uiLocale) return;
+  const userId = session.user.id;
+  localeBusy = true;
+  localeError = false;
+  const res = await fetch('/admin/api/auth/update-user', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ uiLocale: next }),
+  });
+  const confirmed =
+    res.ok &&
+    ((await res.json().catch(() => null)) as { status?: unknown } | null)?.status === true;
+  if (confirmed && session?.user.id === userId) {
+    session.user.uiLocale = next;
+    useLocale(next, true);
+  } else if (uncertainResponse(res)) {
+    const ping = await fetch('/admin/api/ping');
+    const reconciled = ping.ok ? ((await ping.json()) as Session) : undefined;
+    if (reconciled && session?.user.id === userId && reconciled.user.id === userId) {
+      session = reconciled;
+      if (isUiLocale(reconciled.user.uiLocale)) useLocale(reconciled.user.uiLocale, true);
+      localeError = reconciled.user.uiLocale !== next;
+    } else localeError = true;
+  } else localeError = true;
+  localeBusy = false;
 }
 
 // Without the content type Better Auth answers 415 and the session outlives the click.
@@ -346,7 +405,7 @@ const initial = $derived(
     </button>
   </main>
 {:else if !session}
-  <Login {methods} {path} {query} onlogin={loadSession} />
+  <Login {methods} {path} {query} {uiLocale} onlocale={useDeviceLocale} onlogin={loadSession} />
 {:else}
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -- nested links handle keyboard input -->
 <div class="shell" class:is-canvas={Boolean(editing) && editorMode === 'canvas'} onclick={follow}>
@@ -496,6 +555,8 @@ const initial = $derived(
             <a href={sitePath(`/admin/account`)} aria-current={path === '/admin/account' ? 'page' : undefined}
               >Account</a
             >
+            <LanguageControl locale={uiLocale} disabled={localeBusy} onlocale={saveLocale} />
+            {#if localeError}<span class="error locale-error" role="alert">{m.account_language_save_failed({}, messageOptions(uiLocale))}</span>{/if}
             <button type="button" onclick={signOut}>Sign out</button>
           </div>
         {/if}
@@ -559,7 +620,15 @@ const initial = $derived(
     {:else if path === '/admin/media'}
       <Library base={session?.mediaBase ?? ''} presets={session?.presets ?? []} />
     {:else if path === '/admin/account'}
-      <Account user={session.user} role={session.role} onname={loadSession} />
+      <Account
+        user={session.user}
+        role={session.role}
+        {uiLocale}
+        {localeBusy}
+        {localeError}
+        onlocale={saveLocale}
+        onname={loadSession}
+      />
     {:else if path === '/admin/members' && session.role === 'owner'}
       <Members user={session.user} />
     {:else if path === '/admin/activity'}

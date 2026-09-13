@@ -3,6 +3,7 @@
   "account_interface_language": "Interface language",
   "account_language_english": "English",
   "account_language_german": "Deutsch",
+  "account_language_save_failed": "Could not save the interface language.",
   "common_retry": "Retry",
   "common_save_failed": "Could not save {field}.",
   "publishing_pending_count": [

@@ -1,6 +1,8 @@
 <script lang="ts">
 import { onDestroy } from 'svelte';
+import type { UiLocale } from '../i18n.js';
 import { request as fetch, sitePath } from '../request.js';
+import LanguageControl from '../shared/LanguageControl.svelte';
 
 export interface LoginMethods {
   /** The site has a base URL and a mailer, so both "email me a link" and "forgot password" work. */
@@ -13,11 +15,15 @@ let {
   path = '/admin',
   query = '',
   onlogin,
+  uiLocale = 'en',
+  onlocale = () => {},
 }: {
   methods: LoginMethods;
   path?: string;
   query?: string;
   onlogin: () => void;
+  uiLocale?: UiLocale;
+  onlocale?: (locale: UiLocale) => void;
 } = $props();
 
 // svelte-ignore state_referenced_locally -- initialized once from the page URL
@@ -168,6 +174,7 @@ function backToPassword() {
 
 <div class="auth-page">
   <div>
+    <LanguageControl locale={uiLocale} {onlocale} />
     <main class="auth-card">
       {#if view === 'link-sent' || view === 'reset-sent'}
         <div class="site">

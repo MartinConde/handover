@@ -1,5 +1,95 @@
 import { expect, test } from '@playwright/test';
 
+test('saved interface language wins before first paint and a live switch preserves the editor', async ({
+  context,
+  page,
+}) => {
+  await context.addCookies([
+    { name: 'handover_ui_locale', value: 'de', url: 'http://127.0.0.1:4329/admin' },
+  ]);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'languages', { configurable: true, get: () => ['de-DE'] });
+    const observer = new MutationObserver(() => {
+      if (document.querySelector('.shell') && !document.documentElement.dataset.firstAdminLang) {
+        document.documentElement.dataset.firstAdminLang = document.documentElement.lang;
+        observer.disconnect();
+      }
+    });
+    observer.observe(document, { childList: true, subtree: true });
+  });
+  let entryReads = 0;
+  await page.route('**/admin/api/**', async (route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    if (path === '/admin/api/ping') {
+      await route.fulfill({
+        json: {
+          ok: true,
+          collections: ['pages'],
+          user: { id: 'u1', name: 'Martin', email: 'martin@example.com', uiLocale: 'en' },
+          role: 'owner',
+        },
+      });
+    } else if (path === '/admin/api/entries/pages/canvas-fixture') {
+      entryReads += 1;
+      await route.fulfill({
+        json: {
+          fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+          blocks: {},
+          data: { title: 'Canvas fixture' },
+          revisions: { en: 'opened' },
+          pending: [],
+          published: ['en'],
+          problems: [],
+          locales: ['en'],
+          defaultLocale: 'en',
+          sourceLocale: 'en',
+          offered: ['en'],
+          translations: {},
+          stale: [],
+          drift: [],
+        },
+      });
+    } else if (path.startsWith('/admin/api/locks/')) {
+      await route.fulfill({ json: { held_by: null, mine: true, expires_at: Date.now() + 120000 } });
+    } else if (path === '/admin/api/auth/update-user') {
+      await route.fulfill({ json: { status: true } });
+    } else if (path === '/admin/api/account')
+      await route.fulfill({ json: { hasPassword: true, sessions: [] } });
+    else if (path === '/admin/api/build') await route.fulfill({ json: {} });
+    else if (path === '/admin/api/dashboard')
+      await route.fulfill({ json: { recent: [], published: null, translations: null } });
+    else await route.fulfill({ json: { entries: [] } });
+  });
+
+  await page.goto('/admin/c/pages/canvas-fixture');
+  await expect(page.locator('.shell')).toBeVisible();
+  await expect(page.locator('html')).toHaveAttribute('data-first-admin-lang', 'en');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  await page.locator('.user-menu > button').click();
+  await page.getByRole('link', { name: 'Account' }).click();
+  await expect(page.locator('main').getByLabel('Interface language')).toHaveValue('en');
+  await page.goto('/admin/c/pages/canvas-fixture');
+  const title = page.locator('#f-title');
+  await expect(title).toHaveValue('Canvas fixture');
+  const readsBeforeSwitch = entryReads;
+  await title.fill('Unsaved words');
+  await title.evaluate((input) => (input.dataset.localeProof = 'same-node'));
+  await page.locator('.user-menu > button').click();
+  await page.getByLabel('Interface language').selectOption('de');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'de');
+  await expect(title).toHaveValue('Unsaved words');
+  await expect(title).toHaveAttribute('data-locale-proof', 'same-node');
+  expect(entryReads).toBe(readsBeforeSwitch);
+  expect(new URL(page.url()).pathname).toBe('/admin/c/pages/canvas-fixture');
+  const cookies = await context.cookies();
+  expect(cookies.find((cookie) => cookie.name === 'handover_ui_locale')).toMatchObject({
+    value: 'de',
+    path: '/admin',
+  });
+  expect(cookies.some((cookie) => cookie.name === 'PARAGLIDE_LOCALE')).toBe(false);
+});
+
 test('the built integration renders the Canvas fixture', async ({ page }) => {
   const editingAssets: string[] = [];
   page.on('request', (request) => {

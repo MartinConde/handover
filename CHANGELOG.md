@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Add live English/Deutsch interface-language controls to signed-out screens, the account menu,
+  and Account, with saved-account-first bootstrap, installation-scoped device hints, negotiated
+  private shells, confirmed preference writes, and uncertainty reconciliation. Other admin screens
+  remain staged for later translation.
+
 - Add validated, optional English/German account preference storage to the existing profile API
   and bootstrap response. Upgrades require the additive nullable `user.ui_locale` D1 migration;
   language controls follow in a later update.

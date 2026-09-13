@@ -3,6 +3,7 @@
   "account_interface_language": "Sprache der Benutzeroberfläche",
   "account_language_english": "English",
   "account_language_german": "Deutsch",
+  "account_language_save_failed": "Die Sprache der Benutzeroberfläche konnte nicht gespeichert werden.",
   "common_retry": "Erneut versuchen",
   "common_save_failed": "{field} konnte nicht gespeichert werden.",
   "publishing_pending_count": [

@@ -1,6 +1,9 @@
 <script lang="ts">
 import type { UiLocale } from '@handover/core';
+import { messageOptions } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 import { request as fetch } from '../request.js';
+import LanguageControl from '../shared/LanguageControl.svelte';
 
 interface Facts {
   hasPassword: boolean;
@@ -11,10 +14,18 @@ let {
   user,
   role,
   onname,
+  uiLocale = 'en',
+  localeBusy = false,
+  localeError = false,
+  onlocale = () => {},
 }: {
   user: { id: string; name: string; email: string; uiLocale: UiLocale | null };
   role: 'owner' | 'editor';
   onname: () => void;
+  uiLocale?: UiLocale;
+  localeBusy?: boolean;
+  localeError?: boolean;
+  onlocale?: (locale: UiLocale) => void;
 } = $props();
 
 // svelte-ignore state_referenced_locally -- the prop seeds the field; the shell reloads it on save
@@ -218,6 +229,13 @@ function when(at: number): string {
         >{notice}</p>
       {/if}
       <div class="settings">
+        <section class="settings-section">
+          <header><h2>{m.account_interface_language({}, messageOptions(uiLocale))}</h2></header>
+          <LanguageControl locale={uiLocale} disabled={localeBusy} {onlocale} />
+          {#if localeError}
+            <p class="notice notice-danger" role="alert">{m.account_language_save_failed({}, messageOptions(uiLocale))}</p>
+          {/if}
+        </section>
         <section class="settings-section">
           <header><h2>Profile</h2></header>
           <form class="form" onsubmit={saveName}>

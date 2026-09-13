@@ -4,6 +4,7 @@
 - [Install from archives](unpublished-install.md) — pack and install all three private packages on a build machine without the source checkout.
 - [Configuration](configuration.md) — `cms.config.ts`: `collections`, `route`, `index`, `load`; how entry filenames are derived.
 - [Languages](i18n.md) — the `i18n` block, why it has to match `astro.config.mjs`, the folder per language, which fields are translated, and the structure every language shares.
+- [Interface language](interface-language.md) — choosing English or Deutsch for the CMS without changing content language, initial precedence, and save recovery.
 - [Translating](translating.md) — choosing a language, side by side, what a save of a translation writes, making the languages agree.
 - [Machine translation and staleness](machine-translation.md) — the translate buttons, `_machine`, and the marker a moved-on source puts on a field.
 - [Content format](content-format.md) — what the YAML files look like, the reserved `_` keys, `_id` on blocks.

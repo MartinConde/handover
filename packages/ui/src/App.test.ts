@@ -1,6 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import App from './App.svelte';
+import { rememberUiLocale } from './i18n.js';
 
 let app: ReturnType<typeof mount>;
 const session = (role: 'owner' | 'editor' = 'owner') => ({
@@ -9,7 +10,10 @@ const session = (role: 'owner' | 'editor' = 'owner') => ({
   role,
 });
 const show = (signedIn: ReturnType<typeof session> | null | undefined, path = '/admin') => {
-  app = mount(App, { target: document.body, props: { session: signedIn, path } });
+  app = mount(App, {
+    target: document.body,
+    props: { session: signedIn, path, initialUiLocale: signedIn?.user.uiLocale ?? 'en' },
+  });
   flushSync();
   return document.body;
 };
@@ -42,6 +46,8 @@ afterEach(() => {
   unmount(app);
   buildBody = {};
   vi.unstubAllGlobals();
+  document.documentElement.lang = 'en';
+  document.body.innerHTML = '';
 });
 
 test('the shell renders sidebar, top bar and main regions once logged in', () => {
@@ -132,6 +138,162 @@ test('the account menu opens from the top bar with the two things it offers', ()
   expect(toggle?.getAttribute('aria-expanded')).toBe('true');
 });
 
+test('a status-only preference save switches live and writes the installation-scoped cookie', async () => {
+  const calls: { url: string; init?: RequestInit }[] = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      if (url === '/admin/api/auth/update-user') return Response.json({ status: true });
+      if (url === '/admin/api/build') return Response.json({});
+      if (url === '/admin/api/dashboard')
+        return Response.json({ recent: [], published: null, translations: null });
+      return Response.json({ entries: [] });
+    }),
+  );
+  history.replaceState({}, '', '/admin');
+  const root = show(session());
+  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
+  flushSync();
+  const select = root.querySelector<HTMLSelectElement>('.user-menu select');
+  if (!select) throw new Error('Language picker did not open');
+  select.value = 'de';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  await vi.waitFor(() => expect(document.documentElement.lang).toBe('de'));
+
+  const save = calls.find(({ url }) => url === '/admin/api/auth/update-user');
+  expect(JSON.parse(String(save?.init?.body))).toEqual({ uiLocale: 'de' });
+  expect(document.cookie).toContain('handover_ui_locale=de');
+});
+
+test('an uncertain save reconciles before changing the confirmed language', async () => {
+  let ping = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/auth/update-user')
+        return new Response('Connection lost', {
+          status: 503,
+          headers: { 'x-handover-request-uncertain': 'true' },
+        });
+      if (url === '/admin/api/ping') {
+        ping += 1;
+        return Response.json({ ...session(), user: { ...session().user, uiLocale: 'de' } });
+      }
+      if (url === '/admin/api/build') return Response.json({});
+      if (url === '/admin/api/dashboard')
+        return Response.json({ recent: [], published: null, translations: null });
+      return Response.json({ entries: [] });
+    }),
+  );
+  const root = show(session());
+  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
+  flushSync();
+  const select = root.querySelector<HTMLSelectElement>('.user-menu select');
+  if (!select) throw new Error('Language picker did not open');
+  select.value = 'de';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  expect(document.documentElement.lang).toBe('en');
+  await vi.waitFor(() => expect(document.documentElement.lang).toBe('de'));
+  expect(ping).toBe(1);
+});
+
+test('a failed preference save keeps the confirmed language and choice', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/auth/update-user') return new Response('', { status: 500 });
+      if (url === '/admin/api/build') return Response.json({});
+      if (url === '/admin/api/dashboard')
+        return Response.json({ recent: [], published: null, translations: null });
+      return Response.json({ entries: [] });
+    }),
+  );
+  const root = show(session());
+  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
+  flushSync();
+  const select = root.querySelector<HTMLSelectElement>('.user-menu select');
+  if (!select) throw new Error('Language picker did not open');
+  select.value = 'de';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  await vi.waitFor(() =>
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain('Could not save'),
+  );
+  expect(document.documentElement.lang).toBe('en');
+  expect(select.value).toBe('en');
+});
+
+test('a newly signed-in account preference replaces the device hint before the shell appears', async () => {
+  rememberUiLocale('en');
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/ping')
+        return Response.json({ ...session(), user: { ...session().user, uiLocale: 'de' } });
+      if (url === '/admin/api/build') return Response.json({});
+      if (url === '/admin/api/dashboard')
+        return Response.json({ recent: [], published: null, translations: null });
+      return Response.json({ entries: [] });
+    }),
+  );
+  const root = show(undefined);
+  root.querySelector<HTMLButtonElement>('.session-unavailable button')?.click();
+  await vi.waitFor(() => expect(root.querySelector('.shell')).not.toBeNull());
+  expect(document.documentElement.lang).toBe('de');
+});
+
+test('switching language keeps the open editor node, draft, URL, and content request', async () => {
+  const start = '/admin/c/pages/home';
+  history.replaceState({}, '', start);
+  let entryReads = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/entries/pages/home') {
+        entryReads += 1;
+        return Response.json({
+          fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+          blocks: {},
+          data: { title: 'Home' },
+          revisions: { en: 'opened' },
+          pending: [],
+          published: ['en'],
+          problems: [],
+          locales: ['en'],
+          defaultLocale: 'en',
+          sourceLocale: 'en',
+          offered: ['en'],
+          translations: {},
+          stale: [],
+          drift: [],
+        });
+      }
+      if (url.startsWith('/admin/api/locks/'))
+        return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
+      if (url === '/admin/api/auth/update-user') return Response.json({ status: true });
+      if (url === '/admin/api/build') return Response.json({});
+      return Response.json({ entries: [] });
+    }),
+  );
+  const root = show(session(), start);
+  await vi.waitFor(() => expect(root.querySelector('#f-title')).not.toBeNull());
+  const input = root.querySelector<HTMLInputElement>('#f-title');
+  if (!input) throw new Error('Editor did not open');
+  input.value = 'Unsaved German-facing draft';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
+  flushSync();
+  const select = root.querySelector<HTMLSelectElement>('.user-menu select');
+  if (!select) throw new Error('Language picker did not open');
+  select.value = 'de';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  await vi.waitFor(() => expect(document.documentElement.lang).toBe('de'));
+  expect(root.querySelector('#f-title')).toBe(input);
+  expect(input.value).toBe('Unsaved German-facing draft');
+  expect(location.pathname).toBe(start);
+  expect(entryReads).toBe(1);
+});
+
 test('Escape closes the account menu', () => {
   drafts();
   const root = show(session());
@@ -212,6 +374,7 @@ test('without a session only the login form renders', () => {
   expect(root.querySelector('label[for="password"]')?.textContent).toBe('Password');
   expect(root.querySelector('input#password[type="password"]')).not.toBeNull();
   expect(root.querySelector('.sidebar')).toBeNull();
+  expect(root.querySelector('select[aria-label="Interface language"]')).not.toBeNull();
 });
 
 test('an unavailable session check is not presented as signed out and can be retried', async () => {

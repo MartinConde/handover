@@ -1,5 +1,6 @@
 import { mount } from 'svelte';
 import App from './App.svelte';
+import { deviceLocale, resolveUiLocale, showUiLocale } from './i18n.js';
 import { request as fetch, localPath } from './request.js';
 import './tokens.css';
 
@@ -9,10 +10,18 @@ if (!target) throw new Error('Handover shell: #app missing');
 const res = await fetch('/admin/api/ping');
 // The login has no session to ask an endpoint with, so the route wrote the sign-in methods here.
 const methods = JSON.parse(target.dataset.methods || '{}');
+const session = res.ok ? await res.json() : res.status === 401 ? null : undefined;
+const initialUiLocale = resolveUiLocale(
+  session?.user?.uiLocale,
+  deviceLocale(document.cookie),
+  navigator.languages,
+);
+showUiLocale(initialUiLocale);
 mount(App, {
   target,
   props: {
-    session: res.ok ? await res.json() : res.status === 401 ? null : undefined,
+    session,
+    initialUiLocale,
     path: localPath(location.pathname),
     query: location.search,
     methods,

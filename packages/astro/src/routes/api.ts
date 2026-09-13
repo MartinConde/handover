@@ -135,7 +135,7 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
   if (params.path === 'activity/diff') return activityDiff(ctx, url, locals.handover);
   if (params.path === 'members') return members(ctx, locals.handover);
   if (params.path === 'ping') {
-    return Response.json({
+    const response = Response.json({
       ok: true,
       collections: Object.keys(config.collections),
       // The middleware has already asserted a session by the time any of this runs.
@@ -155,6 +155,8 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
       // `site` from astro.config; absent rather than guessed, so the SEO panel draws no preview.
       site: site || undefined,
     });
+    response.headers.set('cache-control', 'private, no-store');
+    return response;
   }
   if (params.path === 'entries') return pickList(ctx);
   const removed = params.path?.match(DELETED);

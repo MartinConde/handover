@@ -36,7 +36,11 @@ vi.mock('virtual:handover/config', () => ({
   default: { i18n: {}, mailer: async () => ({ id: 'x' }) },
 }));
 
-const ctx = (path?: string) => ({ params: { path } }) as unknown as APIContext;
+const ctx = (path?: string, headers: Record<string, string> = {}) =>
+  ({
+    params: { path },
+    request: new Request(`https://x/admin/${path ?? ''}`, { headers }),
+  }) as unknown as APIContext;
 
 test('the shell HTML links only the admin entry and its stylesheet closure', async () => {
   const res = await GET(ctx(undefined));
@@ -58,10 +62,42 @@ test('any non-asset path gets the same shell', async () => {
   expect(await (await GET(ctx('listings/villa'))).text()).toBe(await (await GET(ctx())).text());
 });
 
+test('the private shell uses its validated cookie before weighted browser languages', async () => {
+  const res = await GET(
+    ctx(undefined, {
+      cookie: 'handover_ui_locale=de',
+      'accept-language': 'en-GB;q=1, de-DE;q=0.8',
+    }),
+  );
+  expect(await res.text()).toContain('<html lang="de">');
+  expect(res.headers.get('cache-control')).toBe('private, no-store');
+  expect(res.headers.get('vary')).toBe('Cookie, Accept-Language');
+});
+
+test('weighted language negotiation respects regional tags, order, exclusions, and malformed hints', async () => {
+  expect(
+    await (await GET(ctx(undefined, { 'accept-language': 'en;q=0, de-AT;q=0.7' }))).text(),
+  ).toContain('<html lang="de">');
+  expect(
+    await (
+      await GET(
+        ctx(undefined, {
+          cookie: 'handover_ui_locale=fr',
+          'accept-language': 'fr, en-GB;q=0.4, de-DE;q=0.9',
+        }),
+      )
+    ).text(),
+  ).toContain('<html lang="de">');
+  expect(await (await GET(ctx(undefined, { 'accept-language': 'de;q=wat' }))).text()).toContain(
+    '<html lang="en">',
+  );
+});
+
 test('entry, shared, Canvas, and lazy assets are served immutable with their content type', async () => {
   const js = await GET(ctx('_assets/admin.js'));
   expect(js.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
   expect(js.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+  expect(js.headers.get('vary')).toBeNull();
   expect(await js.text()).toBe('console.log("shell")');
   const css = await GET(ctx('_assets/shared.css'));
   expect(css.headers.get('content-type')).toBe('text/css; charset=utf-8');

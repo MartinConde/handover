@@ -854,6 +854,7 @@ test('ping returns the collection names and who is signed in', async () => {
   };
   const res = await GET(ctx('ping', undefined, { handover: session }));
   expect(res.status).toBe(200);
+  expect(res.headers.get('cache-control')).toBe('private, no-store');
   expect(await res.json()).toEqual({
     ok: true,
     collections: ['pages', 'listings', 'presenters', 'posts', 'notices'],
