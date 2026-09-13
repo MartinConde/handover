@@ -3,6 +3,7 @@ import { type DragDropEventHandlers, DragDropProvider } from '@dnd-kit/svelte';
 import { createSortable, isSortable } from '@dnd-kit/svelte/sortable';
 import {
   EMBED_LABELS,
+  type EmbedRefusalReason,
   type EmbedValue,
   embedThumb,
   type Field,
@@ -14,7 +15,6 @@ import {
   SEO_DESCRIPTION_LIMIT,
   SEO_TITLE_LIMIT,
   SOCIAL_CARD,
-  seoMeter,
   type Translation,
   unsafeLinkScheme,
   type WordPart,
@@ -24,7 +24,7 @@ import Menus, { type Menu } from '../../content/Menus.svelte';
 import PagePicker from '../../content/PagePicker.svelte';
 import { EMPTY_ENTRY_DIRECTORY, type Pickable, readEntryDirectory } from '../../entry-directory.js';
 import type { UiLocale } from '../../i18n.js';
-import { messageOptions } from '../../i18n.js';
+import { formatFieldTime, messageOptions } from '../../i18n.js';
 import Focal from '../../media/Focal.svelte';
 import Media from '../../media/Media.svelte';
 import { fileSize, type MediaItem } from '../../media/upload.js';
@@ -167,16 +167,9 @@ $effect(() => {
   if (opened) popover?.focus();
 });
 const behind = (path: string) => !dismissed.includes(path) && sourceChanged[path] !== undefined;
-// A date rather than "3 days ago": how long ago says nothing about which words.
-const WHEN = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
-});
 const when = (iso: string) => {
   const at = Date.parse(iso);
-  return at ? WHEN.format(at) : '';
+  return at ? formatFieldTime(at, uiLocale) : '';
 };
 const close = (path: string, then: (path: string) => void) => {
   const marker = document.getElementById(`stale-${path}`);
@@ -434,7 +427,7 @@ let framing = $state('');
 /** Which embed field has the paste box open over a value it already holds. */
 let pasting = $state('');
 /** The last paste that was not a link we know, and the field it was made in. */
-let refused = $state({ id: '', why: '' });
+let refused = $state<{ id: string; reason?: EmbedRefusalReason }>({ id: '' });
 
 // A control that replaces itself would drop focus, so focus follows onto its replacement.
 const focusOn = (elementId: string) =>
@@ -448,11 +441,11 @@ function embedValue(at: readonly string[]): EmbedValue | undefined {
 
 // A mistyped link must never empty the field; a recognised one replaces the title too.
 function pasteEmbed(at: readonly string[], id: string, input: HTMLInputElement) {
-  refused = { id: '', why: '' };
+  refused = { id: '' };
   if (!input.value.trim()) return;
   const parsed = parseEmbedUrl(input.value);
   if ('refused' in parsed) {
-    refused = { id, why: parsed.refused };
+    refused = { id, reason: parsed.reason };
     return;
   }
   const { provider, id: chosen, start } = parsed.embed;
@@ -462,6 +455,12 @@ function pasteEmbed(at: readonly string[], id: string, input: HTMLInputElement) 
   pasting = '';
   focusOn(`${id}-change`);
 }
+const embedRefusal = (reason: EmbedRefusalReason | undefined) => {
+  if (reason === 'shortened-map') return m.field_embed_shortened_map({}, messageOptions(uiLocale));
+  if (reason === 'embed-code') return m.field_embed_code({}, messageOptions(uiLocale));
+  if (reason === 'map-view') return m.field_embed_map_view({}, messageOptions(uiLocale));
+  return m.field_embed_unknown({}, messageOptions(uiLocale));
+};
 // Every key a hole, so a description typed before a title does not land above it in the file.
 const SEO_SHAPE = {
   title: undefined,
@@ -589,14 +588,14 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
 
 {#snippet controls(at: readonly string[], i: number, name: string, handle: (node: HTMLElement) => () => void, duplicable = false)}
   <div class="row-controls">
-    <button class="btn btn-ghost btn-icon handle" type="button" aria-label="Reorder {name}" disabled={structureLocked} {@attach handle}>⋮⋮</button>
-    {#if duplicable}<button class="btn btn-ghost btn-icon" type="button" aria-label="Duplicate {name}" disabled={structureLocked} onclick={() => duplicate(at, i)}>⧉</button>{/if}
-    <button class="btn btn-ghost btn-icon" type="button" aria-label="Remove {name}" disabled={structureLocked} onclick={() => drop(at, i)}>×</button>
+    <button class="btn btn-ghost btn-icon handle" type="button" aria-label={m.field_reorder({ item: name }, messageOptions(uiLocale))} disabled={structureLocked} {@attach handle}>⋮⋮</button>
+    {#if duplicable}<button class="btn btn-ghost btn-icon" type="button" aria-label={m.field_duplicate({ item: name }, messageOptions(uiLocale))} disabled={structureLocked} onclick={() => duplicate(at, i)}>⧉</button>{/if}
+    <button class="btn btn-ghost btn-icon" type="button" aria-label={m.field_remove({ item: name }, messageOptions(uiLocale))} disabled={structureLocked} onclick={() => drop(at, i)}>×</button>
   </div>
 {/snippet}
 
 {#snippet altField(id: string, at: readonly string[])}
-  <div class="field"><div class="label-row"><label for="{id}.alt">Alt text</label><span class="mode">Per language</span></div><input class="input" id="{id}.alt" type="text" value={str([...at, 'alt'])} oninput={(e) => write([...at, 'alt'], e.currentTarget.value || undefined)} /></div>
+  <div class="field"><div class="label-row"><label for="{id}.alt">{m.field_alt_text({}, messageOptions(uiLocale))}</label><span class="mode">{m.field_per_language({}, messageOptions(uiLocale))}</span></div><input class="input" id="{id}.alt" type="text" value={str([...at, 'alt'])} oninput={(e) => write([...at, 'alt'], e.currentTarget.value || undefined)} /></div>
 {/snippet}
 
 {#snippet embedThumbnail(value: EmbedValue)}
@@ -605,7 +604,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
 {/snippet}
 
 {#snippet titleField(id: string, at: readonly string[])}
-  <div class="field"><div class="label-row"><label for="{id}.title">Title</label><span class="mode">Per language</span></div><input class="input" id="{id}.title" type="text" value={str([...at, 'title'])} oninput={(e) => write([...at, 'title'], e.currentTarget.value || undefined)} /></div>
+  <div class="field"><div class="label-row"><label for="{id}.title">{m.field_title({}, messageOptions(uiLocale))}</label><span class="mode">{m.field_per_language({}, messageOptions(uiLocale))}</span></div><input class="input" id="{id}.title" type="text" value={str([...at, 'title'])} oninput={(e) => write([...at, 'title'], e.currentTarget.value || undefined)} /></div>
 {/snippet}
 
 {#snippet previews(at: readonly string[])}
@@ -617,16 +616,16 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   {@const of = locale.toUpperCase()}
   <div class="previews">
     <div class="preview-box">
-      <p class="variant-title">Search preview · {of}</p>
-      <div class="snippet" role="group" aria-label="Search result preview">
+      <p class="variant-title">{m.field_seo_search_preview({ locale: of }, messageOptions(uiLocale))}</p>
+      <div class="snippet" role="group" aria-label={m.field_seo_search_preview_label({}, messageOptions(uiLocale))}>
         <div class="url"><span class="fav" aria-hidden="true">{host.charAt(0).toUpperCase()}</span><span class="crumbs">{crumbs}</span></div>
         <div class="title">{title}</div>
         <div class="desc">{desc}</div>
       </div>
     </div>
     <div class="preview-box">
-      <p class="variant-title">Social card · {of}</p>
-      <div class="social-card" role="group" aria-label="Social card preview">
+      <p class="variant-title">{m.field_seo_social_card({ locale: of }, messageOptions(uiLocale))}</p>
+      <div class="social-card" role="group" aria-label={m.field_seo_social_card_label({}, messageOptions(uiLocale))}>
         <div class="thumb">{#if picture}<MediaImage src={picture} alt="" />{/if}</div>
         <div class="body"><div class="domain">{host}</div><div class="title">{title}</div><div class="desc">{desc}</div></div>
       </div>
@@ -639,7 +638,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   {@const described = [`${id}.${key}-meter`, hint ? `${id}.${key}-hint` : ''].filter(Boolean).join(' ')}
   {@const over = value.trim().length > limit}
   <div class="field">
-    <div class="label-row"><label for="{id}.{key}">{label}</label><span class="meter" class:is-over={over} id="{id}.{key}-meter">{seoMeter(value, limit)}</span></div>
+    <div class="label-row"><label for="{id}.{key}">{label}</label><span class="meter" class:is-over={over} id="{id}.{key}-meter">{value.trim().length ? m.field_seo_meter({ count: value.trim().length, limit }, messageOptions(uiLocale)) : m.field_seo_meter_empty({ limit }, messageOptions(uiLocale))}{over ? ` — ${m.field_seo_may_cut({}, messageOptions(uiLocale))}` : ''}</span></div>
     {#if key === 'description'}
       <textarea class="input textarea" id="{id}.{key}" {placeholder} aria-describedby={described} {value} oninput={(e) => seoWrite(at, key, e.currentTarget.value || undefined)}></textarea>
     {:else}
@@ -651,7 +650,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
 {/snippet}
 
 {#snippet nameField(id: string, at: readonly string[])}
-  <div class="field"><div class="label-row"><label for="{id}.name">Display name</label><span class="mode">Per language</span></div><input class="input" id="{id}.name" type="text" value={str([...at, 'name'])} oninput={(e) => write([...at, 'name'], e.currentTarget.value || undefined)} /></div>
+  <div class="field"><div class="label-row"><label for="{id}.name">{m.field_display_name({}, messageOptions(uiLocale))}</label><span class="mode">{m.field_per_language({}, messageOptions(uiLocale))}</span></div><input class="input" id="{id}.name" type="text" value={str([...at, 'name'])} oninput={(e) => write([...at, 'name'], e.currentTarget.value || undefined)} /></div>
 {/snippet}
 
 {#snippet chosenEntry(id: string, labelId: string, says: string | undefined, ref: string, open: () => void)}
@@ -667,15 +666,15 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           {#each known.locales as of (of)}<span class="chip" class:chip-missing={!found.locales.includes(of)}>{of.toUpperCase()}</span>{/each}
         </span>
       {/if}
-      <button class="btn btn-ghost btn-sm remove" type="button" onclick={open}>Change</button>
+      <button class="btn btn-ghost btn-sm remove" type="button" onclick={open}>{m.field_change({}, messageOptions(uiLocale))}</button>
     </div>
   </div>
 {/snippet}
 
 {#snippet noEntry(id: string, labelId: string, says: string | undefined, text: string, open: () => void)}
   <div class="list-empty" {id} role="group" aria-labelledby={labelId} aria-describedby={says}>
-    <span>Nothing chosen yet</span>
-    <button class="btn btn-sm" type="button" onclick={open}>Choose {text}</button>
+    <span>{m.field_nothing_chosen({}, messageOptions(uiLocale))}</span>
+    <button class="btn btn-sm" type="button" onclick={open}>{m.field_choose_named({ field: text }, messageOptions(uiLocale))}</button>
   </div>
 {/snippet}
 
@@ -702,7 +701,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if translating && mode === 'duplicate' && !structural(field)}
       {@render groupLabel(id, field, text, at)}
       <div class="readonly" {id} role="region" tabindex="-1" aria-labelledby="{id}-l">{read(at) ?? ''}</div>
-      <p class="hint">Same in every language</p>
+      <p class="hint">{m.field_same_every_language({}, messageOptions(uiLocale))}</p>
     {:else if field.type === 'text'}
       {@render labelRow(id, field, text, at)}
       <TextField {id} invalid={bad} describedBy={says} required={field.required} value={str(at)} onvalue={(value) => write(at, value)} />
@@ -734,22 +733,22 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'link' && translating}
       <!-- A link's label is the half a translation owns. -->
       {@render groupLabel(id, field, text, at)}
-      <div class="field"><div class="label-row"><label for="{id}.label">Label</label>{@render machineMark(childAddress(at, 'label'), `${text} label`)}</div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
+      <div class="field"><div class="label-row"><label for="{id}.label">{m.field_link_label({}, messageOptions(uiLocale))}</label>{@render machineMark(childAddress(at, 'label'), `${text} label`)}</div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
     {:else if field.type === 'link'}
       {@render groupLabel(id, field, text, at)}
       <div class="link-field-controls">
         <fieldset class="link-destination">
-          <legend>Destination</legend>
-          <div class="seg" role="group" aria-label="Link type">
-            <button type="button" aria-pressed={linkType(at) === 'entry'} onclick={() => setLinkType(at, 'entry')}>Page / Entry</button>
+          <legend>{m.field_link_destination({}, messageOptions(uiLocale))}</legend>
+          <div class="seg" role="group" aria-label={m.field_link_type({}, messageOptions(uiLocale))}>
+            <button type="button" aria-pressed={linkType(at) === 'entry'} onclick={() => setLinkType(at, 'entry')}>{m.field_link_page_entry({}, messageOptions(uiLocale))}</button>
             <button type="button" aria-pressed={linkType(at) === 'url'} onclick={() => setLinkType(at, 'url')}>URL</button>
           </div>
           {#if linkType(at) === 'url'}
             {@const scheme = unsafeLinkScheme('default', str([...at, 'href']))}
             <div class="field" class:is-invalid={scheme}>
-              <div class="label-row"><label for="{id}.href">Address</label></div>
-              <input class="input" id="{id}.href" type="url" placeholder="/contact or https://…" aria-invalid={scheme ? 'true' : undefined} aria-describedby={scheme ? `${id}.href-err` : undefined} value={str([...at, 'href'])} oninput={(e) => writeMany(at, [{ path: ['type'], value: 'url' }, { path: ['href'], value: e.currentTarget.value }])} />
-              {#if scheme}<p class="error" id="{id}.href-err">{scheme}: links are not allowed</p>{/if}
+              <div class="label-row"><label for="{id}.href">{m.field_link_address({}, messageOptions(uiLocale))}</label></div>
+              <input class="input" id="{id}.href" type="url" placeholder={m.field_link_address_placeholder({}, messageOptions(uiLocale))} aria-invalid={scheme ? 'true' : undefined} aria-describedby={scheme ? `${id}.href-err` : undefined} value={str([...at, 'href'])} oninput={(e) => writeMany(at, [{ path: ['type'], value: 'url' }, { path: ['href'], value: e.currentTarget.value }])} />
+              {#if scheme}<p class="error" id="{id}.href-err">{m.field_link_scheme_not_allowed({ scheme }, messageOptions(uiLocale))}</p>{/if}
             </div>
           {:else if picker === id}
             <PagePicker {id} label={text} labelId="{id}-l" {uiLocale} chosen={str([...at, 'ref'])} onpick={(e) => { writeMany(at, [{ path: ['type'], value: 'entry' }, { path: ['ref'], value: e.path }]); picker = ''; }} onclose={() => (picker = '')} />
@@ -759,15 +758,15 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
             {@render noEntry(`${id}.ref`, `${id}-l`, says, 'a page or entry', () => (picker = id))}
           {/if}
         </fieldset>
-        <div class="field"><div class="label-row"><label for="{id}.label">Label</label></div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
-        <label class="check" for="{id}.newTab"><input type="checkbox" id="{id}.newTab" checked={read([...at, 'newTab']) === true} onchange={(e) => write([...at, 'newTab'], e.currentTarget.checked || undefined)} /><span>Open in new tab</span></label>
+        <div class="field"><div class="label-row"><label for="{id}.label">{m.field_link_label({}, messageOptions(uiLocale))}</label></div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
+        <label class="check" for="{id}.newTab"><input type="checkbox" id="{id}.newTab" checked={read([...at, 'newTab']) === true} onchange={(e) => write([...at, 'newTab'], e.currentTarget.checked || undefined)} /><span>{m.field_link_new_tab({}, messageOptions(uiLocale))}</span></label>
       </div>
     {:else if field.type === 'richtext'}
       {@render groupLabel(id, field, text, at)}
       <RichText {id} labelId="{id}-l" {locale} {uiLocale} tier={field.tier} invalid={!!err} describedby={says} value={str(at)} address={address(at)} {session} onchange={(md, history) => write(at, md, history)} />
     {:else if field.type === 'group'}
       <details class="group" open>
-        <summary>{text}<span class="count">{field.fields.length} fields</span></summary>
+        <summary>{text}<span class="count">{m.field_count({ count: field.fields.length }, messageOptions(uiLocale))}</span></summary>
         <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
       </details>
     {:else if field.type === 'array'}
@@ -784,11 +783,11 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
             {#if !translating}{@render controls(at, i, `${text} row ${i + 1}`, s.attachHandle)}{/if}
           </div>
         {:else}
-          <p class="hint">Nothing here yet</p>
+          <p class="hint">{m.field_list_empty({}, messageOptions(uiLocale))}</p>
         {/each}
         </DragDropProvider>
         {#if !translating}
-          <button class="btn btn-sm add" type="button" disabled={structureLocked} onclick={() => (isGallery ? (picker = id) : add(at, scalar ? '' : { _id: newId('default') }))}>Add to {text}</button>
+          <button class="btn btn-sm add" type="button" disabled={structureLocked} onclick={() => (isGallery ? (picker = id) : add(at, scalar ? '' : { _id: newId('default') }))}>{m.field_list_add({ field: text }, messageOptions(uiLocale))}</button>
         {/if}
       </div>
       {#if isGallery && picker === id}
@@ -815,7 +814,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           {@const shut = !open && folded[keyOf(items, i)] === true}
           <article class="block-card" id="{id}.{i}" aria-labelledby="{id}.{i}-h" class:is-dragging={s.isDragging} class:is-folded={shut} {@attach s.attach}>
             <header>
-              <button class="btn btn-ghost btn-icon fold" type="button" disabled={open} aria-expanded={!shut} aria-controls="{id}.{i}-b" aria-label="{shut ? 'Expand' : 'Collapse'} {name}" onclick={() => (folded[keyOf(items, i)] = !shut)}>{shut ? '▸' : '▾'}</button>
+              <button class="btn btn-ghost btn-icon fold" type="button" disabled={open} aria-expanded={!shut} aria-controls="{id}.{i}-b" aria-label={shut ? m.field_expand({ item: name }, messageOptions(uiLocale)) : m.field_collapse({ item: name }, messageOptions(uiLocale))} onclick={() => (folded[keyOf(items, i)] = !shut)}>{shut ? '▸' : '▾'}</button>
               <span class="label" id="{id}.{i}-h" title="{block(row)._type} · {block(row)._id}">{block(row)._label || name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (letter) => letter.toUpperCase())}</span>
               {#if shut}<span class="excerpt">{excerpt(row, inner)}</span>{/if}
               {#if !translating}{@render controls(at, i, name, s.attachHandle, true)}{/if}
@@ -825,16 +824,16 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
             {:else if inner}
               <div class="form" id="{id}.{i}-b"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
             {:else}
-              <p class="ref-note" id="{id}.{i}-b">{block(row)._ref ?? `No “${block(row)._type}” block in the registry`} — not editable here</p>
+              <p class="ref-note" id="{id}.{i}-b">{block(row)._ref ?? m.field_block_missing({ type: block(row)._type ?? '' }, messageOptions(uiLocale))} — {m.field_not_editable({}, messageOptions(uiLocale))}</p>
             {/if}
           </article>
         {:else}
-          <p class="hint">Nothing here yet</p>
+          <p class="hint">{m.field_list_empty({}, messageOptions(uiLocale))}</p>
         {/each}
         </DragDropProvider>
         {#if !translating}
         <div class="pop-anchor">
-          <button class="btn btn-sm add" type="button" disabled={structureLocked} aria-expanded={picker === id} onclick={() => (picker = picker === id ? '' : id)}>Add block</button>
+          <button class="btn btn-sm add" type="button" disabled={structureLocked} aria-expanded={picker === id} onclick={() => (picker = picker === id ? '' : id)}>{m.field_add_block({}, messageOptions(uiLocale))}</button>
           {#if picker === id}
             <div class="popover block-picker">
               <div class="types">
@@ -855,7 +854,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         <div class="meta">
           <div><div class="sub">{str([...at, 'src'])}</div></div>
           {@render altField(id, at)}
-          <p class="hint">The picture is the same in every language.</p>
+          <p class="hint">{m.field_picture_same({}, messageOptions(uiLocale))}</p>
         </div>
       </div>
     {:else if field.type === 'image' && read(at) !== undefined}
@@ -866,21 +865,21 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           <div><div class="sub">{str([...at, 'src'])} · {num([...at, 'width'])} × {num([...at, 'height'])}</div></div>
           {@render altField(id, at)}
           <div class="actions">
-            <button class="btn btn-sm" type="button" onclick={() => (framing = id)}>Set focal point</button>
-            <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>Replace</button>
-            <button class="btn btn-sm btn-ghost" type="button" onclick={() => write(at, undefined)}>Remove</button>
+            <button class="btn btn-sm" type="button" onclick={() => (framing = id)}>{m.field_picture_set_focal({}, messageOptions(uiLocale))}</button>
+            <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>{m.field_replace({}, messageOptions(uiLocale))}</button>
+            <button class="btn btn-sm btn-ghost" type="button" onclick={() => write(at, undefined)}>{m.field_remove_value({}, messageOptions(uiLocale))}</button>
           </div>
-          {#if field.preset.ratio}<p class="hint">Shown at {field.preset.ratio} wherever this field appears.</p>{/if}
+          {#if field.preset.ratio}<p class="hint">{m.field_image_ratio({ ratio: field.preset.ratio }, messageOptions(uiLocale))}</p>{/if}
         </div>
       </div>
     {:else if field.type === 'image'}
       {@render groupLabel(id, field, text, at)}
       <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
       <div class="dropzone" role="group" aria-labelledby="{id}-l" aria-describedby={says} ondragover={(e) => e.preventDefault()} ondrop={(e) => dropOn(id, e)}>
-        <span>Drop an image or choose from library</span>
-        {#if field.preset.ratio || field.preset.min}<span class="hint">{[field.preset.ratio, field.preset.min && `at least ${field.preset.min} px wide`].filter(Boolean).join(' · ')}</span>{/if}
-        <span class="hint">JPEG, PNG or WebP · saved at up to {field.preset.max ?? 2400} px wide</span>
-        <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>Choose from library</button>
+        <span>{m.field_image_drop({}, messageOptions(uiLocale))}</span>
+        {#if field.preset.ratio || field.preset.min}<span class="hint">{[field.preset.ratio, field.preset.min && m.field_image_min_width({ min: field.preset.min }, messageOptions(uiLocale))].filter(Boolean).join(' · ')}</span>{/if}
+        <span class="hint">{m.field_image_formats({ max: field.preset.max ?? 2400 }, messageOptions(uiLocale))}</span>
+        <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>{m.field_picture_choose({}, messageOptions(uiLocale))}</button>
       </div>
     {:else if field.type === 'file' && translating}
       <!-- The download is one file for every language; what it is called is not. -->
@@ -890,7 +889,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         <div class="meta">
           <div><div class="sub">{str([...at, 'src'])}</div></div>
           {@render nameField(id, at)}
-          <p class="hint">The same file in every language.</p>
+          <p class="hint">{m.field_file_same({}, messageOptions(uiLocale))}</p>
         </div>
       </div>
     {:else if field.type === 'file' && read(at) !== undefined}
@@ -901,8 +900,8 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           <div><div class="sub">{str([...at, 'src'])} · {bytes(at)} · {str([...at, 'mime'])}</div></div>
           {@render nameField(id, at)}
           <div class="actions">
-            <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>Replace</button>
-            <button class="btn btn-sm btn-ghost" type="button" onclick={() => write(at, undefined)}>Remove</button>
+            <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>{m.field_replace({}, messageOptions(uiLocale))}</button>
+            <button class="btn btn-sm btn-ghost" type="button" onclick={() => write(at, undefined)}>{m.field_remove_value({}, messageOptions(uiLocale))}</button>
           </div>
         </div>
       </div>
@@ -910,9 +909,9 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       {@render groupLabel(id, field, text, at)}
       <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
       <div class="dropzone" role="group" aria-labelledby="{id}-l" aria-describedby={says} ondragover={(e) => e.preventDefault()} ondrop={(e) => dropOn(id, e)}>
-        <span>Drop a file or choose from library</span>
-        <span class="hint">{field.accept.map((m) => (m.split('/').pop() ?? '').toUpperCase()).join(', ')} up to 10 MB</span>
-        <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>Choose from library</button>
+        <span>{m.field_file_drop({}, messageOptions(uiLocale))}</span>
+        <span class="hint">{m.field_file_types({ formats: field.accept.map((mime) => (mime.split('/').pop() ?? '').toUpperCase()).join(', ') }, messageOptions(uiLocale))}</span>
+        <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>{m.field_picture_choose({}, messageOptions(uiLocale))}</button>
       </div>
     {:else if field.type === 'reference'}
       {@render groupLabel(id, field, text, at)}
@@ -933,11 +932,11 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           <div class="meta">
             <div><div class="name"><span class="badge badge-info">{EMBED_LABELS[value.provider]}</span> <span class="sub">{value.id}</span></div></div>
             {@render titleField(id, at)}
-            <p class="hint">The same video in every language.</p>
+            <p class="hint">{m.field_video_same({}, messageOptions(uiLocale))}</p>
           </div>
         </div>
       {:else}
-        <p class="hint" {id}>Nothing here yet</p>
+        <p class="hint" {id}>{m.field_list_empty({}, messageOptions(uiLocale))}</p>
       {/if}
     {:else if field.type === 'embed'}
       {@const value = embedValue(at)}
@@ -945,9 +944,9 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {@render groupLabel(id, field, text, at)}
       {:else}
         <div class="label-row"><label for={id} id="{id}-l">{text}{#if field.required}<span class="req" aria-hidden="true">*</span>{/if}</label></div>
-        <input class="input" {id} type="url" placeholder="Paste a YouTube, Vimeo or Google Maps link" aria-invalid={refused.id === id ? 'true' : bad} aria-describedby={[refused.id === id ? `${id}-paste` : '', value ? `${id}-keep` : '', says].filter(Boolean).join(' ') || undefined} oninput={(e) => pasteEmbed(at, id, e.currentTarget)} />
-        {#if refused.id === id}<p class="error" id="{id}-paste">{refused.why}</p>{/if}
-        {#if value}<p class="hint" id="{id}-keep">Still showing the video below until a new link is recognised.</p>{/if}
+        <input class="input" {id} type="url" placeholder={m.field_embed_placeholder({}, messageOptions(uiLocale))} aria-invalid={refused.id === id ? 'true' : bad} aria-describedby={[refused.id === id ? `${id}-paste` : '', value ? `${id}-keep` : '', says].filter(Boolean).join(' ') || undefined} oninput={(e) => pasteEmbed(at, id, e.currentTarget)} />
+        {#if refused.id === id}<p class="error" id="{id}-paste">{embedRefusal(refused.reason)}</p>{/if}
+        {#if value}<p class="hint" id="{id}-keep">{m.field_embed_keep_hint({}, messageOptions(uiLocale))}</p>{/if}
       {/if}
       {#if value}
         <div class="media-card" id={pasting === id ? undefined : id} role="group" aria-labelledby="{id}-l" aria-describedby={pasting === id ? undefined : says}>
@@ -955,15 +954,15 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           <div class="meta">
             <div><div class="name"><span class="badge badge-info">{EMBED_LABELS[value.provider]}</span> <span class="sub">{value.id}</span></div></div>
             {#if pasting === id}
-              <div class="actions"><button class="btn btn-sm btn-ghost" type="button" onclick={() => { pasting = ''; refused = { id: '', why: '' }; focusOn(`${id}-change`); }}>Keep this one</button></div>
+              <div class="actions"><button class="btn btn-sm btn-ghost" type="button" onclick={() => { pasting = ''; refused = { id: '' }; focusOn(`${id}-change`); }}>{m.field_embed_keep({}, messageOptions(uiLocale))}</button></div>
             {:else}
               {@render titleField(id, at)}
               {#if value.provider !== 'google-maps'}
-                <div class="field"><div class="label-row"><label for="{id}.start">Start at</label></div><input class="input" id="{id}.start" type="number" min="0" step="1" aria-describedby="{id}.start-hint" value={num([...at, 'start'])} oninput={(e) => write([...at, 'start'], e.currentTarget.value === '' ? undefined : e.currentTarget.valueAsNumber)} /><p class="hint" id="{id}.start-hint">Seconds, optional</p></div>
+                <div class="field"><div class="label-row"><label for="{id}.start">{m.field_embed_start({}, messageOptions(uiLocale))}</label></div><input class="input" id="{id}.start" type="number" min="0" step="1" aria-describedby="{id}.start-hint" value={num([...at, 'start'])} oninput={(e) => write([...at, 'start'], e.currentTarget.value === '' ? undefined : e.currentTarget.valueAsNumber)} /><p class="hint" id="{id}.start-hint">{m.field_embed_seconds_optional({}, messageOptions(uiLocale))}</p></div>
               {/if}
               <div class="actions">
-                <button class="btn btn-sm" id="{id}-change" type="button" onclick={() => { pasting = id; focusOn(id); }}>Change</button>
-                <button class="btn btn-sm btn-ghost" type="button" onclick={() => { write(at, undefined); pasting = ''; focusOn(id); }}>Remove</button>
+                <button class="btn btn-sm" id="{id}-change" type="button" onclick={() => { pasting = id; focusOn(id); }}>{m.field_change({}, messageOptions(uiLocale))}</button>
+                <button class="btn btn-sm btn-ghost" type="button" onclick={() => { write(at, undefined); pasting = ''; focusOn(id); }}>{m.field_remove_value({}, messageOptions(uiLocale))}</button>
               </div>
             {/if}
           </div>
@@ -973,14 +972,14 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <!-- A translation owns the words a page is found by: title, description, alt. -->
       {@render groupLabel(id, field, text, at)}
       <div class="form" {id} role="group" aria-labelledby="{id}-l" aria-describedby={says}>
-        {@render seoWords(id, at, 'title', 'Search title', SEO_TITLE_LIMIT, inheritedSeo?.title ?? '', 'Leave empty to use the page title.')}
-        {@render seoWords(id, at, 'description', 'Description', SEO_DESCRIPTION_LIMIT, inheritedSeo?.description ?? '', '')}
+        {@render seoWords(id, at, 'title', m.field_seo_search_title({}, messageOptions(uiLocale)), SEO_TITLE_LIMIT, inheritedSeo?.title ?? '', m.field_seo_title_fallback({}, messageOptions(uiLocale)))}
+        {@render seoWords(id, at, 'description', m.field_seo_description({}, messageOptions(uiLocale)), SEO_DESCRIPTION_LIMIT, inheritedSeo?.description ?? '', '')}
         {#if read([...at, 'image']) !== undefined}
           <div class="media-card">
             <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"><MediaImage src={src([...at, 'image'])} alt="" style="object-position: {dot([...at, 'image'])[0]}% {dot([...at, 'image'])[1]}%" /></span>
             <div class="meta">
               {@render altField(`${id}.image`, [...at, 'image'])}
-              <p class="hint">The same picture in every language.</p>
+              <p class="hint">{m.field_picture_same({}, messageOptions(uiLocale))}</p>
             </div>
           </div>
         {/if}
@@ -992,10 +991,10 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       {@const scheme = unsafeLinkScheme('default', str([...at, 'canonical']))}
       {@render groupLabel(id, field, text, at)}
       <div class="form" {id} role="group" aria-labelledby="{id}-l" aria-describedby={says}>
-        {@render seoWords(id, at, 'title', 'Search title', SEO_TITLE_LIMIT, inheritedSeo?.title ?? '', 'Leave empty to use the page title and the site’s own pattern.')}
-        {@render seoWords(id, at, 'description', 'Description', SEO_DESCRIPTION_LIMIT, inheritedSeo?.description ?? '', '')}
+        {@render seoWords(id, at, 'title', m.field_seo_search_title({}, messageOptions(uiLocale)), SEO_TITLE_LIMIT, inheritedSeo?.title ?? '', m.field_seo_pattern_fallback({}, messageOptions(uiLocale)))}
+        {@render seoWords(id, at, 'description', m.field_seo_description({}, messageOptions(uiLocale)), SEO_DESCRIPTION_LIMIT, inheritedSeo?.description ?? '', '')}
         <div class="field">
-          <div class="label-row"><span id="{id}.image-l">Social image</span><span class="mode">Same in every language</span></div>
+          <div class="label-row"><span id="{id}.image-l">{m.field_seo_social_image({}, messageOptions(uiLocale))}</span><span class="mode">{m.field_same_every_language({}, messageOptions(uiLocale))}</span></div>
           {#if read(image) !== undefined}
             <div class="media-card" id="{id}.image" role="group" tabindex="-1" aria-labelledby="{id}.image-l">
               <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"><MediaImage src={src(image)} alt="" style="object-position: {dot(image)[0]}% {dot(image)[1]}%" /><span class="focal" style="left: {dot(image)[0]}%; top: {dot(image)[1]}%" aria-hidden="true"></span></span>
@@ -1003,41 +1002,41 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
                 <div><div class="sub">{str([...image, 'src'])} · {num([...image, 'width'])} × {num([...image, 'height'])}</div></div>
                 {@render altField(`${id}.image`, image)}
                 <div class="actions">
-                  <button class="btn btn-sm" type="button" onclick={() => (framing = `${id}.image`)}>Set focal point</button>
-                  <button class="btn btn-sm" type="button" onclick={() => (picker = `${id}.image`)}>Replace</button>
-                  <button class="btn btn-sm btn-ghost" type="button" onclick={() => write(image, undefined)}>{inheritedSeo?.image ? 'Use the site’s default' : 'Remove'}</button>
+                  <button class="btn btn-sm" type="button" onclick={() => (framing = `${id}.image`)}>{m.field_picture_set_focal({}, messageOptions(uiLocale))}</button>
+                  <button class="btn btn-sm" type="button" onclick={() => (picker = `${id}.image`)}>{m.field_replace({}, messageOptions(uiLocale))}</button>
+                  <button class="btn btn-sm btn-ghost" type="button" onclick={() => write(image, undefined)}>{inheritedSeo?.image ? m.field_seo_site_default({}, messageOptions(uiLocale)) : m.field_remove_value({}, messageOptions(uiLocale))}</button>
                 </div>
               </div>
             </div>
           {:else}
             <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
             <div class="dropzone" role="group" aria-labelledby="{id}.image-l" ondragover={(e) => e.preventDefault()} ondrop={(e) => dropOn(`${id}.image`, e)}>
-              <span>{inheritedSeo?.image ? 'The site’s own card is shared for this page' : 'Drop an image or choose from library'}</span>
-              <span class="hint">{SOCIAL_CARD.ratio} · at least {SOCIAL_CARD.min} px wide</span>
-              <button class="btn btn-sm" type="button" onclick={() => (picker = `${id}.image`)}>Choose from library</button>
+              <span>{inheritedSeo?.image ? m.field_seo_site_card({}, messageOptions(uiLocale)) : m.field_image_drop({}, messageOptions(uiLocale))}</span>
+              <span class="hint">{SOCIAL_CARD.ratio} · {m.field_image_min_width({ min: SOCIAL_CARD.min ?? 0 }, messageOptions(uiLocale))}</span>
+              <button class="btn btn-sm" type="button" onclick={() => (picker = `${id}.image`)}>{m.field_picture_choose({}, messageOptions(uiLocale))}</button>
             </div>
           {/if}
         </div>
         <div class="field">
-          <label class="switch" for="{id}.noindex"><input type="checkbox" role="switch" id="{id}.noindex" checked={hiding} onchange={(e) => seoWrite(at, 'noindex', e.currentTarget.checked)} /><span>Hide this page from search engines</span></label>
+          <label class="switch" for="{id}.noindex"><input type="checkbox" role="switch" id="{id}.noindex" checked={hiding} onchange={(e) => seoWrite(at, 'noindex', e.currentTarget.checked)} /><span>{m.field_seo_hide({}, messageOptions(uiLocale))}</span></label>
           {#if hiding}
-            <p class="notice notice-warn">This page is left out of the sitemap and search engines are asked not to list it. It stays on the site: anybody with the link can still open it, and it can take a few weeks to drop out of results.</p>
+            <p class="notice notice-warn">{m.field_seo_hide_notice({}, messageOptions(uiLocale))}</p>
           {/if}
         </div>
         {#if host}{@render previews(at)}{/if}
         <details class="group">
-          <summary>Canonical URL{#if str([...at, 'canonical'])}<span class="count">{str([...at, 'canonical'])}</span>{/if}</summary>
+          <summary>{m.field_seo_canonical({}, messageOptions(uiLocale))}{#if str([...at, 'canonical'])}<span class="count">{str([...at, 'canonical'])}</span>{/if}</summary>
           <div class="field" class:is-invalid={scheme}>
-            <div class="label-row"><label for="{id}.canonical">Canonical URL</label></div>
+            <div class="label-row"><label for="{id}.canonical">{m.field_seo_canonical({}, messageOptions(uiLocale))}</label></div>
             <input class="input" id="{id}.canonical" type="url" aria-invalid={scheme ? 'true' : undefined} aria-describedby="{id}.canonical-hint{scheme ? ` ${id}.canonical-err` : ''}" value={str([...at, 'canonical'])} oninput={(e) => seoWrite(at, 'canonical', e.currentTarget.value || undefined)} />
-            {#if scheme}<p class="error" id="{id}.canonical-err">{scheme}: links are not allowed</p>{/if}
-            <p class="hint" id="{id}.canonical-hint">Only set this when the same page lives at another address.</p>
+            {#if scheme}<p class="error" id="{id}.canonical-err">{m.field_link_scheme_not_allowed({ scheme }, messageOptions(uiLocale))}</p>{/if}
+            <p class="hint" id="{id}.canonical-hint">{m.field_seo_canonical_hint({}, messageOptions(uiLocale))}</p>
           </div>
         </details>
       </div>
     {:else}
       <div class="label-row"><label for={id}>{text}</label></div>
-      <p class="hint" {id}>Not editable here yet</p>
+      <p class="hint" {id}>{m.field_not_editable_yet({}, messageOptions(uiLocale))}</p>
     {/if}
     {#if err}<p class="error" id="{id}-err">{err}</p>{/if}
     {#if marked}{@render stale(marked)}{/if}
@@ -1056,10 +1055,10 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       {@const image = [...at, 'image']}
       <!-- A 1.91:1 card cut from a 3:2 photo loses a band top and bottom. -->
       <Focal
-        name="Social image"
+        name={m.field_seo_social_image({}, messageOptions(uiLocale))}
         url={src(image)}
         focal={point(image)}
-        presets={[{ label: 'Social image', preset: SOCIAL_CARD }]}
+        presets={[{ label: m.field_seo_social_image({}, messageOptions(uiLocale)), preset: SOCIAL_CARD }]}
         onsave={(moved) => { write([...image, 'focal'], centred(moved) ? undefined : moved); framing = ''; }}
         onclose={() => (framing = '')}
       />
@@ -1067,7 +1066,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {#if picker === `${id}.image` && field.type === 'seo'}
       <Media
         kind="images"
-        label="Social image"
+        label={m.field_seo_social_image({}, messageOptions(uiLocale))}
         preset={SOCIAL_CARD}
         base={mediaBase}
         {dropped}

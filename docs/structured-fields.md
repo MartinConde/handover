@@ -132,6 +132,15 @@ of cards, each headed by its `_label` or `_type`, and Add block offers one butto
 in your registry. Reordering never rewrites an `_id`, so translations and `_machine` paths
 keep pointing at the same block.
 
+Group counts, list empty states, row actions, block controls, references, link controls, embed
+guidance and the SEO panel follow the account's interface language. Switching English/Deutsch
+updates open block and page pickers, an embed replacement with a retained refusal, SEO notices and
+compact Handover-owned dates in place. Nested and repeatable input nodes, focus, selections and
+values stay where they are; no entry-directory reread or content write is caused by the switch.
+Schema labels and option values, block type names, entry titles, paths, filenames, URLs and edited
+content remain exactly as authored. “Same in every language” describes shared structure; it changes
+language as interface text but does not duplicate or rewrite the stored value.
+
 `image` and `file` are a card: the picture at the field's own ratio, or the file's type and
 size, with the translatable half beside it and Replace and Remove under it. An empty one is a
 drop zone that takes a file dropped on it and opens the
@@ -155,9 +164,13 @@ shortened `maps.app.goo.gl` one, Google's own embed code, and a map dragged to s
 (`/maps/@lat,lng`) — a view with no place on it. A language that is being translated gets the title and
 nothing else — the video is the same in every language. What the page does with the value is
 [`<Embed />`](rendering.md#videos-and-maps).
+The parser keeps its existing English `refused` sentence for older callers and also returns a stable
+`reason`; the admin uses that reason to present the same recovery in the selected interface language.
 
 `seo` is a tab of its own rather than a row in the form, and what it draws is described in
 [Search and sharing](seo.md#in-the-admin) along with the `<Seo />` that renders it.
+Its search and social previews, meter guidance, canonical controls and visible no-index notice follow
+the interface language. SEO title, description, canonical URL, image and preview content do not.
 
 Make a structured field **required** and a new entry cannot be published until it is filled in.
 Nothing typed is lost: the draft is stored anyway and the field is marked as a problem. Keep a

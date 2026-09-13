@@ -14,6 +14,7 @@ const relativeFormatters = new Map<UiLocale, Intl.RelativeTimeFormat>();
 const dateFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const exactFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const clockFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
+const fieldTimeFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const languageFormatters = new Map<UiLocale, Intl.DisplayNames>();
 const languageTag = (locale: UiLocale) => (locale === 'de' ? 'de-DE' : 'en-GB');
 
@@ -69,6 +70,20 @@ export const formatClockTime = (at: number, locale: UiLocale): string =>
     clockFormatters,
     locale,
     () => new Intl.DateTimeFormat(languageTag(locale), { hour: '2-digit', minute: '2-digit' }),
+  ).format(at);
+
+/** Field popovers keep the browser timezone and their compact date shape across locales. */
+export const formatFieldTime = (at: number, locale: UiLocale): string =>
+  formatter(
+    fieldTimeFormatters,
+    locale,
+    () =>
+      new Intl.DateTimeFormat(languageTag(locale), {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
   ).format(at);
 
 /** Unknown or malformed content-language tags stay visible as their authored code. */

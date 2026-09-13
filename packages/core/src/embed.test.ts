@@ -83,13 +83,14 @@ test.each([
   // Reject unsafe provider ids before interpolation.
   ['an id that is markup', 'https://youtu.be/<script>'],
 ])('%s is refused with the allow-list', (_name, url) => {
-  expect(parseEmbedUrl(url)).toEqual({ refused: UNKNOWN });
+  expect(parseEmbedUrl(url)).toEqual({ refused: UNKNOWN, reason: 'unknown' });
 });
 
 // The two things Google's own Share dialog hands over: each says what to do next instead.
 test('a shortened map link says to open it first', () => {
   expect(parseEmbedUrl('https://maps.app.goo.gl/AbCdEf123')).toEqual({
     refused: 'Google Maps shortened this link. Open it, then copy the address from your browser.',
+    reason: 'shortened-map',
   });
 });
 
@@ -98,6 +99,7 @@ test('a map view with no place on it says to search for one', () => {
   expect(parseEmbedUrl('https://www.google.com/maps/@50.5,-4.8,17z')).toEqual({
     refused:
       'This link is a map view with no place on it. Search for the place in Google Maps, then copy the address from your browser.',
+    reason: 'map-view',
   });
 });
 
@@ -105,6 +107,7 @@ test('googles own embed URL says to copy the address instead', () => {
   expect(parseEmbedUrl('https://www.google.com/maps/embed?pb=!1m18!1m12!1m3')).toEqual({
     refused:
       'That is Google’s embed code. Open the map itself and copy the address from your browser.',
+    reason: 'embed-code',
   });
 });
 

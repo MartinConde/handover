@@ -114,6 +114,10 @@ number, one-character limits use singular wording, and decimal bounds keep their
 with the interface language's decimal separator. The schema's original message and field path
 remain in the API response; a message supplied by your schema or error map is shown exactly as
 written and is never inferred from matching Zod's English text.
+The link toggle, labels, actions and unsafe-scheme guidance also follow the interface language
+without changing the typed URL or selected entry. The date value remains the same ISO string;
+Handover-owned date presentation uses the interface language and the existing browser timezone.
+The native date picker's own calendar chrome may continue to follow the browser or operating system.
 Rich text is a TipTap editor whose toolbar has exactly the tier's
 constructs; its link button opens the same search box, and points at the address the
 language being written serves. A value that already contains something outside the tier

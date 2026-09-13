@@ -10,8 +10,10 @@ export interface EmbedValue {
   start?: number;
 }
 
-/** A pasted link is either something to store or the sentence saying why it is not. */
-export type EmbedParse = { embed: EmbedValue } | { refused: string };
+export type EmbedRefusalReason = 'unknown' | 'shortened-map' | 'embed-code' | 'map-view';
+
+/** The legacy sentence stays available while clients select localized copy from the reason. */
+export type EmbedParse = { embed: EmbedValue } | { refused: string; reason: EmbedRefusalReason };
 
 export const EMBED_LABELS: Record<EmbedProvider, string> = {
   youtube: 'YouTube',
@@ -21,6 +23,10 @@ export const EMBED_LABELS: Record<EmbedProvider, string> = {
 
 // "Invalid URL" tells a client nothing they can act on, so the refusal is the allow-list.
 const UNKNOWN = 'We don’t recognise this link. Supported: YouTube, Vimeo, Google Maps.';
+const refusal = (reason: EmbedRefusalReason, refused = UNKNOWN): EmbedParse => ({
+  refused,
+  reason,
+});
 
 // `90`, `90s`, `1m30s`, `1h2m3s` — the forms YouTube and Vimeo put in `t`.
 function seconds(raw: string | null | undefined): number | undefined {
@@ -42,7 +48,7 @@ const video = (
 ): EmbedParse =>
   id && /^[A-Za-z0-9_-]+$/.test(id)
     ? { embed: { provider, id, ...(start ? { start } : {}) } }
-    : { refused: UNKNOWN };
+    : refusal('unknown');
 
 /** `start` is kept only where the link carried one, so a plain link stores no key. */
 export function parseEmbedUrl(input: string): EmbedParse {
@@ -50,9 +56,9 @@ export function parseEmbedUrl(input: string): EmbedParse {
   try {
     url = new URL(input.trim());
   } catch {
-    return { refused: UNKNOWN };
+    return refusal('unknown');
   }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') return { refused: UNKNOWN };
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') return refusal('unknown');
   const host = url.hostname.replace(/^www\./, '');
   const path = url.pathname.split('/').filter(Boolean);
   const t = seconds(url.searchParams.get('t') ?? url.searchParams.get('start'));
@@ -62,7 +68,7 @@ export function parseEmbedUrl(input: string): EmbedParse {
     if (path[0] === 'watch') return video('youtube', url.searchParams.get('v') ?? undefined, t);
     if (path[0] === 'shorts' || path[0] === 'embed' || path[0] === 'live')
       return video('youtube', path[1], t);
-    return { refused: UNKNOWN };
+    return refusal('unknown');
   }
   if (host === 'vimeo.com' || host === 'player.vimeo.com')
     return video(
@@ -73,27 +79,28 @@ export function parseEmbedUrl(input: string): EmbedParse {
 
   // Google's own Share dialog hands over these two, so each gets the next instruction by name.
   if (host === 'maps.app.goo.gl' || (host === 'goo.gl' && path[0] === 'maps'))
-    return {
-      refused: 'Google Maps shortened this link. Open it, then copy the address from your browser.',
-    };
+    return refusal(
+      'shortened-map',
+      'Google Maps shortened this link. Open it, then copy the address from your browser.',
+    );
   if (host === 'google.com' || host === 'maps.google.com') {
     if (path[0] === 'maps' && path[1] === 'embed')
-      return {
-        refused:
-          'That is Google’s embed code. Open the map itself and copy the address from your browser.',
-      };
+      return refusal(
+        'embed-code',
+        'That is Google’s embed code. Open the map itself and copy the address from your browser.',
+      );
     // `/maps/@lat,lng,zoom` is a view, not a place: a pin at its centre is not what was seen.
     if (path[0] === 'maps' && path[1]?.startsWith('@') && !url.searchParams.has('q'))
-      return {
-        refused:
-          'This link is a map view with no place on it. Search for the place in Google Maps, then copy the address from your browser.',
-      };
+      return refusal(
+        'map-view',
+        'This link is a map view with no place on it. Search for the place in Google Maps, then copy the address from your browser.',
+      );
     const q =
       url.searchParams.get('q') ??
       (path[0] === 'maps' && path[1] === 'place' ? place(path[2] ?? '') : '');
     if (q && !/[<>]/.test(q)) return { embed: { provider: 'google-maps', id: q } };
   }
-  return { refused: UNKNOWN };
+  return refusal('unknown');
 }
 
 /** The iframe's address, built from the provider's own template and the stored id. */

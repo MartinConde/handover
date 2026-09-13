@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate structured, repeated, link, reference, image, file, embed and SEO field presentation
+  into English and German. Open field popovers, retained embed guidance, Handover-owned compact
+  dates and SEO notices reformat in place while nested inputs, focus, selections, values and authored
+  schema copy remain unchanged. Embed parsing retains its legacy refusal text and adds a stable
+  reason so the editor never infers recovery from English prose.
+
 - Localize required and built-in scalar type, date, selection, text-length, and number-bound
   validation in the entry editor. Add stable descriptors and safe bounds parameters to draft/read
   problems while retaining field paths and legacy messages. Visible validation and scalar controls

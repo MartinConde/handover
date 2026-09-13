@@ -127,7 +127,7 @@ export {
 } from './db.js';
 export type { Change, DiffGroup, RowAt, WordPart } from './diff.js';
 export { diffEntry, sourceChanges } from './diff.js';
-export type { EmbedParse, EmbedProvider, EmbedValue } from './embed.js';
+export type { EmbedParse, EmbedProvider, EmbedRefusalReason, EmbedValue } from './embed.js';
 export { EMBED_LABELS, embedSrc, embedThumb, parseEmbedUrl } from './embed.js';
 export type {
   ContentFile,
