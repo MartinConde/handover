@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Add a pinned, noninteractive contributor command that reproducibly generates the committed
+  Better Auth schema from explicit configuration and output paths.
+
 - Block admin UI message generation when supported catalogs have missing, extra, or empty entries,
   incompatible placeholders/declarations/selectors, missing variant fallbacks, or locales that
   differ from the core allowlist. All UI workflows now share the same validation and compiler entry

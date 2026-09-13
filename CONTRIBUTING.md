@@ -84,6 +84,26 @@ local-storage strategies. The compiler strategy is fixed to `globalVariable base
 small runtime helpers in `packages/ui/src/i18n.ts` share their allowlist with framework-neutral
 core code.
 
+### Authentication schema
+
+After changing Better Auth's configuration, build the workspace so the source configuration can
+load the current core exports, then regenerate its Drizzle tables from the repository root:
+
+```sh
+pnpm build
+pnpm auth:generate
+```
+
+`pnpm auth:generate` runs the pinned Better Auth CLI noninteractively with
+`./scripts/auth-config.ts` as its explicit input and
+`./packages/core/src/auth-schema.ts` as its explicit output. Commit the generated schema and check
+that running the command again leaves it unchanged.
+
+This contributor command owns the package's committed authentication table definitions. It does
+not create or apply a consumer site's SQL migrations. After installing a Handover version whose
+tables changed, consumers run `npx handover db generate` in their site and commit the resulting
+`migrations/`; deployment applies those migrations separately.
+
 ### UI build cost
 
 The UI has separate `admin` and `canvas` entries, lazy editor and rich-text code, and an Astro
