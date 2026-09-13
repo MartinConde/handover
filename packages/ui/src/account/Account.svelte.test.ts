@@ -217,3 +217,26 @@ test('an unavailable account read has a retry that recovers without reloading th
   expect(root.querySelector('.settings')).not.toBeNull();
   expect(root.querySelector('.account-read-error')).toBeNull();
 });
+
+test('a malformed successful account read has localized retry feedback', async () => {
+  let attempts = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => {
+      attempts += 1;
+      return attempts === 1
+        ? new Response('not JSON', { status: 200 })
+        : Response.json({ hasPassword: true, sessions: [HERE] });
+    }),
+  );
+  const root = await show('owner', 'de');
+
+  expect(root.querySelector('.account-read-error')?.textContent).toContain(
+    'Ihr Konto konnte nicht geladen werden.',
+  );
+  root.querySelector<HTMLButtonElement>('.account-read-error button')?.click();
+  await settle();
+
+  expect(root.querySelector('.settings')).not.toBeNull();
+  expect(root.querySelector('.account-read-error')).toBeNull();
+});

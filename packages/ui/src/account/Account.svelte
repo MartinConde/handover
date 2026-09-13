@@ -43,8 +43,17 @@ let reload = $state(0);
 
 async function facts(): Promise<Facts> {
   const res = await fetch('/admin/api/account');
-  if (!res.ok) throw new Error('ACCOUNT_LOAD_FAILED');
-  return res.json();
+  if (!res.ok) throw await responseMessage(res, 'ACCOUNT_LOAD_FAILED');
+  const body = (await res.json().catch(() => undefined)) as Facts | undefined;
+  if (!body || typeof body.hasPassword !== 'boolean' || !Array.isArray(body.sessions))
+    throw { code: 'ACCOUNT_LOAD_FAILED' } satisfies UiMessage;
+  return body;
+}
+
+function accountReadFailure(error: unknown): UiMessage {
+  return error && typeof error === 'object' && 'code' in error && typeof error.code === 'string'
+    ? (error as UiMessage)
+    : { code: 'ACCOUNT_LOAD_FAILED' };
 }
 
 async function post(path: string, body: unknown) {
@@ -199,7 +208,7 @@ function when(at: number, locale: UiLocale): string {
                   {#if passwordError.detail}<span class="technical-detail">{m.common_technical_detail({ detail: passwordError.detail }, messageOptions(uiLocale))}</span>{/if}
                 </span>
               {:else}
-                <span class="hint" id="set-new-hint">{m.auth_password_hint_no_other_rules({}, messageOptions(uiLocale))}</span>
+                <span class="hint" id="set-new-hint">{m.auth_password_hint_length({}, messageOptions(uiLocale))}</span>
               {/if}
             </div>
             <div class="field">
@@ -318,7 +327,7 @@ function when(at: number, locale: UiLocale): string {
                   </span>
                 {:else}
                   <span class="hint" id="change-new-hint">
-                    {m.auth_password_hint_no_other_rules({}, messageOptions(uiLocale))}
+                    {m.auth_password_hint_length({}, messageOptions(uiLocale))}
                   </span>
                 {/if}
               </div>
@@ -370,7 +379,10 @@ function when(at: number, locale: UiLocale): string {
       </div>
     {:catch error}
       <div class="account-read-error">
-        <p class="notice notice-danger" role="alert">{messageText({ code: error.message }, uiLocale)}</p>
+        <p class="notice notice-danger" role="alert">
+          {messageText(accountReadFailure(error), uiLocale)}
+          {#if accountReadFailure(error).detail}<span class="technical-detail">{m.common_technical_detail({ detail: accountReadFailure(error).detail ?? '' }, messageOptions(uiLocale))}</span>{/if}
+        </p>
         <button class="btn" type="button" onclick={() => (reload += 1)}>{m.common_retry({}, messageOptions(uiLocale))}</button>
       </div>
     {/await}

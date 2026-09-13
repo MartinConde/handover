@@ -94,9 +94,30 @@ test('an expired reset code is localized without showing Better Auth prose', asy
   await settle();
 
   expect(root.querySelector('[role="alert"]')?.textContent).toBe(
-    'Das Passwort konnte nicht zurückgesetzt werden. Fordern Sie einen neuen Link an und versuchen Sie es erneut.',
+    'Der Link zum Zurücksetzen ist abgelaufen oder wurde bereits verwendet. Fordern Sie einen neuen Link an und versuchen Sie es erneut.',
   );
   expect(text(root)).not.toContain('Token expired');
+});
+
+test('an overlong reset password keeps the form and token with actionable guidance', async () => {
+  const calls = server(() =>
+    Response.json({ code: 'PASSWORD_TOO_LONG', message: 'Password too long' }, { status: 400 }),
+  );
+  const root = show(BOTH, '/admin/reset', '?token=tok_123', 'de');
+  const password = 'x'.repeat(129);
+  type(root, 'new-password', password);
+  type(root, 'confirm-password', password);
+
+  click(root, 'Passwort speichern');
+  await settle();
+
+  expect(root.querySelector('[role="alert"]')?.textContent).toBe(
+    'Darf höchstens 128 Zeichen lang sein',
+  );
+  expect(text(root)).not.toContain('Fordern Sie einen neuen Link an');
+  expect((root.querySelector('#new-password') as HTMLInputElement).value).toBe(password);
+  expect((root.querySelector('#confirm-password') as HTMLInputElement).value).toBe(password);
+  expect(calls[0]?.body).toEqual({ token: 'tok_123', newPassword: password });
 });
 
 // The form must not confirm which addresses have an account, so it renders the same card for any.

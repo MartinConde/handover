@@ -6,7 +6,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Translate the complete Account, sign-in, reset-password, and expired-link surfaces into English
   and German. Visible account/authentication feedback now follows live language changes without
-  clearing forms or sessions; known auth codes and connection-loss uncertainty survive wrappers.
+  clearing forms or sessions; known auth codes, actionable password limits, malformed account-read
+  recovery, and connection-loss uncertainty survive wrappers.
 
 - Add live English/Deutsch interface-language controls to signed-out screens, the account menu,
   and Account, with saved-account-first bootstrap, installation-scoped device hints, negotiated

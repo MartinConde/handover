@@ -30,6 +30,7 @@ const KNOWN_CODES = new Set([
   'CREDENTIAL_ACCOUNT_NOT_FOUND',
   'INVALID_PASSWORD',
   'PASSWORD_TOO_SHORT',
+  'PASSWORD_TOO_LONG',
   'INVALID_TOKEN',
   'TOKEN_EXPIRED',
 ]);
@@ -48,10 +49,13 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
     case 'PASSWORD_TOO_SHORT':
     case 'AUTH_PASSWORD_TOO_SHORT':
       return m.auth_password_too_short({}, options);
+    case 'PASSWORD_TOO_LONG':
+      return m.auth_password_too_long({}, options);
     case 'AUTH_PASSWORDS_DIFFERENT':
       return m.auth_passwords_different({}, options);
     case 'INVALID_TOKEN':
     case 'TOKEN_EXPIRED':
+      return m.auth_reset_token_failed({}, options);
     case 'AUTH_RESET_FAILED':
       return m.auth_reset_failed({}, options);
     case 'AUTH_RESET_REQUEST_FAILED':
@@ -75,6 +79,6 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
     case 'ACCOUNT_LOAD_FAILED':
       return m.account_load_failed({}, options);
     default:
-      return m.account_password_failed({}, options);
+      return m.common_unknown_error({}, options);
   }
 }

@@ -42,3 +42,15 @@ test('unknown technical detail stays separate from the localized summary', async
   });
   expect(messageText(descriptor, 'de')).toBe('Das Passwort konnte nicht gespeichert werden.');
 });
+
+test('password length, token expiry, and general reset failures give different recovery', () => {
+  expect(messageText({ code: 'PASSWORD_TOO_LONG' }, 'de')).toBe(
+    'Darf höchstens 128 Zeichen lang sein',
+  );
+  expect(messageText({ code: 'TOKEN_EXPIRED' }, 'de')).toBe(
+    'Der Link zum Zurücksetzen ist abgelaufen oder wurde bereits verwendet. Fordern Sie einen neuen Link an und versuchen Sie es erneut.',
+  );
+  expect(messageText({ code: 'AUTH_RESET_FAILED' }, 'de')).toBe(
+    'Das Passwort konnte nicht zurückgesetzt werden. Bitte versuchen Sie es erneut.',
+  );
+});

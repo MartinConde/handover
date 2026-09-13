@@ -65,7 +65,7 @@ VALUES ('acc_1', 'local:credential', 'usr_1', 'credential', 'usr_1', '<the hash>
 Run each once with `--local` and once with `--remote`: those are two different databases. Three
 values are not free choices, and a password that never works is what you get when one is wrong:
 `provider_id` is `credential`, `issuer` is `local:credential`, and `account_id` is the **user's
-own id**, not the email. A password is at least 12 characters, with no other rules.
+own id**, not the email. A password is 12 to 128 characters.
 
 ## Signing in by emailed link
 
@@ -107,6 +107,10 @@ Which of the two roles somebody has, and what each may do, is
 *Forgot password?* mails a link to `/admin/reset` that lives for **an hour** and works once.
 Setting a new password there ends every session the account had, including the one that asked —
 which is the point, if the reason for the reset is that somebody else had it.
+
+The reset form keeps the entered password and original token when the server refuses its length.
+Passwords are 12 to 128 characters. Only an invalid, expired, or already-used token tells the user
+to request a new link; a general reset failure keeps the current form and offers an ordinary retry.
 
 Everyone has an account page at `/admin/account`: their display name, their email and role as
 facts, a password form, and their sessions with *Sign out everywhere*. Somebody who signed in

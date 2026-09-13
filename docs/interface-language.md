@@ -51,5 +51,9 @@ summary from a stable error descriptor, not from an English sentence or status c
 authentication codes select specific recovery text. Unknown technical detail stays separate from
 the translated summary where it is useful and safe to show.
 
+Password-length failures keep the entered values and give the supported 12–128-character range.
+Only an invalid, expired, or already-used reset token asks for a new link. A malformed Account read
+uses the localized account-loading recovery and Retry action rather than parser text.
+
 The negotiated shell and authenticated bootstrap response use `Cache-Control: private, no-store`.
 Hashed admin JavaScript and CSS remain shared immutable assets.
