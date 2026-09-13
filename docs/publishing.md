@@ -66,8 +66,10 @@ the header counts them — "2 problems", which jumps to the first one. The count
 with every autosave, so it clears as you fill things in.
 
 Handover-owned validation can carry a stable descriptor beside the legacy `message`; the editor
-keeps that descriptor in the entry session and formats it only when drawn. A collection schema's
-own message has no descriptor and remains exactly as the developer wrote it.
+keeps that descriptor in the entry session and formats it only when drawn. The built-in validation
+producers are still being converted to supply descriptors, so validation without one continues to
+show its legacy `message`. A collection schema's own message has no descriptor and remains exactly
+as the developer wrote it.
 
 An error from the [pre-publish checks](pending-changes.md#checks-before-a-publish) — a picture whose file is
 gone — is counted and marked the same way, since it holds the publish back the same way. The

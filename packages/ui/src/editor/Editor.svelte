@@ -437,12 +437,13 @@ let taking = $state(false);
 let takeTrigger = $state<HTMLButtonElement>();
 function cancelTake() {
   taking = false;
+  lockFailed = undefined;
 }
 // When the last answer came back, and when this tab last extended a lock of its own.
 let asked = $state(0);
 let beatAt = 0;
 const locked = $derived(lost || (lock !== undefined && !lock.mine));
-const holder = $derived(lock?.held_by?.name || m.editor_lock_somebody_else({}, options));
+const holderName = $derived(lock?.held_by?.name);
 // The holder is this same person, in another tab.
 const otherTab = $derived(lock?.held_by?.id !== undefined && lock?.held_by?.id === userId);
 // Beats ride on the autosave, so the expiry is the holder's last keystroke plus one lifetime.
@@ -1119,7 +1120,6 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 <main class="main main-editor" class:is-canvas-fullscreen={mode === 'canvas'}>
   {#if actionFailed && !renaming && !deleting && !offing}<p class="notice notice-danger" role="alert">{actionFailed}</p>{/if}
   {#if holdFailed}<p class="notice notice-danger" role="alert">{feedbackText(holdFailed)} {feedbackDetail(holdFailed)}</p>{/if}
-  {#if lockFailed}<p class="notice notice-danger" role="alert">{feedbackText(lockFailed)} {feedbackDetail(lockFailed)}</p>{/if}
   {#if saveError}<p class="notice notice-danger" role="alert">{feedbackText(saveError)} {feedbackDetail(saveError)} <button class="btn-link" type="button" onclick={() => flush()}>{m.editor_save_retry({}, options)}</button></p>{/if}
   {#each entry.offerProblems ?? [] as problem (problem)}
     <div class="lock-banner is-offer">
@@ -1134,8 +1134,10 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         {m.editor_lock_lost_other_tab({}, options)}
       {:else if !lock?.held_by}
         {m.editor_lock_lost_expired({}, options)}
+      {:else if holderName}
+        {m.editor_lock_lost_taken({ holder: holderName }, options)}
       {:else}
-        {m.editor_lock_lost_taken({ holder }, options)}
+        {m.editor_lock_lost_taken_anonymous({}, options)}
       {/if}
       <button class="btn-link" type="button" onclick={() => void (onreload ? onreload() : onchanged())}>{m.editor_lock_reload({}, options)}</button>
     </div>
@@ -1145,7 +1147,11 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         {m.editor_lock_other_tab({}, options)}
         <button class="btn-link" type="button" bind:this={takeTrigger} onclick={() => (taking = true)}>{m.editor_lock_edit_here({}, options)}</button>
       {:else if lock?.held_by}
-        {m.editor_lock_held_by({ holder: lock.held_by.name || m.editor_lock_somebody_else({}, options) }, options)}
+        {#if holderName}
+          {m.editor_lock_held_by({ holder: holderName }, options)}
+        {:else}
+          {m.editor_lock_held_anonymous({}, options)}
+        {/if}
         <span class="when">
           {idle >= 60000
             ? m.editor_lock_idle({}, options)
@@ -1679,9 +1685,14 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   {/if}
   {#if taking}
     <Modal labelledby="take-h" returnTo={takeTrigger} dismissible={!busy} onclose={cancelTake}>
-        <h2 id="take-h">{m.editor_lock_take_question({ holder }, options)}</h2>
-        <p>{m.editor_lock_take_shared({ holder }, options)}</p>
+        <h2 id="take-h">{holderName
+          ? m.editor_lock_take_question({ holder: holderName }, options)
+          : m.editor_lock_take_question_anonymous({}, options)}</h2>
+        <p>{holderName
+          ? m.editor_lock_take_shared({ holder: holderName }, options)
+          : m.editor_lock_take_shared_anonymous({}, options)}</p>
         <p>{m.editor_lock_take_refusal({}, options)}</p>
+        {#if lockFailed}<p class="notice notice-danger" role="alert">{feedbackText(lockFailed)} {feedbackDetail(lockFailed)}</p>{/if}
         <div class="actions">
           <button class="btn" type="button" disabled={busy} onclick={cancelTake}>{m.common_cancel({}, options)}</button>
           <button class="btn btn-primary" type="button" disabled={busy} onclick={takeOver}>{m.editor_lock_take_over({}, options)}</button>

@@ -313,3 +313,132 @@ test('an open take-over confirmation retranslates without changing the lock or e
   expect(q<HTMLFieldSetElement>('.form > fieldset')?.disabled).toBe(true);
   expect(fetchMock).toHaveBeenCalledTimes(requestsBeforeSwitch);
 });
+
+test('a refused take-over stays in the open dialog, retranslates, and retries', async () => {
+  let takeAttempts = 0;
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (!url.startsWith('/admin/api/locks/')) return Response.json({});
+    const body = init?.body ? JSON.parse(String(init.body)) : {};
+    if (body.take === true) {
+      takeAttempts += 1;
+      return takeAttempts === 1
+        ? new Response('lock store unavailable', {
+            status: 500,
+            headers: { 'content-type': 'text/plain' },
+          })
+        : Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120_000 });
+    }
+    return Response.json({
+      held_by: { id: 'u2', name: 'Anna Berg' },
+      mine: false,
+      expires_at: Date.now() + 120_000,
+    });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  app = mount(EditorLocaleFixture, {
+    target: document.body,
+    props: { initialUiLocale: 'de' },
+  });
+  await new Promise((resolve) => setTimeout(resolve));
+  flushSync();
+  const field = q<HTMLInputElement>('input#f-title');
+  q<HTMLButtonElement>('.lock-banner .btn-link')?.click();
+  flushSync();
+  const dialog = q<HTMLDialogElement>('dialog[open]');
+
+  q<HTMLButtonElement>('dialog[open] .btn-primary')?.click();
+  await new Promise((resolve) => setTimeout(resolve));
+  flushSync();
+
+  expect(q('dialog[open] [role="alert"]')?.textContent ?? '').toContain(
+    'Die Bearbeitung konnte nicht übernommen werden.',
+  );
+  expect(q('dialog[open] [role="alert"]')?.textContent ?? '').toContain(
+    'Technisches Detail: lock store unavailable',
+  );
+  expect(qa('.main > [role="alert"]')).toHaveLength(0);
+  expect(q<HTMLDialogElement>('dialog[open]')).toBe(dialog);
+  expect(q<HTMLInputElement>('input#f-title')).toBe(field);
+  expect(q<HTMLFieldSetElement>('.form > fieldset')?.disabled).toBe(true);
+
+  switchLocale();
+
+  expect(q<HTMLDialogElement>('dialog[open]')).toBe(dialog);
+  expect(q('dialog[open] [role="alert"]')?.textContent ?? '').toContain(
+    'The lock could not be taken over.',
+  );
+  expect(q('dialog[open] [role="alert"]')?.textContent ?? '').toContain(
+    'Technical detail: lock store unavailable',
+  );
+  expect(q<HTMLInputElement>('input#f-title')).toBe(field);
+
+  q<HTMLButtonElement>('dialog[open] .btn-primary')?.click();
+  await new Promise((resolve) => setTimeout(resolve));
+  flushSync();
+
+  expect(takeAttempts).toBe(2);
+  expect(q('dialog[open]')).toBeNull();
+  expect(q<HTMLInputElement>('input#f-title')).toBe(field);
+  expect(q<HTMLFieldSetElement>('.form > fieldset')?.disabled).toBe(false);
+});
+
+test('German anonymous-holder feedback uses complete sentences', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      url.startsWith('/admin/api/locks/')
+        ? Response.json({
+            held_by: { id: 'u2', name: null },
+            mine: false,
+            expires_at: Date.now() + 120_000,
+          })
+        : Response.json({}),
+    ),
+  );
+  app = mount(EditorLocaleFixture, {
+    target: document.body,
+    props: { initialUiLocale: 'de' },
+  });
+  await new Promise((resolve) => setTimeout(resolve));
+  flushSync();
+
+  expect(q('.lock-banner')?.textContent).toContain('Eine andere Person bearbeitet diesen Eintrag');
+  q<HTMLButtonElement>('.lock-banner .btn-link')?.click();
+  flushSync();
+
+  expect([q('.dialog h2')?.textContent, q('.dialog p')?.textContent]).toEqual([
+    'Bearbeitung einer anderen Person übernehmen?',
+    'Nichts von dem, was jemand anderes geschrieben hat, geht verloren — es gibt einen gemeinsamen Entwurf und du machst dort weiter, wo die Person aufgehört hat.',
+  ]);
+});
+
+test('the German lost-lock announcement uses a complete anonymous-holder sentence', async () => {
+  vi.useFakeTimers();
+  let lockReads = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (!url.startsWith('/admin/api/locks/')) return Response.json({});
+      lockReads += 1;
+      return lockReads === 1
+        ? Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120_000 })
+        : Response.json({
+            held_by: { id: 'u2', name: null },
+            mine: false,
+            expires_at: Date.now() + 120_000,
+          });
+    }),
+  );
+  app = mount(EditorLocaleFixture, {
+    target: document.body,
+    props: { initialUiLocale: 'de' },
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync();
+  await vi.advanceTimersByTimeAsync(15_000);
+  flushSync();
+
+  expect(q('.lock-banner.is-lost')?.textContent).toContain(
+    'Eine andere Person hat diesen Eintrag übernommen.',
+  );
+});
