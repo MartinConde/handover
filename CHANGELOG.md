@@ -8,8 +8,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   changes retain titles, starters, searches, custom URLs, selected entries and content language
   without rereading content; picker language names follow the interface locale, retained failures
   retranslate, and malformed creation success data no longer opens an unknown entry. Picker-owned
-  labels are translated while schema labels stay authored, invalid creation-directory rows use the
-  retry state, and an uninterpretable successful creation warns that the outcome is unconfirmed.
+  labels are translated while schema labels stay authored, invalid creation-directory envelopes or
+  rows use the retry state, and an uninterpretable successful creation warns that the outcome is
+  unconfirmed.
 
 - Translate entry lists, filters, counts, empty states, row actions, deleted-entry history, dates,
   language names, and retained list feedback into English and German. Live language changes keep

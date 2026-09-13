@@ -67,8 +67,8 @@ collection. A live language change keeps the typed title and selected starter. I
 the translated summary changes in the same alert while any server detail remains verbatim. If a
 successful response does not contain a usable filename, the draft may already exist: the dialog
 keeps the title and starter, does not navigate or post again, and asks the author to check the entry
-list before trying again. Invalid directory rows use the existing unavailable state and Retry
-action rather than rendering partial data.
+list before trying again. Invalid directory envelopes or rows use the existing unavailable state
+and Retry action rather than rendering partial data; an empty object remains a valid empty result.
 
 ## Duplicating an entry
 

@@ -6,7 +6,7 @@ export const nameOf = (collection: string) => collection.replace(/s$/, '');
 <script lang="ts">
 import { request as fetch } from '../request.js';
 
-import { entryName } from '@handover/core';
+import { addressError, entryName } from '@handover/core';
 import { invalidateEntryDirectory } from '../entry-directory.js';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
 import { messageOptions, type UiLocale } from '../i18n.js';
@@ -49,28 +49,31 @@ async function load(name: string) {
     directoryError = await responseMessage(res, 'NEW_ENTRY_DIRECTORY_FAILED');
     return;
   }
-  const body = (await res.json().catch(() => undefined)) as
-    | { entries?: unknown; templates?: unknown }
-    | undefined;
+  const body = (await res.json().catch(() => undefined)) as unknown;
   if (mine !== loadRequest) return;
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    directoryCurrent = false;
+    directoryError = { code: 'NEW_ENTRY_DIRECTORY_FAILED' };
+    return;
+  }
+  const directory = body as { entries?: unknown; templates?: unknown };
   if (
-    !body ||
-    (body.entries !== undefined && !Array.isArray(body.entries)) ||
-    (body.templates !== undefined && !Array.isArray(body.templates)) ||
-    (Array.isArray(body.entries) &&
-      !body.entries.every(
+    (directory.entries !== undefined && !Array.isArray(directory.entries)) ||
+    (directory.templates !== undefined && !Array.isArray(directory.templates)) ||
+    (Array.isArray(directory.entries) &&
+      !directory.entries.every(
         (entry): entry is { id: string } =>
           typeof entry === 'object' && entry !== null && typeof entry.id === 'string',
       )) ||
-    (Array.isArray(body.templates) &&
-      !body.templates.every((template): template is string => typeof template === 'string'))
+    (Array.isArray(directory.templates) &&
+      !directory.templates.every((template): template is string => typeof template === 'string'))
   ) {
     directoryCurrent = false;
     directoryError = { code: 'NEW_ENTRY_DIRECTORY_FAILED' };
     return;
   }
-  taken = ((body.entries ?? []) as { id: string }[]).map((entry) => entry.id);
-  templates = (body.templates ?? []) as string[];
+  taken = ((directory.entries ?? []) as { id: string }[]).map((entry) => entry.id);
+  templates = (directory.templates ?? []) as string[];
   directoryCurrent = true;
 }
 
@@ -108,11 +111,7 @@ async function create(event: Event) {
     return;
   }
   const body = (await res.json().catch(() => undefined)) as { slug?: unknown } | undefined;
-  if (
-    typeof body?.slug !== 'string' ||
-    body.slug.length > 80 ||
-    !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(body.slug)
-  ) {
+  if (typeof body?.slug !== 'string' || !body.slug || addressError('default', body.slug)) {
     error = { code: 'ENTRY_CREATE_UNCONFIRMED' };
     busy = false;
     return;

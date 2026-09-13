@@ -135,12 +135,47 @@ test.each([
     });
     await settle();
 
-    expect(document.querySelector('.entry-read-error')?.textContent).toContain(
+    expect(document.querySelector('.entry-read-error')?.textContent ?? '').toContain(
       'Could not check existing pages',
     );
     expect(document.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
   },
 );
+
+test.each([
+  ['a string', 'not a directory'],
+  ['an array', []],
+])('an invalid directory envelope containing %s uses the retry state', async (_name, body) => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json(body)),
+  );
+  app = mount(NewEntry, {
+    target: document.body,
+    props: { collection: 'pages', onclose: () => {} },
+  });
+  await settle();
+
+  expect(document.querySelector('.entry-read-error')?.textContent ?? '').toContain(
+    'Could not check existing pages',
+  );
+  expect(document.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
+});
+
+test('an empty directory record remains a valid empty result', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({})),
+  );
+  app = mount(NewEntry, {
+    target: document.body,
+    props: { collection: 'pages', onclose: () => {} },
+  });
+  await settle();
+
+  expect(document.querySelector('.entry-read-error')).toBeNull();
+  expect(document.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
+});
 
 test('an open creation keeps its draft and translates retained failure', async () => {
   let reads = 0;
