@@ -14,6 +14,7 @@ const relativeFormatters = new Map<UiLocale, Intl.RelativeTimeFormat>();
 const dateFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const exactFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const clockFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
+const languageFormatters = new Map<UiLocale, Intl.DisplayNames>();
 const languageTag = (locale: UiLocale) => (locale === 'de' ? 'de-DE' : 'en-GB');
 
 const formatter = <T>(cache: Map<UiLocale, T>, locale: UiLocale, make: () => T): T => {
@@ -69,6 +70,21 @@ export const formatClockTime = (at: number, locale: UiLocale): string =>
     locale,
     () => new Intl.DateTimeFormat(languageTag(locale), { hour: '2-digit', minute: '2-digit' }),
   ).format(at);
+
+/** Unknown or malformed content-language tags stay visible as their authored code. */
+export function formatLanguageName(code: string, locale: UiLocale): string {
+  try {
+    return (
+      formatter(
+        languageFormatters,
+        locale,
+        () => new Intl.DisplayNames([languageTag(locale)], { type: 'language' }),
+      ).of(code) ?? code
+    );
+  } catch {
+    return code;
+  }
+}
 
 export const DEVICE_LOCALE_COOKIE = 'handover_ui_locale';
 

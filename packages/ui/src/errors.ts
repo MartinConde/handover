@@ -78,6 +78,18 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
       return m.account_sessions_ended({}, options);
     case 'ACCOUNT_LOAD_FAILED':
       return m.account_load_failed({}, options);
+    case 'ENTRY_LIST_LOAD_FAILED':
+      return message.status
+        ? m.entry_list_load_failed_status({ status: message.status }, options)
+        : m.entry_list_load_failed({}, options);
+    case 'ENTRY_DELETED_LOAD_FAILED':
+      return message.status
+        ? m.entry_deleted_load_failed_status({ status: message.status }, options)
+        : m.entry_deleted_load_failed({}, options);
+    case 'ENTRY_ACTION_FAILED':
+      return message.status
+        ? m.entry_action_failed_status({ status: message.status }, options)
+        : m.entry_action_failed({}, options);
     default:
       return m.common_unknown_error({}, options);
   }

@@ -48,6 +48,7 @@ const drafts = (...keys: string[]) =>
   );
 afterEach(() => {
   unmount(app);
+  vi.restoreAllMocks();
   buildBody = {};
   vi.unstubAllGlobals();
   document.documentElement.lang = 'en';
@@ -205,6 +206,135 @@ test('a live switch retranslates shell feedback and dashboard without rereading 
   expect(root.querySelector('.topbar .pill')?.textContent).toContain('Build fehlgeschlagen');
   expect(root.querySelector('.sidebar')?.getAttribute('aria-label')).toBe('Hauptnavigation');
   expect(dashboardReads).toBe(1);
+});
+
+test('a live switch retranslates an entry list without disturbing its working state', async () => {
+  const now = new Date(2026, 7, 25, 14, 0).getTime();
+  const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
+  let listReads = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/auth/update-user') return Response.json({ status: true });
+      if (url === '/admin/api/entries/listings') {
+        listReads += 1;
+        return Response.json({
+          entries: [
+            {
+              id: 'mill-house',
+              locales: {
+                en: { title: 'The Mill House', path: 'src/content/listings/en/mill-house.yaml' },
+              },
+              pending: true,
+              edited: { at: now - 2 * 60 * 60_000, by: 'Anna Berg', kind: 'edit' },
+            },
+            {
+              id: 'seaview-cottage',
+              locales: {
+                en: { title: 'Seaview Cottage', path: 'src/content/listings/en/seaview.yaml' },
+                de: { title: 'Seeblick', path: 'src/content/listings/de/seaview.yaml' },
+              },
+            },
+          ],
+          locales: ['en', 'de'],
+          index: '/listings',
+        });
+      }
+      if (url === '/admin/api/build') return Response.json({});
+      return Response.json({ entries: [] });
+    }),
+  );
+  history.replaceState({}, '', '/admin/c/listings?locale=de');
+  const root = show(session(), '/admin/c/listings');
+  await vi.waitFor(() =>
+    expect(root.querySelector('.row .td.title a')?.textContent).toBe('The Mill House'),
+  );
+
+  const search = root.querySelector<HTMLInputElement>('#entry-search');
+  const selected = root.querySelector<HTMLInputElement>('.row input[type="checkbox"]');
+  if (!search || !selected) throw new Error('Entry-list controls did not render');
+  search.value = 'mill';
+  search.dispatchEvent(new Event('input', { bubbles: true }));
+  selected.click();
+  root.querySelector<HTMLButtonElement>('.row .row-menu > button')?.click();
+  flushSync();
+  Array.from(root.querySelectorAll<HTMLButtonElement>('.row .menu button'))
+    .find((button) => button.textContent?.trim() === 'Duplicate')
+    ?.click();
+  await vi.waitFor(() => expect(root.querySelector<HTMLInputElement>('#copy-to')).not.toBeNull());
+  const draft = root.querySelector<HTMLInputElement>('#copy-to');
+  const drafts = root.querySelector<HTMLInputElement>('.dialog input[type="checkbox"]');
+  if (!draft || !drafts) throw new Error('Duplicate draft controls did not render');
+  draft.value = 'mill-house-copy-local';
+  draft.dispatchEvent(new Event('input', { bubbles: true }));
+  drafts.click();
+
+  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
+  flushSync();
+  const locale = root.querySelector<HTMLSelectElement>('.user-menu select');
+  if (!locale) throw new Error('Language picker did not open');
+  locale.value = 'de';
+  locale.dispatchEvent(new Event('change', { bubbles: true }));
+
+  await vi.waitFor(() =>
+    expect(root.querySelector('.dialog h2')?.textContent).toBe('The Mill House duplizieren'),
+  );
+  expect(root.querySelector('#entry-search')).toBe(search);
+  expect(search.value).toBe('mill');
+  expect(root.querySelector('#copy-to')).toBe(draft);
+  expect(draft.value).toBe('mill-house-copy-local');
+  expect(drafts.checked).toBe(true);
+  expect(selected.checked).toBe(true);
+  expect(root.querySelector('.list-toolbar .count')?.textContent).toBe('1 von 2');
+  expect(root.querySelector<HTMLSelectElement>('#list-locale')?.value).toBe('de');
+  expect(root.querySelector<HTMLSelectElement>('#list-locale')?.textContent).toContain(
+    'Deutsch fehlt oder ist veraltet',
+  );
+  expect(root.querySelector('.row .td.title a')?.textContent).toBe('The Mill House');
+  expect(root.querySelector('.row .td.edited')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+    'Bearbeitet von Anna Berg vor 2 Std.',
+  );
+  expect(root.querySelector('time')?.title).toBe('25. August 2026 um 12:00');
+  expect(location.search).toBe('?locale=de');
+  expect(listReads).toBe(1);
+  nowSpy.mockRestore();
+});
+
+test('an already-visible entry-list error changes language without another read', async () => {
+  let listReads = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/auth/update-user') return Response.json({ status: true });
+      if (url === '/admin/api/entries/listings') {
+        listReads += 1;
+        return new Response('Unavailable', { status: 503 });
+      }
+      if (url === '/admin/api/build') return Response.json({});
+      return Response.json({ entries: [] });
+    }),
+  );
+  history.replaceState({}, '', '/admin/c/listings');
+  const root = show(session(), '/admin/c/listings');
+  await vi.waitFor(() =>
+    expect(root.querySelector('[role="alert"]')?.textContent).toBe('Could not load the list (503)'),
+  );
+  const alert = root.querySelector('[role="alert"]');
+
+  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
+  flushSync();
+  const locale = root.querySelector<HTMLSelectElement>('.user-menu select');
+  if (!locale) throw new Error('Language picker did not open');
+  locale.value = 'de';
+  locale.dispatchEvent(new Event('change', { bubbles: true }));
+
+  await vi.waitFor(() =>
+    expect(root.querySelector('[role="alert"]')?.textContent).toBe(
+      'Die Eintragsliste konnte nicht geladen werden (503).',
+    ),
+  );
+  expect(root.querySelector('[role="alert"]')).toBe(alert);
+  expect(listReads).toBe(1);
 });
 
 test('an uncertain save reconciles before changing the confirmed language', async () => {

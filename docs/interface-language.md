@@ -10,11 +10,13 @@ and expired-link screens, have a device-only picker so they remain readable befo
 ## What is translated now
 
 Language controls, sign-in, password-reset and expired-link flows, the complete Account screen,
-the signed-in shell, and the dashboard are bilingual. Navigation, pending/build indicators,
-dashboard states, dates, accessibility labels, and already-visible shell notices or failures
-reformat when the language changes. Dashboard data is not reread, and typed values, the signed-in
-session, and an open editor remain in place. Activity-event sentences and the remaining admin
-screens are being converted in stages and can still contain English.
+the signed-in shell, the dashboard, and collection entry lists are bilingual. Navigation,
+pending/build indicators, dashboard and entry-list states, dates, language names, accessibility
+labels, and already-visible shell or list failures reformat when the language changes. Dashboard
+and collection data are not reread, and typed values, filters, selected rows, the signed-in
+session, and an open editor remain in place. New-entry and page-picker dialogs, activity-event
+sentences, and the remaining admin screens are being converted in stages and can still contain
+English.
 
 Handover-owned interface text is translated. Content and site configuration are not: collection
 labels, schema descriptions, custom validation messages, entry titles, names, URLs, provider
@@ -44,8 +46,9 @@ For a signed-in account, a selection is applied only after the existing profile 
 network makes the outcome uncertain, Handover reads the existing bootstrap endpoint once to
 reconcile the stored value; it does not reload the page or recreate the editor.
 
-Changing interface language does not navigate, refetch content, change `?locale=`, remount an open
-editor, or replace its draft. A new sign-in resolves the newly signed-in account's preference.
+Changing interface language does not navigate, refetch content, change a list's content-language
+`?locale=`, clear search/status/language filters or selected rows, remount an open editor, or
+replace a local action draft. A new sign-in resolves the newly signed-in account's preference.
 
 Connection failures retain the existing uncertain-result behavior. Handover renders a localized
 summary from a stable error descriptor, not from an English sentence or status code. Known

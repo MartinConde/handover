@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('saved interface language wins before first paint and a live switch preserves the editor', async ({
+test('saved interface language wins before first paint and live switches preserve work', async ({
   context,
   page,
 }) => {
@@ -18,6 +18,7 @@ test('saved interface language wins before first paint and a live switch preserv
     observer.observe(document, { childList: true, subtree: true });
   });
   let entryReads = 0;
+  let listReads = 0;
   let dashboardReads = 0;
   await page.route('**/admin/api/**', async (route) => {
     const request = route.request();
@@ -29,6 +30,31 @@ test('saved interface language wins before first paint and a live switch preserv
           collections: ['pages'],
           user: { id: 'u1', name: 'Martin', email: 'martin@example.com', uiLocale: 'en' },
           role: 'owner',
+        },
+      });
+    } else if (path === '/admin/api/entries/pages') {
+      listReads += 1;
+      await route.fulfill({
+        json: {
+          entries: [
+            {
+              id: 'canvas-fixture',
+              locales: {
+                en: { title: 'Canvas fixture', path: 'src/content/pages/en/canvas.yaml' },
+              },
+              pending: true,
+              edited: { at: Date.now() - 7_200_000, by: 'Anna Berg', kind: 'edit' },
+            },
+            {
+              id: 'about',
+              locales: {
+                en: { title: 'About us', path: 'src/content/pages/en/about.yaml' },
+                de: { title: 'Über uns', path: 'src/content/pages/de/about.yaml' },
+              },
+            },
+          ],
+          locales: ['en', 'de'],
+          index: '/',
         },
       });
     } else if (path === '/admin/api/entries/pages/canvas-fixture') {
@@ -82,6 +108,32 @@ test('saved interface language wins before first paint and a live switch preserv
   expect(dashboardReads).toBe(dashboardReadsBeforeSwitch);
   await page.getByLabel('Sprache der Benutzeroberfläche').selectOption('en');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dashboard');
+  await page.goto('/admin/c/pages?locale=de');
+  await expect(page.getByRole('link', { name: 'Canvas fixture' })).toBeVisible();
+  const listReadsBeforeSwitch = listReads;
+  const search = page.locator('#entry-search');
+  const selected = page.getByLabel('Select Canvas fixture');
+  await search.fill('canvas');
+  await search.evaluate((input) => (input.dataset.localeProof = 'same-list-search'));
+  await selected.check();
+  await page.locator('.user-menu > button').click();
+  await page.getByLabel('Interface language').selectOption('de');
+  await expect(search).toHaveValue('canvas');
+  await expect(search).toHaveAttribute('data-locale-proof', 'same-list-search');
+  await expect(selected).toBeChecked();
+  await expect(page.locator('.list-toolbar .count')).toHaveText('1 von 2');
+  await expect(page.locator('#list-locale')).toHaveValue('de');
+  await expect(page.locator('#list-locale')).toContainText('Deutsch fehlt oder ist veraltet');
+  await expect(page.getByRole('link', { name: 'Canvas fixture' })).toBeVisible();
+  expect(listReads).toBe(listReadsBeforeSwitch);
+  expect(new URL(page.url()).search).toBe('?locale=de');
+  await page.getByLabel('Aktionen für Canvas fixture').click();
+  await page.getByRole('button', { name: 'Duplizieren', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Canvas fixture duplizieren' })).toBeVisible();
+  await expect(page.getByLabel('Mit unveröffentlichten Änderungen duplizieren')).toBeVisible();
+  await page.getByRole('button', { name: 'Abbrechen' }).click();
+  await page.locator('.user-menu > button').click();
+  await page.getByLabel('Sprache der Benutzeroberfläche').selectOption('en');
   await page.getByRole('link', { name: 'Account' }).click();
   await expect(page.locator('main').getByLabel('Interface language')).toHaveValue('en');
   const accountName = page.locator('#display-name');

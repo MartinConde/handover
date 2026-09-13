@@ -5,6 +5,7 @@ import {
   deviceLocaleCookie,
   formatClockTime,
   formatExactTime,
+  formatLanguageName,
   formatRelativeTime,
   isUiLocale,
   messageOptions,
@@ -128,5 +129,15 @@ describe('localized date and time formatting', () => {
       else process.env.TZ = previousTimezone;
       vi.setSystemTime(now);
     }
+  });
+});
+
+describe('content-language names', () => {
+  test.each([
+    ['en', 'de', 'German'],
+    ['de', 'de', 'Deutsch'],
+    ['de', 'not_a_language', 'not_a_language'],
+  ] as const)('%s presents %s as %s', (locale, code, expected) => {
+    expect(formatLanguageName(code, locale)).toBe(expected);
   });
 });

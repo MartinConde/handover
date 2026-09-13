@@ -1,9 +1,17 @@
 <script lang="ts">
 import { entryName } from '@handover/core';
 import { invalidateEntryDirectory } from '../entry-directory.js';
+import { messageText, responseMessage, type UiMessage } from '../errors.js';
+import {
+  formatExactTime,
+  formatLanguageName,
+  formatRelativeTime,
+  messageOptions,
+  type UiLocale,
+} from '../i18n.js';
 import { navigate } from '../navigate';
+import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
-import { EXACT, when } from '../shared/activity-line';
 import Modal from '../shared/Modal.svelte';
 import NewEntry, { nameOf } from './NewEntry.svelte';
 import OffsiteDialog, { type Target } from './Offsite.svelte';
@@ -41,6 +49,7 @@ let {
   oncommitted,
   role,
   onsaved,
+  uiLocale = 'en',
 }: {
   collection: string;
   onchanged: () => void;
@@ -49,7 +58,9 @@ let {
   /** Saving a template shapes every entry made after it, so the item is the owner's. */
   role?: 'owner' | 'editor';
   onsaved?: (name: string) => void;
+  uiLocale?: UiLocale;
 } = $props();
+const options = $derived(messageOptions(uiLocale));
 
 let entries = $state<Entry[]>([]);
 // A tab, not a filter: a deleted entry is in neither the index nor the drafts.
@@ -77,7 +88,7 @@ let menuFor = $state('');
 let target = $state<Entry>();
 let text = $state('');
 let busy = $state(false);
-let error = $state('');
+let error = $state<UiMessage>();
 let trigger = $state<HTMLElement>();
 
 $effect(() => {
@@ -90,6 +101,7 @@ $effect(() => {
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const singular = $derived(nameOf(collection));
+const collectionLabel = $derived(uiLocale === 'en' ? singular : collection);
 // An entry that exists in German alone is listed by its German title, not its file name.
 const titleOf = (entry: Entry) =>
   locales.map((l) => entry.locales[l]?.title).find(Boolean) ||
@@ -120,12 +132,12 @@ const shown = $derived(
 const filtered = $derived(showing !== 'all' || language !== '' || search.trim() !== '');
 const chipTitle = (entry: Entry, locale: string) =>
   !offered(entry, locale)
-    ? 'turned off for this entry'
+    ? m.entry_list_chip_off({}, options)
     : !entry.locales[locale]
-      ? 'not written yet'
+      ? m.entry_list_chip_missing({}, options)
       : entry.stale?.includes(locale)
-        ? 'behind the language it was translated from'
-        : 'written';
+        ? m.entry_list_chip_stale({}, options)
+        : m.entry_list_chip_written({}, options);
 const named = (ids: string[]) =>
   ids.length === 1 ? (entries.find((e) => e.id === ids[0]) ?? undefined) : undefined;
 
@@ -139,19 +151,19 @@ const preview = $derived(
       : entries.map((e) => e.id).filter((id) => dialog !== 'rename' || id !== target?.id),
   ),
 );
-const WHEN = new Intl.DateTimeFormat('en-GB', {
-  day: 'numeric',
-  month: 'long',
-  hour: '2-digit',
-  minute: '2-digit',
-});
+const textOf = (message: UiMessage) => messageText(message, uiLocale);
+const errorDetail = (message: UiMessage) =>
+  message.detail ? m.common_technical_detail({ detail: message.detail }, options) : '';
+const dialogError = $derived(
+  error ? [textOf(error), errorDetail(error)].filter(Boolean).join(' ') : '',
+);
 
 async function loadDeleted(name: string) {
   deletedLoading = true;
   const res = await fetch(`/admin/api/deleted/${name}`);
   deletedLoading = false;
   if (res.ok) deleted = ((await res.json()) as { deleted: Deleted[] }).deleted;
-  else error = `Could not load what was deleted (${res.status})`;
+  else error = await responseMessage(res, 'ENTRY_DELETED_LOAD_FAILED');
 }
 
 async function load(name: string) {
@@ -169,7 +181,7 @@ async function load(name: string) {
     templates = body.templates ?? [];
     // A language the address names and the site does not declare filters nothing.
     if (!locales.includes(language)) language = '';
-  } else error = `Could not load the list (${res.status})`;
+  } else error = await responseMessage(res, 'ENTRY_LIST_LOAD_FAILED');
   loading = false;
 }
 
@@ -191,7 +203,7 @@ function open(kind: 'new' | 'rename' | 'duplicate' | 'template', entry?: Entry) 
   target = entry;
   text = kind === 'new' ? '' : kind === 'duplicate' ? `${entry?.id ?? ''}-copy` : (entry?.id ?? '');
   withDrafts = false;
-  error = '';
+  error = undefined;
 }
 function startOffsite(action: 'hide' | 'delete', ids: string[]) {
   const here = document.activeElement as HTMLElement | null;
@@ -203,7 +215,7 @@ const close = () => {
   dialog = '';
   offsite = undefined;
   putting = undefined;
-  error = '';
+  error = undefined;
 };
 
 const json = (body: unknown) => ({
@@ -215,14 +227,19 @@ const json = (body: unknown) => ({
 // A 409 or 503 is the server's own sentence and reads better than anything said here.
 async function send(url: string, init: RequestInit) {
   busy = true;
-  error = '';
+  error = undefined;
   const res = await fetch(url, init);
   busy = false;
   if (res.ok) return res;
-  error =
-    res.status === 409 || res.status === 503
-      ? said(await res.text())
-      : `That did not work (${res.status})`;
+  error = await responseMessage(res, 'ENTRY_ACTION_FAILED');
+  if (
+    (res.status === 409 || res.status === 503) &&
+    !error.detail &&
+    error.code !== 'CONNECTION_LOST'
+  ) {
+    const detail = said(await res.text());
+    if (detail) error = { ...error, detail };
+  }
   return undefined;
 }
 
@@ -306,74 +323,71 @@ async function done() {
 
 <main class="main collection-page">
   <div class="list-toolbar">
-    <h1>{capitalise(collection)} <span class="count">{filtered ? `${shown.length} of ${entries.length}` : entries.length}</span></h1>
+    <h1>{capitalise(collection)} <span class="count">{filtered ? m.entry_list_count_filtered({ shown: shown.length, total: entries.length }, options) : entries.length}</span></h1>
     <span class="spacer"></span>
-    <button class="btn btn-primary" type="button" onclick={() => open('new')}>New {singular}</button>
+    <button class="btn btn-primary" type="button" onclick={() => open('new')}>{m.entry_list_new({ collection: collectionLabel }, options)}</button>
   </div>
-  <div class="tabs list-tabs" role="tablist" aria-label="Which {collection}">
+  <div class="tabs list-tabs" role="tablist" aria-label={m.entry_list_tabs_label({ collection }, options)}>
     <button
       type="button"
       role="tab"
       aria-selected={tab === 'all'}
-      onclick={() => (tab = 'all')}>All</button
+      onclick={() => (tab = 'all')}>{m.entry_list_all({}, options)}</button
     >
     <button
       type="button"
       role="tab"
       aria-selected={tab === 'deleted'}
-      onclick={() => (tab = 'deleted')}>Deleted</button
+      onclick={() => (tab = 'deleted')}>{m.entry_list_deleted({}, options)}</button
     >
   </div>
   {#if tab === 'all'}
     <div class="collection-controls">
       <div class="search-field">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
-        <label class="visually-hidden" for="entry-search">Search {collection}</label>
-        <input class="input" id="entry-search" type="search" placeholder="Search {collection}…" bind:value={search} />
+        <label class="visually-hidden" for="entry-search">{m.entry_list_search_label({ collection }, options)}</label>
+        <input class="input" id="entry-search" type="search" placeholder={m.entry_list_search_placeholder({ collection }, options)} bind:value={search} />
       </div>
     <div class="filters">
-      <label class="visually-hidden" for="list-status">Status</label>
+      <label class="visually-hidden" for="list-status">{m.entry_list_status({}, options)}</label>
       <select class="filter" class:is-on={showing !== 'all'} id="list-status" bind:value={showing}>
-        <option value="all">All</option>
-        <option value="live">Live</option>
-        <option value="hidden">Hidden</option>
+        <option value="all">{m.entry_list_all({}, options)}</option>
+        <option value="live">{m.entry_list_live({}, options)}</option>
+        <option value="hidden">{m.entry_list_hidden({}, options)}</option>
       </select>
       {#if many}
-        <label class="visually-hidden" for="list-locale">Language</label>
+        <label class="visually-hidden" for="list-locale">{m.entry_list_language({}, options)}</label>
         <select class="filter" class:is-on={language} id="list-locale" bind:value={language}>
-          <option value="">Every language</option>
+          <option value="">{m.entry_list_every_language({}, options)}</option>
           {#each locales as locale (locale)}
-            <option value={locale}>{locale.toUpperCase()} missing or stale</option>
+            <option value={locale}>{m.entry_list_language_attention({ language: formatLanguageName(locale, uiLocale) }, options)}</option>
           {/each}
         </select>
       {/if}
     </div>
-      {#if filtered}<button class="btn btn-ghost btn-sm" type="button" onclick={() => { search = ''; showing = 'all'; language = ''; }}>Clear filters</button>{/if}
+      {#if filtered}<button class="btn btn-ghost btn-sm" type="button" onclick={() => { search = ''; showing = 'all'; language = ''; }}>{m.entry_list_clear_filters({}, options)}</button>{/if}
     </div>
   {/if}
-  {#if error && !dialog}<p class="notice notice-danger" role="alert">{error}</p>{/if}
+  {#if error && !dialog}<p class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{errorDetail(error)}</span>{/if}</p>{/if}
   {#if tab === 'deleted'}
-    <p class="list-note">
-      A deleted {singular} is in neither the published site nor your unpublished changes, so this is
-      a record of what happened rather than a filter over the list. Kept for 180 days.
-    </p>
+    <p class="list-note">{m.entry_list_deleted_note({ collection }, options)}</p>
     {#if deletedLoading && !deleted.length}
-      <p class="placeholder">Loading…</p>
+      <p class="placeholder">{m.common_loading({}, options)}</p>
     {:else if deleted.length}
-      <div class="table cols-4" role="table" aria-label="Deleted {collection}">
+      <div class="table cols-4" role="table" aria-label={m.entry_list_deleted_table({ collection }, options)}>
         <div class="row-head" role="row">
-          <div class="th" role="columnheader">File name</div>
-          <div class="th" role="columnheader">What went</div>
-          <div class="th" role="columnheader">Deleted</div>
-          <div class="th" role="columnheader"><span class="visually-hidden">Actions</span></div>
+          <div class="th" role="columnheader">{m.entry_list_file_name({}, options)}</div>
+          <div class="th" role="columnheader">{m.entry_list_what_went({}, options)}</div>
+          <div class="th" role="columnheader">{m.entry_list_deleted_when({}, options)}</div>
+          <div class="th" role="columnheader"><span class="visually-hidden">{m.entry_list_actions({}, options)}</span></div>
         </div>
         {#each deleted as row (row.id)}
           <div class="row" role="row">
             <div class="td title filename" role="cell">{row.slug}</div>
-            <div class="td" role="cell" data-label="What went">
-              {row.whole ? `The whole ${singular}` : 'One language'}
+            <div class="td" role="cell" data-label={m.entry_list_what_went({}, options)}>
+              {row.whole ? m.entry_list_whole_entry({ entry: collectionLabel }, options) : m.entry_list_one_language({}, options)}
               {#if row.locales.length}
-                <span class="visually-hidden">Languages:</span>
+                <span class="visually-hidden">{m.entry_list_languages({}, options)}</span>
                 <span class="chips">
                   {#each row.locales as locale (locale)}
                     <span class="chip">{locale.toUpperCase()}</span>
@@ -381,10 +395,10 @@ async function done() {
                 </span>
               {/if}
             </div>
-            <div class="td num" role="cell" data-label="Deleted">
-              {row.by ?? 'System'}
+            <div class="td num" role="cell" data-label={m.entry_list_deleted_when({}, options)}>
+              {row.by ?? m.entry_list_system({}, options)}
               <span class="sep" aria-hidden="true">·</span>
-              {WHEN.format(row.at)}
+              {formatExactTime(row.at, uiLocale)}
             </div>
             <div class="td menu-cell" role="cell">
               <!-- aria-disabled so the button keeps focus and the reason is heard. -->
@@ -398,7 +412,7 @@ async function done() {
                   trigger = document.activeElement as HTMLElement;
                   putting = row;
                 }}
-                >Restore<span class="visually-hidden"> {row.slug}</span></button
+                >{m.entry_list_restore({}, options)}<span class="visually-hidden"> {row.slug}</span></button
               >
             </div>
           </div>
@@ -406,7 +420,7 @@ async function done() {
             <div class="row row-note" role="row">
               <div class="td" role="cell">
                 <p class="notice notice-warn" id="why-{row.id}">
-                  Can't be restored: {row.blocked} Rename what is there, then try again.
+                  {m.entry_list_restore_blocked({}, options)} <span class="technical-detail">{m.common_technical_detail({ detail: row.blocked }, options)}</span> {m.entry_list_restore_blocked_hint({}, options)}
                 </p>
               </div>
             </div>
@@ -416,23 +430,22 @@ async function done() {
     {:else}
       <div class="empty">
         <div>
-          <h2>Nothing has been deleted</h2>
-          <p>
-            Deleted {collection} turn up here for as long as the activity log keeps them — 180 days
-            on this site.
-          </p>
+          <h2>{m.entry_list_nothing_deleted({}, options)}</h2>
+          <p>{m.entry_list_nothing_deleted_hint({ collection }, options)}</p>
         </div>
       </div>
     {/if}
   {:else if loading}
-    <p class="placeholder">Loading…</p>
+    <p class="placeholder">{m.common_loading({}, options)}</p>
   {:else if entries.length && !shown.length}
     <p class="placeholder">
       {search.trim()
-        ? `No results for “${search.trim()}”. Try another search or clear the filters.`
+        ? m.entry_list_no_search_results({ search: search.trim() }, options)
         : language
-        ? `Nothing is missing or stale in ${language.toUpperCase()}.`
-        : `No ${showing} ${collection}.`}
+        ? m.entry_list_language_complete({ language: formatLanguageName(language, uiLocale) }, options)
+        : showing === 'hidden'
+          ? m.entry_list_no_hidden({ collection }, options)
+          : m.entry_list_no_live({ collection }, options)}
     </p>
   {:else if entries.length}
     <!-- Without the languages column the grid is the five-column `has-select.cols-4`. -->
@@ -442,23 +455,23 @@ async function done() {
         <div class="th" role="columnheader">
           <input
             type="checkbox"
-            aria-label="Select all"
+            aria-label={m.entry_list_select_all({}, options)}
             checked={chosen.length === shown.length && shown.length > 0}
             onchange={(e) => (chosen = e.currentTarget.checked ? shown.map((x) => x.id) : [])}
           />
         </div>
-        <div class="th" role="columnheader">Title</div>
-        {#if many}<div class="th" role="columnheader">Languages</div>{/if}
-        <div class="th" role="columnheader">Edited</div>
-        <div class="th" role="columnheader">File name</div>
-        <div class="th" role="columnheader"><span class="visually-hidden">Actions</span></div>
+        <div class="th" role="columnheader">{m.entry_list_title({}, options)}</div>
+        {#if many}<div class="th" role="columnheader">{m.entry_list_languages_heading({}, options)}</div>{/if}
+        <div class="th" role="columnheader">{m.entry_list_edited({}, options)}</div>
+        <div class="th" role="columnheader">{m.entry_list_file_name({}, options)}</div>
+        <div class="th" role="columnheader"><span class="visually-hidden">{m.entry_list_actions({}, options)}</span></div>
       </div>
       {#each shown as entry (entry.id)}
         <div class="row" role="row" class:is-selected={chosen.includes(entry.id)}>
           <div class="td" role="cell">
             <input
               type="checkbox"
-              aria-label="Select {titleOf(entry)}"
+              aria-label={m.entry_list_select_title({ title: titleOf(entry) }, options)}
               checked={chosen.includes(entry.id)}
               onchange={(e) =>
                 (chosen = e.currentTarget.checked
@@ -468,12 +481,12 @@ async function done() {
           </div>
           <div class="td title" role="cell">
             <a href={sitePath(`/admin/c/${collection}/${entry.id}`)}>{titleOf(entry)}</a>
-            {#if isHidden(entry)}<span class="badge">Hidden</span>{/if}
-            {#if entry.editing}<span class="badge">Being edited by {entry.editing.name || 'somebody'}</span>{/if}
+            {#if isHidden(entry)}<span class="badge">{m.entry_list_hidden({}, options)}</span>{/if}
+            {#if entry.editing}<span class="badge">{entry.editing.name ? m.entry_list_being_edited_by({ name: entry.editing.name }, options) : m.entry_list_being_edited({}, options)}</span>{/if}
           </div>
           {#if many}
-            <div class="td" role="cell" data-label="Languages">
-              <span class="visually-hidden">Languages:</span>
+            <div class="td" role="cell" data-label={m.entry_list_languages_heading({}, options)}>
+              <span class="visually-hidden">{m.entry_list_languages({}, options)}</span>
               <span class="chips">
                 {#each locales as locale (locale)}
                   <span
@@ -487,32 +500,34 @@ async function done() {
               </span>
             </div>
           {/if}
-          <div class="td edited" role="cell" data-label="Edited">
+          <div class="td edited" role="cell" data-label={m.entry_list_edited({}, options)}>
             {#if entry.edited}
-              <span class="sub"
-                >{entry.edited.kind === 'edit' ? 'Edited' : 'Published'}{#if entry.edited.by}{` by ${entry.edited.by}`}{/if}{' '}<time
-                  datetime={new Date(entry.edited.at).toISOString()}
-                  title={EXACT.format(entry.edited.at)}>{when(entry.edited.at).toLowerCase()}</time
-                ></span
-              >
+              {@const relative = formatRelativeTime(entry.edited.at, uiLocale)}
+              <time class="sub" datetime={new Date(entry.edited.at).toISOString()} title={formatExactTime(entry.edited.at, uiLocale)}>{entry.edited.kind === 'edit'
+                ? entry.edited.by
+                  ? m.entry_list_edited_by_when({ name: entry.edited.by, when: relative }, options)
+                  : m.entry_list_edited_when({ when: relative }, options)
+                : entry.edited.by
+                  ? m.entry_list_published_by_when({ name: entry.edited.by, when: relative }, options)
+                  : m.entry_list_published_when({ when: relative }, options)}</time>
             {/if}
           </div>
-          <div class="td num filename" role="cell" data-label="File name">{entry.id}</div>
+          <div class="td num filename" role="cell" data-label={m.entry_list_file_name({}, options)}>{entry.id}</div>
           <div class="td menu-cell" role="cell">
             <div class="row-menu">
               <button
                 class="btn btn-ghost btn-sm"
                 type="button"
                 aria-expanded={menuFor === entry.id}
-                aria-label="Actions for {titleOf(entry)}"
+                aria-label={m.entry_list_actions_for({ title: titleOf(entry) }, options)}
                 onclick={() => (menuFor = menuFor === entry.id ? '' : entry.id)}>⋯</button
               >
               {#if menuFor === entry.id}
                 <div class="menu">
-                  <button type="button" onclick={() => { menuFor = ''; open('duplicate', entry); }}>Duplicate</button>
-                  <button type="button" onclick={() => { menuFor = ''; open('rename', entry); }}>Rename</button>
+                  <button type="button" onclick={() => { menuFor = ''; open('duplicate', entry); }}>{m.entry_list_duplicate({}, options)}</button>
+                  <button type="button" onclick={() => { menuFor = ''; open('rename', entry); }}>{m.entry_list_rename({}, options)}</button>
                   {#if role === 'owner'}
-                    <button type="button" onclick={() => { menuFor = ''; open('template', entry); }}>Save as template</button>
+                    <button type="button" onclick={() => { menuFor = ''; open('template', entry); }}>{m.entry_list_save_template({}, options)}</button>
                   {/if}
                   <!-- Hide before Delete, so the gentler answer is the one reached first. -->
                   <button
@@ -522,10 +537,10 @@ async function done() {
                       menuFor = '';
                       if (isHidden(entry)) status([entry.id], false);
                       else startOffsite('hide', [entry.id]);
-                    }}>{isHidden(entry) ? 'Show' : 'Hide'}</button
+                    }}>{isHidden(entry) ? m.entry_list_show({}, options) : m.entry_list_hide({}, options)}</button
                   >
                   <hr />
-                  <button type="button" onclick={() => startOffsite('delete', [entry.id])}>Delete</button>
+                  <button type="button" onclick={() => startOffsite('delete', [entry.id])}>{m.entry_list_delete({}, options)}</button>
                 </div>
               {/if}
             </div>
@@ -534,27 +549,27 @@ async function done() {
       {/each}
     </div>
     {#if chosen.length}
-      <div class="bulk-bar" role="region" aria-label="Bulk actions">
-        {chosen.length} selected
+      <div class="bulk-bar" role="region" aria-label={m.entry_list_bulk_actions({}, options)}>
+        {m.entry_list_selected({ count: chosen.length }, options)}
         <span class="spacer"></span>
-        <button class="btn btn-ghost btn-sm" type="button" onclick={() => (chosen = [])}>Clear</button>
+        <button class="btn btn-ghost btn-sm" type="button" onclick={() => (chosen = [])}>{m.entry_list_clear_selection({}, options)}</button>
         <button
           class="btn btn-sm"
           type="button"
           disabled={busy}
           onclick={() => startOffsite('hide', chosen)}
         >
-          Hide {chosen.length} {chosen.length === 1 ? singular : collection}
+          {m.entry_list_hide_selected({ count: chosen.length, collection }, options)}
         </button>
       </div>
     {/if}
   {:else}
     <div class="empty">
       <div>
-        <h2>No {collection} yet</h2>
-        <p>Create your first {singular} to start adding content to your site.</p>
+        <h2>{m.entry_list_empty({ collection }, options)}</h2>
+        <p>{m.entry_list_empty_hint({ collection: collectionLabel }, options)}</p>
         <button class="btn btn-primary" type="button" onclick={() => open('new')}>
-          New {singular}
+          {m.entry_list_new({ collection: collectionLabel }, options)}
         </button>
       </div>
     </div>
@@ -564,11 +579,8 @@ async function done() {
 {#if putting}
   {@const row = putting}
   <Modal labelledby="restore-h" returnTo={trigger} dismissible={!busy} onclose={close}>
-      <h2 id="restore-h">Restore {row.slug}?</h2>
-      <p>
-        The files come back as they were on {WHEN.format(row.at)}, in a commit of its own — the
-        site has them again as soon as the build is through.
-      </p>
+      <h2 id="restore-h">{m.entry_list_restore_question({ name: row.slug }, options)}</h2>
+      <p>{m.entry_list_restore_explanation({ date: formatExactTime(row.at, uiLocale) }, options)}</p>
       <ul class="publish-set">
         <li>
           {#if row.locales.length}
@@ -577,18 +589,16 @@ async function done() {
                 >{/each}
             </span>
           {/if}
-          {row.whole ? 'Every language file it had' : 'The language file that was turned off'}
+          {row.whole ? m.entry_list_restore_every_language({}, options) : m.entry_list_restore_one_language({}, options)}
         </li>
-        <li>The redirect that was added when it went is taken back out</li>
+        <li>{m.entry_list_restore_redirect({}, options)}</li>
       </ul>
-      <p class="hint">
-        Pictures are never deleted with an entry, so the gallery comes back whole.
-      </p>
-      {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
+      <p class="hint">{m.entry_list_restore_pictures({}, options)}</p>
+      {#if error}<div class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{errorDetail(error)}</span>{/if}</div>{/if}
       <div class="actions">
-        <button class="btn" type="button" disabled={busy} onclick={close}>Cancel</button>
+        <button class="btn" type="button" disabled={busy} onclick={close}>{m.common_cancel({}, options)}</button>
         <button class="btn btn-primary" type="button" disabled={busy} onclick={() => restore(row)}>
-          {busy ? 'Restoring…' : 'Restore'}
+          {busy ? m.entry_list_restoring({}, options) : m.entry_list_restore({}, options)}
         </button>
       </div>
   </Modal>
@@ -604,7 +614,7 @@ async function done() {
     {collection}
     {index}
     {busy}
-    {error}
+    error={dialogError}
     returnTo={trigger}
     onconfirm={(target) =>
       action === 'delete' ? remove(ids[0] ?? '', target) : status(ids, true, target)}
@@ -624,10 +634,10 @@ async function done() {
     onclose={close}
   >
       {#if dialog === 'rename'}
-        <h2 id="entry-dialog-h">Rename {titleOf(target as Entry)}</h2>
+        <h2 id="entry-dialog-h">{m.entry_list_rename_question({ title: titleOf(target as Entry) }, options)}</h2>
         <form onsubmit={rename}>
           <div class="field">
-            <div class="label-row"><label for="rename-to">File name</label></div>
+            <div class="label-row"><label for="rename-to">{m.entry_list_file_name({}, options)}</label></div>
             <input
               class="input filename"
               id="rename-to"
@@ -635,24 +645,21 @@ async function done() {
               bind:value={text}
               aria-describedby="rename-hint"
             />
-            <p class="hint" id="rename-hint">
-              Saved as <span class="filename">{preview}</span>. The old address redirects to the new
-              one.
-            </p>
+            <p class="hint" id="rename-hint">{m.entry_list_saved_as({}, options)} <span class="filename">{preview}</span>. {m.entry_list_rename_hint({}, options)}</p>
           </div>
-          {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
+          {#if error}<div class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{errorDetail(error)}</span>{/if}</div>{/if}
           <div class="actions">
-            <button class="btn" type="button" disabled={busy} onclick={close}>Cancel</button>
+            <button class="btn" type="button" disabled={busy} onclick={close}>{m.common_cancel({}, options)}</button>
             <button class="btn btn-primary" type="submit" disabled={busy}>
-              {busy ? 'Renaming…' : 'Rename'}
+              {busy ? m.entry_list_renaming({}, options) : m.entry_list_rename({}, options)}
             </button>
           </div>
         </form>
       {:else if dialog === 'template'}
-        <h2 id="entry-dialog-h">Save {titleOf(target as Entry)} as a template</h2>
+        <h2 id="entry-dialog-h">{m.entry_list_template_question({ title: titleOf(target as Entry) }, options)}</h2>
         <form onsubmit={saveTemplate}>
           <div class="field">
-            <div class="label-row"><label for="template-to">Template name</label></div>
+            <div class="label-row"><label for="template-to">{m.entry_list_template_name({}, options)}</label></div>
             <input
               class="input filename"
               id="template-to"
@@ -660,24 +667,21 @@ async function done() {
               bind:value={text}
               aria-describedby="template-hint"
             />
-            <p class="hint" id="template-hint">
-              Saved as <span class="filename">{preview}</span> and offered when somebody makes a new
-              {singular}. What is published now is what it keeps, in the language it was written in.
-            </p>
+            <p class="hint" id="template-hint">{m.entry_list_saved_as({}, options)} <span class="filename">{preview}</span>. {m.entry_list_template_hint({ collection }, options)}</p>
           </div>
-          {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
+          {#if error}<div class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{errorDetail(error)}</span>{/if}</div>{/if}
           <div class="actions">
-            <button class="btn" type="button" disabled={busy} onclick={close}>Cancel</button>
+            <button class="btn" type="button" disabled={busy} onclick={close}>{m.common_cancel({}, options)}</button>
             <button class="btn btn-primary" type="submit" disabled={busy}>
-              {busy ? 'Saving…' : 'Save as template'}
+              {busy ? m.entry_list_saving_template({}, options) : m.entry_list_save_template({}, options)}
             </button>
           </div>
         </form>
       {:else}
-        <h2 id="entry-dialog-h">Duplicate {titleOf(target as Entry)}</h2>
+        <h2 id="entry-dialog-h">{m.entry_list_duplicate_question({ title: titleOf(target as Entry) }, options)}</h2>
         <form onsubmit={duplicate}>
           <div class="field">
-            <div class="label-row"><label for="copy-to">File name</label></div>
+            <div class="label-row"><label for="copy-to">{m.entry_list_file_name({}, options)}</label></div>
             <input
               class="input filename"
               id="copy-to"
@@ -685,23 +689,19 @@ async function done() {
               bind:value={text}
               aria-describedby="copy-hint"
             />
-            <p class="hint" id="copy-hint">
-              Saved as <span class="filename">{preview}</span>.
-              {#if many}Every language comes with it, and the{:else}The{/if} copy is hidden until
-              you show it.
-            </p>
+            <p class="hint" id="copy-hint">{m.entry_list_saved_as({}, options)} <span class="filename">{preview}</span>. {many ? m.entry_list_duplicate_hint_many({}, options) : m.entry_list_duplicate_hint_one({}, options)}</p>
           </div>
           {#if target?.pending}
             <label class="choice">
               <input type="checkbox" bind:checked={withDrafts} />
-              Duplicate including unpublished changes
+              {m.entry_list_duplicate_drafts({}, options)}
             </label>
           {/if}
-          {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
+          {#if error}<div class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{errorDetail(error)}</span>{/if}</div>{/if}
           <div class="actions">
-            <button class="btn" type="button" disabled={busy} onclick={close}>Cancel</button>
+            <button class="btn" type="button" disabled={busy} onclick={close}>{m.common_cancel({}, options)}</button>
             <button class="btn btn-primary" type="submit" disabled={busy}>
-              {busy ? 'Duplicating…' : 'Duplicate'}
+              {busy ? m.entry_list_duplicating({}, options) : m.entry_list_duplicate({}, options)}
             </button>
           </div>
         </form>

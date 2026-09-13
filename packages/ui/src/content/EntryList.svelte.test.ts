@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import type { UiLocale } from '../i18n.js';
 import EntryList from './EntryList.svelte';
 
 // Not tested: how one answer becomes a rule per language, which api.test.ts holds the route to.
@@ -39,7 +40,7 @@ const api = (
 
 const saved = vi.fn();
 const committed = vi.fn();
-const show = (role?: 'owner' | 'editor') => {
+const show = (role?: 'owner' | 'editor', uiLocale: UiLocale = 'en') => {
   app = mount(EntryList, {
     target: document.body,
     props: {
@@ -47,6 +48,7 @@ const show = (role?: 'owner' | 'editor') => {
       onchanged: changed,
       oncommitted: committed,
       role,
+      uiLocale,
       onsaved: saved,
     },
   });
@@ -150,6 +152,18 @@ test('a collection with no entries offers the one action that makes sense', asyn
   expect(root.querySelectorAll('.row').length).toBe(0);
   expect(q(root, '.empty h2')?.textContent).toBe('No listings yet');
   expect(q(root, '.empty .btn-primary')?.textContent?.trim()).toBe('New listing');
+});
+
+test('a German empty collection uses localized presentation around its authored name', async () => {
+  api([]);
+  const root = show(undefined, 'de');
+  await tick();
+
+  expect(q(root, '.empty h2')?.textContent).toBe('Noch keine Einträge in listings');
+  expect(q(root, '.empty p')?.textContent).toBe(
+    'Erstelle den ersten Eintrag in listings, um Inhalte zu deiner Website hinzuzufügen.',
+  );
+  expect(q(root, '.empty .btn-primary')?.textContent?.trim()).toBe('Neu in listings');
 });
 
 test('the new entry dialog shows the file name the title will produce', async () => {
@@ -509,7 +523,7 @@ test('each row says who last touched it, and with which verb', async () => {
     Array.from(root.querySelectorAll('.row .td.edited'), (td) =>
       td.textContent?.replace(/\s+/g, ' ').trim(),
     ),
-  ).toEqual(['Edited by Anna Berg 2h ago', 'Published 30 min ago']);
+  ).toEqual(['Edited by Anna Berg 2 hr ago', 'Published 30 min ago']);
 });
 
 const titles = (root: ParentNode) =>

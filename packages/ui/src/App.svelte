@@ -743,6 +743,7 @@ const initial = $derived(
       <EntryList
         collection={listRoute[1] ?? ''}
         role={session.role}
+        {uiLocale}
         onchanged={() => {
           invalidateEntryDirectory();
           return loadPending();

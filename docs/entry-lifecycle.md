@@ -38,6 +38,19 @@ to pointing at the page when the entry is shown again.
 A page hidden for more than 90 days comes up as a note in the pending-changes drawer, so a
 page put away and forgotten is seen once more ([Pending changes](pending-changes.md#checks-before-a-publish)).
 
+### Entry-list language
+
+The collection list follows the account's [interface language](interface-language.md). Its tabs,
+search and status/language filters, shown-of-total count, empty states, row actions, dates,
+content-language names, accessibility labels, and visible list failures update between English
+and German without another collection request. Search text, filters, selected rows, the
+content-language `?locale=`, and an open duplicate/rename/template draft remain in place.
+
+Collection identifiers, filenames, entry titles, people's names, and repository diagnostics stay
+as authored. Language chips remain stable codes such as `EN` and `DE`; the filter presents their
+localized language names. New-entry and page-picker dialogs are part of the next staged interface
+translation, so they can still contain English for now.
+
 ## Creating an entry
 
 "New entry" asks for a title and derives the filename from it
