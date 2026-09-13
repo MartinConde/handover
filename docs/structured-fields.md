@@ -144,6 +144,12 @@ Link-choice and row-action sentences translate as complete phrases around author
 row numbers. SEO meters always describe the plural configured limit, even when one character has
 been entered.
 
+Rich-text toolbar names, link controls and the read-only explanation for Markdown outside a
+field's tier follow the interface language. Switching English/Deutsch keeps the same editor,
+focus, selection, active formatting, Markdown, undo history and open link draft. It does not write
+content or reread the entry directory. The field's label, written text and link addresses remain as
+authored; `##` / `###` heading levels and Markdown syntax do not change with the interface.
+
 `image` and `file` are a card: the picture at the field's own ratio, or the file's type and
 size, with the translatable half beside it and Replace and Remove under it. An empty one is a
 drop zone that takes a file dropped on it and opens the

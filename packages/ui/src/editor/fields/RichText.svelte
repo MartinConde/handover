@@ -7,7 +7,8 @@ import type { Selection } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import { onMount, untrack } from 'svelte';
 import PagePicker from '../../content/PagePicker.svelte';
-import type { UiLocale } from '../../i18n.js';
+import { messageOptions, type UiLocale } from '../../i18n.js';
+import * as m from '../../paraglide/messages.js';
 import type {
   EntrySession,
   FieldCommandResult,
@@ -44,6 +45,7 @@ let {
   session?: EntrySession;
   onchange: (markdown: string, history?: FieldHistory) => FieldCommandResult | undefined;
 } = $props();
+const options = $derived(messageOptions(uiLocale));
 
 const logical = (selection: Selection): LogicalSelection | undefined =>
   session && address
@@ -92,50 +94,85 @@ function logicalFromDom(view: EditorView): LogicalSelection | undefined {
 // svelte-ignore state_referenced_locally -- initialized once to avoid dropping content
 const foreign = richtextErrors('default', value, tier).length > 0;
 
-const BASIC = [
+type ToolbarButton = {
+  kind:
+    | 'bold'
+    | 'italic'
+    | 'link'
+    | 'bullet-list'
+    | 'numbered-list'
+    | 'heading-2'
+    | 'heading-3'
+    | 'quote';
+  mark: string;
+  attrs?: Record<string, unknown>;
+  run: (editor: Editor) => boolean;
+};
+
+const BASIC: ToolbarButton[] = [
   {
-    label: 'Bold',
+    kind: 'bold',
     mark: 'bold',
     run: (e: Editor) => formatted(() => e.chain().focus().toggleBold().run()),
   },
   {
-    label: 'Italic',
+    kind: 'italic',
     mark: 'italic',
     run: (e: Editor) => formatted(() => e.chain().focus().toggleItalic().run()),
   },
-  { label: 'Link', mark: 'link', run: (e: Editor) => toggleLink(e) },
+  { kind: 'link', mark: 'link', run: (e: Editor) => toggleLink(e) },
   {
-    label: 'Bullet list',
+    kind: 'bullet-list',
     mark: 'bulletList',
     run: (e: Editor) => formatted(() => e.chain().focus().toggleBulletList().run()),
   },
   {
-    label: 'Numbered list',
+    kind: 'numbered-list',
     mark: 'orderedList',
     run: (e: Editor) => formatted(() => e.chain().focus().toggleOrderedList().run()),
   },
 ];
-const FULL = [
+const FULL: ToolbarButton[] = [
   {
-    label: 'Heading 2',
+    kind: 'heading-2',
     mark: 'heading',
     attrs: { level: 2 },
     run: (e: Editor) => formatted(() => e.chain().focus().toggleHeading({ level: 2 }).run()),
   },
   {
-    label: 'Heading 3',
+    kind: 'heading-3',
     mark: 'heading',
     attrs: { level: 3 },
     run: (e: Editor) => formatted(() => e.chain().focus().toggleHeading({ level: 3 }).run()),
   },
   {
-    label: 'Quote',
+    kind: 'quote',
     mark: 'blockquote',
     run: (e: Editor) => formatted(() => e.chain().focus().toggleBlockquote().run()),
   },
 ];
 // svelte-ignore state_referenced_locally -- the tier is fixed per field
 const buttons = tier === 'full' ? [...BASIC, ...FULL] : BASIC;
+const buttonLabel = (button: ToolbarButton) => {
+  switch (button.kind) {
+    case 'bold':
+      return m.rich_text_bold({}, options);
+    case 'italic':
+      return m.rich_text_italic({}, options);
+    case 'link':
+      return m.rich_text_link({}, options);
+    case 'bullet-list':
+      return m.rich_text_bullet_list({}, options);
+    case 'numbered-list':
+      return m.rich_text_numbered_list({}, options);
+    case 'heading-2':
+      return m.rich_text_heading({ level: 2 }, options);
+    case 'heading-3':
+      return m.rich_text_heading({ level: 3 }, options);
+    case 'quote':
+      return m.rich_text_quote({}, options);
+  }
+};
 
 // A target the site would refuse is refused while typed, not on the way to the repository.
 let linking = $state(false);
@@ -344,15 +381,16 @@ const active = (b: { mark: string; attrs?: Record<string, unknown> }) =>
 
 {#if foreign}
   <div class="readonly" role="region" aria-labelledby={labelId} aria-describedby="{id}-hint"><pre {id}>{value}</pre></div>
-  <p class="hint" id="{id}-hint">This text was edited in code and uses formatting the editor can’t change. Ask your developer.</p>
+  <p class="hint" id="{id}-hint">{m.rich_text_foreign_formatting({}, options)}</p>
 {:else}
   <div class="rte" role="group" aria-labelledby={labelId}>
-    <div class="rte-toolbar" role="toolbar" aria-label="Formatting">
-      {#each buttons as b (b.label)}
-        <button type="button" aria-label={b.label} aria-pressed={active(b)} disabled={!editor} onclick={() => editor && b.run(editor)} title={b.label}>
+    <div class="rte-toolbar" role="toolbar" aria-label={m.rich_text_formatting({}, options)}>
+      {#each buttons as b (b.kind)}
+        {@const label = buttonLabel(b)}
+        <button type="button" aria-label={label} aria-pressed={active(b)} disabled={!editor} onclick={() => editor && b.run(editor)} title={label}>
           {#if b.mark === 'bold'}<strong aria-hidden="true">B</strong>
           {:else if b.mark === 'italic'}<em aria-hidden="true">I</em>
-          {:else if b.mark === 'heading'}<span class="heading-tool" aria-hidden="true">H{b.label.endsWith('2') ? '2' : '3'}</span>
+          {:else if b.mark === 'heading'}<span class="heading-tool" aria-hidden="true">H{b.attrs?.level}</span>
           {:else if b.mark === 'link'}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 13 4-4M8 16l-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 1 1-1a4 4 0 0 1 6 6l-4 4a4 4 0 0 1-6 0"/></svg>
           {:else if b.mark === 'bulletList' || b.mark === 'orderedList'}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6h12M9 12h12M9 18h12"/>{#if b.mark === 'bulletList'}<path d="M3 6h.1M3 12h.1M3 18h.1" stroke-width="3"/>{:else}<path d="M2 4h1v5M2 13c3-2 4 1 0 5h3"/>{/if}</svg>
           {:else}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h5v6H4zm11 0h5v6h-5zM9 13c0 4-2 5-4 5m15-5c0 4-2 5-4 5"/></svg>{/if}
@@ -361,7 +399,7 @@ const active = (b: { mark: string; attrs?: Record<string, unknown> }) =>
     </div>
     <div bind:this={element}></div>
     {#if linking}
-      <PagePicker id="{id}-link" label="pages and entries to link to" labelKind="link-targets" labelId={labelId} {locale} {uiLocale} onpick={(entry) => linkTo(entry.urls[locale] ?? '', entry.title)} onurl={linkTo} onclose={() => (linking = false)} />
+      <PagePicker id="{id}-link" label={m.page_picker_label_link_targets({}, options)} labelKind="link-targets" labelId={labelId} {locale} {uiLocale} onpick={(entry) => linkTo(entry.urls[locale] ?? '', entry.title)} onurl={linkTo} onclose={() => (linking = false)} />
     {/if}
   </div>
 {/if}

@@ -32,6 +32,8 @@ const fields = [
   { path: ['button'], label: 'Booking link', type: 'link', required: false },
   { path: ['video'], label: 'Tour video', type: 'embed', required: false },
   { path: ['seo'], label: 'Search settings', type: 'seo', required: false },
+  { path: ['summary'], label: 'Summary', type: 'richtext', required: false, tier: 'full' },
+  { path: ['legacy'], label: 'Legacy copy', type: 'richtext', required: false, tier: 'basic' },
 ] satisfies Field[];
 
 const blocks = {
@@ -48,6 +50,8 @@ const session = createEntrySession({
     button: { type: 'url', href: 'javascript:alert(1)', label: 'Book now' },
     video: { provider: 'youtube', id: 'dQw4w9WgXcQ', title: 'House tour' },
     seo: { noindex: true },
+    summary: 'Two bedrooms.',
+    legacy: '## Developer heading',
   },
   translations: {},
   form: { fields, blocks },
@@ -68,6 +72,9 @@ const changed: Record<string, WordPart[]> = {
 </button>
 <output data-refusal-url>{refusalUrl}</output>
 <output data-command-count>{commands}</output>
+<output data-richtext-value>{String(root.summary ?? '')}</output>
+<output data-richtext-history>{JSON.stringify(session.historyStats())}</output>
+<output data-richtext-selection>{JSON.stringify(session.historySelection())}</output>
 
 <Fields
   {fields}

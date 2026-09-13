@@ -2,6 +2,10 @@ import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import FieldsLocaleFixture from './FieldsLocaleFixture.svelte';
 
+// jsdom has no layout; ProseMirror asks for it when it scrolls a selection into view.
+Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
+Range.prototype.getBoundingClientRect = () => new DOMRect();
+
 let app: ReturnType<typeof mount>;
 afterEach(() => {
   unmount(app);
@@ -24,6 +28,146 @@ const type = (selector: string, value: string) => {
   input.dispatchEvent(new Event('input', { bubbles: true }));
   flushSync();
 };
+const settle = async () => {
+  await tick();
+  await Promise.resolve();
+  await tick();
+  flushSync();
+};
+const selectAll = (selector: string) => {
+  const editor = q<HTMLElement>(selector);
+  editor.focus();
+  const range = document.createRange();
+  range.selectNodeContents(editor);
+  const selection = window.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+  document.dispatchEvent(new Event('selectionchange'));
+  flushSync();
+};
+
+test('rich-text state and an open link draft survive a live locale switch', async () => {
+  const fetchMock = vi.fn(async () => Response.json({ entries: [], locales: ['en', 'de'] }));
+  vi.stubGlobal('fetch', fetchMock);
+  app = mount(FieldsLocaleFixture, { target: document.body });
+  await settle();
+
+  const editor = q<HTMLElement>('#f-summary');
+  const toolbar = q<HTMLElement>('#f-summary-field [role="toolbar"]');
+  selectAll('#f-summary');
+  click('[aria-label="Bold"]');
+  expect(q('[data-richtext-value]').textContent).toBe('**Two bedrooms.**');
+  expect(q('[aria-label="Bold"]').getAttribute('aria-pressed')).toBe('true');
+
+  click('[aria-label="Link"]');
+  await settle();
+  const picker = q<HTMLElement>('#f-summary-field .picker');
+  const linkDraft = q<HTMLInputElement>('#f-summary-link-url');
+  type('#f-summary-link-url', 'https://example.com/house');
+  linkDraft.focus();
+  linkDraft.setSelectionRange(12, 12);
+  const historyBefore = q('[data-richtext-history]').textContent;
+  const logicalBefore = q('[data-richtext-selection]').textContent;
+  const commandsBefore = q('[data-command-count]').textContent;
+  const requestsBefore = fetchMock.mock.calls.length;
+
+  expect(JSON.parse(historyBefore ?? '')).toMatchObject({
+    redoTransactions: 0,
+    undoTransactions: 1,
+  });
+  expect(JSON.parse(logicalBefore ?? '')).toMatchObject({
+    address: 'summary',
+    anchor: 1,
+    head: 14,
+    kind: 'text',
+    locale: 'en',
+  });
+  expect(commandsBefore).toBe('1');
+
+  expect(toolbar.getAttribute('aria-label')).toBe('Formatting');
+  click('[data-locale-switch]');
+
+  expect(q('#f-summary')).toBe(editor);
+  expect(q('#f-summary-field [role="toolbar"]')).toBe(toolbar);
+  expect(q('#f-summary-field .picker')).toBe(picker);
+  expect(q<HTMLInputElement>('#f-summary-link-url')).toBe(linkDraft);
+  expect(document.activeElement).toBe(linkDraft);
+  expect(linkDraft.value).toBe('https://example.com/house');
+  expect(linkDraft.selectionStart).toBe(12);
+  expect(q('[data-richtext-value]').textContent).toBe('**Two bedrooms.**');
+  expect(q('[data-richtext-history]').textContent).toBe(historyBefore);
+  expect(q('[data-richtext-selection]').textContent).toBe(logicalBefore);
+  expect(q('[data-command-count]').textContent).toBe(commandsBefore);
+  expect(toolbar.getAttribute('aria-label')).toBe('Formatierung');
+  expect(q('[aria-label="Fett"]').getAttribute('aria-pressed')).toBe('true');
+  expect(
+    Array.from(toolbar.querySelectorAll('button'), (button) => button.getAttribute('aria-label')),
+  ).toEqual([
+    'Fett',
+    'Kursiv',
+    'Link',
+    'Aufzählung',
+    'Nummerierte Liste',
+    'Überschrift 2',
+    'Überschrift 3',
+    'Zitat',
+  ]);
+  expect(q('#f-summary-field .picker-list').getAttribute('aria-label')).toBe(
+    'Seiten und Einträge zum Verlinken',
+  );
+  expect(q('#f-summary-field .side-title').textContent).toBe('Eigener Link');
+  expect(fetchMock).toHaveBeenCalledTimes(requestsBefore);
+
+  click('#f-summary-field .actions .btn-primary');
+  expect(q<HTMLAnchorElement>('#f-summary a').href).toBe('https://example.com/house');
+  expect(q('#f-summary a').textContent).toBe('Two bedrooms.');
+  expect(q('[data-richtext-value]').textContent).toContain('https://example.com/house');
+
+  const undo = new KeyboardEvent('keydown', {
+    key: 'z',
+    code: 'KeyZ',
+    keyCode: 90,
+    ctrlKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  editor.dispatchEvent(undo);
+  await settle();
+  expect(undo.defaultPrevented).toBe(true);
+  expect(q('[data-richtext-value]').textContent).toBe('**Two bedrooms.**');
+  expect(q('#f-summary strong').textContent).toBe('Two bedrooms.');
+});
+
+test('foreign guidance and a lazily opened link picker use the latest locale', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ entries: [], locales: ['en', 'de'] })),
+  );
+  app = mount(FieldsLocaleFixture, { target: document.body });
+  await settle();
+  const editor = q<HTMLElement>('#f-summary');
+  const foreign = q<HTMLElement>('#f-legacy-field [role="region"]');
+  const authored = q('#f-legacy').textContent;
+
+  click('[data-locale-switch]');
+
+  expect(q('#f-legacy-field [role="region"]')).toBe(foreign);
+  expect(q('#f-legacy').textContent).toBe(authored);
+  expect(q('#f-legacy-hint').textContent).toBe(
+    'Dieser Text wurde im Code bearbeitet und verwendet Formatierungen, die der Editor nicht ändern kann. Bitte deinen Entwickler um Hilfe.',
+  );
+  selectAll('#f-summary');
+  click('[aria-label="Link"]');
+  await settle();
+  expect(q('#f-summary')).toBe(editor);
+  expect(q('#f-summary-field .picker-list').getAttribute('aria-label')).toBe(
+    'Seiten und Einträge zum Verlinken',
+  );
+  expect(q<HTMLInputElement>('#f-summary-link-q').placeholder).toBe(
+    'Seiten und Einträge durchsuchen',
+  );
+  expect(q('[data-richtext-value]').textContent).toBe('Two bedrooms.');
+});
 
 test('structured field state and open feedback survive a live locale switch', async () => {
   const fetchMock = vi.fn(async () => Response.json({ entries: [], locales: ['en', 'de'] }));

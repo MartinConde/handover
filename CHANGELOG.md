@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate rich-text toolbar names, unsupported-formatting guidance and lazy link controls into
+  English and German. A live interface-language switch preserves the TipTap editor, focus,
+  selection, active formatting, Markdown, session undo history and an open link draft without a
+  content write or entry-directory reread.
+
 - Translate structured, repeated, link, reference, image, file, embed and SEO field presentation
   into English and German. Open field popovers, retained embed guidance, Handover-owned compact
   dates and SEO notices reformat in place while nested inputs, focus, selections, values and authored
