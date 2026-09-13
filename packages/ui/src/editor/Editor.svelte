@@ -14,7 +14,7 @@ import CanvasWorkspace from '../canvas/CanvasWorkspace.svelte';
 import type { CanvasRenderRequest } from '../canvas/canvas-renderer';
 import OffsiteDialog, { type Target } from '../content/Offsite.svelte';
 import { invalidateEntryDirectory } from '../entry-directory.js';
-import { formatExactTime, messageOptions, type UiLocale } from '../i18n.js';
+import { formatExactTime, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import {
   guardEntryActions,
   guardNavigation,
@@ -1247,11 +1247,11 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           aria-expanded={confirming}
           disabled={!dirty || saving || missing.length > 0 || entry.drift.length > 0 || locked || actionBusy}
           title={locked
-            ? 'Somebody else is editing this entry'
+            ? m.editor_publish_disabled_locked({}, options)
             : entry.drift.length
-            ? 'The languages of this entry disagree about its blocks'
+            ? m.editor_publish_disabled_drift({}, options)
             : missing.length
-              ? 'Fill in what is missing before publishing this entry'
+              ? m.editor_publish_disabled_missing({}, options)
               : undefined}
           onclick={askToPublish}
           bind:this={publishButton}
@@ -1299,7 +1299,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       <p class="slug-row">
         {#if editing}
           <span class="url">{before}</span>
-          <label class="visually-hidden" for="entry-address">{m.editor_address_label({ language: language(locale) }, options)}</label>
+          <label class="visually-hidden" for="entry-address">{m.editor_address_label({ language: formatLanguageName(locale, uiLocale) }, options)}</label>
           <input class="input" id="entry-address" type="text" bind:value={typed} placeholder={slug} />
           <button class="btn btn-sm" type="button" disabled={busy} onclick={saveAddress}>{m.editor_address_save({}, options)}</button>
           <button class="btn btn-ghost btn-sm" type="button" onclick={() => (editing = false)}>{m.editor_address_cancel({}, options)}</button>

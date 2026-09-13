@@ -38,7 +38,9 @@ Changing the account's [interface language](interface-language.md) while an entr
 its tabs, view controls, status and overflow actions, URL metadata and converted dates in place.
 It does not reread the entry, move its content-language selection, release or retake the lock, or
 replace the focused field and its unsaved value. Lock, save and hold-result messages are still part
-of the staged interface-language conversion and can currently remain in English.
+of the staged interface-language conversion and can currently remain in English. The header's
+disabled Publish tooltip is presentation rather than a retained message, so its current lock,
+block-drift or missing-value reason does follow the interface language.
 
 When the lock runs out while somebody is waiting on it, the banner says so and offers
 **Reload**, which opens the entry with the lock theirs.

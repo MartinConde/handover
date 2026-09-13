@@ -57,8 +57,10 @@ replace a local action draft. A new sign-in resolves the newly signed-in account
 
 In an open entry, the Content/SEO/History tabs, Form/Split/Canvas controls, status and overflow
 actions, URL metadata, outline labels, and the date of a language removed through Handover update
-in place. The collection identifier, entry title, field labels, filenames, URLs, content-language
-selection, and typed content remain authored data.
+in place. An editable web-address label presents the selected content language in the interface
+language, and a disabled Publish action translates whether a lock, block drift or a missing value
+is in the way. The collection identifier, entry title, field labels, filenames, URLs,
+content-language selection, and typed content remain authored data.
 
 Connection failures retain the existing uncertain-result behavior. Handover renders a localized
 summary from a stable error descriptor, not from an English sentence or status code. Known

@@ -46,7 +46,15 @@ test('live interface language updates editor chrome and dates without replacing 
   input.value = 'Unsaved harbour words';
   input.dispatchEvent(new Event('input', { bubbles: true }));
   input.dataset.localeProof = 'same-editor-field';
-  input.focus();
+  expect(q('.slug-row .mode')?.textContent).toBe('Same as the file name');
+  q<HTMLButtonElement>('.slug-row .btn-link')?.click();
+  flushSync();
+  const address = q<HTMLInputElement>('#entry-address');
+  if (!address) throw new Error('address input missing');
+  address.value = 'coastal-home';
+  address.dispatchEvent(new Event('input', { bubbles: true }));
+  address.dataset.localeProof = 'same-address-field';
+  address.focus();
   const requestsBeforeSwitch = fetchMock.mock.calls.length;
 
   q<HTMLButtonElement>('[data-locale-switch]')?.click();
@@ -63,15 +71,21 @@ test('live interface language updates editor chrome and dates without replacing 
     'Verlauf',
   ]);
   expect(q('.entry-header button.btn-primary')?.textContent).toBe('Diesen Eintrag veröffentlichen');
-  expect(q('.slug-row .mode')?.textContent).toBe('Wie der Dateiname');
   expect(current).toBe(input);
   expect(current?.value).toBe('Unsaved harbour words');
   expect(current?.dataset.localeProof).toBe('same-editor-field');
-  expect(document.activeElement).toBe(current);
+  const currentAddress = q<HTMLInputElement>('#entry-address');
+  expect(q('label[for="entry-address"]')?.textContent).toBe('Webadresse auf Englisch');
+  expect(currentAddress).toBe(address);
+  expect(currentAddress?.value).toBe('coastal-home');
+  expect(currentAddress?.dataset.localeProof).toBe('same-address-field');
+  expect(document.activeElement).toBe(currentAddress);
   expect(
     q<HTMLButtonElement>('[aria-label="Language"] button[aria-pressed="true"]')?.textContent,
   ).toContain('EN');
   expect(fetchMock).toHaveBeenCalledTimes(requestsBeforeSwitch);
+  q<HTMLButtonElement>('.slug-row .btn-ghost')?.click();
+  flushSync();
 
   q<HTMLButtonElement>('[aria-label="Weitere Aktionen"]')?.click();
   flushSync();
@@ -93,4 +107,57 @@ test('live interface language updates editor chrome and dates without replacing 
     flushSync();
   }
   expect(q('.pane time')?.textContent ?? '').toBe('12. August 2026 um 12:00');
+});
+
+test('German publish tooltips keep the header reason order', async () => {
+  let locked = false;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      url.startsWith('/admin/api/locks/')
+        ? Response.json(
+            locked
+              ? { held_by: { id: 'u2', name: 'Anna Berg' }, mine: false, expires_at: Date.now() }
+              : { held_by: null, mine: true, expires_at: Date.now() + 120_000 },
+          )
+        : Response.json({}),
+    ),
+  );
+  const titles: { en: string | null; de: string | null }[] = [];
+  for (const state of ['locked', 'drift', 'missing'] as const) {
+    locked = state === 'locked';
+    app = mount(EditorLocaleFixture, {
+      target: document.body,
+      props: {
+        publishState: state === 'locked' ? 'clean' : state,
+      },
+    });
+    await new Promise((resolve) => setTimeout(resolve));
+    flushSync();
+    const en =
+      q<HTMLButtonElement>('.entry-header button.btn-primary')?.getAttribute('title') ?? null;
+    q<HTMLButtonElement>('[data-locale-switch]')?.click();
+    flushSync();
+    const de =
+      q<HTMLButtonElement>('.entry-header button.btn-primary')?.getAttribute('title') ?? null;
+    titles.push({ en, de });
+    unmount(app);
+    document.body.innerHTML = '';
+  }
+  app = mount(EditorLocaleFixture, { target: document.body });
+
+  expect(titles).toEqual([
+    {
+      en: 'Somebody else is editing this entry',
+      de: 'Jemand anderes bearbeitet diesen Eintrag',
+    },
+    {
+      en: 'The languages of this entry disagree about its blocks',
+      de: 'Die Sprachen dieses Eintrags unterscheiden sich bei den Blöcken',
+    },
+    {
+      en: 'Fill in what is missing before publishing this entry',
+      de: 'Fülle die fehlenden Angaben aus, bevor du diesen Eintrag veröffentlichst',
+    },
+  ]);
 });

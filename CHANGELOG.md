@@ -7,8 +7,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Translate entry-editor tabs, view controls, status and overflow actions, URL metadata, rename
   presentation, outline labels, and the removed-language timestamp into English and German. Live
   interface-language changes keep the editor session, content language, focused field and typed
-  value in place without rereading content. Save, lock, hold-result, validation, translation,
-  off-site, publish-dialog, and history feedback remain in their staged follow-up work.
+  value in place without rereading content. Address metadata names the content language in the
+  interface language, and disabled Publish tooltips translate their current lock, drift or missing
+  field reason. Save, lock, hold-result, validation, translation, off-site, publish-dialog, and
+  history feedback remain in their staged follow-up work.
 
 - Translate entry creation and shared page/entry pickers into English and German. Live language
   changes retain titles, starters, searches, custom URLs, selected entries and content language

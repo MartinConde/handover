@@ -1,23 +1,48 @@
 <script lang="ts">
-import type { Field } from '@handover/core';
+import type { Drift, Field } from '@handover/core';
 import type { UiLocale } from '../i18n.js';
 import Editor from './Editor.svelte';
 
-let uiLocale = $state<UiLocale>('en');
+let {
+  initialUiLocale = 'en',
+  publishState = 'clean',
+}: {
+  initialUiLocale?: UiLocale;
+  publishState?: 'clean' | 'drift' | 'missing';
+} = $props();
+// svelte-ignore state_referenced_locally -- each test mount intentionally fixes its initial locale
+let uiLocale = $state<UiLocale>(initialUiLocale);
+// svelte-ignore state_referenced_locally -- each test mount intentionally fixes its state variant
+const drift: Drift[] =
+  publishState === 'drift'
+    ? [
+        {
+          path: 'blocks[_id=z9y8x7w6]',
+          type: 'quote',
+          in: ['de'],
+          expected: ['en', 'de'],
+          values: { de: ['Ein seltener Fund.'] },
+        },
+      ]
+    : [];
+// svelte-ignore state_referenced_locally -- each test mount intentionally fixes its state variant
 const entry = {
   fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }] satisfies Field[],
   blocks: {},
   data: { title: 'Seaview Cottage' },
   pending: [] as string[],
   published: ['en'],
-  problems: [] as { path: string; message: string }[],
+  problems:
+    publishState === 'missing'
+      ? [{ path: 'title', message: 'Authored title requirement' }]
+      : ([] as { path: string; message: string }[]),
   locales: ['en', 'de'],
   defaultLocale: 'en',
   sourceLocale: 'en',
   offered: ['en'],
   translations: {} as Record<string, Record<string, unknown>>,
   stale: [] as string[],
-  drift: [],
+  drift,
   route: '/listings/[slug]',
   localizedSlugs: true,
   addresses: { en: '' },
