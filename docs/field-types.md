@@ -104,6 +104,8 @@ written in. Its controls, availability descriptions, empty states, and validatio
 account's interface language. Switching English/Deutsch keeps the search, typed custom URL,
 selected entry, and content-language destination intact; language names are localized while
 language chips, collection names, entry titles, paths, and schema labels remain authored data.
+Handover's own picker descriptions—such as “pages and entries”—translate with the surrounding
+controls; a schema-supplied label such as “Related page” remains exactly as configured.
 URL is typed, and a scheme the site will not accept is refused under the box rather than on save.
 Rich text is a TipTap editor whose toolbar has exactly the tier's
 constructs; its link button opens the same search box, and points at the address the

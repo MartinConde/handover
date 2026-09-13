@@ -22,6 +22,10 @@ Handover-owned interface text is translated. Content and site configuration are 
 labels, schema descriptions, custom validation messages, entry titles, names, URLs, provider
 diagnostics, and the values being edited remain as authored.
 
+If entry creation returns success without a usable filename, Handover cannot know whether the
+draft was created. It keeps the creation form and presents translated guidance to check the entry
+list before trying again; changing interface language retranslates that guidance in place.
+
 ## How the initial language is chosen
 
 Before the signed-in interface first appears, Handover uses the first supported value from:

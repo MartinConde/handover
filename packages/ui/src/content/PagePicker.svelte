@@ -8,6 +8,7 @@ import * as m from '../paraglide/messages.js';
 let {
   id,
   label,
+  labelKind,
   labelId,
   collection,
   locale,
@@ -24,6 +25,8 @@ let {
   id: string;
   /** What is being chosen, for the search box nobody can see a label on. */
   label: string;
+  /** Handover-owned wording; omitted for schema-authored labels that must stay verbatim. */
+  labelKind?: 'pages-and-entries' | 'page-or-entry' | 'link-targets';
   /** The heading this list belongs to. */
   labelId: string;
   /** Only this collection's entries — a `reference` is locked to the one its schema names. */
@@ -45,6 +48,15 @@ let {
   onclose?: () => void;
 } = $props();
 const options = $derived(messageOptions(uiLocale));
+const displayedLabel = $derived(
+  labelKind === 'pages-and-entries'
+    ? m.page_picker_label_pages_entries({}, options)
+    : labelKind === 'page-or-entry'
+      ? m.page_picker_label_page_entry({}, options)
+      : labelKind === 'link-targets'
+        ? m.page_picker_label_link_targets({}, options)
+        : label,
+);
 
 let all = $state<Pickable>({ entries: [], locales: [] });
 let query = $state('');
@@ -92,7 +104,9 @@ const languageName = (locale: string) => formatLanguageName(locale, uiLocale);
 const directoryText = $derived(
   directoryError?.code === 'CONNECTION_LOST'
     ? messageText(directoryError, uiLocale)
-    : m.page_picker_load_failed({ label }, options),
+    : labelKind
+      ? m.page_picker_owned_load_failed({}, options)
+      : m.page_picker_load_failed({ label }, options),
 );
 
 const matches = $derived(
@@ -134,7 +148,7 @@ function step(e: KeyboardEvent) {
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -- arrow keys move focus inside -->
 <div class="picker" class:is-library={library} role="group" aria-labelledby={labelId} onkeydown={step}>
-  <label class="visually-hidden" for="{id}-q">{m.page_picker_search_label({ label }, options)}</label>
+  <label class="visually-hidden" for="{id}-q">{m.page_picker_search_label({ label: displayedLabel }, options)}</label>
   <input class="input" id="{id}-q" type="search" placeholder={m.page_picker_search_placeholder({}, options)} bind:value={query} bind:this={box} />
   {#if directoryError}
     <div class="notice notice-danger directory-read-error" role="alert">
@@ -142,7 +156,7 @@ function step(e: KeyboardEvent) {
       <button class="btn-link" type="button" onclick={loadDirectory}>{m.common_retry({}, options)}</button>
     </div>
   {/if}
-  <div class="picker-list" bind:this={list} role={library ? 'group' : 'listbox'} aria-label={label}>
+  <div class="picker-list" bind:this={list} role={library ? 'group' : 'listbox'} aria-label={displayedLabel}>
     {#if directoryLoading && !all.entries.length}
       <p class="hint">{m.page_picker_loading({}, options)}</p>
     {:else}
@@ -189,7 +203,7 @@ function step(e: KeyboardEvent) {
       <h3 class="side-title">{m.page_picker_custom_link({}, options)}</h3>
       <div class="field">
         <div class="label-row"><label for="{id}-url">{m.page_picker_address({}, options)}</label></div>
-        <input class="input" id="{id}-url" type="url" placeholder="/contact or https://…" bind:value={typed} aria-invalid={refused ? 'true' : undefined} aria-describedby={refused ? `${id}-url-err` : undefined} />
+        <input class="input" id="{id}-url" type="url" placeholder={m.page_picker_address_placeholder({}, options)} bind:value={typed} aria-invalid={refused ? 'true' : undefined} aria-describedby={refused ? `${id}-url-err` : undefined} />
         {#if refused}<p class="error" id="{id}-url-err">{m.page_picker_links_not_allowed({ scheme: refused }, options)}</p>{/if}
       </div>
     </div>

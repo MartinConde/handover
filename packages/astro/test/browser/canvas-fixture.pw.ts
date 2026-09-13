@@ -153,7 +153,7 @@ test('saved interface language wins before first paint and live switches preserv
   expect(new URL(page.url()).search).toBe('?locale=de');
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Neu in pages' }).click();
-  await expect(page.getByRole('heading', { name: 'Neuer Eintrag in page' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Neuer Eintrag in pages' })).toBeVisible();
   await expect(page.getByLabel('Titel')).toBeVisible();
   await page.getByRole('button', { name: 'Abbrechen' }).click();
   await page.getByLabel('Aktionen für Canvas fixture').click();
@@ -190,6 +190,7 @@ test('saved interface language wins before first paint and live switches preserv
     'placeholder',
     'Seiten und Einträge durchsuchen',
   );
+  await expect(page.locator('.picker-list')).toHaveAttribute('aria-label', 'Related');
   await expect(page.locator('.picker .chip').nth(1)).toHaveAttribute(
     'title',
     'Nicht verfügbar auf Deutsch',

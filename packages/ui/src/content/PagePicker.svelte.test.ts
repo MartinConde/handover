@@ -226,6 +226,64 @@ test('a retained picker failure changes language without another directory read'
   expect(reads).toBe(1);
 });
 
+test('an owned picker label and address placeholder translate without changing authored labels', async () => {
+  invalidateEntryDirectory();
+  let reads = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => {
+      reads += 1;
+      return new Response('unavailable', { status: 503 });
+    }),
+  );
+  const props = $state({
+    id: 'p',
+    label: 'pages and entries',
+    labelKind: 'pages-and-entries' as 'pages-and-entries' | 'page-or-entry' | 'link-targets',
+    labelId: 'p-l',
+    uiLocale: 'en' as UiLocale,
+    onpick: () => {},
+    onurl: () => {},
+  });
+  app = mount(PagePicker, { target: document.body, props });
+  await new Promise((r) => setTimeout(r));
+  flushSync();
+
+  const search = q<HTMLInputElement>('#p-q');
+  const list = q('.picker-list');
+  const alert = q('.directory-read-error');
+  expect(search.getAttribute('aria-label')).toBeNull();
+  expect(document.querySelector<HTMLLabelElement>('label[for="p-q"]')?.textContent).toBe(
+    'Search pages and entries',
+  );
+  expect(list.getAttribute('aria-label')).toBe('pages and entries');
+
+  props.uiLocale = 'de';
+  flushSync();
+
+  expect(document.querySelector<HTMLLabelElement>('label[for="p-q"]')?.textContent).toBe(
+    'Seiten und Einträge durchsuchen',
+  );
+  expect(list.getAttribute('aria-label')).toBe('Seiten und Einträge');
+  expect(alert.textContent).toContain('Seiten und Einträge konnten nicht geladen werden');
+  expect(q<HTMLInputElement>('#p-url').placeholder).toBe('/kontakt oder https://…');
+
+  props.labelKind = 'page-or-entry';
+  flushSync();
+  expect(document.querySelector<HTMLLabelElement>('label[for="p-q"]')?.textContent).toBe(
+    'eine Seite oder einen Eintrag durchsuchen',
+  );
+  expect(list.getAttribute('aria-label')).toBe('eine Seite oder einen Eintrag');
+
+  props.labelKind = 'link-targets';
+  flushSync();
+  expect(document.querySelector<HTMLLabelElement>('label[for="p-q"]')?.textContent).toBe(
+    'Seiten und Einträge zum Verlinken durchsuchen',
+  );
+  expect(list.getAttribute('aria-label')).toBe('Seiten und Einträge zum Verlinken');
+  expect(reads).toBe(1);
+});
+
 test('a live language change preserves picker drafts and selected authored data', async () => {
   let reads = 0;
   vi.stubGlobal(

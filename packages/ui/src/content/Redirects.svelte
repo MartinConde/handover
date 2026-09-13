@@ -495,6 +495,7 @@ async function remove() {
             <PagePicker
               id="rd-pick"
               label="pages and entries"
+              labelKind="pages-and-entries"
               labelId="rd-h"
               {uiLocale}
               locale={toLocale}

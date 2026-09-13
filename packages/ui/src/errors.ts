@@ -94,6 +94,8 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
       return message.status
         ? m.new_entry_create_failed_status({ status: message.status }, options)
         : m.new_entry_create_failed({}, options);
+    case 'ENTRY_CREATE_UNCONFIRMED':
+      return m.new_entry_create_unconfirmed({}, options);
     default:
       return m.common_unknown_error({}, options);
   }

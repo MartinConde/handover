@@ -361,7 +361,7 @@ const active = (b: { mark: string; attrs?: Record<string, unknown> }) =>
     </div>
     <div bind:this={element}></div>
     {#if linking}
-      <PagePicker id="{id}-link" label="pages and entries to link to" labelId={labelId} {locale} {uiLocale} onpick={(entry) => linkTo(entry.urls[locale] ?? '', entry.title)} onurl={linkTo} onclose={() => (linking = false)} />
+      <PagePicker id="{id}-link" label="pages and entries to link to" labelKind="link-targets" labelId={labelId} {locale} {uiLocale} onpick={(entry) => linkTo(entry.urls[locale] ?? '', entry.title)} onurl={linkTo} onclose={() => (linking = false)} />
     {/if}
   </div>
 {/if}

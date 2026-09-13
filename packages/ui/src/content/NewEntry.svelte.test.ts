@@ -119,6 +119,29 @@ test('creation waits for its catalogue and retry restores templates and collisio
   expect(document.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
 });
 
+test.each([
+  ['entry row', { entries: [null] }],
+  ['template row', { entries: [], templates: [null] }],
+])(
+  'an invalid directory %s uses the retry state without rendering unsafe data',
+  async (_name, body) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => Response.json(body)),
+    );
+    app = mount(NewEntry, {
+      target: document.body,
+      props: { collection: 'pages', onclose: () => {} },
+    });
+    await settle();
+
+    expect(document.querySelector('.entry-read-error')?.textContent).toContain(
+      'Could not check existing pages',
+    );
+    expect(document.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(true);
+  },
+);
+
 test('an open creation keeps its draft and translates retained failure', async () => {
   let reads = 0;
   vi.stubGlobal(
@@ -151,7 +174,7 @@ test('an open creation keeps its draft and translates retained failure', async (
   props.uiLocale = 'de';
   flushSync();
 
-  expect(document.querySelector('h2')?.textContent).toBe('Neuer Eintrag in listing');
+  expect(document.querySelector('h2')?.textContent).toBe('Neuer Eintrag in listings');
   expect(document.querySelector('#new-title')).toBe(title);
   expect(title.value).toBe('Küstenhaus');
   expect(starter.checked).toBe(true);
@@ -161,26 +184,49 @@ test('an open creation keeps its draft and translates retained failure', async (
   expect(reads).toBe(1);
 });
 
-test('an invalid successful creation response stays in the dialog as a failure', async () => {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (_url: string, init?: RequestInit) =>
-      init?.method === 'POST' ? Response.json({}) : Response.json({ entries: [] }),
-    ),
-  );
-  app = mount(NewEntry, {
-    target: document.body,
-    props: { collection: 'pages', onclose: () => {} },
-  });
-  await settle();
-  const title = document.querySelector<HTMLInputElement>('#new-title');
-  if (!title) throw new Error('title missing');
-  title.value = 'About';
-  title.dispatchEvent(new Event('input', { bubbles: true }));
-  document.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
-  await settle();
+test.each([
+  [
+    'invalid JSON',
+    () => new Response('{', { status: 200, headers: { 'content-type': 'application/json' } }),
+  ],
+  ['a missing slug', () => Response.json({})],
+  ['an unusable slug', () => Response.json({ slug: 'not/a-file-name' })],
+])(
+  'a successful response with %s keeps the draft and retranslates unconfirmed guidance',
+  async (_case, response) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_url: string, init?: RequestInit) =>
+        init?.method === 'POST' ? response() : Response.json({ entries: [] }),
+      ),
+    );
+    const props = $state({ collection: 'pages', uiLocale: 'en' as UiLocale, onclose: () => {} });
+    app = mount(NewEntry, { target: document.body, props });
+    await settle();
+    const title = document.querySelector<HTMLInputElement>('#new-title');
+    if (!title) throw new Error('title missing');
+    title.value = 'About';
+    title.dispatchEvent(new Event('input', { bubbles: true }));
+    document.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+    await settle();
 
-  expect(document.body.textContent).toContain('That did not work');
-  expect(document.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
-  expect(location.pathname).not.toContain('undefined');
-});
+    const alert = document.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain(
+      'Creation may have succeeded. Check the entry list before trying again.',
+    );
+    expect(title.value).toBe('About');
+    expect(document.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(
+      false,
+    );
+    expect(location.pathname).not.toContain('undefined');
+
+    props.uiLocale = 'de';
+    flushSync();
+
+    expect(document.querySelector('[role="alert"]')).toBe(alert);
+    expect(alert?.textContent).toContain(
+      'Die Erstellung könnte erfolgreich gewesen sein. Prüfe die Eintragsliste, bevor du es erneut versuchst.',
+    );
+    expect(title.value).toBe('About');
+  },
+);

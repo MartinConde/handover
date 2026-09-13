@@ -64,8 +64,11 @@ It can also start from one of the collection's
 
 The creation dialog follows the account's interface language without closing or rereading the
 collection. A live language change keeps the typed title and selected starter. If creation fails,
-the translated summary changes in the same alert while any server detail remains verbatim. An
-invalid success response stays in the dialog as a failure rather than opening an unknown entry.
+the translated summary changes in the same alert while any server detail remains verbatim. If a
+successful response does not contain a usable filename, the draft may already exist: the dialog
+keeps the title and starter, does not navigate or post again, and asks the author to check the entry
+list before trying again. Invalid directory rows use the existing unavailable state and Retry
+action rather than rendering partial data.
 
 ## Duplicating an entry
 

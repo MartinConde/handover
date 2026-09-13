@@ -56,7 +56,14 @@ async function load(name: string) {
   if (
     !body ||
     (body.entries !== undefined && !Array.isArray(body.entries)) ||
-    (body.templates !== undefined && !Array.isArray(body.templates))
+    (body.templates !== undefined && !Array.isArray(body.templates)) ||
+    (Array.isArray(body.entries) &&
+      !body.entries.every(
+        (entry): entry is { id: string } =>
+          typeof entry === 'object' && entry !== null && typeof entry.id === 'string',
+      )) ||
+    (Array.isArray(body.templates) &&
+      !body.templates.every((template): template is string => typeof template === 'string'))
   ) {
     directoryCurrent = false;
     directoryError = { code: 'NEW_ENTRY_DIRECTORY_FAILED' };
@@ -67,7 +74,7 @@ async function load(name: string) {
   directoryCurrent = true;
 }
 
-const singular = $derived(nameOf(collection));
+const headingCollection = $derived(uiLocale === 'en' ? nameOf(collection) : collection);
 const directoryText = $derived(
   directoryError?.code === 'CONNECTION_LOST'
     ? messageText(directoryError, uiLocale)
@@ -101,8 +108,12 @@ async function create(event: Event) {
     return;
   }
   const body = (await res.json().catch(() => undefined)) as { slug?: unknown } | undefined;
-  if (typeof body?.slug !== 'string' || !body.slug) {
-    error = { code: 'ENTRY_CREATE_FAILED' };
+  if (
+    typeof body?.slug !== 'string' ||
+    body.slug.length > 80 ||
+    !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(body.slug)
+  ) {
+    error = { code: 'ENTRY_CREATE_UNCONFIRMED' };
     busy = false;
     return;
   }
@@ -113,7 +124,7 @@ async function create(event: Event) {
 </script>
 
 <Modal labelledby="new-entry-h" initialFocus="#new-title" dismissible={!busy} {onclose}>
-    <h2 id="new-entry-h">{m.new_entry_heading({ collection: singular }, options)}</h2>
+    <h2 id="new-entry-h">{m.new_entry_heading({ collection: headingCollection }, options)}</h2>
     <form onsubmit={create}>
       <div class="field">
         <div class="label-row"><label for="new-title">{m.new_entry_title({}, options)}</label></div>

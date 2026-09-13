@@ -112,6 +112,7 @@ const ready = $derived(kind === 'entry' ? Boolean(picked) : kind !== 'url' || ur
           <PagePicker
             id="offsite-pick"
             label="pages and entries"
+            labelKind="pages-and-entries"
             labelId="offsite-h"
             {uiLocale}
             chosen={picked?.path}
