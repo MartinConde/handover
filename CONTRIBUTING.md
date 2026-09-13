@@ -31,6 +31,28 @@ one fixture entry, and the page picker in the shapes the fields open it in — t
 either component outside the admin. It is a dev server only — the admin bundle's entry is
 `src/main.ts` and never that page.
 
+### UI build cost
+
+The UI has separate `admin` and `canvas` entries, lazy editor and rich-text code, and an Astro
+integration that embeds every emitted JS/CSS asset in the Worker. When a UI dependency or build
+step changes, measure the entry closures as well as the whole emitted asset set:
+
+```sh
+pnpm build
+node scripts/ui-build-metrics.mjs
+```
+
+The report follows static imports from Vite's manifest and counts a shared file once within each
+entry graph. It reports decoded, gzip, and Brotli bytes for the initial admin graph, initial Canvas
+graph, lazy Canvas rich-text graph, and all embedded UI assets. Dynamic entries are intentionally
+separate from the initial graphs.
+
+For the packaged Worker, build the Cloudflare demo, run Wrangler's deploy command with `--dry-run`
+and an output directory, then pass that directory as `--worker <dir>`. Record Wrangler's own Total
+Upload result too; the script's per-module compressed sum is a stable local comparison, not a
+substitute for Wrangler's bundle calculation. Compiler-only dependency size and generation time
+belong in the same review but must not be presented as client runtime cost.
+
 ## Tests
 
 Vitest. A new test is seen failing before it counts; a bug fix comes with a regression

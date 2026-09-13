@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Document and automate repeatable decoded, gzip, and Brotli measurements for the admin, Canvas,
+  lazy rich-text, embedded UI asset, and packaged Worker graphs; no runtime behavior changes.
+
 - Read build content once per virtual-index generation, preserving explicit development
   invalidation and byte-identical index, template, media-usage, and translation-staleness output.
 
