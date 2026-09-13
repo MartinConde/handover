@@ -316,6 +316,103 @@ test('a newly signed-in account preference replaces the device hint before the s
   expect(document.documentElement.lang).toBe('de');
 });
 
+test('a visible sign-in error changes language without clearing the form', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      url === '/admin/api/auth/sign-in/email'
+        ? Response.json(
+            { code: 'INVALID_EMAIL_OR_PASSWORD', message: 'Invalid email or password' },
+            { status: 401 },
+          )
+        : Response.json({}),
+    ),
+  );
+  app = mount(App, {
+    target: document.body,
+    props: {
+      session: null,
+      path: '/admin',
+      initialUiLocale: 'en',
+      methods: { emailLink: false, github: false },
+    },
+  });
+  flushSync();
+  const email = document.querySelector<HTMLInputElement>('#email');
+  const password = document.querySelector<HTMLInputElement>('#password');
+  if (!email || !password) throw new Error('Sign-in fields did not render');
+  email.value = 'owner@example.com';
+  email.dispatchEvent(new Event('input', { bubbles: true }));
+  password.value = 'wrong password';
+  password.dispatchEvent(new Event('input', { bubbles: true }));
+  document.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+  await vi.waitFor(() =>
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+      "We couldn't sign you in. Check your email and password.",
+    ),
+  );
+
+  const picker = document.querySelector<HTMLSelectElement>('.auth-page select');
+  if (!picker) throw new Error('Language picker did not render');
+  picker.value = 'de';
+  picker.dispatchEvent(new Event('change', { bubbles: true }));
+  await vi.waitFor(() =>
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+      'Die Anmeldung ist fehlgeschlagen. Prüfen Sie Ihre E-Mail-Adresse und Ihr Passwort.',
+    ),
+  );
+  expect(document.querySelector('#email')).toBe(email);
+  expect(document.querySelector('#password')).toBe(password);
+  expect(email.value).toBe('owner@example.com');
+  expect(password.value).toBe('wrong password');
+  expect(document.querySelector('.shell')).toBeNull();
+});
+
+test('a visible account failure changes language and keeps its technical detail and form', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === '/admin/api/account') return Response.json({ hasPassword: true, sessions: [] });
+      if (url === '/admin/api/auth/update-user') {
+        const body = JSON.parse(String(init?.body)) as { name?: string; uiLocale?: string };
+        return body.uiLocale
+          ? Response.json({ status: true })
+          : Response.json({ error: 'provider trace 7A' }, { status: 502 });
+      }
+      return Response.json({ entries: [] });
+    }),
+  );
+  const root = show(session(), '/admin/account');
+  await vi.waitFor(() => expect(root.querySelector('#display-name')).not.toBeNull());
+  const name = root.querySelector<HTMLInputElement>('#display-name');
+  if (!name) throw new Error('Display-name field did not render');
+  name.value = 'Uncommitted Name';
+  name.dispatchEvent(new Event('input', { bubbles: true }));
+  Array.from(root.querySelectorAll('button'))
+    .find((button) => button.textContent?.trim() === 'Save name')
+    ?.click();
+  await vi.waitFor(() =>
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain(
+      'Your name could not be saved.',
+    ),
+  );
+  expect(root.textContent).toContain('Technical detail: provider trace 7A');
+
+  const picker = root.querySelector<HTMLSelectElement>('main .language-control select');
+  if (!picker) throw new Error('Account language picker did not render');
+  picker.value = 'de';
+  picker.dispatchEvent(new Event('change', { bubbles: true }));
+  await vi.waitFor(() =>
+    expect(root.querySelector('[role="alert"]')?.textContent).toContain(
+      'Ihr Name konnte nicht gespeichert werden.',
+    ),
+  );
+  expect(root.querySelector('#display-name')).toBe(name);
+  expect(name.value).toBe('Uncommitted Name');
+  expect(root.textContent).toContain('Technisches Detail: provider trace 7A');
+  expect(root.querySelector('.user-menu .name')?.textContent).toBe('Martin');
+});
+
 test('a blocked cookie read does not prevent a newly signed-in preference from loading', async () => {
   const read = vi.spyOn(document, 'cookie', 'get').mockImplementation(() => {
     throw new DOMException('Cookies disabled', 'SecurityError');

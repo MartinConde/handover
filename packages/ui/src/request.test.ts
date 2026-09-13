@@ -28,6 +28,7 @@ test('a disconnected API request becomes a retryable refusal; a retry can succee
   const response = await request('/admin/api/publish', { method: 'POST' });
   expect(response.status).toBe(503);
   expect(uncertainResponse(response)).toBe(true);
+  expect(response.headers.get('x-handover-error-code')).toBe('CONNECTION_LOST');
   expect(await response.text()).toContain('try again');
   const retry = await request('/admin/api/publish', { method: 'POST' });
   expect(retry.ok).toBe(true);
@@ -51,6 +52,7 @@ test('a response body disconnected after headers also reports failure', async ()
   const response = await request('/admin/api/drafts/pages/home', { method: 'PUT' });
   expect(response.status).toBe(503);
   expect(uncertainResponse(response)).toBe(true);
+  expect(response.headers.get('x-handover-error-code')).toBe('CONNECTION_LOST');
 });
 
 test('a base beginning with admin is not added twice to navigation', () => {

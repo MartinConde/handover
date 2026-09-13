@@ -1,6 +1,9 @@
 <script lang="ts">
 import { onDestroy } from 'svelte';
+import { messageText, responseMessage, type UiMessage } from '../errors.js';
 import type { UiLocale } from '../i18n.js';
+import { messageOptions } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
 import LanguageControl from '../shared/LanguageControl.svelte';
 
@@ -33,9 +36,6 @@ const resetToken = path === '/admin/reset' ? (params.get('token') ?? '') : '';
 // With no emailed link the expired-link wording would be a lie, so it gets the plain message.
 const refused = Boolean(params.get('error'));
 
-// One message for both causes, so the form never confirms which addresses have an account.
-const REFUSED = "We couldn't sign you in. Check your email and password.";
-const RESET_REFUSED = "We couldn't send a reset link. Please try again.";
 const DEFAULT_RETRY_DELAY = 60_000;
 const MAX_TIMER_DELAY = 2_147_483_647;
 
@@ -52,9 +52,11 @@ let confirm = $state('');
 let usePassword = $state(!methods.emailLink);
 let reveal = $state(false);
 // svelte-ignore state_referenced_locally -- the initial error is chosen once per page load
-let error = $state(refused && !methods.emailLink ? REFUSED : '');
-let fieldError = $state('');
-let notice = $state('');
+let error = $state<UiMessage | undefined>(
+  refused && !methods.emailLink ? { code: 'AUTH_SIGN_IN_FAILED' } : undefined,
+);
+let fieldError = $state<UiMessage | undefined>();
+let notice = $state(false);
 let limited = $state(false);
 let busy = $state(false);
 let limitTimer: ReturnType<typeof setTimeout> | undefined;
@@ -81,8 +83,8 @@ onDestroy(() => {
 
 async function post(path: string, body: unknown) {
   busy = true;
-  error = '';
-  fieldError = '';
+  error = undefined;
+  fieldError = undefined;
   clearLimit();
   const res = await fetch(path, {
     method: 'POST',
@@ -104,7 +106,7 @@ async function signIn(event: SubmitEvent) {
   if (!usePassword) return sendLink();
   const res = await post('/admin/api/auth/sign-in/email', { email, password });
   if (res.ok) onlogin();
-  else if (!limited) error = REFUSED;
+  else if (!limited) error = await responseMessage(res, 'AUTH_SIGN_IN_FAILED');
 }
 
 async function sendLink() {
@@ -115,7 +117,7 @@ async function sendLink() {
     errorCallbackURL: sitePath('/admin'),
   });
   if (!limited) view = res.ok ? 'link-sent' : 'sign-in';
-  if (!limited && !res.ok) error = REFUSED;
+  if (!limited && !res.ok) error = await responseMessage(res, 'AUTH_SIGN_IN_FAILED');
 }
 
 async function forgot() {
@@ -125,7 +127,7 @@ async function forgot() {
   });
   if (!limited) {
     view = res.ok ? 'reset-sent' : 'sign-in';
-    if (!res.ok) error = RESET_REFUSED;
+    if (!res.ok) error = await responseMessage(res, 'AUTH_RESET_REQUEST_FAILED');
   }
 }
 
@@ -135,19 +137,22 @@ async function withGitHub() {
     callbackURL: sitePath('/admin'),
     errorCallbackURL: sitePath('/admin'),
   });
-  const { url } = (await res.json().catch(() => ({}))) as { url?: string };
+  const { url } = (await res
+    .clone()
+    .json()
+    .catch(() => ({}))) as { url?: string };
   if (url) location.href = url;
-  else error = "We couldn't reach GitHub. Try again, or sign in with your password.";
+  else error = await responseMessage(res, 'AUTH_GITHUB_FAILED');
 }
 
 async function saveNewPassword(event: SubmitEvent) {
   event.preventDefault();
   if (next.length < 12) {
-    fieldError = 'Must be at least 12 characters';
+    fieldError = { code: 'AUTH_PASSWORD_TOO_SHORT' };
     return;
   }
   if (next !== confirm) {
-    fieldError = 'The two passwords are different';
+    fieldError = { code: 'AUTH_PASSWORDS_DIFFERENT' };
     return;
   }
   const res = await post('/admin/api/auth/reset-password', {
@@ -159,16 +164,16 @@ async function saveNewPassword(event: SubmitEvent) {
     history.replaceState(null, '', sitePath('/admin'));
     view = 'sign-in';
     usePassword = true;
-    notice = 'Your password is saved. Sign in with it.';
+    notice = true;
   } else {
-    fieldError = ((await res.json().catch(() => ({}))) as { message?: string }).message ?? REFUSED;
+    fieldError = await responseMessage(res, 'AUTH_RESET_FAILED');
   }
 }
 
 function backToPassword() {
   view = 'sign-in';
   usePassword = true;
-  notice = '';
+  notice = false;
 }
 </script>
 
@@ -179,34 +184,32 @@ function backToPassword() {
       {#if view === 'link-sent' || view === 'reset-sent'}
         <div class="site">
           <span class="site-logo" aria-hidden="true">H</span>
-          <h1>Check your inbox</h1>
+          <h1>{m.auth_check_inbox({}, messageOptions(uiLocale))}</h1>
         </div>
         <p class="lede" role="status">
           {#if view === 'link-sent'}
-            We sent a sign-in link to <strong>{email}</strong>. It works once and expires in 15
-            minutes.
+            {m.auth_link_sent({ email }, messageOptions(uiLocale))}
           {:else}
-            If <strong>{email}</strong> has an account, we sent it a link for setting a new
-            password. It expires in an hour.
+            {m.auth_reset_sent({ email }, messageOptions(uiLocale))}
           {/if}
         </p>
         <p class="secondary">
           {#if view === 'link-sent'}
-            <button class="btn-link" type="button" disabled={busy} onclick={sendLink}>Resend</button>
+            <button class="btn-link" type="button" disabled={busy} onclick={sendLink}>{m.auth_resend({}, messageOptions(uiLocale))}</button>
             ·
           {/if}
           <button class="btn-link" type="button" onclick={backToPassword}>
-            Use password instead
+            {m.auth_use_password_instead({}, messageOptions(uiLocale))}
           </button>
         </p>
       {:else if view === 'reset'}
         <div class="site">
           <span class="site-logo" aria-hidden="true">H</span>
-          <h1>Set a new password</h1>
+          <h1>{m.auth_set_new_password({}, messageOptions(uiLocale))}</h1>
         </div>
         <form onsubmit={saveNewPassword}>
           <div class="field" class:is-invalid={fieldError}>
-            <label for="new-password">New password</label>
+            <label for="new-password">{m.auth_new_password({}, messageOptions(uiLocale))}</label>
             <div class="input-row">
               <input
                 class="input"
@@ -225,16 +228,16 @@ function backToPassword() {
                 aria-pressed={reveal}
                 aria-controls="new-password"
                 onclick={() => (reveal = !reveal)}
-              >{reveal ? 'Hide' : 'Show'}</button>
+              >{reveal ? m.auth_hide_password({}, messageOptions(uiLocale)) : m.auth_show_password({}, messageOptions(uiLocale))}</button>
             </div>
             {#if fieldError}
-              <span class="error" id="new-password-error" role="alert">{fieldError}</span>
+              <span class="error" id="new-password-error" role="alert">{messageText(fieldError, uiLocale)}</span>
             {:else}
-              <span class="hint" id="new-password-hint">At least 12 characters</span>
+              <span class="hint" id="new-password-hint">{m.auth_password_hint({}, messageOptions(uiLocale))}</span>
             {/if}
           </div>
           <div class="field">
-            <label for="confirm-password">Confirm password</label>
+            <label for="confirm-password">{m.auth_confirm_password({}, messageOptions(uiLocale))}</label>
             <input
               class="input"
               id="confirm-password"
@@ -247,18 +250,18 @@ function backToPassword() {
           </div>
           <div class="button-row">
             <button class="btn btn-primary btn-block" type="submit" disabled={busy}>
-              Save password
+              {m.auth_save_password({}, messageOptions(uiLocale))}
             </button>
           </div>
         </form>
       {:else}
         <div class="site">
           <span class="site-logo" aria-hidden="true">H</span>
-          <h1>{view === 'link-dead' ? 'That sign-in link has expired' : 'Handover'}</h1>
+          <h1>{view === 'link-dead' ? m.auth_link_expired({}, messageOptions(uiLocale)) : 'Handover'}</h1>
         </div>
         {#if view === 'link-dead'}
           <p class="lede" role="status">
-            Links work once and last 15 minutes. Enter your email and we'll send a new one.
+            {m.auth_link_expired_hint({}, messageOptions(uiLocale))}
           </p>
         {/if}
         <form
@@ -266,7 +269,7 @@ function backToPassword() {
           aria-describedby={error || limited || notice ? 'sign-in-message' : undefined}
         >
           <div class="field">
-            <label for="email">Email</label>
+            <label for="email">{m.auth_email({}, messageOptions(uiLocale))}</label>
             <input
               class="input"
               id="email"
@@ -280,7 +283,7 @@ function backToPassword() {
           </div>
           {#if usePassword}
             <div class="field">
-              <label for="password">Password</label>
+              <label for="password">{m.auth_password({}, messageOptions(uiLocale))}</label>
               <div class="input-row">
                 <input
                   class="input"
@@ -296,29 +299,29 @@ function backToPassword() {
                   aria-pressed={reveal}
                   aria-controls="password"
                   onclick={() => (reveal = !reveal)}
-                >{reveal ? 'Hide' : 'Show'}</button>
+                >{reveal ? m.auth_hide_password({}, messageOptions(uiLocale)) : m.auth_show_password({}, messageOptions(uiLocale))}</button>
               </div>
               {#if methods.emailLink}
                 <span class="hint">
                   <button class="btn-link" type="button" disabled={busy || !email} onclick={forgot}>
-                    Forgot password?
+                    {m.auth_forgot_password({}, messageOptions(uiLocale))}
                   </button>
                 </span>
               {/if}
             </div>
           {/if}
           {#if error}
-            <div class="notice notice-danger" id="sign-in-message" role="alert">{error}</div>
+            <div class="notice notice-danger" id="sign-in-message" role="alert">{messageText(error, uiLocale)}</div>
           {:else if limited}
             <div class="notice notice-warn" id="sign-in-message" role="status">
-              Too many attempts. Try again in a minute.
+              {m.auth_too_many_attempts({}, messageOptions(uiLocale))}
             </div>
           {:else if notice}
-            <div class="notice notice-success" id="sign-in-message" role="status">{notice}</div>
+            <div class="notice notice-success" id="sign-in-message" role="status">{m.auth_password_saved({}, messageOptions(uiLocale))}</div>
           {/if}
           <div class="button-row">
             <button class="btn btn-primary btn-block" type="submit" disabled={busy || limited}>
-              {#if usePassword}Sign in{:else if view === 'link-dead'}Send a new link{:else if methods.emailLink}Email me a link{:else}Use password{/if}
+              {#if usePassword}{m.auth_sign_in({}, messageOptions(uiLocale))}{:else if view === 'link-dead'}{m.auth_send_new_link({}, messageOptions(uiLocale))}{:else if methods.emailLink}{m.auth_email_link({}, messageOptions(uiLocale))}{:else}{m.auth_use_password({}, messageOptions(uiLocale))}{/if}
             </button>
             {#if methods.emailLink && !usePassword}
               <button
@@ -326,9 +329,9 @@ function backToPassword() {
                 type="button"
                 onclick={() => {
                   usePassword = true;
-                  notice = '';
+                  notice = false;
                 }}
-              >Use password</button>
+              >{m.auth_use_password({}, messageOptions(uiLocale))}</button>
             {/if}
           </div>
         </form>
@@ -336,13 +339,13 @@ function backToPassword() {
           <p class="secondary">
             {#if methods.emailLink && usePassword}
               <button class="btn-link" type="button" disabled={busy || !email} onclick={sendLink}>
-                Email me a link instead
+                {m.auth_email_link_instead({}, messageOptions(uiLocale))}
               </button>
               {#if methods.github}·{/if}
             {/if}
             {#if methods.github}
               <button class="btn-link" type="button" disabled={busy} onclick={withGitHub}>
-                Continue with GitHub
+                {m.auth_continue_github({}, messageOptions(uiLocale))}
               </button>
             {/if}
           </p>

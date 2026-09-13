@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { UiLocale } from '@handover/core';
+import { messageText, responseMessage, type UiMessage } from '../errors.js';
 import { messageOptions } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch } from '../request.js';
@@ -34,15 +35,15 @@ let current = $state('');
 let next = $state('');
 let confirm = $state('');
 let reveal = $state(false);
-let passwordError = $state('');
-let notice = $state('');
+let passwordError = $state<UiMessage | undefined>();
+let notice = $state<UiMessage | undefined>();
 let noticeError = $state(false);
 let busy = $state(false);
 let reload = $state(0);
 
 async function facts(): Promise<Facts> {
   const res = await fetch('/admin/api/account');
-  if (!res.ok) throw new Error(`Could not load your account (${res.status})`);
+  if (!res.ok) throw new Error('ACCOUNT_LOAD_FAILED');
   return res.json();
 }
 
@@ -59,14 +60,14 @@ async function post(path: string, body: unknown) {
 
 async function saveName(event: SubmitEvent) {
   event.preventDefault();
-  notice = '';
+  notice = undefined;
   noticeError = false;
   const res = await post('/admin/api/auth/update-user', { name });
   if (res.ok) {
-    notice = 'Your name is saved.';
+    notice = { code: 'ACCOUNT_NAME_SAVED' };
     onname();
   } else {
-    notice = `Your name could not be saved (${res.status}).`;
+    notice = await responseMessage(res, 'ACCOUNT_NAME_SAVE_FAILED');
     noticeError = true;
   }
 }
@@ -74,15 +75,15 @@ async function saveName(event: SubmitEvent) {
 /** One form, two endpoints: setting a first password is server-only and refuses once one exists. */
 async function savePassword(event: SubmitEvent, hasPassword: boolean) {
   event.preventDefault();
-  notice = '';
+  notice = undefined;
   noticeError = false;
-  passwordError = '';
+  passwordError = undefined;
   if (next.length < 12) {
-    passwordError = 'Must be at least 12 characters';
+    passwordError = { code: 'AUTH_PASSWORD_TOO_SHORT' };
     return;
   }
   if (next !== confirm) {
-    passwordError = 'The two passwords are different';
+    passwordError = { code: 'AUTH_PASSWORDS_DIFFERENT' };
     return;
   }
   const res = hasPassword
@@ -94,34 +95,30 @@ async function savePassword(event: SubmitEvent, hasPassword: boolean) {
       })
     : await post('/admin/api/account/set-password', { newPassword: next });
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
-    passwordError =
-      body.error ??
-      body.message ??
-      (res.status === 400
-        ? 'That current password is not right'
-        : `Something went wrong (${res.status})`);
+    passwordError = await responseMessage(res, 'ACCOUNT_PASSWORD_FAILED');
     return;
   }
   current = '';
   next = '';
   confirm = '';
-  notice = hasPassword ? 'Your password is changed.' : 'Your password is set.';
+  notice = { code: hasPassword ? 'ACCOUNT_PASSWORD_CHANGED' : 'ACCOUNT_PASSWORD_SET' };
   reload += 1;
 }
 
 async function signOutEverywhere() {
-  notice = '';
+  notice = undefined;
   noticeError = false;
   const res = await post('/admin/api/auth/revoke-other-sessions', {});
-  notice = res.ok ? 'Your other devices are signed out.' : 'Those sessions could not be ended.';
+  notice = res.ok
+    ? { code: 'ACCOUNT_SESSIONS_ENDED' }
+    : await responseMessage(res, 'ACCOUNT_SESSIONS_END_FAILED');
   noticeError = !res.ok;
   reload += 1;
 }
 
 /** A guess at the two words a person recognises, not a parser. */
-function device(userAgent: string | null): string {
-  if (!userAgent) return 'Unknown device';
+function device(userAgent: string | null, locale: UiLocale): string {
+  if (!userAgent) return m.account_unknown_device({}, messageOptions(locale));
   const browser = /Edg\//.test(userAgent)
     ? 'Edge'
     : /OPR\/|Opera/.test(userAgent)
@@ -132,7 +129,7 @@ function device(userAgent: string | null): string {
           ? 'Chrome'
           : /Safari\//.test(userAgent)
             ? 'Safari'
-            : 'A browser';
+            : m.account_browser({}, messageOptions(locale));
   const os = /iPhone/.test(userAgent)
     ? 'iPhone'
     : /iPad/.test(userAgent)
@@ -146,36 +143,36 @@ function device(userAgent: string | null): string {
             : /Linux/.test(userAgent)
               ? 'Linux'
               : '';
-  return os ? `${browser} on ${os}` : browser;
+  return os ? m.account_device_on({ browser, os }, messageOptions(locale)) : browser;
 }
 
 /** Coarse on purpose: the question a session list answers is "recently, or ages ago?". */
-function when(at: number): string {
+function when(at: number, locale: UiLocale): string {
   const minutes = Math.floor((Date.now() - at) / 60000);
-  if (minutes < 2) return 'Last used just now';
-  if (minutes < 60) return `Last used ${minutes} minutes ago`;
+  if (minutes < 2) return m.account_last_used_now({}, messageOptions(locale));
+  if (minutes < 60) return m.account_last_used_minutes({ count: minutes }, messageOptions(locale));
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `Last used ${hours} hour${hours === 1 ? '' : 's'} ago`;
+  if (hours < 24) return m.account_last_used_hours({ count: hours }, messageOptions(locale));
   const days = Math.floor(hours / 24);
-  return `Last used ${days} day${days === 1 ? '' : 's'} ago`;
+  return m.account_last_used_days({ count: days }, messageOptions(locale));
 }
 </script>
 
 <main class="main">
-  <h1>Account</h1>
+  <h1>{m.account_title({}, messageOptions(uiLocale))}</h1>
   {#key reload}
     {#await facts()}
-      <p class="placeholder">Loading…</p>
+      <p class="placeholder">{m.account_loading({}, messageOptions(uiLocale))}</p>
     {:then account}
       {#if !account.hasPassword}
         <div class="suggestion">
           <div>
-            <strong>You signed in with an email link.</strong>
-            <p>Set a password to sign in without one. The email link keeps working either way.</p>
+            <strong>{m.account_email_link_used({}, messageOptions(uiLocale))}</strong>
+            <p>{m.account_set_password_explanation({}, messageOptions(uiLocale))}</p>
           </div>
           <form class="form" onsubmit={(e) => savePassword(e, false)}>
             <div class="field" class:is-invalid={passwordError}>
-              <label for="set-new">New password</label>
+              <label for="set-new">{m.auth_new_password({}, messageOptions(uiLocale))}</label>
               <div class="input-row">
                 <input
                   class="input"
@@ -194,16 +191,19 @@ function when(at: number): string {
                   aria-pressed={reveal}
                   aria-controls="set-new"
                   onclick={() => (reveal = !reveal)}
-                >{reveal ? 'Hide' : 'Show'}</button>
+                >{reveal ? m.auth_hide_password({}, messageOptions(uiLocale)) : m.auth_show_password({}, messageOptions(uiLocale))}</button>
               </div>
               {#if passwordError}
-                <span class="error" id="set-new-error" role="alert">{passwordError}</span>
+                <span class="error" id="set-new-error" role="alert">
+                  {messageText(passwordError, uiLocale)}
+                  {#if passwordError.detail}<span class="technical-detail">{m.common_technical_detail({ detail: passwordError.detail }, messageOptions(uiLocale))}</span>{/if}
+                </span>
               {:else}
-                <span class="hint" id="set-new-hint">At least 12 characters. No other rules.</span>
+                <span class="hint" id="set-new-hint">{m.auth_password_hint_no_other_rules({}, messageOptions(uiLocale))}</span>
               {/if}
             </div>
             <div class="field">
-              <label for="set-confirm">Confirm password</label>
+              <label for="set-confirm">{m.auth_confirm_password({}, messageOptions(uiLocale))}</label>
               <input
                 class="input"
                 id="set-confirm"
@@ -215,7 +215,7 @@ function when(at: number): string {
               />
             </div>
             <div class="actions">
-              <button class="btn btn-primary" type="submit" disabled={busy}>Set password</button>
+              <button class="btn btn-primary" type="submit" disabled={busy}>{m.auth_set_password({}, messageOptions(uiLocale))}</button>
             </div>
           </form>
         </div>
@@ -226,7 +226,10 @@ function when(at: number): string {
           class:notice-success={!noticeError}
           class:notice-danger={noticeError}
           role={noticeError ? 'alert' : 'status'}
-        >{notice}</p>
+        >
+          {messageText(notice, uiLocale)}
+          {#if notice.detail}<span class="technical-detail">{m.common_technical_detail({ detail: notice.detail }, messageOptions(uiLocale))}</span>{/if}
+        </p>
       {/if}
       <div class="settings">
         <section class="settings-section">
@@ -237,10 +240,10 @@ function when(at: number): string {
           {/if}
         </section>
         <section class="settings-section">
-          <header><h2>Profile</h2></header>
+          <header><h2>{m.account_profile({}, messageOptions(uiLocale))}</h2></header>
           <form class="form" onsubmit={saveName}>
             <div class="field">
-              <label for="display-name">Display name</label>
+              <label for="display-name">{m.account_display_name({}, messageOptions(uiLocale))}</label>
               <input
                 class="input"
                 id="display-name"
@@ -250,33 +253,33 @@ function when(at: number): string {
                 bind:value={name}
               />
               <p class="hint" id="display-name-hint">
-                Shown in the activity log, in lock banners, and against every change you publish.
+                {m.account_display_name_hint({}, messageOptions(uiLocale))}
               </p>
             </div>
             <dl class="facts">
-              <div><dt>Email</dt><dd>{user.email}</dd></div>
+              <div><dt>{m.account_email({}, messageOptions(uiLocale))}</dt><dd>{user.email}</dd></div>
               <div>
-                <dt>Role</dt>
+                <dt>{m.account_role({}, messageOptions(uiLocale))}</dt>
                 <dd>
-                  <span class="badge">{role === 'owner' ? 'Owner' : 'Editor'}</span>
-                  <span class="sub">An owner changes this on the Members screen.</span>
+                  <span class="badge">{role === 'owner' ? m.account_role_owner({}, messageOptions(uiLocale)) : m.account_role_editor({}, messageOptions(uiLocale))}</span>
+                  <span class="sub">{m.account_role_hint({}, messageOptions(uiLocale))}</span>
                 </dd>
               </div>
             </dl>
             <div class="actions">
-              <button class="btn btn-primary" type="submit" disabled={busy}>Save name</button>
+              <button class="btn btn-primary" type="submit" disabled={busy}>{m.account_save_name({}, messageOptions(uiLocale))}</button>
             </div>
           </form>
         </section>
         {#if account.hasPassword}
           <section class="settings-section">
             <header>
-              <h2>Password</h2>
-              <p>Changing it signs out your other devices.</p>
+              <h2>{m.account_password({}, messageOptions(uiLocale))}</h2>
+              <p>{m.account_password_change_hint({}, messageOptions(uiLocale))}</p>
             </header>
             <form class="form" onsubmit={(e) => savePassword(e, true)}>
               <div class="field">
-                <label for="current-password">Current password</label>
+                <label for="current-password">{m.auth_current_password({}, messageOptions(uiLocale))}</label>
                 <input
                   class="input"
                   id="current-password"
@@ -287,7 +290,7 @@ function when(at: number): string {
                 />
               </div>
               <div class="field" class:is-invalid={passwordError}>
-                <label for="change-new">New password</label>
+                <label for="change-new">{m.auth_new_password({}, messageOptions(uiLocale))}</label>
                 <div class="input-row">
                   <input
                     class="input"
@@ -306,18 +309,21 @@ function when(at: number): string {
                     aria-pressed={reveal}
                     aria-controls="change-new"
                     onclick={() => (reveal = !reveal)}
-                  >{reveal ? 'Hide' : 'Show'}</button>
+                  >{reveal ? m.auth_hide_password({}, messageOptions(uiLocale)) : m.auth_show_password({}, messageOptions(uiLocale))}</button>
                 </div>
                 {#if passwordError}
-                  <span class="error" id="change-new-error" role="alert">{passwordError}</span>
+                  <span class="error" id="change-new-error" role="alert">
+                    {messageText(passwordError, uiLocale)}
+                    {#if passwordError.detail}<span class="technical-detail">{m.common_technical_detail({ detail: passwordError.detail }, messageOptions(uiLocale))}</span>{/if}
+                  </span>
                 {:else}
                   <span class="hint" id="change-new-hint">
-                    At least 12 characters. No other rules.
+                    {m.auth_password_hint_no_other_rules({}, messageOptions(uiLocale))}
                   </span>
                 {/if}
               </div>
               <div class="field">
-                <label for="change-confirm">Confirm new password</label>
+                <label for="change-confirm">{m.auth_confirm_new_password({}, messageOptions(uiLocale))}</label>
                 <input
                   class="input"
                   id="change-confirm"
@@ -330,7 +336,7 @@ function when(at: number): string {
               </div>
               <div class="actions">
                 <button class="btn btn-primary" type="submit" disabled={busy}>
-                  Change password
+                  {m.auth_change_password({}, messageOptions(uiLocale))}
                 </button>
               </div>
             </form>
@@ -338,17 +344,17 @@ function when(at: number): string {
         {/if}
         <section class="settings-section">
           <header>
-            <h2>Sessions</h2>
-            <p>Where you are signed in. Signing out everywhere keeps this device.</p>
+            <h2>{m.account_sessions({}, messageOptions(uiLocale))}</h2>
+            <p>{m.account_sessions_hint({}, messageOptions(uiLocale))}</p>
           </header>
           <ul class="session-list">
             {#each account.sessions as row (row.id)}
               <li class="session-item">
                 <span class="where">
-                  {device(row.userAgent)}
-                  {#if row.current}<span class="badge badge-accent">This device</span>{/if}
+                  {device(row.userAgent, uiLocale)}
+                  {#if row.current}<span class="badge badge-accent">{m.account_this_device({}, messageOptions(uiLocale))}</span>{/if}
                 </span>
-                <span class="sub">{when(row.lastUsed)}</span>
+                <span class="sub">{when(row.lastUsed, uiLocale)}</span>
               </li>
             {/each}
           </ul>
@@ -358,14 +364,14 @@ function when(at: number): string {
               type="button"
               disabled={busy || account.sessions.length < 2}
               onclick={signOutEverywhere}
-            >Sign out everywhere</button>
+            >{m.account_sign_out_everywhere({}, messageOptions(uiLocale))}</button>
           </div>
         </section>
       </div>
     {:catch error}
       <div class="account-read-error">
-        <p class="notice notice-danger" role="alert">{error.message}</p>
-        <button class="btn" type="button" onclick={() => (reload += 1)}>Retry</button>
+        <p class="notice notice-danger" role="alert">{messageText({ code: error.message }, uiLocale)}</p>
+        <button class="btn" type="button" onclick={() => (reload += 1)}>{m.common_retry({}, messageOptions(uiLocale))}</button>
       </div>
     {/await}
   {/key}

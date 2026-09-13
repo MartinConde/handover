@@ -4399,7 +4399,7 @@ test("a refused password comes back in Better Auth's own words", async () => {
   };
   const res = await setting(JSON.stringify({ newPassword: 'beach' }));
   expect(res.status).toBe(400);
-  expect(((await res.json()) as { error: string }).error).toBe('Password too short');
+  expect(await res.json()).toEqual({ error: 'Password too short', code: 'PASSWORD_TOO_SHORT' });
 });
 
 test('a password Better Auth accepts answers ok', async () => {

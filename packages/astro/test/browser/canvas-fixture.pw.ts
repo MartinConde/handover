@@ -53,7 +53,12 @@ test('saved interface language wins before first paint and a live switch preserv
     } else if (path.startsWith('/admin/api/locks/')) {
       await route.fulfill({ json: { held_by: null, mine: true, expires_at: Date.now() + 120000 } });
     } else if (path === '/admin/api/auth/update-user') {
-      await route.fulfill({ json: { status: true } });
+      const body = request.postDataJSON() as { name?: string; uiLocale?: string };
+      await route.fulfill(
+        body.uiLocale
+          ? { json: { status: true } }
+          : { status: 502, json: { error: 'provider trace 7A' } },
+      );
     } else if (path === '/admin/api/account')
       await route.fulfill({ json: { hasPassword: true, sessions: [] } });
     else if (path === '/admin/api/build') await route.fulfill({ json: {} });
@@ -69,6 +74,15 @@ test('saved interface language wins before first paint and a live switch preserv
   await page.locator('.user-menu > button').click();
   await page.getByRole('link', { name: 'Account' }).click();
   await expect(page.locator('main').getByLabel('Interface language')).toHaveValue('en');
+  const accountName = page.locator('#display-name');
+  await accountName.fill('Unsaved account name');
+  await accountName.evaluate((input) => (input.dataset.localeProof = 'same-account-node'));
+  await page.getByRole('button', { name: 'Save name' }).click();
+  await expect(page.getByRole('alert')).toContainText('Your name could not be saved.');
+  await page.locator('main').getByLabel('Interface language').selectOption('de');
+  await expect(page.getByRole('alert')).toContainText('Ihr Name konnte nicht gespeichert werden.');
+  await expect(accountName).toHaveValue('Unsaved account name');
+  await expect(accountName).toHaveAttribute('data-locale-proof', 'same-account-node');
   await page.goto('/admin/c/pages/canvas-fixture');
   const title = page.locator('#f-title');
   await expect(title).toHaveValue('Canvas fixture');

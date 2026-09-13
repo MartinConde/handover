@@ -44,6 +44,17 @@ saved value from the next `GET /admin/api/ping`, where `user.uiLocale` is `null`
 chooses one. Unsupported values answer `400` with code `VALIDATION_ERROR`. Omitting `uiLocale`
 leaves the stored preference unchanged.
 
+Authentication failures keep Better Auth's `code` alongside its existing `message`. The guarded
+`POST /admin/api/account/set-password` wrapper likewise returns `{ "error", "code" }` for a known
+Better Auth refusal, preserving its `400` status and legacy `error` field. Clients should classify a
+known failure by `code`, never by matching English prose or by status alone.
+
+If the admin loses the connection before an API response body is complete, its request wrapper
+creates the existing `503` response with `x-handover-request-uncertain: true` and the legacy English
+body. It now also sends `x-handover-error-code: CONNECTION_LOST`, allowing visible recovery text to
+follow the selected interface language. The uncertainty header remains the authority for mutation
+reconciliation; the descriptor does not mean that a write failed.
+
 ## Locks
 
 The soft lock on an entry, and what it does to a save. What it means for two people

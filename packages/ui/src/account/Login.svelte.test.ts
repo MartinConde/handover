@@ -6,10 +6,10 @@ let app: ReturnType<typeof mount>;
 const BOTH: LoginMethods = { emailLink: true, github: true };
 const PASSWORD_ONLY: LoginMethods = { emailLink: false, github: false };
 
-const show = (methods: LoginMethods, path = '/admin', query = '') => {
+const show = (methods: LoginMethods, path = '/admin', query = '', uiLocale: 'en' | 'de' = 'en') => {
   app = mount(Login, {
     target: document.body,
-    props: { methods, path, query, onlogin: () => {} },
+    props: { methods, path, query, uiLocale, onlogin: () => {} },
   });
   flushSync();
   return document.body;
@@ -71,6 +71,32 @@ test('a site with both offers the link as the primary way in and GitHub as a tex
   expect(root.querySelector('.btn-primary')?.textContent?.trim()).toBe('Email me a link');
   expect(root.querySelector('input#password')).toBeNull();
   expect(text(root)).toContain('Continue with GitHub');
+});
+
+test.each([
+  ['/admin', '', 'Link per E-Mail senden'],
+  ['/admin', '?error=INVALID_TOKEN', 'Dieser Anmeldelink ist abgelaufen'],
+  ['/admin/reset', '?token=tok_123', 'Neues Passwort festlegen'],
+])('the German login surface covers %s%s', (path, query, expected) => {
+  const root = show(BOTH, path, query, 'de');
+
+  expect(text(root)).toContain(expected);
+  expect(root.querySelector<HTMLSelectElement>('.language-control select')?.value).toBe('de');
+});
+
+test('an expired reset code is localized without showing Better Auth prose', async () => {
+  server(() => Response.json({ code: 'TOKEN_EXPIRED', message: 'Token expired' }, { status: 400 }));
+  const root = show(BOTH, '/admin/reset', '?token=tok_123', 'de');
+  type(root, 'new-password', 'a-brand-new-password');
+  type(root, 'confirm-password', 'a-brand-new-password');
+
+  click(root, 'Passwort speichern');
+  await settle();
+
+  expect(root.querySelector('[role="alert"]')?.textContent).toBe(
+    'Das Passwort konnte nicht zurückgesetzt werden. Fordern Sie einen neuen Link an und versuchen Sie es erneut.',
+  );
+  expect(text(root)).not.toContain('Token expired');
 });
 
 // The form must not confirm which addresses have an account, so it renders the same card for any.

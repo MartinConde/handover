@@ -9,9 +9,11 @@ and expired-link screens, have a device-only picker so they remain readable befo
 
 ## What is translated now
 
-Language controls and their save feedback are bilingual. The rest of the admin is being converted
-screen by screen and can still contain English. Changing the preference now does not imply that
-every screen has been translated.
+Language controls, sign-in, password-reset and expired-link flows, and the complete Account screen
+are bilingual. Their already-visible notices and known authentication failures reformat when the
+language changes. Typed credentials and profile values, the signed-in session, and an open editor
+remain in place. The rest of the admin is being converted screen by screen and can still contain
+English.
 
 Handover-owned interface text is translated. Content and site configuration are not: collection
 labels, schema descriptions, custom validation messages, entry titles, names, URLs, provider
@@ -43,6 +45,11 @@ reconcile the stored value; it does not reload the page or recreate the editor.
 
 Changing interface language does not navigate, refetch content, change `?locale=`, remount an open
 editor, or replace its draft. A new sign-in resolves the newly signed-in account's preference.
+
+Connection failures retain the existing uncertain-result behavior. Handover renders a localized
+summary from a stable error descriptor, not from an English sentence or status code. Known
+authentication codes select specific recovery text. Unknown technical detail stays separate from
+the translated summary where it is useful and safe to show.
 
 The negotiated shell and authenticated bootstrap response use `Cache-Control: private, no-store`.
 Hashed admin JavaScript and CSS remain shared immutable assets.

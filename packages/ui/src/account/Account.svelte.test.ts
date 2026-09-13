@@ -24,8 +24,11 @@ function server(facts: Facts) {
   return calls;
 }
 
-const show = async (role: 'owner' | 'editor' = 'owner') => {
-  app = mount(Account, { target: document.body, props: { user: USER, role, onname: () => {} } });
+const show = async (role: 'owner' | 'editor' = 'owner', uiLocale: 'en' | 'de' = 'en') => {
+  app = mount(Account, {
+    target: document.body,
+    props: { user: USER, role, uiLocale, onname: () => {} },
+  });
   flushSync();
   await new Promise((r) => setTimeout(r, 0));
   flushSync();
@@ -85,6 +88,18 @@ test('somebody who has a password is asked for the old one and not prompted', as
 
   expect(root.querySelector('input#current-password')).not.toBeNull();
   expect(text(root)).not.toContain('You signed in with an email link');
+});
+
+test('the account surface renders in German while account data stays unchanged', async () => {
+  server({ hasPassword: true, sessions: [HERE] });
+  const root = await show('editor', 'de');
+
+  expect(root.querySelector('h1')?.textContent).toBe('Konto');
+  expect(text(root)).toContain('Anzeigename');
+  expect(text(root)).toContain('Sitzungen');
+  expect(text(root)).toContain('Redakteur');
+  expect(text(root)).toContain('martin@example.com');
+  expect((root.querySelector('#display-name') as HTMLInputElement).value).toBe('Martin');
 });
 
 // Better Auth has two endpoints: a first password is server-only and asks for nothing.

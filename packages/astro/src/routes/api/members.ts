@@ -28,7 +28,7 @@ export async function account(
 function refused(err: unknown): Response {
   const body = (err as { body?: { code?: string; message?: string } }).body;
   if (!body?.code) throw err;
-  return Response.json({ error: body.message ?? body.code }, { status: 400 });
+  return Response.json({ error: body.message ?? body.code, code: body.code }, { status: 400 });
 }
 
 /** Better Auth's `setPassword` is server-only and refuses when a password already exists. */

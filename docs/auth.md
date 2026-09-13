@@ -116,8 +116,16 @@ how an invited person gets one. Changing a password signs the other devices out.
 The account row can store an optional English or German interface preference. An unset value stays
 `null`; Handover does not backfill English. The [interface-language controls](interface-language.md)
 are available on sign-in and reset screens, in the account menu, and on the account page. A signed-in
-choice is saved to the account; a signed-out choice is only a device hint. Only the picker and its
-save error are bilingual in this stage, while the remaining admin copy is translated in later work.
+choice is saved to the account; a signed-out choice is only a device hint. Sign-in, password-reset,
+expired-link, and Account screens are bilingual. Their visible notices and known authentication
+failures change language immediately without clearing a typed email, password, or profile name.
+
+An expired or used link is recoverable from the sign-in screen. A wrong current password stays a
+field error. Unknown provider or server detail, when it is safe and useful on the signed-in Account
+screen, appears separately from Handover's translated summary; login does not expose it or reveal
+whether an address has an account. A connection loss says the result may be uncertain rather than
+promising that an account change did not happen. Retry from the same form after checking the current
+account state.
 
 ## Signing in too often
 
