@@ -70,6 +70,7 @@ describe('interface locale resolution', () => {
       throw new DOMException('Cookies disabled', 'SecurityError');
     });
     try {
+      expect(readDeviceLocale).not.toThrow();
       expect(readDeviceLocale()).toBeUndefined();
     } finally {
       read.mockRestore();

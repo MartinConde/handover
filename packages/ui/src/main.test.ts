@@ -35,7 +35,7 @@ test('bootstrap mounts with the saved preference when cookie reads are blocked',
     throw new DOMException('Cookies disabled', 'SecurityError');
   });
 
-  await import('./main.js');
+  await expect(import('./main.js')).resolves.toBeDefined();
 
   expect(document.documentElement.lang).toBe('de');
   expect(mount).toHaveBeenCalledOnce();
