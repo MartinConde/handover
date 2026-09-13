@@ -40,9 +40,28 @@ Generate their typed Paraglide modules with:
 pnpm --filter @handover/ui generate
 ```
 
-The UI's build, dev, test, typecheck, and fixture commands run generation first, including when
-they are selected through the root recursive commands. `packages/ui/project.inlang/settings.json`
-loads the pinned message-format plugin from
+This command validates every catalog before invoking the compiler. To run only the gate:
+
+```sh
+pnpm --filter @handover/ui validate:messages
+```
+
+The UI's build, dev, test, typecheck, and fixture commands all use the same validation/generation
+entry point, including when selected through the root recursive commands. The gate checks that
+every supported locale has exactly the English keys, translations are non-empty, placeholders and
+selectors keep their contracts, and each variant message has its required `other` or `*` fallback.
+It also requires exact agreement between the compiler locales/base locale and `UI_LOCALES` /
+`DEFAULT_UI_LOCALE` in framework-neutral core code. Paraglide's subsequent syntax/type compilation
+is a separate check; its English fallback does not make an incomplete German catalog valid.
+
+When adding or changing a message, use a stable surface prefix such as `account_`, `editor_`,
+`media_`, or `canvas_`; add the English source and reviewed German translation together; and retain
+the same placeholders even when German moves them within the sentence. For a variant, use the
+message-format declarations and selectors and retain a complete fallback. Adding a UI language also
+requires its catalog, an entry in both `project.inlang/settings.json` and the core allowlist, and a
+reviewed glossary. Run the message-only validation, then the relevant UI test/typecheck/build.
+
+`packages/ui/project.inlang/settings.json` loads the pinned message-format plugin from
 `../../node_modules/@inlang/plugin-message-format/dist/index.js`; the repository pins pnpm's
 hoisted linker in `.npmrc`, which places the package at the workspace root, and Inlang resolves
 this path from `packages/ui/`, the directory containing `project.inlang`. It also defines
@@ -62,8 +81,7 @@ the authentication schema workflow and remains committed so database changes are
 Message calls pass the UI locale explicitly; Handover does not use Paraglide's URL, cookie, or
 local-storage strategies. The compiler strategy is fixed to `globalVariable baseLocale`, and the
 small runtime helpers in `packages/ui/src/i18n.ts` share their allowlist with framework-neutral
-core code. Catalog completeness is a separate required check; generation alone may use an English
-fallback for a missing German message.
+core code.
 
 ### UI build cost
 

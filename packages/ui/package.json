@@ -4,17 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "generate": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy globalVariable baseLocale --emit-ts-declarations",
-    "prebuild": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy globalVariable baseLocale --emit-ts-declarations",
+    "generate": "node ./scripts/messages.mjs",
+    "prebuild": "node ./scripts/messages.mjs",
     "build": "vite build",
-    "predev": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy globalVariable baseLocale --emit-ts-declarations",
+    "predev": "node ./scripts/messages.mjs",
     "dev": "vite build --watch",
-    "prefixtures": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy globalVariable baseLocale --emit-ts-declarations",
+    "prefixtures": "node ./scripts/messages.mjs",
     "fixtures": "vite dev",
-    "pretest": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy globalVariable baseLocale --emit-ts-declarations",
-    "test": "vitest run",
-    "pretypecheck": "paraglide-js compile --project ./project.inlang --outdir ./src/paraglide --strategy globalVariable baseLocale --emit-ts-declarations",
-    "typecheck": "svelte-check --tsconfig ./tsconfig.json"
+    "pretest": "node ./scripts/messages.mjs",
+    "test": "vitest run --exclude scripts/catalog-validator.test.mjs && vitest run --config vitest.catalogs.config.mjs",
+    "pretypecheck": "node ./scripts/messages.mjs",
+    "typecheck": "svelte-check --tsconfig ./tsconfig.json",
+    "validate:messages": "node ./scripts/messages.mjs --validate-only"
   },
   "devDependencies": {
     "@dnd-kit/svelte": "^0.5.0",
