@@ -14,6 +14,7 @@ import CanvasWorkspace from '../canvas/CanvasWorkspace.svelte';
 import type { CanvasRenderRequest } from '../canvas/canvas-renderer';
 import OffsiteDialog, { type Target } from '../content/Offsite.svelte';
 import { invalidateEntryDirectory } from '../entry-directory.js';
+import { messageText, responseMessage, type UiMessage } from '../errors.js';
 import { formatExactTime, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import {
   guardEntryActions,
@@ -33,13 +34,16 @@ import History from '../publishing/History.svelte';
 import { request as fetch, previewPath, siteBase, sitePath } from '../request.js';
 import { when } from '../shared/activity-line';
 import Modal from '../shared/Modal.svelte';
-import { createEntrySession, type StructuralSaveEnvelope } from './entry-session.svelte';
+import {
+  createEntrySession,
+  type EntryProblem,
+  type StructuralSaveEnvelope,
+} from './entry-session.svelte';
 import Fields from './fields/Fields.svelte';
 import { classifyDraftSaveRefusal } from './save';
 import Translation from './Translation.svelte';
 
 type Data = Record<string, unknown>;
-type Problem = { path: string; message: string };
 let {
   collection,
   slug,
@@ -83,7 +87,7 @@ let {
     /** Where each language sends its readers while it is hidden; empty for "nowhere". */
     redirects?: Record<string, string>;
     /** What the collection schema will not accept yet, by field path. */
-    problems: { path: string; message: string }[];
+    problems: EntryProblem[];
     /** The field this collection is keyed on, when it is not `title`. */
     titleField?: string;
     /** The site's own SEO defaults per language; absent for an entry with no `seo` field. */
@@ -144,6 +148,20 @@ let {
   onmode?: (mode: EditorMode) => void;
 } = $props();
 const options = $derived(messageOptions(uiLocale));
+const feedbackText = (message: UiMessage) => messageText(message, uiLocale);
+const feedbackDetail = (message: UiMessage) =>
+  message.detail ? m.common_technical_detail({ detail: message.detail }, options) : '';
+async function retainedFailure(response: Response, fallback: string): Promise<UiMessage> {
+  const message = await responseMessage(response, fallback);
+  if (
+    message.detail ||
+    message.code === 'CONNECTION_LOST' ||
+    !response.headers.get('content-type')?.startsWith('text/plain')
+  )
+    return message;
+  const detail = (await response.clone().text()).trim();
+  return detail ? { ...message, detail } : message;
+}
 
 // svelte-ignore state_referenced_locally -- the loaded files seed this opened entry's session
 const entryForm = { fields: [...entry.fields], blocks: entry.blocks };
@@ -168,10 +186,10 @@ const pendingByLocale = $state<Record<string, boolean>>(
 );
 const saving = $derived(saveState.phase === 'saving');
 const saveFailed = $derived(saveState.phase === 'failed');
-let saveError = $state('');
+let saveError = $state<UiMessage>();
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let held = $state(entry.held === true);
-const schemaProblems = $derived(entrySession.positionalProblems(entry.sourceLocale));
+const schemaProblems = $derived(entrySession.positionalProblems(entry.sourceLocale, uiLocale));
 /** What the pre-publish checks found over this entry: read when it opens and after every save. */
 let checks = $state<CheckItem[]>([]);
 // Only check errors block the publish; they name rows by id, so the position is looked up now.
@@ -424,7 +442,7 @@ function cancelTake() {
 let asked = $state(0);
 let beatAt = 0;
 const locked = $derived(lost || (lock !== undefined && !lock.mine));
-const holder = $derived(lock?.held_by?.name || 'Somebody else');
+const holder = $derived(lock?.held_by?.name || m.editor_lock_somebody_else({}, options));
 // The holder is this same person, in another tab.
 const otherTab = $derived(lock?.held_by?.id !== undefined && lock?.held_by?.id === userId);
 // Beats ride on the autosave, so the expiry is the holder's last keystroke plus one lifetime.
@@ -491,7 +509,7 @@ async function writeSourceSave(
   contentVersion: number,
   structure?: StructuralSaveEnvelope,
 ): Promise<boolean> {
-  saveError = '';
+  saveError = undefined;
   try {
     const res = await fetch(`/admin/api/drafts/${collection}/${slug}`, {
       method: 'PUT',
@@ -504,19 +522,22 @@ async function writeSourceSave(
       }),
     });
     if (!res.ok) {
-      saveError = 'Your changes are still here. Try saving again before leaving.';
-      const refusal = await classifyDraftSaveRefusal(res);
+      saveError = await retainedFailure(res, 'EDITOR_SAVE_REFUSED');
+      const refusal = await classifyDraftSaveRefusal(res.clone());
       if (refusal.kind === 'lock') loseLock(refusal.lock);
       else if (refusal.kind === 'revision') {
         entrySession.freezeHistory();
-        saveError =
-          refusal.error ?? 'This entry changed elsewhere. Copy your unsaved text before reloading.';
+        saveError = {
+          code: 'EDITOR_SAVE_REVISION',
+          status: res.status,
+          ...(refusal.error ? { detail: refusal.error } : {}),
+        };
       }
       return false;
     }
     const body = (await res.json()) as {
       pending: boolean;
-      problems: Problem[];
+      problems: EntryProblem[];
       revisions?: Record<string, string>;
     };
     entrySession.mergeRevisions(body.revisions);
@@ -529,7 +550,7 @@ async function writeSourceSave(
     else checks = [];
     return true;
   } catch {
-    saveError = 'Your changes are still here. Check your connection and try saving again.';
+    saveError = { code: 'EDITOR_SAVE_CONNECTION' };
     return false;
   }
 }
@@ -554,7 +575,7 @@ async function writeTranslationSave(
     }
     const body = (await res.json()) as {
       pending: boolean;
-      problems: Problem[];
+      problems: EntryProblem[];
       revision?: string;
     };
     if (body.revision) entrySession.setRevision(of, body.revision);
@@ -598,6 +619,7 @@ onMount(() => {
 // The entry is read again afterwards: carrying on means loading the shared draft they left.
 async function takeOver() {
   busy = true;
+  lockFailed = undefined;
   const res = await fetch(`/admin/api/locks/${collection}/${slug}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -605,7 +627,7 @@ async function takeOver() {
   });
   busy = false;
   if (!res.ok) {
-    actionFailed = await res.text();
+    lockFailed = await retainedFailure(res, 'EDITOR_LOCK_TAKE_FAILED');
     return;
   }
   taking = false;
@@ -650,6 +672,8 @@ let deleting = $state(false);
 let actionTrigger = $state<HTMLElement>();
 let newName = $state('');
 let actionFailed = $state('');
+let lockFailed = $state<UiMessage>();
+let holdFailed = $state<UiMessage>();
 const willBe = $derived(entryName('default', newName, []));
 
 function openRename() {
@@ -725,6 +749,7 @@ async function remove(redirect: Target) {
 async function toggleHold() {
   const next = !held;
   busy = true;
+  holdFailed = undefined;
   if (!(await flush())) {
     busy = false;
     return;
@@ -736,7 +761,7 @@ async function toggleHold() {
   });
   busy = false;
   if (res.ok) held = ((await res.json()) as { held: unknown }).held === true;
-  else actionFailed = await res.text();
+  else holdFailed = await retainedFailure(res, 'EDITOR_HOLD_FAILED');
 }
 
 // Scrolling there is not enough on its own: the count is a button, so it has to land somewhere.
@@ -788,7 +813,7 @@ function reviewCanvasProblems() {
   const of = locale;
   const path = Object.keys({
     ...entrySession.incompleteFields(of),
-    ...(of === entry.sourceLocale ? problems : entrySession.positionalProblems(of)),
+    ...(of === entry.sourceLocale ? problems : entrySession.positionalProblems(of, uiLocale)),
   })[0];
   setMode('form');
   if (of !== entry.sourceLocale) side = true;
@@ -1075,7 +1100,13 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   </select>
   <span class="autosave" class:is-saving={entrySession.saveState(locale).phase === 'saving'}
     class:is-offline={entrySession.saveState(locale).phase === 'failed'} role="status">
-    {entrySession.saveState(locale).phase === 'saving' ? 'Saving…' : entrySession.saveState(locale).phase === 'failed' ? 'Not saved' : entrySession.unsaved(locale) ? 'Unsaved' : 'Saved'}
+    {entrySession.saveState(locale).phase === 'saving'
+      ? m.editor_save_saving({}, options)
+      : entrySession.saveState(locale).phase === 'failed'
+        ? m.editor_save_not_saved({}, options)
+        : entrySession.unsaved(locale)
+          ? m.editor_save_unsaved({}, options)
+          : m.editor_save_saved({}, options)}
   </span>
 {/snippet}
 
@@ -1087,7 +1118,9 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 <main class="main main-editor" class:is-canvas-fullscreen={mode === 'canvas'}>
   {#if actionFailed && !renaming && !deleting && !offing}<p class="notice notice-danger" role="alert">{actionFailed}</p>{/if}
-  {#if saveError}<p class="notice notice-danger" role="alert">{saveError} <button class="btn-link" type="button" onclick={() => flush()}>Retry save</button></p>{/if}
+  {#if holdFailed}<p class="notice notice-danger" role="alert">{feedbackText(holdFailed)} {feedbackDetail(holdFailed)}</p>{/if}
+  {#if lockFailed}<p class="notice notice-danger" role="alert">{feedbackText(lockFailed)} {feedbackDetail(lockFailed)}</p>{/if}
+  {#if saveError}<p class="notice notice-danger" role="alert">{feedbackText(saveError)} {feedbackDetail(saveError)} <button class="btn-link" type="button" onclick={() => flush()}>{m.editor_save_retry({}, options)}</button></p>{/if}
   {#each entry.offerProblems ?? [] as problem (problem)}
     <div class="lock-banner is-offer">
       This entry's file says something its languages contradict — {problem}. Fix it in the
@@ -1098,30 +1131,30 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     <!-- Leads with where the work went: the draft is in D1. -->
     <div class="lock-banner is-lost">
       {#if otherTab}
-        Your other tab has this entry now. Saved changes are in the shared draft. Any unsaved text remains here; copy it before reloading.
+        {m.editor_lock_lost_other_tab({}, options)}
       {:else if !lock?.held_by}
-        This editing session expired while idle. Saved changes are in the shared draft. Any unsaved text remains here; copy it before reloading.
+        {m.editor_lock_lost_expired({}, options)}
       {:else}
-        {holder} took over this entry. Saved changes are in the shared draft. Any unsaved text remains here; copy it before reloading.
+        {m.editor_lock_lost_taken({ holder }, options)}
       {/if}
-      <button class="btn-link" type="button" onclick={() => void (onreload ? onreload() : onchanged())}>Reload</button>
+      <button class="btn-link" type="button" onclick={() => void (onreload ? onreload() : onchanged())}>{m.editor_lock_reload({}, options)}</button>
     </div>
   {:else if locked}
     <div class="lock-banner">
       {#if otherTab}
-        You have this open in another tab
-        <button class="btn-link" type="button" bind:this={takeTrigger} onclick={() => (taking = true)}>Edit here instead</button>
+        {m.editor_lock_other_tab({}, options)}
+        <button class="btn-link" type="button" bind:this={takeTrigger} onclick={() => (taking = true)}>{m.editor_lock_edit_here({}, options)}</button>
       {:else if lock?.held_by}
-        Being edited by {lock.held_by.name || 'somebody else'}
+        {m.editor_lock_held_by({ holder: lock.held_by.name || m.editor_lock_somebody_else({}, options) }, options)}
         <span class="when">
           {idle >= 60000
-            ? '— nothing typed for a minute; the lock frees itself after two'
-            : '— active a few seconds ago'}
+            ? m.editor_lock_idle({}, options)
+            : m.editor_lock_active({}, options)}
         </span>
-        <button class="btn-link" type="button" bind:this={takeTrigger} onclick={() => (taking = true)}>Take over</button>
+        <button class="btn-link" type="button" bind:this={takeTrigger} onclick={() => (taking = true)}>{m.editor_lock_take_over({}, options)}</button>
       {:else}
-        Nobody is editing this entry any more.
-        <button class="btn-link" type="button" onclick={() => void (onreload ? onreload() : onchanged())}>Reload</button>
+        {m.editor_lock_nobody({}, options)}
+        <button class="btn-link" type="button" onclick={() => void (onreload ? onreload() : onchanged())}>{m.editor_lock_reload({}, options)}</button>
       {/if}
     </div>
   {/if}
@@ -1147,7 +1180,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     <div class="crumbs">
       <a href={sitePath(entry.singleton ? '/admin/site' : `/admin/c/${collection}`)}>{entry.singleton ? m.editor_site_settings({}, options) : capitalise(collection)}</a><span class="sep" aria-hidden="true">/</span><span>{title}</span>
       <span class="autosave" class:is-saving={saving} class:is-offline={saveFailed}>
-        {#if saving}Saving…{:else if saveFailed}Not saved{:else if sourceUnsaved}Unsaved changes{:else}Saved{/if}
+        {#if saving}{m.editor_save_saving({}, options)}{:else if saveFailed}{m.editor_save_not_saved({}, options)}{:else if sourceUnsaved}{m.editor_save_unsaved_changes({}, options)}{:else}{m.editor_save_saved({}, options)}{/if}
       </span>
     </div>
     <div class="heading-row">
@@ -1193,7 +1226,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           ><span class="dot" aria-hidden="true"></span> {m.editor_hold({}, options)}</button>
           {#if missing.length}
             <button class="problems" type="button" onclick={goToFirst}>
-              {missing.length} problem{missing.length === 1 ? '' : 's'}
+              {m.editor_problem_count({ count: missing.length }, options)}
             </button>
           {/if}
         </div>
@@ -1287,7 +1320,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       </p>
     {/if}
     {#if held}
-      <p class="subline">On hold — won't be included when others publish</p>
+      <p class="subline">{m.editor_hold_active({}, options)}</p>
     {/if}
     {#if hidden}
       <p class="subline">
@@ -1467,7 +1500,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
               {fields}
               blocks={entry.blocks}
               bind:data={entrySession.snapshots[shown]!}
-              problems={entrySession.positionalProblems(shown)}
+              problems={entrySession.positionalProblems(shown, uiLocale)}
               inheritedSeo={inherited(shown, entrySession.snapshot(shown))}
               source={entry.sourceLocale}
               {locked}
@@ -1505,7 +1538,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           sourceLocale={entry.sourceLocale}
           session={entrySession}
           blocks={entry.blocks}
-          problems={locale === entry.sourceLocale ? problems : entrySession.positionalProblems(locale)}
+          problems={locale === entry.sourceLocale ? problems : entrySession.positionalProblems(locale, uiLocale)}
           onreviewproblems={reviewCanvasProblems}
           {mediaBase}
           {site}
@@ -1646,15 +1679,12 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   {/if}
   {#if taking}
     <Modal labelledby="take-h" returnTo={takeTrigger} dismissible={!busy} onclose={cancelTake}>
-        <h2 id="take-h">Take over editing from {holder}?</h2>
-        <p>
-          Nothing {holder} has written is lost — there is one shared draft and you carry on from
-          where they left off.
-        </p>
-        <p>Their next save is refused and they are told you took over.</p>
+        <h2 id="take-h">{m.editor_lock_take_question({ holder }, options)}</h2>
+        <p>{m.editor_lock_take_shared({ holder }, options)}</p>
+        <p>{m.editor_lock_take_refusal({}, options)}</p>
         <div class="actions">
-          <button class="btn" type="button" disabled={busy} onclick={cancelTake}>Cancel</button>
-          <button class="btn btn-primary" type="button" disabled={busy} onclick={takeOver}>Take over</button>
+          <button class="btn" type="button" disabled={busy} onclick={cancelTake}>{m.common_cancel({}, options)}</button>
+          <button class="btn btn-primary" type="button" disabled={busy} onclick={takeOver}>{m.editor_lock_take_over({}, options)}</button>
         </div>
     </Modal>
   {/if}

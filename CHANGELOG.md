@@ -9,8 +9,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   interface-language changes keep the editor session, content language, focused field and typed
   value in place without rereading content. Address metadata names the content language in the
   interface language, and disabled Publish tooltips translate their current lock, drift or missing
-  field reason. Save, lock, hold-result, validation, translation, off-site, publish-dialog, and
-  history feedback remain in their staged follow-up work.
+  field reason. Save state, retry and lock/take-over notices, hold results, problem counts and
+  descriptor-backed validation now reformat while visible without changing queued writes, values,
+  undo or recovery. Custom schema validation stays authored. Translation, off-site, publish-dialog,
+  and history feedback remain in their staged follow-up work.
 
 - Translate entry creation and shared page/entry pickers into English and German. Live language
   changes retain titles, starters, searches, custom URLs, selected entries and content language

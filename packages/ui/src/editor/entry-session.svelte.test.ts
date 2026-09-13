@@ -237,6 +237,61 @@ test('validation problems follow nested rows after a local reorder', () => {
   });
 });
 
+test('validation descriptors reformat without changing queued state or undo history', async () => {
+  const pending = deferred<boolean>();
+  const writes: string[] = [];
+  const session = createEntrySession({
+    sourceLocale: 'en',
+    data: data(),
+    translations: {},
+    form,
+    problems: {
+      en: [
+        { path: 'sections.1.title', message: 'Required', descriptor: { code: 'FIELD_REQUIRED' } },
+        { path: 'sections.0.title', message: 'Use the newsroom wording' },
+      ],
+    },
+  });
+  session.configureAutosave(async (_locale, snapshot) => {
+    writes.push(snapshot);
+    if (writes.length === 1) return pending.promise;
+    return true;
+  });
+  session.fieldCommand('en', {
+    address: 'sections[_id=first].title',
+    contentVersion: 0,
+    changes: [{ value: 'First local edit' }],
+  });
+  const flushing = session.flush();
+  await Promise.resolve();
+  session.fieldCommand('en', {
+    address: 'sections[_id=first].title',
+    contentVersion: 1,
+    changes: [{ value: 'Latest local edit' }],
+  });
+  const history = session.historyStats();
+
+  expect(session.positionalProblems('en', 'en')).toEqual({
+    'sections.0.title': 'Use the newsroom wording',
+    'sections.1.title': 'Required',
+  });
+  expect(session.positionalProblems('en', 'de')).toEqual({
+    'sections.0.title': 'Use the newsroom wording',
+    'sections.1.title': 'Erforderlich',
+  });
+  expect(session.historyStats()).toEqual(history);
+  expect(session.unsaved('en')).toBe(true);
+
+  pending.resolve(true);
+  expect(await flushing).toBe(true);
+  expect(writes.map((snapshot) => JSON.parse(snapshot).sections[0].title)).toEqual([
+    'First local edit',
+    'Latest local edit',
+  ]);
+  expect(session.undo()).toMatchObject({ ok: true });
+  expect((session.snapshot('en').sections as { title: string }[])[0]?.title).toBe('First');
+});
+
 test('a late validation response is discarded by content version', () => {
   const session = createEntrySession({
     sourceLocale: 'en',

@@ -8,6 +8,11 @@ export interface UiMessage {
   detail?: string;
 }
 
+export interface UiProblem {
+  message: string;
+  descriptor?: UiMessage;
+}
+
 export async function responseMessage(response: Response, fallback: string): Promise<UiMessage> {
   const headerCode = response.headers.get('x-handover-error-code');
   let body: { code?: unknown; error?: unknown; message?: unknown } | undefined;
@@ -33,6 +38,12 @@ const KNOWN_CODES = new Set([
   'PASSWORD_TOO_LONG',
   'INVALID_TOKEN',
   'TOKEN_EXPIRED',
+  'EDITOR_HOLD_FAILED',
+  'EDITOR_LOCK_TAKE_FAILED',
+  'EDITOR_SAVE_CONNECTION',
+  'EDITOR_SAVE_REFUSED',
+  'EDITOR_SAVE_REVISION',
+  'FIELD_REQUIRED',
 ]);
 
 export function messageText(message: UiMessage, locale: UiLocale): string {
@@ -96,7 +107,26 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
         : m.new_entry_create_failed({}, options);
     case 'ENTRY_CREATE_UNCONFIRMED':
       return m.new_entry_create_unconfirmed({}, options);
+    case 'EDITOR_HOLD_FAILED':
+      return m.editor_hold_failed({}, options);
+    case 'EDITOR_LOCK_TAKE_FAILED':
+      return m.editor_lock_take_failed({}, options);
+    case 'EDITOR_SAVE_CONNECTION':
+      return m.editor_save_connection({}, options);
+    case 'EDITOR_SAVE_REFUSED':
+      return m.editor_save_refused({}, options);
+    case 'EDITOR_SAVE_REVISION':
+      return m.editor_save_revision({}, options);
+    case 'FIELD_REQUIRED':
+      return m.validation_required({}, options);
     default:
       return m.common_unknown_error({}, options);
   }
+}
+
+/** A descriptor marks Handover-owned validation; unmarked schema prose stays authored. */
+export function problemText(problem: UiProblem, locale: UiLocale): string {
+  return problem.descriptor?.code === 'FIELD_REQUIRED'
+    ? messageText(problem.descriptor, locale)
+    : problem.message;
 }

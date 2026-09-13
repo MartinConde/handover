@@ -13,11 +13,12 @@ Language controls, sign-in, password-reset and expired-link flows, the complete 
 the signed-in shell, the dashboard, collection entry lists, entry creation, shared page/entry
 pickers, and the entry editor's tabs and header controls are bilingual. Navigation, pending/build
 indicators, list and picker states, editor URL metadata, converted dates, accessibility labels,
-validation, and retained failures reformat when the language changes. Dashboard, collection,
-picker, and open-entry data are not reread, and typed values, filters, selected rows, creation
-starters, custom URLs, the signed-in session, editor content language, and the active editor field
-remain in place. Save, lock and hold-result feedback plus activity-event sentences and the
-remaining admin screens are being converted in stages and can still contain English.
+descriptor-backed validation, and retained editor save/lock/hold feedback reformat when the
+language changes. Dashboard, collection, picker, and open-entry data are not reread, and typed
+values, queued saves, undo history, filters, selected rows, creation starters, custom URLs, the
+signed-in session, editor content language, and the active editor field remain in place.
+Activity-event sentences and the remaining admin screens are being converted in stages and can
+still contain English.
 
 Handover-owned interface text is translated. Content and site configuration are not: collection
 labels, schema descriptions, custom validation messages, entry titles, names, URLs, provider

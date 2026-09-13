@@ -12,11 +12,13 @@ import {
   syncLocaleField,
   TRANSLATED_PROPS,
 } from '@handover/core';
+import { problemText, type UiMessage } from '../errors.js';
+import type { UiLocale } from '../i18n.js';
 import { requiredFieldProblems } from './required-fields';
 import { type SaveState, saveCoordinator, saveLane } from './save';
 
 export type EntryData = Record<string, unknown>;
-export type EntryProblem = { path: string; message: string };
+export type EntryProblem = { path: string; message: string; descriptor?: UiMessage };
 
 export type EntrySession = ReturnType<typeof createEntrySession>;
 
@@ -437,7 +439,7 @@ export function createEntrySession({
   const serialized = new Map<string, { version: number; value: string }>(
     Object.entries(initialSerialized).map(([locale, value]) => [locale, { version: 0, value }]),
   );
-  const validation = $state<Record<string, Record<string, string>>>({});
+  const validation = $state<Record<string, Record<string, EntryProblem>>>({});
   const undoStack = $state<HistoryTransaction[]>([]);
   const redoStack = $state<HistoryTransaction[]>([]);
   const pendingStructure = $state<PendingStructure[]>([]);
@@ -563,7 +565,7 @@ export function createEntrySession({
     if (logicalSelection?.locale === locale) logicalSelection = undefined;
   };
   const normalize = (snapshot: EntryData, found: EntryProblem[]) => {
-    const normalized: Record<string, string> = {};
+    const normalized: Record<string, EntryProblem> = {};
     for (const problem of found) {
       const address = fieldAddress(
         'default',
@@ -572,8 +574,7 @@ export function createEntrySession({
         form,
       );
       // A duplicate id cannot safely attach an error to either occurrence.
-      if (address !== undefined && normalized[address] === undefined)
-        normalized[address] = problem.message;
+      if (address !== undefined && normalized[address] === undefined) normalized[address] = problem;
     }
     return normalized;
   };
@@ -1113,17 +1114,22 @@ export function createEntrySession({
         : {};
     },
     /** Stable addresses are consumed directly by Canvas and future session commands. */
-    problemAddresses(locale: string): Record<string, string> {
-      return { ...(validation[locale] ?? {}) };
+    problemAddresses(locale: string, uiLocale: UiLocale = 'en'): Record<string, string> {
+      return Object.fromEntries(
+        Object.entries(validation[locale] ?? {}).map(([address, problem]) => [
+          address,
+          problemText(problem, uiLocale),
+        ]),
+      );
     },
     /** Form controls still consume the API's positional dotted-path shape. */
-    positionalProblems(locale: string): Record<string, string> {
+    positionalProblems(locale: string, uiLocale: UiLocale = 'en'): Record<string, string> {
       const current = snapshots[locale];
       if (!current) return {};
       const positional: Record<string, string> = {};
-      for (const [address, message] of Object.entries(validation[locale] ?? {})) {
+      for (const [address, problem] of Object.entries(validation[locale] ?? {})) {
         const path = fieldPosition('default', address, current, form);
-        if (path) positional[path.join('.')] = message;
+        if (path) positional[path.join('.')] = problemText(problem, uiLocale);
       }
       return positional;
     },

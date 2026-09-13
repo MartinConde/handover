@@ -47,6 +47,11 @@ The state next to the breadcrumb is the autosave, not the publish:
 | `Saved` | the draft matches what you typed |
 | `Not saved` | the write failed — the edit is only in this tab, do not close it |
 
+These states and the retry notice follow the account's
+[interface language](interface-language.md) while they are visible. Changing that language does
+not join, restart or reorder the source-and-translation save queue; text typed behind an in-flight
+write is still the next snapshot saved.
+
 **Publish…** is enabled whenever any language of the entry differs from the file in git,
 including on a fresh page load with a draft already stored — a translation drafted on its own
 counts, whether or not its column is open.
@@ -59,6 +64,10 @@ a `positive()` number you have not reached yet would throw away everything typed
 What is missing is named instead. The field is marked and carries the reason under it, and
 the header counts them — "2 problems", which jumps to the first one. The count comes back
 with every autosave, so it clears as you fill things in.
+
+Handover-owned validation can carry a stable descriptor beside the legacy `message`; the editor
+keeps that descriptor in the entry session and formats it only when drawn. A collection schema's
+own message has no descriptor and remains exactly as the developer wrote it.
 
 An error from the [pre-publish checks](pending-changes.md#checks-before-a-publish) — a picture whose file is
 gone — is counted and marked the same way, since it holds the publish back the same way. The
@@ -172,6 +181,11 @@ switches, and actions that rewrite or reload an entry wait for a successful flus
 fails, the form stays open with its text and an explicit retry. Reloading or closing a tab
 warns while it contains unsaved work; the browser cannot reliably finish an asynchronous
 save during unload.
+
+An interface-language switch is presentation only: it preserves queued snapshots, revisions,
+the current input, undo history, and the same recovery gate. Unknown server detail is shown
+separately from Handover's translated recovery summary; a lost response keeps its existing
+uncertain-outcome meaning.
 
 Publishing validates and commits one captured set of drafts. Edits saved during GitHub's
 work remain pending, rebased on the committed file. Cleanup compares the selected revisions

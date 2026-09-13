@@ -35,12 +35,11 @@ the Deleted view or the Activity log, all answer *Anna Berg is editing this entr
 be renamed once they are done* rather than writing under her.
 
 Changing the account's [interface language](interface-language.md) while an entry is open updates
-its tabs, view controls, status and overflow actions, URL metadata and converted dates in place.
-It does not reread the entry, move its content-language selection, release or retake the lock, or
-replace the focused field and its unsaved value. Lock, save and hold-result messages are still part
-of the staged interface-language conversion and can currently remain in English. The header's
-disabled Publish tooltip is presentation rather than a retained message, so its current lock,
-block-drift or missing-value reason does follow the interface language.
+its tabs, view controls, lock and take-over banners, save state, retry notice, hold result, URL
+metadata and converted dates in place. An open take-over confirmation changes language without
+closing or repeating it. The switch does not reread the entry, move its content-language
+selection, release or retake the lock, replace the focused field, discard its unsaved value, or
+alter the save queue and undo history.
 
 When the lock runs out while somebody is waiting on it, the banner says so and offers
 **Reload**, which opens the entry with the lock theirs.

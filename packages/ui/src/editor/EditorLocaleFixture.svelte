@@ -6,9 +6,11 @@ import Editor from './Editor.svelte';
 let {
   initialUiLocale = 'en',
   publishState = 'clean',
+  feedback = false,
 }: {
   initialUiLocale?: UiLocale;
   publishState?: 'clean' | 'drift' | 'missing';
+  feedback?: boolean;
 } = $props();
 // svelte-ignore state_referenced_locally -- each test mount intentionally fixes its initial locale
 let uiLocale = $state<UiLocale>(initialUiLocale);
@@ -27,13 +29,19 @@ const drift: Drift[] =
     : [];
 // svelte-ignore state_referenced_locally -- each test mount intentionally fixes its state variant
 const entry = {
-  fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }] satisfies Field[],
+  fields: [
+    { path: ['title'], label: 'Title', type: 'text', required: true },
+    ...(feedback
+      ? [{ path: ['summary'], label: 'Summary', type: 'text', required: false } satisfies Field]
+      : []),
+  ] satisfies Field[],
   blocks: {},
-  data: { title: 'Seaview Cottage' },
+  data: { title: 'Seaview Cottage', ...(feedback ? { summary: '' } : {}) },
   pending: [] as string[],
   published: ['en'],
-  problems:
-    publishState === 'missing'
+  problems: feedback
+    ? [{ path: 'summary', message: 'Required', descriptor: { code: 'FIELD_REQUIRED' } }]
+    : publishState === 'missing'
       ? [{ path: 'title', message: 'Authored title requirement' }]
       : ([] as { path: string; message: string }[]),
   locales: ['en', 'de'],
@@ -49,7 +57,7 @@ const entry = {
 };
 </script>
 
-<button data-locale-switch type="button" onclick={() => (uiLocale = 'de')}>Deutsch</button>
+<button data-locale-switch type="button" onclick={() => (uiLocale = uiLocale === 'en' ? 'de' : 'en')}>{uiLocale === 'en' ? 'Deutsch' : 'English'}</button>
 <Editor
   collection="listings"
   slug="seaview-cottage"

@@ -16,7 +16,11 @@ Merges `data` into the entry and stores the result. `revision` is the version re
 lock with ([Locks](admin-api.md#locks)); a save without the holder's token is refused. `pending` is false when the stored
 bytes are identical to the file in git — an autosave that changed nothing. `problems` is
 what the collection schema will not accept, `[{ "path": "body.1.heading", "message":
-"Required" }]`, empty when it accepts all of it; the draft is stored either way. Keys
+"Required" }]`, empty when it accepts all of it; the draft is stored either way. The editor also
+accepts an additive `descriptor: { "code": "…" }` on a problem for Handover-owned rules, while
+retaining `message` for compatibility and as the exact display text for custom schema errors.
+Changing interface language reformats a known descriptor from session state and never matches or
+rewrites `message`. Keys
 beginning with `_` are ignored: they belong to the file, not to the form. `400` if `data`
 is not an object or holds a shape the serialiser cannot write back (a nested array), with
 the reason as the body; `404` if the collection or the file does not exist. `409` with
@@ -136,4 +140,7 @@ POST /admin/api/hold/:collection/:slug  { "hold": true }  →  { "held" }
 Marks the entry *Not ready yet*, or takes the mark off with `false`. It writes the flag to
 every language's draft row, so it holds back files the caller has not touched; an entry
 with nothing pending has no row to write and nothing to hold back. `404` if the collection
-is not configured.
+is not configured. Save, hold and take-over failures retain local operation descriptors in the
+editor so their summary can follow a live interface-language change. Those local identities do
+not alter these response bodies or replace `x-handover-request-uncertain` as the authority for a
+possibly completed mutation.
