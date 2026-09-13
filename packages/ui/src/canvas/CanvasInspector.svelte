@@ -7,6 +7,7 @@ import type {
   ListCommandResult,
 } from '../editor/entry-session.svelte';
 import Fields from '../editor/fields/Fields.svelte';
+import type { UiLocale } from '../i18n.js';
 import { sitePath } from '../request';
 import CanvasIcon from './CanvasIcon.svelte';
 import type { CanvasDocumentIdentity, CanvasSelection } from './canvas-bridge';
@@ -20,6 +21,7 @@ let {
   entryDocument,
   ownerLabel,
   locale,
+  uiLocale = 'en',
   sourceLocale,
   session,
   blocks,
@@ -40,6 +42,7 @@ let {
   entryDocument: CanvasDocumentIdentity;
   ownerLabel: string;
   locale: string;
+  uiLocale?: UiLocale;
   sourceLocale: string;
   session: EntrySession;
   blocks: Record<string, Field[]>;
@@ -218,6 +221,7 @@ function completionEvents(node: HTMLFormElement) {
             {problems}
             {mediaBase}
             {locale}
+            {uiLocale}
             {site}
             {servedAt}
             {session}

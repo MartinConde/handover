@@ -1,5 +1,6 @@
 <script lang="ts">
 import { type Field, keptMachine, type ResolvedSeo, type WordPart } from '@handover/core';
+import type { UiLocale } from '../i18n.js';
 import { request as fetch } from '../request.js';
 import type { EntrySession } from './entry-session.svelte';
 import Fields from './fields/Fields.svelte';
@@ -23,6 +24,7 @@ let {
   actionBlocked = false,
   url,
   site,
+  uiLocale = 'en',
   onsaved,
   onclose,
   onturnoff,
@@ -48,6 +50,7 @@ let {
   actionBlocked?: boolean;
   url?: string;
   site?: string;
+  uiLocale?: UiLocale;
   /** The entry keeps `pending`: this column is thrown away on a screen change, its edit is not. */
   onsaved?: (pending: boolean, data?: Data) => void;
   onclose?: () => void;
@@ -162,6 +165,7 @@ const named = (of: string) => {
         {mediaBase}
         {inheritedSeo}
         {locale}
+        {uiLocale}
         {session}
         bind:root={data}
         translating

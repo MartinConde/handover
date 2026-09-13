@@ -354,5 +354,5 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
 </main>
 
 {#if creating}
-  <NewEntry collection={creating} onclose={() => (creating = '')} />
+  <NewEntry collection={creating} {uiLocale} onclose={() => (creating = '')} />
 {/if}

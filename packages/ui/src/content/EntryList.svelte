@@ -614,6 +614,7 @@ async function done() {
     {collection}
     {index}
     {busy}
+    {uiLocale}
     error={dialogError}
     returnTo={trigger}
     onconfirm={(target) =>
@@ -624,7 +625,7 @@ async function done() {
 {/if}
 
 {#if dialog === 'new'}
-  <NewEntry {collection} onclose={close} />
+  <NewEntry {collection} {uiLocale} onclose={close} />
 {:else if dialog}
   <Modal
     labelledby="entry-dialog-h"

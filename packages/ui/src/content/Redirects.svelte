@@ -1,10 +1,14 @@
 <script lang="ts">
 import { type Pickable, readEntryDirectory } from '../entry-directory.js';
+import type { UiLocale } from '../i18n.js';
 import { request as fetch, sitePath } from '../request.js';
 import Modal from '../shared/Modal.svelte';
 import PagePicker from './PagePicker.svelte';
 
-let { oncommitted }: { oncommitted?: () => void | Promise<void> } = $props();
+let {
+  uiLocale = 'en',
+  oncommitted,
+}: { uiLocale?: UiLocale; oncommitted?: () => void | Promise<void> } = $props();
 
 /** One rule as `/admin/api/redirects` answers it. */
 interface Rule {
@@ -492,6 +496,7 @@ async function remove() {
               id="rd-pick"
               label="pages and entries"
               labelId="rd-h"
+              {uiLocale}
               locale={toLocale}
               chosen={known.entries.find((e) => e.urls[toLocale] === writing?.to)?.path}
               onpick={(entry) => {

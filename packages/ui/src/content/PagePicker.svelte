@@ -1,6 +1,9 @@
 <script lang="ts">
 import { unsafeLinkScheme } from '@handover/core';
 import { type Pickable, type PickEntry, readEntryDirectory } from '../entry-directory.js';
+import { messageText, type UiMessage } from '../errors.js';
+import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 
 let {
   id,
@@ -12,6 +15,7 @@ let {
   chosen,
   library = false,
   included = [],
+  uiLocale = 'en',
   onpick,
   onurl,
   onclose,
@@ -33,12 +37,14 @@ let {
   /** A persistent library offers repeatable add actions instead of a single selection. */
   library?: boolean;
   included?: string[];
+  uiLocale?: UiLocale;
   onpick: (entry: PickEntry) => void;
   /** Given when a typed web address is an answer too; without it the list is the only way. */
   onurl?: (href: string) => void;
   /** Absent where the list is the pane itself: what stands open all the time has no Cancel. */
   onclose?: () => void;
 } = $props();
+const options = $derived(messageOptions(uiLocale));
 
 let all = $state<Pickable>({ entries: [], locales: [] });
 let query = $state('');
@@ -47,7 +53,7 @@ let list = $state<HTMLElement>();
 let box = $state<HTMLInputElement>();
 let directoryLoading = $state(true);
 let directoryCurrent = $state(false);
-let directoryError = $state('');
+let directoryError = $state<UiMessage>();
 
 $effect(() => {
   if (!library) box?.focus();
@@ -56,13 +62,13 @@ $effect(() => {
 
 async function loadDirectory() {
   directoryLoading = true;
-  directoryError = '';
+  directoryError = undefined;
   try {
     all = await readEntryDirectory();
     directoryCurrent = true;
   } catch {
     directoryCurrent = false;
-    directoryError = `Could not load ${label}. Check the connection and try again.`;
+    directoryError = { code: 'PAGE_PICKER_LOAD_FAILED' };
   } finally {
     directoryLoading = false;
   }
@@ -72,16 +78,22 @@ async function loadDirectory() {
 const why = (entry: PickEntry) => {
   if (!locale || entry.urls[locale]) return undefined;
   return entry.locales.includes(locale)
-    ? 'Nothing on the site renders this, so it has no address'
-    : `There is no ${locale.toUpperCase()} page to link to`;
+    ? m.page_picker_no_rendered_address({}, options)
+    : m.page_picker_no_language_page({ language: formatLanguageName(locale, uiLocale) }, options);
 };
 // A hidden page still takes the choice; it is a poor one, so it is said rather than refused.
 const note = (entry: PickEntry) =>
   entry.index
-    ? 'The page that lists them all'
+    ? m.page_picker_collection_page_note({}, options)
     : entry.hidden
-      ? 'Hidden itself — visitors would land on a page that isn’t there either'
+      ? m.page_picker_hidden_note({}, options)
       : undefined;
+const languageName = (locale: string) => formatLanguageName(locale, uiLocale);
+const directoryText = $derived(
+  directoryError?.code === 'CONNECTION_LOST'
+    ? messageText(directoryError, uiLocale)
+    : m.page_picker_load_failed({ label }, options),
+);
 
 const matches = $derived(
   [...all.entries, ...(indexes ? (all.indexes ?? []) : [])].filter(
@@ -122,17 +134,17 @@ function step(e: KeyboardEvent) {
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -- arrow keys move focus inside -->
 <div class="picker" class:is-library={library} role="group" aria-labelledby={labelId} onkeydown={step}>
-  <label class="visually-hidden" for="{id}-q">Search {label}</label>
-  <input class="input" id="{id}-q" type="search" placeholder="Search pages and entries" bind:value={query} bind:this={box} />
+  <label class="visually-hidden" for="{id}-q">{m.page_picker_search_label({ label }, options)}</label>
+  <input class="input" id="{id}-q" type="search" placeholder={m.page_picker_search_placeholder({}, options)} bind:value={query} bind:this={box} />
   {#if directoryError}
     <div class="notice notice-danger directory-read-error" role="alert">
-      {directoryError}{all.entries.length ? ' The choices below are the last result.' : ''}
-      <button class="btn-link" type="button" onclick={loadDirectory}>Retry</button>
+      {directoryText}{all.entries.length ? ` ${m.page_picker_stale_choices({}, options)}` : ''}
+      <button class="btn-link" type="button" onclick={loadDirectory}>{m.common_retry({}, options)}</button>
     </div>
   {/if}
   <div class="picker-list" bind:this={list} role={library ? 'group' : 'listbox'} aria-label={label}>
     {#if directoryLoading && !all.entries.length}
-      <p class="hint">Loading pages and entries…</p>
+      <p class="hint">{m.page_picker_loading({}, options)}</p>
     {:else}
     {#each groups as group (group.name)}
       <!-- Not a heading: the picker opens under a different outline level on every screen. -->
@@ -142,15 +154,15 @@ function step(e: KeyboardEvent) {
         {@const no = why(row)}
         {@const says = no ?? note(row)}
         <!-- aria-disabled: a disabled button takes no focus, so the reason goes unheard. -->
-        <button type="button" role={library ? undefined : 'option'} aria-label={library ? `Add ${row.title}${included.includes(row.path) ? ' again' : ''}` : undefined} aria-selected={library ? undefined : row.path === chosen ? 'true' : 'false'} aria-disabled={no || !directoryCurrent ? 'true' : undefined} aria-describedby={says && (!library || !row.index) ? `${id}-why-${row.path}` : undefined} onclick={() => directoryCurrent && !no && onpick(row)}>
+        <button type="button" role={library ? undefined : 'option'} aria-label={library ? (included.includes(row.path) ? m.page_picker_add_again({ title: row.title }, options) : m.page_picker_add({ title: row.title }, options)) : undefined} aria-selected={library ? undefined : row.path === chosen ? 'true' : 'false'} aria-disabled={no || !directoryCurrent ? 'true' : undefined} aria-describedby={says && (!library || !row.index) ? `${id}-why-${row.path}` : undefined} onclick={() => directoryCurrent && !no && onpick(row)}>
           {#if library}
             <span class="library-entry">
               <span class="library-title">{row.title}</span>
               <span class="path">{row.path}</span>
               <span class="library-meta">
-                {#if included.includes(row.path)}<span class="library-included">✓ In menu</span>{/if}
-                {#if row.index}<span>Collection page</span>{/if}
-                {#each all.locales as of (of)}<span class="library-locale" class:is-missing={!row.locales.includes(of)} title={row.locales.includes(of) ? `Available in ${of.toUpperCase()}` : `Not available in ${of.toUpperCase()}`}>{of.toUpperCase()}</span>{/each}
+                {#if included.includes(row.path)}<span class="library-included">✓ {m.page_picker_in_menu({}, options)}</span>{/if}
+                {#if row.index}<span>{m.page_picker_collection_page({}, options)}</span>{/if}
+                {#each all.locales as of (of)}<span class="library-locale" class:is-missing={!row.locales.includes(of)} title={row.locales.includes(of) ? m.page_picker_available_in({ language: languageName(of) }, options) : m.page_picker_not_available_in({ language: languageName(of) }, options)}>{of.toUpperCase()}</span>{/each}
               </span>
             </span>
             <span class="library-add" aria-hidden="true">+</span>
@@ -158,35 +170,35 @@ function step(e: KeyboardEvent) {
           <span>{row.title}</span>
           <span class="chips">
             {#each all.locales as of (of)}
-              <span class="chip" class:chip-missing={!row.locales.includes(of)}>{of.toUpperCase()}</span>
+              <span class="chip" class:chip-missing={!row.locales.includes(of)} title={row.locales.includes(of) ? m.page_picker_available_in({ language: languageName(of) }, options) : m.page_picker_not_available_in({ language: languageName(of) }, options)}>{of.toUpperCase()}</span>
             {/each}
           </span>
           <span class="path">{locale ? (row.urls[locale] ?? row.path) : row.path}</span>
           {/if}
         </button>
-        {#if says && (!library || !row.index)}<p class="why" id="{id}-why-{row.path}">{library && row.hidden && !no ? 'Hidden page — visitors won’t see this item.' : says}</p>{/if}
+        {#if says && (!library || !row.index)}<p class="why" id="{id}-why-{row.path}">{library && row.hidden && !no ? m.page_picker_hidden_library_note({}, options) : says}</p>{/if}
       {/each}
       </div>
     {:else}
-      {#if !directoryError}<p class="hint">{query ? `Nothing here matches “${query}”` : 'Nothing to choose from yet'}</p>{/if}
+      {#if !directoryError}<p class="hint">{query ? m.page_picker_no_matches({ query }, options) : m.page_picker_empty({}, options)}</p>{/if}
     {/each}
     {/if}
   </div>
   {#if onurl}
     <div class="custom-link">
-      <h3 class="side-title">Custom link</h3>
+      <h3 class="side-title">{m.page_picker_custom_link({}, options)}</h3>
       <div class="field">
-        <div class="label-row"><label for="{id}-url">Address</label></div>
+        <div class="label-row"><label for="{id}-url">{m.page_picker_address({}, options)}</label></div>
         <input class="input" id="{id}-url" type="url" placeholder="/contact or https://…" bind:value={typed} aria-invalid={refused ? 'true' : undefined} aria-describedby={refused ? `${id}-url-err` : undefined} />
-        {#if refused}<p class="error" id="{id}-url-err">{refused}: links are not allowed</p>{/if}
+        {#if refused}<p class="error" id="{id}-url-err">{m.page_picker_links_not_allowed({ scheme: refused }, options)}</p>{/if}
       </div>
     </div>
   {/if}
   {#if onclose || onurl}
     <div class="actions">
-      {#if onclose}<button class="btn btn-sm" type="button" onclick={onclose}>Cancel</button>{/if}
+      {#if onclose}<button class="btn btn-sm" type="button" onclick={onclose}>{m.common_cancel({}, options)}</button>{/if}
       {#if onurl}
-        <button class="btn btn-sm btn-primary" type="button" disabled={!typed.trim() || !!refused} onclick={() => { onurl?.(typed.trim()); if (library) typed = ''; }}>{library ? 'Add custom link' : 'Use this address'}</button>
+        <button class="btn btn-sm btn-primary" type="button" disabled={!typed.trim() || !!refused} onclick={() => { onurl?.(typed.trim()); if (library) typed = ''; }}>{library ? m.page_picker_add_custom_link({}, options) : m.page_picker_use_address({}, options)}</button>
       {/if}
     </div>
   {/if}

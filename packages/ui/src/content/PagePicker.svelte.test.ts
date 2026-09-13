@@ -1,6 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import { invalidateEntryDirectory, type PickEntry } from '../entry-directory.js';
+import type { UiLocale } from '../i18n.js';
 import PagePicker from './PagePicker.svelte';
 
 // Testing: what the list is filtered and grouped by, that the keyboard walks it without a pointer.
@@ -192,4 +193,87 @@ test('a failed catalogue read is unavailable rather than empty and retry recover
 
   expect(titles()).toContain('Contact');
   expect(document.querySelector('.directory-read-error')).toBeNull();
+});
+
+test('a retained picker failure changes language without another directory read', async () => {
+  invalidateEntryDirectory();
+  let reads = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => {
+      reads += 1;
+      return new Response('unavailable', { status: 503 });
+    }),
+  );
+  const props = $state({
+    id: 'p',
+    label: 'Related page',
+    labelId: 'p-l',
+    uiLocale: 'en' as UiLocale,
+    onpick: () => {},
+  });
+  app = mount(PagePicker, { target: document.body, props });
+  await new Promise((r) => setTimeout(r));
+  flushSync();
+  const alert = q('.directory-read-error');
+  expect(alert.textContent).toContain('Could not load Related page');
+
+  props.uiLocale = 'de';
+  flushSync();
+
+  expect(q('.directory-read-error')).toBe(alert);
+  expect(alert.textContent).toContain('Related page konnte nicht geladen werden');
+  expect(reads).toBe(1);
+});
+
+test('a live language change preserves picker drafts and selected authored data', async () => {
+  let reads = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => {
+      reads += 1;
+      return Response.json({ entries: OFFERED, locales: ['en', 'de', 'not_a_language'] });
+    }),
+  );
+  const props = $state({
+    id: 'p',
+    label: 'Related page',
+    labelId: 'p-l',
+    locale: 'de',
+    chosen: 'listings/mill-house',
+    uiLocale: 'en' as UiLocale,
+    onpick: () => {},
+    onurl: () => {},
+    onclose: () => {},
+  });
+  app = mount(PagePicker, { target: document.body, props });
+  await new Promise((r) => setTimeout(r));
+  flushSync();
+
+  const search = q<HTMLInputElement>('#p-q');
+  const address = q<HTMLInputElement>('#p-url');
+  search.value = 'Mill House';
+  search.dispatchEvent(new Event('input', { bubbles: true }));
+  address.value = 'javascript:alert(1)';
+  address.dispatchEvent(new Event('input', { bubbles: true }));
+  flushSync();
+  const chosen = rows()[0];
+  expect(chosen?.getAttribute('aria-selected')).toBe('true');
+  expect(document.body.textContent).toContain('There is no German page to link to');
+
+  props.uiLocale = 'de';
+  flushSync();
+
+  expect(q<HTMLInputElement>('#p-q')).toBe(search);
+  expect(search.value).toBe('Mill House');
+  expect(q<HTMLInputElement>('#p-url')).toBe(address);
+  expect(address.value).toBe('javascript:alert(1)');
+  expect(rows()[0]).toBe(chosen);
+  expect(chosen?.getAttribute('aria-selected')).toBe('true');
+  expect(q<HTMLInputElement>('#p-q').placeholder).toBe('Seiten und Einträge durchsuchen');
+  expect(document.body.textContent).toContain('Es gibt keine Seite auf Deutsch zum Verlinken');
+  expect(q('#p-url-err').textContent).toBe('javascript: Links sind nicht erlaubt');
+  expect(document.querySelector('[title*="not_a_language"]')).not.toBeNull();
+  expect(document.body.textContent).toContain('Old Mill House');
+  expect(reads).toBe(1);
 });

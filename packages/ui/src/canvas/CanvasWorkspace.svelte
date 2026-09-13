@@ -4,6 +4,7 @@ import { onMount, type Snippet, tick, untrack } from 'svelte';
 import { cubicOut } from 'svelte/easing';
 import { fly } from 'svelte/transition';
 import { readEntryDirectory } from '../entry-directory';
+import type { UiLocale } from '../i18n.js';
 import { previewPath } from '../request';
 import CanvasBlockEditor from './CanvasBlockEditor.svelte';
 import CanvasIcon from './CanvasIcon.svelte';
@@ -53,6 +54,7 @@ let {
   entryActions,
   publishAction,
   locale,
+  uiLocale = 'en',
   url,
   request,
   currentVersion,
@@ -76,6 +78,7 @@ let {
   entryActions?: Snippet;
   publishAction?: Snippet;
   locale: string;
+  uiLocale?: UiLocale;
   url: string;
   request: () => CanvasRenderRequest;
   currentVersion: () => number;
@@ -1314,6 +1317,7 @@ onMount(() => {
               {blocks}
               {mediaBase}
               {locale}
+              {uiLocale}
               {site}
               {servedAt}
               {locked}
@@ -1384,6 +1388,7 @@ onMount(() => {
               {entryDocument}
               {ownerLabel}
               {locale}
+              {uiLocale}
               {sourceLocale}
               {session}
               {blocks}

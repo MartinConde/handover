@@ -41,6 +41,7 @@ import { tick } from 'svelte';
 import CanvasIcon from './CanvasIcon.svelte';
 import type { ListCommandResult } from '../editor/entry-session.svelte';
 import Fields from '../editor/fields/Fields.svelte';
+import type { UiLocale } from '../i18n.js';
 
 let {
   mode,
@@ -49,6 +50,7 @@ let {
   currentType,
   mediaBase = '',
   locale,
+  uiLocale = 'en',
   site,
   servedAt,
   locked = false,
@@ -61,6 +63,7 @@ let {
   currentType?: string;
   mediaBase?: string;
   locale: string;
+  uiLocale?: UiLocale;
   site?: string;
   servedAt?: string;
   locked?: boolean;
@@ -150,6 +153,7 @@ function apply() {
           {problems}
           {mediaBase}
           {locale}
+          {uiLocale}
           {site}
           {servedAt}
           prefix="canvas-block"

@@ -37,6 +37,7 @@ import {
   type PickEntry,
   readEntryDirectory,
 } from '../entry-directory.js';
+import type { UiLocale } from '../i18n.js';
 import Modal from '../shared/Modal.svelte';
 import PagePicker from './PagePicker.svelte';
 
@@ -47,6 +48,7 @@ let {
   locale = '',
   translating = false,
   sourceLabel = '',
+  uiLocale = 'en',
 }: {
   /** The field's own id; every control on the screen is named under it. */
   id: string;
@@ -60,6 +62,7 @@ let {
   translating?: boolean;
   /** The source language's display name, supplied by the translation pane. */
   sourceLabel?: string;
+  uiLocale?: UiLocale;
 } = $props();
 
 let tab = $state(0);
@@ -482,7 +485,7 @@ function walkTabs(event: KeyboardEvent) {
     <div class="field">
       <div class="label-row"><span id="{id}-ed-link-l">Links to</span><span class="mode">Same in every language</span></div>
       {#if changing}
-        <PagePicker id="{id}-ed-link" label="a page or entry" labelId="{id}-ed-link-l" indexes chosen={keyOf(row.link)} onpick={(e) => { row.link = linkTo(e); changing = false; }} onurl={(href) => { row.link = { type: 'url', href }; changing = false; }} onclose={() => (changing = false)} />
+        <PagePicker id="{id}-ed-link" label="a page or entry" labelId="{id}-ed-link-l" indexes {uiLocale} chosen={keyOf(row.link)} onpick={(e) => { row.link = linkTo(e); changing = false; }} onurl={(href) => { row.link = { type: 'url', href }; changing = false; }} onclose={() => (changing = false)} />
       {:else}
         <div class="link-summary" role="group" aria-labelledby="{id}-ed-link-l">
           <span class="name">{fallback(row)}</span>
@@ -583,7 +586,7 @@ function walkTabs(event: KeyboardEvent) {
             <p>Choose a page or add your own link.</p>
             <a class="nav-jump" href="#{id}-structure-h">Go to menu structure ↓</a>
           </header>
-          <PagePicker id="{id}-pick" label="pages and entries" labelId="{id}-add-h" indexes library {included} onpick={addEntry} onurl={addUrl} />
+          <PagePicker id="{id}-pick" label="pages and entries" labelId="{id}-add-h" indexes library {included} {uiLocale} onpick={addEntry} onurl={addUrl} />
           <p class="nav-feedback" role="status">{addedMessage || 'Pages keep their titles up to date automatically.'}</p>
         </section>
       {/if}

@@ -712,6 +712,7 @@ const initial = $derived(
           mediaBase={session?.mediaBase ?? ''}
           preview={session?.preview ?? false}
           site={session?.site}
+          {uiLocale}
           userId={session?.user.id}
           onchanged={async () => {
             invalidateEntryDirectory();
@@ -752,7 +753,7 @@ const initial = $derived(
         onsaved={(name) => notify({ code: 'SAVED_TEMPLATE', name })}
       />
     {:else if redirectRoute}
-      <Redirects oncommitted={commitChanged} />
+      <Redirects {uiLocale} oncommitted={commitChanged} />
     {:else if path === '/admin/site'}
       <Globals />
     {:else if path === '/admin/media'}

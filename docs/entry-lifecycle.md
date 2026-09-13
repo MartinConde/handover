@@ -47,9 +47,8 @@ and German without another collection request. Search text, filters, selected ro
 content-language `?locale=`, and an open duplicate/rename/template draft remain in place.
 
 Collection identifiers, filenames, entry titles, people's names, and repository diagnostics stay
-as authored. Language chips remain stable codes such as `EN` and `DE`; the filter presents their
-localized language names. New-entry and page-picker dialogs are part of the next staged interface
-translation, so they can still contain English for now.
+as authored. Language chips remain stable codes such as `EN` and `DE`; filters and picker
+descriptions present their localized language names.
 
 ## Creating an entry
 
@@ -62,6 +61,11 @@ publish, changing the filename is the rename below.
 It can also start from one of the collection's
 [starters](site-files.md#templates) instead of empty; an owner makes one from an entry with
 **Save as template** on its row.
+
+The creation dialog follows the account's interface language without closing or rereading the
+collection. A live language change keeps the typed title and selected starter. If creation fails,
+the translated summary changes in the same alert while any server detail remains verbatim. An
+invalid success response stays in the dialog as a failure rather than opening an unknown entry.
 
 ## Duplicating an entry
 

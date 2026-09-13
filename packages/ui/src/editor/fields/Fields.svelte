@@ -23,6 +23,7 @@ import { tick } from 'svelte';
 import Menus, { type Menu } from '../../content/Menus.svelte';
 import PagePicker from '../../content/PagePicker.svelte';
 import { EMPTY_ENTRY_DIRECTORY, type Pickable, readEntryDirectory } from '../../entry-directory.js';
+import type { UiLocale } from '../../i18n.js';
 import Focal from '../../media/Focal.svelte';
 import Media from '../../media/Media.svelte';
 import { fileSize, type MediaItem } from '../../media/upload.js';
@@ -58,6 +59,7 @@ let {
   prefix = 'f',
   mediaBase = '',
   locale = '',
+  uiLocale = 'en',
   inheritedSeo,
   site,
   servedAt,
@@ -99,6 +101,7 @@ let {
   mediaBase?: string;
   /** The language this column writes: what a link typed into rich text has to point at. */
   locale?: string;
+  uiLocale?: UiLocale;
   /** Resolved by the build's own `resolveSeo`, so the greyed value and the emitted tag agree. */
   inheritedSeo?: ResolvedSeo;
   /** The site's origin, for the SEO previews; none, and the panel draws none. */
@@ -693,7 +696,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   <div class="field" data-field-type={field.type} id="{id}-field" tabindex="-1" class:is-invalid={err} class:pop-anchor={marked} inert={textOnly && !structural(field) && ((field.type !== 'text' && field.type !== 'richtext') || mode !== true) ? true : undefined}>
     {#if field.type === 'menus'}
       {@render groupLabel(id, field, text, at)}
-      <Menus {id} labelId="{id}-l" menus={rows(at) as Menu[]} {locale} {translating} {sourceLabel} />
+      <Menus {id} labelId="{id}-l" menus={rows(at) as Menu[]} {locale} {uiLocale} {translating} {sourceLabel} />
     {:else if translating && mode === 'duplicate' && !structural(field)}
       {@render groupLabel(id, field, text, at)}
       <div class="readonly" {id} role="region" tabindex="-1" aria-labelledby="{id}-l">{read(at) ?? ''}</div>
@@ -747,7 +750,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
               {#if scheme}<p class="error" id="{id}.href-err">{scheme}: links are not allowed</p>{/if}
             </div>
           {:else if picker === id}
-            <PagePicker {id} label={text} labelId="{id}-l" chosen={str([...at, 'ref'])} onpick={(e) => { writeMany(at, [{ path: ['type'], value: 'entry' }, { path: ['ref'], value: e.path }]); picker = ''; }} onclose={() => (picker = '')} />
+            <PagePicker {id} label={text} labelId="{id}-l" {uiLocale} chosen={str([...at, 'ref'])} onpick={(e) => { writeMany(at, [{ path: ['type'], value: 'entry' }, { path: ['ref'], value: e.path }]); picker = ''; }} onclose={() => (picker = '')} />
           {:else if str([...at, 'ref'])}
             {@render chosenEntry(`${id}.ref`, `${id}-l`, says, str([...at, 'ref']), () => (picker = id))}
           {:else}
@@ -759,11 +762,11 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       </div>
     {:else if field.type === 'richtext'}
       {@render groupLabel(id, field, text, at)}
-      <RichText {id} labelId="{id}-l" {locale} tier={field.tier} invalid={!!err} describedby={says} value={str(at)} address={address(at)} {session} onchange={(md, history) => write(at, md, history)} />
+      <RichText {id} labelId="{id}-l" {locale} {uiLocale} tier={field.tier} invalid={!!err} describedby={says} value={str(at)} address={address(at)} {session} onchange={(md, history) => write(at, md, history)} />
     {:else if field.type === 'group'}
       <details class="group" open>
         <summary>{text}<span class="count">{field.fields.length} fields</span></summary>
-        <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
+        <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
       </details>
     {:else if field.type === 'array'}
       {@const items = rows(at)}
@@ -775,7 +778,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {#each items as row, i (keyOf(items, i))}
           {@const s = sortable(() => keyOf(items, i), () => i)}
           <div class="row-card" class:is-dragging={s.isDragging} {@attach s.attach}>
-            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
+            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
             {#if !translating}{@render controls(at, i, `${text} row ${i + 1}`, s.attachHandle)}{/if}
           </div>
         {:else}
@@ -818,7 +821,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
             {#if shut}
               <!-- folded: the header is the whole card -->
             {:else if inner}
-              <div class="form" id="{id}.{i}-b"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
+              <div class="form" id="{id}.{i}-b"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
             {:else}
               <p class="ref-note" id="{id}.{i}-b">{block(row)._ref ?? `No “${block(row)._type}” block in the registry`} — not editable here</p>
             {/if}
@@ -912,7 +915,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'reference'}
       {@render groupLabel(id, field, text, at)}
       {#if picker === id}
-        <PagePicker {id} label={text} labelId="{id}-l" collection={field.collection} chosen={str(at)} onpick={(e) => { write(at, e.path); picker = ''; }} onclose={() => (picker = '')} />
+        <PagePicker {id} label={text} labelId="{id}-l" {uiLocale} collection={field.collection} chosen={str(at)} onpick={(e) => { write(at, e.path); picker = ''; }} onclose={() => (picker = '')} />
       {:else if str(at)}
         {@render chosenEntry(id, `${id}-l`, says, str(at), () => (picker = id))}
       {:else}

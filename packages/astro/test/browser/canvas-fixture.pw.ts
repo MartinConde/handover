@@ -61,7 +61,16 @@ test('saved interface language wins before first paint and live switches preserv
       entryReads += 1;
       await route.fulfill({
         json: {
-          fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+          fields: [
+            { path: ['title'], label: 'Title', type: 'text', required: true },
+            {
+              path: ['related'],
+              label: 'Related',
+              type: 'reference',
+              required: false,
+              collection: 'pages',
+            },
+          ],
           blocks: {},
           data: { title: 'Canvas fixture' },
           revisions: { en: 'opened' },
@@ -75,6 +84,21 @@ test('saved interface language wins before first paint and live switches preserv
           translations: {},
           stale: [],
           drift: [],
+        },
+      });
+    } else if (path === '/admin/api/entries') {
+      await route.fulfill({
+        json: {
+          entries: [
+            {
+              collection: 'pages',
+              path: 'pages/about',
+              title: 'About us',
+              locales: ['en'],
+              urls: { en: '/about' },
+            },
+          ],
+          locales: ['en', 'de'],
         },
       });
     } else if (path.startsWith('/admin/api/locks/')) {
@@ -127,6 +151,11 @@ test('saved interface language wins before first paint and live switches preserv
   await expect(page.getByRole('link', { name: 'Canvas fixture' })).toBeVisible();
   expect(listReads).toBe(listReadsBeforeSwitch);
   expect(new URL(page.url()).search).toBe('?locale=de');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Neu in pages' }).click();
+  await expect(page.getByRole('heading', { name: 'Neuer Eintrag in page' })).toBeVisible();
+  await expect(page.getByLabel('Titel')).toBeVisible();
+  await page.getByRole('button', { name: 'Abbrechen' }).click();
   await page.getByLabel('Aktionen für Canvas fixture').click();
   await page.getByRole('button', { name: 'Duplizieren', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Canvas fixture duplizieren' })).toBeVisible();
@@ -156,6 +185,16 @@ test('saved interface language wins before first paint and live switches preserv
   await expect(page.locator('html')).toHaveAttribute('lang', 'de');
   await expect(title).toHaveValue('Unsaved words');
   await expect(title).toHaveAttribute('data-locale-proof', 'same-node');
+  await page.locator('#f-related button').click();
+  await expect(page.locator('#f-related-q')).toHaveAttribute(
+    'placeholder',
+    'Seiten und Einträge durchsuchen',
+  );
+  await expect(page.locator('.picker .chip').nth(1)).toHaveAttribute(
+    'title',
+    'Nicht verfügbar auf Deutsch',
+  );
+  await expect(page.locator('.picker-list')).toContainText('About us');
   expect(entryReads).toBe(readsBeforeSwitch);
   expect(new URL(page.url()).pathname).toBe('/admin/c/pages/canvas-fixture');
   const cookies = await context.cookies();

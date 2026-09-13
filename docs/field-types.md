@@ -100,8 +100,12 @@ more than 80 characters), number a numeric input, boolean a switch, date a nativ
 input, select radios for five options or fewer and a dropdown above that, link a Page /
 Entry · URL toggle with label and "Open in new tab". Page / Entry is a search box over
 every entry the site has, grouped by collection and showing which languages each one is
-written in; URL is typed, and a scheme the site will not accept is refused under the box
-rather than on save. Rich text is a TipTap editor whose toolbar has exactly the tier's
+written in. Its controls, availability descriptions, empty states, and validation follow the
+account's interface language. Switching English/Deutsch keeps the search, typed custom URL,
+selected entry, and content-language destination intact; language names are localized while
+language chips, collection names, entry titles, paths, and schema labels remain authored data.
+URL is typed, and a scheme the site will not accept is refused under the box rather than on save.
+Rich text is a TipTap editor whose toolbar has exactly the tier's
 constructs; its link button opens the same search box, and points at the address the
 language being written serves. A value that already contains something outside the tier
 (edited in code) is shown read-only rather than rewritten. Leaving an optional field empty

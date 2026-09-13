@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import type { UiLocale } from '../i18n.js';
 import NewEntry from './NewEntry.svelte';
 
 let app: ReturnType<typeof mount>;
@@ -116,4 +117,70 @@ test('creation waits for its catalogue and retry restores templates and collisio
   expect(document.body.textContent).toContain('Saved as new-page-2.');
   expect(document.body.textContent).toContain('Campaign template');
   expect(document.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
+});
+
+test('an open creation keeps its draft and translates retained failure', async () => {
+  let reads = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return new Response('Draft already exists', { status: 409 });
+      reads += 1;
+      return Response.json({ entries: [], templates: ['flat-by-the-sea'] });
+    }),
+  );
+  const props = $state({
+    collection: 'listings',
+    uiLocale: 'en' as UiLocale,
+    onclose: () => {},
+  });
+  app = mount(NewEntry, { target: document.body, props });
+  await settle();
+
+  const title = document.querySelector<HTMLInputElement>('#new-title');
+  const starter = document.querySelector<HTMLInputElement>('input[value="flat-by-the-sea"]');
+  if (!title || !starter) throw new Error('creation controls missing');
+  title.value = 'Küstenhaus';
+  title.dispatchEvent(new Event('input', { bubbles: true }));
+  starter.click();
+  document.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+  await settle();
+  const alert = document.querySelector('[role="alert"]');
+  expect(alert?.textContent).toContain('That did not work (409)');
+
+  props.uiLocale = 'de';
+  flushSync();
+
+  expect(document.querySelector('h2')?.textContent).toBe('Neuer Eintrag in listing');
+  expect(document.querySelector('#new-title')).toBe(title);
+  expect(title.value).toBe('Küstenhaus');
+  expect(starter.checked).toBe(true);
+  expect(document.querySelector('[role="alert"]')).toBe(alert);
+  expect(alert?.textContent).toContain('Das hat nicht funktioniert (409).');
+  expect(alert?.textContent).toContain('Draft already exists');
+  expect(reads).toBe(1);
+});
+
+test('an invalid successful creation response stays in the dialog as a failure', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (_url: string, init?: RequestInit) =>
+      init?.method === 'POST' ? Response.json({}) : Response.json({ entries: [] }),
+    ),
+  );
+  app = mount(NewEntry, {
+    target: document.body,
+    props: { collection: 'pages', onclose: () => {} },
+  });
+  await settle();
+  const title = document.querySelector<HTMLInputElement>('#new-title');
+  if (!title) throw new Error('title missing');
+  title.value = 'About';
+  title.dispatchEvent(new Event('input', { bubbles: true }));
+  document.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+  await settle();
+
+  expect(document.body.textContent).toContain('That did not work');
+  expect(document.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false);
+  expect(location.pathname).not.toContain('undefined');
 });

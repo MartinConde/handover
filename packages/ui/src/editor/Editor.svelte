@@ -14,6 +14,7 @@ import CanvasWorkspace from '../canvas/CanvasWorkspace.svelte';
 import type { CanvasRenderRequest } from '../canvas/canvas-renderer';
 import OffsiteDialog, { type Target } from '../content/Offsite.svelte';
 import { invalidateEntryDirectory } from '../entry-directory.js';
+import type { UiLocale } from '../i18n.js';
 import {
   guardEntryActions,
   guardNavigation,
@@ -54,6 +55,7 @@ let {
   onrestored,
   restored,
   site,
+  uiLocale = 'en',
   onmode,
 }: {
   collection: string;
@@ -122,6 +124,7 @@ let {
   section?: string;
   /** The site's origin, for the SEO previews; none, and the panel draws none. */
   site?: string;
+  uiLocale?: UiLocale;
   /** A file of this entry was made, removed or settled, so the entry has to be read again. */
   onchanged: () => void | Promise<void>;
   /** Re-read the whole entry without flushing the session whose authoritative data changed. */
@@ -1365,7 +1368,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           onfocusout={canvasCompleted}
         >
           <fieldset disabled={locked || entrySession.localeMutationBlocked(entry.sourceLocale)}>
-            <Fields {fields} blocks={entry.blocks} {problems} {mediaBase} locale={entry.sourceLocale} session={entrySession} inheritedSeo={inherited(entry.sourceLocale, data)} {site} servedAt={localeUrl(entry.sourceLocale)} bind:root={entrySession.snapshots[entry.sourceLocale]!} structureLocked={entrySession.structureMutationBlocked()} textOnly={entrySession.sourceTextOnly(entry.sourceLocale)} />
+            <Fields {fields} blocks={entry.blocks} {problems} {mediaBase} locale={entry.sourceLocale} {uiLocale} session={entrySession} inheritedSeo={inherited(entry.sourceLocale, data)} {site} servedAt={localeUrl(entry.sourceLocale)} bind:root={entrySession.snapshots[entry.sourceLocale]!} structureLocked={entrySession.structureMutationBlocked()} textOnly={entrySession.sourceTextOnly(entry.sourceLocale)} />
           </fieldset>
         </form>
       {/if}
@@ -1472,6 +1475,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
               actionBlocked={busy || sending}
               url={localeUrl(shown)}
               {site}
+              {uiLocale}
               onsaved={(pending) => {
                 renew();
                 setPending(shown, pending);
@@ -1491,6 +1495,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           publishAction={canvasPublish}
           active={mode === 'split' || mode === 'canvas'}
           {locale}
+          {uiLocale}
           {url}
           request={canvasRequest}
           currentVersion={() => entrySession.contentVersion(locale)}
@@ -1580,6 +1585,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {collection}
       index={entryUrl('default', routing, entry.index, '', locale) ?? undefined}
       {busy}
+      {uiLocale}
       error={statusFailed}
       returnTo={actionTrigger}
       onconfirm={(target: Target) => setStatus(true, target)}
@@ -1613,6 +1619,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {collection}
       index={entryUrl('default', routing, entry.index, '', locale) ?? undefined}
       {busy}
+      {uiLocale}
       error={actionFailed}
       returnTo={actionTrigger}
       onconfirm={remove}
@@ -1630,6 +1637,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {collection}
       index={localeIndex(going)}
       {busy}
+      {uiLocale}
       error={actionFailed}
       returnTo={actionTrigger}
       onconfirm={(target: Target) => turnOff(going, target)}

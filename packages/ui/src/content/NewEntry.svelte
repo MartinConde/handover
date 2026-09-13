@@ -8,10 +8,18 @@ import { request as fetch } from '../request.js';
 
 import { entryName } from '@handover/core';
 import { invalidateEntryDirectory } from '../entry-directory.js';
+import { messageText, responseMessage, type UiMessage } from '../errors.js';
+import { messageOptions, type UiLocale } from '../i18n.js';
 import { navigate } from '../navigate';
+import * as m from '../paraglide/messages.js';
 import Modal from '../shared/Modal.svelte';
 
-let { collection, onclose }: { collection: string; onclose: () => void } = $props();
+let {
+  collection,
+  uiLocale = 'en',
+  onclose,
+}: { collection: string; uiLocale?: UiLocale; onclose: () => void } = $props();
+const options = $derived(messageOptions(uiLocale));
 
 // Read when the dialog opens, so the dashboard opens it exactly as the list does.
 let taken = $state<string[]>([]);
@@ -19,10 +27,10 @@ let templates = $state<string[]>([]);
 let text = $state('');
 let starter = $state('');
 let busy = $state(false);
-let error = $state('');
+let error = $state<UiMessage>();
 let directoryLoading = $state(true);
 let directoryCurrent = $state(false);
-let directoryError = $state('');
+let directoryError = $state<UiMessage>();
 let loadRequest = 0;
 
 $effect(() => {
@@ -32,23 +40,39 @@ $effect(() => {
 async function load(name: string) {
   const mine = ++loadRequest;
   directoryLoading = true;
-  directoryError = '';
+  directoryError = undefined;
   const res = await fetch(`/admin/api/entries/${name}`);
   if (mine !== loadRequest) return;
   directoryLoading = false;
   if (!res.ok) {
     directoryCurrent = false;
-    directoryError = `Could not check existing ${name}. Check the connection and try again.`;
+    directoryError = await responseMessage(res, 'NEW_ENTRY_DIRECTORY_FAILED');
     return;
   }
-  const body = (await res.json()) as { entries?: { id: string }[]; templates?: string[] };
+  const body = (await res.json().catch(() => undefined)) as
+    | { entries?: unknown; templates?: unknown }
+    | undefined;
   if (mine !== loadRequest) return;
-  taken = (body.entries ?? []).map((entry) => entry.id);
-  templates = body.templates ?? [];
+  if (
+    !body ||
+    (body.entries !== undefined && !Array.isArray(body.entries)) ||
+    (body.templates !== undefined && !Array.isArray(body.templates))
+  ) {
+    directoryCurrent = false;
+    directoryError = { code: 'NEW_ENTRY_DIRECTORY_FAILED' };
+    return;
+  }
+  taken = ((body.entries ?? []) as { id: string }[]).map((entry) => entry.id);
+  templates = (body.templates ?? []) as string[];
   directoryCurrent = true;
 }
 
 const singular = $derived(nameOf(collection));
+const directoryText = $derived(
+  directoryError?.code === 'CONNECTION_LOST'
+    ? messageText(directoryError, uiLocale)
+    : m.new_entry_directory_failed({ collection }, options),
+);
 // The same derivation the server runs, so the dialog can promise the file name.
 const preview = $derived(entryName('default', text, taken));
 // `flat-by-the-sea` → `Flat by the sea`, which is all a file name has to say to be picked.
@@ -57,36 +81,42 @@ const starterLabel = (name: string) => {
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
 
-// A 409 or a 503 is the server's own sentence and reads better than anything said here.
 async function create(event: Event) {
   event.preventDefault();
   if (!directoryCurrent) return;
   busy = true;
-  error = '';
+  error = undefined;
   const res = await fetch(`/admin/api/entries/${collection}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ title: text, ...(starter ? { template: starter } : {}) }),
   });
-  busy = false;
   if (!res.ok) {
-    error =
-      res.status === 409 || res.status === 503
-        ? await res.text()
-        : `That did not work (${res.status})`;
+    const failure = await responseMessage(res, 'ENTRY_CREATE_FAILED');
+    if (failure.code === 'ENTRY_CREATE_FAILED' && !failure.detail) {
+      const detail = await res.text().catch(() => '');
+      error = { ...failure, ...(detail ? { detail } : {}) };
+    } else error = failure;
+    busy = false;
     return;
   }
-  const { slug } = (await res.json()) as { slug: string };
+  const body = (await res.json().catch(() => undefined)) as { slug?: unknown } | undefined;
+  if (typeof body?.slug !== 'string' || !body.slug) {
+    error = { code: 'ENTRY_CREATE_FAILED' };
+    busy = false;
+    return;
+  }
+  busy = false;
   invalidateEntryDirectory();
-  navigate(`/admin/c/${collection}/${slug}`);
+  navigate(`/admin/c/${collection}/${body.slug}`);
 }
 </script>
 
 <Modal labelledby="new-entry-h" initialFocus="#new-title" dismissible={!busy} {onclose}>
-    <h2 id="new-entry-h">New {singular}</h2>
+    <h2 id="new-entry-h">{m.new_entry_heading({ collection: singular }, options)}</h2>
     <form onsubmit={create}>
       <div class="field">
-        <div class="label-row"><label for="new-title">Title</label></div>
+        <div class="label-row"><label for="new-title">{m.new_entry_title({}, options)}</label></div>
         <input
           class="input"
           id="new-title"
@@ -96,39 +126,40 @@ async function create(event: Event) {
         />
         <p class="hint" id="new-hint">
           {#if directoryCurrent}
-            Saved as <span class="filename">{preview}</span>. This becomes the web address.
+            {m.new_entry_saved_as_lead({}, options)} <span class="filename">{preview}</span>. {m.new_entry_saved_as_end({}, options)}
           {:else if directoryLoading}
-            Checking the available file name…
+            {m.new_entry_checking_name({}, options)}
           {:else}
-            The available file name could not be checked.
+            {m.new_entry_name_unavailable({}, options)}
           {/if}
         </p>
       </div>
       {#if directoryError}
         <div class="notice notice-danger entry-read-error" role="alert">
-          {directoryError}
-          <button class="btn-link" type="button" onclick={() => load(collection)}>Retry</button>
+          {directoryText}
+          {#if directoryError.detail}<span class="technical-detail">{m.common_technical_detail({ detail: directoryError.detail }, options)}</span>{/if}
+          <button class="btn-link" type="button" onclick={() => load(collection)}>{m.common_retry({}, options)}</button>
         </div>
       {/if}
       {#if templates.length}
         <fieldset>
-          <legend>Start from</legend>
+          <legend>{m.new_entry_start_from({}, options)}</legend>
           <label class="choice">
-            <input type="radio" name="starter" value="" bind:group={starter} /> Blank
+            <input type="radio" name="starter" value="" bind:group={starter} /> {m.new_entry_blank({}, options)}
           </label>
           {#each templates as name (name)}
             <label class="choice">
               <input type="radio" name="starter" value={name} bind:group={starter} />
-              {starterLabel(name)} <span class="desc">template</span>
+              {starterLabel(name)} <span class="desc">{m.new_entry_template({}, options)}</span>
             </label>
           {/each}
         </fieldset>
       {/if}
-      {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
+      {#if error}<div class="notice notice-danger" role="alert">{messageText(error, uiLocale)}{#if error.detail}<span class="technical-detail">{m.common_technical_detail({ detail: error.detail }, options)}</span>{/if}</div>{/if}
       <div class="actions">
-        <button class="btn" type="button" disabled={busy} onclick={onclose}>Cancel</button>
+        <button class="btn" type="button" disabled={busy} onclick={onclose}>{m.common_cancel({}, options)}</button>
         <button class="btn btn-primary" type="submit" disabled={busy || !directoryCurrent}>
-          {busy ? 'Creating…' : 'Create'}
+          {busy ? m.new_entry_creating({}, options) : m.new_entry_create({}, options)}
         </button>
       </div>
     </form>

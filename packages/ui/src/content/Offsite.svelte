@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { PickEntry } from '../entry-directory.js';
+import type { UiLocale } from '../i18n.js';
 import Modal from '../shared/Modal.svelte';
 import PagePicker from './PagePicker.svelte';
 
@@ -20,6 +21,7 @@ let {
   index,
   busy = false,
   error = '',
+  uiLocale = 'en',
   returnTo,
   onconfirm,
   onhide,
@@ -38,6 +40,7 @@ let {
   index?: string;
   busy?: boolean;
   error?: string;
+  uiLocale?: UiLocale;
   returnTo?: HTMLElement | null;
   onconfirm: (target: Target) => void;
   /** Deleting only: led with, since the client will want it back. */
@@ -110,6 +113,7 @@ const ready = $derived(kind === 'entry' ? Boolean(picked) : kind !== 'url' || ur
             id="offsite-pick"
             label="pages and entries"
             labelId="offsite-h"
+            {uiLocale}
             chosen={picked?.path}
             onpick={(entry) => (picked = entry)}
             onclose={() => (kind = index ? 'index' : 'none')}

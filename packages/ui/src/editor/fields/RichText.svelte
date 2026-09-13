@@ -7,6 +7,7 @@ import type { Selection } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import { onMount, untrack } from 'svelte';
 import PagePicker from '../../content/PagePicker.svelte';
+import type { UiLocale } from '../../i18n.js';
 import type {
   EntrySession,
   FieldCommandResult,
@@ -21,6 +22,7 @@ let {
   tier,
   value,
   locale = '',
+  uiLocale = 'en',
   invalid = false,
   describedby,
   address = '',
@@ -33,6 +35,7 @@ let {
   value: string;
   /** The language being written: a link to an entry points at the page that language serves. */
   locale?: string;
+  uiLocale?: UiLocale;
   /** The schema will not accept what is in here; the message sits under the field. */
   invalid?: boolean;
   describedby?: string;
@@ -358,7 +361,7 @@ const active = (b: { mark: string; attrs?: Record<string, unknown> }) =>
     </div>
     <div bind:this={element}></div>
     {#if linking}
-      <PagePicker id="{id}-link" label="pages and entries to link to" labelId={labelId} {locale} onpick={(entry) => linkTo(entry.urls[locale] ?? '', entry.title)} onurl={linkTo} onclose={() => (linking = false)} />
+      <PagePicker id="{id}-link" label="pages and entries to link to" labelId={labelId} {locale} {uiLocale} onpick={(entry) => linkTo(entry.urls[locale] ?? '', entry.title)} onurl={linkTo} onclose={() => (linking = false)} />
     {/if}
   </div>
 {/if}

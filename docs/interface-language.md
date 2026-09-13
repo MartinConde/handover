@@ -10,13 +10,13 @@ and expired-link screens, have a device-only picker so they remain readable befo
 ## What is translated now
 
 Language controls, sign-in, password-reset and expired-link flows, the complete Account screen,
-the signed-in shell, the dashboard, and collection entry lists are bilingual. Navigation,
-pending/build indicators, dashboard and entry-list states, dates, language names, accessibility
-labels, and already-visible shell or list failures reformat when the language changes. Dashboard
-and collection data are not reread, and typed values, filters, selected rows, the signed-in
-session, and an open editor remain in place. New-entry and page-picker dialogs, activity-event
-sentences, and the remaining admin screens are being converted in stages and can still contain
-English.
+the signed-in shell, the dashboard, collection entry lists, entry creation, and shared page/entry
+pickers are bilingual. Navigation, pending/build indicators, list and picker states, dates,
+language names, accessibility labels, validation, and retained failures reformat when the language
+changes. Dashboard, collection, and picker data are not reread, and typed values, filters, selected
+rows, creation starters, custom URLs, the signed-in session, and an open editor remain in place.
+Activity-event sentences and the remaining admin screens are being converted in stages and can
+still contain English.
 
 Handover-owned interface text is translated. Content and site configuration are not: collection
 labels, schema descriptions, custom validation messages, entry titles, names, URLs, provider
