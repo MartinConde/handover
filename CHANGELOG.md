@@ -8,7 +8,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   validation in the entry editor. Add stable descriptors and safe bounds parameters to draft/read
   problems while retaining field paths and legacy messages. Visible validation and scalar controls
   update on an English/Deutsch switch without another schema parse or content write; schema/check
-  messages and consumer global error maps remain authored.
+  messages and consumer global error maps remain authored. Integer failures explain that a whole
+  number is needed, character limits pluralize correctly, and numeric limits retain their precision
+  while using the interface language's decimal separator.
 
 - Translate entry-editor tabs, view controls, status and overflow actions, URL metadata, rename
   presentation, outline labels, and the removed-language timestamp into English and German. Live

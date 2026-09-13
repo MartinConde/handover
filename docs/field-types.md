@@ -109,9 +109,11 @@ controls; a schema-supplied label such as “Related page” remains exactly as 
 URL is typed, and a scheme the site will not accept is refused under the box rather than on save.
 Required fields and built-in scalar type, date, selection, text-length, and number-bound errors
 follow the account's interface language. Changing English/Deutsch reformats an error already under
-a control without parsing the entry again or changing its value. The schema's original message and
-field path remain in the API response; a message supplied by your schema or error map is shown
-exactly as written and is never inferred from matching Zod's English text.
+a control without parsing the entry again or changing its value. Integer rules ask for a whole
+number, one-character limits use singular wording, and decimal bounds keep their full numeric value
+with the interface language's decimal separator. The schema's original message and field path
+remain in the API response; a message supplied by your schema or error map is shown exactly as
+written and is never inferred from matching Zod's English text.
 Rich text is a TipTap editor whose toolbar has exactly the tier's
 constructs; its link button opens the same search box, and points at the address the
 language being written serves. A value that already contains something outside the tier

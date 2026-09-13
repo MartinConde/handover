@@ -41,8 +41,8 @@ function descriptorOf(issue: Issue): ProblemDescriptor | undefined {
   if (issue.input === undefined) return { code: 'FIELD_REQUIRED' };
   if (issue.code === 'invalid_type') {
     if (issue.expected === 'string') return { code: 'FIELD_EXPECTED_TEXT' };
-    if (issue.expected === 'number' || issue.expected === 'int')
-      return { code: 'FIELD_EXPECTED_NUMBER' };
+    if (issue.expected === 'number') return { code: 'FIELD_EXPECTED_NUMBER' };
+    if (issue.expected === 'int') return { code: 'FIELD_EXPECTED_INTEGER' };
     if (issue.expected === 'boolean') return { code: 'FIELD_EXPECTED_BOOLEAN' };
   }
   if (issue.code === 'invalid_format' && issue.format === 'date')

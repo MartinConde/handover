@@ -198,7 +198,7 @@ test('visible scalar validation and controls reformat without validating or repl
   const requestsBeforeSwitch = fetchMock.mock.calls.length;
 
   expect(q('#f-title-err')?.textContent).toBe('Required');
-  expect(q('#f-count-err')?.textContent).toBe('Enter a number greater than 0');
+  expect(q('#f-count-err')?.textContent).toBe('Enter a number greater than 1.5');
   expect(q('#f-note-err')?.textContent).toBe('Use the newsroom wording');
   expect(select.options[0]?.textContent).toBe('Choose…');
   expect(input.getAttribute('aria-required')).toBe('true');
@@ -210,7 +210,7 @@ test('visible scalar validation and controls reformat without validating or repl
   switchLocale();
 
   expect(q('#f-title-err')?.textContent).toBe('Erforderlich');
-  expect(q('#f-count-err')?.textContent).toBe('Gib eine Zahl größer als 0 ein');
+  expect(q('#f-count-err')?.textContent).toBe('Gib eine Zahl größer als 1,5 ein');
   expect(q('#f-featured-err')?.textContent).toBe('Wähle ein oder aus');
   expect(q('#f-availableFrom-err')?.textContent).toBe('Gib ein gültiges Datum ein');
   expect(q('#f-status-err')?.textContent).toBe('Wähle eine der verfügbaren Optionen');

@@ -49,6 +49,20 @@ const KNOWN_CODES = new Set([
   'FIELD_REQUIRED',
 ]);
 
+const numberFormats = new Map<UiLocale, Intl.NumberFormat>();
+
+function numberText(value: number, locale: UiLocale): string {
+  let format = numberFormats.get(locale);
+  if (!format) {
+    format = new Intl.NumberFormat(locale, {
+      maximumSignificantDigits: 21,
+      useGrouping: false,
+    });
+    numberFormats.set(locale, format);
+  }
+  return format.format(value);
+}
+
 function validationText(message: UiMessage, locale: UiLocale): string | undefined {
   const options = messageOptions(locale);
   switch (message.code) {
@@ -58,6 +72,8 @@ function validationText(message: UiMessage, locale: UiLocale): string | undefine
       return m.validation_expected_text({}, options);
     case 'FIELD_EXPECTED_NUMBER':
       return m.validation_expected_number({}, options);
+    case 'FIELD_EXPECTED_INTEGER':
+      return m.validation_expected_integer({}, options);
     case 'FIELD_EXPECTED_BOOLEAN':
       return m.validation_expected_boolean({}, options);
     case 'FIELD_INVALID_DATE':
@@ -66,6 +82,17 @@ function validationText(message: UiMessage, locale: UiLocale): string | undefine
       return m.validation_invalid_selection({}, options);
   }
   if (typeof message.limit !== 'number' || !Number.isFinite(message.limit)) return undefined;
+  if (
+    (message.code === 'FIELD_TEXT_TOO_SMALL' || message.code === 'FIELD_TEXT_TOO_BIG') &&
+    (Object.hasOwn(message, 'inclusive') ||
+      (Object.hasOwn(message, 'exact') && typeof message.exact !== 'boolean'))
+  )
+    return undefined;
+  if (
+    (message.code === 'FIELD_NUMBER_TOO_SMALL' || message.code === 'FIELD_NUMBER_TOO_BIG') &&
+    (Object.hasOwn(message, 'exact') || typeof message.inclusive !== 'boolean')
+  )
+    return undefined;
   const limit = message.limit;
   switch (message.code) {
     case 'FIELD_TEXT_TOO_SMALL':
@@ -76,16 +103,18 @@ function validationText(message: UiMessage, locale: UiLocale): string | undefine
       return message.exact === true
         ? m.validation_text_exact({ limit }, options)
         : m.validation_text_maximum({ limit }, options);
-    case 'FIELD_NUMBER_TOO_SMALL':
-      if (typeof message.inclusive !== 'boolean') return undefined;
+    case 'FIELD_NUMBER_TOO_SMALL': {
+      const formatted = numberText(limit, locale);
       return message.inclusive
-        ? m.validation_number_minimum({ limit }, options)
-        : m.validation_number_greater({ limit }, options);
-    case 'FIELD_NUMBER_TOO_BIG':
-      if (typeof message.inclusive !== 'boolean') return undefined;
+        ? m.validation_number_minimum({ limit: formatted }, options)
+        : m.validation_number_greater({ limit: formatted }, options);
+    }
+    case 'FIELD_NUMBER_TOO_BIG': {
+      const formatted = numberText(limit, locale);
       return message.inclusive
-        ? m.validation_number_maximum({ limit }, options)
-        : m.validation_number_less({ limit }, options);
+        ? m.validation_number_maximum({ limit: formatted }, options)
+        : m.validation_number_less({ limit: formatted }, options);
+    }
     default:
       return undefined;
   }

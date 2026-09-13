@@ -20,13 +20,14 @@ what the collection schema will not accept, `[{ "path": "body.1.heading", "messa
 accepts an additive `descriptor: { "code": "…" }` on a problem for Handover-owned rules, while
 retaining `message` for compatibility and as the exact display text for custom schema errors.
 Built-in scalar descriptors use `FIELD_REQUIRED`, `FIELD_EXPECTED_TEXT`,
-`FIELD_EXPECTED_NUMBER`, `FIELD_EXPECTED_BOOLEAN`, `FIELD_INVALID_DATE`,
+`FIELD_EXPECTED_NUMBER`, `FIELD_EXPECTED_INTEGER`, `FIELD_EXPECTED_BOOLEAN`, `FIELD_INVALID_DATE`,
 `FIELD_INVALID_SELECTION`, `FIELD_TEXT_TOO_SMALL`, `FIELD_TEXT_TOO_BIG`,
 `FIELD_NUMBER_TOO_SMALL`, or `FIELD_NUMBER_TOO_BIG`. A bounds descriptor also carries a finite
 numeric `limit` and, where needed, boolean `inclusive` or `exact`; malformed or unknown descriptors
-fall back to `message`. Changing interface language reformats a known descriptor from session state
-and never matches or rewrites `message`. Schema/check messages and consumer global error maps remain
-unmarked and authored. Keys
+fall back to `message`. The numeric limit remains a number on the wire; only its display uses the
+interface language's decimal separator. Changing interface language reformats a known descriptor
+from session state and never matches or rewrites `message`. Schema/check messages and consumer
+global error maps remain unmarked and authored. Keys
 beginning with `_` are ignored: they belong to the file, not to the form. `400` if `data`
 is not an object or holds a shape the serialiser cannot write back (a nested array), with
 the reason as the body; `404` if the collection or the file does not exist. `409` with

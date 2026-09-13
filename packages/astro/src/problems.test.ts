@@ -47,6 +47,7 @@ test('a key that is simply absent reads as required, whatever its type', () => {
 test('built-in scalar type issues carry stable identities and keep their legacy messages', () => {
   const schema = z.object({
     title: z.string(),
+    amount: z.number(),
     count: z.number().int(),
     featured: z.boolean(),
     availableFrom: z.iso.date(),
@@ -56,6 +57,7 @@ test('built-in scalar type issues carry stable identities and keep their legacy 
   expect(
     entryProblems(schema, {
       title: 4,
+      amount: '4',
       count: 1.5,
       featured: 'yes',
       availableFrom: '13/09/2026',
@@ -68,9 +70,14 @@ test('built-in scalar type issues carry stable identities and keep their legacy 
       descriptor: { code: 'FIELD_EXPECTED_TEXT' },
     },
     {
+      path: 'amount',
+      message: 'Invalid input: expected number, received string',
+      descriptor: { code: 'FIELD_EXPECTED_NUMBER' },
+    },
+    {
       path: 'count',
       message: 'Invalid input: expected int, received number',
-      descriptor: { code: 'FIELD_EXPECTED_NUMBER' },
+      descriptor: { code: 'FIELD_EXPECTED_INTEGER' },
     },
     {
       path: 'featured',
@@ -90,50 +97,83 @@ test('built-in scalar type issues carry stable identities and keep their legacy 
   ]);
 });
 
-test('a one-option enum is a selection while a literal discriminator is not', () => {
+test('a one-option enum is selection validation', () => {
   expect(entryProblems(z.enum(['draft']), 'live')[0]?.descriptor).toEqual({
     code: 'FIELD_INVALID_SELECTION',
   });
+});
+
+test('a literal discriminator is not selection validation', () => {
   expect(entryProblems(z.literal('draft'), 'live')[0]?.descriptor).toBeUndefined();
 });
 
-test('built-in scalar bounds carry only safe formatting parameters', () => {
-  const schema = z.object({
-    short: z.string().min(3),
-    long: z.string().max(5),
-    exact: z.string().length(4),
-    low: z.number().min(2),
-    high: z.number().lt(10),
-  });
+test.each([
+  [
+    'text minimum',
+    z.string().min(3),
+    'x',
+    'Too small: expected string to have >=3 characters',
+    { code: 'FIELD_TEXT_TOO_SMALL', limit: 3 },
+  ],
+  [
+    'text maximum',
+    z.string().max(5),
+    'abcdef',
+    'Too big: expected string to have <=5 characters',
+    { code: 'FIELD_TEXT_TOO_BIG', limit: 5 },
+  ],
+  [
+    'exact text while short',
+    z.string().length(4),
+    'x',
+    'Too small: expected string to have >=4 characters',
+    { code: 'FIELD_TEXT_TOO_SMALL', exact: true, limit: 4 },
+  ],
+  [
+    'exact text while long',
+    z.string().length(4),
+    'abcdef',
+    'Too big: expected string to have <=4 characters',
+    { code: 'FIELD_TEXT_TOO_BIG', exact: true, limit: 4 },
+  ],
+  [
+    'inclusive number minimum',
+    z.number().min(2),
+    1,
+    'Too small: expected number to be >=2',
+    { code: 'FIELD_NUMBER_TOO_SMALL', inclusive: true, limit: 2 },
+  ],
+  [
+    'exclusive number minimum',
+    z.number().gt(2),
+    2,
+    'Too small: expected number to be >2',
+    { code: 'FIELD_NUMBER_TOO_SMALL', inclusive: false, limit: 2 },
+  ],
+  [
+    'inclusive number maximum',
+    z.number().max(10),
+    11,
+    'Too big: expected number to be <=10',
+    { code: 'FIELD_NUMBER_TOO_BIG', inclusive: true, limit: 10 },
+  ],
+  [
+    'exclusive number maximum',
+    z.number().lt(10),
+    10,
+    'Too big: expected number to be <10',
+    { code: 'FIELD_NUMBER_TOO_BIG', inclusive: false, limit: 10 },
+  ],
+] as const)(
+  '%s carries safe formatting parameters',
+  (_name, schema, input, message, descriptor) => {
+    expect(entryProblems(schema, input)).toEqual([{ path: '', message, descriptor }]);
+  },
+);
 
-  expect(
-    entryProblems(schema, { short: 'x', long: 'abcdef', exact: 'x', low: 1, high: 10 }),
-  ).toEqual([
-    {
-      path: 'short',
-      message: 'Too small: expected string to have >=3 characters',
-      descriptor: { code: 'FIELD_TEXT_TOO_SMALL', limit: 3 },
-    },
-    {
-      path: 'long',
-      message: 'Too big: expected string to have <=5 characters',
-      descriptor: { code: 'FIELD_TEXT_TOO_BIG', limit: 5 },
-    },
-    {
-      path: 'exact',
-      message: 'Too small: expected string to have >=4 characters',
-      descriptor: { code: 'FIELD_TEXT_TOO_SMALL', exact: true, limit: 4 },
-    },
-    {
-      path: 'low',
-      message: 'Too small: expected number to be >=2',
-      descriptor: { code: 'FIELD_NUMBER_TOO_SMALL', inclusive: true, limit: 2 },
-    },
-    {
-      path: 'high',
-      message: 'Too big: expected number to be <10',
-      descriptor: { code: 'FIELD_NUMBER_TOO_BIG', inclusive: false, limit: 10 },
-    },
+test('a non-finite scalar bound stays unmarked', () => {
+  expect(entryProblems(z.number().min(Number.POSITIVE_INFINITY), 1)).toEqual([
+    { path: '', message: 'Too small: expected number to be >=Infinity' },
   ]);
 });
 
@@ -141,11 +181,13 @@ test('schema-authored messages stay unmarked even when they equal a Zod default'
   const schema = z.object({
     title: z.string({ error: 'Required' }),
     summary: z.string().min(5, 'Too small: expected string to have >=5 characters'),
+    whole: z.number().int('Use whole items'),
   });
 
-  expect(entryProblems(schema, { summary: 'x' })).toEqual([
+  expect(entryProblems(schema, { summary: 'x', whole: 1.5 })).toEqual([
     { path: 'title', message: 'Required' },
     { path: 'summary', message: 'Too small: expected string to have >=5 characters' },
+    { path: 'whole', message: 'Use whole items' },
   ]);
 });
 

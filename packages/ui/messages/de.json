@@ -426,12 +426,40 @@
   "validation_this_field": "Dieses Feld",
   "validation_expected_text": "Gib Text ein",
   "validation_expected_number": "Gib eine Zahl ein",
+  "validation_expected_integer": "Gib eine ganze Zahl ein",
   "validation_expected_boolean": "Wähle ein oder aus",
   "validation_invalid_date": "Gib ein gültiges Datum ein",
   "validation_invalid_selection": "Wähle eine der verfügbaren Optionen",
-  "validation_text_minimum": "Gib mindestens {limit} Zeichen ein",
-  "validation_text_maximum": "Gib höchstens {limit} Zeichen ein",
-  "validation_text_exact": "Gib genau {limit} Zeichen ein",
+  "validation_text_minimum": [
+    {
+      "declarations": ["input limit", "local limitPlural = limit: plural"],
+      "selectors": ["limitPlural"],
+      "match": {
+        "limitPlural=one": "Gib mindestens {limit} Zeichen ein",
+        "limitPlural=other": "Gib mindestens {limit} Zeichen ein"
+      }
+    }
+  ],
+  "validation_text_maximum": [
+    {
+      "declarations": ["input limit", "local limitPlural = limit: plural"],
+      "selectors": ["limitPlural"],
+      "match": {
+        "limitPlural=one": "Gib höchstens {limit} Zeichen ein",
+        "limitPlural=other": "Gib höchstens {limit} Zeichen ein"
+      }
+    }
+  ],
+  "validation_text_exact": [
+    {
+      "declarations": ["input limit", "local limitPlural = limit: plural"],
+      "selectors": ["limitPlural"],
+      "match": {
+        "limitPlural=one": "Gib genau {limit} Zeichen ein",
+        "limitPlural=other": "Gib genau {limit} Zeichen ein"
+      }
+    }
+  ],
   "validation_number_minimum": "Gib {limit} oder mehr ein",
   "validation_number_greater": "Gib eine Zahl größer als {limit} ein",
   "validation_number_maximum": "Gib {limit} oder weniger ein",

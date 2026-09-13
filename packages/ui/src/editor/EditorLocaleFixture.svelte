@@ -67,8 +67,8 @@ const entry = {
         { path: 'title', message: 'Required', descriptor: { code: 'FIELD_REQUIRED' } },
         {
           path: 'count',
-          message: 'Too small: expected number to be >0',
-          descriptor: { code: 'FIELD_NUMBER_TOO_SMALL', inclusive: false, limit: 0 },
+          message: 'Too small: expected number to be >1.5',
+          descriptor: { code: 'FIELD_NUMBER_TOO_SMALL', inclusive: false, limit: 1.5 },
         },
         {
           path: 'featured',
