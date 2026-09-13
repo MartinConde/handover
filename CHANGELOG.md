@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Localize required and built-in scalar type, date, selection, text-length, and number-bound
+  validation in the entry editor. Add stable descriptors and safe bounds parameters to draft/read
+  problems while retaining field paths and legacy messages. Visible validation and scalar controls
+  update on an English/Deutsch switch without another schema parse or content write; schema/check
+  messages and consumer global error maps remain authored.
+
 - Translate entry-editor tabs, view controls, status and overflow actions, URL metadata, rename
   presentation, outline labels, and the removed-language timestamp into English and German. Live
   interface-language changes keep the editor session, content language, focused field and typed

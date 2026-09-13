@@ -24,9 +24,11 @@ import Menus, { type Menu } from '../../content/Menus.svelte';
 import PagePicker from '../../content/PagePicker.svelte';
 import { EMPTY_ENTRY_DIRECTORY, type Pickable, readEntryDirectory } from '../../entry-directory.js';
 import type { UiLocale } from '../../i18n.js';
+import { messageOptions } from '../../i18n.js';
 import Focal from '../../media/Focal.svelte';
 import Media from '../../media/Media.svelte';
 import { fileSize, type MediaItem } from '../../media/upload.js';
+import * as m from '../../paraglide/messages.js';
 import MediaImage from '../../shared/MediaImage.svelte';
 import type {
   EntrySession,
@@ -703,27 +705,27 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <p class="hint">Same in every language</p>
     {:else if field.type === 'text'}
       {@render labelRow(id, field, text, at)}
-      <TextField {id} invalid={bad} describedBy={says} value={str(at)} onvalue={(value) => write(at, value)} />
+      <TextField {id} invalid={bad} describedBy={says} required={field.required} value={str(at)} onvalue={(value) => write(at, value)} />
     {:else if field.type === 'number'}
       {@render labelRow(id, field, text, at)}
-      <input class="input" {id} type="number" step="any" aria-invalid={bad} aria-describedby={says} value={num(at)} oninput={(e) => write(at, e.currentTarget.value === '' ? undefined : e.currentTarget.valueAsNumber)} />
+      <input class="input" {id} type="number" step="any" aria-invalid={bad} aria-describedby={says} aria-required={field.required ? 'true' : undefined} value={num(at)} oninput={(e) => write(at, e.currentTarget.value === '' ? undefined : e.currentTarget.valueAsNumber)} />
     {:else if field.type === 'boolean'}
-      <label class="switch" for={id}><input type="checkbox" role="switch" {id} aria-invalid={bad} aria-describedby={says} checked={read(at) === true} onchange={(e) => write(at, e.currentTarget.checked)} /><span>{text}</span></label>
+      <label class="switch" for={id}><input type="checkbox" role="switch" {id} aria-invalid={bad} aria-describedby={says} aria-required={field.required ? 'true' : undefined} checked={read(at) === true} onchange={(e) => write(at, e.currentTarget.checked)} /><span>{text}</span></label>
     {:else if field.type === 'date'}
       {@render labelRow(id, field, text, at)}
-      <input class="input" {id} type="date" aria-invalid={bad} aria-describedby={says} value={str(at)} oninput={(e) => write(at, e.currentTarget.value || undefined)} />
+      <input class="input" {id} type="date" aria-invalid={bad} aria-describedby={says} aria-required={field.required ? 'true' : undefined} value={str(at)} oninput={(e) => write(at, e.currentTarget.value || undefined)} />
     {:else if field.type === 'select'}
       {#if field.options.length <= 5}
         <fieldset aria-describedby={says}>
           <legend>{text}{#if field.required}<span class="req" aria-hidden="true">*</span>{/if}</legend>
           {#each field.options as option (option)}
-            <label class="choice"><input type="radio" name={id} value={option} checked={read(at) === option} onchange={() => write(at, option)} /><span>{capitalise(option)}</span></label>
+            <label class="choice"><input type="radio" name={id} value={option} required={field.required} checked={read(at) === option} onchange={() => write(at, option)} /><span>{capitalise(option)}</span></label>
           {/each}
         </fieldset>
       {:else}
         {@render labelRow(id, field, text, at)}
-        <select class="input" {id} aria-invalid={bad} aria-describedby={says} value={str(at)} onchange={(e) => write(at, e.currentTarget.value || undefined)}>
-          <option value="">Choose…</option>
+        <select class="input" {id} aria-invalid={bad} aria-describedby={says} aria-required={field.required ? 'true' : undefined} value={str(at)} onchange={(e) => write(at, e.currentTarget.value || undefined)}>
+          <option value="">{m.field_choose({}, messageOptions(uiLocale))}</option>
           {#each field.options as option (option)}
             <option value={option}>{capitalise(option)}</option>
           {/each}

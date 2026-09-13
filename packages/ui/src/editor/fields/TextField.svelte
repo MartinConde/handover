@@ -4,12 +4,14 @@ let {
   value,
   invalid,
   describedBy,
+  required = false,
   onvalue,
 }: {
   id: string;
   value: string;
   invalid?: 'true';
   describedBy?: string;
+  required?: boolean;
   onvalue: (value: string) => void;
 } = $props();
 
@@ -25,6 +27,7 @@ const multiline = value.length > 80 || value.includes('\n');
     {id}
     aria-invalid={invalid}
     aria-describedby={describedBy}
+    aria-required={required ? 'true' : undefined}
     {value}
     oninput={(event) => onvalue(event.currentTarget.value)}
   ></textarea>
@@ -35,6 +38,7 @@ const multiline = value.length > 80 || value.includes('\n');
     type="text"
     aria-invalid={invalid}
     aria-describedby={describedBy}
+    aria-required={required ? 'true' : undefined}
     {value}
     oninput={(event) => onvalue(event.currentTarget.value)}
   />

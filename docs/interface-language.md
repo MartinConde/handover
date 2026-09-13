@@ -14,8 +14,10 @@ the signed-in shell, the dashboard, collection entry lists, entry creation, shar
 pickers, and the entry editor's tabs and header controls are bilingual. Navigation, pending/build
 indicators, list and picker states, editor URL metadata, converted dates, accessibility labels,
 validation that already carries a Handover descriptor, and retained editor save/lock/hold feedback
-reformat when the language changes. Built-in validation producers are still being converted to
-emit those descriptors. Dashboard, collection, picker, and open-entry data are not reread, and typed
+reformat when the language changes. Required fields and built-in scalar type, date, selection,
+text-length and number-bound validation now emit those descriptors; structured fields and widget-
+owned validation are still being converted. Dashboard, collection, picker, and open-entry data are
+not reread, and typed
 values, queued saves, undo history, filters, selected rows, creation starters, custom URLs, the
 signed-in session, editor content language, and the active editor field remain in place.
 Activity-event sentences and the remaining admin screens are being converted in stages and can

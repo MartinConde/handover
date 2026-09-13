@@ -1102,7 +1102,7 @@ export function createEntrySession({
       return true;
     },
     /** Missing required content pauses Canvas rendering, never draft persistence. */
-    incompleteFields(locale: string): Record<string, string> {
+    incompleteFields(locale: string, uiLocale: UiLocale = 'en'): Record<string, string> {
       return form
         ? requiredFieldProblems(
             form.fields,
@@ -1110,6 +1110,7 @@ export function createEntrySession({
             form.blocks,
             [],
             locale !== sourceLocale,
+            uiLocale,
           )
         : {};
     },

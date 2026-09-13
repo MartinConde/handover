@@ -1428,7 +1428,7 @@ test('an entry returns its fields and its parsed data, and no sha', async () => 
     revisions: {},
     pending: [],
     held: false,
-    problems: [{ path: 'address', message: 'Required' }],
+    problems: [{ path: 'address', message: 'Required', descriptor: { code: 'FIELD_REQUIRED' } }],
     // On the site: `_status` is absent, so no `redirects` key comes with it either.
     hidden: false,
     locales: ['en'],
@@ -1744,8 +1744,8 @@ test('an autosave the schema refuses is stored anyway, with what is missing name
     updated_at: 1755864000000,
     pending: true,
     problems: [
-      { path: 'rooms', message: 'Required' },
-      { path: 'address', message: 'Required' },
+      { path: 'rooms', message: 'Required', descriptor: { code: 'FIELD_REQUIRED' } },
+      { path: 'address', message: 'Required', descriptor: { code: 'FIELD_REQUIRED' } },
     ],
   });
   expect(saveDraft).toHaveBeenCalledWith(

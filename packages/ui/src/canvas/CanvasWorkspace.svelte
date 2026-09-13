@@ -126,7 +126,7 @@ let resizing = $state<{
   startX: number;
   startWidth: number;
 }>();
-const incomplete = $derived(session.incompleteFields(locale));
+const incomplete = $derived(session.incompleteFields(locale, uiLocale));
 const incompletePaths = $derived(Object.keys(incomplete));
 const issues = $derived(Object.entries({ ...incomplete, ...problems }));
 // Untouched required fields are an ordinary work-in-progress state. Review fields reveals

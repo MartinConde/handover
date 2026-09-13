@@ -1,4 +1,7 @@
 import type { Field } from '@handover/core';
+import type { UiLocale } from '../i18n.js';
+import { messageOptions } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 
 const object = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -15,6 +18,7 @@ export function requiredFieldProblems(
   blocks: Record<string, Field[]> = {},
   prefix: readonly string[] = [],
   translating = false,
+  uiLocale: UiLocale = 'en',
 ) {
   const problems: Record<string, string> = {};
   for (const field of fields) {
@@ -33,6 +37,7 @@ export function requiredFieldProblems(
             blocks,
             path,
             translating,
+            uiLocale,
           ),
         );
       continue;
@@ -43,7 +48,14 @@ export function requiredFieldProblems(
         const children = field.type === 'array' ? field.item : (blocks[String(row._type)] ?? []);
         Object.assign(
           problems,
-          requiredFieldProblems(children, row, blocks, [...path, String(index)], translating),
+          requiredFieldProblems(
+            children,
+            row,
+            blocks,
+            [...path, String(index)],
+            translating,
+            uiLocale,
+          ),
         );
       });
     }
@@ -68,7 +80,11 @@ export function requiredFieldProblems(
                         ((value.type === 'entry' && filled(value.ref)) ||
                           (value.type === 'url' && filled(value.href)))
                       : object(value);
-    if (!present) problems[path.join('.')] = `${field.label || 'This field'} is required`;
+    if (!present)
+      problems[path.join('.')] = m.validation_required_field(
+        { field: field.label || m.validation_this_field({}, messageOptions(uiLocale)) },
+        messageOptions(uiLocale),
+      );
   }
   return problems;
 }

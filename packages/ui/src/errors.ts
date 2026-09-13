@@ -6,6 +6,9 @@ export interface UiMessage {
   code: string;
   status?: number;
   detail?: string;
+  limit?: number;
+  inclusive?: boolean;
+  exact?: boolean;
 }
 
 export interface UiProblem {
@@ -46,7 +49,51 @@ const KNOWN_CODES = new Set([
   'FIELD_REQUIRED',
 ]);
 
+function validationText(message: UiMessage, locale: UiLocale): string | undefined {
+  const options = messageOptions(locale);
+  switch (message.code) {
+    case 'FIELD_REQUIRED':
+      return m.validation_required({}, options);
+    case 'FIELD_EXPECTED_TEXT':
+      return m.validation_expected_text({}, options);
+    case 'FIELD_EXPECTED_NUMBER':
+      return m.validation_expected_number({}, options);
+    case 'FIELD_EXPECTED_BOOLEAN':
+      return m.validation_expected_boolean({}, options);
+    case 'FIELD_INVALID_DATE':
+      return m.validation_invalid_date({}, options);
+    case 'FIELD_INVALID_SELECTION':
+      return m.validation_invalid_selection({}, options);
+  }
+  if (typeof message.limit !== 'number' || !Number.isFinite(message.limit)) return undefined;
+  const limit = message.limit;
+  switch (message.code) {
+    case 'FIELD_TEXT_TOO_SMALL':
+      return message.exact === true
+        ? m.validation_text_exact({ limit }, options)
+        : m.validation_text_minimum({ limit }, options);
+    case 'FIELD_TEXT_TOO_BIG':
+      return message.exact === true
+        ? m.validation_text_exact({ limit }, options)
+        : m.validation_text_maximum({ limit }, options);
+    case 'FIELD_NUMBER_TOO_SMALL':
+      if (typeof message.inclusive !== 'boolean') return undefined;
+      return message.inclusive
+        ? m.validation_number_minimum({ limit }, options)
+        : m.validation_number_greater({ limit }, options);
+    case 'FIELD_NUMBER_TOO_BIG':
+      if (typeof message.inclusive !== 'boolean') return undefined;
+      return message.inclusive
+        ? m.validation_number_maximum({ limit }, options)
+        : m.validation_number_less({ limit }, options);
+    default:
+      return undefined;
+  }
+}
+
 export function messageText(message: UiMessage, locale: UiLocale): string {
+  const validation = validationText(message, locale);
+  if (validation) return validation;
   const options = messageOptions(locale);
   switch (message.code) {
     case 'CONNECTION_LOST':
@@ -117,8 +164,6 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
       return m.editor_save_refused({}, options);
     case 'EDITOR_SAVE_REVISION':
       return m.editor_save_revision({}, options);
-    case 'FIELD_REQUIRED':
-      return m.validation_required({}, options);
     default:
       return m.common_unknown_error({}, options);
   }
@@ -126,7 +171,5 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
 
 /** A descriptor marks Handover-owned validation; unmarked schema prose stays authored. */
 export function problemText(problem: UiProblem, locale: UiLocale): string {
-  return problem.descriptor?.code === 'FIELD_REQUIRED'
-    ? messageText(problem.descriptor, locale)
-    : problem.message;
+  return (problem.descriptor && validationText(problem.descriptor, locale)) ?? problem.message;
 }

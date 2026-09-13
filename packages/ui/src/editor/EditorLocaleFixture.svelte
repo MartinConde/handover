@@ -7,10 +7,12 @@ let {
   initialUiLocale = 'en',
   publishState = 'clean',
   feedback = false,
+  scalarFeedback = false,
 }: {
   initialUiLocale?: UiLocale;
   publishState?: 'clean' | 'drift' | 'missing';
   feedback?: boolean;
+  scalarFeedback?: boolean;
 } = $props();
 // svelte-ignore state_referenced_locally -- each test mount intentionally fixes its initial locale
 let uiLocale = $state<UiLocale>(initialUiLocale);
@@ -34,16 +36,62 @@ const entry = {
     ...(feedback
       ? [{ path: ['summary'], label: 'Summary', type: 'text', required: false } satisfies Field]
       : []),
+    ...(scalarFeedback
+      ? ([
+          { path: ['count'], label: 'Count', type: 'number', required: true },
+          { path: ['featured'], label: 'Featured', type: 'boolean', required: true },
+          { path: ['availableFrom'], label: 'Available from', type: 'date', required: true },
+          {
+            path: ['status'],
+            label: 'Status',
+            type: 'select',
+            required: true,
+            options: ['one', 'two', 'three', 'four', 'five', 'six'],
+          },
+          { path: ['note'], label: 'Note', type: 'text', required: false },
+        ] satisfies Field[])
+      : []),
   ] satisfies Field[],
   blocks: {},
-  data: { title: 'Seaview Cottage', ...(feedback ? { summary: '' } : {}) },
+  data: {
+    title: 'Seaview Cottage',
+    ...(feedback ? { summary: '' } : {}),
+    ...(scalarFeedback
+      ? { count: 0, featured: true, availableFrom: 'wrong', status: '', note: '' }
+      : {}),
+  },
   pending: [] as string[],
   published: ['en'],
-  problems: feedback
-    ? [{ path: 'summary', message: 'Required', descriptor: { code: 'FIELD_REQUIRED' } }]
-    : publishState === 'missing'
-      ? [{ path: 'title', message: 'Authored title requirement' }]
-      : ([] as { path: string; message: string }[]),
+  problems: scalarFeedback
+    ? [
+        { path: 'title', message: 'Required', descriptor: { code: 'FIELD_REQUIRED' } },
+        {
+          path: 'count',
+          message: 'Too small: expected number to be >0',
+          descriptor: { code: 'FIELD_NUMBER_TOO_SMALL', inclusive: false, limit: 0 },
+        },
+        {
+          path: 'featured',
+          message: 'Invalid input: expected boolean, received string',
+          descriptor: { code: 'FIELD_EXPECTED_BOOLEAN' },
+        },
+        {
+          path: 'availableFrom',
+          message: 'Invalid ISO date',
+          descriptor: { code: 'FIELD_INVALID_DATE' },
+        },
+        {
+          path: 'status',
+          message: 'Invalid option',
+          descriptor: { code: 'FIELD_INVALID_SELECTION' },
+        },
+        { path: 'note', message: 'Use the newsroom wording' },
+      ]
+    : feedback
+      ? [{ path: 'summary', message: 'Required', descriptor: { code: 'FIELD_REQUIRED' } }]
+      : publishState === 'missing'
+        ? [{ path: 'title', message: 'Authored title requirement' }]
+        : ([] as { path: string; message: string }[]),
   locales: ['en', 'de'],
   defaultLocale: 'en',
   sourceLocale: 'en',

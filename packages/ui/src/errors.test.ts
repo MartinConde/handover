@@ -1,5 +1,71 @@
 import { expect, test } from 'vitest';
-import { messageText, responseMessage } from './errors.js';
+import { messageText, problemText, responseMessage } from './errors.js';
+
+test('scalar type validation formats from stable identities', () => {
+  expect(
+    problemText({ message: 'legacy', descriptor: { code: 'FIELD_EXPECTED_TEXT' } }, 'en'),
+  ).toBe('Enter text');
+  expect(
+    problemText({ message: 'legacy', descriptor: { code: 'FIELD_EXPECTED_NUMBER' } }, 'de'),
+  ).toBe('Gib eine Zahl ein');
+  expect(
+    problemText({ message: 'legacy', descriptor: { code: 'FIELD_EXPECTED_BOOLEAN' } }, 'de'),
+  ).toBe('Wähle ein oder aus');
+  expect(problemText({ message: 'legacy', descriptor: { code: 'FIELD_INVALID_DATE' } }, 'de')).toBe(
+    'Gib ein gültiges Datum ein',
+  );
+  expect(
+    problemText({ message: 'legacy', descriptor: { code: 'FIELD_INVALID_SELECTION' } }, 'de'),
+  ).toBe('Wähle eine der verfügbaren Optionen');
+});
+
+test('scalar bounds format safe parameters in either language', () => {
+  expect(
+    problemText(
+      { message: 'legacy', descriptor: { code: 'FIELD_TEXT_TOO_SMALL', limit: 3 } },
+      'en',
+    ),
+  ).toBe('Enter at least 3 characters');
+  expect(
+    problemText(
+      {
+        message: 'legacy',
+        descriptor: { code: 'FIELD_NUMBER_TOO_SMALL', inclusive: false, limit: 0 },
+      },
+      'de',
+    ),
+  ).toBe('Gib eine Zahl größer als 0 ein');
+  expect(
+    problemText(
+      {
+        message: 'legacy',
+        descriptor: { code: 'FIELD_NUMBER_TOO_BIG', inclusive: true, limit: 10 },
+      },
+      'en',
+    ),
+  ).toBe('Enter 10 or less');
+});
+
+test('malformed and unknown validation descriptors keep the legacy message', () => {
+  expect(
+    problemText(
+      { message: 'Keep this', descriptor: { code: 'FIELD_TEXT_TOO_SMALL', limit: Number.NaN } },
+      'de',
+    ),
+  ).toBe('Keep this');
+  expect(
+    problemText(
+      {
+        message: 'Keep this too',
+        descriptor: { code: 'FIELD_NUMBER_TOO_BIG', limit: '10' as never },
+      },
+      'de',
+    ),
+  ).toBe('Keep this too');
+  expect(problemText({ message: 'Authored', descriptor: { code: 'OTHER_RULE' } }, 'de')).toBe(
+    'Authored',
+  );
+});
 
 test('a synthetic connection failure keeps a stable localizable identity', async () => {
   const descriptor = await responseMessage(

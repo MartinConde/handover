@@ -173,6 +173,56 @@ test('German publish tooltips keep the header reason order', async () => {
   ]);
 });
 
+test('visible scalar validation and controls reformat without validating or replacing input', async () => {
+  vi.useFakeTimers();
+  const fetchMock = vi.fn(async (url: string) =>
+    url.startsWith('/admin/api/locks/')
+      ? Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120_000 })
+      : url === '/admin/api/publish/checks'
+        ? Response.json({ results: [] })
+        : Response.json({}),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  app = mount(EditorLocaleFixture, {
+    target: document.body,
+    props: { scalarFeedback: true },
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync();
+  const input = q<HTMLInputElement>('input#f-title');
+  const select = q<HTMLSelectElement>('select#f-status');
+  if (!input || !select) throw new Error('scalar controls missing');
+  input.value = 'Words not validated yet';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dataset.validationProof = 'same-input';
+  const requestsBeforeSwitch = fetchMock.mock.calls.length;
+
+  expect(q('#f-title-err')?.textContent).toBe('Required');
+  expect(q('#f-count-err')?.textContent).toBe('Enter a number greater than 0');
+  expect(q('#f-note-err')?.textContent).toBe('Use the newsroom wording');
+  expect(select.options[0]?.textContent).toBe('Choose…');
+  expect(input.getAttribute('aria-required')).toBe('true');
+  expect(q('#f-count')?.getAttribute('aria-required')).toBe('true');
+  expect(q('#f-featured')?.getAttribute('aria-required')).toBe('true');
+  expect(q('#f-availableFrom')?.getAttribute('aria-required')).toBe('true');
+  expect(select.getAttribute('aria-required')).toBe('true');
+
+  switchLocale();
+
+  expect(q('#f-title-err')?.textContent).toBe('Erforderlich');
+  expect(q('#f-count-err')?.textContent).toBe('Gib eine Zahl größer als 0 ein');
+  expect(q('#f-featured-err')?.textContent).toBe('Wähle ein oder aus');
+  expect(q('#f-availableFrom-err')?.textContent).toBe('Gib ein gültiges Datum ein');
+  expect(q('#f-status-err')?.textContent).toBe('Wähle eine der verfügbaren Optionen');
+  expect(q('#f-note-err')?.textContent).toBe('Use the newsroom wording');
+  expect(q<HTMLInputElement>('input#f-title')).toBe(input);
+  expect(input.value).toBe('Words not validated yet');
+  expect(input.dataset.validationProof).toBe('same-input');
+  expect(q<HTMLSelectElement>('select#f-status')).toBe(select);
+  expect(select.options[0]?.textContent).toBe('Auswählen…');
+  expect(fetchMock).toHaveBeenCalledTimes(requestsBeforeSwitch);
+});
+
 test('visible validation and a pending save retranslate without losing queued edits', async () => {
   vi.useFakeTimers();
   const first = deferred<Response>();

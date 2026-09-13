@@ -50,8 +50,8 @@ test('empty optional groups and untranslated source fields do not block translat
   ];
   expect(requiredFieldProblems(fields, { enabled: false, count: 0 }, {}, [], true)).toEqual({});
   expect(
-    requiredFieldProblems(fields, { optional: {}, enabled: false, count: 0 }, {}, [], true),
+    requiredFieldProblems(fields, { optional: {}, enabled: false, count: 0 }, {}, [], true, 'de'),
   ).toEqual({
-    'optional.heading': 'Heading is required',
+    'optional.heading': 'Für „Heading“ ist eine Angabe erforderlich',
   });
 });
