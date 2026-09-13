@@ -43,6 +43,45 @@ function sameList(left, right) {
   return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, nested]) => [key, canonical(nested)]),
+  );
+}
+
+function declarationContract(declarations) {
+  return declarations
+    .map((declaration) => JSON.stringify(canonical(declaration)))
+    .sort()
+    .join(',');
+}
+
+async function parseLocaleBundles({ project, projectPath, settings, locales }) {
+  const plugin = (await project.plugins.get()).find(
+    ({ key }) => key === 'plugin.inlang.messageFormat',
+  );
+  if (!plugin?.toBeImportedFiles || !plugin.importFiles) {
+    throw new Error('Inlang message-format plugin does not expose its file parser');
+  }
+  const files = await plugin.toBeImportedFiles({ settings });
+  const bundles = new Map();
+  for (const locale of locales) {
+    const file = files.find((candidate) => candidate.locale === locale);
+    if (!file) throw new Error(`message-format plugin did not declare a ${locale} catalog`);
+    const content = await fs.promises.readFile(path.resolve(path.dirname(projectPath), file.path));
+    const parsed = await plugin.importFiles({
+      settings,
+      files: [{ locale, content, toBeImportedFilesMetadata: file.metadata }],
+    });
+    bundles.set(locale, new Map(parsed.bundles.map((bundle) => [bundle.id, bundle])));
+  }
+  return bundles;
+}
+
 function patternContract(pattern) {
   const placeholders = new Set();
 
@@ -125,16 +164,21 @@ export async function validateCatalogs({
       throw new Error(`Inlang project could not be loaded: ${formatErrors(projectErrors)}`);
     }
 
-    const [bundles, messages, variants] = await Promise.all([
-      project.db.selectFrom('bundle').selectAll().execute(),
+    const localeBundles = await parseLocaleBundles({
+      project,
+      projectPath,
+      settings,
+      locales: expectedLocales,
+    });
+
+    const [messages, variants] = await Promise.all([
       project.db.selectFrom('message').selectAll().execute(),
       project.db.selectFrom('variant').selectAll().execute(),
     ]);
-    if (bundles.length === 0 || messages.length === 0) {
+    if (messages.length === 0) {
       throw new Error('Inlang project loaded no catalog messages');
     }
 
-    const bundlesById = new Map(bundles.map((bundle) => [bundle.id, bundle]));
     const variantsByMessage = new Map();
     for (const variant of variants) {
       const list = variantsByMessage.get(variant.messageId) ?? [];
@@ -163,7 +207,12 @@ export async function validateCatalogs({
 
       for (const [key, message] of localeMessages) {
         if (!baseKeys.has(key)) continue;
-        const bundle = bundlesById.get(key);
+        const bundle = localeBundles.get(locale)?.get(key);
+        const baseBundle = localeBundles.get(settings.baseLocale)?.get(key);
+        if (!bundle || !baseBundle) {
+          problems.push(`${locale} parsed declaration is missing: ${key}`);
+          continue;
+        }
         const messageVariants = variantsByMessage.get(message.id) ?? [];
         if (
           messageVariants.length === 0 ||
@@ -175,6 +224,11 @@ export async function validateCatalogs({
 
         const baseMessage = baseMessages.get(key);
         const baseVariants = variantsByMessage.get(baseMessage.id) ?? [];
+        if (
+          declarationContract(bundle.declarations) !== declarationContract(baseBundle.declarations)
+        ) {
+          problems.push(`${locale} declaration contract differs: ${key}`);
+        }
         if (
           !sameList(
             message.selectors.map(({ name }) => name),

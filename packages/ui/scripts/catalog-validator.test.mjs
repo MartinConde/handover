@@ -95,6 +95,27 @@ describe('validateCatalogs', () => {
       }),
       'required fallback is missing: pending',
     ],
+    [
+      'selector input mismatch',
+      () => ({
+        ...baseMessages(),
+        pending: [
+          {
+            declarations: [
+              'input count',
+              'input otherCount',
+              'local countPlural = otherCount: plural',
+            ],
+            selectors: ['countPlural'],
+            match: {
+              'countPlural=one': '{count} pending change',
+              'countPlural=other': '{count} pending changes',
+            },
+          },
+        ],
+      }),
+      'declaration contract differs: pending',
+    ],
   ])('rejects a %s', async (_name, mutate, message) => {
     const de = JSON.parse(JSON.stringify(mutate(), (_key, value) => value));
     await expect(

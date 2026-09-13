@@ -48,11 +48,12 @@ pnpm --filter @handover/ui validate:messages
 
 The UI's build, dev, test, typecheck, and fixture commands all use the same validation/generation
 entry point, including when selected through the root recursive commands. The gate checks that
-every supported locale has exactly the English keys, translations are non-empty, placeholders and
-selectors keep their contracts, and each variant message has its required `other` or `*` fallback.
-It also requires exact agreement between the compiler locales/base locale and `UI_LOCALES` /
-`DEFAULT_UI_LOCALE` in framework-neutral core code. Paraglide's subsequent syntax/type compilation
-is a separate check; its English fallback does not make an incomplete German catalog valid.
+every supported locale has exactly the English keys, translations are non-empty, and parsed
+placeholders, declarations, selector inputs and selectors keep their contracts before Inlang merges
+locales. Each variant message must also have its required `other` or `*` fallback. The gate requires
+exact agreement between the compiler locales/base locale and `UI_LOCALES` / `DEFAULT_UI_LOCALE` in
+framework-neutral core code. Paraglide's subsequent syntax/type compilation is a separate check;
+its English fallback does not make an incomplete German catalog valid.
 
 When adding or changing a message, use a stable surface prefix such as `account_`, `editor_`,
 `media_`, or `canvas_`; add the English source and reviewed German translation together; and retain
