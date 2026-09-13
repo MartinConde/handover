@@ -1,6 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Media from './Media.svelte';
+import MediaLocaleFixture from './MediaLocaleFixture.svelte';
 import { type MediaItem, uploadImage } from './upload.js';
 
 // jsdom has no canvas, so the upload result is the one boundary faked; upload.ts is tested alone.
@@ -62,6 +63,7 @@ const deferred = <T>() => {
 afterEach(() => {
   unmount(app);
   vi.unstubAllGlobals();
+  vi.clearAllMocks();
 });
 
 const q = <T extends Element>(sel: string) => {
@@ -321,4 +323,82 @@ test('every id in the picker is unique, refused tiles included', async () => {
     const ref = el.getAttribute('aria-describedby') ?? el.getAttribute('aria-labelledby');
     expect(document.body.querySelectorAll(`#${ref}`)).toHaveLength(1);
   }
+});
+
+test('live language switching preserves picker state and resolves pending work in the latest language', async () => {
+  const pending = deferred<MediaItem>();
+  const failed = Object.assign(new Error('bucket diagnostic'), {
+    descriptor: { code: 'MEDIA_UPLOAD_BUCKET_FAILED', status: 503, detail: 'bucket diagnostic' },
+  });
+  vi.mocked(uploadImage)
+    .mockRejectedValueOnce(failed)
+    .mockImplementationOnce(() => pending.promise);
+  asked = [];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      asked.push(url);
+      return Response.json({
+        media: [
+          item({ id: 'a'.repeat(64), filename: 'harbour.jpg' }),
+          item({ id: 'b'.repeat(64), src: 'media/b.webp', filename: 'garden.jpg' }),
+        ],
+      });
+    }),
+  );
+  app = mount(MediaLocaleFixture, { target: document.body });
+  await new Promise((resolve) => setTimeout(resolve));
+  flushSync();
+
+  q<HTMLInputElement>(`input[value="${'b'.repeat(64)}"]`).click();
+  q<HTMLInputElement>(`input[value="${'a'.repeat(64)}"]`).click();
+  const search = q<HTMLInputElement>('#picker-q');
+  search.value = 'coast';
+  search.dispatchEvent(new Event('input', { bubbles: true }));
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  flushSync();
+  search.focus();
+  const chooser = q<HTMLInputElement>('#picker-file');
+  Object.defineProperty(chooser, 'files', {
+    value: [
+      new File([new Uint8Array([1])], 'broken.jpg', { type: 'image/jpeg' }),
+      new File([new Uint8Array([2])], 'new.jpg', { type: 'image/jpeg' }),
+    ],
+  });
+  chooser.dispatchEvent(new Event('change', { bubbles: true }));
+  await vi.waitFor(() => expect(uploadImage).toHaveBeenCalledTimes(2));
+  flushSync();
+
+  const dialog = q<HTMLDialogElement>('[aria-labelledby="picker-h"]');
+  const selected = Array.from(
+    document.querySelectorAll('.picker-side .upload-row .name'),
+    (node) => node.textContent,
+  );
+  const requestCount = asked.length;
+  q<HTMLButtonElement>('[data-locale-switch]').click();
+  flushSync();
+
+  expect(q<HTMLDialogElement>('[aria-labelledby="picker-h"]')).toBe(dialog);
+  expect(q<HTMLInputElement>('#picker-q')).toBe(search);
+  expect(search.value).toBe('coast');
+  expect(document.activeElement).toBe(search);
+  expect(
+    Array.from(
+      document.querySelectorAll('.picker-side .upload-row .name'),
+      (node) => node.textContent,
+    ),
+  ).toEqual(selected);
+  expect(asked).toHaveLength(requestCount);
+  expect(uploadImage).toHaveBeenCalledTimes(2);
+  expect(document.querySelectorAll('.upload-row .state')[0]?.textContent).toBe(
+    'Der Upload wurde vom Speicher abgelehnt (503).Technisches Detail: bucket diagnostic',
+  );
+  expect(document.body.textContent).toContain('Wird hochgeladen…');
+
+  pending.resolve(item({ id: 'c'.repeat(64), filename: 'new.jpg' }));
+  await new Promise((resolve) => setTimeout(resolve));
+  flushSync();
+  expect(document.body.textContent).toContain('Hochgeladen');
+  expect(document.body.textContent).toContain('3 ausgewählt');
+  expect(uploadImage).toHaveBeenCalledTimes(2);
 });

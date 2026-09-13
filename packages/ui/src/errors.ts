@@ -193,6 +193,32 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
       return m.editor_save_refused({}, options);
     case 'EDITOR_SAVE_REVISION':
       return m.editor_save_revision({}, options);
+    case 'MEDIA_UPLOAD_DECLARATION_FAILED':
+      return message.status
+        ? m.media_upload_declaration_failed_status({ status: message.status }, options)
+        : m.media_upload_declaration_failed({}, options);
+    case 'MEDIA_UPLOAD_DECLARATION_UNCONFIRMED':
+      return m.media_upload_declaration_unconfirmed({}, options);
+    case 'MEDIA_UPLOAD_DECLARATION_INVALID':
+      return m.media_upload_declaration_invalid({}, options);
+    case 'MEDIA_UPLOAD_BUCKET_FAILED':
+      return message.status
+        ? m.media_upload_bucket_failed_status({ status: message.status }, options)
+        : m.media_upload_bucket_failed({}, options);
+    case 'MEDIA_UPLOAD_BUCKET_UNCONFIRMED':
+      return m.media_upload_bucket_unconfirmed({}, options);
+    case 'MEDIA_UPLOAD_CONFIRMATION_FAILED':
+      return message.status
+        ? m.media_upload_confirmation_failed_status({ status: message.status }, options)
+        : m.media_upload_confirmation_failed({}, options);
+    case 'MEDIA_UPLOAD_CONFIRMATION_UNCONFIRMED':
+      return m.media_upload_confirmation_unconfirmed({}, options);
+    case 'MEDIA_UPLOAD_CONFIRMATION_INVALID':
+      return m.media_upload_confirmation_invalid({}, options);
+    case 'MEDIA_UPLOAD_NORMALIZATION_FAILED':
+      return m.media_upload_normalization_failed({}, options);
+    case 'MEDIA_UPLOAD_FAILED':
+      return m.media_upload_failed({}, options);
     default:
       return m.common_unknown_error({}, options);
   }

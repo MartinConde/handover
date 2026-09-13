@@ -1,10 +1,14 @@
 import { expect, test, vi } from 'vitest';
-import { uploadBlob, uploadFile } from './upload.js';
+import { fileSize, uploadBlob, uploadFile, uploadImage } from './upload.js';
 
 const bytes = new Uint8Array([1, 2, 3, 4]);
 // sha-256 of those four bytes, hand-computed with `printf '\x01\x02\x03\x04' | shasum -a 256`.
 const HASH = '9f64a747e1b97f131fabb6b447296c9b6f0201e79fb3c5356e6c77e89b6a806a';
 const blob = () => new Blob([bytes], { type: 'image/webp' });
+
+test('file sizes use the interface locale without changing the byte value', () => {
+  expect(fileSize(1_572_864, 'de')).toBe('1,5 MB');
+});
 
 /** The admin's own endpoints and the bucket, as one fake: every call, in the order it was made. */
 function server(answers: Record<string, unknown>) {
@@ -24,6 +28,7 @@ function server(answers: Record<string, unknown>) {
     });
     const answer = answers[`${method} ${url}`];
     if (answer === undefined) return new Response(null, { status: 200 });
+    if (answer instanceof Error) throw answer;
     if (answer instanceof Response) return answer;
     return Response.json(answer);
   });
@@ -69,6 +74,138 @@ test('a refusal reaches the caller in the words the Worker used', async () => {
   await expect(uploadBlob(blob(), { filename: 'huge.webp' }, { fetch })).rejects.toThrow(
     'an upload may be at most 10MB',
   );
+});
+
+const descriptorOf = async (operation: Promise<unknown>) => {
+  try {
+    await operation;
+  } catch (error) {
+    return (error as { descriptor?: unknown }).descriptor;
+  }
+  return undefined;
+};
+const signed = {
+  'POST /admin/api/media': {
+    upload: { key: `uploads/${HASH}.webp`, url: 'https://bucket/put' },
+  },
+};
+const uncertain = () =>
+  new Response('lost', {
+    status: 503,
+    headers: { 'x-handover-request-uncertain': 'true' },
+  });
+
+test.each([
+  {
+    name: 'declaration refusal',
+    answers: {
+      'POST /admin/api/media': Response.json(
+        { error: 'declared bytes were refused' },
+        { status: 422 },
+      ),
+    },
+    expected: {
+      code: 'MEDIA_UPLOAD_DECLARATION_FAILED',
+      status: 422,
+      detail: 'declared bytes were refused',
+    },
+  },
+  {
+    name: 'uncertain declaration',
+    answers: { 'POST /admin/api/media': uncertain() },
+    expected: { code: 'MEDIA_UPLOAD_DECLARATION_UNCONFIRMED', status: 503 },
+  },
+  {
+    name: 'malformed declaration success',
+    answers: { 'POST /admin/api/media': { upload: { key: `uploads/${HASH}.webp` } } },
+    expected: { code: 'MEDIA_UPLOAD_DECLARATION_INVALID' },
+  },
+  {
+    name: 'bucket refusal',
+    answers: {
+      ...signed,
+      'PUT https://bucket/put': new Response('full', { status: 507 }),
+    },
+    expected: { code: 'MEDIA_UPLOAD_BUCKET_FAILED', status: 507 },
+  },
+  {
+    name: 'unknown bucket result',
+    answers: {
+      ...signed,
+      'PUT https://bucket/put': new TypeError('socket closed'),
+    },
+    expected: {
+      code: 'MEDIA_UPLOAD_BUCKET_UNCONFIRMED',
+      detail: 'socket closed',
+    },
+  },
+  {
+    name: 'confirmation refusal',
+    answers: {
+      ...signed,
+      [`PUT /admin/api/media/${HASH}`]: Response.json(
+        { error: 'stored bytes did not match' },
+        { status: 422 },
+      ),
+    },
+    expected: {
+      code: 'MEDIA_UPLOAD_CONFIRMATION_FAILED',
+      status: 422,
+      detail: 'stored bytes did not match',
+    },
+  },
+  {
+    name: 'uncertain confirmation',
+    answers: {
+      ...signed,
+      [`PUT /admin/api/media/${HASH}`]: uncertain(),
+    },
+    expected: { code: 'MEDIA_UPLOAD_CONFIRMATION_UNCONFIRMED', status: 503 },
+  },
+  {
+    name: 'malformed confirmation success',
+    answers: {
+      ...signed,
+      [`PUT /admin/api/media/${HASH}`]: { media: { id: HASH } },
+    },
+    expected: { code: 'MEDIA_UPLOAD_CONFIRMATION_INVALID' },
+  },
+])('$name has a stable recovery descriptor', async ({ answers, expected }) => {
+  const { fetch } = server(answers);
+  expect(await descriptorOf(uploadBlob(blob(), { filename: 'mill.webp' }, { fetch }))).toEqual(
+    expected,
+  );
+});
+
+test('image normalization failure has a stable descriptor and keeps the diagnostic', async () => {
+  vi.stubGlobal(
+    'createImageBitmap',
+    vi.fn(async () => {
+      throw new TypeError('decoder unavailable');
+    }),
+  );
+  expect(
+    await descriptorOf(
+      uploadImage(new File([bytes], 'mill.jpg', { type: 'image/jpeg' }), {
+        fetch: vi.fn() as unknown as typeof globalThis.fetch,
+      }),
+    ),
+  ).toEqual({ code: 'MEDIA_UPLOAD_NORMALIZATION_FAILED', detail: 'decoder unavailable' });
+  vi.unstubAllGlobals();
+});
+
+test('an unknown preparation error has the generic upload identity', async () => {
+  const unreadable = {
+    size: 4,
+    type: 'image/webp',
+    arrayBuffer: vi.fn(async () => {
+      throw new TypeError('bytes unavailable');
+    }),
+  } as unknown as Blob;
+  expect(await descriptorOf(uploadBlob(unreadable, { filename: 'mill.webp' }))).toEqual({
+    code: 'MEDIA_UPLOAD_FAILED',
+    detail: 'bytes unavailable',
+  });
 });
 
 test('a file goes to the bucket as it is, and is stored as a download', async () => {

@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate media-picker guidance, limits, selections, upload queues and retained recovery into
+  English and German. Stable upload-stage descriptors preserve server diagnostics and distinguish
+  refused, malformed and unconfirmed outcomes; live switching keeps search, focus, chosen order and
+  pending work without another library read or upload restart.
+
 - Translate rich-text toolbar names, unsupported-formatting guidance and lazy link controls into
   English and German. A live interface-language switch preserves the TipTap editor, focus,
   selection, active formatting, Markdown, session undo history and an open link draft without a

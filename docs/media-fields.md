@@ -43,6 +43,12 @@ picker, which is the library scoped to that field — its types, its preset, its
 header line. Uploading happens inside the picker, and a picture the site already has is
 reused rather than uploaded again.
 
+The picker follows the account's **Interface language** for its heading, search and drop guidance,
+format/size limits, empty and loading states, selection order, upload queue, refusals and recovery.
+A live English/Deutsch switch keeps the same open picker, search, focus, selected order and pending
+files; filenames, media keys and field labels remain as authored. Native file-dialog controls may
+follow the browser or operating system language.
+
 A picture the library has no width and height for — what the reconciliation job recovers, since
 a HEAD cannot measure one — is refused by every image field, floor or no floor: the field stores
 those two numbers.

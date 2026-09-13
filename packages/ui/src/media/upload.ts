@@ -1,5 +1,7 @@
 import { DEFAULT_MAX } from '@handover/core';
-import { request } from '../request.js';
+import { responseMessage, type UiMessage } from '../errors.js';
+import type { UiLocale } from '../i18n.js';
+import { request, uncertainResponse } from '../request.js';
 /** One asset as the admin answers for it: the key a content file stores, and where it is served. */
 export interface MediaItem {
   id: string;
@@ -26,19 +28,48 @@ export interface LibraryItem extends MediaItem {
 }
 
 /** A size a client reads rather than a byte count; nothing stored is ever "0 KB". */
-export const fileSize = (bytes?: number | null) => {
+export const fileSize = (bytes?: number | null, locale: UiLocale = 'en') => {
   if (!bytes) return '';
-  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-  return `${Math.round(bytes / 104_857.6) / 10} MB`;
+  const value =
+    bytes < 1024 * 1024
+      ? Math.max(1, Math.round(bytes / 1024))
+      : Math.round(bytes / 104_857.6) / 10;
+  return `${new Intl.NumberFormat(locale === 'de' ? 'de-DE' : 'en-GB').format(value)} ${bytes < 1024 * 1024 ? 'KB' : 'MB'}`;
 };
 
 const hex = (buffer: ArrayBuffer) =>
   [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, '0')).join('');
 
-const refusal = async (res: Response, what: string) => {
-  const said = await res.json().catch(() => undefined);
-  return new Error(
-    (said as { error?: string } | undefined)?.error ?? `${what} failed (${res.status})`,
+export class MediaUploadError extends Error {
+  constructor(
+    readonly descriptor: UiMessage,
+    cause?: unknown,
+  ) {
+    super(cause instanceof Error ? cause.message : (descriptor.detail ?? descriptor.code));
+    this.name = 'MediaUploadError';
+  }
+}
+
+const detailOf = (error: unknown) => (error instanceof Error ? error.message : undefined);
+const failure = (code: string, error?: unknown, status?: number) =>
+  new MediaUploadError(
+    {
+      code,
+      ...(status ? { status } : {}),
+      ...(detailOf(error) ? { detail: detailOf(error) } : {}),
+    },
+    error,
+  );
+const responseFailure = async (response: Response, code: string) =>
+  new MediaUploadError(await responseMessage(response, code));
+const mediaItem = (value: unknown): value is MediaItem => {
+  if (!value || typeof value !== 'object') return false;
+  const item = value as Partial<MediaItem>;
+  return (
+    typeof item.id === 'string' &&
+    item.id.length > 0 &&
+    typeof item.src === 'string' &&
+    item.src.length > 0
   );
 };
 
@@ -49,36 +80,83 @@ export async function uploadBlob(
   deps: { fetch?: typeof globalThis.fetch } = {},
 ): Promise<MediaItem> {
   const { fetch = request } = deps;
-  const hash = hex(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()));
+  let hash: string;
+  try {
+    hash = hex(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()));
+  } catch (error) {
+    throw failure('MEDIA_UPLOAD_FAILED', error);
+  }
   const declared = { hash, bytes: blob.size, mime: blob.type, ...about };
-  const asked = await fetch('/admin/api/media', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(declared),
-  });
-  if (!asked.ok) throw await refusal(asked, 'the upload');
-  const answer = (await asked.json()) as {
-    media?: MediaItem;
-    upload?: { url: string; key: string };
-  };
-  if (answer.media) return answer.media;
-  const put = await fetch(answer.upload?.url ?? '', {
-    method: 'PUT',
-    headers: {
-      'content-type': blob.type,
-      // A file the bucket's domain would render is an XSS vector, so it is stored as a download.
-      ...(blob.type.startsWith('image/') ? {} : { 'content-disposition': 'attachment' }),
-    },
-    body: blob,
-  });
-  if (!put.ok) throw new Error(`the bucket would not take the upload (${put.status})`);
-  const confirmed = await fetch(`/admin/api/media/${hash}`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ ...declared, key: answer.upload?.key }),
-  });
-  if (!confirmed.ok) throw await refusal(confirmed, 'the upload');
-  return ((await confirmed.json()) as { media: MediaItem }).media;
+  let asked: Response;
+  try {
+    asked = await fetch('/admin/api/media', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(declared),
+    });
+  } catch (error) {
+    throw failure('MEDIA_UPLOAD_DECLARATION_UNCONFIRMED', error);
+  }
+  if (!asked.ok) {
+    if (uncertainResponse(asked))
+      throw failure('MEDIA_UPLOAD_DECLARATION_UNCONFIRMED', undefined, asked.status);
+    throw await responseFailure(asked, 'MEDIA_UPLOAD_DECLARATION_FAILED');
+  }
+  let answer: { media?: unknown; upload?: { url?: unknown; key?: unknown } };
+  try {
+    answer = (await asked.json()) as typeof answer;
+  } catch (error) {
+    throw failure('MEDIA_UPLOAD_DECLARATION_INVALID', error);
+  }
+  if (answer.media !== undefined) {
+    if (!mediaItem(answer.media)) throw failure('MEDIA_UPLOAD_DECLARATION_INVALID');
+    return answer.media;
+  }
+  if (
+    typeof answer.upload?.url !== 'string' ||
+    !answer.upload.url ||
+    typeof answer.upload.key !== 'string' ||
+    !answer.upload.key
+  )
+    throw failure('MEDIA_UPLOAD_DECLARATION_INVALID');
+  let put: Response;
+  try {
+    put = await fetch(answer.upload.url, {
+      method: 'PUT',
+      headers: {
+        'content-type': blob.type,
+        // A file the bucket's domain would render is an XSS vector, so it is stored as a download.
+        ...(blob.type.startsWith('image/') ? {} : { 'content-disposition': 'attachment' }),
+      },
+      body: blob,
+    });
+  } catch (error) {
+    throw failure('MEDIA_UPLOAD_BUCKET_UNCONFIRMED', error);
+  }
+  if (!put.ok) throw failure('MEDIA_UPLOAD_BUCKET_FAILED', undefined, put.status);
+  let confirmed: Response;
+  try {
+    confirmed = await fetch(`/admin/api/media/${hash}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...declared, key: answer.upload.key }),
+    });
+  } catch (error) {
+    throw failure('MEDIA_UPLOAD_CONFIRMATION_UNCONFIRMED', error);
+  }
+  if (!confirmed.ok) {
+    if (uncertainResponse(confirmed))
+      throw failure('MEDIA_UPLOAD_CONFIRMATION_UNCONFIRMED', undefined, confirmed.status);
+    throw await responseFailure(confirmed, 'MEDIA_UPLOAD_CONFIRMATION_FAILED');
+  }
+  let result: { media?: unknown };
+  try {
+    result = (await confirmed.json()) as typeof result;
+  } catch (error) {
+    throw failure('MEDIA_UPLOAD_CONFIRMATION_INVALID', error);
+  }
+  if (!mediaItem(result.media)) throw failure('MEDIA_UPLOAD_CONFIRMATION_INVALID');
+  return result.media;
 }
 
 /** Strips EXIF so no GPS reaches a public bucket; 0.9 because every crop re-encodes from this. */
@@ -115,6 +193,12 @@ export async function uploadImage(
   file: File,
   opts: { max?: number; fetch?: typeof globalThis.fetch } = {},
 ): Promise<MediaItem> {
-  const { blob, width, height } = await normaliseImage(file, opts.max);
+  let normalised: Awaited<ReturnType<typeof normaliseImage>>;
+  try {
+    normalised = await normaliseImage(file, opts.max);
+  } catch (error) {
+    throw failure('MEDIA_UPLOAD_NORMALIZATION_FAILED', error);
+  }
+  const { blob, width, height } = normalised;
   return uploadBlob(blob, { filename: file.name, width, height }, { fetch: opts.fetch });
 }

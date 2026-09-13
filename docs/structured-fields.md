@@ -150,6 +150,11 @@ focus, selection, active formatting, Markdown, undo history and open link draft.
 content or reread the entry directory. The field's label, written text and link addresses remain as
 authored; `##` / `###` heading levels and Markdown syntax do not change with the interface.
 
+The media picker also follows the interface language, including search/drop guidance, field limits,
+selection order, queue progress and upload recovery. Switching language leaves its search, chosen
+media, pending files, filenames and focus in place and causes no library reread or upload restart.
+An upload completing after the switch reports its result in the latest language.
+
 `image` and `file` are a card: the picture at the field's own ratio, or the file's type and
 size, with the translatable half beside it and Replace and Remove under it. An empty one is a
 drop zone that takes a file dropped on it and opens the

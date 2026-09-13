@@ -476,7 +476,8 @@ function seoWrite(at: readonly string[], key: string, value: unknown) {
   else write([...at, key], value);
 }
 
-const bytes = (at: readonly string[]) => fileSize(read([...at, 'bytes']) as number | undefined);
+const bytes = (at: readonly string[]) =>
+  fileSize(read([...at, 'bytes']) as number | undefined, uiLocale);
 
 /** One picked asset as the format stores it — and in that order. */
 const stored = (type: 'image' | 'file', item: MediaItem, pageAlt?: unknown) =>
@@ -797,6 +798,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           preset={field.item[0]?.type === 'image' ? field.item[0].preset : {}}
           base={mediaBase}
           many
+          {uiLocale}
           onpick={(items) => pickedInto(at, items)}
           onclose={() => (picker = '')}
         />
@@ -1070,6 +1072,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         preset={SOCIAL_CARD}
         base={mediaBase}
         {dropped}
+        {uiLocale}
         onpick={(items) => { seoWrite(at, 'image', stored('image', items[0] as MediaItem)); picker = ''; dropped = []; }}
         onclose={() => { picker = ''; dropped = []; }}
       />
@@ -1082,6 +1085,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         accept={field.type === 'file' ? field.accept : []}
         base={mediaBase}
         {dropped}
+        {uiLocale}
         onpick={(items) => picked(at, field.type as 'image' | 'file', items)}
         onclose={() => { picker = ''; dropped = []; }}
       />

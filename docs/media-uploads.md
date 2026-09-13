@@ -35,6 +35,15 @@ server stores the final object with `content-disposition: attachment`. An object
 is not the type it was uploaded as is deleted, whatever it was called. A renamed `.html` served from your
 CDN domain would be a cross-site scripting hole, and a name is not evidence.
 
+## Failure and recovery
+
+The picker distinguishes image preparation, declaration, bucket PUT and confirmation failures with
+stable operation descriptors. It does not guess from English response text or status alone. A
+connection loss or malformed success after a possible write is reported as unconfirmed: check the
+library before starting another upload. Server or provider diagnostics remain separate from the
+localized recovery sentence. Changing **Interface language** reformats an already-visible failure
+and an upload that finishes afterwards uses the latest language; it does not restart the upload.
+
 ## Keys are content-addressed
 
 An object is named by the SHA-256 of its own bytes, so the same picture is always the same
