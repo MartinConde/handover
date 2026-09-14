@@ -4,6 +4,7 @@ import {
   formatCalendarDate,
   formatLanguageName,
   formatRelativeTime,
+  languageTag,
   messageOptions,
   type UiLocale,
 } from '../i18n.js';
@@ -327,7 +328,7 @@ async function simulate() {
 
 const failing = $derived(CHECKS.filter((check) => results[check.key]?.state === 'failed'));
 const consequence = $derived.by(() => {
-  const list = new Intl.ListFormat(uiLocale === 'de' ? 'de-DE' : 'en-GB', {
+  const list = new Intl.ListFormat(languageTag(uiLocale), {
     style: 'long',
     type: 'conjunction',
   }).format(failing.map((check) => checkStops(check.key)));

@@ -202,7 +202,7 @@ test('a live switch retranslates shell feedback and dashboard without rereading 
 
   await vi.waitFor(() => expect(root.querySelector('main h1')?.textContent).toBe('Übersicht'));
   expect(root.querySelector('.toast')).toBe(notice);
-  expect(toasts(root)).toEqual(['Abmelden fehlgeschlagen. Bitte versuchen Sie es erneut.']);
+  expect(toasts(root)).toEqual(['Abmelden fehlgeschlagen. Versuche es erneut.']);
   expect(root.querySelector('.topbar .pill')?.textContent).toContain('Build fehlgeschlagen');
   expect(root.querySelector('.sidebar')?.getAttribute('aria-label')).toBe('Hauptnavigation');
   expect(dashboardReads).toBe(1);
@@ -560,7 +560,7 @@ test('a visible sign-in error changes language without clearing the form', async
   picker.dispatchEvent(new Event('change', { bubbles: true }));
   await vi.waitFor(() =>
     expect(document.querySelector('[role="alert"]')?.textContent).toContain(
-      'Die Anmeldung ist fehlgeschlagen. Prüfen Sie Ihre E-Mail-Adresse und Ihr Passwort.',
+      'Die Anmeldung ist fehlgeschlagen. Prüfe deine E-Mail-Adresse und dein Passwort.',
     ),
   );
   expect(document.querySelector('#email')).toBe(email);
@@ -606,7 +606,7 @@ test('a visible account failure changes language and keeps its technical detail 
   picker.dispatchEvent(new Event('change', { bubbles: true }));
   await vi.waitFor(() =>
     expect(root.querySelector('[role="alert"]')?.textContent).toContain(
-      'Ihr Name konnte nicht gespeichert werden.',
+      'Dein Name konnte nicht gespeichert werden.',
     ),
   );
   expect(root.querySelector('#display-name')).toBe(name);
@@ -803,7 +803,7 @@ test('an unavailable session check follows the initial interface language', () =
   const root = show(undefined, '/admin', 'de');
 
   expect(root.querySelector('[role="alert"]')?.textContent).toContain(
-    'Es konnte nicht geprüft werden, ob Sie angemeldet sind.',
+    'Es konnte nicht geprüft werden, ob du angemeldet bist.',
   );
   expect(root.querySelector('.session-unavailable button')?.textContent?.trim()).toBe(
     'Erneut versuchen',

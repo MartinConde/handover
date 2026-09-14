@@ -7,6 +7,15 @@ Choose **Interface language** from the account menu to change it without leaving
 screen. The same choice is available on **Account**. Signed-out screens, including password reset
 and expired-link screens, have a device-only picker so they remain readable before sign-in.
 
+## Supported languages and review status
+
+The supported interface languages are English and German. The documentation site remains English;
+the account preference changes only the CMS. The German catalog has been checked for the product
+glossary, informal `du`, inclusive role labels, placeholder parity, plural fallbacks, linked-message
+order, accessibility text, locale-sensitive formatting and narrow layouts. A native German
+product-copy sign-off has not been recorded yet, so release review should keep that editorial step
+open even though the catalog and interface checks pass.
+
 ## What is translated now
 
 Language controls, sign-in, password-reset and expired-link flows, the complete Account screen,

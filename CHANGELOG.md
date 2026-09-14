@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Review the complete English/German admin at desktop and phone widths, standardize German on
+  informal `du` and inclusive role labels, and add a generated long-string pseudo-locale check.
+  Locale-sensitive formatters now accept a newly configured UI locale without component changes.
+
 - Finish the English/German admin string and error audit: translate retained editor
   restore/drift/conflict guidance and shared missing-image accessibility text, and make Canvas
   structure presentation recognize semantic paths instead of English synthetic labels. Known

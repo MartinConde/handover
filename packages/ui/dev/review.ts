@@ -1,5 +1,5 @@
 /** Local design preview with stubbed API traffic. */
-import type { Field, Form } from '@handover/core';
+import { type Field, type Form, isUiLocale } from '@handover/core';
 import { mount } from 'svelte';
 import App, { type Session } from '../src/App.svelte';
 import type { Member } from '../src/account/Members.svelte';
@@ -10,6 +10,8 @@ import '../src/tokens.css';
 
 if (!import.meta.env.DEV) throw new Error('The design preview is only available in development');
 const now = Date.now();
+const requestedUiLocale = new URLSearchParams(location.search).get('locale');
+const reviewUiLocale = isUiLocale(requestedUiLocale) ? requestedUiLocale : null;
 const locales = ['en', 'de'];
 const rows = [
   { id: 'cafe-bar-2026', title: 'Café & Bar / 2026', hidden: true, missing: true },
@@ -129,7 +131,12 @@ const config = {
 };
 const session = {
   collections: ['listings', 'pages', 'samples'],
-  user: { id: 'preview', name: 'Martin', email: 'martin@example.com', uiLocale: null },
+  user: {
+    id: 'preview',
+    name: 'Martin',
+    email: 'martin@example.com',
+    uiLocale: reviewUiLocale,
+  },
   role: 'owner' as const,
   preview: false,
 } satisfies Session;
@@ -183,6 +190,7 @@ window.fetch = async (input, init) => {
       held_by: { id: 'preview', name: 'Martin' },
     });
   if (path === '/admin/api/publish/checks') return json({ results: [] });
+  if (path === '/admin/api/auth/update-user') return json({ status: true });
   if (init?.method && init.method !== 'GET' && !path.startsWith('/admin/api/checks/'))
     return Response.json(
       { error: 'This is a design preview. Connect a site to save changes.' },
@@ -404,7 +412,11 @@ const target = document.getElementById('app');
 if (target)
   mount(App, {
     target,
-    props: { session, path: new URLSearchParams(location.search).get('screen') || '/admin' },
+    props: {
+      session,
+      path: new URLSearchParams(location.search).get('screen') || '/admin',
+      initialUiLocale: session.user.uiLocale ?? 'en',
+    },
   });
 const note = document.createElement('div');
 note.textContent = 'Design preview · sample content';

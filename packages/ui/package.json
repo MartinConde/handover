@@ -12,10 +12,11 @@
     "prefixtures": "node ./scripts/messages.mjs",
     "fixtures": "vite dev",
     "pretest": "node ./scripts/messages.mjs",
-    "test": "vitest run --exclude scripts/catalog-validator.test.mjs && vitest run --config vitest.catalogs.config.mjs",
+    "test": "vitest run --exclude 'scripts/*.test.mjs' && vitest run --config vitest.catalogs.config.mjs",
     "pretypecheck": "node ./scripts/messages.mjs",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
-    "validate:messages": "node ./scripts/messages.mjs --validate-only"
+    "validate:messages": "node ./scripts/messages.mjs --validate-only",
+    "review:pseudo": "node ./scripts/pseudo-locale.mjs"
   },
   "devDependencies": {
     "@dnd-kit/svelte": "^0.5.0",

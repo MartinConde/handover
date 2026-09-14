@@ -1,7 +1,7 @@
 <script lang="ts">
 import { type Pickable, readEntryDirectory } from '../entry-directory.js';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
-import { messageOptions, type UiLocale } from '../i18n.js';
+import { languageTag, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
 import Modal from '../shared/Modal.svelte';
@@ -96,7 +96,7 @@ const reasonLabel = (reason: Rule['reason']) =>
     manual: m.redirect_reason_manual,
   })[reason]({}, options);
 const when = (value: string) =>
-  new Intl.DateTimeFormat(uiLocale === 'de' ? 'de-DE' : 'en-GB', {
+  new Intl.DateTimeFormat(languageTag(uiLocale), {
     day: 'numeric',
     month: 'short',
   }).format(Date.parse(value));

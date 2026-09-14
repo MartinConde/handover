@@ -60,7 +60,22 @@ When adding or changing a message, use a stable surface prefix such as `account_
 the same placeholders even when German moves them within the sentence. For a variant, use the
 message-format declarations and selectors and retain a complete fallback. Adding a UI language also
 requires its catalog, an entry in both `project.inlang/settings.json` and the core allowlist, and a
-reviewed glossary. Run the message-only validation, then the relevant UI test/typecheck/build.
+reviewed glossary. No component has a language list of its own; locale-sensitive formatters use the
+shared locale tag. Run the message-only validation, then the relevant UI test/typecheck/build.
+
+Before reviewing narrow layouts, generate a deliberately expanded pseudo-catalog:
+
+```sh
+pnpm --filter @handover/ui review:pseudo
+```
+
+The command prints the temporary `qps-ploc.json` path and does not alter the checked-in catalogs.
+Add `qps-ploc` to a temporary copy of the Inlang locale list and core allowlist, put that catalog
+beside `en.json`, then run the UI typecheck/build and the design preview at desktop and phone widths.
+Do not ship the pseudo-locale. For a real language, replace it with reviewed translations and test
+0, 1, and 2 for plural messages, locale-sensitive numbers and dates, linked-message reading order,
+accessible names, and the account preference round trip. The shipped German catalog uses informal
+`du` and inclusive `Eigentümer:in` / `Redakteur:in` role labels.
 
 Imperative Canvas controls must subscribe to the shared Canvas UI-locale state and translate their
 visible text, titles, tooltips, accessible names and live announcements from the catalogs. Keep

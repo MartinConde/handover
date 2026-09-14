@@ -232,7 +232,7 @@ test('a malformed successful account read has localized retry feedback', async (
   const root = await show('owner', 'de');
 
   expect(root.querySelector('.account-read-error')?.textContent).toContain(
-    'Ihr Konto konnte nicht geladen werden.',
+    'Dein Konto konnte nicht geladen werden.',
   );
   root.querySelector<HTMLButtonElement>('.account-read-error button')?.click();
   await settle();

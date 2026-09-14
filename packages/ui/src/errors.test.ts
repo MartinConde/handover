@@ -170,7 +170,7 @@ test('a synthetic connection failure keeps a stable localizable identity', async
     'Connection lost. Your changes may have been saved. Please try again.',
   );
   expect(messageText(descriptor, 'de')).toBe(
-    'Verbindung unterbrochen. Ihre Änderungen wurden möglicherweise gespeichert. Bitte versuchen Sie es erneut.',
+    'Verbindung unterbrochen. Deine Änderungen wurden möglicherweise gespeichert. Versuche es erneut.',
   );
 });
 
@@ -258,9 +258,9 @@ test('password length, token expiry, and general reset failures give different r
     'Darf höchstens 128 Zeichen lang sein',
   );
   expect(messageText({ code: 'TOKEN_EXPIRED' }, 'de')).toBe(
-    'Der Link zum Zurücksetzen ist abgelaufen oder wurde bereits verwendet. Fordern Sie einen neuen Link an und versuchen Sie es erneut.',
+    'Der Link zum Zurücksetzen ist abgelaufen oder wurde bereits verwendet. Fordere einen neuen Link an und versuche es erneut.',
   );
   expect(messageText({ code: 'AUTH_RESET_FAILED' }, 'de')).toBe(
-    'Das Passwort konnte nicht zurückgesetzt werden. Bitte versuchen Sie es erneut.',
+    'Das Passwort konnte nicht zurückgesetzt werden. Versuche es erneut.',
   );
 });

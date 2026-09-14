@@ -1,6 +1,6 @@
 import { DEFAULT_MAX } from '@handover/core';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
-import type { UiLocale } from '../i18n.js';
+import { languageTag, type UiLocale } from '../i18n.js';
 import { request, uncertainResponse } from '../request.js';
 /** One asset as the admin answers for it: the key a content file stores, and where it is served. */
 export interface MediaItem {
@@ -36,7 +36,7 @@ export const fileSize = (bytes?: number | null, locale: UiLocale = 'en') => {
       : Math.round(bytes / 104_857.6) / 10;
   let formatter = fileSizeFormatters.get(locale);
   if (!formatter) {
-    formatter = new Intl.NumberFormat(locale === 'de' ? 'de-DE' : 'en-GB');
+    formatter = new Intl.NumberFormat(languageTag(locale));
     fileSizeFormatters.set(locale, formatter);
   }
   return `${formatter.format(value)} ${bytes < 1024 * 1024 ? 'KB' : 'MB'}`;

@@ -19,7 +19,7 @@ const mediaDateFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const calendarDateFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const languageFormatters = new Map<UiLocale, Intl.DisplayNames>();
 const languageListFormatters = new Map<UiLocale, Intl.ListFormat>();
-const languageTag = (locale: UiLocale) => (locale === 'de' ? 'de-DE' : 'en-GB');
+export const languageTag = (locale: UiLocale) => (locale === 'en' ? 'en-GB' : locale);
 
 const formatter = <T>(cache: Map<UiLocale, T>, locale: UiLocale, make: () => T): T => {
   const cached = cache.get(locale);

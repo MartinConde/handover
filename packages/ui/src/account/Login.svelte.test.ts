@@ -94,7 +94,7 @@ test('an expired reset code is localized without showing Better Auth prose', asy
   await settle();
 
   expect(root.querySelector('[role="alert"]')?.textContent).toBe(
-    'Der Link zum Zurücksetzen ist abgelaufen oder wurde bereits verwendet. Fordern Sie einen neuen Link an und versuchen Sie es erneut.',
+    'Der Link zum Zurücksetzen ist abgelaufen oder wurde bereits verwendet. Fordere einen neuen Link an und versuche es erneut.',
   );
   expect(text(root)).not.toContain('Token expired');
 });
@@ -114,7 +114,7 @@ test('an overlong reset password keeps the form and token with actionable guidan
   expect(root.querySelector('[role="alert"]')?.textContent).toBe(
     'Darf höchstens 128 Zeichen lang sein',
   );
-  expect(text(root)).not.toContain('Fordern Sie einen neuen Link an');
+  expect(text(root)).not.toContain('Fordere einen neuen Link an');
   expect((root.querySelector('#new-password') as HTMLInputElement).value).toBe(password);
   expect((root.querySelector('#confirm-password') as HTMLInputElement).value).toBe(password);
   expect(calls[0]?.body).toEqual({ token: 'tok_123', newPassword: password });
