@@ -4,6 +4,16 @@ import type {
   HistoricalRestoreResponse,
   HistoricalRestoreResult,
 } from '../editor/entry-session.svelte';
+import { messageText, responseMessage, type UiMessage } from '../errors.js';
+import {
+  formatExactTime,
+  formatLanguageList,
+  formatLanguageName,
+  formatRelativeTime,
+  messageOptions,
+  type UiLocale,
+} from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath, uncertainResponse } from '../request.js';
 import Modal from '../shared/Modal.svelte';
 import Diff from './Diff.svelte';
@@ -28,6 +38,7 @@ let {
   locales = [],
   drafted = false,
   mediaBase = '',
+  uiLocale = 'en',
   onrestored,
   onrestore,
 }: {
@@ -35,6 +46,7 @@ let {
   slug: string;
   /** Where a stored media key is served from, for a replaced picture's thumbnails. */
   mediaBase?: string;
+  uiLocale?: UiLocale;
   /** The languages the site declares; with one there is nothing to filter by. */
   locales?: string[];
   /** Whether the entry has unpublished changes a restore would write over. */
@@ -50,7 +62,8 @@ let {
 
 let versions = $state<Version[]>([]);
 let loading = $state(true);
-let error = $state('');
+const options = $derived(messageOptions(uiLocale));
+let error = $state<UiMessage>();
 let more = $state(false);
 let page = $state(1);
 /** Which language's commits are shown; empty is all of them. */
@@ -60,14 +73,14 @@ let selected = $state<Version>();
 let chosen = $state<Version[]>([]);
 let groups = $state<DiffGroup[]>([]);
 let reading = $state(false);
-let diffError = $state('');
+let diffError = $state<UiMessage>();
 let diffEpoch = 0;
 let diffIdentity = '';
 /** The version the confirmation is about, and Cancel, which is where the answer is no. */
 let confirming = $state<Version>();
 let restoreButton = $state<HTMLElement>();
 let restoring = $state(false);
-let restoreError = $state('');
+let restoreError = $state<UiMessage>();
 
 $effect(() => {
   resetDiffSelection();
@@ -80,13 +93,10 @@ async function load(want: number, entryCollection = collection, entrySlug = slug
   loading = false;
   if (!res.ok) {
     // A 503 is the server's own sentence; anything else is GitHub refusing for a few minutes.
-    error =
-      res.status === 503
-        ? await res.text()
-        : 'GitHub would not answer just now. Try again in a few minutes.';
+    error = await responseMessage(res, 'HISTORY_LOAD_FAILED');
     return;
   }
-  error = '';
+  error = undefined;
   page = want;
   const body = (await res.json()) as { versions?: Version[]; more?: boolean };
   versions = body.versions ?? [];
@@ -98,14 +108,14 @@ function cancelDiff() {
   diffIdentity = '';
   groups = [];
   reading = false;
-  diffError = '';
+  diffError = undefined;
 }
 
 function resetDiffSelection() {
   selected = undefined;
   chosen = [];
   confirming = undefined;
-  restoreError = '';
+  restoreError = undefined;
   cancelDiff();
 }
 
@@ -118,7 +128,7 @@ async function readDiff(to: Version, from?: Version) {
   diffIdentity = identity;
   groups = [];
   reading = true;
-  diffError = '';
+  diffError = undefined;
   // A version from before a rename has its files under the name the entry had then.
   const query = new URLSearchParams({
     to: to.sha,
@@ -136,7 +146,7 @@ async function readDiff(to: Version, from?: Version) {
   if (!res.ok) {
     reading = false;
     groups = [];
-    diffError = 'Those versions could not be read from GitHub.';
+    diffError = await responseMessage(res, 'HISTORY_DIFF_FAILED');
     return;
   }
   const body = (await res.json()) as { groups?: DiffGroup[] };
@@ -147,7 +157,7 @@ async function readDiff(to: Version, from?: Version) {
 
 function closeConfirm() {
   confirming = undefined;
-  restoreError = '';
+  restoreError = undefined;
 }
 
 /** Into the drafts, never a rewrite of git: publishing it is the ordinary forward commit. */
@@ -166,11 +176,7 @@ async function restore() {
       });
       if (uncertainResponse(res)) throw new TypeError('The restore response was not confirmed.');
       if (res.ok) return { ok: true };
-      return {
-        ok: false,
-        // The server's own sentence: somebody holding the entry, or a version it cannot read.
-        error: (await res.text()) || 'That version could not be restored.',
-      };
+      return { ok: false, error: await responseMessage(res, 'HISTORY_RESTORE_FAILED') };
     },
     (outcome) => onrestored(version.date, outcome),
   );
@@ -178,22 +184,25 @@ async function restore() {
   if (!result.ok) {
     restoreError =
       result.error ??
-      (result.reason === 'save'
-        ? 'Your changes could not be saved, so the version was not restored.'
-        : result.reason === 'uncertain'
-          ? 'The restore was not confirmed. The entry is being reloaded before editing can continue.'
-          : result.reason === 'reload'
-            ? 'The version was restored, but the entry could not be reloaded. Reload the page before editing.'
-            : 'That version could not be restored.');
+      ({
+        code:
+          result.reason === 'save'
+            ? 'HISTORY_RESTORE_SAVE_FAILED'
+            : result.reason === 'uncertain'
+              ? 'HISTORY_RESTORE_UNCONFIRMED'
+              : result.reason === 'reload'
+                ? 'HISTORY_RESTORE_RELOAD_FAILED'
+                : 'HISTORY_RESTORE_FAILED',
+      } satisfies UiMessage);
     return;
   }
   confirming = undefined;
-  restoreError = '';
+  restoreError = undefined;
 }
 
 function open(version: Version) {
   confirming = undefined;
-  restoreError = '';
+  restoreError = undefined;
   selected = version;
   chosen = [];
   readDiff(version);
@@ -201,7 +210,7 @@ function open(version: Version) {
 
 function compare(version: Version, on: boolean) {
   confirming = undefined;
-  restoreError = '';
+  restoreError = undefined;
   chosen = on ? [...chosen, version] : chosen.filter((v) => v.sha !== version.sha);
   selected = undefined;
   if (chosen.length !== 2) {
@@ -214,40 +223,14 @@ function compare(version: Version, on: boolean) {
 
 const shown = $derived(only ? versions.filter((v) => v.locales.includes(only)) : versions);
 
-const LANGUAGES = new Intl.DisplayNames(['en'], { type: 'language' });
-const language = (of: string) => {
-  try {
-    return LANGUAGES.of(of) ?? of.toUpperCase();
-  } catch {
-    return of.toUpperCase();
-  }
-};
-
-const DATE = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-const EXACT = new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeStyle: 'short' });
-const midnight = (at: number) => {
-  const day = new Date(at);
-  day.setHours(0, 0, 0, 0);
-  return day.getTime();
-};
-
-// Past a week a distance stops being an answer, so the date is shown, as in the activity log.
-function when(iso: string): string {
-  const at = Date.parse(iso);
-  if (!at) return '';
-  const minutes = Math.floor((Date.now() - at) / 60_000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round((midnight(Date.now()) - midnight(at)) / 86_400_000);
-  if (days <= 1) return 'yesterday';
-  if (days < 7) return `${days} days ago`;
-  return DATE.format(at);
-}
+const language = (of: string) => formatLanguageName(of, uiLocale);
+const when = (iso: string) => (Date.parse(iso) ? formatRelativeTime(Date.parse(iso), uiLocale) : '');
 
 /** Which languages a version writes, where the entry has more than the one. */
-const spoken = (of: string[]) => (of.length > 1 ? `, in ${of.map(language).join(' and ')}` : '');
+const spoken = (of: string[]) =>
+  of.length > 1
+    ? m.history_languages_spoken({ languages: formatLanguageList(of, uiLocale) }, options)
+    : '';
 
 const initials = (name: string) =>
   name
@@ -261,12 +244,12 @@ const initials = (name: string) =>
   <div class="history-list">
     <div class="history-list-head">
       <div>
-        <h2>Version history</h2>
+        <h2>{m.history_title({}, options)}</h2>
         <p>
           {#if loading && versions.length === 0}
-            Fetching published versions…
+            {m.history_fetching({}, options)}
           {:else}
-            {shown.length} {shown.length === 1 ? 'version' : 'versions'}
+            {m.history_version_count({ count: shown.length }, options)}
           {/if}
         </p>
       </div>
@@ -274,14 +257,16 @@ const initials = (name: string) =>
         <svg viewBox="0 0 20 20" aria-hidden="true">
           <path d="M6.5 4.5h-2v11h2M13.5 4.5h2v11h-2M8.5 7.5h3M8.5 12.5h3" />
         </svg>
-        {chosen.length ? `${chosen.length} of 2 selected` : 'Select 2 to compare'}
+        {chosen.length
+          ? m.history_selected_count({ count: chosen.length }, options)
+          : m.history_select_to_compare({}, options)}
       </span>
     </div>
     {#if locales.length > 1 || loading || chosen.length}
       <div class="version-tools">
         {#if locales.length > 1}
-          <div class="seg" role="group" aria-label="Language">
-            <button type="button" aria-pressed={only === ''} onclick={() => (only = '')}>All</button>
+          <div class="seg" role="group" aria-label={m.common_language({}, options)}>
+            <button type="button" aria-pressed={only === ''} onclick={() => (only = '')}>{m.common_all({}, options)}</button>
             {#each locales as of (of)}
               <button type="button" aria-pressed={only === of} onclick={() => (only = of)}>
                 {of.toUpperCase()}<span class="visually-hidden"> — {language(of)}</span>
@@ -291,16 +276,16 @@ const initials = (name: string) =>
         {/if}
         <span class="spacer"></span>
         {#if loading}
-          <span role="status">Loading history from GitHub…</span>
+          <span role="status">{m.history_loading({}, options)}</span>
         {:else if chosen.length}
-          <span class="visually-hidden" role="status">{chosen.length} of 2 chosen to compare</span>
+          <span class="visually-hidden" role="status">{m.history_chosen_count({ count: chosen.length }, options)}</span>
         {/if}
       </div>
     {/if}
     {#if error}
       <div class="notice notice-danger" role="alert">
-        <b>Couldn't load history right now</b> — {error}
-        <button class="btn btn-sm" type="button" onclick={() => load(page)}>Try again</button>
+        <b>{m.history_load_title({}, options)}</b> — {messageText(error, uiLocale)}
+        <button class="btn btn-sm" type="button" onclick={() => load(page)}>{m.common_try_again({}, options)}</button>
       </div>
     {:else if loading && versions.length === 0}
       <ul class="version-list">
@@ -323,19 +308,16 @@ const initials = (name: string) =>
       <!-- Not an error: the tab is reachable so the client learns where history will be. -->
       <div class="empty">
         <div>
-          <h2>Nothing published yet</h2>
-          <p>
-            This entry exists only as unpublished changes. Its first version appears here when it
-            is published.
-          </p>
-          <a class="btn" href={sitePath(`/admin/c/${collection}/${slug}`)}>Back to Content</a>
+          <h2>{m.history_empty_title({}, options)}</h2>
+          <p>{m.history_empty_intro({}, options)}</p>
+          <a class="btn" href={sitePath(`/admin/c/${collection}/${slug}`)}>{m.history_back_to_content({}, options)}</a>
         </div>
       </div>
     {:else if shown.length === 0}
       <div class="history-filter-empty">
-        <strong>No versions in {language(only)}</strong>
-        <span>Try another language or show the full history.</span>
-        <button class="btn btn-sm" type="button" onclick={() => (only = '')}>Show all versions</button>
+        <strong>{m.history_filter_empty({ language: language(only) }, options)}</strong>
+        <span>{m.history_filter_empty_hint({}, options)}</span>
+        <button class="btn btn-sm" type="button" onclick={() => (only = '')}>{m.history_show_all({}, options)}</button>
       </div>
     {:else}
       <ul class="version-list">
@@ -346,7 +328,10 @@ const initials = (name: string) =>
                 type="checkbox"
                 checked={chosen.some((v) => v.sha === version.sha)}
                 disabled={chosen.length === 2 && !chosen.some((v) => v.sha === version.sha)}
-                aria-label="Compare the version from {when(version.date)}, {version.summary}"
+                aria-label={m.history_compare_version(
+                  { when: when(version.date), summary: version.summary },
+                  options,
+                )}
                 onchange={(e) => compare(version, e.currentTarget.checked)}
               />
               <div class="version-main">
@@ -362,14 +347,14 @@ const initials = (name: string) =>
                   <button
                     class="summary"
                     type="button"
-                    title="Commit {version.sha.slice(0, 7)}"
+                    title={m.history_commit({ sha: version.sha.slice(0, 7) }, options)}
                     aria-current={selected?.sha === version.sha ? 'true' : undefined}
                     onclick={() => open(version)}
                   >{version.summary}</button>
                   <span class="sub">
-                    <span>{when(version.date)}{version.author ? ` · ${version.author}` : ''}{version.name ? ` · as ${version.name}` : ''}</span>
+                    <span>{when(version.date)}{version.author ? ` · ${version.author}` : ''}{version.name ? ` · ${m.history_as_name({ name: version.name }, options)}` : ''}</span>
                     <!-- A bare span may not carry an aria-label, so the word is in the sentence. -->
-                    <span class="visually-hidden">Languages:</span>
+                    <span class="visually-hidden">{m.history_languages({}, options)}</span>
                     <span class="chips">
                       {#each version.locales as of (of)}
                         <span class="chip">{of.toUpperCase()}</span>
@@ -386,7 +371,7 @@ const initials = (name: string) =>
       {#if more}
         <div class="load-more">
           <button class="btn btn-sm" type="button" disabled={loading} onclick={() => load(page + 1)}>
-            {loading ? 'Loading…' : 'Show older versions'}
+            {loading ? m.common_loading({}, options) : m.history_show_older({}, options)}
           </button>
         </div>
       {/if}
@@ -394,14 +379,14 @@ const initials = (name: string) =>
   </div>
   <div class="version-view" class:has-version={selected || chosen.length === 2}>
     {#if diffError}
-      <p class="notice notice-danger" role="alert">{diffError}</p>
+      <p class="notice notice-danger" role="alert">{messageText(diffError, uiLocale)}</p>
     {:else if reading}
-      <p class="placeholder" role="status">Reading that version…</p>
+      <p class="placeholder" role="status">{m.history_reading({}, options)}</p>
     {:else if selected}
       <div class="version-head">
         <div class="version-title">
-          <span class="version-kicker">Published version</span>
-          <h2>Version from {when(selected.date)}</h2>
+          <span class="version-kicker">{m.history_published_version({}, options)}</span>
+          <h2>{m.history_version_from({ when: when(selected.date) }, options)}</h2>
         </div>
         <div class="actions">
           <button
@@ -409,38 +394,38 @@ const initials = (name: string) =>
             type="button"
             bind:this={restoreButton}
             onclick={() => (confirming = selected)}
-          >Restore this version</button>
+          >{m.history_restore_this({}, options)}</button>
         </div>
         <p class="by">
-          {selected.author ? `Published by ${selected.author}, ` : ''}{EXACT.format(
-            Date.parse(selected.date),
-          )} · <em>{selected.summary}</em> · compared with what is live now
+          {selected.author ? m.history_published_by({ author: selected.author }, options) : ''}{formatExactTime(
+            Date.parse(selected.date), uiLocale,
+          )} · <em>{selected.summary}</em> · {m.history_compared_live({}, options)}
         </p>
       </div>
-      <Diff {groups} {mediaBase} />
+      <Diff {groups} {mediaBase} {uiLocale} />
     <!-- No Restore for a pair: it restores the version being looked at, which a pair is not. -->
     {:else if chosen.length === 2}
       {@const pair = [...chosen].sort((a, b) => Date.parse(a.date) - Date.parse(b.date))}
       <div class="version-head">
         <div class="version-title">
-          <span class="version-kicker">Comparison</span>
-          <h2>Two versions compared</h2>
+          <span class="version-kicker">{m.history_comparison({}, options)}</span>
+          <h2>{m.history_two_compared({}, options)}</h2>
         </div>
         <!-- Named by what each says: two versions of one afternoon both read "6 days ago". -->
         <p class="by">
-          From <em>{pair[0]?.summary}</em>, {when(pair[0]?.date ?? '')}, to
-          <em>{pair[1]?.summary}</em>, {when(pair[1]?.date ?? '')}
+          {m.history_from({}, options)} <em>{pair[0]?.summary}</em>, {when(pair[0]?.date ?? '')},
+          {m.history_to({}, options)} <em>{pair[1]?.summary}</em>, {when(pair[1]?.date ?? '')}
         </p>
       </div>
-      <Diff {groups} {mediaBase} />
+      <Diff {groups} {mediaBase} {uiLocale} />
     {:else if versions.length}
       <div class="form-placeholder">
         <span class="history-placeholder-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="M12 7v5l3 2M20 12a8 8 0 1 1-2.3-5.7" /><path d="M17 3v4h4" /></svg>
         </span>
         <span>
-          <strong>Choose a version to inspect</strong>
-          Review what changed against the live entry, or select two versions to compare.
+          <strong>{m.history_choose_version({}, options)}</strong>
+          {m.history_choose_version_hint({}, options)}
         </span>
       </div>
     {/if}
@@ -456,23 +441,28 @@ const initials = (name: string) =>
     dismissible={!restoring}
     onclose={closeConfirm}
   >
-      <h2 id="rs-h">Restore the version from {when(confirming.date)}?</h2>
+      <h2 id="rs-h">{m.history_restore_question({ when: when(confirming.date) }, options)}</h2>
       <div id="rs-d">
         <p>
           {drafted
-            ? 'This replaces your unpublished changes to this entry with'
-            : 'This puts, as unpublished changes,'}
-          what {confirming.author ?? 'somebody'} published on {EXACT.format(
-            Date.parse(confirming.date),
-          )}{spoken(confirming.locales)}. Nothing is published until you publish.
+            ? m.history_restore_replaces({}, options)
+            : m.history_restore_puts({}, options)}
+          {m.history_restore_what(
+            {
+              author: confirming.author ?? m.history_somebody({}, options),
+              date: formatExactTime(Date.parse(confirming.date), uiLocale),
+              languages: spoken(confirming.locales),
+            },
+            options,
+          )}
         </p>
-        <p>The version you have now stays in this list — restoring is a step forward, never a rewind.</p>
+        <p>{m.history_restore_forward({}, options)}</p>
       </div>
-      {#if restoreError}<p class="notice notice-danger" role="alert">{restoreError}</p>{/if}
+      {#if restoreError}<p class="notice notice-danger" role="alert">{messageText(restoreError, uiLocale)}</p>{/if}
       <div class="actions">
-        <button class="btn" type="button" disabled={restoring} onclick={closeConfirm}>Cancel</button>
+        <button class="btn" type="button" disabled={restoring} onclick={closeConfirm}>{m.common_cancel({}, options)}</button>
         <button class="btn btn-primary" type="button" disabled={restoring} onclick={restore}>
-          {restoring ? 'Restoring…' : 'Restore as unpublished changes'}
+          {restoring ? m.history_restoring({}, options) : m.history_restore_as_draft({}, options)}
         </button>
       </div>
   </Modal>

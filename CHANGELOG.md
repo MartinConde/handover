@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate version history, field-by-field diffs, restore confirmation/recovery and preview-pane
+  chrome into English and German. Live switching preserves history filters, selected versions,
+  comparisons, dialogs, loaded diffs, the preview iframe and render identity without another
+  request; authored history/content and the preview page's content language remain unchanged, and
+  timestamps retain the browser timezone.
+
 - Translate the pending-changes drawer and one-entry publish confirmation into English and German,
   including selection and hold counts, precheck summaries, dates, accessibility labels and retained
   publish/discard recovery. Stable publish/check response codes preserve status, paths, drift,

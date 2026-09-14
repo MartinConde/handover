@@ -335,6 +335,22 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
         { page: message.page ?? '', status: message.status ?? 0 },
         options,
       );
+    case 'HISTORY_LOAD_FAILED':
+      return message.status
+        ? m.history_load_failed_status({ status: message.status }, options)
+        : m.history_load_failed({}, options);
+    case 'HISTORY_DIFF_FAILED':
+      return m.history_diff_failed({}, options);
+    case 'HISTORY_RESTORE_SAVE_FAILED':
+      return m.history_restore_save_failed({}, options);
+    case 'HISTORY_RESTORE_UNCONFIRMED':
+      return m.history_restore_unconfirmed({}, options);
+    case 'HISTORY_RESTORE_RELOAD_FAILED':
+      return m.history_restore_reload_failed({}, options);
+    case 'HISTORY_RESTORE_FAILED':
+      return message.status
+        ? m.history_restore_failed_status({ status: message.status }, options)
+        : m.history_restore_failed({}, options);
     case 'EDITOR_HOLD_FAILED':
       return m.editor_hold_failed({}, options);
     case 'EDITOR_LOCK_TAKE_FAILED':

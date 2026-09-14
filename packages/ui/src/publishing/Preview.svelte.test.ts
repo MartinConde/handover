@@ -19,6 +19,7 @@ let props = $state({
   published: true,
   hidden: false,
   stale: false,
+  uiLocale: 'en' as 'en' | 'de',
   problems: [] as { path: string; label: string; message: string }[],
   ongo: went,
   savedAt: 1755864000000,
@@ -39,6 +40,7 @@ afterEach(() => {
     published: true,
     hidden: false,
     stale: false,
+    uiLocale: 'en',
     problems: [],
     savedAt: 1755864000000,
   });
@@ -109,7 +111,7 @@ test('only a success signal for the requested URL and saved version marks the pr
   expect(q(root, '.preview-status')?.textContent?.trim()).toBe('Updating…');
 
   result(root, 'success');
-  expect(q(root, '.preview-status')?.textContent?.trim()).toBe('Updated 0 seconds ago');
+  expect(q(root, '.preview-status')?.textContent?.trim()).toBe('Updated now');
 });
 
 test('an iframe load without a successful preview result is reported as failed', () => {
@@ -220,4 +222,17 @@ test('a hidden entry still renders, under a banner saying it is off the live sit
     'Hidden — not on the live site',
   );
   expect(q(root, 'iframe')).not.toBe(null);
+});
+
+test('live interface switching translates chrome without changing the preview page identity', () => {
+  const root = show();
+  const before = src(root);
+
+  props.uiLocale = 'de';
+  flushSync();
+
+  expect(q(root, 'aside')?.getAttribute('aria-label')).toBe('Vorschau');
+  expect(q(root, '.preview-acts button')?.textContent).toBe('Aktualisieren');
+  expect(src(root)).toBe(before);
+  expect(q(root, 'iframe')).not.toBeNull();
 });

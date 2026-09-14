@@ -4,8 +4,8 @@ import { afterEach, expect, test } from 'vitest';
 import Diff from './Diff.svelte';
 
 let app: ReturnType<typeof mount>;
-const show = (groups: DiffGroup[], mediaBase = '') => {
-  app = mount(Diff, { target: document.body, props: { groups, mediaBase } });
+const show = (groups: DiffGroup[], mediaBase = '', uiLocale: 'en' | 'de' = 'en') => {
+  app = mount(Diff, { target: document.body, props: { groups, mediaBase, uiLocale } });
   flushSync();
   return document.body;
 };
@@ -90,4 +90,21 @@ test('a replaced picture is both thumbnails', () => {
     'https://media.example/media/aaaa.webp',
     'https://media.example/media/bbbb.webp',
   ]);
+});
+
+test('diff chrome and language names render in German while authored labels stay unchanged', () => {
+  const root = show(
+    [
+      {
+        locale: 'en',
+        changes: [{ path: 'title', label: 'Authored title label', kind: 'whole' }],
+      },
+    ],
+    '',
+    'de',
+  );
+
+  expect(root.querySelector('h3')?.textContent).toBe('Englisch');
+  expect(root.querySelector('.row')?.textContent).toContain('Authored title label');
+  expect(root.querySelector('.row')?.textContent).toContain('geändert');
 });

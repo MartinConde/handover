@@ -1,25 +1,23 @@
 <script lang="ts">
 import type { Change, DiffGroup } from '@handover/core';
+import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 
 let {
   groups,
   mediaBase = '',
+  uiLocale = 'en',
 }: {
   groups: DiffGroup[];
   /** Where a stored media key is served from; without it a replaced picture has no thumbnails. */
   mediaBase?: string;
+  uiLocale?: UiLocale;
 } = $props();
+const options = $derived(messageOptions(uiLocale));
 
 const basename = (key: string) => key.slice(key.lastIndexOf('/') + 1);
 
-const LANGUAGES = new Intl.DisplayNames(['en'], { type: 'language' });
-const named = (locale: string) => {
-  try {
-    return LANGUAGES.of(locale) ?? locale;
-  } catch {
-    return locale;
-  }
-};
+const named = (locale: string) => formatLanguageName(locale, uiLocale);
 
 const languages = $derived(groups.filter((g) => g.locale !== undefined).length);
 // The shared group is only worth a heading where it is holding something back.
@@ -29,12 +27,12 @@ const shown = $derived(groups.filter((g) => g.locale !== undefined || g.changes.
 <div class="change-diff">
   {#each shown as group (group.locale ?? '')}
     <!-- h3 follows the surrounding h2. -->
-    <h3>{group.locale ? named(group.locale) : languages === 2 ? 'Both languages' : 'All languages'}</h3>
+    <h3>{group.locale ? named(group.locale) : languages === 2 ? m.diff_both_languages({}, options) : m.diff_all_languages({}, options)}</h3>
     <div class="diff">
       {#if group.removed}
-        <div class="row is-block"><del>The {named(group.locale ?? '')} version was removed</del></div>
+        <div class="row is-block"><del>{m.diff_language_removed({ language: named(group.locale ?? '') }, options)}</del></div>
       {:else if group.changes.length === 0}
-        <div class="row is-quiet"><small>Everything else</small>unchanged</div>
+        <div class="row is-quiet"><small>{m.diff_everything_else({}, options)}</small>{m.diff_unchanged({}, options)}</div>
       {:else}
         {@render rows(group.changes, '')}
       {/if}
@@ -49,15 +47,15 @@ const shown = $derived(groups.filter((g) => g.locale !== undefined || g.changes.
       {#if change.at !== 'same'}
         <div class="row is-block">
           <small>{label}</small>
-          {#if change.at === 'added'}<ins>added</ins>
-          {:else if change.at === 'removed'}<del>removed</del>
-          {:else}<span class="badge">moved {change.at === 'moved-up' ? 'up' : 'down'}</span>{/if}
-          {#if change.type}<span class="sub">a {change.type} block</span>{/if}
+          {#if change.at === 'added'}<ins>{m.diff_added({}, options)}</ins>
+          {:else if change.at === 'removed'}<del>{m.diff_removed({}, options)}</del>
+          {:else}<span class="badge">{change.at === 'moved-up' ? m.diff_moved_up({}, options) : m.diff_moved_down({}, options)}</span>{/if}
+          {#if change.type}<span class="sub">{m.diff_block_type({ type: change.type }, options)}</span>{/if}
           {#if change.at !== 'removed'}
-            <span class="sub">{#if change.above}now above <b>{change.above}</b>{:else}at the end{/if}</span>
+            <span class="sub">{#if change.above}{m.diff_now_above({ label: change.above }, options)}{:else}{m.diff_at_end({}, options)}{/if}</span>
           {/if}
           {#if change.changes.length === 0 && change.at !== 'added' && change.at !== 'removed'}
-            <span class="sub">nothing inside it changed</span>
+            <span class="sub">{m.diff_nothing_inside({}, options)}</span>
           {/if}
         </div>
       {/if}
@@ -72,13 +70,13 @@ const shown = $derived(groups.filter((g) => g.locale !== undefined || g.changes.
       <!-- A picture has no history of its own. -->
       <div class="row is-block">
         <small>{label}</small>
-        <span>photo {change.before && change.after ? 'replaced' : change.after ? 'added' : 'removed'}</span>
+        <span>{change.before && change.after ? m.diff_photo_replaced({}, options) : change.after ? m.diff_photo_added({}, options) : m.diff_photo_removed({}, options)}</span>
         <div class="pair">
           {#if change.before}
-            <div><span class="lbl">Before · {basename(change.before)}</span><div class="ratio-preview is-16x9 is-old"><img src="{mediaBase}/{change.before}" alt="" loading="lazy" /></div></div>
+            <div><span class="lbl">{m.diff_before({}, options)} · {basename(change.before)}</span><div class="ratio-preview is-16x9 is-old"><img src="{mediaBase}/{change.before}" alt="" loading="lazy" /></div></div>
           {/if}
           {#if change.after}
-            <div><span class="lbl">After · {basename(change.after)}</span><div class="ratio-preview is-16x9"><img src="{mediaBase}/{change.after}" alt="" loading="lazy" /></div></div>
+            <div><span class="lbl">{m.diff_after({}, options)} · {basename(change.after)}</span><div class="ratio-preview is-16x9"><img src="{mediaBase}/{change.after}" alt="" loading="lazy" /></div></div>
           {/if}
         </div>
       </div>
@@ -89,7 +87,7 @@ const shown = $derived(groups.filter((g) => g.locale !== undefined || g.changes.
           >{' → '}</span>{/if}{#if change.after !== undefined}<ins>{change.after}</ins>{/if}
       </div>
     {:else}
-      <div class="row"><small>{label}</small>changed</div>
+      <div class="row"><small>{label}</small>{m.diff_changed({}, options)}</div>
     {/if}
   {/each}
 {/snippet}

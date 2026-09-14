@@ -1388,6 +1388,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       {mediaBase}
       locales={entry.locales}
       drafted={entry.pending.length > 0}
+      {uiLocale}
       onrestore={entrySession.historicalRestore}
       onrestored={async (date, outcome) => {
         if (outcome === 'restored') onrestored?.(date);

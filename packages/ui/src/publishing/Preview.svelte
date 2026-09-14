@@ -1,4 +1,6 @@
 <script lang="ts">
+import { formatElapsedTime, messageOptions, type UiLocale } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 import { previewPath } from '../request.js';
 
 // Toolbar and banners sit outside the frame: a band drawn inside would read as the site's own.
@@ -16,6 +18,7 @@ let {
   published,
   hidden = false,
   stale = false,
+  uiLocale = 'en',
   problems,
   ongo,
   savedAt,
@@ -32,19 +35,21 @@ let {
   hidden?: boolean;
   /** The last save did not land, so the render is behind the form. */
   stale?: boolean;
+  uiLocale?: UiLocale;
   /** A page cannot be built around a hole, so these come first. */
   problems: Problem[];
   ongo: (path: string) => void;
   /** The render follows the stored draft, never the keystrokes. */
   savedAt: number;
 } = $props();
+const options = $derived(messageOptions(uiLocale));
 
 type Width = 'desktop' | 'tablet' | 'phone';
-const WIDTHS: { value: Width; label: string }[] = [
-  { value: 'desktop', label: 'Desktop' },
-  { value: 'tablet', label: 'Tablet' },
-  { value: 'phone', label: 'Phone' },
-];
+const widths = $derived([
+  { value: 'desktop' as const, label: m.preview_desktop({}, options) },
+  { value: 'tablet' as const, label: m.preview_tablet({}, options) },
+  { value: 'phone' as const, label: m.preview_phone({}, options) },
+]);
 let width = $state<Width>('desktop');
 // Refresh must change `src`, or the same address would not be asked for again.
 let refreshed = $state(0);
@@ -77,14 +82,7 @@ $effect(() => {
   return () => clearInterval(tick);
 });
 
-function ago(since: number): string {
-  const seconds = Math.max(0, Math.round((now - since) / 1000));
-  if (seconds < 60) return `${seconds} second${seconds === 1 ? '' : 's'} ago`;
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
-  const hours = Math.round(minutes / 60);
-  return `${hours} hour${hours === 1 ? '' : 's'} ago`;
-}
+const ago = (since: number) => formatElapsedTime(since, now, uiLocale);
 
 function refresh() {
   refreshed = Math.max(Date.now(), Number(requestedVersion) + 1);
@@ -117,42 +115,39 @@ function loaded(event: Event) {
 // While the schema is unhappy the count is the state, not a render that never comes back.
 const status = $derived(
   problems.length
-    ? `Not updated — ${problems.length} problem${problems.length === 1 ? '' : 's'}`
+    ? m.preview_not_updated({ count: problems.length }, options)
     : working
-      ? 'Updating…'
+      ? m.preview_updating({}, options)
       : phase === 'expired'
-        ? 'Preview stopped — sign in again'
+        ? m.preview_stopped({}, options)
         : phase === 'timeout'
-          ? 'Preview took too long'
+          ? m.preview_timeout_status({}, options)
           : phase === 'failed'
-            ? 'Preview could not be updated'
+            ? m.preview_failed_status({}, options)
             : stale
-              ? `Showing the last saved version — ${ago(renderedAt)}`
-              : `Updated ${ago(renderedAt)}`,
+              ? m.preview_showing_saved({ ago: ago(renderedAt) }, options)
+              : m.preview_updated({ ago: ago(renderedAt) }, options),
 );
 </script>
 
-<aside class="pane is-preview" aria-label="Preview">
+<aside class="pane is-preview" aria-label={m.preview_title({}, options)}>
   {#if !enabled}
     <!-- The route is injected at build, so the sentence names the developer's flag. -->
     <div class="preview-error is-quiet">
-      <h3>Preview isn't switched on for this site</h3>
-      <p>
-        Your developer turns it on by setting <code>PREVIEW_ENABLED</code> when the site is built.
-        Until then you can still edit and publish — you just won't see the page beforehand.
-      </p>
+      <h3>{m.preview_disabled_title({}, options)}</h3>
+      <p>{m.preview_disabled_before({}, options)} <code>PREVIEW_ENABLED</code> {m.preview_disabled_after({}, options)}</p>
     </div>
   {:else}
     <div class="preview-tools">
-      <div class="seg" role="group" aria-label="Screen width">
-        {#each WIDTHS as of (of.value)}
+      <div class="seg" role="group" aria-label={m.preview_screen_width({}, options)}>
+        {#each widths as of (of.value)}
           <button type="button" aria-pressed={width === of.value} onclick={() => (width = of.value)}>
             {of.label}
           </button>
         {/each}
       </div>
       {#if locales.length > 1}
-        <div class="seg" role="group" aria-label="Language">
+        <div class="seg" role="group" aria-label={m.common_language({}, options)}>
           {#each locales as of (of.locale)}
             <button type="button" aria-pressed={locale === of.locale} onclick={() => onlocale(of.locale)}>
               {of.locale.toUpperCase()}<span class="visually-hidden"> — {of.label}</span>
@@ -163,53 +158,53 @@ const status = $derived(
       <div class="preview-acts">
         <p class="preview-status" class:is-busy={working} class:is-warn={!working && (stale || problems.length > 0 || phase === 'failed' || phase === 'expired' || phase === 'timeout')} role="status">{status}</p>
         <span class="spacer"></span>
-        <button class="btn btn-ghost btn-sm" type="button" onclick={refresh}>Refresh</button>
-        <a class="btn btn-ghost btn-sm" href={previewPath(url ?? '/')} target="_blank" rel="noreferrer">Open in new tab ↗</a>
+        <button class="btn btn-ghost btn-sm" type="button" onclick={refresh}>{m.preview_refresh({}, options)}</button>
+        <a class="btn btn-ghost btn-sm" href={previewPath(url ?? '/')} target="_blank" rel="noreferrer">{m.preview_open_new_tab({}, options)} ↗</a>
       </div>
     </div>
     {#if problems.length}
       <!-- The card stands where the frame would be, rather than a page with a hole in it. -->
       <div class="preview-error">
-        <h3>Can't show a preview yet</h3>
+        <h3>{m.preview_problems_title({}, options)}</h3>
         {#each problems as problem (problem.path)}
           <p><strong>{problem.label}</strong> — {problem.message}</p>
         {/each}
         <div class="actions">
           {#each problems as problem (problem.path)}
-            <button class="btn" type="button" onclick={() => ongo(problem.path)}>Go to {problem.label}</button>
+            <button class="btn" type="button" onclick={() => ongo(problem.path)}>{m.preview_go_to({ label: problem.label }, options)}</button>
           {/each}
         </div>
       </div>
     {:else}
       {#if hidden}
-        <p class="preview-banner is-hidden">Hidden — not on the live site.</p>
+        <p class="preview-banner is-hidden">{m.preview_hidden({}, options)}</p>
       {/if}
       {#if !published}
-        <p class="preview-banner">Not published yet — previewing at <code>{url}</code>.</p>
+        <p class="preview-banner">{m.preview_unpublished_before({}, options)} <code>{url}</code>{m.preview_unpublished_after({}, options)}</p>
       {/if}
       {#if stale}
-        <p class="preview-banner is-stale">Not everything you have typed is saved, so this is the last version that was.</p>
+        <p class="preview-banner is-stale">{m.preview_stale({}, options)}</p>
       {/if}
       {#if phase === 'expired'}
         <div class="preview-error">
-          <h3>Your sign-in expired</h3>
-          <p>Reload the admin to sign in again. Saved changes will still be in the shared draft.</p>
+          <h3>{m.preview_expired_title({}, options)}</h3>
+          <p>{m.preview_expired_intro({}, options)}</p>
           <div class="actions">
-            <button class="btn" type="button" onclick={() => location.reload()}>Reload admin</button>
+            <button class="btn" type="button" onclick={() => location.reload()}>{m.preview_reload_admin({}, options)}</button>
           </div>
         </div>
       {:else if phase === 'failed' || phase === 'timeout'}
         <div class="preview-error">
-          <h3>{phase === 'timeout' ? 'The preview took too long' : "The preview couldn't be shown"}</h3>
-          <p>{phase === 'timeout' ? 'The page did not finish rendering within 15 seconds.' : 'The site refused the page or could not render it.'}</p>
+          <h3>{phase === 'timeout' ? m.preview_timeout_title({}, options) : m.preview_failed_title({}, options)}</h3>
+          <p>{phase === 'timeout' ? m.preview_timeout_intro({}, options) : m.preview_failed_intro({}, options)}</p>
           <div class="actions">
-            <button class="btn" type="button" onclick={refresh}>Try again</button>
+            <button class="btn" type="button" onclick={refresh}>{m.common_try_again({}, options)}</button>
           </div>
         </div>
       {:else}
         <div class="preview-stage" class:is-updating={working}>
           <div class="preview-frame is-{width}">
-            <iframe {src} title="The page as the site would serve it" onload={loaded}></iframe>
+            <iframe {src} title={m.preview_frame_title({}, options)} onload={loaded}></iframe>
           </div>
         </div>
       {/if}

@@ -1398,13 +1398,13 @@ test('a confirmed restore refusal retains snapshots and reopens ordinary editing
 
   expect(
     await session.historicalRestore(
-      async () => ({ ok: false, error: 'That commit cannot be restored.' }),
+      async () => ({ ok: false, error: { code: 'HISTORY_RESTORE_FAILED' } }),
       reload,
     ),
   ).toEqual({
     ok: false,
     reason: 'refused',
-    error: 'That commit cannot be restored.',
+    error: { code: 'HISTORY_RESTORE_FAILED' },
   });
   expect(reload).not.toHaveBeenCalled();
   expect(session.snapshot('en')).toEqual(before);

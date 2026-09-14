@@ -40,6 +40,12 @@ severity and already-visible publish recovery update in place without another ch
 request. Stable publish and check codes preserve incomplete, drifted, conflicting, unreachable and
 uncertain outcomes while legacy server detail remains diagnostic rather than control flow.
 
+Version history, field-by-field diffs, restore confirmation and recovery, and preview-pane chrome
+are bilingual. A switch keeps the selected version or comparison, history filter, open restore
+dialog, loaded diff, preview iframe, render identity and selected content language. It makes no
+history, content or preview request. Authored commit summaries, names, field labels, changed values
+and the site-rendered page remain unchanged; timestamps keep the browser timezone.
+
 An open crop or focal-point dialog keeps its node, focus, crop region, ratio and focal coordinates
 when the interface language changes. Live slider and focal-handle labels update, while filenames and
 site-authored preset labels remain unchanged. Switching does not process an image, write content or

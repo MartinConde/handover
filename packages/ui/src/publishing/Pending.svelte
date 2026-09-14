@@ -477,7 +477,7 @@ function askDiscard(entry: PendingEntry) {
       {@const shown = changes[entry.key]}
       {#if shown}
         <div class="change-diff">
-          <Diff groups={shown.groups} {mediaBase} />
+          <Diff groups={shown.groups} {mediaBase} {uiLocale} />
           {#if shown.redirects.length}
             <h4>{m.pending_riding_along({}, options)}</h4>
             <div class="diff">

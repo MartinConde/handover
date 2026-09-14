@@ -99,7 +99,7 @@ export type MachineTranslationResult =
   | { ok: true; response: MachineTranslationResponse }
   | { ok: false; reason: MachineTranslationFailure };
 
-export type HistoricalRestoreResponse = { ok: true } | { ok: false; error: string };
+export type HistoricalRestoreResponse = { ok: true } | { ok: false; error: UiMessage };
 export type HistoricalRestoreFailure =
   | 'busy'
   | 'closed'
@@ -110,7 +110,7 @@ export type HistoricalRestoreFailure =
   | 'uncertain';
 export type HistoricalRestoreResult =
   | { ok: true }
-  | { ok: false; reason: HistoricalRestoreFailure; error?: string };
+  | { ok: false; reason: HistoricalRestoreFailure; error?: UiMessage };
 
 export type FinalPublishFailure =
   | 'busy'

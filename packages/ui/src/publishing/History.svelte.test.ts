@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import type { UiMessage } from '../errors.js';
 import History from './History.svelte';
 
 // Not testing: the per-field diff, which is Diff.svelte's own, or the tab that mounts this.
@@ -31,8 +32,29 @@ let restoreRefusal: string | undefined;
 let handedOff = 0;
 /** The date of each version the editor was handed. */
 let handedDates: string[] = [];
+let props = $state({
+  collection: 'listings',
+  slug: 'mill-house',
+  locales: ['en', 'de'],
+  drafted: false,
+  uiLocale: 'en' as 'en' | 'de',
+  onrestore: async (
+    request: () => Promise<{ ok: true } | { ok: false; error: UiMessage }>,
+    reload: (outcome: 'restored' | 'uncertain') => void | Promise<void>,
+  ) => {
+    const response = await request();
+    if (!response.ok)
+      return { ok: false as const, reason: 'refused' as const, error: response.error };
+    await reload('restored');
+    return { ok: true as const };
+  },
+  onrestored: (date: string) => {
+    handedOff += 1;
+    handedDates.push(date);
+  },
+});
 
-const show = async (locales = ['en', 'de'], drafted = false) => {
+const show = async (locales = ['en', 'de'], drafted = false, uiLocale: 'en' | 'de' = 'en') => {
   asked = [];
   vi.stubGlobal(
     'fetch',
@@ -50,26 +72,8 @@ const show = async (locales = ['en', 'de'], drafted = false) => {
       return Response.json({ versions, more });
     }),
   );
-  app = mount(History, {
-    target: document.body,
-    props: {
-      collection: 'listings',
-      slug: 'mill-house',
-      locales,
-      drafted,
-      onrestore: async (request, reload) => {
-        const response = await request();
-        if (!response.ok)
-          return { ok: false as const, reason: 'refused' as const, error: response.error };
-        await reload('restored');
-        return { ok: true as const };
-      },
-      onrestored: (date: string) => {
-        handedOff += 1;
-        handedDates.push(date);
-      },
-    },
-  });
+  Object.assign(props, { locales, drafted, uiLocale });
+  app = mount(History, { target: document.body, props });
   await settle();
   return document.body;
 };
@@ -91,6 +95,7 @@ afterEach(() => {
   restoreRefusal = undefined;
   handedOff = 0;
   handedDates = [];
+  Object.assign(props, { locales: ['en', 'de'], drafted: false, uiLocale: 'en' });
 });
 
 const q = <T extends Element>(sel: string) => {
@@ -140,7 +145,7 @@ test('a version says what changed, when, who and which languages', async () => {
   ];
   await show();
 
-  expect(rows()).toEqual([['Update price', '2h ago · Anna Weber Languages: ENDE']]);
+  expect(rows()).toEqual([['Update price', '2 hr ago · Anna Weber Languages: ENDE']]);
   expect(q('.summary').getAttribute('title')).toBe('Commit aaa111b');
   expect(q('.avatar').textContent).toBe('AW');
 });
@@ -152,7 +157,7 @@ test('a version nobody is recorded against says only when it happened', async ()
   ];
   await show();
 
-  expect(rows()).toEqual([['Update listings/en/mill-house', '3h ago Languages: EN']]);
+  expect(rows()).toEqual([['Update listings/en/mill-house', '3 hr ago Languages: EN']]);
   expect(all('.version-row .avatar')).toHaveLength(0);
 });
 
@@ -320,7 +325,7 @@ test('a pair is compared oldest first', async () => {
   expect(q('.version-head h2').textContent).toBe('Two versions compared');
   // Both would read "2 days ago", so the pair is named by what each version says.
   expect(q('.version-head .by').textContent?.replace(/\s+/g, ' ').trim()).toBe(
-    'From Create, 2 days ago, to Update price, 2h ago',
+    'From Create, 2 days ago, to Update price, 2 hr ago',
   );
 });
 
@@ -466,17 +471,37 @@ test('Escape closes the confirmation and gives focus back to Restore', async () 
   expect(restored).toEqual([]);
 });
 
-// The dialog stays open so the server's sentence is read next to the button.
-test('a refused restore says what the server said', async () => {
+// The dialog stays open with stable recovery rather than retaining server-authored English.
+test('a refused restore keeps the dialog open with localized recovery', async () => {
   restoreRefusal = 'Anna is editing this entry — it can be restored once they are done';
   await openRestore();
 
   await click(all('.dialog .actions button')[1] as Element);
 
-  expect(q('.dialog .notice-danger').textContent).toBe(
-    'Anna is editing this entry — it can be restored once they are done',
-  );
+  expect(q('.dialog .notice-danger').textContent).toBe('That version could not be restored (409).');
   expect(handedOff).toBe(0);
+});
+
+test('visible history, diff and restore recovery reformat in German without another read', async () => {
+  restoreRefusal = 'legacy server prose';
+  diffResponse = () => diff('Current content');
+  versions = [VERSION];
+  const body = await show(['en', 'de'], true, 'en');
+  await click(q('.version-row .summary'));
+  await click(q('.version-head .actions button'));
+  await click(all('.dialog .actions button')[1] as Element);
+  const requests = asked.length;
+
+  props.uiLocale = 'de';
+  flushSync();
+
+  expect(q('.history-list-head h2').textContent).toBe('Versionsverlauf');
+  expect(q('.change-diff h3').textContent).toBe('Englisch');
+  expect(q('.dialog .notice-danger').textContent).toBe(
+    'Diese Version konnte nicht wiederhergestellt werden (409).',
+  );
+  expect(asked).toHaveLength(requests);
+  expect(body.querySelector('.dialog')).not.toBeNull();
 });
 
 // The refusal belongs to the attempt, not the version, or it would follow to the next one opened.

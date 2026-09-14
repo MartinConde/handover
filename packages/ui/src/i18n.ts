@@ -60,6 +60,20 @@ export function formatRelativeTime(at: number, locale: UiLocale): string {
   ).format(at);
 }
 
+/** Short elapsed duration for live status lines; callers supply their reactive clock. */
+export function formatElapsedTime(at: number, now: number, locale: UiLocale): string {
+  const format = formatter(
+    relativeFormatters,
+    locale,
+    () => new Intl.RelativeTimeFormat(languageTag(locale), { numeric: 'auto', style: 'short' }),
+  );
+  const seconds = Math.max(0, Math.round((now - at) / 1000));
+  if (seconds < 60) return format.format(-seconds, 'second');
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return format.format(-minutes, 'minute');
+  return format.format(-Math.round(minutes / 60), 'hour');
+}
+
 export const formatExactTime = (at: number, locale: UiLocale): string =>
   formatter(
     exactFormatters,
