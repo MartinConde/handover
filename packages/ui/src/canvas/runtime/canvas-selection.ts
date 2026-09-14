@@ -1,3 +1,5 @@
+import { messageOptions, type UiLocale } from '../../i18n';
+import * as m from '../../paraglide/messages.js';
 import {
   type CanvasAnnotationKind,
   type CanvasBlockAction,
@@ -28,6 +30,10 @@ interface InternalNode extends CanvasStructureNode {
   /** The block's own name from the template, before position is used as a fallback. */
   named: string;
 }
+
+type Announcement =
+  | { kind: 'selected' | 'empty' | 'focus' | 'dragging' | 'unchanged' | 'canceled' }
+  | { kind: 'preview' | 'moved'; destinationPosition: number; destinationCount: number };
 
 export interface CanvasSelectionRuntimeOptions {
   root?: Document;
@@ -222,7 +228,11 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
   let nodeById = new Map<string, InternalNode>();
   let nodesByElement = new WeakMap<Element, InternalNode[]>();
   let childrenByParent = new Map<string | undefined, InternalNode[]>();
+  let lastAnnouncement: { node: InternalNode; state: Announcement } | undefined;
+  let unsubscribeLocale: (() => void) | undefined;
   const visible = new WeakMap<Element, boolean>();
+  const locale = (): UiLocale => options.uiLocale?.current() ?? 'en';
+  const message = () => messageOptions(locale());
 
   const host = root.createElement('div');
   host.dataset.handoverCanvasOverlay = '';
@@ -294,9 +304,36 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     }
     return result;
   };
-  const announce = (node: InternalNode, suffix = '') => {
+  const renderAnnouncement = (node: InternalNode, state: Announcement) => {
     const parent = node.parentId ? nodeById.get(node.parentId) : undefined;
-    live.textContent = `${node.label}, ${node.position} of ${node.setSize} in ${parent?.label ?? 'Page'}${suffix}`;
+    const values = {
+      label: node.label,
+      position: node.position,
+      count: node.setSize,
+      parent: parent?.label ?? m.canvas_page({}, message()),
+    };
+    switch (state.kind) {
+      case 'selected':
+        return m.canvas_selection_announcement_selected(values, message());
+      case 'empty':
+        return m.canvas_selection_announcement_empty(values, message());
+      case 'focus':
+        return m.canvas_selection_announcement_focus(values, message());
+      case 'dragging':
+        return m.canvas_selection_announcement_dragging(values, message());
+      case 'unchanged':
+        return m.canvas_selection_announcement_unchanged(values, message());
+      case 'canceled':
+        return m.canvas_selection_announcement_canceled(values, message());
+      case 'preview':
+        return m.canvas_selection_announcement_preview({ ...values, ...state }, message());
+      case 'moved':
+        return m.canvas_selection_announcement_moved({ ...values, ...state }, message());
+    }
+  };
+  const announce = (node: InternalNode, state: Announcement) => {
+    lastAnnouncement = { node, state };
+    live.textContent = renderAnnouncement(node, state);
   };
   const finishDrag = (commit: boolean) => {
     const held = dragging;
@@ -311,9 +348,13 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
           kind: destination.kind,
           target: destination.target,
         });
-      announce(held.node, `. Moved to position ${held.to + 1} of ${held.siblings.length}.`);
+      announce(held.node, {
+        kind: 'moved',
+        destinationPosition: held.to + 1,
+        destinationCount: held.siblings.length,
+      });
     } else {
-      announce(held.node, commit ? '. Position unchanged.' : '. Move canceled.');
+      announce(held.node, { kind: commit ? 'unchanged' : 'canceled' });
     }
     scheduleDraw();
   };
@@ -343,7 +384,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     };
     dragPoint = undefined;
     options.onInteraction?.({ kind: node.kind, target: node.target }, { dragging: true });
-    announce(node, '. Dragging within this list; release to move or press Escape to cancel.');
+    announce(node, { kind: 'dragging' });
     scheduleDraw();
   }
   const projectDrag = (event: PointerEvent) => {
@@ -369,20 +410,33 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     });
     if (nearest !== dragging.to) {
       dragging.to = nearest;
-      announce(
-        dragging.node,
-        `. Move preview: position ${nearest + 1} of ${dragging.siblings.length}.`,
-      );
+      announce(dragging.node, {
+        kind: 'preview',
+        destinationPosition: nearest + 1,
+        destinationCount: dragging.siblings.length,
+      });
     }
   };
   const draw = () => {
     geometryFrame = 0;
     if (disposed) return;
+    const focused = shadow.activeElement instanceof HTMLElement ? shadow.activeElement : undefined;
+    const focusedAction = focused?.dataset.canvasAction;
+    const focusedToggle = focused?.hasAttribute('data-canvas-actions-toggle') ?? false;
+    const restoreActionFocus = () => {
+      const replacement = focusedAction
+        ? actions.querySelector<HTMLElement>(`[data-canvas-action="${focusedAction}"]`)
+        : focusedToggle
+          ? actions.querySelector<HTMLElement>('[data-canvas-actions-toggle]')
+          : undefined;
+      replacement?.focus({ preventScroll: true });
+    };
     boxes.replaceChildren();
     actions.replaceChildren();
     dropSlot.hidden = true;
     if (!enabled) {
       path.hidden = true;
+      restoreActionFocus();
       return;
     }
     const measured = new Map<Element, DOMRect>();
@@ -434,21 +488,42 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     const anchor = selectedElement ?? hoveredElement ?? labelled?.elements[0];
     if (!labelled || !anchor) {
       path.hidden = true;
+      restoreActionFocus();
       return;
     }
     const bounds = boundsOf(anchor);
     path.hidden = editing || bounds.bottom < 0 || bounds.top > owner.innerHeight;
-    path.title = `Page / ${parents(labelled)
-      .map((node) => node.label)
-      .join(
-        ' / ',
-      )}${labelled.empty ? ' · Empty list' : ''}${labelled.occurrences > 1 ? ` · ${labelled.occurrences} occurrences` : ''}`;
-    path.textContent = `${labelled.label}${labelled.empty ? ' · Empty' : ''}${labelled.occurrences > 1 ? ` · ${labelled.occurrences} occurrences` : ''}`;
+    const occurrence =
+      labelled.occurrences > 1
+        ? m.canvas_selection_occurrences({ count: labelled.occurrences }, message())
+        : '';
+    const pathDetails = [
+      labelled.empty ? m.canvas_selection_empty_list({}, message()) : '',
+      occurrence,
+    ].filter(Boolean);
+    path.title = `${m.canvas_selection_path(
+      {
+        path: parents(labelled)
+          .map((node) => node.label)
+          .join(' / '),
+      },
+      message(),
+    )}${pathDetails.length ? ` · ${pathDetails.join(' · ')}` : ''}`;
+    const labelDetails = [labelled.empty ? m.canvas_empty({}, message()) : '', occurrence].filter(
+      Boolean,
+    );
+    path.textContent = `${labelled.label}${labelDetails.length ? ` · ${labelDetails.join(' · ')}` : ''}`;
     path.style.left = `${Math.max(4, Math.min(bounds.left, owner.innerWidth - path.offsetWidth - 4))}px`;
     path.style.top = `${Math.max(4, bounds.top - 28)}px`;
-    if (!selectedNode || !selectedElement || options.isEditing?.()) return;
+    if (!selectedNode || !selectedElement || options.isEditing?.()) {
+      restoreActionFocus();
+      return;
+    }
     const selectedBounds = boundsOf(selectedElement);
-    if (selectedBounds.bottom < 0 || selectedBounds.top > owner.innerHeight) return;
+    if (selectedBounds.bottom < 0 || selectedBounds.top > owner.innerHeight) {
+      restoreActionFocus();
+      return;
+    }
     const addAction = (
       action: CanvasBlockAction,
       label: string,
@@ -460,6 +535,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       const button = root.createElement('button');
       button.type = 'button';
       button.className = className;
+      button.dataset.canvasAction = action;
       button.setAttribute('aria-label', label);
       button.textContent = text;
       button.style.left = `${Math.max(4, left)}px`;
@@ -480,7 +556,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       if (allowedActions.includes('insert-before'))
         addAction(
           'insert-before',
-          `Insert before ${selectedNode.label}`,
+          m.canvas_selection_insert_before({ label: selectedNode.label }, message()),
           selectedBounds.left + selectedBounds.width / 2 - 14,
           selectedBounds.top - 14,
           'insert',
@@ -488,7 +564,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       if (allowedActions.includes('insert-after'))
         addAction(
           'insert-after',
-          `Insert after ${selectedNode.label}`,
+          m.canvas_selection_insert_after({ label: selectedNode.label }, message()),
           selectedBounds.left + selectedBounds.width / 2 - 14,
           selectedBounds.bottom - 14,
           'insert',
@@ -499,13 +575,29 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
         text: string;
         className?: string;
       }> = [
-        { action: 'replace', label: `Replace ${selectedNode.label}`, text: 'Replace block' },
-        { action: 'move-up', label: `Move ${selectedNode.label} up`, text: '↑' },
-        { action: 'move-down', label: `Move ${selectedNode.label} down`, text: '↓' },
-        { action: 'duplicate', label: `Duplicate ${selectedNode.label}`, text: '⧉' },
+        {
+          action: 'replace',
+          label: m.canvas_selection_replace({ label: selectedNode.label }, message()),
+          text: m.canvas_replace_block({}, message()),
+        },
+        {
+          action: 'move-up',
+          label: m.canvas_selection_move_up({ label: selectedNode.label }, message()),
+          text: '↑',
+        },
+        {
+          action: 'move-down',
+          label: m.canvas_selection_move_down({ label: selectedNode.label }, message()),
+          text: '↓',
+        },
+        {
+          action: 'duplicate',
+          label: m.canvas_selection_duplicate({ label: selectedNode.label }, message()),
+          text: '⧉',
+        },
         {
           action: 'delete',
-          label: `Delete ${selectedNode.label}`,
+          label: m.canvas_selection_delete({ label: selectedNode.label }, message()),
           text: '×',
           className: 'danger',
         },
@@ -514,14 +606,25 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       const corner = Math.max(4, Math.min(selectedBounds.right - 34, owner.innerWidth - 38));
       const top = Math.max(4, selectedBounds.top + 8);
       if (allowedActions.includes('move')) {
-        const drag = addAction('move', `Drag ${selectedNode.label}`, corner - 34, top, 'drag', '↕');
+        const drag = addAction(
+          'move',
+          m.canvas_selection_drag({ label: selectedNode.label }, message()),
+          corner - 34,
+          top,
+          'drag',
+          '↕',
+        );
         if (dragging) drag.classList.add('is-dragging');
       }
       if (compact.length) {
         const toggle = root.createElement('button');
         toggle.type = 'button';
+        toggle.dataset.canvasActionsToggle = '';
         toggle.textContent = '⋯';
-        toggle.setAttribute('aria-label', `Actions for ${selectedNode.label}`);
+        toggle.setAttribute(
+          'aria-label',
+          m.canvas_selection_actions({ label: selectedNode.label }, message()),
+        );
         toggle.setAttribute('aria-expanded', String(actionsOpen));
         toggle.style.left = `${corner}px`;
         toggle.style.top = `${top}px`;
@@ -551,25 +654,25 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
             menuTop + index * 32,
             `menu-item ${className ?? ''}`,
             action === 'replace'
-              ? 'Replace block'
+              ? m.canvas_replace_block({}, message())
               : action === 'duplicate'
-                ? 'Duplicate'
+                ? m.canvas_selection_duplicate_button({}, message())
                 : action === 'delete'
-                  ? 'Delete block'
+                  ? m.canvas_selection_delete_button({}, message())
                   : action === 'move-up'
-                    ? 'Move up'
-                    : 'Move down',
+                    ? m.canvas_selection_move_up_button({}, message())
+                    : m.canvas_selection_move_down_button({}, message()),
           );
         });
       }
     } else if (selectedNode.kind === 'field' && allowedActions.includes('replace-media')) {
       addAction(
         'replace-media',
-        `Replace ${selectedNode.label}`,
+        m.canvas_selection_replace({ label: selectedNode.label }, message()),
         Math.min(selectedBounds.right - 112, owner.innerWidth - 116),
         selectedBounds.top + 8,
         'field-action',
-        'Replace image',
+        m.canvas_selection_replace_image({}, message()),
       );
     } else if (
       selectedNode.kind === 'list' &&
@@ -578,7 +681,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     ) {
       addAction(
         'insert-empty',
-        `Add block to ${selectedNode.label}`,
+        m.canvas_selection_add_block_to({ label: selectedNode.label }, message()),
         selectedBounds.left + selectedBounds.width / 2 - 14,
         selectedBounds.top + selectedBounds.height / 2 - 14,
         'insert',
@@ -596,11 +699,23 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
         dropSlot.style.width = `${Math.max(24, destinationBounds.width)}px`;
       }
     }
+    restoreActionFocus();
   };
   const scheduleDraw = () => {
     if (!geometryFrame) geometryFrame = owner.requestAnimationFrame(draw);
   };
   const publishStructure = () => options.onStructure?.(nodes.map(publicNode));
+  const labelNodes = () => {
+    for (const node of nodes) {
+      node.label =
+        node.kind === 'block'
+          ? node.named || m.canvas_selection_block_position({ position: node.position }, message())
+          : humanize(node.target.address) ||
+            (node.kind === 'list'
+              ? m.canvas_type_array({}, message())
+              : m.canvas_selection_field({}, message()));
+    }
+  };
   const observerRealm = owner as unknown as typeof globalThis;
   const resizeObserver = new observerRealm.ResizeObserver(scheduleDraw);
   const intersectionObserver = new observerRealm.IntersectionObserver((entries) => {
@@ -633,6 +748,10 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     if (disposed) return;
     nodes = readStructure(root);
     indexNodes();
+    if (lastAnnouncement) {
+      const currentAnnouncementNode = nodeForSelection(lastAnnouncement.node);
+      if (currentAnnouncementNode) lastAnnouncement.node = currentAnnouncementNode;
+    }
     cursor = nodeForSelection(cursor);
     const chosen = nodeForSelection(selected);
     if (selected && !chosen) {
@@ -642,6 +761,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       selected = { kind: chosen.kind, target: chosen.target };
       selectedElement = chosen.elements[0];
     }
+    labelNodes();
     publishStructure();
     scheduleDraw();
   };
@@ -664,7 +784,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     cursor = node;
     if (settings.scroll) selectedElement?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     if (settings.publish !== false) options.onSelection?.(selected);
-    announce(node, node.empty ? ', empty list.' : ', selected.');
+    announce(node, { kind: node.empty ? 'empty' : 'selected' });
     scheduleDraw();
     return true;
   };
@@ -827,7 +947,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     cursor = next;
     hoveredElement = next.elements[0];
     hoveredElement?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-    announce(next, '. Press Enter to select.');
+    announce(next, { kind: 'focus' });
     scheduleDraw();
   };
 
@@ -851,6 +971,17 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
         childList: true,
         attributes: true,
         attributeFilter: MARKERS.map(([attribute]) => attribute),
+      });
+      let observedLocale = locale();
+      unsubscribeLocale = options.uiLocale?.subscribe((nextLocale) => {
+        if (disposed) return;
+        if (nextLocale === observedLocale) return;
+        observedLocale = nextLocale;
+        labelNodes();
+        publishStructure();
+        if (lastAnnouncement)
+          live.textContent = renderAnnouncement(lastAnnouncement.node, lastAnnouncement.state);
+        scheduleDraw();
       });
     },
     select(value: CanvasSelection, settings: { scroll?: boolean } = {}) {
@@ -880,6 +1011,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       observer.disconnect();
       resizeObserver.disconnect();
       intersectionObserver.disconnect();
+      unsubscribeLocale?.();
       root.removeEventListener('pointermove', onPointerMove, true);
       root.removeEventListener('pointerup', onPointerUp, true);
       root.removeEventListener('pointercancel', onPointerCancel, true);

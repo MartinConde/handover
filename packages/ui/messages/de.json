@@ -1989,6 +1989,43 @@
   "canvas_action_history_unavailable": "Für diese Verlaufsaktion ist nichts verfügbar.",
   "canvas_action_refused": "Diese Aktion konnte nicht ausgeführt werden ({reason}).",
   "canvas_page": "Seite",
+  "canvas_selection_block_position": "Block {position}",
+  "canvas_selection_field": "Feld",
+  "canvas_selection_path": "Seite / {path}",
+  "canvas_selection_empty_list": "Leere Liste",
+  "canvas_selection_occurrences": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{count} Vorkommen",
+        "p=other": "{count} Vorkommen"
+      }
+    }
+  ],
+  "canvas_selection_insert_before": "Vor {label} einfügen",
+  "canvas_selection_insert_after": "Nach {label} einfügen",
+  "canvas_selection_replace": "{label} ersetzen",
+  "canvas_selection_move_up": "{label} nach oben verschieben",
+  "canvas_selection_move_down": "{label} nach unten verschieben",
+  "canvas_selection_duplicate": "{label} duplizieren",
+  "canvas_selection_delete": "{label} löschen",
+  "canvas_selection_drag": "{label} ziehen",
+  "canvas_selection_actions": "Aktionen für {label}",
+  "canvas_selection_duplicate_button": "Duplizieren",
+  "canvas_selection_delete_button": "Block löschen",
+  "canvas_selection_move_up_button": "Nach oben",
+  "canvas_selection_move_down_button": "Nach unten",
+  "canvas_selection_replace_image": "Bild ersetzen",
+  "canvas_selection_add_block_to": "Block zu {label} hinzufügen",
+  "canvas_selection_announcement_selected": "{label}, {position} von {count} in {parent}, ausgewählt.",
+  "canvas_selection_announcement_empty": "{label}, {position} von {count} in {parent}, leere Liste.",
+  "canvas_selection_announcement_focus": "{label}, {position} von {count} in {parent}. Drücke die Eingabetaste zum Auswählen.",
+  "canvas_selection_announcement_dragging": "{label}, {position} von {count} in {parent}. Wird innerhalb dieser Liste gezogen; zum Verschieben loslassen oder zum Abbrechen Escape drücken.",
+  "canvas_selection_announcement_preview": "{label}, {position} von {count} in {parent}. Vorschau: Position {destinationPosition} von {destinationCount}.",
+  "canvas_selection_announcement_moved": "{label}, {position} von {count} in {parent}. Auf Position {destinationPosition} von {destinationCount} verschoben.",
+  "canvas_selection_announcement_unchanged": "{label}, {position} von {count} in {parent}. Position unverändert.",
+  "canvas_selection_announcement_canceled": "{label}, {position} von {count} in {parent}. Verschieben abgebrochen.",
   "canvas_column": "Spalte {number}",
   "canvas_editable_items": [
     {

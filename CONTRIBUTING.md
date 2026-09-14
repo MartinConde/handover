@@ -62,6 +62,12 @@ message-format declarations and selectors and retain a complete fallback. Adding
 requires its catalog, an entry in both `project.inlang/settings.json` and the core allowlist, and a
 reviewed glossary. Run the message-only validation, then the relevant UI test/typecheck/build.
 
+Imperative Canvas controls must subscribe to the shared Canvas UI-locale state and translate their
+visible text, titles, tooltips, accessible names and live announcements from the catalogs. Keep
+template-authored labels and machine identifiers unchanged. A locale test must switch an already
+open control and prove that its selection, focus, drag/edit state and unfinished input survive; also
+cover a control initialized after the switch when it can load lazily.
+
 `packages/ui/project.inlang/settings.json` loads the pinned message-format plugin from
 `../../node_modules/@inlang/plugin-message-format/dist/index.js`; the repository pins pnpm's
 hoisted linker in `.npmrc`, which places the package at the workspace root, and Inlang resolves

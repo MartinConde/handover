@@ -115,6 +115,11 @@ names, actions, tooltips and accessibility text reformat. Schema field labels, b
 entry names, paths and edited values are authored content and are not translated. Longer controls
 wrap inside the narrow panels.
 
+Canvas selection paths, structural fallback names, block action controls and live keyboard/drag
+announcements also follow the interface language. An open action menu keeps focus, and a selection or
+active drag is not canceled by switching. Names supplied by the template and labels derived from its
+field paths remain authored schema text.
+
 Connection failures retain the existing uncertain-result behavior. Handover renders a localized
 summary from a stable error descriptor, not from an English sentence or status code. Known
 authentication codes select specific recovery text. Unknown technical detail stays separate from

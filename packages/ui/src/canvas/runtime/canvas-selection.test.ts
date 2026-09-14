@@ -2,6 +2,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import type { CanvasTarget } from '../canvas-bridge';
 import { canvasNodeKey, visibleCanvasNodes } from '../canvas-structure';
 import { createCanvasSelectionRuntime } from './canvas-selection';
+import { createCanvasUiLocaleState } from './canvas-ui-locale';
 
 const target = (address: string): CanvasTarget => ({
   document: { collection: 'pages', id: 'home' },
@@ -243,7 +244,47 @@ test('selected blocks and empty lists expose every permitted structural control'
   runtime.dispose();
 });
 
-test('a nested pointer drag stays projected until drop and Escape cancels without an action', async () => {
+test('live locale changes translate the retained selection, focused actions, and announcements', async () => {
+  document.body.innerHTML = `<main ${mark('list', 'blocks')}>
+    <section id="one" ${mark('block', 'blocks[_id=one]')}>One</section>
+  </main>`;
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(
+    new DOMRect(10, 20, 200, 40),
+  );
+  const uiLocale = createCanvasUiLocaleState('en');
+  const runtime = createCanvasSelectionRuntime({ uiLocale });
+  runtime.start();
+
+  document.querySelector('#one')?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  const selected = { kind: 'block' as const, target: target('blocks[_id=one]') };
+  runtime.actions(selected, ['replace', 'duplicate', 'delete']);
+  await settle();
+
+  const overlay = document.querySelector<HTMLElement>('[data-handover-canvas-overlay]');
+  const shadow = overlay?.shadowRoot;
+  expect(shadow?.querySelector('.live')?.textContent).toBe('Block 1, 1 of 1 in Blocks, selected.');
+  shadow?.querySelector<HTMLButtonElement>('[data-canvas-actions-toggle]')?.click();
+  const focused = shadow?.activeElement;
+  expect(focused?.getAttribute('aria-label')).toBe('Replace Block 1');
+
+  uiLocale.set('de');
+  await settle();
+
+  expect(document.querySelector('[data-handover-canvas-overlay]')).toBe(overlay);
+  expect(runtime.selection()).toEqual(selected);
+  expect(shadow?.querySelector('.path')?.getAttribute('title')).toBe('Seite / Blocks / Block 1');
+  expect(shadow?.activeElement?.getAttribute('aria-label')).toBe('Block 1 ersetzen');
+  expect(
+    Array.from(shadow?.querySelectorAll('.menu-item') ?? []).map((button) => button.textContent),
+  ).toEqual(['Block ersetzen', 'Duplizieren', 'Block löschen']);
+  expect(shadow?.querySelector('.live')?.textContent).toBe(
+    'Block 1, 1 von 1 in Blocks, ausgewählt.',
+  );
+
+  runtime.dispose();
+});
+
+test('a nested pointer drag stays projected and translated until drop while Escape cancels', async () => {
   document.body.innerHTML = `<main ${mark('list', 'blocks')}>
     <section ${mark('block', 'blocks[_id=columns]')}>
       <div ${mark('list', 'blocks[_id=columns].items')}>
@@ -258,7 +299,12 @@ test('a nested pointer drag stays projected until drop and Escape cancels withou
   });
   const action = vi.fn();
   const interaction = vi.fn();
-  const runtime = createCanvasSelectionRuntime({ onAction: action, onInteraction: interaction });
+  const uiLocale = createCanvasUiLocaleState('en');
+  const runtime = createCanvasSelectionRuntime({
+    onAction: action,
+    onInteraction: interaction,
+    uiLocale,
+  });
   runtime.start();
   const one = document.querySelector('#nested-one');
   one?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -270,7 +316,8 @@ test('a nested pointer drag stays projected until drop and Escape cancels withou
   await settle();
 
   const overlay = document.querySelector<HTMLElement>('[data-handover-canvas-overlay]');
-  const drag = () => overlay?.shadowRoot?.querySelector<HTMLButtonElement>('[aria-label^="Drag"]');
+  const drag = () =>
+    overlay?.shadowRoot?.querySelector<HTMLButtonElement>('[data-canvas-action="move"]');
   const pointer = (type: string, y: number) => {
     const event = new Event(type, { bubbles: true, cancelable: true });
     Object.defineProperties(event, {
@@ -283,11 +330,19 @@ test('a nested pointer drag stays projected until drop and Escape cancels withou
   drag()?.dispatchEvent(pointer('pointerdown', 120));
   document.dispatchEvent(pointer('pointermove', 230));
   await settle();
+  uiLocale.set('de');
+  await settle();
   expect(action).not.toHaveBeenCalled();
   expect(overlay?.shadowRoot?.querySelector('.drop-slot:not([hidden])')).not.toBeNull();
+  expect(overlay?.shadowRoot?.querySelector('.live')?.textContent).toContain(
+    'Vorschau: Position 2 von 2.',
+  );
   document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   expect(action).not.toHaveBeenCalled();
   expect(interaction).toHaveBeenLastCalledWith(selected, { dragging: false });
+  expect(overlay?.shadowRoot?.querySelector('.live')?.textContent).toContain(
+    'Verschieben abgebrochen.',
+  );
 
   await settle();
   drag()?.dispatchEvent(pointer('pointerdown', 120));

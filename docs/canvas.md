@@ -211,3 +211,9 @@ its typed label/address and focused input, while an active rich-text edit keeps 
 selection, formatting, composition and session undo history. A rich-text editor loaded after the
 switch starts in the latest language. Entry titles, paths, typed copy and technical refusal reasons
 remain authored or diagnostic text.
+
+Selection outlines, path badges and block actions use the same interface language. This includes
+insert, replace, move, duplicate, delete and image-replacement names plus keyboard-selection and
+drag-position announcements. Switching language keeps the selected annotation, an open action menu,
+its focused action and an active block drag in place. Template-authored block names and field-path
+labels are not translated; only Handover's fallback names and surrounding presentation change.

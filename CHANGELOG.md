@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate Canvas selection paths, structural fallback names, block actions and keyboard/drag
+  announcements into English and German. Live switching preserves the selected annotation, open
+  action menu, focused action and active drag while template-authored labels remain unchanged.
+
 - Translate Canvas link and rich-text controls into English and German, including entry search,
   unsafe-address guidance, toolbar names, accessible attributes and retained recovery. Live
   switching preserves the open link draft and focused input plus the active TipTap document,

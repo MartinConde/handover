@@ -1995,6 +1995,43 @@
   "canvas_action_history_unavailable": "There is nothing available for that history action.",
   "canvas_action_refused": "That action could not be applied ({reason}).",
   "canvas_page": "Page",
+  "canvas_selection_block_position": "Block {position}",
+  "canvas_selection_field": "Field",
+  "canvas_selection_path": "Page / {path}",
+  "canvas_selection_empty_list": "Empty list",
+  "canvas_selection_occurrences": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{count} occurrence",
+        "p=other": "{count} occurrences"
+      }
+    }
+  ],
+  "canvas_selection_insert_before": "Insert before {label}",
+  "canvas_selection_insert_after": "Insert after {label}",
+  "canvas_selection_replace": "Replace {label}",
+  "canvas_selection_move_up": "Move {label} up",
+  "canvas_selection_move_down": "Move {label} down",
+  "canvas_selection_duplicate": "Duplicate {label}",
+  "canvas_selection_delete": "Delete {label}",
+  "canvas_selection_drag": "Drag {label}",
+  "canvas_selection_actions": "Actions for {label}",
+  "canvas_selection_duplicate_button": "Duplicate",
+  "canvas_selection_delete_button": "Delete block",
+  "canvas_selection_move_up_button": "Move up",
+  "canvas_selection_move_down_button": "Move down",
+  "canvas_selection_replace_image": "Replace image",
+  "canvas_selection_add_block_to": "Add block to {label}",
+  "canvas_selection_announcement_selected": "{label}, {position} of {count} in {parent}, selected.",
+  "canvas_selection_announcement_empty": "{label}, {position} of {count} in {parent}, empty list.",
+  "canvas_selection_announcement_focus": "{label}, {position} of {count} in {parent}. Press Enter to select.",
+  "canvas_selection_announcement_dragging": "{label}, {position} of {count} in {parent}. Dragging within this list; release to move or press Escape to cancel.",
+  "canvas_selection_announcement_preview": "{label}, {position} of {count} in {parent}. Move preview: position {destinationPosition} of {destinationCount}.",
+  "canvas_selection_announcement_moved": "{label}, {position} of {count} in {parent}. Moved to position {destinationPosition} of {destinationCount}.",
+  "canvas_selection_announcement_unchanged": "{label}, {position} of {count} in {parent}. Position unchanged.",
+  "canvas_selection_announcement_canceled": "{label}, {position} of {count} in {parent}. Move canceled.",
   "canvas_column": "Column {number}",
   "canvas_editable_items": [
     {
