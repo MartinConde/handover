@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import type { CanvasAcknowledgement, CanvasFieldMutation, CanvasTarget } from '../canvas-bridge';
 import { createCanvasLinkRuntime } from './canvas-link';
+import { createCanvasUiLocaleState } from './canvas-ui-locale';
 
 const target: CanvasTarget = {
   document: { collection: 'pages', id: 'home' },
@@ -90,6 +91,83 @@ test('edits a schema link as one destination, label, and window-target command',
     composing: false,
   });
   expect(fetcher).not.toHaveBeenCalled();
+  runtime.dispose();
+});
+
+test('translates an open editor without replacing its focused draft controls', () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ entries: [], indexes: [], locales: ['en'] })),
+  );
+  document.body.innerHTML = '<a href="/contact">Contact</a>';
+  const anchor = document.querySelector('a');
+  if (!anchor) throw new Error('link fixture missing');
+  const uiLocale = createCanvasUiLocaleState('en');
+  const runtime = createCanvasLinkRuntime({
+    command: vi.fn(),
+    interaction: vi.fn(),
+    uiLocale,
+  });
+  runtime.configure({
+    kind: 'link',
+    target,
+    value: { type: 'url', ref: '', href: '/contact', label: 'Contact', newTab: false },
+  });
+  runtime.activate({ kind: 'field', target }, anchor);
+  const dialog = document.querySelector<HTMLElement>('[data-handover-canvas-link-editor]');
+  const label = dialog?.querySelector<HTMLInputElement>('#handover-canvas-link-label');
+  if (!dialog || !label) throw new Error('link editor controls missing');
+  label.value = 'Geschriebener Entwurf';
+  label.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  label.focus();
+
+  uiLocale.set('de');
+
+  expect(document.querySelector('#handover-canvas-link-label')).toBe(label);
+  expect(document.activeElement).toBe(label);
+  expect(label.value).toBe('Geschriebener Entwurf');
+  expect(dialog.getAttribute('aria-label')).toBe('Link bearbeiten');
+  expect(dialog.querySelector('[data-link-close]')?.textContent).toBe('Linkeditor schließen');
+  expect(dialog.querySelector('[data-link-apply]')?.textContent).toBe('Anwenden');
+  expect(dialog.textContent).toContain('In neuem Tab öffnen');
+  runtime.dispose();
+});
+
+test('reformats an already-visible link refusal in the latest interface language', async () => {
+  document.body.innerHTML = '<a href="/contact">Contact</a>';
+  const anchor = document.querySelector('a');
+  if (!anchor) throw new Error('link fixture missing');
+  const uiLocale = createCanvasUiLocaleState('en');
+  const runtime = createCanvasLinkRuntime({
+    command: async () => ({
+      ...reply(1),
+      ok: false,
+      acceptedVersion: undefined,
+      reason: 'readonly',
+    }),
+    interaction: vi.fn(),
+    uiLocale,
+  });
+  runtime.configure({
+    kind: 'link',
+    target,
+    value: { type: 'url', ref: '', href: '/contact', label: 'Contact', newTab: false },
+  });
+  runtime.activate({ kind: 'field', target }, anchor);
+  const dialog = document.querySelector<HTMLElement>('[data-handover-canvas-link-editor]');
+  if (!dialog) throw new Error('link editor missing');
+  dialog.querySelector<HTMLButtonElement>('[data-link-apply]')?.click();
+  await vi.waitFor(() =>
+    expect(dialog.querySelector('[role="alert"]')?.textContent).toBe(
+      'This link could not be updated (readonly).',
+    ),
+  );
+
+  uiLocale.set('de');
+
+  expect(dialog.querySelector('[role="alert"]')?.textContent).toBe(
+    'Dieser Link konnte nicht aktualisiert werden (readonly).',
+  );
   runtime.dispose();
 });
 

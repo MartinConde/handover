@@ -203,3 +203,11 @@ rich text opens the same compact Canvas link editor for its label, Page/Entry or
 and (where the schema supports it) new-tab behavior; edit mode never follows the link. The
 Inspector presents those destination choices as a full-width control and truncates long entry
 titles and paths without widening the panel.
+
+The Canvas link editor and rich-text toolbar follow the interface language, including search and
+empty states, unsafe-address guidance, progress and recovery text, button names, tooltips and
+accessible labels. Switching language updates those existing controls in place: an open link keeps
+its typed label/address and focused input, while an active rich-text edit keeps its TipTap document,
+selection, formatting, composition and session undo history. A rich-text editor loaded after the
+switch starts in the latest language. Entry titles, paths, typed copy and technical refusal reasons
+remain authored or diagnostic text.

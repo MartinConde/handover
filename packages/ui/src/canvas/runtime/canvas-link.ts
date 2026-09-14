@@ -1,4 +1,6 @@
 import type { Pickable } from '../../entry-directory';
+import { messageOptions } from '../../i18n';
+import * as m from '../../paraglide/messages.js';
 import type {
   CanvasAcknowledgement,
   CanvasEditingState,
@@ -8,7 +10,11 @@ import type {
   CanvasTextField,
 } from '../canvas-bridge';
 import { sameCanvasTarget } from '../canvas-target';
-import { type CanvasLinkDraft, createCanvasLinkEditor } from './canvas-link-editor';
+import {
+  type CanvasLinkDraft,
+  type CanvasLinkEditorFeedback,
+  createCanvasLinkEditor,
+} from './canvas-link-editor';
 import type { CanvasUiLocaleState } from './canvas-ui-locale';
 
 type LinkField = Extract<CanvasTextField, { kind: 'link' }>;
@@ -30,7 +36,12 @@ export function createCanvasLinkRuntime(options: CanvasLinkOptions) {
   let active: { element: HTMLElement; field: LinkField } | undefined;
   let disposed = false;
 
-  const editor = createCanvasLinkEditor({ root, owner, readDirectory: options.readDirectory });
+  const editor = createCanvasLinkEditor({
+    root,
+    owner,
+    readDirectory: options.readDirectory,
+    uiLocale: options.uiLocale,
+  });
 
   const finish = () => {
     const held = active;
@@ -57,7 +68,6 @@ export function createCanvasLinkRuntime(options: CanvasLinkOptions) {
       anchor: element,
       value: field.value,
       locale: field.target.locale,
-      label: 'Edit link',
       allowLabel: true,
       allowNewTab: true,
       onApply: async (value) => {
@@ -69,7 +79,12 @@ export function createCanvasLinkRuntime(options: CanvasLinkOptions) {
           { path: ['newTab'], value: value.newTab || undefined },
         ];
         const response = await options.command(field.target, { type: 'field', changes });
-        if (!response.ok) return `This link could not be updated (${response.reason}).`;
+        if (!response.ok)
+          return ((locale) =>
+            m.canvas_link_update_failed_reason(
+              { reason: response.reason },
+              messageOptions(locale),
+            )) satisfies CanvasLinkEditorFeedback;
         field.value = { ...value };
         element.textContent = value.label;
         return undefined;

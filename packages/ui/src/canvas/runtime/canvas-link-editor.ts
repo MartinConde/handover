@@ -1,5 +1,8 @@
 import { unsafeLinkScheme } from '@handover/core';
 import { createEntryDirectoryReader, type Pickable, type PickEntry } from '../../entry-directory';
+import { messageOptions, type UiLocale } from '../../i18n';
+import * as m from '../../paraglide/messages.js';
+import type { CanvasUiLocaleState } from './canvas-ui-locale';
 
 export interface CanvasLinkDraft {
   type: 'entry' | 'url';
@@ -10,6 +13,7 @@ export interface CanvasLinkDraft {
 }
 
 type CloseReason = 'applied' | 'cancel' | 'outside' | 'removed';
+export type CanvasLinkEditorFeedback = string | ((locale: UiLocale) => string);
 
 export interface CanvasLinkEditorOpen {
   anchor: Element | (() => DOMRect);
@@ -19,7 +23,9 @@ export interface CanvasLinkEditorOpen {
   allowLabel?: boolean;
   allowNewTab?: boolean;
   allowRemove?: boolean;
-  onApply: (value: CanvasLinkDraft) => string | undefined | Promise<string | undefined>;
+  onApply: (
+    value: CanvasLinkDraft,
+  ) => CanvasLinkEditorFeedback | undefined | Promise<CanvasLinkEditorFeedback | undefined>;
   onRemove?: () => void | Promise<void>;
   onClose?: (reason: CloseReason) => void;
 }
@@ -28,6 +34,7 @@ export interface CanvasLinkEditorOptions {
   root?: Document;
   owner?: Window;
   readDirectory?: () => Promise<Pickable>;
+  uiLocale?: CanvasUiLocaleState;
 }
 
 const copy = (value: CanvasLinkDraft): CanvasLinkDraft => ({ ...value });
@@ -87,6 +94,10 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
   let draft: CanvasLinkDraft | undefined;
   let directory: PickEntry[] | undefined;
   let touchedDestination = false;
+  let refreshTranslation = () => {};
+  const locale = () => options.uiLocale?.current() ?? 'en';
+  const text = (feedback: CanvasLinkEditorFeedback) =>
+    typeof feedback === 'function' ? feedback(locale()) : feedback;
 
   const anchorBounds = () => {
     if (!opened) return new DOMRect();
@@ -135,18 +146,19 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
     draft = undefined;
     panel.hidden = true;
     panel.replaceChildren();
+    refreshTranslation = () => {};
     held?.onClose?.(reason);
   };
 
   const draw = (focus: 'label' | 'search' | 'url' | 'apply' = 'label') => {
     if (!opened || !draft) return;
     panel.replaceChildren();
-    panel.setAttribute('aria-label', opened.label ?? 'Edit link');
+    let feedback: CanvasLinkEditorFeedback | undefined;
+    let applying = false;
 
     const heading = root.createElement('header');
     const title = root.createElement('h2');
-    title.textContent = opened.label ?? 'Edit link';
-    const closeButton = makeButton('Close', () => close('cancel'));
+    const closeButton = makeButton('', () => close('cancel'));
     closeButton.dataset.linkClose = '';
     heading.append(title, closeButton);
     panel.append(heading);
@@ -160,18 +172,16 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
       labelInput.addEventListener('input', () => {
         if (draft) draft.label = labelInput?.value ?? '';
       });
-      panel.append(field('Label', labelInput));
+      panel.append(field('', labelInput));
     }
 
     const destination = root.createElement('fieldset');
     destination.dataset.linkDestination = '';
     const legend = root.createElement('legend');
-    legend.textContent = 'Destination';
     const tabs = root.createElement('div');
     tabs.dataset.linkTabs = '';
     tabs.setAttribute('role', 'group');
-    tabs.setAttribute('aria-label', 'Link destination type');
-    const entryTab = makeButton('Page / Entry', () => {
+    const entryTab = makeButton('', () => {
       if (!draft || draft.type === 'entry') return;
       touchedDestination = true;
       draft.type = 'entry';
@@ -189,23 +199,28 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
     destination.append(legend, tabs);
 
     let destinationInput: HTMLInputElement | undefined;
+    let results: HTMLDivElement | undefined;
+    let paintResults: (() => void) | undefined;
+    let validate: (() => void) | undefined;
     if (draft.type === 'url') {
       destinationInput = root.createElement('input');
       destinationInput.type = 'url';
       destinationInput.id = 'handover-canvas-link-url';
-      destinationInput.placeholder = '/contact or https://…';
+      destinationInput.placeholder = '';
       destinationInput.value = draft.href;
-      const urlField = field('Address', destinationInput);
+      const urlField = field('', destinationInput);
       const error = root.createElement('p');
       error.dataset.linkError = '';
       error.hidden = true;
-      const validate = () => {
+      validate = () => {
         if (!draft || !destinationInput) return;
         draft.href = destinationInput.value;
         const refused = unsafeLinkScheme('default', draft.href);
         destinationInput.setAttribute('aria-invalid', String(Boolean(refused)));
         error.hidden = !refused;
-        error.textContent = refused ? `${refused}: links are not allowed` : '';
+        error.textContent = refused
+          ? m.field_link_scheme_not_allowed({ scheme: refused }, messageOptions(locale()))
+          : '';
         updateApply();
       };
       destinationInput.addEventListener('input', validate);
@@ -215,20 +230,18 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
       destinationInput = root.createElement('input');
       destinationInput.type = 'search';
       destinationInput.id = 'handover-canvas-link-search';
-      destinationInput.placeholder = 'Search pages and entries';
-      destinationInput.setAttribute('aria-label', 'Search pages and entries');
-      const results = root.createElement('div');
+      destinationInput.placeholder = '';
+      results = root.createElement('div');
       results.dataset.linkResults = '';
       results.setAttribute('role', 'listbox');
-      results.setAttribute('aria-label', 'Pages and entries');
-      const paintResults = () => {
+      paintResults = () => {
         if (!draft || !destinationInput) return;
-        results.replaceChildren();
+        results?.replaceChildren();
         if (!directory) {
           const loading = root.createElement('p');
           loading.dataset.linkEmpty = '';
-          loading.textContent = 'Loading pages…';
-          results.append(loading);
+          loading.textContent = m.page_picker_loading({}, messageOptions(locale()));
+          results?.append(loading);
           return;
         }
         const query = destinationInput.value.trim().toLocaleLowerCase();
@@ -249,7 +262,7 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
             draft.type = 'entry';
             draft.ref = entry.path;
             draft.href = url;
-            paintResults();
+            paintResults?.();
             updateApply();
           });
           row.setAttribute('role', 'option');
@@ -259,15 +272,18 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
           const path = root.createElement('small');
           path.textContent = url;
           row.replaceChildren(name, path);
-          results.append(row);
+          results?.append(row);
         }
-        if (!results.childElementCount) {
+        if (!results?.childElementCount) {
           const empty = root.createElement('p');
           empty.dataset.linkEmpty = '';
           empty.textContent = query
-            ? `Nothing matches “${destinationInput.value.trim()}”`
-            : 'No pages are available';
-          results.append(empty);
+            ? m.page_picker_no_matches(
+                { query: destinationInput.value.trim() },
+                messageOptions(locale()),
+              )
+            : m.page_picker_empty({}, messageOptions(locale()));
+          results?.append(empty);
         }
       };
       destinationInput.addEventListener('input', paintResults);
@@ -283,14 +299,14 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
               draft.ref = match.path;
             }
           }
-          paintResults();
+          paintResults?.();
           updateApply();
           position();
         })
         .catch(() => {
           if (!opened || !draft || panel.hidden) return;
           directory = [];
-          paintResults();
+          paintResults?.();
           updateApply();
           position();
         });
@@ -307,7 +323,9 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
       checkbox.addEventListener('change', () => {
         if (draft) draft.newTab = checkbox.checked;
       });
-      check.append(checkbox, root.createTextNode('Open in new tab'));
+      const checkText = root.createElement('span');
+      checkText.dataset.linkCheckText = '';
+      check.append(checkbox, checkText);
       panel.append(check);
     }
 
@@ -320,7 +338,7 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
     const actions = root.createElement('div');
     actions.dataset.linkActions = '';
     if (opened.allowRemove && opened.onRemove) {
-      const remove = makeButton('Remove link', async () => {
+      const remove = makeButton('', async () => {
         remove.disabled = true;
         try {
           await opened?.onRemove?.();
@@ -328,29 +346,34 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
         } catch {
           remove.disabled = false;
           message.hidden = false;
-          message.textContent = 'This link could not be removed.';
+          feedback = (next) => m.canvas_link_remove_failed({}, messageOptions(next));
+          message.textContent = text(feedback);
           position();
         }
       });
       remove.dataset.linkRemove = '';
       actions.append(remove);
     }
-    actions.append(makeButton('Cancel', () => close('cancel')));
-    const apply = makeButton('Apply', async () => {
+    const cancel = makeButton('', () => close('cancel'));
+    actions.append(cancel);
+    const apply = makeButton('', async () => {
       if (!opened || !draft) return;
       apply.disabled = true;
-      apply.textContent = 'Applying…';
-      let error: string | undefined;
+      applying = true;
+      refreshTranslation();
+      let error: CanvasLinkEditorFeedback | undefined;
       try {
         error = await opened.onApply(copy(draft));
       } catch {
-        error = 'This link could not be updated.';
+        error = (next) => m.canvas_link_update_failed({}, messageOptions(next));
       }
       if (!opened || !draft) return;
       if (!error) return close('applied');
+      feedback = error;
       message.hidden = false;
-      message.textContent = error;
-      apply.textContent = 'Apply';
+      message.textContent = text(error);
+      applying = false;
+      refreshTranslation();
       updateApply();
       position();
     });
@@ -358,10 +381,58 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
     actions.append(apply);
     panel.append(actions);
 
+    refreshTranslation = () => {
+      if (!opened || !draft || panel.hidden) return;
+      const options = messageOptions(locale());
+      const headingText = opened.label ?? m.canvas_link_edit({}, options);
+      panel.setAttribute('aria-label', headingText);
+      title.textContent = headingText;
+      closeButton.textContent = m.canvas_link_close({}, options);
+      closeButton.setAttribute('aria-label', m.canvas_link_close({}, options));
+      if (labelInput) labelInput.labels?.item(0)?.replaceChildren(m.field_link_label({}, options));
+      legend.textContent = m.field_link_destination({}, options);
+      tabs.setAttribute('aria-label', m.field_link_type({}, options));
+      entryTab.textContent = m.field_link_page_entry({}, options);
+      if (destinationInput) {
+        if (draft.type === 'url') {
+          destinationInput.placeholder = m.field_link_address_placeholder({}, options);
+          destinationInput.labels?.item(0)?.replaceChildren(m.field_link_address({}, options));
+          validate?.();
+        } else {
+          const search = m.page_picker_search_placeholder({}, options);
+          destinationInput.placeholder = search;
+          destinationInput.setAttribute('aria-label', search);
+          results?.setAttribute('aria-label', m.page_picker_label_pages_entries({}, options));
+          const empty = results?.querySelector<HTMLElement>('[data-link-empty]');
+          if (empty) {
+            const query = destinationInput.value.trim();
+            empty.textContent = !directory
+              ? m.page_picker_loading({}, options)
+              : query
+                ? m.page_picker_no_matches({ query }, options)
+                : m.page_picker_empty({}, options);
+          }
+        }
+      }
+      if (opened.allowNewTab) {
+        const checkText = panel.querySelector<HTMLElement>('[data-link-check-text]');
+        if (checkText) checkText.textContent = m.field_link_new_tab({}, options);
+      }
+      const remove = actions.querySelector<HTMLButtonElement>('[data-link-remove]');
+      if (remove) remove.textContent = m.canvas_link_remove({}, options);
+      cancel.textContent = m.common_cancel({}, options);
+      apply.textContent = applying
+        ? m.canvas_link_applying({}, options)
+        : m.canvas_apply({}, options);
+      if (feedback) message.textContent = text(feedback);
+      position();
+    };
+
     function updateApply() {
       const refused = draft?.type === 'url' ? unsafeLinkScheme('default', draft.href) : undefined;
       apply.disabled = Boolean(
-        !draft ||
+        applying ||
+          !draft ||
           refused ||
           (draft.type === 'url' ? !draft.href.trim() : !draft.ref.trim()) ||
           (opened?.allowLabel && !draft.label.trim()),
@@ -369,6 +440,7 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
     }
     updateApply();
     panel.hidden = false;
+    refreshTranslation();
     position();
     owner.requestAnimationFrame(position);
     const focused =
@@ -401,6 +473,7 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
   root.addEventListener('keydown', keydown, true);
   root.addEventListener('scroll', position, true);
   owner.addEventListener('resize', position);
+  const unsubscribeLocale = options.uiLocale?.subscribe(() => refreshTranslation());
 
   return {
     open(value: CanvasLinkEditorOpen) {
@@ -419,6 +492,7 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
       root.removeEventListener('keydown', keydown, true);
       root.removeEventListener('scroll', position, true);
       owner.removeEventListener('resize', position);
+      unsubscribeLocale?.();
       panel.remove();
       style.remove();
     },

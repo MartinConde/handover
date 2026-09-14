@@ -6,6 +6,7 @@ import type {
   CanvasTarget,
 } from '../canvas-bridge';
 import { createCanvasRichTextRuntime } from './canvas-rich-text';
+import { createCanvasUiLocaleState } from './canvas-ui-locale';
 
 const target: CanvasTarget = {
   document: { collection: 'pages', id: 'home' },
@@ -122,6 +123,7 @@ test('uses the Canvas link editor to create and revisit a rich-text link', async
   const element = fixture();
   const commands: CanvasMutation[] = [];
   let version = 0;
+  const uiLocale = createCanvasUiLocaleState('en');
   const runtime = createCanvasRichTextRuntime({
     command: async (_target, mutation) => {
       commands.push(mutation);
@@ -130,6 +132,7 @@ test('uses the Canvas link editor to create and revisit a rich-text link', async
       return reply(version, { ok: true, update: { value } });
     },
     interaction: vi.fn(),
+    uiLocale,
   });
   runtime.start();
   runtime.configure({ kind: 'richtext', target, value: 'Harbour home', tier: 'basic' });
@@ -148,6 +151,12 @@ test('uses the Canvas link editor to create and revisit a rich-text link', async
   ).toBe(true);
   address.value = '/contact';
   address.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  address.focus();
+  uiLocale.set('de');
+  expect(document.querySelector('#handover-canvas-link-url')).toBe(address);
+  expect(document.activeElement).toBe(address);
+  expect(address.value).toBe('/contact');
+  expect(dialog.getAttribute('aria-label')).toBe('Link bearbeiten');
   dialog.querySelector<HTMLButtonElement>('[data-link-apply]')?.click();
 
   await vi.waitFor(() => expect(commands).toHaveLength(1));
@@ -163,6 +172,34 @@ test('uses the Canvas link editor to create and revisit a rich-text link', async
   expect(dialog.querySelector<HTMLInputElement>('#handover-canvas-link-url')?.value).toBe(
     '/contact',
   );
+  runtime.dispose();
+});
+
+test('a lazy rich-text runtime starts in the latest locale and switches without replacing TipTap', () => {
+  const uiLocale = createCanvasUiLocaleState('de');
+  const element = fixture();
+  const runtime = createCanvasRichTextRuntime({
+    command: vi.fn(),
+    interaction: vi.fn(),
+    uiLocale,
+  });
+  runtime.start();
+  runtime.configure({ kind: 'richtext', target, value: 'Harbour home', tier: 'basic' });
+  runtime.activate(selected, element);
+  const editor = element.querySelector<HTMLElement>('[contenteditable="true"]');
+  if (!editor) throw new Error('TipTap editable missing');
+  editor.focus();
+  expect(editor.getAttribute('aria-label')).toBe('Rich Text in Canvas');
+  expect(document.querySelector('[aria-label="Rich-Text-Formatierung"]')).not.toBeNull();
+  expect(document.querySelector('[aria-label="Aufzählung"]')?.textContent).toBe('• Liste');
+
+  uiLocale.set('en');
+
+  expect(element.querySelector('[contenteditable="true"]')).toBe(editor);
+  expect(document.activeElement).toBe(editor);
+  expect(editor.textContent).toBe('Harbour home');
+  expect(document.querySelector('[aria-label="Rich text formatting"]')).not.toBeNull();
+  expect(document.querySelector('[aria-label="Bullet list"]')?.textContent).toBe('• List');
   runtime.dispose();
 });
 

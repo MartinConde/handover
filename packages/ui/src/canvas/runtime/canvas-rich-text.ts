@@ -8,6 +8,8 @@ import {
   richTextExtensions,
 } from '../../editor/fields/rich-text-kit';
 import type { Pickable } from '../../entry-directory';
+import { messageOptions } from '../../i18n';
+import * as m from '../../paraglide/messages.js';
 import type {
   CanvasAcknowledgement,
   CanvasEditingState,
@@ -19,7 +21,7 @@ import type {
   CanvasTextSelection,
 } from '../canvas-bridge';
 import { sameCanvasTarget } from '../canvas-target';
-import { createCanvasLinkEditor } from './canvas-link-editor';
+import { type CanvasLinkEditorFeedback, createCanvasLinkEditor } from './canvas-link-editor';
 import type { CanvasUiLocaleState } from './canvas-ui-locale';
 
 type RichField = Extract<CanvasTextField, { kind: 'richtext' }>;
@@ -95,10 +97,12 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
   let generation = 0;
   let queued = 0;
   let lane = Promise.resolve();
+  let refusalReason: string | undefined;
   const linkEditor = createCanvasLinkEditor({
     root,
     owner,
     readDirectory: options.readDirectory,
+    uiLocale: options.uiLocale,
   });
 
   const style = root.createElement('style');
@@ -118,7 +122,6 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
   const toolbar = root.createElement('div');
   toolbar.dataset.handoverCanvasRichtextToolbar = '';
   toolbar.setAttribute('role', 'toolbar');
-  toolbar.setAttribute('aria-label', 'Rich text formatting');
   toolbar.hidden = true;
   const status = root.createElement('div');
   status.dataset.handoverCanvasRichtextStatus = '';
@@ -155,7 +158,8 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
     generation += 1;
     apply(active.accepted);
     active.element.dataset.handoverInlineRefusal = reason;
-    status.textContent = `The inline change was not applied (${reason}).`;
+    refusalReason = reason;
+    translateUi();
   };
 
   const enqueue = (
@@ -180,6 +184,7 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
       held.accepted = reply.update?.value ?? value ?? held.accepted;
       status.dataset.handoverCanvasRichtextVersion = String(reply.acceptedVersion);
       delete held.element.dataset.handoverInlineRefusal;
+      refusalReason = undefined;
       status.textContent = '';
       const hasNewerLocalInput = queued > 1;
       if (reply.update && !hasNewerLocalInput) apply(reply.update.value, reply.update.selection);
@@ -326,7 +331,13 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
           applied = false;
         }
         nextIntent = undefined;
-        return applied ? undefined : 'This link could not be updated.';
+        return applied
+          ? undefined
+          : (((locale) =>
+              m.canvas_link_update_failed(
+                {},
+                messageOptions(locale),
+              )) satisfies CanvasLinkEditorFeedback);
       },
       onRemove: () => {
         nextIntent = 'format';
@@ -355,57 +366,104 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
     return true;
   };
 
+  const labels = (control: string) => {
+    const options = messageOptions(optionsLocale());
+    switch (control) {
+      case 'bold':
+        return m.rich_text_bold({}, options);
+      case 'italic':
+        return m.rich_text_italic({}, options);
+      case 'link':
+        return m.rich_text_link({}, options);
+      case 'bulletList':
+        return m.rich_text_bullet_list({}, options);
+      case 'orderedList':
+        return m.rich_text_numbered_list({}, options);
+      case 'heading2':
+        return m.rich_text_heading({ level: 2 }, options);
+      case 'heading3':
+        return m.rich_text_heading({ level: 3 }, options);
+      default:
+        return m.rich_text_quote({}, options);
+    }
+  };
+
+  const shortLabel = (control: string) => {
+    if (control === 'bulletList')
+      return `• ${m.canvas_rich_text_list_short({}, messageOptions(optionsLocale()))}`;
+    if (control === 'orderedList')
+      return `1. ${m.canvas_rich_text_list_short({}, messageOptions(optionsLocale()))}`;
+    if (control === 'link') return m.rich_text_link({}, messageOptions(optionsLocale()));
+    return control === 'bold'
+      ? 'B'
+      : control === 'italic'
+        ? 'I'
+        : control.startsWith('heading')
+          ? `H${control.at(-1)}`
+          : '“”';
+  };
+
+  const optionsLocale = () => options.uiLocale?.current() ?? 'en';
+  const translateUi = () => {
+    const locale = optionsLocale();
+    const translated = messageOptions(locale);
+    toolbar.setAttribute('aria-label', m.canvas_rich_text_formatting({}, translated));
+    for (const button of Array.from(
+      toolbar.querySelectorAll<HTMLButtonElement>('button[data-control]'),
+    )) {
+      const control = button.dataset.control ?? '';
+      button.setAttribute('aria-label', labels(control));
+      button.textContent = shortLabel(control);
+    }
+    active?.editor.view.dom.setAttribute('aria-label', m.canvas_rich_text_editable({}, translated));
+    if (refusalReason)
+      status.textContent = m.canvas_inline_change_refused({ reason: refusalReason }, translated);
+  };
+  translateUi();
+
   const buttons = (field: RichField) => {
     const specs = [
       {
-        label: 'Bold',
-        text: 'B',
+        control: 'bold',
         mark: 'bold',
         run: (editor: Editor) => editor.chain().focus().toggleBold().run(),
       },
       {
-        label: 'Italic',
-        text: 'I',
+        control: 'italic',
         mark: 'italic',
         run: (editor: Editor) => editor.chain().focus().toggleItalic().run(),
       },
       {
-        label: 'Link',
-        text: 'Link',
+        control: 'link',
         mark: 'link',
         run: (editor: Editor) => openLink(editor),
       },
       {
-        label: 'Bullet list',
-        text: '• List',
+        control: 'bulletList',
         mark: 'bulletList',
         run: (editor: Editor) => editor.chain().focus().toggleBulletList().run(),
       },
       {
-        label: 'Numbered list',
-        text: '1. List',
+        control: 'orderedList',
         mark: 'orderedList',
         run: (editor: Editor) => editor.chain().focus().toggleOrderedList().run(),
       },
       ...(field.tier === 'full'
         ? [
             {
-              label: 'Heading 2',
-              text: 'H2',
+              control: 'heading2',
               mark: 'heading',
               level: 2,
               run: (editor: Editor) => editor.chain().focus().toggleHeading({ level: 2 }).run(),
             },
             {
-              label: 'Heading 3',
-              text: 'H3',
+              control: 'heading3',
               mark: 'heading',
               level: 3,
               run: (editor: Editor) => editor.chain().focus().toggleHeading({ level: 3 }).run(),
             },
             {
-              label: 'Quote',
-              text: '“”',
+              control: 'quote',
               mark: 'blockquote',
               run: (editor: Editor) => editor.chain().focus().toggleBlockquote().run(),
             },
@@ -416,11 +474,10 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
     for (const spec of specs) {
       const button = root.createElement('button');
       button.type = 'button';
+      button.dataset.control = spec.control;
       button.dataset.mark = spec.mark;
       if ('level' in spec && spec.level) button.dataset.level = String(spec.level);
-      button.setAttribute('aria-label', spec.label);
       button.setAttribute('aria-pressed', 'false');
-      button.textContent = spec.text;
       button.addEventListener('pointerdown', (event) => event.preventDefault());
       button.addEventListener('click', () => {
         if (!active) return;
@@ -432,6 +489,7 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
       });
       toolbar.append(button);
     }
+    translateUi();
   };
 
   const deactivate = () => {
@@ -493,7 +551,7 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
         contentType: 'markdown',
         editorProps: {
           attributes: {
-            'aria-label': 'Rich text in Canvas',
+            'aria-label': m.canvas_rich_text_editable({}, messageOptions(optionsLocale())),
             'aria-multiline': 'true',
           },
           handleDOMEvents: {
@@ -609,6 +667,8 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
     return true;
   };
 
+  const unsubscribeLocale = options.uiLocale?.subscribe(() => translateUi());
+
   const onKeyDown = (event: KeyboardEvent) => {
     if (!active) return;
     const target = event.target;
@@ -688,6 +748,7 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
       toolbar.remove();
       status.remove();
       linkEditor.dispose();
+      unsubscribeLocale?.();
     },
   };
 }

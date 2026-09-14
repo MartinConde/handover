@@ -149,6 +149,9 @@ field's tier follow the interface language. Switching English/Deutsch keeps the 
 focus, selection, active formatting, Markdown, undo history and open link draft. It does not write
 content or reread the entry directory. The field's label, written text and link addresses remain as
 authored; `##` / `###` heading levels and Markdown syntax do not change with the interface.
+The same rule applies inside Canvas: toolbar and compact link-editor text, attributes, search states,
+unsafe-address guidance and retained failures update in place. A lazy Canvas rich-text editor opens
+in the latest language without recreating the edited content or its history.
 
 The media picker also follows the interface language, including search/drop guidance, field limits,
 selection order, queue progress and upload recovery. Switching language leaves its search, chosen

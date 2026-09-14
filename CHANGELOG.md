@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate Canvas link and rich-text controls into English and German, including entry search,
+  unsafe-address guidance, toolbar names, accessible attributes and retained recovery. Live
+  switching preserves the open link draft and focused input plus the active TipTap document,
+  selection, formatting, composition and session undo history; lazy rich-text controls start in the
+  latest accepted language without a content write or directory reread.
+
 - Translate the Canvas Inspector and staged block controls into English and German, including
   field-kind labels, content-language names, notices, tooltips and accessibility text. Live
   switching preserves the selected field, focused widget, replacement draft and authored schema
