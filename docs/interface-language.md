@@ -6,6 +6,9 @@ English and Deutsch are available even when the site has only one content langua
 Choose **Interface language** from the account menu to change it without leaving the current
 screen. The same choice is available on **Account**. Signed-out screens, including password reset
 and expired-link screens, have a device-only picker so they remain readable before sign-in.
+In German the control is labelled **Sprache der Benutzeroberfläche**. Both versions list the
+choices as **English** and **Deutsch**; these labels name the interface language and never select
+the language of the entry being edited.
 
 ## Supported languages and review status
 
@@ -16,7 +19,12 @@ order, accessibility text, locale-sensitive formatting and narrow layouts. A nat
 product-copy sign-off has not been recorded yet, so release review should keep that editorial step
 open even though the catalog and interface checks pass.
 
-## What is translated now
+## Complete translated scope
+
+Every Handover-owned admin surface is bilingual. The sections below spell out the state that is
+preserved during live switching and the deliberate boundary around authored and technical text.
+Transactional email contents, command-line output, external OAuth pages, this documentation, and
+browser- or operating-system-owned controls are outside the interface-language setting.
 
 Language controls, sign-in, password-reset and expired-link flows, the complete Account screen,
 the signed-in shell, the dashboard, collection entry lists, entry creation, shared page/entry

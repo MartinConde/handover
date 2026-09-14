@@ -6,8 +6,10 @@ publishes it. One `astro-handover` integration, no database for content, no sepa
 
 Editors sign in with an account, edit two or more languages side by side, write rich text,
 put pictures and files in R2, keep drafts that survive a refresh, see the page before it goes
-out, and publish as one commit. Pre-1.0: the file format and `cms.config.ts` still move
-between releases, and every change is in [CHANGELOG.md](CHANGELOG.md).
+out, and publish as one commit. The complete Handover-owned admin interface is available in
+English and German, independently of the language being edited. Pre-1.0: the file format and
+`cms.config.ts` still move between releases, and every change is in
+[CHANGELOG.md](CHANGELOG.md).
 
 ```sh
 pnpm add --save-prod link:../handover/packages/astro
@@ -16,4 +18,4 @@ pnpm add --save-prod link:../handover/packages/astro
 It is not on npm yet. Build the checkout before linking it, or install the three private
 package archives using the [getting-started recipe](docs/getting-started.md#install-the-unpublished-package).
 
-Docs: [Getting started](docs/getting-started.md) · [Setting a site up](docs/init.md) · [Template convention](docs/template-convention.md) · [Canvas editing](docs/canvas.md) · [Deploy](docs/deploy.md) · [How it works](docs/how-it-works.md)
+Docs: [Getting started](docs/getting-started.md) · [Interface language](docs/interface-language.md) · [Setting a site up](docs/init.md) · [Template convention](docs/template-convention.md) · [Canvas editing](docs/canvas.md) · [Deploy](docs/deploy.md) · [How it works](docs/how-it-works.md)

@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Complete the interface-language documentation against the shipped admin: the package overview
+  and both guide sets now describe full Handover-owned English/German coverage, the exact picker
+  labels, persistence and live-switching boundaries, authored-copy exclusions, migration path and
+  remaining native German editorial sign-off. Contributor and API examples were rechecked against
+  the catalog, locale, authentication and bootstrap contracts.
+
 - Review the complete English/German admin at desktop and phone widths, standardize German on
   informal `du` and inclusive role labels, and add a generated long-string pseudo-locale check.
   Locale-sensitive formatters now accept a newly configured UI locale without component changes.
