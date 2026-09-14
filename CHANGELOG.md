@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Finish the English/German admin string and error audit: translate retained editor
+  restore/drift/conflict guidance and shared missing-image accessibility text, and make Canvas
+  structure presentation recognize semantic paths instead of English synthetic labels. Known
+  failures remain code-driven while legacy prose-only payloads keep localized generic recovery and
+  separate technical detail.
+
 - Translate retained Canvas plain-text editing recovery and mark every Handover-owned in-frame
   overlay with the interface language while leaving the preview document in its content language.
   Live switching preserves IME composition, caret, accepted content and history; navigation routes,

@@ -26,3 +26,17 @@ test('a failed image becomes a readable fallback', () => {
   expect(document.querySelector('img')).toBeNull();
   expect(document.querySelector('[role="img"]')?.textContent).toContain('Image unavailable');
 });
+
+test('an existing fallback follows the interface language', () => {
+  const props = $state({ uiLocale: 'en' as 'en' | 'de' });
+  app = mount(MediaImage, { target: document.body, props });
+  flushSync();
+  const fallback = document.querySelector('[role="img"]');
+
+  props.uiLocale = 'de';
+  flushSync();
+
+  expect(document.querySelector('[role="img"]')).toBe(fallback);
+  expect(fallback?.getAttribute('aria-label')).toBe('Kein Bild ausgewählt');
+  expect(fallback?.textContent).toContain('Kein Bild ausgewählt');
+});

@@ -173,6 +173,36 @@ test('German publish tooltips keep the header reason order', async () => {
   ]);
 });
 
+test('retained drift and restore guidance retranslate in place', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      url.startsWith('/admin/api/locks/')
+        ? Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120_000 })
+        : Response.json({}),
+    ),
+  );
+  app = mount(EditorLocaleFixture, {
+    target: document.body,
+    props: {
+      publishState: 'drift',
+      pending: true,
+      restored: '2026-08-12T12:00:00.000Z',
+    },
+  });
+  await new Promise((resolve) => setTimeout(resolve));
+  flushSync();
+  const banner = q('.lock-banner.is-drift');
+  expect(banner?.textContent).toContain('Restored the version from');
+  expect(banner?.textContent).toContain('decide what to keep');
+
+  switchLocale();
+
+  expect(q('.lock-banner.is-drift')).toBe(banner);
+  expect(banner?.textContent).toContain('Die Version von');
+  expect(banner?.textContent).toContain('entscheide, was bleiben soll');
+});
+
 test('an open publish confirmation retranslates without rerunning checks', async () => {
   const fetchMock = vi.fn(async (url: string) =>
     url.startsWith('/admin/api/locks/')

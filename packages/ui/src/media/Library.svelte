@@ -548,7 +548,7 @@ const queueText = (state: QueueState) => {
           {#each shown as item (item.id)}
             <article class="tile" class:is-archived={item.archived} class:is-selected={chosen?.id === item.id}>
               <span class="thumb">
-                <MediaImage src={item.url} alt="" />
+                <MediaImage src={item.url} alt="" {uiLocale} />
                 {#if item.archived}<span class="badge flag">{m.media_library_archived({}, options)}</span>
                 {:else if recovered(item)}<span class="badge badge-warn flag">{m.media_library_recovered({}, options)}</span>{/if}
               </span>
@@ -593,7 +593,7 @@ const queueText = (state: QueueState) => {
         </div>
         {#if kind === 'images'}
           <div class="preview">
-            <MediaImage src={chosen.url} alt="" />
+            <MediaImage src={chosen.url} alt="" {uiLocale} />
             <span class="focal" style="left: {dot(chosen)[0]}%; top: {dot(chosen)[1]}%" aria-hidden="true"></span>
           </div>
           <p class="hint">{m.media_library_focal_hint({}, options)}</p>

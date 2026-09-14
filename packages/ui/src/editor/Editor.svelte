@@ -1188,19 +1188,16 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     <!-- The restore is over by the time this draws, so this is what says what just happened. -->
     <div class="lock-banner" class:is-drift={entry.drift.length > 0} role="status">
       <span>
-        <b>Restored the version from {when(Date.parse(restored)).toLowerCase()}.</b>
+        <b>{m.editor_restored_version({ date: when(Date.parse(restored)).toLowerCase() }, options)}</b>
         {#if entry.drift.length}
-          The languages disagree about its blocks since then — decide what to keep, then publish.
+          {m.editor_restored_drift({}, options)}
         {:else}
-          It is here as unpublished changes — nothing is live until you publish.
+          {m.editor_restored_unpublished({}, options)}
         {/if}
       </span>
     </div>
   {:else if entry.drift.length}
-    <div class="lock-banner is-drift">
-      The languages of this entry disagree about its blocks — publishing is blocked until that is
-      settled.
-    </div>
+    <div class="lock-banner is-drift">{m.editor_drift_blocked({}, options)}</div>
   {/if}
   <header class="entry-header" class:is-held={held}>
     <div class="crumbs">
@@ -1240,7 +1237,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             </div>
           {/if}
           {#if conflicted}
-            <span class="badge badge-danger">Changed in the repository since you opened it</span>
+            <span class="badge badge-danger">{m.pending_changed_repository({}, options)}</span>
           {/if}
           <button
             class="hold-toggle"
@@ -1340,10 +1337,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       </div>
     </div>
     {#if conflicted}
-      <p class="subline">
-        Somebody changed this in the repository after you opened it. Open Unpublished changes to
-        resolve it field by field, or to discard yours and take what is there now.
-      </p>
+      <p class="subline">{m.editor_conflict_guidance({}, options)}</p>
     {/if}
     {#if held}
       <p class="subline">{m.editor_hold_active({}, options)}</p>

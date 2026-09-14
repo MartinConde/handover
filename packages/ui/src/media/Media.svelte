@@ -243,7 +243,7 @@ function drop(e: DragEvent) {
                 <!-- aria-disabled, not disabled: a disabled control would skip the reason. -->
                 <input type={many ? 'checkbox' : 'radio'} name="picker-pick" value={item.id} checked={chosen.some((i) => i.id === item.id)} aria-disabled={refused ? 'true' : undefined} aria-describedby={refused ? `why-${item.id}` : undefined} onchange={() => { if (!refused) choose(item); }} />
                 {#if kind === 'images'}
-                  <span class="thumb"><MediaImage src={item.url} alt="" /></span>
+                  <span class="thumb"><MediaImage src={item.url} alt="" {uiLocale} /></span>
                 {:else}
                   <span class="file-icon" aria-hidden="true">{(item.mime?.split('/').pop() ?? '').toUpperCase()}</span>
                 {/if}
@@ -280,7 +280,7 @@ function drop(e: DragEvent) {
             {#if kind === 'images'}
               {@const dot = [(one.focal?.[0] ?? 0.5) * 100, (one.focal?.[1] ?? 0.5) * 100]}
               <div class="ratio-preview" style="aspect-ratio: {aspect}">
-                <MediaImage src={one.url} alt="" style="object-position: {dot[0]}% {dot[1]}%" />
+                <MediaImage src={one.url} alt="" style="object-position: {dot[0]}% {dot[1]}%" {uiLocale} />
                 <span class="focal" style="left: {dot[0]}%; top: {dot[1]}%" aria-hidden="true"></span>
               </div>
               <p class="hint">{m.media_picker_focal_hint({}, options)}</p>

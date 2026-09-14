@@ -602,7 +602,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
 
 {#snippet embedThumbnail(value: EmbedValue)}
   {@const still = embedThumb(value)}
-  <span class="thumb" style="aspect-ratio: 16 / 9">{#if still}<MediaImage src={still} alt="" loading="lazy" />{/if}</span>
+  <span class="thumb" style="aspect-ratio: 16 / 9">{#if still}<MediaImage src={still} alt="" loading="lazy" {uiLocale} />{/if}</span>
 {/snippet}
 
 {#snippet titleField(id: string, at: readonly string[])}
@@ -628,7 +628,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     <div class="preview-box">
       <p class="variant-title">{m.field_seo_social_card({ locale: of }, messageOptions(uiLocale))}</p>
       <div class="social-card" role="group" aria-label={m.field_seo_social_card_label({}, messageOptions(uiLocale))}>
-        <div class="thumb">{#if picture}<MediaImage src={picture} alt="" />{/if}</div>
+        <div class="thumb">{#if picture}<MediaImage src={picture} alt="" {uiLocale} />{/if}</div>
         <div class="body"><div class="domain">{host}</div><div class="title">{title}</div><div class="desc">{desc}</div></div>
       </div>
     </div>
@@ -853,7 +853,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <!-- A translation owns the words and not the picture: the alt, and nothing else. -->
       {@render groupLabel(id, field, text, at)}
       <div class="media-card" {id} role="group" tabindex="-1" aria-labelledby="{id}-l">
-        <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><MediaImage src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></span>
+        <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><MediaImage src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" {uiLocale} /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></span>
         <div class="meta">
           <div><div class="sub">{str([...at, 'src'])}</div></div>
           {@render altField(id, at)}
@@ -863,7 +863,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'image' && read(at) !== undefined}
       {@render groupLabel(id, field, text, at)}
       <div class="media-card" {id} role="group" tabindex="-1" aria-labelledby="{id}-l">
-        <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><MediaImage src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></span>
+        <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><MediaImage src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" {uiLocale} /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></span>
         <div class="meta">
           <div><div class="sub">{str([...at, 'src'])} · {num([...at, 'width'])} × {num([...at, 'height'])}</div></div>
           {@render altField(id, at)}
@@ -979,7 +979,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {@render seoWords(id, at, 'description', m.field_seo_description({}, messageOptions(uiLocale)), SEO_DESCRIPTION_LIMIT, inheritedSeo?.description ?? '', '')}
         {#if read([...at, 'image']) !== undefined}
           <div class="media-card">
-            <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"><MediaImage src={src([...at, 'image'])} alt="" style="object-position: {dot([...at, 'image'])[0]}% {dot([...at, 'image'])[1]}%" /></span>
+            <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"><MediaImage src={src([...at, 'image'])} alt="" style="object-position: {dot([...at, 'image'])[0]}% {dot([...at, 'image'])[1]}%" {uiLocale} /></span>
             <div class="meta">
               {@render altField(`${id}.image`, [...at, 'image'])}
               <p class="hint">{m.field_picture_same({}, messageOptions(uiLocale))}</p>
@@ -1000,7 +1000,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           <div class="label-row"><span id="{id}.image-l">{m.field_seo_social_image({}, messageOptions(uiLocale))}</span><span class="mode">{m.field_same_every_language({}, messageOptions(uiLocale))}</span></div>
           {#if read(image) !== undefined}
             <div class="media-card" id="{id}.image" role="group" tabindex="-1" aria-labelledby="{id}.image-l">
-              <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"><MediaImage src={src(image)} alt="" style="object-position: {dot(image)[0]}% {dot(image)[1]}%" /><span class="focal" style="left: {dot(image)[0]}%; top: {dot(image)[1]}%" aria-hidden="true"></span></span>
+              <span class="thumb" style="aspect-ratio: {aspect(SOCIAL_CARD)}"><MediaImage src={src(image)} alt="" style="object-position: {dot(image)[0]}% {dot(image)[1]}%" {uiLocale} /><span class="focal" style="left: {dot(image)[0]}%; top: {dot(image)[1]}%" aria-hidden="true"></span></span>
               <div class="meta">
                 <div><div class="sub">{str([...image, 'src'])} · {num([...image, 'width'])} × {num([...image, 'height'])}</div></div>
                 {@render altField(`${id}.image`, image)}

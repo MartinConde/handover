@@ -11,6 +11,7 @@ let {
   targetOffered = false,
   translator = false,
   pending = false,
+  restored,
 }: {
   initialUiLocale?: UiLocale;
   publishState?: 'clean' | 'drift' | 'missing';
@@ -19,6 +20,7 @@ let {
   targetOffered?: boolean;
   translator?: boolean;
   pending?: boolean;
+  restored?: string;
 } = $props();
 // svelte-ignore state_referenced_locally -- each test mount intentionally fixes its initial locale
 let uiLocale = $state<UiLocale>(initialUiLocale);
@@ -118,6 +120,7 @@ const entry = {
   slug="seaview-cottage"
   {entry}
   preview
+  {restored}
   {uiLocale}
   onchanged={() => {}}
 />

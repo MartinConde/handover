@@ -234,6 +234,8 @@ const selectedNode = $derived(structure.find((node) => sameCanvasSelection(node,
 let collapsed = $state<Record<string, boolean>>({});
 const parentOf = (node: CanvasStructureNode) =>
   node.parentId ? structure.find((candidate) => candidate.id === node.parentId) : undefined;
+const structuralName = (node: CanvasStructureNode) =>
+  node.target.address.split('.').at(-1)?.replace(/\[.*$/, '').toLowerCase();
 const branches = $derived(new Set(structure.map((node) => node.parentId).filter(Boolean)));
 // Hide only generic, nonempty wrapper lists; retain empty lists as insertion targets.
 const hiddenWrappers = $derived(
@@ -244,7 +246,7 @@ const hiddenWrappers = $derived(
           node.kind === 'list' &&
           node.parentId &&
           !node.empty &&
-          /^(Blocks|Columns)$/i.test(node.label),
+          (structuralName(node) === 'blocks' || structuralName(node) === 'columns'),
       )
       .map((node) => node.id),
   ),
@@ -259,10 +261,13 @@ function treeDepth(node: CanvasStructureNode) {
   return depth;
 }
 function treeLabel(node: CanvasStructureNode) {
-  if (!node.parentId && node.kind === 'list' && node.label === 'Blocks')
+  if (!node.parentId && node.kind === 'list' && structuralName(node) === 'blocks')
     return m.canvas_page({}, options);
-  if (parentOf(node)?.label === 'Columns' && /^Block \d+$/.test(node.label))
-    return m.canvas_column({ number: node.label.replace('Block ', '') }, options);
+  if (
+    structuralName(parentOf(node) ?? node) === 'columns' &&
+    node.label === m.canvas_selection_block_position({ position: node.position }, options)
+  )
+    return m.canvas_column({ number: node.position }, options);
   return node.label;
 }
 function nodeIcon(node: CanvasStructureNode) {

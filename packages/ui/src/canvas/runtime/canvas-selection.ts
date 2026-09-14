@@ -159,10 +159,10 @@ function readStructure(root: Document): InternalNode[] {
     const siblings = nodes.filter((candidate) => candidate.parentId === node.parentId);
     node.position = siblings.indexOf(node) + 1;
     node.setSize = siblings.length;
-    node.label =
-      node.kind === 'block'
-        ? node.named || `Block ${node.position}`
-        : humanize(node.target.address) || (node.kind === 'list' ? 'List' : 'Field');
+    // `labelNodes` supplies every owned fallback from the active catalog after the tree is indexed.
+    // Keep only authored/template-derived text here so an English placeholder never crosses the
+    // Canvas bridge or becomes control flow in the parent workspace.
+    node.label = node.kind === 'block' ? node.named : humanize(node.target.address);
     if (node.kind === 'list') {
       const hasBlock = nodes.some(
         (candidate) =>

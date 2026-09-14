@@ -960,6 +960,11 @@
   "editor_publish_disabled_locked": "Jemand anderes bearbeitet diesen Eintrag",
   "editor_publish_disabled_drift": "Die Sprachen dieses Eintrags unterscheiden sich bei den Blöcken",
   "editor_publish_disabled_missing": "Fülle die fehlenden Angaben aus, bevor du diesen Eintrag veröffentlichst",
+  "editor_restored_version": "Die Version von {date} wurde wiederhergestellt.",
+  "editor_restored_drift": "Seitdem stimmen die Sprachen bei den Blöcken nicht mehr überein — entscheide, was bleiben soll, und veröffentliche dann.",
+  "editor_restored_unpublished": "Sie liegt jetzt als unveröffentlichte Änderungen vor — bis zur Veröffentlichung ist nichts live.",
+  "editor_drift_blocked": "Die Sprachen dieses Eintrags stimmen bei den Blöcken nicht überein — die Veröffentlichung bleibt gesperrt, bis das geklärt ist.",
+  "editor_conflict_guidance": "Jemand hat diesen Eintrag nach dem Öffnen im Repository geändert. Öffne die unveröffentlichten Änderungen, um den Konflikt Feld für Feld zu lösen oder deine Änderungen zu verwerfen und den aktuellen Stand zu übernehmen.",
   "editor_more_actions": "Weitere Aktionen",
   "editor_rename": "Umbenennen",
   "editor_show": "Einblenden",
@@ -1495,6 +1500,8 @@
   "media_library_metadata_invalid": "Die Antwort zum Speichern konnte nicht überprüft werden. Dieselben Metadaten können sicher erneut angewendet werden.",
   "media_library_not_found": "Dieses Medium ist nicht mehr in der Medienbibliothek vorhanden.",
   "media_library_storage_unavailable": "Der Medienspeicher ist nicht verfügbar.",
+  "media_image_unavailable": "Bild nicht verfügbar",
+  "media_image_not_selected": "Kein Bild ausgewählt",
   "media_library_delete_in_use": [
     {
       "declarations": ["input count", "local countPlural = count: plural"],

@@ -51,12 +51,26 @@ when the interface language changes. Live slider and focal-handle labels update,
 site-authored preset labels remain unchanged. Switching does not process an image, write content or
 restart an upload. Already-visible source-read, render and upload failures reformat from stable
 descriptors, with useful technical detail kept separate.
-Activity-event sentences and the remaining admin screens are being converted in stages and can
-still contain English.
-
 Handover-owned interface text is translated. Content and site configuration are not: collection
 labels, schema descriptions, custom validation messages, entry titles, names, URLs, provider
 diagnostics, and the values being edited remain as authored.
+
+## Translation and error boundary
+
+The bilingual surface now covers Handover-owned labels, buttons, menus, dialogs, notices,
+validation summaries, accessibility text and Canvas overlays throughout the admin. This does not
+mean every string visible beside the interface is translated. Site-authored collection, field and
+block labels; descriptions and custom validation messages; content, filenames, alt text, tags,
+URLs and identifiers remain exactly as authored. Product and provider names, configuration keys,
+protocol values and copyable technical diagnostics also remain exact. Native file, date, number
+and range picker chrome belongs to the browser or operating system and may follow the device
+language instead.
+
+Known Handover failures use stable codes or descriptors and are formatted in the current interface
+language. The client never chooses recovery by comparing an English error sentence. Older servers
+that return only prose still get the operation's localized generic recovery; safe response prose
+may be shown separately as technical detail. Custom schema validation is the exception: its
+authored message remains the useful fallback because Handover must not rewrite the site's rules.
 
 If entry creation returns success without a usable filename, Handover cannot know whether the
 draft was created. It keeps the creation form and presents translated guidance to check the entry

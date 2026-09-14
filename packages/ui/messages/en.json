@@ -957,6 +957,11 @@
   "editor_publish_disabled_locked": "Somebody else is editing this entry",
   "editor_publish_disabled_drift": "The languages of this entry disagree about its blocks",
   "editor_publish_disabled_missing": "Fill in what is missing before publishing this entry",
+  "editor_restored_version": "Restored the version from {date}.",
+  "editor_restored_drift": "The languages disagree about its blocks since then — decide what to keep, then publish.",
+  "editor_restored_unpublished": "It is here as unpublished changes — nothing is live until you publish.",
+  "editor_drift_blocked": "The languages of this entry disagree about its blocks — publishing is blocked until that is settled.",
+  "editor_conflict_guidance": "Somebody changed this in the repository after you opened it. Open Unpublished changes to resolve it field by field, or to discard yours and take what is there now.",
   "editor_more_actions": "More actions",
   "editor_rename": "Rename",
   "editor_show": "Show",
@@ -1501,6 +1506,8 @@
   "media_library_metadata_invalid": "The save response could not be verified. Reapplying the same metadata is safe.",
   "media_library_not_found": "That asset is no longer in the media library.",
   "media_library_storage_unavailable": "Media storage is unavailable.",
+  "media_image_unavailable": "Image unavailable",
+  "media_image_not_selected": "No image selected",
   "media_library_delete_in_use": [
     {
       "declarations": ["input count", "local countPlural = count: plural"],
