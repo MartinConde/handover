@@ -3,6 +3,12 @@
 A first draft from a machine, and the mark that says a translation's source has moved on since
 somebody made it. Both hang off the second language's column ([Translating](translating.md)).
 
+Button text, language names, machine/stale badges, before-and-after headings, dates and retained
+translation failures follow the account's interface language. Switching the interface language
+does not restart a provider request, replace the translated field, or alter its authored value.
+Handover keeps an unknown provider diagnostic separate from its translated recovery summary; when
+a disconnected write cannot be confirmed, reload the entry before retrying it.
+
 ## A machine's first draft
 
 With something to translate with configured, the second language's header offers **Translate

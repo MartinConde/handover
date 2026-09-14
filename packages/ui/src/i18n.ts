@@ -17,6 +17,7 @@ const clockFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const fieldTimeFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const mediaDateFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const languageFormatters = new Map<UiLocale, Intl.DisplayNames>();
+const languageListFormatters = new Map<UiLocale, Intl.ListFormat>();
 const languageTag = (locale: UiLocale) => (locale === 'de' ? 'de-DE' : 'en-GB');
 
 const formatter = <T>(cache: Map<UiLocale, T>, locale: UiLocale, make: () => T): T => {
@@ -111,6 +112,15 @@ export function formatLanguageName(code: string, locale: UiLocale): string {
   } catch {
     return code;
   }
+}
+
+/** Content-language names and their conjunction both follow the interface locale. */
+export function formatLanguageList(codes: readonly string[], locale: UiLocale): string {
+  return formatter(
+    languageListFormatters,
+    locale,
+    () => new Intl.ListFormat(languageTag(locale), { style: 'long', type: 'conjunction' }),
+  ).format(codes.map((code) => formatLanguageName(code, locale)));
 }
 
 export const DEVICE_LOCALE_COOKIE = 'handover_ui_locale';

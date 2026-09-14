@@ -92,7 +92,7 @@ test('live interface language updates editor chrome and dates without replacing 
   expect(currentAddress?.dataset.localeProof).toBe('same-address-field');
   expect(document.activeElement).toBe(currentAddress);
   expect(
-    q<HTMLButtonElement>('[aria-label="Language"] button[aria-pressed="true"]')?.textContent,
+    q<HTMLButtonElement>('[aria-label="Sprache"] button[aria-pressed="true"]')?.textContent,
   ).toContain('EN');
   expect(fetchMock).toHaveBeenCalledTimes(requestsBeforeSwitch);
   q<HTMLButtonElement>('.slug-row .btn-ghost')?.click();
@@ -112,7 +112,7 @@ test('live interface language updates editor chrome and dates without replacing 
   q<HTMLButtonElement>('.dialog button:not(.btn-primary)')?.click();
   flushSync();
 
-  qa<HTMLButtonElement>('[aria-label="Language"] button')[1]?.click();
+  qa<HTMLButtonElement>('[aria-label="Sprache"] button')[1]?.click();
   for (let attempt = 0; attempt < 10 && !q('.pane time'); attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 10));
     flushSync();
@@ -171,6 +171,58 @@ test('German publish tooltips keep the header reason order', async () => {
       de: 'Fülle die fehlenden Angaben aus, bevor du diesen Eintrag veröffentlichst',
     },
   ]);
+});
+
+test('content-language creation controls retranslate without changing the selected language', async () => {
+  const fetchMock = vi.fn(async (url: string) =>
+    url.startsWith('/admin/api/locks/')
+      ? Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120_000 })
+      : url === '/admin/api/translate/listings/seaview-cottage/de'
+        ? new Response('provider diagnostic', {
+            status: 503,
+            headers: { 'content-type': 'text/plain' },
+          })
+        : Response.json({}),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  app = mount(EditorLocaleFixture, {
+    target: document.body,
+    props: { targetOffered: true, translator: true },
+  });
+  await new Promise((resolve) => setTimeout(resolve));
+  flushSync();
+  qa<HTMLButtonElement>('[aria-label="Language"] button')[1]?.click();
+  flushSync();
+  const pane = q<HTMLElement>('.pane.is-locale');
+  const create = q<HTMLButtonElement>('.pane .btn-create');
+  expect(pane?.textContent).toContain('Create from English');
+  expect(pane?.textContent).toContain('Create and pre-fill');
+  const requestsBeforeSwitch = fetchMock.mock.calls.length;
+
+  switchLocale();
+
+  expect(q('.pane.is-locale')).toBe(pane);
+  expect(q('.pane h2')?.textContent).toBe('Deutsch');
+  expect(q('.pane .btn-create')).toBe(create);
+  expect(pane?.textContent).toContain('Aus Englisch erstellen');
+  expect(pane?.textContent).toContain('Erstellen und vorübersetzen');
+  expect(
+    q<HTMLButtonElement>('[aria-label="Sprache"] button[aria-pressed="true"]')?.textContent,
+  ).toContain('DE');
+  expect(fetchMock).toHaveBeenCalledTimes(requestsBeforeSwitch);
+
+  q<HTMLButtonElement>('.pane .btn-fill')?.click();
+  await vi.waitFor(() =>
+    expect(q('.pane [role="alert"]')?.textContent).toContain(
+      'Die Sprache wurde erstellt, aber die Übersetzung ist fehlgeschlagen.',
+    ),
+  );
+  flushSync();
+  switchLocale();
+  expect(q('.pane.is-locale')).toBe(pane);
+  expect(q('.pane [role="alert"]')?.textContent).toContain(
+    'The language was created, but translation failed.',
+  );
 });
 
 test('visible scalar validation and controls reformat without validating or replacing input', async () => {

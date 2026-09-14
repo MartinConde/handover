@@ -1,6 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Drift from './Drift.svelte';
+import DriftLocaleFixture from './DriftLocaleFixture.svelte';
 
 // Not testing: the banner above it or the chrome the panel sits in.
 
@@ -39,6 +40,43 @@ afterEach(() => {
   unmount(app);
   resolved.mockClear();
   vi.unstubAllGlobals();
+});
+
+test('an open decision and retained refusal retranslate without replacing the choice', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('moved', { status: 409 })),
+  );
+  app = mount(DriftLocaleFixture, { target: document.body });
+  flushSync();
+  const choice = document.body.querySelector<HTMLInputElement>('.choice input');
+  if (!choice) throw new Error('drift choice missing');
+  choice.click();
+  choice.focus();
+  flushSync();
+  document.body.querySelector<HTMLButtonElement>('.actions .btn-primary')?.click();
+  await tick();
+  flushSync();
+  expect(document.body.querySelector('[role="alert"]')?.textContent).toContain(
+    'This entry changed while you were deciding.',
+  );
+
+  document.body.querySelector<HTMLButtonElement>('[data-locale-switch]')?.click();
+  flushSync();
+
+  expect(document.body.querySelector('.drift h2')?.textContent).toBe(
+    'Die Sprachen unterscheiden sich bei den Blöcken dieses Eintrags',
+  );
+  expect(document.body.querySelector('.what')?.textContent).toContain(
+    'Deutsch enthält diesen Block, Englisch nicht',
+  );
+  expect(document.body.querySelector('.choice > span')?.textContent).toBe('Zu Englisch hinzufügen');
+  expect(document.body.querySelector('[role="alert"]')?.textContent).toContain(
+    'Dieser Eintrag wurde geändert, während du entschieden hast.',
+  );
+  expect(document.body.querySelector<HTMLInputElement>('.choice input')).toBe(choice);
+  expect(choice.checked).toBe(true);
+  expect(document.activeElement).toBe(choice);
 });
 
 const labels = (root: ParentNode, card = 0) =>

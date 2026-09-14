@@ -31,7 +31,13 @@ import CheckLines, {
 } from '../publishing/CheckLines.svelte';
 import DriftPanel from '../publishing/Drift.svelte';
 import History from '../publishing/History.svelte';
-import { request as fetch, previewPath, siteBase, sitePath } from '../request.js';
+import {
+  request as fetch,
+  previewPath,
+  siteBase,
+  sitePath,
+  uncertainResponse,
+} from '../request.js';
 import { when } from '../shared/activity-line';
 import Modal from '../shared/Modal.svelte';
 import {
@@ -320,11 +326,30 @@ async function findRestore(of: string) {
   if (found && of === shown) putBack = found;
 }
 
-const createFrom = (of: string) => ask(`/admin/api/drafts/${collection}/${slug}/${of}`);
+let localeFailure = $state<{ locale: string; message: UiMessage }>();
+async function createFrom(of: string) {
+  if (!(await flush())) return;
+  busy = true;
+  localeFailure = undefined;
+  const res = await fetch(`/admin/api/drafts/${collection}/${slug}/${of}`, { method: 'POST' });
+  busy = false;
+  if (!res.ok) {
+    localeFailure = {
+      locale: of,
+      message: uncertainResponse(res)
+        ? { code: 'TRANSLATION_CREATE_UNCONFIRMED', status: res.status }
+        : await retainedFailure(res, 'TRANSLATION_CREATE_FAILED'),
+    };
+    return;
+  }
+  await announceCommit(res);
+  onchanged();
+}
 // The file has to exist before a machine's draft can be written into it.
 async function createFilled(of: string) {
   if (!(await flush())) return;
   busy = true;
+  localeFailure = undefined;
   const made = await fetch(`/admin/api/drafts/${collection}/${slug}/${of}`, { method: 'POST' });
   let filled: Response | undefined;
   if (made.ok)
@@ -335,12 +360,22 @@ async function createFilled(of: string) {
     });
   busy = false;
   if (!made.ok) {
-    actionFailed = await made.text();
+    localeFailure = {
+      locale: of,
+      message: uncertainResponse(made)
+        ? { code: 'TRANSLATION_CREATE_UNCONFIRMED', status: made.status }
+        : await retainedFailure(made, 'TRANSLATION_CREATE_FAILED'),
+    };
     return;
   }
   if (!filled?.ok) {
-    actionFailed =
-      'The language was created, but translation failed. Reload it to retry translation.';
+    const refusal = filled ?? new Response('', { status: 503 });
+    localeFailure = {
+      locale: of,
+      message: uncertainResponse(refusal)
+        ? { code: 'TRANSLATION_CREATED_FILL_UNCONFIRMED', status: refusal.status }
+        : await retainedFailure(refusal, 'TRANSLATION_CREATED_FILL_FAILED'),
+    };
     return;
   }
   onchanged();
@@ -397,14 +432,7 @@ function setPending(of: string, pending: boolean) {
   if (hadPending !== hasPending()) onpending?.();
 }
 const dirty = $derived(hasPending() || entrySession.unsaved());
-const LANGUAGES = new Intl.DisplayNames(['en'], { type: 'language' });
-const language = (of: string) => {
-  try {
-    return LANGUAGES.of(of) ?? of;
-  } catch {
-    return of;
-  }
-};
+const language = (of: string) => formatLanguageName(of, uiLocale);
 
 /** The soft lock on every language of this entry at once; `undefined` until the first answer. */
 type Lock = {
@@ -1093,10 +1121,10 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 <svelte:document onvisibilitychange={recheck} />
 
 {#snippet canvasEntryActions()}
-  <select class="canvas-locale" aria-label="Language" value={locale}
+  <select class="canvas-locale" aria-label={m.editor_language({}, options)} value={locale}
     onchange={(event) => { const nextLocale = event.currentTarget.value; void leaving(() => (locale = nextLocale)); }}>
     {#each entry.locales as of (of)}
-      <option value={of}>{of.toUpperCase()}{off(of) ? ' · Off' : untranslated(of) ? ' · New' : entry.stale.includes(of) ? ' · Changed' : ''}</option>
+      <option value={of}>{of.toUpperCase()}{off(of) ? ` · ${m.editor_language_off({}, options)}` : untranslated(of) ? ` · ${m.editor_language_new({}, options)}` : entry.stale.includes(of) ? ` · ${m.editor_language_changed({}, options)}` : ''}</option>
     {/each}
   </select>
   <span class="autosave" class:is-saving={entrySession.saveState(locale).phase === 'saving'}
@@ -1240,15 +1268,15 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       <div class="actions">
         {#if many}
           {#if entry.locales.length < 5}
-            <div class="seg" role="group" aria-label="Language">
+            <div class="seg" role="group" aria-label={m.editor_language({}, options)}>
               {#each entry.locales as of (of)}
                 <button type="button" class:is-off={off(of)} aria-pressed={locale === of} onclick={() => leaving(() => (locale = of))}>
-                  {of.toUpperCase()}{#if off(of)}<span class="visually-hidden"> — turned off for this entry</span>{:else if untranslated(of)}<span class="visually-hidden"> — not translated yet</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {language(entry.sourceLocale)} changed since this was translated</span><span class="mark" aria-hidden="true"></span>{/if}
+                  {of.toUpperCase()}{#if off(of)}<span class="visually-hidden"> — {m.editor_language_off_a11y({}, options)}</span>{:else if untranslated(of)}<span class="visually-hidden"> — {m.editor_language_untranslated_a11y({}, options)}</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {m.editor_language_stale_a11y({ source: language(entry.sourceLocale) }, options)}</span><span class="mark" aria-hidden="true"></span>{/if}
                 </button>
               {/each}
             </div>
           {:else}
-            <label class="visually-hidden" for="entry-locale">Language</label>
+            <label class="visually-hidden" for="entry-locale">{m.editor_language({}, options)}</label>
             <select
               class="input"
               id="entry-locale"
@@ -1261,7 +1289,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
             </select>
           {/if}
           {#if mode === 'form'}
-            <button class="btn btn-sbs" type="button" aria-pressed={side} onclick={() => leaving(() => (side = !side))}>Side by side</button>
+            <button class="btn btn-sbs" type="button" aria-pressed={side} onclick={() => leaving(() => (side = !side))}>{m.editor_side_by_side({}, options)}</button>
           {/if}
         {/if}
         {#if !entry.singleton}
@@ -1390,6 +1418,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         {slug}
         drift={entry.drift}
         locales={entry.locales}
+        {uiLocale}
         onresolved={entrySession.afterReconciliation}
       />
     {:else}
@@ -1435,13 +1464,10 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           <div class="empty">
             {#if off(shown)}
               <div class="is-wide">
-                <p>
-                  This entry is not offered in {language(shown)}. No {language(shown)} file is
-                  written and the site does not link to one.
-                </p>
+                <p>{m.editor_not_offered({ language: language(shown) }, options)}</p>
                 {#if putBack}
                   <p>
-                    It was turned off here on <time datetime={new Date(putBack.at).toISOString()}>{formatExactTime(putBack.at, uiLocale)}</time>, and the {language(shown)} words are still in the repository.
+                    {m.editor_turned_off_before({}, options)} <time datetime={new Date(putBack.at).toISOString()}>{formatExactTime(putBack.at, uiLocale)}</time>{m.editor_turned_off_after({ language: language(shown) }, options)}
                   </p>
                   <button
                     class="btn btn-primary"
@@ -1453,40 +1479,40 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
                         body: JSON.stringify({ commit_sha: putBack?.commit_sha }),
                       })}
                   >
-                    Bring the {language(shown)} words back
+                    {m.editor_restore_words({ language: language(shown) }, options)}
                   </button>
                   <p>
-                    Or <button class="btn-link" type="button" disabled={actionBusy || locked} onclick={() => offer(shown, true)}>turn {language(shown)} back on with an empty form</button>.
+                    {m.editor_or({}, options)} <button class="btn-link" type="button" disabled={actionBusy || locked} onclick={() => offer(shown, true)}>{m.editor_restore_empty({ language: language(shown) }, options)}</button>.
                   </p>
                 {:else}
                   <button class="btn" type="button" disabled={actionBusy || locked} onclick={() => offer(shown, true)}>
-                    Turn {language(shown)} back on
+                    {m.editor_turn_back_on({ language: language(shown) }, options)}
                   </button>
                 {/if}
               </div>
             {:else}
               <div class="is-wide">
-                <p>
-                  Creating it copies the structure and everything that reads the same in every
-                  language. The text fields start empty.
-                </p>
+                <p>{m.editor_create_translation_intro({}, options)}</p>
                 <button class="btn btn-primary btn-create" type="button" disabled={actionBusy || locked} onclick={() => createFrom(shown)}>
-                  Create from {language(entry.sourceLocale)}
+                  {m.editor_create_from({ language: language(entry.sourceLocale) }, options)}
                 </button>
                 {#if entry.translator}
                   <button class="btn btn-fill" type="button" disabled={actionBusy || locked} onclick={() => createFilled(shown)}>
-                    Create and pre-fill
+                    {m.editor_create_prefill({}, options)}
                   </button>
                 {/if}
                 {#if !entry.singleton}
                   <p>
-                    Or <button class="btn-link" type="button" disabled={actionBusy || locked} onclick={() => offer(shown, false)}>don't offer this entry in {language(shown)}</button> — no file is written for it.
+                    {m.editor_or({}, options)} <button class="btn-link" type="button" disabled={actionBusy || locked} onclick={() => offer(shown, false)}>{m.editor_do_not_offer({ language: language(shown) }, options)}</button> {m.editor_no_file_written({}, options)}
                   </p>
                 {/if}
               </div>
             {/if}
             {#if actionFailed}
               <div class="notice notice-danger" role="alert">{actionFailed}</div>
+            {/if}
+            {#if localeFailure?.locale === shown}
+              <div class="notice notice-danger" role="alert">{feedbackText(localeFailure.message)} {feedbackDetail(localeFailure.message)}</div>
             {/if}
           </div>
         </section>

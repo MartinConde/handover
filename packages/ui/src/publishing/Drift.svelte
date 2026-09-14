@@ -1,5 +1,7 @@
 <script lang="ts">
 import type { Drift } from '@handover/core';
+import { formatLanguageList, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 import { request as fetch } from '../request.js';
 
 let {
@@ -7,6 +9,7 @@ let {
   slug,
   drift,
   locales,
+  uiLocale = 'en',
   onresolved,
 }: {
   collection: string;
@@ -15,25 +18,19 @@ let {
   drift: Drift[];
   /** The languages the site declares: a block in all of them is the one that carries no mark. */
   locales: string[];
+  uiLocale?: UiLocale;
   /** The answers are in: the entry has to be read again, drift and all. */
   onresolved: () => void;
 } = $props();
+const options = $derived(messageOptions(uiLocale));
 
 /** Which answer each block has been given, by its path; the index of one of its choices. */
 let answers = $state<Record<string, number>>({});
 let busy = $state(false);
-let error = $state('');
+let error = $state<{ kind: 'changed' } | { kind: 'failed'; status: number }>();
 
-const LANGUAGES = new Intl.DisplayNames(['en'], { type: 'language' });
-const named = (locale: string) => {
-  try {
-    return LANGUAGES.of(locale) ?? locale;
-  } catch {
-    return locale;
-  }
-};
-const list = (of: string[]) => of.map(named).join(' and ');
-const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const named = (locale: string) => formatLanguageName(locale, uiLocale);
+const list = (of: string[]) => formatLanguageList(of, uiLocale);
 
 /** One answer: the languages the block ends up in, and how that reads. */
 interface Choice {
@@ -49,30 +46,35 @@ const extraIn = (row: Drift) => row.in.filter((l) => !row.expected.includes(l));
 function choicesFor(row: Drift): Choice[] {
   const missing = missingFrom(row);
   const extra = extraIn(row);
-  const parts = [
-    ...(missing.length ? [`add it to ${list(missing)}`] : []),
-    ...(extra.length ? [`remove it from ${list(extra)}`] : []),
-  ];
+  const expectedChoice = missing.length
+    ? extra.length
+      ? m.drift_add_remove({ add: list(missing), remove: list(extra) }, options)
+      : m.drift_add({ languages: list(missing) }, options)
+    : m.drift_remove({ languages: list(extra) }, options);
   const everywhere = row.in.length === locales.length;
   return [
     {
       to: row.expected,
-      label: capitalise(parts.join(' and ')),
+      label: expectedChoice,
       desc: missing.length
-        ? 'It arrives with the values every language shares and nothing to read yet'
-        : `Keeps it ${list(row.expected)} only`,
+        ? m.drift_added_desc({}, options)
+        : m.drift_keep_only({ languages: list(row.expected) }, options),
     },
     {
       to: row.in,
-      label: everywhere ? 'Let it be in every language' : `Keep it in ${list(row.in)} only`,
-      desc: everywhere ? 'Drops the mark that says otherwise' : 'Marks the block as theirs',
+      label: everywhere
+        ? m.drift_everywhere({}, options)
+        : m.drift_keep_only({ languages: list(row.in) }, options),
+      desc: everywhere
+        ? m.drift_drop_mark_desc({}, options)
+        : m.drift_mark_ownership_desc({}, options),
     },
     ...(missing.length
       ? [
           {
             to: [],
-            label: `Remove it from ${list(row.in)}`,
-            desc: 'What is written there is lost',
+            label: m.drift_remove({ languages: list(row.in) }, options),
+            desc: m.drift_removed_desc({}, options),
           },
         ]
       : []),
@@ -83,10 +85,13 @@ function whatOf(row: Drift): string {
   const missing = missingFrom(row);
   const extra = extraIn(row);
   if (!missing.length)
-    return `This block is marked for ${list(row.expected)}, and ${list(extra)} has it as well.`;
+    return m.drift_marked_extra({ expected: list(row.expected), extra: list(extra) }, options);
   if (!extra.length)
-    return `${list(row.in)} has this block and ${list(missing)} does not, with nothing on it to say which language it belongs to.`;
-  return `This block is marked for ${list(row.expected)} and sits in ${list(row.in)} instead.`;
+    return m.drift_unmarked_missing({ present: list(row.in), missing: list(missing) }, options);
+  return m.drift_marked_misaligned(
+    { expected: list(row.expected), present: list(row.in) },
+    options,
+  );
 }
 
 // The languages this block is about: the ones that have it and the ones that should.
@@ -96,7 +101,7 @@ const answered = $derived(drift.filter((row) => answers[row.path] !== undefined)
 
 async function apply() {
   busy = true;
-  error = '';
+  error = undefined;
   const res = await fetch(`/admin/api/drift/${collection}/${slug}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -110,10 +115,7 @@ async function apply() {
   busy = false;
   if (!res.ok) {
     // A 409 is the report having moved on under the tab; reading the entry again is the answer.
-    error =
-      res.status === 409
-        ? 'This entry changed while you were deciding. Reload it and look again.'
-        : `Those answers were not applied (${res.status}).`;
+    error = res.status === 409 ? { kind: 'changed' } : { kind: 'failed', status: res.status };
     return;
   }
   onresolved();
@@ -122,20 +124,16 @@ async function apply() {
 
 <section class="drift" aria-labelledby="drift-h">
   <header>
-    <h2 id="drift-h">The languages disagree about this entry's blocks</h2>
-    <p>
-      Blocks are the same in every language — only the words differ. These do not line up, which
-      happens when a file is edited outside the admin. Nothing is decided for you: say what each
-      block should be, and publishing is open again.
-    </p>
+    <h2 id="drift-h">{m.drift_title({}, options)}</h2>
+    <p>{m.drift_intro({}, options)}</p>
   </header>
   <div class="drift-rows">
     {#each drift as row, i (row.path)}
       <article class="block-card" aria-labelledby="drift-{i}-h">
         <header>
-          <span class="label" id="drift-{i}-h">{row.type ?? 'Row'}</span>
+          <span class="label" id="drift-{i}-h">{row.type ?? m.drift_row({}, options)}</span>
           <span class="type">{row.path}</span>
-          <span class="visually-hidden">Languages:</span>
+          <span class="visually-hidden">{m.drift_languages({}, options)}</span>
           <span class="chips">
             {#each shown(row) as locale (locale)}
               <span class="chip" class:chip-missing={!row.in.includes(locale)}>
@@ -154,15 +152,15 @@ async function apply() {
                   {#each row.values[locale] ?? [] as words, w (w)}
                     <p>{words}</p>
                   {:else}
-                    <p>{row.in.includes(locale) ? 'Nothing written in it' : 'Not in this language'}</p>
+                    <p>{row.in.includes(locale) ? m.drift_nothing_written({}, options) : m.drift_not_in_language({}, options)}</p>
                   {/each}
                 </div>
               </div>
             {/each}
           </div>
           <fieldset>
-            <legend>What should this block be?</legend>
-            {#each choicesFor(row) as choice, j (choice.label)}
+            <legend>{m.drift_question({}, options)}</legend>
+            {#each choicesFor(row) as choice, j (j)}
               <label class="choice" for="drift-{i}-{j}">
                 <input
                   type="radio"
@@ -180,16 +178,16 @@ async function apply() {
       </article>
     {/each}
   </div>
-  {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
+  {#if error}<div class="notice notice-danger" role="alert">{error.kind === 'changed' ? m.drift_changed({}, options) : m.drift_apply_failed({ status: error.status }, options)}</div>{/if}
   <div class="actions">
-    <span class="left">{answered} of {drift.length} answered</span>
+    <span class="left">{m.drift_answered({ answered, total: drift.length }, options)}</span>
     <button
       class="btn btn-primary"
       type="button"
       disabled={busy || answered < drift.length}
       onclick={apply}
     >
-      {busy ? 'Applying…' : 'Apply these answers'}
+      {busy ? m.drift_applying({}, options) : m.drift_apply({}, options)}
     </button>
   </div>
 </section>

@@ -8,11 +8,15 @@ let {
   publishState = 'clean',
   feedback = false,
   scalarFeedback = false,
+  targetOffered = false,
+  translator = false,
 }: {
   initialUiLocale?: UiLocale;
   publishState?: 'clean' | 'drift' | 'missing';
   feedback?: boolean;
   scalarFeedback?: boolean;
+  targetOffered?: boolean;
+  translator?: boolean;
 } = $props();
 // svelte-ignore state_referenced_locally -- each test mount intentionally fixes its initial locale
 let uiLocale = $state<UiLocale>(initialUiLocale);
@@ -95,10 +99,11 @@ const entry = {
   locales: ['en', 'de'],
   defaultLocale: 'en',
   sourceLocale: 'en',
-  offered: ['en'],
+  offered: targetOffered ? ['en', 'de'] : ['en'],
   translations: {} as Record<string, Record<string, unknown>>,
   stale: [] as string[],
   drift,
+  translator,
   route: '/listings/[slug]',
   localizedSlugs: true,
   addresses: { en: '' },

@@ -207,6 +207,10 @@ test('structured field state and open feedback survive a live locale switch', as
   expect(q('#translated-summary-field .hint').textContent ?? '').toBe('Same in every language');
   expect(q('.block-picker .type-card').textContent ?? '').toBe('callout');
   expect(q('.popover small').textContent ?? '').toBe('English, when translated · 13 Sept, 10:15');
+  expect(q('#translated-summary-field .badge-machine').textContent ?? '').toBe(
+    'Machine translated',
+  );
+  expect(q('#stale-summary').textContent ?? '').toBe('English changed since this was translated');
 
   click('[data-locale-switch]');
 
@@ -226,7 +230,27 @@ test('structured field state and open feedback survive a live locale switch', as
   expect(q('#f-button-field legend').textContent ?? '').toBe('Ziel');
   expect(q('#f-seo\\.title-meter').textContent ?? '').toBe('Bis zu etwa 60 Zeichen');
   expect(q('.block-picker .type-card').textContent ?? '').toBe('callout');
-  expect(q('.popover small').textContent ?? '').toBe('English, when translated · 13. Sept., 10:15');
+  expect(q('.popover small').textContent ?? '').toBe(
+    'Englisch, bei der Übersetzung · 13. Sept., 10:15',
+  );
+  expect(q('#translated-summary-field .badge-machine').textContent ?? '').toBe(
+    'Maschinell übersetzt',
+  );
+  expect(q('#stale-summary').textContent ?? '').toBe(
+    'Englisch wurde seit dieser Übersetzung geändert',
+  );
+  expect(q('#translated-summary-field > .popover').getAttribute('aria-label')).toBe(
+    'Änderungen auf Englisch',
+  );
+  expect(q('#translated-summary-field > .popover .row:nth-child(2) small').textContent ?? '').toBe(
+    'Englisch, jetzt',
+  );
+  expect(
+    Array.from(
+      q('#translated-summary-field > .popover .actions').querySelectorAll('button'),
+      (button) => button.textContent,
+    ),
+  ).toEqual(['Neu übersetzen', 'Schließen']);
   expect(q<HTMLInputElement>('input#f-rooms\\.0\\.name')).toBe(nested);
   expect(nested.value).toBe('Garden room');
   expect(nested.selectionStart).toBe(6);

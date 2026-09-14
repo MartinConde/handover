@@ -1,7 +1,9 @@
 <script lang="ts">
 import { type Field, keptMachine, type ResolvedSeo, type WordPart } from '@handover/core';
-import type { UiLocale } from '../i18n.js';
-import { request as fetch } from '../request.js';
+import { messageText, responseMessage, type UiMessage } from '../errors.js';
+import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
+import { request as fetch, uncertainResponse } from '../request.js';
 import type { EntrySession } from './entry-session.svelte';
 import Fields from './fields/Fields.svelte';
 
@@ -59,13 +61,15 @@ let {
 } = $props();
 
 const saveState = $derived(session.saveState(locale));
+const options = $derived(messageOptions(uiLocale));
 // svelte-ignore state_referenced_locally -- the loaded file is the initial value on purpose
 let base = $state<Data>(structuredClone($state.snapshot(session.snapshot(locale))));
 const saving = $derived(saveState.phase === 'saving');
-let fillFailed = $state(false);
-const failed = $derived(saveState.phase === 'failed' || fillFailed);
+let fillFailure = $state<UiMessage>();
+let retryPaths = $state<string[]>();
+const failed = $derived(saveState.phase === 'failed' || fillFailure !== undefined);
 $effect(() => {
-  if (saveState.phase === 'saving') fillFailed = false;
+  if (saveState.phase === 'saving') fillFailure = undefined;
 });
 
 // Only read for a stale file, so an entry nobody has translated pays nothing for the marker.
@@ -93,17 +97,27 @@ const mutationBlocked = $derived(locked || actionBlocked || session.localeMutati
 
 // The session reserves the entry before flushing, then owns the request and acknowledgement.
 async function fill(paths?: string[]) {
-  fillFailed = false;
+  fillFailure = undefined;
+  retryPaths = paths;
+  let refusal: UiMessage | undefined;
   const result = await session.machineTranslate(locale, async () => {
     const res = await fetch(`/admin/api/translate/${collection}/${slug}/${locale}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(paths ? { paths } : {}),
     });
-    if (!res.ok) return undefined;
+    if (!res.ok) {
+      refusal = uncertainResponse(res)
+        ? { code: 'TRANSLATION_UNCONFIRMED', status: res.status }
+        : await translationFailure(res);
+      return undefined;
+    }
     return (await res.json()) as { data: Data; pending: boolean; revision?: string };
   });
-  fillFailed = !result.ok && (result.reason === 'request' || result.reason === 'stale');
+  if (!result.ok && (result.reason === 'request' || result.reason === 'stale'))
+    fillFailure = refusal ?? {
+      code: result.reason === 'stale' ? 'TRANSLATION_STALE' : 'TRANSLATION_FAILED',
+    };
   if (!result.ok) return;
   const body = result.response;
   base = structuredClone(body.data);
@@ -111,50 +125,58 @@ async function fill(paths?: string[]) {
   onsaved?.(body.pending, body.data);
 }
 
+async function translationFailure(response: Response): Promise<UiMessage> {
+  const message = await responseMessage(response, 'TRANSLATION_FAILED');
+  if (message.detail || !response.headers.get('content-type')?.startsWith('text/plain'))
+    return message;
+  const detail = (await response.clone().text()).trim();
+  return detail ? { ...message, detail } : message;
+}
+
 /** The publish reads D1, so a click a second after typing must find this language there. */
 async function flush(): Promise<boolean> {
   return session.flush();
 }
 
-const LANGUAGES = new Intl.DisplayNames(['en'], { type: 'language' });
-const named = (of: string) => {
-  try {
-    return LANGUAGES.of(of) ?? of;
-  } catch {
-    return of;
-  }
-};
+const named = (of: string) => formatLanguageName(of, uiLocale);
+const failureText = $derived(fillFailure ? messageText(fillFailure, uiLocale) : '');
+const failureDetail = $derived(
+  fillFailure?.detail ? m.common_technical_detail({ detail: fillFailure.detail }, options) : '',
+);
 </script>
 
 <section class="pane is-locale" aria-labelledby="pane-{locale}">
   <div class="pane-head">
     <h2 id="pane-{locale}">{named(locale)}</h2>
     {#if stale}
-      <span class="mode">{named(source)} changed since this was translated</span>
+      <span class="mode">{m.translation_source_changed({ source: named(source) }, options)}</span>
     {/if}
     <span class="autosave" class:is-saving={saving} class:is-offline={failed}>
-      {#if saving}Saving…{:else if failed}Not saved <button type="button" class="btn-link" onclick={() => flush()}>Retry save</button>{:else if isUnsaved}Unsaved changes{:else}Saved{/if}
+      {#if saving}{m.editor_save_saving({}, options)}{:else if failed}{m.editor_save_not_saved({}, options)} {#if fillFailure?.code === 'TRANSLATION_UNCONFIRMED'}<button type="button" class="btn-link" onclick={() => location.reload()}>{m.editor_lock_reload({}, options)}</button>{:else}<button type="button" class="btn-link" onclick={() => fillFailure ? fill(retryPaths) : flush()}>{fillFailure ? m.translation_retry({}, options) : m.editor_save_retry({}, options)}</button>{/if}{:else if isUnsaved}{m.editor_save_unsaved_changes({}, options)}{:else}{m.editor_save_saved({}, options)}{/if}
     </span>
     <span class="spacer"></span>
     {#if translator}
       <button class="btn btn-sm btn-fill" type="button" disabled={filling || locked || actionBlocked} onclick={() => fill()}>
-        Translate what's empty
+        {m.translation_fill_empty({}, options)}
       </button>
     {/if}
     {#if onturnoff}
       <button class="btn btn-sm btn-off" type="button" disabled={locked} onclick={onturnoff}>
-        Turn {named(locale)} off
+        {m.translation_turn_off({ language: named(locale) }, options)}
       </button>
     {/if}
     {#if onclose}
       <button
         class="btn btn-ghost btn-sm"
         type="button"
-        aria-label="Close side by side"
+        aria-label={m.translation_close_side_by_side({}, options)}
         onclick={onclose}>×</button
       >
     {/if}
   </div>
+  {#if fillFailure}
+    <div class="notice notice-danger" role="alert">{failureText} {failureDetail}</div>
+  {/if}
   <form class="form" onsubmit={(e) => e.preventDefault()}>
     <fieldset disabled={mutationBlocked}>
       <Fields

@@ -25,6 +25,11 @@ authored metadata and pending uploads remain intact. Dashboard, collection, pick
 values, queued saves, undo history, filters, selected rows, creation starters, custom URLs, the
 signed-in session, editor content language, and the active editor field remain in place.
 
+Content-language controls, translation columns, machine/stale markers and block-drift decisions are
+also bilingual. Language names use the current interface locale. Switching keeps the selected
+content language, translated draft, focused field, drift choices and in-flight work; retained
+translation and drift failures reformat from stable state instead of retrying the operation.
+
 An open crop or focal-point dialog keeps its node, focus, crop region, ratio and focal coordinates
 when the interface language changes. Live slider and focal-handle labels update, while filenames and
 site-authored preset labels remain unchanged. Switching does not process an image, write content or

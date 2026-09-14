@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate content-language controls, translation columns, machine/stale indicators and block
+  drift reconciliation into English and German. Reactive language names and retained failures
+  follow the interface locale while selected content language, drafts, focused fields, drift
+  answers and pending requests stay in place; one-language sites gain no content controls.
+
 - Translate the full media library into English and German, including filters, counts, dates, byte
   sizes, details, metadata recovery and deletion guidance. Stable media codes distinguish current
   and published usage, missing assets and unavailable storage while preserving API statuses and

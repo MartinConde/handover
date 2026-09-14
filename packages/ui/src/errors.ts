@@ -199,6 +199,24 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
       return m.editor_save_refused({}, options);
     case 'EDITOR_SAVE_REVISION':
       return m.editor_save_revision({}, options);
+    case 'TRANSLATION_FAILED':
+      return message.status
+        ? m.translation_failed_status({ status: message.status }, options)
+        : m.translation_failed({}, options);
+    case 'TRANSLATION_UNCONFIRMED':
+      return m.translation_unconfirmed({}, options);
+    case 'TRANSLATION_STALE':
+      return m.translation_stale({}, options);
+    case 'TRANSLATION_CREATE_FAILED':
+      return message.status
+        ? m.translation_create_failed_status({ status: message.status }, options)
+        : m.translation_create_failed({}, options);
+    case 'TRANSLATION_CREATE_UNCONFIRMED':
+      return m.translation_create_unconfirmed({}, options);
+    case 'TRANSLATION_CREATED_FILL_FAILED':
+      return m.translation_created_fill_failed({}, options);
+    case 'TRANSLATION_CREATED_FILL_UNCONFIRMED':
+      return m.translation_created_fill_unconfirmed({}, options);
     case 'MEDIA_UPLOAD_DECLARATION_FAILED':
       return message.status
         ? m.media_upload_declaration_failed_status({ status: message.status }, options)

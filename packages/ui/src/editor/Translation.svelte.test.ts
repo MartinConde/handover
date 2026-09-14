@@ -3,8 +3,79 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import { createEntrySession } from './entry-session.svelte';
 import Translation from './Translation.svelte';
+import TranslationLocaleFixture from './TranslationLocaleFixture.svelte';
 
-afterEach(() => vi.useRealTimers());
+let localeApp: ReturnType<typeof mount> | undefined;
+afterEach(() => {
+  if (localeApp) {
+    unmount(localeApp);
+    localeApp = undefined;
+  }
+  document.body.innerHTML = '';
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+test('machine and stale feedback retranslate without replacing the target draft', async () => {
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) =>
+    url === '/admin/api/source/listings/harbour-house/de'
+      ? Response.json({
+          translatedAt: new Date(2026, 8, 13, 10, 15).toISOString(),
+          changed: {
+            title: [
+              { text: 'Harbour cottage', mark: 'del' },
+              { text: 'Harbour house', mark: 'ins' },
+            ],
+          },
+        })
+      : init?.method === 'POST'
+        ? new Response('provider diagnostic', {
+            status: 503,
+            headers: { 'content-type': 'text/plain' },
+          })
+        : Response.json({}),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  localeApp = mount(TranslationLocaleFixture, { target: document.body });
+  await vi.waitFor(() => expect(document.querySelector('#stale-title')).not.toBeNull());
+  flushSync();
+
+  const input = document.querySelector<HTMLInputElement>('#t-title');
+  if (!input) throw new Error('translation title missing');
+  input.value = 'Eigener Entwurf';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  input.dataset.localeProof = 'same-translation-field';
+  document.querySelector<HTMLButtonElement>('.pane-head .btn-fill')?.click();
+  await vi.waitFor(() => expect(document.querySelector('[role="alert"]')).not.toBeNull());
+  flushSync();
+
+  expect(document.querySelector('.pane h2')?.textContent).toBe('German');
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+    'The translation could not be applied (503).',
+  );
+  document.querySelector<HTMLButtonElement>('[data-locale-switch]')?.click();
+  flushSync();
+
+  expect(document.querySelector('.pane h2')?.textContent).toBe('Deutsch');
+  expect(document.querySelector('.pane .mode')?.textContent).toBe(
+    'Englisch wurde seit dieser Übersetzung geändert',
+  );
+  expect(document.querySelector('.pane-head .btn-fill')?.textContent?.trim()).toBe(
+    'Leere Felder übersetzen',
+  );
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+    'Die Übersetzung konnte nicht angewendet werden (503).',
+  );
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain(
+    'Technisches Detail: provider diagnostic',
+  );
+  expect(document.querySelector('.autosave .btn-link')?.textContent).toBe(
+    'Übersetzung erneut versuchen',
+  );
+  expect(document.querySelector<HTMLInputElement>('#t-title')).toBe(input);
+  expect(input.value).toBe('Eigener Entwurf');
+  expect(input.dataset.localeProof).toBe('same-translation-field');
+});
 
 const deferred = <T>() => {
   let resolve!: (value: T) => void;

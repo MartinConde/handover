@@ -123,6 +123,7 @@ let {
   /** During machine translation, only plain and rich source prose remains editable. */
   textOnly?: boolean;
 } = $props();
+const options = $derived(messageOptions(uiLocale));
 
 const modeOf = (field: Field): Translation => field.i18n ?? inherited;
 // Walked whatever its own mode says, because a field inside it can say otherwise.
@@ -532,7 +533,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
 </script>
 
 {#snippet machineMark(path: string, text: string)}
-  {#if machine.includes(path)}<span class="badge badge-machine">Machine translated</span>{/if}
+  {#if machine.includes(path)}<span class="badge badge-machine">{m.translation_machine_badge({}, options)}</span>{/if}
   {#if behind(path)}
     <button
       class="stale"
@@ -541,11 +542,11 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       aria-haspopup="dialog"
       aria-expanded={opened === path}
       onclick={() => (opened = opened === path ? '' : path)}
-      >{sourceLabel} changed since this was translated</button
+      >{m.translation_source_changed({ source: sourceLabel }, options)}</button
     >
   {/if}
   {#if ontranslate && path}
-    <button class="btn btn-ghost btn-translate" type="button" aria-label="Translate {text} from the source language" onclick={() => ontranslate?.(path)}>Translate</button>
+    <button class="btn btn-ghost btn-translate" type="button" aria-label={m.translation_field_aria({ field: text }, options)} onclick={() => ontranslate?.(path)}>{m.translation_field({}, options)}</button>
   {/if}
 {/snippet}
 
@@ -556,18 +557,18 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     role="dialog"
     tabindex="-1"
     bind:this={popover}
-    aria-label="What changed in {sourceLabel}"
+    aria-label={m.translation_changed_dialog({ source: sourceLabel }, options)}
     onkeydown={(e) => e.key === 'Escape' && close(stalePath, () => {})}
   >
     <div class="diff">
       <div class="row">
-        <small>{sourceLabel}, when translated{translatedAt ? ` · ${when(translatedAt)}` : ''}</small
+        <small>{translatedAt ? m.translation_when_at({ source: sourceLabel, date: when(translatedAt) }, options) : m.translation_when({ source: sourceLabel }, options)}</small
         >{#each sourceChanged[stalePath] ?? [] as part, i (i)}{#if part.mark === 'del'}<del
             >{part.text}</del
           >{:else if part.mark !== 'ins'}{part.text}{/if}{/each}
       </div>
       <div class="row">
-        <small>{sourceLabel}, now</small
+        <small>{m.translation_now({ source: sourceLabel }, options)}</small
         >{#each sourceChanged[stalePath] ?? [] as part, i (i)}{#if part.mark === 'ins'}<ins
             >{part.text}</ins
           >{:else if part.mark !== 'del'}{part.text}{/if}{/each}
@@ -576,9 +577,9 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     <!-- Read the address before `opened` moves: closing is what takes the argument away. -->
     <div class="actions">
       {#if onretranslate}
-        <button class="btn btn-sm" type="button" onclick={() => close(stalePath, onretranslate)}>Re-translate</button>
+        <button class="btn btn-sm" type="button" onclick={() => close(stalePath, onretranslate)}>{m.translation_retranslate({}, options)}</button>
       {/if}
-      <button class="btn btn-sm btn-ghost" type="button" onclick={() => close(stalePath, (p) => (dismissed = [...dismissed, p]))}>Dismiss</button>
+      <button class="btn btn-sm btn-ghost" type="button" onclick={() => close(stalePath, (p) => (dismissed = [...dismissed, p]))}>{m.translation_dismiss({}, options)}</button>
     </div>
   </div>
 {/snippet}

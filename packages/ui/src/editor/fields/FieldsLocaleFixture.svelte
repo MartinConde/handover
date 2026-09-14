@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { Field, WordPart } from '@handover/core';
-import type { UiLocale } from '../../i18n.js';
+import { formatLanguageName, type UiLocale } from '../../i18n.js';
 import { createEntrySession } from '../entry-session.svelte';
 import Fields from './Fields.svelte';
 
@@ -93,7 +93,10 @@ const changed: Record<string, WordPart[]> = {
   translating
   locale="de"
   {uiLocale}
-  sourceLabel="English"
+  machine={['summary']}
+  ontranslate={() => {}}
+  sourceLabel={formatLanguageName('en', uiLocale)}
   sourceChanged={changed}
   translatedAt={new Date(2026, 8, 13, 10, 15).toISOString()}
+  onretranslate={() => {}}
 />

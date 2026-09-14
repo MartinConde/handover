@@ -8,6 +8,13 @@ the missing translation is the thing to see.
 A first draft from a machine, and what happens when the source language moves on after a
 translation was made, are [a page of their own](machine-translation.md).
 
+All Handover-owned controls on this screen follow the account's interface language, including
+content-language names, missing/off/stale indicators, the translation column, and the block-drift
+decision panel. Changing the interface language keeps the selected content language, open column,
+typed values, focused field, drift answers and pending work. It does not create a content file or
+send a translation request. A one-content-language site still keeps the interface-language picker,
+but continues to show none of the content-language controls described below.
+
 ## Choosing a language
 
 An entry opens on the language it is written in, and the header offers the others — buttons up
@@ -109,6 +116,8 @@ wants is ordinary validation rather than another refusal; *Keep it in German onl
 `_locales`. Each card shows what every language has written in the block, so *Remove it from
 English* is answered against the words it would lose. Answering every card writes each language
 the answers change in one go, and the banner goes because the next read has nothing to report.
+Changing the interface language while deciding keeps each selected answer and focused control;
+an already-visible changed-entry or apply refusal is rendered again in the new interface language.
 
 A menu label is the one translated value a machine is never offered: an empty box is not a gap
 but *use the page's own title*, and that title is already translated.
