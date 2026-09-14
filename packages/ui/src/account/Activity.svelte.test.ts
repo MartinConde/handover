@@ -4,6 +4,11 @@ import Activity from './Activity.svelte';
 
 let app: ReturnType<typeof mount>;
 const committed = vi.fn();
+const props = $state({
+  role: 'owner' as 'owner' | 'editor',
+  uiLocale: 'en' as 'en' | 'de',
+  oncommitted: committed,
+});
 
 interface Event {
   id: string;
@@ -57,8 +62,9 @@ function server(
   return calls;
 }
 
-const show = async (role: 'owner' | 'editor' = 'owner') => {
-  app = mount(Activity, { target: document.body, props: { role, oncommitted: committed } });
+const show = async (role: 'owner' | 'editor' = 'owner', uiLocale: 'en' | 'de' = 'en') => {
+  Object.assign(props, { role, uiLocale });
+  app = mount(Activity, { target: document.body, props });
   flushSync();
   await settle();
   return document.body;
@@ -91,6 +97,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
   committed.mockClear();
+  Object.assign(props, { role: 'owner', uiLocale: 'en' });
   document.body.innerHTML = '';
 });
 
@@ -200,7 +207,7 @@ test('a publish of one file links to the entry and names its language', async ()
   const link = root.querySelector('.said a');
   expect(link?.getAttribute('href')).toBe('/admin/c/listings/mill-house');
   expect(link?.textContent).toBe('mill-house');
-  expect(sentences(root)).toEqual(['Anna Berg published mill-house DE a1b2c3d']);
+  expect(sentences(root)).toEqual(['Anna Berg published mill-house DE. a1b2c3d']);
 });
 
 test('a row about a global links to Site settings, not to a collection', async () => {
@@ -257,8 +264,39 @@ test('a kind nothing has written a sentence for still reads as a record', async 
   });
   const root = await show();
 
-  expect(sentences(root)).toEqual(['Anna Berg — entry-archived contact EN']);
+  expect(sentences(root)).toEqual(['Anna Berg — entry-archived: contact EN']);
   expect(root.querySelector('.said a')?.getAttribute('href')).toBe('/admin/c/pages/contact');
+});
+
+test('existing rows, links, filters and dates reformat in German without another read', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-08-25T14:00:00'));
+  const calls = server({
+    events: [
+      ev('publish', {
+        at: Date.parse('2026-08-24T12:00:00'),
+        subject: 'src/content/listings/de/mill-house.yaml',
+        detail: { files: 1 },
+      }),
+      ev('entry-archived', { subject: 'src/content/pages/en/contact.yaml' }),
+    ],
+    cursor: null,
+  });
+  const root = await show();
+  const firstRow = root.querySelector('.activity li');
+  const reads = activityCalls(calls).length;
+
+  props.uiLocale = 'de';
+  flushSync();
+
+  expect(root.querySelector('.activity li')).toBe(firstRow);
+  expect(sentences(root)).toEqual([
+    'mill-house DE wurde von Anna Berg veröffentlicht.',
+    'contact EN: Anna Berg — entry-archived',
+  ]);
+  expect(root.querySelector('.badge')?.textContent).toBe('Veröffentlichung');
+  expect(root.querySelector('.when')?.textContent).toBe('gestern');
+  expect(activityCalls(calls)).toHaveLength(reads);
 });
 
 test('a saved template names the template and links to the entry it came from', async () => {
@@ -273,7 +311,7 @@ test('a saved template names the template and links to the entry it came from', 
   });
   const root = await show();
 
-  expect(sentences(root)).toEqual(['Anna Berg saved the template house from mill-house EN']);
+  expect(sentences(root)).toEqual(['Anna Berg saved the template house from mill-house EN.']);
   expect(root.querySelector('.said a')?.getAttribute('href')).toBe('/admin/c/listings/mill-house');
 });
 
@@ -295,8 +333,8 @@ test('a rename and a duplicate name what the entry was and link to what it is', 
   const root = await show();
 
   expect(sentences(root)).toEqual([
-    'Anna Berg renamed contact-us to contact EN',
-    'Anna Berg duplicated mill-house as mill-house-copy EN',
+    'Anna Berg renamed contact-us to contact EN.',
+    'Anna Berg duplicated mill-house as mill-house-copy EN.',
   ]);
   expect(Array.from(root.querySelectorAll('.said a')).map((a) => a.getAttribute('href'))).toEqual([
     '/admin/c/pages/contact',
@@ -358,7 +396,7 @@ test('a cron row says what the job did, or why it did not', async () => {
   expect(sentences(root)).toEqual([
     'The hourly media check recorded 2 uploads the library had missed.',
     'The daily clean-up removed 1 activity row older than 180 days.',
-    'The daily clean-up discarded 3 drafts whose file is no longer in the repository.',
+    'The daily clean-up discarded 3 drafts whose files are no longer in the repository.',
     'The daily hidden-page check found 2 pages hidden for more than 90 days.',
     'The daily draft clean-up failed: the repository could not be reached.',
     'The later job ran and did 1 thing.',
@@ -383,10 +421,10 @@ test('a time is worded by how long ago it was, and becomes a date after a week',
   const root = await show();
 
   expect(Array.from(root.querySelectorAll('.when'), (t) => t.textContent)).toEqual([
-    'Just now',
+    'now',
     '22 min ago',
-    '2h ago',
-    'Yesterday',
+    '2 hr ago',
+    'yesterday',
     '3 days ago',
     '16 Aug 2026',
   ]);
@@ -587,7 +625,7 @@ test('a publish row opens to the commit read field by field, not to its files', 
   const root = await show();
 
   const toggle = root.querySelector('.expand button') as HTMLButtonElement;
-  expect(toggle.getAttribute('aria-label')).toBe('What changed, 1h ago');
+  expect(toggle.getAttribute('aria-label')).toBe('What changed, 1 hr ago');
   expect(toggle.getAttribute('aria-expanded')).toBe('false');
   expect(calls.some((u) => u.startsWith('/admin/api/activity/diff'))).toBe(false);
 
@@ -642,7 +680,7 @@ test('a publish stopped by a file somebody else changed names that entry', async
   });
   const root = await show();
 
-  expect(sentences(root)).toEqual(['Publish stopped: somebody else had changed mill-house EN']);
+  expect(sentences(root)).toEqual(['Publish stopped: somebody else had changed mill-house EN.']);
   expect(root.querySelector('.said a')?.getAttribute('href')).toBe('/admin/c/listings/mill-house');
   expect(root.querySelector('.activity-detail')?.textContent).toContain(
     'discard the draft in the pending-changes drawer',
@@ -666,8 +704,8 @@ test('a take-over and a released hold read as sentences, and neither expands', a
   const root = await show();
 
   expect(sentences(root)).toEqual([
-    "Anna Berg took over Martin Vale's editing of contact EN",
-    "Anna Berg released Martin Vale's hold on about-us EN",
+    "Anna Berg took over Martin Vale's editing of contact EN.",
+    "Anna Berg released Martin Vale's hold on about-us EN.",
   ]);
   expect(root.querySelector('.expand button')).toBe(null);
   expect(root.querySelector('.activity-detail')).toBe(null);
@@ -690,8 +728,8 @@ test('a discard reads as a sentence, and a restore over a draft says which it wa
   const root = await show();
 
   expect(sentences(root)).toEqual([
-    'Anna Berg discarded the unpublished changes to contact EN',
-    'Anna Berg restored an older version over the unpublished changes to about-us EN',
+    'Anna Berg discarded the unpublished changes to contact EN.',
+    'Anna Berg restored an older version over the unpublished changes to about-us EN.',
   ]);
 });
 
@@ -703,7 +741,7 @@ test('a hold released with nobody named still reads', async () => {
   });
   const root = await show();
 
-  expect(sentences(root)).toEqual(['Anna Berg released the hold on about-us EN']);
+  expect(sentences(root)).toEqual(['Anna Berg released the hold on about-us EN.']);
 });
 
 test('an upload reads as a sentence, named by the file it was chosen as', async () => {
@@ -795,8 +833,8 @@ test('the two removals and a restore each read as their own sentence', async () 
 
   expect(sentences(root)).toEqual([
     'Anna Berg deleted mill-house (EN, DE). d1b2c3d',
-    'Anna Berg turned DE off for harbour-flat EN e1b2c3d',
-    'Anna Berg restored mill-house EN f1b2c3d',
+    'Anna Berg turned DE off for harbour-flat EN. e1b2c3d',
+    'Anna Berg restored mill-house EN. f1b2c3d',
     'Anna Berg undid a publish. a2b2c3d',
   ]);
   expect(root.querySelectorAll('.said a').length).toBe(2);
@@ -856,6 +894,13 @@ test('a refused restore says what the server said', async () => {
   (root.querySelector('li .meta button') as HTMLButtonElement).click();
   await settle();
 
+  expect(root.querySelector('.notice-warn')?.textContent).toContain('has changed since');
+
+  props.uiLocale = 'de';
+  flushSync();
+  expect(root.querySelector('.notice-warn')?.textContent).toContain(
+    'Es wurde nichts wiederhergestellt.',
+  );
   expect(root.querySelector('.notice-warn')?.textContent).toContain('has changed since');
   expect(committed).not.toHaveBeenCalled();
 });

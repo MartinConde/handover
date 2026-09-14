@@ -775,6 +775,7 @@ const initial = $derived(
       <Activity
         role={session.role}
         mediaBase={session.mediaBase ?? ''}
+        {uiLocale}
         oncommitted={commitChanged}
       />
     {:else if path === '/admin/settings' && session.role === 'owner'}

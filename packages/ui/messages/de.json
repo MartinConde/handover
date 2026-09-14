@@ -233,6 +233,225 @@
   "dashboard_activity_failed": "Die letzten Aktivitäten sind nicht verfügbar. Das letzte Ergebnis ist möglicherweise veraltet.",
   "dashboard_activity_stale": "Die zuletzt gelesenen Aktivitäten werden angezeigt.",
   "dashboard_activity_empty": "Noch keine Aktivitäten aufgezeichnet.",
+  "activity_title": "Aktivität",
+  "activity_filter_kind": "Art",
+  "activity_all_kinds": "Alle Arten",
+  "activity_filter_person": "Person",
+  "activity_everyone": "Alle",
+  "activity_filter_entry": "Eintrag",
+  "activity_all_pages": "Alle Seiten",
+  "activity_clear_filters": "Filter löschen",
+  "activity_editor_scope": "Du siehst deine eigenen Aktivitäten. Eigentümer:innen sehen alle.",
+  "activity_load_failed_status": "Die Aktivitäten konnten nicht geladen werden ({status}).",
+  "activity_restore_failed_status": "Die Wiederherstellung ist fehlgeschlagen ({status}). Es wurde nichts geändert.",
+  "activity_restore_conflict": "Es wurde nichts wiederhergestellt. {detail}",
+  "activity_no_matches": "Keine Aktivitäten entsprechen diesen Filtern",
+  "activity_no_matches_hint": "In den letzten 180 Tagen wurde nichts gefunden. Ältere Einträge werden automatisch entfernt.",
+  "activity_empty": "Noch keine Aktivitäten aufgezeichnet",
+  "activity_empty_hint": "Anmeldungen, Einladungen und Veröffentlichungen erscheinen hier, sobald sie stattfinden.",
+  "activity_status_shown": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": { "p=one": "{count} Ereignis angezeigt", "p=other": "{count} Ereignisse angezeigt" }
+    }
+  ],
+  "activity_restore": "Wiederherstellen",
+  "activity_restoring": "Wird wiederhergestellt…",
+  "activity_why_failed": "Warum es fehlgeschlagen ist",
+  "activity_what_changed": "Was geändert wurde",
+  "activity_diff_failed": "Der Commit konnte nicht von GitHub gelesen werden.",
+  "activity_diff_empty": "Dieser Commit enthält keinen Eintrag.",
+  "activity_diff_more": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "…und {count} weiterer Eintrag in diesem Commit.",
+        "p=other": "…und {count} weitere Einträge in diesem Commit."
+      }
+    }
+  ],
+  "activity_load_more": "Mehr laden",
+  "activity_group_accounts": "Konten",
+  "activity_group_publishing": "Veröffentlichung",
+  "activity_group_entries": "Einträge",
+  "activity_group_media": "Medien",
+  "activity_group_site": "Website",
+  "activity_group_settings": "Einstellungen",
+  "activity_group_system": "System",
+  "activity_actor_removed": "Ein entferntes Mitglied",
+  "activity_actor_system": "System",
+  "activity_actor_member": "ein Mitglied",
+  "activity_actor_somebody": "jemanden",
+  "activity_entry_unknown": "einen Eintrag",
+  "activity_template_unknown": "eine Vorlage",
+  "activity_language_unknown": "eine Sprache",
+  "activity_file_unknown": "eine Datei",
+  "activity_address_unknown": "einer Adresse",
+  "activity_login_password": "{actor} hat sich mit einem Passwort angemeldet.",
+  "activity_login_link": "{actor} hat sich über einen E-Mail-Link angemeldet.",
+  "activity_login_github": "{actor} hat sich über GitHub angemeldet.",
+  "activity_login": "{actor} hat sich angemeldet.",
+  "activity_invite_owner": "{actor} hat {email} als Eigentümer:in eingeladen.",
+  "activity_invite_editor": "{actor} hat {email} als Redakteur:in eingeladen.",
+  "activity_invite_member": "{actor} hat {email} als Mitglied eingeladen.",
+  "activity_role_owner": "{actor} hat {member} zum Eigentümer oder zur Eigentümerin gemacht.",
+  "activity_role_editor": "{actor} hat {member} zum Redakteur oder zur Redakteurin gemacht.",
+  "activity_role_member": "{actor} hat die Rolle von {member} geändert.",
+  "activity_invite_revoked": "{actor} hat die Einladung an {email} zurückgezogen.",
+  "activity_member_removed": "{actor} hat {email} entfernt.",
+  "activity_password_first": "{actor} hat das erste Passwort festgelegt.",
+  "activity_password_changed": "{actor} hat das Passwort geändert.",
+  "activity_password_reset": "{actor} hat das Passwort zurückgesetzt.",
+  "activity_password_set": "{actor} hat das Passwort festgelegt.",
+  "activity_publish_entry": "{entry} wurde von {actor} veröffentlicht.",
+  "activity_publish_files": [
+    {
+      "declarations": ["input actor", "input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{actor} hat {count} Datei veröffentlicht.",
+        "p=other": "{actor} hat {count} Dateien veröffentlicht."
+      }
+    }
+  ],
+  "activity_publish_several": "{actor} hat mehrere Dateien veröffentlicht.",
+  "activity_publish_failed": "Veröffentlichung fehlgeschlagen: Das Repository hat die Aktualisierung abgelehnt.",
+  "activity_publish_ref_moved": "Eine andere Änderung hat das Repository zuerst erreicht. Es wurde nichts geschrieben; eine erneute Veröffentlichung baut darauf auf.",
+  "activity_publish_refused": "Das Repository hat den Commit abgelehnt. Es wurde nichts geschrieben.",
+  "activity_publish_conflict_entry": "Veröffentlichung angehalten: Jemand anderes hatte {entry} geändert.",
+  "activity_publish_conflict_files": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "Veröffentlichung angehalten: {count} Datei hatte sich im Repository geändert.",
+        "p=other": "Veröffentlichung angehalten: {count} Dateien hatten sich im Repository geändert."
+      }
+    }
+  ],
+  "activity_publish_conflict_reason": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "Diese Datei wurde nach dem Öffnen im Repository geändert. Es wurde nichts geschrieben: Verwirf den Entwurf im Bereich „Unveröffentlichte Änderungen“ und veröffentliche erneut.",
+        "p=other": "{count} Dateien wurden nach dem Öffnen im Repository geändert. Es wurde nichts geschrieben: Verwirf diese Entwürfe im Bereich „Unveröffentlichte Änderungen“ und veröffentliche erneut."
+      }
+    }
+  ],
+  "activity_draft_restored": "{actor} hat eine ältere Version über die unveröffentlichten Änderungen an {entry} wiederhergestellt.",
+  "activity_draft_discarded": "{actor} hat die unveröffentlichten Änderungen an {entry} verworfen.",
+  "activity_draft_restored_unknown": "{actor} hat bei einem Eintrag eine ältere Version über die unveröffentlichten Änderungen wiederhergestellt.",
+  "activity_draft_discarded_unknown": "{actor} hat die unveröffentlichten Änderungen an einem Eintrag verworfen.",
+  "activity_hold_released_named": "{actor} hat die Zurückstellung von {from} für {entry} aufgehoben.",
+  "activity_hold_released": "{actor} hat die Zurückstellung für {entry} aufgehoben.",
+  "activity_hold_released_named_unknown": "{actor} hat die Zurückstellung von {from} aufgehoben.",
+  "activity_hold_released_unknown": "{actor} hat die Zurückstellung aufgehoben.",
+  "activity_lock_takeover_named": "{actor} hat die Bearbeitung von {entry} von {from} übernommen.",
+  "activity_lock_takeover": "{actor} hat die Bearbeitung von {entry} übernommen.",
+  "activity_lock_takeover_unknown": "{actor} hat die Bearbeitung eines Eintrags übernommen.",
+  "activity_setting_deepl_set": "{actor} hat den DeepL-Schlüssel festgelegt.",
+  "activity_setting_deepl_replaced": "{actor} hat den DeepL-Schlüssel ersetzt.",
+  "activity_setting_deepl_removed": "{actor} hat den DeepL-Schlüssel entfernt.",
+  "activity_setting_assist_set": "{actor} hat den Schlüssel für Schreibhilfe festgelegt.",
+  "activity_setting_assist_replaced": "{actor} hat den Schlüssel für Schreibhilfe ersetzt.",
+  "activity_setting_assist_removed": "{actor} hat den Schlüssel für Schreibhilfe entfernt.",
+  "activity_setting_key_set": "{actor} hat einen Schlüssel festgelegt.",
+  "activity_setting_key_replaced": "{actor} hat einen Schlüssel ersetzt.",
+  "activity_setting_key_removed": "{actor} hat einen Schlüssel entfernt.",
+  "activity_setting_key_changed": "{actor} hat einen Schlüssel geändert.",
+  "activity_entry_renamed": "{actor} hat {from} in {entry} umbenannt.",
+  "activity_entry_renamed_unknown": "{actor} hat {from} umbenannt.",
+  "activity_entry_duplicated": "{actor} hat {from} als {entry} dupliziert.",
+  "activity_entry_duplicated_unknown": "{actor} hat {from} dupliziert.",
+  "activity_template_saved": "{actor} hat die Vorlage {template} aus {entry} gespeichert.",
+  "activity_template_saved_unknown": "{actor} hat die Vorlage {template} gespeichert.",
+  "activity_entry_deleted_locales": "{actor} hat {entry} gelöscht ({locales}).",
+  "activity_entry_deleted": "{actor} hat {entry} gelöscht.",
+  "activity_locale_disabled": "{actor} hat {locales} für {entry} deaktiviert.",
+  "activity_locale_disabled_unknown": "{actor} hat {locales} für einen Eintrag deaktiviert.",
+  "activity_publish_undone": "{actor} hat eine Veröffentlichung rückgängig gemacht.",
+  "activity_entry_restored": "{entry} wurde von {actor} wiederhergestellt.",
+  "activity_files_restored": [
+    {
+      "declarations": ["input actor", "input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{actor} hat {count} Datei wiederhergestellt.",
+        "p=other": "{actor} hat {count} Dateien wiederhergestellt."
+      }
+    }
+  ],
+  "activity_uploaded": "{actor} hat {name} hochgeladen.",
+  "activity_media_archived": "{actor} hat {name} archiviert.",
+  "activity_media_unarchived": "{actor} hat {name} aus dem Archiv genommen.",
+  "activity_media_deleted": "{actor} hat {name} aus dem Speicher gelöscht.",
+  "activity_redirect_added": "{actor} hat eine Weiterleitung von {from} hinzugefügt.",
+  "activity_redirect_changed": "{actor} hat die Weiterleitung von {from} geändert.",
+  "activity_redirect_deleted": "{actor} hat die Weiterleitung von {from} gelöscht.",
+  "activity_mail_sign_in_failed": "Ein Anmeldelink konnte nicht gesendet werden.",
+  "activity_mail_invite_failed": "Eine Einladung konnte nicht gesendet werden.",
+  "activity_mail_reset_failed": "Eine E-Mail zum Zurücksetzen des Passworts konnte nicht gesendet werden.",
+  "activity_mail_failed": "Eine Nachricht konnte nicht gesendet werden.",
+  "activity_cron_reconcile": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "Die stündliche Medienprüfung hat {count} fehlenden Upload erfasst.",
+        "p=other": "Die stündliche Medienprüfung hat {count} fehlende Uploads erfasst."
+      }
+    }
+  ],
+  "activity_cron_retention": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "Die tägliche Bereinigung hat {count} Aktivität entfernt, die älter als 180 Tage war.",
+        "p=other": "Die tägliche Bereinigung hat {count} Aktivitäten entfernt, die älter als 180 Tage waren."
+      }
+    }
+  ],
+  "activity_cron_orphans": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "Die tägliche Bereinigung hat {count} Entwurf verworfen, dessen Datei nicht mehr im Repository liegt.",
+        "p=other": "Die tägliche Bereinigung hat {count} Entwürfe verworfen, deren Dateien nicht mehr im Repository liegen."
+      }
+    }
+  ],
+  "activity_cron_hidden": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "Die tägliche Prüfung ausgeblendeter Seiten hat {count} Seite gefunden, die seit mehr als 90 Tagen ausgeblendet ist.",
+        "p=other": "Die tägliche Prüfung ausgeblendeter Seiten hat {count} Seiten gefunden, die seit mehr als 90 Tagen ausgeblendet sind."
+      }
+    }
+  ],
+  "activity_cron_reconcile_failed": "Die stündliche Medienprüfung ist fehlgeschlagen: {error}.",
+  "activity_cron_retention_failed": "Die tägliche Aktivitätsbereinigung ist fehlgeschlagen: {error}.",
+  "activity_cron_orphans_failed": "Die tägliche Entwurfsbereinigung ist fehlgeschlagen: {error}.",
+  "activity_cron_hidden_failed": "Die tägliche Prüfung ausgeblendeter Seiten ist fehlgeschlagen: {error}.",
+  "activity_cron_unknown": [
+    {
+      "declarations": ["input job", "input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "Der Job {job} wurde ausgeführt und hat {count} Vorgang erledigt.",
+        "p=other": "Der Job {job} wurde ausgeführt und hat {count} Vorgänge erledigt."
+      }
+    }
+  ],
+  "activity_cron_unknown_failed": "Der Job {job} ist fehlgeschlagen: {error}.",
+  "activity_unknown_entry": "{entry}: {actor} — {kind}",
+  "activity_unknown": "{actor} — {kind}",
   "entry_list_new": "Neu in {collection}",
   "entry_list_count_filtered": "{shown} von {total}",
   "entry_list_tabs_label": "Ansichten für {collection}",

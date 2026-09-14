@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate the activity log and dashboard activity rows into English and German, including whole
+  event sentences, filters, group labels, plural counts, dates, accessibility labels, empty states,
+  commit details and retained restore/load recovery. Catalogs control where a linked entry appears,
+  so German does not inherit English word order; live switching keeps rows, filters, expanded diffs,
+  commits and event data in place without another activity read or translated data write.
+
 - Translate the field-by-field conflict resolver into English and German, including choices,
   merged-change explanations, timestamps, accessibility labels and recovery. Stable conflict
   response codes distinguish a settled or changed report, stale answers and an unreachable

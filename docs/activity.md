@@ -53,6 +53,19 @@ not a way to find out who else has an account.
 `/admin/activity`, under *Manage* in the sidebar. Both roles are offered it — an editor sees
 their own events, which is the filter above and not a hidden tab.
 
+The screen and the dashboard's recent-activity rows follow the signed-in account's
+[interface language](interface-language.md). Switching between English and German re-renders the
+existing rows, group names, filters, empty and recovery states, relative and exact dates, plural
+counts, and open commit details in place. It does not reread the activity endpoint, collapse an
+open diff, clear a filter, or alter any stored event. Names, email addresses, file names, commit
+identifiers, content-language codes, unknown event kinds, and diagnostic detail remain the exact
+recorded values.
+
+Each known event is translated as a complete sentence rather than assembled from translated verb,
+role, and method fragments. That lets a linked entry move to the position natural for each
+language. Historical or newer event kinds that this version does not recognise still show the
+actor, raw kind, and a usable entry link when their subject is a known content path.
+
 A row is a sentence, not a table cell:
 
 ```
@@ -64,8 +77,9 @@ A cron job has no person, so it gets a grey gear; somebody who has been removed 
 their events and gets a quiet ring, because the log outlives the account and drawing them as
 the system would say a person's sign-in was a machine's.
 
-**A time stops counting backwards after a week.** *Just now*, *20 min ago*, *4h ago*,
-*Yesterday*, *3 days ago* — and then the date, `16 Aug 2026`, because "1 week ago" is not
+**A time stops counting backwards after a week.** The relative wording comes from the selected
+interface language — for example *now*, *20 min ago*, *2 hr ago*, *yesterday*, *3 days ago* in
+English — and then becomes a localized date such as `16 Aug 2026`, because "1 week ago" is not
 something an audit can be read off. The day buckets are calendar days, so an event at 23:00
 reads as *Yesterday* from 01:00 and not as *2 days ago*. The exact instant is in the row's
 `<time datetime>` and in the tooltip; it is not spoken by a screen reader, which reads the
@@ -102,7 +116,7 @@ Three filters, all of them the server's:
 
 | Filter | Takes |
 |---|---|
-| Kind | One of the six groups. The chip on a row is the same word |
+| Kind | One of the seven groups. The chip on a row is the same word |
 | Person | A member. **Owners only** — an editor is already looking at one person's events |
 | Entry | A file path, matched exactly. The box suggests the paths on screen and takes a typed or pasted one for anything older |
 
@@ -114,7 +128,7 @@ again from the newest — the cursor belongs to the query that produced it.
 
 **A kind with no sentence of its own still gets a row.** Kinds arrive with the features that
 write them, and the screen names one it does not recognise rather than throwing:
-*Anna Berg — entry-archived contact EN*. Adding the sentence is one line beside the others.
+*Anna Berg — entry-archived: contact EN*. Adding the sentence is one catalog entry beside the others.
 
 ## Reading it from your own code
 

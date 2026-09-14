@@ -1,11 +1,10 @@
 <script lang="ts">
 import type { ActivityEvent } from '@handover/core';
-import { activityGroupOf } from '@handover/core';
 import NewEntry, { nameOf } from '../content/NewEntry.svelte';
 import { formatExactTime, formatRelativeTime, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
-import { initials, said } from '../shared/activity-line';
+import { activityGroupLabel, initials, said } from '../shared/activity-line';
 import BuildPill, { type Build } from './BuildPill.svelte';
 
 type Recent = {
@@ -324,19 +323,18 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
       {:else if events.length}
         <ul class="activity">
           {#each events as event (event.id)}
-            {@const line = said(event)}
+            {@const line = said(event, [], uiLocale)}
             <li>
               <div class="activity-row">
                 <span class="avatar avatar-sm" class:is-system={!event.user} aria-hidden="true"
                   >{event.user ? initials(event) || '?' : '⚙'}</span
                 >
                 <p class="said">
-                  {line.lead}{#if line.link}<a href={sitePath(line.link.href)}>{line.link.label}</a>
-                    <span class="sub">{line.link.locale.toUpperCase()}</span>{/if}
+                  {line.lead}{#if line.link}<a href={sitePath(line.link.href)}>{line.link.label}</a>{' '}<span class="sub">{line.link.locale.toUpperCase()}</span>{line.tail ?? ''}{/if}
                 </p>
                 <span class="meta">
-                  {#if activityGroupOf(event.kind)}
-                    <span class="badge">{activityGroupOf(event.kind)}</span>
+                  {#if activityGroupLabel(event.kind, uiLocale)}
+                    <span class="badge">{activityGroupLabel(event.kind, uiLocale)}</span>
                   {/if}
                   <time class="when" datetime={new Date(event.at).toISOString()} title={formatExactTime(event.at, uiLocale)}
                     >{formatRelativeTime(event.at, uiLocale)}</time

@@ -230,6 +230,225 @@
   "dashboard_activity_failed": "Recent activity is unavailable. The last result may be out of date.",
   "dashboard_activity_stale": "Showing the last activity read.",
   "dashboard_activity_empty": "Nothing has been recorded yet.",
+  "activity_title": "Activity",
+  "activity_filter_kind": "Kind",
+  "activity_all_kinds": "All kinds",
+  "activity_filter_person": "Person",
+  "activity_everyone": "Everyone",
+  "activity_filter_entry": "Entry",
+  "activity_all_pages": "All pages",
+  "activity_clear_filters": "Clear filters",
+  "activity_editor_scope": "Showing your own activity. Owners see everyone's.",
+  "activity_load_failed_status": "Could not load the activity ({status}).",
+  "activity_restore_failed_status": "That was not restored ({status}). Nothing was changed.",
+  "activity_restore_conflict": "Nothing was restored. {detail}",
+  "activity_no_matches": "No activity matches these filters",
+  "activity_no_matches_hint": "Nothing in the last 180 days. Anything older is removed automatically.",
+  "activity_empty": "Nothing has been recorded yet",
+  "activity_empty_hint": "Sign-ins, invites and publishes appear here as they happen.",
+  "activity_status_shown": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": { "p=one": "{count} event shown", "p=other": "{count} events shown" }
+    }
+  ],
+  "activity_restore": "Restore",
+  "activity_restoring": "Restoring…",
+  "activity_why_failed": "Why it failed",
+  "activity_what_changed": "What changed",
+  "activity_diff_failed": "The commit could not be read from GitHub.",
+  "activity_diff_empty": "Nothing in this commit is an entry.",
+  "activity_diff_more": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "…and {count} more entry in this commit.",
+        "p=other": "…and {count} more entries in this commit."
+      }
+    }
+  ],
+  "activity_load_more": "Load more",
+  "activity_group_accounts": "Accounts",
+  "activity_group_publishing": "Publishing",
+  "activity_group_entries": "Entries",
+  "activity_group_media": "Media",
+  "activity_group_site": "Site",
+  "activity_group_settings": "Settings",
+  "activity_group_system": "System",
+  "activity_actor_removed": "A removed member",
+  "activity_actor_system": "System",
+  "activity_actor_member": "a member",
+  "activity_actor_somebody": "somebody",
+  "activity_entry_unknown": "an entry",
+  "activity_template_unknown": "a template",
+  "activity_language_unknown": "a language",
+  "activity_file_unknown": "a file",
+  "activity_address_unknown": "an address",
+  "activity_login_password": "{actor} signed in with a password.",
+  "activity_login_link": "{actor} signed in with an email link.",
+  "activity_login_github": "{actor} signed in through GitHub.",
+  "activity_login": "{actor} signed in.",
+  "activity_invite_owner": "{actor} invited {email} as an owner.",
+  "activity_invite_editor": "{actor} invited {email} as an editor.",
+  "activity_invite_member": "{actor} invited {email} as a member.",
+  "activity_role_owner": "{actor} made {member} an owner.",
+  "activity_role_editor": "{actor} made {member} an editor.",
+  "activity_role_member": "{actor} changed {member}'s role.",
+  "activity_invite_revoked": "{actor} revoked the invite to {email}.",
+  "activity_member_removed": "{actor} removed {email}.",
+  "activity_password_first": "{actor} set their first password.",
+  "activity_password_changed": "{actor} changed their password.",
+  "activity_password_reset": "{actor} reset their password.",
+  "activity_password_set": "{actor} set their password.",
+  "activity_publish_entry": "{actor} published {entry}.",
+  "activity_publish_files": [
+    {
+      "declarations": ["input actor", "input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{actor} published {count} file.",
+        "p=other": "{actor} published {count} files."
+      }
+    }
+  ],
+  "activity_publish_several": "{actor} published several files.",
+  "activity_publish_failed": "Publish failed: the repository refused the update.",
+  "activity_publish_ref_moved": "Another change reached the repository first. Nothing was written, and publishing again writes on top of it.",
+  "activity_publish_refused": "The repository would not take the commit. Nothing was written.",
+  "activity_publish_conflict_entry": "Publish stopped: somebody else had changed {entry}.",
+  "activity_publish_conflict_files": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "Publish stopped: {count} file had changed in the repository.",
+        "p=other": "Publish stopped: {count} files had changed in the repository."
+      }
+    }
+  ],
+  "activity_publish_conflict_reason": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "That file had changed in the repository after it was opened. Nothing was written: discard the draft in the pending-changes drawer, then publish again.",
+        "p=other": "{count} files had changed in the repository after they were opened. Nothing was written: discard those drafts in the pending-changes drawer, then publish again."
+      }
+    }
+  ],
+  "activity_draft_restored": "{actor} restored an older version over the unpublished changes to {entry}.",
+  "activity_draft_discarded": "{actor} discarded the unpublished changes to {entry}.",
+  "activity_draft_restored_unknown": "{actor} restored an older version over the unpublished changes to an entry.",
+  "activity_draft_discarded_unknown": "{actor} discarded the unpublished changes to an entry.",
+  "activity_hold_released_named": "{actor} released {from}'s hold on {entry}.",
+  "activity_hold_released": "{actor} released the hold on {entry}.",
+  "activity_hold_released_named_unknown": "{actor} released {from}'s hold.",
+  "activity_hold_released_unknown": "{actor} released the hold.",
+  "activity_lock_takeover_named": "{actor} took over {from}'s editing of {entry}.",
+  "activity_lock_takeover": "{actor} took over editing of {entry}.",
+  "activity_lock_takeover_unknown": "{actor} took over an entry.",
+  "activity_setting_deepl_set": "{actor} set the DeepL key.",
+  "activity_setting_deepl_replaced": "{actor} replaced the DeepL key.",
+  "activity_setting_deepl_removed": "{actor} removed the DeepL key.",
+  "activity_setting_assist_set": "{actor} set the writing help key.",
+  "activity_setting_assist_replaced": "{actor} replaced the writing help key.",
+  "activity_setting_assist_removed": "{actor} removed the writing help key.",
+  "activity_setting_key_set": "{actor} set a key.",
+  "activity_setting_key_replaced": "{actor} replaced a key.",
+  "activity_setting_key_removed": "{actor} removed a key.",
+  "activity_setting_key_changed": "{actor} changed a key.",
+  "activity_entry_renamed": "{actor} renamed {from} to {entry}.",
+  "activity_entry_renamed_unknown": "{actor} renamed {from}.",
+  "activity_entry_duplicated": "{actor} duplicated {from} as {entry}.",
+  "activity_entry_duplicated_unknown": "{actor} duplicated {from}.",
+  "activity_template_saved": "{actor} saved the template {template} from {entry}.",
+  "activity_template_saved_unknown": "{actor} saved the template {template}.",
+  "activity_entry_deleted_locales": "{actor} deleted {entry} ({locales}).",
+  "activity_entry_deleted": "{actor} deleted {entry}.",
+  "activity_locale_disabled": "{actor} turned {locales} off for {entry}.",
+  "activity_locale_disabled_unknown": "{actor} turned {locales} off for an entry.",
+  "activity_publish_undone": "{actor} undid a publish.",
+  "activity_entry_restored": "{actor} restored {entry}.",
+  "activity_files_restored": [
+    {
+      "declarations": ["input actor", "input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{actor} restored {count} file.",
+        "p=other": "{actor} restored {count} files."
+      }
+    }
+  ],
+  "activity_uploaded": "{actor} uploaded {name}.",
+  "activity_media_archived": "{actor} archived {name}.",
+  "activity_media_unarchived": "{actor} took {name} out of the archive.",
+  "activity_media_deleted": "{actor} deleted {name} from storage.",
+  "activity_redirect_added": "{actor} added a redirect from {from}.",
+  "activity_redirect_changed": "{actor} changed the redirect from {from}.",
+  "activity_redirect_deleted": "{actor} deleted the redirect from {from}.",
+  "activity_mail_sign_in_failed": "A sign-in link could not be sent.",
+  "activity_mail_invite_failed": "An invite could not be sent.",
+  "activity_mail_reset_failed": "A password reset could not be sent.",
+  "activity_mail_failed": "A message could not be sent.",
+  "activity_cron_reconcile": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "The hourly media check recorded {count} upload the library had missed.",
+        "p=other": "The hourly media check recorded {count} uploads the library had missed."
+      }
+    }
+  ],
+  "activity_cron_retention": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "The daily clean-up removed {count} activity row older than 180 days.",
+        "p=other": "The daily clean-up removed {count} activity rows older than 180 days."
+      }
+    }
+  ],
+  "activity_cron_orphans": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "The daily clean-up discarded {count} draft whose file is no longer in the repository.",
+        "p=other": "The daily clean-up discarded {count} drafts whose files are no longer in the repository."
+      }
+    }
+  ],
+  "activity_cron_hidden": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "The daily hidden-page check found {count} page hidden for more than 90 days.",
+        "p=other": "The daily hidden-page check found {count} pages hidden for more than 90 days."
+      }
+    }
+  ],
+  "activity_cron_reconcile_failed": "The hourly media check failed: {error}.",
+  "activity_cron_retention_failed": "The daily activity clean-up failed: {error}.",
+  "activity_cron_orphans_failed": "The daily draft clean-up failed: {error}.",
+  "activity_cron_hidden_failed": "The daily hidden-page check failed: {error}.",
+  "activity_cron_unknown": [
+    {
+      "declarations": ["input job", "input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "The {job} job ran and did {count} thing.",
+        "p=other": "The {job} job ran and did {count} things."
+      }
+    }
+  ],
+  "activity_cron_unknown_failed": "The {job} job failed: {error}.",
+  "activity_unknown_entry": "{actor} — {kind}: {entry}",
+  "activity_unknown": "{actor} — {kind}",
   "entry_list_new": "New {collection}",
   "entry_list_count_filtered": "{shown} of {total}",
   "entry_list_tabs_label": "Views for {collection}",

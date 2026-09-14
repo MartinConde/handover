@@ -1,31 +1,31 @@
 <script lang="ts">
-import {
-  ACTIVITY_GROUPS,
-  type ActivityEvent,
-  activityGroupOf,
-  type DiffGroup,
-} from '@handover/core';
+import { ACTIVITY_GROUPS, type ActivityEvent, type DiffGroup } from '@handover/core';
+import { formatExactTime, formatRelativeTime, messageOptions, type UiLocale } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 import Diff from '../publishing/Diff.svelte';
 import { request as fetch, sitePath } from '../request.js';
-import { ENTRY, EXACT, initials, type Person, said, when } from '../shared/activity-line';
+import { activityGroupLabel, ENTRY, initials, type Person, said } from '../shared/activity-line';
 
 let {
   role,
   mediaBase = '',
+  uiLocale = 'en',
   oncommitted,
 }: {
   role: 'owner' | 'editor';
   /** Where a stored media key is served from, for a replaced picture's thumbnails. */
   mediaBase?: string;
+  uiLocale?: UiLocale;
   /** Restoring a removed entry makes a new commit, so the shell can refresh its build state. */
   oncommitted?: () => void | Promise<void>;
 } = $props();
+const options = $derived(messageOptions(uiLocale));
 
 let events = $state<ActivityEvent[]>([]);
 let cursor = $state<string | null>(null);
 let loading = $state(true);
 let more = $state(false);
-let failure = $state('');
+let failure = $state<number>();
 let people = $state<Person[]>([]);
 
 /** The typed box is separate, so the entry filter applies on change, not every keystroke. */
@@ -39,17 +39,17 @@ const status = $derived(
   loading
     ? ''
     : events.length
-      ? `${events.length} event${events.length === 1 ? '' : 's'} shown`
+      ? m.activity_status_shown({ count: events.length }, options)
       : filtered
-        ? 'No activity matches these filters'
-        : 'Nothing has been recorded yet',
+        ? m.activity_no_matches({}, options)
+        : m.activity_empty({}, options),
 );
 
 /** A page that is no longer the one being asked for must not land in the list. */
 let asked = 0;
 /** The removal being put back, and what the server said if it would not be. */
 let putting = $state('');
-let refused = $state('');
+let refused = $state<{ status: number; detail?: string }>();
 /** Which row is open — one at a time, the way the log reads. */
 let why = $state('');
 /** What each publish row's commit changed, read from the server the first time it is opened. */
@@ -100,10 +100,10 @@ async function load(next?: string | null) {
   more = false;
   loading = false;
   if (!res.ok) {
-    failure = `Could not load the activity (${res.status}).`;
+    failure = res.status;
     return;
   }
-  failure = '';
+  failure = undefined;
   const page = (await res.json()) as { events: ActivityEvent[]; cursor: string | null };
   events = next ? [...events, ...page.events] : page.events;
   cursor = page.cursor;
@@ -112,7 +112,7 @@ async function load(next?: string | null) {
 /** No confirmation: it only puts files back; the one overwrite case the server refuses. */
 async function putBack(event: ActivityEvent) {
   putting = event.id;
-  refused = '';
+  refused = undefined;
   const res = await fetch('/admin/api/restore', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -121,11 +121,16 @@ async function putBack(event: ActivityEvent) {
   putting = '';
   if (!res.ok) {
     const body = await res.text();
-    // A file that has moved on since is the server's own sentence, and it names the file.
-    refused =
-      res.status === 409
-        ? ((JSON.parse(body.startsWith('{') ? body : '{}') as { error?: string }).error ?? body)
-        : `That was not restored (${res.status}). Nothing was changed.`;
+    let detail = body;
+    if (body.startsWith('{')) {
+      try {
+        const error = (JSON.parse(body) as { error?: unknown }).error;
+        detail = typeof error === 'string' ? error : body;
+      } catch {
+        // Preserve the response as diagnostics; malformed JSON must not break the recovery state.
+      }
+    }
+    refused = { status: res.status, detail: res.status === 409 && detail ? detail : undefined };
     return;
   }
   await load();
@@ -145,34 +150,34 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
 
 <main class="main">
   <div class="list-toolbar">
-    <h1>Activity</h1>
+    <h1>{m.activity_title({}, options)}</h1>
     <span class="spacer"></span>
     <div class="filters">
       <!-- A native select brings its own keyboard, typeahead and the phone's picker. -->
-      <label class="visually-hidden" for="activity-group">Kind</label>
+      <label class="visually-hidden" for="activity-group">{m.activity_filter_kind({}, options)}</label>
       <select class="filter" class:is-on={group} id="activity-group" bind:value={group}>
-        <option value="">All kinds</option>
+        <option value="">{m.activity_all_kinds({}, options)}</option>
         {#each Object.keys(ACTIVITY_GROUPS) as name (name)}
-          <option value={name}>{name}</option>
+          <option value={name}>{activityGroupLabel(ACTIVITY_GROUPS[name as keyof typeof ACTIVITY_GROUPS][0], uiLocale)}</option>
         {/each}
       </select>
       {#if role === 'owner'}
-        <label class="visually-hidden" for="activity-person">Person</label>
+        <label class="visually-hidden" for="activity-person">{m.activity_filter_person({}, options)}</label>
         <select class="filter" class:is-on={person} id="activity-person" bind:value={person}>
-          <option value="">Everyone</option>
+          <option value="">{m.activity_everyone({}, options)}</option>
           {#each people as member (member.id)}
             <option value={member.id}>{member.name || member.email}</option>
           {/each}
         </select>
       {/if}
       <!-- The server matches `subject` exactly, a file path, so the box takes one. -->
-      <label class="visually-hidden" for="activity-entry">Entry</label>
+      <label class="visually-hidden" for="activity-entry">{m.activity_filter_entry({}, options)}</label>
       <input
         class="input filter-text"
         id="activity-entry"
         type="text"
         list="activity-entries"
-        placeholder="All pages"
+        placeholder={m.activity_all_pages({}, options)}
         bind:value={typed}
         onchange={() => (entry = typed.trim())}
       />
@@ -182,35 +187,35 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
         {/each}
       </datalist>
       {#if filtered}
-        <button class="btn btn-sm" type="button" onclick={clear}>Clear filters</button>
+        <button class="btn btn-sm" type="button" onclick={clear}>{m.activity_clear_filters({}, options)}</button>
       {/if}
     </div>
   </div>
   <p class="visually-hidden" role="status">{status}</p>
   {#if role !== 'owner'}
-    <p class="list-note">Showing your own activity. Owners see everyone's.</p>
+    <p class="list-note">{m.activity_editor_scope({}, options)}</p>
   {/if}
-  {#if failure}<p class="notice notice-danger" role="alert">{failure}</p>{/if}
-  {#if refused}<p class="notice notice-warn" role="alert">{refused}</p>{/if}
+  {#if failure}<p class="notice notice-danger" role="alert">{m.activity_load_failed_status({ status: failure }, options)}</p>{/if}
+  {#if refused}<p class="notice notice-warn" role="alert">{refused.detail ? m.activity_restore_conflict({ detail: refused.detail }, options) : m.activity_restore_failed_status({ status: refused.status }, options)}</p>{/if}
   {#if loading}
-    <p class="placeholder">Loading…</p>
+    <p class="placeholder">{m.common_loading({}, options)}</p>
   {:else if events.length === 0}
     <div class="empty">
       <div>
         {#if filtered}
-          <h2>No activity matches these filters</h2>
-          <p>Nothing in the last 180 days. Anything older is removed automatically.</p>
-          <button class="btn" type="button" onclick={clear}>Clear filters</button>
+          <h2>{m.activity_no_matches({}, options)}</h2>
+          <p>{m.activity_no_matches_hint({}, options)}</p>
+          <button class="btn" type="button" onclick={clear}>{m.activity_clear_filters({}, options)}</button>
         {:else}
-          <h2>Nothing has been recorded yet</h2>
-          <p>Sign-ins, invites and publishes appear here as they happen.</p>
+          <h2>{m.activity_empty({}, options)}</h2>
+          <p>{m.activity_empty_hint({}, options)}</p>
         {/if}
       </div>
     </div>
   {:else}
     <ol class="activity">
       {#each events as event (event.id)}
-        {@const line = said(event, people)}
+        {@const line = said(event, people, uiLocale)}
         <li>
           <div class="activity-row">
             <span
@@ -220,8 +225,7 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
               aria-hidden="true">{event.user ? initials(event) || '?' : '⚙'}</span
             >
             <p class="said">
-              {line.lead}{#if line.link}<a href={sitePath(line.link.href)}>{line.link.label}</a>
-                <span class="sub">{line.link.locale.toUpperCase()}</span>{/if}
+              {line.lead}{#if line.link}<a href={sitePath(line.link.href)}>{line.link.label}</a>{' '}<span class="sub">{line.link.locale.toUpperCase()}</span>{line.tail ?? ''}{/if}
               {#if event.commitSha}<span class="sub sha">{event.commitSha.slice(0, 7)}</span>{/if}
             </p>
             <span class="meta">
@@ -232,14 +236,14 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
                   type="button"
                   disabled={putting === event.id}
                   onclick={() => putBack(event)}
-                  >{putting === event.id ? 'Restoring…' : 'Restore'}</button
+                  >{putting === event.id ? m.activity_restoring({}, options) : m.activity_restore({}, options)}</button
                 >
               {/if}
-              {#if activityGroupOf(event.kind)}
-                <span class="badge">{activityGroupOf(event.kind)}</span>
+              {#if activityGroupLabel(event.kind, uiLocale)}
+                <span class="badge">{activityGroupLabel(event.kind, uiLocale)}</span>
               {/if}
-              <time class="when" datetime={new Date(event.at).toISOString()} title={EXACT.format(event.at)}
-                >{when(event.at)}</time
+              <time class="when" datetime={new Date(event.at).toISOString()} title={formatExactTime(event.at, uiLocale)}
+                >{formatRelativeTime(event.at, uiLocale)}</time
               >
               <!-- Empty on every other row, which is what keeps the column straight. -->
               <span class="expand">
@@ -249,7 +253,7 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
                     type="button"
                     aria-expanded={why === event.id}
                     aria-controls="why-{event.id}"
-                    aria-label="{line.reason ? 'Why it failed' : 'What changed'}, {when(event.at)}"
+                    aria-label="{line.reason ? m.activity_why_failed({}, options) : m.activity_what_changed({}, options)}, {formatRelativeTime(event.at, uiLocale)}"
                     onclick={() => toggle(event)}
                     >{why === event.id ? '▾' : '▸'}</button
                   >
@@ -265,20 +269,20 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
             {@const changed = diffs[event.id]}
             <div class="activity-detail" id="why-{event.id}" hidden={why !== event.id}>
               {#if changed === undefined || changed === 'loading'}
-                <p>Loading…</p>
+                <p>{m.common_loading({}, options)}</p>
               {:else if changed === 'failed'}
-                <p>The commit could not be read from GitHub.</p>
+                <p>{m.activity_diff_failed({}, options)}</p>
               {:else if changed.entries.length === 0}
-                <p>Nothing in this commit is an entry.</p>
+                <p>{m.activity_diff_empty({}, options)}</p>
               {:else}
                 {#each changed.entries as entry (entry.key)}
                   <section>
                     <h2><a href={sitePath(hrefOf(entry.key))}>{entry.key.split('/')[1]}</a></h2>
-                    <Diff groups={entry.groups} {mediaBase} />
+                    <Diff groups={entry.groups} {mediaBase} {uiLocale} />
                   </section>
                 {/each}
                 {#if changed.more}
-                  <p>…and {changed.more} more {changed.more === 1 ? 'entry' : 'entries'} in this commit.</p>
+                  <p>{m.activity_diff_more({ count: changed.more }, options)}</p>
                 {/if}
               {/if}
             </div>
@@ -289,7 +293,7 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
     {#if cursor}
       <div class="load-more">
         <button class="btn" type="button" disabled={more} onclick={() => load(cursor)}>
-          {more ? 'Loading…' : 'Load more'}
+          {more ? m.common_loading({}, options) : m.activity_load_more({}, options)}
         </button>
       </div>
     {/if}

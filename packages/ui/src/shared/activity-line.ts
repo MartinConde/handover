@@ -1,56 +1,39 @@
-import type { ActivityEvent } from '@handover/core';
+import { type ActivityEvent, type ActivityGroup, activityGroupOf } from '@handover/core';
+import { formatRelativeTime, messageOptions, type UiLocale } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 
 /** Both screens that draw the log share these sentences, so they never disagree. */
-
-// The only subject shape that is somewhere to go: an id on screen tells nobody anything.
 export const ENTRY = /^src\/content\/([\w-]+)\/([\w-]+)\/([\w-]+)\.yaml$/;
 const entryOf = (subject: string | null) => {
   const found = subject?.match(ENTRY);
   if (!found) return undefined;
   const [, collection = '', locale = '', name = ''] = found;
-  // A global is edited at its own address, not under a collection.
   const href = collection === 'globals' ? `/admin/site/${name}` : `/admin/c/${collection}/${name}`;
   return { href, label: name, locale };
 };
 
-/** `detail` is small json; every read is of one named key, never the blob. */
 const str = (detail: unknown, key: string): string | undefined => {
   const value = (detail as Record<string, unknown> | null | undefined)?.[key];
   return typeof value === 'string' ? value : undefined;
 };
 
-const METHOD: Record<string, string> = {
-  password: 'with a password',
-  link: 'with an email link',
-  github: 'through GitHub',
-};
-const ROLES: Record<string, string> = { owner: 'an owner', editor: 'an editor' };
-const HOW: Record<string, string> = {
-  first: 'set their first password',
-  changed: 'changed their password',
-  reset: 'reset their password',
-};
-/** The two keys a client owns, as the settings screen names them, and what can happen to one. */
-const INTEGRATIONS: Record<string, string> = {
-  deepl: 'DeepL key',
-  assist: 'writing help key',
-};
-const HOW_KEY: Record<string, string> = { set: 'set', replaced: 'replaced', removed: 'removed' };
-const MESSAGE: Record<string, string> = {
-  'sign-in link': 'A sign-in link',
-  invite: 'An invite',
-  'password reset': 'A password reset',
+export const who = (event: ActivityEvent, locale: UiLocale = 'en') =>
+  event.user
+    ? event.user.name || event.user.email || m.activity_actor_removed({}, messageOptions(locale))
+    : m.activity_actor_system({}, messageOptions(locale));
+
+const named = (
+  id: string | null,
+  people: Person[],
+  written: string | undefined,
+  locale: UiLocale,
+) => {
+  const found = people.find((person) => person.id === id);
+  return found
+    ? found.name || found.email
+    : written || m.activity_actor_member({}, messageOptions(locale));
 };
 
-export const who = (event: ActivityEvent) =>
-  event.user ? event.user.name || event.user.email || 'A removed member' : 'System';
-/** The subject is a member id; the owner's member list or the written name gives it a name. */
-const named = (id: string | null, people: Person[], written?: string) => {
-  const found = people.find((p) => p.id === id);
-  return found ? found.name || found.email : written || 'a member';
-};
-
-/** Whoever this admin knows about, which only an owner is given: an editor names nobody. */
 export interface Person {
   id: string;
   name: string;
@@ -60,208 +43,332 @@ export interface Person {
 export interface Said {
   lead: string;
   link?: { href: string; label: string; locale: string };
-  /** Why a publish was not made; the row opens on it, the way a publish row opens on its diff. */
+  tail?: string;
   reason?: string;
 }
 
-const REFUSED: Record<string, string> = {
-  'ref-moved':
-    'Another change reached the repository first. Nothing was written, and publishing again writes on top of it.',
-  refused: 'The repository would not take the commit. Nothing was written.',
+// Each catalog owns a complete sentence. This marker lets its grammar place the linked entry.
+const SUBJECT_MARKER = '\ue000activity-entry\ue001';
+const linked = (sentence: string, link: NonNullable<Said['link']>): Said => {
+  const at = sentence.indexOf(SUBJECT_MARKER);
+  if (at < 0) return { lead: `${sentence} `, link };
+  return { lead: sentence.slice(0, at), link, tail: sentence.slice(at + SUBJECT_MARKER.length) };
 };
-const changed = (files: number) =>
-  files === 1
-    ? 'That file had changed in the repository after it was opened. Nothing was written: discard the draft in the pending-changes drawer, then publish again.'
-    : `${files} files had changed in the repository after they were opened. Nothing was written: discard those drafts in the pending-changes drawer, then publish again.`;
-/** How many files a Publishing event was about, as its route wrote it down. */
+
 const count = (detail: unknown, key: 'files' | 'done' = 'files'): number => {
   const value = (detail as Record<string, unknown> | null | undefined)?.[key];
   return typeof value === 'number' ? value : 0;
 };
-/** The languages a removal took away, as the row that would put them back names them. */
+
+/** Language codes identify stored files, so presentation changes case but never translates them. */
 const went = (detail: unknown): string => {
   const value = (detail as { locales?: unknown } | null | undefined)?.locales;
-  return Array.isArray(value) ? value.map((l) => String(l).toUpperCase()).join(', ') : '';
+  return Array.isArray(value) ? value.map((locale) => String(locale).toUpperCase()).join(', ') : '';
 };
 
-/** What each cron job did, in the words of the screen it did it to. */
-const JOB_DID: Record<string, (n: number) => string> = {
-  reconcile: (n) =>
-    `The hourly media check recorded ${n} upload${n === 1 ? '' : 's'} the library had missed.`,
-  retention: (n) =>
-    `The daily clean-up removed ${n} activity row${n === 1 ? '' : 's'} older than 180 days.`,
-  orphans: (n) =>
-    `The daily clean-up discarded ${n} draft${n === 1 ? '' : 's'} whose file is no longer in the repository.`,
-  hidden: (n) =>
-    `The daily hidden-page check found ${n} page${n === 1 ? '' : 's'} hidden for more than 90 days.`,
-};
-const JOB_NAME: Record<string, string> = {
-  reconcile: 'hourly media check',
-  retention: 'daily activity clean-up',
-  orphans: 'daily draft clean-up',
-  hidden: 'daily hidden-page check',
-};
+export function activityGroupLabel(kind: string, locale: UiLocale = 'en'): string | undefined {
+  const options = messageOptions(locale);
+  const group = activityGroupOf(kind);
+  const labels: Record<ActivityGroup, string> = {
+    Accounts: m.activity_group_accounts({}, options),
+    Publishing: m.activity_group_publishing({}, options),
+    Entries: m.activity_group_entries({}, options),
+    Media: m.activity_group_media({}, options),
+    Site: m.activity_group_site({}, options),
+    Settings: m.activity_group_settings({}, options),
+    System: m.activity_group_system({}, options),
+  };
+  return group ? labels[group] : undefined;
+}
 
-export function said(event: ActivityEvent, people: Person[] = []): Said {
-  const actor = who(event);
-  const d = event.detail;
+export function said(event: ActivityEvent, people: Person[] = [], locale: UiLocale = 'en'): Said {
+  const options = messageOptions(locale);
+  const actor = who(event, locale);
+  const detail = event.detail;
+
   if (event.kind.startsWith('cron-')) {
     const job = event.kind.slice('cron-'.length);
-    const failed = str(d, 'error');
-    if (failed) return { lead: `The ${JOB_NAME[job] ?? `${job} job`} failed: ${failed}.` };
-    const n = count(d, 'done');
+    const failed = str(detail, 'error');
+    if (failed) {
+      const known = {
+        reconcile: m.activity_cron_reconcile_failed,
+        retention: m.activity_cron_retention_failed,
+        orphans: m.activity_cron_orphans_failed,
+        hidden: m.activity_cron_hidden_failed,
+      }[job];
+      return {
+        lead: known
+          ? known({ error: failed }, options)
+          : m.activity_cron_unknown_failed({ job, error: failed }, options),
+      };
+    }
+    const done = count(detail, 'done');
+    const known = {
+      reconcile: m.activity_cron_reconcile,
+      retention: m.activity_cron_retention,
+      orphans: m.activity_cron_orphans,
+      hidden: m.activity_cron_hidden,
+    }[job];
     return {
-      lead: JOB_DID[job]?.(n) ?? `The ${job} job ran and did ${n} thing${n === 1 ? '' : 's'}.`,
+      lead: known
+        ? known({ count: done }, options)
+        : m.activity_cron_unknown({ job, count: done }, options),
     };
   }
+
   switch (event.kind) {
     case 'login': {
-      const how = METHOD[str(d, 'method') ?? ''];
-      return { lead: how ? `${actor} signed in ${how}.` : `${actor} signed in.` };
+      const message = {
+        password: m.activity_login_password,
+        link: m.activity_login_link,
+        github: m.activity_login_github,
+      }[str(detail, 'method') ?? ''];
+      return { lead: (message ?? m.activity_login)({ actor }, options) };
     }
-    case 'invite':
-      return {
-        lead: `${actor} invited ${str(d, 'email') ?? 'somebody'} as ${ROLES[str(d, 'role') ?? ''] ?? 'a member'}.`,
-      };
-    case 'role-change':
-      return {
-        lead: `${actor} made ${named(event.subject, people, str(d, 'name'))} ${ROLES[str(d, 'role') ?? ''] ?? 'a member'}.`,
-      };
+    case 'invite': {
+      const email = str(detail, 'email') ?? m.activity_actor_somebody({}, options);
+      const message = {
+        owner: m.activity_invite_owner,
+        editor: m.activity_invite_editor,
+      }[str(detail, 'role') ?? ''];
+      return { lead: (message ?? m.activity_invite_member)({ actor, email }, options) };
+    }
+    case 'role-change': {
+      const member = named(event.subject, people, str(detail, 'name'), locale);
+      const message = {
+        owner: m.activity_role_owner,
+        editor: m.activity_role_editor,
+      }[str(detail, 'role') ?? ''];
+      return { lead: (message ?? m.activity_role_member)({ actor, member }, options) };
+    }
     case 'member-removed': {
-      const address = str(d, 'email') ?? 'somebody';
+      const email = str(detail, 'email') ?? m.activity_actor_somebody({}, options);
       return {
-        lead: (d as { pending?: unknown } | null)?.pending
-          ? `${actor} revoked the invite to ${address}.`
-          : `${actor} removed ${address}.`,
+        lead: (detail as { pending?: unknown } | null)?.pending
+          ? m.activity_invite_revoked({ actor, email }, options)
+          : m.activity_member_removed({ actor, email }, options),
       };
     }
-    case 'password-set':
-      return { lead: `${actor} ${HOW[str(d, 'how') ?? ''] ?? 'set their password'}.` };
+    case 'password-set': {
+      const message = {
+        first: m.activity_password_first,
+        changed: m.activity_password_changed,
+        reset: m.activity_password_reset,
+      }[str(detail, 'how') ?? ''];
+      return { lead: (message ?? m.activity_password_set)({ actor }, options) };
+    }
     case 'publish': {
       const one = entryOf(event.subject);
-      if (one) return { lead: `${actor} published `, link: one };
-      const files = (d as { files?: unknown } | null)?.files;
-      const many =
-        typeof files === 'number' ? `${files} file${files === 1 ? '' : 's'}` : 'several files';
-      return { lead: `${actor} published ${many}.` };
+      if (one)
+        return linked(m.activity_publish_entry({ actor, entry: SUBJECT_MARKER }, options), one);
+      const files = (detail as { files?: unknown } | null)?.files;
+      return {
+        lead:
+          typeof files === 'number'
+            ? m.activity_publish_files({ actor, count: files }, options)
+            : m.activity_publish_several({ actor }, options),
+      };
     }
     case 'publish-failed':
       return {
-        lead: 'Publish failed: the repository refused the update.',
-        reason: REFUSED[str(d, 'reason') ?? ''] ?? REFUSED.refused,
+        lead: m.activity_publish_failed({}, options),
+        reason:
+          str(detail, 'reason') === 'ref-moved'
+            ? m.activity_publish_ref_moved({}, options)
+            : m.activity_publish_refused({}, options),
       };
     case 'publish-conflict': {
       const one = entryOf(event.subject);
-      const files = count(d);
+      const files = one ? 1 : count(detail);
       return {
-        lead: one
-          ? 'Publish stopped: somebody else had changed '
-          : `Publish stopped: ${files} files had changed in the repository.`,
-        link: one,
-        reason: changed(one ? 1 : files),
+        ...(one
+          ? linked(m.activity_publish_conflict_entry({ entry: SUBJECT_MARKER }, options), one)
+          : { lead: m.activity_publish_conflict_files({ count: files }, options) }),
+        reason: m.activity_publish_conflict_reason({ count: files }, options),
       };
     }
     case 'draft-discard': {
-      // One kind, two writers: the drawer's Discard, and a version restored over the draft.
       const one = entryOf(event.subject);
-      const lead = (d as { restore?: unknown } | null)?.restore
-        ? `${actor} restored an older version over the unpublished changes to `
-        : `${actor} discarded the unpublished changes to `;
-      return one ? { lead, link: one } : { lead: `${lead}an entry.` };
+      const restore = Boolean((detail as { restore?: unknown } | null)?.restore);
+      if (!one)
+        return {
+          lead: restore
+            ? m.activity_draft_restored_unknown({ actor }, options)
+            : m.activity_draft_discarded_unknown({ actor }, options),
+        };
+      return linked(
+        restore
+          ? m.activity_draft_restored({ actor, entry: SUBJECT_MARKER }, options)
+          : m.activity_draft_discarded({ actor, entry: SUBJECT_MARKER }, options),
+        one,
+      );
     }
     case 'hold-released': {
       const one = entryOf(event.subject);
-      const from = str(d, 'from');
-      const whose = from ? `${from}'s hold` : 'the hold';
-      return one
-        ? { lead: `${actor} released ${whose} on `, link: one }
-        : { lead: `${actor} released ${whose}.` };
+      const from = str(detail, 'from');
+      if (!one)
+        return {
+          lead: from
+            ? m.activity_hold_released_named_unknown({ actor, from }, options)
+            : m.activity_hold_released_unknown({ actor }, options),
+        };
+      return linked(
+        from
+          ? m.activity_hold_released_named({ actor, from, entry: SUBJECT_MARKER }, options)
+          : m.activity_hold_released({ actor, entry: SUBJECT_MARKER }, options),
+        one,
+      );
     }
     case 'lock-takeover': {
       const one = entryOf(event.subject);
-      const from = str(d, 'from');
-      const whose = from ? `${from}'s editing of ` : 'editing of ';
-      return one
-        ? { lead: `${actor} took over ${whose}`, link: one }
-        : { lead: `${actor} took over an entry.` };
+      const from = str(detail, 'from');
+      if (!one) return { lead: m.activity_lock_takeover_unknown({ actor }, options) };
+      return linked(
+        from
+          ? m.activity_lock_takeover_named({ actor, from, entry: SUBJECT_MARKER }, options)
+          : m.activity_lock_takeover({ actor, entry: SUBJECT_MARKER }, options),
+        one,
+      );
     }
     case 'setting-changed': {
-      // The log holds the key name and what happened, never the value.
-      const did = HOW_KEY[str(d, 'how') ?? ''] ?? 'changed';
-      const key = INTEGRATIONS[event.subject ?? ''];
-      return { lead: key ? `${actor} ${did} the ${key}.` : `${actor} ${did} a key.` };
+      const key =
+        event.subject === 'deepl' ? 'deepl' : event.subject === 'assist' ? 'assist' : 'key';
+      const action = str(detail, 'how');
+      const messages = {
+        set: {
+          deepl: m.activity_setting_deepl_set,
+          assist: m.activity_setting_assist_set,
+          key: m.activity_setting_key_set,
+        },
+        replaced: {
+          deepl: m.activity_setting_deepl_replaced,
+          assist: m.activity_setting_assist_replaced,
+          key: m.activity_setting_key_replaced,
+        },
+        removed: {
+          deepl: m.activity_setting_deepl_removed,
+          assist: m.activity_setting_assist_removed,
+          key: m.activity_setting_key_removed,
+        },
+      } as const;
+      return {
+        lead:
+          action === 'set' || action === 'replaced' || action === 'removed'
+            ? messages[action][key]({ actor }, options)
+            : m.activity_setting_key_changed({ actor }, options),
+      };
     }
-    // Both rows link the entry as it is now, which is the one that is somewhere to go.
     case 'entry-rename': {
       const one = entryOf(event.subject);
-      const from = str(d, 'from') ?? 'an entry';
+      const from = str(detail, 'from') ?? m.activity_entry_unknown({}, options);
       return one
-        ? { lead: `${actor} renamed ${from} to `, link: one }
-        : { lead: `${actor} renamed ${from}.` };
+        ? linked(m.activity_entry_renamed({ actor, from, entry: SUBJECT_MARKER }, options), one)
+        : { lead: m.activity_entry_renamed_unknown({ actor, from }, options) };
     }
     case 'entry-duplicate': {
       const one = entryOf(event.subject);
-      const from = str(d, 'from') ?? 'an entry';
+      const from = str(detail, 'from') ?? m.activity_entry_unknown({}, options);
       return one
-        ? { lead: `${actor} duplicated ${from} as `, link: one }
-        : { lead: `${actor} duplicated ${from}.` };
+        ? linked(m.activity_entry_duplicated({ actor, from, entry: SUBJECT_MARKER }, options), one)
+        : { lead: m.activity_entry_duplicated_unknown({ actor, from }, options) };
     }
     case 'template-saved': {
       const one = entryOf(event.subject);
-      const name = str(d, 'template') ?? 'a template';
+      const template = str(detail, 'template') ?? m.activity_template_unknown({}, options);
       return one
-        ? { lead: `${actor} saved the template ${name} from `, link: one }
-        : { lead: `${actor} saved the template ${name}.` };
+        ? linked(
+            m.activity_template_saved({ actor, template, entry: SUBJECT_MARKER }, options),
+            one,
+          )
+        : { lead: m.activity_template_saved_unknown({ actor, template }, options) };
     }
     case 'entry-delete': {
-      // Named, not linked: a row pointing at a 404 is worse than the file name.
-      const gone = entryOf(event.subject);
-      const langs = went(d);
+      const entry = entryOf(event.subject)?.label ?? m.activity_entry_unknown({}, options);
+      const locales = went(detail);
       return {
-        lead: `${actor} deleted ${gone?.label ?? 'an entry'}${langs ? ` (${langs})` : ''}.`,
+        lead: locales
+          ? m.activity_entry_deleted_locales({ actor, entry, locales }, options)
+          : m.activity_entry_deleted({ actor, entry }, options),
       };
     }
     case 'locale-off': {
       const one = entryOf(event.subject);
-      const langs = went(d) || 'a language';
+      const locales = went(detail) || m.activity_language_unknown({}, options);
       return one
-        ? { lead: `${actor} turned ${langs} off for `, link: one }
-        : { lead: `${actor} turned ${langs} off for an entry.` };
+        ? linked(
+            m.activity_locale_disabled({ actor, locales, entry: SUBJECT_MARKER }, options),
+            one,
+          )
+        : { lead: m.activity_locale_disabled_unknown({ actor, locales }, options) };
     }
     case 'revert': {
-      // Both are the same inverse commit; only the detail tells them apart.
+      if (!(detail as { restore?: unknown } | null)?.restore)
+        return { lead: m.activity_publish_undone({ actor }, options) };
       const one = entryOf(event.subject);
-      if (!(d as { restore?: unknown } | null)?.restore)
-        return { lead: `${actor} undid a publish.` };
       return one
-        ? { lead: `${actor} restored `, link: one }
-        : { lead: `${actor} restored ${count(d)} files.` };
+        ? linked(m.activity_entry_restored({ actor, entry: SUBJECT_MARKER }, options), one)
+        : { lead: m.activity_files_restored({ actor, count: count(detail) }, options) };
     }
     case 'upload':
-      return { lead: `${actor} uploaded ${str(d, 'name') ?? 'a file'}.` };
-    case 'media-archive': {
-      const what = str(d, 'name') ?? 'a file';
       return {
-        lead: (d as { archived?: unknown } | null)?.archived
-          ? `${actor} archived ${what}.`
-          : `${actor} took ${what} out of the archive.`,
+        lead: m.activity_uploaded(
+          { actor, name: str(detail, 'name') ?? m.activity_file_unknown({}, options) },
+          options,
+        ),
+      };
+    case 'media-archive': {
+      const name = str(detail, 'name') ?? m.activity_file_unknown({}, options);
+      return {
+        lead: (detail as { archived?: unknown } | null)?.archived
+          ? m.activity_media_archived({ actor, name }, options)
+          : m.activity_media_unarchived({ actor, name }, options),
       };
     }
     case 'media-delete':
-      return { lead: `${actor} deleted ${str(d, 'name') ?? 'a file'} from storage.` };
-    // A rule is named by the address it covers, the half a client recognises.
+      return {
+        lead: m.activity_media_deleted(
+          { actor, name: str(detail, 'name') ?? m.activity_file_unknown({}, options) },
+          options,
+        ),
+      };
     case 'redirect-added':
-      return { lead: `${actor} added a redirect from ${str(d, 'from') ?? 'an address'}.` };
+      return {
+        lead: m.activity_redirect_added(
+          { actor, from: str(detail, 'from') ?? m.activity_address_unknown({}, options) },
+          options,
+        ),
+      };
     case 'redirect-changed':
-      return { lead: `${actor} changed the redirect from ${str(d, 'from') ?? 'an address'}.` };
+      return {
+        lead: m.activity_redirect_changed(
+          { actor, from: str(detail, 'from') ?? m.activity_address_unknown({}, options) },
+          options,
+        ),
+      };
     case 'redirect-deleted':
-      return { lead: `${actor} deleted the redirect from ${str(d, 'from') ?? 'an address'}.` };
-    case 'mail-failed':
-      return { lead: `${MESSAGE[str(d, 'message') ?? ''] ?? 'A message'} could not be sent.` };
+      return {
+        lead: m.activity_redirect_deleted(
+          { actor, from: str(detail, 'from') ?? m.activity_address_unknown({}, options) },
+          options,
+        ),
+      };
+    case 'mail-failed': {
+      const message = {
+        'sign-in link': m.activity_mail_sign_in_failed,
+        invite: m.activity_mail_invite_failed,
+        'password reset': m.activity_mail_reset_failed,
+      }[str(detail, 'message') ?? ''];
+      return { lead: (message ?? m.activity_mail_failed)({}, options) };
+    }
   }
-  // A kind with no sentence yet is still a record, so it is named rather than dropped.
+
   const one = entryOf(event.subject);
-  return { lead: one ? `${actor} — ${event.kind} ` : `${actor} — ${event.kind}`, link: one };
+  return one
+    ? linked(
+        m.activity_unknown_entry({ actor, kind: event.kind, entry: SUBJECT_MARKER }, options),
+        one,
+      )
+    : { lead: m.activity_unknown({ actor, kind: event.kind }, options) };
 }
 
 export const initials = (event: ActivityEvent) =>
@@ -271,29 +378,5 @@ export const initials = (event: ActivityEvent) =>
     .map((part) => part.charAt(0).toUpperCase())
     .join('');
 
-const DATE = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-export const EXACT = new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeStyle: 'short' });
-const midnight = (at: number) => {
-  const day = new Date(at);
-  day.setHours(0, 0, 0, 0);
-  return day.getTime();
-};
-
-/** Day buckets count from local midnight: a day is 23 or 25 hours across a DST change. */
-export function when(at: number): string {
-  const minutes = Math.floor((Date.now() - at) / 60_000);
-  if (minutes < 1) return 'Just now';
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round((midnight(Date.now()) - midnight(at)) / 86_400_000);
-  if (days <= 1) return 'Yesterday';
-  if (days < 7) return `${days} days ago`;
-  return DATE.format(at);
-}
-
-/** Same calendar days as `when`; nothing on the day it was set. */
-export function age(since: number): string {
-  const days = Math.round((midnight(Date.now()) - midnight(since)) / 86_400_000);
-  return days < 1 ? '' : days === 1 ? '1 day' : `${days} days`;
-}
+/** Legacy editor acknowledgement; Activity itself always supplies the reactive UI locale. */
+export const when = (at: number): string => formatRelativeTime(at, 'en');
