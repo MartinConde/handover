@@ -1,4 +1,5 @@
-import type { UiLocale } from '../i18n.js';
+import { messageOptions, type UiLocale } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 import {
   CANVAS_PROTOCOL,
   type CanvasBridgeRejection,
@@ -147,6 +148,7 @@ const sameManifest = (a: CanvasSuccessManifest, b: CanvasSuccessManifest) =>
 
 const randomId = () => crypto.randomUUID();
 const markerSelector = '[data-handover-field], [data-handover-list], [data-handover-block]';
+const frameTitle = (locale: UiLocale) => m.preview_frame_title({}, messageOptions(locale));
 
 const findTarget = (root: Document, expected: CanvasTarget): Element | undefined => {
   for (const element of Array.from(root.querySelectorAll(markerSelector))) {
@@ -367,7 +369,7 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
     const serialized = JSON.stringify({ ...request.snapshot, requestId });
     const frame = root.createElement('iframe');
     frame.name = frameName();
-    frame.title = 'The page as the site would serve it';
+    frame.title = frameTitle(options.uiLocale());
     frame.dataset.handoverCanvasFrame = 'candidate';
     frame.setAttribute('aria-hidden', 'true');
     frame.setAttribute('inert', '');
@@ -629,6 +631,8 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
       return active?.bridge.mode(next) ?? false;
     },
     uiLocale(next: UiLocale) {
+      if (active) active.frame.title = frameTitle(next);
+      if (candidate) candidate.frame.title = frameTitle(next);
       const activeUpdated = active?.bridge.uiLocale(next) ?? false;
       const candidateUpdated = candidate?.bridge.uiLocale(next) ?? false;
       return activeUpdated || candidateUpdated;

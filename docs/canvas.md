@@ -167,6 +167,13 @@ released by either panel, while minimum widths keep all three surfaces usable. O
 opening Inspector temporarily hides Structure; closing it or choosing Structure returns to the same
 selection.
 
+The Canvas workspace chrome follows the account's interface language: view and interaction controls,
+Structure navigation, validation and navigation notices, recovery actions, resize accessibility text,
+and the embedded page's frame title all update immediately. A language switch updates the existing
+frame rather than rendering or replacing it, so the selected content, field state, scroll position,
+and pending edits remain intact. Known render failures use translated recovery guidance; exact
+technical detail remains separate when it is available.
+
 Structure lists blocks by the same name the form editor gives them — a block's `_label`, else its
 type — and a row with children collapses from its own arrow, or with `←` and `→` while it has
 focus. Selecting content in the page opens whatever branch it sits in. Adding a block commits the

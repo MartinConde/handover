@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate the Canvas workspace, Structure controls, navigation and validation feedback, recovery
+  actions, accessibility text and embedded-frame title into English and German. Live switching
+  updates the existing iframe and retained failure descriptors without refetching content, replacing
+  the page, or losing editor state; exact technical detail remains separate from recovery guidance.
+
 - Synchronize the interface language into the editable Canvas through a dedicated, validated
   parent-to-iframe bridge message. Initial, live-switched and late-initialized controls share the
   latest accepted English/Deutsch locale without replacing the iframe, changing content locale or

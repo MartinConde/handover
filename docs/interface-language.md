@@ -103,6 +103,12 @@ language, and content version. It does not reload the page or repurpose Canvas's
 Controls that initialize later use the latest accepted interface language; the preview page's
 `<html lang>` remains the content language.
 
+The surrounding Canvas workspace also switches in place, including its viewport and interaction
+controls, Structure navigation, notices, recovery actions, accessibility labels, and embedded-frame
+title. The iframe is not replaced and content is not fetched again. Existing field state and the last
+working page remain available while known failures are reformatted as English or German guidance;
+technical detail stays separate.
+
 Connection failures retain the existing uncertain-result behavior. Handover renders a localized
 summary from a stable error descriptor, not from an English sentence or status code. Known
 authentication codes select specific recovery text. Unknown technical detail stays separate from

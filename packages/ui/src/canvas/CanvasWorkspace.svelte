@@ -4,7 +4,8 @@ import { onMount, type Snippet, tick, untrack } from 'svelte';
 import { cubicOut } from 'svelte/easing';
 import { fly } from 'svelte/transition';
 import { readEntryDirectory } from '../entry-directory';
-import type { UiLocale } from '../i18n.js';
+import { messageOptions, type UiLocale } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 import { previewPath } from '../request';
 import CanvasBlockEditor from './CanvasBlockEditor.svelte';
 import CanvasIcon from './CanvasIcon.svelte';
@@ -149,7 +150,8 @@ let disposed = false;
 let inlineEditing = false;
 let interactionMode = $state<CanvasInteractionMode>('edit');
 let actionRefusal = $state('');
-let navigationError = $state('');
+type NavigationError = 'form-get' | 'form-post' | 'navigation-save' | 'preview-save';
+let navigationError = $state<NavigationError>();
 let navigationBusy = false;
 let mediaPickerRequest = $state(0);
 let navigationAction = $state<{
@@ -165,26 +167,69 @@ type BlockEditorState = StagedBlockTarget & {
 let blockEditor = $state<BlockEditorState>();
 const structureVisible = $derived(structureOpen && !(narrow && inspectorOpen));
 
-const WIDTHS: { value: Width; label: string }[] = [
-  { value: 'desktop', label: 'Desktop' },
-  { value: 'tablet', label: 'Tablet' },
-  { value: 'phone', label: 'Phone' },
-];
+const options = $derived(messageOptions(uiLocale));
+const widths = $derived([
+  { value: 'desktop' as const, label: m.preview_desktop({}, options) },
+  { value: 'tablet' as const, label: m.preview_tablet({}, options) },
+  { value: 'phone' as const, label: m.preview_phone({}, options) },
+]);
 
 const status = $derived(
   loading
-    ? 'Preparing Canvas…'
+    ? m.canvas_preparing({}, options)
     : incompletePaths.length
-      ? 'Complete required fields to update Canvas'
+      ? m.canvas_complete_required_status({}, options)
       : rendererState.phase === 'rendering'
-        ? 'Updating Canvas…'
+        ? m.canvas_updating({}, options)
         : rendererState.phase === 'ready'
-          ? 'Canvas updated'
+          ? m.canvas_updated({}, options)
           : rendererState.phase === 'failed'
-            ? 'Canvas update failed'
-            : 'Canvas ready',
+            ? m.canvas_update_failed({}, options)
+            : m.canvas_ready({}, options),
 );
 const failure = $derived(rendererState.phase === 'failed' ? rendererState : undefined);
+const failureText = $derived.by(() => {
+  if (!failure) return '';
+  if (failure.reason === 'timeout') return m.canvas_failure_timeout({}, options);
+  if (failure.reason === 'stale') return m.canvas_failure_stale({}, options);
+  if (failure.reason === 'render')
+    return failure.status
+      ? m.canvas_failure_render_status({ status: failure.status }, options)
+      : m.canvas_failure_render({}, options);
+  return m.canvas_failure_start({}, options);
+});
+const navigationErrorText = $derived.by(() => {
+  switch (navigationError) {
+    case 'preview-save':
+      return m.canvas_preview_save_failed({}, options);
+    case 'navigation-save':
+      return m.canvas_navigation_save_failed({}, options);
+    case 'form-post':
+      return m.canvas_form_submit_blocked({}, options);
+    case 'form-get':
+      return m.canvas_form_navigation_blocked({}, options);
+    default:
+      return '';
+  }
+});
+const actionRefusalText = $derived.by(() => {
+  if (!actionRefusal) return '';
+  if (actionRefusal === 'stale') return m.canvas_action_stale({}, options);
+  if (actionRefusal === 'deleted') return m.canvas_action_deleted({}, options);
+  if (actionRefusal === 'readonly' || actionRefusal === 'closed')
+    return m.canvas_action_readonly({}, options);
+  if (
+    actionRefusal === 'ambiguous' ||
+    actionRefusal === 'drift' ||
+    actionRefusal === 'referenced' ||
+    actionRefusal === 'schema' ||
+    actionRefusal === 'structural'
+  )
+    return m.canvas_action_structure_changed({}, options);
+  if (actionRefusal === 'empty' || actionRefusal === 'frozen')
+    return m.canvas_action_history_unavailable({}, options);
+  return m.canvas_action_refused({ reason: actionRefusal }, options);
+});
 const selectedNode = $derived(structure.find((node) => sameCanvasSelection(node, selected)));
 let collapsed = $state<Record<string, boolean>>({});
 const parentOf = (node: CanvasStructureNode) =>
@@ -214,9 +259,10 @@ function treeDepth(node: CanvasStructureNode) {
   return depth;
 }
 function treeLabel(node: CanvasStructureNode) {
-  if (!node.parentId && node.kind === 'list' && node.label === 'Blocks') return 'Page';
+  if (!node.parentId && node.kind === 'list' && node.label === 'Blocks')
+    return m.canvas_page({}, options);
   if (parentOf(node)?.label === 'Columns' && /^Block \d+$/.test(node.label))
-    return node.label.replace('Block', 'Column');
+    return m.canvas_column({ number: node.label.replace('Block ', '') }, options);
   return node.label;
 }
 function nodeIcon(node: CanvasStructureNode) {
@@ -276,12 +322,13 @@ const breadcrumb = $derived.by(() => {
   const result: string[] = [];
   let node: CanvasStructureNode | undefined = selectedNode;
   while (node) {
-    if (!hiddenWrappers.has(node.id) && treeLabel(node) !== 'Page') result.unshift(treeLabel(node));
+    if (!hiddenWrappers.has(node.id) && treeLabel(node) !== m.canvas_page({}, options))
+      result.unshift(treeLabel(node));
     node = node.parentId
       ? structure.find((candidate) => candidate.id === node?.parentId)
       : undefined;
   }
-  return ['Page', ...result].join(' / ');
+  return [m.canvas_page({}, options), ...result].join(' / ');
 });
 
 async function submit(kind: 'render' | 'schedule', force = false) {
@@ -314,7 +361,7 @@ async function submit(kind: 'render' | 'schedule', force = false) {
       requestId: crypto.randomUUID(),
       contentVersion: version,
       reason: 'bootstrap',
-      message: error instanceof Error ? error.message : 'Canvas could not start.',
+      ...(error instanceof Error ? { message: error.message } : {}),
     };
   }
 }
@@ -1004,9 +1051,9 @@ const previewHref = (href: string) => {
 };
 
 async function openCurrentPreview() {
-  navigationError = '';
+  navigationError = undefined;
   if (!(await session.flush())) {
-    navigationError = 'Preview was not opened because your changes could not be saved.';
+    navigationError = 'preview-save';
     return;
   }
   window.open(previewPath(url || '/'), '_blank', 'noopener,noreferrer');
@@ -1015,13 +1062,10 @@ async function openCurrentPreview() {
 async function canvasNavigate(message: CanvasNavigationMessage) {
   if (navigationBusy) return;
   navigationBusy = true;
-  navigationError = '';
+  navigationError = undefined;
   navigationAction = undefined;
   if (message.kind === 'form') {
-    navigationError =
-      message.method === 'post'
-        ? 'This form cannot submit from Canvas. Open the preview to test its side effects.'
-        : 'This form cannot navigate inside Canvas. Open the preview to test it.';
+    navigationError = message.method === 'post' ? 'form-post' : 'form-get';
     navigationBusy = false;
     return;
   }
@@ -1033,7 +1077,7 @@ async function canvasNavigate(message: CanvasNavigationMessage) {
   }
   const destination = classifyCanvasNavigation(message.href, index, location.origin);
   if (!(await session.flush())) {
-    navigationError = 'Navigation stopped because your changes could not be saved.';
+    navigationError = 'navigation-save';
     navigationBusy = false;
     return;
   }
@@ -1159,81 +1203,81 @@ onMount(() => {
   class:is-fullscreen={fullscreen}
   class:is-inactive={!active}
   class:is-mobile-hidden={mobileHidden}
-  aria-label="Canvas"
+  aria-label={m.canvas_label({}, options)}
   aria-hidden={!active}
   inert={!active}
   data-selected-address={selected?.target.occurrence?.address ?? selected?.target.address}
 >
   <div class="canvas-rail">
     {#if fullscreen}
-      <button class="btn btn-ghost canvas-back" type="button" aria-label="Back to form" title="Back to form" onclick={onform}><CanvasIcon name="back" /></button>
-      <div class="canvas-identity"><strong title={ownerLabel}>{ownerLabel}</strong><span>Canvas</span></div>
+      <button class="btn btn-ghost canvas-back" type="button" aria-label={m.canvas_back_to_form({}, options)} title={m.canvas_back_to_form({}, options)} onclick={onform}><CanvasIcon name="back" /></button>
+      <div class="canvas-identity"><strong title={ownerLabel}>{ownerLabel}</strong><span>{m.canvas_label({}, options)}</span></div>
     {/if}
     <div class="canvas-tools">
-      <div class="canvas-panel-tools" role="group" aria-label="Editor panels">
-        <button class="btn btn-ghost canvas-panel-toggle" type="button" title="Show or hide Structure"
-          disabled={interactionMode !== 'edit'} aria-expanded={structureVisible} aria-controls="canvas-structure" onclick={toggleStructure}><CanvasIcon name="structure" /><span>Structure</span></button>
-        <button class="btn btn-ghost canvas-panel-toggle" type="button" title="Show or hide Inspector"
-          disabled={interactionMode !== 'edit'} aria-expanded={inspectorOpen} aria-controls="canvas-inspector" onclick={toggleInspector}><CanvasIcon name="inspector" /><span>Inspector</span></button>
+      <div class="canvas-panel-tools" role="group" aria-label={m.canvas_editor_panels({}, options)}>
+        <button class="btn btn-ghost canvas-panel-toggle" type="button" title={m.canvas_toggle_structure({}, options)}
+          disabled={interactionMode !== 'edit'} aria-expanded={structureVisible} aria-controls="canvas-structure" onclick={toggleStructure}><CanvasIcon name="structure" /><span>{m.canvas_structure({}, options)}</span></button>
+        <button class="btn btn-ghost canvas-panel-toggle" type="button" title={m.canvas_toggle_inspector({}, options)}
+          disabled={interactionMode !== 'edit'} aria-expanded={inspectorOpen} aria-controls="canvas-inspector" onclick={toggleInspector}><CanvasIcon name="inspector" /><span>{m.canvas_inspector({}, options)}</span></button>
       </div>
       <span class="canvas-tool-divider"></span>
-      <button class="btn btn-ghost canvas-icon-button" type="button" aria-label="Undo" title="Undo (⌘Z / Ctrl+Z)" disabled={interactionMode !== 'edit' || !session.canUndo()}
+      <button class="btn btn-ghost canvas-icon-button" type="button" aria-label={m.canvas_undo({}, options)} title={m.canvas_undo_shortcut({}, options)} disabled={interactionMode !== 'edit' || !session.canUndo()}
         aria-keyshortcuts="Control+Z Meta+Z" onclick={() => replay('undo')}><CanvasIcon name="undo" /></button>
-      <button class="btn btn-ghost canvas-icon-button" type="button" aria-label="Redo" title="Redo (⌘⇧Z / Ctrl+Shift+Z)" disabled={interactionMode !== 'edit' || !session.canRedo()}
+      <button class="btn btn-ghost canvas-icon-button" type="button" aria-label={m.canvas_redo({}, options)} title={m.canvas_redo_shortcut({}, options)} disabled={interactionMode !== 'edit' || !session.canRedo()}
         aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z" onclick={() => replay('redo')}><CanvasIcon name="redo" /></button>
     </div>
     <div class="canvas-view-tools">
-      <div class="seg canvas-widths" role="group" aria-label="Canvas viewport">
-        {#each WIDTHS as item (item.value)}
+      <div class="seg canvas-widths" role="group" aria-label={m.canvas_viewport({}, options)}>
+        {#each widths as item (item.value)}
           <button type="button" aria-label={item.label} title={item.label} aria-pressed={width === item.value} onclick={() => (width = item.value)}><CanvasIcon name={item.value} /></button>
         {/each}
       </div>
-      <div class="seg" role="group" aria-label="Canvas interaction">
-        <button type="button" aria-pressed={interactionMode === 'edit'} onclick={() => setInteractionMode('edit')}>Edit</button>
-        <button type="button" aria-pressed={interactionMode === 'interact'} onclick={() => setInteractionMode('interact')}>Interact</button>
+      <div class="seg" role="group" aria-label={m.canvas_interaction({}, options)}>
+        <button type="button" aria-pressed={interactionMode === 'edit'} onclick={() => setInteractionMode('edit')}>{m.canvas_edit({}, options)}</button>
+        <button type="button" aria-pressed={interactionMode === 'interact'} onclick={() => setInteractionMode('interact')}>{m.canvas_interact({}, options)}</button>
       </div>
     </div>
     <div class="canvas-entry-actions">
       {#if fullscreen}{@render entryActions?.()}{/if}
       <a class="btn btn-sm canvas-preview" href={previewPath(url || '/')} target="_blank" rel="noreferrer"
-        onclick={(event) => { event.preventDefault(); void openCurrentPreview(); }}>Preview <CanvasIcon name="external" /></a>
+        onclick={(event) => { event.preventDefault(); void openCurrentPreview(); }}>{m.preview_title({}, options)} <CanvasIcon name="external" /></a>
       {#if fullscreen}{@render publishAction?.()}{/if}
     </div>
     <span class="visually-hidden canvas-render-state" class:is-busy={loading || rendererState.phase === 'rendering'} class:is-failed={rendererState.phase === 'failed'} role="status">{status}</span>
   </div>
-  {#if actionRefusal}<div class="canvas-action-refusal" role="alert">Action refused ({actionRefusal})</div>{/if}
+  {#if actionRefusal}<div class="canvas-action-refusal" role="alert">{actionRefusalText}</div>{/if}
 
   {#if issues.length}
     <div class="canvas-validation" class:is-incomplete={incompletePaths.length > 0} role="status">
       <div>
         {#if incompletePaths.length}
-          <span>Complete required fields to update Canvas. You can keep editing; draft saving continues.</span>
+          <span>{m.canvas_complete_required({}, options)}</span>
         {:else}
-          <strong>{issues.length} {issues.length === 1 ? 'field needs' : 'fields need'} attention</strong>
-          <span>{issues[0]?.[1]}{issues.length > 1 ? ` · and ${issues.length - 1} more` : ''}. Review the fields to keep Canvas up to date.</span>
+          <strong>{m.canvas_fields_need_attention({ count: issues.length }, options)}</strong>
+          <span>{issues[0]?.[1]}{issues.length > 1 ? ` · ${m.canvas_more_issues({ count: issues.length - 1 }, options)}` : ''}. {m.canvas_review_to_update({}, options)}</span>
         {/if}
       </div>
-      <button class="btn btn-sm" type="button" onclick={onreviewproblems}>Review fields</button>
+      <button class="btn btn-sm" type="button" onclick={onreviewproblems}>{m.canvas_review_fields({}, options)}</button>
     </div>
   {/if}
 
   {#if navigationError}
     <div class="canvas-navigation-notice" role="alert">
-      <span>{navigationError}</span>
-      <button class="btn btn-sm" type="button" onclick={() => (navigationError = '')}>Dismiss</button>
+      <span>{navigationErrorText}</span>
+      <button class="btn btn-sm" type="button" onclick={() => (navigationError = undefined)}>{m.canvas_dismiss({}, options)}</button>
     </div>
   {:else if navigationAction}
     <div class="canvas-navigation-notice" role="status">
       <span>
         {navigationAction.download
-          ? 'This download opens outside Canvas.'
+          ? m.canvas_download_outside({}, options)
           : navigationAction.destination.kind === 'external'
-            ? 'This link leaves the site.'
-            : 'This page opens as a normal preview.'}
+            ? m.canvas_link_leaves_site({}, options)
+            : m.canvas_page_opens_preview({}, options)}
       </span>
-      <button class="btn btn-sm" type="button" onclick={() => (navigationAction = undefined)}>Cancel</button>
+      <button class="btn btn-sm" type="button" onclick={() => (navigationAction = undefined)}>{m.common_cancel({}, options)}</button>
       <button class="btn btn-sm btn-primary" type="button" onclick={followNavigationAction}>
-        {navigationAction.download ? 'Open download' : navigationAction.destination.kind === 'external' ? 'Open link' : 'Open preview'} ↗
+        {navigationAction.download ? m.canvas_open_download({}, options) : navigationAction.destination.kind === 'external' ? m.canvas_open_link({}, options) : m.canvas_open_preview({}, options)} ↗
       </button>
     </div>
   {/if}
@@ -1241,11 +1285,12 @@ onMount(() => {
   {#if failure && !incompletePaths.length}
     <div class="canvas-failure" role="alert">
       <div>
-        <strong>Canvas could not update</strong>
-        <span>{failure.message ?? 'Your changes remain in the editor. The last working page is still available.'}</span>
+        <strong>{m.canvas_could_not_update({}, options)}</strong>
+        <span>{failureText}</span>
+        {#if failure.message}<small>{failure.message}</small>{/if}
       </div>
-      <button class="btn btn-sm" type="button" onclick={onform}>Go to Form</button>
-      <button class="btn btn-sm" type="button" onclick={retry}>Retry</button>
+      <button class="btn btn-sm" type="button" onclick={onform}>{m.canvas_go_to_form({}, options)}</button>
+      <button class="btn btn-sm" type="button" onclick={retry}>{m.common_retry({}, options)}</button>
     </div>
   {/if}
 
@@ -1261,13 +1306,13 @@ onMount(() => {
         <div class="canvas-structure-home">
           <header>
             <div>
-              <h2 id="canvas-structure-title">Structure</h2>
-              <span>{structure.length} editable {structure.length === 1 ? 'item' : 'items'}</span>
+              <h2 id="canvas-structure-title">{m.canvas_structure({}, options)}</h2>
+              <span>{m.canvas_editable_items({ count: structure.length }, options)}</span>
             </div>
-            <button class="btn btn-ghost btn-sm" type="button" aria-label="Close Structure" onclick={() => (structureOpen = false)}><CanvasIcon name="collapse-left" /></button>
+            <button class="btn btn-ghost btn-sm" type="button" aria-label={m.canvas_close_structure({}, options)} onclick={() => (structureOpen = false)}><CanvasIcon name="collapse-left" /></button>
           </header>
           {#if structure.length}
-            <div class="canvas-structure-tree" aria-label="Page structure" role="tree">
+            <div class="canvas-structure-tree" aria-label={m.canvas_page_structure({}, options)} role="tree">
               {#each visibleStructure as node (canvasNodeKey(node))}
                 {@const branch = branches.has(node.id)}
                 {@const shut = branch && collapsed[canvasNodeKey(node)] === true}
@@ -1301,17 +1346,17 @@ onMount(() => {
                   {/if}
                   <span class="canvas-structure-kind" aria-hidden="true"><CanvasIcon name={nodeIcon(node)} /></span>
                   <span class="canvas-structure-name">{treeLabel(node)}</span>
-                  {#if node.empty}<small>Empty</small>{/if}
+                  {#if node.empty}<small>{m.canvas_empty({}, options)}</small>{/if}
                   {#if node.occurrences > 1}<small>{node.occurrences}×</small>{/if}
                 </button>
               {/each}
             </div>
           {:else}
-            <p class="canvas-structure-empty">This template has no editable annotations.</p>
+            <p class="canvas-structure-empty">{m.canvas_no_annotations({}, options)}</p>
           {/if}
           <footer>
             <button bind:this={addBlockButton} class="btn btn-sm" type="button" disabled={!insertionNode || interactionMode !== 'edit'}
-              onclick={() => { if (insertionNode) openBlockEditor(insertionNode.kind === 'list' ? 'insert-empty' : 'insert-after', insertionNode); }}><CanvasIcon name="plus" /> Add block</button>
+              onclick={() => { if (insertionNode) openBlockEditor(insertionNode.kind === 'list' ? 'insert-empty' : 'insert-after', insertionNode); }}><CanvasIcon name="plus" /> {m.canvas_add_block({}, options)}</button>
           </footer>
         </div>
         {#if blockEditor}
@@ -1339,14 +1384,14 @@ onMount(() => {
           class="canvas-panel-resizer canvas-structure-resizer"
           class:is-active={resizing?.panel === 'structure'}
           role="separator"
-          aria-label="Resize Structure panel"
+          aria-label={m.canvas_resize_structure({}, options)}
           aria-orientation="vertical"
           aria-valuemin={PANEL_WIDTHS.structure.min}
           aria-valuemax={panelMaximum('structure')}
           aria-valuenow={structureWidth}
-          aria-valuetext={`${structureWidth} pixels`}
+          aria-valuetext={m.canvas_pixels({ count: structureWidth }, options)}
           tabindex="0"
-          title="Drag to resize · Double-click to reset"
+          title={m.canvas_resize_hint({}, options)}
           onpointerdown={(event) => beginPanelResize('structure', event)}
           onpointermove={continuePanelResize}
           onpointerup={finishPanelResize}
@@ -1357,7 +1402,7 @@ onMount(() => {
       {/if}
     </div>
     <div class="canvas-stage-shell">
-      <div class="canvas-stage is-{width}" bind:this={stage} aria-label="Editable page Canvas"></div>
+      <div class="canvas-stage is-{width}" bind:this={stage} aria-label={m.canvas_editable_page({}, options)}></div>
     </div>
     <div class="canvas-panel-slot canvas-inspector-slot" class:is-open={inspectorOpen} aria-hidden={!inspectorOpen} inert={!inspectorOpen}>
       {#if inspectorOpen}
@@ -1367,14 +1412,14 @@ onMount(() => {
             class="canvas-panel-resizer canvas-inspector-resizer"
             class:is-active={resizing?.panel === 'inspector'}
             role="separator"
-            aria-label="Resize Inspector panel"
+            aria-label={m.canvas_resize_inspector({}, options)}
             aria-orientation="vertical"
             aria-valuemin={PANEL_WIDTHS.inspector.min}
             aria-valuemax={panelMaximum('inspector')}
             aria-valuenow={inspectorWidth}
-            aria-valuetext={`${inspectorWidth} pixels`}
+            aria-valuetext={m.canvas_pixels({ count: inspectorWidth }, options)}
             tabindex="0"
-            title="Drag to resize · Double-click to reset"
+            title={m.canvas_resize_hint({}, options)}
             onpointerdown={(event) => beginPanelResize('inspector', event)}
             onpointermove={continuePanelResize}
             onpointerup={finishPanelResize}
@@ -1412,16 +1457,16 @@ onMount(() => {
                 <div class="canvas-inspector-title">
                   <span class="canvas-selection-icon"><CanvasIcon name="inspector" /></span>
                   <div>
-                    <span class="canvas-inspector-kicker">Inspector</span>
-                    <h2 id="canvas-inspector-heading">Nothing selected</h2>
+                    <span class="canvas-inspector-kicker">{m.canvas_inspector({}, options)}</span>
+                    <h2 id="canvas-inspector-heading">{m.canvas_nothing_selected({}, options)}</h2>
                   </div>
                 </div>
-                <button class="btn btn-ghost btn-sm" type="button" aria-label="Close Inspector" onclick={() => (inspectorOpen = false)}><CanvasIcon name="collapse-right" /></button>
+                <button class="btn btn-ghost btn-sm" type="button" aria-label={m.canvas_close_inspector({}, options)} onclick={() => (inspectorOpen = false)}><CanvasIcon name="collapse-right" /></button>
               </header>
               <div class="canvas-inspector-empty-state">
                 <span class="canvas-inspector-empty-mark" aria-hidden="true"><CanvasIcon name="block" /></span>
-                <strong>Select an element to edit</strong>
-                <p>Choose an element on the canvas or in Structure. Its settings will appear here.</p>
+                <strong>{m.canvas_select_element({}, options)}</strong>
+                <p>{m.canvas_select_element_hint({}, options)}</p>
               </div>
             </aside>
           {/if}

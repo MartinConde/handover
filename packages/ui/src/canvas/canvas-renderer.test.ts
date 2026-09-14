@@ -80,3 +80,27 @@ test('an editing boundary launches the pending final request immediately', () =>
   expect(canvas.state()).toMatchObject({ phase: 'rendering', contentVersion: 2 });
   canvas.dispose();
 });
+
+test('updates candidate frame presentation when the UI locale changes', () => {
+  const stage = document.createElement('div');
+  document.body.append(stage);
+  let uiLocale: 'en' | 'de' = 'en';
+  const canvas = createCanvasRenderer({
+    stage,
+    contentVersion: () => 2,
+    currentTarget: () => undefined,
+    uiLocale: () => uiLocale,
+    onCommand: () => ({ ok: false, reason: 'readonly' }),
+  });
+
+  void canvas.render(request(2));
+  const frame = canvas.candidateFrame();
+  expect(frame?.title).toBe('The page as the site would serve it');
+
+  uiLocale = 'de';
+  canvas.uiLocale(uiLocale);
+
+  expect(canvas.candidateFrame()).toBe(frame);
+  expect(frame?.title).toBe('Die Seite, wie sie von der Website ausgeliefert würde');
+  canvas.dispose();
+});
