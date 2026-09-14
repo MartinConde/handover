@@ -6234,7 +6234,23 @@ test('a conflict somebody has already settled is refused rather than drawn', asy
   const res = await GET(ctx('conflict/listings/mill-house'));
 
   expect(res.status).toBe(409);
+  expect(await res.json()).toEqual({
+    code: 'CONFLICT_SETTLED',
+    error: 'This entry has not changed in the repository since it was opened',
+  });
   expect((await GET(ctx('conflict/nothing/at-all'))).status).toBe(404);
+});
+
+test('an unreachable conflict report has a stable recovery code', async () => {
+  entryConflict.mockRejectedValue(new RepoUnreachableError('GitHub did not answer'));
+
+  const res = await GET(ctx('conflict/listings/mill-house'));
+
+  expect(res.status).toBe(503);
+  expect(await res.json()).toEqual({
+    code: 'CONFLICT_REPOSITORY_UNAVAILABLE',
+    error: 'GitHub did not answer',
+  });
 });
 
 // Every question or none: written half-answered.
@@ -6282,6 +6298,10 @@ test('a half-answered conflict is refused and nothing is written', async () => {
   const res = await POST(answers([{ path: 'rooms', locale: 'en', side: 'ours' }]));
 
   expect(res.status).toBe(409);
+  expect(await res.json()).toEqual({
+    code: 'CONFLICT_ANSWERS_INVALID',
+    error: 'Those are not the fields this entry disagrees about',
+  });
   expect(resolveConflict).not.toHaveBeenCalled();
   expect(
     (
@@ -6293,6 +6313,21 @@ test('a half-answered conflict is refused and nothing is written', async () => {
       )
     ).status,
   ).toBe(409);
+  expect(resolveConflict).not.toHaveBeenCalled();
+});
+
+test('answers to an older conflict report are identified separately', async () => {
+  conflicted();
+
+  const res = await POST(
+    post('conflict/listings/mill-house', JSON.stringify({ version: 'older-version', answers: [] })),
+  );
+
+  expect(res.status).toBe(409);
+  expect(await res.json()).toEqual({
+    code: 'CONFLICT_CHANGED',
+    error: 'This conflict changed. Reload it and review the new values.',
+  });
   expect(resolveConflict).not.toHaveBeenCalled();
 });
 

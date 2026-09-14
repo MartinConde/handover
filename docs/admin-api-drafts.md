@@ -140,6 +140,17 @@ the answers were given over. Nothing is committed. `409` when nothing of the ent
 — somebody has already settled it — and `409` when the answers are not one per question,
 which is the report having moved on since the screen was drawn.
 
+Conflict refusals keep their existing `error` text for API consumers and also return a stable
+`code` used by the bilingual admin:
+
+- `CONFLICT_SETTLED` (`409`) when there is no longer a conflict to draw
+- `CONFLICT_CHANGED` (`409`) when `version` no longer identifies the current report
+- `CONFLICT_ANSWERS_INVALID` (`409`) when the answers are not exactly one per current question
+- `CONFLICT_REPOSITORY_UNAVAILABLE` (`503`) when either conflict request cannot reach the repository
+
+The UI stores the code and response parameters, not translated prose, so already-visible recovery
+can change interface language without changing the permitted retry or reload action.
+
 ```
 POST /admin/api/hold/:collection/:slug  { "hold": true }  →  { "held" }
 ```

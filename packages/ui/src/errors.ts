@@ -90,6 +90,10 @@ const KNOWN_CODES = new Set([
   'PUBLISH_REPOSITORY_UNAVAILABLE',
   'PUBLISH_FINALIZATION_PENDING',
   'PUBLISH_CHECKS_FAILED',
+  'CONFLICT_SETTLED',
+  'CONFLICT_CHANGED',
+  'CONFLICT_ANSWERS_INVALID',
+  'CONFLICT_REPOSITORY_UNAVAILABLE',
 ]);
 
 const numberFormats = new Map<UiLocale, Intl.NumberFormat>();
@@ -351,6 +355,26 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
       return message.status
         ? m.history_restore_failed_status({ status: message.status }, options)
         : m.history_restore_failed({}, options);
+    case 'CONFLICT_LOAD_FAILED':
+      return message.status
+        ? m.conflict_load_failed_status({ status: message.status }, options)
+        : m.conflict_load_failed({}, options);
+    case 'CONFLICT_SETTLED':
+      return m.conflict_settled({}, options);
+    case 'CONFLICT_CHANGED':
+      return m.conflict_changed({}, options);
+    case 'CONFLICT_ANSWERS_INVALID':
+      return m.conflict_answers_invalid({}, options);
+    case 'CONFLICT_REPOSITORY_UNAVAILABLE':
+      return m.conflict_repository_unavailable({}, options);
+    case 'CONFLICT_SAVE_FAILED':
+      return m.conflict_save_failed({}, options);
+    case 'CONFLICT_UNCONFIRMED':
+      return m.conflict_unconfirmed({}, options);
+    case 'CONFLICT_RESOLVE_FAILED':
+      return message.status
+        ? m.conflict_resolve_failed_status({ status: message.status }, options)
+        : m.conflict_resolve_failed({}, options);
     case 'EDITOR_HOLD_FAILED':
       return m.editor_hold_failed({}, options);
     case 'EDITOR_LOCK_TAKE_FAILED':

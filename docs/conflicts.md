@@ -57,6 +57,19 @@ being answered twice.
 Every language of the entry is read, so a value the languages share is one question and not
 one per file. A language the repository did not touch is not rewritten at all.
 
+The resolver follows the account's [interface language](interface-language.md). Changing between
+English and German updates its actions, explanations, timestamps, accessibility labels and any
+already-visible recovery in place. The loaded report, selected side for every field, focused
+control and merge version stay unchanged; switching does not reread the repository, save a draft
+or submit the answers. Entry titles, schema field labels, content-language codes, values and commit
+identifiers remain authored data and are never translated.
+
+Recovery is tied to stable response codes rather than server prose. A report that somebody else
+settled must be closed; a changed report or answers that no longer match must be reloaded and
+reviewed; an unreachable repository can be retried after checking the connection. If an open entry
+cannot finish saving, the selected sides remain so the same choices can be submitted again after
+the save succeeds. An unconfirmed result makes the report non-actionable until it is reloaded.
+
 ### Your own publish is not a conflict
 
 The comparison is against the file as *that draft* was loaded, so a publish somebody else

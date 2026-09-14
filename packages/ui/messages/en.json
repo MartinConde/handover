@@ -931,6 +931,69 @@
   "pending_discard_remote_changed": "Those changes may have changed remotely. Reload the page before continuing.",
   "pending_discard_failed": "Those changes were not discarded ({status}).",
   "pending_diff_failed": "What changed in {page} could not be read ({status}).",
+  "conflict_title": "Resolve {title}",
+  "conflict_reading": "Reading what changed…",
+  "conflict_report_unavailable": "The conflict report is unavailable. Reload it before choosing what to keep.",
+  "conflict_intro": "Your developer changed this in the code while you were editing it.",
+  "conflict_merged_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "One field only one of you touched is already merged.",
+        "countPlural=other": "{count} fields only one of you touched are already merged."
+      }
+    }
+  ],
+  "conflict_question_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "One field was changed by both of you and needs an answer.",
+        "countPlural=other": "{count} fields were changed by both of you and need an answer."
+      }
+    }
+  ],
+  "conflict_nothing_to_answer": "Nothing was changed by both of you, so there is nothing to answer.",
+  "conflict_keep_all_mine": "Keep all mine",
+  "conflict_take_all_theirs": "Take all theirs",
+  "conflict_shortcut_explanation": "Keep all mine undoes the developer's change to {count} fields. Take all theirs throws away what you wrote in them. What is already merged is kept either way.",
+  "conflict_yours": "Yours",
+  "conflict_theirs": "Theirs",
+  "conflict_you_at": "you, {date}",
+  "conflict_in_repository": "in the repository",
+  "conflict_commit": "commit",
+  "conflict_language": "Language:",
+  "conflict_same_every_language": "Same in every language",
+  "conflict_both_started": "You both started from",
+  "conflict_which_to_keep": "Which {label} to keep",
+  "conflict_merged_for_you": "Merged for you",
+  "conflict_moved_up": "moved up",
+  "conflict_moved_down": "moved down",
+  "conflict_row_changed": "changed: {change}",
+  "conflict_set_to": "set to {value}",
+  "conflict_cleared": "cleared",
+  "conflict_value_changed": "{before} → {after}",
+  "conflict_rewritten": "rewritten",
+  "conflict_empty": "empty",
+  "conflict_only_you_changed": "{change} — only you changed it",
+  "conflict_only_code_changed": "{change} — only the code changed it",
+  "conflict_reload": "Reload conflict",
+  "conflict_saving": "Saving…",
+  "conflict_done_progress": "Done — {answered} of {total} answered",
+  "conflict_done": "Done",
+  "conflict_foot_note": "Finishing writes a new draft over the code's version. Nothing is published until you press Publish.",
+  "conflict_load_failed": "Those changes could not be read.",
+  "conflict_load_failed_status": "Those changes could not be read ({status}).",
+  "conflict_settled": "Somebody else has already settled this conflict. Close this resolver, then reopen Unpublished changes to refresh the list.",
+  "conflict_changed": "This conflict changed. Reload it and review the new values before answering.",
+  "conflict_answers_invalid": "Those answers no longer match the fields in this conflict. Reload it and review the new values.",
+  "conflict_repository_unavailable": "The repository could not be reached. Check the connection, then reload the conflict.",
+  "conflict_save_failed": "The open entry could not finish saving, so the conflict was not resolved. Your choices are kept; try Done again when the entry can save.",
+  "conflict_unconfirmed": "The result could not be confirmed. Reload the conflict before continuing.",
+  "conflict_resolve_failed": "The conflict was not resolved.",
+  "conflict_resolve_failed_status": "The conflict was not resolved ({status}). Reload it before choosing again.",
   "media_library_title": "Media",
   "media_library_image_count": [
     {

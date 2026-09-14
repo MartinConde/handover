@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import type { UiLocale } from '../i18n.js';
 import Resolve from './Resolve.svelte';
 
 // Testing: the two questions a report can ask.
@@ -52,6 +53,7 @@ const MERGED = [
 let app: ReturnType<typeof mount>;
 const resolved = vi.fn();
 const closed = vi.fn();
+let uiLocale = $state<UiLocale>('en');
 const answering = (questions: unknown[] = QUESTIONS, merged: unknown[] = MERGED) => {
   const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
     init?.method === 'POST'
@@ -68,6 +70,9 @@ const show = () => {
       entry: 'listings/seaview-cottage',
       title: 'Seaview Cottage',
       updated: 1755864000000,
+      get uiLocale() {
+        return uiLocale;
+      },
       onclose: closed,
       onresolved: resolved,
     },
@@ -79,6 +84,7 @@ afterEach(() => {
   unmount(app);
   resolved.mockClear();
   closed.mockClear();
+  uiLocale = 'en';
   vi.unstubAllGlobals();
 });
 
@@ -199,24 +205,68 @@ test('a conflict where nobody wrote over anybody is one press with nothing to an
   expect(done?.textContent?.trim()).toBe('Done');
 });
 
-test('a conflict somebody else has already settled says so in the server’s words', async () => {
+test('a conflict somebody else has already settled gives the matching recovery', async () => {
   vi.stubGlobal(
     'fetch',
-    vi.fn(
-      async () =>
-        new Response('This entry has not changed in the repository since it was opened', {
-          status: 409,
-        }),
+    vi.fn(async () =>
+      Response.json(
+        {
+          code: 'CONFLICT_SETTLED',
+          error: 'This entry has not changed in the repository since it was opened',
+        },
+        { status: 409 },
+      ),
     ),
   );
   const root = show();
   await tick();
   flushSync();
 
-  expect(q(root, '[role="alert"]')?.textContent).toBe(
-    'This entry has not changed in the repository since it was opened',
+  expect(q(root, '[role="alert"]')?.textContent).toContain(
+    'Somebody else has already settled this conflict.',
   );
   expect(q(root, '.resolve-list')).toBe(null);
+});
+
+test('an open choice and retained refusal retranslate without another request', async () => {
+  const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
+    init?.method === 'POST'
+      ? Response.json(
+          { code: 'CONFLICT_CHANGED', error: 'This conflict changed.' },
+          { status: 409 },
+        )
+      : Response.json({
+          head: 'a1c9f2b0000',
+          version: 'reviewed-version',
+          questions: QUESTIONS,
+          merged: MERGED,
+        }),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  await tick();
+  flushSync();
+  const choices = sides(root);
+  choices[0]?.click();
+  choices[3]?.click();
+  choices[3]?.focus();
+  flushSync();
+  q<HTMLButtonElement>(root, '.actions .btn-primary')?.click();
+  await vi.waitFor(() =>
+    expect(q(root, '[role="alert"]')?.textContent).toContain('This conflict changed.'),
+  );
+  const calls = fetchMock.mock.calls.length;
+  const alert = q(root, '[role="alert"]');
+
+  uiLocale = 'de';
+  flushSync();
+
+  expect(q(root, '#resolve-h')?.textContent).toBe('Konflikt für Seaview Cottage auflösen');
+  expect(alert?.textContent).toContain('Dieser Konflikt hat sich geändert.');
+  expect(sides(root)[3]).toBe(choices[3]);
+  expect(choices[3]?.checked).toBe(true);
+  expect(document.activeElement).toBe(choices[3]);
+  expect(fetchMock).toHaveBeenCalledTimes(calls);
 });
 
 test('a failed conflict refresh leaves the previous report visible but not actionable', async () => {
@@ -244,7 +294,7 @@ test('a failed conflict refresh leaves the previous report visible but not actio
 
   const done = q<HTMLButtonElement>(root, '.actions .btn-primary');
   expect(done?.disabled).toBe(true);
-  expect(root.textContent).toContain('Repository unavailable');
+  expect(root.textContent).toContain('Those changes could not be read (503).');
   expect(root.textContent).toContain('Nothing was changed by both of you');
 
   q<HTMLButtonElement>(root, '[role="alert"] + button')?.click();

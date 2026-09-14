@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate the field-by-field conflict resolver into English and German, including choices,
+  merged-change explanations, timestamps, accessibility labels and recovery. Stable conflict
+  response codes distinguish a settled or changed report, stale answers and an unreachable
+  repository; live switching preserves the loaded report, selected sides, focus and retained
+  failure without another repository read or draft write.
+
 - Translate version history, field-by-field diffs, restore confirmation/recovery and preview-pane
   chrome into English and German. Live switching preserves history filters, selected versions,
   comparisons, dialogs, loaded diffs, the preview iframe and render identity without another

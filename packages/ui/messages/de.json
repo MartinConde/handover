@@ -925,6 +925,69 @@
   "pending_discard_remote_changed": "Diese Änderungen wurden möglicherweise an anderer Stelle geändert. Lade die Seite neu, bevor du fortfährst.",
   "pending_discard_failed": "Diese Änderungen wurden nicht verworfen ({status}).",
   "pending_diff_failed": "Die Änderungen an {page} konnten nicht gelesen werden ({status}).",
+  "conflict_title": "Konflikt für {title} auflösen",
+  "conflict_reading": "Änderungen werden gelesen…",
+  "conflict_report_unavailable": "Der Konfliktbericht ist nicht verfügbar. Lade ihn neu, bevor du auswählst, was erhalten bleiben soll.",
+  "conflict_intro": "Während deiner Bearbeitung wurde dieser Eintrag im Code geändert.",
+  "conflict_merged_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Ein Feld, das nur von einer Seite geändert wurde, ist bereits zusammengeführt.",
+        "countPlural=other": "{count} Felder, die nur von einer Seite geändert wurden, sind bereits zusammengeführt."
+      }
+    }
+  ],
+  "conflict_question_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Ein Feld wurde von beiden Seiten geändert und benötigt eine Entscheidung.",
+        "countPlural=other": "{count} Felder wurden von beiden Seiten geändert und benötigen eine Entscheidung."
+      }
+    }
+  ],
+  "conflict_nothing_to_answer": "Beide Seiten haben keine gleichen Felder geändert, daher musst du nichts auswählen.",
+  "conflict_keep_all_mine": "Alle eigenen behalten",
+  "conflict_take_all_theirs": "Alle aus dem Repository übernehmen",
+  "conflict_shortcut_explanation": "Alle eigenen behalten macht die Codeänderungen an {count} Feldern rückgängig. Alle aus dem Repository übernehmen verwirft, was du dort geschrieben hast. Bereits Zusammengeführtes bleibt in beiden Fällen erhalten.",
+  "conflict_yours": "Deine Version",
+  "conflict_theirs": "Repository-Version",
+  "conflict_you_at": "du, {date}",
+  "conflict_in_repository": "im Repository",
+  "conflict_commit": "Commit",
+  "conflict_language": "Sprache:",
+  "conflict_same_every_language": "In jeder Sprache gleich",
+  "conflict_both_started": "Euer gemeinsamer Ausgangswert war",
+  "conflict_which_to_keep": "Welche Version von {label} soll bleiben?",
+  "conflict_merged_for_you": "Für dich zusammengeführt",
+  "conflict_moved_up": "nach oben verschoben",
+  "conflict_moved_down": "nach unten verschoben",
+  "conflict_row_changed": "geändert: {change}",
+  "conflict_set_to": "auf {value} gesetzt",
+  "conflict_cleared": "geleert",
+  "conflict_value_changed": "{before} → {after}",
+  "conflict_rewritten": "neu geschrieben",
+  "conflict_empty": "leer",
+  "conflict_only_you_changed": "{change} — nur du hast das Feld geändert",
+  "conflict_only_code_changed": "{change} — nur der Code hat das Feld geändert",
+  "conflict_reload": "Konflikt neu laden",
+  "conflict_saving": "Wird gespeichert…",
+  "conflict_done_progress": "Fertig — {answered} von {total} beantwortet",
+  "conflict_done": "Fertig",
+  "conflict_foot_note": "Beim Abschließen wird ein neuer Entwurf über die Codeversion geschrieben. Veröffentlicht wird erst, wenn du auf Veröffentlichen drückst.",
+  "conflict_load_failed": "Diese Änderungen konnten nicht gelesen werden.",
+  "conflict_load_failed_status": "Diese Änderungen konnten nicht gelesen werden ({status}).",
+  "conflict_settled": "Jemand anderes hat diesen Konflikt bereits aufgelöst. Schließe diese Ansicht und öffne Unveröffentlichte Änderungen erneut, um die Liste zu aktualisieren.",
+  "conflict_changed": "Dieser Konflikt hat sich geändert. Lade ihn neu und prüfe die neuen Werte, bevor du antwortest.",
+  "conflict_answers_invalid": "Diese Antworten passen nicht mehr zu den Feldern des Konflikts. Lade ihn neu und prüfe die neuen Werte.",
+  "conflict_repository_unavailable": "Das Repository war nicht erreichbar. Prüfe die Verbindung und lade dann den Konflikt neu.",
+  "conflict_save_failed": "Der geöffnete Eintrag konnte das Speichern nicht abschließen, daher wurde der Konflikt nicht aufgelöst. Deine Auswahl bleibt erhalten; versuche Fertig erneut, sobald der Eintrag gespeichert werden kann.",
+  "conflict_unconfirmed": "Das Ergebnis konnte nicht bestätigt werden. Lade den Konflikt neu, bevor du fortfährst.",
+  "conflict_resolve_failed": "Der Konflikt wurde nicht aufgelöst.",
+  "conflict_resolve_failed_status": "Der Konflikt wurde nicht aufgelöst ({status}). Lade ihn neu, bevor du erneut auswählst.",
   "media_library_title": "Medien",
   "media_library_image_count": [
     {

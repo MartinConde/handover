@@ -316,7 +316,7 @@ export async function conflictView(
     formFor(collection, slug),
     entryPaths(collection, slug),
   );
-  if (!found) return new Response(SETTLED, { status: 409 });
+  if (!found) return Response.json({ code: 'CONFLICT_SETTLED', error: SETTLED }, { status: 409 });
   return Response.json({
     head: found.head,
     version: found.version,
@@ -353,18 +353,28 @@ export async function resolve(
     form,
     entryPaths(collection, slug),
   );
-  if (!found) return new Response(SETTLED, { status: 409 });
+  if (!found) return Response.json({ code: 'CONFLICT_SETTLED', error: SETTLED }, { status: 409 });
   if (!found.version || body?.version !== found.version)
-    return new Response('This conflict changed. Reload it and review the new values.', {
-      status: 409,
-    });
+    return Response.json(
+      {
+        code: 'CONFLICT_CHANGED',
+        error: 'This conflict changed. Reload it and review the new values.',
+      },
+      { status: 409 },
+    );
   const answering = (question: { path: string; locale?: string }) =>
     answers.filter((a) => a.path === question.path && (a.locale ?? '') === (question.locale ?? ''));
   if (
     answers.length !== found.questions.length ||
     found.questions.some((q) => answering(q).length !== 1)
   )
-    return new Response('Those are not the fields this entry disagrees about', { status: 409 });
+    return Response.json(
+      {
+        code: 'CONFLICT_ANSWERS_INVALID',
+        error: 'Those are not the fields this entry disagrees about',
+      },
+      { status: 409 },
+    );
   await resolveConflict('default', ctx.db(), form, found, answers);
   return Response.json({});
 }

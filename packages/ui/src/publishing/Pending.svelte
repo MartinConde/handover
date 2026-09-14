@@ -553,6 +553,7 @@ function askDiscard(entry: PendingEntry) {
           entry={resolving.key}
           title={named(resolving)}
           updated={resolving.updated_at}
+          {uiLocale}
           onclose={closeResolver}
           onresolved={() => resolving && resolved(resolving)}
         />

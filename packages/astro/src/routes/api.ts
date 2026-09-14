@@ -196,7 +196,10 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
   const past = params.path?.match(HISTORY);
   if (past) return answering(() => entryHistory(ctx, past[1] ?? '', past[2] ?? '', url));
   const against = params.path?.match(CONFLICT);
-  if (against) return answering(() => conflictView(ctx, against[1] ?? '', against[2] ?? ''));
+  if (against)
+    return answering(() => conflictView(ctx, against[1] ?? '', against[2] ?? ''), {
+      repository: 'CONFLICT_REPOSITORY_UNAVAILABLE',
+    });
   const entry = params.path?.match(ENTRY);
   if (entry) return answering(() => getEntry(ctx, entry[1] ?? '', entry[2] ?? ''));
   const list = params.path?.match(ENTRIES);
@@ -400,7 +403,10 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
       restoreVersion(ctx, restored[1] ?? '', restored[2] ?? '', request, locals.handover),
     );
   const settling = params.path?.match(CONFLICT);
-  if (settling) return answering(() => resolve(ctx, settling[1] ?? '', settling[2] ?? '', request));
+  if (settling)
+    return answering(() => resolve(ctx, settling[1] ?? '', settling[2] ?? '', request), {
+      repository: 'CONFLICT_REPOSITORY_UNAVAILABLE',
+    });
   const answered = params.path?.match(DRIFT);
   if (answered)
     return answering(() =>

@@ -1,12 +1,16 @@
 <script lang="ts">
 import type { Change, MergedChange, Question } from '@handover/core';
+import { messageText, responseMessage, type UiMessage } from '../errors.js';
+import { formatExactTime, messageOptions, type UiLocale } from '../i18n.js';
 import { coordinateEntryReplacement } from '../navigate';
+import * as m from '../paraglide/messages.js';
 import { request as fetch, uncertainResponse } from '../request.js';
 
 let {
   entry,
   title,
   updated,
+  uiLocale = 'en',
   onclose,
   onresolved,
 }: {
@@ -15,10 +19,12 @@ let {
   title: string;
   /** When the draft was last typed in, which is the only date the client owns here. */
   updated: number;
+  uiLocale?: UiLocale;
   onclose: () => void;
   /** The answers are written: the draft now sits on the file at HEAD and can publish. */
   onresolved: () => void;
 } = $props();
+const options = $derived(messageOptions(uiLocale));
 
 // The list it replaced is gone from the drawer, so the panel takes the focus with it.
 let panel = $state<HTMLElement>();
@@ -32,27 +38,35 @@ let version = $state('');
 let answers = $state<Record<string, 'ours' | 'theirs'>>({});
 let loading = $state(true);
 let busy = $state(false);
-let error = $state('');
+let error = $state<UiMessage>();
+const errorText = $derived(
+  error
+    ? [
+        messageText(error, uiLocale),
+        error.detail ? m.common_technical_detail({ detail: error.detail }, options) : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+    : '',
+);
 let reportKnown = $state(false);
 let reportCurrent = $state(false);
 
 // A question is one field of one language, or one every language shares.
 const key = (q: { path: string; locale?: string }) => `${q.locale ?? ''} ${q.path}`;
 const answered = $derived(questions.filter((q) => answers[key(q)]).length);
-const plural = (n: number, what: string) => `${n} ${n === 1 ? what.replace(/s$/, '') : what}`;
-
 $effect(() => {
   void load();
 });
 
 async function load() {
   loading = true;
-  error = '';
+  error = undefined;
   reportCurrent = false;
   const res = await fetch(`/admin/api/conflict/${entry}`);
   loading = false;
   if (!res.ok) {
-    error = await refusal(res);
+    error = await responseMessage(res, 'CONFLICT_LOAD_FAILED');
     return;
   }
   const body = (await res.json()) as {
@@ -70,12 +84,6 @@ async function load() {
   reportCurrent = true;
 }
 
-// A conflict somebody else settled, or a repository out of reach.
-const refusal = async (res: Response) =>
-  res.status === 409 || res.status === 503
-    ? await res.text()
-    : `Those changes could not be read (${res.status}).`;
-
 /** Every question at once, for the client who does not want to read them. */
 async function all(side: 'ours' | 'theirs') {
   if (!reportCurrent) return;
@@ -86,7 +94,7 @@ async function all(side: 'ours' | 'theirs') {
 async function done() {
   if (!reportCurrent) return;
   busy = true;
-  error = '';
+  error = undefined;
   let res: Response | undefined;
   const outcome = await coordinateEntryReplacement(entry, async () => {
     res = await fetch(`/admin/api/conflict/${entry}`, {
@@ -106,21 +114,21 @@ async function done() {
   });
   busy = false;
   if (!outcome.ok && outcome.reason === 'save') {
-    error = 'The open entry could not finish saving, so the conflict was not resolved.';
+    error = { code: 'CONFLICT_SAVE_FAILED' };
     return;
   }
   if (!outcome.ok && (outcome.reason === 'uncertain' || outcome.reason === 'reload')) {
     reportCurrent = false;
-    error = 'The result could not be confirmed. Reload the page before continuing.';
+    error = { code: 'CONFLICT_UNCONFIRMED' };
     return;
   }
   if (!outcome.ok) {
     reportCurrent = false;
     if (!res) {
-      error = 'The result could not be confirmed. Reload the page before continuing.';
+      error = { code: 'CONFLICT_UNCONFIRMED' };
       return;
     }
-    error = await refusal(res);
+    error = await responseMessage(res, 'CONFLICT_RESOLVE_FAILED');
     return;
   }
   onresolved();
@@ -130,27 +138,30 @@ async function done() {
 const said = (change: Change): string => {
   if (change.kind === 'row')
     return change.at === 'moved-up'
-      ? 'moved up'
+      ? m.conflict_moved_up({}, options)
       : change.at === 'moved-down'
-        ? 'moved down'
-        : change.at;
+        ? m.conflict_moved_down({}, options)
+        : m.conflict_row_changed({ change: change.at }, options);
   if (change.kind === 'value')
     return change.before === undefined
-      ? `set to ${change.after}`
+      ? m.conflict_set_to({ value: String(change.after ?? '') }, options)
       : change.after === undefined
-        ? 'cleared'
-        : `${change.before} → ${change.after}`;
-  return 'rewritten';
+        ? m.conflict_cleared({}, options)
+        : m.conflict_value_changed(
+            { before: String(change.before), after: String(change.after) },
+            options,
+          );
+  return m.conflict_rewritten({}, options);
 };
 </script>
 
 <!-- What this side says, with what it added marked. -->
 {#snippet value(change: Change)}
-  {#if change.kind === 'value'}{change.after ?? 'empty'}
+  {#if change.kind === 'value'}{change.after ?? m.conflict_empty({}, options)}
   {:else if change.kind === 'words'}{#each change.parts.filter((p) => p.mark !== 'del') as part, i (i)}{#if part.mark === 'ins'}<ins
         >{part.text}</ins
       >{:else}{part.text}{/if}{/each}
-  {:else}rewritten{/if}
+  {:else}{m.conflict_rewritten({}, options)}{/if}
 {/snippet}
 
 {#snippet side(q: Question, mine: boolean)}
@@ -166,11 +177,11 @@ const said = (change: Change): string => {
     >
     <span class="body">
       <!-- Literal spacing keeps Svelte blocks from joining words. -->
-      <b>{mine ? 'Yours' : 'Theirs'}{#if short}{' — '}{@render value(change)}{/if}</b>
+      <b>{mine ? m.conflict_yours({}, options) : m.conflict_theirs({}, options)}{#if short}{' — '}{@render value(change)}{/if}</b>
       {#if !short}<span class="quote">{@render value(change)}</span>{/if}
       <small>
-        {#if mine}you, {new Date(updated).toLocaleString()}
-        {:else}in the repository{#if head}{' · '}commit <code>{head.slice(0, 7)}</code>{/if}
+        {#if mine}{m.conflict_you_at({ date: formatExactTime(updated, uiLocale) }, options)}
+        {:else}{m.conflict_in_repository({}, options)}{#if head}{' · '}{m.conflict_commit({}, options)} <code>{head.slice(0, 7)}</code>{/if}
         {/if}
       </small>
     </span>
@@ -179,21 +190,19 @@ const said = (change: Change): string => {
 
 <div class="resolve" aria-labelledby="resolve-h" tabindex="-1" bind:this={panel}>
   <header>
-    <h3 id="resolve-h">Resolve {title}</h3>
+    <h3 id="resolve-h">{m.conflict_title({ title }, options)}</h3>
     <p>
       {#if loading}
-        Reading what changed…
+        {m.conflict_reading({}, options)}
       {:else if !reportKnown}
-        The conflict report is unavailable. Reload it before choosing what to keep.
+        {m.conflict_report_unavailable({}, options)}
       {:else}
-        Your developer changed this in the code while you were editing it.
-        {#if merged.length}{plural(merged.length, 'fields')} only one of you touched
-          {merged.length === 1 ? 'is' : 'are'} already merged.{/if}
+        {m.conflict_intro({}, options)}
+        {#if merged.length}{m.conflict_merged_count({ count: merged.length }, options)}{/if}
         {#if questions.length}
-          {plural(questions.length, 'fields')} {questions.length === 1 ? 'was' : 'were'} changed by
-          both of you and {questions.length === 1 ? 'needs' : 'need'} an answer.
+          {m.conflict_question_count({ count: questions.length }, options)}
         {:else}
-          Nothing was changed by both of you, so there is nothing to answer.
+          {m.conflict_nothing_to_answer({}, options)}
         {/if}
       {/if}
     </p>
@@ -203,16 +212,14 @@ const said = (change: Change): string => {
     <div class="resolve-shortcuts">
       <div class="btns">
         <button class="btn btn-sm" type="button" disabled={busy} onclick={() => all('ours')}>
-          Keep all mine
+          {m.conflict_keep_all_mine({}, options)}
         </button>
         <button class="btn btn-sm" type="button" disabled={busy} onclick={() => all('theirs')}>
-          Take all theirs
+          {m.conflict_take_all_theirs({}, options)}
         </button>
       </div>
       <p class="sub">
-        <strong>Keep all mine</strong> undoes the developer's change to
-        {plural(questions.length, 'fields')}. <strong>Take all theirs</strong> throws away what you
-        wrote in them. What is already merged is kept either way.
+        {m.conflict_shortcut_explanation({ count: questions.length }, options)}
       </p>
     </div>
   {/if}
@@ -224,16 +231,16 @@ const said = (change: Change): string => {
           <div class="head">
             <span class="name">{q.label}</span>
             {#if q.locale}
-              <span class="visually-hidden">Language:</span><span class="chips"><span class="chip">{q.locale.toUpperCase()}</span></span>
+              <span class="visually-hidden">{m.conflict_language({}, options)}</span><span class="chips"><span class="chip">{q.locale.toUpperCase()}</span></span>
             {:else}
-              <span class="badge">Same in every language</span>
+              <span class="badge">{m.conflict_same_every_language({}, options)}</span>
             {/if}
           </div>
           {#if q.base !== undefined}
-            <p class="base">You both started from <b>{q.base}</b></p>
+            <p class="base">{m.conflict_both_started({}, options)} <b>{q.base}</b></p>
           {/if}
           <fieldset class="sides">
-            <legend class="visually-hidden">Which {q.label} to keep</legend>
+            <legend class="visually-hidden">{m.conflict_which_to_keep({ label: q.label }, options)}</legend>
             {@render side(q, true)}
             {@render side(q, false)}
           </fieldset>
@@ -244,7 +251,7 @@ const said = (change: Change): string => {
 
   {#if merged.length}
     <details class="group">
-      <summary>Merged for you <span class="count">{merged.length}</span></summary>
+      <summary>{m.conflict_merged_for_you({}, options)} <span class="count">{merged.length}</span></summary>
       <ul class="merged-list">
         {#each merged as change (key({ path: change.change.path, locale: change.locale }))}
           <li>
@@ -253,7 +260,9 @@ const said = (change: Change): string => {
               {#if change.locale}<span class="chip">{change.locale.toUpperCase()}</span>{/if}
             </span>
             <span class="sub">
-              {said(change.change)} — only {change.side === 'ours' ? 'you' : 'the code'} changed it
+              {change.side === 'ours'
+                ? m.conflict_only_you_changed({ change: said(change.change) }, options)
+                : m.conflict_only_code_changed({ change: said(change.change) }, options)}
             </span>
           </li>
         {/each}
@@ -261,23 +270,22 @@ const said = (change: Change): string => {
     </details>
   {/if}
 
-  {#if error}<div class="notice notice-danger" role="alert">{error}</div><button type="button" class="btn" disabled={busy} onclick={load}>Reload conflict</button>{/if}
+  {#if error}<div class="notice notice-danger" role="alert">{errorText}</div><button type="button" class="btn" disabled={busy} onclick={load}>{m.conflict_reload({}, options)}</button>{/if}
 
   <div class="actions">
-    <button class="btn" type="button" disabled={busy} onclick={onclose}>Cancel</button>
+    <button class="btn" type="button" disabled={busy} onclick={onclose}>{m.common_cancel({}, options)}</button>
     <button
       class="btn btn-primary"
       type="button"
       disabled={busy || loading || !reportCurrent || answered !== questions.length}
       onclick={() => done()}
     >
-      {#if busy}Saving…
-      {:else if questions.length}Done — {answered} of {questions.length} answered
-      {:else}Done{/if}
+      {#if busy}{m.conflict_saving({}, options)}
+      {:else if questions.length}{m.conflict_done_progress({ answered, total: questions.length }, options)}
+      {:else}{m.conflict_done({}, options)}{/if}
     </button>
     <p class="foot-note">
-      Answering {questions.length === 1 ? 'it' : 'them all'} writes a new draft over the code's
-      version. Nothing is published until you press Publish.
+      {m.conflict_foot_note({ count: questions.length }, options)}
     </p>
   </div>
 </div>

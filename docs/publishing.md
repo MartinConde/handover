@@ -110,6 +110,11 @@ conflicts, a branch that moved, an unreachable repository and a commit whose fin
 not be confirmed. HTTP status and uncertainty still decide the available action; translated prose
 is never parsed to infer the outcome.
 
+The conflict resolver inside the drawer is bilingual too. A language switch keeps the same loaded
+three-way report, field choices, focus and report version without another repository request or
+draft write. If the report changes, is already settled or cannot be reached, the translated message
+still offers only the recovery the response code permits. See [Publish conflicts](conflicts.md).
+
 ## Creating, renaming and deleting
 
 **New entry** writes a draft and nothing else: the file appears in the repository at its
