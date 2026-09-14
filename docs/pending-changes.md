@@ -6,6 +6,14 @@ ones. What autosave stores and how an entry is published on its own are on
 [Drafts and publishing](publishing.md); what happens to the commit afterwards — the build
 pill and the revert — is [Build status and revert](build-status.md).
 
+The drawer follows the account's [interface language](interface-language.md). Changing it while
+the drawer is open updates its labels, plural counts, dates, hold ages, check severity and recovery
+guidance in place. The selected entries, blocked rows, open diff or confirmation, latest check
+result and any publish already in flight stay intact; changing interface language does not run the
+checks again or send another content or publish request. Entry titles, collection identifiers,
+content-language codes and the check rule's own finding remain the authored values returned by the
+site.
+
 ## The drawer
 
 - **Everything is checked to begin with, except entries on hold.** So "publish all of it"

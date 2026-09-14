@@ -658,6 +658,273 @@
       }
     }
   ],
+  "pending_title": "Unveröffentlichte Änderungen",
+  "pending_change_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": { "countPlural=one": "{count} Änderung", "countPlural=other": "{count} Änderungen" }
+    }
+  ],
+  "pending_selected_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} ausgewählt",
+        "countPlural=other": "{count} ausgewählt"
+      }
+    }
+  ],
+  "pending_conflict_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": { "countPlural=one": "{count} Konflikt", "countPlural=other": "{count} Konflikte" }
+    }
+  ],
+  "pending_hold_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} zurückgestellt",
+        "countPlural=other": "{count} zurückgestellt"
+      }
+    }
+  ],
+  "pending_collection_count": [
+    {
+      "declarations": [
+        "input count",
+        "input collection",
+        "input singular",
+        "local countPlural = count: plural"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} {singular}",
+        "countPlural=other": "{count} {collection}"
+      }
+    }
+  ],
+  "pending_redirect_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} Weiterleitung",
+        "countPlural=other": "{count} Weiterleitungen"
+      }
+    }
+  ],
+  "pending_file_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": { "countPlural=one": "{count} Datei", "countPlural=other": "{count} Dateien" }
+    }
+  ],
+  "pending_include": "{title} einschließen",
+  "pending_somebody": "jemand",
+  "pending_on_hold_by": "Zurückgestellt · {name}",
+  "pending_on_hold_by_age": "Zurückgestellt · {name} · {age}",
+  "pending_day_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": { "countPlural=one": "{count} Tag", "countPlural=other": "{count} Tage" }
+    }
+  ],
+  "pending_changed_repository": "Seit dem Öffnen im Repository geändert",
+  "pending_resolve": "Auflösen",
+  "pending_resolve_entry": "Konflikt für {title} auflösen",
+  "pending_not_ready": "Nicht bereit zur Veröffentlichung",
+  "pending_languages_disagree": "Sprachen stimmen nicht überein",
+  "pending_edited": "bearbeitet {date}",
+  "pending_discard": "Verwerfen",
+  "pending_discard_entry": "Eigene Änderungen an {title} verwerfen",
+  "pending_what_changed": "Was hat sich in {title} geändert?",
+  "pending_riding_along": "Wird mitgenommen",
+  "pending_redirect": "Weiterleitung",
+  "pending_redirect_reason": "— weil du die Webadresse geändert hast",
+  "pending_reading_changes": "Änderungen werden gelesen…",
+  "pending_nothing_to_show": "Nichts anzuzeigen.",
+  "pending_close": "Schließen",
+  "pending_select": "Auswählen",
+  "pending_all": "alle",
+  "pending_none": "keine",
+  "pending_select_all_label": "Alle Änderungen auswählen",
+  "pending_select_none_label": "Keine Änderungen auswählen",
+  "pending_nothing_to_publish": "Nichts zu veröffentlichen",
+  "pending_published_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} Änderung veröffentlicht",
+        "countPlural=other": "{count} Änderungen veröffentlicht"
+      }
+    }
+  ],
+  "pending_commit_on_way": "Ein Commit ist unterwegs; die Website wird in ein bis zwei Minuten neu gebaut.",
+  "pending_revert": "Diese Veröffentlichung zurücknehmen",
+  "pending_checks": "Prüfungen",
+  "pending_checks_failed": "Die Prüfungen konnten diesmal nicht ausgeführt werden; daher wurde nichts in dieser Liste geprüft.",
+  "pending_checks_summary": [
+    {
+      "declarations": ["input verdict", "input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{verdict} Der ausgewählte Eintrag wird jetzt und erneut beim Drücken von Veröffentlichen geprüft.",
+        "countPlural=other": "{verdict} Die {count} ausgewählten Einträge werden jetzt und erneut beim Drücken von Veröffentlichen geprüft."
+      }
+    }
+  ],
+  "pending_elsewhere": "Anderswo auf der Website",
+  "pending_still_on_hold": "Weiterhin zurückgestellt",
+  "pending_on_hold": "Zurückgestellt",
+  "pending_hold_release_warning": "Diese Veröffentlichung hebt die Zurückstellung auf. Das wird protokolliert und ist für die Person, die sie gesetzt hat, im Aktivitätsprotokoll sichtbar.",
+  "pending_hold_guidance": "Die bearbeitende Person hat diese Einträge als nicht bereit markiert, daher bleiben sie ausgeschlossen. Durch Auswählen wird ein Eintrag eingeschlossen und seine Zurückstellung aufgehoben; das Aktivitätsprotokoll hält fest, wer dies getan hat.",
+  "pending_everything_published": "Alles ist veröffentlicht",
+  "pending_every_edit_published": "Jede Änderung ist im Repository.",
+  "pending_publishing_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} Änderung wird veröffentlicht…",
+        "countPlural=other": "{count} Änderungen werden veröffentlicht…"
+      }
+    }
+  ],
+  "pending_publishing": "Wird veröffentlicht…",
+  "pending_publish": "Veröffentlichen",
+  "pending_fix_errors": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} Fehler vor der Veröffentlichung beheben",
+        "countPlural=other": "{count} Fehler vor der Veröffentlichung beheben"
+      }
+    }
+  ],
+  "pending_publish_anyway": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Trotzdem veröffentlichen ({count} Warnung)",
+        "countPlural=other": "Trotzdem veröffentlichen ({count} Warnungen)"
+      }
+    }
+  ],
+  "pending_publish_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} Änderung veröffentlichen",
+        "countPlural=other": "{count} Änderungen veröffentlichen"
+      }
+    }
+  ],
+  "pending_waits_for_conflict": "Die Veröffentlichung wartet, solange ein Konflikt geöffnet ist: Der Rest würde im selben Commit veröffentlicht, und dieser Eintrag ist dafür noch nicht bereit.",
+  "pending_everything_on_hold": "Alles, was noch hier ist, wurde zurückgestellt. Wähle einen Eintrag aus, um ihn einzuschließen und die Zurückstellung aufzuheben.",
+  "pending_everything_blocked": "Nichts kann veröffentlicht werden: Jeder Eintrag wird durch die Markierung in seiner Zeile zurückgehalten.",
+  "pending_nothing_selected": "Nichts ist ausgewählt. Wähle aus, was du veröffentlichen möchtest.",
+  "pending_some_blocked": "Die oben markierten Einträge werden einzeln zurückgehalten; der Rest wird weiterhin veröffentlicht.",
+  "pending_publish_explanation": "Ein Commit, dann wird die Website neu gebaut und ist in 1–3 Minuten live. Es wird nichts geschrieben, bis der gesamte Satz übernommen wurde.",
+  "pending_discard_question": "Eigene Änderungen an {title} verwerfen?",
+  "pending_discard_explanation": "Deine unveröffentlichten Änderungen an diesem Eintrag werden verworfen. Anschließend wird er mit allen dortigen Änderungen erneut aus dem Repository gelesen. Die veröffentlichte Seite ist nicht betroffen.",
+  "pending_discarding": "Wird verworfen…",
+  "pending_discard_changes": "Änderungen verwerfen",
+  "pending_publish_entry_question": "{title} veröffentlichen?",
+  "pending_publish_entry_intro": "Damit wird nur dieser Eintrag veröffentlicht. Alles andere, woran du gearbeitet hast, bleibt unveröffentlicht.",
+  "pending_language_file": "Die Datei auf {language}",
+  "pending_language_files": "Alle {count} Sprachdateien",
+  "pending_entry_checks_failed": "Die Prüfungen konnten diesmal nicht ausgeführt werden; daher wurde hier nichts geprüft.",
+  "pending_entry_publish_explanation": "Ein Commit, dann wird die Website neu gebaut und ist in 1–3 Minuten live. Der Adminbereich kann beim Bereitstellen neu geladen werden.",
+  "pending_publish_this_entry": "Diesen Eintrag veröffentlichen",
+  "check_severity_error": "Fehler",
+  "check_severity_warning": "Warnung",
+  "check_severity_note": "Hinweis",
+  "check_languages": "Sprachen:",
+  "check_go_to_field": "Zum Feld",
+  "check_nothing_found": "Nichts gefunden.",
+  "check_error_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": { "countPlural=one": "{count} Fehler", "countPlural=other": "{count} Fehler" }
+    }
+  ],
+  "check_warning_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": { "countPlural=one": "{count} Warnung", "countPlural=other": "{count} Warnungen" }
+    }
+  ],
+  "check_note_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": { "countPlural=one": "{count} Hinweis", "countPlural=other": "{count} Hinweise" }
+    }
+  ],
+  "check_verdict_error": "{counted}. Der Fehler muss zuerst behoben werden.",
+  "check_verdict_warning": "{counted}. Warnungen verhindern die Veröffentlichung nie.",
+  "check_verdict_clear": "{counted} — nichts steht im Weg.",
+  "publish_save_failed": "Nichts wurde veröffentlicht. Deine letzten Änderungen konnten nicht gespeichert werden. Prüfe die Verbindung und versuche es erneut.",
+  "publish_checks_blocked": "Nichts wurde veröffentlicht. Die Prüfungen haben gerade ein Hindernis gefunden; es ist oben aufgeführt.",
+  "publish_response_lost": "Die Antwort auf die Veröffentlichung ging verloren. Der geöffnete Eintrag wird neu geladen, bevor du fortfährst.",
+  "publish_entry_response_lost": "Die Antwort auf die Veröffentlichung ging verloren. Dieser Eintrag wird neu geladen, bevor du fortfährst.",
+  "publish_reload_failed": "Die Änderungen wurden veröffentlicht, aber der geöffnete Eintrag konnte nicht neu geladen werden. Lade die Seite neu.",
+  "publish_entry_reload_failed": "Der Eintrag wurde veröffentlicht, aber diese Ansicht konnte nicht neu geladen werden. Lade die Seite neu.",
+  "publish_failed": "Nichts wurde veröffentlicht. Versuche es erneut.",
+  "publish_failed_status": "Die Veröffentlichung ist fehlgeschlagen ({status}). Nichts wurde geändert.",
+  "publish_incomplete": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Nichts wurde veröffentlicht. Ein Eintrag ist nicht fertig. Öffne ihn, um zu sehen, was fehlt. Lösche ihn, wenn er noch nicht ausgefüllt werden kann.",
+        "countPlural=other": "Nichts wurde veröffentlicht. {count} Einträge sind nicht fertig. Öffne sie, um zu sehen, was fehlt. Lösche diejenigen, die noch nicht ausgefüllt werden können."
+      }
+    }
+  ],
+  "publish_drift": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Nichts wurde veröffentlicht. Bei einem Eintrag stimmen die Sprachen bei den Blöcken nicht überein. Die Dateien müssen vor der Veröffentlichung übereinstimmen.",
+        "countPlural=other": "Nichts wurde veröffentlicht. Bei {count} Einträgen stimmen die Sprachen bei den Blöcken nicht überein. Die Dateien müssen vor der Veröffentlichung übereinstimmen."
+      }
+    }
+  ],
+  "publish_conflict": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Nichts wurde veröffentlicht. Ein Eintrag wurde im Repository geändert, nachdem du ihn geöffnet hattest. Löse den Konflikt auf, um deinen Text zu behalten, oder verwirf deine Änderungen, um die Version aus dem Repository zu übernehmen.",
+        "countPlural=other": "Nichts wurde veröffentlicht. {count} Einträge wurden im Repository geändert, nachdem du sie geöffnet hattest. Löse die Konflikte auf, um deinen Text zu behalten, oder verwirf deine Änderungen, um die Versionen aus dem Repository zu übernehmen."
+      }
+    }
+  ],
+  "publish_ref_moved": "Nichts wurde veröffentlicht, weil sich das Repository während der Vorbereitung geändert hat. Versuche es erneut.",
+  "publish_repository_unavailable": "Nichts wurde veröffentlicht, weil das Repository nicht erreichbar war. Prüfe die Verbindung und versuche es erneut.",
+  "publish_finalization_pending": "Der Veröffentlichungs-Commit wurde erstellt, aber sein Ergebnis konnte nicht bestätigt werden. Lade die Seite neu, bevor du erneut veröffentlichst.",
+  "publish_entry_incomplete": "Nichts wurde veröffentlicht. Etwas, das dieser Eintrag benötigt, fehlt noch. Öffne jede seiner Sprachen, um zu sehen, was fehlt.",
+  "publish_entry_drift": "Nichts wurde veröffentlicht. Die Sprachen dieses Eintrags stimmen bei den Blöcken nicht überein. Dies wird im Panel auf dieser Seite geklärt.",
+  "pending_discard_save_failed": "Die Änderungen wurden nicht verworfen, weil der geöffnete Eintrag das Speichern nicht abschließen konnte.",
+  "pending_discard_unconfirmed": "Das Ergebnis des Verwerfens konnte nicht bestätigt werden. Lade die Seite neu, bevor du fortfährst.",
+  "pending_discard_remote_changed": "Diese Änderungen wurden möglicherweise an anderer Stelle geändert. Lade die Seite neu, bevor du fortfährst.",
+  "pending_discard_failed": "Diese Änderungen wurden nicht verworfen ({status}).",
+  "pending_diff_failed": "Die Änderungen an {page} konnten nicht gelesen werden ({status}).",
   "media_library_title": "Medien",
   "media_library_image_count": [
     {

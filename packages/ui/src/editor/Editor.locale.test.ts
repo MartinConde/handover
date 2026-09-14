@@ -173,6 +173,43 @@ test('German publish tooltips keep the header reason order', async () => {
   ]);
 });
 
+test('an open publish confirmation retranslates without rerunning checks', async () => {
+  const fetchMock = vi.fn(async (url: string) =>
+    url.startsWith('/admin/api/locks/')
+      ? Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120_000 })
+      : url === '/admin/api/publish/checks'
+        ? Response.json({
+            results: [
+              {
+                check: 'image-alt',
+                entry: 'listings/seaview-cottage',
+                path: 'src/content/listings/en/seaview-cottage.yaml',
+                fieldPath: 'photo.alt',
+                severity: 'warn',
+                message: 'Photo has no alt text',
+              },
+            ],
+          })
+        : Response.json({}),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  app = mount(EditorLocaleFixture, { target: document.body, props: { pending: true } });
+  await vi.waitFor(() => expect(q<HTMLButtonElement>('.entry-header .btn-primary')).toBeTruthy());
+  q<HTMLButtonElement>('.entry-header .btn-primary')?.click();
+  await vi.waitFor(() => expect(q('#publish-h')?.textContent).toBe('Publish Seaview Cottage?'));
+  flushSync();
+  const dialog = q<HTMLDialogElement>('dialog[open]');
+  const calls = fetchMock.mock.calls.length;
+
+  switchLocale();
+
+  expect(q<HTMLDialogElement>('dialog[open]')).toBe(dialog);
+  expect(q('#publish-h')?.textContent).toBe('Seaview Cottage veröffentlichen?');
+  expect(q('.checks .sev')?.textContent).toBe('Warnung');
+  expect(q('.dialog .btn-primary')?.textContent).toBe('Trotzdem veröffentlichen (1 Warnung)');
+  expect(fetchMock).toHaveBeenCalledTimes(calls);
+});
+
 test('content-language creation controls retranslate without changing the selected language', async () => {
   const fetchMock = vi.fn(async (url: string) =>
     url.startsWith('/admin/api/locks/')

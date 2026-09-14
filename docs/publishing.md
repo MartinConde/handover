@@ -102,6 +102,14 @@ lists them with a checkbox each and commits the checked ones. What the drawer sh
 refuses, holding an entry back, and what happens after the commit — build status and revert —
 are on [Pending changes](pending-changes.md).
 
+Both the one-entry confirmation and the pending-changes drawer follow the account's
+[interface language](interface-language.md). A live English/Deutsch switch preserves the exact
+publish selection, checks, locks and pending operation. Already-visible Handover recovery text is
+formatted again from a stable result code, including incomplete drafts, block drift, repository
+conflicts, a branch that moved, an unreachable repository and a commit whose final response could
+not be confirmed. HTTP status and uncertainty still decide the available action; translated prose
+is never parsed to infer the outcome.
+
 ## Creating, renaming and deleting
 
 **New entry** writes a draft and nothing else: the file appears in the repository at its

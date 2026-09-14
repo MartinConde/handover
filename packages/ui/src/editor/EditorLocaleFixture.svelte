@@ -10,6 +10,7 @@ let {
   scalarFeedback = false,
   targetOffered = false,
   translator = false,
+  pending = false,
 }: {
   initialUiLocale?: UiLocale;
   publishState?: 'clean' | 'drift' | 'missing';
@@ -17,6 +18,7 @@ let {
   scalarFeedback?: boolean;
   targetOffered?: boolean;
   translator?: boolean;
+  pending?: boolean;
 } = $props();
 // svelte-ignore state_referenced_locally -- each test mount intentionally fixes its initial locale
 let uiLocale = $state<UiLocale>(initialUiLocale);
@@ -64,7 +66,7 @@ const entry = {
       ? { count: 0, featured: true, availableFrom: 'wrong', status: '', note: '' }
       : {}),
   },
-  pending: [] as string[],
+  pending: pending ? ['en'] : ([] as string[]),
   published: ['en'],
   problems: scalarFeedback
     ? [

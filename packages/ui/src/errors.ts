@@ -83,6 +83,13 @@ const KNOWN_CODES = new Set([
   'ENTRY_LOCALE_LAST_FILE',
   'REDIRECT_NOT_FOUND',
   'REDIRECT_MANAGED',
+  'PUBLISH_INCOMPLETE',
+  'PUBLISH_DRIFT',
+  'PUBLISH_CONFLICT',
+  'PUBLISH_REF_MOVED',
+  'PUBLISH_REPOSITORY_UNAVAILABLE',
+  'PUBLISH_FINALIZATION_PENDING',
+  'PUBLISH_CHECKS_FAILED',
 ]);
 
 const numberFormats = new Map<UiLocale, Intl.NumberFormat>();
@@ -281,6 +288,53 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
       return m.redirect_validation_shadows({ page: message.page ?? '' }, options);
     case 'REDIRECT_FROM_EXISTS':
       return m.redirect_validation_exists({}, options);
+    case 'PUBLISH_SAVE_FAILED':
+      return m.publish_save_failed({}, options);
+    case 'PUBLISH_CHECKS_BLOCKED':
+      return m.publish_checks_blocked({}, options);
+    case 'PUBLISH_RESPONSE_LOST':
+      return m.publish_response_lost({}, options);
+    case 'PUBLISH_ENTRY_RESPONSE_LOST':
+      return m.publish_entry_response_lost({}, options);
+    case 'PUBLISH_RELOAD_FAILED':
+      return m.publish_reload_failed({}, options);
+    case 'PUBLISH_ENTRY_RELOAD_FAILED':
+      return m.publish_entry_reload_failed({}, options);
+    case 'PUBLISH_FAILED':
+      return message.status
+        ? m.publish_failed_status({ status: message.status }, options)
+        : m.publish_failed({}, options);
+    case 'PUBLISH_INCOMPLETE':
+      return m.publish_incomplete({ count: message.count ?? 0 }, options);
+    case 'PUBLISH_DRIFT':
+      return m.publish_drift({ count: message.count ?? 0 }, options);
+    case 'PUBLISH_CONFLICT':
+      return m.publish_conflict({ count: message.count ?? 0 }, options);
+    case 'PUBLISH_REF_MOVED':
+      return m.publish_ref_moved({}, options);
+    case 'PUBLISH_REPOSITORY_UNAVAILABLE':
+      return m.publish_repository_unavailable({}, options);
+    case 'PUBLISH_FINALIZATION_PENDING':
+      return m.publish_finalization_pending({}, options);
+    case 'PUBLISH_ENTRY_INCOMPLETE':
+      return m.publish_entry_incomplete({}, options);
+    case 'PUBLISH_ENTRY_DRIFT':
+      return m.publish_entry_drift({}, options);
+    case 'PUBLISH_CHECKS_FAILED':
+      return m.pending_checks_failed({}, options);
+    case 'PENDING_DISCARD_SAVE_FAILED':
+      return m.pending_discard_save_failed({}, options);
+    case 'PENDING_DISCARD_UNCONFIRMED':
+      return m.pending_discard_unconfirmed({}, options);
+    case 'PENDING_DISCARD_REMOTE_CHANGED':
+      return m.pending_discard_remote_changed({}, options);
+    case 'PENDING_DISCARD_FAILED':
+      return m.pending_discard_failed({ status: message.status ?? 0 }, options);
+    case 'PENDING_DIFF_FAILED':
+      return m.pending_diff_failed(
+        { page: message.page ?? '', status: message.status ?? 0 },
+        options,
+      );
     case 'EDITOR_HOLD_FAILED':
       return m.editor_hold_failed({}, options);
     case 'EDITOR_LOCK_TAKE_FAILED':

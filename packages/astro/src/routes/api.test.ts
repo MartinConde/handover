@@ -1605,6 +1605,7 @@ test('publishing is refused when a global is missing something its schema needs'
 
   expect(res.status).toBe(422);
   expect(await res.json()).toEqual({
+    code: 'PUBLISH_INCOMPLETE',
     error: 'src/content/globals/en/site.yaml is missing something the schema needs',
     paths: ['src/content/globals/en/site.yaml'],
   });
@@ -2077,6 +2078,7 @@ test('publishing is 409 when a file changed in the repository since the draft wa
   expect(res.status).toBe(409);
   // The drawer badges the rows it names, so the paths come back as data, not only as prose.
   expect(await res.json()).toEqual({
+    code: 'PUBLISH_CONFLICT',
     error: 'src/content/listings/en/mill-house.yaml changed in the repository after it was opened',
     paths: ['src/content/listings/en/mill-house.yaml'],
   });
@@ -2094,6 +2096,7 @@ test('publishing is refused when a stored draft is not everything the schema nee
   const res = await POST(post('publish', ''));
   expect(res.status).toBe(422);
   expect(await res.json()).toEqual({
+    code: 'PUBLISH_INCOMPLETE',
     error: 'src/content/listings/en/mill-house.yaml is missing something the schema needs',
     paths: ['src/content/listings/en/mill-house.yaml'],
   });
@@ -2134,7 +2137,47 @@ test('publishing is 409 when the branch moved under it', async () => {
   publishDrafts.mockImplementationOnce(async () => {
     throw new RefMovedError('main moved past abc123');
   });
-  expect((await POST(post('publish', ''))).status).toBe(409);
+  const res = await POST(post('publish', ''));
+  expect(res.status).toBe(409);
+  expect(await res.json()).toEqual({ code: 'PUBLISH_REF_MOVED', error: 'main moved past abc123' });
+});
+
+test('publish and pre-publish repository failures carry operation-specific codes', async () => {
+  const message = 'The GitHub App cannot see acme/site.';
+  readyDrafts.mockImplementationOnce(async () => {
+    throw new RepoUnreachableError(message);
+  });
+  const publishRes = await POST(post('publish', ''));
+  expect(publishRes.status).toBe(503);
+  expect(await publishRes.json()).toEqual({
+    code: 'PUBLISH_REPOSITORY_UNAVAILABLE',
+    error: message,
+  });
+
+  readyDrafts.mockImplementationOnce(async () => {
+    throw new RepoUnreachableError(message);
+  });
+  const checksRes = await POST(post('publish/checks', JSON.stringify({ entries: [] })));
+  expect(checksRes.status).toBe(503);
+  expect(await checksRes.json()).toEqual({ code: 'PUBLISH_CHECKS_FAILED', error: message });
+});
+
+test('a publish awaiting database finalization carries a stable recovery code', async () => {
+  const { OperationFinalizationError } = await import('@handover/core');
+  publishDrafts.mockImplementationOnce(async () => {
+    throw new OperationFinalizationError('publish-operation', 'def4567890');
+  });
+
+  const res = await POST(post('publish', ''));
+
+  expect(res.status).toBe(503);
+  expect(await res.json()).toEqual({
+    code: 'PUBLISH_FINALIZATION_PENDING',
+    error: 'The commit succeeded, but its database finalization still needs to be retried.',
+    reason: 'needs-finalization',
+    operation_id: 'publish-operation',
+    commit_sha: 'def4567890',
+  });
 });
 
 test('the browser cannot hand file contents to the publish endpoint', async () => {
@@ -3292,6 +3335,7 @@ test('publishing an entry whose languages have drifted apart is refused', async 
 
   expect(res.status).toBe(409);
   expect(await res.json()).toEqual({
+    code: 'PUBLISH_DRIFT',
     error:
       "src/content/pages/en/home.yaml has drifted apart from the entry's other languages — resolve it in the editor",
     paths: ['src/content/pages/en/home.yaml'],
@@ -3497,6 +3541,7 @@ test('a block answered into English is refused for what its schema needs, not fo
 
   expect(res.status).toBe(422);
   expect(await res.json()).toEqual({
+    code: 'PUBLISH_INCOMPLETE',
     error: 'src/content/pages/en/home.yaml is missing something the schema needs',
     paths: ['src/content/pages/en/home.yaml'],
   });

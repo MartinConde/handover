@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate the pending-changes drawer and one-entry publish confirmation into English and German,
+  including selection and hold counts, precheck summaries, dates, accessibility labels and retained
+  publish/discard recovery. Stable publish/check response codes preserve status, paths, drift,
+  conflict and uncertain-finalization semantics; live switching keeps selections, locks, dialogs,
+  check results and in-flight work without another content request or check pass.
+
 - Translate redirects, off-site destination choices, hidden-address summaries and localized-address
   validation into English and German. Stable redirect, address, and last-language error descriptors
   preserve HTTP outcomes and legacy diagnostics. Live switching keeps paths, filters, selected

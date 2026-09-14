@@ -238,6 +238,21 @@ test('offsite and address descriptors preserve parameters and translate in Germa
   );
 });
 
+test('publish descriptors preserve recovery identity and plural parameters', async () => {
+  const moved = await responseMessage(
+    Response.json({ code: 'PUBLISH_REF_MOVED', error: 'main moved past abc123' }, { status: 409 }),
+    'PUBLISH_FAILED',
+  );
+  expect(moved).toEqual({ code: 'PUBLISH_REF_MOVED', status: 409 });
+  expect(messageText(moved, 'de')).toContain('Repository');
+
+  expect(messageText({ code: 'PUBLISH_CONFLICT', count: 1 }, 'en')).toContain('One entry changed');
+  expect(messageText({ code: 'PUBLISH_CONFLICT', count: 2 }, 'de')).toContain('2 Einträge wurden');
+  expect(messageText({ code: 'PUBLISH_FINALIZATION_PENDING' }, 'de')).toContain(
+    'konnte nicht bestätigt werden',
+  );
+});
+
 test('password length, token expiry, and general reset failures give different recovery', () => {
   expect(messageText({ code: 'PASSWORD_TOO_LONG' }, 'de')).toBe(
     'Darf höchstens 128 Zeichen lang sein',

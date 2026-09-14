@@ -655,6 +655,282 @@
       }
     }
   ],
+  "pending_title": "Unpublished changes",
+  "pending_change_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} change",
+        "countPlural=other": "{count} changes"
+      }
+    }
+  ],
+  "pending_selected_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} selected",
+        "countPlural=other": "{count} selected"
+      }
+    }
+  ],
+  "pending_conflict_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} conflict",
+        "countPlural=other": "{count} conflicts"
+      }
+    }
+  ],
+  "pending_hold_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} on hold",
+        "countPlural=other": "{count} on hold"
+      }
+    }
+  ],
+  "pending_collection_count": [
+    {
+      "declarations": [
+        "input count",
+        "input collection",
+        "input singular",
+        "local countPlural = count: plural"
+      ],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} {singular}",
+        "countPlural=other": "{count} {collection}"
+      }
+    }
+  ],
+  "pending_redirect_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} redirect",
+        "countPlural=other": "{count} redirects"
+      }
+    }
+  ],
+  "pending_file_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} file",
+        "countPlural=other": "{count} files"
+      }
+    }
+  ],
+  "pending_include": "Include {title}",
+  "pending_somebody": "somebody",
+  "pending_on_hold_by": "On hold · {name}",
+  "pending_on_hold_by_age": "On hold · {name} · {age}",
+  "pending_day_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": { "countPlural=one": "{count} day", "countPlural=other": "{count} days" }
+    }
+  ],
+  "pending_changed_repository": "Changed in the repository since you opened it",
+  "pending_resolve": "Resolve",
+  "pending_resolve_entry": "Resolve {title}",
+  "pending_not_ready": "Not ready to publish",
+  "pending_languages_disagree": "Languages disagree",
+  "pending_edited": "edited {date}",
+  "pending_discard": "Discard",
+  "pending_discard_entry": "Discard your changes to {title}",
+  "pending_what_changed": "What changed in {title}",
+  "pending_riding_along": "Riding along",
+  "pending_redirect": "Redirect",
+  "pending_redirect_reason": "— because you changed the web address",
+  "pending_reading_changes": "Reading what changed…",
+  "pending_nothing_to_show": "Nothing to show.",
+  "pending_close": "Close",
+  "pending_select": "Select",
+  "pending_all": "all",
+  "pending_none": "none",
+  "pending_select_all_label": "Select all the changes",
+  "pending_select_none_label": "Select none of the changes",
+  "pending_nothing_to_publish": "Nothing to publish",
+  "pending_published_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Published {count} change",
+        "countPlural=other": "Published {count} changes"
+      }
+    }
+  ],
+  "pending_commit_on_way": "One commit is on its way; the site rebuilds in a minute or two.",
+  "pending_revert": "Revert this publish",
+  "pending_checks": "Checks",
+  "pending_checks_failed": "The checks could not be run this time, so nothing on this list has been looked at.",
+  "pending_checks_summary": [
+    {
+      "declarations": ["input verdict", "input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{verdict} Checked over the entry you have selected, and again when you press Publish.",
+        "countPlural=other": "{verdict} Checked over the {count} entries you have selected, and again when you press Publish."
+      }
+    }
+  ],
+  "pending_elsewhere": "Elsewhere on the site",
+  "pending_still_on_hold": "Still on hold",
+  "pending_on_hold": "On hold",
+  "pending_hold_release_warning": "Publishing this releases the hold. It is logged, and whoever set it sees it in the activity log.",
+  "pending_hold_guidance": "Whoever is editing these says they are not ready, so they are left out. Checking one includes it and releases the hold — the activity log records who did.",
+  "pending_everything_published": "Everything is published",
+  "pending_every_edit_published": "Every edit is in the repository.",
+  "pending_publishing_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Publishing {count} change…",
+        "countPlural=other": "Publishing {count} changes…"
+      }
+    }
+  ],
+  "pending_publishing": "Publishing…",
+  "pending_publish": "Publish",
+  "pending_fix_errors": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Fix {count} error to publish",
+        "countPlural=other": "Fix {count} errors to publish"
+      }
+    }
+  ],
+  "pending_publish_anyway": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Publish anyway ({count} warning)",
+        "countPlural=other": "Publish anyway ({count} warnings)"
+      }
+    }
+  ],
+  "pending_publish_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Publish {count} change",
+        "countPlural=other": "Publish {count} changes"
+      }
+    }
+  ],
+  "pending_waits_for_conflict": "Publishing waits while a conflict is open: the rest would go out in the same commit, and this entry is not ready to be in it.",
+  "pending_everything_on_hold": "Everything still here is on hold. Check one to include it — that releases the hold.",
+  "pending_everything_blocked": "Nothing can go out: every entry here is held back by what is marked on its row.",
+  "pending_nothing_selected": "Nothing is selected. Check what you want to publish.",
+  "pending_some_blocked": "The entries marked above are held back on their own; the rest still publish.",
+  "pending_publish_explanation": "One commit, then the site rebuilds — live in 1–3 minutes. Nothing is written until the whole set lands.",
+  "pending_discard_question": "Discard your changes to {title}?",
+  "pending_discard_explanation": "Your unpublished changes to this entry are thrown away and it is read from the repository again, with whatever was changed there. The published page is not affected.",
+  "pending_discarding": "Discarding…",
+  "pending_discard_changes": "Discard changes",
+  "pending_publish_entry_question": "Publish {title}?",
+  "pending_publish_entry_intro": "This publishes it on its own. Anything else you have been working on stays unpublished.",
+  "pending_language_file": "The {language} file",
+  "pending_language_files": "All {count} language files",
+  "pending_entry_checks_failed": "The checks could not be run this time, so nothing here has been looked at.",
+  "pending_entry_publish_explanation": "One commit, then the site rebuilds — live in 1–3 minutes. The admin may reload while it deploys.",
+  "pending_publish_this_entry": "Publish this entry",
+  "check_severity_error": "Error",
+  "check_severity_warning": "Warning",
+  "check_severity_note": "Note",
+  "check_languages": "Languages:",
+  "check_go_to_field": "Go to field",
+  "check_nothing_found": "Nothing found.",
+  "check_error_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": { "countPlural=one": "{count} error", "countPlural=other": "{count} errors" }
+    }
+  ],
+  "check_warning_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": { "countPlural=one": "{count} warning", "countPlural=other": "{count} warnings" }
+    }
+  ],
+  "check_note_count": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": { "countPlural=one": "{count} note", "countPlural=other": "{count} notes" }
+    }
+  ],
+  "check_verdict_error": "{counted}. The error has to go first.",
+  "check_verdict_warning": "{counted}. Warnings never stop a publish.",
+  "check_verdict_clear": "{counted} — nothing is in the way.",
+  "publish_save_failed": "Nothing was published. Your latest changes could not be saved — check your connection and try again.",
+  "publish_checks_blocked": "Nothing was published. The checks found something in the way just now — it is listed above.",
+  "publish_response_lost": "The publish response was lost, so the open entry is being reloaded before you continue.",
+  "publish_entry_response_lost": "The publish response was lost, so this entry is being reloaded before you continue.",
+  "publish_reload_failed": "The changes were published, but the open entry could not reload. Reload the page.",
+  "publish_entry_reload_failed": "The entry was published, but this screen could not reload. Reload the page.",
+  "publish_failed": "Nothing was published. Try again.",
+  "publish_failed_status": "Publish failed ({status}). Nothing was changed.",
+  "publish_incomplete": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Nothing was published. One entry is not finished — open it to see what is missing. Delete it if it cannot be filled in yet.",
+        "countPlural=other": "Nothing was published. {count} entries are not finished — open them to see what is missing. Delete the ones that cannot be filled in yet."
+      }
+    }
+  ],
+  "publish_drift": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Nothing was published. One entry's languages disagree about which blocks it has — the files have to agree before it can go out.",
+        "countPlural=other": "Nothing was published. {count} entries have languages that disagree about which blocks they have — the files have to agree before they can go out."
+      }
+    }
+  ],
+  "publish_conflict": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Nothing was published. One entry changed in the repository after you opened it. Resolve it to keep what you wrote, or discard your changes to take what is there now.",
+        "countPlural=other": "Nothing was published. {count} entries changed in the repository after you opened them. Resolve them to keep what you wrote, or discard your changes to take what is there now."
+      }
+    }
+  ],
+  "publish_ref_moved": "Nothing was published because the repository changed while the publish was being prepared. Try again.",
+  "publish_repository_unavailable": "Nothing was published because the repository could not be reached. Check the connection and try again.",
+  "publish_finalization_pending": "The publish commit was made, but its result could not be confirmed. Reload before publishing again.",
+  "publish_entry_incomplete": "Nothing was published. Something this entry needs is still missing — open each of its languages to see what.",
+  "publish_entry_drift": "Nothing was published. This entry's languages disagree about which blocks it has — the panel on this screen is where that is settled.",
+  "pending_discard_save_failed": "Those changes were not discarded because the open entry could not finish saving.",
+  "pending_discard_unconfirmed": "The discard result could not be confirmed. Reload the page before continuing.",
+  "pending_discard_remote_changed": "Those changes may have changed remotely. Reload the page before continuing.",
+  "pending_discard_failed": "Those changes were not discarded ({status}).",
+  "pending_diff_failed": "What changed in {page} could not be read ({status}).",
   "media_library_title": "Media",
   "media_library_image_count": [
     {

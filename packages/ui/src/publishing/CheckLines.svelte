@@ -1,4 +1,7 @@
 <script module lang="ts">
+import { messageOptions, type UiLocale } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
+
 /** One thing the checks found, named by the entry as well as by the file it is in. */
 export type CheckItem = {
   check: string;
@@ -12,10 +15,16 @@ export type CheckItem = {
 export type CheckLine = CheckItem & { locales: string[] };
 
 export const WORST = { error: 0, warn: 1, info: 2 };
-export const SEVERITY = { error: 'Error', warn: 'Warning', info: 'Note' };
 export const TINT = { error: 'danger', warn: 'warn', info: 'info' };
-export const plural = (n: number, what: string) =>
-  `${n} ${n === 1 ? what.replace(/s$/, '') : what}`;
+
+export const severityLabel = (severity: CheckLine['severity'], locale: UiLocale) => {
+  const options = messageOptions(locale);
+  return {
+    error: m.check_severity_error,
+    warn: m.check_severity_warning,
+    info: m.check_severity_note,
+  }[severity]({}, options);
+};
 
 const LOCALE = /^src\/content\/[^/]+\/([^/]+)\//;
 // The same field in two language files is one problem, since the client's edit is one edit.
@@ -33,20 +42,24 @@ export function merged(items: CheckItem[]): CheckLine[] {
 }
 
 // Only an error stops a publish; the worst word present is also what the button says.
-export function verdict(lines: CheckLine[]): string {
-  if (!lines.length) return 'Nothing found.';
-  const count = (of: CheckLine['severity'], what: string) => {
+export function verdict(lines: CheckLine[], locale: UiLocale): string {
+  const options = messageOptions(locale);
+  if (!lines.length) return m.check_nothing_found({}, options);
+  const count = (of: CheckLine['severity']) => {
     const n = lines.filter((l) => l.severity === of).length;
-    return n ? plural(n, what) : '';
+    if (!n) return '';
+    return {
+      error: m.check_error_count,
+      warn: m.check_warning_count,
+      info: m.check_note_count,
+    }[of]({ count: n }, options);
   };
-  const counted = [count('error', 'errors'), count('warn', 'warnings'), count('info', 'notes')]
-    .filter(Boolean)
-    .join(' · ');
+  const counted = [count('error'), count('warn'), count('info')].filter(Boolean).join(' · ');
   return lines.some((l) => l.severity === 'error')
-    ? `${counted}. The error has to go first.`
+    ? m.check_verdict_error({ counted }, options)
     : lines.some((l) => l.severity === 'warn')
-      ? `${counted}. Warnings never stop a publish.`
-      : `${counted} — nothing is in the way.`;
+      ? m.check_verdict_warning({ counted }, options)
+      : m.check_verdict_clear({ counted }, options);
 }
 </script>
 
@@ -56,12 +69,14 @@ import { sitePath } from '../request.js';
 let {
   lines,
   chips = false,
+  uiLocale = 'en',
   goTo,
   onclose,
 }: {
   lines: CheckLine[];
   /** Whether a line says which languages it is about — only worth saying where there are two. */
   chips?: boolean;
+  uiLocale?: UiLocale;
   /** Where a line's field is edited; without it no line offers Go to field. */
   goTo?: (line: CheckLine) => string;
   onclose?: () => void;
@@ -72,9 +87,9 @@ const notes = $derived(lines.filter((line) => line.severity === 'info'));
 
 {#snippet line(item: CheckLine)}
   <div class="notice notice-{TINT[item.severity]}">
-    <span class="sev">{SEVERITY[item.severity]}</span>
+    <span class="sev">{severityLabel(item.severity, uiLocale)}</span>
     {#if chips}
-      <span class="visually-hidden">Languages:</span>
+      <span class="visually-hidden">{m.check_languages({}, messageOptions(uiLocale))}</span>
       <span class="chips">
         {#each item.locales as of (of)}<span class="chip">{of.toUpperCase()}</span>{/each}
       </span>
@@ -82,7 +97,7 @@ const notes = $derived(lines.filter((line) => line.severity === 'info'));
     <span class="msg">{item.message}</span>
     <!-- The machine-translation note is not about a mistake, so it has nowhere to go. -->
     {#if goTo && item.fieldPath && item.check !== 'translation-machine'}
-      <a class="btn-link" href={sitePath(goTo(item))} onclick={onclose}>Go to field</a>
+      <a class="btn-link" href={sitePath(goTo(item))} onclick={onclose}>{m.check_go_to_field({}, messageOptions(uiLocale))}</a>
     {/if}
   </div>
 {/snippet}
@@ -93,7 +108,7 @@ const notes = $derived(lines.filter((line) => line.severity === 'info'));
 <!-- Notes fold away so what stops or changes a publish stays in view. -->
 {#if notes.length}
   <details class="check-notes">
-    <summary>{plural(notes.length, 'notes')}</summary>
+    <summary>{m.check_note_count({ count: notes.length }, messageOptions(uiLocale))}</summary>
     {#each notes as item (item.path + item.fieldPath + item.check)}
       {@render line(item)}
     {/each}

@@ -573,6 +573,38 @@ test('confirming publishes this entry alone and reads the screen again', async (
   vi.unstubAllGlobals();
 });
 
+test('an uncertain entry publish reloads before offering another attempt', async () => {
+  const reloaded = vi.fn();
+  const fetchMock = vi.fn(async (url: string) => {
+    if (isLock(url)) return Response.json(HELD);
+    if (isLint(url)) return Response.json({ results: [] });
+    if (url === '/admin/api/publish')
+      return new Response('Connection lost', {
+        status: 503,
+        headers: {
+          'x-handover-request-uncertain': 'true',
+          'x-handover-error-code': 'CONNECTION_LOST',
+        },
+      });
+    return Response.json({ updated_at: 1755864000000, pending: true, problems: [] });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({
+    entry: { ...entry, pending: ['en'] },
+    onreload: reloaded,
+  });
+  $<HTMLButtonElement>(root, '.entry-header button.btn-primary')?.click();
+  await settled();
+  $<HTMLButtonElement>(root, '.dialog .btn-primary')?.click();
+  await settled();
+
+  expect(reloaded).toHaveBeenCalledOnce();
+  expect($(root, '.dialog [role="alert"]')?.textContent).toContain(
+    'The publish response was lost, so this entry is being reloaded before you continue.',
+  );
+  vi.unstubAllGlobals();
+});
+
 // The pass runs again on the press, so a picture deleted since the dialog opened is still caught.
 const BROKEN = {
   check: 'media-missing',

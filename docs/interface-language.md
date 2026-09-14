@@ -34,6 +34,12 @@ counts, warnings, actions, dialogs and retained failures update without rereadin
 order, drag state, an open item editor, focus and unfinished labels remain intact; site-authored
 global descriptions, menu labels, page titles, keys and URLs are not translated.
 
+The pending-changes drawer and the one-entry publish confirmation are bilingual. Selection,
+holds, conflicts, precheck results and in-flight work survive a switch; count grammar, check
+severity and already-visible publish recovery update in place without another check or content
+request. Stable publish and check codes preserve incomplete, drifted, conflicting, unreachable and
+uncertain outcomes while legacy server detail remains diagnostic rather than control flow.
+
 An open crop or focal-point dialog keeps its node, focus, crop region, ratio and focal coordinates
 when the interface language changes. Live slider and focal-handle labels update, while filenames and
 site-authored preset labels remain unchanged. Switching does not process an image, write content or

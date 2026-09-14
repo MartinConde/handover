@@ -240,15 +240,35 @@ export const PATCH: APIRoute = async ({ params, request, locals }) => {
 };
 
 // Every route answers the same way when git refuses, whether it was reading or committing.
-async function answering(work: () => Promise<Response>): Promise<Response> {
+type AnswerCodes = Partial<{
+  conflict: string;
+  finalization: string;
+  refMoved: string;
+  repository: string;
+}>;
+
+async function answering(
+  work: () => Promise<Response>,
+  codes: AnswerCodes = {},
+): Promise<Response> {
   try {
     return await work();
   } catch (err) {
     // The repository is out of reach for every path, so 503 with the message rather than a 404.
-    if (err instanceof RepoUnreachableError) return new Response(err.message, { status: 503 });
+    if (err instanceof RepoUnreachableError)
+      return codes.repository
+        ? Response.json({ code: codes.repository, error: err.message }, { status: 503 })
+        : new Response(err.message, { status: 503 });
     // A conflict names its files as data so the drawer can badge those rows.
     if (err instanceof DraftConflictError)
-      return Response.json({ error: err.message, paths: err.paths }, { status: 409 });
+      return Response.json(
+        {
+          ...(codes.conflict ? { code: codes.conflict } : {}),
+          error: err.message,
+          paths: err.paths,
+        },
+        { status: 409 },
+      );
     if (err instanceof CommitScopeError) return new Response(err.message, { status: 403 });
     if (err instanceof DraftRevisionError || isDraftRace(err))
       return Response.json(
@@ -267,10 +287,14 @@ async function answering(work: () => Promise<Response>): Promise<Response> {
     if (err instanceof RevertConflictError)
       return Response.json({ error: err.message, paths: err.paths }, { status: 409 });
     if (err instanceof RenameCollisionError) return new Response(err.message, { status: 409 });
-    if (err instanceof RefMovedError) return new Response(err.message, { status: 409 });
+    if (err instanceof RefMovedError)
+      return codes.refMoved
+        ? Response.json({ code: codes.refMoved, error: err.message }, { status: 409 })
+        : new Response(err.message, { status: 409 });
     if (err instanceof OperationFinalizationError)
       return Response.json(
         {
+          ...(codes.finalization ? { code: codes.finalization } : {}),
           error: err.message,
           reason: 'needs-finalization',
           operation_id: err.operationId,
@@ -309,8 +333,17 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   if (params.path === 'media') return answering(() => askUpload(ctx, request));
   if (params.path === 'redirects')
     return answering(() => addRedirect(ctx, request, locals.handover));
-  if (params.path === 'publish/checks') return answering(() => prepublishChecks(ctx, request));
-  if (params.path === 'publish') return answering(() => publish(ctx, request, locals.handover));
+  if (params.path === 'publish/checks')
+    return answering(() => prepublishChecks(ctx, request), {
+      repository: 'PUBLISH_CHECKS_FAILED',
+    });
+  if (params.path === 'publish')
+    return answering(() => publish(ctx, request, locals.handover), {
+      conflict: 'PUBLISH_CONFLICT',
+      finalization: 'PUBLISH_FINALIZATION_PENDING',
+      refMoved: 'PUBLISH_REF_MOVED',
+      repository: 'PUBLISH_REPOSITORY_UNAVAILABLE',
+    });
   if (params.path === 'revert') return answering(() => revert(ctx, request, locals.handover));
   if (params.path === 'restore') return answering(() => restore(ctx, request, locals.handover));
   const beat = params.path?.match(LOCK);

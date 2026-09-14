@@ -71,6 +71,14 @@ the entry's own drift panel is the way out of the other. In all
 of those cases nothing was written and no row was cleared. A path no collection owns —
 `redirects.yaml`, a global — has no schema to be held to and is never the reason for a `422`.
 
+Publish failures retain `error` as diagnostic compatibility text and add a stable `code` for UI
+presentation: `PUBLISH_INCOMPLETE` (`422`), `PUBLISH_DRIFT` (`409`), `PUBLISH_CONFLICT` (`409`),
+`PUBLISH_REF_MOVED` (`409`), `PUBLISH_REPOSITORY_UNAVAILABLE` (`503`) or
+`PUBLISH_FINALIZATION_PENDING` (`503`). Path-bearing answers keep `paths`; drift keeps
+`reason: "drift"`; an unfinished finalization keeps its operation and commit identifiers. Clients
+must continue to use status, `paths`, `reason` and the request uncertainty signal for control flow,
+not translated text or the descriptor alone.
+
 ```
 POST /admin/api/publish/checks   { "entries": ["listings/mill-house"] }  →  { "results": [{ "check", "entry", "path", "fieldPath", "severity", "message" }] }
 ```
@@ -87,6 +95,11 @@ block being moved.
 that it has its own CPU: a publish too heavily cross-linked to read in one pass costs a check
 result rather than the commit. `POST /admin/api/publish` does not run it, and an error is only
 a stop in the drawer, whose Publish button is disabled while one stands.
+
+If the repository cannot be read, the check request returns `503` with
+`{ "code": "PUBLISH_CHECKS_FAILED", "error": "…" }`. The drawer still treats an unavailable
+lint as non-blocking and says that nothing was checked; this code localizes that explanation
+without changing the lint's advisory semantics.
 
 ```
 POST /admin/api/checks/conflict  →  { "entry", "path", "commit_sha" }

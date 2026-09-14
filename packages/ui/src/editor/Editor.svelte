@@ -23,12 +23,7 @@ import {
   navigateAfterAuthoritativeChange,
 } from '../navigate';
 import * as m from '../paraglide/messages.js';
-import CheckLines, {
-  type CheckItem,
-  merged,
-  plural,
-  verdict,
-} from '../publishing/CheckLines.svelte';
+import CheckLines, { type CheckItem, merged, verdict } from '../publishing/CheckLines.svelte';
 import DriftPanel from '../publishing/Drift.svelte';
 import History from '../publishing/History.svelte';
 import {
@@ -881,7 +876,7 @@ onMount(() => {
 // This entry whole and nothing else; it commits, so it confirms first.
 let confirming = $state(false);
 let sending = $state(false);
-let publishFailed = $state('');
+let publishFailed = $state<UiMessage>();
 /** The pass could not be run at all — which holds nothing back: it is a lint, not a gate. */
 let checksFailed = $state(false);
 let pass = 0;
@@ -898,7 +893,7 @@ const going = $derived(entry.locales.filter((of) => pendingByLocale[of]));
 
 async function askToPublish() {
   if (!(await flush())) return;
-  publishFailed = '';
+  publishFailed = undefined;
   confirming = true;
   void lint();
 }
@@ -928,7 +923,7 @@ function closePublish() {
 async function publishEntry() {
   if (entrySession.persistedActionPending()) return;
   sending = true;
-  publishFailed = '';
+  publishFailed = undefined;
   let res: Response | undefined;
   let checksBlocked = false;
   const outcome = await entrySession.finalPublish(
@@ -944,6 +939,7 @@ async function publishEntry() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ entries: [`${collection}/${slug}`] }),
       });
+      if (uncertainResponse(res)) throw new TypeError('The publish response was not confirmed.');
       if (res.ok) await onpublished?.(title);
       return res.ok;
     },
@@ -955,55 +951,54 @@ async function publishEntry() {
     return;
   }
   if (outcome.reason === 'save') {
-    publishFailed =
-      'Nothing was published. Your latest changes could not be saved — check your connection and try again.';
+    publishFailed = { code: 'PUBLISH_SAVE_FAILED' };
     publishPanel?.focus();
     return;
   }
   if (checksBlocked) {
     // A disabled button drops the focus that pressed it.
-    publishFailed =
-      'Nothing was published. The checks found something in the way just now — it is listed above.';
+    publishFailed = { code: 'PUBLISH_CHECKS_BLOCKED' };
     publishPanel?.focus();
     return;
   }
   if (outcome.reason === 'uncertain') {
-    publishFailed =
-      'The publish response was lost, so this entry is being reloaded before you continue.';
+    publishFailed = { code: 'PUBLISH_ENTRY_RESPONSE_LOST' };
     return;
   }
   if (outcome.reason === 'reload') {
-    publishFailed = 'The entry was published, but this screen could not reload. Reload the page.';
+    publishFailed = { code: 'PUBLISH_ENTRY_RELOAD_FAILED' };
     return;
   }
   if (!res) {
-    publishFailed = 'Nothing was published. Try again.';
-    return;
-  }
-  // A repository the App cannot reach is the server's own sentence; nothing else adds to it.
-  if (res.status === 503) {
-    publishFailed = await res.text();
+    publishFailed = { code: 'PUBLISH_FAILED' };
     return;
   }
   if (res.status === 422) {
-    publishFailed =
-      'Nothing was published. Something this entry needs is still missing — open each of its languages to see what.';
+    publishFailed = { code: 'PUBLISH_ENTRY_INCOMPLETE' };
     return;
   }
   if (res.status === 409) {
-    const body = await res.text();
-    const parsed = JSON.parse(body.startsWith('{') ? body : '{}') as { reason?: string };
+    const parsed = (await res
+      .clone()
+      .json()
+      .catch(() => ({}))) as {
+      paths?: unknown;
+      reason?: string;
+    };
     // Drift has a panel on this screen; a file somebody else changed is handled in the drawer.
-    if (parsed.reason !== 'drift') {
+    if (parsed.reason === 'drift') {
+      publishFailed = { code: 'PUBLISH_ENTRY_DRIFT' };
+      return;
+    }
+    if (Array.isArray(parsed.paths) && parsed.paths.length) {
       closePublish();
       conflicted = true;
       return;
     }
-    publishFailed =
-      "Nothing was published. This entry's languages disagree about which blocks it has — the panel on this screen is where that is settled.";
+    publishFailed = await retainedFailure(res, 'PUBLISH_REF_MOVED');
     return;
   }
-  publishFailed = `Nothing was published (${res.status}).`;
+  publishFailed = await retainedFailure(res, 'PUBLISH_FAILED');
 }
 
 // Keep the pane mounted until all its changes have been saved.
@@ -1591,53 +1586,52 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       bind:panel={publishPanel}
       onclose={closePublish}
     >
-        <h2 id="publish-h">Publish {title}?</h2>
+        <h2 id="publish-h">{m.pending_publish_entry_question({ title }, options)}</h2>
         <p>
-          This publishes it on its own. Anything else you have been working on stays unpublished.
+          {m.pending_publish_entry_intro({}, options)}
         </p>
         {#if many && going.length}
           <ul class="publish-set">
             <li>
-              <span class="visually-hidden">Languages:</span>
+              <span class="visually-hidden">{m.check_languages({}, options)}</span>
               <span class="chips">
                 {#each going as of (of)}<span class="chip">{of.toUpperCase()}</span>{/each}
               </span>
               {going.length === 1
-                ? `The ${language(going[0] ?? '')} file`
-                : `All ${going.length} language files`}
+                ? m.pending_language_file({ language: language(going[0] ?? '') }, options)
+                : m.pending_language_files({ count: going.length }, options)}
             </li>
           </ul>
         {/if}
         {#if checksFailed || lines.length}
           <section class="checks" aria-labelledby="publish-checks-h">
-            <h3 class="group-title" id="publish-checks-h">Checks</h3>
+            <h3 class="group-title" id="publish-checks-h">{m.pending_checks({}, options)}</h3>
             {#if checksFailed}
               <p class="checks-sum" role="status">
-                The checks could not be run this time, so nothing here has been looked at.
+                {m.pending_entry_checks_failed({}, options)}
               </p>
             {:else}
-              <p class="checks-sum">{verdict(lines)}</p>
-              <CheckLines {lines} chips={many} />
+              <p class="checks-sum">{verdict(lines, uiLocale)}</p>
+              <CheckLines {lines} chips={many} {uiLocale} />
             {/if}
           </section>
         {/if}
         <p class="rebuild-note">
-          One commit, then the site rebuilds — live in 1–3 minutes. The admin may reload while it
-          deploys.
+          {m.pending_entry_publish_explanation({}, options)}
         </p>
-        {#if publishFailed}<div class="notice notice-danger" role="alert">{publishFailed}</div>{/if}
+        {#if publishFailed}<div class="notice notice-danger" role="alert">{feedbackText(publishFailed)}{#if feedbackDetail(publishFailed)} {feedbackDetail(publishFailed)}{/if}</div>{/if}
         <div class="actions">
-          <button class="btn" type="button" disabled={sending} onclick={closePublish}>Cancel</button>
+          <button class="btn" type="button" disabled={sending} onclick={closePublish}>{m.common_cancel({}, options)}</button>
           <button
             class="btn btn-primary"
             type="button"
             disabled={sending || errors.length > 0 || entrySession.persistedActionPending()}
             onclick={publishEntry}
           >
-            {#if sending}Publishing…
-            {:else if errors.length}Fix {plural(errors.length, 'errors')} to publish
-            {:else if warnings.length}Publish anyway ({plural(warnings.length, 'warnings')})
-            {:else}Publish this entry{/if}
+            {#if sending}{m.pending_publishing({}, options)}
+            {:else if errors.length}{m.pending_fix_errors({ count: errors.length }, options)}
+            {:else if warnings.length}{m.pending_publish_anyway({ count: warnings.length }, options)}
+            {:else}{m.pending_publish_this_entry({}, options)}{/if}
           </button>
         </div>
     </Modal>

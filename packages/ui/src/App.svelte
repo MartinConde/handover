@@ -800,6 +800,7 @@ const initial = $derived(
     <Pending
       entries={pending}
       {defaultLocale}
+      {uiLocale}
       mediaBase={session?.mediaBase ?? ''}
       {build}
       onrevert={askRevert}

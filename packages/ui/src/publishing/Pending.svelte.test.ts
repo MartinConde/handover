@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import type { UiLocale } from '../i18n.js';
 import Pending from './Pending.svelte';
 
 // Not testing Select all / none: they set the same state a checkbox does.
@@ -36,6 +37,7 @@ let build = $state<{
   started_at?: number;
   committed_at?: number;
 } | null>(null);
+let uiLocale = $state<UiLocale>('en');
 const show = (initial = ENTRIES, defaultLocale = '') => {
   entries = initial;
   app = mount(Pending, {
@@ -47,6 +49,9 @@ const show = (initial = ENTRIES, defaultLocale = '') => {
       },
       get build() {
         return build;
+      },
+      get uiLocale() {
+        return uiLocale;
       },
       onclose: () => {},
       onpublished: published,
@@ -63,6 +68,7 @@ afterEach(() => {
   discarded.mockClear();
   reverted.mockClear();
   build = null;
+  uiLocale = 'en';
   vi.unstubAllGlobals();
 });
 
@@ -260,7 +266,7 @@ test('Escape closes only the nested confirmation and returns to the drawer', asy
   expect(document.activeElement).toBe(discard);
 });
 
-test('a branch that moved under the publish is reported in the words the server used', async () => {
+test('a branch that moved under the publish gets stable recovery with diagnostic detail', async () => {
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => new Response('main moved past abc123', { status: 409 })),
@@ -269,12 +275,68 @@ test('a branch that moved under the publish is reported in the words the server 
   await refused(root);
 
   expect(q(root, '[role="alert"]')?.textContent).toBe(
-    'Nothing was published. main moved past abc123',
+    'Nothing was published because the repository changed while the publish was being prepared. Try again. Technical detail: main moved past abc123',
   );
   // Nothing was named, so nothing unchecked itself and the same set is what a retry sends.
   const button = q<HTMLButtonElement>(root, '.drawer-foot .btn-primary');
   expect(button?.textContent).toBe('Publish 2 changes');
   expect(button?.disabled).toBe(false);
+});
+
+test('switching language keeps selection and retranslates an existing publish conflict', async () => {
+  const fetchMock = vi.fn(async (url: string) =>
+    url === '/admin/api/publish/checks' ? Response.json({ results: [] }) : CONFLICT.clone(),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  await refused(root);
+  const calls = fetchMock.mock.calls.length;
+
+  uiLocale = 'de';
+  flushSync();
+
+  expect(q(root, '#pending-h')?.textContent).toBe('Unveröffentlichte Änderungen');
+  expect(q(root, '[role="alert"]')?.textContent).toContain(
+    'Ein Eintrag wurde im Repository geändert',
+  );
+  expect(q<HTMLInputElement>(root, '.change-row.is-blocked input')?.checked).toBe(false);
+  expect(q(root, '.drawer-foot .btn-primary')?.textContent).toBe('1 Änderung veröffentlichen');
+  expect(fetchMock).toHaveBeenCalledTimes(calls);
+});
+
+test('an uncertain finalization keeps the selection and retranslates its recovery', async () => {
+  const fetchMock = vi.fn(async (url: string) =>
+    url === '/admin/api/publish/checks'
+      ? Response.json({ results: [] })
+      : Response.json(
+          {
+            code: 'PUBLISH_FINALIZATION_PENDING',
+            error: 'The commit succeeded, but its database finalization still needs to be retried.',
+            reason: 'needs-finalization',
+            operation_id: 'publish-operation',
+            commit_sha: 'def4567890',
+          },
+          { status: 503 },
+        ),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show();
+  await refused(root);
+  const calls = fetchMock.mock.calls.length;
+
+  expect(q(root, '[role="alert"]')?.textContent).toContain(
+    'The publish commit was made, but its result could not be confirmed.',
+  );
+  expect(boxes(root).every((box) => box.checked)).toBe(true);
+
+  uiLocale = 'de';
+  flushSync();
+
+  expect(q(root, '[role="alert"]')?.textContent).toContain(
+    'Der Veröffentlichungs-Commit wurde erstellt, aber sein Ergebnis konnte nicht bestätigt werden.',
+  );
+  expect(boxes(root).every((box) => box.checked)).toBe(true);
+  expect(fetchMock).toHaveBeenCalledTimes(calls);
 });
 
 test('with nothing pending there is no Publish button to press', () => {

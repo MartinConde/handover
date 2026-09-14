@@ -1,16 +1,17 @@
 <script lang="ts">
 import type { DiffGroup } from '@handover/core';
+import { messageText, responseMessage, type UiMessage } from '../errors.js';
+import { formatFieldTime, messageOptions, type UiLocale } from '../i18n.js';
 import { coordinateEntryPublish, coordinateEntryReplacement } from '../navigate';
+import * as m from '../paraglide/messages.js';
 import { request as fetch, uncertainResponse } from '../request.js';
-import { age } from '../shared/activity-line';
 import Modal from '../shared/Modal.svelte';
 import BuildPill, { type Build } from '../shell/BuildPill.svelte';
 import CheckLines, {
   type CheckItem,
   type CheckLine,
   merged,
-  plural,
-  SEVERITY,
+  severityLabel,
   TINT,
   verdict,
   WORST,
@@ -37,6 +38,7 @@ let {
   defaultLocale = '',
   mediaBase = '',
   build,
+  uiLocale = 'en',
   onclose,
   onpublished,
   onrevert,
@@ -49,6 +51,7 @@ let {
   mediaBase?: string;
   /** The shell's build status, repeated here beside the commit it is of. */
   build?: Build | null;
+  uiLocale?: UiLocale;
   onclose: () => void;
   onpublished: (count: number) => void | Promise<void>;
   /** Undo the commit this drawer just made; the shell owns the confirmation. */
@@ -56,11 +59,22 @@ let {
   /** A draft was discarded or overwritten, so the entry must be reread wherever it is open. */
   ondiscarded: () => void;
 } = $props();
+const options = $derived(messageOptions(uiLocale));
 
 let panel = $state<HTMLElement>();
 
 let busy = $state(false);
-let error = $state('');
+let error = $state<UiMessage>();
+const errorText = $derived(
+  error
+    ? [
+        messageText(error, uiLocale),
+        error.detail ? m.common_technical_detail({ detail: error.detail }, options) : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+    : '',
+);
 let published = $state(0);
 /** The commit this drawer made, which is what Revert is of. */
 let committed = $state('');
@@ -92,6 +106,11 @@ let reading = $state('');
 let toggled = $state<string[]>([]);
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const midnight = (at: number) => new Date(at).setHours(0, 0, 0, 0);
+const holdAge = (since: number) => {
+  const days = Math.round((midnight(Date.now()) - midnight(since)) / 86_400_000);
+  return days < 1 ? '' : m.pending_day_count({ count: days }, options);
+};
 // Only this drawer's commit gets the pill, or a publish elsewhere would show its build here.
 const ours = $derived(build && committed && build.commit_sha === committed ? build : undefined);
 const named = (entry: PendingEntry) => entry.title;
@@ -137,30 +156,29 @@ const rules = $derived(entries.reduce((n, e) => n + (e.redirects ?? 0), 0));
 const summary = $derived(
   [
     ...[...new Set(entries.map((e) => e.collection))].map((c) =>
-      plural(entries.filter((e) => e.collection === c).length, c),
+      m.pending_collection_count(
+        {
+          count: entries.filter((e) => e.collection === c).length,
+          collection: c,
+          singular: c.replace(/s$/, ''),
+        },
+        options,
+      ),
     ),
-    ...(rules ? [`+${plural(rules, 'redirects')}`] : []),
+    ...(rules ? [`+${m.pending_redirect_count({ count: rules }, options)}`] : []),
   ].join(' · '),
 );
 
-// A moved branch names no entries, so the server's own sentence stands as it is.
-const refusal = (body: string, keys: string[]) => {
-  if (!keys.length) return `Nothing was published. ${body}`;
-  const [what, them] = keys.length === 1 ? ['One entry', 'it'] : [`${keys.length} entries`, 'them'];
-  return `Nothing was published. ${what} changed in the repository after you opened ${them}. Resolve ${them} to keep what you wrote, or discard your changes to take what is there now.`;
-};
+const refusal = (keys: string[]): UiMessage => ({ code: 'PUBLISH_CONFLICT', count: keys.length });
 
 // Pressing again can work here, so the way out for a field with no editor yet is named.
-const incomplete = (keys: string[]) =>
-  keys.length === 1
-    ? 'Nothing was published. One entry is not finished — open it to see what is missing. Delete it if it cannot be filled in yet.'
-    : `Nothing was published. ${keys.length} entries are not finished — open them to see what is missing. Delete the ones that cannot be filled in yet.`;
+const incomplete = (keys: string[]): UiMessage => ({
+  code: 'PUBLISH_INCOMPLETE',
+  count: keys.length,
+});
 
 // No draft is stale here, so Discard is not the way out; the files themselves are.
-const adrift = (keys: string[]) =>
-  keys.length === 1
-    ? "Nothing was published. One entry's languages disagree about which blocks it has — the files have to agree before it can go out."
-    : `Nothing was published. ${keys.length} entries have languages that disagree about which blocks they have — the files have to agree before they can go out.`;
+const adrift = (keys: string[]): UiMessage => ({ code: 'PUBLISH_DRIFT', count: keys.length });
 
 /** The entries a refusal's paths belong to: it answers with files, and this list is of entries. */
 const entriesOf = (paths: string[]) =>
@@ -199,7 +217,7 @@ async function publish() {
   const keys = going.map((entry) => entry.key);
   // Busy from the press, not the commit: a button live through the lint publishes the set twice.
   busy = true;
-  error = '';
+  error = undefined;
   unready = [];
   drifted = [];
   let res: Response | undefined;
@@ -231,28 +249,25 @@ async function publish() {
     return;
   }
   if (!outcome.ok && outcome.reason === 'save') {
-    error =
-      'Nothing was published. Your latest changes could not be saved — check your connection and try again.';
+    error = { code: 'PUBLISH_SAVE_FAILED' };
     panel?.focus();
     return;
   }
   if (checksBlocked) {
-    error =
-      'Nothing was published. The checks found something in the way just now — it is listed above.';
+    error = { code: 'PUBLISH_CHECKS_BLOCKED' };
     panel?.focus();
     return;
   }
   if (!outcome.ok && outcome.reason === 'uncertain') {
-    error =
-      'The publish response was lost, so the open entry is being reloaded before you continue.';
+    error = { code: 'PUBLISH_RESPONSE_LOST' };
     return;
   }
   if (!outcome.ok && outcome.reason === 'reload') {
-    error = 'The changes were published, but the open entry could not reload. Reload the page.';
+    error = { code: 'PUBLISH_RELOAD_FAILED' };
     return;
   }
   if (!res) {
-    error = 'Nothing was published. Try again.';
+    error = { code: 'PUBLISH_FAILED' };
     return;
   }
   if (res.status === 422) {
@@ -260,18 +275,15 @@ async function publish() {
     error = incomplete(unready);
     return;
   }
-  // A repository the App cannot reach is the server's own sentence; nothing else adds to it.
-  if (res.status === 503) {
-    error = await res.text();
-    return;
-  }
   if (res.status !== 409) {
-    error = `Publish failed (${res.status}). Nothing was changed.`;
+    error = await responseMessage(res, 'PUBLISH_FAILED');
     return;
   }
   // A conflict, drift and a moved ref are all 409; only the first two answer with JSON.
   const body = await res.text();
   const parsed = JSON.parse(body.startsWith('{') ? body : '{}') as {
+    code?: string;
+    error?: string;
     paths?: string[];
     reason?: string;
   };
@@ -281,7 +293,15 @@ async function publish() {
     return;
   }
   conflicts = entriesOf(parsed.paths ?? []);
-  error = refusal(body, conflicts);
+  error = conflicts.length
+    ? refusal(conflicts)
+    : {
+        code: parsed.code ?? res.headers.get('x-handover-error-code') ?? 'PUBLISH_REF_MOVED',
+        status: res.status,
+        ...(!parsed.code && !res.headers.has('x-handover-error-code') && body
+          ? { detail: parsed.error ?? body }
+          : {}),
+      };
 }
 
 // Take theirs whole; choosing field by field is the three-way view.
@@ -298,24 +318,24 @@ async function discard() {
   discarding = false;
   confirming = undefined;
   if (!outcome.ok && outcome.reason === 'save') {
-    error = 'Those changes were not discarded because the open entry could not finish saving.';
+    error = { code: 'PENDING_DISCARD_SAVE_FAILED' };
     return;
   }
   if (!outcome.ok && (outcome.reason === 'uncertain' || outcome.reason === 'reload')) {
-    error = 'The discard result could not be confirmed. Reload the page before continuing.';
+    error = { code: 'PENDING_DISCARD_UNCONFIRMED' };
     return;
   }
   if (!outcome.ok) {
     if (!res) {
-      error = 'Those changes may have changed remotely. Reload the page before continuing.';
+      error = { code: 'PENDING_DISCARD_REMOTE_CHANGED' };
       return;
     }
-    error = `Those changes were not discarded (${res.status}).`;
+    error = { code: 'PENDING_DISCARD_FAILED', status: res.status };
     return;
   }
   conflicts = conflicts.filter((k) => k !== entry.key);
   // The refusal is about the entries still in it, so it is written again rather than kept.
-  error = conflicts.length ? refusal('', conflicts) : '';
+  error = conflicts.length ? refusal(conflicts) : undefined;
   ondiscarded();
 }
 
@@ -327,7 +347,7 @@ async function open(entry: PendingEntry) {
   const res = await fetch(`/admin/api/diff/${entry.key}`);
   reading = '';
   if (!res.ok) {
-    error = `What changed in ${named(entry)} could not be read (${res.status}).`;
+    error = { code: 'PENDING_DIFF_FAILED', status: res.status, page: named(entry) };
     opened = '';
     return;
   }
@@ -344,7 +364,7 @@ function closeResolver() {
 function resolved(entry: PendingEntry) {
   closeResolver();
   conflicts = conflicts.filter((k) => k !== entry.key);
-  error = conflicts.length ? refusal('', conflicts) : '';
+  error = conflicts.length ? refusal(conflicts) : undefined;
   // What it changed is the merge now, not what was read before it.
   delete changes[entry.key];
   ondiscarded();
@@ -372,10 +392,10 @@ function askDiscard(entry: PendingEntry) {
 
 {#snippet result()}
   <p class="result-actions">
-    {#if ours}<BuildPill build={ours} />{/if}
+    {#if ours}<BuildPill build={ours} {uiLocale} />{/if}
     {#if committed}
       <button class="btn-link" type="button" onclick={() => onrevert(committed)}>
-        Revert this publish
+        {m.pending_revert({}, options)}
       </button>
     {/if}
   </p>
@@ -385,7 +405,7 @@ function askDiscard(entry: PendingEntry) {
   <li>
     <div class="change-row" class:is-held={entry.held_by} class:is-blocked={blocked.includes(entry.key)}>
       <label class="lead" for="pending-{entry.key}">
-        <span class="visually-hidden">Include {named(entry)}</span>
+        <span class="visually-hidden">{m.pending_include({ title: named(entry) }, options)}</span>
         <input
           type="checkbox"
           id="pending-{entry.key}"
@@ -398,39 +418,41 @@ function askDiscard(entry: PendingEntry) {
         <span class="name">{named(entry)}</span>
         <span class="badge">{capitalise(entry.collection)}</span>
         {#if entry.locales.length}
-          <span class="visually-hidden">Languages:</span>
+          <span class="visually-hidden">{m.check_languages({}, options)}</span>
           <span class="chips">
             {#each entry.locales as of (of)}<span class="chip">{of.toUpperCase()}</span>{/each}
           </span>
         {/if}
         {#if entry.redirects}
-          <span class="badge badge-accent">+{plural(entry.redirects, 'redirects')}</span>
+          <span class="badge badge-accent">+{m.pending_redirect_count({ count: entry.redirects }, options)}</span>
         {/if}
         {#if entry.held_by}
-          {@const held = entry.held_by.since ? age(entry.held_by.since) : ''}
+          {@const held = entry.held_by.since ? holdAge(entry.held_by.since) : ''}
           <span class="badge badge-warn"
-            >On hold · {entry.held_by.name || 'somebody'}{held ? ` · ${held}` : ''}</span
+            >{held
+              ? m.pending_on_hold_by_age({ name: entry.held_by.name || m.pending_somebody({}, options), age: held }, options)
+              : m.pending_on_hold_by({ name: entry.held_by.name || m.pending_somebody({}, options) }, options)}</span
           >
         {/if}
         {#if conflicts.includes(entry.key)}
-          <span class="badge badge-danger">Changed in the repository since you opened it</span>
+          <span class="badge badge-danger">{m.pending_changed_repository({}, options)}</span>
           <button
             class="btn btn-sm"
             type="button"
             disabled={busy || discarding}
-            aria-label="Resolve {named(entry)}"
+            aria-label={m.pending_resolve_entry({ title: named(entry) }, options)}
             onclick={() => (resolving = entry)}
-          >Resolve</button>
+          >{m.pending_resolve({}, options)}</button>
         {:else if unready.includes(entry.key)}
-          <span class="badge badge-danger">Not ready to publish</span>
+          <span class="badge badge-danger">{m.pending_not_ready({}, options)}</span>
         {:else if drifted.includes(entry.key)}
-          <span class="badge badge-danger">Languages disagree</span>
+          <span class="badge badge-danger">{m.pending_languages_disagree({}, options)}</span>
         {/if}
       </div>
       <div class="change-sub">
-        {plural(entry.files.length, 'files')}
+        {m.pending_file_count({ count: entry.files.length }, options)}
         <span class="sep" aria-hidden="true">·</span>
-        edited {new Date(entry.updated_at).toLocaleString()}
+        {m.pending_edited({ date: formatFieldTime(entry.updated_at, uiLocale) }, options)}
       </div>
       <div class="change-actions">
         {#if conflicts.includes(entry.key)}
@@ -438,15 +460,15 @@ function askDiscard(entry: PendingEntry) {
             class="btn btn-sm"
             type="button"
             disabled={busy || discarding}
-            aria-label="Discard your changes to {named(entry)}"
+            aria-label={m.pending_discard_entry({ title: named(entry) }, options)}
             onclick={() => askDiscard(entry)}
-          >Discard</button>
+          >{m.pending_discard({}, options)}</button>
         {/if}
         <button
           class="btn btn-ghost btn-icon"
           type="button"
           aria-expanded={opened === entry.key}
-          aria-label="What changed in {named(entry)}"
+          aria-label={m.pending_what_changed({ title: named(entry) }, options)}
           onclick={() => open(entry)}
         >{opened === entry.key ? '▾' : '▸'}</button>
       </div>
@@ -457,15 +479,15 @@ function askDiscard(entry: PendingEntry) {
         <div class="change-diff">
           <Diff groups={shown.groups} {mediaBase} />
           {#if shown.redirects.length}
-            <h4>Riding along</h4>
+            <h4>{m.pending_riding_along({}, options)}</h4>
             <div class="diff">
               {#each shown.redirects as rule (rule.from)}
                 <div class="row is-block">
-                  <small>Redirect</small>
+                  <small>{m.pending_redirect({}, options)}</small>
                   <code>{rule.from}</code>
                   <span aria-hidden="true">→</span>
                   <code>{rule.to}</code>
-                  <span class="sub">— because you changed the web address</span>
+                  <span class="sub">{m.pending_redirect_reason({}, options)}</span>
                 </div>
               {/each}
             </div>
@@ -473,7 +495,9 @@ function askDiscard(entry: PendingEntry) {
         </div>
       {:else}
         <div class="change-diff"><p class="foot-note" role="status">
-          {reading === entry.key ? 'Reading what changed…' : 'Nothing to show.'}
+          {reading === entry.key
+            ? m.pending_reading_changes({}, options)
+            : m.pending_nothing_to_show({}, options)}
         </p></div>
       {/if}
     {/if}
@@ -490,36 +514,36 @@ function askDiscard(entry: PendingEntry) {
 >
     <header class="drawer-head">
       <div class="head-row">
-        <h2 id="pending-h">Unpublished changes</h2>
+        <h2 id="pending-h">{m.pending_title({}, options)}</h2>
         <button
           class="btn btn-ghost btn-icon"
           type="button"
-          aria-label="Close"
+          aria-label={m.pending_close({}, options)}
           disabled={busy || discarding}
           onclick={resolving ? closeResolver : onclose}
         >✕</button>
       </div>
       {#if entries.length}
         <p class="drawer-meta">
-          <span class="count">{plural(entries.length, 'changes')}</span>
-          <span class="sep" aria-hidden="true">·</span> {selected.length} selected
+          <span class="count">{m.pending_change_count({ count: entries.length }, options)}</span>
+          <span class="sep" aria-hidden="true">·</span> {m.pending_selected_count({ count: selected.length }, options)}
           {#if conflicts.length}
-            <span class="sep" aria-hidden="true">·</span> {plural(conflicts.length, 'conflicts')}
+            <span class="sep" aria-hidden="true">·</span> {m.pending_conflict_count({ count: conflicts.length }, options)}
           {/if}
           {#if held.length}
             <span class="sep" aria-hidden="true">·</span>
-            {held.filter((e) => !checked(e)).length} on hold
+            {m.pending_hold_count({ count: held.filter((e) => !checked(e)).length }, options)}
           {/if}
         </p>
         <p class="drawer-meta is-summary">{summary}</p>
         <div class="drawer-tools">
-          <span>Select</span>
-          <button class="btn-link" type="button" disabled={busy} aria-label="Select all the changes" onclick={selectAll}>all</button>
+          <span>{m.pending_select({}, options)}</span>
+          <button class="btn-link" type="button" disabled={busy} aria-label={m.pending_select_all_label({}, options)} onclick={selectAll}>{m.pending_all({}, options)}</button>
           <span class="sep" aria-hidden="true">·</span>
-          <button class="btn-link" type="button" disabled={busy} aria-label="Select none of the changes" onclick={selectNone}>none</button>
+          <button class="btn-link" type="button" disabled={busy} aria-label={m.pending_select_none_label({}, options)} onclick={selectNone}>{m.pending_none({}, options)}</button>
         </div>
       {:else}
-        <p class="drawer-meta">Nothing to publish</p>
+        <p class="drawer-meta">{m.pending_nothing_to_publish({}, options)}</p>
       {/if}
     </header>
     <div class="drawer-body">
@@ -536,36 +560,37 @@ function askDiscard(entry: PendingEntry) {
         <!-- A hold left behind keeps the drawer open, so the commit is also named here. -->
         {#if published}
           <div class="publish-result">
-            <h3>Published {plural(published, 'changes')}</h3>
-            <p>One commit is on its way; the site rebuilds in a minute or two.</p>
+            <h3>{m.pending_published_count({ count: published }, options)}</h3>
+            <p>{m.pending_commit_on_way({}, options)}</p>
             {@render result()}
           </div>
         {/if}
         {#if checksFailed || groups.length || elsewhere.length}
           <section class="checks" aria-labelledby="checks-h">
-            <h3 class="group-title" id="checks-h">Checks</h3>
+            <h3 class="group-title" id="checks-h">{m.pending_checks({}, options)}</h3>
             {#if checksFailed}
               <p class="checks-sum" role="status">
-                The checks could not be run this time, so nothing on this list has been looked at.
+                {m.pending_checks_failed({}, options)}
               </p>
             {:else}
               <p class="checks-sum">
-                {verdict(lines)} Checked over
-                {selected.length === 1 ? 'the entry' : `the ${selected.length} entries`} you have
-                selected, and again when you press Publish.
+                {m.pending_checks_summary(
+                  { verdict: verdict(lines, uiLocale), count: selected.length },
+                  options,
+                )}
               </p>
               {#each groups as group (group.entry.key)}
                 <div class="check-group">
                   <h4>{named(group.entry)} <span class="badge">{capitalise(group.entry.collection)}</span></h4>
-                  <CheckLines lines={group.items} chips={group.entry.locales.length > 1} {goTo} {onclose} />
+                  <CheckLines lines={group.items} chips={group.entry.locales.length > 1} {uiLocale} {goTo} {onclose} />
                 </div>
               {/each}
               {#if elsewhere.length}
                 <div class="check-group">
-                  <h4>Elsewhere on the site</h4>
+                  <h4>{m.pending_elsewhere({}, options)}</h4>
                   {#each elsewhere as item (item.path + item.fieldPath + item.check)}
                     <div class="notice notice-{TINT[item.severity]}">
-                      <span class="sev">{SEVERITY[item.severity]}</span>
+                      <span class="sev">{severityLabel(item.severity, uiLocale)}</span>
                       <span class="msg">{item.message}</span>
                     </div>
                   {/each}
@@ -579,19 +604,17 @@ function askDiscard(entry: PendingEntry) {
         </ul>
         {#if held.length}
           <div class="change-group">
-            <h3 class="group-title">{published ? 'Still on hold' : 'On hold'}</h3>
+            <h3 class="group-title">{published ? m.pending_still_on_hold({}, options) : m.pending_on_hold({}, options)}</h3>
             <ul class="change-list">
               {#each held as entry (entry.key)}{@render change(entry)}{/each}
             </ul>
             {#if held.some(checked)}
               <div class="notice notice-warn">
-                Publishing this releases the hold. It is logged, and whoever set it sees it in
-                the activity log.
+                {m.pending_hold_release_warning({}, options)}
               </div>
             {:else}
               <p class="foot-note">
-                Whoever is editing these says they are not ready, so they are left out. Checking
-                one includes it and releases the hold — the activity log records who did.
+                {m.pending_hold_guidance({}, options)}
               </p>
             {/if}
           </div>
@@ -599,11 +622,11 @@ function askDiscard(entry: PendingEntry) {
       {:else}
         <div class="empty">
           <div>
-            <h2>{published ? `Published ${plural(published, 'changes')}` : 'Everything is published'}</h2>
+            <h2>{published ? m.pending_published_count({ count: published }, options) : m.pending_everything_published({}, options)}</h2>
             <p>
               {published
-                ? 'One commit is on its way; the site rebuilds in a minute or two.'
-                : 'Every edit is in the repository.'}
+                ? m.pending_commit_on_way({}, options)
+                : m.pending_every_edit_published({}, options)}
             </p>
             {#if published}{@render result()}{/if}
           </div>
@@ -612,8 +635,8 @@ function askDiscard(entry: PendingEntry) {
     </div>
     {#if entries.length}
       <footer class="drawer-foot">
-        {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
-        {#if busy}<div class="notice notice-info" role="status">Publishing {plural(selected.length, 'changes')}…</div>{/if}
+        {#if error}<div class="notice notice-danger" role="alert">{errorText}</div>{/if}
+        {#if busy}<div class="notice notice-info" role="status">{m.pending_publishing_count({ count: selected.length }, options)}</div>{/if}
         <div class="foot-row">
           <button
             class="btn btn-primary"
@@ -621,28 +644,26 @@ function askDiscard(entry: PendingEntry) {
             disabled={busy || discarding || Boolean(resolving) || !selected.length || errors.length > 0}
             onclick={publish}
           >
-            {#if busy}Publishing…
-            {:else if errors.length}Fix {plural(errors.length, 'errors')} to publish
-            {:else if !selected.length}Publish
-            {:else if warnings.length}Publish anyway ({plural(warnings.length, 'warnings')})
-            {:else}Publish {plural(selected.length, 'changes')}{/if}
+            {#if busy}{m.pending_publishing({}, options)}
+            {:else if errors.length}{m.pending_fix_errors({ count: errors.length }, options)}
+            {:else if !selected.length}{m.pending_publish({}, options)}
+            {:else if warnings.length}{m.pending_publish_anyway({ count: warnings.length }, options)}
+            {:else}{m.pending_publish_count({ count: selected.length }, options)}{/if}
           </button>
         </div>
         <p class="foot-note">
           {#if resolving}
-            Publishing waits while a conflict is open: the rest would go out in the same commit,
-            and this entry is not ready to be in it.
+            {m.pending_waits_for_conflict({}, options)}
           {:else if !ready.length}
-            Everything still here is on hold. Check one to include it — that releases the hold.
+            {m.pending_everything_on_hold({}, options)}
           {:else if !selected.length && ready.every((e) => blocked.includes(e.key))}
-            Nothing can go out: every entry here is held back by what is marked on its row.
+            {m.pending_everything_blocked({}, options)}
           {:else if !selected.length}
-            Nothing is selected. Check what you want to publish.
+            {m.pending_nothing_selected({}, options)}
           {:else if blocked.length}
-            The entries marked above are held back on their own; the rest still publish.
+            {m.pending_some_blocked({}, options)}
           {:else}
-            One commit, then the site rebuilds — live in 1–3 minutes. Nothing is written until the
-            whole set lands.
+            {m.pending_publish_explanation({}, options)}
           {/if}
         </p>
       </footer>
@@ -656,15 +677,14 @@ function askDiscard(entry: PendingEntry) {
     dismissible={!discarding}
     onclose={() => (confirming = undefined)}
   >
-      <h2 id="discard-h">Discard your changes to {named(confirming)}?</h2>
+      <h2 id="discard-h">{m.pending_discard_question({ title: named(confirming) }, options)}</h2>
       <p>
-        Your unpublished changes to this entry are thrown away and it is read from the repository
-        again, with whatever was changed there. The published page is not affected.
+        {m.pending_discard_explanation({}, options)}
       </p>
       <div class="actions">
-        <button class="btn" type="button" disabled={discarding} onclick={() => (confirming = undefined)}>Cancel</button>
+        <button class="btn" type="button" disabled={discarding} onclick={() => (confirming = undefined)}>{m.common_cancel({}, options)}</button>
         <button class="btn btn-danger" type="button" disabled={discarding} onclick={discard}>
-          {discarding ? 'Discarding…' : 'Discard changes'}
+          {discarding ? m.pending_discarding({}, options) : m.pending_discard_changes({}, options)}
         </button>
       </div>
   </Modal>

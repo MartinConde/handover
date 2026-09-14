@@ -591,6 +591,7 @@ export async function publish(
     const paths = unready.map((r) => r.path);
     return Response.json(
       {
+        code: 'PUBLISH_INCOMPLETE',
         error:
           paths.length === 1
             ? `${paths[0]} is missing something the schema needs`
@@ -607,6 +608,7 @@ export async function publish(
   if (drifted.length) {
     return Response.json(
       {
+        code: 'PUBLISH_DRIFT',
         error:
           drifted.length === 1
             ? `${drifted[0]} has drifted apart from the entry's other languages — resolve it in the editor`
