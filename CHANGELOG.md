@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate retained Canvas plain-text editing recovery and mark every Handover-owned in-frame
+  overlay with the interface language while leaving the preview document in its content language.
+  Live switching preserves IME composition, caret, accepted content and history; navigation routes,
+  methods, protocol discriminators and exact refusal identifiers remain unchanged.
+
 - Translate Canvas selection paths, structural fallback names, block actions and keyboard/drag
   announcements into English and German. Live switching preserves the selected annotation, open
   action menu, focused action and active drag while template-authored labels remain unchanged.

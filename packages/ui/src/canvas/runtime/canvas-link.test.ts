@@ -124,6 +124,7 @@ test('translates an open editor without replacing its focused draft controls', (
   uiLocale.set('de');
 
   expect(document.querySelector('#handover-canvas-link-label')).toBe(label);
+  expect(dialog.lang).toBe('de');
   expect(document.activeElement).toBe(label);
   expect(label.value).toBe('Geschriebener Entwurf');
   expect(dialog.getAttribute('aria-label')).toBe('Link bearbeiten');

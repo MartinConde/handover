@@ -96,6 +96,7 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
   let touchedDestination = false;
   let refreshTranslation = () => {};
   const locale = () => options.uiLocale?.current() ?? 'en';
+  panel.lang = locale();
   const text = (feedback: CanvasLinkEditorFeedback) =>
     typeof feedback === 'function' ? feedback(locale()) : feedback;
 
@@ -473,7 +474,10 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
   root.addEventListener('keydown', keydown, true);
   root.addEventListener('scroll', position, true);
   owner.addEventListener('resize', position);
-  const unsubscribeLocale = options.uiLocale?.subscribe(() => refreshTranslation());
+  const unsubscribeLocale = options.uiLocale?.subscribe((nextLocale) => {
+    panel.lang = nextLocale;
+    refreshTranslation();
+  });
 
   return {
     open(value: CanvasLinkEditorOpen) {

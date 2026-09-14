@@ -407,6 +407,8 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
   const translateUi = () => {
     const locale = optionsLocale();
     const translated = messageOptions(locale);
+    toolbar.lang = locale;
+    status.lang = locale;
     toolbar.setAttribute('aria-label', m.canvas_rich_text_formatting({}, translated));
     for (const button of Array.from(
       toolbar.querySelectorAll<HTMLButtonElement>('button[data-control]'),

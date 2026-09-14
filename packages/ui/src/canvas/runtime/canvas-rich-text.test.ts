@@ -153,6 +153,12 @@ test('uses the Canvas link editor to create and revisit a rich-text link', async
   address.dispatchEvent(new InputEvent('input', { bubbles: true }));
   address.focus();
   uiLocale.set('de');
+  expect(document.querySelector<HTMLElement>('[data-handover-canvas-richtext-toolbar]')?.lang).toBe(
+    'de',
+  );
+  expect(document.querySelector<HTMLElement>('[data-handover-canvas-richtext-status]')?.lang).toBe(
+    'de',
+  );
   expect(document.querySelector('#handover-canvas-link-url')).toBe(address);
   expect(document.activeElement).toBe(address);
   expect(address.value).toBe('/contact');

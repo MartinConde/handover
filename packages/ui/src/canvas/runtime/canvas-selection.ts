@@ -236,6 +236,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
 
   const host = root.createElement('div');
   host.dataset.handoverCanvasOverlay = '';
+  host.lang = locale();
   host.style.cssText =
     'all:initial;position:fixed!important;inset:0!important;z-index:2147483647!important;pointer-events:none!important;';
   const shadow = host.attachShadow({ mode: 'open' });
@@ -975,6 +976,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       let observedLocale = locale();
       unsubscribeLocale = options.uiLocale?.subscribe((nextLocale) => {
         if (disposed) return;
+        host.lang = nextLocale;
         if (nextLocale === observedLocale) return;
         observedLocale = nextLocale;
         labelNodes();

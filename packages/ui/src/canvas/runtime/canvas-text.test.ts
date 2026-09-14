@@ -6,6 +6,7 @@ import type {
   CanvasTarget,
 } from '../canvas-bridge';
 import { createCanvasPlainTextRuntime } from './canvas-text';
+import { createCanvasUiLocaleState } from './canvas-ui-locale';
 
 const target: CanvasTarget = {
   document: { collection: 'pages', id: 'home' },
@@ -56,6 +57,7 @@ const fixture = (selector: string) => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  document.documentElement.removeAttribute('lang');
   document.documentElement.innerHTML = '<head></head><body></body>';
 });
 
@@ -194,5 +196,52 @@ test('a refused acknowledgement restores accepted content and session undo resto
   await vi.waitFor(() => expect(heading.textContent).toBe('Before'));
   expect(command).toHaveBeenLastCalledWith(target, { type: 'history', direction: 'undo' });
   expect(document.getSelection()?.anchorOffset).toBe(3);
+  runtime.dispose();
+});
+
+test('live locale changes retranslate retained feedback without disturbing composition or content language', async () => {
+  document.documentElement.lang = 'en';
+  document.body.innerHTML = '<h1>Sea</h1>';
+  const heading = fixture('h1');
+  const commands: CanvasMutation[] = [];
+  const uiLocale = createCanvasUiLocaleState('en');
+  const command = vi
+    .fn<(target: CanvasTarget, command: CanvasMutation) => Promise<CanvasAcknowledgement>>()
+    .mockImplementationOnce(async (_target, mutation) => {
+      commands.push(mutation);
+      return reply('command-1', 1, { ok: true, update: { value: '日本' } });
+    })
+    .mockResolvedValueOnce(reply('command-2', 2, { ok: false, reason: 'readonly' }));
+  const runtime = createCanvasPlainTextRuntime({ command, interaction: vi.fn(), uiLocale });
+  runtime.start();
+  runtime.configure({ kind: 'text', target, value: 'Sea' });
+  runtime.activate(selected, heading);
+
+  heading.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+  heading.textContent = '日本';
+  cursor(heading, 2);
+  uiLocale.set('de');
+
+  const status = fixture('[data-handover-canvas-text-status]');
+  expect(runtime.composing()).toBe(true);
+  expect(heading.textContent).toBe('日本');
+  expect(document.documentElement.lang).toBe('en');
+  expect(status.lang).toBe('de');
+
+  heading.dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '日本' }));
+  await vi.waitFor(() => expect(commands).toHaveLength(1));
+  beforeInput(heading);
+  heading.textContent = '日本!';
+  cursor(heading, 3);
+  heading.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+  await vi.waitFor(() =>
+    expect(status.textContent).toBe('Die Inline-Änderung wurde nicht angewendet (readonly).'),
+  );
+
+  uiLocale.set('en');
+  expect(status.textContent).toBe('The inline change was not applied (readonly).');
+  expect(status.lang).toBe('en');
+  expect(heading.getAttribute('data-handover-inline-refusal')).toBe('readonly');
+  expect(document.documentElement.lang).toBe('en');
   runtime.dispose();
 });

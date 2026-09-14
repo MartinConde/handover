@@ -1,3 +1,5 @@
+import { messageOptions, type UiLocale } from '../../i18n';
+import * as m from '../../paraglide/messages.js';
 import type {
   CanvasAcknowledgement,
   CanvasEditingState,
@@ -117,6 +119,9 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
   let generation = 0;
   let queued = 0;
   let lane = Promise.resolve();
+  let refusalReason: string | undefined;
+  let unsubscribeLocale: (() => void) | undefined;
+  const locale = (): UiLocale => options.uiLocale?.current() ?? 'en';
 
   const style = root.createElement('style');
   style.dataset.handoverCanvasText = '';
@@ -130,6 +135,15 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
   status.setAttribute('aria-live', 'polite');
   status.style.cssText =
     'position:fixed;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0';
+
+  const translateUi = (nextLocale = locale()) => {
+    status.lang = nextLocale;
+    if (refusalReason)
+      status.textContent = m.canvas_inline_change_refused(
+        { reason: refusalReason },
+        messageOptions(nextLocale),
+      );
+  };
 
   const publish = (state: CanvasEditingState) => {
     if (active) options.interaction(active.target, state);
@@ -147,7 +161,8 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
     generation += 1;
     apply(active.accepted);
     active.element.dataset.handoverInlineRefusal = reason;
-    status.textContent = `The inline change was not applied (${reason}).`;
+    refusalReason = reason;
+    translateUi();
   };
 
   const enqueue = (
@@ -172,6 +187,7 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
       held.accepted = reply.update?.value ?? value ?? held.accepted;
       status.dataset.handoverCanvasTextVersion = String(reply.acceptedVersion);
       delete held.element.dataset.handoverInlineRefusal;
+      refusalReason = undefined;
       status.textContent = '';
       const hasNewerLocalInput = queued > 1;
       if (reply.update && (command.type === 'history' || !hasNewerLocalInput))
@@ -337,6 +353,8 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
       root.addEventListener('compositionend', onCompositionEnd, true);
       root.addEventListener('keydown', onKeyDown, true);
       root.addEventListener('focusout', onFocusOut, true);
+      unsubscribeLocale = options.uiLocale?.subscribe(translateUi);
+      translateUi();
     },
     configure(field?: PlainField) {
       configured = field;
@@ -380,6 +398,8 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
       root.removeEventListener('compositionend', onCompositionEnd, true);
       root.removeEventListener('keydown', onKeyDown, true);
       root.removeEventListener('focusout', onFocusOut, true);
+      unsubscribeLocale?.();
+      unsubscribeLocale = undefined;
       style.remove();
       status.remove();
     },

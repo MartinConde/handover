@@ -217,3 +217,11 @@ insert, replace, move, duplicate, delete and image-replacement names plus keyboa
 drag-position announcements. Switching language keeps the selected annotation, an open action menu,
 its focused action and an active block drag in place. Template-authored block names and field-path
 labels are not translated; only Handover's fallback names and surrounding presentation change.
+
+Plain-text inline-editing recovery follows the interface language too. A switch during IME
+composition keeps the composition, caret, accepted value and session history intact; retained
+recovery is reformatted in place while its exact refusal identifier remains diagnostic text. Every
+Handover-owned overlay root declares the interface language for assistive technology, but the
+preview document's `<html lang>` remains the content language. Link and form navigation continue to
+use their existing route, method and protocol discriminators; those machine identifiers are not
+translated.

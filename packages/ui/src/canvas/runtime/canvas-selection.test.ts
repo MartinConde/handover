@@ -262,6 +262,7 @@ test('live locale changes translate the retained selection, focused actions, and
 
   const overlay = document.querySelector<HTMLElement>('[data-handover-canvas-overlay]');
   const shadow = overlay?.shadowRoot;
+  expect(overlay?.lang).toBe('en');
   expect(shadow?.querySelector('.live')?.textContent).toBe('Block 1, 1 of 1 in Blocks, selected.');
   shadow?.querySelector<HTMLButtonElement>('[data-canvas-actions-toggle]')?.click();
   const focused = shadow?.activeElement;
@@ -271,6 +272,7 @@ test('live locale changes translate the retained selection, focused actions, and
   await settle();
 
   expect(document.querySelector('[data-handover-canvas-overlay]')).toBe(overlay);
+  expect(overlay?.lang).toBe('de');
   expect(runtime.selection()).toEqual(selected);
   expect(shadow?.querySelector('.path')?.getAttribute('title')).toBe('Seite / Blocks / Block 1');
   expect(shadow?.activeElement?.getAttribute('aria-label')).toBe('Block 1 ersetzen');
