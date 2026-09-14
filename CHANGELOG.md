@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate Settings, connection diagnostics, integration-key dialogs and development checks into
+  English and German. Stable result codes distinguish unavailable configuration, provider refusal,
+  optional connections and integration operations without inferring a cause from HTTP status.
+  Live switching preserves check results, exact identifiers/provider detail and an open secret
+  draft without rerunning checks or changing site configuration.
+
 - Translate the Members screen into English and German, including invitation, role and removal
   dialogs, sign-in metadata, dates, accessibility labels and retained feedback. Stable CMS and
   authentication codes keep known refusals localizable; live switching preserves names, email

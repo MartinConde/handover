@@ -4,6 +4,7 @@ import Diagnostics from './Diagnostics.svelte';
 
 let app: ReturnType<typeof mount>;
 const committed = vi.fn();
+const props = $state({ uiLocale: 'en' as 'en' | 'de', oncommitted: committed });
 
 const CONFIG = {
   collections: [{ name: 'pages' }, { name: 'listings', route: '/listings/[slug]' }],
@@ -60,9 +61,11 @@ const show = async (
   answers: Record<string, Response | (() => Response)> = {},
   config: Partial<typeof CONFIG> = {},
   keys: Key[] = NOTHING_SET,
+  uiLocale: 'en' | 'de' = 'en',
 ) => {
+  props.uiLocale = uiLocale;
   server(answers, config, keys);
-  app = mount(Diagnostics, { target: document.body, props: { oncommitted: committed } });
+  app = mount(Diagnostics, { target: document.body, props });
   flushSync();
   await settle();
   return document.body;
@@ -100,6 +103,7 @@ afterEach(() => {
   committed.mockClear();
   vi.unstubAllGlobals();
   document.body.innerHTML = '';
+  props.uiLocale = 'en';
 });
 
 // The one check on the page with a side effect.
@@ -344,6 +348,20 @@ test('removing a key asks first, then asks the route to and reads the list again
   expect(requests.filter((url) => url === '/admin/api/settings')).toHaveLength(2);
 });
 
+test('a removal refusal remains visible after the integration list is refreshed', async () => {
+  const root = await show(
+    { '/admin/api/settings/deepl': Response.json({ error: 'no' }, { status: 503 }) },
+    {},
+    SET_HERE,
+  );
+  press(cardOr(root, 'DeepL'), 'Remove');
+  press(root.querySelector('.dialog') as HTMLElement, 'Remove');
+  await settle();
+
+  expect(text(root)).toContain('The key was not removed (503).');
+  expect(requests.filter((url) => url === '/admin/api/settings')).toHaveLength(2);
+});
+
 // The half axe scores nothing on: a dialog that opens takes focus, and closing gives it back.
 test('the dialog takes focus and hands it back to the button that opened it', async () => {
   const root = await show({}, {}, SET_HERE);
@@ -369,4 +387,36 @@ test('keys that could not be read say so where the cards would have been', async
   expect(text(section ?? document.createElement('div'))).toContain(
     'The keys you own could not be read (500).',
   );
+});
+
+test('the screen and retained results switch to German without another request or lost key input', async () => {
+  const root = await show(
+    {
+      '/admin/api/checks/github': Response.json({
+        ok: true,
+        code: 'DIAGNOSTIC_GITHUB_OK',
+        repository: 'acme/site',
+        revision: '15db548',
+      }),
+      '/admin/api/checks/storage': Response.json(
+        { code: 'DIAGNOSTIC_REFUSED', error: 'R2 provider detail (403)' },
+        { status: 502 },
+      ),
+    },
+    {},
+    SET_HERE,
+  );
+  press(cardOr(root, 'DeepL'), 'Replace');
+  type(dialog() as HTMLElement, 'still-secret');
+  const requestCount = requests.length;
+
+  props.uiLocale = 'de';
+  flushSync();
+
+  expect(root.querySelector('h1')?.textContent).toBe('Einstellungen');
+  expect(text(root)).toContain('die App hat ein Token erstellt und 15db548 gelesen');
+  expect(text(root)).toContain('R2 provider detail (403)');
+  expect(text(root)).toContain('3. Mai 2026');
+  expect((root.querySelector('#key-value') as HTMLInputElement).value).toBe('still-secret');
+  expect(requests).toHaveLength(requestCount);
 });

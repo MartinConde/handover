@@ -29,7 +29,11 @@ import { mediaStore, missingMailer, NO_BUCKET, workerBuilds } from './environmen
 export async function testEmail(session: App.Locals['handover']): Promise<Response> {
   if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
   const send = mailer();
-  if (!send) return Response.json({ error: missingMailer() }, { status: 503 });
+  if (!send)
+    return Response.json(
+      { code: 'DIAGNOSTIC_UNAVAILABLE', error: missingMailer() },
+      { status: 503 },
+    );
   const to = session.user.email;
   try {
     const { id } = await send({
@@ -37,10 +41,13 @@ export async function testEmail(session: App.Locals['handover']): Promise<Respon
       subject: 'Handover test email',
       text: 'Your site can send email. Nothing else to do — this message was sent from the admin to check.',
     });
-    return Response.json({ ok: true, to, id });
+    return Response.json({ ok: true, code: 'DIAGNOSTIC_EMAIL_SENT', to, id });
   } catch (err) {
     // The provider's refusal names the broken rule, which is the whole use of the button.
-    return Response.json({ error: (err as Error).message }, { status: 502 });
+    return Response.json(
+      { code: 'DIAGNOSTIC_REFUSED', error: (err as Error).message },
+      { status: 502 },
+    );
   }
 }
 
@@ -68,7 +75,8 @@ export function diagnostics(session: App.Locals['handover']): Response {
 }
 
 /** Something the site was never told, rather than something that refused: a different sentence. */
-const unset = (why: string) => Response.json({ error: why }, { status: 503 });
+const unset = (why: string) =>
+  Response.json({ code: 'DIAGNOSTIC_UNAVAILABLE', error: why }, { status: 503 });
 
 /** The key itself is never in the answer: only its last four characters, who set it and when. */
 export async function integrations(
@@ -116,7 +124,11 @@ export async function setIntegration(
   if (!INTEGRATIONS.includes(key as Integration)) return new Response('Not found', { status: 404 });
   const body = (await request.json().catch(() => undefined)) as { value?: unknown } | undefined;
   const value = typeof body?.value === 'string' ? body.value.trim() : '';
-  if (!value) return Response.json({ error: 'Paste the key before saving it.' }, { status: 400 });
+  if (!value)
+    return Response.json(
+      { code: 'INTEGRATION_KEY_REQUIRED', error: 'Paste the key before saving it.' },
+      { status: 400 },
+    );
   let detail: string | undefined;
   if (key === 'deepl') {
     const to = config.i18n.locales.find((l) => l !== config.i18n.defaultLocale);
@@ -126,7 +138,10 @@ export async function setIntegration(
         await deeplTranslate('default', value)(['Hello'], config.i18n.defaultLocale, to);
         detail = `It translated "Hello" into ${to}.`;
       } catch (err) {
-        return Response.json({ error: (err as Error).message }, { status: 502 });
+        return Response.json(
+          { code: 'DIAGNOSTIC_REFUSED', error: (err as Error).message },
+          { status: 502 },
+        );
       }
     }
   }
@@ -152,7 +167,13 @@ export async function setIntegration(
     subject: key,
     detail: { how: replaced ? 'replaced' : 'set' },
   });
-  return Response.json({ ok: true, ...(detail ? { detail } : {}) });
+  return Response.json({
+    ok: true,
+    code: detail ? 'INTEGRATION_KEY_TESTED' : 'INTEGRATION_KEY_STORED',
+    ...(detail
+      ? { detail, locale: config.i18n.locales.find((l) => l !== config.i18n.defaultLocale) }
+      : {}),
+  });
 }
 
 /** What is in force afterwards is the resolution order, and the card says which. */
@@ -171,7 +192,7 @@ export async function clearIntegration(
     subject: key,
     detail: { how: 'removed' },
   });
-  return Response.json({ ok: true });
+  return Response.json({ ok: true, code: 'INTEGRATION_KEY_REMOVED' });
 }
 
 /** Every answer is a sentence, not a status; an optional thing that is absent answers `off`. */
@@ -182,10 +203,11 @@ export async function connection(
 ): Promise<Response> {
   if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
   const e = env as Record<string, string | undefined>;
-  const ok = (detail: string) => Response.json({ ok: true, detail });
-  const off = (detail: string) => Response.json({ off: true, detail });
+  const ok = (code: string, detail: string, facts: Record<string, string | number> = {}) =>
+    Response.json({ ok: true, code, detail, ...facts });
+  const off = (code: string, detail: string) => Response.json({ off: true, code, detail });
   const refused = (err: unknown) =>
-    Response.json({ error: (err as Error).message }, { status: 502 });
+    Response.json({ code: 'DIAGNOSTIC_REFUSED', error: (err as Error).message }, { status: 502 });
 
   if (name === 'github') {
     let git: GitClient;
@@ -197,7 +219,11 @@ export async function connection(
     }
     try {
       const head = await git.getHead();
-      return ok(`${e.GITHUB_REPO} — the app minted a token and read ${head.slice(0, 7)}.`);
+      return ok(
+        'DIAGNOSTIC_GITHUB_OK',
+        `${e.GITHUB_REPO} — the app minted a token and read ${head.slice(0, 7)}.`,
+        { repository: e.GITHUB_REPO ?? '', revision: head.slice(0, 7) },
+      );
     } catch (err) {
       return refused(err);
     }
@@ -212,8 +238,11 @@ export async function connection(
     } catch (err) {
       return refused(err);
     }
+    const duration = Date.now() - started;
     return ok(
-      `Wrote, read back and deleted a test object on ${store.bucket} in ${Date.now() - started}ms.`,
+      'DIAGNOSTIC_STORAGE_OK',
+      `Wrote, read back and deleted a test object on ${store.bucket} in ${duration}ms.`,
+      { bucket: store.bucket, duration },
     );
   }
 
@@ -229,13 +258,20 @@ export async function connection(
       config.i18n.translate ?? (stored ? deeplTranslate('default', stored) : undefined);
     if (!translate)
       return off(
+        'DIAGNOSTIC_TRANSLATION_OFF',
         'No DeepL key in Settings, no DEEPL_API_KEY and no translate hook, so the Translate button is hidden.',
       );
     const to = config.i18n.locales.find((l) => l !== config.i18n.defaultLocale);
-    if (!to) return off('This site has one language, so nothing is translated.');
+    if (!to)
+      return off(
+        'DIAGNOSTIC_TRANSLATION_SINGLE_LANGUAGE',
+        'This site has one language, so nothing is translated.',
+      );
     try {
       await translate(['Hello'], config.i18n.defaultLocale, to);
-      return ok(`It translated "Hello" into ${to}.`);
+      return ok('DIAGNOSTIC_TRANSLATION_OK', `It translated "Hello" into ${to}.`, {
+        locale: to,
+      });
     } catch (err) {
       return refused(err);
     }
@@ -245,12 +281,17 @@ export async function connection(
     const builds = workerBuilds();
     if (!builds)
       return off(
+        'DIAGNOSTIC_BUILD_OFF',
         'No CLOUDFLARE_API_TOKEN and CLOUDFLARE_WORKER, so the admin cannot say whether a publish reached the site.',
       );
     try {
       // No commit named: a commit nothing has built would read as a token that does not work.
       await commitBuild(builds, undefined);
-      return ok(`Cloudflare answered for ${builds.worker} — the token works.`);
+      return ok(
+        'DIAGNOSTIC_BUILD_OK',
+        `Cloudflare answered for ${builds.worker} — the token works.`,
+        { worker: builds.worker },
+      );
     } catch (err) {
       return refused(err);
     }
@@ -265,7 +306,9 @@ export async function connection(
       return why.includes('binding') ? unset(why) : refused(err);
     }
     return ok(
+      'DIAGNOSTIC_DATABASE_OK',
       `The database answered — the admin's tables are there. Schema version ${SCHEMA_VERSION}.`,
+      { version: SCHEMA_VERSION },
     );
   }
 

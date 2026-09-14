@@ -6,6 +6,13 @@ who is not you finds out *what* is broken, in a sentence they can forward.
 
 Owner only. An editor is offered neither the sidebar item nor the route.
 
+The screen follows the account's **Interface language** choice immediately. Headings, controls,
+dates, language names, check states and Handover's own result summaries switch between English and
+German without rerunning a check or clearing an open key dialog. Collection names, routes, email
+addresses, repository names, commit prefixes, bucket and worker names, configuration identifiers
+and provider refusal details remain exactly as the site or service supplied them. Changing this
+language never changes the site's content languages or configuration.
+
 ## Configuration
 
 The collections and their routes, the languages, where uploads are served from, who sends the
@@ -31,6 +38,11 @@ with no `DEEPL_API_KEY` is not broken. A check that was configured and refused r
 working**, and its result line is the refusal itself — `RESEND_API_KEY is not set: …`, the
 bucket's own status, the sentence naming the four R2 values. That is the wording to send to
 whoever holds the credentials.
+
+Those two states come from stable response codes, not from treating every `502` or `503` as the
+same cause. Known successful and optional-off results are formatted by the browser in the current
+interface language. A service refusal or configuration detail stays verbatim so a translated
+summary cannot obscure the value that needs fixing.
 
 The failures are counted at the top of the page, with what stops working while they stand.
 

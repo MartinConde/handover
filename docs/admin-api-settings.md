@@ -20,23 +20,27 @@ build has a `/_preview` route at all. `dev` is the build mode, and is what decid
 screen offers *Simulate a conflict*.
 
 ```
-POST /admin/api/checks/github        →  { "ok": true, "detail" }
-POST /admin/api/checks/storage       →  { "ok": true, "detail" }
-POST /admin/api/checks/translation   →  { "ok": true, "detail" } | { "off": true, "detail" }
-POST /admin/api/checks/build         →  { "ok": true, "detail" } | { "off": true, "detail" }
-POST /admin/api/checks/database      →  { "ok": true, "detail" }
+POST /admin/api/checks/github        →  { "ok": true, "code", "detail", "repository", "revision" }
+POST /admin/api/checks/storage       →  { "ok": true, "code", "detail", "bucket", "duration" }
+POST /admin/api/checks/translation   →  { "ok": true, "code", "detail", "locale" }
+                                      | { "off": true, "code", "detail" }
+POST /admin/api/checks/build         →  { "ok": true, "code", "detail", "worker" }
+                                      | { "off": true, "code", "detail" }
+POST /admin/api/checks/database      →  { "ok": true, "code", "detail", "version" }
 ```
 
 One connection, tried for real: an installation token and a read of the branch head; one small
 object written to the bucket, read back and deleted again; one word translated; the worker asked
-about without naming a commit; a read of the admin's own tables. `detail` is a sentence and not a
-code, because this page is read by whoever forwards it.
+about without naming a commit; a read of the admin's own tables. `code` identifies the result and
+the named fields let the client format Handover's summary in the selected interface language.
+`detail` remains for older clients and for the exact sentence somebody forwards.
 
 `off` is a thing the site never configured and does not need — no DeepL key, no
 `CLOUDFLARE_API_TOKEN` — which is not a failure. `503` is a thing it needs and was never told,
-and the body's `error` is the sentence naming what to set; `502` is a thing that was told and
-refused, and `error` is the refusal itself. `403` for an editor; `404` for a check name that is
-not one of these.
+and answers `DIAGNOSTIC_UNAVAILABLE`; `502` is a configured service that refused and answers
+`DIAGNOSTIC_REFUSED`. In both cases `error` is the exact configuration or provider detail. Clients
+classify with the code rather than guessing from the status. `403` for an editor; `404` for a
+check name that is not one of these.
 
 The test email is [`POST /admin/api/checks/email`](email.md#prove-it-before-anything-depends-on-it), which sends
 something and so is never run on its own, and *Simulate a conflict* is
@@ -50,8 +54,8 @@ Owner only, like the rest of that screen.
 ```
 GET    /admin/api/settings          →  { "integrations": [ { "key", "source", "fallback",
                                                              "hint", "updatedAt", "by" } ] }
-PUT    /admin/api/settings/:key        { "value": "…" }   →  { "ok": true, "detail"? }
-DELETE /admin/api/settings/:key                           →  { "ok": true }
+PUT    /admin/api/settings/:key        { "value": "…" }   →  { "ok": true, "code", "detail"?, "locale"? }
+DELETE /admin/api/settings/:key                           →  { "ok": true, "code" }
 ```
 
 `key` is `deepl` or `assist` and nothing else — anything the admin needs to run itself stays in
@@ -61,7 +65,10 @@ without the row, so *Remove* can say what happens before it is pressed. `hint` i
 characters of the key. **The key itself is never in an answer**: to check one, replace it.
 
 A `PUT` of a DeepL key translates one word with it before storing anything, and answers `502`
-with DeepL's own refusal if that fails; `detail` is what it translated when it worked. `400` for
-an empty value, `404` for a key outside the two, `503` when `HANDOVER_SETTINGS_KEY` is not set —
-the body names it. Every write is a `setting-changed` row in the [activity log](activity.md),
-carrying the name of the key and never its value.
+with `DIAGNOSTIC_REFUSED` plus DeepL's own refusal if that fails. Success is
+`INTEGRATION_KEY_TESTED` with the target `locale`, or `INTEGRATION_KEY_STORED` where no test is
+possible. An empty value is `400` with `INTEGRATION_KEY_REQUIRED`; deleting is
+`INTEGRATION_KEY_REMOVED`. `404` is a key outside the two. `503` with
+`DIAGNOSTIC_UNAVAILABLE` means `HANDOVER_SETTINGS_KEY` is unavailable, and `error` names it.
+Every write is a `setting-changed` row in the [activity log](activity.md), carrying the name of
+the key and never its value.

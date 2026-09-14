@@ -16,6 +16,7 @@ const exactFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const clockFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const fieldTimeFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const mediaDateFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
+const calendarDateFormatters = new Map<UiLocale, Intl.DateTimeFormat>();
 const languageFormatters = new Map<UiLocale, Intl.DisplayNames>();
 const languageListFormatters = new Map<UiLocale, Intl.ListFormat>();
 const languageTag = (locale: UiLocale) => (locale === 'de' ? 'de-DE' : 'en-GB');
@@ -110,6 +111,18 @@ export const formatMediaDate = (at: number, locale: UiLocale): string =>
       new Intl.DateTimeFormat(languageTag(locale), {
         day: 'numeric',
         month: 'long',
+      }),
+  ).format(at);
+
+export const formatCalendarDate = (at: number, locale: UiLocale): string =>
+  formatter(
+    calendarDateFormatters,
+    locale,
+    () =>
+      new Intl.DateTimeFormat(languageTag(locale), {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
       }),
   ).format(at);
 

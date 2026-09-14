@@ -900,7 +900,12 @@ test('a test email goes to the signed-in owner and answers with the id it was gi
   siteMailer = fakeMailer;
   const res = await testEmail(owner);
   expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ ok: true, to: 'martin@example.com', id: 'fake-1' });
+  expect(await res.json()).toEqual({
+    ok: true,
+    code: 'DIAGNOSTIC_EMAIL_SENT',
+    to: 'martin@example.com',
+    id: 'fake-1',
+  });
   // Nobody else can be named: the recipient is the session's, not the request's.
   expect(sent).toHaveLength(1);
   expect(sent[0]?.to).toBe('martin@example.com');
@@ -956,7 +961,10 @@ test('the repository check names the repository and the commit it read', async (
   // Shortened: the whole forty characters is noise on a page somebody reads out loud.
   expect(await res.json()).toEqual({
     ok: true,
+    code: 'DIAGNOSTIC_GITHUB_OK',
     detail: 'acme/site — the app minted a token and read 15db548.',
+    repository: 'acme/site',
+    revision: '15db548',
   });
 });
 
@@ -964,6 +972,7 @@ test('a bucket the site was never told about answers with the four values to set
   bucketed = false;
   const res = await check('storage', owner);
   expect(res.status).toBe(503);
+  expect((await body(res.clone())).code).toBe('DIAGNOSTIC_UNAVAILABLE');
   expect((await body(res)).error).toContain('R2_ACCOUNT_ID');
 });
 
@@ -971,6 +980,7 @@ test('a bucket that refuses the round trip answers with what refused it', async 
   storeRefusal = new Error('The bucket refused the upload (403)');
   const res = await check('storage', owner);
   expect(res.status).toBe(502);
+  expect((await body(res.clone())).code).toBe('DIAGNOSTIC_REFUSED');
   expect((await body(res)).error).toBe('The bucket refused the upload (403)');
 });
 
@@ -987,6 +997,7 @@ test('a site with no translator says translation is off rather than failing', as
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
     off: true,
+    code: 'DIAGNOSTIC_TRANSLATION_OFF',
     detail:
       'No DeepL key in Settings, no DEEPL_API_KEY and no translate hook, so the Translate button is hidden.',
   });
@@ -1004,6 +1015,7 @@ test('a one-language site has nothing to translate into and says that instead', 
   const res = await check('translation', owner);
   expect(await res.json()).toEqual({
     off: true,
+    code: 'DIAGNOSTIC_TRANSLATION_SINGLE_LANGUAGE',
     detail: 'This site has one language, so nothing is translated.',
   });
 });
@@ -1039,7 +1051,9 @@ test('the database check answers with the schema version the tables are at', asy
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({
     ok: true,
+    code: 'DIAGNOSTIC_DATABASE_OK',
     detail: "The database answered — the admin's tables are there. Schema version 10.",
+    version: 10,
   });
 });
 
@@ -1168,6 +1182,7 @@ test('a key is tried against DeepL before it is stored, and a refusal stores not
   );
   const res = await setKey('deepl', 'wrong-key');
   expect(res.status).toBe(502);
+  expect((await body(res.clone())).code).toBe('DIAGNOSTIC_REFUSED');
   expect((await body(res)).error).toContain('403');
   expect(stored.deepl).toBeUndefined();
   expect(logged).toEqual([]);
@@ -1181,7 +1196,12 @@ test('a key that answers is stored, and the answer never carries it back', async
   );
   const res = await setKey('deepl', '  fx-0000-x7Kq  ');
   expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ ok: true, detail: 'It translated "Hello" into de.' });
+  expect(await res.json()).toEqual({
+    ok: true,
+    code: 'INTEGRATION_KEY_TESTED',
+    detail: 'It translated "Hello" into de.',
+    locale: 'de',
+  });
   // Trimmed: a pasted key carries whitespace, and the service would refuse it later.
   expect(stored.deepl?.value).toBe('fx-0000-x7Kq');
 });
@@ -1210,7 +1230,9 @@ test('a key outside the allow-list is not found, whatever it is called', async (
 });
 
 test('an empty key is refused before anything is asked or stored', async () => {
-  expect((await setKey('deepl', '   ')).status).toBe(400);
+  const empty = await setKey('deepl', '   ');
+  expect(empty.status).toBe(400);
+  expect((await body(empty)).code).toBe('INTEGRATION_KEY_REQUIRED');
   expect((await setKey('deepl', 42)).status).toBe(400);
   expect(stored.deepl).toBeUndefined();
 });
@@ -1226,7 +1248,9 @@ test('a site with no secret to encrypt under names the secret rather than storin
 test('removing a key takes it out and leaves the other one where it is', async () => {
   stored.deepl = { value: 'fx-0000-x7Kq', hint: 'x7Kq', updatedAt: 1, updatedBy: 'u1' };
   stored.assist = { value: 'ai-key', hint: '-key', updatedAt: 1, updatedBy: 'u1' };
-  expect((await clearKey('deepl')).status).toBe(200);
+  const res = await clearKey('deepl');
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ ok: true, code: 'INTEGRATION_KEY_REMOVED' });
   expect(stored.deepl).toBeUndefined();
   expect(stored.assist).toBeDefined();
 });
@@ -1295,7 +1319,12 @@ test('the named provider sends through Resend on the key the Worker holds', asyn
   );
   const res = await testEmail(owner);
   expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ ok: true, to: 'martin@example.com', id: 'e1b2c3d4' });
+  expect(await res.json()).toEqual({
+    ok: true,
+    code: 'DIAGNOSTIC_EMAIL_SENT',
+    to: 'martin@example.com',
+    id: 'e1b2c3d4',
+  });
   expect(calls[0]).toMatchObject({
     from: 'Handover <onboarding@resend.dev>',
     to: 'martin@example.com',
@@ -1349,7 +1378,11 @@ test('smtp sends over implicit TLS with the sender split, and reports no id', as
   const res = await testEmail(owner);
   expect(res.status).toBe(200);
   // No `id`: SMTP hands back nothing a person could look the message up by.
-  expect(await res.json()).toEqual({ ok: true, to: 'martin@example.com' });
+  expect(await res.json()).toEqual({
+    ok: true,
+    code: 'DIAGNOSTIC_EMAIL_SENT',
+    to: 'martin@example.com',
+  });
   expect(smtpCalls).toHaveLength(1);
   expect(smtpCalls[0]?.options).toMatchObject({
     host: 'smtp.resend.com',

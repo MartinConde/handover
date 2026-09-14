@@ -1,9 +1,21 @@
 <script lang="ts">
 import { untrack } from 'svelte';
+import {
+  formatCalendarDate,
+  formatLanguageName,
+  formatRelativeTime,
+  messageOptions,
+  type UiLocale,
+} from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 import { request as fetch } from '../request.js';
 import Modal from '../shared/Modal.svelte';
 
-let { oncommitted }: { oncommitted?: () => void | Promise<void> } = $props();
+let {
+  uiLocale = 'en',
+  oncommitted,
+}: { uiLocale?: UiLocale; oncommitted?: () => void | Promise<void> } = $props();
+const options = $derived(messageOptions(uiLocale));
 
 interface Config {
   collections: { name: string; route?: string }[];
@@ -29,69 +41,47 @@ interface Key {
 type State = 'running' | 'ok' | 'off' | 'failed';
 interface Result {
   state: State;
-  detail: string;
+  message?: DiagnosticMessage;
   at?: number;
+}
+
+interface DiagnosticMessage {
+  code: string;
+  status?: number;
+  detail?: string;
+  to?: string;
+  locale?: string;
+  repository?: string;
+  revision?: string;
+  bucket?: string;
+  duration?: number;
+  worker?: string;
+  version?: number;
+  entry?: string;
+  name?: string;
 }
 
 /** `sends` marks the one check with a side effect: it never runs on open. */
 const CHECKS = [
-  {
-    key: 'github',
-    name: "Your website's code (GitHub)",
-    what: 'Where published pages are written.',
-    stops: 'publishing',
-  },
-  {
-    key: 'storage',
-    name: 'Images and files (R2)',
-    what: 'Where uploads are stored.',
-    stops: 'uploading pictures and files',
-  },
-  {
-    key: 'email',
-    name: 'Email',
-    what: 'Sign-in links and invitations.',
-    stops: 'sending sign-in links and invitations',
-    sends: true,
-  },
-  {
-    key: 'translation',
-    name: 'Translation',
-    what: 'Used by the Translate button.',
-    stops: 'machine translation',
-  },
-  {
-    key: 'build',
-    name: 'Build status',
-    what: 'Lets the admin say whether a publish reached the site.',
-    stops: 'the build status in the top bar',
-  },
-  {
-    key: 'database',
-    name: 'Database',
-    what: 'Where drafts, locks and the activity log live.',
-    stops: 'editing anything at all',
-  },
+  { key: 'github' },
+  { key: 'storage' },
+  { key: 'email', sends: true },
+  { key: 'translation' },
+  { key: 'build' },
+  { key: 'database' },
 ];
 
-const BADGE: Record<State, { class: string; label: string }> = {
-  running: { class: 'badge-info', label: 'Checking…' },
-  ok: { class: 'badge-success', label: 'Working' },
-  off: { class: '', label: 'Not in use' },
-  failed: { class: 'badge-danger', label: 'Not working' },
-};
-
 let results = $state<Record<string, Result>>({});
-let conflict = $state('');
+let conflict = $state<DiagnosticMessage>();
 let simulating = $state(false);
 let keys = $state<Key[]>([]);
-let keysError = $state('');
+let keysError = $state<DiagnosticMessage>();
 /** The key currently being entered, never retained before Save. */
 let typing = $state<Key>();
 let typed = $state('');
 let saving = $state(false);
-let keyError = $state('');
-let keySaid = $state('');
+let keyError = $state<DiagnosticMessage>();
+let keySaid = $state<DiagnosticMessage>();
 let trigger = $state<HTMLElement | null>(null);
 
 // Untracked because `run` reads and writes `results`, so a tracking effect would loop for ever.
@@ -104,17 +94,141 @@ $effect(() => {
 
 async function load(): Promise<Config> {
   const res = await fetch('/admin/api/diagnostics');
-  if (!res.ok) throw new Error(`Could not read this site's settings (${res.status})`);
+  if (!res.ok) throw { code: 'DIAGNOSTICS_LOAD_FAILED', status: res.status };
   return res.json();
 }
 
+const responseMessage = (
+  body: Record<string, unknown>,
+  fallback: string,
+  status?: number,
+): DiagnosticMessage => ({
+  code: typeof body.code === 'string' ? body.code : fallback,
+  ...(status ? { status } : {}),
+  ...(typeof body.error === 'string'
+    ? { detail: body.error }
+    : typeof body.detail === 'string'
+      ? { detail: body.detail }
+      : {}),
+  ...(typeof body.to === 'string' ? { to: body.to } : {}),
+  ...(typeof body.locale === 'string' ? { locale: body.locale } : {}),
+  ...(typeof body.repository === 'string' ? { repository: body.repository } : {}),
+  ...(typeof body.revision === 'string' ? { revision: body.revision } : {}),
+  ...(typeof body.bucket === 'string' ? { bucket: body.bucket } : {}),
+  ...(typeof body.duration === 'number' ? { duration: body.duration } : {}),
+  ...(typeof body.worker === 'string' ? { worker: body.worker } : {}),
+  ...(typeof body.version === 'number' ? { version: body.version } : {}),
+  ...(typeof body.entry === 'string' ? { entry: body.entry } : {}),
+});
+
+function messageText(message: DiagnosticMessage): string {
+  switch (message.code) {
+    case 'DIAGNOSTICS_LOAD_FAILED':
+      return m.diagnostics_load_failed({ status: message.status ?? 0 }, options);
+    case 'DIAGNOSTIC_CHECK_FAILED':
+      return message.detail ?? m.diagnostics_check_failed({ status: message.status ?? 0 }, options);
+    case 'DIAGNOSTIC_EMAIL_SENT':
+      return m.diagnostics_email_sent({ email: message.to ?? '' }, options);
+    case 'DIAGNOSTIC_GITHUB_OK':
+      return m.diagnostics_github_ok(
+        { repository: message.repository ?? '', revision: message.revision ?? '' },
+        options,
+      );
+    case 'DIAGNOSTIC_STORAGE_OK':
+      return m.diagnostics_storage_ok(
+        { bucket: message.bucket ?? '', duration: message.duration ?? 0 },
+        options,
+      );
+    case 'DIAGNOSTIC_TRANSLATION_OK':
+    case 'INTEGRATION_KEY_TESTED':
+      return m.diagnostics_translation_ok({ locale: message.locale ?? '' }, options);
+    case 'DIAGNOSTIC_TRANSLATION_OFF':
+      return m.diagnostics_translation_off({}, options);
+    case 'DIAGNOSTIC_TRANSLATION_SINGLE_LANGUAGE':
+      return m.diagnostics_translation_single_language({}, options);
+    case 'DIAGNOSTIC_BUILD_OK':
+      return m.diagnostics_build_ok({ worker: message.worker ?? '' }, options);
+    case 'DIAGNOSTIC_BUILD_OFF':
+      return m.diagnostics_build_off({}, options);
+    case 'DIAGNOSTIC_DATABASE_OK':
+      return m.diagnostics_database_ok({ version: message.version ?? 0 }, options);
+    case 'INTEGRATION_KEYS_LOAD_FAILED':
+      return m.diagnostics_keys_load_failed({ status: message.status ?? 0 }, options);
+    case 'INTEGRATION_KEY_SAVE_FAILED':
+      return (
+        message.detail ?? m.diagnostics_key_save_failed({ status: message.status ?? 0 }, options)
+      );
+    case 'INTEGRATION_KEY_REMOVE_FAILED':
+      return m.diagnostics_key_remove_failed({ status: message.status ?? 0 }, options);
+    case 'INTEGRATION_KEY_REQUIRED':
+      return m.diagnostics_key_required({}, options);
+    case 'INTEGRATION_KEY_STORED':
+      return m.diagnostics_key_stored({ name: message.name ?? '' }, options);
+    case 'INTEGRATION_KEY_REMOVED':
+      return m.diagnostics_key_removed({ name: message.name ?? '' }, options);
+    case 'DIAGNOSTIC_CONFLICT_CREATED':
+      return m.diagnostics_conflict_created({ entry: message.entry ?? '' }, options);
+    case 'DIAGNOSTIC_CONFLICT_FAILED':
+      return (
+        message.detail ?? m.diagnostics_conflict_failed({ status: message.status ?? 0 }, options)
+      );
+    case 'DIAGNOSTIC_REFUSED':
+    case 'DIAGNOSTIC_UNAVAILABLE':
+      return message.detail ?? m.diagnostics_check_failed({ status: message.status ?? 0 }, options);
+    default:
+      return message.detail ?? m.diagnostics_check_failed({ status: message.status ?? 0 }, options);
+  }
+}
+
+function checkName(key: string): string {
+  if (key === 'github') return m.diagnostics_github_name({}, options);
+  if (key === 'storage') return m.diagnostics_storage_name({}, options);
+  if (key === 'email') return m.diagnostics_email_name({}, options);
+  if (key === 'translation') return m.diagnostics_translation_name({}, options);
+  if (key === 'build') return m.diagnostics_build_name({}, options);
+  return m.diagnostics_database_name({}, options);
+}
+
+function checkWhat(key: string): string {
+  if (key === 'github') return m.diagnostics_github_what({}, options);
+  if (key === 'storage') return m.diagnostics_storage_what({}, options);
+  if (key === 'email') return m.diagnostics_email_what({}, options);
+  if (key === 'translation') return m.diagnostics_translation_what({}, options);
+  if (key === 'build') return m.diagnostics_build_what({}, options);
+  return m.diagnostics_database_what({}, options);
+}
+
+function checkStops(key: string): string {
+  if (key === 'github') return m.diagnostics_github_stops({}, options);
+  if (key === 'storage') return m.diagnostics_storage_stops({}, options);
+  if (key === 'email') return m.diagnostics_email_stops({}, options);
+  if (key === 'translation') return m.diagnostics_translation_stops({}, options);
+  if (key === 'build') return m.diagnostics_build_stops({}, options);
+  return m.diagnostics_database_stops({}, options);
+}
+
+const badgeClass = (state: State) =>
+  state === 'running'
+    ? 'badge-info'
+    : state === 'ok'
+      ? 'badge-success'
+      : state === 'failed'
+        ? 'badge-danger'
+        : '';
+const badgeLabel = (state: State) =>
+  state === 'running'
+    ? m.diagnostics_checking({}, options)
+    : state === 'ok'
+      ? m.diagnostics_working({}, options)
+      : state === 'off'
+        ? m.diagnostics_not_in_use({}, options)
+        : m.diagnostics_not_working({}, options);
+
 async function run(key: string) {
   if (results[key]?.state === 'running') return;
-  results[key] = { state: 'running', detail: '' };
+  results[key] = { state: 'running' };
   const res = await fetch(`/admin/api/checks/${key}`, { method: 'POST' });
-  const body = (await res.json().catch(() => ({}))) as {
-    detail?: string;
-    error?: string;
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown> & {
     off?: boolean;
     to?: string;
   };
@@ -122,24 +236,26 @@ async function run(key: string) {
   if (!res.ok) {
     results[key] = {
       state: 'failed',
-      detail: body.error ?? `The check could not be run (${res.status}).`,
+      message: responseMessage(body, 'DIAGNOSTIC_CHECK_FAILED', res.status),
       at,
     };
     return;
   }
-  // The test email endpoint answers with the address it went to rather than a sentence.
-  const detail = body.detail ?? (body.to ? `Sent to ${body.to}.` : '');
-  results[key] = { state: body.off ? 'off' : 'ok', detail, at };
+  results[key] = {
+    state: body.off ? 'off' : 'ok',
+    message: responseMessage(body, body.to ? 'DIAGNOSTIC_EMAIL_SENT' : 'DIAGNOSTIC_DETAIL'),
+    at,
+  };
 }
 
 async function loadKeys() {
   const res = await fetch('/admin/api/settings');
   if (!res.ok) {
-    keysError = `The keys you own could not be read (${res.status}).`;
+    keysError = responseMessage({}, 'INTEGRATION_KEYS_LOAD_FAILED', res.status);
     return;
   }
   keys = ((await res.json()) as { integrations: Key[] }).integrations;
-  keysError = '';
+  keysError = undefined;
 }
 
 function open(row: Key) {
@@ -147,14 +263,14 @@ function open(row: Key) {
   trigger = document.activeElement as HTMLElement | null;
   typing = row;
   typed = '';
-  keyError = '';
-  keySaid = '';
+  keyError = undefined;
+  keySaid = undefined;
 }
 
 function close() {
   typing = undefined;
   typed = '';
-  keyError = '';
+  keyError = undefined;
 }
 
 async function saveKey(event: SubmitEvent) {
@@ -162,21 +278,22 @@ async function saveKey(event: SubmitEvent) {
   const row = typing;
   if (!row) return;
   saving = true;
-  keyError = '';
+  keyError = undefined;
   const res = await fetch(`/admin/api/settings/${row.key}`, {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ value: typed }),
   });
-  const body = (await res.json().catch(() => ({}))) as { error?: string; detail?: string };
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
   saving = false;
   // The dialog stays open on a refusal: what refused is nearly always a typo in the value.
   if (!res.ok) {
-    keyError = body.error ?? `The key was not saved (${res.status}).`;
+    keyError = responseMessage(body, 'INTEGRATION_KEY_SAVE_FAILED', res.status);
     return;
   }
+  const success = responseMessage(body, 'INTEGRATION_KEY_STORED');
   close();
-  keySaid = body.detail ?? `The ${NAMES[row.key] ?? row.key} key is stored.`;
+  keySaid = { ...success, name: keyName(row.key) };
   await loadKeys();
 }
 
@@ -186,97 +303,108 @@ let removing = $state<Key>();
 async function removeKey(row: Key) {
   removing = undefined;
   const res = await fetch(`/admin/api/settings/${row.key}`, { method: 'DELETE' });
-  keySaid = res.ok ? `The ${NAMES[row.key] ?? row.key} key is gone.` : '';
-  if (!res.ok) keysError = `The key was not removed (${res.status}).`;
+  const failed = res.ok
+    ? undefined
+    : responseMessage({}, 'INTEGRATION_KEY_REMOVE_FAILED', res.status);
+  keySaid = res.ok ? { code: 'INTEGRATION_KEY_REMOVED', name: keyName(row.key) } : undefined;
   await loadKeys();
+  if (failed) keysError = failed;
 }
 
 async function simulate() {
   simulating = true;
-  conflict = '';
+  conflict = undefined;
   const res = await fetch('/admin/api/checks/conflict', { method: 'POST' });
-  const body = (await res.json().catch(() => ({}))) as { entry?: string; error?: string };
+  const body = (await res.json().catch(() => ({}))) as Record<string, unknown> & {
+    entry?: string;
+  };
   simulating = false;
   conflict = res.ok
-    ? `Conflict made on ${body.entry}. Open Unpublished changes to resolve it, and delete that entry when you are done.`
-    : (body.error ?? `Nothing was made (${res.status}).`);
+    ? { code: 'DIAGNOSTIC_CONFLICT_CREATED', entry: body.entry }
+    : responseMessage(body, 'DIAGNOSTIC_CONFLICT_FAILED', res.status);
   if (res.ok) await oncommitted?.();
 }
 
 const failing = $derived(CHECKS.filter((check) => results[check.key]?.state === 'failed'));
 const consequence = $derived.by(() => {
-  const [first = '', ...rest] = failing.map((check) => check.stops);
-  const list = rest.length
-    ? `${[first, ...rest.slice(0, -1)].join(', ')} and ${rest.at(-1)}`
-    : first;
-  return `${list.charAt(0).toUpperCase()}${list.slice(1)} will not work until ${failing.length === 1 ? 'it is' : 'they are'} fixed.`;
+  const list = new Intl.ListFormat(uiLocale === 'de' ? 'de-DE' : 'en-GB', {
+    style: 'long',
+    type: 'conjunction',
+  }).format(failing.map((check) => checkStops(check.key)));
+  const sentenceList = list.charAt(0).toLocaleUpperCase(uiLocale) + list.slice(1);
+  return failing.length === 1
+    ? m.diagnostics_consequence_one({ things: sentenceList }, options)
+    : m.diagnostics_consequence_many({ things: sentenceList }, options);
 });
 
 /** Coarse on purpose: what a result line answers is "just now, or a while ago?". */
 function when(at: number): string {
-  const minutes = Math.floor((Date.now() - at) / 60000);
-  if (minutes < 1) return 'checked a moment ago';
-  if (minutes < 60) return `checked ${minutes} minute${minutes === 1 ? '' : 's'} ago`;
-  const hours = Math.floor(minutes / 60);
-  return `checked ${hours} hour${hours === 1 ? '' : 's'} ago`;
+  return m.diagnostics_checked_when({ when: formatRelativeTime(at, uiLocale) }, options);
 }
 
-const NAMES: Record<string, string> = { deepl: 'DeepL', assist: 'Writing help (AI)' };
-const KEY_BADGE: Record<Key['source'], { class: string; label: string }> = {
-  settings: { class: 'badge-success', label: 'Set here' },
-  env: { class: 'badge-info', label: "Coming from the site's settings" },
-  code: { class: 'badge-info', label: "Your site's own code" },
-  off: { class: '', label: 'Not set' },
+const keyName = (key: string) =>
+  key === 'deepl' ? 'DeepL' : key === 'assist' ? m.diagnostics_assist_name({}, options) : key;
+const keyBadgeClass = (source: Key['source']) =>
+  source === 'settings' ? 'badge-success' : source === 'off' ? '' : 'badge-info';
+const keyBadgeLabel = (source: Key['source']) => {
+  if (source === 'settings') return m.diagnostics_set_here({}, options);
+  if (source === 'env') return m.diagnostics_from_site_settings({}, options);
+  if (source === 'code') return m.diagnostics_site_code({}, options);
+  return m.diagnostics_not_set({}, options);
 };
-const DAY = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
 
 /** A removal names what takes over, because the alternative is finding out after the press. */
 function says(row: Key): string {
-  if (row.source === 'code')
-    return 'Your site translates with its own code, handed in by your developer, so a key here would not be used.';
+  if (row.source === 'code') return m.diagnostics_key_site_code({}, options);
   if (row.source === 'settings') {
     const who = row.updatedAt
-      ? ` · set ${row.by ? `by ${row.by} ` : ''}on ${DAY.format(row.updatedAt)}`
+      ? row.by
+        ? m.diagnostics_key_set_by(
+            { person: row.by, date: formatCalendarDate(row.updatedAt, uiLocale) },
+            options,
+          )
+        : m.diagnostics_key_set_on({ date: formatCalendarDate(row.updatedAt, uiLocale) }, options)
       : '';
     const next =
       row.fallback === 'env'
-        ? " Removing it falls back to the key in your site's settings."
+        ? m.diagnostics_key_remove_fallback({}, options)
         : row.key === 'deepl'
-          ? ' Removing it hides the Translate button everywhere.'
-          : ' Removing it takes the key back out.';
-    return `Ends in …${row.hint}${who}.${next}`;
+          ? m.diagnostics_key_remove_hides_translation({}, options)
+          : m.diagnostics_key_remove_plain({}, options);
+    return m.diagnostics_key_stored_description(
+      { hint: row.hint ?? '', attribution: who, consequence: next },
+      options,
+    );
   }
-  if (row.source === 'env')
-    return "Set in your site's own settings by your developer. Setting one here would override it.";
+  if (row.source === 'env') return m.diagnostics_key_environment({}, options);
   return row.key === 'deepl'
-    ? "Nothing set here and nothing in your site's settings, so the Translate button is hidden everywhere."
-    : 'Nothing set here — and there is no writing help in this version yet, so a key stored here waits for one.';
+    ? m.diagnostics_key_deepl_off({}, options)
+    : m.diagnostics_key_assist_off({}, options);
 }
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const language = (code: string) =>
-  new Intl.DisplayNames(['en'], { type: 'language' }).of(code) ?? code;
-const MAILERS: Record<string, string> = {
-  resend: 'Resend',
-  smtp: 'SMTP',
-  cloudflare: 'Cloudflare Email Sending',
-  custom: "Your site's own mailer",
+const mailerName = (provider: string) => {
+  if (provider === 'resend') return 'Resend';
+  if (provider === 'smtp') return 'SMTP';
+  if (provider === 'cloudflare') return 'Cloudflare Email Sending';
+  if (provider === 'custom') return m.diagnostics_custom_mailer({}, options);
+  return provider;
 };
 </script>
 
 <main class="main diagnostics-page">
-  <div class="list-toolbar"><h1>Settings</h1></div>
+  <div class="list-toolbar"><h1>{m.diagnostics_title({}, options)}</h1></div>
   <p class="list-note">
-    Your site's configuration and connected services. Configuration is managed by your developer in <code>cms.config.ts</code>.
+    {m.diagnostics_intro_before({}, options)} <code>cms.config.ts</code>{m.diagnostics_intro_after({}, options)}
   </p>
   {#await load()}
-    <p class="placeholder">Loading…</p>
+    <p class="placeholder">{m.common_loading({}, options)}</p>
   {:then config}
     <!-- The count says what stops working, because that is the half the owner can judge. -->
     {#if failing.length}
       <p class="notice notice-danger page-alert" role="status">
         <strong>
-          {failing.length} check{failing.length === 1 ? ' is' : 's are'} failing.
+          {m.diagnostics_failures({ count: failing.length }, options)}
         </strong>
         {consequence}
       </p>
@@ -284,12 +412,12 @@ const MAILERS: Record<string, string> = {
     <div class="settings is-wide">
       <section class="settings-section" aria-labelledby="cfg">
         <header>
-          <h2 id="cfg">Configuration</h2>
-          <p>Changed in <code>cms.config.ts</code> by your developer, then deployed.</p>
+          <h2 id="cfg">{m.diagnostics_configuration({}, options)}</h2>
+          <p>{m.diagnostics_configuration_before({}, options)} <code>cms.config.ts</code>{m.diagnostics_configuration_after({}, options)}</p>
         </header>
         <dl class="facts">
           <div>
-            <dt>Collections</dt>
+            <dt>{m.diagnostics_collections({}, options)}</dt>
             <dd>
               {#each config.collections as collection, i (collection.name)}
                 {#if i}<span class="sep" aria-hidden="true">·</span>{/if}
@@ -301,46 +429,46 @@ const MAILERS: Record<string, string> = {
             </dd>
           </div>
           <div>
-            <dt>Languages</dt>
+            <dt>{m.diagnostics_languages({}, options)}</dt>
             <dd>
               {#each config.locales as locale, i (locale)}
                 {#if i}<span class="sep" aria-hidden="true">·</span>{/if}
                 <span>
-                  {language(locale)}
-                  {#if locale === config.defaultLocale}<span class="badge">default</span>{/if}
+                  {formatLanguageName(locale, uiLocale)}
+                  {#if locale === config.defaultLocale}<span class="badge">{m.diagnostics_default({}, options)}</span>{/if}
                 </span>
               {/each}
             </dd>
           </div>
           <div>
-            <dt>Images and files</dt>
+            <dt>{m.diagnostics_media({}, options)}</dt>
             <dd>
               {#if config.mediaBase}
                 <code>{config.mediaBase}</code>
               {:else}
-                Off <span class="sub">no <code>media.publicBase</code>, so uploads have nowhere to be served from</span>
+                {m.diagnostics_off({}, options)} <span class="sub">{m.diagnostics_media_off_before({}, options)} <code>media.publicBase</code>{m.diagnostics_media_off_after({}, options)}</span>
               {/if}
             </dd>
           </div>
           <div>
-            <dt>Email</dt>
+            <dt>{m.diagnostics_email_name({}, options)}</dt>
             <dd>
               {#if config.mailer}
-                {MAILERS[config.mailer.provider] ?? config.mailer.provider}
-                {#if config.mailer.from}<span class="sub">from {config.mailer.from}</span>{/if}
+                {mailerName(config.mailer.provider)}
+                {#if config.mailer.from}<span class="sub">{m.diagnostics_from_address({ address: config.mailer.from }, options)}</span>{/if}
               {:else}
-                Off <span class="sub">no <code>mailer</code> block, so nobody can be emailed a sign-in link</span>
+                {m.diagnostics_off({}, options)} <span class="sub">{m.diagnostics_email_off_before({}, options)} <code>mailer</code>{m.diagnostics_email_off_after({}, options)}</span>
               {/if}
             </dd>
           </div>
           <div>
-            <dt>Preview</dt>
+            <dt>{m.diagnostics_preview({}, options)}</dt>
             <dd>
               {#if config.preview}
-                On
+                {m.diagnostics_on({}, options)}
               {:else}
                 <!-- Named rather than offered: nothing in the admin can turn this on. -->
-                Off <span class="sub">your developer switches it on by setting <code>PREVIEW_ENABLED</code> when the site is built</span>
+                {m.diagnostics_off({}, options)} <span class="sub">{m.diagnostics_preview_off_before({}, options)} <code>PREVIEW_ENABLED</code>{m.diagnostics_preview_off_after({}, options)}</span>
               {/if}
             </dd>
           </div>
@@ -348,23 +476,23 @@ const MAILERS: Record<string, string> = {
       </section>
       <section class="settings-section" aria-labelledby="conn">
         <header>
-          <h2 id="conn">Connections</h2>
-          <p>Each one is checked when this page opens, and again whenever you press Test.</p>
+          <h2 id="conn">{m.diagnostics_connections({}, options)}</h2>
+          <p>{m.diagnostics_connections_hint({}, options)}</p>
         </header>
         <ul class="check-list">
           {#each CHECKS as check (check.key)}
             {@const result = results[check.key]}
             <li class="check-card" class:is-busy={result?.state === 'running'}>
               <div class="head">
-                <span class="name">{check.name}</span>
+                <span class="name">{checkName(check.key)}</span>
                 {#if result}
-                  <span class="badge {BADGE[result.state].class}">{BADGE[result.state].label}</span>
+                  <span class="badge {badgeClass(result.state)}">{badgeLabel(result.state)}</span>
                   {#if result.at}<span class="sub">{when(result.at)}</span>{/if}
                 {:else}
-                  <span class="sub">not checked yet</span>
+                  <span class="sub">{m.diagnostics_not_checked({}, options)}</span>
                 {/if}
               </div>
-              <p class="what">{check.what}</p>
+              <p class="what">{checkWhat(check.key)}</p>
               <div class="actions">
                 <!-- aria-disabled, not disabled: a disabled button takes no focus. -->
                 <button
@@ -373,15 +501,15 @@ const MAILERS: Record<string, string> = {
                   aria-disabled={result?.state === 'running' ? 'true' : undefined}
                   onclick={() => run(check.key)}
                 >
-                  {check.sends ? 'Send a test email' : 'Test'}<span class="visually-hidden"> {check.name}</span>
+                  {check.sends ? m.diagnostics_send_test_email({}, options) : m.diagnostics_test({}, options)}<span class="visually-hidden"> {checkName(check.key)}</span>
                 </button>
               </div>
               {#if result?.state === 'failed'}
-                <p class="notice notice-danger result" role="status">{result.detail}</p>
-              {:else if result?.detail}
-                <p class="result" role="status">{result.detail}</p>
+                <p class="notice notice-danger result" role="status">{result.message ? messageText(result.message) : ''}</p>
+              {:else if result?.message}
+                <p class="result" role="status">{messageText(result.message)}</p>
               {:else if result?.state === 'running'}
-                <p class="result" role="status">Checking…</p>
+                <p class="result" role="status">{m.diagnostics_checking({}, options)}</p>
               {/if}
             </li>
           {/each}
@@ -389,37 +517,36 @@ const MAILERS: Record<string, string> = {
       </section>
       <section class="settings-section" aria-labelledby="integ">
         <header>
-          <h2 id="integ">Integrations</h2>
+          <h2 id="integ">{m.diagnostics_integrations({}, options)}</h2>
           <p>
-            The only thing on this page you can change. Keys are stored encrypted and are never
-            shown again — to check one, replace it.
+            {m.diagnostics_integrations_hint({}, options)}
           </p>
         </header>
-        {#if keysError}<p class="notice notice-danger" role="alert">{keysError}</p>{/if}
-        {#if keySaid}<p class="notice notice-info" role="status">{keySaid}</p>{/if}
+        {#if keysError}<p class="notice notice-danger" role="alert">{messageText(keysError)}</p>{/if}
+        {#if keySaid}<p class="notice notice-info" role="status">{messageText(keySaid)}</p>{/if}
         <ul class="check-list">
           {#each keys as row (row.key)}
             <li class="check-card">
               <div class="head">
-                <span class="name">{NAMES[row.key] ?? row.key}</span>
-                <span class="badge {KEY_BADGE[row.source].class}">{KEY_BADGE[row.source].label}</span>
+                <span class="name">{keyName(row.key)}</span>
+                <span class="badge {keyBadgeClass(row.source)}">{keyBadgeLabel(row.source)}</span>
               </div>
               <p class="what">{says(row)}</p>
               <div class="actions">
                 <!-- No button where the site's code is in charge: it could change nothing. -->
                 {#if row.source === 'settings'}
                   <button class="btn btn-sm" type="button" onclick={() => open(row)}>
-                    Replace<span class="visually-hidden"> the {NAMES[row.key] ?? row.key} key</span>
+                    {m.diagnostics_replace({}, options)}<span class="visually-hidden"> {m.diagnostics_key_for({ name: keyName(row.key) }, options)}</span>
                   </button>
                   <button class="btn btn-ghost btn-sm" type="button" onclick={() => (removing = row)}>
-                    Remove<span class="visually-hidden"> the {NAMES[row.key] ?? row.key} key</span>
+                    {m.diagnostics_remove({}, options)}<span class="visually-hidden"> {m.diagnostics_key_for({ name: keyName(row.key) }, options)}</span>
                   </button>
                 {:else if row.source !== 'code'}
                   <button class="btn btn-sm" type="button" onclick={() => open(row)}>
-                    {row.source === 'env' ? 'Set a key here' : 'Add a key'}<span
+                    {row.source === 'env' ? m.diagnostics_set_key_here({}, options) : m.diagnostics_add_key({}, options)}<span
                       class="visually-hidden"
                     >
-                      for {NAMES[row.key] ?? row.key}</span
+                      {m.diagnostics_for_name({ name: keyName(row.key) }, options)}</span
                     >
                   </button>
                 {/if}
@@ -431,33 +558,33 @@ const MAILERS: Record<string, string> = {
       {#if config.dev}
         <section class="settings-section" aria-labelledby="dev">
           <header>
-            <h2 id="dev">Developer tools</h2>
-            <p>Shown because this site is running in development mode.</p>
+            <h2 id="dev">{m.diagnostics_developer_tools({}, options)}</h2>
+            <p>{m.diagnostics_developer_tools_hint({}, options)}</p>
           </header>
           <div class="actions">
             <button class="btn" type="button" disabled={simulating} onclick={simulate}>
-              {simulating ? 'Making one…' : 'Simulate a conflict on a scratch file'}
+              {simulating ? m.diagnostics_making_conflict({}, options) : m.diagnostics_simulate_conflict({}, options)}
             </button>
           </div>
-          {#if conflict}<p class="notice notice-info" role="status">{conflict}</p>{/if}
+          {#if conflict}<p class="notice notice-info" role="status">{messageText(conflict)}</p>{/if}
         </section>
       {/if}
     </div>
     <!-- Inside the loaded block: whether the key is tried first is the site's language count. -->
     {#if removing}
-      {@const name = NAMES[removing.key] ?? removing.key}
+      {@const name = keyName(removing.key)}
       {@const row = removing}
       <Modal labelledby="remove-h" onclose={() => (removing = undefined)}>
-          <h2 id="remove-h">Remove the {name} key?</h2>
+          <h2 id="remove-h">{m.diagnostics_remove_key_question({ name }, options)}</h2>
           <p>{says(row)}</p>
           <div class="actions">
-            <button class="btn" type="button" onclick={() => (removing = undefined)}>Cancel</button>
-            <button class="btn btn-danger" type="button" onclick={() => removeKey(row)}>Remove</button>
+            <button class="btn" type="button" onclick={() => (removing = undefined)}>{m.common_cancel({}, options)}</button>
+            <button class="btn btn-danger" type="button" onclick={() => removeKey(row)}>{m.diagnostics_remove({}, options)}</button>
           </div>
       </Modal>
     {/if}
     {#if typing}
-      {@const name = NAMES[typing.key] ?? typing.key}
+      {@const name = keyName(typing.key)}
       {@const tried = typing.key === 'deepl' && config.locales.length > 1}
       <Modal
         labelledby="key-h"
@@ -466,17 +593,17 @@ const MAILERS: Record<string, string> = {
         dismissible={!saving}
         onclose={close}
       >
-          <h2 id="key-h">{typing.hint ? `Replace the ${name} key` : `Add the ${name} key`}</h2>
+          <h2 id="key-h">{typing.hint ? m.diagnostics_replace_key_title({ name }, options) : m.diagnostics_add_key_title({ name }, options)}</h2>
           <form onsubmit={saveKey}>
             <p>
-              The key is stored encrypted and is never shown again.
+              {m.diagnostics_key_secret({}, options)}
               {#if typing.hint}
-                The one ending …{typing.hint} stops working as soon as this is saved.
+                {m.diagnostics_key_replaced({ hint: typing.hint }, options)}
               {/if}
             </p>
             <div class="field">
               <div class="label-row">
-                <label for="key-value">{typing.hint ? `New ${name} key` : `${name} key`}</label>
+                <label for="key-value">{typing.hint ? m.diagnostics_new_key_label({ name }, options) : m.diagnostics_key_label({ name }, options)}</label>
               </div>
               <input
                 class="input"
@@ -487,20 +614,20 @@ const MAILERS: Record<string, string> = {
                 aria-describedby={tried ? 'key-tried' : undefined}
               />
               {#if tried}
-                <p class="hint" id="key-tried">We try it against DeepL before saving it.</p>
+                <p class="hint" id="key-tried">{m.diagnostics_deepl_test_hint({}, options)}</p>
               {/if}
             </div>
-            {#if keyError}<div class="notice notice-danger" role="alert">{keyError}</div>{/if}
+            {#if keyError}<div class="notice notice-danger" role="alert">{messageText(keyError)}</div>{/if}
             <div class="actions">
-              <button class="btn" type="button" disabled={saving} onclick={close}>Cancel</button>
+              <button class="btn" type="button" disabled={saving} onclick={close}>{m.common_cancel({}, options)}</button>
               <button class="btn btn-primary" type="submit" disabled={saving}>
-                {saving ? 'Saving…' : tried ? 'Save and test' : 'Save'}
+                {saving ? m.diagnostics_saving({}, options) : tried ? m.diagnostics_save_test({}, options) : m.diagnostics_save({}, options)}
               </button>
             </div>
           </form>
       </Modal>
     {/if}
   {:catch error}
-    <p class="notice notice-danger" role="alert">{error.message}</p>
+    <p class="notice notice-danger" role="alert">{messageText(error as DiagnosticMessage)}</p>
   {/await}
 </main>

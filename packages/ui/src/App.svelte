@@ -779,7 +779,7 @@ const initial = $derived(
         oncommitted={commitChanged}
       />
     {:else if path === '/admin/settings' && session.role === 'owner'}
-      <Diagnostics oncommitted={commitChanged} />
+      <Diagnostics {uiLocale} oncommitted={commitChanged} />
     {:else}
       <Dashboard
         {pending}
