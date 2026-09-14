@@ -755,7 +755,7 @@ const initial = $derived(
     {:else if redirectRoute}
       <Redirects {uiLocale} oncommitted={commitChanged} />
     {:else if path === '/admin/site'}
-      <Globals />
+      <Globals {uiLocale} />
     {:else if path === '/admin/media'}
       <Library base={session?.mediaBase ?? ''} presets={session?.presets ?? []} {uiLocale} />
     {:else if path === '/admin/account'}

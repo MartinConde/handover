@@ -62,6 +62,11 @@ renamed, duplicated or deleted. Everything else is the same screen, locks, unpub
 and one-commit publish included. Not to be confused with the read-only **Settings** screen,
 which is this config as the Worker sees it.
 
+The Site settings list follows the account's **Interface language**. Its headings, timestamps,
+language availability, editing state, empty state and load failure switch between English and
+German without another list request. Global names and descriptions come from the site's schema
+and stay as their author wrote them.
+
 ## Templates
 
 A starter for new entries is a content file under `src/content/_templates/<collection>/<name>.yaml`

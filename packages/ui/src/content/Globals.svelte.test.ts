@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import type { UiLocale } from '../i18n.js';
 import Globals from './Globals.svelte';
 
 // Testing: one card per declared global, in the order the API returned.
@@ -16,12 +17,14 @@ const GLOBALS = [
 ];
 
 let app: ReturnType<typeof mount>;
-const show = (globals: unknown[] = GLOBALS, locales = ['en', 'de']) => {
+const props = $state({ uiLocale: 'en' as UiLocale });
+const show = (globals: unknown[] = GLOBALS, locales = ['en', 'de'], uiLocale: UiLocale = 'en') => {
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => Response.json({ globals, locales })),
   );
-  app = mount(Globals, { target: document.body });
+  props.uiLocale = uiLocale;
+  app = mount(Globals, { target: document.body, props });
   flushSync();
   return document.body;
 };
@@ -98,7 +101,53 @@ test('a card says who last edited it, and a card nobody has touched says nothing
 
   const [site, cta] = all(root, '.global-card');
   expect(site?.querySelector('.sub')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-    'Edited by Anna Berg 2h ago',
+    'Edited by Anna Berg 2 hr ago',
   );
   expect(cta?.querySelector('.sub')).toBeNull();
+});
+
+test('a live interface switch retranslates the list without rereading or replacing its cards', async () => {
+  const root = show([
+    {
+      ...GLOBALS[0],
+      editing: { id: 'u2', name: null },
+      edited: { at: Date.now() - 2 * 60 * 60 * 1000, by: 'Anna Berg', kind: 'edit' },
+    },
+  ]);
+  await loaded();
+  const card = root.querySelector('.global-card');
+  const requests = vi.mocked(fetch).mock.calls.length;
+
+  flushSync(() => {
+    props.uiLocale = 'de';
+  });
+
+  expect(root.querySelector('h1')?.textContent).toBe('Website-Einstellungen');
+  expect(root.querySelector('.global-card')).toBe(card);
+  expect(root.querySelector('.badge')?.textContent).toBe('Wird von jemandem bearbeitet');
+  expect(root.querySelector('.sub')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+    'Bearbeitet von Anna Berg vor 2 Std.',
+  );
+  expect(vi.mocked(fetch)).toHaveBeenCalledTimes(requests);
+});
+
+test('a visible list failure retranslates without another request', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => new Response('unavailable', { status: 503 })),
+  );
+  props.uiLocale = 'en';
+  app = mount(Globals, { target: document.body, props });
+  await loaded();
+  expect(document.querySelector('[role="alert"]')?.textContent).toBe(
+    'Could not load the list (503)',
+  );
+
+  flushSync(() => {
+    props.uiLocale = 'de';
+  });
+  expect(document.querySelector('[role="alert"]')?.textContent).toBe(
+    'Die Liste konnte nicht geladen werden (503)',
+  );
+  expect(vi.mocked(fetch)).toHaveBeenCalledTimes(1);
 });

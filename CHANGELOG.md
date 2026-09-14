@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate Site settings and the full navigation builder into English and German, including
+  dates, language names, counts, drag/drop and row actions, dialogs, accessibility labels, and
+  retained list/directory feedback. Live switching preserves shared menu structure, ordering,
+  open item editors, focus and local label drafts without rereading site or entry data.
+
 - Translate content-language controls, translation columns, machine/stale indicators and block
   drift reconciliation into English and German. Reactive language names and retained failures
   follow the interface locale while selected content language, drafts, focused fields, drift

@@ -60,6 +60,12 @@ and a custom-link form. Each page has an add button; **In menu** marks pages alr
 including nested items. The library keeps the current search after an addition. On narrow
 screens the library stacks above the tree, with a shortcut to the menu structure.
 
+The navigation builder follows the account's **Interface language**. Switching between English
+and German translates its controls, counts, warnings, dialogs and retained directory feedback in
+place. It does not reread the page directory or replace the builder: menu order, an active drag,
+the open item editor, focus and an unfinished label stay where they are. Menu keys, page titles,
+labels, URLs and other site-authored values remain exactly as written.
+
 Rows show a label, destination and an explicit **Edit** control. Clicking a row opens its
 editor underneath: label, link, new tab and language visibility. **Done** closes the editor;
 **Cancel** restores the row to how it was when opened. Rows move by dragging the handle — a hairline marks a slot between

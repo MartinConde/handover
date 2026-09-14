@@ -2,6 +2,7 @@ import { parseEntry, stringifyEntry } from '@handover/core';
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import { invalidateEntryDirectory } from '../entry-directory.js';
+import type { UiLocale } from '../i18n.js';
 import Menus, { type Menu } from './Menus.svelte';
 
 // Not tested: the Fields dispatch (glue) or styling.
@@ -48,7 +49,22 @@ const INDEXES = [
 
 let app: ReturnType<typeof mount>;
 let menus: Menu[] = $state([]);
-const show = (items: unknown[] = [], keys = ['header'], translating = false, locale = 'en') => {
+const props = $state({
+  id: 'f-menus',
+  labelId: 'f-menus-l',
+  locale: 'en',
+  menus: [] as Menu[],
+  translating: false,
+  sourceLabel: 'English',
+  uiLocale: 'en' as UiLocale,
+});
+const show = (
+  items: unknown[] = [],
+  keys = ['header'],
+  translating = false,
+  locale = 'en',
+  uiLocale: UiLocale = 'en',
+) => {
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => Response.json({ entries: OFFERED, indexes: INDEXES, locales: ['en', 'de'] })),
@@ -58,17 +74,16 @@ const show = (items: unknown[] = [], keys = ['header'], translating = false, loc
     key,
     items: i === 0 ? items : [],
   })) as Menu[];
-  app = mount(Menus, {
-    target: document.body,
-    props: {
-      id: 'f-menus',
-      labelId: 'f-menus-l',
-      locale,
-      menus,
-      translating,
-      sourceLabel: 'English',
-    },
+  Object.assign(props, {
+    id: 'f-menus',
+    labelId: 'f-menus-l',
+    locale,
+    menus,
+    translating,
+    sourceLabel: 'English',
+    uiLocale,
   });
+  app = mount(Menus, { target: document.body, props });
   flushSync();
   return document.body;
 };
@@ -98,18 +113,29 @@ test('an unavailable catalogue does not label stored menu targets as missing', a
       items: [item({ label: 'Gone', link: { type: 'entry', ref: 'pages/nowhere' } })],
     },
   ] as Menu[];
-  app = mount(Menus, {
-    target: document.body,
-    props: { id: 'f-menus', labelId: 'f-menus-l', locale: 'en', menus },
+  Object.assign(props, {
+    id: 'f-menus',
+    labelId: 'f-menus-l',
+    locale: 'en',
+    menus,
+    translating: false,
+    sourceLabel: 'English',
+    uiLocale: 'en' as UiLocale,
   });
+  app = mount(Menus, { target: document.body, props });
   await loaded();
 
   expect(document.body.textContent).not.toContain('Page missing');
   expect(q('.menu-directory-error').textContent).toContain('Page details are unavailable');
+  flushSync(() => {
+    props.uiLocale = 'de';
+  });
+  expect(q('.menu-directory-error').textContent).toContain('Seitendetails sind nicht verfügbar');
+  expect(attempts).toBe(1);
   q<HTMLButtonElement>('.menu-directory-error button').click();
   await loaded();
 
-  expect(document.body.textContent).toContain('Page missing');
+  expect(document.body.textContent).toContain('Seite fehlt');
   expect(document.querySelector('.menu-directory-error')).toBeNull();
 });
 
@@ -796,4 +822,65 @@ test('language visibility is an optional exception and Cancel restores the origi
   expect(q('.nav-visibility summary').textContent).toContain('German only');
   click(q('.item-editor .actions button:last-child'));
   expect(menus[0]?.items[0]?._locales).toBeUndefined();
+});
+
+test('a live interface switch preserves the reordered tree, open editor, focus and local draft', async () => {
+  laidOut();
+  show(three());
+  await loaded();
+
+  await key(grip('Home'), 'Space');
+  await until(lifted, 'lifted');
+  await arrow('ArrowDown');
+  const proxy = q('[data-dnd-overlay] .drag-proxy');
+  const indicator = q('.drop-line');
+  flushSync(() => {
+    props.uiLocale = 'de';
+  });
+  expect(q('[data-dnd-overlay] .drag-proxy')).toBe(proxy);
+  expect(q('.drop-line')).toBe(indicator);
+  expect(q('.nav-structure-heading h2').textContent).toBe('Menüstruktur');
+  await key(document, 'Space');
+  await until(() => !lifted(), 'dropped');
+  expect(labels()).toEqual(['Listings', 'Home', 'Contact']);
+
+  click(rowOpen());
+  type('#f-menus-ed-label', 'Holiday listings');
+  q<HTMLInputElement>('#f-menus-ed-label').focus();
+  const editor = q('.item-editor');
+  const requests = vi.mocked(fetch).mock.calls.length;
+
+  flushSync(() => {
+    props.uiLocale = 'en';
+  });
+
+  expect(labels()).toEqual(['Holiday listings', 'Home', 'Contact']);
+  expect(q('.item-editor')).toBe(editor);
+  expect(q<HTMLInputElement>('#f-menus-ed-label').value).toBe('Holiday listings');
+  expect(document.activeElement).toBe(q('#f-menus-ed-label'));
+  expect(q('.item-editor .label-row label').textContent).toBe('Label');
+  expect(q('.nav-structure-heading h2').textContent).toBe('Menu structure');
+  expect(q('.nav-count').textContent).toBe('3 items');
+  expect(byLabel('Actions for Holiday listings')).not.toBeNull();
+  expect(vi.mocked(fetch)).toHaveBeenCalledTimes(requests);
+  expect(menus[0]?.items.map((entry) => entry.label)).toEqual([
+    'Holiday listings',
+    'Home',
+    'Contact',
+  ]);
+});
+
+test('retained add feedback retranslates without rereading the page directory', async () => {
+  show();
+  await loaded();
+  pickRow('pages/contact');
+  expect(q('[role="status"]').textContent).toContain('Contact added to Header.');
+  const requests = vi.mocked(fetch).mock.calls.length;
+
+  flushSync(() => {
+    props.uiLocale = 'de';
+  });
+
+  expect(q('[role="status"]').textContent).toContain('Contact wurde zu Header hinzugefügt.');
+  expect(vi.mocked(fetch)).toHaveBeenCalledTimes(requests);
 });

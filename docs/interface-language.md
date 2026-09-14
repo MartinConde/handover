@@ -29,6 +29,10 @@ Content-language controls, translation columns, machine/stale markers and block-
 also bilingual. Language names use the current interface locale. Switching keeps the selected
 content language, translated draft, focused field, drift choices and in-flight work; retained
 translation and drift failures reformat from stable state instead of retrying the operation.
+Site settings and the navigation builder are bilingual too. Their timestamps, language names,
+counts, warnings, actions, dialogs and retained failures update without rereading data. Shared menu
+order, drag state, an open item editor, focus and unfinished labels remain intact; site-authored
+global descriptions, menu labels, page titles, keys and URLs are not translated.
 
 An open crop or focal-point dialog keeps its node, focus, crop region, ratio and focal coordinates
 when the interface language changes. Live slider and focal-handle labels update, while filenames and
