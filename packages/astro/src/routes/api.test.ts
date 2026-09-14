@@ -4715,9 +4715,10 @@ test("an invite to somebody who is already a member comes back in Better Auth's 
   const res = await memberPost('members', { email: 'anna@example.com', role: 'editor' }, owner);
 
   expect(res.status).toBe(400);
-  expect(((await res.json()) as { error: string }).error).toBe(
-    'User already exists. Use another email.',
-  );
+  expect(await res.json()).toEqual({
+    code: 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL',
+    error: 'User already exists. Use another email.',
+  });
   expect(calls.signInMagicLink).toEqual([]);
 });
 
@@ -4748,7 +4749,10 @@ test('the last owner cannot be demoted', async () => {
   const res = await memberPost('members/u2/role', { role: 'editor' }, owner);
 
   expect(res.status).toBe(400);
-  expect(((await res.json()) as { error: string }).error).toBe('There must be at least one owner');
+  expect(await res.json()).toEqual({
+    code: 'MEMBER_LAST_OWNER',
+    error: 'There must be at least one owner',
+  });
   expect(calls.setRole).toEqual([]);
 });
 

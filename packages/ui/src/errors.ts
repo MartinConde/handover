@@ -94,6 +94,14 @@ const KNOWN_CODES = new Set([
   'CONFLICT_CHANGED',
   'CONFLICT_ANSWERS_INVALID',
   'CONFLICT_REPOSITORY_UNAVAILABLE',
+  'MEMBER_EMAIL_REQUIRED',
+  'MEMBER_ROLE_INVALID',
+  'MEMBER_ALREADY_SIGNED_IN',
+  'MEMBER_SELF_ROLE',
+  'MEMBER_LAST_OWNER',
+  'MEMBER_SELF_REMOVE',
+  'USER_ALREADY_EXISTS',
+  'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL',
 ]);
 
 const numberFormats = new Map<UiLocale, Intl.NumberFormat>();
@@ -212,6 +220,37 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
       return m.account_sessions_ended({}, options);
     case 'ACCOUNT_LOAD_FAILED':
       return m.account_load_failed({}, options);
+    case 'MEMBER_EMAIL_REQUIRED':
+      return m.members_email_required({}, options);
+    case 'MEMBER_ROLE_INVALID':
+      return m.members_role_invalid({}, options);
+    case 'MEMBER_ALREADY_SIGNED_IN':
+      return m.members_already_signed_in({}, options);
+    case 'MEMBER_SELF_ROLE':
+      return m.members_self_role({}, options);
+    case 'MEMBER_LAST_OWNER':
+      return m.members_last_owner({}, options);
+    case 'MEMBER_SELF_REMOVE':
+      return m.members_self_remove({}, options);
+    case 'USER_ALREADY_EXISTS':
+    case 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL':
+      return m.members_already_exists({}, options);
+    case 'MEMBER_LIST_FAILED':
+      return message.status
+        ? m.members_load_failed_status({ status: message.status }, options)
+        : m.members_load_failed({}, options);
+    case 'MEMBER_INVITE_FAILED':
+      return message.status
+        ? m.members_invite_failed_status({ status: message.status }, options)
+        : m.members_invite_failed({}, options);
+    case 'MEMBER_ROLE_FAILED':
+      return message.status
+        ? m.members_role_failed_status({ status: message.status }, options)
+        : m.members_role_failed({}, options);
+    case 'MEMBER_REMOVE_FAILED':
+      return message.status
+        ? m.members_remove_failed_status({ status: message.status }, options)
+        : m.members_remove_failed({}, options);
     case 'ENTRY_LIST_LOAD_FAILED':
       return message.status
         ? m.entry_list_load_failed_status({ status: message.status }, options)

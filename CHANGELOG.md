@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate the Members screen into English and German, including invitation, role and removal
+  dialogs, sign-in metadata, dates, accessibility labels and retained feedback. Stable CMS and
+  authentication codes keep known refusals localizable; live switching preserves names, email
+  addresses, entry titles, dialog state, typed invitations and permission behavior without another
+  members read. Invitation email contents remain unchanged.
+
 - Translate the activity log and dashboard activity rows into English and German, including whole
   event sentences, filters, group labels, plural counts, dates, accessibility labels, empty states,
   commit details and retained restore/load recovery. Catalogs control where a linked entry appears,

@@ -769,7 +769,7 @@ const initial = $derived(
         onname={loadSession}
       />
     {:else if path === '/admin/members' && session.role === 'owner'}
-      <Members user={session.user} />
+      <Members user={session.user} {uiLocale} />
     {:else if path === '/admin/activity'}
       <!-- No role condition: which events an editor sees is the server's filter. -->
       <Activity

@@ -30,6 +30,11 @@ Owner-only, and the only place an account is made or unmade. Every route behind 
 role on the server. Your own row has no actions menu, because nothing in it would be allowed —
 and the server refuses both anyway, since a missing menu is a drawing of a rule and not the rule.
 
+The Members screen follows the account's English or German interface preference. Changing the
+interface language updates its table, dates, menus, open dialog and any visible invitation, role or
+removal feedback in place. It does not reload the member list or change permissions, and it leaves
+member names, email addresses and the titles of entries they are editing exactly as stored.
+
 ### Inviting somebody
 
 *Invite* takes an address and one of the two roles. It writes a `user` row and mails that
@@ -48,6 +53,7 @@ login screen.
 
 If the mail cannot be sent the row is still made, so the invite is there to resend once the
 [mailer](email.md) is fixed. The screen says so rather than pretending nothing happened.
+The invitation email itself is not translated by the admin interface preference.
 
 ### Changing a role
 

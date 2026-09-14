@@ -4,6 +4,7 @@ import Members from './Members.svelte';
 
 let app: ReturnType<typeof mount>;
 const YOU = { id: 'u1', name: 'Martin Conde', email: 'martin@example.com' };
+const props = $state({ user: YOU, uiLocale: 'en' as 'en' | 'de' });
 
 interface Row {
   id: string;
@@ -53,8 +54,9 @@ function server(
   return calls;
 }
 
-const show = async () => {
-  app = mount(Members, { target: document.body, props: { user: YOU } });
+const show = async (uiLocale: 'en' | 'de' = 'en') => {
+  props.uiLocale = uiLocale;
+  app = mount(Members, { target: document.body, props });
   flushSync();
   await settle();
   return document.body;
@@ -89,6 +91,7 @@ afterEach(() => {
   unmount(app);
   vi.unstubAllGlobals();
   document.body.innerHTML = '';
+  props.uiLocale = 'en';
 });
 
 test('each sign-in method is named in the words the person would use', async () => {
@@ -316,10 +319,13 @@ test('revoking an invite is a different question from removing a member', async 
   expect(text(dialog)).not.toContain('unpublished changes');
 });
 
-test("a refused change comes back in the server's own words, beside the button that asked", async () => {
+test('a coded role refusal stays beside the action and follows the interface language', async () => {
   server([row('u1', 'martin@example.com', { role: 'owner' }), row('u2', 'anna@example.com')], {
     '/admin/api/members/u2/role': Response.json(
-      { error: 'There must be at least one owner' },
+      {
+        code: 'MEMBER_LAST_OWNER',
+        error: 'legacy English text must not choose the presentation',
+      },
       { status: 400 },
     ),
   });
@@ -330,8 +336,47 @@ test("a refused change comes back in the server's own words, beside the button t
   await settle();
 
   expect(text(root.querySelector('.dialog .notice-danger') as HTMLElement)).toBe(
-    'There must be at least one owner',
+    'There must be at least one owner.',
   );
+
+  props.uiLocale = 'de';
+  flushSync();
+  expect(text(root.querySelector('.dialog .notice-danger') as HTMLElement)).toBe(
+    'Es muss mindestens eine Person mit der Rolle Eigentümer:in geben.',
+  );
+});
+
+test('an auth invite code retranslates without clearing the address or closing the dialog', async () => {
+  server([row('u1', 'martin@example.com', { role: 'owner' })], {
+    '/admin/api/members': Response.json(
+      {
+        code: 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL',
+        error: 'User already exists. Use another email.',
+      },
+      { status: 400 },
+    ),
+  });
+  const root = await show();
+
+  click(root, 'Invite');
+  const field = root.querySelector('input#invite-email') as HTMLInputElement;
+  field.value = 'anna@example.com';
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+  flushSync();
+  (root.querySelector('.dialog form') as HTMLFormElement).requestSubmit();
+  await settle();
+
+  expect(text(root.querySelector('.dialog .notice-danger') as HTMLElement)).toBe(
+    'That email address already belongs to a member.',
+  );
+  props.uiLocale = 'de';
+  flushSync();
+  expect(text(root.querySelector('.dialog .notice-danger') as HTMLElement)).toBe(
+    'Diese E-Mail-Adresse gehört bereits zu einem Mitglied.',
+  );
+  expect(field.value).toBe('anna@example.com');
+  expect(root.querySelector('#invite-h')?.textContent).toBe('Jemanden einladen');
+  expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
 });
 
 // The menu item that was pressed is gone by the time focus comes back.

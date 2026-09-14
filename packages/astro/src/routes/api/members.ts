@@ -117,8 +117,15 @@ export async function invite(
   const body = (await request.json().catch(() => ({}))) as { email?: unknown };
   const role = roleIn(body);
   if (typeof body.email !== 'string' || !body.email.trim())
-    return Response.json({ error: 'No email address was sent' }, { status: 400 });
-  if (!role) return Response.json({ error: 'That is not a role' }, { status: 400 });
+    return Response.json(
+      { code: 'MEMBER_EMAIL_REQUIRED', error: 'No email address was sent' },
+      { status: 400 },
+    );
+  if (!role)
+    return Response.json(
+      { code: 'MEMBER_ROLE_INVALID', error: 'That is not a role' },
+      { status: 400 },
+    );
   const send = mailer();
   if (!send) return Response.json({ error: missingMailer() }, { status: 503 });
   const auth = createAuth(url, cfContext, { invite: true });
@@ -167,7 +174,10 @@ export async function resendInvite(
   const member = (await memberList('default', ctx.db())).find((row) => row.id === id);
   if (!member) return new Response('Not found', { status: 404 });
   if (!member.pending)
-    return Response.json({ error: 'They have already signed in' }, { status: 400 });
+    return Response.json(
+      { code: 'MEMBER_ALREADY_SIGNED_IN', error: 'They have already signed in' },
+      { status: 400 },
+    );
   const send = mailer();
   if (!send) return Response.json({ error: missingMailer() }, { status: 503 });
   try {
@@ -195,16 +205,26 @@ export async function setMemberRole(
 ): Promise<Response> {
   if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
   if (id === session.user.id)
-    return Response.json({ error: 'You cannot change your own role' }, { status: 400 });
+    return Response.json(
+      { code: 'MEMBER_SELF_ROLE', error: 'You cannot change your own role' },
+      { status: 400 },
+    );
   const role = roleIn(await request.json().catch(() => ({})));
-  if (!role) return Response.json({ error: 'That is not a role' }, { status: 400 });
+  if (!role)
+    return Response.json(
+      { code: 'MEMBER_ROLE_INVALID', error: 'That is not a role' },
+      { status: 400 },
+    );
   const database = ctx.db();
   const member = (await memberList('default', database)).find((row) => row.id === id);
   if (!member) return new Response('Not found', { status: 404 });
   // Demoting an owner runs in the statement that holds the rule, not `setRole` behind a count.
   if (role === 'editor' && member.role === 'owner') {
     if (!(await demoteOwner('default', database, id)))
-      return Response.json({ error: 'There must be at least one owner' }, { status: 400 });
+      return Response.json(
+        { code: 'MEMBER_LAST_OWNER', error: 'There must be at least one owner' },
+        { status: 400 },
+      );
   } else {
     try {
       await memberApi('default', createAuth(url, cfContext)).setRole({
@@ -236,13 +256,19 @@ export async function removeMember(
 ): Promise<Response> {
   if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
   if (id === session.user.id)
-    return Response.json({ error: 'You cannot remove yourself' }, { status: 400 });
+    return Response.json(
+      { code: 'MEMBER_SELF_REMOVE', error: 'You cannot remove yourself' },
+      { status: 400 },
+    );
   const database = ctx.db();
   const member = (await memberList('default', database)).find((row) => row.id === id);
   if (!member) return new Response('Not found', { status: 404 });
   // An owner leaves the count before the table, so two owners removing each other can't both win.
   if (member.role === 'owner' && !(await demoteOwner('default', database, id)))
-    return Response.json({ error: 'There must be at least one owner' }, { status: 400 });
+    return Response.json(
+      { code: 'MEMBER_LAST_OWNER', error: 'There must be at least one owner' },
+      { status: 400 },
+    );
   try {
     await memberApi('default', createAuth(url, cfContext)).removeUser({
       body: { userId: id },
