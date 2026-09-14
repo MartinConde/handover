@@ -109,6 +109,12 @@ title. The iframe is not replaced and content is not fetched again. Existing fie
 working page remain available while known failures are reformatted as English or German guidance;
 technical detail stays separate.
 
+Inspector and staged block controls switch in place too. The selected field, focused control,
+unfinished replacement and retained refusal stay intact while field-kind labels, content-language
+names, actions, tooltips and accessibility text reformat. Schema field labels, block type names,
+entry names, paths and edited values are authored content and are not translated. Longer controls
+wrap inside the narrow panels.
+
 Connection failures retain the existing uncertain-result behavior. Handover renders a localized
 summary from a stable error descriptor, not from an English sentence or status code. Known
 authentication codes select specific recovery text. Unknown technical detail stays separate from

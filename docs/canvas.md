@@ -174,6 +174,12 @@ frame rather than rendering or replacing it, so the selected content, field stat
 and pending edits remain intact. Known render failures use translated recovery guidance; exact
 technical detail remains separate when it is available.
 
+Inspector and the staged block-replacement panel follow the same language. Their field-kind labels,
+content-language names, guidance, retained refusals, actions, tooltips and accessibility text switch
+without replacing the selected field or focused widget, or clearing a configured replacement. Schema
+field labels, block type names, entry names, paths and edited values remain site-authored text. Panel
+controls allow longer German labels to wrap within the available width.
+
 Structure lists blocks by the same name the form editor gives them — a block's `_label`, else its
 type — and a row with children collapses from its own arrow, or with `←` and `→` while it has
 focus. Selecting content in the page opens whatever branch it sits in. Adding a block commits the

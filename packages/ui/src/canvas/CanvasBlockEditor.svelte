@@ -41,7 +41,8 @@ import { tick } from 'svelte';
 import CanvasIcon from './CanvasIcon.svelte';
 import type { ListCommandResult } from '../editor/entry-session.svelte';
 import Fields from '../editor/fields/Fields.svelte';
-import type { UiLocale } from '../i18n.js';
+import { messageOptions, type UiLocale } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 
 let {
   mode,
@@ -72,6 +73,7 @@ let {
 } = $props();
 
 const offered = $derived(types.filter((type) => blocks[type] !== undefined));
+const options = $derived(messageOptions(uiLocale));
 let chosen = $state('');
 let draft = $state<Record<string, unknown>>({});
 let refusal = $state('');
@@ -79,6 +81,12 @@ let panel = $state<HTMLElement>();
 const fields = $derived(blocks[chosen] ?? []);
 const problems = $derived(chosen ? canvasBlockProblems(fields, draft, blocks) : {});
 const ready = $derived(chosen && Object.keys(problems).length === 0 && !locked);
+const refusalText = $derived.by(() => {
+  if (refusal === 'stale') return m.canvas_action_stale({}, options);
+  if (refusal === 'deleted') return m.canvas_action_deleted({}, options);
+  if (refusal === 'readonly' || refusal === 'closed') return m.canvas_action_readonly({}, options);
+  return m.canvas_action_structure_changed({}, options);
+});
 
 $effect(() => {
   void tick().then(() => panel?.focus());
@@ -113,36 +121,36 @@ function apply() {
   bind:this={panel}
 >
   <header>
-    <button class="btn btn-ghost btn-sm canvas-block-editor-back" type="button" aria-label="Back to Structure" onclick={() => onclose()}><CanvasIcon name="back" /></button>
+    <button class="btn btn-ghost btn-sm canvas-block-editor-back" type="button" aria-label={m.canvas_back_to_structure({}, options)} onclick={() => onclose()}><CanvasIcon name="back" /></button>
     <div>
-      <span class="badge">Block</span>
-      <h2 id="canvas-block-editor-heading">{mode === 'replace' ? 'Replace block' : 'Add block'}</h2>
+      <span class="badge">{m.canvas_type_block({}, options)}</span>
+      <h2 id="canvas-block-editor-heading">{mode === 'replace' ? m.canvas_replace_block({}, options) : m.canvas_add_block({}, options)}</h2>
     </div>
   </header>
 
   {#if mode === 'replace' && currentType}
-    <p class="canvas-block-context">Replacing <strong>{currentType}</strong>. Fields are not converted between block types.</p>
+    <p class="canvas-block-context">{m.canvas_replacing_block({ type: currentType }, options)}</p>
   {/if}
 
   {#if refusal}
-    <p class="notice notice-danger" role="alert">This block was not applied ({refusal}).</p>
+    <p class="notice notice-danger" role="alert">{refusalText}</p>
   {/if}
 
   {#if !chosen}
-    <div class="canvas-block-picker" role="list" aria-label="Allowed block types">
+    <div class="canvas-block-picker" role="list" aria-label={m.canvas_allowed_block_types({}, options)}>
       {#each offered as type (type)}
         <button class="type-card" type="button" disabled={locked} onclick={() => choose(type)}>
           <strong>{type}</strong>
-          <span>{mode === 'insert' ? 'Add this block' : 'Configure replacement'}</span>
+          <span>{mode === 'insert' ? m.canvas_add_this_block({}, options) : m.canvas_configure_replacement({}, options)}</span>
         </button>
       {:else}
-        <p class="canvas-inspector-message">This list has no configurable block types.</p>
+        <p class="canvas-inspector-message">{m.canvas_no_configurable_blocks({}, options)}</p>
       {/each}
     </div>
   {:else}
     <div class="canvas-block-editor-type">
       <strong>{chosen}</strong>
-      <button class="btn btn-ghost btn-sm" type="button" onclick={() => (chosen = '')}>Change type</button>
+      <button class="btn btn-ghost btn-sm" type="button" onclick={() => (chosen = '')}>{m.canvas_change_type({}, options)}</button>
     </div>
     <form class="form canvas-inspector-form" onsubmit={(event) => { event.preventDefault(); apply(); }}>
       <fieldset disabled={locked}>
@@ -160,11 +168,11 @@ function apply() {
         />
       </fieldset>
       {#if Object.keys(problems).length}
-        <p class="hint" role="status">Complete the required fields before applying this block.</p>
+        <p class="hint" role="status">{m.canvas_complete_block_fields({}, options)}</p>
       {/if}
       <div class="actions canvas-block-editor-actions">
-        <button class="btn" type="button" onclick={() => onclose()}>Cancel</button>
-        <button class="btn btn-primary" type="submit" disabled={!ready}>Apply</button>
+        <button class="btn" type="button" onclick={() => onclose()}>{m.common_cancel({}, options)}</button>
+        <button class="btn btn-primary" type="submit" disabled={!ready}>{m.canvas_apply({}, options)}</button>
       </div>
     </form>
   {/if}

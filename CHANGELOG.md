@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate the Canvas Inspector and staged block controls into English and German, including
+  field-kind labels, content-language names, notices, tooltips and accessibility text. Live
+  switching preserves the selected field, focused widget, replacement draft and authored schema
+  labels or block names; narrow-panel actions wrap instead of clipping longer German labels.
+
 - Translate the Canvas workspace, Structure controls, navigation and validation feedback, recovery
   actions, accessibility text and embedded-frame title into English and German. Live switching
   updates the existing iframe and retained failure descriptors without refetching content, replacing

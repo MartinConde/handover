@@ -19,20 +19,22 @@ const show = (over: Record<string, unknown> = {}) => {
     contentVersion: 1,
   }));
   const onclose = vi.fn();
+  const props = $state({
+    mode: 'insert' as 'insert' | 'replace',
+    types: ['hero', 'quote'],
+    blocks,
+    locale: 'en',
+    uiLocale: 'en' as 'en' | 'de',
+    onapply,
+    onclose,
+    ...over,
+  });
   app = mount(CanvasBlockEditor, {
     target: document.body,
-    props: {
-      mode: 'insert',
-      types: ['hero', 'quote'],
-      blocks,
-      locale: 'en',
-      onapply,
-      onclose,
-      ...over,
-    },
+    props,
   });
   flushSync();
-  return { root: document.body, onapply, onclose };
+  return { root: document.body, onapply, onclose, props };
 };
 
 afterEach(() => {
@@ -136,4 +138,48 @@ test('replacement starts a fresh allowed type instead of converting the old bloc
     expect.objectContaining({ _type: 'quote', _id: expect.any(String), quote: 'Fresh words' }),
   );
   expect(onapply.mock.calls[0]?.[0]).not.toHaveProperty('heading');
+});
+
+test('switches block controls in place while preserving the configured replacement', () => {
+  const { root, props } = show({ mode: 'replace', currentType: 'hero' });
+  Array.from(root.querySelectorAll<HTMLButtonElement>('.type-card'))
+    .find((button) => button.textContent?.includes('quote'))
+    ?.click();
+  flushSync();
+  const quote = root.querySelector<HTMLInputElement>('input[id$="quote"]');
+  if (!quote) throw new Error('Quote field missing');
+  quote.focus();
+  quote.value = 'Authored quotation';
+  quote.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  flushSync();
+
+  props.uiLocale = 'de';
+  flushSync();
+
+  expect(root.querySelector<HTMLInputElement>('input[id$="quote"]')).toBe(quote);
+  expect(quote.value).toBe('Authored quotation');
+  expect(document.activeElement).toBe(quote);
+  expect(root.querySelector('h2')?.textContent).toBe('Block ersetzen');
+  expect(root.querySelector('.canvas-block-context')?.textContent).toContain('hero wird ersetzt.');
+  expect(root.textContent).toContain('quote');
+  expect(root.textContent).toContain('Quote');
+  expect(root.querySelector('[aria-label="Zurück zur Struktur"]')).not.toBeNull();
+  expect(
+    Array.from(root.querySelectorAll<HTMLButtonElement>('button')).some(
+      (button) => button.textContent?.trim() === 'Anwenden',
+    ),
+  ).toBe(true);
+});
+
+test('reformats a refused block action after an interface-language switch', () => {
+  const onapply = vi.fn(() => ({ ok: false as const, reason: 'stale' as const }));
+  const { root, props } = show({ onapply, uiLocale: 'en' });
+  root.querySelector<HTMLButtonElement>('.type-card')?.click();
+  flushSync();
+  expect(root.textContent).toContain('That action used an older version of the page.');
+
+  props.uiLocale = 'de';
+  flushSync();
+  expect(root.textContent).toContain('Diese Aktion verwendete eine ältere Version der Seite.');
+  expect(onapply).toHaveBeenCalledOnce();
 });

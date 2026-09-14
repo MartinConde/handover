@@ -7,7 +7,8 @@ import type {
   ListCommandResult,
 } from '../editor/entry-session.svelte';
 import Fields from '../editor/fields/Fields.svelte';
-import type { UiLocale } from '../i18n.js';
+import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 import { sitePath } from '../request';
 import CanvasIcon from './CanvasIcon.svelte';
 import type { CanvasDocumentIdentity, CanvasSelection } from './canvas-bridge';
@@ -73,20 +74,58 @@ const parentPath = $derived(
 );
 const translating = $derived(locale !== sourceLocale);
 const mutationBlocked = $derived(locked || session.localeMutationBlocked(locale));
+const options = $derived(messageOptions(uiLocale));
 const fieldLabel = $derived(
-  resolvedTarget?.field.label || resolvedTarget?.field.path.at(-1) || 'Content',
+  resolvedTarget?.field.label || resolvedTarget?.field.path.at(-1) || m.canvas_content({}, options),
 );
 const heading = $derived(
   sameDocument ? (blockInspection?.type ?? fieldLabel) : selection.target.document.id,
 );
-const fieldType = $derived(
-  blockInspection
-    ? 'Block'
-    : resolvedTarget
-      ? `${resolvedTarget.field.type.charAt(0).toUpperCase()}${resolvedTarget.field.type.slice(1)}`
-      : selection.target.document.collection === 'globals'
-        ? 'Shared'
-        : 'Entry',
+const fieldType = $derived.by(() => {
+  if (blockInspection) return m.canvas_type_block({}, options);
+  if (!resolvedTarget)
+    return selection.target.document.collection === 'globals'
+      ? m.canvas_type_shared({}, options)
+      : m.canvas_type_entry({}, options);
+  switch (resolvedTarget.field.type) {
+    case 'text':
+      return m.canvas_type_text({}, options);
+    case 'richtext':
+      return m.canvas_type_richtext({}, options);
+    case 'number':
+      return m.canvas_type_number({}, options);
+    case 'boolean':
+      return m.canvas_type_boolean({}, options);
+    case 'date':
+      return m.canvas_type_date({}, options);
+    case 'select':
+      return m.canvas_type_select({}, options);
+    case 'link':
+      return m.canvas_type_link({}, options);
+    case 'image':
+      return m.canvas_type_image({}, options);
+    case 'file':
+      return m.canvas_type_file({}, options);
+    case 'embed':
+      return m.canvas_type_embed({}, options);
+    case 'seo':
+      return m.canvas_type_seo({}, options);
+    case 'menus':
+      return m.canvas_type_menus({}, options);
+    case 'reference':
+      return m.canvas_type_reference({}, options);
+    case 'group':
+      return m.canvas_type_group({}, options);
+    case 'array':
+      return m.canvas_type_array({}, options);
+    case 'blocks':
+      return m.canvas_type_blocks({}, options);
+    case 'unsupported':
+      return m.canvas_type_unsupported({}, options);
+  }
+});
+const imageField = $derived(
+  !blockInspection && resolvedTarget && ['image', 'file'].includes(resolvedTarget.field.type),
 );
 const widgetKey = $derived.by(() => {
   if (!sameDocument) return '';
@@ -99,14 +138,6 @@ const widgetKey = $derived.by(() => {
     ownerAddress,
   ]);
 });
-
-const language = (value: string) => {
-  try {
-    return new Intl.DisplayNames(['en'], { type: 'language' }).of(value) ?? value;
-  } catch {
-    return value;
-  }
-};
 
 const ownerHref = $derived.by(() => {
   const owner = selection.target.document;
@@ -122,6 +153,12 @@ const ownerHref = $derived.by(() => {
 });
 
 let refusal = $state('');
+const refusalText = $derived.by(() => {
+  if (refusal === 'stale') return m.canvas_action_stale({}, options);
+  if (refusal === 'deleted') return m.canvas_action_deleted({}, options);
+  if (refusal === 'readonly' || refusal === 'closed') return m.canvas_action_readonly({}, options);
+  return m.canvas_action_structure_changed({}, options);
+});
 let completedVersion = -1;
 $effect(() => {
   selection.target.address;
@@ -182,29 +219,29 @@ function completionEvents(node: HTMLFormElement) {
 >
   <header>
     <div class="canvas-inspector-title">
-      <span class="canvas-selection-icon"><CanvasIcon name={['Image', 'File'].includes(fieldType) ? 'image' : selection.kind === 'field' ? 'text' : 'block'} /></span>
+      <span class="canvas-selection-icon"><CanvasIcon name={imageField ? 'image' : selection.kind === 'field' ? 'text' : 'block'} /></span>
       <div>
-        <span class="canvas-inspector-kicker">Inspector · {fieldType === 'Richtext' ? 'Rich text' : fieldType}</span>
+        <span class="canvas-inspector-kicker">{m.canvas_inspector({}, options)} · {fieldType}</span>
         <h2 id="canvas-inspector-heading">{selectionLabel || heading}</h2>
       </div>
     </div>
-    <button class="btn btn-ghost btn-sm" type="button" aria-label="Close Inspector" onclick={onclose}><CanvasIcon name="collapse-right" /></button>
+    <button class="btn btn-ghost btn-sm" type="button" aria-label={m.canvas_close_inspector({}, options)} onclick={onclose}><CanvasIcon name="collapse-right" /></button>
   </header>
   {#if context}<p class="canvas-inspector-context" title={context}>{context}</p>{/if}
 
   {#if !sameDocument}
     <div class="canvas-inspector-message">
-      <p>This content belongs to another editor. Its source cannot be changed through this page.</p>
+      <p>{m.canvas_other_editor({}, options)}</p>
       <a class="btn btn-primary" href={ownerHref}>
-        {selection.target.document.collection === 'globals' ? 'Edit shared content' : 'Open entry'} ↗
+        {selection.target.document.collection === 'globals' ? m.canvas_edit_shared({}, options) : m.canvas_open_entry({}, options)} ↗
       </a>
     </div>
   {:else if inspected || blockInspection}
     {#if locked}
-      <p class="notice notice-danger" role="status">Editing is disabled because this entry is locked.</p>
+      <p class="notice notice-danger" role="status">{m.canvas_inspector_locked({}, options)}</p>
     {/if}
     {#if refusal}
-      <p class="notice notice-danger" role="alert">This change was not applied ({refusal}).</p>
+      <p class="notice notice-danger" role="alert">{refusalText}</p>
     {/if}
     <form
       class="form canvas-inspector-form"
@@ -238,11 +275,11 @@ function completionEvents(node: HTMLFormElement) {
     </form>
   {:else}
     <div class="canvas-inspector-message">
-      <p>Select a field inside this block to edit its content.</p>
+      <p>{m.canvas_select_block_field({}, options)}</p>
     </div>
   {/if}
   <div class="canvas-inspector-owner">
-    <span class="visually-hidden">Owned by</span>
-    <strong>{sameDocument ? ownerLabel : `${selection.target.document.collection}/${selection.target.document.id}`} · {language(selection.target.locale)}</strong>
+    <span class="visually-hidden">{m.canvas_owned_by({}, options)}</span>
+    <strong>{sameDocument ? ownerLabel : `${selection.target.document.collection}/${selection.target.document.id}`} · {formatLanguageName(selection.target.locale, uiLocale)}</strong>
   </div>
 </aside>

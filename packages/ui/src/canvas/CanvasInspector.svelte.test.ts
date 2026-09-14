@@ -60,6 +60,7 @@ const showFixture = ({
     entryDocument: { collection: 'pages', id: 'home' },
     ownerLabel: 'Home',
     locale: selection.target.locale,
+    uiLocale: 'en' as 'en' | 'de',
     sourceLocale: 'en',
     session,
     blocks: schemaBlocks,
@@ -348,4 +349,41 @@ test('disables every reused widget when the entry lock is lost', () => {
   expect(root.querySelector('.canvas-inspector')?.textContent).toContain(
     'Editing is disabled because this entry is locked.',
   );
+});
+
+test('switches Inspector chrome and language names without replacing the selected field', () => {
+  const { root, props } = show(target('hero.alt'), { uiLocale: 'en' });
+  const alt = root.querySelector<HTMLInputElement>('input[id$="hero.alt"]');
+  if (!alt) throw new Error('alt input missing');
+  alt.focus();
+  alt.value = 'Authored draft';
+  alt.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  flushSync();
+
+  expect(root.querySelector('.canvas-inspector-kicker')?.textContent).toBe('Inspector · Image');
+  expect(root.querySelector('.canvas-inspector-owner')?.textContent).toContain('English');
+
+  props.uiLocale = 'de';
+  flushSync();
+
+  expect(root.querySelector<HTMLInputElement>('input[id$="hero.alt"]')).toBe(alt);
+  expect(alt.value).toBe('Authored draft');
+  expect(document.activeElement).toBe(alt);
+  expect(root.querySelector('.canvas-inspector-kicker')?.textContent).toBe('Inspektor · Bild');
+  expect(root.querySelector('.canvas-inspector-owner')?.textContent).toContain('Englisch');
+  expect(root.querySelector('[aria-label="Inspektor schließen"]')).not.toBeNull();
+  expect(root.textContent).toContain('Hero image');
+});
+
+test('switches an already-visible Inspector notice without changing its selection', () => {
+  const { root, props } = show(target('button'), { uiLocale: 'en', locked: true });
+  expect(root.textContent).toContain('Editing is disabled because this entry is locked.');
+
+  props.uiLocale = 'de';
+  flushSync();
+
+  expect(root.textContent).toContain(
+    'Die Bearbeitung ist deaktiviert, weil dieser Eintrag gesperrt ist.',
+  );
+  expect(root.querySelector<HTMLInputElement>('input[id$="button.label"]')?.value).toBe('Book now');
 });
