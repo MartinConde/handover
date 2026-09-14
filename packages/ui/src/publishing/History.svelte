@@ -224,7 +224,8 @@ function compare(version: Version, on: boolean) {
 const shown = $derived(only ? versions.filter((v) => v.locales.includes(only)) : versions);
 
 const language = (of: string) => formatLanguageName(of, uiLocale);
-const when = (iso: string) => (Date.parse(iso) ? formatRelativeTime(Date.parse(iso), uiLocale) : '');
+const when = (iso: string) =>
+  Date.parse(iso) ? formatRelativeTime(Date.parse(iso), uiLocale) : '';
 
 /** Which languages a version writes, where the entry has more than the one. */
 const spoken = (of: string[]) =>

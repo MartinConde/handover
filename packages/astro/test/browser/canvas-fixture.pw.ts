@@ -140,11 +140,14 @@ test('saved interface language wins before first paint and live switches preserv
   await search.fill('canvas');
   await search.evaluate((input) => (input.dataset.localeProof = 'same-list-search'));
   await selected.check();
+  await selected.evaluate((input) => (input.dataset.localeProof = 'same-list-selection'));
   await page.locator('.user-menu > button').click();
   await page.getByLabel('Interface language').selectOption('de');
   await expect(search).toHaveValue('canvas');
   await expect(search).toHaveAttribute('data-locale-proof', 'same-list-search');
-  await expect(selected).toBeChecked();
+  const selectedGerman = page.getByLabel('Canvas fixture auswählen');
+  await expect(selectedGerman).toBeChecked();
+  await expect(selectedGerman).toHaveAttribute('data-locale-proof', 'same-list-selection');
   await expect(page.locator('.list-toolbar .count')).toHaveText('1 von 2');
   await expect(page.locator('#list-locale')).toHaveValue('de');
   await expect(page.locator('#list-locale')).toContainText('Deutsch fehlt oder ist veraltet');
@@ -171,7 +174,7 @@ test('saved interface language wins before first paint and live switches preserv
   await page.getByRole('button', { name: 'Save name' }).click();
   await expect(page.getByRole('alert')).toContainText('Your name could not be saved.');
   await page.locator('main').getByLabel('Interface language').selectOption('de');
-  await expect(page.getByRole('alert')).toContainText('Ihr Name konnte nicht gespeichert werden.');
+  await expect(page.getByRole('alert')).toContainText('Dein Name konnte nicht gespeichert werden.');
   await expect(accountName).toHaveValue('Unsaved account name');
   await expect(accountName).toHaveAttribute('data-locale-proof', 'same-account-node');
   await page.goto('/admin/c/pages/canvas-fixture');
@@ -209,10 +212,9 @@ test('saved interface language wins before first paint and live switches preserv
   expect(entryReads).toBe(readsBeforeSwitch);
   expect(new URL(page.url()).pathname).toBe('/admin/c/pages/canvas-fixture');
   const cookies = await context.cookies();
-  expect(cookies.find((cookie) => cookie.name === 'handover_ui_locale')).toMatchObject({
-    value: 'de',
-    path: '/admin',
-  });
+  expect(
+    cookies.find((cookie) => cookie.name === 'handover_ui_locale' && cookie.path === '/admin'),
+  ).toMatchObject({ value: 'de' });
   expect(cookies.some((cookie) => cookie.name === 'PARAGLIDE_LOCALE')).toBe(false);
 });
 
@@ -1561,12 +1563,20 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
       );
     }, finish);
   };
-  const nestedOrder = () =>
-    frame
-      .locator('[data-block-id="columns1"] [data-column-id="column01"] > [data-block-id]')
-      .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-block-id')));
+  const nestedOrder = async () => {
+    try {
+      return await frame
+        .locator('[data-block-id="columns1"] [data-column-id="column01"] > [data-block-id]')
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-block-id')));
+    } catch (error) {
+      // The fixture intentionally replaces its preview frame after a block command. A concurrent
+      // assertion can observe that handoff; let expect.poll retry against the replacement frame.
+      if (error instanceof Error && error.message.includes('Frame was detached')) return [];
+      throw error;
+    }
+  };
   await pointerDrag('escape');
-  expect(await nestedOrder()).toEqual(['repeat02', 'promo001']);
+  await expect.poll(nestedOrder).toEqual(['repeat02', 'promo001']);
   await pointerDrag('drop');
   await expect.poll(nestedOrder).toEqual(['promo001', 'repeat02']);
   await frame

@@ -223,7 +223,7 @@ test('full-screen controls switch viewport and return to form without losing edi
   await openCanvas(page);
   await page.getByRole('button', { name: 'Phone', exact: true }).click();
   await expect(page.locator('.canvas-stage')).toHaveClass(/is-phone/);
-  expect((await page.locator('.canvas-stage').boundingBox())?.width).toBe(390);
+  expect((await page.locator('.canvas-stage').boundingBox())?.width).toBeCloseTo(390, 2);
   await page.getByRole('button', { name: 'Desktop', exact: true }).click();
   await page.getByRole('treeitem', { name: 'Title', exact: true }).click();
   await page

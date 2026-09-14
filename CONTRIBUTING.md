@@ -55,6 +55,12 @@ exact agreement between the compiler locales/base locale and `UI_LOCALES` / `DEF
 framework-neutral core code. Paraglide's subsequent syntax/type compilation is a separate check;
 its English fallback does not make an incomplete German catalog valid.
 
+That entry point records a fingerprint beside the ignored generated modules. An unchanged catalog,
+compiler configuration, lockfile, validator, and UI-locale allowlist reuse the already validated
+output; changing any of them, deleting a required generated module, or passing `--force` validates
+and compiles again. The validator and compiler run in separate processes so their Inlang SDK heaps
+do not overlap. Delete `packages/ui/src/paraglide/` to reproduce a clean-cache generation.
+
 When adding or changing a message, use a stable surface prefix such as `account_`, `editor_`,
 `media_`, or `canvas_`; add the English source and reviewed German translation together; and retain
 the same placeholders even when German moves them within the sentence. For a variant, use the

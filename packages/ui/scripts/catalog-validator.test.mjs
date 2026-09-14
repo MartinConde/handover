@@ -172,9 +172,11 @@ describe('validateCatalogs', () => {
     const compiler = path.join(bin, 'paraglide-js');
     fs.writeFileSync(compiler, '#!/bin/sh\nexit 7\n');
     fs.chmodSync(compiler, 0o755);
-    const result = spawnSync(process.execPath, [path.join(import.meta.dirname, 'messages.mjs')], {
-      env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
-    });
+    const result = spawnSync(
+      process.execPath,
+      [path.join(import.meta.dirname, 'messages.mjs'), '--force'],
+      { env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } },
+    );
     expect(result.status).toBe(7);
   });
 });

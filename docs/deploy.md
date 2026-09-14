@@ -110,6 +110,12 @@ The interface-preference schema adds nullable `user.ui_locale`. Apply its additi
 local and remote D1 before deploying the package version that selects this column. It has no
 default and does not rewrite existing users.
 
+For an upgrade, keep this order: install the new package, run and commit `handover db generate`,
+apply the new migration, build, then deploy. Test an archive installation when validating an
+unpublished package; a local `link:` build can hide missing packed files. The release check should
+also load an ordinary public page and confirm it has no `/admin/_assets/` script or stylesheet—the
+English/German message runtime belongs to the admin and editable Canvas only.
+
 ## The GitHub App
 
 Handover commits as a GitHub App, so every commit shows as **Verified** and the site's

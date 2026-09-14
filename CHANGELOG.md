@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Cache validated Paraglide output by its complete compiler-input fingerprint, and isolate catalog
+  validation from compilation so repeated release builds avoid overlapping Inlang SDK heaps. The
+  release proof now covers archive installation, fresh and upgraded consumer migrations, packaged
+  Worker size, browser timing, and the absence of admin translation assets on public pages.
+
 - Complete the interface-language documentation against the shipped admin: the package overview
   and both guide sets now describe full Handover-owned English/German coverage, the exact picker
   labels, persistence and live-switching boundaries, authored-copy exclusions, migration path and

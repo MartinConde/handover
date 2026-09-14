@@ -57,6 +57,7 @@ const canvasUrl = `/admin/_assets/${canvas.script}`;
         timeoutMs: 1500,
         contentVersion: () => version,
         currentTarget: target,
+        uiLocale: () => 'en',
         currentSelection: () => selectedSelection,
         onCommand: () => ({ ok: false, reason: 'readonly' }),
         onSelectionChange: (selection) => {
