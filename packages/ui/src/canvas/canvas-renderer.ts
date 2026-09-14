@@ -1,3 +1,4 @@
+import type { UiLocale } from '../i18n.js';
 import {
   CANVAS_PROTOCOL,
   type CanvasBridgeRejection,
@@ -78,6 +79,7 @@ export interface CanvasRendererOptions {
   stage: HTMLElement;
   contentVersion: () => number;
   currentTarget: () => CanvasTarget | undefined;
+  uiLocale: () => UiLocale;
   currentSelection?: () => CanvasSelection | undefined;
   onCommand: (message: CanvasCommandMessage) => CanvasCommandResult | Promise<CanvasCommandResult>;
   commandRecovery?: CanvasParentBridgeOptions['commandRecovery'];
@@ -409,6 +411,7 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
       commandRecovery: options.commandRecovery,
       onReady: () => {
         held.ready = true;
+        held.bridge.uiLocale(options.uiLocale());
         held.bridge.mode(mode);
         promote(held);
       },
@@ -624,6 +627,11 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
     mode(next: CanvasInteractionMode) {
       mode = next;
       return active?.bridge.mode(next) ?? false;
+    },
+    uiLocale(next: UiLocale) {
+      const activeUpdated = active?.bridge.uiLocale(next) ?? false;
+      const candidateUpdated = candidate?.bridge.uiLocale(next) ?? false;
+      return activeUpdated || candidateUpdated;
     },
     dispose() {
       if (disposed) return;

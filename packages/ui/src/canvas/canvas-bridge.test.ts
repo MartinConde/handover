@@ -98,6 +98,72 @@ test('the parent handshake accepts only the expected origin, frame, request and 
   expect(onReady).toHaveBeenCalledOnce();
 });
 
+test('interface locale crosses only the current connected Canvas identity', () => {
+  const candidate = frame();
+  let contentVersion = 4;
+  const parent = createCanvasParentBridge({
+    manifest,
+    frame: candidate,
+    origin: 'https://cms.example',
+    contentVersion: () => contentVersion,
+    currentTarget: () => target,
+    onCommand: vi.fn(),
+    listen: false,
+  });
+
+  expect(parent.uiLocale('de')).toBe(false);
+  parent.receive(event(candidate, 'https://cms.example', ready));
+  expect(parent.uiLocale('de')).toBe(true);
+  contentVersion = 5;
+  expect(parent.uiLocale('en')).toBe(true);
+  expect(parent.uiLocale('fr' as never)).toBe(false);
+  expect(candidate.postMessage).toHaveBeenCalledTimes(2);
+  expect(candidate.postMessage).toHaveBeenNthCalledWith(
+    1,
+    {
+      ...ready,
+      type: 'handover:canvas:ui-locale',
+      uiLocale: 'de',
+    },
+    'https://cms.example',
+  );
+  expect(candidate.postMessage).toHaveBeenNthCalledWith(
+    2,
+    expect.objectContaining({
+      type: 'handover:canvas:ui-locale',
+      uiLocale: 'en',
+      contentVersion: 4,
+    }),
+    'https://cms.example',
+  );
+
+  const browserParent = frame();
+  const other = frame();
+  const onUiLocale = vi.fn();
+  const child = createCanvasChildBridge({
+    manifest,
+    parent: browserParent,
+    origin: 'https://cms.example',
+    onUiLocale,
+    listen: false,
+  });
+  const localeMessage = {
+    ...ready,
+    type: 'handover:canvas:ui-locale',
+    uiLocale: 'de',
+  } as const;
+  child.receive(event(other, 'https://cms.example', localeMessage));
+  child.receive(event(browserParent, 'https://attacker.example', localeMessage));
+  child.receive(event(browserParent, 'https://cms.example', { ...localeMessage, epoch: 'old' }));
+  child.receive(event(browserParent, 'https://cms.example', { ...localeMessage, uiLocale: 'fr' }));
+  expect(onUiLocale).not.toHaveBeenCalled();
+
+  child.receive(event(browserParent, 'https://cms.example', localeMessage));
+  expect(onUiLocale).toHaveBeenCalledOnce();
+  expect(onUiLocale).toHaveBeenCalledWith('de');
+  expect(child.contentVersion()).toBe(4);
+});
+
 test('a controlled render error manifest is available to the candidate lifecycle', () => {
   document.body.innerHTML = `<script type="application/json" data-handover-canvas-manifest>{"mode":"canvas","status":"error","protocol":1,"requestId":"render-1","epoch":"session-1","contentVersion":4,"error":{"status":422,"message":"Invalid snapshot"}}</script>`;
 

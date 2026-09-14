@@ -20,6 +20,7 @@ import type {
 } from '../canvas-bridge';
 import { sameCanvasTarget } from '../canvas-target';
 import { createCanvasLinkEditor } from './canvas-link-editor';
+import type { CanvasUiLocaleState } from './canvas-ui-locale';
 
 type RichField = Extract<CanvasTextField, { kind: 'richtext' }>;
 
@@ -34,6 +35,7 @@ export interface CanvasRichTextOptions {
   root?: Document;
   owner?: Window;
   readDirectory?: () => Promise<Pickable>;
+  uiLocale?: CanvasUiLocaleState;
 }
 
 const historySelection = (selection: Selection): CanvasTextSelection => proseSelection(selection);

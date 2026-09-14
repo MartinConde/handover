@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Synchronize the interface language into the editable Canvas through a dedicated, validated
+  parent-to-iframe bridge message. Initial, live-switched and late-initialized controls share the
+  latest accepted English/Deutsch locale without replacing the iframe, changing content locale or
+  advancing content versions; foreign, malformed and stale messages are ignored.
+
 - Translate Settings, connection diagnostics, integration-key dialogs and development checks into
   English and German. Stable result codes distinguish unavailable configuration, provider refusal,
   optional connections and integration operations without inferring a cause from HTTP status.

@@ -9,6 +9,7 @@ import { createCanvasLinkRuntime } from './canvas/runtime/canvas-link';
 import { createCanvasNavigationRuntime } from './canvas/runtime/canvas-navigation';
 import { createCanvasSelectionRuntime } from './canvas/runtime/canvas-selection';
 import { createCanvasPlainTextRuntime } from './canvas/runtime/canvas-text';
+import { createCanvasUiLocaleState } from './canvas/runtime/canvas-ui-locale';
 import { createEntryDirectoryReader } from './entry-directory';
 
 export * from './canvas/canvas-bridge';
@@ -22,6 +23,7 @@ export const loadCanvasRichTextEditor = () => import('./canvas/runtime/canvas-ri
 if (typeof window !== 'undefined' && window.parent !== window) {
   const manifest = readCanvasManifest();
   if (manifest) {
+    const uiLocale = createCanvasUiLocaleState();
     const entryDirectory = createEntryDirectoryReader(
       window.fetch.bind(window),
       manifest.entryDirectory ?? '/admin/api/entries',
@@ -86,6 +88,7 @@ if (typeof window !== 'undefined' && window.parent !== window) {
             command: (target, command) => bridge.command(target, command),
             interaction,
             readDirectory: entryDirectory.read,
+            uiLocale,
           });
           richText.start();
           richText.configure(field?.kind === 'richtext' ? field : undefined);
@@ -111,15 +114,18 @@ if (typeof window !== 'undefined' && window.parent !== window) {
           configureField(undefined);
         }
       },
+      onUiLocale: (next) => uiLocale.set(next),
     });
     text = createCanvasPlainTextRuntime({
       command: (target, command) => bridge.command(target, command),
       interaction,
+      uiLocale,
     });
     link = createCanvasLinkRuntime({
       command: (target, command) => bridge.command(target, command),
       interaction,
       readDirectory: entryDirectory.read,
+      uiLocale,
     });
     selection = createCanvasSelectionRuntime({
       onSelection: (value) => bridge.selection(value),
@@ -140,6 +146,7 @@ if (typeof window !== 'undefined' && window.parent !== window) {
       },
       isEditing: () =>
         (text?.active() ?? false) || (link?.active() ?? false) || (richText?.active() ?? false),
+      uiLocale,
     });
     const navigation = createCanvasNavigationRuntime({
       mode: () => mode,

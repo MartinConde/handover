@@ -143,6 +143,20 @@ Canvas POST bodies contain transient working snapshots, are same-origin and auth
 not save or publish by rendering. Public pages and ordinary preview GETs contain no Canvas markers,
 source metadata, bridge scripts, or Canvas styles.
 
+## Interface language boundary
+
+Canvas receives the CMS interface language through its authenticated, same-origin browser bridge.
+The parent sends a separate, allowlisted `uiLocale` message after the current iframe completes its
+ready handshake and again when the account preference changes. Origin, window, protocol, render
+request, editing epoch, entry, content locale, and content version checks still apply; a message
+from another frame or an obsolete render cannot change Canvas controls.
+
+This does not reuse the Canvas `locale`, which continues to identify the language of the content
+snapshot and every editable target. Changing English/Deutsch therefore does not render a new page,
+advance the content version, or alter the preview document's `<html lang>`. Eager and lazy Canvas
+controls share the last accepted interface locale, so a control loaded after a switch starts in the
+same language as controls that were already present.
+
 
 ## Editor feedback and panels
 

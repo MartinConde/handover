@@ -19,6 +19,7 @@ const renderer = (stage: HTMLElement) =>
     stage,
     contentVersion: () => 2,
     currentTarget: () => undefined,
+    uiLocale: () => 'en',
     onCommand: () => ({ ok: false, reason: 'readonly' }),
     renderDelayMs: 200,
   });

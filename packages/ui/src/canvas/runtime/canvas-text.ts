@@ -9,6 +9,7 @@ import type {
   CanvasTextSelection,
 } from '../canvas-bridge';
 import { sameCanvasTarget } from '../canvas-target';
+import type { CanvasUiLocaleState } from './canvas-ui-locale';
 
 type PlainField = Extract<CanvasTextField, { kind: 'text' }>;
 
@@ -21,6 +22,7 @@ export interface CanvasPlainTextOptions {
   ) => Promise<CanvasAcknowledgement>;
   interaction: (target: CanvasTarget, state: CanvasEditingState) => void;
   root?: Document;
+  uiLocale?: CanvasUiLocaleState;
 }
 
 const length = (element: HTMLElement) => element.textContent?.length ?? 0;

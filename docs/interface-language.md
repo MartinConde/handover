@@ -97,6 +97,12 @@ language, and a disabled Publish action translates whether a lock, block drift o
 is in the way. The collection identifier, entry title, field labels, filenames, URLs,
 content-language selection, and typed content remain authored data.
 
+An open Canvas receives the confirmed interface language over its existing same-origin bridge. The
+update is validated against the current iframe, render request, editing epoch, entry, content
+language, and content version. It does not reload the page or repurpose Canvas's content `locale`.
+Controls that initialize later use the latest accepted interface language; the preview page's
+`<html lang>` remains the content language.
+
 Connection failures retain the existing uncertain-result behavior. Handover renders a localized
 summary from a stable error descriptor, not from an English sentence or status code. Known
 authentication codes select specific recovery text. Unknown technical detail stays separate from

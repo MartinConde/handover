@@ -1066,6 +1066,11 @@ $effect(() => {
 });
 
 $effect(() => {
+  const next = uiLocale;
+  untrack(() => renderer?.uiLocale(next));
+});
+
+$effect(() => {
   const selection = selected;
   const shown = active;
   const version = session.contentVersion(locale);
@@ -1116,6 +1121,7 @@ onMount(() => {
       stage,
       contentVersion: currentVersion,
       currentTarget: () => selected?.target,
+      uiLocale: () => uiLocale,
       currentSelection: () => selected,
       onCommand: canvasCommand,
       commandRecovery: (message) => {

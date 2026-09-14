@@ -7,6 +7,7 @@ import {
   isCanvasTarget,
 } from '../canvas-bridge';
 import { canvasSelectionKey, sameCanvasDocument, sameCanvasSelection } from '../canvas-target';
+import type { CanvasUiLocaleState } from './canvas-ui-locale';
 
 const MARKERS = [
   ['data-handover-field', 'field'],
@@ -42,6 +43,7 @@ export interface CanvasSelectionRuntimeOptions {
   ) => void;
   onInteraction?: (selection: CanvasSelection, state: { dragging: boolean }) => void;
   isEditing?: () => boolean;
+  uiLocale?: CanvasUiLocaleState;
 }
 
 const structuralLocation = (target: CanvasTarget): StructuralLocation => {

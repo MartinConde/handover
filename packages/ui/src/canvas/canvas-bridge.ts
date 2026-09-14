@@ -1,4 +1,4 @@
-import type { RichtextTier } from '@handover/core';
+import { isUiLocale, type RichtextTier, type UiLocale } from '@handover/core';
 import type { FieldCommandFailure } from '../editor/entry-session.svelte';
 import { sameCanvasDocument, sameCanvasTarget } from './canvas-target';
 import type { CanvasInteractionMode, CanvasNavigationRequest } from './runtime/canvas-navigation';
@@ -120,6 +120,10 @@ export interface CanvasCommandMessage extends CanvasIdentity {
   commandId: string;
   target: CanvasTarget;
   command: CanvasMutation;
+}
+export interface CanvasUiLocaleMessage extends CanvasIdentity {
+  type: 'handover:canvas:ui-locale';
+  uiLocale: UiLocale;
 }
 export interface CanvasActionMessage extends CanvasIdentity {
   type: 'handover:canvas:action';
@@ -651,6 +655,16 @@ const modeMessage = (
       mode: CanvasInteractionMode;
     };
 };
+const uiLocaleMessage = (value: unknown): CanvasUiLocaleMessage | undefined => {
+  if (
+    record(value) &&
+    keys(value, ['type', ...BASE, 'uiLocale']) &&
+    value.type === 'handover:canvas:ui-locale' &&
+    identity(value) &&
+    isUiLocale(value.uiLocale)
+  )
+    return value as unknown as CanvasUiLocaleMessage;
+};
 
 const copyDocument = (value: CanvasDocumentIdentity): CanvasDocumentIdentity => ({
   collection: value.collection,
@@ -731,6 +745,9 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
   let connected = false;
   let disposed = false;
   let replyPort: MessagePort | undefined;
+  // The parent session can advance before this rendered document receives a field update. Locale
+  // synchronization follows the child's accepted version so it remains independent of form edits.
+  let childVersion = manifest.contentVersion;
   const reject = (reason: CanvasBridgeRejection, message: unknown) =>
     options.onRejected?.(reason, message);
   const post = (reply: CanvasAcknowledgement) => {
@@ -741,6 +758,7 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
   const refusal = (message: CanvasCommandMessage, reason: CanvasCommandRefusal) => {
     reject(reason, message);
     const update = options.commandRecovery?.(message);
+    childVersion = options.contentVersion();
     post({
       ...base(manifest, message.contentVersion),
       type: 'handover:canvas:ack',
@@ -854,6 +872,7 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
             : !REFUSALS.has(result.reason))
         )
           throw new Error('Invalid Canvas command result');
+        if (result.ok) childVersion = result.contentVersion;
         return {
           ...base(manifest, message.contentVersion),
           type: 'handover:canvas:ack',
@@ -901,6 +920,7 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
     },
     textField(value?: CanvasTextField) {
       if (disposed || !connected || (value !== undefined && !textField(value))) return false;
+      childVersion = options.contentVersion();
       frame.postMessage(
         {
           ...base(manifest, options.contentVersion()),
@@ -944,6 +964,18 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
       );
       return true;
     },
+    uiLocale(value: UiLocale) {
+      if (disposed || !connected || !isUiLocale(value)) return false;
+      frame.postMessage(
+        {
+          ...base(manifest, childVersion),
+          type: 'handover:canvas:ui-locale',
+          uiLocale: value,
+        } satisfies CanvasUiLocaleMessage,
+        origin,
+      );
+      return true;
+    },
     dispose: () => {
       disposed = true;
       connected = false;
@@ -966,6 +998,7 @@ export interface CanvasChildBridgeOptions {
   onTextField?: (field: CanvasTextField | undefined) => void;
   onActions?: (capability: CanvasActionCapability) => void;
   onMode?: (mode: CanvasInteractionMode) => void;
+  onUiLocale?: (locale: UiLocale) => void;
 }
 
 export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
@@ -1012,6 +1045,7 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
     const configured = textFieldMessage(event.data);
     const configuredActions = actionCapabilityMessage(event.data);
     const configuredMode = modeMessage(event.data);
+    const configuredUiLocale = uiLocaleMessage(event.data);
     if (requested) {
       if (!stale(requested, manifest, version))
         options.onSelect?.(requested.selection, { scroll: requested.scroll !== false });
@@ -1038,6 +1072,11 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
     }
     if (configuredMode) {
       if (!stale(configuredMode, manifest, version)) options.onMode?.(configuredMode.mode);
+      return;
+    }
+    if (configuredUiLocale) {
+      if (!stale(configuredUiLocale, manifest, version))
+        options.onUiLocale?.(configuredUiLocale.uiLocale);
       return;
     }
     acceptReply(event.data);

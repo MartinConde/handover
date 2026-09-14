@@ -9,6 +9,7 @@ import type {
 } from '../canvas-bridge';
 import { sameCanvasTarget } from '../canvas-target';
 import { type CanvasLinkDraft, createCanvasLinkEditor } from './canvas-link-editor';
+import type { CanvasUiLocaleState } from './canvas-ui-locale';
 
 type LinkField = Extract<CanvasTextField, { kind: 'link' }>;
 
@@ -18,6 +19,7 @@ export interface CanvasLinkOptions {
   root?: Document;
   owner?: Window;
   readDirectory?: () => Promise<Pickable>;
+  uiLocale?: CanvasUiLocaleState;
 }
 
 /** Edits an annotated schema link without turning its button or anchor into a text-only surface. */
