@@ -217,8 +217,10 @@ export async function changeRedirect(
     pickable(ctx),
   ]);
   const found = rules.find((rule) => rule._id === id);
-  if (!found) return new Response('Not found', { status: 404 });
-  if (found.reason === 'hidden') return Response.json({ error: MANAGED }, { status: 409 });
+  if (!found)
+    return Response.json({ code: 'REDIRECT_NOT_FOUND', error: 'Not found' }, { status: 404 });
+  if (found.reason === 'hidden')
+    return Response.json({ code: 'REDIRECT_MANAGED', error: MANAGED }, { status: 409 });
   const bad = redirectError('default', typed, { pages: sitePages(entries), rules }, id);
   if (bad) return Response.json(bad, { status: 422 });
   const operation =
@@ -280,8 +282,10 @@ export async function removeRedirect(
   const baseSha = prior?.baseSha ?? head;
   const rules = prior ? await readRedirects('default', git, baseSha) : current;
   const found = rules.find((rule) => rule._id === id);
-  if (!found) return new Response('Not found', { status: 404 });
-  if (found.reason === 'hidden') return Response.json({ error: MANAGED }, { status: 409 });
+  if (!found)
+    return Response.json({ code: 'REDIRECT_NOT_FOUND', error: 'Not found' }, { status: 404 });
+  if (found.reason === 'hidden')
+    return Response.json({ code: 'REDIRECT_MANAGED', error: MANAGED }, { status: 409 });
   const operation =
     prior ??
     (await beginOperation('default', database, {

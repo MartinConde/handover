@@ -1,6 +1,8 @@
 <script lang="ts">
 import type { PickEntry } from '../entry-directory.js';
-import type { UiLocale } from '../i18n.js';
+import { messageText, type UiMessage } from '../errors.js';
+import { messageOptions, type UiLocale } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 import Modal from '../shared/Modal.svelte';
 import PagePicker from './PagePicker.svelte';
 
@@ -39,7 +41,7 @@ let {
   /** Pre-chosen because it is right most of the time. */
   index?: string;
   busy?: boolean;
-  error?: string;
+  error?: string | UiMessage;
   uiLocale?: UiLocale;
   returnTo?: HTMLElement | null;
   onconfirm: (target: Target) => void;
@@ -47,9 +49,21 @@ let {
   onhide?: () => void;
   onclose: () => void;
 } = $props();
+const options = $derived(messageOptions(uiLocale));
+const errorText = $derived(
+  typeof error === 'string'
+    ? error
+    : error
+      ? [
+          messageText(error, uiLocale),
+          error.detail ? m.common_technical_detail({ detail: error.detail }, options) : '',
+        ]
+          .filter(Boolean)
+          .join(' ')
+      : '',
+);
 
 const singular = $derived(collection.replace(/s$/, ''));
-const verb = $derived(action === 'delete' ? 'Delete' : 'Hide');
 
 // svelte-ignore state_referenced_locally -- the collection's page above is the initial choice
 let kind = $state<Target['kind']>(index ? 'index' : 'none');
@@ -72,41 +86,39 @@ const ready = $derived(kind === 'entry' ? Boolean(picked) : kind !== 'url' || ur
   dismissible={!busy}
   {onclose}
 >
-    <h2 id="offsite-h">Where should visitors to this page go now?</h2>
+    <h2 id="offsite-h">{m.offsite_title({}, options)}</h2>
     <form onsubmit={(e) => { e.preventDefault(); onconfirm(target()); }}>
       {#if action === 'delete' && onhide}
         <p class="lead">
-          <strong>Hide it instead?</strong> Hidden entries come off the site but can be brought
-          back.
+          <strong>{m.offsite_hide_instead_question({}, options)}</strong>
+          {m.offsite_hide_instead_explanation({}, options)}
         </p>
       {/if}
       <p>
         {#if action === 'off'}
-          The {language} half of <strong>{what}</strong>{#if served} — <code>{served}</code>{/if} leaves
-          the repository in one commit; the entry is no longer offered in {language}, and
-          unpublished changes to it go with it.
+          {m.offsite_turn_off_before({ language }, options)} <strong>{what}</strong>{#if served} — <code>{served}</code>{/if}
+          {m.offsite_turn_off_after({ language }, options)}
         {:else}
           <strong>{what}</strong>
           {#if action === 'delete'}
-            leaves the repository in one commit, and its unpublished changes go with it.
+            {m.offsite_delete_explanation({}, options)}
           {:else}
-            {many ? 'come' : 'comes'} off the site the next time you publish.
+            {m.offsite_hide_explanation({ count: many ? 2 : 1 }, options)}
           {/if}
         {/if}
-        Anyone following an old link — a bookmark, an email, a search result — has to land
-        somewhere.
+        {m.offsite_old_links({}, options)}
       </p>
       <fieldset>
-        <legend class="visually-hidden">Where to send them</legend>
+        <legend class="visually-hidden">{m.offsite_send_to({}, options)}</legend>
         {#if index}
           <label class="choice">
             <input type="radio" name="offsite-to" value="index" bind:group={kind} />
-            The {collection} overview <span class="desc">{index}</span>
+            {m.offsite_collection_overview({ collection }, options)} <span class="desc">{index}</span>
           </label>
         {/if}
         <label class="choice">
           <input type="radio" name="offsite-to" value="entry" bind:group={kind} />
-          Another page…
+          {m.offsite_another_page({}, options)}
         </label>
         {#if kind === 'entry'}
           <PagePicker
@@ -122,29 +134,30 @@ const ready = $derived(kind === 'entry' ? Boolean(picked) : kind !== 'url' || ur
         {/if}
         <label class="choice">
           <input type="radio" name="offsite-to" value="url" bind:group={kind} />
-          A web address…
+          {m.offsite_web_address_choice({}, options)}
         </label>
         {#if kind === 'url'}
           <div class="field">
-            <div class="label-row"><label for="offsite-url">Web address</label></div>
+            <div class="label-row"><label for="offsite-url">{m.redirect_web_address({}, options)}</label></div>
             <input class="input" id="offsite-url" type="url" placeholder="https://example.com" bind:value={url} />
           </div>
         {/if}
         <label class="choice">
           <input type="radio" name="offsite-to" value="none" bind:group={kind} />
-          Nowhere — show “page not found” <span class="desc">404</span>
+          {m.offsite_nowhere({}, options)} <span class="desc">404</span>
         </label>
       </fieldset>
       <!-- The server writes a rule per language, so the dialog asks once. -->
       <p class="hint">
-        The rule is written {action === 'hide' ? 'when you publish' : 'in the same commit'}{#if action !== 'off'},
-          once per language, from the address each of them serves at{/if}.
+        {action === 'hide'
+          ? m.offsite_rule_on_publish({}, options)
+          : m.offsite_rule_same_commit({}, options)}{#if action !== 'off'}{m.offsite_rule_each_language({}, options)}{/if}
       </p>
-      {#if error}<div class="notice notice-danger" role="alert">{error}</div>{/if}
+      {#if errorText}<div class="notice notice-danger" role="alert">{errorText}</div>{/if}
       <div class="actions">
-        <button class="btn" type="button" disabled={busy} onclick={onclose}>Cancel</button>
+        <button class="btn" type="button" disabled={busy} onclick={onclose}>{m.common_cancel({}, options)}</button>
         {#if action === 'delete' && onhide}
-          <button class="btn btn-primary" type="button" disabled={busy} onclick={onhide}>Hide instead</button>
+          <button class="btn btn-primary" type="button" disabled={busy} onclick={onhide}>{m.offsite_hide_instead({}, options)}</button>
         {/if}
         <button
           class="btn {action === 'hide' ? 'btn-primary' : 'btn-danger'}"
@@ -152,11 +165,21 @@ const ready = $derived(kind === 'entry' ? Boolean(picked) : kind !== 'url' || ur
           disabled={busy || !ready}
         >
           {#if busy}
-            {action === 'delete' ? 'Deleting…' : action === 'off' ? 'Turning off…' : 'Hiding…'}
+            {action === 'delete'
+              ? m.offsite_deleting({}, options)
+              : action === 'off'
+                ? m.offsite_turning_off({}, options)
+                : m.offsite_hiding({}, options)}
           {:else if action === 'off'}
-            Turn {language} off
+            {m.offsite_turn_off({ language }, options)}
+          {:else if action === 'delete' && many}
+            {m.offsite_delete_many({ what }, options)}
+          {:else if action === 'delete'}
+            {m.offsite_delete_one({ kind: singular }, options)}
+          {:else if many}
+            {m.offsite_hide_many({ what }, options)}
           {:else}
-            {verb} {many ? what : `this ${singular}`}
+            {m.offsite_hide_one({ kind: singular }, options)}
           {/if}
         </button>
       </div>

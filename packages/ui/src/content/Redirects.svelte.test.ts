@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import type { UiLocale } from '../i18n.js';
 import Redirects from './Redirects.svelte';
 
 type Rule = {
@@ -30,6 +31,7 @@ let asked: { url: string; method: string; body: unknown }[] = [];
 let rules: Rule[] = [];
 let refusal: { status: number; body: unknown } | undefined;
 const committed = vi.fn();
+const props = $state({ uiLocale: 'en' as UiLocale, oncommitted: committed });
 /** What fetching the old address answers: the fields the verdict reads, or a network failure. */
 let live: { status: number; redirected: boolean; url: string; type?: ResponseType } | Error = {
   status: 404,
@@ -39,6 +41,7 @@ let live: { status: number; redirected: boolean; url: string; type?: ResponseTyp
 
 const show = async () => {
   asked = [];
+  props.uiLocale = 'en';
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -61,7 +64,7 @@ const show = async () => {
       return Response.json({ rules });
     }),
   );
-  app = mount(Redirects, { target: document.body, props: { oncommitted: committed } });
+  app = mount(Redirects, { target: document.body, props });
   await settle();
   return document.body;
 };
@@ -145,6 +148,27 @@ test('a row says where the rule came from and a rule waiting on a draft says it 
     'Not published yet',
   );
   expect(q('.notice-info').textContent).toContain('not live yet');
+});
+
+test('a live interface switch retranslates rows and an open destructive warning in place', async () => {
+  rules = [rule({ _id: 'a', createdAt: ago(120), reason: 'manual' })];
+  await show();
+  const row = q('.table .row');
+  click('.menu-cell button:last-child');
+  const dialog = q('.dialog');
+  expect(dialog.textContent).toContain('Delete this redirect?');
+
+  flushSync(() => {
+    props.uiLocale = 'de';
+  });
+
+  expect(q('h1').textContent).toBe('Weiterleitungen');
+  expect(q('.table .row')).toBe(row);
+  expect(q('.why .badge').textContent).toBe('Manuell');
+  expect(q('.dialog')).toBe(dialog);
+  expect(dialog.textContent).toContain('Diese Weiterleitung löschen?');
+  expect(q<HTMLInputElement>('#rd-q').value).toBe('');
+  expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
 });
 
 // Unhiding removes the rule in the same commit, so this screen never takes one out.

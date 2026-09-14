@@ -284,7 +284,7 @@ async function ask(url: string, init: RequestInit = {}) {
   if (res.ok) {
     await announceCommit(res);
     onchanged();
-  } else actionFailed = await res.text();
+  } else actionFailed = await retainedFailure(res, 'ENTRY_ACTION_FAILED');
   return res.ok;
 }
 
@@ -668,12 +668,12 @@ async function takeOver() {
 let hidden = $state(entry.hidden === true);
 let statusMenu = $state(false);
 let hiding = $state(false);
-let statusFailed = $state('');
+let statusFailed = $state<UiMessage>();
 
 async function setStatus(next: boolean, redirect?: Target) {
   statusMenu = false;
   busy = true;
-  statusFailed = '';
+  statusFailed = undefined;
   // Everything on screen goes into the rows first: this write rewrites the same files.
   if (!(await flush())) {
     busy = false;
@@ -686,7 +686,7 @@ async function setStatus(next: boolean, redirect?: Target) {
   });
   busy = false;
   if (!res.ok) {
-    statusFailed = await res.text();
+    statusFailed = await retainedFailure(res, 'ENTRY_ACTION_FAILED');
     return;
   }
   hidden = next;
@@ -700,7 +700,7 @@ let renaming = $state(false);
 let deleting = $state(false);
 let actionTrigger = $state<HTMLElement>();
 let newName = $state('');
-let actionFailed = $state('');
+let actionFailed = $state<UiMessage>();
 let lockFailed = $state<UiMessage>();
 let holdFailed = $state<UiMessage>();
 const willBe = $derived(entryName('default', newName, []));
@@ -709,7 +709,7 @@ function openRename() {
   rememberActionTrigger();
   moreMenu = false;
   newName = slug;
-  actionFailed = '';
+  actionFailed = undefined;
   renaming = true;
 }
 
@@ -728,7 +728,7 @@ function startHiding() {
 function startDeleting() {
   rememberActionTrigger();
   moreMenu = false;
-  actionFailed = '';
+  actionFailed = undefined;
   deleting = true;
 }
 
@@ -736,14 +736,11 @@ function startDeleting() {
 async function act(url: string, init: RequestInit) {
   if (!(await flush())) return undefined;
   busy = true;
-  actionFailed = '';
+  actionFailed = undefined;
   const res = await fetch(url, init);
   busy = false;
   if (res.ok) return res;
-  actionFailed =
-    res.status === 409 || res.status === 503
-      ? await res.text()
-      : `That did not work (${res.status})`;
+  actionFailed = await retainedFailure(res, 'ENTRY_ACTION_FAILED');
   return undefined;
 }
 
@@ -1018,7 +1015,7 @@ async function leaving(change: () => void) {
 // Unlike a field, an address is validated, unique and owes a redirect when it moves.
 let editing = $state(false);
 let typed = $state('');
-let addressFailed = $state('');
+let addressFailed = $state<UiMessage>();
 const address = $derived(entry.addresses?.[locale] ?? '');
 // A language with no file has no address: the offer to make one stands where the form would be.
 const addressable = $derived(
@@ -1085,7 +1082,7 @@ function navigateCanvasEntry(target: {
 
 function editAddress() {
   typed = address;
-  addressFailed = '';
+  addressFailed = undefined;
   editing = true;
 }
 
@@ -1103,7 +1100,7 @@ async function saveAddress() {
   });
   busy = false;
   if (!res.ok) {
-    addressFailed = await res.text();
+    addressFailed = await retainedFailure(res, 'ENTRY_ACTION_FAILED');
     return;
   }
   editing = false;
@@ -1146,7 +1143,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 {/snippet}
 
 <main class="main main-editor" class:is-canvas-fullscreen={mode === 'canvas'}>
-  {#if actionFailed && !renaming && !deleting && !offing}<p class="notice notice-danger" role="alert">{actionFailed}</p>{/if}
+  {#if actionFailed && !renaming && !deleting && !offing}<p class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {feedbackDetail(actionFailed)}</p>{/if}
   {#if holdFailed}<p class="notice notice-danger" role="alert">{feedbackText(holdFailed)} {feedbackDetail(holdFailed)}</p>{/if}
   {#if saveError}<p class="notice notice-danger" role="alert">{feedbackText(saveError)} {feedbackDetail(saveError)} <button class="btn-link" type="button" onclick={() => flush()}>{m.editor_save_retry({}, options)}</button></p>{/if}
   {#each entry.offerProblems ?? [] as problem (problem)}
@@ -1357,11 +1354,12 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       <p class="subline">{m.editor_hold_active({}, options)}</p>
     {/if}
     {#if hidden}
+      {@const hiddenRedirect = entry.redirects?.[locale]}
       <p class="subline">
-        {#if entry.redirects?.[locale]}Redirecting to {entry.redirects[locale]} while hidden{:else}Off the site — visitors to its old address see “page not found”{/if}
+        {#if hiddenRedirect}{m.editor_hidden_redirecting({ address: hiddenRedirect }, options)}{:else}{m.editor_hidden_not_found({}, options)}{/if}
       </p>
     {/if}
-    {#if statusFailed}<p class="subline is-bad" role="alert">{statusFailed}</p>{/if}
+    {#if statusFailed}<p class="subline is-bad" role="alert">{feedbackText(statusFailed)} {feedbackDetail(statusFailed)}</p>{/if}
     {#if addressable}
       <p class="slug-row">
         {#if editing}
@@ -1370,7 +1368,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           <input class="input" id="entry-address" type="text" bind:value={typed} placeholder={slug} />
           <button class="btn btn-sm" type="button" disabled={busy} onclick={saveAddress}>{m.editor_address_save({}, options)}</button>
           <button class="btn btn-ghost btn-sm" type="button" onclick={() => (editing = false)}>{m.editor_address_cancel({}, options)}</button>
-          {#if addressFailed}<span class="mode is-bad">{addressFailed}</span>{/if}
+          {#if addressFailed}<span class="mode is-bad">{feedbackText(addressFailed)} {feedbackDetail(addressFailed)}</span>{/if}
         {:else}
           <span class="url">{url}</span>
           {#if !address}<span class="mode">{m.editor_address_file_name({}, options)}</span>{/if}
@@ -1509,7 +1507,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
               </div>
             {/if}
             {#if actionFailed}
-              <div class="notice notice-danger" role="alert">{actionFailed}</div>
+              <div class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {feedbackDetail(actionFailed)}</div>
             {/if}
             {#if localeFailure?.locale === shown}
               <div class="notice notice-danger" role="alert">{feedbackText(localeFailure.message)} {feedbackDetail(localeFailure.message)}</div>
@@ -1548,7 +1546,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
               }}
               {mediaBase}
               onclose={side ? () => leaving(() => (side = false)) : undefined}
-              onturnoff={entry.singleton ? undefined : () => { rememberActionTrigger(); actionFailed = ''; offing = shown; }}
+              onturnoff={entry.singleton ? undefined : () => { rememberActionTrigger(); actionFailed = undefined; offing = shown; }}
             />
           </div>
         {/key}
@@ -1669,7 +1667,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
               {m.entry_list_saved_as({}, options)} <span class="filename">{willBe}</span>. {m.entry_list_rename_hint({}, options)}
             </p>
           </div>
-          {#if actionFailed}<div class="notice notice-danger" role="alert">{actionFailed}</div>{/if}
+          {#if actionFailed}<div class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {feedbackDetail(actionFailed)}</div>{/if}
           <div class="actions">
             <button class="btn" type="button" disabled={busy} onclick={() => (renaming = false)}>{m.common_cancel({}, options)}</button>
             <button class="btn btn-primary" type="submit" disabled={busy}>{busy ? m.entry_list_renaming({}, options) : m.editor_rename({}, options)}</button>

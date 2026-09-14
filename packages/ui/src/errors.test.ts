@@ -198,6 +198,46 @@ test('unknown technical detail stays separate from the localized summary', async
   expect(messageText(descriptor, 'de')).toBe('Das Passwort konnte nicht gespeichert werden.');
 });
 
+test('offsite and address descriptors preserve parameters and translate in German', async () => {
+  const locale = await responseMessage(
+    Response.json(
+      {
+        code: 'ENTRY_LOCALE_LAST_PUBLISHED',
+        error: 'legacy prose',
+        locales: ['de'],
+        remaining: ['en'],
+      },
+      { status: 409 },
+    ),
+    'ENTRY_ACTION_FAILED',
+  );
+  expect(locale).toEqual({
+    code: 'ENTRY_LOCALE_LAST_PUBLISHED',
+    status: 409,
+    locales: ['de'],
+    remaining: ['en'],
+  });
+  expect(messageText(locale, 'de')).toContain('Deutsch');
+  expect(messageText(locale, 'de')).toContain('Englisch');
+
+  const address = await responseMessage(
+    Response.json(
+      {
+        code: 'ENTRY_ADDRESS_TAKEN',
+        error: 'legacy prose',
+        address: 'belegt',
+        collection: 'posts',
+        locale: 'de',
+      },
+      { status: 409 },
+    ),
+    'ENTRY_ACTION_FAILED',
+  );
+  expect(messageText(address, 'de')).toBe(
+    'belegt ist bereits die Webadresse eines anderen Eintrags in posts auf Deutsch.',
+  );
+});
+
 test('password length, token expiry, and general reset failures give different recovery', () => {
   expect(messageText({ code: 'PASSWORD_TOO_LONG' }, 'de')).toBe(
     'Darf höchstens 128 Zeichen lang sein',

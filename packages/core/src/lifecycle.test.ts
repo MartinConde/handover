@@ -552,10 +552,12 @@ test('an empty box is asked for rather than corrected', () => {
   expect(redirectError('default', { from: '  ', to: '/listings' }, site)).toEqual({
     field: 'from',
     message: 'An old address is needed.',
+    descriptor: { code: 'REDIRECT_FROM_REQUIRED' },
   });
   expect(redirectError('default', { from: '/a', to: '' }, site)).toEqual({
     field: 'to',
     message: 'A destination is needed.',
+    descriptor: { code: 'REDIRECT_TO_REQUIRED' },
   });
 });
 
@@ -563,6 +565,7 @@ test('an old address that is not a path says so with the path it meant', () => {
   expect(redirectError('default', { from: 'summer-offer', to: '/listings' }, site)).toEqual({
     field: 'from',
     message: 'An address has to start with "/" — did you mean "/summer-offer"?',
+    descriptor: { code: 'REDIRECT_FROM_SLASH', suggestion: '/summer-offer' },
   });
 });
 
@@ -578,6 +581,7 @@ test('an old address that is a real page names the page it would hide', () => {
   ).toEqual({
     field: 'from',
     message: 'This is a real page. A redirect here would hide Harbour Flat from visitors.',
+    descriptor: { code: 'REDIRECT_SHADOWS_PAGE', page: 'Harbour Flat' },
   });
 });
 
@@ -585,6 +589,7 @@ test('a rule that sends an address to itself is refused on the destination', () 
   expect(redirectError('default', { from: '/a', to: '/a' }, site)).toEqual({
     field: 'to',
     message: 'This sends visitors back where they came from. Pick somewhere else.',
+    descriptor: { code: 'REDIRECT_SAME_ADDRESS' },
   });
 });
 
@@ -606,6 +611,7 @@ test('a destination that is neither a path nor a web address is refused', () => 
     field: 'to',
     message:
       'A destination is a path on this site or a full web address — did you mean "/listings"?',
+    descriptor: { code: 'REDIRECT_TO_INVALID', suggestion: '/listings' },
   });
 });
 
@@ -621,10 +627,12 @@ test('redirect fields cannot contain whitespace or control characters', () => {
     expect(redirectError('default', { from: value, to: '/new' }, site)).toEqual({
       field: 'from',
       message: 'An old address cannot contain spaces or control characters.',
+      descriptor: { code: 'REDIRECT_FROM_WHITESPACE' },
     });
     expect(redirectError('default', { from: '/old', to: value }, site)).toEqual({
       field: 'to',
       message: 'A destination cannot contain spaces or control characters.',
+      descriptor: { code: 'REDIRECT_TO_WHITESPACE' },
     });
   }
 });

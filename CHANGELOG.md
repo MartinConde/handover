@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Translate redirects, off-site destination choices, hidden-address summaries and localized-address
+  validation into English and German. Stable redirect, address, and last-language error descriptors
+  preserve HTTP outcomes and legacy diagnostics. Live switching keeps paths, filters, selected
+  targets, typed URLs, dialog nodes, focus, content-language scope and editor drafts unchanged.
+
 - Translate Site settings and the full navigation builder into English and German, including
   dates, language names, counts, drag/drop and row actions, dialogs, accessibility labels, and
   retained list/directory feedback. Live switching preserves shared menu structure, ordering,

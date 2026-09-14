@@ -3657,7 +3657,11 @@ test('turning off the last language an entry has a file in is refused', async ()
   const res = await POST(post('entries/posts/taken/locales', JSON.stringify({ locales: ['de'] })));
 
   expect(res.status).toBe(409);
-  expect(await res.text()).toContain('Delete');
+  expect(await res.json()).toEqual({
+    code: 'ENTRY_LOCALE_LAST_FILE',
+    error: expect.stringContaining('Delete'),
+    locales: ['en'],
+  });
   expect(publish).not.toHaveBeenCalled();
   expect(setEntryLocales).not.toHaveBeenCalled();
 });
@@ -3676,7 +3680,12 @@ test('a language whose only other file is a draft cannot be turned off', async (
   const res = await POST(post('entries/pages/home/locales', JSON.stringify({ locales: ['de'] })));
 
   expect(res.status).toBe(409);
-  expect(await res.text()).toContain('publish de first');
+  expect(await res.json()).toEqual({
+    code: 'ENTRY_LOCALE_LAST_PUBLISHED',
+    error: expect.stringContaining('publish de first'),
+    locales: ['en'],
+    remaining: ['de'],
+  });
   expect(publish).not.toHaveBeenCalled();
   expect(setEntryLocales).not.toHaveBeenCalled();
 });
@@ -4156,7 +4165,10 @@ test('an address that is not one is refused with the reason', async () => {
   );
 
   expect(res.status).toBe(422);
-  expect(await res.text()).toMatch(/lowercase letters, digits and single dashes/);
+  expect(await res.json()).toEqual({
+    code: 'ENTRY_ADDRESS_INVALID',
+    error: expect.stringMatching(/lowercase letters, digits and single dashes/),
+  });
 });
 
 test('an address another entry in that language already serves is refused', async () => {
@@ -4166,6 +4178,13 @@ test('an address another entry in that language already serves is refused', asyn
   for (const address of ['belegt', 'taken']) {
     const res = await POST(post('entries/posts/hello/address/de', JSON.stringify({ address })));
     expect([address, res.status]).toEqual([address, 409]);
+    expect(await res.json()).toEqual({
+      code: 'ENTRY_ADDRESS_TAKEN',
+      error: expect.any(String),
+      address,
+      collection: 'posts',
+      locale: 'de',
+    });
   }
 });
 
@@ -6422,6 +6441,7 @@ test('a manual rule cannot inject another redirects line', async () => {
   expect(await res.json()).toEqual({
     field: 'from',
     message: 'An old address cannot contain spaces or control characters.',
+    descriptor: { code: 'REDIRECT_FROM_WHITESPACE' },
   });
   expect(publish).not.toHaveBeenCalled();
 });
@@ -6436,6 +6456,7 @@ test('a rule over a page the site serves is refused by the page it would hide', 
   expect(await res.json()).toEqual({
     field: 'from',
     message: 'This is a real page. A redirect here would hide The Mill House from visitors.',
+    descriptor: { code: 'REDIRECT_SHADOWS_PAGE', page: 'The Mill House' },
   });
   expect(publish).not.toHaveBeenCalled();
 });
@@ -6549,9 +6570,11 @@ test('a hidden entry’s rule is not deleted from this screen', async () => {
   const res = await DELETE(ctx('redirects/cccccccc', undefined, { handover: owner }));
 
   expect(res.status).toBe(409);
-  expect(((await res.json()) as { error: string }).error).toBe(
-    'This redirect belongs to the entry that is hidden. Show that entry again and the redirect goes with it.',
-  );
+  expect(await res.json()).toEqual({
+    code: 'REDIRECT_MANAGED',
+    error:
+      'This redirect belongs to the entry that is hidden. Show that entry again and the redirect goes with it.',
+  });
   expect(publish).not.toHaveBeenCalled();
 });
 

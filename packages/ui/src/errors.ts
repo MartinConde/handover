@@ -1,5 +1,5 @@
 import type { UiLocale } from './i18n.js';
-import { messageOptions } from './i18n.js';
+import { formatLanguageList, formatLanguageName, messageOptions } from './i18n.js';
 import * as m from './paraglide/messages.js';
 
 export interface UiMessage {
@@ -10,6 +10,13 @@ export interface UiMessage {
   inclusive?: boolean;
   exact?: boolean;
   count?: number;
+  suggestion?: string;
+  page?: string;
+  address?: string;
+  collection?: string;
+  locale?: string;
+  locales?: string[];
+  remaining?: string[];
 }
 
 export interface UiProblem {
@@ -19,7 +26,9 @@ export interface UiProblem {
 
 export async function responseMessage(response: Response, fallback: string): Promise<UiMessage> {
   const headerCode = response.headers.get('x-handover-error-code');
-  let body: { code?: unknown; error?: unknown; message?: unknown } | undefined;
+  let body:
+    | (Record<string, unknown> & { code?: unknown; error?: unknown; message?: unknown })
+    | undefined;
   try {
     body = (await response.clone().json()) as typeof body;
   } catch {
@@ -30,7 +39,21 @@ export async function responseMessage(response: Response, fallback: string): Pro
   const known = KNOWN_CODES.has(code);
   const detailValue = typeof body?.error === 'string' ? body.error : body?.message;
   const detail = typeof detailValue === 'string' && !known ? detailValue : undefined;
-  return { code: known ? code : fallback, status: response.status, ...(detail ? { detail } : {}) };
+  const strings = (key: string) =>
+    Array.isArray(body?.[key]) && body[key].every((value) => typeof value === 'string')
+      ? (body[key] as string[])
+      : undefined;
+  return {
+    code: known ? code : fallback,
+    status: response.status,
+    ...(detail ? { detail } : {}),
+    ...(typeof body?.limit === 'number' ? { limit: body.limit } : {}),
+    ...(typeof body?.address === 'string' ? { address: body.address } : {}),
+    ...(typeof body?.collection === 'string' ? { collection: body.collection } : {}),
+    ...(typeof body?.locale === 'string' ? { locale: body.locale } : {}),
+    ...(strings('locales') ? { locales: strings('locales') } : {}),
+    ...(strings('remaining') ? { remaining: strings('remaining') } : {}),
+  };
 }
 
 const KNOWN_CODES = new Set([
@@ -53,6 +76,13 @@ const KNOWN_CODES = new Set([
   'MEDIA_STORAGE_UNAVAILABLE',
   'MEDIA_IN_USE',
   'MEDIA_PUBLISHED_IN_USE',
+  'ENTRY_ADDRESS_TOO_LONG',
+  'ENTRY_ADDRESS_INVALID',
+  'ENTRY_ADDRESS_TAKEN',
+  'ENTRY_LOCALE_LAST_PUBLISHED',
+  'ENTRY_LOCALE_LAST_FILE',
+  'REDIRECT_NOT_FOUND',
+  'REDIRECT_MANAGED',
 ]);
 
 const numberFormats = new Map<UiLocale, Intl.NumberFormat>();
@@ -189,6 +219,68 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
         : m.new_entry_create_failed({}, options);
     case 'ENTRY_CREATE_UNCONFIRMED':
       return m.new_entry_create_unconfirmed({}, options);
+    case 'ENTRY_ADDRESS_TOO_LONG':
+      return m.editor_address_too_long({ limit: message.limit ?? 80 }, options);
+    case 'ENTRY_ADDRESS_INVALID':
+      return m.editor_address_invalid({}, options);
+    case 'ENTRY_ADDRESS_TAKEN':
+      return m.editor_address_taken(
+        {
+          address: message.address ?? '',
+          collection: message.collection ?? '',
+          language: message.locale ? formatLanguageName(message.locale, locale) : '',
+        },
+        options,
+      );
+    case 'ENTRY_LOCALE_LAST_PUBLISHED':
+      return m.offsite_last_published(
+        {
+          languages: formatLanguageList(message.locales ?? [], locale),
+          remaining: formatLanguageList(message.remaining ?? [], locale),
+        },
+        options,
+      );
+    case 'ENTRY_LOCALE_LAST_FILE':
+      return m.offsite_last_file(
+        { languages: formatLanguageList(message.locales ?? [], locale) },
+        options,
+      );
+    case 'REDIRECT_NOT_FOUND':
+      return m.redirect_not_found({}, options);
+    case 'REDIRECT_MANAGED':
+      return m.redirect_managed_error({}, options);
+    case 'REDIRECT_LOAD_FAILED':
+      return message.status
+        ? m.redirect_load_failed_status({ status: message.status }, options)
+        : m.redirect_load_failed({}, options);
+    case 'REDIRECT_SAVE_FAILED':
+      return message.status
+        ? m.redirect_save_failed_status({ status: message.status }, options)
+        : m.redirect_save_failed({}, options);
+    case 'REDIRECT_DELETE_FAILED':
+      return message.status
+        ? m.redirect_delete_failed_status({ status: message.status }, options)
+        : m.redirect_delete_failed({}, options);
+    case 'REDIRECT_FROM_REQUIRED':
+      return m.redirect_validation_from_required({}, options);
+    case 'REDIRECT_FROM_ABSOLUTE':
+      return m.redirect_validation_from_absolute({}, options);
+    case 'REDIRECT_FROM_SLASH':
+      return m.redirect_validation_from_slash({ suggestion: message.suggestion ?? '/' }, options);
+    case 'REDIRECT_FROM_WHITESPACE':
+      return m.redirect_validation_from_whitespace({}, options);
+    case 'REDIRECT_TO_REQUIRED':
+      return m.redirect_validation_to_required({}, options);
+    case 'REDIRECT_TO_WHITESPACE':
+      return m.redirect_validation_to_whitespace({}, options);
+    case 'REDIRECT_TO_INVALID':
+      return m.redirect_validation_to_invalid({ suggestion: message.suggestion ?? '/' }, options);
+    case 'REDIRECT_SAME_ADDRESS':
+      return m.redirect_validation_same({}, options);
+    case 'REDIRECT_SHADOWS_PAGE':
+      return m.redirect_validation_shadows({ page: message.page ?? '' }, options);
+    case 'REDIRECT_FROM_EXISTS':
+      return m.redirect_validation_exists({}, options);
     case 'EDITOR_HOLD_FAILED':
       return m.editor_hold_failed({}, options);
     case 'EDITOR_LOCK_TAKE_FAILED':

@@ -544,3 +544,80 @@ test('the German lost-lock announcement uses a complete anonymous-holder sentenc
     'Eine andere Person hat diesen Eintrag übernommen.',
   );
 });
+
+test('an address refusal retranslates without replacing the address draft', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      url.startsWith('/admin/api/locks/')
+        ? Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120_000 })
+        : url.includes('/address/')
+          ? Response.json(
+              {
+                code: 'ENTRY_ADDRESS_TAKEN',
+                error: 'legacy prose',
+                address: 'belegt',
+                collection: 'listings',
+                locale: 'de',
+              },
+              { status: 409 },
+            )
+          : Response.json({}),
+    ),
+  );
+  app = mount(EditorLocaleFixture, { target: document.body });
+  await new Promise((resolve) => setTimeout(resolve));
+  flushSync();
+  q<HTMLButtonElement>('.slug-row .btn-link')?.click();
+  flushSync();
+  const input = q<HTMLInputElement>('#entry-address');
+  if (!input) throw new Error('address input missing');
+  input.value = 'belegt';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  q<HTMLButtonElement>('.slug-row .btn-sm')?.click();
+  await new Promise((resolve) => setTimeout(resolve));
+  flushSync();
+  expect(q('.slug-row .is-bad')?.textContent).toContain('already the web address');
+
+  switchLocale();
+
+  expect(q<HTMLInputElement>('#entry-address')).toBe(input);
+  expect(input.value).toBe('belegt');
+  expect(q('.slug-row .is-bad')?.textContent).toContain('bereits die Webadresse');
+});
+
+test('an open offsite choice retranslates without losing its target draft', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      url.startsWith('/admin/api/locks/')
+        ? Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120_000 })
+        : Response.json({}),
+    ),
+  );
+  app = mount(EditorLocaleFixture, { target: document.body });
+  await new Promise((resolve) => setTimeout(resolve));
+  flushSync();
+  q<HTMLButtonElement>('[aria-label="More actions"]')?.click();
+  flushSync();
+  qa<HTMLButtonElement>('[role="menuitem"]')
+    .find((button) => button.textContent?.trim() === 'Delete')
+    ?.click();
+  flushSync();
+  const dialog = q<HTMLDialogElement>('.dialog');
+  qa<HTMLInputElement>('.dialog input[type="radio"]')
+    .find((input) => input.value === 'url')
+    ?.click();
+  flushSync();
+  const address = q<HTMLInputElement>('#offsite-url');
+  if (!dialog || !address) throw new Error('offsite URL choice missing');
+  address.value = 'https://example.com/archive';
+  address.dispatchEvent(new Event('input', { bubbles: true }));
+
+  switchLocale();
+
+  expect(q('.dialog')).toBe(dialog);
+  expect(q('.dialog h2')?.textContent).toBe('Wohin sollen Besucher dieser Seite jetzt gelangen?');
+  expect(q<HTMLInputElement>('#offsite-url')).toBe(address);
+  expect(address.value).toBe('https://example.com/archive');
+});

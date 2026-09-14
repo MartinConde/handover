@@ -35,6 +35,13 @@ to pointing at the page when the entry is shown again.
 
 "Nowhere" is an honest answer for a page nobody linked to: its address answers 404.
 
+The off-site question follows the account's [interface language](interface-language.md). Changing
+between English and German while it is open keeps the dialog, chosen target, typed web address,
+entry draft, content language, and focus in place. The explanation still distinguishes the
+operations: hiding waits for publish, deleting commits immediately, and turning off a language
+removes only that language's file. A refusal to remove the last published or last remaining
+language is returned with a stable reason and re-renders in the current interface language.
+
 A page hidden for more than 90 days comes up as a note in the pending-changes drawer, so a
 page put away and forgotten is seen once more ([Pending changes](pending-changes.md#checks-before-a-publish)).
 
@@ -122,6 +129,11 @@ picked — or, where the picked page has no German half, to that collection's Ge
 and then to `/de/`. On a
 [`localizedSlugs`](configuration.md#localizedslugs) collection that URL is the `slug` in the
 language's own file, so renaming the file writes no rule for a language that has one.
+
+The localized address control follows the interface language too. Built-in format and uniqueness
+failures update while visible after an interface-language switch, but the typed address and the
+content language it belongs to do not change. Collection identifiers, language codes, URLs, and
+server diagnostics remain data rather than translated content.
 
 Both wait for whoever has the entry open. They commit every locale file at once, so a rename or
 a delete under somebody else's edit would take the file they are typing into out from under

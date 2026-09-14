@@ -46,6 +46,19 @@ includes its query parameters.
 A rule with `reason: hidden` belongs to the entry that is hidden — showing that entry again
 removes the rule in the same commit — so the table draws it but neither edits nor deletes it.
 
+### Interface language
+
+The redirects screen follows the account's [interface language](interface-language.md), including
+filters, reasons, dates, validation, live-site test results, and deletion warnings. Switching
+between English and German keeps the same rules, search, open dialog, typed paths or URL, and
+selected destination; it neither rereads the list nor changes a rule's path or language scope.
+Paths, status codes, entry titles, and diagnostic details remain exact.
+
+Validation explains the consequence before anything is written: an old address cannot cover a
+real page or another rule, and a destination cannot point back to itself. Deleting a recent rule
+warns that bookmarks, search results, and old email links may become 404s. A failed add, edit, or
+delete keeps its stable server reason and can be presented in the current interface language.
+
 ## At build time
 
 At build time the integration writes every rule into `_redirects` in the output directory,

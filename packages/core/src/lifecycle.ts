@@ -213,6 +213,16 @@ export interface RedirectSite {
   rules: readonly RedirectRule[];
 }
 
+export interface RedirectProblem {
+  field: 'from' | 'to';
+  message: string;
+  descriptor: {
+    code: string;
+    suggestion?: string;
+    page?: string;
+  };
+}
+
 /** Said as the consequence: nobody diagnoses a shadowed page from a 404; `field` is its box. */
 export function redirectError(
   _siteId: string,
@@ -220,36 +230,61 @@ export function redirectError(
   site: RedirectSite,
   /** The rule being changed, whose own `from` is not a clash with itself. */
   id?: string,
-): { field: 'from' | 'to'; message: string } | undefined {
+): RedirectProblem | undefined {
   const from = rule.from.trim();
   const to = rule.to.trim();
-  const at = (field: 'from' | 'to', message: string) => ({ field, message });
-  if (!from) return at('from', 'An old address is needed.');
+  const at = (
+    field: 'from' | 'to',
+    message: string,
+    descriptor: RedirectProblem['descriptor'],
+  ): RedirectProblem => ({ field, message, descriptor });
+  if (!from) return at('from', 'An old address is needed.', { code: 'REDIRECT_FROM_REQUIRED' });
   if (/^[a-z][a-z0-9+.-]*:/i.test(from))
     return at(
       'from',
       'An old address is a path on this site, like "/summer-offer", not a full web address.',
+      {
+        code: 'REDIRECT_FROM_ABSOLUTE',
+      },
     );
   if (!from.startsWith('/'))
-    return at('from', `An address has to start with "/" — did you mean "/${from}"?`);
+    return at('from', `An address has to start with "/" — did you mean "/${from}"?`, {
+      code: 'REDIRECT_FROM_SLASH',
+      suggestion: `/${from}`,
+    });
   if (redirectSourceError(from))
-    return at('from', 'An old address cannot contain spaces or control characters.');
-  if (!to) return at('to', 'A destination is needed.');
+    return at('from', 'An old address cannot contain spaces or control characters.', {
+      code: 'REDIRECT_FROM_WHITESPACE',
+    });
+  if (!to) return at('to', 'A destination is needed.', { code: 'REDIRECT_TO_REQUIRED' });
   const toError = redirectDestinationError(to);
   if (toError?.includes('whitespace'))
-    return at('to', 'A destination cannot contain spaces or control characters.');
+    return at('to', 'A destination cannot contain spaces or control characters.', {
+      code: 'REDIRECT_TO_WHITESPACE',
+    });
   if (toError)
     return at(
       'to',
       `A destination is a path on this site or a full web address — did you mean "/${to.replace(/^\/+/, '')}"?`,
+      {
+        code: 'REDIRECT_TO_INVALID',
+        suggestion: `/${to.replace(/^\/+/, '')}`,
+      },
     );
   if (from === to)
-    return at('to', 'This sends visitors back where they came from. Pick somewhere else.');
+    return at('to', 'This sends visitors back where they came from. Pick somewhere else.', {
+      code: 'REDIRECT_SAME_ADDRESS',
+    });
   const page = site.pages[from];
   if (page)
-    return at('from', `This is a real page. A redirect here would hide ${page} from visitors.`);
+    return at('from', `This is a real page. A redirect here would hide ${page} from visitors.`, {
+      code: 'REDIRECT_SHADOWS_PAGE',
+      page,
+    });
   if (site.rules.some((r) => r.from === from && r._id !== id))
-    return at('from', 'There is already a redirect from this address.');
+    return at('from', 'There is already a redirect from this address.', {
+      code: 'REDIRECT_FROM_EXISTS',
+    });
   return undefined;
 }
 

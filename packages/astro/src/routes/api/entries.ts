@@ -652,10 +652,19 @@ export async function offering(
   const published = files.filter((f) => f.file).map((f) => f.locale);
   const left = published.length ? published.filter((l) => !going.includes(l)) : staying;
   if (going.length && !left.length)
-    return new Response(
+    return Response.json(
       staying.length
-        ? `Turning ${going.join(', ')} off would leave this entry with no published file: publish ${staying.join(', ')} first, or Delete the entry`
-        : `Turning ${going.join(', ')} off would leave this entry with no file in any language: Delete the entry instead, which asks where its readers should go`,
+        ? {
+            code: 'ENTRY_LOCALE_LAST_PUBLISHED',
+            error: `Turning ${going.join(', ')} off would leave this entry with no published file: publish ${staying.join(', ')} first, or Delete the entry`,
+            locales: going,
+            remaining: staying,
+          }
+        : {
+            code: 'ENTRY_LOCALE_LAST_FILE',
+            error: `Turning ${going.join(', ')} off would leave this entry with no file in any language: Delete the entry instead, which asks where its readers should go`,
+            locales: going,
+          },
       { status: 409 },
     );
   const pathsOf = (locales: string[]) => locales.map((l) => entryPath(collection, slug, l));
@@ -785,7 +794,15 @@ export async function address(
   const body = (await request.json().catch(() => undefined)) as { address?: unknown } | undefined;
   const wanted = typeof body?.address === 'string' ? body.address.trim() : '';
   const bad = addressError('default', wanted);
-  if (bad) return new Response(bad, { status: 422 });
+  if (bad)
+    return Response.json(
+      {
+        code: wanted.length > 80 ? 'ENTRY_ADDRESS_TOO_LONG' : 'ENTRY_ADDRESS_INVALID',
+        error: bad,
+        ...(wanted.length > 80 ? { limit: 80 } : {}),
+      },
+      { status: 422 },
+    );
   const path = entryPath(collection, slug, locale);
   const git = ctx.git();
   const [file, row] = await Promise.all([git.getFile(path), loadDraft('default', ctx.db(), path)]);
@@ -793,8 +810,14 @@ export async function address(
   // Empty falls back to the file name, so that is the address being claimed either way.
   const after = wanted || slug;
   if ((await takenAddresses(ctx, collection, locale, slug)).includes(after))
-    return new Response(
-      `${JSON.stringify(after)} is already the web address of another entry in ${collection} in ${locale}`,
+    return Response.json(
+      {
+        code: 'ENTRY_ADDRESS_TAKEN',
+        error: `${JSON.stringify(after)} is already the web address of another entry in ${collection} in ${locale}`,
+        address: after,
+        collection,
+        locale,
+      },
       { status: 409 },
     );
   // Only a published address can have been followed, and only via the collection's route.

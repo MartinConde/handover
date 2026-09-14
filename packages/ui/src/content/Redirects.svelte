@@ -1,6 +1,8 @@
 <script lang="ts">
 import { type Pickable, readEntryDirectory } from '../entry-directory.js';
-import type { UiLocale } from '../i18n.js';
+import { messageText, responseMessage, type UiMessage } from '../errors.js';
+import { messageOptions, type UiLocale } from '../i18n.js';
+import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
 import Modal from '../shared/Modal.svelte';
 import PagePicker from './PagePicker.svelte';
@@ -9,6 +11,14 @@ let {
   uiLocale = 'en',
   oncommitted,
 }: { uiLocale?: UiLocale; oncommitted?: () => void | Promise<void> } = $props();
+const options = $derived(messageOptions(uiLocale));
+const errorText = (message: UiMessage) =>
+  [
+    messageText(message, uiLocale),
+    message.detail ? m.common_technical_detail({ detail: message.detail }, options) : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
 /** One rule as `/admin/api/redirects` answers it. */
 interface Rule {
@@ -30,10 +40,10 @@ let rules = $state<Rule[]>([]);
 let known = $state<Pickable>({ entries: [], locales: [] });
 let loading = $state(true);
 let rulesKnown = $state(false);
-let readError = $state('');
-let error = $state('');
+let readError = $state<UiMessage>();
+let error = $state<UiMessage>();
 let knownCurrent = $state(false);
-let knownError = $state('');
+let knownError = $state(false);
 let query = $state('');
 let reason = $state('');
 /** The rule being written; nothing when neither dialog is open. */
@@ -44,7 +54,7 @@ let writing = $state<{
   status: 301 | 302;
   kind: 'page' | 'url';
 }>();
-let bad = $state<{ field: 'from' | 'to'; message: string }>();
+let bad = $state<{ field: 'from' | 'to'; message: UiMessage }>();
 let saving = $state(false);
 let dropping = $state<Rule>();
 let trigger = $state<HTMLElement>();
@@ -56,14 +66,11 @@ $effect(() => {
 
 async function load() {
   loading = true;
-  readError = '';
+  readError = undefined;
   const res = await fetch('/admin/api/redirects');
   loading = false;
   if (!res.ok) {
-    readError =
-      res.status === 503
-        ? `Could not load the redirects. ${await res.text()}`
-        : `Could not load the redirects (${res.status}).`;
+    readError = await responseMessage(res, 'REDIRECT_LOAD_FAILED');
     return;
   }
   rules = ((await res.json()) as { rules?: Rule[] }).rules ?? [];
@@ -71,23 +78,28 @@ async function load() {
 }
 
 async function loadDirectory() {
-  knownError = '';
+  knownError = false;
   try {
     known = await readEntryDirectory();
     knownCurrent = true;
   } catch {
     knownCurrent = false;
-    knownError = 'Could not load page destinations. Check the connection and try again.';
+    knownError = true;
   }
 }
 
-const REASONS = {
-  'slug-change': 'Slug change',
-  hidden: 'Hidden',
-  deleted: 'Deleted',
-  manual: 'Manual',
-} as const;
-const WHEN = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' });
+const reasonLabel = (reason: Rule['reason']) =>
+  ({
+    'slug-change': m.redirect_reason_slug_change,
+    hidden: m.redirect_reason_hidden,
+    deleted: m.redirect_reason_deleted,
+    manual: m.redirect_reason_manual,
+  })[reason]({}, options);
+const when = (value: string) =>
+  new Intl.DateTimeFormat(uiLocale === 'de' ? 'de-DE' : 'en-GB', {
+    day: 'numeric',
+    month: 'short',
+  }).format(Date.parse(value));
 
 // The whole file is on screen, so unlike the media library the search is over what is loaded.
 const shown = $derived(
@@ -163,20 +175,51 @@ async function save() {
     field?: string;
     message?: string;
     error?: string;
+    code?: string;
+    descriptor?: UiMessage;
   };
   bad =
     body.field === 'to' || body.field === 'from'
-      ? { field: body.field, message: body.message ?? '' }
-      : { field: 'from', message: body.error ?? `That was not saved (${res.status}).` };
+      ? {
+          field: body.field,
+          message: body.descriptor ?? {
+            code: 'REDIRECT_SAVE_FAILED',
+            status: res.status,
+            ...(body.message ? { detail: body.message } : {}),
+          },
+        }
+      : {
+          field: 'from',
+          message: {
+            code: body.code ?? 'REDIRECT_SAVE_FAILED',
+            status: res.status,
+            ...(!body.code && body.error ? { detail: body.error } : {}),
+          },
+        };
 }
 
 /** What the live site said about one rule's old address; no verdict while it is being asked. */
-type Verdict = { kind: 'ok' | 'wait' | 'bad' | 'unknown'; line: string; text: string };
-const VERDICT = {
-  ok: 'Working',
-  wait: 'Not there yet',
-  bad: 'Not what this rule says',
-  unknown: 'Could not verify',
+type Verdict = {
+  kind: 'ok' | 'wait' | 'bad' | 'unknown';
+  line: string;
+  code: 'unknown' | 'elsewhere' | 'bad-status' | 'working' | 'waiting' | 'page';
+  status?: number;
+};
+const verdictLabel = (kind: Verdict['kind']) =>
+  ({
+    ok: m.redirect_verdict_working,
+    wait: m.redirect_verdict_waiting,
+    bad: m.redirect_verdict_mismatch,
+    unknown: m.redirect_verdict_unknown,
+  })[kind]({}, options);
+const verdictText = (verdict: Verdict) => {
+  if (verdict.code === 'elsewhere') return m.redirect_probe_elsewhere({}, options);
+  if (verdict.code === 'bad-status')
+    return m.redirect_probe_bad_status({ status: verdict.status ?? 0 }, options);
+  if (verdict.code === 'working') return m.redirect_probe_working({}, options);
+  if (verdict.code === 'waiting') return m.redirect_probe_waiting({}, options);
+  if (verdict.code === 'page') return m.redirect_probe_page({}, options);
+  return m.redirect_probe_unknown({}, options);
 };
 let tested = $state<{ id: string; verdict?: Verdict }>();
 const trimmed = (path: string) => path.replace(/\/+$/, '');
@@ -195,7 +238,7 @@ async function probe(rule: Rule): Promise<Verdict> {
   const unverified: Verdict = {
     kind: 'unknown',
     line: `${rule.from} → no answer`,
-    text: 'The browser could not verify this redirect. Open the old address to check it directly, or try again when the connection is available.',
+    code: 'unknown',
   };
   let res: Response;
   try {
@@ -212,30 +255,31 @@ async function probe(rule: Rule): Promise<Verdict> {
       return {
         kind: 'bad',
         line: `${rule.from} → ${shown}`,
-        text: "The old address forwards, but somewhere else. Another rule may cover it, or the site's own routing does.",
+        code: 'elsewhere',
       };
     if (res.status >= 400)
       return {
         kind: 'bad',
         line: `${rule.from} → ${shown} → ${res.status}`,
-        text: `Visitors are sent where this rule says, but that page answers ${res.status}. Point the rule at a page that exists.`,
+        code: 'bad-status',
+        status: res.status,
       };
     return {
       kind: 'ok',
       line: `${rule.from} → ${shown}`,
-      text: 'Asked the live site just now and followed it. Visitors on the old address land where this rule points.',
+      code: 'working',
     };
   }
   if (res.status === 404)
     return {
       kind: 'wait',
       line: `${rule.from} → 404`,
-      text: 'This rule has not been published, or the site is still building. Try again when the build finishes.',
+      code: 'waiting',
     };
   return {
     kind: 'bad',
     line: `${rule.from} → ${res.status} (no redirect)`,
-    text: 'A real page answers at this address, so the redirect never runs. That usually means a page was added at the old address after the rule was written.',
+    code: 'page',
   };
 }
 
@@ -256,7 +300,7 @@ async function remove() {
   close();
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
-    error = body.error ?? `That redirect was not deleted (${res.status}).`;
+    error = await responseMessage(res, 'REDIRECT_DELETE_FAILED');
     return;
   }
   await load();
@@ -269,75 +313,70 @@ async function remove() {
 <main class="main main-editor">
   <header class="entry-header">
     <div class="crumbs">
-      <a href={sitePath(`/admin/site`)}>Site settings</a><span class="sep" aria-hidden="true">/</span><span
-        >Redirects</span
+      <a href={sitePath(`/admin/site`)}>{m.globals_title({}, options)}</a><span class="sep" aria-hidden="true">/</span><span
+        >{m.redirect_title({}, options)}</span
       >
     </div>
-    <div class="title-row"><h1>Redirects</h1></div>
+    <div class="title-row"><h1>{m.redirect_title({}, options)}</h1></div>
     <p class="subline">
-      Old addresses that forward to new ones. One list for the whole site — a redirect is a path,
-      not a language. A rule you add here is saved straight away and reaches visitors when the
-      site has finished building.
+      {m.redirect_intro({}, options)}
     </p>
   </header>
   <div class="entry-body">
     <div class="redirects">
-      {#if error}<p class="notice notice-danger" role="alert">{error}</p>{/if}
+      {#if error}<p class="notice notice-danger" role="alert">{errorText(error)}</p>{/if}
       {#if readError}
         <div class="notice notice-danger redirects-read-error" role="alert">
-          {readError}{rulesKnown ? ' The rules below are the last result.' : ''}
-          <button class="btn-link" type="button" onclick={load}>Retry</button>
+          {errorText(readError)}{rulesKnown ? ` ${m.redirect_last_result({}, options)}` : ''}
+          <button class="btn-link" type="button" onclick={load}>{m.common_retry({}, options)}</button>
         </div>
       {/if}
       {#if waiting}
         <div class="notice notice-info">
-          {waiting === 1 ? 'One rule is' : `${waiting} rules are`} not live yet: {waiting === 1
-            ? 'it belongs'
-            : 'they belong'} to an entry with unpublished changes and {waiting === 1
-            ? 'goes'
-            : 'go'} out when you publish it.
+          {m.redirect_pending({ count: waiting }, options)}
         </div>
       {/if}
       <div class="list-toolbar">
         <div class="search field">
-          <label class="visually-hidden" for="rd-q">Search by address</label>
+          <label class="visually-hidden" for="rd-q">{m.redirect_search({}, options)}</label>
           <input
             class="input"
             id="rd-q"
             type="search"
-            placeholder="Search by address"
+            placeholder={m.redirect_search({}, options)}
             bind:value={query}
           />
         </div>
         <div class="filters">
-          <label class="visually-hidden" for="rd-reason">Reason</label>
+          <label class="visually-hidden" for="rd-reason">{m.redirect_reason({}, options)}</label>
           <select class="filter" class:is-on={reason} id="rd-reason" bind:value={reason}>
-            <option value="">Every reason</option>
-            {#each Object.entries(REASONS) as [key, label] (key)}
-              <option value={key}>{label}</option>
+            <option value="">{m.redirect_every_reason({}, options)}</option>
+            {#each ['slug-change', 'hidden', 'deleted', 'manual'] as key (key)}
+              <option value={key}>{reasonLabel(key as Rule['reason'])}</option>
             {/each}
           </select>
         </div>
         {#if rules.length}
           <span class="tally"
-            >{shown.length === rules.length ? '' : `${shown.length} of `}{rules.length}
-            {rules.length === 1 ? 'rule' : 'rules'}</span
+            >{shown.length === rules.length
+              ? m.redirect_rule_count({ count: rules.length }, options)
+              : m.redirect_filtered_count({ shown: shown.length, count: rules.length }, options)}</span
           >
         {/if}
         <span class="spacer"></span>
-        <button class="btn btn-primary" type="button" onclick={() => open()}>Add redirect</button>
+        <button class="btn btn-primary" type="button" onclick={() => open()}>{m.redirect_add({}, options)}</button>
       </div>
       {#if loading && !rulesKnown}
-        <p class="placeholder">Loading…</p>
+        <p class="placeholder">{m.common_loading({}, options)}</p>
       {:else if readError && !rulesKnown}
-        <p class="placeholder">Redirects are unavailable.</p>
+        <p class="placeholder">{m.redirect_unavailable({}, options)}</p>
       {:else if shown.length}
-        <div class="table is-redirects" role="table" aria-label="Redirects">
+        <div class="table is-redirects" role="table" aria-label={m.redirect_title({}, options)}>
           <div class="row-head" role="row">
-            <div class="th" role="columnheader">Redirect</div>
-            <div class="th" role="columnheader">Reason</div>
-            <div class="th" role="columnheader">Added</div>
-            <div class="th" role="columnheader"><span class="visually-hidden">Actions</span></div>
+            <div class="th" role="columnheader">{m.redirect_column_redirect({}, options)}</div>
+            <div class="th" role="columnheader">{m.redirect_reason({}, options)}</div>
+            <div class="th" role="columnheader">{m.redirect_column_added({}, options)}</div>
+            <div class="th" role="columnheader"><span class="visually-hidden">{m.redirect_actions({}, options)}</span></div>
           </div>
           {#each shown as rule (rule._id)}
             {@const asking = tested?.id === rule._id}
@@ -346,29 +385,29 @@ async function remove() {
               <div class="td route" role="cell">
                 <div class="hop">
                   <span class="from">{rule.from}</span>
-                  {#if rule.pending}<span class="badge badge-accent">Not published yet</span>{/if}
+                  {#if rule.pending}<span class="badge badge-accent">{m.redirect_not_published({}, options)}</span>{/if}
                 </div>
                 <div class="hop is-to">
-                  <span class="arrow" aria-hidden="true">↳</span><span class="visually-hidden">to</span>
+                  <span class="arrow" aria-hidden="true">↳</span><span class="visually-hidden">{m.redirect_to({}, options)}</span>
                   <span class="to">{rule.to}</span>
                   <span class="badge code" class:is-temp={rule.status === 302}
-                    >{rule.status === 302 ? '302 · temporary' : rule.status}</span
+                    >{rule.status === 302 ? m.redirect_temporary({}, options) : rule.status}</span
                   >
                 </div>
               </div>
               <div class="td why" role="cell">
-                <span class="badge">{REASONS[rule.reason]}</span>
+                <span class="badge">{reasonLabel(rule.reason)}</span>
                 {#if rule.entry}
                   <a class="owner" href={sitePath(`/admin/c/${rule.entry}`)}>{rule.title ?? rule.entry}</a>
                 {/if}
                 {#if managed(rule)}
                   <span class="lock-note" id="owns-{rule._id}"
-                    >managed by {rule.title ?? 'the entry'} — show it again to remove this</span
+                    >{m.redirect_managed_by({ title: rule.title ?? m.redirect_the_entry({}, options) }, options)}</span
                   >
                 {/if}
               </div>
-              <div class="td num" role="cell" data-label="Added">
-                {WHEN.format(Date.parse(rule.createdAt))}
+              <div class="td num" role="cell" data-label={m.redirect_column_added({}, options)}>
+                {when(rule.createdAt)}
               </div>
               <div class="td menu-cell" role="cell">
                 <div class="row-menu">
@@ -377,7 +416,7 @@ async function remove() {
                     type="button"
                     aria-busy={asking && !verdict ? 'true' : undefined}
                     onclick={() => test(rule)}
-                    >{asking && !verdict ? 'Testing…' : 'Test'}<span class="visually-hidden">
+                    >{asking && !verdict ? m.redirect_testing({}, options) : m.redirect_test({}, options)}<span class="visually-hidden">
                       {rule.from}</span
                     ></button
                   >
@@ -388,7 +427,7 @@ async function remove() {
                     aria-disabled={managed(rule) ? 'true' : undefined}
                     aria-describedby={managed(rule) ? `owns-${rule._id}` : undefined}
                     onclick={() => !managed(rule) && open(rule)}
-                    >Edit<span class="visually-hidden"> {rule.from}</span></button
+                    >{m.redirect_edit({}, options)}<span class="visually-hidden"> {rule.from}</span></button
                   >
                   <button
                     class="btn btn-ghost btn-sm btn-delete"
@@ -399,7 +438,7 @@ async function remove() {
                       if (managed(rule)) return;
                       trigger = document.activeElement as HTMLElement;
                       dropping = rule;
-                    }}>Delete<span class="visually-hidden"> {rule.from}</span></button
+                    }}>{m.redirect_delete({}, options)}<span class="visually-hidden"> {rule.from}</span></button
                   >
                 </div>
               </div>
@@ -407,18 +446,18 @@ async function remove() {
               {#if verdict}
                 <div class="td verdict-cell" role="cell" aria-colspan="4">
                   <div class="test-pop is-{verdict.kind}" role="status">
-                    <p class="verdict is-{verdict.kind}">{VERDICT[verdict.kind]}</p>
+                    <p class="verdict is-{verdict.kind}">{verdictLabel(verdict.kind)}</p>
                     <p class="line">{verdict.line}</p>
-                    <p>{verdict.text}</p>
+                    <p>{verdictText(verdict)}</p>
                     <div class="actions">
                       <a
                         class="btn btn-ghost btn-sm open-address"
                         href={rule.from}
                         target="_blank"
-                        rel="noreferrer">Open old address ↗</a
+                        rel="noreferrer">{m.redirect_open_old({}, options)} ↗</a
                       >
-                      <button class="btn btn-sm" type="button" onclick={() => test(rule)}>Test again</button>
-                      <button class="btn btn-ghost btn-sm" type="button" onclick={() => (tested = undefined)}>Close</button>
+                      <button class="btn btn-sm" type="button" onclick={() => test(rule)}>{m.redirect_test_again({}, options)}</button>
+                      <button class="btn btn-ghost btn-sm" type="button" onclick={() => (tested = undefined)}>{m.redirect_close({}, options)}</button>
                     </div>
                   </div>
                 </div>
@@ -427,16 +466,12 @@ async function remove() {
           {/each}
         </div>
       {:else if rules.length}
-        <p class="placeholder">Nothing here matches that.</p>
+        <p class="placeholder">{m.redirect_no_matches({}, options)}</p>
       {:else}
         <div class="empty">
           <div>
-            <h2>No redirects yet</h2>
-            <p>
-              Renaming a page, hiding one or deleting one adds a rule here on its own, so old
-              links keep working. You can also add one by hand — an address from an old brochure,
-              or a shortlink for a campaign.
-            </p>
+            <h2>{m.redirect_empty_title({}, options)}</h2>
+            <p>{m.redirect_empty_intro({}, options)}</p>
           </div>
         </div>
       {/if}
@@ -453,7 +488,7 @@ async function remove() {
     dismissible={!saving}
     onclose={close}
   >
-      <h2 id="rd-h">{writing.id ? 'Edit this redirect' : 'Add a redirect'}</h2>
+      <h2 id="rd-h">{writing.id ? m.redirect_edit_title({}, options) : m.redirect_add_title({}, options)}</h2>
       <form
         onsubmit={(e) => {
           e.preventDefault();
@@ -462,12 +497,12 @@ async function remove() {
       >
         {#if knownError && writing.kind === 'page'}
           <div class="notice notice-danger redirect-directory-error" role="alert">
-            {knownError}
-            <button class="btn-link" type="button" onclick={loadDirectory}>Retry</button>
+            {m.redirect_directory_failed({}, options)}
+            <button class="btn-link" type="button" onclick={loadDirectory}>{m.common_retry({}, options)}</button>
           </div>
         {/if}
         <div class="field" class:is-invalid={bad?.field === 'from'}>
-          <div class="label-row"><label for="rd-from">Old address</label></div>
+          <div class="label-row"><label for="rd-from">{m.redirect_old_address({}, options)}</label></div>
           <input
             class="input"
             id="rd-from"
@@ -477,19 +512,18 @@ async function remove() {
             aria-describedby={bad?.field === 'from' ? 'rd-from-e' : 'rd-from-hint'}
           />
           {#if bad?.field === 'from'}
-            <p class="error" id="rd-from-e">{bad.message}</p>
+            <p class="error" id="rd-from-e">{bad.message.detail ?? messageText(bad.message, uiLocale)}</p>
           {:else}
             <p class="hint" id="rd-from-hint">
-              A path on this site, starting with <code>/</code>. Visitors who ask for this get sent
-              on.
+              {m.redirect_old_address_hint({}, options)}
             </p>
           {/if}
         </div>
         <fieldset>
-          <legend>Send them to</legend>
+          <legend>{m.redirect_send_to({}, options)}</legend>
           <label class="choice">
             <input type="radio" name="rd-kind" value="page" bind:group={writing.kind} />
-            A page on this site
+            {m.redirect_page_destination({}, options)}
           </label>
           {#if writing.kind === 'page'}
             <PagePicker
@@ -507,11 +541,11 @@ async function remove() {
           {/if}
           <label class="choice">
             <input type="radio" name="rd-kind" value="url" bind:group={writing.kind} />
-            A web address…
+            {m.redirect_web_destination({}, options)}
           </label>
           {#if writing.kind === 'url'}
             <div class="field">
-              <div class="label-row"><label for="rd-url">Web address</label></div>
+              <div class="label-row"><label for="rd-url">{m.redirect_web_address({}, options)}</label></div>
               <input
                 class="input"
                 id="rd-url"
@@ -525,37 +559,36 @@ async function remove() {
           {/if}
           <!-- A picked page is an address like any other, so the rule is shown as it will read. -->
           <p class="hint">
-            Visitors go to <code>{writing.to || '…'}</code>
+            {m.redirect_visitors_go_to({ destination: writing.to || '…' }, options)}
           </p>
-          {#if bad?.field === 'to'}<p class="error" id="rd-to-e">{bad.message}</p>{/if}
+          {#if bad?.field === 'to'}<p class="error" id="rd-to-e">{bad.message.detail ?? messageText(bad.message, uiLocale)}</p>{/if}
         </fieldset>
         <!-- A fieldset: a <label> naming no control is a label a screen reader drops. -->
         <fieldset>
-          <legend>How permanent is this?</legend>
+          <legend>{m.redirect_permanence({}, options)}</legend>
           <label class="choice">
             <input type="radio" name="rd-code" value={301} bind:group={writing.status} />
-            It has moved for good <span class="desc">301</span>
+            {m.redirect_permanent({}, options)} <span class="desc">301</span>
           </label>
           <label class="choice">
             <input type="radio" name="rd-code" value={302} bind:group={writing.status} />
-            Just for now <span class="desc">302</span>
+            {m.redirect_temporary_choice({}, options)} <span class="desc">302</span>
           </label>
         </fieldset>
         {#if chained}
           <div class="notice notice-info">
-            <b>Already covered.</b>
-            <code>{chained.from}</code> is forwarded to this address, so that rule will be pointed
-            straight at the new one — visitors never make two hops.
+            <b>{m.redirect_already_covered({}, options)}</b>
+            {m.redirect_chain_explanation({ address: chained.from }, options)}
           </div>
         {/if}
         <div class="actions">
-          <button class="btn" type="button" disabled={saving} onclick={close}>Cancel</button>
+          <button class="btn" type="button" disabled={saving} onclick={close}>{m.common_cancel({}, options)}</button>
           <button
             class="btn btn-primary"
             type="submit"
             disabled={saving || (writing.kind === 'page' && !knownCurrent)}
           >
-            {saving ? 'Saving…' : writing.id ? 'Save redirect' : 'Add redirect'}
+            {saving ? m.redirect_saving({}, options) : writing.id ? m.redirect_save({}, options) : m.redirect_add({}, options)}
           </button>
         </div>
       </form>
@@ -571,22 +604,19 @@ async function remove() {
     dismissible={!saving}
     onclose={close}
   >
-      <h2 id="rd-del-h">Delete this redirect?</h2>
+      <h2 id="rd-del-h">{m.redirect_delete_question({}, options)}</h2>
       <div id="rd-del-d">
         <p><code>{dropping.from}</code> → <code>{dropping.to}</code></p>
         {#if young(dropping)}
           <div class="notice notice-warn">
-            This rule is {months(dropping)}
-            {months(dropping) === 1 ? 'month' : 'months'} old. Search results, other people's links
-            and old emails still point at the address it covers, and deleting it turns those into
-            “page not found”. A year is roughly how long that traffic takes to die down.
+            {m.redirect_delete_warning({ count: months(dropping) }, options)}
           </div>
         {/if}
       </div>
       <div class="actions">
-        <button class="btn" type="button" disabled={saving} onclick={close}>Keep it</button>
+        <button class="btn" type="button" disabled={saving} onclick={close}>{m.redirect_keep({}, options)}</button>
         <button class="btn btn-danger" type="button" disabled={saving} onclick={remove}
-          >{saving ? 'Deleting…' : 'Delete anyway'}</button
+          >{saving ? m.redirect_deleting({}, options) : m.redirect_delete_anyway({}, options)}</button
         >
       </div>
   </Modal>
