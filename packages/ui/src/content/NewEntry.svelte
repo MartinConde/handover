@@ -1,17 +1,11 @@
-<script lang="ts" module>
-/** `listings` → `listing`: what the buttons, the heading and the empty state call one of them. */
-export const nameOf = (collection: string) => collection.replace(/s$/, '');
-</script>
-
 <script lang="ts">
-import { request as fetch } from '../request.js';
-
 import { addressError, entryName } from '@handover/core';
 import { invalidateEntryDirectory } from '../entry-directory.js';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
-import { messageOptions, type UiLocale } from '../i18n.js';
+import { collectionName, messageOptions, type UiLocale } from '../i18n.js';
 import { navigate } from '../navigate';
 import * as m from '../paraglide/messages.js';
+import { request as fetch } from '../request.js';
 import Modal from '../shared/Modal.svelte';
 
 let {
@@ -77,11 +71,15 @@ async function load(name: string) {
   directoryCurrent = true;
 }
 
-const headingCollection = $derived(uiLocale === 'en' ? nameOf(collection) : collection);
+const headingCollection = $derived(
+  uiLocale === 'en'
+    ? collectionName(collection, uiLocale, 'singular')
+    : collectionName(collection, uiLocale),
+);
 const directoryText = $derived(
   directoryError?.code === 'CONNECTION_LOST'
     ? messageText(directoryError, uiLocale)
-    : m.new_entry_directory_failed({ collection }, options),
+    : m.new_entry_directory_failed({ collection: collectionName(collection, uiLocale) }, options),
 );
 // The same derivation the server runs, so the dialog can promise the file name.
 const preview = $derived(entryName('default', text, taken));

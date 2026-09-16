@@ -1,7 +1,13 @@
 <script lang="ts">
-import type { ActivityEvent } from '@handover/core';
-import NewEntry, { nameOf } from '../content/NewEntry.svelte';
-import { formatExactTime, formatRelativeTime, messageOptions, type UiLocale } from '../i18n.js';
+import type { ActivityEvent, Labels } from '@handover/core';
+import NewEntry from '../content/NewEntry.svelte';
+import {
+  collectionName,
+  formatExactTime,
+  formatRelativeTime,
+  messageOptions,
+  type UiLocale,
+} from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
 import { activityGroupLabel, initials, said } from '../shared/activity-line';
@@ -10,6 +16,7 @@ import BuildPill, { type Build } from './BuildPill.svelte';
 type Recent = {
   key: string;
   title: string;
+  labels?: Labels;
   collection: string;
   href: string;
   at: number;
@@ -159,7 +166,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
   {#if collections.length}
     <div class="quick">
       {#each collections as name (name)}
-        <button class="btn" type="button" onclick={() => (creating = name)}>{m.dashboard_new_collection({ collection: nameOf(name) }, options)}</button>
+        <button class="btn" type="button" onclick={() => (creating = name)}>{m.dashboard_new_collection({ collection: collectionName(name, uiLocale, 'singular') }, options)}</button>
       {/each}
     </div>
   {/if}
@@ -241,7 +248,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
         {#if recent.length}
           <ul class="recent">
             {#each recent as row (row.key)}
-              <li><a href={sitePath(row.href)}>{row.title}</a> <span class="badge">{row.collection}</span></li>
+              <li><a href={sitePath(row.href)}>{row.labels?.[uiLocale] ?? row.title}</a> <span class="badge">{collectionName(row.collection, uiLocale)}</span></li>
             {/each}
           </ul>
         {/if}
@@ -249,8 +256,8 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
         <ul class="recent">
           {#each recent as row (row.key)}
             <li>
-              <a href={sitePath(row.href)}>{row.title}</a>
-              <span class="badge">{row.collection}</span>
+              <a href={sitePath(row.href)}>{row.labels?.[uiLocale] ?? row.title}</a>
+              <span class="badge">{collectionName(row.collection, uiLocale)}</span>
               {#if row.editing}
                 <span class="lock">{m.dashboard_is_editing({ name: row.editing.name || m.dashboard_somebody({}, options) }, options)}</span>
               {/if}
@@ -292,7 +299,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
               {#if where.length}
                 <span class="show">
                   {#each where as name (name)}
-                    <a href={sitePath(`/admin/c/${name}?locale=${row.locale}`)}>{where.length > 1 ? m.dashboard_show_collection({ collection: name }, options) : m.dashboard_show({}, options)}</a>
+                    <a href={sitePath(`/admin/c/${name}?locale=${row.locale}`)}>{where.length > 1 ? m.dashboard_show_collection({ collection: collectionName(name, uiLocale) }, options) : m.dashboard_show({}, options)}</a>
                   {/each}
                 </span>
               {/if}

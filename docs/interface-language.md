@@ -49,7 +49,8 @@ translation and drift failures reformat from stable state instead of retrying th
 Site settings and the navigation builder are bilingual too. Their timestamps, language names,
 counts, warnings, actions, dialogs and retained failures update without rereading data. Shared menu
 order, drag state, an open item editor, focus and unfinished labels remain intact; site-authored
-global descriptions, menu labels, page titles, keys and URLs are not translated.
+global descriptions, menu labels, page titles, keys and URLs are not translated. A global's label
+switches with the interface when the site gives one per language.
 
 The pending-changes drawer and the one-entry publish confirmation are bilingual. Selection,
 holds, conflicts, precheck results and in-flight work survive a switch; count grammar, check
@@ -60,25 +61,27 @@ uncertain outcomes while legacy server detail remains diagnostic rather than con
 Version history, field-by-field diffs, restore confirmation and recovery, and preview-pane chrome
 are bilingual. A switch keeps the selected version or comparison, history filter, open restore
 dialog, loaded diff, preview iframe, render identity and selected content language. It makes no
-history, content or preview request. Authored commit summaries, names, field labels, changed values
-and the site-rendered page remain unchanged; timestamps keep the browser timezone.
+history, content or preview request. Authored commit summaries, names, changed values and the
+site-rendered page remain unchanged; field labels switch only where the site gives one per language.
+Timestamps keep the browser timezone.
 
 An open crop or focal-point dialog keeps its node, focus, crop region, ratio and focal coordinates
-when the interface language changes. Live slider and focal-handle labels update, while filenames and
-site-authored preset labels remain unchanged. Switching does not process an image, write content or
+when the interface language changes. Live slider and focal-handle labels update, while filenames
+remain unchanged and preset labels switch only where the site gives one per language. Switching does not process an image, write content or
 restart an upload. Already-visible source-read, render and upload failures reformat from stable
 descriptors, with useful technical detail kept separate.
-Handover-owned interface text is translated. Content and site configuration are not: collection
-labels, schema descriptions, custom validation messages, entry titles, names, URLs, provider
-diagnostics, and the values being edited remain as authored.
+Handover-owned interface text is translated. Content and site configuration are not: schema
+descriptions, custom validation messages, entry titles, names, URLs, provider diagnostics, and the
+values being edited remain as authored. Labels the site gives per language are the exception.
 
 ## Translation and error boundary
 
 The bilingual surface now covers Handover-owned labels, buttons, menus, dialogs, notices,
 validation summaries, accessibility text and Canvas overlays throughout the admin. This does not
-mean every string visible beside the interface is translated. Site-authored collection, field and
-block labels; descriptions and custom validation messages; content, filenames, alt text, tags,
-URLs and identifiers remain exactly as authored. Product and provider names, configuration keys,
+mean every string visible beside the interface is translated. Collection, global, field and block
+labels are the site's: they switch with the interface only where the site gives
+[names given per language](configuration.md#names-in-each-interface-language), and otherwise read as configured. Descriptions and custom validation
+messages; content, filenames, alt text, tags, URLs and identifiers remain exactly as authored. Product and provider names, configuration keys,
 protocol values and copyable technical diagnostics also remain exact. Native file, date, number
 and range picker chrome belongs to the browser or operating system and may follow the device
 language instead.
@@ -125,8 +128,8 @@ In an open entry, the Content/SEO/History tabs, Form/Split/Canvas controls, stat
 actions, URL metadata, outline labels, and the date of a language removed through Handover update
 in place. An editable web-address label presents the selected content language in the interface
 language, and a disabled Publish action translates whether a lock, block drift or a missing value
-is in the way. The collection identifier, entry title, field labels, filenames, URLs,
-content-language selection, and typed content remain authored data.
+is in the way. The entry title, filenames, URLs, content-language selection, and typed content
+remain authored data; collection names and field labels switch where the site gives one per language.
 
 An open Canvas receives the confirmed interface language over its existing same-origin bridge. The
 update is validated against the current iframe, render request, editing epoch, entry, content
@@ -142,8 +145,9 @@ technical detail stays separate.
 
 Inspector and staged block controls switch in place too. The selected field, focused control,
 unfinished replacement and retained refusal stay intact while field-kind labels, content-language
-names, actions, tooltips and accessibility text reformat. Schema field labels, block type names,
-entry names, paths and edited values are authored content and are not translated. Longer controls
+names, actions, tooltips and accessibility text reformat. Entry names, paths and edited values are
+authored content; field labels and block type names switch where the site gives one per language.
+Longer controls
 wrap inside the narrow panels.
 
 Canvas selection paths, structural fallback names, block action controls and live keyboard/drag

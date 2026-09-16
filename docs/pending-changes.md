@@ -10,9 +10,9 @@ The drawer follows the account's [interface language](interface-language.md). Ch
 the drawer is open updates its labels, plural counts, dates, hold ages, check severity and recovery
 guidance in place. The selected entries, blocked rows, open diff or confirmation, latest check
 result and any publish already in flight stay intact; changing interface language does not run the
-checks again or send another content or publish request. Entry titles, collection identifiers,
-content-language codes and the check rule's own finding remain the authored values returned by the
-site.
+checks again or send another content or publish request. Entry titles, content-language codes and
+the check rule's own finding remain the authored values returned by the site. Collection names and
+field labels switch where the site gives one per language.
 
 ## The drawer
 

@@ -258,7 +258,7 @@ export {
   unsafeLinkScheme,
 } from './richtext.js';
 export type { Field, Form, JsonSchema, Translation } from './schema.js';
-export { fieldsFrom, formOf, humanise, imagePresets } from './schema.js';
+export { fieldsFrom, formIn, formOf, humanise, imagePresets } from './schema.js';
 export type { ResolvedSeo, SeoDefaultsValue, SeoImage, SeoValue } from './seo.js';
 export {
   resolveSeo,
@@ -308,5 +308,5 @@ export {
   machineFilled,
   resolveFieldTarget,
 } from './translate.js';
-export type { UiLocale } from './ui-locale.js';
-export { DEFAULT_UI_LOCALE, isUiLocale, UI_LOCALES } from './ui-locale.js';
+export type { Labels, UiLocale } from './ui-locale.js';
+export { DEFAULT_UI_LOCALE, isUiLocale, labelIn, labelsOf, UI_LOCALES } from './ui-locale.js';

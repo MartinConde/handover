@@ -387,3 +387,32 @@ test('switches an already-visible Inspector notice without changing its selectio
   );
   expect(root.querySelector<HTMLInputElement>('input[id$="button.label"]')?.value).toBe('Book now');
 });
+
+test('localizes an inspected field in place without losing its draft or focus', () => {
+  const { root, props, session } = showFixture({
+    selection: target('headline'),
+    schemaFields: [
+      {
+        path: ['headline'],
+        label: 'Headline',
+        labels: { en: 'Headline', de: 'Überschrift' },
+        type: 'text',
+        required: false,
+      },
+    ],
+    entryData: { headline: 'Welcome' },
+  });
+  const input = root.querySelector<HTMLInputElement>('input');
+  if (!input) throw new Error('headline input missing');
+  input.focus();
+  input.value = 'Unfinished draft';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  flushSync();
+  props.uiLocale = 'de';
+  flushSync();
+  expect(root.querySelector('.canvas-inspector h2')?.textContent).toContain('Überschrift');
+  expect(root.querySelector('label')?.textContent).toContain('Überschrift');
+  expect(root.querySelector('input')).toBe(input);
+  expect(document.activeElement).toBe(input);
+  expect(session.snapshot('en').headline).toBe('Unfinished draft');
+});

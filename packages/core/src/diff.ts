@@ -1,5 +1,6 @@
 import { isObject, rowKey, TRANSLATED_PROPS, translatedValues } from './content.js';
 import { type Field, type Form, humanise, rowFields, type Translation } from './schema.js';
+import { type Labels, labelIn, labelsOf, UI_LOCALES } from './ui-locale.js';
 
 export interface WordPart {
   text: string;
@@ -8,13 +9,21 @@ export interface WordPart {
 
 export type RowAt = 'added' | 'removed' | 'moved-up' | 'moved-down' | 'same';
 
-export type Change = { path: string; label: string } & (
+export type Change = { path: string; label: string; labels?: Labels } & (
   | { kind: 'words'; parts: WordPart[] }
   | { kind: 'value'; before?: string; after?: string }
   /** Two keys into storage, never a value that moved. */
   | { kind: 'picture'; before?: string; after?: string }
   | { kind: 'whole' }
-  | { kind: 'row'; type?: string; at: RowAt; above?: string; changes: Change[] }
+  | {
+      kind: 'row';
+      type?: string;
+      types?: Labels;
+      at: RowAt;
+      above?: string;
+      aboveLabels?: Labels;
+      changes: Change[];
+    }
 );
 
 export interface DiffGroup {
@@ -66,7 +75,7 @@ export function diffEntry(
 
 const walk = (form: Form, before: unknown, after: unknown, wants: Wants): Change[] => {
   const found: Change[] = [];
-  changesIn(form, form.fields, before, after, '', '', true, wants, found);
+  changesIn(form, form.fields, before, after, '', { label: '' }, true, wants, found);
   return found;
 };
 
@@ -77,7 +86,7 @@ function changesIn(
   before: unknown,
   after: unknown,
   at: string,
-  named: string,
+  named: Named,
   inherited: Translation,
   wants: Wants,
   found: Change[],
@@ -88,7 +97,7 @@ function changesIn(
     const was = isObject(before) ? before[key] : undefined;
     const now = isObject(after) ? after[key] : undefined;
     const path = at ? `${at}.${key}` : key;
-    const label = named ? `${named} · ${field.label}` : field.label;
+    const label = joinedName(named, field);
     const mode = field.i18n ?? inherited;
     const item = rowFields(field);
     if (field.type === 'group')
@@ -106,7 +115,7 @@ function leafIn(
   before: unknown,
   after: unknown,
   path: string,
-  label: string,
+  label: Named,
   mode: Translation,
   wants: Wants,
   found: Change[],
@@ -119,18 +128,20 @@ function leafIn(
   if (!wants(mode) || show(before) === show(after)) return;
   if (field.type === 'text' || field.type === 'array') {
     const parts = wordDiff(str(before), str(after));
-    found.push(parts ? { path, label, kind: 'words', parts } : { path, label, kind: 'whole' });
+    found.push(
+      parts ? { path, ...label, kind: 'words', parts } : { path, ...label, kind: 'whole' },
+    );
   } else if (field.type === 'unsupported' && (linkTarget(before) || linkTarget(after)))
     found.push({
       path,
-      label,
+      ...label,
       kind: 'value',
       before: linkTarget(before),
       after: linkTarget(after),
     });
   else if (field.type === 'richtext' || field.type === 'unsupported')
-    found.push({ path, label, kind: 'whole' });
-  else found.push({ path, label, kind: 'value', before: show(before), after: show(after) });
+    found.push({ path, ...label, kind: 'whole' });
+  else found.push({ path, ...label, kind: 'value', before: show(before), after: show(after) });
 }
 
 function propsIn(
@@ -139,7 +150,7 @@ function propsIn(
   before: unknown,
   after: unknown,
   path: string,
-  label: string,
+  label: Named,
   under: string[],
   mode: Translation,
   wants: Wants,
@@ -171,7 +182,7 @@ function propsIn(
     if (picture && key === 'src')
       found.push({
         path: to,
-        label: [label, ...under.map(humanise)].join(' · '),
+        ...joinedName(label, { label: under.map(humanise).join(' · ') }),
         kind: 'picture',
         ...(typeof was === 'string' ? { before: was } : {}),
         ...(typeof now === 'string' ? { after: now } : {}),
@@ -179,7 +190,7 @@ function propsIn(
     else
       found.push({
         path: to,
-        label: [label, ...inner.map(humanise)].join(' · '),
+        ...joinedName(label, { label: inner.map(humanise).join(' · ') }),
         kind: 'value',
         before: show(was),
         after: show(now),
@@ -214,7 +225,7 @@ function rowsIn(
         old,
         row,
         rowAddress(at, key),
-        '',
+        { label: '' },
         mode,
         wants,
         changes,
@@ -223,15 +234,17 @@ function rowsIn(
     const shown = wants(mode) ? at_ : 'same';
     if (shown === 'same' && changes.length === 0) continue;
     const above = nowKeys[i + 1];
+    const next =
+      shown !== 'same' && above !== undefined
+        ? rowLabel(form, fieldsOf(asRow(now.get(above))) ?? [], now.get(above), i + 1)
+        : undefined;
     rows.push({
       path: rowAddress(at, key),
-      label: rowLabel(fieldsOf(asRow(row)) ?? [], row, i),
+      ...rowLabel(form, fieldsOf(asRow(row)) ?? [], row, i),
       kind: 'row',
-      ...typeOf(row),
+      ...typeOf(form, row),
       at: shown,
-      ...(shown !== 'same' && above !== undefined
-        ? { above: rowLabel(fieldsOf(asRow(now.get(above))) ?? [], now.get(above), i + 1) }
-        : {}),
+      ...(next ? { above: next.label, ...(next.labels ? { aboveLabels: next.labels } : {}) } : {}),
       changes,
     });
   }
@@ -240,9 +253,9 @@ function rowsIn(
       if (!now.has(key))
         rows.push({
           path: rowAddress(at, key),
-          label: rowLabel(fieldsOf(asRow(row)) ?? [], row, i),
+          ...rowLabel(form, fieldsOf(asRow(row)) ?? [], row, i),
           kind: 'row',
-          ...typeOf(row),
+          ...typeOf(form, row),
           at: 'removed',
           changes: [],
         });
@@ -257,17 +270,49 @@ export const rowAddress = (at: string, key: string) =>
 
 const asRow = (row: unknown): Record<string, unknown> => (isObject(row) ? row : {});
 
-const typeOf = (row: unknown) =>
-  isObject(row) && typeof row._type === 'string' ? { type: humanise(row._type) } : {};
+type Named = { label: string; labels?: Labels };
+
+/** Join schema names while keeping authored values and untranslated names intact. */
+export function joinedName(prefix: Named, name: Named): Named {
+  const join = (a: string, b: string) => [a, b].filter(Boolean).join(' · ');
+  return {
+    label: join(prefix.label, name.label),
+    ...(prefix.labels || name.labels
+      ? {
+          labels: Object.fromEntries(
+            UI_LOCALES.map((locale) => [
+              locale,
+              join(prefix.labels?.[locale] ?? prefix.label, name.labels?.[locale] ?? name.label),
+            ]),
+          ),
+        }
+      : {}),
+  };
+}
+
+const typeOf = (form: Form, row: unknown): { type?: string; types?: Labels } => {
+  if (!isObject(row) || typeof row._type !== 'string') return {};
+  const label = form.blockLabels?.[row._type];
+  const labels = labelsOf(label);
+  const type = labelIn(label, 'en') ?? humanise(row._type);
+  return {
+    type,
+    ...(labels
+      ? {
+          types: Object.fromEntries(
+            UI_LOCALES.map((locale) => [locale, labelIn(label, locale) ?? type]),
+          ),
+        }
+      : {}),
+  };
+};
 
 /** A menu item named by its page keeps no label of its own, hence the link fallback. */
-function rowLabel(fields: readonly Field[], row: unknown, index: number): string {
-  return (
-    firstWords(fields, row) ||
-    linkTarget(isObject(row) ? row.link : undefined) ||
-    typeOf(row).type ||
-    `Row ${index + 1}`
-  );
+function rowLabel(form: Form, fields: readonly Field[], row: unknown, index: number): Named {
+  const authored = firstWords(fields, row) || linkTarget(isObject(row) ? row.link : undefined);
+  if (authored) return { label: authored };
+  const type = typeOf(form, row);
+  return { label: type.type || `Row ${index + 1}`, ...(type.types ? { labels: type.types } : {}) };
 }
 
 // A reader knows a link by what it names, never by its JSON.

@@ -229,7 +229,7 @@ const said = (change: Change): string => {
       {#each questions as q (key(q))}
         <li class="resolve-field">
           <div class="head">
-            <span class="name">{q.label}</span>
+            <span class="name">{q.labels?.[uiLocale] ?? q.label}</span>
             {#if q.locale}
               <span class="visually-hidden">{m.conflict_language({}, options)}</span><span class="chips"><span class="chip">{q.locale.toUpperCase()}</span></span>
             {:else}
@@ -240,7 +240,7 @@ const said = (change: Change): string => {
             <p class="base">{m.conflict_both_started({}, options)} <b>{q.base}</b></p>
           {/if}
           <fieldset class="sides">
-            <legend class="visually-hidden">{m.conflict_which_to_keep({ label: q.label }, options)}</legend>
+            <legend class="visually-hidden">{m.conflict_which_to_keep({ label: q.labels?.[uiLocale] ?? q.label }, options)}</legend>
             {@render side(q, true)}
             {@render side(q, false)}
           </fieldset>
@@ -256,7 +256,7 @@ const said = (change: Change): string => {
         {#each merged as change (key({ path: change.change.path, locale: change.locale }))}
           <li>
             <span class="name">
-              {change.label}
+              {change.labels?.[uiLocale] ?? change.label}
               {#if change.locale}<span class="chip">{change.locale.toUpperCase()}</span>{/if}
             </span>
             <span class="sub">

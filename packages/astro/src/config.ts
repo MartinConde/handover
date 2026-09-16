@@ -5,6 +5,7 @@ import {
   checkI18n,
   fieldsFrom,
   type JsonSchema,
+  type Labels,
   type Mailer,
   type Preset,
   type RichtextTier,
@@ -13,6 +14,7 @@ import {
   richtextErrors,
   SOCIAL_CARD,
   type Translate,
+  UI_LOCALES,
   unsafeLinkScheme,
 } from '@handover/core';
 import { z } from 'astro/zod';
@@ -70,7 +72,10 @@ export const navigation = z
       .meta({ handover: 'menus', i18n: 'duplicate' }),
   })
   // Shown on the Site settings card; a global without a label is listed under its key.
-  .meta({ label: 'Navigation', description: 'The menus the site renders' });
+  .meta({
+    label: { en: 'Navigation', de: 'Navigation' },
+    description: 'The menus the site renders',
+  });
 export type Navigation = z.infer<typeof navigation>;
 
 export const redirects = z.object({
@@ -152,13 +157,21 @@ export const seoDefaults = z
     titlePattern: z
       .string()
       .optional()
-      .meta({ label: 'Default search title', description: '%s becomes the page’s own title' }),
+      .meta({
+        label: { en: 'Default search title', de: 'Standard-Suchtitel' },
+        description: '%s becomes the page’s own title',
+      }),
     description: z.string().optional(),
-    image: image(SOCIAL_CARD).optional().meta({ label: 'Default social image' }),
+    image: image(SOCIAL_CARD)
+      .optional()
+      .meta({ label: { en: 'Default social image', de: 'Standard-Social-Media-Bild' } }),
     // One account for the site, written the way X wants it read: `@name`.
-    twitter: z.string().optional().meta({ i18n: 'duplicate', label: 'X (Twitter) handle' }),
+    twitter: z
+      .string()
+      .optional()
+      .meta({ i18n: 'duplicate', label: { en: 'X (Twitter) handle', de: 'X-(Twitter-)Name' } }),
   })
-  .meta({ label: 'Search and sharing' });
+  .meta({ label: { en: 'Search and sharing', de: 'Suche und Teilen' } });
 export type SeoDefaults = z.infer<typeof seoDefaults>;
 
 // Stored as `collection/slug`; the collection name lets the picker list the right entries.
@@ -225,6 +238,10 @@ export interface HandoverConfig {
       titleField?: string;
       /** Each language serves entries at its file's `slug`; empty falls back to the file name. */
       localizedSlugs?: boolean;
+      /** What the admin calls the collection, written as it reads mid-sentence: `{ en: 'posts', de: 'Beiträge' }`. */
+      label?: string | Labels;
+      /** One entry of it, the same way: `{ en: 'post', de: 'Beitrag' }`. */
+      singular?: string | Labels;
     }
   >;
   /** One schema per file under `src/content/globals/<locale>/`, keyed by file name. */
@@ -301,6 +318,17 @@ export function defineConfig(config: HandoverConfig): HandoverConfig {
         `${at}"slug" is required in this collection's schema — make it optional, since an empty address falls back to the file name`,
       );
   }
+  // A misspelled language would fall back to English with nothing saying why.
+  for (const [name, c] of Object.entries(config.collections))
+    for (const key of ['label', 'singular'] as const) {
+      const label = c[key];
+      if (typeof label !== 'object') continue;
+      for (const locale of Object.keys(label))
+        if (!(UI_LOCALES as readonly string[]).includes(locale))
+          errors.push(
+            `cms.config.ts › collections.${name}.${key}: ${JSON.stringify(locale)} is not an interface language — ${UI_LOCALES.join(', ')}`,
+          );
+    }
   // A misspelled id is a check the site believes it turned off, with nothing saying why.
   for (const id of config.checks?.ignore ?? [])
     if (!(id in CHECKS))

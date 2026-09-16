@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { Preset } from '@handover/core';
+import type { Labels, Preset } from '@handover/core';
 import type { UiLocale } from '../i18n.js';
 import { messageOptions } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
@@ -19,7 +19,7 @@ let {
   url: string;
   focal: [number, number];
   /** The crops this dot is previewed in: the whole site's in the library. */
-  presets?: { label: string; preset: Preset }[];
+  presets?: { label: string; labels?: Labels; preset: Preset }[];
   uiLocale?: UiLocale;
   onsave: (focal: [number, number]) => void;
   onclose: () => void;
@@ -33,7 +33,7 @@ let stage = $state<HTMLElement>();
 
 // A phone holds a picture upright whatever the site's fields crop to.
 const options = $derived(messageOptions(uiLocale));
-const phone = $derived({
+const phone = $derived<(typeof presets)[number]>({
   label: m.focal_phone_upright({}, options),
   preset: { ratio: '9:16' } as Preset,
 });
@@ -99,7 +99,7 @@ const aspect = (preset: Preset) => preset.ratio?.replace(':', ' / ') ?? '4 / 3';
               <img src={url} alt="" style="object-position: {across}% {down}%" />
             </div>
             <span class="lbl">{p.preset.ratio}</span>
-            <span class="sub">{[p.label, p.preset.max && `${p.preset.max} px`].filter(Boolean).join(' · ')}</span>
+            <span class="sub">{[p.labels?.[uiLocale] ?? p.label, p.preset.max && `${p.preset.max} px`].filter(Boolean).join(' · ')}</span>
           </div>
         {/each}
       </div>

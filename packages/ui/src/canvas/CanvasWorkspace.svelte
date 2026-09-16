@@ -64,6 +64,7 @@ let {
   sourceLocale,
   session,
   blocks,
+  blockLabels,
   problems = {},
   mediaBase = '',
   site,
@@ -88,6 +89,7 @@ let {
   sourceLocale: string;
   session: import('../editor/entry-session.svelte').EntrySession;
   blocks: Record<string, import('@handover/core').Field[]>;
+  blockLabels?: import('@handover/core').Form['blockLabels'];
   problems?: Record<string, string>;
   mediaBase?: string;
   site?: string;
@@ -1371,6 +1373,7 @@ onMount(() => {
               types={blockEditor.types}
               currentType={blockEditor.currentType}
               {blocks}
+              {blockLabels}
               {mediaBase}
               {locale}
               {uiLocale}
@@ -1448,6 +1451,7 @@ onMount(() => {
               {sourceLocale}
               {session}
               {blocks}
+              {blockLabels}
               problems={inspectorProblems}
               {mediaBase}
               {site}

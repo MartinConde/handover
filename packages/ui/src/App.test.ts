@@ -1,11 +1,12 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import App from './App.svelte';
-import { rememberUiLocale, type UiLocale } from './i18n.js';
+import { type CollectionLabels, rememberUiLocale, type UiLocale } from './i18n.js';
 
 let app: ReturnType<typeof mount>;
 const session = (role: 'owner' | 'editor' = 'owner') => ({
   collections: ['listings', 'pages'],
+  collectionLabels: undefined as CollectionLabels | undefined,
   user: { id: 'u1', name: 'Martin', email: 'martin@example.com', uiLocale: null },
   role,
 });
@@ -1025,6 +1026,29 @@ test("a collection path renders that collection's entry list", async () => {
   expect(
     root.querySelector('[aria-labelledby="nav-content"] a[aria-current="page"]')?.textContent,
   ).toBe('Listings');
+});
+
+test('a labelled collection is named in the interface language in the sidebar and its list', async () => {
+  const collectionLabels = {
+    listings: { label: { en: 'homes', de: 'Häuser' }, singular: { en: 'home', de: 'Haus' } },
+  };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/ping')
+        return Response.json({ ok: true, collections: ['listings', 'pages'], collectionLabels });
+      if (url.startsWith('/admin/api/entries/')) return Response.json({ entries: [] });
+      if (url === '/admin/api/dashboard')
+        return Response.json({ recent: [], published: null, translations: null });
+      return Response.json({ entries: [] });
+    }),
+  );
+  const root = show({ ...session(), collectionLabels }, '/admin/c/listings', 'de');
+  await new Promise((r) => setTimeout(r, 0));
+  flushSync();
+  const links = root.querySelectorAll<HTMLAnchorElement>('[aria-labelledby="nav-content"] a');
+  expect(Array.from(links, (a) => a.textContent)).toEqual(['Häuser', 'Pages']);
+  expect(root.querySelector('.list-toolbar h1')?.textContent).toContain('Häuser');
 });
 
 // Manage's Settings is the developer's read-only config, so Site settings is its own group.

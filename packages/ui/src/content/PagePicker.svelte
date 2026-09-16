@@ -1,8 +1,8 @@
 <script lang="ts">
-import { unsafeLinkScheme } from '@handover/core';
+import { labelIn, unsafeLinkScheme } from '@handover/core';
 import { type Pickable, type PickEntry, readEntryDirectory } from '../entry-directory.js';
 import { messageText, type UiMessage } from '../errors.js';
-import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
+import { collectionName, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 
 let {
@@ -113,7 +113,8 @@ const matches = $derived(
   [...all.entries, ...(indexes ? (all.indexes ?? []) : [])].filter(
     (e) =>
       (!collection || e.collection === collection) &&
-      (e.title.toLowerCase().includes(query.toLowerCase().trim()) ||
+      (rowTitle(e).toLowerCase().includes(query.toLowerCase().trim()) ||
+        e.title.toLowerCase().includes(query.toLowerCase().trim()) ||
         e.path.toLowerCase().includes(query.toLowerCase().trim())),
   ),
 );
@@ -126,6 +127,8 @@ const groups = $derived(
       .sort((a, b) => Number(b.index ?? false) - Number(a.index ?? false)),
   })),
 );
+
+const rowTitle = (row: PickEntry) => labelIn(row.labels, uiLocale) ?? row.title;
 
 const refused = $derived(typed ? unsafeLinkScheme('default', typed) : undefined);
 
@@ -163,15 +166,15 @@ function step(e: KeyboardEvent) {
     {#each groups as group (group.name)}
       <!-- Not a heading: the picker opens under a different outline level on every screen. -->
       <div role="group" aria-labelledby="{id}-g-{group.name}">
-      <p class="group-name" id="{id}-g-{group.name}" role="presentation">{group.name}</p>
+      <p class="group-name" id="{id}-g-{group.name}" role="presentation">{collectionName(group.name, uiLocale)}</p>
       {#each group.rows as row (row.path)}
         {@const no = why(row)}
         {@const says = no ?? note(row)}
         <!-- aria-disabled: a disabled button takes no focus, so the reason goes unheard. -->
-        <button type="button" role={library ? undefined : 'option'} aria-label={library ? (included.includes(row.path) ? m.page_picker_add_again({ title: row.title }, options) : m.page_picker_add({ title: row.title }, options)) : undefined} aria-selected={library ? undefined : row.path === chosen ? 'true' : 'false'} aria-disabled={no || !directoryCurrent ? 'true' : undefined} aria-describedby={says && (!library || !row.index) ? `${id}-why-${row.path}` : undefined} onclick={() => directoryCurrent && !no && onpick(row)}>
+        <button type="button" role={library ? undefined : 'option'} aria-label={library ? (included.includes(row.path) ? m.page_picker_add_again({ title: rowTitle(row) }, options) : m.page_picker_add({ title: rowTitle(row) }, options)) : undefined} aria-selected={library ? undefined : row.path === chosen ? 'true' : 'false'} aria-disabled={no || !directoryCurrent ? 'true' : undefined} aria-describedby={says && (!library || !row.index) ? `${id}-why-${row.path}` : undefined} onclick={() => directoryCurrent && !no && onpick(row)}>
           {#if library}
             <span class="library-entry">
-              <span class="library-title">{row.title}</span>
+              <span class="library-title">{rowTitle(row)}</span>
               <span class="path">{row.path}</span>
               <span class="library-meta">
                 {#if included.includes(row.path)}<span class="library-included">✓ {m.page_picker_in_menu({}, options)}</span>{/if}
@@ -181,7 +184,7 @@ function step(e: KeyboardEvent) {
             </span>
             <span class="library-add" aria-hidden="true">+</span>
           {:else}
-          <span>{row.title}</span>
+          <span>{rowTitle(row)}</span>
           <span class="chips">
             {#each all.locales as of (of)}
               <span class="chip" class:chip-missing={!row.locales.includes(of)} title={row.locales.includes(of) ? m.page_picker_available_in({ language: languageName(of) }, options) : m.page_picker_not_available_in({ language: languageName(of) }, options)}>{of.toUpperCase()}</span>

@@ -335,3 +335,45 @@ test('a live language change preserves picker drafts and selected authored data'
   expect(document.body.textContent).toContain('Old Mill House');
   expect(reads).toBe(1);
 });
+
+test('an index label falls back to English and keeps its saved title', async () => {
+  await show(
+    [
+      {
+        collection: 'listings',
+        path: 'listings',
+        title: 'Listings',
+        index: true,
+        labels: { en: 'Homes' },
+        locales: ['en', 'de'],
+        urls: { en: '/listings', de: '/de/listings' },
+      },
+    ],
+    { uiLocale: 'de' },
+  );
+  expect(titles()).toEqual(['Homes']);
+  rows()[0]?.click();
+  expect(picked?.title).toBe('Listings');
+});
+
+test('an index can be searched by its displayed label', async () => {
+  await show(
+    [
+      {
+        collection: 'listings',
+        path: 'listings',
+        title: 'Listings',
+        index: true,
+        labels: { en: 'Homes', de: 'Häuser' },
+        locales: ['en', 'de'],
+        urls: { en: '/listings', de: '/de/listings' },
+      },
+    ],
+    { uiLocale: 'de' },
+  );
+  const search = q<HTMLInputElement>('#p-q');
+  search.value = 'Häuser';
+  search.dispatchEvent(new Event('input', { bubbles: true }));
+  flushSync();
+  expect(titles()).toEqual(['Häuser']);
+});

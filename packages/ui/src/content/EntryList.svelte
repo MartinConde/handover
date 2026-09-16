@@ -3,6 +3,7 @@ import { entryName } from '@handover/core';
 import { invalidateEntryDirectory } from '../entry-directory.js';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
 import {
+  collectionName,
   formatExactTime,
   formatLanguageName,
   formatRelativeTime,
@@ -13,7 +14,7 @@ import { navigate } from '../navigate';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
 import Modal from '../shared/Modal.svelte';
-import NewEntry, { nameOf } from './NewEntry.svelte';
+import NewEntry from './NewEntry.svelte';
 import OffsiteDialog, { type Target } from './Offsite.svelte';
 
 type Entry = {
@@ -100,8 +101,10 @@ $effect(() => {
 });
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const singular = $derived(nameOf(collection));
-const collectionLabel = $derived(uiLocale === 'en' ? singular : collection);
+const plural = $derived(collectionName(collection, uiLocale));
+const collectionLabel = $derived(
+  uiLocale === 'en' ? collectionName(collection, uiLocale, 'singular') : plural,
+);
 // An entry that exists in German alone is listed by its German title, not its file name.
 const titleOf = (entry: Entry) =>
   locales.map((l) => entry.locales[l]?.title).find(Boolean) ||
@@ -323,11 +326,11 @@ async function done() {
 
 <main class="main collection-page">
   <div class="list-toolbar">
-    <h1>{capitalise(collection)} <span class="count">{filtered ? m.entry_list_count_filtered({ shown: shown.length, total: entries.length }, options) : entries.length}</span></h1>
+    <h1>{capitalise(plural)} <span class="count">{filtered ? m.entry_list_count_filtered({ shown: shown.length, total: entries.length }, options) : entries.length}</span></h1>
     <span class="spacer"></span>
     <button class="btn btn-primary" type="button" onclick={() => open('new')}>{m.entry_list_new({ collection: collectionLabel }, options)}</button>
   </div>
-  <div class="tabs list-tabs" role="tablist" aria-label={m.entry_list_tabs_label({ collection }, options)}>
+  <div class="tabs list-tabs" role="tablist" aria-label={m.entry_list_tabs_label({ collection: plural }, options)}>
     <button
       type="button"
       role="tab"
@@ -345,8 +348,8 @@ async function done() {
     <div class="collection-controls">
       <div class="search-field">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
-        <label class="visually-hidden" for="entry-search">{m.entry_list_search_label({ collection }, options)}</label>
-        <input class="input" id="entry-search" type="search" placeholder={m.entry_list_search_placeholder({ collection }, options)} bind:value={search} />
+        <label class="visually-hidden" for="entry-search">{m.entry_list_search_label({ collection: plural }, options)}</label>
+        <input class="input" id="entry-search" type="search" placeholder={m.entry_list_search_placeholder({ collection: plural }, options)} bind:value={search} />
       </div>
     <div class="filters">
       <label class="visually-hidden" for="list-status">{m.entry_list_status({}, options)}</label>
@@ -370,11 +373,11 @@ async function done() {
   {/if}
   {#if error && !dialog}<p class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{errorDetail(error)}</span>{/if}</p>{/if}
   {#if tab === 'deleted'}
-    <p class="list-note">{m.entry_list_deleted_note({ collection }, options)}</p>
+    <p class="list-note">{m.entry_list_deleted_note({ collection: plural }, options)}</p>
     {#if deletedLoading && !deleted.length}
       <p class="placeholder">{m.common_loading({}, options)}</p>
     {:else if deleted.length}
-      <div class="table cols-4" role="table" aria-label={m.entry_list_deleted_table({ collection }, options)}>
+      <div class="table cols-4" role="table" aria-label={m.entry_list_deleted_table({ collection: plural }, options)}>
         <div class="row-head" role="row">
           <div class="th" role="columnheader">{m.entry_list_file_name({}, options)}</div>
           <div class="th" role="columnheader">{m.entry_list_what_went({}, options)}</div>
@@ -431,7 +434,7 @@ async function done() {
       <div class="empty">
         <div>
           <h2>{m.entry_list_nothing_deleted({}, options)}</h2>
-          <p>{m.entry_list_nothing_deleted_hint({ collection }, options)}</p>
+          <p>{m.entry_list_nothing_deleted_hint({ collection: plural }, options)}</p>
         </div>
       </div>
     {/if}
@@ -444,12 +447,12 @@ async function done() {
         : language
         ? m.entry_list_language_complete({ language: formatLanguageName(language, uiLocale) }, options)
         : showing === 'hidden'
-          ? m.entry_list_no_hidden({ collection }, options)
-          : m.entry_list_no_live({ collection }, options)}
+          ? m.entry_list_no_hidden({ collection: plural }, options)
+          : m.entry_list_no_live({ collection: plural }, options)}
     </p>
   {:else if entries.length}
     <!-- Without the languages column the grid is the five-column `has-select.cols-4`. -->
-    <div class="table has-select" class:cols-4={!many} role="table" aria-label={capitalise(collection)}>
+    <div class="table has-select" class:cols-4={!many} role="table" aria-label={capitalise(plural)}>
       <!-- role="table" needs a row around its columnheaders; display: contents keeps the grid. -->
       <div class="row-head" role="row">
         <div class="th" role="columnheader">
@@ -566,7 +569,7 @@ async function done() {
   {:else}
     <div class="empty">
       <div>
-        <h2>{m.entry_list_empty({ collection }, options)}</h2>
+        <h2>{m.entry_list_empty({ collection: plural }, options)}</h2>
         <p>{m.entry_list_empty_hint({ collection: collectionLabel }, options)}</p>
         <button class="btn btn-primary" type="button" onclick={() => open('new')}>
           {m.entry_list_new({ collection: collectionLabel }, options)}
@@ -609,7 +612,7 @@ async function done() {
   {@const action = offsite.action}
   <OffsiteDialog
     {action}
-    what={named(ids) ? titleOf(named(ids) as Entry) : `${ids.length} ${collection}`}
+    what={named(ids) ? titleOf(named(ids) as Entry) : `${ids.length} ${plural}`}
     many={ids.length > 1}
     {collection}
     {index}
@@ -668,7 +671,7 @@ async function done() {
               bind:value={text}
               aria-describedby="template-hint"
             />
-            <p class="hint" id="template-hint">{m.entry_list_saved_as({}, options)} <span class="filename">{preview}</span>. {m.entry_list_template_hint({ collection }, options)}</p>
+            <p class="hint" id="template-hint">{m.entry_list_saved_as({}, options)} <span class="filename">{preview}</span>. {m.entry_list_template_hint({ collection: plural }, options)}</p>
           </div>
           {#if error}<div class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{errorDetail(error)}</span>{/if}</div>{/if}
           <div class="actions">

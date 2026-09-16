@@ -7,7 +7,9 @@ import {
   type EmbedValue,
   embedThumb,
   type Field,
+  type Form,
   fieldAddress,
+  labelIn,
   newId,
   type Preset,
   parseEmbedUrl,
@@ -48,6 +50,7 @@ let {
   root = $bindable(),
   path = [],
   blocks = {},
+  blockLabels = {},
   problems = {},
   rowLabel = '',
   translating = false,
@@ -77,6 +80,8 @@ let {
   path?: readonly string[];
   /** Fields per block type, keyed as `formOf` returns them. */
   blocks?: Record<string, Field[]>;
+  /** What a block type is called, where its schema names it. */
+  blockLabels?: Form['blockLabels'];
   /** What the collection schema will not accept, by the same dotted path the ids use. */
   problems?: Record<string, string>;
   /** Names a field whose own path is empty — one scalar row of an array. */
@@ -398,7 +403,11 @@ function excerpt(row: unknown, inner: Field[] | undefined): string {
   return '';
 }
 // A `_ref` block's content lives in a global and an unknown `_type` has no fields: both read-only.
-const blockName = (row: unknown) => block(row)._label || block(row)._type || '';
+const blockName = (row: unknown) =>
+  block(row)._label ||
+  labelIn(blockLabels?.[block(row)._type ?? ''], uiLocale) ||
+  block(row)._type ||
+  '';
 const blockFields = (row: unknown) =>
   block(row)._ref === undefined ? blocks[block(row)._type ?? ''] : undefined;
 
@@ -769,7 +778,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'group'}
       <details class="group" open>
         <summary>{text}<span class="count">{m.field_count({ count: field.fields.length }, messageOptions(uiLocale))}</span></summary>
-        <div class="form"><Fields fields={field.fields} bind:root {blocks} {problems} path={at} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
+        <div class="form"><Fields fields={field.fields} bind:root {blocks} {blockLabels} {problems} path={at} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
       </details>
     {:else if field.type === 'array'}
       {@const items = rows(at)}
@@ -781,7 +790,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {#each items as row, i (keyOf(items, i))}
           {@const s = sortable(() => keyOf(items, i), () => i)}
           <div class="row-card" class:is-dragging={s.isDragging} {@attach s.attach}>
-            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
+            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
             {#if !translating}{@render controls(at, i, m.field_row_name({ field: text, index: i + 1 }, messageOptions(uiLocale)), s.attachHandle)}{/if}
           </div>
         {:else}
@@ -825,7 +834,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
             {#if shut}
               <!-- folded: the header is the whole card -->
             {:else if inner}
-              <div class="form" id="{id}.{i}-b"><Fields fields={inner} bind:root {blocks} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
+              <div class="form" id="{id}.{i}-b"><Fields fields={inner} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
             {:else}
               <p class="ref-note" id="{id}.{i}-b">{block(row)._ref ?? m.field_block_missing({ type: block(row)._type ?? '' }, messageOptions(uiLocale))} — {m.field_not_editable({}, messageOptions(uiLocale))}</p>
             {/if}
@@ -841,7 +850,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
             <div class="popover block-picker">
               <div class="types">
                 {#each field.types as type (type)}
-                  <button class="type-card" type="button" value={type} disabled={structureLocked} onclick={() => { add(at, { _type: type, _id: newId('default') }); picker = ''; }}>{type}</button>
+                  <button class="type-card" type="button" value={type} disabled={structureLocked} onclick={() => { add(at, { _type: type, _id: newId('default') }); picker = ''; }}>{labelIn(blockLabels?.[type], uiLocale) ?? type}</button>
                 {/each}
               </div>
             </div>

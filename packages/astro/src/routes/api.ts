@@ -138,6 +138,11 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
     const response = Response.json({
       ok: true,
       collections: Object.keys(config.collections),
+      collectionLabels: Object.fromEntries(
+        Object.entries(config.collections).flatMap(([name, { label, singular }]) =>
+          label || singular ? [[name, { label, singular }]] : [],
+        ),
+      ),
       // The middleware has already asserted a session by the time any of this runs.
       user: locals.handover?.user,
       role: locals.handover?.role,

@@ -1,6 +1,6 @@
 import config from 'virtual:handover/config';
 import index, { stale, templates } from 'virtual:handover/index';
-import type { Db, EntryEdit, Form, IndexEntry, LocaleSeed } from '@handover/core';
+import type { Db, EntryEdit, Form, IndexEntry, Labels, LocaleSeed } from '@handover/core';
 import {
   addressError,
   beginOperation,
@@ -32,6 +32,7 @@ import {
   isDraftRace,
   isLive,
   isMediaRace,
+  labelsOf,
   lastCommit,
   loadDraft,
   lockHolder,
@@ -174,7 +175,13 @@ export async function getEntry(
     ...(hidden ? { redirects: await hideTargets(ctx, collection, slug, loaded) } : {}),
     titleField: collected?.titleField,
     // A global has nothing to hide, rename or duplicate; it is drawn under the dev's label.
-    ...(global ? { singleton: true, label: globalLabel(slug, global).label } : {}),
+    ...(global
+      ? {
+          singleton: true,
+          label: globalLabel(slug, global).label,
+          labels: globalLabel(slug, global).labels,
+        }
+      : {}),
     // Decides whether the editor draws the multi-language controls at all.
     locales: config.i18n.locales,
     // The site's, which is what says whether a language's URLs carry its segment.
@@ -1013,6 +1020,14 @@ export async function listEntries(ctx: RequestContext, collection: string): Prom
   });
 }
 
+/** A global's label in every language, for the rows that name it; nothing for an entry. */
+const globalLabels = (key: string) => {
+  const [collection, name = ''] = key.split('/');
+  const schema = collection === 'globals' ? config.globals?.[name] : undefined;
+  const labels = schema && globalLabel(name, schema).labels;
+  return labels ? { labels } : {};
+};
+
 /** One answer for every picker: they choose from the same set and differ only afterwards. */
 export async function pickList(ctx: RequestContext): Promise<Response> {
   return Response.json({
@@ -1020,6 +1035,8 @@ export async function pickList(ctx: RequestContext): Promise<Response> {
     // A collection's index page is not an entry, but a menu can point at one.
     indexes: Object.entries(config.collections).flatMap(([collection, { index: page }]) => {
       if (!page) return [];
+      const { label } = config.collections[collection] ?? {};
+      const labels = typeof label === 'string' && label ? { en: label } : labelsOf(label);
       const urls: Record<string, string> = {};
       for (const locale of config.i18n.locales) {
         const url = entryUrl('default', config.i18n, page, '', locale);
@@ -1030,7 +1047,19 @@ export async function pickList(ctx: RequestContext): Promise<Response> {
           collection,
           index: true,
           path: collection,
+          // What a menu item pointing here is called on the site; `labels` is the admin's name.
           title: humanise(collection),
+          ...(labels
+            ? {
+                // Written as it reads mid-sentence; a picker row is a heading.
+                labels: Object.fromEntries(
+                  Object.entries(labels).map(([locale, text]) => [
+                    locale,
+                    text.charAt(0).toUpperCase() + text.slice(1),
+                  ]),
+                ),
+              }
+            : {}),
           locales: config.i18n.locales,
           urls,
         },
@@ -1126,6 +1155,7 @@ export async function dashboard(ctx: RequestContext): Promise<Response> {
       ...row,
       collection,
       title: titles.get(row.key) || slug,
+      ...globalLabels(row.key),
       href: entryHref(row.key),
       editing: editing[row.key],
     };
@@ -1223,6 +1253,7 @@ export async function pendingList(ctx: RequestContext): Promise<Response> {
   type Row = {
     key: string;
     title: string;
+    labels?: Labels;
     collection: string;
     locales: string[];
     files: string[];
@@ -1240,6 +1271,7 @@ export async function pendingList(ctx: RequestContext): Promise<Response> {
       found = {
         key,
         title: titles.get(key) || slug || key,
+        ...globalLabels(key),
         collection,
         locales: [],
         files: [],

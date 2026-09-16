@@ -1,7 +1,7 @@
 <script lang="ts">
-import type { DiffGroup } from '@handover/core';
+import type { DiffGroup, Labels } from '@handover/core';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
-import { formatFieldTime, messageOptions, type UiLocale } from '../i18n.js';
+import { collectionName, formatFieldTime, messageOptions, type UiLocale } from '../i18n.js';
 import { coordinateEntryPublish, coordinateEntryReplacement } from '../navigate';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, uncertainResponse } from '../request.js';
@@ -23,6 +23,7 @@ export type PendingEntry = {
   /** `listings/mill-house` — what a publish is of, since the languages go out together. */
   key: string;
   title: string;
+  labels?: Labels;
   collection: string;
   /** The languages of it that are waiting, in the order the site declares them. */
   locales: string[];
@@ -113,7 +114,7 @@ const holdAge = (since: number) => {
 };
 // Only this drawer's commit gets the pill, or a publish elsewhere would show its build here.
 const ours = $derived(build && committed && build.commit_sha === committed ? build : undefined);
-const named = (entry: PendingEntry) => entry.title;
+const named = (entry: PendingEntry) => entry.labels?.[uiLocale] ?? entry.title;
 
 const blocked = $derived([...conflicts, ...unready, ...drifted]);
 const checked = (entry: PendingEntry) =>
@@ -159,8 +160,8 @@ const summary = $derived(
       m.pending_collection_count(
         {
           count: entries.filter((e) => e.collection === c).length,
-          collection: c,
-          singular: c.replace(/s$/, ''),
+          collection: collectionName(c, uiLocale),
+          singular: collectionName(c, uiLocale, 'singular'),
         },
         options,
       ),
@@ -416,7 +417,7 @@ function askDiscard(entry: PendingEntry) {
       </label>
       <div class="change-title">
         <span class="name">{named(entry)}</span>
-        <span class="badge">{capitalise(entry.collection)}</span>
+        <span class="badge">{capitalise(collectionName(entry.collection, uiLocale))}</span>
         {#if entry.locales.length}
           <span class="visually-hidden">{m.check_languages({}, options)}</span>
           <span class="chips">
@@ -582,7 +583,7 @@ function askDiscard(entry: PendingEntry) {
               </p>
               {#each groups as group (group.entry.key)}
                 <div class="check-group">
-                  <h4>{named(group.entry)} <span class="badge">{capitalise(group.entry.collection)}</span></h4>
+                  <h4>{named(group.entry)} <span class="badge">{capitalise(collectionName(group.entry.collection, uiLocale))}</span></h4>
                   <CheckLines lines={group.items} chips={group.entry.locales.length > 1} {uiLocale} {goTo} {onclose} />
                 </div>
               {/each}

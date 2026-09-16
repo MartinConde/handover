@@ -36,7 +36,7 @@ export function canvasBlockDraft(type: string, id: string, fields: readonly Fiel
 </script>
 
 <script lang="ts">
-import { newId, type Field as BlockField } from '@handover/core';
+import { newId, type Field as BlockField, type Form, labelIn } from '@handover/core';
 import { tick } from 'svelte';
 import CanvasIcon from './CanvasIcon.svelte';
 import type { ListCommandResult } from '../editor/entry-session.svelte';
@@ -48,6 +48,7 @@ let {
   mode,
   types,
   blocks,
+  blockLabels,
   currentType,
   mediaBase = '',
   locale,
@@ -61,6 +62,7 @@ let {
   mode: 'insert' | 'replace';
   types: readonly string[];
   blocks: Record<string, BlockField[]>;
+  blockLabels?: Form['blockLabels'];
   currentType?: string;
   mediaBase?: string;
   locale: string;
@@ -74,6 +76,7 @@ let {
 
 const offered = $derived(types.filter((type) => blocks[type] !== undefined));
 const options = $derived(messageOptions(uiLocale));
+const typeName = (type: string) => labelIn(blockLabels?.[type], uiLocale) ?? type;
 let chosen = $state('');
 let draft = $state<Record<string, unknown>>({});
 let refusal = $state('');
@@ -129,7 +132,7 @@ function apply() {
   </header>
 
   {#if mode === 'replace' && currentType}
-    <p class="canvas-block-context">{m.canvas_replacing_block({ type: currentType }, options)}</p>
+    <p class="canvas-block-context">{m.canvas_replacing_block({ type: typeName(currentType) }, options)}</p>
   {/if}
 
   {#if refusal}
@@ -140,7 +143,7 @@ function apply() {
     <div class="canvas-block-picker" role="list" aria-label={m.canvas_allowed_block_types({}, options)}>
       {#each offered as type (type)}
         <button class="type-card" type="button" disabled={locked} onclick={() => choose(type)}>
-          <strong>{type}</strong>
+          <strong>{typeName(type)}</strong>
           <span>{mode === 'insert' ? m.canvas_add_this_block({}, options) : m.canvas_configure_replacement({}, options)}</span>
         </button>
       {:else}
@@ -149,7 +152,7 @@ function apply() {
     </div>
   {:else}
     <div class="canvas-block-editor-type">
-      <strong>{chosen}</strong>
+      <strong>{typeName(chosen)}</strong>
       <button class="btn btn-ghost btn-sm" type="button" onclick={() => (chosen = '')}>{m.canvas_change_type({}, options)}</button>
     </div>
     <form class="form canvas-inspector-form" onsubmit={(event) => { event.preventDefault(); apply(); }}>
@@ -158,6 +161,7 @@ function apply() {
           {fields}
           bind:root={draft}
           {blocks}
+          {blockLabels}
           {problems}
           {mediaBase}
           {locale}

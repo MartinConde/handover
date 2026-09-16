@@ -56,7 +56,7 @@ restore confirmations, and retained restore failures are available in English an
 interface-language change keeps the selected version or comparison, language filter, open restore
 dialog, and loaded diff in place. It does not read GitHub again or change the browser timezone.
 
-Commit summaries, author names, entry names, field labels, block type names, filenames, and changed
-content remain exactly as stored. Restoring still writes the same historical content into the
+Commit summaries, author names, entry names, filenames, and changed content remain exactly as
+stored. Field labels and block type names switch where the site gives one per language. Restoring still writes the same historical content into the
 current unpublished draft; changing the interface language never changes the version, current web
 address, offered content languages, or published site.

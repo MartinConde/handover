@@ -5,6 +5,7 @@ import {
   type Form,
   fieldAddress,
   fieldPosition,
+  formIn,
   type LocaleSeed,
   regenerateIds,
   resolveFieldTarget,
@@ -1103,11 +1104,12 @@ export function createEntrySession({
     },
     /** Missing required content pauses Canvas rendering, never draft persistence. */
     incompleteFields(locale: string, uiLocale: UiLocale = 'en'): Record<string, string> {
-      return form
+      const named = form && formIn(form, uiLocale);
+      return named
         ? requiredFieldProblems(
-            form.fields,
+            named.fields,
             snapshots[locale],
-            form.blocks,
+            named.blocks,
             [],
             locale !== sourceLocale,
             uiLocale,

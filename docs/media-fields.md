@@ -46,7 +46,7 @@ reused rather than uploaded again.
 The picker follows the account's **Interface language** for its heading, search and drop guidance,
 format/size limits, empty and loading states, selection order, upload queue, refusals and recovery.
 A live English/Deutsch switch keeps the same open picker, search, focus, selected order and pending
-files; filenames, media keys and field labels remain as authored. Native file-dialog controls may
+files; filenames and media keys remain as authored, and field labels switch only where the site gives one per language. Native file-dialog controls may
 follow the browser or operating system language.
 
 A picture the library has no width and height for — what the reconciliation job recovers, since
@@ -67,7 +67,7 @@ page that did not set one is the library's ([The media library](media-library.md
 
 The focal and crop dialogs follow the account's interface language, including their live control
 labels and recovery. Switching English/Deutsch keeps the same dialog, focus, focal coordinates,
-crop region and selected ratio. Filenames and preset labels stay as authored. A switch does not
+crop region and selected ratio. Filenames stay as authored; preset labels switch only where their field's label does. A switch does not
 process an image, write content or restart an upload. If creating a cropped copy fails while reading
 or rendering the source, the dialog keeps a stable recovery reason; upload-stage failures retain
 the same refused, unconfirmed and diagnostic distinctions as the picker.

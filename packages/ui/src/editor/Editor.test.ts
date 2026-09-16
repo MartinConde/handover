@@ -137,6 +137,43 @@ test('a global keeps its title state and publishing controls in one header row',
   expect(row?.querySelector('.btn-primary')?.textContent).toContain('Publish this entry');
 });
 
+test('fields and block types labelled per language are named in the interface language', () => {
+  const root = show({
+    uiLocale: 'de',
+    entry: {
+      ...entry,
+      fields: [
+        { path: ['title'], label: 'Title', labels: { de: 'Titel' }, type: 'text', required: true },
+        { path: ['body'], label: 'Body', type: 'blocks', required: false, types: ['hero'] },
+      ] satisfies Field[],
+      blocks: { hero: [] },
+      blockLabels: { hero: { en: 'Hero', de: 'Bühne' } },
+      data: { title: 'Seaview Cottage', body: [] },
+    },
+  });
+
+  expect($(root, 'label[for="f-title"]')?.textContent).toBe('Titel*');
+  $<HTMLButtonElement>(root, '.pop-anchor .add')?.click();
+  flushSync();
+  expect($$(root, '.block-picker .type-card').map((b) => b.textContent)).toEqual(['Bühne']);
+});
+
+test('a global labelled per language is named in the interface language', () => {
+  const root = show({
+    collection: 'globals',
+    slug: 'site',
+    uiLocale: 'de',
+    entry: {
+      ...entry,
+      singleton: true,
+      label: 'Site details',
+      labels: { en: 'Site details', de: 'Website-Angaben' },
+    },
+  });
+
+  expect($(root, 'h1')?.textContent).toBe('Website-Angaben');
+});
+
 test("a global is named by the dev's label, under Site settings", () => {
   const root = show({
     collection: 'globals',

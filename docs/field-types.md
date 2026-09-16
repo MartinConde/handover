@@ -90,7 +90,16 @@ not read well — on any field, including the helpers:
 export const listing = z.object({
   availableFrom: z.iso.date(),                 // "Available from"
   seo: seo.meta({ label: 'SEO' }).optional(),  // "SEO"
+  rooms: z.number().meta({ label: { en: 'Rooms', de: 'Zimmer' } }),
 });
+```
+
+A label with one string per interface language is read in the language each editor picked, in the
+form, History, pending changes and conflicts. A block type is named the same way. Without a label,
+the block picker shows the type:
+
+```ts
+hero: defineBlock('hero', { heading: z.string() }).meta({ label: { en: 'Hero', de: 'Bühne' } }),
 ```
 
 ### In the admin
@@ -103,9 +112,11 @@ every entry the site has, grouped by collection and showing which languages each
 written in. Its controls, availability descriptions, empty states, and validation follow the
 account's interface language. Switching English/Deutsch keeps the search, typed custom URL,
 selected entry, and content-language destination intact; language names are localized while
-language chips, collection names, entry titles, paths, and schema labels remain authored data.
-Handover's own picker descriptions—such as “pages and entries”—translate with the surrounding
-controls; a schema-supplied label such as “Related page” remains exactly as configured.
+language chips, entry titles and paths remain authored data. Collection names and schema labels
+follow the interface language when the site gives one per language
+([Configuration](configuration.md#names-in-each-interface-language)), and otherwise read as
+configured. Handover's own picker descriptions, such as “pages and entries”, translate with the
+surrounding controls.
 URL is typed, and a scheme the site will not accept is refused under the box rather than on save.
 Required fields and built-in scalar type, date, selection, text-length, and number-bound errors
 follow the account's interface language. Changing English/Deutsch reformats an error already under

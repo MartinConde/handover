@@ -37,7 +37,7 @@ import {
   type PickEntry,
   readEntryDirectory,
 } from '../entry-directory.js';
-import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
+import { collectionName, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import Modal from '../shared/Modal.svelte';
 import PagePicker from './PagePicker.svelte';
@@ -127,8 +127,8 @@ const target = (item: MenuItem) =>
 const kind = (item: MenuItem) => {
   const link = item.link;
   if (link.type === 'url') return m.menus_custom_link({}, options);
-  if (link.type === 'index') return m.menus_collection_index({ collection: capitalise(link.collection) }, options);
-  return capitalise(entryOf(item)?.collection ?? link.ref.split('/')[0] ?? '');
+  if (link.type === 'index') return m.menus_collection_index({ collection: capitalise(collectionName(link.collection, uiLocale)) }, options);
+  return capitalise(collectionName(entryOf(item)?.collection ?? link.ref.split('/')[0] ?? '', uiLocale));
 };
 // The renderer drops the row either way; the editor is where somebody can see why and tidy up.
 const flag = (item: MenuItem): { chip: string; why: string } | undefined => {

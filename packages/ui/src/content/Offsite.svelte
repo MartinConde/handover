@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { PickEntry } from '../entry-directory.js';
 import { messageText, type UiMessage } from '../errors.js';
-import { messageOptions, type UiLocale } from '../i18n.js';
+import { collectionName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import Modal from '../shared/Modal.svelte';
 import PagePicker from './PagePicker.svelte';
@@ -63,7 +63,7 @@ const errorText = $derived(
       : '',
 );
 
-const singular = $derived(collection.replace(/s$/, ''));
+const singular = $derived(collectionName(collection, uiLocale, 'singular'));
 
 // svelte-ignore state_referenced_locally -- the collection's page above is the initial choice
 let kind = $state<Target['kind']>(index ? 'index' : 'none');
@@ -113,7 +113,7 @@ const ready = $derived(kind === 'entry' ? Boolean(picked) : kind !== 'url' || ur
         {#if index}
           <label class="choice">
             <input type="radio" name="offsite-to" value="index" bind:group={kind} />
-            {m.offsite_collection_overview({ collection }, options)} <span class="desc">{index}</span>
+            {m.offsite_collection_overview({ collection: collectionName(collection, uiLocale) }, options)} <span class="desc">{index}</span>
           </label>
         {/if}
         <label class="choice">

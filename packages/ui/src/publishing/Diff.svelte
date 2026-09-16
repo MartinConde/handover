@@ -42,7 +42,8 @@ const shown = $derived(groups.filter((g) => g.locale !== undefined || g.changes.
 
 {#snippet rows(changes: Change[], prefix: string)}
   {#each changes as change (change.path)}
-    {@const label = prefix ? `${prefix} · ${change.label}` : change.label}
+    {@const own = change.labels?.[uiLocale] ?? change.label}
+    {@const label = prefix ? `${prefix} · ${own}` : own}
     {#if change.kind === 'row'}
       {#if change.at !== 'same'}
         <div class="row is-block">
@@ -50,9 +51,9 @@ const shown = $derived(groups.filter((g) => g.locale !== undefined || g.changes.
           {#if change.at === 'added'}<ins>{m.diff_added({}, options)}</ins>
           {:else if change.at === 'removed'}<del>{m.diff_removed({}, options)}</del>
           {:else}<span class="badge">{change.at === 'moved-up' ? m.diff_moved_up({}, options) : m.diff_moved_down({}, options)}</span>{/if}
-          {#if change.type}<span class="sub">{m.diff_block_type({ type: change.type }, options)}</span>{/if}
+          {#if change.type}<span class="sub">{m.diff_block_type({ type: change.types?.[uiLocale] ?? change.type }, options)}</span>{/if}
           {#if change.at !== 'removed'}
-            <span class="sub">{#if change.above}{m.diff_now_above({ label: change.above }, options)}{:else}{m.diff_at_end({}, options)}{/if}</span>
+            <span class="sub">{#if change.above}{m.diff_now_above({ label: change.aboveLabels?.[uiLocale] ?? change.above }, options)}{:else}{m.diff_at_end({}, options)}{/if}</span>
           {/if}
           {#if change.changes.length === 0 && change.at !== 'added' && change.at !== 'removed'}
             <span class="sub">{m.diff_nothing_inside({}, options)}</span>

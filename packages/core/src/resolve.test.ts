@@ -515,3 +515,69 @@ test('a language nobody changed comes out of the resolution as it went in', () =
 
   expect(resolved.de).toEqual(de);
 });
+
+test('a question about a labelled field is named in every interface language', () => {
+  const form: Form = {
+    fields: [
+      { path: ['title'], label: 'Title', labels: { de: 'Titel' }, type: 'text', required: true },
+    ],
+    blocks: {},
+  };
+  const report = conflictReport('default', form, {
+    en: { base: { title: 'Home' }, ours: { title: 'Start' }, theirs: { title: 'Welcome' } },
+  });
+
+  expect(report.questions.map((q) => [q.label, q.labels])).toEqual([
+    ['Title', { en: 'Title', de: 'Titel' }],
+  ]);
+});
+
+test('nested conflict and merged labels preserve localized row and group prefixes', () => {
+  const form: Form = {
+    fields: [{ path: ['body'], label: 'Body', type: 'blocks', required: false, types: ['hero'] }],
+    blocks: {
+      hero: [
+        {
+          path: ['details'],
+          label: 'Details',
+          labels: { de: 'Angaben' },
+          type: 'group',
+          required: false,
+          fields: [
+            {
+              path: ['price'],
+              label: 'Price',
+              labels: { de: 'Preis' },
+              type: 'number',
+              required: false,
+            },
+            { path: ['count'], label: 'Count', type: 'number', required: false },
+          ],
+        },
+      ],
+    },
+    blockLabels: { hero: { en: 'Hero', de: 'Bühne' } },
+  };
+  const data = (price: number, count: number) => ({
+    body: [{ _id: 'one', _type: 'hero', details: { price, count } }],
+  });
+  const report = conflictReport('default', form, {
+    en: { base: data(1, 1), ours: data(2, 2), theirs: data(3, 1) },
+  });
+  expect(report.questions[0]?.labels).toEqual({
+    en: 'Hero · Details · Price',
+    de: 'Bühne · Angaben · Preis',
+  });
+  expect(report.merged[0]?.labels).toEqual({
+    en: 'Hero · Details · Count',
+    de: 'Bühne · Angaben · Count',
+  });
+  expect(
+    applyResolution(
+      'default',
+      form,
+      { en: { base: data(1, 1), ours: data(2, 2), theirs: data(3, 1) } },
+      [{ locale: 'en', path: 'body[_id=one].details.price', side: 'theirs' }],
+    ),
+  ).toEqual({ en: data(3, 2) });
+});

@@ -114,7 +114,10 @@ const {
         phone: z.string().optional().meta({ i18n: 'duplicate' }),
         defaultSeo: seoDefaults.optional(),
       })
-      .meta({ label: 'Site details', description: 'Contact details and footer text' }),
+      .meta({
+        label: { en: 'Site details', de: 'Website-Angaben' },
+        description: 'Contact details and footer text',
+      }),
     // The GitHub boundary: one file in the repo, nothing else.
     getFile: vi.fn(async (path: string, ref?: string) => {
       // `<ref>:<path>` is the file as one commit has it, which is what a version diff reads.
@@ -371,7 +374,13 @@ vi.mock('virtual:handover/config', () => ({
     collections: {
       // Pages first and its blocks are required, so "Simulate conflict" has to walk past it.
       pages: { schema: page },
-      listings: { schema: listing, route: '/listings/[slug]', index: '/listings' },
+      listings: {
+        schema: listing,
+        route: '/listings/[slug]',
+        index: '/listings',
+        label: { en: 'homes', de: 'Häuser' },
+        singular: { en: 'home', de: 'Haus' },
+      },
       presenters: { schema: presenter, titleField: 'name' },
       posts: { schema: article, route: '/blog/[slug]', index: '/blog', localizedSlugs: true },
       notices: { schema: notice, route: '/notices/[slug]' },
@@ -858,6 +867,10 @@ test('ping returns the collection names and who is signed in', async () => {
   expect(await res.json()).toEqual({
     ok: true,
     collections: ['pages', 'listings', 'presenters', 'posts', 'notices'],
+    // Every language's, so switching the interface language needs no second request.
+    collectionLabels: {
+      listings: { label: { en: 'homes', de: 'Häuser' }, singular: { en: 'home', de: 'Haus' } },
+    },
     user: session.user,
     role: 'editor',
     // Where a stored key is served from: the widgets draw thumbnails of keys nothing listed.
@@ -866,7 +879,11 @@ test('ping returns the collection names and who is signed in', async () => {
     presets: [
       { label: 'Portrait', preset: { ratio: '1:1', max: 512 } },
       // The site's default social card: the one preset a platform fixes rather than a designer.
-      { label: 'Default social image', preset: { ratio: '1.91:1', max: 1200, min: 1200 } },
+      {
+        label: 'Default social image',
+        labels: { en: 'Default social image', de: 'Standard-Social-Media-Bild' },
+        preset: { ratio: '1.91:1', max: 1200, min: 1200 },
+      },
     ],
     // Whether this build has a preview route at all.
     preview: true,
@@ -1519,14 +1536,22 @@ test('a global is served as an entry, in singleton mode and under its own label'
     {
       path: ['defaultSeo'],
       label: 'Search and sharing',
+      labels: { en: 'Search and sharing', de: 'Suche und Teilen' },
       type: 'group',
       required: false,
       fields: [
-        { path: ['titlePattern'], label: 'Default search title', type: 'text', required: false },
+        {
+          path: ['titlePattern'],
+          label: 'Default search title',
+          labels: { en: 'Default search title', de: 'Standard-Suchtitel' },
+          type: 'text',
+          required: false,
+        },
         { path: ['description'], label: 'Description', type: 'text', required: false },
         {
           path: ['image'],
           label: 'Default social image',
+          labels: { en: 'Default social image', de: 'Standard-Social-Media-Bild' },
           type: 'image',
           required: false,
           preset: { ratio: '1.91:1', max: 1200, min: 1200 },
@@ -1534,6 +1559,7 @@ test('a global is served as an entry, in singleton mode and under its own label'
         {
           path: ['twitter'],
           label: 'X (Twitter) handle',
+          labels: { en: 'X (Twitter) handle', de: 'X-(Twitter-)Name' },
           type: 'text',
           required: false,
           i18n: 'duplicate',
@@ -1544,6 +1570,8 @@ test('a global is served as an entry, in singleton mode and under its own label'
   expect(body.data).toEqual({ footerText: 'Coastal homes since 2009' });
   expect(body.singleton).toBe(true);
   expect(body.label).toBe('Site details');
+  // Every language's, so switching the interface language redraws the heading without a request.
+  expect(body.labels).toEqual({ en: 'Site details', de: 'Website-Angaben' });
   // Nothing a collection's routes are about: a global has no page of its own to link to.
   expect(body.route).toBeUndefined();
   expect(body.localizedSlugs).toBeUndefined();
@@ -1658,6 +1686,7 @@ test('the globals list names each global and the languages it has a file in', as
       {
         key: 'site',
         label: 'Site details',
+        labels: { en: 'Site details', de: 'Website-Angaben' },
         description: 'Contact details and footer text',
         locales: ['en'],
         pending: false,
@@ -1970,7 +1999,11 @@ test('a global on the dashboard is named and addressed the way Site settings nam
     recent: Record<string, unknown>[];
   };
 
-  expect(recent[0]).toMatchObject({ title: 'Site details', href: '/admin/site/site' });
+  expect(recent[0]).toMatchObject({
+    title: 'Site details',
+    labels: { en: 'Site details', de: 'Website-Angaben' },
+    href: '/admin/site/site',
+  });
 });
 
 test('translation health counts the languages an entry owes and the ones behind their source', async () => {
@@ -2025,6 +2058,7 @@ test('a global waiting to be published is listed under its label', async () => {
       {
         key: 'globals/site',
         title: 'Site details',
+        labels: { en: 'Site details', de: 'Website-Angaben' },
         collection: 'globals',
         locales: ['en'],
         files: ['src/content/globals/en/site.yaml'],
@@ -2972,6 +3006,8 @@ test('the picker list carries each collection with an index page, in every langu
       index: true,
       path: 'listings',
       title: 'Listings',
+      // The collection's own label, capitalised for a picker row, in every interface language.
+      labels: { en: 'Homes', de: 'Häuser' },
       locales: ['en', 'de'],
       urls: { en: '/listings', de: '/de/listings' },
     },
@@ -7256,4 +7292,23 @@ test('lock reads, renewals and takeovers omit bases and do not read draft rows',
     ]);
   }
   expect(loadDraft).not.toHaveBeenCalled();
+});
+
+test('a plain collection label is available to the picker without changing menu titles', async () => {
+  const { default: config } = await import('virtual:handover/config');
+  const collection = config.collections.listings;
+  if (!collection) throw new Error('listings collection missing');
+  const original = collection.label;
+  try {
+    collection.label = 'homes';
+    const body = (await (await GET(ctx('entries'))).json()) as {
+      indexes: { collection: string; title: string; labels?: unknown }[];
+    };
+    expect(body.indexes.find((row) => row.collection === 'listings')).toMatchObject({
+      title: 'Listings',
+      labels: { en: 'Homes' },
+    });
+  } finally {
+    collection.label = original;
+  }
 });

@@ -17,6 +17,8 @@ import {
   entryOffer,
   entryUrl,
   formOf,
+  labelIn,
+  labelsOf,
   loadDraft,
   lockHolder,
   openDraft,
@@ -138,9 +140,11 @@ export const schemaOf = (
 /** What the site settings list calls a global, and what it says it is for. */
 export const globalLabel = (key: string, schema: Parameters<typeof formSchema>[0]) => {
   const root = formSchema(schema) as { label?: unknown; description?: unknown };
+  const labels = labelsOf(root.label);
   return {
     key,
-    label: typeof root.label === 'string' ? root.label : key,
+    label: labelIn(root.label, 'en') ?? key,
+    ...(labels ? { labels } : {}),
     description: typeof root.description === 'string' ? root.description : undefined,
   };
 };

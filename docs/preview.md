@@ -136,6 +136,6 @@ or change the selected content language.
 
 The page inside the frame remains the site-rendered content in the selected content language. Its
 `<html lang>`, words, links, dates, and formatting belong to the site, not the CMS interface
-preference. Schema-authored field labels and validation messages also remain authored copy. The
+preference. Schema-authored validation messages also remain authored copy. The
 preview's elapsed-time wording follows the interface language while retaining the existing browser
 timezone and render timestamp.

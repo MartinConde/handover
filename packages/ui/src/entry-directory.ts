@@ -1,3 +1,4 @@
+import type { Labels } from '@handover/core';
 import { request } from './request.js';
 
 /** One thing an editor can point at, as `/admin/api/entries` answers it. */
@@ -18,6 +19,8 @@ export interface PickEntry {
   hidden?: boolean;
   /** A collection's index page rather than an entry; `path` is then the collection alone. */
   index?: true;
+  /** An index page's name in each interface language, from the collection's label. */
+  labels?: Labels;
 }
 
 export interface Pickable {

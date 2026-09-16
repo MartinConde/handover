@@ -61,8 +61,8 @@ The resolver follows the account's [interface language](interface-language.md). 
 English and German updates its actions, explanations, timestamps, accessibility labels and any
 already-visible recovery in place. The loaded report, selected side for every field, focused
 control and merge version stay unchanged; switching does not reread the repository, save a draft
-or submit the answers. Entry titles, schema field labels, content-language codes, values and commit
-identifiers remain authored data and are never translated.
+or submit the answers. Entry titles, content-language codes, values and commit identifiers remain
+authored data. Field labels switch only where the site gives one per language.
 
 Recovery is tied to stable response codes rather than server prose. A report that somebody else
 settled must be closed; a changed report or answers that no longer match must be reloaded and

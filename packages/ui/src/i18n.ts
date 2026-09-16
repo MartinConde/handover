@@ -1,4 +1,11 @@
-import { DEFAULT_UI_LOCALE, isUiLocale, UI_LOCALES, type UiLocale } from '@handover/core';
+import {
+  DEFAULT_UI_LOCALE,
+  isUiLocale,
+  type Labels,
+  labelIn,
+  UI_LOCALES,
+  type UiLocale,
+} from '@handover/core';
 import type { Locale } from './paraglide/runtime.js';
 import { siteBase } from './request.js';
 
@@ -9,6 +16,29 @@ export type { UiLocale };
 export { DEFAULT_UI_LOCALE, isUiLocale, UI_LOCALES };
 
 export const messageOptions = (locale: UiLocale) => ({ locale }) as const;
+
+export type CollectionLabels = Record<
+  string,
+  { label?: string | Labels; singular?: string | Labels }
+>;
+
+// Fixed by the site's build, so the shell sets it once rather than every screen taking a prop.
+let collectionLabels: CollectionLabels = {};
+export const useCollectionLabels = (labels: CollectionLabels = {}) => {
+  collectionLabels = labels;
+};
+
+/** As the name reads mid-sentence; `capitalise` makes a heading of it. */
+export function collectionName(
+  name: string,
+  locale: UiLocale,
+  form: 'plural' | 'singular' = 'plural',
+): string {
+  const { label, singular } = collectionLabels[name] ?? {};
+  const plural = labelIn(label, locale);
+  if (form === 'plural') return plural ?? name;
+  return labelIn(singular, locale) ?? plural ?? name.replace(/s$/, '');
+}
 
 const relativeFormatters = new Map<UiLocale, Intl.RelativeTimeFormat>();
 const dateFormatters = new Map<UiLocale, Intl.DateTimeFormat>();

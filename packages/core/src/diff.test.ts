@@ -790,3 +790,92 @@ test('a block field is marked at the address the form knows it by', () => {
     'blocks[_id=aaaa1111].heading': [{ text: 'Seaview Cottage' }, { text: ', Devon', mark: 'ins' }],
   });
 });
+
+// Labelled per language, so the History screen switches language without asking again.
+const labelled: Form = {
+  fields: [
+    {
+      path: ['contact'],
+      label: 'Contact',
+      labels: { en: 'Contact', de: 'Kontakt' },
+      type: 'group',
+      required: false,
+      fields: [
+        {
+          path: ['phone'],
+          label: 'Phone',
+          labels: { de: 'Telefon' },
+          type: 'number',
+          required: false,
+        },
+      ],
+    },
+    { path: ['body'], label: 'Body', type: 'blocks', required: false, types: ['hero'] },
+  ],
+  blocks: {
+    hero: [
+      {
+        path: ['heading'],
+        label: 'Heading',
+        labels: { de: 'Überschrift' },
+        type: 'text',
+        required: false,
+      },
+    ],
+  },
+  blockLabels: { hero: { en: 'Hero', de: 'Bühne' } },
+};
+
+test('a change to a labelled field carries its label in every interface language', () => {
+  const groups = diffEntry(
+    'default',
+    labelled,
+    { en: { contact: { phone: 1 } } },
+    { en: { contact: { phone: 2 } } },
+  );
+
+  expect(changesIn(groups, 'en')).toEqual([
+    {
+      path: 'contact.phone',
+      label: 'Contact · Phone',
+      labels: { en: 'Contact · Phone', de: 'Kontakt · Telefon' },
+      kind: 'value',
+      before: '1',
+      after: '2',
+    },
+  ]);
+});
+
+test('a block row is named by its type label, in every interface language', () => {
+  const hero = { _type: 'hero', _id: 'aaaa1111', heading: 'Welcome' };
+  const [row] = changesIn(
+    diffEntry(
+      'default',
+      labelled,
+      { en: { body: [] } },
+      { en: { body: [{ ...hero, heading: '' }] } },
+    ),
+    'en',
+  );
+
+  expect(row).toMatchObject({ kind: 'row', type: 'Hero', types: { en: 'Hero', de: 'Bühne' } });
+});
+
+test('a row position carries the localized name of the following block', () => {
+  const row = (id: string) => ({ _id: id, _type: 'hero', heading: '' });
+  const changes = changesIn(
+    diffEntry(
+      'default',
+      labelled,
+      { en: { body: [row('existing')] } },
+      { en: { body: [row('new'), row('existing')] } },
+    ),
+    'en',
+  );
+  expect(changes[0]).toMatchObject({
+    kind: 'row',
+    at: 'added',
+    above: 'Hero',
+    aboveLabels: { en: 'Hero', de: 'Bühne' },
+  });
+});

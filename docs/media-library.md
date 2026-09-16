@@ -62,8 +62,8 @@ existing content or a deployed page.
 The library follows the account's **Interface language** for search, filters, counts, dates and
 byte sizes, the detail panel, metadata recovery and deletion guidance. Switching English/Deutsch
 keeps the same selected asset, search, filter state, focused control, unsaved tag input, optimistic
-metadata and pending uploads. Filenames, alt text, tags, storage keys, MIME values, URLs and site
-preset labels remain authored data.
+metadata and pending uploads. Filenames, alt text, tags, storage keys, MIME values and URLs remain
+authored data; preset labels switch only where their field's label does.
 
 ## Failure and recovery
 

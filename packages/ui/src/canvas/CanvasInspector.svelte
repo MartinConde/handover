@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { Field } from '@handover/core';
+import { type Field, type Form, formIn, labelIn } from '@handover/core';
 import { untrack } from 'svelte';
 import type {
   EntrySession,
@@ -26,6 +26,7 @@ let {
   sourceLocale,
   session,
   blocks,
+  blockLabels,
   problems = {},
   mediaBase = '',
   site,
@@ -47,6 +48,7 @@ let {
   sourceLocale: string;
   session: EntrySession;
   blocks: Record<string, Field[]>;
+  blockLabels?: Form['blockLabels'];
   problems?: Record<string, string>;
   mediaBase?: string;
   site?: string;
@@ -75,11 +77,24 @@ const parentPath = $derived(
 const translating = $derived(locale !== sourceLocale);
 const mutationBlocked = $derived(locked || session.localeMutationBlocked(locale));
 const options = $derived(messageOptions(uiLocale));
+const shownFields = $derived(
+  formIn(
+    { fields: blockInspection?.fields ?? (inspected ? [inspected.field] : []), blocks: {} },
+    uiLocale,
+  ).fields,
+);
 const fieldLabel = $derived(
-  resolvedTarget?.field.label || resolvedTarget?.field.path.at(-1) || m.canvas_content({}, options),
+  labelIn(resolvedTarget?.field.labels, uiLocale) ||
+    resolvedTarget?.field.label ||
+    resolvedTarget?.field.path.at(-1) ||
+    m.canvas_content({}, options),
 );
 const heading = $derived(
-  sameDocument ? (blockInspection?.type ?? fieldLabel) : selection.target.document.id,
+  sameDocument
+    ? blockInspection
+      ? (labelIn(blockLabels?.[blockInspection.type], uiLocale) ?? blockInspection.type)
+      : fieldLabel
+    : selection.target.document.id,
 );
 const fieldType = $derived.by(() => {
   if (blockInspection) return m.canvas_type_block({}, options);
@@ -251,10 +266,11 @@ function completionEvents(node: HTMLFormElement) {
       <fieldset disabled={mutationBlocked}>
         {#key widgetKey}
           <Fields
-            fields={blockInspection?.fields ?? (inspected ? [inspected.field] : [])}
+            fields={shownFields}
             root={session.snapshot(locale)}
             path={blockInspection?.path ?? parentPath}
             {blocks}
+            {blockLabels}
             {problems}
             {mediaBase}
             {locale}

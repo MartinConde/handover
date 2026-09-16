@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import {
+  collectionName,
   DEFAULT_UI_LOCALE,
   deviceLocale,
   deviceLocaleCookie,
@@ -13,6 +14,7 @@ import {
   rememberUiLocale,
   resolveUiLocale,
   UI_LOCALES,
+  useCollectionLabels,
 } from './i18n.js';
 import { m } from './paraglide/messages.js';
 
@@ -139,5 +141,27 @@ describe('content-language names', () => {
     ['de', 'not_a_language', 'not_a_language'],
   ] as const)('%s presents %s as %s', (locale, code, expected) => {
     expect(formatLanguageName(code, locale)).toBe(expected);
+  });
+});
+
+describe('collection names', () => {
+  test('a collection without a label is called by its key', () => {
+    useCollectionLabels({});
+    expect(collectionName('pages', 'de')).toBe('pages');
+    expect(collectionName('pages', 'en', 'singular')).toBe('page');
+  });
+
+  test('a label and its singular answer in the interface language', () => {
+    useCollectionLabels({
+      pages: { label: { en: 'pages', de: 'Seiten' }, singular: { en: 'page', de: 'Seite' } },
+    });
+    expect(collectionName('pages', 'de')).toBe('Seiten');
+    expect(collectionName('pages', 'de', 'singular')).toBe('Seite');
+  });
+
+  // Taking an s off a label guesses wrong ("Medien"), so the label stands for both.
+  test('a label without a singular is used for one entry too', () => {
+    useCollectionLabels({ media: { label: { en: 'media', de: 'Medien' } } });
+    expect(collectionName('media', 'de', 'singular')).toBe('Medien');
   });
 });

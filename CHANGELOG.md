@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Name collections, globals, fields and block types in each interface language. A collection takes
+  `label` and `singular` in `cms.config.ts`; a schema takes `.meta({ label: { en, de } })`. The
+  editor, entry lists, dashboard, pending changes, History diffs, conflicts and Canvas panels read
+  the editor's language and switch without a reload. A collection label with a key other than
+  `en` or `de` stops the build.
+
 - Cache validated Paraglide output by its complete compiler-input fingerprint, and isolate catalog
   validation from compilation so repeated release builds avoid overlapping Inlang SDK heaps. The
   release proof now covers archive installation, fresh and upgraded consumer migrations, packaged

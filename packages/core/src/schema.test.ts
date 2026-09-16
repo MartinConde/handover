@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { fieldsFrom, formOf, imagePresets, type JsonSchema } from './schema.js';
+import { fieldsFrom, formIn, formOf, imagePresets, type JsonSchema } from './schema.js';
 
 // Hand-written `z.toJSONSchema()` output: core never holds a Zod object.
 const obj = (properties: Record<string, JsonSchema>, required: string[] = []): JsonSchema => ({
@@ -369,6 +369,56 @@ test('a label in the schema wins over the humanised key', () => {
   expect(fieldsFrom('default', schema)[0]?.label).toBe('SEO');
 });
 
+test('a label per language keeps every language and reads English by default', () => {
+  const schema = obj({ title: { type: 'string', label: { en: 'Title', de: 'Titel' } } });
+  expect(fieldsFrom('default', schema)).toEqual([
+    {
+      path: ['title'],
+      label: 'Title',
+      labels: { en: 'Title', de: 'Titel' },
+      type: 'text',
+      required: false,
+    },
+  ]);
+});
+
+test('a block type labelled in its schema is named in the form', () => {
+  const hero = obj({ _type: { type: 'string', const: 'hero' } });
+  hero.label = { en: 'Hero', de: 'Bühne' };
+  const cta = obj({ _type: { type: 'string', const: 'cta' } });
+  const schema = obj({
+    body: {
+      type: 'array',
+      handover: 'blocks',
+      types: ['hero', 'cta'],
+      items: { anyOf: [hero, cta] },
+    },
+  });
+  expect(formOf('default', schema).blockLabels).toEqual({ hero: { en: 'Hero', de: 'Bühne' } });
+});
+
+test('formIn names every field and block type in the language asked for', () => {
+  const hero = obj({
+    _type: { type: 'string', const: 'hero' },
+    heading: { type: 'string', label: { en: 'Heading', de: 'Überschrift' } },
+  });
+  hero.label = { en: 'Hero', de: 'Bühne' };
+  const schema = obj({
+    contact: obj({ phone: { type: 'string', label: { en: 'Phone', de: 'Telefon' } } }),
+    days: { type: 'array', items: obj({ day: { type: 'string', label: { de: 'Tag' } } }) },
+    body: { type: 'array', handover: 'blocks', types: ['hero'], items: { anyOf: [hero] } },
+    note: { type: 'string' },
+  });
+  const form = formIn(formOf('default', schema), 'de');
+  const [contact, days, body, note] = form.fields;
+  expect(contact?.type === 'group' && contact.fields[0]?.label).toBe('Telefon');
+  expect(days?.type === 'array' && days.item[0]?.label).toBe('Tag');
+  expect(body?.label).toBe('Body');
+  expect(note?.label).toBe('Note');
+  expect(form.blocks.hero?.[0]?.label).toBe('Überschrift');
+  expect(form.blockLabels).toEqual({ hero: 'Bühne' });
+});
+
 test('groups, arrays, blocks and unsupported leaves are labelled too', () => {
   const schema = obj({
     mainContact: obj({ phoneNumber: { type: 'string' } }),
@@ -447,5 +497,21 @@ test('the site’s image ratios are collected from every depth, once each', () =
     { label: 'Hero image', preset: { ratio: '16:9', max: 2400 } },
     { label: 'Gallery', preset: { ratio: '4:3', max: 1600 } },
     { label: 'Portrait', preset: { ratio: '1:1', max: 512 } },
+  ]);
+});
+
+test('an image ratio keeps the labels of the field that asked for it', () => {
+  const form = formOf(
+    'default',
+    obj({
+      photos: {
+        type: 'array',
+        label: { en: 'Photos', de: 'Fotos' },
+        items: { handover: 'image', ratio: '4:3', max: 1600 },
+      },
+    }),
+  );
+  expect(imagePresets([form])).toEqual([
+    { label: 'Photos', labels: { en: 'Photos', de: 'Fotos' }, preset: { ratio: '4:3', max: 1600 } },
   ]);
 });

@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { Preset } from '@handover/core';
+import type { Labels, Preset } from '@handover/core';
 import { ParaglideMessage } from '@inlang/paraglide-js-svelte';
 import { tick } from 'svelte';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
@@ -20,7 +20,7 @@ let {
   /** Where a stored key is served from. */
   base?: string;
   /** Every shape this site crops a picture to: what the focal picker previews and Crop offers. */
-  presets?: { label: string; preset: Preset }[];
+  presets?: { label: string; labels?: Labels; preset: Preset }[];
   uiLocale?: UiLocale;
 } = $props();
 

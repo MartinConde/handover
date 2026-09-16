@@ -137,8 +137,8 @@ guidance and the SEO panel follow the account's interface language. Switching En
 updates open block and page pickers, an embed replacement with a retained refusal, SEO notices and
 compact Handover-owned dates in place. Nested and repeatable input nodes, focus, selections and
 values stay where they are; no entry-directory reread or content write is caused by the switch.
-Schema labels and option values, block type names, entry titles, paths, filenames, URLs and edited
-content remain exactly as authored. “Same in every language” describes shared structure; it changes
+Option values, entry titles, paths, filenames, URLs and edited content remain exactly as authored;
+schema labels and block type names switch only where the site gives one per language. “Same in every language” describes shared structure; it changes
 language as interface text but does not duplicate or rewrite the stored value.
 Link-choice and row-action sentences translate as complete phrases around authored field names and
 row numbers. SEO meters always describe the plural configured limit, even when one character has
@@ -160,7 +160,7 @@ An upload completing after the switch reports its result in the latest language.
 
 Focal-point and crop dialogs update their headings, instructions, controls, live accessibility
 labels and retained failures in place. Their DOM nodes, focus, focal coordinates, crop region and
-ratio remain unchanged; authored filenames and preset labels do not translate. Changing interface
+ratio remain unchanged; filenames do not translate, and preset labels only as their field's label does. Changing interface
 language causes no image processing, content write or geometry reset. Crop source-read, render and
 upload failures keep separate recovery identities and safe diagnostics.
 

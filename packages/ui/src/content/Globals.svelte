@@ -1,14 +1,17 @@
 <script lang="ts">
+import type { Labels } from '@handover/core';
 import { formatExactTime, formatRelativeTime, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
 
 let { uiLocale = 'en' }: { uiLocale?: UiLocale } = $props();
 const options = $derived(messageOptions(uiLocale));
+const named = (global: Global) => global.labels?.[uiLocale] ?? global.label;
 
 type Global = {
   key: string;
   label: string;
+  labels?: Labels;
   description?: string;
   /** The languages this global has a file in; the rest are the dashed chip. */
   locales: string[];
@@ -60,13 +63,13 @@ async function load() {
     <div class="settings-list">
       {#each globals as global (global.key)}
         <div class="global-card">
-          <span class="global-symbol" aria-hidden="true">{global.label.slice(0, 1).toUpperCase()}</span>
+          <span class="global-symbol" aria-hidden="true">{named(global).slice(0, 1).toUpperCase()}</span>
           <h2>
             {#if global.pending}
               <span class="pdot" aria-hidden="true"></span>
               <span class="visually-hidden">{m.shell_unpublished_changes({}, options)}.</span>
             {/if}
-            <a href={sitePath(`/admin/site/${global.key}`)}>{global.label}</a>
+            <a href={sitePath(`/admin/site/${global.key}`)}>{named(global)}</a>
           </h2>
           {#if global.description}<p>{global.description}</p>{/if}
           <div class="meta">

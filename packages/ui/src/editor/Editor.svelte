@@ -4,7 +4,10 @@ import {
   entryName,
   entryUrl,
   type Field,
+  type Form,
   fieldPosition,
+  formIn,
+  type Labels,
   LOCK_TTL,
   resolveSeo,
   type SeoDefaultsValue,
@@ -15,7 +18,13 @@ import type { CanvasRenderRequest } from '../canvas/canvas-renderer';
 import OffsiteDialog, { type Target } from '../content/Offsite.svelte';
 import { invalidateEntryDirectory } from '../entry-directory.js';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
-import { formatExactTime, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
+import {
+  collectionName,
+  formatExactTime,
+  formatLanguageName,
+  messageOptions,
+  type UiLocale,
+} from '../i18n.js';
 import {
   guardEntryActions,
   guardNavigation,
@@ -75,6 +84,7 @@ let {
   entry: {
     fields: readonly Field[];
     blocks: Record<string, Field[]>;
+    blockLabels?: Form['blockLabels'];
     data: Data;
     revisions?: Record<string, string>;
     /** The languages whose file this entry has a draft ahead of in git. */
@@ -97,6 +107,7 @@ let {
     singleton?: boolean;
     /** What the dev calls this global — a global has no title field to be named by. */
     label?: string;
+    labels?: Labels;
     /** The languages the site declares. */
     locales: string[];
     /** The site's default, which is what says whether a language's URLs carry its segment. */
@@ -397,17 +408,26 @@ async function offer(of: string, on: boolean, redirect?: Target) {
 const sourceUnsaved = $derived(entrySession.unsaved(entry.sourceLocale));
 const missing = $derived(Object.keys(problems));
 const named = $derived(data[entry.titleField ?? 'title']);
-const title = $derived(entry.label ?? (typeof named === 'string' && named ? named : slug));
+const title = $derived(
+  entry.labels?.[uiLocale] ?? entry.label ?? (typeof named === 'string' && named ? named : slug),
+);
 // The SEO panel is its own tab, so the Content form omits the field; a global has no tabs.
 const seoField = $derived(!entry.singleton && entry.fields.some((f) => f.type === 'seo'));
 /** The key the seo field sits under, which is what a problem on it is named by. */
 const seoAt = $derived(entry.fields.find((f) => f.type === 'seo')?.path[0]);
+// Named again when the interface language changes, without reading the entry again.
+const shownForm = $derived(
+  formIn(
+    { fields: [...entry.fields], blocks: entry.blocks, blockLabels: entry.blockLabels },
+    uiLocale,
+  ),
+);
 const fields = $derived(
   !seoField
-    ? entry.fields
+    ? shownForm.fields
     : section === 'seo'
-      ? entry.fields.filter((f) => f.type === 'seo')
-      : entry.fields.filter((f) => f.type !== 'seo'),
+      ? shownForm.fields.filter((f) => f.type === 'seo')
+      : shownForm.fields.filter((f) => f.type !== 'seo'),
 );
 /** What one language's page would say with nothing typed: the build's own resolution. */
 const inherited = (of: string, values: Data) =>
@@ -1201,7 +1221,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   {/if}
   <header class="entry-header" class:is-held={held}>
     <div class="crumbs">
-      <a href={sitePath(entry.singleton ? '/admin/site' : `/admin/c/${collection}`)}>{entry.singleton ? m.editor_site_settings({}, options) : capitalise(collection)}</a><span class="sep" aria-hidden="true">/</span><span>{title}</span>
+      <a href={sitePath(entry.singleton ? '/admin/site' : `/admin/c/${collection}`)}>{entry.singleton ? m.editor_site_settings({}, options) : capitalise(collectionName(collection, uiLocale))}</a><span class="sep" aria-hidden="true">/</span><span>{title}</span>
       <span class="autosave" class:is-saving={saving} class:is-offline={saveFailed}>
         {#if saving}{m.editor_save_saving({}, options)}{:else if saveFailed}{m.editor_save_not_saved({}, options)}{:else if sourceUnsaved}{m.editor_save_unsaved_changes({}, options)}{:else}{m.editor_save_saved({}, options)}{/if}
       </span>
@@ -1426,7 +1446,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           onfocusout={canvasCompleted}
         >
           <fieldset disabled={locked || entrySession.localeMutationBlocked(entry.sourceLocale)}>
-            <Fields {fields} blocks={entry.blocks} {problems} {mediaBase} locale={entry.sourceLocale} {uiLocale} session={entrySession} inheritedSeo={inherited(entry.sourceLocale, data)} {site} servedAt={localeUrl(entry.sourceLocale)} bind:root={entrySession.snapshots[entry.sourceLocale]!} structureLocked={entrySession.structureMutationBlocked()} textOnly={entrySession.sourceTextOnly(entry.sourceLocale)} />
+            <Fields {fields} blocks={shownForm.blocks} blockLabels={shownForm.blockLabels} {problems} {mediaBase} locale={entry.sourceLocale} {uiLocale} session={entrySession} inheritedSeo={inherited(entry.sourceLocale, data)} {site} servedAt={localeUrl(entry.sourceLocale)} bind:root={entrySession.snapshots[entry.sourceLocale]!} structureLocked={entrySession.structureMutationBlocked()} textOnly={entrySession.sourceTextOnly(entry.sourceLocale)} />
           </fieldset>
         </form>
       {/if}
@@ -1518,7 +1538,8 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
               locale={shown}
               session={entrySession}
               {fields}
-              blocks={entry.blocks}
+              blocks={shownForm.blocks}
+              blockLabels={shownForm.blockLabels}
               bind:data={entrySession.snapshots[shown]!}
               problems={entrySession.positionalProblems(shown, uiLocale)}
               inheritedSeo={inherited(shown, entrySession.snapshot(shown))}
@@ -1557,7 +1578,8 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           ownerLabel={title}
           sourceLocale={entry.sourceLocale}
           session={entrySession}
-          blocks={entry.blocks}
+          blocks={shownForm.blocks}
+          blockLabels={shownForm.blockLabels}
           problems={locale === entry.sourceLocale ? problems : entrySession.positionalProblems(locale, uiLocale)}
           onreviewproblems={reviewCanvasProblems}
           {mediaBase}

@@ -35,6 +35,8 @@ digits and dashes.
 | `load` | no | The loader's name: `'post'` means `src/loaders/post.ts` ([Loaders and pages](loaders.md)). Preview needs it. |
 | `titleField` | no | The field the entry list shows, when the collection is not keyed on `title`: `titleField: 'name'`. It is also the field "New entry" writes the name you type into, so it has to be a text field of this collection's schema — the build says so if it is not. |
 | `localizedSlugs` | no | Each language may serve this collection's entries at a web address of its own. See below. |
+| `label` | no | What the admin calls the collection, written as it reads mid-sentence: `'homes'` or `{ en: 'homes', de: 'Häuser' }`. Without it the key is used. See [Names in each interface language](#names-in-each-interface-language). |
+| `singular` | no | One entry of it, the same way: `{ en: 'home', de: 'Haus' }`. Without it the `label` is used, or the key without its final `s`. |
 
 ## `i18n`
 
@@ -101,6 +103,37 @@ cms.config.ts › collections.posts.localizedSlugs: this collection's schema has
   language only ([Publishing](publishing.md#creating-renaming-and-deleting)) — the other languages' URLs did not move
 - Off, a `slug` in a file is an ordinary field of that collection's schema like any other
 
+## Names in each interface language
+
+Wherever the admin shows a name you chose — a collection, a global, a field, a block type — the name
+can be one string or one per [interface language](interface-language.md): `{ en: '…', de: '…' }`.
+Each editor reads the one for the language they picked. A language you leave out reads the English
+one, and without English the first one given.
+
+```ts
+collections: {
+  listings: {
+    schema: listing,
+    label: { en: 'homes', de: 'Häuser' },
+    singular: { en: 'home', de: 'Haus' },
+  },
+},
+```
+
+The sidebar reads **Homes** or **Häuser**, and the button reads **New home** or **Neu in Häuser**.
+Write a collection's names the way they read inside a sentence. Headings capitalise the first
+letter. In a collection's `label` or `singular`, a key other than `en` or `de` stops the build:
+
+```
+cms.config.ts › collections.listings.label: "ger" is not an interface language — en, de
+```
+
+Globals, fields and block types take the same shape through `.meta({ label })`. See
+[Field types](field-types.md#labels) for fields and block types, and `globals` below. A
+description stays one string. Two places keep one name however the admin is set. The Canvas
+Structure list names a block by `_label` or its type, because the site renders it. The
+publish-check sentences are English and use the English label.
+
 ## `globals`
 
 One key per site-wide file under `src/content/globals/<locale>/`, mapping the file name
@@ -114,7 +147,7 @@ is called comes from the schema, so the client reads a name rather than a file n
 export const site = z
   .object({ name: z.string(), footerText: z.string() })
   .meta({
-    label: 'Site details',
+    label: { en: 'Site details', de: 'Website-Angaben' },
     description: 'The name, contact details and footer line every page carries',
   });
 ```

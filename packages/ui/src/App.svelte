@@ -1,5 +1,5 @@
 <script lang="ts">
-import type { Preset, UiLocale } from '@handover/core';
+import type { Labels, Preset, UiLocale } from '@handover/core';
 import Account from './account/Account.svelte';
 import Activity from './account/Activity.svelte';
 import Diagnostics from './account/Diagnostics.svelte';
@@ -10,6 +10,8 @@ import Globals from './content/Globals.svelte';
 import Redirects from './content/Redirects.svelte';
 import { invalidateEntryDirectory } from './entry-directory.js';
 import {
+  type CollectionLabels,
+  collectionName,
   formatRelativeTime,
   type UiLocale as InterfaceLocale,
   isUiLocale,
@@ -18,6 +20,7 @@ import {
   rememberUiLocale,
   resolveUiLocale,
   showUiLocale,
+  useCollectionLabels,
 } from './i18n.js';
 import Library from './media/Library.svelte';
 import { coordinateEntryReplacement, flushNavigation, navigate } from './navigate';
@@ -31,10 +34,12 @@ import Dashboard from './shell/Dashboard.svelte';
 
 export interface Session {
   collections: string[];
+  /** What the site calls its collections, in every interface language. */
+  collectionLabels?: CollectionLabels;
   /** Where a stored media key is served from, so a widget can draw what a content file names. */
   mediaBase?: string;
   /** Every shape this site crops a picture to, which is what the focal picker previews. */
-  presets?: { label: string; preset: Preset }[];
+  presets?: { label: string; labels?: Labels; preset: Preset }[];
   /** This build serves `/_preview`, so the editor can offer to show the page before it is live. */
   preview?: boolean;
   /** `site` from astro.config, which the SEO previews print each language's address under. */
@@ -58,6 +63,8 @@ let {
 } = $props();
 // svelte-ignore state_referenced_locally -- the prop is only the initial value
 let session = $state(signedIn);
+// svelte-ignore state_referenced_locally -- the ping below sets them again with a new session
+useCollectionLabels(signedIn?.collectionLabels);
 let sessionBusy = $state(false);
 // svelte-ignore state_referenced_locally -- bootstrap resolves this before the first mount
 let uiLocale = $state(initialUiLocale);
@@ -268,6 +275,7 @@ async function loadSession() {
   sessionBusy = false;
   if (res.ok) {
     const next = (await res.json()) as Session;
+    useCollectionLabels(next.collectionLabels);
     useLocale(resolveUiLocale(next.user.uiLocale, readDeviceLocale(), navigator.languages));
     session = next;
     sessionError = undefined;
@@ -581,7 +589,7 @@ const initial = $derived(
             href={sitePath(`/admin/c/${name}`)}
             data-icon={['listings', 'pages', 'team', 'blog'].includes(name) ? name : 'collection'}
             aria-current={(listRoute ?? entryRoute)?.[1] === name ? 'page' : undefined}
-          >{capitalise(name)}</a>
+          >{capitalise(collectionName(name, uiLocale))}</a>
         {/each}
       </div>
     </nav>

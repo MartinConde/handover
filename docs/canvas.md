@@ -176,8 +176,9 @@ technical detail remains separate when it is available.
 
 Inspector and the staged block-replacement panel follow the same language. Their field-kind labels,
 content-language names, guidance, retained refusals, actions, tooltips and accessibility text switch
-without replacing the selected field or focused widget, or clearing a configured replacement. Schema
-field labels, block type names, entry names, paths and edited values remain site-authored text. Panel
+without replacing the selected field or focused widget, or clearing a configured replacement. Entry
+names, paths and edited values remain site-authored text; field labels and block type names switch
+where the site gives one per language, except in Structure, which the site renders. Panel
 controls allow longer German labels to wrap within the available width.
 
 Structure lists blocks by the same name the form editor gives them — a block's `_label`, else its

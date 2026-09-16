@@ -1158,6 +1158,30 @@ test('defineConfig fails when mailer.provider names no provider', () => {
   ).not.toThrow();
 });
 
+// A language code the admin does not have would fall back to English with nothing saying why.
+test('defineConfig fails when a collection label names no interface language', () => {
+  expect(() =>
+    defineConfig({
+      i18n: EN,
+      collections: {
+        posts: { schema: z.object({}), label: { en: 'posts', ger: 'Beiträge' } as never },
+      },
+    }),
+  ).toThrow('cms.config.ts › collections.posts.label: "ger" is not an interface language — en, de');
+  expect(() =>
+    defineConfig({
+      i18n: EN,
+      collections: {
+        posts: {
+          schema: z.object({}),
+          label: { en: 'posts', de: 'Beiträge' },
+          singular: { en: 'post', de: 'Beitrag' },
+        },
+      },
+    }),
+  ).not.toThrow();
+});
+
 // A typo in checks.ignore is a check the site thinks it turned off, which nothing else would say.
 test('defineConfig fails when checks.ignore names no check', () => {
   expect(() =>

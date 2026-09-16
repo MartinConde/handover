@@ -61,6 +61,17 @@ test('one card per global, named and described by the schema', async () => {
   ]);
 });
 
+test('a global labelled per language is named in the interface language', async () => {
+  const root = show(
+    [{ ...GLOBALS[0], labels: { en: 'Site details', de: 'Website-Angaben' } }],
+    ['en', 'de'],
+    'de',
+  );
+  await loaded();
+
+  expect(all(root, '.global-card h2 a')[0]?.textContent).toBe('Website-Angaben');
+});
+
 test('a language with no file yet is the dashed chip, and an unpublished change is the dot', async () => {
   const root = show();
   await loaded();

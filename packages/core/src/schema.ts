@@ -1,5 +1,6 @@
 import { DEFAULT_MAX, type Preset } from './media.js';
 import type { RichtextTier } from './richtext.js';
+import { type Labels, labelIn, labelsOf, type UiLocale } from './ui-locale.js';
 
 // The subset of `z.toJSONSchema()` output the walker reads; anything else is "unsupported".
 export interface JsonSchema {
@@ -37,12 +38,15 @@ type FieldOf =
   | { path: string[]; label: string; type: 'blocks'; required: boolean; types: string[] }
   | { path: string[]; label: string; type: 'unsupported' };
 
-export type Field = FieldOf & { i18n?: Translation };
+// `label` is the English-first name; `labels` is kept so the admin can switch language without asking again.
+export type Field = FieldOf & { i18n?: Translation; labels?: Labels };
 
 // Keyed by name, not nested under each `blocks` field, because a block can contain its own type.
 export interface Form {
   fields: Field[];
   blocks: Record<string, Field[]>;
+  /** Only the block types whose schema names them. */
+  blockLabels?: Record<string, string | Labels>;
 }
 
 export function fieldsFrom(_siteId: string, schema: JsonSchema): Field[] {
@@ -76,29 +80,36 @@ export const rowFields = (field: Field): readonly Field[] | undefined =>
       ? field.item
       : undefined;
 
+type Named = { label: string; labels?: Labels };
+
 /** Every ratio the site shows a picture at, once each, for the focal picker's previews. */
-export function imagePresets(forms: Iterable<Form>): { label: string; preset: Preset }[] {
-  const found = new Map<string, { label: string; preset: Preset }>();
+export function imagePresets(forms: Iterable<Form>): (Named & { preset: Preset })[] {
+  const found = new Map<string, Named & { preset: Preset }>();
   // An array of pictures labels its item with nothing, so the row is named after its field.
-  const walk = (fields: Field[], within: string) => {
+  const walk = (fields: Field[], within: Named) => {
     for (const field of fields) {
-      const label = field.label || within;
+      const named: Named = field.label
+        ? field.labels
+          ? { label: field.label, labels: field.labels }
+          : { label: field.label }
+        : within;
       if (field.type === 'image') {
         if (field.preset.ratio && !found.has(field.preset.ratio))
-          found.set(field.preset.ratio, { label, preset: field.preset });
-      } else if (field.type === 'group') walk(field.fields, label);
-      else if (field.type === 'array') walk(field.item, label);
+          found.set(field.preset.ratio, { ...named, preset: field.preset });
+      } else if (field.type === 'group') walk(field.fields, named);
+      else if (field.type === 'array') walk(field.item, named);
     }
   };
   for (const form of forms) {
-    walk(form.fields, '');
-    for (const fields of Object.values(form.blocks)) walk(fields, '');
+    walk(form.fields, { label: '' });
+    for (const fields of Object.values(form.blocks)) walk(fields, { label: '' });
   }
   return [...found.values()];
 }
 
 export function formOf(_siteId: string, schema: JsonSchema): Form {
   const blocks: Record<string, Field[]> = {};
+  const blockLabels: Record<string, string | Labels> = {};
   const seen = new Set<JsonSchema>();
   const collect = (node: JsonSchema) => {
     const s = resolve(schema, node);
@@ -106,7 +117,10 @@ export function formOf(_siteId: string, schema: JsonSchema): Form {
     seen.add(s);
     if (s.handover === 'blocks') {
       for (const b of blockObjects(schema, s.items)) {
-        blocks[String(b.properties?._type?.const)] ??= objectFields(schema, b);
+        const type = String(b.properties?._type?.const);
+        blocks[type] ??= objectFields(schema, b);
+        const label = labelsOf(b.label) ?? labelIn(b.label, 'en');
+        if (label) blockLabels[type] = label;
         collect(b);
       }
       return;
@@ -115,7 +129,25 @@ export function formOf(_siteId: string, schema: JsonSchema): Form {
       if (child) collect(child);
   };
   collect(schema);
-  return { fields: fieldsFrom(_siteId, schema), blocks };
+  const fields = fieldsFrom(_siteId, schema);
+  return Object.keys(blockLabels).length ? { fields, blocks, blockLabels } : { fields, blocks };
+}
+
+/** The form with every name in one interface language, for whatever shows it to a reader. */
+export function formIn(form: Form, locale: UiLocale): Form {
+  const named = (fields: Field[]): Field[] =>
+    fields.map((field) => {
+      const label = field.labels?.[locale] ?? field.label;
+      if (field.type === 'group') return { ...field, label, fields: named(field.fields) };
+      if (field.type === 'array') return { ...field, label, item: named(field.item) };
+      return { ...field, label };
+    });
+  const blocks = Object.fromEntries(Object.entries(form.blocks).map(([t, f]) => [t, named(f)]));
+  if (!form.blockLabels) return { fields: named(form.fields), blocks };
+  const blockLabels = Object.fromEntries(
+    Object.entries(form.blockLabels).map(([type, label]) => [type, labelIn(label, locale) ?? type]),
+  );
+  return { fields: named(form.fields), blocks, blockLabels };
 }
 
 function blockObjects(root: JsonSchema, node: JsonSchema | undefined): JsonSchema[] {
@@ -155,8 +187,18 @@ export const humanise = (key: string) =>
 function fieldOf(root: JsonSchema, path: string[], node: JsonSchema, required: boolean): Field[] {
   const child = resolve(root, node);
   // An array item has no key, and the form numbers its rows instead.
-  const label =
-    typeof child.label === 'string' ? child.label : humanise(path[path.length - 1] ?? '');
+  const label = labelIn(child.label, 'en') ?? humanise(path[path.length - 1] ?? '');
+  const labels = labelsOf(child.label);
+  return fieldFrom(root, path, child, required, label).map((f) => (labels ? { ...f, labels } : f));
+}
+
+function fieldFrom(
+  root: JsonSchema,
+  path: string[],
+  child: JsonSchema,
+  required: boolean,
+  label: string,
+): Field[] {
   // Shapes the package's own helpers tag with `.meta({ handover })`; see astro-handover.
   switch (child.handover) {
     case 'text':

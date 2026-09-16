@@ -1,5 +1,11 @@
 <script lang="ts">
-import { type Field, keptMachine, type ResolvedSeo, type WordPart } from '@handover/core';
+import {
+  type Field,
+  type Form,
+  keptMachine,
+  type ResolvedSeo,
+  type WordPart,
+} from '@handover/core';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
 import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
@@ -15,6 +21,7 @@ let {
   session,
   fields,
   blocks,
+  blockLabels,
   data = $bindable(),
   problems = {},
   source,
@@ -39,6 +46,7 @@ let {
   session: EntrySession;
   fields: readonly Field[];
   blocks: Record<string, Field[]>;
+  blockLabels?: Form['blockLabels'];
   data: Data;
   problems?: Record<string, string>;
   mediaBase?: string;
@@ -182,6 +190,7 @@ const failureDetail = $derived(
       <Fields
         {fields}
         {blocks}
+        {blockLabels}
         {problems}
         {machine}
         {mediaBase}

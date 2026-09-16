@@ -7,8 +7,9 @@ tables — every tile is a read the admin already makes.
 The dashboard and surrounding navigation follow the account's **Interface language**. Switching
 between English and Deutsch updates tile headings, counts, loading/empty/error states, build
 status, controls, dates, and accessibility labels in place. It does not reread dashboard data.
-Entry titles, collection names, member names, content-language codes, and provider diagnostics
-stay exactly as authored. Activity-event sentences are still English during the staged migration.
+Entry titles, member names, content-language codes, and provider diagnostics stay exactly as
+authored. Collection and global names switch where the site gives one per language
+([Configuration](configuration.md#names-in-each-interface-language)). Activity-event sentences are still English during the staged migration.
 Malformed successful dashboard and activity responses stay unavailable and retryable; they do not
 erase an already-known tile value or masquerade as an empty result.
 

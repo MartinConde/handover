@@ -108,3 +108,44 @@ test('diff chrome and language names render in German while authored labels stay
   expect(root.querySelector('.row')?.textContent).toContain('Authored title label');
   expect(root.querySelector('.row')?.textContent).toContain('geändert');
 });
+
+test('a change and a block type labelled per language are named in the interface language', () => {
+  const body = show(
+    [
+      {
+        locale: 'en',
+        changes: [
+          {
+            path: 'body[_id=aaaa1111]',
+            label: 'Hero',
+            labels: { en: 'Hero', de: 'Bühne' },
+            kind: 'row',
+            type: 'Hero',
+            types: { en: 'Hero', de: 'Bühne' },
+            above: 'Hero',
+            aboveLabels: { en: 'Hero', de: 'Bühne' },
+            at: 'added',
+            changes: [],
+          },
+          {
+            path: 'price',
+            label: 'Price',
+            labels: { en: 'Price', de: 'Preis' },
+            kind: 'value',
+            before: '1',
+            after: '2',
+          },
+        ],
+      },
+    ],
+    '',
+    'de',
+  );
+
+  expect(Array.from(body.querySelectorAll('small'), (s) => s.textContent)).toEqual([
+    'Bühne',
+    'Preis',
+  ]);
+  expect(body.querySelector('.is-block .sub')?.textContent).toContain('Bühne');
+  expect(body.querySelector('.is-block')?.textContent).not.toContain('Hero');
+});
