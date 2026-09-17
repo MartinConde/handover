@@ -258,9 +258,38 @@ window.fetch = async (input, init) => {
     });
   }
   if (path === '/admin/api/diagnostics') return json(config);
-  if (path === '/admin/api/settings') return json({ integrations: [] });
-  if (path.startsWith('/admin/api/checks/'))
-    return json({ ok: true, detail: 'Example connection result. No service was contacted.' });
+  if (path === '/admin/api/settings')
+    return json({
+      integrations: [
+        {
+          key: 'deepl',
+          source: 'settings',
+          fallback: 'off',
+          hint: 'x7Kq',
+          updatedAt: now - 86400000 * 12,
+          by: 'Martin',
+        },
+        { key: 'assist', source: 'off', fallback: 'off', hint: null, updatedAt: null, by: null },
+      ],
+    });
+  if (path.startsWith('/admin/api/checks/')) {
+    const check = path.slice('/admin/api/checks/'.length);
+    // `?fail=storage` shows the failing state without a broken site.
+    if (new URLSearchParams(location.search).get('fail') === check)
+      return Response.json(
+        { error: 'Example refusal: the bucket answered 403. No service was contacted.' },
+        { status: 502 },
+      );
+    const answers: Record<string, object> = {
+      github: { code: 'DIAGNOSTIC_GITHUB_OK', repository: 'example/site', revision: '76609ae' },
+      storage: { code: 'DIAGNOSTIC_STORAGE_OK', bucket: 'example-media', duration: 212 },
+      email: { to: 'martin@example.com' },
+      translation: { code: 'DIAGNOSTIC_TRANSLATION_OK', locale: 'de' },
+      build: { code: 'DIAGNOSTIC_BUILD_OK', worker: 'example-site' },
+      database: { code: 'DIAGNOSTIC_DATABASE_OK', version: 10 },
+    };
+    return json({ ok: true, ...answers[check] });
+  }
   if (path === '/admin/api/dashboard')
     return json({
       recent: entries.map((row) => ({

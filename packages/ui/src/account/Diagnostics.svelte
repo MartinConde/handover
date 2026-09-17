@@ -73,6 +73,7 @@ const CHECKS = [
 ];
 
 let results = $state<Record<string, Result>>({});
+let expanded = $state<Record<string, boolean>>({});
 let conflict = $state<DiagnosticMessage>();
 let simulating = $state(false);
 let keys = $state<Key[]>([]);
@@ -88,7 +89,7 @@ let trigger = $state<HTMLElement | null>(null);
 // Untracked because `run` reads and writes `results`, so a tracking effect would loop for ever.
 $effect(() => {
   untrack(() => {
-    for (const check of CHECKS) if (!check.sends) void run(check.key);
+    checkAll();
     void loadKeys();
   });
 });
@@ -142,7 +143,10 @@ function messageText(message: DiagnosticMessage): string {
       );
     case 'DIAGNOSTIC_TRANSLATION_OK':
     case 'INTEGRATION_KEY_TESTED':
-      return m.diagnostics_translation_ok({ locale: message.locale ?? '' }, options);
+      return m.diagnostics_translation_ok(
+        { locale: message.locale ? formatLanguageName(message.locale, uiLocale) : '' },
+        options,
+      );
     case 'DIAGNOSTIC_TRANSLATION_OFF':
       return m.diagnostics_translation_off({}, options);
     case 'DIAGNOSTIC_TRANSLATION_SINGLE_LANGUAGE':
@@ -185,7 +189,6 @@ function checkName(key: string): string {
   if (key === 'github') return m.diagnostics_github_name({}, options);
   if (key === 'storage') return m.diagnostics_storage_name({}, options);
   if (key === 'email') return m.diagnostics_email_name({}, options);
-  if (key === 'translation') return m.diagnostics_translation_name({}, options);
   if (key === 'build') return m.diagnostics_build_name({}, options);
   return m.diagnostics_database_name({}, options);
 }
@@ -194,9 +197,17 @@ function checkWhat(key: string): string {
   if (key === 'github') return m.diagnostics_github_what({}, options);
   if (key === 'storage') return m.diagnostics_storage_what({}, options);
   if (key === 'email') return m.diagnostics_email_what({}, options);
-  if (key === 'translation') return m.diagnostics_translation_what({}, options);
   if (key === 'build') return m.diagnostics_build_what({}, options);
   return m.diagnostics_database_what({}, options);
+}
+
+/** Brand names, so they stay as they are in every interface language. */
+function provider(key: string, config: Config): string | undefined {
+  if (key === 'github') return 'GitHub';
+  if (key === 'storage') return 'Cloudflare R2';
+  if (key === 'email') return config.mailer ? mailerName(config.mailer.provider) : undefined;
+  if (key === 'build') return 'Cloudflare Workers Builds';
+  return 'Cloudflare D1';
 }
 
 function checkStops(key: string): string {
@@ -234,6 +245,8 @@ async function run(key: string) {
     to?: string;
   };
   const at = Date.now();
+  // Opened here rather than bound to the state, so a row somebody opened survives a recheck.
+  if (!res.ok || body.to) expanded[key] = true;
   if (!res.ok) {
     results[key] = {
       state: 'failed',
@@ -326,6 +339,16 @@ async function simulate() {
   if (res.ok) await oncommitted?.();
 }
 
+// Translation is checked like the rest but drawn on the DeepL row, where its key is managed.
+const SERVICES = CHECKS.filter((check) => check.key !== 'translation');
+
+function checkAll() {
+  for (const check of CHECKS) if (!check.sends) void run(check.key);
+}
+
+const busy = $derived(CHECKS.some((check) => results[check.key]?.state === 'running'));
+const lastChecked = $derived(Math.max(0, ...CHECKS.map((check) => results[check.key]?.at ?? 0)));
+
 const failing = $derived(CHECKS.filter((check) => results[check.key]?.state === 'failed'));
 const consequence = $derived.by(() => {
   const list = new Intl.ListFormat(languageTag(uiLocale), {
@@ -394,145 +417,61 @@ const mailerName = (provider: string) => {
 </script>
 
 <main class="main diagnostics-page">
-  <div class="list-toolbar"><h1>{m.diagnostics_title({}, options)}</h1></div>
-  <p class="list-note">
-    {m.diagnostics_intro_before({}, options)} <code>cms.config.ts</code>{m.diagnostics_intro_after({}, options)}
-  </p>
+  <header class="page-head">
+    <h1>{m.diagnostics_title({}, options)}</h1>
+    <p class="list-note">{m.diagnostics_intro({}, options)}</p>
+  </header>
   {#await load()}
     <p class="placeholder">{m.common_loading({}, options)}</p>
   {:then config}
-    <!-- The count says what stops working, because that is the half the owner can judge. -->
-    {#if failing.length}
-      <p class="notice notice-danger page-alert" role="status">
-        <strong>
-          {m.diagnostics_failures({ count: failing.length }, options)}
-        </strong>
-        {consequence}
-      </p>
-    {/if}
     <div class="settings is-wide">
-      <section class="settings-section" aria-labelledby="cfg">
-        <header>
-          <h2 id="cfg">{m.diagnostics_configuration({}, options)}</h2>
-          <p>{m.diagnostics_configuration_before({}, options)} <code>cms.config.ts</code>{m.diagnostics_configuration_after({}, options)}</p>
-        </header>
-        <dl class="facts">
-          <div>
-            <dt>{m.diagnostics_collections({}, options)}</dt>
-            <dd>
-              {#each config.collections as collection, i (collection.name)}
-                {#if i}<span class="sep" aria-hidden="true">·</span>{/if}
-                <span>
-                  {capitalise(collection.name)}
-                  {#if collection.route}<span class="sub">{collection.route}</span>{/if}
-                </span>
-              {/each}
-            </dd>
-          </div>
-          <div>
-            <dt>{m.diagnostics_languages({}, options)}</dt>
-            <dd>
-              {#each config.locales as locale, i (locale)}
-                {#if i}<span class="sep" aria-hidden="true">·</span>{/if}
-                <span>
-                  {formatLanguageName(locale, uiLocale)}
-                  {#if locale === config.defaultLocale}<span class="badge">{m.diagnostics_default({}, options)}</span>{/if}
-                </span>
-              {/each}
-            </dd>
-          </div>
-          <div>
-            <dt>{m.diagnostics_media({}, options)}</dt>
-            <dd>
-              {#if config.mediaBase}
-                <code>{config.mediaBase}</code>
-              {:else}
-                {m.diagnostics_off({}, options)} <span class="sub">{m.diagnostics_media_off_before({}, options)} <code>media.publicBase</code>{m.diagnostics_media_off_after({}, options)}</span>
-              {/if}
-            </dd>
-          </div>
-          <div>
-            <dt>{m.diagnostics_email_name({}, options)}</dt>
-            <dd>
-              {#if config.mailer}
-                {mailerName(config.mailer.provider)}
-                {#if config.mailer.from}<span class="sub">{m.diagnostics_from_address({ address: config.mailer.from }, options)}</span>{/if}
-              {:else}
-                {m.diagnostics_off({}, options)} <span class="sub">{m.diagnostics_email_off_before({}, options)} <code>mailer</code>{m.diagnostics_email_off_after({}, options)}</span>
-              {/if}
-            </dd>
-          </div>
-          <div>
-            <dt>{m.diagnostics_preview({}, options)}</dt>
-            <dd>
-              {#if config.preview}
-                {m.diagnostics_on({}, options)}
-              {:else}
-                <!-- Named rather than offered: nothing in the admin can turn this on. -->
-                {m.diagnostics_off({}, options)} <span class="sub">{m.diagnostics_preview_off_before({}, options)} <code>PREVIEW_ENABLED</code>{m.diagnostics_preview_off_after({}, options)}</span>
-              {/if}
-            </dd>
-          </div>
-        </dl>
-      </section>
-      <section class="settings-section" aria-labelledby="conn">
-        <header>
-          <h2 id="conn">{m.diagnostics_connections({}, options)}</h2>
-          <p>{m.diagnostics_connections_hint({}, options)}</p>
-        </header>
-        <ul class="check-list">
-          {#each CHECKS as check (check.key)}
-            {@const result = results[check.key]}
-            <li class="check-card" class:is-busy={result?.state === 'running'}>
-              <div class="head">
-                <span class="name">{checkName(check.key)}</span>
-                {#if result}
-                  <span class="badge {badgeClass(result.state)}">{badgeLabel(result.state)}</span>
-                  {#if result.at}<span class="sub">{when(result.at)}</span>{/if}
-                {:else}
-                  <span class="sub">{m.diagnostics_not_checked({}, options)}</span>
-                {/if}
-              </div>
-              <p class="what">{checkWhat(check.key)}</p>
-              <div class="actions">
-                <!-- aria-disabled, not disabled: a disabled button takes no focus. -->
-                <button
-                  class="btn btn-sm"
-                  type="button"
-                  aria-disabled={result?.state === 'running' ? 'true' : undefined}
-                  onclick={() => run(check.key)}
-                >
-                  {check.sends ? m.diagnostics_send_test_email({}, options) : m.diagnostics_test({}, options)}<span class="visually-hidden"> {checkName(check.key)}</span>
-                </button>
-              </div>
-              {#if result?.state === 'failed'}
-                <p class="notice notice-danger result" role="status">{result.message ? messageText(result.message) : ''}</p>
-              {:else if result?.message}
-                <p class="result" role="status">{messageText(result.message)}</p>
-              {:else if result?.state === 'running'}
-                <p class="result" role="status">{m.diagnostics_checking({}, options)}</p>
-              {/if}
-            </li>
-          {/each}
-        </ul>
-      </section>
+      <div class="health" class:is-failing={failing.length > 0} class:is-busy={busy && !failing.length}>
+        <!-- The count says what stops working, because that is the half the owner can judge. -->
+        {#if failing.length}
+          <p class="page-alert" role="status">
+            <strong>
+              {m.diagnostics_failures({ count: failing.length }, options)}
+            </strong>
+            {consequence}
+          </p>
+        {:else if busy}
+          <p class="health-line" role="status"><span class="health-dot" aria-hidden="true"></span>{m.diagnostics_checking({}, options)}</p>
+        {:else}
+          <p class="health-line" role="status">
+            <span class="health-dot" aria-hidden="true"></span>
+            <strong>{m.diagnostics_all_working({}, options)}</strong>
+            {#if lastChecked}<span class="sub">{when(lastChecked)}</span>{/if}
+          </p>
+        {/if}
+        <!-- aria-disabled, not disabled: a disabled button takes no focus. -->
+        <button class="btn btn-sm" type="button" aria-disabled={busy ? 'true' : undefined} onclick={checkAll}>
+          {m.diagnostics_check_again({}, options)}
+        </button>
+      </div>
+
       <section class="settings-section" aria-labelledby="integ">
         <header>
-          <h2 id="integ">{m.diagnostics_integrations({}, options)}</h2>
-          <p>
-            {m.diagnostics_integrations_hint({}, options)}
-          </p>
+          <h2 id="integ">{m.diagnostics_keys_title({}, options)}</h2>
+          <p>{m.diagnostics_keys_hint({}, options)}</p>
         </header>
         {#if keysError}<p class="notice notice-danger" role="alert">{messageText(keysError)}</p>{/if}
         {#if keySaid}<p class="notice notice-info" role="status">{messageText(keySaid)}</p>{/if}
         <ul class="check-list">
           {#each keys as row (row.key)}
-            <li class="check-card">
+            {@const translation = row.key === 'deepl' ? results.translation : undefined}
+            <li class="check-card key-row">
               <div class="head">
                 <span class="name">{keyName(row.key)}</span>
                 <span class="badge {keyBadgeClass(row.source)}">{keyBadgeLabel(row.source)}</span>
               </div>
               <p class="what">{says(row)}</p>
+              {#if translation?.state === 'failed'}
+                <p class="result is-failed" role="status">{translation.message ? messageText(translation.message) : ''}</p>
+              {:else if translation?.state === 'ok' && translation.message}
+                <p class="result is-ok" role="status">{messageText(translation.message)}</p>
+              {:else if translation?.message?.code === 'DIAGNOSTIC_TRANSLATION_SINGLE_LANGUAGE'}
+                <p class="result" role="status">{messageText(translation.message)}</p>
+              {/if}
               <div class="actions">
                 <!-- No button where the site's code is in charge: it could change nothing. -->
                 {#if row.source === 'settings'}
@@ -556,20 +495,149 @@ const mailerName = (provider: string) => {
           {/each}
         </ul>
       </section>
-      {#if config.dev}
-        <section class="settings-section" aria-labelledby="dev">
-          <header>
+
+      <section class="settings-section" aria-labelledby="conn">
+        <header>
+          <h2 id="conn">{m.diagnostics_services({}, options)}</h2>
+          <p>{m.diagnostics_services_hint({}, options)}</p>
+        </header>
+        <ul class="check-list">
+          {#each SERVICES as check (check.key)}
+            {@const result = results[check.key]}
+            {@const state = result?.state ?? 'unchecked'}
+            {@const name = provider(check.key, config)}
+            <li class="check-card service-row is-{state}" class:has-action={check.sends}>
+              <details bind:open={expanded[check.key]}>
+                <summary>
+                  <svg class="chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4" /></svg>
+                  <span class="name">{checkName(check.key)}</span>
+                  <span class="what">{checkWhat(check.key)}</span>
+                  <span class="state">
+                    {#if result}
+                      <span class="badge {badgeClass(result.state)}">{badgeLabel(result.state)}</span>
+                    {:else}
+                      <span class="sub">{m.diagnostics_not_checked({}, options)}</span>
+                    {/if}
+                  </span>
+                </summary>
+                <dl class="service-facts">
+                  {#if name}
+                    <div><dt>{m.diagnostics_provider({}, options)}</dt><dd>{name}</dd></div>
+                  {/if}
+                  {#if check.key === 'storage'}
+                    <div>
+                      <dt>{m.diagnostics_served_from({}, options)}</dt>
+                      <dd>
+                        {#if config.mediaBase}
+                          <code>{config.mediaBase}</code>
+                        {:else}
+                          {m.diagnostics_off({}, options)} — {m.diagnostics_media_off_before({}, options)} <code>media.publicBase</code>{m.diagnostics_media_off_after({}, options)}
+                        {/if}
+                      </dd>
+                    </div>
+                  {/if}
+                  {#if check.key === 'email'}
+                    <div>
+                      <dt>{m.diagnostics_sender({}, options)}</dt>
+                      <dd>
+                        {#if config.mailer?.from}
+                          {config.mailer.from}
+                        {:else if !config.mailer}
+                          {m.diagnostics_off({}, options)} — {m.diagnostics_email_off_before({}, options)} <code>mailer</code>{m.diagnostics_email_off_after({}, options)}
+                        {:else}
+                          {m.diagnostics_custom_mailer({}, options)}
+                        {/if}
+                      </dd>
+                    </div>
+                  {/if}
+                  {#if result}
+                    <div>
+                      <dt>{m.diagnostics_last_check({}, options)}</dt>
+                      <dd>
+                        <span class="result" class:is-failed={result.state === 'failed'} role="status">
+                          {#if result.state === 'running'}
+                            {m.diagnostics_checking({}, options)}
+                          {:else if result.message}
+                            {messageText(result.message)}
+                          {/if}
+                        </span>
+                        {#if result.at}<span class="sub">{when(result.at)}</span>{/if}
+                      </dd>
+                    </div>
+                  {/if}
+                </dl>
+              </details>
+              {#if check.sends}
+                <button
+                  class="btn btn-sm service-action"
+                  type="button"
+                  aria-disabled={result?.state === 'running' ? 'true' : undefined}
+                  onclick={() => run(check.key)}
+                >
+                  {m.diagnostics_send_test_email({}, options)}
+                </button>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      </section>
+
+      <details class="about">
+        <summary>
+          <svg class="chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4" /></svg>
+          <span class="about-title">{m.diagnostics_about({}, options)}</span>
+          <span class="sub">{m.diagnostics_configuration_before({}, options)} <code>cms.config.ts</code>{m.diagnostics_configuration_after({}, options)}</span>
+        </summary>
+        <dl class="facts">
+          <div>
+            <dt>{m.diagnostics_collections({}, options)}</dt>
+            <dd>
+              {#each config.collections as collection, i (collection.name)}
+                {#if i}<span class="sep" aria-hidden="true">·</span>{/if}
+                <span>
+                  {capitalise(collection.name)}
+                  {#if collection.route}<code class="sub">{collection.route}</code>{/if}
+                </span>
+              {/each}
+            </dd>
+          </div>
+          <div>
+            <dt>{m.diagnostics_languages({}, options)}</dt>
+            <dd>
+              {#each config.locales as locale, i (locale)}
+                {#if i}<span class="sep" aria-hidden="true">·</span>{/if}
+                <span>
+                  {formatLanguageName(locale, uiLocale)}
+                  {#if locale === config.defaultLocale}<span class="badge">{m.diagnostics_default({}, options)}</span>{/if}
+                </span>
+              {/each}
+            </dd>
+          </div>
+          <div>
+            <dt>{m.diagnostics_preview({}, options)}</dt>
+            <dd>
+              {#if config.preview}
+                {m.diagnostics_on({}, options)}
+              {:else}
+                <!-- Named rather than offered: nothing in the admin can turn this on. -->
+                {m.diagnostics_off({}, options)} <span class="sub">{m.diagnostics_preview_off_before({}, options)} <code>PREVIEW_ENABLED</code>{m.diagnostics_preview_off_after({}, options)}</span>
+              {/if}
+            </dd>
+          </div>
+        </dl>
+        {#if config.dev}
+          <section class="dev-tools" aria-labelledby="dev">
             <h2 id="dev">{m.diagnostics_developer_tools({}, options)}</h2>
             <p>{m.diagnostics_developer_tools_hint({}, options)}</p>
-          </header>
-          <div class="actions">
-            <button class="btn" type="button" disabled={simulating} onclick={simulate}>
-              {simulating ? m.diagnostics_making_conflict({}, options) : m.diagnostics_simulate_conflict({}, options)}
-            </button>
-          </div>
-          {#if conflict}<p class="notice notice-info" role="status">{messageText(conflict)}</p>{/if}
-        </section>
-      {/if}
+            <div class="actions">
+              <button class="btn btn-sm" type="button" disabled={simulating} onclick={simulate}>
+                {simulating ? m.diagnostics_making_conflict({}, options) : m.diagnostics_simulate_conflict({}, options)}
+              </button>
+            </div>
+            {#if conflict}<p class="notice notice-info" role="status">{messageText(conflict)}</p>{/if}
+          </section>
+        {/if}
+      </details>
     </div>
     <!-- Inside the loaded block: whether the key is tried first is the site's language count. -->
     {#if removing}

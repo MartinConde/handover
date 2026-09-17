@@ -89,7 +89,9 @@ test('an owner on the settings route gets the diagnostics screen', () => {
   drafts();
   const root = show(session('owner'), '/admin/settings');
   expect(root.querySelector('main.main h1')?.textContent).toBe('Settings');
-  expect(root.querySelector('main.main .list-note')?.textContent).toContain('cms.config.ts');
+  expect(root.querySelector('main.main .list-note')?.textContent).toContain(
+    'the keys you look after yourself',
+  );
 });
 
 test('an editor who types the settings route is not shown it', () => {

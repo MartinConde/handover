@@ -17,7 +17,7 @@ first sign-in onwards.
 | Entries | `entry-rename` and `entry-duplicate`, each with the name it had before or was copied from · `entry-delete` and `locale-off`, each with the commit that took the files away and the languages that went — which is what a **Restore** on the row puts back ([Entry lifecycle](entry-lifecycle.md#putting-a-deleted-entry-back)) |
 | Media | `upload` — a picture stored, named by the file it was chosen as. Choosing one the site already holds is not an upload and is not a row · `media-archive` — put away or taken back out · `media-delete` — bytes and row gone, which only happens when nothing names them |
 | Site | `redirect-added`, `redirect-changed` and `redirect-deleted` — a rule the client wrote by hand under Site settings → Redirects, each with the commit it made. A rule a rename or a hide wrote is part of that publish and is not a row of its own |
-| Settings | `setting-changed` — one of the client's own [integration keys](diagnostics.md#integrations) set, replaced or removed. The name of the key, never its value |
+| Settings | `setting-changed` — one of the client's own [integration keys](diagnostics.md#translation-and-ai) set, replaced or removed. The name of the key, never its value |
 | System | `mail-failed` — a message the provider would not take |
 
 **Per-field edits are not logged.** Typing in the editor autosaves every couple of seconds; a

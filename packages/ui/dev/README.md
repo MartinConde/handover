@@ -9,5 +9,6 @@ The production build uses only `src/main.ts`, so the preview and its fixtures do
 
 Use `?screen=/admin/site`, `?screen=/admin/c/listings`, `?screen=/admin/c/pages/home`,
 `?screen=/admin/media`, or `?screen=/admin/settings` to open a particular screen. Navigate using
-the sidebar; reload the preview URL to reset the sample session. Images are labeled sample
+the sidebar; reload the preview URL to reset the sample session. Add `&fail=storage` (or any other check name)
+to the settings screen to see that check failing. Images are labeled sample
 swatches, not site assets. Complete publishing and upload checks require a connected test site.

@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Redesign **Settings**: one line at the top says whether everything works, with **Check again**;
+  DeepL and writing-help keys come first under **Translation and AI**, with the translation check's
+  result on the DeepL row; services are single rows that open for their provider and last result,
+  and a failing one opens by itself; the configuration moves into a closed **About this site**.
+
 - Tidy the navigation builder: the library groups pages into collapsible sections per collection
   with one line per page and no paths, menu rows are single lines in one list, and the item
   editor puts label and link side by side with language visibility as one **Shown in** select.

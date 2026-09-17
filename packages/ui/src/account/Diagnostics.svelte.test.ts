@@ -136,12 +136,8 @@ test("a failing check shows the developer's own sentence and counts at the top",
     '/admin/api/checks/storage': () =>
       Response.json({ error: 'The bucket refused the upload (403)' }, { status: 502 }),
   });
-  expect(text(card(root, 'Images and files (R2)'))).toContain(
-    'The bucket refused the upload (403)',
-  );
-  expect(card(root, 'Images and files (R2)').querySelector('.badge')?.textContent).toBe(
-    'Not working',
-  );
+  expect(text(card(root, 'Images and files'))).toContain('The bucket refused the upload (403)');
+  expect(card(root, 'Images and files').querySelector('.badge')?.textContent).toBe('Not working');
   expect(text(root.querySelector('.page-alert') as HTMLElement)).toBe(
     '1 check is failing. Uploading pictures and files will not work until it is fixed.',
   );
@@ -166,8 +162,52 @@ test('a check whose thing the site never configured is off, not broken', async (
       detail: 'No DEEPL_API_KEY and no translate hook, so the Translate button is hidden.',
     }),
   });
-  expect(card(root, 'Translation').querySelector('.badge')?.textContent).toBe('Not in use');
+  expect(card(root, 'DeepL').querySelector('.badge')?.textContent).toBe('Not set');
+  expect(text(card(root, 'DeepL'))).not.toContain('Not working');
   expect(root.querySelector('.page-alert')).toBeNull();
+});
+
+test('with nothing failing the page says everything works', async () => {
+  const root = await show();
+  expect(text(root.querySelector('.health') as HTMLElement)).toContain('Everything is working');
+});
+
+test('Check again runs every check but the email one a second time', async () => {
+  const root = await show();
+  press(root.querySelector('.health') as HTMLElement, 'Check again');
+  await settle();
+  const checks = requests.filter((url) => url.startsWith('/admin/api/checks/'));
+  expect(checks.filter((url) => url === '/admin/api/checks/github')).toHaveLength(2);
+  expect(checks.filter((url) => url === '/admin/api/checks/translation')).toHaveLength(2);
+  expect(checks).not.toContain('/admin/api/checks/email');
+});
+
+test('a row opened by hand stays open through Check again', async () => {
+  const root = await show();
+  const details = card(root, 'Publishing').querySelector('details') as HTMLDetailsElement;
+  details.open = true;
+  press(root.querySelector('.health') as HTMLElement, 'Check again');
+  await settle();
+  expect(details.open).toBe(true);
+});
+
+test('a failing service is open, so its reason shows without a click', async () => {
+  const root = await show({
+    '/admin/api/checks/storage': () => Response.json({ error: 'no' }, { status: 502 }),
+  });
+  expect(card(root, 'Images and files').querySelector('details')?.open).toBe(true);
+  expect(card(root, 'Database').querySelector('details')?.open).toBe(false);
+});
+
+test('what the translation check found is on the DeepL row', async () => {
+  const root = await show({
+    '/admin/api/checks/translation': Response.json({
+      ok: true,
+      code: 'DIAGNOSTIC_TRANSLATION_OK',
+      locale: 'de',
+    }),
+  });
+  expect(text(card(root, 'DeepL'))).toContain('It translated “Hello” into German.');
 });
 
 test('the configuration is read back as facts nobody can edit here', async () => {
@@ -175,7 +215,9 @@ test('the configuration is read back as facts nobody can edit here', async () =>
   const facts = text(root.querySelector('.facts') as HTMLElement);
   expect(facts).toContain('Listings /listings/[slug]');
   expect(facts).toContain('English default');
-  expect(facts).toContain('Resend from hello@example.com');
+  expect(text(card(root, 'Email'))).toContain('Resend');
+  expect(text(card(root, 'Email'))).toContain('hello@example.com');
+  expect(text(card(root, 'Images and files'))).toContain('https://media.example.com');
   expect(root.querySelector('.settings input')).toBeNull();
 });
 
@@ -382,7 +424,7 @@ test('keys that could not be read say so where the cards would have been', async
     '/admin/api/settings': () => Response.json({ error: 'no' }, { status: 500 }),
   });
   const section = Array.from(root.querySelectorAll<HTMLElement>('.settings-section')).find(
-    (s) => s.querySelector('h2')?.textContent === 'Integrations',
+    (s) => s.querySelector('h2')?.textContent === 'Translation and AI',
   );
   expect(text(section ?? document.createElement('div'))).toContain(
     'The keys you own could not be read (500).',

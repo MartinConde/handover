@@ -48,7 +48,7 @@ something and so is never run on its own, and *Simulate a conflict* is
 
 ## Integration keys
 
-The keys the client owns rather than the developer ([Settings](diagnostics.md#integrations)).
+The keys the client owns rather than the developer ([Settings](diagnostics.md#translation-and-ai)).
 Owner only, like the rest of that screen.
 
 ```

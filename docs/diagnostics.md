@@ -1,8 +1,11 @@
 # Settings — what is connected
 
-**Settings** in the admin's Manage group is the owner's read-only view of the site: what
-`cms.config.ts` came out as, and whether the things it points at answer. It is where somebody
-who is not you finds out *what* is broken, in a sentence they can forward.
+**Settings** in the admin's Manage group is where the owner sees whether the services the site
+runs on answer, and manages the keys they own. It is where somebody who is not you finds out
+*what* is broken, in a sentence they can forward.
+
+A line at the top says whether everything is working, or how many checks fail and what stops
+working while they do. **Check again** reruns every check except the test email.
 
 Owner only. An editor is offered neither the sidebar item nor the route.
 
@@ -13,27 +16,26 @@ addresses, repository names, commit prefixes, bucket and worker names, configura
 and provider refusal details remain exactly as the site or service supplied them. Changing this
 language never changes the site's content languages or configuration.
 
-## Configuration
+## Services
 
-The collections and their routes, the languages, where uploads are served from, who sends the
-mail, and whether this build has a preview route. All of it is read out of `cms.config.ts` and
-the build; nothing on the page edits it. A build with no preview says which variable turns it
-on rather than saying "off" and stopping.
+Each service is tried for real when the page opens, and again on **Check again**. A row shows
+its name and state; open it for the provider, where uploads are served from or who sends the
+mail, and the last result:
 
-## Connections
-
-Each connection is tried for real when the page opens, and again whenever **Test** is pressed:
-
-| Check | What it does |
+| Service | What the check does |
 |---|---|
-| Your website's code (GitHub) | mints an installation token and reads the branch head |
-| Images and files (R2) | writes, reads back and deletes one small object |
-| Email | **only when you press it** — sends a test message to your own address |
-| Translation | translates one word into the site's second language — a one-language site has nothing to translate into and says so |
+| Publishing | mints a GitHub installation token and reads the branch head |
+| Images and files | writes, reads back and deletes one small object on R2 |
+| Email | **only when you press Send a test email** — sends a message to your own address |
 | Build status | asks Cloudflare about the worker, so the token is proven without a commit |
 | Database | reads from the admin's own tables |
 
-A check whose thing the site never configured reads **Not in use** rather than failing: a site
+Translation is checked the same way — one word into the site's second language — and its result
+is shown on the **DeepL** row under [Translation and AI](#translation-and-ai). A one-language
+site has nothing to translate into and says so.
+
+A failing row opens by itself, so its reason is visible without a click. A check whose thing the
+site never configured reads **Not in use** rather than failing: a site
 with no `DEEPL_API_KEY` is not broken. A check that was configured and refused reads **Not
 working**, and its result line is the refusal itself — `RESEND_API_KEY is not set: …`, the
 bucket's own status, the sentence naming the four R2 values. That is the wording to send to
@@ -44,9 +46,7 @@ same cause. Known successful and optional-off results are formatted by the brows
 interface language. A service refusal or configuration detail stays verbatim so a translated
 summary cannot obscure the value that needs fixing.
 
-The failures are counted at the top of the page, with what stops working while they stand.
-
-## Integrations
+## Translation and AI
 
 The one section of this page that writes. Two keys belong to whoever owns the site rather than to
 whoever built it — **DeepL** and, when there is a version with writing help in it, the AI
@@ -58,9 +58,9 @@ A key is stored **encrypted** in the site's own database, under `HANDOVER_SETTIN
 ([Deploying](secrets.md)). Without that secret there is nowhere to put one, and the page
 says so rather than failing.
 
-Each card says where the key it names is coming from, and what happens if you take it away:
+Each row says where the key it names is coming from, and what happens if you take it away:
 
-| The card says | What it means |
+| The row says | What it means |
 |---|---|
 | **Set here** | A key was pasted into this page. It ends in the four characters shown, with who set it and when |
 | **Coming from the site's settings** | Your developer set it in the site's environment. Setting one here overrides it, and removing yours falls back to theirs |
@@ -81,9 +81,17 @@ The one check with a side effect, so it never runs on its own. It goes to the ad
 whoever is signed in and to nobody else — the recipient is never asked for, so the button
 cannot be pointed at a stranger. [Sending email](email.md) is the setup behind it.
 
+## About this site
+
+A closed section at the bottom: the collections and their routes, the languages, and whether
+this build has a preview route. All of it is read out of `cms.config.ts` and the build; nothing
+on the page edits it. A build with no preview says which variable turns it on rather than saying
+"off" and stopping.
+
 ## Simulate a conflict
 
-Under **Developer tools**, and only while the site is running in development. It publishes a
+Under **Developer tools** inside **About this site**, and only while the site is running in
+development. It publishes a
 scratch entry, edits its draft and then commits a different edit to the same file — which is
 what a colleague's push does to somebody's open draft — so the three-way view in the
 pending-changes drawer can be exercised without hand-crafting commits
