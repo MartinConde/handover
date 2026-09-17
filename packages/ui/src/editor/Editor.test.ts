@@ -2285,21 +2285,33 @@ test('a save refused by a take-over says where the work went and stops the tab',
   vi.useRealTimers();
 });
 
-// Once a refusal means "you lost it", the beat on that save would push the lost lock back out.
-test('a refused save does not push the lock back out', async () => {
+// Somebody who opened the entry while this tab's lock had lapsed is named on the next edit.
+test('a lapsed lock somebody else took is named on the next edit and nothing is saved', async () => {
   vi.useFakeTimers();
-  const fetchMock = refused();
+  let claimed = false;
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (!isLock(url)) return Response.json({ pending: true, problems: [] });
+    if (init?.method !== 'POST')
+      return Response.json({ held_by: null, mine: false, expires_at: null });
+    if (claimed)
+      return Response.json({
+        held_by: { id: 'u1', name: 'Anna Berg' },
+        mine: false,
+        expires_at: Date.now() + LOCK_TTL,
+      });
+    claimed = true;
+    return Response.json({ held_by: null, mine: true, expires_at: Date.now() + LOCK_TTL });
+  });
   vi.stubGlobal('fetch', fetchMock);
   const root = show();
-  // Past the three quarters of a lifetime that says the next save also beats.
-  await vi.advanceTimersByTimeAsync(50_000);
-  const before = fetchMock.mock.calls.filter((call) => isLock(call[0])).length;
-  type(root, 'input#f-title', 'Seaview House');
+  await vi.advanceTimersByTimeAsync(LOCK_TTL + 16_000);
 
+  type(root, 'input#f-title', 'Seaview House');
   await vi.advanceTimersByTimeAsync(2000);
   flushSync();
 
-  expect(fetchMock.mock.calls.filter((call) => isLock(call[0])).length).toBe(before);
+  expect($(root, '.lock-banner.is-lost')?.textContent).toContain('Anna Berg took over this entry');
+  expect(wrote(fetchMock)).toHaveLength(0);
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -2476,30 +2488,34 @@ test('a tab coming back to the front asks about its lock at once', async () => {
   vi.useRealTimers();
 });
 
-// A lock that lapsed with nobody after it is not a take-over, so nobody else is named.
-test('a lapsed idle lock stays released until the editor reloads', async () => {
+// Stopping to read is not losing the entry: an idle lock lapses quietly and typing takes it back.
+test('a lapsed idle lock stays released without a banner until the next save claims it', async () => {
   vi.useFakeTimers();
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) =>
     !isLock(url)
-      ? Response.json({})
+      ? Response.json({ pending: true, problems: [] })
       : init?.method === 'POST'
-        ? Response.json(HELD)
+        ? Response.json({ held_by: null, mine: true, expires_at: Date.now() + LOCK_TTL })
         : Response.json({ held_by: null, mine: false, expires_at: null }),
   );
   vi.stubGlobal('fetch', fetchMock);
-  const reload = vi.fn();
-  const changed = vi.fn();
-  const root = show({ onreload: reload, onchanged: changed });
-  await vi.advanceTimersByTimeAsync(16_000);
+  const root = show();
+  const claims = () =>
+    fetchMock.mock.calls.filter((c) => isLock(c[0]) && c[1]?.method === 'POST').length;
+  await vi.advanceTimersByTimeAsync(LOCK_TTL + 16_000);
   flushSync();
 
-  const claims = fetchMock.mock.calls.filter((c) => isLock(c[0]) && c[1]?.method === 'POST');
-  expect(claims).toHaveLength(1);
-  expect($(root, '.lock-banner.is-lost')).not.toBeNull();
-  expect($<HTMLFieldSetElement>(root, '.form > fieldset')?.disabled).toBe(true);
-  $<HTMLButtonElement>(root, '.lock-banner .btn-link')?.click();
-  expect(reload).toHaveBeenCalledOnce();
-  expect(changed).not.toHaveBeenCalled();
+  expect(claims()).toBe(1);
+  expect($(root, '.lock-banner')).toBeNull();
+  expect($<HTMLFieldSetElement>(root, '.form > fieldset')?.disabled).toBe(false);
+
+  type(root, 'input#f-title', 'Seaview House');
+  await vi.advanceTimersByTimeAsync(2000);
+  flushSync();
+
+  expect(wrote(fetchMock)).toHaveLength(1);
+  expect(claims()).toBe(2);
+  expect($(root, '.lock-banner')).toBeNull();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -3265,8 +3281,6 @@ test('a short settings form stays single-column without an outline', () => {
   expect($(root, '.editor-outline')).toBeNull();
 });
 
-
-
 test('Canvas exposes validation problems with a working jump to the affected field', async () => {
   const root = show({
     entry: {
@@ -3304,7 +3318,6 @@ test('the mobile translation switch keeps both language forms mounted and change
   expect($(root, 'input#t-title')).toBe(translation);
 });
 
-
 test('opening Canvas from Translate removes the mobile language tabs', () => {
   const root = show({ entry: { ...bilingual, route: '/listings/[slug]' }, preview: true });
   $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
@@ -3316,10 +3329,13 @@ test('opening Canvas from Translate removes the mobile language tabs', () => {
   expect($(root, '.canvas-mobile-tabs')).toBeNull();
 });
 
-
 test('a saved Write preference yields to live preview when a page is available', () => {
   localStorage.setItem('handover:editor-view:v3:/:u1', 'none');
-  const root = show({ entry: { ...bilingual, route: '/listings/[slug]' }, preview: true, userId: 'u1' });
+  const root = show({
+    entry: { ...bilingual, route: '/listings/[slug]' },
+    preview: true,
+    userId: 'u1',
+  });
   flushSync();
   expect(beside(root).map((button) => button.textContent)).toEqual(['Live preview', 'Translate']);
   expect(pressed(root)).toBe('Live preview');
@@ -3327,14 +3343,17 @@ test('a saved Write preference yields to live preview when a page is available',
 });
 
 test('closing Translate returns to live preview when a page is available', async () => {
-  const root = show({ entry: { ...bilingual, route: '/listings/[slug]' }, preview: true, userId: 'u1' });
+  const root = show({
+    entry: { ...bilingual, route: '/listings/[slug]' },
+    preview: true,
+    userId: 'u1',
+  });
   $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
   flushSync();
   $<HTMLButtonElement>(root, '.pane-head button[aria-label]')?.click();
   await vi.waitFor(() => expect(pressed(root)).toBe('Live preview'));
   expect(localStorage.getItem('handover:editor-view:v3:/:u1')).toBe('page');
 });
-
 
 test('without preview, Translate toggles the comparison pane without a Write option', async () => {
   const root = show({ entry: bilingual });

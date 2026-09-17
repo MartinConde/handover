@@ -809,7 +809,6 @@
   "editor_lock_nobody": "Niemand bearbeitet diesen Eintrag mehr.",
   "editor_lock_reload": "Neu laden",
   "editor_lock_lost_other_tab": "Dein anderer Tab hat diesen Eintrag jetzt. Gespeicherte Änderungen befinden sich im gemeinsamen Entwurf. Ungespeicherter Text bleibt hier; kopiere ihn vor dem Neuladen.",
-  "editor_lock_lost_expired": "Diese Bearbeitungssitzung ist wegen Inaktivität abgelaufen. Gespeicherte Änderungen befinden sich im gemeinsamen Entwurf. Ungespeicherter Text bleibt hier; kopiere ihn vor dem Neuladen.",
   "editor_lock_lost_taken": "{holder} hat diesen Eintrag übernommen. Gespeicherte Änderungen befinden sich im gemeinsamen Entwurf. Ungespeicherter Text bleibt hier; kopiere ihn vor dem Neuladen.",
   "editor_lock_lost_taken_anonymous": "Eine andere Person hat diesen Eintrag übernommen. Gespeicherte Änderungen befinden sich im gemeinsamen Entwurf. Ungespeicherter Text bleibt hier; kopiere ihn vor dem Neuladen.",
   "editor_lock_take_question": "Bearbeitung von {holder} übernehmen?",

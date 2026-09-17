@@ -14,7 +14,10 @@ same write.
 The lock is held by a heartbeat, and the heartbeat is typing: the admin extends it while
 somebody is editing and it frees itself about **two minutes after the last keystroke**.
 A tab left open on a train gives the entry back on its own; nobody has to remember to
-close anything.
+close anything. The tab itself says nothing when that happens: if nobody opened the entry
+in the meantime, the next keystroke takes the lock back. If somebody did, that keystroke
+shows their take-over banner, and if they saved changes and left, the save is refused with
+*This entry changed elsewhere* rather than writing over them.
 
 The second person to open that entry gets it read-only, under a banner:
 

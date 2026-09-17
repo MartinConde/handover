@@ -527,10 +527,6 @@ const recheck = () => {
 let renewing = false;
 function renew() {
   if (!lock?.mine || lost || renewing || Date.now() - beatAt < 45000) return;
-  if (lock.expires_at !== null && Date.now() >= lock.expires_at) {
-    loseLock();
-    return;
-  }
   renewing = true;
   void beat(true).finally(() => {
     renewing = false;
@@ -549,11 +545,14 @@ async function beat(claim: boolean) {
   ).catch(() => undefined);
   if (!res?.ok) return;
   const had = lock?.mine === true;
-  lock = (await res.json()) as Lock;
+  const answer = (await res.json()) as Lock;
   asked = Date.now();
+  // Lapsed with nobody after it: the next edit claims it back, and the save revision catches edits meanwhile.
+  if (had && !answer.mine && !answer.held_by) return;
+  lock = answer;
   if (lock.mine && claim) beatAt = asked;
   else if (had && !lock.mine) {
-    // Expiry and takeover both require a fresh read before this tab can resume editing.
+    // A take-over or another tab requires a fresh read before this tab can resume editing.
     loseLock();
   }
 }
@@ -1175,8 +1174,6 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     <div class="lock-banner is-lost">
       {#if otherTab}
         {m.editor_lock_lost_other_tab({}, options)}
-      {:else if !lock?.held_by}
-        {m.editor_lock_lost_expired({}, options)}
       {:else if holderName}
         {m.editor_lock_lost_taken({ holder: holderName }, options)}
       {:else}

@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Stop showing *This editing session expired while idle* after two minutes without typing. If
+  nobody else opened the entry meanwhile, the next edit takes the lock back quietly.
+
 - Replace the Form/Split/Canvas views and the separate **Side by side** button with **Beside the
   form**: **Page**, **Side by side** or **Form only**, plus a **Canvas** button. Entries that have a
   page open with it beside the form. That page stays in view while the form scrolls, has one header

@@ -806,7 +806,6 @@
   "editor_lock_nobody": "Nobody is editing this entry any more.",
   "editor_lock_reload": "Reload",
   "editor_lock_lost_other_tab": "Your other tab has this entry now. Saved changes are in the shared draft. Any unsaved text remains here; copy it before reloading.",
-  "editor_lock_lost_expired": "This editing session expired while idle. Saved changes are in the shared draft. Any unsaved text remains here; copy it before reloading.",
   "editor_lock_lost_taken": "{holder} took over this entry. Saved changes are in the shared draft. Any unsaved text remains here; copy it before reloading.",
   "editor_lock_lost_taken_anonymous": "Someone else took over this entry. Saved changes are in the shared draft. Any unsaved text remains here; copy it before reloading.",
   "editor_lock_take_question": "Take over editing from {holder}?",
