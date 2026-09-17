@@ -72,10 +72,11 @@ test('live interface language updates editor chrome and dates without replacing 
   flushSync();
 
   const current = q<HTMLInputElement>('input#f-title');
-  expect(q('.editor-modes')?.getAttribute('aria-label')).toBe('Editoransicht');
-  expect(qa<HTMLButtonElement>('.editor-modes button').map((button) => button.textContent)).toEqual(
-    ['Formular', 'Geteilt', 'Canvas'],
-  );
+  expect(q('.editor-beside')?.getAttribute('aria-label')).toBe('Neben dem Formular');
+  expect(
+    qa<HTMLButtonElement>('.editor-beside button').map((button) => button.textContent),
+  ).toEqual(['Seite', 'Nebeneinander', 'Nur Formular']);
+  expect(q('.canvas-open')?.textContent).toBe('Canvas');
   expect(q('.tabs')?.getAttribute('aria-label')).toBe('Eintragsbereiche');
   expect(qa<HTMLAnchorElement>('.tabs a').map((link) => link.textContent)).toEqual([
     'Inhalt',

@@ -218,50 +218,63 @@ const checkProblems = $derived(
 const problems = $derived({ ...checkProblems, ...schemaProblems });
 // svelte-ignore state_referenced_locally -- the language the entry is written in is where it opens
 let locale = $state(entry.sourceLocale);
-let side = $state(false);
 let canvasPane = $state<ReturnType<typeof CanvasWorkspace>>();
 // Sticky panes below the header sit exactly under it, however many rows it wraps to.
 let headerHeight = $state(0);
 
 type EditorMode = 'form' | 'split' | 'canvas';
-const MODES: EditorMode[] = ['form', 'split', 'canvas'];
-const modeLabel = (value: EditorMode) =>
-  value === 'form'
-    ? m.editor_view_form({}, options)
-    : value === 'split'
-      ? m.editor_view_split({}, options)
-      : m.editor_view_canvas({}, options);
+/** What sits beside the form: the page, the other language, or nothing. */
+type Beside = 'page' | 'language' | 'none';
+const BESIDE: Beside[] = ['page', 'language', 'none'];
 // svelte-ignore state_referenced_locally -- one authenticated editor instance owns one preference key
-// v2: Split became the default, so a Form saved under the old default does not keep hiding it.
-const modeKey = `handover:canvas-mode:v2:${siteBase() || '/'}:${userId}`;
-const readMode = (): EditorMode => {
+// v3: Form and Split became one view, so earlier saved values mean nothing here.
+const viewKey = `handover:editor-view:v3:${siteBase() || '/'}:${userId}`;
+const readView = () => {
   try {
-    const value = localStorage.getItem(modeKey);
-    return MODES.includes(value as EditorMode) ? (value as EditorMode) : 'split';
+    return localStorage.getItem(viewKey);
   } catch {
-    return 'split';
+    return null;
   }
 };
-let preferredMode = $state<EditorMode>(readMode());
+const saved = readView();
+let chosen = $state<Beside | undefined>(
+  BESIDE.includes(saved as Beside) ? (saved as Beside) : undefined,
+);
+let canvasOpen = $state(saved === 'canvas');
 const canvasSupported = $derived(preview && Boolean(entry.route));
-const mode = $derived(section === '' && canvasSupported ? preferredMode : ('form' as EditorMode));
+const pageShown = $derived(section === '' && canvasSupported);
+const besideOptions = $derived(
+  BESIDE.filter((of) => (of === 'page' ? pageShown : of === 'language' ? many : true)),
+);
+const beside = $derived<Beside>(
+  chosen && besideOptions.includes(chosen) ? chosen : pageShown ? 'page' : 'none',
+);
+const side = $derived(beside === 'language');
+const mode = $derived<EditorMode>(
+  pageShown && canvasOpen ? 'canvas' : beside === 'page' ? 'split' : 'form',
+);
 let canvasVisited = $state(false);
 let mobilePane = $state<'form' | 'page'>('form');
 const canvasEpoch = crypto.randomUUID();
 
-function setMode(next: EditorMode) {
-  if (next !== 'form' && !canvasSupported) return;
-  preferredMode = next;
-  if (next !== 'form') {
-    canvasVisited = true;
-    mobilePane = next === 'canvas' ? 'page' : mobilePane;
-  }
+function remember(value: string) {
   try {
-    localStorage.setItem(modeKey, next);
+    localStorage.setItem(viewKey, value);
   } catch {
     // A blocked browser preference must never block editing.
   }
-  if (section !== '') navigate(`/admin/c/${collection}/${slug}`);
+}
+function setBeside(next: Beside) {
+  chosen = next;
+  canvasOpen = false;
+  remember(next);
+}
+function setCanvas(open: boolean) {
+  if (open && !canvasSupported) return;
+  canvasOpen = open;
+  if (open) mobilePane = 'page';
+  remember(open ? 'canvas' : beside);
+  if (open && section !== '') navigate(`/admin/c/${collection}/${slug}`);
 }
 
 $effect(() => {
@@ -847,7 +860,7 @@ function goTo(path: string | undefined) {
 }
 const goToFirst = () => {
   if (mode === 'canvas') {
-    setMode('form');
+    setCanvas(false);
     locale = entry.sourceLocale;
     void tick().then(() => goTo(missing[0]));
   } else goTo(missing[0]);
@@ -859,8 +872,8 @@ function reviewCanvasProblems() {
     ...entrySession.incompleteFields(of),
     ...(of === entry.sourceLocale ? problems : entrySession.positionalProblems(of, uiLocale)),
   })[0];
-  setMode('form');
-  if (of !== entry.sourceLocale) side = true;
+  setCanvas(false);
+  if (of !== entry.sourceLocale) setBeside('language');
   void tick().then(() => {
     if (of === entry.sourceLocale) goTo(path);
     else land(drawn('t', path));
@@ -878,7 +891,7 @@ function fromAddress() {
   if (inColumn && shown !== of) {
     leaving(() => {
       locale = of;
-      side = true;
+      setBeside('language');
     });
   } else if (!inColumn && alone) {
     leaving(() => {
@@ -1093,7 +1106,6 @@ function navigateCanvasEntry(target: {
   }
   if (!entry.locales.includes(target.locale) || untranslated(target.locale)) return;
   locale = target.locale;
-  side = target.locale !== entry.sourceLocale;
   if (mode === 'split') mobilePane = 'page';
   void tick().then(() => canvasPane?.schedule());
 }
@@ -1300,24 +1312,22 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
               {/each}
             </select>
           {/if}
-          {#if mode === 'form'}
-            <button class="btn btn-sbs" type="button" aria-pressed={side} onclick={() => leaving(() => (side = !side))}>{m.editor_side_by_side({}, options)}</button>
-          {/if}
         {/if}
-        {#if !entry.singleton}
-          <div class="seg editor-modes" role="group" aria-label={m.editor_view({}, options)}>
-            {#each MODES as item (item)}
+        {#if besideOptions.length > 1}
+          <div class="seg editor-beside" role="group" aria-label={m.editor_beside({}, options)}>
+            {#each besideOptions as of (of)}
               <button
                 type="button"
-                aria-pressed={mode === item}
-                disabled={entry.drift.length > 0 || (item !== 'form' && !canvasSupported)}
-                title={item !== 'form' && !canvasSupported
-                  ? m.editor_canvas_unavailable({}, options)
-                  : undefined}
-                onclick={() => setMode(item)}
-              >{modeLabel(item)}</button>
+                class:btn-sbs={of === 'language'}
+                aria-pressed={beside === of && mode !== 'canvas'}
+                disabled={entry.drift.length > 0}
+                onclick={() => leaving(() => setBeside(of))}
+              >{of === 'page' ? m.editor_split_page({}, options) : of === 'language' ? m.editor_side_by_side({}, options) : m.editor_form_only({}, options)}</button>
             {/each}
           </div>
+        {/if}
+        {#if !entry.singleton && canvasSupported}
+          <button class="btn canvas-open" type="button" disabled={entry.drift.length > 0} onclick={() => setCanvas(true)}>{m.editor_view_canvas({}, options)}</button>
         {/if}
         <button
           class="btn btn-primary"
@@ -1561,7 +1571,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
                 setPending(shown, pending);
               }}
               {mediaBase}
-              onclose={side ? () => leaving(() => (side = false)) : undefined}
+              onclose={side ? () => leaving(() => setBeside('none')) : undefined}
               onturnoff={entry.singleton ? undefined : () => { rememberActionTrigger(); actionFailed = undefined; offing = shown; }}
             />
           </div>
@@ -1591,7 +1601,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
           {site}
           servedAt={localeUrl(locale)}
           {locked}
-          onform={() => setMode('form')}
+          onform={() => setCanvas(false)}
           onnavigateentry={navigateCanvasEntry}
           mobileHidden={mode === 'split' && mobilePane === 'form'}
         />

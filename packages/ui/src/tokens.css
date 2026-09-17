@@ -349,7 +349,7 @@ a.btn { text-decoration: none; }
 .entry-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--s-10); padding: var(--s-8) var(--s-10) var(--s-12); width: 100%; max-width: 880px; margin: 0 auto; flex: 1; align-content: start; }
 .entry-body.has-pane { max-width: none; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--s-8); }
 .entry-body.is-canvas { max-width: none; padding: 0; }
-.editor-modes { flex: none; }
+.editor-beside { flex: none; }
 .canvas-mobile-tabs { display: none; }
 .canvas-form-surface { display: contents; }
 .canvas-workspace { min-width: 0; height: var(--canvas-height, calc(100dvh - 210px)); min-height: 420px; display: flex; flex-direction: column; align-self: stretch; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
@@ -1779,7 +1779,6 @@ input[type="checkbox"] { accent-color: var(--accent-ink); }
   :root .change-row { grid-template-columns: 32px minmax(0, 1fr); }
   :root .change-row .change-actions { grid-row: 3; grid-column: 2; justify-content: flex-start; }
   :root .change-row .lead { grid-row: 1; }
-  :root .entry-header .actions .btn-sbs { display: inline-flex; }
   :root .entry-header .title-row .actions { flex-wrap: wrap; justify-content: flex-end; }
   :root .media-grid { grid-template-columns: 1fr 1fr; }
   :root .picker-foot > a { flex-basis: 100%; }

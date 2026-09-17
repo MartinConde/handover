@@ -73,7 +73,7 @@ code the site does not declare is named the same way; both are fixed in the repo
 
 ## Side by side
 
-**Side by side** puts the second language beside the first: the entry's own language on the left,
+**Side by side**, under *Beside the form*, puts the second language beside the first: the entry's own language on the left,
 the chosen one on the right. They are separate files and separate saves — each column autosaves
 its own, and publishing takes both. Which language is on the right and whether the column is open
 are two different things: with the entry's own language chosen, it shows the first of the others.

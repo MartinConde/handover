@@ -238,32 +238,32 @@ const withProblems = (problems: { path: string; message: string }[]) => {
   return document.body;
 };
 
+const beside = (root: ParentNode) =>
+  $$<HTMLButtonElement>(root, '[aria-label="Beside the form"] button');
+const pressed = (root: ParentNode) =>
+  $(root, '[aria-label="Beside the form"] [aria-pressed="true"]')?.textContent;
+
 // Canvas needs both the injected preview route and a page address to POST into.
-test('Canvas modes are enabled only where the site has a page to show', () => {
-  expect(
-    $<HTMLButtonElement>(show({ preview: true }), '.editor-modes button:last-child')?.disabled,
-  ).toBe(true);
+test('the page and Canvas are offered only where the site has a page to show', () => {
+  const none = show({ entry: bilingual, preview: true });
+  expect(beside(none).map((b) => b.textContent)).toEqual(['Side by side', 'Form only']);
+  expect($(none, '.canvas-open')).toBeNull();
   unmount(app);
   const root = show({ entry: { ...entry, route: '/listings/[slug]' }, preview: true });
-  expect(
-    $<HTMLButtonElement>(root, '.editor-modes button:last-child')?.getAttribute('aria-pressed'),
-  ).toBe('false');
-  expect($<HTMLButtonElement>(root, '.editor-modes button:last-child')?.disabled).toBe(false);
+  expect(beside(root).map((b) => b.textContent)).toEqual(['Page', 'Form only']);
+  expect($<HTMLButtonElement>(root, '.canvas-open')?.disabled).toBe(false);
 });
 
-test('pressing Split puts Canvas beside the form at the address this language serves', () => {
+test('the page beside the form is the address this language serves, with only page controls', () => {
   const root = show({
     entry: { ...entry, route: '/listings/[slug]', published: [] },
     preview: true,
   });
-
-  $$<HTMLButtonElement>(root, '.editor-modes button')[1]?.click();
   flushSync();
 
   expect(
     $<HTMLAnchorElement>(root, '.canvas-workspace a[target="_blank"]')?.getAttribute('href'),
   ).toContain('/_preview/listings/seaview-cottage');
-  expect($(root, '.canvas-workspace')).not.toBeNull();
   expect($(root, 'input#f-title')).not.toBeNull();
   // The form beside it is the inspector, so the rail keeps only what is about the page.
   expect($(root, '.canvas-rail .canvas-address')?.textContent).toBe('/listings/seaview-cottage');
@@ -273,52 +273,65 @@ test('pressing Split puts Canvas beside the form at the address this language se
   expect($(root, '.canvas-rail [aria-label="Canvas interaction"]')).toBeNull();
 });
 
-test('an entry with a page opens in Split until someone picks another view', () => {
+test('an entry with a page opens with the page beside the form', () => {
   const root = show({ entry: { ...entry, route: '/listings/[slug]' }, preview: true });
   flushSync();
 
-  expect(
-    $<HTMLButtonElement>(root, '[aria-label="Editor view"] button[aria-pressed="true"]')
-      ?.textContent,
-  ).toBe('Split');
-  expect($(root, '.canvas-workspace')).not.toBeNull();
+  expect(pressed(root)).toBe('Page');
+  expect($(root, '.entry-body.has-pane > .canvas-workspace:not(.is-inactive)')).not.toBeNull();
 });
 
-test('the saved editor mode is scoped to the site base and signed-in user', () => {
+test('Form only gives the form the whole width and brings the outline back', () => {
+  const key = 'handover:editor-view:v3:/:u1';
+  const long = [1, 2, 3, 4, 5, 6].map(
+    (n) => ({ path: [`f${n}`], label: `Field ${n}`, type: 'text', required: false }) as Field,
+  );
+  const root = show({
+    entry: { ...entry, fields: [...entry.fields, ...long], route: '/listings/[slug]' },
+    preview: true,
+    userId: 'u1',
+  });
+
+  beside(root)[1]?.click();
+  flushSync();
+
+  expect(pressed(root)).toBe('Form only');
+  expect($(root, '.entry-body.has-pane')).toBeNull();
+  expect($(root, '.entry-body.has-outline .editor-outline')).not.toBeNull();
+  expect(localStorage.getItem(key)).toBe('none');
+});
+
+test('the saved view is scoped to the site base and signed-in user', () => {
   document.body.innerHTML = '<div id="app" data-base="/coastal"></div>';
-  localStorage.setItem('handover:canvas-mode:v2:/coastal:u1', 'canvas');
+  const key = 'handover:editor-view:v3:/coastal:u1';
+  localStorage.setItem(key, 'canvas');
   const root = show({
     entry: { ...entry, route: '/listings/[slug]' },
     preview: true,
     userId: 'u1',
   });
-
-  expect(
-    $<HTMLButtonElement>(root, '[aria-label="Editor view"] button[aria-pressed="true"]')
-      ?.textContent,
-  ).toBe('Canvas');
-  $<HTMLButtonElement>(root, '[aria-label="Editor view"] button')?.click();
   flushSync();
-  expect(localStorage.getItem('handover:canvas-mode:v2:/coastal:u1')).toBe('form');
+
+  expect($(root, '.canvas-workspace.is-fullscreen')).not.toBeNull();
+  $<HTMLButtonElement>(root, '.canvas-back')?.click();
+  flushSync();
+  expect($(root, '.canvas-workspace.is-fullscreen')).toBeNull();
+  expect(pressed(root)).toBe('Page');
+  expect(localStorage.getItem(key)).toBe('page');
 });
 
-test('an unsupported preference opens Form and an invalid one Split, neither overwritten', () => {
+test('an unsupported preference falls back without being overwritten, an invalid one to Page', () => {
   document.body.innerHTML = '<div id="app" data-base="/coastal/"></div>';
-  const key = 'handover:canvas-mode:v2:/coastal:u1';
+  const key = 'handover:editor-view:v3:/coastal:u1';
   localStorage.setItem(key, 'canvas');
   const root = show({
-    entry: { ...entry, route: '/listings/[slug]' },
+    entry: { ...bilingual, route: '/listings/[slug]' },
     preview: false,
     userId: 'u1',
   });
 
-  expect(
-    $<HTMLButtonElement>(root, '[aria-label="Editor view"] button[aria-pressed="true"]')
-      ?.textContent,
-  ).toBe('Form');
-  expect($<HTMLButtonElement>(root, '[aria-label="Editor view"] button:last-child')?.disabled).toBe(
-    true,
-  );
+  expect($(root, '.canvas-workspace')).toBeNull();
+  expect(pressed(root)).toBe('Form only');
   expect(localStorage.getItem(key)).toBe('canvas');
 
   unmount(app);
@@ -328,14 +341,11 @@ test('an unsupported preference opens Form and an invalid one Split, neither ove
     preview: true,
     userId: 'u1',
   });
-  expect(
-    $<HTMLButtonElement>(invalid, '[aria-label="Editor view"] button[aria-pressed="true"]')
-      ?.textContent,
-  ).toBe('Split');
+  expect(pressed(invalid)).toBe('Page');
   expect(localStorage.getItem(key)).toBe('anything-else');
 });
 
-test('Form to Canvas to Form retains unsaved field state in the same entry session', () => {
+test('opening and leaving Canvas keeps unsaved field state in the same entry session', () => {
   const root = show({
     entry: { ...entry, route: '/listings/[slug]' },
     preview: true,
@@ -343,36 +353,37 @@ test('Form to Canvas to Form retains unsaved field state in the same entry sessi
   });
   type(root, 'input#f-title', 'Unsaved harbour edit');
 
-  $$<HTMLButtonElement>(root, '[aria-label="Editor view"] button')[2]?.click();
+  $<HTMLButtonElement>(root, '.canvas-open')?.click();
   flushSync();
-  expect($(root, '.canvas-workspace')).not.toBeNull();
+  expect($(root, '.canvas-workspace.is-fullscreen')).not.toBeNull();
   expect($(root, 'input#f-title')).toBeNull();
 
-  $$<HTMLButtonElement>(root, '[aria-label="Editor view"] button')[0]?.click();
+  $<HTMLButtonElement>(root, '.canvas-back')?.click();
   flushSync();
   expect($<HTMLInputElement>(root, 'input#f-title')?.value).toBe('Unsaved harbour edit');
 });
 
-test('Split replaces comparison with Canvas and Form restores the unsaved translation', () => {
+test('Side by side takes the page’s place and Page brings it back, keeping the translation', async () => {
+  vi.stubGlobal('fetch', autosaved());
   const root = show({
     entry: { ...bilingual, route: '/listings/[slug]' },
     preview: true,
     userId: 'u1',
   });
-  $$<HTMLButtonElement>(root, '[aria-label="Editor view"] button')[0]?.click();
-  flushSync();
   $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
   flushSync();
   type(root, 'input#t-title', 'Ungespeicherte Hätte');
+  expect($(root, '.canvas-workspace:not(.is-inactive)')).toBeNull();
 
-  $$<HTMLButtonElement>(root, '[aria-label="Editor view"] button')[1]?.click();
-  flushSync();
-  expect($(root, '.canvas-workspace')).not.toBeNull();
+  beside(root)[0]?.click();
+  await vi.waitFor(() => expect($(root, '.canvas-workspace:not(.is-inactive)')).not.toBeNull());
   expect($(root, 'input#t-title')).toBeNull();
 
-  $$<HTMLButtonElement>(root, '[aria-label="Editor view"] button')[0]?.click();
-  flushSync();
-  expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Ungespeicherte Hätte');
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  await vi.waitFor(() =>
+    expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Ungespeicherte Hätte'),
+  );
+  vi.unstubAllGlobals();
 });
 
 test('the header shows the entry title; Publish is disabled until something changes', () => {
@@ -1392,8 +1403,6 @@ test('a save in the second language keeps the Canvas workspace mounted', async (
   });
 
   $$<HTMLButtonElement>(root, '.entry-header .seg button')[1]?.click();
-  flushSync();
-  $$<HTMLButtonElement>(root, '.editor-modes button')[1]?.click();
   flushSync();
   const canvas = $(root, '.canvas-workspace');
   type(root, 'input#t-title', 'Seeblick-Häuschen');
@@ -3232,7 +3241,7 @@ test('the editor starts focused and opens its second pane only when requested', 
   $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
   flushSync();
   expect($(root, '.entry-body.has-pane .pane.is-locale')).not.toBeNull();
-  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  $$<HTMLButtonElement>(root, '[aria-label="Beside the form"] button')[1]?.click();
   flushSync();
   expect($(root, '.entry-body.has-pane')).toBeNull();
   vi.unstubAllGlobals();
@@ -3306,11 +3315,12 @@ test('Canvas exposes validation problems with a working jump to the affected fie
     preview: true,
     userId: 'u1',
   });
-  $$<HTMLButtonElement>(root, '[aria-label="Editor view"] button')[2]?.click();
+  $<HTMLButtonElement>(root, '.canvas-open')?.click();
   flushSync();
+  expect($(root, '.canvas-workspace.is-fullscreen')).not.toBeNull();
   expect($(root, '.canvas-validation')?.textContent).toContain('1 field needs attention');
   expect($(root, '.canvas-validation')?.textContent).toContain('Required');
   $<HTMLButtonElement>(root, '.canvas-validation button')?.click();
   await vi.waitFor(() => expect(document.activeElement?.id).toBe('f-title'));
-  expect($(root, '[aria-label="Editor view"] [aria-pressed="true"]')?.textContent).toBe('Form');
+  expect($(root, '.canvas-workspace.is-fullscreen')).toBeNull();
 });

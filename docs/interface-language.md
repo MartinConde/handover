@@ -123,7 +123,7 @@ Changing interface language does not navigate, refetch content, change a list's 
 `?locale=`, clear search/status/language filters or selected rows, remount an open editor, or
 replace a local action draft. A new sign-in resolves the newly signed-in account's preference.
 
-In an open entry, the Content/SEO/History tabs, Form/Split/Canvas controls, status and overflow
+In an open entry, the Content/SEO/History tabs, Beside the form and Canvas controls, status and overflow
 actions, URL metadata, outline labels, and the date of a language removed through Handover update
 in place. An editable web-address label presents the selected content language in the interface
 language, and a disabled Publish action translates whether a lock, block drift or a missing value

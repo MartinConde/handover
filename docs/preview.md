@@ -105,16 +105,20 @@ An address the site could serve but has no entry at is `404`, the same answer th
 would give. A collection with no `load`, or a loader that exports no component, is `500` saying
 which line to write: those are the site's own wiring, and only preview reads it.
 
-## Form, Split, and Canvas
+## Beside the form, and Canvas
 
-Entries with a `route`, a [loader](loaders.md), and preview enabled offer three editor views.
-**Split** is the initial view: the form scrolls on the left while the page stays in view on the
-right, under a single row with the page's address, the device widths and **Preview**. The page in
-Split is for looking at: it scrolls and follows every edit, but clicking it selects, edits and
-follows nothing — that is Canvas.
-**Form** retains side-by-side language comparison; **Canvas** gives the page the workspace width,
-adds Structure, Inspector, undo and Edit/Interact, and collapses the normal navigation. The view
-someone picks is remembered per browser. Tablet and phone controls set the iframe's real width rather than scaling it.
+The form is always on the left. **Beside the form** picks what sits on its right: **Page**, the
+page as the site renders it; **Side by side**, the entry in another language
+([Translating](translating.md#side-by-side)); or **Form only**, which gives the form the width and
+brings back the list of fields. **Page** is offered to entries with a `route`, a
+[loader](loaders.md), and preview enabled, and is where they open; everything else opens with
+**Form only**. The choice is remembered per browser.
+
+The page beside the form stays in view while the form scrolls, under one row with its address, the
+device widths and **Preview**. It is for looking at: it scrolls and follows every edit, but clicking
+it selects, edits and follows nothing. **Canvas** gives the page the workspace width, adds
+Structure, Inspector, undo and Edit/Interact, and collapses the normal navigation; its back arrow
+returns to the form. Tablet and phone controls set the iframe's real width rather than scaling it.
 
 Canvas renders the current working snapshots, including changes that autosave has not sent yet.
 Completed edits are coalesced into a fresh render; autosave by itself does not reload the page.
