@@ -3006,6 +3006,8 @@ test('the picker list carries each collection with an index page, in every langu
       index: true,
       path: 'listings',
       title: 'Listings',
+      // What the site calls an unlabelled item pointing here, in each language it serves.
+      titles: { en: 'Homes', de: 'Häuser' },
       // The collection's own label, capitalised for a picker row, in every interface language.
       labels: { en: 'Homes', de: 'Häuser' },
       locales: ['en', 'de'],
@@ -3016,6 +3018,7 @@ test('the picker list carries each collection with an index page, in every langu
       index: true,
       path: 'posts',
       title: 'Posts',
+      titles: { en: 'Posts', de: 'Posts' },
       locales: ['en', 'de'],
       urls: { en: '/blog', de: '/de/blog' },
     },

@@ -448,7 +448,7 @@ function walkTabs(event: KeyboardEvent) {
             {#if item._locales?.length === 1}<span class="badge badge-info">{m.menus_language_only({ language: (item._locales[0] ?? '').toUpperCase() }, options)}</span>{/if}
             {#if says}<span class="badge badge-warn" title={says.why}>{says.chip}</span>{/if}
             </span>
-            <span class="row-edit">{open ? m.menus_close({}, options) : m.menus_edit({}, options)}<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d={open ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} /></svg></span>
+            <span class="row-edit" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d={open ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'} /></svg></span>
           </button>
           <div class="item-actions row-menu">
             <button class="btn btn-ghost btn-icon btn-sm" id="{id}-more-{item._id}" type="button" aria-expanded={menuFor === item._id} aria-label={m.menus_actions_for({ item: name(item) }, options)} onclick={() => (menuFor = menuFor === item._id ? '' : item._id)}>⋯</button>
@@ -478,43 +478,40 @@ function walkTabs(event: KeyboardEvent) {
 {#snippet editor(row: MenuItem, says: { chip: string; why: string } | undefined)}
   <div class="item-editor" role="group" aria-label={m.menus_edit_label({ item: name(row) }, options)}>
     {#if says}<p class="notice notice-warn">{says.why}</p>{/if}
-    <div class="field">
-      <div class="label-row"><label for="{id}-ed-label">{m.menus_label({}, options)}</label><span class="mode">{m.field_per_language({}, options)}</span></div>
-      <input class="input" id="{id}-ed-label" type="text" value={row.label} oninput={(e) => (row.label = e.currentTarget.value)} placeholder={fallback(row)} aria-describedby="{id}-ed-label-hint" />
-      <p class="hint" id="{id}-ed-label-hint">{row.link.type === 'url' ? m.menus_empty_address({}, options) : m.menus_empty_page_title({}, options)} <b>{fallback(row)}</b>.</p>
+    <div class="editor-grid">
+      <div class="field">
+        <div class="label-row"><label for="{id}-ed-label">{m.menus_label({}, options)}</label><span class="mode">{m.field_per_language({}, options)}</span></div>
+        <input class="input" id="{id}-ed-label" type="text" value={row.label} oninput={(e) => (row.label = e.currentTarget.value)} placeholder={fallback(row)} />
+      </div>
+      <div class="field">
+        <div class="label-row"><span id="{id}-ed-link-l">{m.menus_links_to({}, options)}</span><span class="mode">{m.field_same_every_language({}, options)}</span></div>
+        {#if changing}
+          <PagePicker id="{id}-ed-link" label="a page or entry" labelKind="page-or-entry" labelId="{id}-ed-link-l" indexes {uiLocale} chosen={keyOf(row.link)} onpick={(e) => { row.link = linkTo(e); changing = false; }} onurl={(href) => { row.link = { type: 'url', href }; changing = false; }} onclose={() => (changing = false)} />
+        {:else}
+          <div class="link-summary" role="group" aria-labelledby="{id}-ed-link-l">
+            <span class="name">{fallback(row)}</span>
+            <span class="sub">{row.link.type === 'url' ? m.menus_link({}, options) : m.menus_page({}, options)} <code>{target(row)}</code></span>
+            <button class="btn btn-sm" type="button" onclick={() => (changing = true)}>{m.field_change({}, options)}</button>
+          </div>
+        {/if}
+      </div>
     </div>
-    <div class="field">
-      <div class="label-row"><span id="{id}-ed-link-l">{m.menus_links_to({}, options)}</span><span class="mode">{m.field_same_every_language({}, options)}</span></div>
-      {#if changing}
-        <PagePicker id="{id}-ed-link" label="a page or entry" labelKind="page-or-entry" labelId="{id}-ed-link-l" indexes {uiLocale} chosen={keyOf(row.link)} onpick={(e) => { row.link = linkTo(e); changing = false; }} onurl={(href) => { row.link = { type: 'url', href }; changing = false; }} onclose={() => (changing = false)} />
-      {:else}
-        <div class="link-summary" role="group" aria-labelledby="{id}-ed-link-l">
-          <span class="name">{fallback(row)}</span>
-          <button class="btn btn-sm" type="button" onclick={() => (changing = true)}>{m.field_change({}, options)}</button>
-          <span class="sub">{row.link.type === 'url' ? m.menus_link({}, options) : m.menus_page({}, options)} <code>{target(row)}</code></span>
-        </div>
+    <div class="editor-foot">
+      <label class="editor-option" for="{id}-ed-tab"><input type="checkbox" id="{id}-ed-tab" checked={row.newTab === true} onchange={(e) => { if (e.currentTarget.checked) row.newTab = true; else delete row.newTab; }} /><span>{m.menus_new_tab({}, options)}</span></label>
+      {#if known.locales.length > 1}
+        <label class="editor-option" for="{id}-ed-loc"><span>{m.menus_shown_in({}, options)}</span>
+          <select class="filter" id="{id}-ed-loc" value={shownIn(row)} onchange={(e) => showIn(row, e.currentTarget.value)} aria-describedby={shownIn(row) ? `${id}-ed-loc-hint` : undefined}>
+            <option value="">{m.menus_all_languages({}, options)}</option>
+            {#each known.locales as of (of)}<option value={of}>{m.menus_language_only({ language: languageName(of) }, options)}</option>{/each}
+          </select>
+        </label>
       {/if}
-      <p class="hint">{row.link.type === 'url' ? m.menus_custom_link_hint({}, options) : m.menus_page_link_hint({}, options)}</p>
+      <div class="actions">
+        <button class="btn btn-sm btn-primary" type="button" onclick={closeEditor}>{m.menus_done({}, options)}</button>
+        <button class="btn btn-sm" type="button" onclick={() => cancelEdit(row)}>{m.common_cancel({}, options)}</button>
+      </div>
     </div>
-    <label class="choice" for="{id}-ed-tab"><input type="checkbox" id="{id}-ed-tab" checked={row.newTab === true} onchange={(e) => { if (e.currentTarget.checked) row.newTab = true; else delete row.newTab; }} /><span>{m.menus_new_tab({}, options)}</span></label>
-    {#if known.locales.length > 1}
-      <details class="nav-visibility" open={shownIn(row) !== ''}>
-        <summary>{m.menus_language_visibility({}, options)}<span>{shownIn(row) ? m.menus_language_only({ language: languageName(shownIn(row)) }, options) : m.menus_all_languages({}, options)}</span></summary>
-        <fieldset>
-        <legend>{m.menus_show_in({}, options)}</legend>
-        <label class="choice"><input type="radio" name="{id}-ed-loc" checked={shownIn(row) === ''} onchange={() => showIn(row, '')} /><span>{m.menus_all_languages({}, options)}</span></label>
-        {#each known.locales as of (of)}
-          <label class="choice"><input type="radio" name="{id}-ed-loc" checked={shownIn(row) === of} onchange={() => showIn(row, of)} /><span>{m.menus_language_only({ language: languageName(of) }, options)}</span></label>
-        {/each}
-        </fieldset>
-        <p class="hint">{m.menus_visibility_hint({}, options)}</p>
-        {#if row.link.type !== 'url'}<p class="hint">{m.menus_visibility_page_hint({}, options)}</p>{/if}
-      </details>
-    {/if}
-    <div class="actions">
-      <button class="btn btn-primary" type="button" onclick={closeEditor}>{m.menus_done({}, options)}</button>
-      <button class="btn" type="button" onclick={() => cancelEdit(row)}>{m.common_cancel({}, options)}</button>
-    </div>
+    {#if shownIn(row)}<p class="hint" id="{id}-ed-loc-hint">{m.menus_visibility_hint({}, options)}{row.link.type !== 'url' ? ` ${m.menus_visibility_page_hint({}, options)}` : ''}</p>{/if}
   </div>
 {/snippet}
 
@@ -583,7 +580,6 @@ function walkTabs(event: KeyboardEvent) {
         <section class="nav-library" aria-labelledby="{id}-add-h">
           <header class="nav-panel-heading">
             <h2 id="{id}-add-h">{m.menus_add({}, options)}</h2>
-            <p>{m.menus_add_intro({}, options)}</p>
             <a class="nav-jump" href="#{id}-structure-h">{m.menus_go_to_structure({}, options)} ↓</a>
           </header>
           <PagePicker id="{id}-pick" label="pages and entries" labelKind="pages-and-entries" labelId="{id}-add-h" indexes library {included} {uiLocale} onpick={addEntry} onurl={addUrl} />
@@ -591,7 +587,7 @@ function walkTabs(event: KeyboardEvent) {
             ? m.menus_entry_added({ title: addedFeedback.title, menu: addedFeedback.menu }, options)
             : addedFeedback?.kind === 'url'
               ? m.menus_url_added({}, options)
-              : m.menus_titles_update({}, options)}</p>
+              : ''}</p>
         </section>
       {/if}
       <section class="nav-workspace" aria-labelledby="{id}-structure-h">
@@ -626,7 +622,6 @@ function walkTabs(event: KeyboardEvent) {
           </div>
         </div>
       {/if}
-        {#if !translating && menu.items.length}<p class="nav-tree-help">{m.menus_tree_help({}, options)}</p>{/if}
       </section>
     </div>
   {/if}

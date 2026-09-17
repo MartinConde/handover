@@ -377,3 +377,67 @@ test('an index can be searched by its displayed label', async () => {
   flushSync();
   expect(titles()).toEqual(['Häuser']);
 });
+
+const search = (value: string) => {
+  const box = q<HTMLInputElement>('#p-q');
+  box.value = value;
+  box.dispatchEvent(new Event('input', { bubbles: true }));
+  flushSync();
+};
+const sections = () =>
+  Array.from(document.querySelectorAll<HTMLButtonElement>('.picker-list .group-toggle'));
+const openSections = () =>
+  sections()
+    .filter((b) => b.getAttribute('aria-expanded') === 'true')
+    .map((b) => b.querySelector('.group-label')?.textContent);
+const libraryRows = () =>
+  Array.from(document.querySelectorAll<HTMLButtonElement>('.picker-list button[data-path]'));
+
+test('the library opens with every section closed, and a search opens the ones that match', async () => {
+  await show(OFFERED, { library: true, onclose: undefined });
+  expect(sections().map((b) => b.querySelector('.group-label')?.textContent)).toEqual([
+    'pages',
+    'listings',
+  ]);
+  expect(openSections()).toEqual([]);
+  expect(libraryRows()).toHaveLength(0);
+
+  search('harbour');
+  expect(openSections()).toEqual(['listings']);
+  expect(libraryRows().map((b) => b.dataset.path)).toEqual(['listings/harbour-flat']);
+
+  // Closed during a search, a section stays shut until the words change.
+  sections()[0]?.click();
+  flushSync();
+  expect(openSections()).toEqual([]);
+  search('harbou');
+  expect(openSections()).toEqual(['listings']);
+
+  search('');
+  expect(openSections()).toEqual([]);
+});
+
+test('in the library the arrows walk rows across open sections, never stopping on a section', async () => {
+  await show(OFFERED, { library: true, onclose: undefined });
+  for (const section of sections()) section.click();
+  flushSync();
+  press('ArrowDown');
+  expect((document.activeElement as HTMLElement).dataset.path).toBe('pages/contact');
+  press('ArrowDown');
+  expect((document.activeElement as HTMLElement).dataset.path).toBe('listings/mill-house');
+  press('ArrowUp');
+  press('ArrowUp');
+  expect((document.activeElement as HTMLElement).dataset.path).toBe('listings/harbour-flat');
+});
+
+test('a library row names the one language a page is limited to, and nothing when it has all', async () => {
+  await show(OFFERED, { library: true, onclose: undefined });
+  sections()[1]?.click();
+  flushSync();
+  const tag = (path: string) =>
+    libraryRows()
+      .find((b) => b.dataset.path === path)
+      ?.querySelector('.library-only')?.textContent;
+  expect(tag('listings/mill-house')).toBe('EN only');
+  expect(tag('listings/harbour-flat')).toBeUndefined();
+});

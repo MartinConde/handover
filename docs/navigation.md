@@ -42,7 +42,9 @@ menus:
 `newTab` sits on the item, not inside `link`. An `index` item links each language's own
 index page — `/listings` in English, `/de/listings` in German — where a `url` item sends every
 language to the one address it holds; it needs the collection to declare an `index`, and is
-named by the collection until a label is typed. Every menu and item has an `_id`, the same
+named by the collection's [`label`](configuration.md#collections) in that language —
+`{ en: 'homes', de: 'Häuser' }` gives *Homes* and *Häuser*, a plain string counts as English — or
+by its key where the label has no entry for the language, until a label is typed. Every menu and item has an `_id`, the same
 in every locale. A `label` left empty is not a mistake: the item is then named by the page it
 points at, so renaming that page moves the menu with it — in each language by that language's
 title.
@@ -56,8 +58,10 @@ moves it in all of them, and the German file keeps its German words while it hap
 
 The client edits this file in **Site settings → Navigation**. A persistent **Add to menu**
 library sits beside the menu structure, with searchable pages, entries, collection index pages
-and a custom-link form. Each page has an add button; **In menu** marks pages already used,
-including nested items. The library keeps the current search after an addition. On narrow
+and a custom-link form. Pages are grouped in one closed section per collection; a search opens
+every section it matches. Each page is one line with an add button; a ✓ marks pages already in
+the menu, including nested items, and a tag names a page that is hidden or exists in only some
+languages (*DE only*). The library keeps the current search after an addition. On narrow
 screens the library stacks above the tree, with a shortcut to the menu structure.
 
 The navigation builder follows the account's **Interface language**. Switching between English
@@ -66,8 +70,9 @@ place. It does not reread the page directory or replace the builder: menu order,
 the open item editor, focus and an unfinished label stay where they are. Menu keys, page titles,
 labels, URLs and other site-authored values remain exactly as written.
 
-Rows show a label, destination and an explicit **Edit** control. Clicking a row opens its
-editor underneath: label, link, new tab and language visibility. **Done** closes the editor;
+Rows are one line each: the label, what it points at and its address. Clicking a row opens its
+editor underneath: label and link side by side, then **Open in a new tab** and a **Shown in**
+choice (all languages, or one language only). **Done** closes the editor;
 **Cancel** restores the row to how it was when opened. Rows move by dragging the handle — a hairline marks a slot between
 siblings, a tinted well names the parent a drop would go inside, and a slot past three levels
 refuses in place — or from the row's ⋯ (up, down, make a sub-item, move out a level, remove).
@@ -83,7 +88,7 @@ language to edit its labels, or use **Side by side** for reference. Leaving a la
 uses the linked page's own title in that language. Page and collection links resolve the
 localized destination automatically; a custom URL uses the exact same address everywhere.
 
-**Language visibility** is an optional setting inside the item editor. Keep **All languages**
+**Shown in** is an optional setting inside the item editor. Keep **All languages**
 for normal navigation; choose a single language for exceptions such as a German-only legal
 link. It controls where the item and its sub-items belong, not whether a page is translated.
 Missing or hidden pages are still omitted in that language. Label placeholders and hidden-page

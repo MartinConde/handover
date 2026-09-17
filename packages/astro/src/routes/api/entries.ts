@@ -29,6 +29,7 @@ import {
   heldDrafts,
   holdEntry,
   humanise,
+  indexName,
   isDraftRace,
   isLive,
   isMediaRace,
@@ -1049,6 +1050,9 @@ export async function pickList(ctx: RequestContext): Promise<Response> {
           path: collection,
           // What a menu item pointing here is called on the site; `labels` is the admin's name.
           title: humanise(collection),
+          titles: Object.fromEntries(
+            config.i18n.locales.map((locale) => [locale, indexName(collection, label, locale)]),
+          ),
           ...(labels
             ? {
                 // Written as it reads mid-sentence; a picker row is a heading.

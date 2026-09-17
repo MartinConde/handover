@@ -5,6 +5,7 @@ import { entryAddress, entryUrl, type I18nRouting } from './names.js';
 import { checkReserved, isLive, RESERVED_KEYS } from './reserved.js';
 import { type Field, type Form, humanise, rowFields, type Translation } from './schema.js';
 import { fieldAddress, fieldPosition, keptMachine } from './translate.js';
+import { type Labels, labelsOf } from './ui-locale.js';
 
 export interface ContentEntry<T = unknown> {
   id: string;
@@ -156,7 +157,13 @@ export interface LocaleSite {
   i18n: I18nRouting;
   collections: Record<
     string,
-    { route?: string; index?: string; localizedSlugs?: boolean; titleField?: string }
+    {
+      route?: string;
+      index?: string;
+      localizedSlugs?: boolean;
+      titleField?: string;
+      label?: string | Labels;
+    }
   >;
 }
 
@@ -232,6 +239,14 @@ async function navLinks<C extends Record<string, unknown>>(
   return links;
 }
 
+/** An index page has no title: its collection's label in this language, a plain label being English. */
+export function indexName(collection: string, label: unknown, locale: string): string {
+  const named = (typeof label === 'string' && label ? { en: label } : labelsOf(label))?.[
+    locale as keyof Labels
+  ];
+  return named ? named.charAt(0).toUpperCase() + named.slice(1) : humanise(collection);
+}
+
 /** Where one item points in this language, and what the page it points at is called. */
 async function href<C extends Record<string, unknown>>(
   siteId: string,
@@ -247,7 +262,12 @@ async function href<C extends Record<string, unknown>>(
   if (link.type === 'index') {
     if (typeof link.collection !== 'string') return undefined;
     const url = entryUrl(siteId, site.i18n, site.collections[link.collection]?.index, '', locale);
-    return url ? { href: url, name: humanise(link.collection) } : undefined;
+    return url
+      ? {
+          href: url,
+          name: indexName(link.collection, site.collections[link.collection]?.label, locale),
+        }
+      : undefined;
   }
   if (typeof link.ref !== 'string') return undefined;
   const cut = link.ref.indexOf('/');

@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Tidy the navigation builder: the library groups pages into collapsible sections per collection
+  with one line per page and no paths, menu rows are single lines in one list, and the item
+  editor puts label and link side by side with language visibility as one **Shown in** select.
+
+- Name an unlabelled `index` menu item by the collection's `label` in each language, on the site
+  through `menusAt()` and in the navigation builder, instead of the humanised key everywhere.
+
 - Name collections, globals, fields and block types in each interface language. A collection takes
   `label` and `singular` in `cms.config.ts`; a schema takes `.meta({ label: { en, de } })`. The
   editor, entry lists, dashboard, pending changes, History diffs, conflicts and Canvas panels read

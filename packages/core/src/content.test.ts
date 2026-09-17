@@ -2150,6 +2150,24 @@ test("an index item points at the language's own index page, named by the collec
   ).toEqual([]);
 });
 
+test("an unlabelled index item takes the collection's label in the visitor's language", async () => {
+  const labelled = {
+    ...site,
+    collections: {
+      ...site.collections,
+      listings: { ...site.collections.listings, label: { en: 'homes', de: 'Häuser' } },
+    },
+  };
+  const nav = menu([item({ link: { type: 'index', collection: 'listings' } })]);
+  const name = async (locale: string) =>
+    (await menusAt('default', switcherSource, labelled, nav, locale)).header?.[0]?.label;
+
+  expect(await name('en')).toBe('Homes');
+  expect(await name('de')).toBe('Häuser');
+  // No label written for this language: the key, as before.
+  expect(await name('fr')).toBe('Listings');
+});
+
 test('a site with no navigation global renders no menus rather than throwing', async () => {
   expect(await resolved(undefined, 'en')).toEqual({});
 });

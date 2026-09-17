@@ -179,10 +179,16 @@ const item = (over: Record<string, unknown>) => ({
 const openAdd = async () => {
   await loaded();
 };
+/** The library's sections start closed. */
+const openSections = () => {
+  for (const toggle of Array.from(
+    document.querySelectorAll<HTMLButtonElement>('.group-toggle[aria-expanded="false"]'),
+  ))
+    click(toggle);
+};
 const pickRow = (path: string) => {
-  const row = Array.from(document.querySelectorAll<HTMLButtonElement>('.picker-list button')).find(
-    (b) => b.querySelector('.path')?.textContent === path,
-  );
+  openSections();
+  const row = document.querySelector<HTMLButtonElement>(`.picker-list button[data-path="${path}"]`);
   if (!row) throw new Error(`no row for ${path}`);
   click(row);
 };
@@ -218,6 +224,9 @@ test('a page chosen from the list joins the menu, named by the page until somebo
 test("a collection's index chosen from the list is written as an index item", async () => {
   show();
   await openAdd();
+  openSections();
+  // The row reads "Collection page", so its name has to carry which collection.
+  expect(document.querySelector('[aria-label="Add the Listings collection page"]')).not.toBeNull();
   pickRow('listings');
 
   expect(labels()).toEqual(['Listings']);
@@ -525,6 +534,7 @@ test('the library stays visible, preserves search, and marks pages already in an
   await loaded();
   expect(document.querySelector('.nav-library')).not.toBeNull();
   expect(document.activeElement?.id).not.toBe('f-menus-pick-q');
+  openSections();
   expect(byLabel('Add Contact again').textContent).toContain('In menu');
 
   type('#f-menus-pick-q', 'Impressum');
@@ -545,6 +555,7 @@ test('the library reflects removal and the active menu when switching tabs', asy
     ['header', 'footer'],
   );
   await loaded();
+  openSections();
   expect(byLabel('Add Contact again').textContent).toContain('In menu');
   click(action('Contact', 'Remove Contact'));
   expect(byLabel('Add Contact').textContent).not.toContain('In menu');
@@ -812,14 +823,13 @@ test('language visibility is an optional exception and Cancel restores the origi
   show([item({ label: 'Contact', link: { type: 'entry', ref: 'pages/contact' } })]);
   await loaded();
   click(rowOpen());
-  expect(q<HTMLDetailsElement>('.nav-visibility').open).toBe(false);
-  expect(q('.nav-visibility summary').textContent).toContain('All languages');
-  const german = Array.from(
-    document.querySelectorAll<HTMLLabelElement>('.nav-visibility label'),
-  ).find((label) => label.textContent === 'German only');
-  click(german?.querySelector('input') as HTMLInputElement);
+  const shownIn = q<HTMLSelectElement>('#f-menus-ed-loc');
+  expect(shownIn.selectedOptions[0]?.textContent).toBe('All languages');
+  shownIn.value = 'de';
+  shownIn.dispatchEvent(new Event('change', { bubbles: true }));
+  flushSync();
   expect(menus[0]?.items[0]?._locales).toEqual(['de']);
-  expect(q('.nav-visibility summary').textContent).toContain('German only');
+  expect(shownIn.selectedOptions[0]?.textContent).toBe('German only');
   click(q('.item-editor .actions button:last-child'));
   expect(menus[0]?.items[0]?._locales).toBeUndefined();
 });

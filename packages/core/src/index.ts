@@ -64,6 +64,7 @@ export {
   FORMAT_VERSION,
   getEntryLocales,
   globalsAt,
+  indexName,
   menusAt,
   mergeEntry,
   parseEntry,
