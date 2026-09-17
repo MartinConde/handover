@@ -196,6 +196,25 @@ window.fetch = async (input, init) => {
       { error: 'This is a design preview. Connect a site to save changes.' },
       { status: 403 },
     );
+  if (path === '/admin/api/account')
+    return json({
+      hasPassword: true,
+      canChangeEmail: true,
+      sessions: [
+        {
+          id: 's1',
+          current: true,
+          userAgent: 'Mozilla/5.0 (Macintosh; Mac OS X) Chrome/140',
+          lastUsed: now,
+        },
+        {
+          id: 's2',
+          current: false,
+          userAgent: 'Mozilla/5.0 (iPhone) Safari/18',
+          lastUsed: now - 3 * 86400000,
+        },
+      ],
+    });
   if (path === '/admin/api/drafts') return json({ entries: pending, defaultLocale: 'en' });
   if (path === '/admin/api/build') return json(build);
   if (path === '/admin/api/globals') return json({ globals, locales });

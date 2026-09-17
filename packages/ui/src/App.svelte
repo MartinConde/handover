@@ -27,7 +27,6 @@ import { coordinateEntryReplacement, flushNavigation, navigate } from './navigat
 import * as m from './paraglide/messages.js';
 import Pending from './publishing/Pending.svelte';
 import { request as fetch, localPath, sitePath, uncertainResponse } from './request.js';
-import LanguageControl from './shared/LanguageControl.svelte';
 import Modal from './shared/Modal.svelte';
 import BuildPill, { type Build } from './shell/BuildPill.svelte';
 import Dashboard from './shell/Dashboard.svelte';
@@ -699,8 +698,6 @@ const initial = $derived(
             <a href={sitePath(`/admin/account`)} aria-current={path === '/admin/account' ? 'page' : undefined}
               >{m.account_title({}, options)}</a
             >
-            <LanguageControl locale={uiLocale} disabled={localeBusy} onlocale={saveLocale} />
-            {#if localeError}<span class="error locale-error" role="alert">{m.account_language_save_failed({}, messageOptions(uiLocale))}</span>{/if}
             <button type="button" onclick={signOut}>{m.shell_sign_out({}, options)}</button>
           </div>
         {/if}
@@ -770,6 +767,7 @@ const initial = $derived(
       <Account
         user={session.user}
         role={session.role}
+        {query}
         {uiLocale}
         {localeBusy}
         {localeError}

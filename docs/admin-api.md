@@ -51,6 +51,11 @@ Authentication failures keep Better Auth's `code` alongside its existing `messag
 Better Auth refusal, preserving its `400` status and legacy `error` field. Clients should classify a
 known failure by `code`, never by matching English prose or by status alone.
 
+`GET /admin/api/account` answers `canChangeEmail: true` when the site can mail, and only then does
+`POST /admin/api/auth/change-email` with `{ "newEmail", "callbackURL" }` start the change. It
+answers `{ "status": true }` whether or not another account already uses the address, so it never
+says who has an account.
+
 If the admin loses the connection before an API response body is complete, its request wrapper
 creates the existing `503` response with `x-handover-request-uncertain: true` and the legacy English
 body. It now also sends `x-handover-error-code: CONNECTION_LOST`, allowing visible recovery text to

@@ -42,6 +42,8 @@ let baseURL: string | undefined;
 let github: { clientId: string; clientSecret: string } | undefined;
 const magicLinks: { email: string; url: string }[] = [];
 const resetLinks: { email: string; url: string }[] = [];
+const emailApprovals: { email: string; newEmail: string; url: string }[] = [];
+const emailChangeLinks: { email: string; url: string }[] = [];
 let sending = false;
 
 beforeEach(() => {
@@ -50,6 +52,8 @@ beforeEach(() => {
   sending = false;
   magicLinks.length = 0;
   resetLinks.length = 0;
+  emailApprovals.length = 0;
+  emailChangeLinks.length = 0;
 });
 
 const auth = (secureCookies = true) =>
@@ -65,6 +69,12 @@ const auth = (secureCookies = true) =>
           },
           sendPasswordReset: async (data) => {
             resetLinks.push(data);
+          },
+          sendEmailChangeApproval: async (data) => {
+            emailApprovals.push(data);
+          },
+          sendEmailChangeLink: async (data) => {
+            emailChangeLinks.push(data);
           },
         }
       : {}),
@@ -610,6 +620,77 @@ test('a reset link cannot be pointed off the site either', async () => {
 
   expect(res.status).toBe(403);
   expect(resetLinks).toEqual([]);
+});
+
+// changing the email address
+
+// The current address approves first, so a session left open somewhere cannot move the account.
+test('an email change is approved from the current address before the new one hears of it', async () => {
+  emailing();
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+  const cookie = await sessionCookie('owner@example.com', 'correct-horse-battery');
+
+  const res = await call(
+    '/change-email',
+    { newEmail: 'new@example.com', callbackURL: '/admin/account' },
+    { cookie },
+  );
+
+  expect(res.status).toBe(200);
+  expect(emailApprovals).toMatchObject([
+    { email: 'owner@example.com', newEmail: 'new@example.com' },
+  ]);
+  expect(emailChangeLinks).toEqual([]);
+  expect(await sessionUser(cookie)).toMatchObject({ email: 'owner@example.com' });
+});
+
+test('approving the change mails the new address a link, and that link makes the change', async () => {
+  emailing();
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+  const cookie = await sessionCookie('owner@example.com', 'correct-horse-battery');
+  await call(
+    '/change-email',
+    { newEmail: 'new@example.com', callbackURL: '/admin/account' },
+    { cookie },
+  );
+
+  const approved = await open(emailApprovals[0]?.url ?? '', cookie);
+  expect(approved.status).toBe(302);
+  expect(emailChangeLinks).toMatchObject([{ email: 'new@example.com' }]);
+  expect(await userRows()).toEqual([{ email: 'owner@example.com', role: 'owner' }]);
+
+  const changed = await open(emailChangeLinks[0]?.url ?? '', cookie);
+
+  expect(changed.status).toBe(302);
+  expect(changed.headers.get('location')).toBe('/admin/account');
+  expect(await userRows()).toEqual([{ email: 'new@example.com', role: 'owner' }]);
+});
+
+test('without a mailer an email change is refused and nothing is sent', async () => {
+  baseURL = SITE;
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+  const cookie = await sessionCookie('owner@example.com', 'correct-horse-battery');
+
+  const res = await call('/change-email', { newEmail: 'new@example.com' }, { cookie });
+
+  expect(res.status).toBe(400);
+  expect(emailApprovals).toEqual([]);
+  expect(await userRows()).toEqual([{ email: 'owner@example.com', role: 'owner' }]);
+});
+
+test('an email change cannot be pointed off the site either', async () => {
+  emailing();
+  await seed('owner@example.com', 'correct-horse-battery', 'owner');
+  const cookie = await sessionCookie('owner@example.com', 'correct-horse-battery');
+
+  const res = await call(
+    '/change-email',
+    { newEmail: 'new@example.com', callbackURL: 'https://example.com/x' },
+    { cookie },
+  );
+
+  expect(res.status).toBe(403);
+  expect(emailApprovals).toEqual([]);
 });
 
 // A consent screen can outlast the five-minute state, and the fallback has to be the login.

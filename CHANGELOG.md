@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Change your email on **Account**. The current address approves the change by link, then the new
+  address confirms it; a site without a mailer shows the email without the form.
+
+- Redesign **Account**: profile, interface language, password and sessions are separate cards,
+  each with its button and its result in the card's footer. The account menu no longer has an
+  interface-language picker; choose the language on **Account**.
+
 - Redesign **Settings**: one line at the top says whether everything works, with **Check again**;
   DeepL and writing-help keys come first under **Translation and AI**, with the translation check's
   result on the DeepL row; services are single rows that open for their provider and last result,

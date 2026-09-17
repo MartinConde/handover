@@ -3,8 +3,7 @@
 Handover's interface language is separate from the language of the content being edited.
 English and Deutsch are available even when the site has only one content language.
 
-Choose **Interface language** from the account menu to change it without leaving the current
-screen. The same choice is available on **Account**. Signed-out screens, including password reset
+Choose **Interface language** on **Account** (open the account menu, then **Account**). Signed-out screens, including password reset
 and expired-link screens, have a device-only picker so they remain readable before sign-in.
 In German the control is labelled **Sprache der Benutzeroberfläche**. Both versions list the
 choices as **English** and **Deutsch**; these labels name the interface language and never select

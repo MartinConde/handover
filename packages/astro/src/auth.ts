@@ -146,6 +146,22 @@ export function createAuth(url: URL, ctx?: CloudflareContext, options?: { invite
             })
               .catch(mailFailed(db, 'password reset'))
               .then(() => undefined),
+          sendEmailChangeApproval: ({ email, newEmail, url: link }) =>
+            send({
+              to: email,
+              subject: 'Approve your new email address',
+              text: `Somebody signed in as ${email} asked to change this account's email to ${newEmail}.\n\nOpen this link to approve it. We then send a link to ${newEmail}, and the change happens when that one is opened. It expires in an hour.\n\n${link}\n\nIf this was not you, do not open the link and change your password — somebody may be signed in as you.`,
+            })
+              .catch(mailFailed(db, 'email change approval'))
+              .then(() => undefined),
+          sendEmailChangeLink: ({ email, url: link }) =>
+            send({
+              to: email,
+              subject: 'Confirm your new email address',
+              text: `Open this link to make ${email} the address you sign in with. It works once and expires in an hour.\n\n${link}\n\nIf you did not ask for this, ignore it — nothing has changed.`,
+            })
+              .catch(mailFailed(db, 'email change link'))
+              .then(() => undefined),
         }
       : {}),
     // Better Auth already attached its `.catch`, so a failed send is only a Worker log line.

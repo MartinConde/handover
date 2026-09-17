@@ -1,10 +1,11 @@
 # Sending email
 
-The admin sends mail for three things: the sign-in link on the login screen, the "set a new
-password" link behind *Forgot password?*, and the test message on the settings screen. All three
-go through whatever `mailer` in `cms.config.ts` names, so a site swaps its provider in one place.
+The admin sends mail for these: the sign-in link on the login screen, the "set a new
+password" link behind *Forgot password?*, the two links that confirm an email change on
+**Account**, and the test message on the settings screen. All of them go through whatever `mailer`
+in `cms.config.ts` names, so a site swaps its provider in one place.
 
-Until a site has one, none of the three is offered — the login shows the password form and
+Until a site has one, none of these is offered — the login shows the password form and
 nothing that does not work. The same is true of a provider named without its credential: the
 admin treats that as no mailer at all rather than offering a button that fails.
 
@@ -126,7 +127,7 @@ cannot be pointed at a stranger.
 
 ## When a send fails
 
-The two links behave differently, and it is worth knowing which you are looking at.
+The links behave differently, and it is worth knowing which you are looking at.
 
 The **sign-in link** and the **test email** both wait for the provider's answer. A send that
 fails is a failed request: the test email answers `502` with the refusal in it, and the login
@@ -137,9 +138,10 @@ The **reset link** does not wait. `Forgot password?` answers *If this email exis
 check your email for the reset link* before the mail is handed over — which is what keeps it from
 confirming who has an account. A send that then fails reaches the Worker's log as
 `Failed to run background task` carrying the provider's own sentence, so `npx wrangler tail` is
-where the reason is. Nothing in that line is the link itself.
+where the reason is. Nothing in that line is the link itself. The two **email-change links**
+behave the same way: *Change email* says to check the inbox before the mail is handed over.
 
-Every failed send of all three also leaves a row in the [activity log](activity.md), which is
+Every failed send also leaves a row in the [activity log](activity.md), which is
 where to look first when somebody says a link never arrived: it says which kind of message it
 was and when, and the provider's reason is the line in the tail.
 

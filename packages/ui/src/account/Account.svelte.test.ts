@@ -7,6 +7,7 @@ const USER = { id: 'u1', name: 'Martin', email: 'martin@example.com', uiLocale: 
 
 interface Facts {
   hasPassword: boolean;
+  canChangeEmail?: boolean;
   sessions: { id: string; current: boolean; userAgent: string | null; lastUsed: number }[];
 }
 
@@ -24,10 +25,14 @@ function server(facts: Facts) {
   return calls;
 }
 
-const show = async (role: 'owner' | 'editor' = 'owner', uiLocale: 'en' | 'de' = 'en') => {
+const show = async (
+  role: 'owner' | 'editor' = 'owner',
+  uiLocale: 'en' | 'de' = 'en',
+  query = '',
+) => {
   app = mount(Account, {
     target: document.body,
-    props: { user: USER, role, uiLocale, onname: () => {} },
+    props: { user: USER, role, uiLocale, query, onname: () => {} },
   });
   flushSync();
   await new Promise((r) => setTimeout(r, 0));
@@ -239,4 +244,33 @@ test('a malformed successful account read has localized retry feedback', async (
 
   expect(root.querySelector('.settings')).not.toBeNull();
   expect(root.querySelector('.account-read-error')).toBeNull();
+});
+
+// Where the link lands is the account page, so the change finishes where it started.
+test('an email change asks for the new address and says to check the inbox', async () => {
+  const calls = server({ hasPassword: true, sessions: [HERE], canChangeEmail: true });
+  const root = await show();
+  type(root, 'new-email', 'new@example.com');
+
+  click(root, 'Change email');
+  await settle();
+
+  expect(calls[0]?.url).toBe('/admin/api/auth/change-email');
+  expect(calls[0]?.body).toEqual({ newEmail: 'new@example.com', callbackURL: '/admin/account' });
+  expect(text(root)).toContain('Check your inbox');
+});
+
+test('a site that cannot send email shows the address with no way to change it', async () => {
+  server({ hasPassword: true, sessions: [HERE], canChangeEmail: false });
+  const root = await show();
+
+  expect(root.querySelector('input#new-email')).toBeNull();
+  expect(text(root)).toContain('martin@example.com');
+});
+
+test('an email link that no longer works says so when it lands here', async () => {
+  server({ hasPassword: true, sessions: [HERE], canChangeEmail: true });
+  const root = await show('owner', 'en', '?error=TOKEN_EXPIRED');
+
+  expect(root.querySelector('[role="alert"]')?.textContent).toContain('That email link');
 });

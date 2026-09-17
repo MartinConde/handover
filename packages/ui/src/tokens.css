@@ -656,11 +656,7 @@ select.filter.is-on { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .drift > .actions { display: flex; align-items: center; gap: var(--s-3); }
 .drift > .actions .left { font-size: var(--text-sm); color: var(--ink-2); margin-right: auto; }
 
-/* A one-time prompt in accent ground, above the sections rather than inside them. */
-.suggestion { display: grid; gap: var(--s-3); padding: var(--s-4); border-radius: var(--radius-lg); background: var(--accent-soft); color: var(--ink); }
-.suggestion .actions { display: flex; gap: var(--s-2); }
-
-/* Account — one column of sections, each with its own heading and its own form. */
+/* Settings pages — one column of sections, each with its own heading and its own form. */
 .settings { display: grid; max-width: 880px; width: 100%; }
 .settings-section { display: grid; gap: var(--s-4); padding: var(--s-6) 0; border-top: 1px solid var(--border); }
 .settings-section:first-child { border-top: 0; padding-top: 0; }
@@ -669,9 +665,26 @@ select.filter.is-on { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .settings-section > header p { font-size: var(--text-sm); color: var(--ink-2); }
 .settings-section .form { max-width: 420px; gap: var(--s-4); }
 .settings-section .actions { display: flex; gap: var(--s-2); }
-.main > .suggestion { max-width: 620px; margin-bottom: var(--s-8); }
-.main > .suggestion strong { display: block; margin-bottom: var(--s-1); }
-.main > .suggestion .form { max-width: 420px; gap: var(--s-4); }
+
+/* Account — one card per thing you can change; its button and its feedback sit in the footer. */
+.settings.is-account { max-width: 720px; gap: var(--s-5); }
+.settings-card { display: grid; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); overflow: hidden; }
+.settings-card-body { display: grid; gap: var(--s-5); padding: var(--s-6); }
+.settings-card-body > header { display: grid; gap: var(--s-1); }
+.settings-card h2 { font-size: var(--text-lg); letter-spacing: var(--tracking-tight); font-weight: 600; }
+.settings-card-body > header p { font-size: var(--text-sm); color: var(--ink-2); }
+.settings-card .field { max-width: 420px; }
+.settings-card-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-4); min-height: 56px; padding: var(--s-3) var(--s-6); border-top: 1px solid var(--border); background: var(--surface-2); }
+.settings-card-foot > p { flex: 1; min-width: min(100%, 220px); font-size: var(--text-sm); }
+.settings-card-foot > .btn { margin-left: auto; }
+.settings-card-foot .notice { padding: var(--s-1) var(--s-3); }
+.settings-card.is-suggested { border-color: var(--accent); }
+.settings-card.is-suggested .settings-card-body { background: var(--accent-soft); }
+.is-account .facts { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--s-4) var(--s-6); }
+.is-account .facts > div { align-content: start; }
+.is-account .language-control { max-width: 320px; }
+/* The card heading already names the select, which keeps its own aria-label. */
+.is-account .language-control > span { display: none; }
 
 /* A value the screen shows but nobody edits here. */
 .facts { display: grid; gap: var(--s-4); margin: 0; }
@@ -752,8 +765,9 @@ select.filter.is-on { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .dev-tools p { font-size: var(--text-sm); color: var(--ink-2); }
 .facts .sep { color: var(--border-strong); }
 
-.session-list { display: grid; gap: var(--s-2); margin: 0; padding: 0; list-style: none; }
-.session-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); min-height: 44px; padding: var(--s-2) var(--s-3); border-radius: var(--radius); background: var(--surface-2); font-size: var(--text-sm); }
+.session-list { display: grid; margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: var(--radius); }
+.session-item { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-2) var(--s-3); min-height: 52px; padding: var(--s-2) var(--s-4); font-size: var(--text-sm); }
+.session-item + .session-item { border-top: 1px solid var(--border); }
 .session-item .where { display: flex; align-items: center; gap: var(--s-2); font-weight: 500; }
 .session-item .sub { margin-left: auto; }
 

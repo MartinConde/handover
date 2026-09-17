@@ -36,6 +36,14 @@ export interface AuthConfig {
   github?: { clientId: string; clientSecret: string };
   sendMagicLink?: (data: { email: string; url: string }) => Promise<void>;
   sendPasswordReset?: (data: { email: string; url: string }) => Promise<void>;
+  /** Goes to the current address; approving it is what mails `sendEmailChangeLink`. */
+  sendEmailChangeApproval?: (data: {
+    email: string;
+    newEmail: string;
+    url: string;
+  }) => Promise<void>;
+  /** Goes to the new address; opening it makes the change. */
+  sendEmailChangeLink?: (data: { email: string; url: string }) => Promise<void>;
   /** Defaults to true: the wrong answer the other way is a session cookie sent in plaintext. */
   secureCookies?: boolean;
   /** An invite is read hours later; the minted row carries its own expiry. */
@@ -54,12 +62,24 @@ const SIGN_IN_METHOD: Record<string, string> = {
 export function authOptions(siteId: string, db: Db, config: AuthConfig): BetterAuthOptions {
   const emailing = Boolean(config.baseURL);
   const resetting = emailing && config.sendPasswordReset;
+  const approval = emailing ? config.sendEmailChangeApproval : undefined;
+  const changeLink = emailing ? config.sendEmailChangeLink : undefined;
   return {
     basePath: config.basePath ?? AUTH_BASE_PATH,
     baseURL: config.baseURL,
     secret: config.secret,
     database: drizzleAdapter(db, { provider: 'sqlite', schema: { ...authTables } }),
     user: {
+      // Both mails or neither: without the approval step a borrowed session could move the account.
+      ...(approval && changeLink
+        ? {
+            changeEmail: {
+              enabled: true,
+              sendChangeEmailConfirmation: ({ user, newEmail, url }) =>
+                approval({ email: user.email, newEmail, url }),
+            },
+          }
+        : {}),
       additionalFields: {
         uiLocale: {
           type: [...UI_LOCALES],
@@ -88,6 +108,14 @@ export function authOptions(siteId: string, db: Db, config: AuthConfig): BetterA
           }
         : {}),
     },
+    // Reached only through an email change: sign-up is closed and `/send-verification-email` is not routed.
+    ...(approval && changeLink
+      ? {
+          emailVerification: {
+            sendVerificationEmail: ({ user, url }) => changeLink({ email: user.email, url }),
+          },
+        }
+      : {}),
     ...(emailing && config.github
       ? { socialProviders: { github: { ...config.github, disableSignUp: true } } }
       : {}),
@@ -209,10 +237,13 @@ export function createAuth(siteId: string, db: Db, config: AuthConfig): Auth {
             '/reset-password',
             '/update-user',
             '/change-password',
+            '/change-email',
             '/revoke-other-sessions',
           ].includes(path)
         : request.method === 'GET' &&
-          (/^\/(callback\/github|magic-link\/verify|reset-password\/[^/]+)$/.test(path) ||
+          (/^\/(callback\/github|magic-link\/verify|verify-email|reset-password\/[^/]+)$/.test(
+            path,
+          ) ||
             ['/get-session', '/error'].includes(path));
     return allowed ? handler(request) : new Response('Not found', { status: 404 });
   };

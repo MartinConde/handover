@@ -112,14 +112,20 @@ The reset form keeps the entered password and original token when the server ref
 Passwords are 12 to 128 characters. Only an invalid, expired, or already-used token tells the user
 to request a new link; a general reset failure keeps the current form and offers an ordinary retry.
 
-Everyone has an account page at `/admin/account`: their display name, their email and role as
-facts, a password form, and their sessions with *Sign out everywhere*. Somebody who signed in
+Everyone has an account page at `/admin/account`: their display name and role, their email, a
+password form, and their sessions with *Sign out everywhere*. Somebody who signed in
 with a link and has no password yet is offered one there instead of the password form — that is
 how an invited person gets one. Changing a password signs the other devices out.
 
+A site with a [mailer](email.md) and `HANDOVER_BASE_URL` also lets people change their email there.
+*Change email* first mails the current address a link to approve the change; opening it mails the
+new address a second link, and opening that one makes the change and returns to the account page.
+Both links expire in an hour. An address that was never proved skips the approval and gets the
+second link directly. Without a mailer the email is shown and cannot be changed.
+
 The account row can store an optional English or German interface preference. An unset value stays
 `null`; Handover does not backfill English. The [interface-language controls](interface-language.md)
-are available on sign-in and reset screens, in the account menu, and on the account page. A signed-in
+are available on sign-in and reset screens and on the account page. A signed-in
 choice is saved to the account; a signed-out choice is only a device hint. Sign-in, password-reset,
 expired-link, and Account screens are bilingual. Their visible notices and known authentication
 failures change language immediately without clearing a typed email, password, or profile name.

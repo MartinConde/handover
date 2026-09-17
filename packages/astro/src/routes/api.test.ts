@@ -308,6 +308,8 @@ let resendKey: string | undefined;
 let smtpUser: string | undefined;
 let smtpPass: string | undefined;
 let emailBinding: EmailSender | undefined;
+// Emailed links need somewhere to point, so a mailer alone mounts none of them.
+let baseUrl: string | undefined;
 // What `worker-mailer` was asked to do, since the SMTP boundary is a socket rather than a fetch.
 const smtpCalls: { options: Record<string, unknown>; email: Record<string, unknown> }[] = [];
 let smtpRefusal: Error | undefined;
@@ -494,6 +496,9 @@ vi.mock('cloudflare:workers', () => ({
     },
     get EMAIL() {
       return emailBinding;
+    },
+    get HANDOVER_BASE_URL() {
+      return baseUrl;
     },
     get CLOUDFLARE_API_TOKEN() {
       return cloudflareToken;
@@ -808,6 +813,7 @@ afterEach(() => {
   setRoleRefusal = undefined;
   for (const list of Object.values(calls)) list.length = 0;
   resendKey = undefined;
+  baseUrl = undefined;
   smtpUser = undefined;
   smtpPass = undefined;
   emailBinding = undefined;
@@ -4515,6 +4521,24 @@ test("the account route reads the session's own user, never the request's", asyn
 
   expect(res.status).toBe(200);
   expect(asked).toEqual(['u1', 's1']);
+});
+
+// The page offers the form only when Better Auth has the change mounted, or it could only fail.
+test('the account route offers an email change only when the site can mail the links', async () => {
+  const offered = async () =>
+    (
+      (await body(
+        await GET(ctx('account', undefined, { handover: { ...owner, sessionId: 's1' } })),
+      )) as {
+        canChangeEmail: boolean;
+      }
+    ).canChangeEmail;
+  siteMailer = fakeMailer;
+  expect(await offered()).toBe(false);
+
+  baseUrl = 'https://demo.example';
+
+  expect(await offered()).toBe(true);
 });
 
 const setting = (body: string) =>

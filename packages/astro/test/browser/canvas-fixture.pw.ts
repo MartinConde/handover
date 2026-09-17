@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('saved interface language wins before first paint and live switches preserve work', async ({
+test('saved interface language wins before first paint and an Account switch preserves work', async ({
   context,
   page,
 }) => {
@@ -17,9 +17,6 @@ test('saved interface language wins before first paint and live switches preserv
     });
     observer.observe(document, { childList: true, subtree: true });
   });
-  let entryReads = 0;
-  let listReads = 0;
-  let dashboardReads = 0;
   await page.route('**/admin/api/**', async (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -32,77 +29,6 @@ test('saved interface language wins before first paint and live switches preserv
           role: 'owner',
         },
       });
-    } else if (path === '/admin/api/entries/pages') {
-      listReads += 1;
-      await route.fulfill({
-        json: {
-          entries: [
-            {
-              id: 'canvas-fixture',
-              locales: {
-                en: { title: 'Canvas fixture', path: 'src/content/pages/en/canvas.yaml' },
-              },
-              pending: true,
-              edited: { at: Date.now() - 7_200_000, by: 'Anna Berg', kind: 'edit' },
-            },
-            {
-              id: 'about',
-              locales: {
-                en: { title: 'About us', path: 'src/content/pages/en/about.yaml' },
-                de: { title: 'Über uns', path: 'src/content/pages/de/about.yaml' },
-              },
-            },
-          ],
-          locales: ['en', 'de'],
-          index: '/',
-        },
-      });
-    } else if (path === '/admin/api/entries/pages/canvas-fixture') {
-      entryReads += 1;
-      await route.fulfill({
-        json: {
-          fields: [
-            { path: ['title'], label: 'Title', type: 'text', required: true },
-            {
-              path: ['related'],
-              label: 'Related',
-              type: 'reference',
-              required: false,
-              collection: 'pages',
-            },
-          ],
-          blocks: {},
-          data: { title: 'Canvas fixture' },
-          revisions: { en: 'opened' },
-          pending: [],
-          published: ['en'],
-          problems: [],
-          locales: ['en'],
-          defaultLocale: 'en',
-          sourceLocale: 'en',
-          offered: ['en'],
-          translations: {},
-          stale: [],
-          drift: [],
-        },
-      });
-    } else if (path === '/admin/api/entries') {
-      await route.fulfill({
-        json: {
-          entries: [
-            {
-              collection: 'pages',
-              path: 'pages/about',
-              title: 'About us',
-              locales: ['en'],
-              urls: { en: '/about' },
-            },
-          ],
-          locales: ['en', 'de'],
-        },
-      });
-    } else if (path.startsWith('/admin/api/locks/')) {
-      await route.fulfill({ json: { held_by: null, mine: true, expires_at: Date.now() + 120000 } });
     } else if (path === '/admin/api/auth/update-user') {
       const body = request.postDataJSON() as { name?: string; uiLocale?: string };
       await route.fulfill(
@@ -113,104 +39,33 @@ test('saved interface language wins before first paint and live switches preserv
     } else if (path === '/admin/api/account')
       await route.fulfill({ json: { hasPassword: true, sessions: [] } });
     else if (path === '/admin/api/build') await route.fulfill({ json: {} });
-    else if (path === '/admin/api/dashboard') {
-      dashboardReads += 1;
+    else if (path === '/admin/api/dashboard')
       await route.fulfill({ json: { recent: [], published: null, translations: null } });
-    } else await route.fulfill({ json: { entries: [] } });
+    else await route.fulfill({ json: { entries: [] } });
   });
 
-  await page.goto('/admin/c/pages/canvas-fixture');
+  await page.goto('/admin');
   await expect(page.locator('.shell')).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('data-first-admin-lang', 'en');
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
-  await page.goto('/admin');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dashboard');
-  const dashboardReadsBeforeSwitch = dashboardReads;
   await page.locator('.user-menu > button').click();
-  await page.getByLabel('Interface language').selectOption('de');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Übersicht');
-  expect(dashboardReads).toBe(dashboardReadsBeforeSwitch);
-  await page.getByLabel('Sprache der Benutzeroberfläche').selectOption('en');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dashboard');
-  await page.goto('/admin/c/pages?locale=de');
-  await expect(page.getByRole('link', { name: 'Canvas fixture' })).toBeVisible();
-  const listReadsBeforeSwitch = listReads;
-  const search = page.locator('#entry-search');
-  const selected = page.getByLabel('Select Canvas fixture');
-  await search.fill('canvas');
-  await search.evaluate((input) => (input.dataset.localeProof = 'same-list-search'));
-  await selected.check();
-  await selected.evaluate((input) => (input.dataset.localeProof = 'same-list-selection'));
-  await page.locator('.user-menu > button').click();
-  await page.getByLabel('Interface language').selectOption('de');
-  await expect(search).toHaveValue('canvas');
-  await expect(search).toHaveAttribute('data-locale-proof', 'same-list-search');
-  const selectedGerman = page.getByLabel('Canvas fixture auswählen');
-  await expect(selectedGerman).toBeChecked();
-  await expect(selectedGerman).toHaveAttribute('data-locale-proof', 'same-list-selection');
-  await expect(page.locator('.list-toolbar .count')).toHaveText('1 von 2');
-  await expect(page.locator('#list-locale')).toHaveValue('de');
-  await expect(page.locator('#list-locale')).toContainText('Deutsch fehlt oder ist veraltet');
-  await expect(page.getByRole('link', { name: 'Canvas fixture' })).toBeVisible();
-  expect(listReads).toBe(listReadsBeforeSwitch);
-  expect(new URL(page.url()).search).toBe('?locale=de');
-  await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Neu in pages' }).click();
-  await expect(page.getByRole('heading', { name: 'Neuer Eintrag in pages' })).toBeVisible();
-  await expect(page.getByLabel('Titel')).toBeVisible();
-  await page.getByRole('button', { name: 'Abbrechen' }).click();
-  await page.getByLabel('Aktionen für Canvas fixture').click();
-  await page.getByRole('button', { name: 'Duplizieren', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Canvas fixture duplizieren' })).toBeVisible();
-  await expect(page.getByLabel('Mit unveröffentlichten Änderungen duplizieren')).toBeVisible();
-  await page.getByRole('button', { name: 'Abbrechen' }).click();
-  await page.locator('.user-menu > button').click();
-  await page.getByLabel('Sprache der Benutzeroberfläche').selectOption('en');
+  await expect(page.locator('.user-menu .menu select')).toHaveCount(0);
   await page.getByRole('link', { name: 'Account' }).click();
-  await expect(page.locator('main').getByLabel('Interface language')).toHaveValue('en');
+  const picker = page.locator('main').getByLabel('Interface language');
+  await expect(picker).toHaveValue('en');
   const accountName = page.locator('#display-name');
   await accountName.fill('Unsaved account name');
   await accountName.evaluate((input) => (input.dataset.localeProof = 'same-account-node'));
   await page.getByRole('button', { name: 'Save name' }).click();
   await expect(page.getByRole('alert')).toContainText('Your name could not be saved.');
-  await page.locator('main').getByLabel('Interface language').selectOption('de');
+  await picker.selectOption('de');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'de');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Konto');
   await expect(page.getByRole('alert')).toContainText('Dein Name konnte nicht gespeichert werden.');
   await expect(accountName).toHaveValue('Unsaved account name');
   await expect(accountName).toHaveAttribute('data-locale-proof', 'same-account-node');
-  await page.goto('/admin/c/pages/canvas-fixture');
-  const title = page.locator('#f-title');
-  await expect(title).toHaveValue('Canvas fixture');
-  const readsBeforeSwitch = entryReads;
-  await title.fill('Unsaved words');
-  await title.evaluate((input) => (input.dataset.localeProof = 'same-node'));
-  await page.locator('.user-menu > button').click();
-  await page.getByLabel('Interface language').selectOption('de');
-  await expect(page.locator('html')).toHaveAttribute('lang', 'de');
-  await expect(page.getByRole('group', { name: 'Editoransicht' }).getByRole('button')).toHaveText([
-    'Formular',
-    'Geteilt',
-    'Canvas',
-  ]);
-  await expect(
-    page.getByRole('navigation', { name: 'Eintragsbereiche' }).getByRole('link'),
-  ).toHaveText(['Inhalt', 'Verlauf']);
-  await expect(page.getByRole('button', { name: 'Diesen Eintrag veröffentlichen' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Weitere Aktionen' })).toBeVisible();
-  await expect(title).toHaveValue('Unsaved words');
-  await expect(title).toHaveAttribute('data-locale-proof', 'same-node');
-  await page.locator('#f-related button').click();
-  await expect(page.locator('#f-related-q')).toHaveAttribute(
-    'placeholder',
-    'Seiten und Einträge durchsuchen',
-  );
-  await expect(page.locator('.picker-list')).toHaveAttribute('aria-label', 'Related');
-  await expect(page.locator('.picker .chip').nth(1)).toHaveAttribute(
-    'title',
-    'Nicht verfügbar auf Deutsch',
-  );
-  await expect(page.locator('.picker-list')).toContainText('About us');
-  expect(entryReads).toBe(readsBeforeSwitch);
-  expect(new URL(page.url()).pathname).toBe('/admin/c/pages/canvas-fixture');
+  expect(new URL(page.url()).pathname).toBe('/admin/account');
   const cookies = await context.cookies();
   expect(
     cookies.find((cookie) => cookie.name === 'handover_ui_locale' && cookie.path === '/admin'),

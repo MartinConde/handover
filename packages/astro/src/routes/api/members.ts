@@ -10,7 +10,7 @@ import {
   memberList,
   releaseLocks,
 } from '@handover/core';
-import { createAuth, mailer } from '../../auth.js';
+import { createAuth, loginMethods, mailer } from '../../auth.js';
 import { entryTitle } from './content.js';
 import type { RequestContext } from './context.js';
 import { missingMailer } from './environment.js';
@@ -21,7 +21,9 @@ export async function account(
   session: App.Locals['handover'],
 ): Promise<Response> {
   if (!session) return new Response('Unauthorized', { status: 401 });
-  return Response.json(await accountFacts('default', ctx.db(), session.user.id, session.sessionId));
+  const facts = await accountFacts('default', ctx.db(), session.user.id, session.sessionId);
+  // The same condition that mounts the email change, so the page offers no form that can only fail.
+  return Response.json({ ...facts, canChangeEmail: loginMethods().emailLink });
 }
 
 /** Better Auth's own refusal; anything without a code is not its answer and is rethrown. */

@@ -39,5 +39,4 @@ const choose = async (event: Event) => {
   .language-control { display: grid; gap: .35rem; }
   .language-control > span { font-size: .8rem; font-weight: 650; }
   :global(.auth-page) .language-control { width: min(220px, 100%); margin: 0 0 var(--s-3) auto; }
-  :global(.menu) .language-control { padding: var(--s-2) var(--s-3); }
 </style>

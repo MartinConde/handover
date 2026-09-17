@@ -56,6 +56,13 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
+// The interface language is chosen on the Account screen only.
+const accountPicker = async (root: HTMLElement) => {
+  await vi.waitFor(() =>
+    expect(root.querySelector('main .language-control select')).not.toBeNull(),
+  );
+  return root.querySelector('main .language-control select') as HTMLSelectElement;
+};
 test('the shell renders sidebar, top bar and main regions once logged in', () => {
   drafts();
   const root = show(session());
@@ -143,6 +150,7 @@ test('the account menu opens from the top bar with the two things it offers', ()
   expect(
     Array.from(menu?.querySelectorAll('a, button') ?? [], (e) => e.textContent?.trim()),
   ).toEqual(['Account', 'Sign out']);
+  expect(menu?.querySelector('select')).toBeNull();
   expect(toggle?.getAttribute('aria-expanded')).toBe('true');
 });
 
@@ -152,6 +160,7 @@ test('a status-only preference save switches live and writes the installation-sc
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
       calls.push({ url, init });
+      if (url === '/admin/api/account') return Response.json({ hasPassword: true, sessions: [] });
       if (url === '/admin/api/auth/update-user') return Response.json({ status: true });
       if (url === '/admin/api/build') return Response.json({});
       if (url === '/admin/api/dashboard')
@@ -159,12 +168,9 @@ test('a status-only preference save switches live and writes the installation-sc
       return Response.json({ entries: [] });
     }),
   );
-  history.replaceState({}, '', '/admin');
-  const root = show(session());
-  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
-  flushSync();
-  const select = root.querySelector<HTMLSelectElement>('.user-menu select');
-  if (!select) throw new Error('Language picker did not open');
+  history.replaceState({}, '', '/admin/account');
+  const root = show(session(), '/admin/account');
+  const select = await accountPicker(root);
   select.value = 'de';
   select.dispatchEvent(new Event('change', { bubbles: true }));
   await vi.waitFor(() => expect(document.documentElement.lang).toBe('de'));
@@ -172,172 +178,6 @@ test('a status-only preference save switches live and writes the installation-sc
   const save = calls.find(({ url }) => url === '/admin/api/auth/update-user');
   expect(JSON.parse(String(save?.init?.body))).toEqual({ uiLocale: 'de' });
   expect(document.cookie).toContain('handover_ui_locale=de');
-});
-
-test('a live switch retranslates shell feedback and dashboard without rereading it', async () => {
-  let dashboardReads = 0;
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string) => {
-      if (url === '/admin/api/auth/sign-out') return new Response('Unavailable', { status: 503 });
-      if (url === '/admin/api/auth/update-user') return Response.json({ status: true });
-      if (url === '/admin/api/build')
-        return Response.json({ state: 'failed', commit_sha: 'bad123' });
-      if (url === '/admin/api/dashboard') {
-        dashboardReads += 1;
-        return Response.json({ recent: [], published: null, translations: null });
-      }
-      if (url === '/admin/api/activity') return Response.json({ events: [] });
-      return Response.json({ entries: [] });
-    }),
-  );
-  const root = show(session());
-  await vi.waitFor(() => expect(root.querySelector('main h1')?.textContent).toBe('Dashboard'));
-  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
-  flushSync();
-  root.querySelector<HTMLButtonElement>('.user-menu .menu button:last-child')?.click();
-  await vi.waitFor(() => expect(toasts(root)).toEqual(['Could not sign out. Please try again.']));
-  const notice = root.querySelector('.toast');
-  const select = root.querySelector<HTMLSelectElement>('.user-menu select');
-  if (!select) throw new Error('Language picker did not open');
-  select.value = 'de';
-  select.dispatchEvent(new Event('change', { bubbles: true }));
-
-  await vi.waitFor(() => expect(root.querySelector('main h1')?.textContent).toBe('Übersicht'));
-  expect(root.querySelector('.toast')).toBe(notice);
-  expect(toasts(root)).toEqual(['Abmelden fehlgeschlagen. Versuche es erneut.']);
-  expect(root.querySelector('.topbar .pill')?.textContent).toContain('Build fehlgeschlagen');
-  expect(root.querySelector('.sidebar')?.getAttribute('aria-label')).toBe('Hauptnavigation');
-  expect(dashboardReads).toBe(1);
-});
-
-test('a live switch retranslates an entry list without disturbing its working state', async () => {
-  const now = new Date(2026, 7, 25, 14, 0).getTime();
-  const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(now);
-  let listReads = 0;
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string) => {
-      if (url === '/admin/api/auth/update-user') return Response.json({ status: true });
-      if (url === '/admin/api/entries/listings') {
-        listReads += 1;
-        return Response.json({
-          entries: [
-            {
-              id: 'mill-house',
-              locales: {
-                en: { title: 'The Mill House', path: 'src/content/listings/en/mill-house.yaml' },
-              },
-              pending: true,
-              edited: { at: now - 2 * 60 * 60_000, by: 'Anna Berg', kind: 'edit' },
-            },
-            {
-              id: 'seaview-cottage',
-              locales: {
-                en: { title: 'Seaview Cottage', path: 'src/content/listings/en/seaview.yaml' },
-                de: { title: 'Seeblick', path: 'src/content/listings/de/seaview.yaml' },
-              },
-            },
-          ],
-          locales: ['en', 'de'],
-          index: '/listings',
-        });
-      }
-      if (url === '/admin/api/build') return Response.json({});
-      return Response.json({ entries: [] });
-    }),
-  );
-  history.replaceState({}, '', '/admin/c/listings?locale=de');
-  const root = show(session(), '/admin/c/listings');
-  await vi.waitFor(() =>
-    expect(root.querySelector('.row .td.title a')?.textContent).toBe('The Mill House'),
-  );
-
-  const search = root.querySelector<HTMLInputElement>('#entry-search');
-  const selected = root.querySelector<HTMLInputElement>('.row input[type="checkbox"]');
-  if (!search || !selected) throw new Error('Entry-list controls did not render');
-  search.value = 'mill';
-  search.dispatchEvent(new Event('input', { bubbles: true }));
-  selected.click();
-  root.querySelector<HTMLButtonElement>('.row .row-menu > button')?.click();
-  flushSync();
-  Array.from(root.querySelectorAll<HTMLButtonElement>('.row .menu button'))
-    .find((button) => button.textContent?.trim() === 'Duplicate')
-    ?.click();
-  await vi.waitFor(() => expect(root.querySelector<HTMLInputElement>('#copy-to')).not.toBeNull());
-  const draft = root.querySelector<HTMLInputElement>('#copy-to');
-  const drafts = root.querySelector<HTMLInputElement>('.dialog input[type="checkbox"]');
-  if (!draft || !drafts) throw new Error('Duplicate draft controls did not render');
-  draft.value = 'mill-house-copy-local';
-  draft.dispatchEvent(new Event('input', { bubbles: true }));
-  drafts.click();
-
-  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
-  flushSync();
-  const locale = root.querySelector<HTMLSelectElement>('.user-menu select');
-  if (!locale) throw new Error('Language picker did not open');
-  locale.value = 'de';
-  locale.dispatchEvent(new Event('change', { bubbles: true }));
-
-  await vi.waitFor(() =>
-    expect(root.querySelector('.dialog h2')?.textContent).toBe('The Mill House duplizieren'),
-  );
-  expect(root.querySelector('#entry-search')).toBe(search);
-  expect(search.value).toBe('mill');
-  expect(root.querySelector('#copy-to')).toBe(draft);
-  expect(draft.value).toBe('mill-house-copy-local');
-  expect(drafts.checked).toBe(true);
-  expect(selected.checked).toBe(true);
-  expect(root.querySelector('.list-toolbar .count')?.textContent).toBe('1 von 2');
-  expect(root.querySelector<HTMLSelectElement>('#list-locale')?.value).toBe('de');
-  expect(root.querySelector<HTMLSelectElement>('#list-locale')?.textContent).toContain(
-    'Deutsch fehlt oder ist veraltet',
-  );
-  expect(root.querySelector('.row .td.title a')?.textContent).toBe('The Mill House');
-  expect(root.querySelector('.row .td.edited')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-    'Bearbeitet von Anna Berg vor 2 Std.',
-  );
-  expect(root.querySelector('time')?.title).toBe('25. August 2026 um 12:00');
-  expect(location.search).toBe('?locale=de');
-  expect(listReads).toBe(1);
-  nowSpy.mockRestore();
-});
-
-test('an already-visible entry-list error changes language without another read', async () => {
-  let listReads = 0;
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string) => {
-      if (url === '/admin/api/auth/update-user') return Response.json({ status: true });
-      if (url === '/admin/api/entries/listings') {
-        listReads += 1;
-        return new Response('Unavailable', { status: 503 });
-      }
-      if (url === '/admin/api/build') return Response.json({});
-      return Response.json({ entries: [] });
-    }),
-  );
-  history.replaceState({}, '', '/admin/c/listings');
-  const root = show(session(), '/admin/c/listings');
-  await vi.waitFor(() =>
-    expect(root.querySelector('[role="alert"]')?.textContent).toBe('Could not load the list (503)'),
-  );
-  const alert = root.querySelector('[role="alert"]');
-
-  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
-  flushSync();
-  const locale = root.querySelector<HTMLSelectElement>('.user-menu select');
-  if (!locale) throw new Error('Language picker did not open');
-  locale.value = 'de';
-  locale.dispatchEvent(new Event('change', { bubbles: true }));
-
-  await vi.waitFor(() =>
-    expect(root.querySelector('[role="alert"]')?.textContent).toBe(
-      'Die Eintragsliste konnte nicht geladen werden (503).',
-    ),
-  );
-  expect(root.querySelector('[role="alert"]')).toBe(alert);
-  expect(listReads).toBe(1);
 });
 
 test('an uncertain save reconciles before changing the confirmed language', async () => {
@@ -351,6 +191,7 @@ test('an uncertain save reconciles before changing the confirmed language', asyn
           status: 503,
           headers: { 'x-handover-request-uncertain': 'true' },
         });
+      if (url === '/admin/api/account') return Response.json({ hasPassword: true, sessions: [] });
       if (url === '/admin/api/ping') {
         ping += 1;
         return Response.json({ ...session(), user: { ...session().user, uiLocale: 'de' } });
@@ -361,11 +202,8 @@ test('an uncertain save reconciles before changing the confirmed language', asyn
       return Response.json({ entries: [] });
     }),
   );
-  const root = show(session());
-  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
-  flushSync();
-  const select = root.querySelector<HTMLSelectElement>('.user-menu select');
-  if (!select) throw new Error('Language picker did not open');
+  const root = show(session(), '/admin/account');
+  const select = await accountPicker(root);
   select.value = 'de';
   select.dispatchEvent(new Event('change', { bubbles: true }));
   expect(document.documentElement.lang).toBe('en');
@@ -377,7 +215,7 @@ test.each([
   ['non-JSON response', new Response('<html>upstream error</html>', { status: 200 })],
   ['response without a user', Response.json({})],
 ])('an uncertain save recovers from a %s', async (_label, pingResponse) => {
-  const start = '/admin/c/pages/home';
+  const start = '/admin/account';
   history.replaceState({}, '', start);
   rememberUiLocale('en');
   let saves = 0;
@@ -392,41 +230,17 @@ test.each([
         });
       }
       if (url === '/admin/api/ping') return pingResponse.clone();
-      if (url === '/admin/api/entries/pages/home')
-        return Response.json({
-          fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
-          blocks: {},
-          data: { title: 'Home' },
-          revisions: { en: 'opened' },
-          pending: [],
-          published: ['en'],
-          problems: [],
-          locales: ['en'],
-          defaultLocale: 'en',
-          sourceLocale: 'en',
-          offered: ['en'],
-          translations: {},
-          stale: [],
-          drift: [],
-        });
-      if (url.startsWith('/admin/api/locks/'))
-        return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
+      if (url === '/admin/api/account') return Response.json({ hasPassword: true, sessions: [] });
       if (url === '/admin/api/build') return Response.json({});
-      if (url === '/admin/api/dashboard')
-        return Response.json({ recent: [], published: null, translations: null });
       return Response.json({ entries: [] });
     }),
   );
   const root = show(session(), start);
-  await vi.waitFor(() => expect(root.querySelector('#f-title')).not.toBeNull());
-  const input = root.querySelector<HTMLInputElement>('#f-title');
-  if (!input) throw new Error('Editor did not open');
-  input.value = 'Uncommitted copy';
+  const select = await accountPicker(root);
+  const input = root.querySelector<HTMLInputElement>('#display-name');
+  if (!input) throw new Error('Account form did not open');
+  input.value = 'Uncommitted name';
   input.dispatchEvent(new Event('input', { bubbles: true }));
-  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
-  flushSync();
-  const select = root.querySelector<HTMLSelectElement>('.user-menu select');
-  if (!select) throw new Error('Language picker did not open');
   select.value = 'de';
   select.dispatchEvent(new Event('change', { bubbles: true }));
 
@@ -437,8 +251,8 @@ test.each([
   expect(document.documentElement.lang).toBe('en');
   expect(document.cookie).toContain('handover_ui_locale=en');
   expect(root.querySelector('.user-menu .name')?.textContent).toBe('Martin');
-  expect(root.querySelector('#f-title')).toBe(input);
-  expect(input.value).toBe('Uncommitted copy');
+  expect(root.querySelector('#display-name')).toBe(input);
+  expect(input.value).toBe('Uncommitted name');
   expect(location.pathname).toBe(start);
 
   select.value = 'de';
@@ -482,17 +296,15 @@ test('a failed preference save keeps the confirmed language and choice', async (
     'fetch',
     vi.fn(async (url: string) => {
       if (url === '/admin/api/auth/update-user') return new Response('', { status: 500 });
+      if (url === '/admin/api/account') return Response.json({ hasPassword: true, sessions: [] });
       if (url === '/admin/api/build') return Response.json({});
       if (url === '/admin/api/dashboard')
         return Response.json({ recent: [], published: null, translations: null });
       return Response.json({ entries: [] });
     }),
   );
-  const root = show(session());
-  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
-  flushSync();
-  const select = root.querySelector<HTMLSelectElement>('.user-menu select');
-  if (!select) throw new Error('Language picker did not open');
+  const root = show(session(), '/admin/account');
+  const select = await accountPicker(root);
   select.value = 'de';
   select.dispatchEvent(new Event('change', { bubbles: true }));
   await vi.waitFor(() =>
@@ -643,58 +455,6 @@ test('a blocked cookie read does not prevent a newly signed-in preference from l
   }
 });
 
-test('switching language keeps the open editor node, draft, URL, and content request', async () => {
-  const start = '/admin/c/pages/home';
-  history.replaceState({}, '', start);
-  let entryReads = 0;
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string) => {
-      if (url === '/admin/api/entries/pages/home') {
-        entryReads += 1;
-        return Response.json({
-          fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
-          blocks: {},
-          data: { title: 'Home' },
-          revisions: { en: 'opened' },
-          pending: [],
-          published: ['en'],
-          problems: [],
-          locales: ['en'],
-          defaultLocale: 'en',
-          sourceLocale: 'en',
-          offered: ['en'],
-          translations: {},
-          stale: [],
-          drift: [],
-        });
-      }
-      if (url.startsWith('/admin/api/locks/'))
-        return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
-      if (url === '/admin/api/auth/update-user') return Response.json({ status: true });
-      if (url === '/admin/api/build') return Response.json({});
-      return Response.json({ entries: [] });
-    }),
-  );
-  const root = show(session(), start);
-  await vi.waitFor(() => expect(root.querySelector('#f-title')).not.toBeNull());
-  const input = root.querySelector<HTMLInputElement>('#f-title');
-  if (!input) throw new Error('Editor did not open');
-  input.value = 'Unsaved German-facing draft';
-  input.dispatchEvent(new Event('input', { bubbles: true }));
-  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
-  flushSync();
-  const select = root.querySelector<HTMLSelectElement>('.user-menu select');
-  if (!select) throw new Error('Language picker did not open');
-  select.value = 'de';
-  select.dispatchEvent(new Event('change', { bubbles: true }));
-  await vi.waitFor(() => expect(document.documentElement.lang).toBe('de'));
-  expect(root.querySelector('#f-title')).toBe(input);
-  expect(input.value).toBe('Unsaved German-facing draft');
-  expect(location.pathname).toBe(start);
-  expect(entryReads).toBe(1);
-});
-
 test('Escape closes the account menu', () => {
   drafts();
   const root = show(session());
@@ -811,40 +571,6 @@ test('an unavailable session check follows the initial interface language', () =
   expect(root.querySelector('.session-unavailable button')?.textContent?.trim()).toBe(
     'Erneut versuchen',
   );
-});
-
-test('an entry-load failure retranslates without another content request', async () => {
-  let entryReads = 0;
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string) => {
-      if (url === '/admin/api/entries/pages/missing') {
-        entryReads += 1;
-        return new Response('Not found', {
-          status: 404,
-          headers: { 'x-handover-error-code': 'ENTRY_NOT_FOUND' },
-        });
-      }
-      if (url === '/admin/api/auth/update-user') return Response.json({ status: true });
-      if (url === '/admin/api/build') return Response.json({});
-      return Response.json({ entries: [] });
-    }),
-  );
-  const root = show(session(), '/admin/c/pages/missing');
-  await vi.waitFor(() =>
-    expect(root.querySelector('main [role="alert"]')?.textContent).toBe('No such entry'),
-  );
-  const failure = root.querySelector('main [role="alert"]');
-  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
-  flushSync();
-  const select = root.querySelector<HTMLSelectElement>('.user-menu select');
-  if (!select) throw new Error('Language picker did not open');
-  select.value = 'de';
-  select.dispatchEvent(new Event('change', { bubbles: true }));
-
-  await vi.waitFor(() => expect(failure?.textContent).toBe('Eintrag nicht gefunden'));
-  expect(root.querySelector('main [role="alert"]')).toBe(failure);
-  expect(entryReads).toBe(1);
 });
 
 test('an unidentified legacy 404 stays a generic localized entry-load failure', async () => {
@@ -1868,48 +1594,6 @@ test('a revert is said in a notice', async () => {
   await settle();
 
   expect(toasts(root)).toEqual(['Reverted that publish — building']);
-});
-
-test('a retained revert conflict retranslates and preserves its diagnostic', async () => {
-  buildBody = { commit_sha: 'c0ffee11', state: 'failed' };
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string) => {
-      if (url === '/admin/api/build') return Response.json(buildBody);
-      if (url === '/admin/api/revert')
-        return Response.json({ error: 'src/content/pages/en/home.yaml changed' }, { status: 409 });
-      if (url === '/admin/api/dashboard')
-        return Response.json({ recent: [], published: null, translations: null });
-      if (url === '/admin/api/activity') return Response.json({ events: [] });
-      if (url === '/admin/api/auth/update-user') return Response.json({ status: true });
-      return Response.json({ entries: [] });
-    }),
-  );
-  const root = show(session());
-  await settle();
-  root.querySelector<HTMLButtonElement>('.topbar .pill .btn-link')?.click();
-  flushSync();
-  document.querySelector<HTMLButtonElement>('[aria-labelledby="revert-h"] .btn-danger')?.click();
-  await vi.waitFor(() => expect(root.querySelector('.banner-warn')).not.toBeNull());
-  const banner = root.querySelector('.banner-warn');
-  expect(banner?.textContent).toContain(
-    'That publish was not reverted (409). Nothing was changed.',
-  );
-  expect(banner?.textContent).toContain('src/content/pages/en/home.yaml changed');
-  root.querySelector<HTMLButtonElement>('.user-menu > button')?.click();
-  flushSync();
-  const select = root.querySelector<HTMLSelectElement>('.user-menu select');
-  if (!select) throw new Error('Language picker did not open');
-  select.value = 'de';
-  select.dispatchEvent(new Event('change', { bubbles: true }));
-
-  await vi.waitFor(() =>
-    expect(banner?.textContent).toContain(
-      'Die Veröffentlichung wurde nicht rückgängig gemacht (409).',
-    ),
-  );
-  expect(root.querySelector('.banner-warn')).toBe(banner);
-  expect(banner?.textContent).toContain('src/content/pages/en/home.yaml changed');
 });
 
 test('a notice leaves on its own after a few seconds', async () => {

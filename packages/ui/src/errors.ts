@@ -214,6 +214,12 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
       return m.account_password_changed({}, options);
     case 'ACCOUNT_PASSWORD_SET':
       return m.account_password_set({}, options);
+    case 'ACCOUNT_EMAIL_CHANGE_SENT':
+      return m.account_email_change_sent({}, options);
+    case 'ACCOUNT_EMAIL_CHANGE_FAILED':
+      return m.account_email_change_failed({}, options);
+    case 'ACCOUNT_EMAIL_LINK_FAILED':
+      return m.account_email_link_failed({}, options);
     case 'ACCOUNT_SESSIONS_END_FAILED':
       return m.account_sessions_end_failed({}, options);
     case 'ACCOUNT_SESSIONS_ENDED':
