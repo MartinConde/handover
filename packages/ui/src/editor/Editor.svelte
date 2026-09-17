@@ -220,6 +220,8 @@ const problems = $derived({ ...checkProblems, ...schemaProblems });
 let locale = $state(entry.sourceLocale);
 let side = $state(false);
 let canvasPane = $state<ReturnType<typeof CanvasWorkspace>>();
+// Sticky panes below the header sit exactly under it, however many rows it wraps to.
+let headerHeight = $state(0);
 
 type EditorMode = 'form' | 'split' | 'canvas';
 const MODES: EditorMode[] = ['form', 'split', 'canvas'];
@@ -230,13 +232,14 @@ const modeLabel = (value: EditorMode) =>
       ? m.editor_view_split({}, options)
       : m.editor_view_canvas({}, options);
 // svelte-ignore state_referenced_locally -- one authenticated editor instance owns one preference key
-const modeKey = `handover:canvas-mode:v1:${siteBase() || '/'}:${userId}`;
+// v2: Split became the default, so a Form saved under the old default does not keep hiding it.
+const modeKey = `handover:canvas-mode:v2:${siteBase() || '/'}:${userId}`;
 const readMode = (): EditorMode => {
   try {
     const value = localStorage.getItem(modeKey);
-    return MODES.includes(value as EditorMode) ? (value as EditorMode) : 'form';
+    return MODES.includes(value as EditorMode) ? (value as EditorMode) : 'split';
   } catch {
-    return 'form';
+    return 'split';
   }
 };
 let preferredMode = $state<EditorMode>(readMode());
@@ -1157,7 +1160,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     onclick={askToPublish} bind:this={canvasPublishButton}>{m.editor_publish_short({}, options)}</button>
 {/snippet}
 
-<main class="main main-editor" class:is-canvas-fullscreen={mode === 'canvas'}>
+<main class="main main-editor" class:is-canvas-fullscreen={mode === 'canvas'} style:--entry-header-h={`${headerHeight}px`}>
   {#if actionFailed && !renaming && !deleting && !offing}<p class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {feedbackDetail(actionFailed)}</p>{/if}
   {#if holdFailed}<p class="notice notice-danger" role="alert">{feedbackText(holdFailed)} {feedbackDetail(holdFailed)}</p>{/if}
   {#if saveError}<p class="notice notice-danger" role="alert">{feedbackText(saveError)} {feedbackDetail(saveError)} <button class="btn-link" type="button" onclick={() => flush()}>{m.editor_save_retry({}, options)}</button></p>{/if}
@@ -1219,7 +1222,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   {:else if entry.drift.length}
     <div class="lock-banner is-drift">{m.editor_drift_blocked({}, options)}</div>
   {/if}
-  <header class="entry-header" class:is-held={held}>
+  <header class="entry-header" class:is-held={held} bind:offsetHeight={headerHeight}>
     <div class="crumbs">
       <a href={sitePath(entry.singleton ? '/admin/site' : `/admin/c/${collection}`)}>{entry.singleton ? m.editor_site_settings({}, options) : capitalise(collectionName(collection, uiLocale))}</a><span class="sep" aria-hidden="true">/</span><span>{title}</span>
       <span class="autosave" class:is-saving={saving} class:is-offline={saveFailed}>
@@ -1369,6 +1372,16 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       </p>
     {/if}
     {#if statusFailed}<p class="subline is-bad" role="alert">{feedbackText(statusFailed)} {feedbackDetail(statusFailed)}</p>{/if}
+    <div class="header-foot">
+    <!-- A global has no SEO or versions of its own: no tabs rather than three dead ones. -->
+    <!-- Links, not a tablist: each is an address the back button lands on; keep the roles off. -->
+    {#if !entry.singleton}
+      <nav class="tabs" aria-label={m.editor_sections({}, options)}>
+        <a href={sitePath(`/admin/c/${collection}/${slug}`)} aria-current={section === '' ? 'page' : undefined}>{m.editor_section_content({}, options)}</a>
+        {#if seoField}<a href={sitePath(`/admin/c/${collection}/${slug}/seo`)} aria-current={section === 'seo' ? 'page' : undefined}>{m.editor_section_seo({}, options)}</a>{/if}
+        <a href={sitePath(`/admin/c/${collection}/${slug}/history`)} aria-current={section === 'history' ? 'page' : undefined}>{m.editor_section_history({}, options)}</a>
+      </nav>
+    {/if}
     {#if addressable}
       <p class="slug-row">
         {#if editing}
@@ -1385,15 +1398,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         {/if}
       </p>
     {/if}
-    <!-- A global has no SEO or versions of its own: no tabs rather than three dead ones. -->
-    <!-- Links, not a tablist: each is an address the back button lands on; keep the roles off. -->
-    {#if !entry.singleton}
-      <nav class="tabs" aria-label={m.editor_sections({}, options)}>
-        <a href={sitePath(`/admin/c/${collection}/${slug}`)} aria-current={section === '' ? 'page' : undefined}>{m.editor_section_content({}, options)}</a>
-        {#if seoField}<a href={sitePath(`/admin/c/${collection}/${slug}/seo`)} aria-current={section === 'seo' ? 'page' : undefined}>{m.editor_section_seo({}, options)}</a>{/if}
-        <a href={sitePath(`/admin/c/${collection}/${slug}/history`)} aria-current={section === 'history' ? 'page' : undefined}>{m.editor_section_history({}, options)}</a>
-      </nav>
-    {/if}
+    </div>
   </header>
   {#if section === 'history'}
     <History

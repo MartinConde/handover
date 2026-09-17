@@ -122,6 +122,11 @@ $effect(() => {
   }
 });
 let inspectorOpen = $state(false);
+// Split is for looking at the page: editing in it, and the panels that go with it, are Canvas's.
+$effect(() => {
+  const next = fullscreen ? 'edit' : 'interact';
+  untrack(() => setInteractionMode(next));
+});
 let inspectorWidth = $state<number>(PANEL_WIDTHS.inspector.default);
 let resizing = $state<{
   panel: ResizablePanel;
@@ -1067,7 +1072,7 @@ async function openCurrentPreview() {
 }
 
 async function canvasNavigate(message: CanvasNavigationMessage) {
-  if (navigationBusy) return;
+  if (navigationBusy || !fullscreen) return;
   navigationBusy = true;
   navigationError = undefined;
   navigationAction = undefined;
@@ -1219,7 +1224,10 @@ onMount(() => {
     {#if fullscreen}
       <button class="btn btn-ghost canvas-back" type="button" aria-label={m.canvas_back_to_form({}, options)} title={m.canvas_back_to_form({}, options)} onclick={onform}><CanvasIcon name="back" /></button>
       <div class="canvas-identity"><strong title={ownerLabel}>{ownerLabel}</strong><span>{m.canvas_label({}, options)}</span></div>
+    {:else}
+      <span class="canvas-address" title={url}>{url}</span>
     {/if}
+    {#if fullscreen}
     <div class="canvas-tools">
       <div class="canvas-panel-tools" role="group" aria-label={m.canvas_editor_panels({}, options)}>
         <button class="btn btn-ghost canvas-panel-toggle" type="button" title={m.canvas_toggle_structure({}, options)}
@@ -1233,16 +1241,19 @@ onMount(() => {
       <button class="btn btn-ghost canvas-icon-button" type="button" aria-label={m.canvas_redo({}, options)} title={m.canvas_redo_shortcut({}, options)} disabled={interactionMode !== 'edit' || !session.canRedo()}
         aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z" onclick={() => replay('redo')}><CanvasIcon name="redo" /></button>
     </div>
+    {/if}
     <div class="canvas-view-tools">
       <div class="seg canvas-widths" role="group" aria-label={m.canvas_viewport({}, options)}>
         {#each widths as item (item.value)}
           <button type="button" aria-label={item.label} title={item.label} aria-pressed={width === item.value} onclick={() => (width = item.value)}><CanvasIcon name={item.value} /></button>
         {/each}
       </div>
-      <div class="seg" role="group" aria-label={m.canvas_interaction({}, options)}>
-        <button type="button" aria-pressed={interactionMode === 'edit'} onclick={() => setInteractionMode('edit')}>{m.canvas_edit({}, options)}</button>
-        <button type="button" aria-pressed={interactionMode === 'interact'} onclick={() => setInteractionMode('interact')}>{m.canvas_interact({}, options)}</button>
-      </div>
+      {#if fullscreen}
+        <div class="seg" role="group" aria-label={m.canvas_interaction({}, options)}>
+          <button type="button" aria-pressed={interactionMode === 'edit'} onclick={() => setInteractionMode('edit')}>{m.canvas_edit({}, options)}</button>
+          <button type="button" aria-pressed={interactionMode === 'interact'} onclick={() => setInteractionMode('interact')}>{m.canvas_interact({}, options)}</button>
+        </div>
+      {/if}
     </div>
     <div class="canvas-entry-actions">
       {#if fullscreen}{@render entryActions?.()}{/if}

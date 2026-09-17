@@ -108,9 +108,13 @@ which line to write: those are the site's own wiring, and only preview reads it.
 ## Form, Split, and Canvas
 
 Entries with a `route`, a [loader](loaders.md), and preview enabled offer three editor views.
-**Form** is the initial view and retains side-by-side language comparison. **Split** places the
-form beside the editable page; **Canvas** gives the page the workspace width and collapses the
-normal navigation. Tablet and phone controls set the iframe's real width rather than scaling it.
+**Split** is the initial view: the form scrolls on the left while the page stays in view on the
+right, under a single row with the page's address, the device widths and **Preview**. The page in
+Split is for looking at: it scrolls and follows every edit, but clicking it selects, edits and
+follows nothing — that is Canvas.
+**Form** retains side-by-side language comparison; **Canvas** gives the page the workspace width,
+adds Structure, Inspector, undo and Edit/Interact, and collapses the normal navigation. The view
+someone picks is remembered per browser. Tablet and phone controls set the iframe's real width rather than scaling it.
 
 Canvas renders the current working snapshots, including changes that autosave has not sent yet.
 Completed edits are coalesced into a fresh render; autosave by itself does not reload the page.

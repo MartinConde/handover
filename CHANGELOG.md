@@ -4,6 +4,13 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Open entries that have a page in **Split** by default. The page pane stays in view while the
+  form scrolls, and its header is one row: the address, device widths and **Preview**; Structure,
+  Inspector, undo and Edit/Interact are in **Canvas** only, and the page in Split cannot be
+  selected, edited in place or clicked through. The entry header is a row shorter, with
+  the web address beside the Content/SEO/History tabs. A view picked before this release is
+  forgotten once.
+
 - Change your email on **Account**. The current address approves the change by link, then the new
   address confirms it; a site without a mailer shows the email without the form.
 

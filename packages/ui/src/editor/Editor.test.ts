@@ -265,21 +265,28 @@ test('pressing Split puts Canvas beside the form at the address this language se
   ).toContain('/_preview/listings/seaview-cottage');
   expect($(root, '.canvas-workspace')).not.toBeNull();
   expect($(root, 'input#f-title')).not.toBeNull();
-  const structure = $<HTMLButtonElement>(
-    root,
-    '.canvas-rail button[aria-controls="canvas-structure"]',
-  );
-  expect(structure?.disabled).toBe(false);
-  expect(structure?.getAttribute('aria-expanded')).toBe('false');
-  structure?.click();
+  // The form beside it is the inspector, so the rail keeps only what is about the page.
+  expect($(root, '.canvas-rail .canvas-address')?.textContent).toBe('/listings/seaview-cottage');
+  expect($$(root, '.canvas-rail .canvas-widths button')).toHaveLength(3);
+  expect($(root, '.canvas-rail .canvas-panel-toggle')).toBeNull();
+  expect($(root, '.canvas-rail [aria-label="Undo"]')).toBeNull();
+  expect($(root, '.canvas-rail [aria-label="Canvas interaction"]')).toBeNull();
+});
+
+test('an entry with a page opens in Split until someone picks another view', () => {
+  const root = show({ entry: { ...entry, route: '/listings/[slug]' }, preview: true });
   flushSync();
-  expect(structure?.getAttribute('aria-expanded')).toBe('true');
-  expect($(root, '#canvas-structure[aria-labelledby="canvas-structure-title"]')).not.toBeNull();
+
+  expect(
+    $<HTMLButtonElement>(root, '[aria-label="Editor view"] button[aria-pressed="true"]')
+      ?.textContent,
+  ).toBe('Split');
+  expect($(root, '.canvas-workspace')).not.toBeNull();
 });
 
 test('the saved editor mode is scoped to the site base and signed-in user', () => {
   document.body.innerHTML = '<div id="app" data-base="/coastal"></div>';
-  localStorage.setItem('handover:canvas-mode:v1:/coastal:u1', 'canvas');
+  localStorage.setItem('handover:canvas-mode:v2:/coastal:u1', 'canvas');
   const root = show({
     entry: { ...entry, route: '/listings/[slug]' },
     preview: true,
@@ -292,12 +299,12 @@ test('the saved editor mode is scoped to the site base and signed-in user', () =
   ).toBe('Canvas');
   $<HTMLButtonElement>(root, '[aria-label="Editor view"] button')?.click();
   flushSync();
-  expect(localStorage.getItem('handover:canvas-mode:v1:/coastal:u1')).toBe('form');
+  expect(localStorage.getItem('handover:canvas-mode:v2:/coastal:u1')).toBe('form');
 });
 
-test('invalid or unsupported Canvas preferences fall back to Form without being overwritten', () => {
+test('an unsupported preference opens Form and an invalid one Split, neither overwritten', () => {
   document.body.innerHTML = '<div id="app" data-base="/coastal/"></div>';
-  const key = 'handover:canvas-mode:v1:/coastal:u1';
+  const key = 'handover:canvas-mode:v2:/coastal:u1';
   localStorage.setItem(key, 'canvas');
   const root = show({
     entry: { ...entry, route: '/listings/[slug]' },
@@ -324,7 +331,8 @@ test('invalid or unsupported Canvas preferences fall back to Form without being 
   expect(
     $<HTMLButtonElement>(invalid, '[aria-label="Editor view"] button[aria-pressed="true"]')
       ?.textContent,
-  ).toBe('Form');
+  ).toBe('Split');
+  expect(localStorage.getItem(key)).toBe('anything-else');
 });
 
 test('Form to Canvas to Form retains unsaved field state in the same entry session', () => {
@@ -351,6 +359,8 @@ test('Split replaces comparison with Canvas and Form restores the unsaved transl
     preview: true,
     userId: 'u1',
   });
+  $$<HTMLButtonElement>(root, '[aria-label="Editor view"] button')[0]?.click();
+  flushSync();
   $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
   flushSync();
   type(root, 'input#t-title', 'Ungespeicherte Hätte');

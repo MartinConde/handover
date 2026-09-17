@@ -173,6 +173,7 @@ test('switches workspace text and the existing frame title without rendering con
   );
   const props = $state({
     active: true,
+    fullscreen: true,
     locale: 'en',
     uiLocale: 'en' as 'en' | 'de',
     url: '/',
@@ -263,4 +264,73 @@ test('reformats retained renderer recovery while preserving exact diagnostic det
     'Canvas render URL must be same-origin.',
   );
   expect(materialize).toHaveBeenCalledOnce();
+});
+
+test('Split shows the page to look at: no editing, Inspector or navigation until Canvas', async () => {
+  const renderer = {
+    mode: vi.fn(),
+    textField: vi.fn(),
+    actions: vi.fn(),
+    select: vi.fn(),
+    uiLocale: vi.fn(),
+    render: vi.fn(async () => ({ ok: true })),
+    schedule: vi.fn(),
+    flushScheduled: vi.fn(),
+    pause: vi.fn(),
+    dispose: vi.fn(),
+  };
+  let options: import('./canvas-renderer').CanvasRendererOptions | undefined;
+  vi.doMock('./canvas-renderer', () => ({
+    createCanvasRenderer: (given: typeof options) => {
+      options = given;
+      return renderer;
+    },
+  }));
+  const session = createEntrySession({
+    document: 'pages/home',
+    sourceLocale: 'en',
+    data: { title: 'Home' },
+    translations: {},
+    form: { fields, blocks: {} },
+  });
+  const props = $state({
+    active: true,
+    fullscreen: false,
+    locale: 'en',
+    url: '/',
+    request: (): CanvasRenderRequest => ({ url: '/preview', snapshot: {} as never }),
+    currentVersion: () => session.contentVersion('en'),
+    entryDocument: { collection: 'pages', id: 'home' },
+    ownerLabel: 'Home',
+    sourceLocale: 'en',
+    session,
+    blocks: {},
+    onform: () => {},
+    onreviewproblems: () => {},
+    onnavigateentry: vi.fn(),
+  });
+  app = mount(CanvasWorkspace, { target: document.body, props });
+  await vi.waitFor(() => expect(options).toBeDefined());
+  options?.onStateChange?.({ phase: 'ready', requestId: 'r1', contentVersion: 0 });
+  flushSync();
+
+  expect(renderer.mode).toHaveBeenLastCalledWith('interact');
+  // A shared global is the selection that would open the Inspector on its own in Canvas.
+  options?.onSelectionChange?.({
+    kind: 'field',
+    target: { document: { collection: 'globals', id: 'site' }, locale: 'en', address: 'name' },
+  });
+  await options?.onNavigate?.({
+    kind: 'form',
+    href: 'http://localhost/contact',
+    method: 'post',
+  } as never);
+  flushSync();
+  expect(document.querySelector('.canvas-workarea.has-inspector')).toBeNull();
+  expect(document.querySelector('.canvas-navigation-notice')).toBeNull();
+
+  props.fullscreen = true;
+  flushSync();
+  expect(renderer.mode).toHaveBeenLastCalledWith('edit');
+  vi.doUnmock('./canvas-renderer');
 });
