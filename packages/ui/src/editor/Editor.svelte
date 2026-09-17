@@ -244,7 +244,7 @@ let canvasOpen = $state(saved === 'canvas');
 const canvasSupported = $derived(preview && Boolean(entry.route));
 const pageShown = $derived(section === '' && canvasSupported);
 const besideOptions = $derived(
-  BESIDE.filter((of) => (of === 'page' ? pageShown : of === 'language' ? many : true)),
+  BESIDE.filter((of) => (of === 'page' ? pageShown : of === 'language' ? many : !pageShown)),
 );
 const beside = $derived<Beside>(
   chosen && besideOptions.includes(chosen) ? chosen : pageShown ? 'page' : 'none',
@@ -265,6 +265,7 @@ function remember(value: string) {
   }
 }
 function setBeside(next: Beside) {
+  if (next === 'none' && pageShown) next = 'page';
   chosen = next;
   canvasOpen = false;
   remember(next);
@@ -826,19 +827,6 @@ function land(field: HTMLElement | null) {
   field?.scrollIntoView({ block: 'center' });
   field?.focus();
 }
-function focusField(path: readonly string[]) {
-  const target = document.getElementById(`f-${path.join('.')}-field`);
-  if (!target) return;
-  target.scrollIntoView({ block: 'center', behavior: 'instant' });
-  const control =
-    target.querySelector<HTMLElement>(':scope > details:not([open]) > summary') ??
-    target.querySelector<HTMLElement>(
-      'input:not([type="hidden"]):not([hidden]):not(:disabled), textarea:not(:disabled), select:not(:disabled), [contenteditable="true"]',
-    ) ??
-    target.querySelector<HTMLElement>('button:not(:disabled), summary') ??
-    target;
-  control.focus({ preventScroll: true });
-}
 // A picture's `src` has no control of its own, so the jump lands on the nearest drawn ancestor.
 function drawn(prefix: string, path: string | undefined) {
   const steps = path?.split('.') ?? [];
@@ -1290,45 +1278,6 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         </div>
       </div>
       <div class="actions">
-        {#if many}
-          {#if entry.locales.length < 5}
-            <div class="seg" role="group" aria-label={m.editor_language({}, options)}>
-              {#each entry.locales as of (of)}
-                <button type="button" class:is-off={off(of)} aria-pressed={locale === of} onclick={() => leaving(() => (locale = of))}>
-                  {of.toUpperCase()}{#if off(of)}<span class="visually-hidden"> — {m.editor_language_off_a11y({}, options)}</span>{:else if untranslated(of)}<span class="visually-hidden"> — {m.editor_language_untranslated_a11y({}, options)}</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {m.editor_language_stale_a11y({ source: language(entry.sourceLocale) }, options)}</span><span class="mark" aria-hidden="true"></span>{/if}
-                </button>
-              {/each}
-            </div>
-          {:else}
-            <label class="visually-hidden" for="entry-locale">{m.editor_language({}, options)}</label>
-            <select
-              class="input"
-              id="entry-locale"
-              value={locale}
-              onchange={(e) => leaving(() => (locale = e.currentTarget.value))}
-            >
-              {#each entry.locales as of (of)}
-                <option value={of}>{language(of)}</option>
-              {/each}
-            </select>
-          {/if}
-        {/if}
-        {#if besideOptions.length > 1}
-          <div class="seg editor-beside" role="group" aria-label={m.editor_beside({}, options)}>
-            {#each besideOptions as of (of)}
-              <button
-                type="button"
-                class:btn-sbs={of === 'language'}
-                aria-pressed={beside === of && mode !== 'canvas'}
-                disabled={entry.drift.length > 0}
-                onclick={() => leaving(() => setBeside(of))}
-              >{of === 'page' ? m.editor_split_page({}, options) : of === 'language' ? m.editor_side_by_side({}, options) : m.editor_form_only({}, options)}</button>
-            {/each}
-          </div>
-        {/if}
-        {#if !entry.singleton && canvasSupported}
-          <button class="btn canvas-open" type="button" disabled={entry.drift.length > 0} onclick={() => setCanvas(true)}>{m.editor_view_canvas({}, options)}</button>
-        {/if}
         <button
           class="btn btn-primary"
           type="button"
@@ -1409,6 +1358,47 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
       </p>
     {/if}
     </div>
+    <div class="workspace-toolbar">
+        {#if many}
+          {#if entry.locales.length < 5}
+            <div class="seg" role="group" aria-label={m.editor_language({}, options)}>
+              {#each entry.locales as of (of)}
+                <button type="button" class:is-off={off(of)} aria-pressed={locale === of} onclick={() => leaving(() => (locale = of))}>
+                  {of.toUpperCase()}{#if off(of)}<span class="visually-hidden"> — {m.editor_language_off_a11y({}, options)}</span>{:else if untranslated(of)}<span class="visually-hidden"> — {m.editor_language_untranslated_a11y({}, options)}</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {m.editor_language_stale_a11y({ source: language(entry.sourceLocale) }, options)}</span><span class="mark" aria-hidden="true"></span>{/if}
+                </button>
+              {/each}
+            </div>
+          {:else}
+            <label class="visually-hidden" for="entry-locale">{m.editor_language({}, options)}</label>
+            <select
+              class="input"
+              id="entry-locale"
+              value={locale}
+              onchange={(e) => leaving(() => (locale = e.currentTarget.value))}
+            >
+              {#each entry.locales as of (of)}
+                <option value={of}>{language(of)}</option>
+              {/each}
+            </select>
+          {/if}
+        {/if}
+        {#if besideOptions.length > 1}
+          <div class="seg editor-beside" role="group" aria-label={m.editor_beside({}, options)}>
+            {#each besideOptions.filter((of) => of !== 'none') as of (of)}
+              <button
+                type="button"
+                class:btn-sbs={of === 'language'}
+                aria-pressed={beside === of && mode !== 'canvas'}
+                disabled={entry.drift.length > 0}
+                onclick={() => leaving(() => setBeside(!pageShown && side && of === 'language' ? 'none' : of))}
+              ><svg class="workspace-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2" />{#if of === 'page'}<path d="M9 3v14M12 7h2M12 10h2" />{:else if of === 'language'}<path d="M10 3v14M5 7h2M13 7h2M5 10h2M13 10h2" />{:else}<path d="M6 7h8M6 10h8M6 13h5" />{/if}</svg><span>{of === 'page' ? m.editor_workspace_preview({}, options) : m.editor_workspace_translate({}, options)}</span></button>
+            {/each}
+          </div>
+        {/if}
+        {#if !entry.singleton && canvasSupported}
+          <button class="btn canvas-open" type="button" disabled={entry.drift.length > 0} onclick={() => setCanvas(true)}>{m.editor_view_canvas({}, options)}</button>
+        {/if}
+    </div>
   </header>
   {#if section === 'history'}
     <History
@@ -1432,7 +1422,6 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   <div
     class="entry-body"
     class:has-pane={!entry.drift.length && (mode === 'split' || (mode === 'form' && !alone && shown !== undefined))}
-    class:has-outline={!entry.drift.length && mode === 'form' && !alone && shown === undefined && fields.length > 5}
     class:is-canvas={mode === 'canvas'}
   >
     {#if entry.drift.length}
@@ -1445,10 +1434,10 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         onresolved={entrySession.afterReconciliation}
       />
     {:else}
-      {#if mode === 'split'}
+      {#if mode === 'split' || (mode === 'form' && side && shown && !alone)}
         <div class="canvas-mobile-tabs seg" role="group" aria-label={m.editor_split_pane({}, options)}>
-          <button type="button" aria-pressed={mobilePane === 'form'} onclick={() => (mobilePane = 'form')}>{m.editor_split_form({}, options)}</button>
-          <button type="button" aria-pressed={mobilePane === 'page'} onclick={() => (mobilePane = 'page')}>{m.editor_split_page({}, options)}</button>
+          <button type="button" aria-pressed={mobilePane === 'form'} onclick={() => (mobilePane = 'form')}>{side ? language(entry.sourceLocale) : m.editor_split_form({}, options)}</button>
+          <button type="button" aria-pressed={mobilePane === 'page'} onclick={() => (mobilePane = 'page')}>{side && shown ? language(shown) : m.editor_split_page({}, options)}</button>
         </div>
       {/if}
       <!-- Not drawn when a translation is on its own. -->
@@ -1456,30 +1445,25 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <form
           class="form"
-          class:is-mobile-hidden={mode === 'split' && mobilePane === 'page'}
+          class:is-mobile-hidden={(mode === 'split' || side) && mobilePane === 'page'}
           onsubmit={(e) => e.preventDefault()}
           onfocusout={canvasCompleted}
         >
+          <div class="editor-form-heading">
+            <div><span class="editor-language-code">{entry.sourceLocale.toUpperCase()}</span><h2>{language(entry.sourceLocale)}</h2></div>
+            <span class="editor-source-label">{m.editor_workspace_source({}, options)}</span>
+          </div>
           <fieldset disabled={locked || entrySession.localeMutationBlocked(entry.sourceLocale)}>
             <Fields {fields} blocks={shownForm.blocks} blockLabels={shownForm.blockLabels} {problems} {mediaBase} locale={entry.sourceLocale} {uiLocale} session={entrySession} inheritedSeo={inherited(entry.sourceLocale, data)} {site} servedAt={localeUrl(entry.sourceLocale)} bind:root={entrySession.snapshots[entry.sourceLocale]!} structureLocked={entrySession.structureMutationBlocked()} textOnly={entrySession.sourceTextOnly(entry.sourceLocale)} />
           </fieldset>
         </form>
       {/if}
       <!-- Split replaces a comparison pane rather than adding a third column. -->
-      {#if mode !== 'canvas' && !(mode === 'split' && !alone) && shown === undefined}
-        {#if fields.length > 5}
-          <nav class="editor-outline" aria-label={m.editor_outline({}, options)}>
-            <p>{m.editor_outline({}, options)}</p>
-            {#each fields as field (field.path.join('.'))}
-              <button type="button" onclick={() => focusField(field.path)}>{field.label || field.path.at(-1)}</button>
-            {/each}
-          </nav>
-        {/if}
-      {:else if mode !== 'canvas' && !(mode === 'split' && !alone) && shown && untranslated(shown)}
+      {#if mode !== 'canvas' && !(mode === 'split' && !alone) && shown && untranslated(shown)}
         <!-- An empty form here would autosave a file nobody asked for. -->
         <section
           class="pane is-locale"
-          class:is-mobile-hidden={mode === 'split' && mobilePane === 'page'}
+          class:is-mobile-hidden={(mode === 'split' && mobilePane === 'page') || (side && !alone && mobilePane === 'form')}
           aria-labelledby="pane-{shown}"
           onfocusout={canvasCompleted}
         >
@@ -1544,7 +1528,7 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         {#key shown}
           <div
             class="canvas-form-surface"
-            class:is-mobile-hidden={mode === 'split' && mobilePane === 'page'}
+            class:is-mobile-hidden={(mode === 'split' && mobilePane === 'page') || (side && !alone && mobilePane === 'form')}
             onfocusout={canvasCompleted}
           >
             <Translation

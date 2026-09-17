@@ -75,7 +75,7 @@ test('live interface language updates editor chrome and dates without replacing 
   expect(q('.editor-beside')?.getAttribute('aria-label')).toBe('Neben dem Formular');
   expect(
     qa<HTMLButtonElement>('.editor-beside button').map((button) => button.textContent),
-  ).toEqual(['Seite', 'Nebeneinander', 'Nur Formular']);
+  ).toEqual(['Live-Vorschau', 'Übersetzen']);
   expect(q('.canvas-open')?.textContent).toBe('Canvas');
   expect(q('.tabs')?.getAttribute('aria-label')).toBe('Eintragsbereiche');
   expect(qa<HTMLAnchorElement>('.tabs a').map((link) => link.textContent)).toEqual([

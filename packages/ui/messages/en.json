@@ -2176,5 +2176,9 @@
   "focal_live_previews": "Live previews",
   "focal_phone_upright": "Phone, upright",
   "focal_no_presets": "This site shows its pictures whole, so the dot only matters where a page crops one.",
-  "focal_save": "Save focal point"
+  "focal_save": "Save focal point",
+  "editor_workspace_preview": "Live preview",
+  "editor_workspace_translate": "Translate",
+  "editor_workspace_write": "Write",
+  "editor_workspace_source": "Source content"
 }

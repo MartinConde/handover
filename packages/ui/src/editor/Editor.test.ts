@@ -133,7 +133,7 @@ test('a global keeps its title state and publishing controls in one header row',
   const row = $(root, '.entry-header > .heading-row');
   expect(row?.querySelector('h1')?.textContent).toBe('Site details');
   expect(row?.querySelector('.hold-toggle')).not.toBeNull();
-  expect(row?.querySelector('.seg[aria-label="Language"]')).not.toBeNull();
+  expect(root.querySelector('.workspace-toolbar .seg[aria-label="Language"]')).not.toBeNull();
   expect(row?.querySelector('.btn-primary')?.textContent).toContain('Publish this entry');
 });
 
@@ -246,11 +246,11 @@ const pressed = (root: ParentNode) =>
 // Canvas needs both the injected preview route and a page address to POST into.
 test('the page and Canvas are offered only where the site has a page to show', () => {
   const none = show({ entry: bilingual, preview: true });
-  expect(beside(none).map((b) => b.textContent)).toEqual(['Side by side', 'Form only']);
+  expect(beside(none).map((b) => b.textContent)).toEqual(['Translate']);
   expect($(none, '.canvas-open')).toBeNull();
   unmount(app);
   const root = show({ entry: { ...entry, route: '/listings/[slug]' }, preview: true });
-  expect(beside(root).map((b) => b.textContent)).toEqual(['Page', 'Form only']);
+  expect(beside(root).map((b) => b.textContent)).toEqual([]);
   expect($<HTMLButtonElement>(root, '.canvas-open')?.disabled).toBe(false);
 });
 
@@ -277,28 +277,28 @@ test('an entry with a page opens with the page beside the form', () => {
   const root = show({ entry: { ...entry, route: '/listings/[slug]' }, preview: true });
   flushSync();
 
-  expect(pressed(root)).toBe('Page');
+  expect(pressed(root)).toBeUndefined();
   expect($(root, '.entry-body.has-pane > .canvas-workspace:not(.is-inactive)')).not.toBeNull();
 });
 
-test('Form only gives the form the whole width and brings the outline back', () => {
+test('without a preview, the default form has no mode choice or outline', () => {
   const key = 'handover:editor-view:v3:/:u1';
   const long = [1, 2, 3, 4, 5, 6].map(
     (n) => ({ path: [`f${n}`], label: `Field ${n}`, type: 'text', required: false }) as Field,
   );
   const root = show({
-    entry: { ...entry, fields: [...entry.fields, ...long], route: '/listings/[slug]' },
-    preview: true,
+    entry: { ...bilingual, fields: [...entry.fields, ...long], route: '/listings/[slug]' },
+    preview: false,
     userId: 'u1',
   });
 
-  beside(root)[1]?.click();
+  // The form is the default; Translate is the only optional pane.
   flushSync();
 
-  expect(pressed(root)).toBe('Form only');
+  expect(pressed(root)).toBeUndefined();
   expect($(root, '.entry-body.has-pane')).toBeNull();
-  expect($(root, '.entry-body.has-outline .editor-outline')).not.toBeNull();
-  expect(localStorage.getItem(key)).toBe('none');
+  expect($(root, '.editor-outline')).toBeNull();
+  expect(localStorage.getItem(key)).toBeNull();
 });
 
 test('the saved view is scoped to the site base and signed-in user', () => {
@@ -316,7 +316,7 @@ test('the saved view is scoped to the site base and signed-in user', () => {
   $<HTMLButtonElement>(root, '.canvas-back')?.click();
   flushSync();
   expect($(root, '.canvas-workspace.is-fullscreen')).toBeNull();
-  expect(pressed(root)).toBe('Page');
+  expect(pressed(root)).toBeUndefined();
   expect(localStorage.getItem(key)).toBe('page');
 });
 
@@ -331,7 +331,7 @@ test('an unsupported preference falls back without being overwritten, an invalid
   });
 
   expect($(root, '.canvas-workspace')).toBeNull();
-  expect(pressed(root)).toBe('Form only');
+  expect(pressed(root)).toBeUndefined();
   expect(localStorage.getItem(key)).toBe('canvas');
 
   unmount(app);
@@ -341,7 +341,9 @@ test('an unsupported preference falls back without being overwritten, an invalid
     preview: true,
     userId: 'u1',
   });
-  expect(pressed(invalid)).toBe('Page');
+  flushSync();
+  expect(pressed(invalid)).toBeUndefined();
+  expect($(invalid, '.canvas-workspace:not(.is-inactive)')).not.toBeNull();
   expect(localStorage.getItem(key)).toBe('anything-else');
 });
 
@@ -3241,7 +3243,7 @@ test('the editor starts focused and opens its second pane only when requested', 
   $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
   flushSync();
   expect($(root, '.entry-body.has-pane .pane.is-locale')).not.toBeNull();
-  $$<HTMLButtonElement>(root, '[aria-label="Beside the form"] button')[1]?.click();
+  $$<HTMLButtonElement>(root, '[aria-label="Beside the form"] button')[0]?.click();
   flushSync();
   expect($(root, '.entry-body.has-pane')).toBeNull();
   vi.unstubAllGlobals();
@@ -3263,47 +3265,7 @@ test('a short settings form stays single-column without an outline', () => {
   expect($(root, '.editor-outline')).toBeNull();
 });
 
-test('the outline reaches empty media, choice and grouped fields as well as text', () => {
-  vi.stubGlobal('fetch', autosaved());
-  const fields: Field[] = [
-    ...entry.fields,
-    { path: ['photo'], label: 'Photo', type: 'image', required: false, preset: { max: 2400 } },
-    {
-      path: ['brochure'],
-      label: 'Brochure',
-      type: 'file',
-      required: false,
-      accept: ['application/pdf'],
-    },
-    {
-      path: ['category'],
-      label: 'Category',
-      type: 'select',
-      required: false,
-      options: ['home', 'office'],
-    },
-    { path: ['summary'], label: 'Summary', type: 'richtext', required: false, tier: 'basic' },
-  ];
-  const root = show({ entry: { ...entry, fields } });
-  flushSync();
-  const jump = (label: string, selector: string) => {
-    $$<HTMLButtonElement>(root, '.editor-outline button')
-      .find((b) => b.textContent === label)
-      ?.click();
-    expect(document.activeElement).toBe($(root, selector));
-  };
-  jump('Title', '#f-title');
-  jump('Photo', '#f-photo-field .dropzone button');
-  jump('Brochure', '#f-brochure-field .dropzone button');
-  jump('Category', '#f-category-field input[type="radio"]');
-  jump('Summary', '#f-summary-field [contenteditable="true"]');
-  jump('Seo', '#f-seo-field input');
-  const group = $<HTMLDetailsElement>(root, '#f-seo-field details');
-  if (group) group.open = false;
-  jump('Seo', '#f-seo-field summary');
-  jump('Photos', '#f-photos-field');
-  vi.unstubAllGlobals();
-});
+
 
 test('Canvas exposes validation problems with a working jump to the affected field', async () => {
   const root = show({
@@ -3323,4 +3285,64 @@ test('Canvas exposes validation problems with a working jump to the affected fie
   $<HTMLButtonElement>(root, '.canvas-validation button')?.click();
   await vi.waitFor(() => expect(document.activeElement?.id).toBe('f-title'));
   expect($(root, '.canvas-workspace.is-fullscreen')).toBeNull();
+});
+
+test('the mobile translation switch keeps both language forms mounted and changes the visible pane', () => {
+  const root = show({ entry: bilingual });
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  const source = $(root, 'input#f-title');
+  const translation = $(root, 'input#t-title');
+  const switches = $$<HTMLButtonElement>(root, '.canvas-mobile-tabs button');
+  expect(switches.map((button) => button.textContent)).toEqual(['English', 'German']);
+  expect($(root, '.canvas-form-surface')?.classList.contains('is-mobile-hidden')).toBe(true);
+  switches[1]?.click();
+  flushSync();
+  expect($(root, '.entry-body > .form')?.classList.contains('is-mobile-hidden')).toBe(true);
+  expect($(root, '.canvas-form-surface')?.classList.contains('is-mobile-hidden')).toBe(false);
+  expect($(root, 'input#f-title')).toBe(source);
+  expect($(root, 'input#t-title')).toBe(translation);
+});
+
+
+test('opening Canvas from Translate removes the mobile language tabs', () => {
+  const root = show({ entry: { ...bilingual, route: '/listings/[slug]' }, preview: true });
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  expect($(root, '.canvas-mobile-tabs')).not.toBeNull();
+  $<HTMLButtonElement>(root, '.canvas-open')?.click();
+  flushSync();
+  expect($(root, '.canvas-workspace.is-fullscreen')).not.toBeNull();
+  expect($(root, '.canvas-mobile-tabs')).toBeNull();
+});
+
+
+test('a saved Write preference yields to live preview when a page is available', () => {
+  localStorage.setItem('handover:editor-view:v3:/:u1', 'none');
+  const root = show({ entry: { ...bilingual, route: '/listings/[slug]' }, preview: true, userId: 'u1' });
+  flushSync();
+  expect(beside(root).map((button) => button.textContent)).toEqual(['Live preview', 'Translate']);
+  expect(pressed(root)).toBe('Live preview');
+  expect($(root, '.canvas-workspace:not(.is-inactive)')).not.toBeNull();
+});
+
+test('closing Translate returns to live preview when a page is available', async () => {
+  const root = show({ entry: { ...bilingual, route: '/listings/[slug]' }, preview: true, userId: 'u1' });
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  $<HTMLButtonElement>(root, '.pane-head button[aria-label]')?.click();
+  await vi.waitFor(() => expect(pressed(root)).toBe('Live preview'));
+  expect(localStorage.getItem('handover:editor-view:v3:/:u1')).toBe('page');
+});
+
+
+test('without preview, Translate toggles the comparison pane without a Write option', async () => {
+  const root = show({ entry: bilingual });
+  expect(beside(root).map((button) => button.textContent)).toEqual(['Translate']);
+  beside(root)[0]?.click();
+  flushSync();
+  expect($(root, 'input#t-title')).not.toBeNull();
+  beside(root)[0]?.click();
+  await vi.waitFor(() => expect($(root, 'input#t-title')).toBeNull());
+  expect($(root, 'input#f-title')).not.toBeNull();
 });

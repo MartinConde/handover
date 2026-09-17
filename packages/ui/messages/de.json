@@ -2170,5 +2170,9 @@
   "focal_live_previews": "Live-Vorschauen",
   "focal_phone_upright": "Smartphone, hochkant",
   "focal_no_presets": "Diese Website zeigt ihre Bilder vollständig. Der Punkt ist daher nur dort relevant, wo eine Seite ein Bild zuschneidet.",
-  "focal_save": "Fokuspunkt speichern"
+  "focal_save": "Fokuspunkt speichern",
+  "editor_workspace_preview": "Live-Vorschau",
+  "editor_workspace_translate": "Übersetzen",
+  "editor_workspace_write": "Schreiben",
+  "editor_workspace_source": "Ausgangsinhalt"
 }
