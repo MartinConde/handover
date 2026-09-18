@@ -413,6 +413,123 @@
   "dashboard_show": "Show",
   "dashboard_show_collection": "Show {collection}",
   "dashboard_stale_hint": "Stale means the language it was translated from has changed since. The count is the last build's, so a translation you have fixed but not published is still in it.",
+  "sources_title": "Source languages",
+  "sources_tile_line": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{count} entry doesn’t yet record which language it is written in. Record it before your developer changes the site’s languages, or it could switch.",
+        "p=other": "{count} entries don’t yet record which language they are written in. Record it before your developer changes the site’s languages, or some entries would switch."
+      }
+    }
+  ],
+  "sources_review": "Review and record",
+  "sources_dialog_title": "Record source languages",
+  "sources_dialog_intro": "These entries have files in more than one language. Recording the language each is written in keeps it fixed whatever happens to the site’s language settings. It records what you see today — nothing changes on screen.",
+  "sources_what": "What gets recorded",
+  "sources_as_now": [
+    {
+      "declarations": ["input count", "input language", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{count} entry — {language}, as now",
+        "p=other": "{count} entries — {language}, as now"
+      }
+    }
+  ],
+  "sources_show_entries": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": { "p=one": "Show the entry", "p=other": "Show the {count} entries" }
+    }
+  ],
+  "sources_stale": [
+    {
+      "declarations": [
+        "input count",
+        "input locale",
+        "input from",
+        "input source",
+        "local p = count: plural"
+      ],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{count} translation into {locale} was made from {from}, not from its entry’s source, {source}. It will show as needing a look against {source}. Its words don’t change.",
+        "p=other": "{count} translations into {locale} were made from {from}, not from their entry’s source, {source}. They will show as needing a look against {source}. Their words don’t change."
+      }
+    }
+  ],
+  "sources_drafts": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{count} of these entries has unpublished changes. They are kept, on top of this commit.",
+        "p=other": "{count} of these entries have unpublished changes. They are kept, on top of this commit."
+      }
+    }
+  ],
+  "sources_one_commit": "One commit, then the site rebuilds; no page changes.",
+  "sources_none": "Every entry records its source language now.",
+  "sources_record": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": { "p=one": "Record for {count} entry", "p=other": "Record for {count} entries" }
+    }
+  ],
+  "sources_recording": "Recording…",
+  "sources_done": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "Recorded for {count} entry in one commit.",
+        "p=other": "Recorded for {count} entries in one commit."
+      }
+    }
+  ],
+  "sources_done_stale": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{count} translation now shows as needing a look against its source.",
+        "p=other": "{count} translations now show as needing a look against their source."
+      }
+    }
+  ],
+  "sources_changed": "The repository changed while this was open. Nothing was recorded — review it again.",
+  "sources_locked": [
+    {
+      "declarations": ["input count", "input names", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{names} is editing an entry this would record. Nothing was recorded — try again once they are done.",
+        "p=other": "{names} are editing entries this would record. Nothing was recorded — try again once they are done."
+      }
+    }
+  ],
+  "sources_lost": "It could not be confirmed whether the languages were recorded. Reload before trying again.",
+  "sources_failed": "The languages could not be recorded ({status}). Nothing was written.",
+  "sources_reload": "Reload",
+  "sources_review_again": "Review again",
+  "diagnostics_sources": "Source languages",
+  "diagnostics_sources_all": "Every entry records the language it is written in",
+  "diagnostics_sources_unrecorded": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{count} entry doesn’t record the language it is written in yet.",
+        "p=other": "{count} entries don’t record the language they are written in yet."
+      }
+    }
+  ],
+  "diagnostics_sources_link": "Record them on the Dashboard",
+  "diagnostics_sources_failed": "Could not be checked ({status})",
   "dashboard_recent_activity": "Recent activity",
   "dashboard_all_activity": "All activity",
   "dashboard_activity_failed": "Recent activity is unavailable. The last result may be out of date.",
@@ -557,6 +674,16 @@
   "activity_entry_deleted": "{actor} deleted {entry}.",
   "activity_locale_disabled": "{actor} turned {locales} off for {entry}.",
   "activity_locale_disabled_unknown": "{actor} turned {locales} off for an entry.",
+  "activity_sources_recorded": [
+    {
+      "declarations": ["input actor", "input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{actor} recorded the source language of {count} entry.",
+        "p=other": "{actor} recorded the source languages of {count} entries."
+      }
+    }
+  ],
   "activity_publish_undone": "{actor} undid a publish.",
   "activity_entry_restored": "{actor} restored {entry}.",
   "activity_files_restored": [

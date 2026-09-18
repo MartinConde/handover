@@ -9,7 +9,7 @@ import {
   type UiLocale,
 } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
-import { request as fetch } from '../request.js';
+import { request as fetch, sitePath } from '../request.js';
 import Modal from '../shared/Modal.svelte';
 
 let {
@@ -85,11 +85,22 @@ let saving = $state(false);
 let keyError = $state<DiagnosticMessage>();
 let keySaid = $state<DiagnosticMessage>();
 let trigger = $state<HTMLElement | null>(null);
+/** Read-only here: recording commits, so it is the Dashboard's button. */
+let unrecorded = $state<{ count: number } | { status: number }>();
 
 onMount(() => {
   checkAll();
   void loadKeys();
+  void loadSources();
 });
+
+async function loadSources() {
+  const res = await fetch('/admin/api/sources');
+  const body = res.ok ? ((await res.json().catch(() => undefined)) as { entries?: unknown }) : {};
+  unrecorded = Array.isArray(body?.entries)
+    ? { count: body.entries.length }
+    : { status: res.ok ? 0 : res.status };
+}
 
 async function load(): Promise<Config> {
   const res = await fetch('/admin/api/diagnostics');
@@ -610,6 +621,21 @@ const mailerName = (provider: string) => {
               {/each}
             </dd>
           </div>
+          {#if (config.locales ?? []).length > 1 && unrecorded}
+            <div>
+              <dt>{m.diagnostics_sources({}, options)}</dt>
+              <dd>
+                {#if 'status' in unrecorded}
+                  {m.diagnostics_sources_failed({ status: unrecorded.status }, options)}
+                {:else if unrecorded.count}
+                  {m.diagnostics_sources_unrecorded({ count: unrecorded.count }, options)}
+                  <a href={sitePath('/admin')}>{m.diagnostics_sources_link({}, options)}</a>
+                {:else}
+                  {m.diagnostics_sources_all({}, options)}
+                {/if}
+              </dd>
+            </div>
+          {/if}
           <div>
             <dt>{m.diagnostics_preview({}, options)}</dt>
             <dd>

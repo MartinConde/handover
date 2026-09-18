@@ -89,6 +89,7 @@ import {
   simulateConflict,
   testEmail,
 } from './api/settings.js';
+import { recordSources, sourcesList } from './api/sources.js';
 
 export { db, gitClient, mediaStore } from './api/environment.js';
 
@@ -173,6 +174,7 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
   if (params.path === 'dashboard') return dashboard(ctx);
   if (params.path === 'build') return buildStatus(ctx);
   if (params.path === 'diagnostics') return diagnostics(locals.handover);
+  if (params.path === 'sources') return answering(() => sourcesList(ctx, locals.handover));
   if (params.path === 'settings') return answering(() => integrations(ctx, locals.handover));
   const held = params.path?.match(LOCK);
   if (held)
@@ -353,6 +355,10 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
       repository: 'PUBLISH_REPOSITORY_UNAVAILABLE',
     });
   if (params.path === 'revert') return answering(() => revert(ctx, request, locals.handover));
+  if (params.path === 'sources')
+    return answering(() => recordSources(ctx, request, locals.handover), {
+      refMoved: 'SOURCES_CHANGED',
+    });
   if (params.path === 'restore') return answering(() => restore(ctx, request, locals.handover));
   const beat = params.path?.match(LOCK);
   if (beat) {

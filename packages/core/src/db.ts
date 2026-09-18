@@ -11,6 +11,7 @@ import {
   stringifyEntry,
   syncLocale,
   type TranslationSource,
+  withSource,
   writtenEntry,
 } from './content.js';
 import { chunksOf, D1_MAX_BOUND_PARAMETERS } from './d1-limits.js';
@@ -983,6 +984,38 @@ export async function recordOffer(
       contents: stringifyEntry(siteId, entry),
       baseSha: commitSha,
       baseBlob: await blobSha(committed),
+    })
+    .where(and(eq(drafts.siteId, siteId), eq(drafts.path, path)));
+}
+
+/** Recording a source moves the open draft onto its commit, or it would publish the file unmarked. */
+export async function recordSource(
+  siteId: string,
+  db: Db,
+  path: string,
+  source: string,
+  commit?: { sha: string; was: string; contents: string },
+): Promise<void> {
+  const open = await loadDraft(siteId, db, path);
+  if (!open?.contents) return;
+  const data = parseEntry(siteId, open.contents);
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return;
+  let entry = withSource(siteId, data, source);
+  if (commit) {
+    const was = parseEntry(siteId, commit.was) as Record<string, unknown> | null;
+    const now = parseEntry(siteId, commit.contents) as Record<string, unknown> | null;
+    // The commit's settled mark, unless the draft had already changed its own.
+    if (JSON.stringify(entry._i18n) === JSON.stringify(was?._i18n)) {
+      const { _i18n, ...rest } = entry;
+      entry = now?._i18n === undefined ? rest : { ...entry, _i18n: now._i18n };
+    }
+  }
+  await db
+    .update(drafts)
+    .set({
+      revision: sql`case when ${drafts.revision} = ${open.revision} then ${crypto.randomUUID()} else null end`,
+      contents: stringifyEntry(siteId, entry),
+      ...(commit ? { baseSha: commit.sha, baseBlob: await blobSha(commit.contents) } : {}),
     })
     .where(and(eq(drafts.siteId, siteId), eq(drafts.path, path)));
 }

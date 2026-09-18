@@ -844,10 +844,12 @@ const initial = $derived(
         {buildStatus}
         {collections}
         {uiLocale}
+        role={session.role}
         onreview={() => (drawer = true)}
         onrevert={askRevert}
         onretryPending={loadPending}
         onretryBuild={loadBuild}
+        oncommitted={commitChanged}
       />
     {/if}
     {/key}

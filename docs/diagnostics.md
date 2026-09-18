@@ -88,6 +88,11 @@ this build has a preview route. All of it is read out of `cms.config.ts` and the
 on the page edits it. A build with no preview says which variable turns it on rather than saying
 "off" and stopping.
 
+**Source languages**, on a site with two or more languages, counts the entries that do not yet
+record the language they are written in and links to the Dashboard, where an owner records them
+([i18n.md](i18n.md#recording-the-source-of-existing-entries)). Settings never writes to the
+repository, so there is no button here.
+
 ## Simulate a conflict
 
 Under **Developer tools** inside **About this site**, and only while the site is running in

@@ -55,7 +55,7 @@ const linked = (sentence: string, link: NonNullable<Said['link']>): Said => {
   return { lead: sentence.slice(0, at), link, tail: sentence.slice(at + SUBJECT_MARKER.length) };
 };
 
-const count = (detail: unknown, key: 'files' | 'done' = 'files'): number => {
+const count = (detail: unknown, key: 'files' | 'done' | 'entries' = 'files'): number => {
   const value = (detail as Record<string, unknown> | null | undefined)?.[key];
   return typeof value === 'number' ? value : 0;
 };
@@ -301,6 +301,10 @@ export function said(event: ActivityEvent, people: Person[] = [], locale: UiLoca
           )
         : { lead: m.activity_locale_disabled_unknown({ actor, locales }, options) };
     }
+    case 'sources-recorded':
+      return {
+        lead: m.activity_sources_recorded({ actor, count: count(detail, 'entries') }, options),
+      };
     case 'revert': {
       if (!(detail as { restore?: unknown } | null)?.restore)
         return { lead: m.activity_publish_undone({ actor }, options) };

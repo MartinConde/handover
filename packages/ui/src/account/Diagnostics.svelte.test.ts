@@ -462,3 +462,21 @@ test('the screen and retained results switch to German without another request o
   expect((root.querySelector('#key-value') as HTMLInputElement).value).toBe('still-secret');
   expect(requests).toHaveLength(requestCount);
 });
+
+test('About counts the entries without a recorded source and sends the owner to the Dashboard', async () => {
+  await show({
+    '/admin/api/sources': Response.json({
+      base: 'b1',
+      entries: [{ key: 'pages/home' }, { key: 'pages/about' }],
+    }),
+  });
+
+  const row = Array.from(document.body.querySelectorAll('.about .facts > div')).find(
+    (div) => div.querySelector('dt')?.textContent === 'Source languages',
+  );
+  expect(row?.querySelector('dd')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+    '2 entries don’t record the language they are written in yet. Record them on the Dashboard',
+  );
+  expect(row?.querySelector('a')?.getAttribute('href')).toBe('/admin');
+  expect(row?.querySelector('button')).toBeNull();
+});

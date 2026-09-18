@@ -12,6 +12,7 @@ import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
 import { activityGroupLabel, initials, said } from '../shared/activity-line';
 import BuildPill, { type Build } from './BuildPill.svelte';
+import SourceLanguagesTile from './SourceLanguagesTile.svelte';
 
 type Recent = {
   key: string;
@@ -38,10 +39,12 @@ let {
   buildStatus = 'ready',
   collections,
   uiLocale = 'en',
+  role,
   onreview,
   onrevert,
   onretryPending = () => {},
   onretryBuild = () => {},
+  oncommitted,
 }: {
   pending: {
     key: string;
@@ -53,10 +56,12 @@ let {
   buildStatus?: 'loading' | 'ready' | 'error';
   collections: string[];
   uiLocale?: UiLocale;
+  role?: 'owner' | 'editor';
   onreview: () => void;
   onrevert: (sha: string) => void;
   onretryPending?: () => void;
   onretryBuild?: () => void;
+  oncommitted?: () => void | Promise<void>;
 } = $props();
 const options = $derived(messageOptions(uiLocale));
 
@@ -279,6 +284,11 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
           {m.dashboard_stale_hint({}, options)}
         </p>
       </section>
+    {/if}
+
+    <!-- Owners only: recording commits, and an editor's dashboard does not even ask. -->
+    {#if role === 'owner'}
+      <SourceLanguagesTile {uiLocale} {oncommitted} />
     {/if}
 
     <section class="dtile feed-tile recent-tile" aria-labelledby="d-recent">

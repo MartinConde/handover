@@ -7,6 +7,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - `_source` is a new reserved key at the top of a file, naming the language the entry is written
   in. A `_source` that is empty, not text, or below the top level fails the read naming the path.
   Nothing writes it yet; no existing file changes and the format version stays `1`.
+- Owners get a **Source languages** tile on the Dashboard while older entries with files in
+  two or more languages don't record `_source`. **Upgrade note:** record them there before you
+  reorder `locales` or change `defaultLocale`, or those entries switch source. One commit; open
+  drafts are kept. Settings → About shows the same count. New routes `GET`/`POST
+  /admin/api/sources`, new activity kind `sources-recorded`.
 - Join the content form and live preview into one workspace, reduce nested field padding, and refresh the canvas toolbar, structure panel, inspector, and stage.
 
 - Redirects is laid out like the other lists: title, rule count and **Add redirect** on one

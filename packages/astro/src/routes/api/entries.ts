@@ -1218,7 +1218,7 @@ function translationHealth(overlay: readonly { path: string; contents: string }[
 }
 
 /** The entry list's own reading, so one entry is named the same thing on every screen. */
-function entryTitles(
+export function entryTitles(
   keys: Iterable<string>,
   overlay: readonly { path: string; contents: string }[],
 ) {

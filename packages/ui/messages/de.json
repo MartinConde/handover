@@ -416,6 +416,126 @@
   "dashboard_show": "Anzeigen",
   "dashboard_show_collection": "{collection} anzeigen",
   "dashboard_stale_hint": "Veraltet bedeutet, dass sich die Ausgangssprache seit der Übersetzung geändert hat. Die Anzahl stammt aus dem letzten Build; eine korrigierte, aber noch nicht veröffentlichte Übersetzung ist weiterhin enthalten.",
+  "sources_title": "Ausgangssprachen",
+  "sources_tile_line": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{count} Eintrag hält noch nicht fest, in welcher Sprache er geschrieben ist. Halte es fest, bevor dein Entwickler die Sprachen der Website ändert, sonst könnte sie wechseln.",
+        "p=other": "{count} Einträge halten noch nicht fest, in welcher Sprache sie geschrieben sind. Halte es fest, bevor dein Entwickler die Sprachen der Website ändert, sonst würden einige Einträge wechseln."
+      }
+    }
+  ],
+  "sources_review": "Prüfen und festhalten",
+  "sources_dialog_title": "Ausgangssprachen festhalten",
+  "sources_dialog_intro": "Diese Einträge haben Dateien in mehr als einer Sprache. Wird festgehalten, in welcher Sprache jeder geschrieben ist, bleibt sie gleich, was auch immer mit den Spracheinstellungen der Website geschieht. Festgehalten wird, was du heute siehst – auf dem Bildschirm ändert sich nichts.",
+  "sources_what": "Was festgehalten wird",
+  "sources_as_now": [
+    {
+      "declarations": ["input count", "input language", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{count} Eintrag – {language}, wie bisher",
+        "p=other": "{count} Einträge – {language}, wie bisher"
+      }
+    }
+  ],
+  "sources_show_entries": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": { "p=one": "Eintrag anzeigen", "p=other": "Die {count} Einträge anzeigen" }
+    }
+  ],
+  "sources_stale": [
+    {
+      "declarations": [
+        "input count",
+        "input locale",
+        "input from",
+        "input source",
+        "local p = count: plural"
+      ],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{count} Übersetzung ({locale}) wurde aus {from} erstellt, nicht aus der Ausgangssprache ihres Eintrags, {source}. Diese Übersetzung wird als zu prüfen gegenüber {source} angezeigt. Der Text ändert sich nicht.",
+        "p=other": "{count} Übersetzungen ({locale}) wurden aus {from} erstellt, nicht aus der Ausgangssprache ihres Eintrags, {source}. Diese Übersetzungen werden als zu prüfen gegenüber {source} angezeigt. Der Text ändert sich nicht."
+      }
+    }
+  ],
+  "sources_drafts": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{count} dieser Einträge hat unveröffentlichte Änderungen. Die Änderungen bleiben erhalten, über diesem Commit.",
+        "p=other": "{count} dieser Einträge haben unveröffentlichte Änderungen. Die Änderungen bleiben erhalten, über diesem Commit."
+      }
+    }
+  ],
+  "sources_one_commit": "Ein Commit, danach wird die Website neu gebaut; keine Seite ändert sich.",
+  "sources_none": "Jeder Eintrag hält seine Ausgangssprache jetzt fest.",
+  "sources_record": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "Für {count} Eintrag festhalten",
+        "p=other": "Für {count} Einträge festhalten"
+      }
+    }
+  ],
+  "sources_recording": "Wird festgehalten …",
+  "sources_done": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "Für {count} Eintrag in einem Commit festgehalten.",
+        "p=other": "Für {count} Einträge in einem Commit festgehalten."
+      }
+    }
+  ],
+  "sources_done_stale": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{count} Übersetzung wird jetzt als zu prüfen gegenüber ihrer Ausgangssprache angezeigt.",
+        "p=other": "{count} Übersetzungen werden jetzt als zu prüfen gegenüber ihrer Ausgangssprache angezeigt."
+      }
+    }
+  ],
+  "sources_changed": "Das Repository hat sich geändert, während dies offen war. Nichts wurde festgehalten – bitte erneut prüfen.",
+  "sources_locked": [
+    {
+      "declarations": ["input count", "input names", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{names} bearbeitet gerade einen Eintrag, den dies festhalten würde. Nichts wurde festgehalten – versuch es erneut, wenn die Bearbeitung beendet ist.",
+        "p=other": "{names} bearbeiten gerade Einträge, die dies festhalten würde. Nichts wurde festgehalten – versuch es erneut, wenn die Bearbeitung beendet ist."
+      }
+    }
+  ],
+  "sources_lost": "Es ließ sich nicht bestätigen, ob die Sprachen festgehalten wurden. Lade neu, bevor du es erneut versuchst.",
+  "sources_failed": "Die Sprachen konnten nicht festgehalten werden ({status}). Nichts wurde geschrieben.",
+  "sources_reload": "Neu laden",
+  "sources_review_again": "Erneut prüfen",
+  "diagnostics_sources": "Ausgangssprachen",
+  "diagnostics_sources_all": "Jeder Eintrag hält fest, in welcher Sprache er geschrieben ist",
+  "diagnostics_sources_unrecorded": [
+    {
+      "declarations": ["input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{count} Eintrag hält noch nicht fest, in welcher Sprache er geschrieben ist.",
+        "p=other": "{count} Einträge halten noch nicht fest, in welcher Sprache sie geschrieben sind."
+      }
+    }
+  ],
+  "diagnostics_sources_link": "Auf der Übersicht festhalten",
+  "diagnostics_sources_failed": "Konnte nicht geprüft werden ({status})",
   "dashboard_recent_activity": "Letzte Aktivitäten",
   "dashboard_all_activity": "Alle Aktivitäten",
   "dashboard_activity_failed": "Die letzten Aktivitäten sind nicht verfügbar. Das letzte Ergebnis ist möglicherweise veraltet.",
@@ -560,6 +680,16 @@
   "activity_entry_deleted": "{actor} hat {entry} gelöscht.",
   "activity_locale_disabled": "{actor} hat {locales} für {entry} deaktiviert.",
   "activity_locale_disabled_unknown": "{actor} hat {locales} für einen Eintrag deaktiviert.",
+  "activity_sources_recorded": [
+    {
+      "declarations": ["input actor", "input count", "local p = count: plural"],
+      "selectors": ["p"],
+      "match": {
+        "p=one": "{actor} hat die Ausgangssprache von {count} Eintrag festgehalten.",
+        "p=other": "{actor} hat die Ausgangssprachen von {count} Einträgen festgehalten."
+      }
+    }
+  ],
   "activity_publish_undone": "{actor} hat eine Veröffentlichung rückgängig gemacht.",
   "activity_entry_restored": "{entry} wurde von {actor} wiederhergestellt.",
   "activity_files_restored": [

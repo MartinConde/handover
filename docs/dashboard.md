@@ -39,6 +39,13 @@ the entry list filtered to the rows that owe it ([translating.md](translating.md
 when more than one collection owes it there is one link per list, each named. Not drawn on a
 site that declares one language.
 
+**Source languages** — owners only, and only while entries with files in two or more
+languages do not record the language they are written in. *Review and record* opens a dialog
+that says what gets recorded (always what the admin shows today), which translations will need
+a look and why, and that unpublished changes are kept, then makes one commit
+([i18n.md](i18n.md#recording-the-source-of-existing-entries)). It refuses, writing nothing, when
+the repository moved while the dialog was open or somebody else is editing one of the entries.
+
 **Recent activity** — the last ten rows of the [activity log](activity.md), which an editor
 sees narrowed to their own events exactly as they do on that screen.
 

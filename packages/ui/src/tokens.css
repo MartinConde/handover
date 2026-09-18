@@ -2438,3 +2438,13 @@ body:has(.is-canvas-fullscreen) .topbar, body:has(.is-canvas-fullscreen) .sideba
   .canvas-workspace.is-fullscreen .canvas-stage-shell { padding: 6px; }
   .canvas-workspace.is-fullscreen .canvas-rail { padding: 8px; }
 }
+
+/* Record source languages (dashboard) */
+.source-effects { display: grid; gap: var(--s-2); }
+.source-effects .group-title { padding: 0; }
+.source-effects ul { display: grid; gap: var(--s-2); margin: 0; padding-left: var(--s-5); font-size: var(--text-sm); color: var(--ink); }
+.source-files { display: grid; gap: var(--s-2); margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); }
+.source-files li { display: flex; align-items: center; gap: var(--s-3); }
+.source-files .desc { margin-left: auto; font-size: var(--text-xs); color: var(--ink-2); }
+.source-list summary { cursor: pointer; font-size: var(--text-sm); color: var(--accent-ink); }
+.source-list[open] summary { margin-bottom: var(--s-3); }
