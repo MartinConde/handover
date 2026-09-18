@@ -310,14 +310,20 @@ async function remove() {
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && tested && (tested = undefined)} />
 
-<main class="main main-editor">
-  <header class="entry-header">
-    <div class="title-row"><h1>{m.redirect_title({}, options)}</h1></div>
-    <p class="subline">
-      {m.redirect_intro({}, options)}
-    </p>
-  </header>
-  <div class="entry-body">
+<main class="main redirects-page">
+  <div class="list-toolbar">
+    <h1>{m.redirect_title({}, options)}</h1>
+    {#if rules.length}
+      <span class="count tally"
+        >{shown.length === rules.length
+          ? m.redirect_rule_count({ count: rules.length }, options)
+          : m.redirect_filtered_count({ shown: shown.length, count: rules.length }, options)}</span
+      >
+    {/if}
+    <span class="spacer"></span>
+    <button class="btn btn-primary" type="button" onclick={() => open()}>{m.redirect_add({}, options)}</button>
+  </div>
+  <p class="list-note">{m.redirect_intro({}, options)}</p>
     <div class="redirects">
       {#if error}<p class="notice notice-danger" role="alert">{errorText(error)}</p>{/if}
       {#if readError}
@@ -331,8 +337,9 @@ async function remove() {
           {m.redirect_pending({ count: waiting }, options)}
         </div>
       {/if}
-      <div class="list-toolbar">
-        <div class="search field">
+      <div class="collection-controls">
+        <div class="search-field">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
           <label class="visually-hidden" for="rd-q">{m.redirect_search({}, options)}</label>
           <input
             class="input"
@@ -351,15 +358,6 @@ async function remove() {
             {/each}
           </select>
         </div>
-        {#if rules.length}
-          <span class="tally"
-            >{shown.length === rules.length
-              ? m.redirect_rule_count({ count: rules.length }, options)
-              : m.redirect_filtered_count({ shown: shown.length, count: rules.length }, options)}</span
-          >
-        {/if}
-        <span class="spacer"></span>
-        <button class="btn btn-primary" type="button" onclick={() => open()}>{m.redirect_add({}, options)}</button>
       </div>
       {#if loading && !rulesKnown}
         <p class="placeholder">{m.common_loading({}, options)}</p>
@@ -378,17 +376,15 @@ async function remove() {
             {@const verdict = asking ? tested?.verdict : undefined}
             <div class={['row', { 'is-managed': managed(rule), 'has-verdict': verdict }]} role="row">
               <div class="td route" role="cell">
-                <div class="hop">
-                  <span class="from">{rule.from}</span>
-                  {#if rule.pending}<span class="badge badge-accent">{m.redirect_not_published({}, options)}</span>{/if}
-                </div>
-                <div class="hop is-to">
-                  <span class="arrow" aria-hidden="true">↳</span><span class="visually-hidden">{m.redirect_to({}, options)}</span>
+                <span class="from">{rule.from}</span>
+                <span class="hop is-to">
+                  <svg class="arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><span class="visually-hidden">{m.redirect_to({}, options)}</span>
                   <span class="to">{rule.to}</span>
                   <span class={['badge code', { 'is-temp': rule.status === 302 }]}
                     >{rule.status === 302 ? m.redirect_temporary({}, options) : rule.status}</span
                   >
-                </div>
+                </span>
+                {#if rule.pending}<span class="badge badge-accent">{m.redirect_not_published({}, options)}</span>{/if}
               </div>
               <div class="td why" role="cell">
                 <span class="badge">{reasonLabel(rule.reason)}</span>
@@ -417,23 +413,25 @@ async function remove() {
                   >
                   <!-- aria-disabled, not disabled: a disabled button would skip the reason. -->
                   <button
-                    class="btn btn-ghost btn-sm"
+                    class="btn btn-ghost btn-icon"
                     type="button"
+                    title={m.redirect_edit({}, options)}
                     aria-disabled={managed(rule) ? 'true' : undefined}
                     aria-describedby={managed(rule) ? `owns-${rule._id}` : undefined}
                     onclick={() => !managed(rule) && open(rule)}
-                    >{m.redirect_edit({}, options)}<span class="visually-hidden"> {rule.from}</span></button
+                    ><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 7l3 3"/></svg><span class="visually-hidden">{m.redirect_edit({}, options)} {rule.from}</span></button
                   >
                   <button
-                    class="btn btn-ghost btn-sm btn-delete"
+                    class="btn btn-ghost btn-icon btn-delete"
                     type="button"
+                    title={m.redirect_delete({}, options)}
                     aria-disabled={managed(rule) ? 'true' : undefined}
                     aria-describedby={managed(rule) ? `owns-${rule._id}` : undefined}
                     onclick={() => {
                       if (managed(rule)) return;
                       trigger = document.activeElement as HTMLElement;
                       dropping = rule;
-                    }}>{m.redirect_delete({}, options)}<span class="visually-hidden"> {rule.from}</span></button
+                    }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg><span class="visually-hidden">{m.redirect_delete({}, options)} {rule.from}</span></button
                   >
                 </div>
               </div>
@@ -449,7 +447,7 @@ async function remove() {
                         class="btn btn-ghost btn-sm open-address"
                         href={rule.from}
                         target="_blank"
-                        rel="noreferrer">{m.redirect_open_old({}, options)} ↗</a
+                        rel="noreferrer">{m.redirect_open_old({}, options)}<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 16 16 8M9 8h7v7"/></svg></a
                       >
                       <button class="btn btn-sm" type="button" onclick={() => test(rule)}>{m.redirect_test_again({}, options)}</button>
                       <button class="btn btn-ghost btn-sm" type="button" onclick={() => (tested = undefined)}>{m.redirect_close({}, options)}</button>
@@ -471,7 +469,6 @@ async function remove() {
         </div>
       {/if}
     </div>
-  </div>
 </main>
 
 {#if writing}

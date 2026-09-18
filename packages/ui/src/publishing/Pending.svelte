@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { DiffGroup, Labels } from '@handover/core';
+import { onDestroy } from 'svelte';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
 import { collectionName, formatFieldTime, messageOptions, type UiLocale } from '../i18n.js';
 import { coordinateEntryPublish, coordinateEntryReplacement } from '../navigate';
@@ -40,7 +41,7 @@ let {
   mediaBase = '',
   build,
   uiLocale = 'en',
-  onclose,
+  onclose: closed,
   onpublished,
   onrevert,
   ondiscarded,
@@ -63,6 +64,31 @@ let {
 const options = $derived(messageOptions(uiLocale));
 
 let panel = $state<HTMLElement>();
+let closing = $state(false);
+let exitAnimation: Animation | undefined;
+let destroyed = false;
+
+function onclose() {
+  if (closing) return;
+  if (!panel?.animate || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+    closed();
+    return;
+  }
+  closing = true;
+  // Keep the native modal and focus boundary alive until the drawer has left the screen.
+  panel.inert = true;
+  exitAnimation = panel.animate(
+    [{ transform: 'translateX(0)', opacity: 1 }, { transform: 'translateX(32px)', opacity: 0 }],
+    { duration: 200, easing: 'cubic-bezier(.4, 0, 1, 1)', fill: 'forwards' },
+  );
+  const finish = () => { if (!destroyed) closed(); };
+  void exitAnimation.finished.then(finish, finish);
+}
+
+onDestroy(() => {
+  destroyed = true;
+  exitAnimation?.cancel();
+});
 
 let busy = $state(false);
 let error = $state<UiMessage>();
@@ -508,8 +534,8 @@ function askDiscard(entry: PendingEntry) {
 <Modal
   labelledby="pending-h"
   panelClass="drawer"
-  scrimClass="is-right"
-  dismissible={!busy && !discarding}
+  scrimClass={closing ? 'is-right pending-scrim is-closing' : 'is-right pending-scrim'}
+  dismissible={!busy && !discarding && !closing}
   bind:panel
   onclose={resolving ? closeResolver : onclose}
 >
@@ -567,6 +593,9 @@ function askDiscard(entry: PendingEntry) {
             {@render result()}
           </div>
         {/if}
+        <ul class="change-list">
+          {#each ready as entry (entry.key)}{@render change(entry)}{/each}
+        </ul>
         {#if checksFailed || groups.length || elsewhere.length}
           <section class="checks" aria-labelledby="checks-h">
             <h3 class="group-title" id="checks-h">{m.pending_checks({}, options)}</h3>
@@ -601,9 +630,6 @@ function askDiscard(entry: PendingEntry) {
             {/if}
           </section>
         {/if}
-        <ul class="change-list">
-          {#each ready as entry (entry.key)}{@render change(entry)}{/each}
-        </ul>
         {#if held.length}
           <div class="change-group">
             <h3 class="group-title">{published ? m.pending_still_on_hold({}, options) : m.pending_on_hold({}, options)}</h3>

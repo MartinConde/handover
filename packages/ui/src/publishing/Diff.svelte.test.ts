@@ -83,8 +83,8 @@ test('a replaced picture is both thumbnails', () => {
   const row = root.querySelector('.diff .row');
   expect(row?.textContent).toContain('photo replaced');
   expect(Array.from(root.querySelectorAll('.pair .lbl')).map((l) => l.textContent)).toEqual([
-    'Before · aaaa.webp',
-    'After · bbbb.webp',
+    'Before aaaa.webp',
+    'After bbbb.webp',
   ]);
   expect(Array.from(root.querySelectorAll('.pair img')).map((i) => i.getAttribute('src'))).toEqual([
     'https://media.example/media/aaaa.webp',

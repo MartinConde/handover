@@ -473,6 +473,16 @@ const queueText = (state: QueueState) => {
   <div class="list-toolbar">
     <h1>{m.media_library_title({}, options)} <span class="count">{heading}</span></h1>
     <span class="spacer"></span>
+    <button class="btn btn-primary" type="button" onclick={() => chooser?.click()}>{m.media_library_upload({}, options)}</button>
+    <label class="visually-hidden" for="lib-file">{m.media_library_files_to_upload({}, options)}</label>
+    <input class="visually-hidden" type="file" id="lib-file" multiple accept={kind === 'images' ? 'image/*' : 'application/pdf'} bind:this={chooser} onchange={(e) => { take(Array.from(e.currentTarget.files ?? [])); e.currentTarget.value = ''; }} />
+  </div>
+  <div class="media-controls">
+  <!-- Buttons rather than links: the kind is not an address of its own. -->
+  <div class="tabs lib-tabs" role="tablist" aria-label={m.media_library_kind({}, options)}>
+    <button type="button" role="tab" aria-selected={kind === 'images'} onclick={() => show('images')}>{m.media_library_images({}, options)}</button>
+    <button type="button" role="tab" aria-selected={kind === 'files'} onclick={() => show('files')}>{m.media_library_files({}, options)}</button>
+  </div>
     <div class="filters">
       <button class={['filter is-toggle', { 'is-on': only.archived }]} type="button" aria-pressed={only.archived} onclick={() => (only.archived = !only.archived)}>{m.media_library_archived({}, options)}</button>
       {#if kind === 'images'}
@@ -484,14 +494,6 @@ const queueText = (state: QueueState) => {
       <label class="visually-hidden" for="lib-q">{m.media_library_search({}, options)}</label>
       <input class="input" id="lib-q" type="search" placeholder={m.media_library_search_placeholder({}, options)} bind:value={query} />
     </div>
-    <button class="btn btn-primary" type="button" onclick={() => chooser?.click()}>{m.media_library_upload({}, options)}</button>
-    <label class="visually-hidden" for="lib-file">{m.media_library_files_to_upload({}, options)}</label>
-    <input class="visually-hidden" type="file" id="lib-file" multiple accept={kind === 'images' ? 'image/*' : 'application/pdf'} bind:this={chooser} onchange={(e) => { take(Array.from(e.currentTarget.files ?? [])); e.currentTarget.value = ''; }} />
-  </div>
-  <!-- Buttons rather than links: the kind is not an address of its own. -->
-  <div class="tabs lib-tabs" role="tablist" aria-label={m.media_library_kind({}, options)}>
-    <button type="button" role="tab" aria-selected={kind === 'images'} onclick={() => show('images')}>{m.media_library_images({}, options)}</button>
-    <button type="button" role="tab" aria-selected={kind === 'files'} onclick={() => show('files')}>{m.media_library_files({}, options)}</button>
   </div>
   {#if failure}
     <div class="notice notice-danger library-failure" role="alert">

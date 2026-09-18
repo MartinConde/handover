@@ -49,7 +49,7 @@ async function load() {
   <p class="list-note">
     {m.globals_intro({}, options)}
   </p></div>
-  <div class="section-label">{m.globals_website_content({}, options)}</div>
+
   {#if errorStatus}<p class="notice notice-danger" role="alert">{m.globals_load_failed({ status: errorStatus }, options)}</p>{/if}
   {#if loading}
     <p class="placeholder">{m.common_loading({}, options)}</p>
@@ -60,10 +60,26 @@ async function load() {
         {m.globals_empty_after({}, options)} <code>globals</code> {m.globals_empty_in({}, options)} <code>cms.config.ts</code>.
       </p>
     {/if}
+    <section class="settings-panel" aria-labelledby="website-content-heading">
+      <header class="settings-panel-heading">
+        <h2 id="website-content-heading">{m.globals_website_content({}, options)}</h2>
+      </header>
     <div class="settings-list">
       {#each globals as global (global.key)}
         <div class="global-card">
-          <span class="global-symbol" aria-hidden="true">{named(global).slice(0, 1).toUpperCase()}</span>
+          <span class="global-symbol" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              {#if global.key === 'site'}
+                <circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a17 17 0 0 1 0 18 17 17 0 0 1 0-18Z"/>
+              {:else if global.key === 'navigation'}
+                <path d="M9 6h11M9 12h11M9 18h7"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>
+              {:else if global.key === 'newsletter'}
+                <rect x="3" y="5" width="18" height="14" rx="3"/><path d="m4 7 8 6 8-6"/>
+              {:else}
+                <rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h4"/>
+              {/if}
+            </svg>
+          </span>
           <h2>
             {#if global.pending}
               <span class="pdot" aria-hidden="true"></span>
@@ -111,12 +127,13 @@ async function load() {
       {/each}
       <!-- Listed, not in the sidebar: to the client this is a thing the site has. -->
       <div class="global-card">
-        <span class="global-symbol" aria-hidden="true">↗</span>
+        <span class="global-symbol" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 17h5a5 5 0 0 0 5-5V6m-4 4 4-4 4 4"/></svg></span>
         <h2><a href={sitePath(`/admin/site/redirects`)}>{m.globals_redirects({}, options)}</a></h2>
         <p>{m.globals_redirects_intro({}, options)}</p>
         <div class="meta"><span class="sub">{m.globals_redirects_meta({}, options)}</span></div>
         <svg class="arrow" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3l5 5-5 5" /></svg>
       </div>
     </div>
+    </section>
   {/if}
 </main>

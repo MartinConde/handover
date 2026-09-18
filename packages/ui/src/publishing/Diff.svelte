@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { Change, DiffGroup } from '@handover/core';
+import MediaImage from '../shared/MediaImage.svelte';
 import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
 
@@ -69,15 +70,15 @@ const shown = $derived(groups.filter((g) => g.locale !== undefined || g.changes.
       </div>
     {:else if change.kind === 'picture'}
       <!-- A picture has no history of its own. -->
-      <div class="row is-block">
+      <div class="row is-block is-picture">
         <small>{label}</small>
         <span>{change.before && change.after ? m.diff_photo_replaced({}, options) : change.after ? m.diff_photo_added({}, options) : m.diff_photo_removed({}, options)}</span>
         <div class="pair">
           {#if change.before}
-            <div><span class="lbl">{m.diff_before({}, options)} · {basename(change.before)}</span><div class="ratio-preview is-16x9 is-old"><img src="{mediaBase}/{change.before}" alt="" loading="lazy" /></div></div>
+            <div><span class="lbl" title={basename(change.before)}><b>{m.diff_before({}, options)}</b>{' '}<span>{basename(change.before)}</span></span><div class="ratio-preview is-16x9 is-old"><MediaImage src="{mediaBase}/{change.before}" alt="" loading="lazy" {uiLocale} /></div></div>
           {/if}
           {#if change.after}
-            <div><span class="lbl">{m.diff_after({}, options)} · {basename(change.after)}</span><div class="ratio-preview is-16x9"><img src="{mediaBase}/{change.after}" alt="" loading="lazy" /></div></div>
+            <div><span class="lbl" title={basename(change.after)}><b>{m.diff_after({}, options)}</b>{' '}<span>{basename(change.after)}</span></span><div class="ratio-preview is-16x9"><MediaImage src="{mediaBase}/{change.after}" alt="" loading="lazy" {uiLocale} /></div></div>
           {/if}
         </div>
       </div>

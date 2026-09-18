@@ -29,6 +29,7 @@ const ENTRIES = [
 let app: ReturnType<typeof mount>;
 let entries = $state(ENTRIES);
 const published = vi.fn();
+const closed = vi.fn();
 const discarded = vi.fn();
 const reverted = vi.fn();
 let build = $state<{
@@ -53,7 +54,7 @@ const show = (initial = ENTRIES, defaultLocale = '') => {
       get uiLocale() {
         return uiLocale;
       },
-      onclose: () => {},
+      onclose: closed,
       onpublished: published,
       onrevert: reverted,
       ondiscarded: discarded,
@@ -65,6 +66,7 @@ const show = (initial = ENTRIES, defaultLocale = '') => {
 afterEach(() => {
   unmount(app);
   published.mockClear();
+  closed.mockClear();
   discarded.mockClear();
   reverted.mockClear();
   build = null;
@@ -1068,4 +1070,35 @@ test('a note about a page outside the set is listed under its own heading', asyn
     '1 note — nothing is in the way. Checked over the 2 entries you have selected, and again when you press Publish.',
   );
   expect(root.querySelectorAll('.check-group .notice a')).toHaveLength(1);
+});
+
+
+test('closing keeps the drawer mounted until its exit animation finishes, then closes once', async () => {
+  const root = show();
+  const done = deferred<void>();
+  const animate = vi.fn(() => ({ finished: done.promise, cancel: vi.fn() }));
+  const panel = root.querySelector<HTMLElement>('.drawer')!;
+  Object.defineProperty(panel, 'animate', { value: animate, configurable: true });
+  const close = root.querySelector<HTMLButtonElement>('[aria-label="Close"]')!;
+  close.click();
+  close.click();
+  flushSync();
+  expect(animate).toHaveBeenCalledTimes(1);
+  expect(panel.inert).toBe(true);
+  expect(closed).not.toHaveBeenCalled();
+  expect(root.querySelector('.pending-scrim.is-closing')).not.toBeNull();
+  done.resolve();
+  await done.promise;
+  expect(closed).toHaveBeenCalledTimes(1);
+});
+
+test('reduced motion closes immediately without animating', () => {
+  vi.stubGlobal('matchMedia', () => ({ matches: true }));
+  const root = show();
+  const panel = root.querySelector<HTMLElement>('.drawer')!;
+  const animate = vi.fn();
+  Object.defineProperty(panel, 'animate', { value: animate, configurable: true });
+  root.querySelector<HTMLButtonElement>('[aria-label="Close"]')!.click();
+  expect(animate).not.toHaveBeenCalled();
+  expect(closed).toHaveBeenCalledTimes(1);
 });

@@ -4,6 +4,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Join the content form and live preview into one workspace, reduce nested field padding, and refresh the canvas toolbar, structure panel, inspector, and stage.
+
+- Redirects is laid out like the other lists: title, rule count and **Add redirect** on one
+  row, the search under it, and each rule on one line (old address, arrow, new address). Edit
+  and Delete are icon buttons beside **Test**.
+- One look across the admin: a soft grey frame with the workspace as a single white rounded
+  sheet, and the editor on the same neutral greys instead of its own warm tint. Inputs get a
+  lighter edge that darkens on hover, corners are slightly rounder, page titles a little
+  lighter, and the current sidebar item is a white card.
 - Admin UI internals follow current Svelte 5 idioms (window listeners, attachments,
   `$state.raw`, class arrays); no behaviour change.
 - Fold the live preview away by pressing **Live preview** again; it slides shut like the sidebar

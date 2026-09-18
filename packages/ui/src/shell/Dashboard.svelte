@@ -160,18 +160,22 @@ const held = $derived(pending.filter((entry) => entry.held_by).length);
 const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
 </script>
 
-<main class="main">
-  <h1>{m.dashboard_title({}, options)}</h1>
-  <p class="list-note">{m.dashboard_intro({}, options)}</p>
-  {#if collections.length}
-    <div class="quick">
-      {#each collections as name (name)}
-        <button class="btn" type="button" onclick={() => (creating = name)}>{m.dashboard_new_collection({ collection: collectionName(name, uiLocale, 'singular') }, options)}</button>
-      {/each}
+<main class="main dashboard-page">
+  <div class="dashboard-heading">
+    <div>
+      <h1>{m.dashboard_title({}, options)}</h1>
+      <p class="list-note">{m.dashboard_intro({}, options)}</p>
     </div>
-  {/if}
+    {#if collections.length}
+      <div class="quick">
+        {#each collections as name (name)}
+          <button class="btn" type="button" onclick={() => (creating = name)}>{m.dashboard_new_collection({ collection: collectionName(name, uiLocale, 'singular') }, options)}</button>
+        {/each}
+      </div>
+    {/if}
+  </div>
   <div class="dash">
-    <section class={['dtile', { 'is-lit': pending.length }]} aria-labelledby="d-pending">
+    <section class={['dtile summary-tile pending-tile', { 'is-lit': pending.length }]} aria-labelledby="d-pending">
       <header><h2 id="d-pending">{m.shell_unpublished_changes({}, options)}</h2></header>
       {#if pendingStatus === 'loading'}
         <p class="line">{m.shell_pending_checking({}, options)}</p>
@@ -196,7 +200,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
 
     <section
       class={[
-        'dtile span-2',
+        'dtile summary-tile build-tile',
         {
           'is-live': build?.state === 'live',
           'is-building': build?.state === 'building',
@@ -240,7 +244,44 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
       {/if}
     </section>
 
-    <section class="dtile span-2" aria-labelledby="d-recent">
+    <!-- Absent on a one-language site, which has nothing to report. -->
+    {#if health}
+      <section class="dtile summary-tile translation-tile" aria-labelledby="d-tr">
+        <header><h2 id="d-tr">{m.dashboard_translation_health({}, options)}</h2></header>
+        <div class="locales">
+          {#each health.locales as row (row.locale)}
+            {@const where = row.where ?? []}
+            <div class="locale-line">
+              <span class={['chip', { 'chip-missing': row.missing }]}>{row.locale.toUpperCase()}</span>
+              {#if row.locale === health.defaultLocale && !row.missing && !row.stale}
+                <span class="ok">{m.dashboard_source_language({}, options)}</span>
+              {:else if !row.missing && !row.stale}
+                <span class="ok">{m.dashboard_up_to_date({}, options)}</span>
+              {:else}
+                <span
+                  >{#if row.missing}<b>{m.dashboard_missing_count({ count: row.missing }, options)}</b>{/if}{row.missing && row.stale
+                    ? ' · '
+                    : ''}{row.stale ? m.dashboard_stale_count({ count: row.stale }, options) : ''}</span
+                >
+              {/if}
+              <!-- One list is *Show*; several are named, since a list is one collection's. -->
+              {#if where.length}
+                <span class="show">
+                  {#each where as name (name)}
+                    <a href={sitePath(`/admin/c/${name}?locale=${row.locale}`)}>{where.length > 1 ? m.dashboard_show_collection({ collection: collectionName(name, uiLocale) }, options) : m.dashboard_show({}, options)}</a>
+                  {/each}
+                </span>
+              {/if}
+            </div>
+          {/each}
+        </div>
+        <p class="line">
+          {m.dashboard_stale_hint({}, options)}
+        </p>
+      </section>
+    {/if}
+
+    <section class="dtile feed-tile recent-tile" aria-labelledby="d-recent">
       <header><h2 id="d-recent">{m.dashboard_recently_edited({}, options)}</h2></header>
       {#if dashboardLoading && !dashboardKnown}
         <p class="line">{m.common_loading({}, options)}</p>
@@ -279,44 +320,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
       {/if}
     </section>
 
-    <!-- Absent on a one-language site, which has nothing to report. -->
-    {#if health}
-      <section class="dtile" aria-labelledby="d-tr">
-        <header><h2 id="d-tr">{m.dashboard_translation_health({}, options)}</h2></header>
-        <div class="locales">
-          {#each health.locales as row (row.locale)}
-            {@const where = row.where ?? []}
-            <div class="locale-line">
-              <span class={['chip', { 'chip-missing': row.missing }]}>{row.locale.toUpperCase()}</span>
-              {#if row.locale === health.defaultLocale && !row.missing && !row.stale}
-                <span class="ok">{m.dashboard_source_language({}, options)}</span>
-              {:else if !row.missing && !row.stale}
-                <span class="ok">{m.dashboard_up_to_date({}, options)}</span>
-              {:else}
-                <span
-                  >{#if row.missing}<b>{m.dashboard_missing_count({ count: row.missing }, options)}</b>{/if}{row.missing && row.stale
-                    ? ' · '
-                    : ''}{row.stale ? m.dashboard_stale_count({ count: row.stale }, options) : ''}</span
-                >
-              {/if}
-              <!-- One list is *Show*; several are named, since a list is one collection's. -->
-              {#if where.length}
-                <span class="show">
-                  {#each where as name (name)}
-                    <a href={sitePath(`/admin/c/${name}?locale=${row.locale}`)}>{where.length > 1 ? m.dashboard_show_collection({ collection: collectionName(name, uiLocale) }, options) : m.dashboard_show({}, options)}</a>
-                  {/each}
-                </span>
-              {/if}
-            </div>
-          {/each}
-        </div>
-        <p class="line">
-          {m.dashboard_stale_hint({}, options)}
-        </p>
-      </section>
-    {/if}
-
-    <section class="dtile span-2" aria-labelledby="d-act">
+    <section class="dtile feed-tile activity-tile" aria-labelledby="d-act">
       <header>
         <h2 id="d-act">{m.dashboard_recent_activity({}, options)}</h2>
         <a href={sitePath(`/admin/activity`)}>{m.dashboard_all_activity({}, options)}</a>
