@@ -46,6 +46,7 @@ export type {
   ContentSource,
   Drift,
   DriftChoice,
+  EntrySource,
   GlobalsSelection,
   I18nMark,
   LocaleLink,
@@ -61,6 +62,7 @@ export {
   draftSource,
   driftReport,
   entryAt,
+  entrySource,
   FORMAT_VERSION,
   getEntryLocales,
   globalsAt,
@@ -68,6 +70,7 @@ export {
   menusAt,
   mergeEntry,
   parseEntry,
+  provenance,
   refErrors,
   staleLocales,
   staticSource,
@@ -77,6 +80,7 @@ export {
   TRANSLATED_PROPS,
   timestampErrors,
   translatableText,
+  withSource,
 } from './content.js';
 export type { CronReport, JobDeps } from './cron.js';
 export { JOB_NAMES, runDue, runJob } from './cron.js';

@@ -62,6 +62,7 @@ Keys starting with `_` belong to Handover. Name your own fields anything else â€
 | Key | Where | Value |
 |---|---|---|
 | `_version` | top of file | The format version, currently `1`. A file without one is read as `1`; the next save writes it, and so does `handover migrate`. |
+| `_source` | top of file | The language the entry is written in, e.g. `de`: a locale code, the same in every file of the entry that carries it ([Languages](i18n.md#which-language-an-entry-is-written-in)). Never on a one-language site. |
 | `_status` | top of file | `hidden` to keep the entry off the site. Absent means live. |
 | `_machine` | top of file | Field paths whose current value was written by a translation or AI assist, e.g. `blocks[_id=k3nf9a2p].heading`. Cleared per path when a person edits the field. |
 | `_i18n` | top of file | Which locale and which version of it a translation was made from. Only in translated files. |
@@ -71,8 +72,9 @@ Keys starting with `_` belong to Handover. Name your own fields anything else â€
 | `_ref` | block | A path such as `globals/cta-newsletter` the block's content comes from. The block carries no fields of its own; `<Blocks />` fills it from that global, per language ([Site files](site-files.md#globals)). |
 | `_locales` | top of file, block, array item | The locales this exists in, e.g. `["de"]`: on a block, the files it is written to; at the top of a file, the languages the entry is offered in ([Translating](translating.md#turning-a-language-off)). Absent means all. Never empty. |
 
-Reading a file checks these: a `_status` other than `hidden`, a malformed `_id`, an empty
-`_locales` or a top-level key on a block fails with an error naming the path, such as
+Reading a file checks these: a `_status` other than `hidden`, an empty or non-text `_source`, a
+malformed `_id`, an empty `_locales` or a top-level key on a block fails with an error naming
+the path, such as
 `blocks[0]._id: expected eight characters from 0-9a-z, got "ABCDEFGH"`.
 
 ## A key your schema no longer declares

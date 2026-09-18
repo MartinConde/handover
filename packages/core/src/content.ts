@@ -869,6 +869,98 @@ const sameMark = (left: I18nMark, right: I18nMark | undefined) =>
   left.sourceHash === right.sourceHash &&
   left.translatedAt === right.translatedAt;
 
+/** The language an entry is written in, or why its files cannot say. */
+export type EntrySource =
+  | { locale: string; recorded: boolean }
+  | { problem: 'conflict' | 'undeclared' | 'missing'; marks: Record<string, string> };
+
+/** `files` is each declared language's effective data; an unmarked file agrees with a marked one. */
+export function entrySource(
+  _siteId: string,
+  i18n: Pick<I18nRouting, 'locales' | 'defaultLocale'>,
+  files: Record<string, unknown>,
+): EntrySource | undefined {
+  const present = i18n.locales.filter((locale) => files[locale] !== undefined);
+  if (i18n.locales.length < 2)
+    return present.includes(i18n.defaultLocale)
+      ? { locale: i18n.defaultLocale, recorded: false }
+      : undefined;
+  if (!present.length) return undefined;
+  const marks: Record<string, string> = {};
+  for (const locale of present) {
+    const data = files[locale];
+    if (isObject(data) && typeof data._source === 'string') marks[locale] = data._source;
+  }
+  const values = [...new Set(Object.values(marks))];
+  if (values.length > 1) return { problem: 'conflict', marks };
+  const [value] = values;
+  if (value !== undefined) {
+    if (!i18n.locales.includes(value)) return { problem: 'undeclared', marks };
+    if (!present.includes(value)) return { problem: 'missing', marks };
+    return { locale: value, recorded: true };
+  }
+  // Unrecorded: the only answer that depends on the configuration, as the baseline gave it.
+  const order = [...new Set([i18n.defaultLocale, ...i18n.locales])];
+  const locale = order.find((l) => present.includes(l));
+  return locale === undefined ? undefined : { locale, recorded: false };
+}
+
+// `ordered()` ranks every `_` key alike, so the position is pinned here.
+export function withSource(
+  _siteId: string,
+  data: unknown,
+  locale: string,
+): Record<string, unknown> {
+  const { _version, _source, ...rest } = isObject(data) ? data : {};
+  return { _version: _version ?? FORMAT_VERSION, _source: locale, ...rest };
+}
+
+// Every file's `_i18n` once `to` is the source; marks move only when `from` and `to` are in sync.
+// `blob` is `to`'s file as written, `at` the time for a mark `from` did not already have.
+export async function provenance(
+  _siteId: string,
+  form: Form,
+  files: Record<string, unknown>,
+  change: { from: string; to: string; blob: string; at: string },
+): Promise<Record<string, unknown>> {
+  const { from, to } = change;
+  const markOf = (locale: string) => {
+    const data = files[locale];
+    return completeMark(isObject(data) ? data._i18n : undefined);
+  };
+  const hashes = new Map<string, Promise<string>>();
+  const hash = (locale: string) => {
+    if (!hashes.has(locale)) hashes.set(locale, hashOf(form, files[locale]));
+    return hashes.get(locale) as Promise<string>;
+  };
+  const inSync = async (locale: string, of: string) => {
+    const mark = markOf(locale);
+    return (
+      mark?.sourceLocale === of && files[of] !== undefined && mark.sourceHash === (await hash(of))
+    );
+  };
+  const out: Record<string, unknown> = {};
+  for (const [locale, data] of Object.entries(files))
+    out[locale] = isObject(data) ? data._i18n : undefined;
+  out[to] = undefined;
+  if (files[from] === undefined || files[to] === undefined) return out;
+  const fromMarked = await inSync(from, to);
+  if (!fromMarked && !(await inSync(to, from))) return out;
+  const rebased = async (translatedAt: string): Promise<I18nMark> => ({
+    sourceLocale: to,
+    sourceBlob: change.blob,
+    sourceHash: await hash(to),
+    translatedAt,
+  });
+  for (const locale of Object.keys(files)) {
+    const own = markOf(locale)?.translatedAt;
+    if (locale !== from && locale !== to && own && (await inSync(locale, from)))
+      out[locale] = await rebased(own);
+  }
+  out[from] = await rebased((fromMarked && markOf(from)?.translatedAt) || change.at);
+  return out;
+}
+
 /** A file with no `_i18n`, no hash, or a source the entry has no file in is never stale. */
 export async function staleLocales(
   _siteId: string,

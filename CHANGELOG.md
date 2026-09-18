@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `_source` is a new reserved key at the top of a file, naming the language the entry is written
+  in. A `_source` that is empty, not text, or below the top level fails the read naming the path.
+  Nothing writes it yet; no existing file changes and the format version stays `1`.
 - Join the content form and live preview into one workspace, reduce nested field padding, and refresh the canvas toolbar, structure panel, inspector, and stage.
 
 - Redirects is laid out like the other lists: title, rule count and **Add redirect** on one

@@ -3,6 +3,7 @@ import type { ContentEntry } from './content.js';
 // Write order inside an object; everything unprefixed follows in schema order.
 export const RESERVED_KEYS = [
   '_version',
+  '_source',
   '_type',
   '_id',
   '_label',
@@ -56,6 +57,8 @@ export function checkReserved(value: unknown, path = ''): void {
     const v = obj[k];
     if (k === '_version' && (typeof v !== 'number' || !top))
       fail(k, top ? 'a number' : 'no _version below the top level');
+    if (k === '_source' && (!top || typeof v !== 'string' || !v))
+      fail(k, top ? 'a locale code' : 'no _source below the top level');
     if (k === '_status' && (v !== 'hidden' || !top))
       fail(k, top ? '"hidden" or no key' : 'no _status below the top level');
     if (k === '_machine' && (!top || !isStringArray(v)))

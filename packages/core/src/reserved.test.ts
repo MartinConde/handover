@@ -37,6 +37,9 @@ test.each([
   ['_ref: 7', '_ref'],
   ['_i18n: "en"', '_i18n'],
   ['_locales: []', '_locales'],
+  ['_source: 7', '_source'],
+  ['_source: ""', '_source'],
+  ['blocks:\n  - _id: "k3nf9a2p"\n    _source: de', 'blocks[0]._source'],
 ])('parse rejects malformed %j naming the path', (yaml, path) => {
   expect(() => parseEntry('default', yaml)).toThrow(path);
 });

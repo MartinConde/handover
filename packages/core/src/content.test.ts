@@ -7,12 +7,15 @@ import {
   draftSource,
   driftReport,
   entryAt,
+  entrySource,
   getEntryLocales,
   globalsAt,
   markTranslation,
   menusAt,
   mergeEntry,
+  offeredEntry,
   parseEntry,
+  provenance,
   refErrors,
   staleLocales,
   staticSource,
@@ -21,6 +24,8 @@ import {
   syncLocaleField,
   timestampErrors,
   translatableText,
+  withSource,
+  writtenEntry,
 } from './content.js';
 import type { Form } from './schema.js';
 import { fieldAddress } from './translate.js';
@@ -2336,3 +2341,197 @@ test.each(['en', 'de'])(
     );
   },
 );
+
+const two = { locales: ['en', 'de'], defaultLocale: 'en' };
+const three = { locales: ['en', 'de', 'fr'], defaultLocale: 'en' };
+
+test('a one-language site answers its default language and ignores marks', () => {
+  const files = { en: { _source: 'de', title: 'Home' }, de: { title: 'Start' } };
+
+  expect(entrySource('default', { locales: ['en'], defaultLocale: 'en' }, files)).toEqual({
+    locale: 'en',
+    recorded: false,
+  });
+});
+
+test('an entry with no file has no source', () => {
+  expect(entrySource('default', two, { en: undefined })).toBeUndefined();
+});
+
+test('two files claiming different sources is a conflict', () => {
+  const files = { en: { _source: 'en' }, de: { _source: 'de' }, fr: { title: 'Accueil' } };
+
+  expect(entrySource('default', three, files)).toEqual({
+    problem: 'conflict',
+    marks: { en: 'en', de: 'de' },
+  });
+});
+
+test('a source the site does not declare is refused', () => {
+  const files = { en: { _source: 'it' }, de: { _source: 'it' } };
+
+  expect(entrySource('default', two, files)).toEqual({
+    problem: 'undeclared',
+    marks: { en: 'it', de: 'it' },
+  });
+});
+
+test('a source with no file of its own is refused', () => {
+  expect(entrySource('default', three, { en: { _source: 'de' } })).toEqual({
+    problem: 'missing',
+    marks: { en: 'de' },
+  });
+});
+
+test('a recorded source is the answer', () => {
+  const files = { en: { _source: 'de' }, de: { _source: 'de' } };
+
+  expect(entrySource('default', two, files)).toEqual({ locale: 'de', recorded: true });
+});
+
+test('an unmarked file beside a marked one agrees with it', () => {
+  const files = { en: { title: 'Notice' }, de: { _source: 'de' }, fr: { title: 'Avis' } };
+
+  expect(entrySource('default', three, files)).toEqual({ locale: 'de', recorded: true });
+});
+
+test('an unrecorded entry with one file is written in that language', () => {
+  expect(entrySource('default', three, { de: { title: 'Impressum' } })).toEqual({
+    locale: 'de',
+    recorded: false,
+  });
+});
+
+test('an unrecorded entry with several files falls back to the default language first', () => {
+  const files = { fr: { title: 'Avis' }, de: { title: 'Hinweis' }, en: { title: 'Notice' } };
+
+  expect(entrySource('default', three, files)).toEqual({ locale: 'en', recorded: false });
+  expect(entrySource('default', three, { fr: files.fr, de: files.de })).toEqual({
+    locale: 'de',
+    recorded: false,
+  });
+});
+
+test('a recorded German source survives reordered locales and a new default language', () => {
+  const files = { en: { _source: 'de' }, de: { _source: 'de' }, fr: {} };
+  const moved = { locales: ['fr', 'en', 'de'], defaultLocale: 'fr' };
+
+  expect(entrySource('default', moved, files)).toEqual({ locale: 'de', recorded: true });
+});
+
+test('undeclared folders take no part in the answer', () => {
+  const files = { en: { title: 'Notice' }, it: { _source: 'it' } };
+
+  expect(entrySource('default', two, files)).toEqual({ locale: 'en', recorded: false });
+});
+
+const sourceGolden = readFileSync(join(goldenDir, 'source-marked.yaml'), 'utf8');
+
+test('withSource puts the key right after `_version`, and a write keeps it there', () => {
+  const marked = withSource(
+    'default',
+    { _i18n: { sourceLocale: 'de' }, title: 'Notice', _version: 1 },
+    'de',
+  );
+
+  expect(Object.keys(marked)).toEqual(['_version', '_source', '_i18n', 'title']);
+  expect(Object.keys(writtenEntry('default', marked, listing.fields))).toEqual([
+    '_version',
+    '_source',
+    '_i18n',
+    'title',
+  ]);
+});
+
+test('withSource writes the source-marked golden byte for byte', () => {
+  const { _source, ...unmarked } = parseEntry('default', sourceGolden) as Record<string, unknown>;
+
+  expect(stringifyEntry('default', withSource('default', unmarked, 'de'))).toBe(sourceGolden);
+});
+
+test('a save, a sibling sync, a change of offer and a plain write keep a file its `_source`', () => {
+  const de = { _version: 1, _source: 'de', title: 'Mühlenhaus' };
+  const en = { _version: 1, _source: 'de', title: 'Mill House', price: 1 };
+
+  expect(mergeEntry('default', de, { title: 'Die Mühle' }, listing)._source).toBe('de');
+  expect(syncLocale('default', listing, 'en', { before: de, after: de }, en)._source).toBe('de');
+  const offer = { offered: ['de'], locales: ['en', 'de'] };
+  expect(offeredEntry('default', de, offer)._source).toBe('de');
+  expect(writtenEntry('default', de, listing.fields)._source).toBe('de');
+});
+
+// Marks made by the real markTranslation, so every hash here is one the CMS would write.
+const markedFrom = async (source: [string, unknown], data: unknown) =>
+  parseEntry(
+    'default',
+    await markTranslation(
+      'default',
+      listing,
+      { locale: source[0], contents: stringifyEntry('default', source[1]), blob_sha: 'old' },
+      stringifyEntry('default', data),
+      undefined,
+    ),
+  ) as Record<string, unknown>;
+const markOf = (data: unknown) => (data as { _i18n?: Record<string, string> })._i18n;
+const change = { blob: 'b10b'.repeat(10), at: '2026-09-18T12:00:00.000Z' };
+
+test('promoting a translation in sync rebases the old source and the translations in sync', async () => {
+  const en = { title: 'Mill House', summary: 'A mill.' };
+  const de = await markedFrom(['en', en], { title: 'Mühlenhaus', summary: 'Eine Mühle.' });
+  const fr = await markedFrom(['en', en], { title: 'Moulin', summary: 'Un moulin.' });
+  const it = await markedFrom(['en', { ...en, summary: 'Old.' }], { title: 'Mulino' });
+  const deHash = markOf(await markedFrom(['de', de], {}))?.sourceHash;
+
+  const marks = await provenance(
+    'default',
+    listing,
+    { en, de, fr, it },
+    { from: 'en', to: 'de', ...change },
+  );
+
+  const rebased = { sourceLocale: 'de', sourceBlob: change.blob, sourceHash: deHash };
+  expect(marks).toEqual({
+    en: { ...rebased, translatedAt: change.at },
+    de: undefined,
+    fr: { ...rebased, translatedAt: markOf(fr)?.translatedAt },
+    it: markOf(it),
+  });
+});
+
+test('promoting a translation that is behind or unmarked rebases nothing', async () => {
+  const en = { title: 'Mill House', summary: 'A mill.' };
+  const behind = await markedFrom(['en', { title: 'Mill' }], { title: 'Mühlenhaus' });
+  const fr = await markedFrom(['en', en], { title: 'Moulin' });
+
+  for (const de of [behind, { title: 'Mühlenhaus' }]) {
+    const marks = await provenance(
+      'default',
+      listing,
+      { en, de, fr },
+      { from: 'en', to: 'de', ...change },
+    );
+
+    expect(marks).toEqual({ en: undefined, de: undefined, fr: markOf(fr) });
+  }
+});
+
+test('a translation made from a language in sync with the source is rebased onto the source', async () => {
+  const en = { title: 'Mill House', summary: 'A mill.' };
+  const de = await markedFrom(['en', en], { title: 'Mühlenhaus', summary: 'Eine Mühle.' });
+  const fr = await markedFrom(['de', de], { title: 'Moulin', summary: 'Un moulin.' });
+  const enHash = markOf(de)?.sourceHash;
+
+  const marks = await provenance(
+    'default',
+    listing,
+    { en, de, fr },
+    { from: 'de', to: 'en', ...change },
+  );
+
+  const rebased = { sourceLocale: 'en', sourceBlob: change.blob, sourceHash: enHash };
+  expect(marks).toEqual({
+    en: undefined,
+    de: { ...rebased, translatedAt: markOf(de)?.translatedAt },
+    fr: { ...rebased, translatedAt: markOf(fr)?.translatedAt },
+  });
+});
