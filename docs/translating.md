@@ -65,9 +65,9 @@ keeps the dialog open with the reason (*publish en first, or Delete the entry*).
 
 **The last language an entry has a published file in cannot be turned off**: that is deleting the
 entry, and Delete asks where its readers should go for all of it at once. A language whose file is
-only a draft is not one the entry has yet — publish it first. The language the entry is written in
-can go while another still has a file: what is left becomes the language it is written in, and an
-`_i18n` naming the one that went is dropped with it.
+only a draft is not one the entry has yet — publish it first. **Nor can the language the entry
+is written in**: the CMS refuses before writing anything. A translation made from a language
+that goes keeps its `_i18n` and reads stale until somebody translates it again from the source.
 
 A hand edit or a bad merge can leave the key disagreeing with the files. **The files win** — a
 language with a file is offered in it whatever the key says — and the entry says so above its

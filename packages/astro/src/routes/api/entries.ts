@@ -198,7 +198,7 @@ export async function getEntry(
     offerProblems: offer.problems,
     drift: driftReport('default', form, languages),
     // A warning next to the language, never a reason to refuse anything.
-    stale: await staleLocales('default', form, languages),
+    stale: await staleLocales('default', form, languages, source),
     // With nothing configured the Translate buttons are not drawn.
     translator: (await translator(ctx)) !== undefined,
     // The languages the repository has a file for; the rest only the preview can show.
@@ -676,21 +676,7 @@ export async function offering(
       return contents || file ? [[locale, parseEntry('default', contents ?? '') ?? {}]] : [];
     }),
   );
-  let resolved = entrySource('default', config.i18n, effective);
-  // The source going, what stays is asked afresh as before `_source`, or its mark names no file.
-  if (resolved && 'locale' in resolved && going.includes(resolved.locale))
-    resolved = entrySource(
-      'default',
-      config.i18n,
-      Object.fromEntries(
-        Object.entries(effective)
-          .filter(([locale]) => !going.includes(locale))
-          .map(([locale, data]) => {
-            const { _source, ...rest } = data as Record<string, unknown>;
-            return [locale, rest];
-          }),
-      ),
-    );
+  const resolved = entrySource('default', config.i18n, effective);
   // A change to the set of files is when an inferred source must be frozen into the ones kept.
   const stamp =
     resolved && 'locale' in resolved && (going.length || resolved.recorded)
@@ -714,6 +700,16 @@ export async function offering(
             error: `Turning ${going.join(', ')} off would leave this entry with no file in any language: Delete the entry instead, which asks where its readers should go`,
             locales: going,
           },
+      { status: 409 },
+    );
+  // Only a deliberate change of source may leave the entry without the language it is written in.
+  if (resolved && 'locale' in resolved && going.includes(resolved.locale))
+    return Response.json(
+      {
+        code: 'ENTRY_LOCALE_IS_SOURCE',
+        error: `${resolved.locale} is the language this entry is written in, so it cannot be turned off`,
+        locale: resolved.locale,
+      },
       { status: 409 },
     );
   const pathsOf = (locales: string[]) => locales.map((l) => entryPath(collection, slug, l));
@@ -772,7 +768,7 @@ export async function offering(
     }
     const result = { commit_sha };
     await markOperationCommitted('default', database, operation.id, commit_sha, result);
-    const offer = { offered, locales: config.i18n.locales, gone: going, source: stamp };
+    const offer = { offered, locales: config.i18n.locales, source: stamp };
     try {
       for (const { locale, path, file } of files) {
         if (!going.includes(locale)) continue;
@@ -1368,7 +1364,7 @@ async function startedFrom(
   const data = built ?? (file && parseEntry('default', file.contents));
   if (data === undefined) return undefined;
   const values = regenerateIds('default', data) as Record<string, unknown>;
-  for (const key of ['_i18n', '_locales', '_status', 'slug']) delete values[key];
+  for (const key of ['_i18n', '_locales', '_source', '_status', 'slug']) delete values[key];
   return values;
 }
 
@@ -1416,7 +1412,8 @@ export async function saveTemplate(
   )
     return Response.json({ name });
   const values = withoutIds(parseEntry('default', from.file.contents)) as Record<string, unknown>;
-  for (const key of ['_i18n', '_locales', '_status', '_machine', 'slug']) delete values[key];
+  for (const key of ['_i18n', '_locales', '_source', '_status', '_machine', 'slug'])
+    delete values[key];
   const baseSha = existing?.baseSha ?? (await git.getHead());
   const path = templatePath(collection, name);
   const operation =

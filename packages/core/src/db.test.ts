@@ -1170,10 +1170,15 @@ const bilingual = () =>
     [PAGE_DE]: page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?'),
   });
 const stale = (repo: ReturnType<typeof bilingual>) =>
-  staleLocales('default', PAGE_FORM, {
-    en: parseEntry('default', repo.read(PAGE_EN)),
-    de: parseEntry('default', repo.read(PAGE_DE)),
-  });
+  staleLocales(
+    'default',
+    PAGE_FORM,
+    {
+      en: parseEntry('default', repo.read(PAGE_EN)),
+      de: parseEntry('default', repo.read(PAGE_DE)),
+    },
+    'en',
+  );
 
 test('publishing a translation marks it with the source language as the commit leaves it', async () => {
   const db = await fresh();
@@ -1407,7 +1412,7 @@ test('a file rewritten by a commit carries the mark into the draft somebody had 
     db,
     PAGE_EN,
     committed,
-    { offered: ['en'], locales: ['en', 'de'], gone: ['de'] },
+    { offered: ['en'], locales: ['en', 'de'] },
     'commit-Z',
   );
 
@@ -2094,7 +2099,7 @@ test('reverting recomputes redirects.yaml rather than restoring it', async () =>
 // A restore that touched git alone would leave the open draft saying German is off.
 const MILL_DE = 'src/content/listings/de/mill-house.yaml';
 const MILL_DE_FILE = '_version: 1\ntitle: "Die Muehle"\nprice: "950 GBP pro Woche"\nrooms: 3\n';
-const OFFER = { offered: ['en'], locales: ['en', 'de'], gone: ['de'] };
+const OFFER = { offered: ['en'], locales: ['en', 'de'] };
 const withoutGerman = (contents: string) =>
   stringifyEntry('default', offeredEntry('default', parseEntry('default', contents), OFFER));
 

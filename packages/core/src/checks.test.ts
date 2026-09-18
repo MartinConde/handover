@@ -369,6 +369,19 @@ test('a translation going out on its own is still measured against the language 
   expect(results.map((r) => r.check)).toContain('translation-stale');
 });
 
+test('a translation made from a language that is not the source says which language it now needs', async () => {
+  const results = await run([
+    entryOf('listings/mill-house', {
+      en: title,
+      de: 'title: "Das Mühlenhaus"\n_i18n:\n  sourceLocale: "fr"\n  sourceBlob: "0000"\n  sourceHash: "0000"\n  translatedAt: "2026-08-01T10:00:00.000Z"\n',
+    }),
+  ]);
+  const found = results.find((r) => r.check === 'translation-stale');
+  expect(found?.message).toBe(
+    'This translation was made from the FR file, and the entry is now written in EN — translate it again from EN',
+  );
+});
+
 test('a value a machine filled in and nobody has read is a note at that value’s own address', async () => {
   const results = await run([
     entryOf(

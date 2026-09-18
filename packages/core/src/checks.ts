@@ -1,7 +1,7 @@
 // Warnings and notes, never a refusal: only the schema and unresolved drift stop a publish.
 
 import { and, desc, eq, gt, inArray } from 'drizzle-orm';
-import { isObject, parseEntry, staleLocales } from './content.js';
+import { entrySource, isObject, parseEntry, staleLocales } from './content.js';
 import type { Db } from './db.js';
 import { type ContentIndex, entryParts, type IndexEntry } from './entries.js';
 import type { GitClient } from './git.js';
@@ -88,17 +88,11 @@ export async function runChecks(
     const collection = entry.key.slice(0, entry.key.indexOf('/'));
     // `globals` is not a collection, and the miss is right: a global has no route or title field.
     const of = input.site.collections[collection] ?? {};
+    // Every language, not only those going out: which one is the source depends on all of them.
     const parsed: Record<string, unknown> = {};
-    for (const locale of entry.publishing) {
-      const file = entry.files[locale];
-      if (file) parsed[locale] = parseEntry(siteId, file.contents);
-    }
-    // A language not going out is parsed only as the source of one that is.
-    for (const data of Object.values(parsed)) {
-      const mark = isObject(data) && isObject(data._i18n) ? data._i18n.sourceLocale : undefined;
-      const from = typeof mark === 'string' && !(mark in parsed) ? entry.files[mark] : undefined;
-      if (from && typeof mark === 'string') parsed[mark] = parseEntry(siteId, from.contents);
-    }
+    for (const [locale, file] of Object.entries(entry.files))
+      parsed[locale] = parseEntry(siteId, file.contents);
+    const source = entrySource(siteId, input.site.i18n, parsed);
     for (const locale of entry.publishing) {
       const file = entry.files[locale];
       if (!file) continue;
@@ -126,15 +120,21 @@ export async function runChecks(
             'Filled in by machine translation and not read by anybody since — it goes to the site as it stands',
           );
     }
-    for (const locale of await staleLocales(siteId, entry.form, parsed)) {
+    const written = source && 'locale' in source ? source.locale : undefined;
+    const stale = written ? await staleLocales(siteId, entry.form, parsed, written) : [];
+    for (const locale of stale) {
       const file = entry.files[locale];
       if (!file || !entry.publishing.includes(locale)) continue;
+      const from = markedFrom(parsed[locale]);
       found.push({
         check: 'translation-stale',
         path: file.path,
         fieldPath: '',
         severity: CHECKS['translation-stale'],
-        message: `This translation was made from an older version of the ${sourceOf(parsed[locale])} — somebody has changed the words it was translated from since`,
+        message:
+          from === written
+            ? `This translation was made from an older version of the ${from.toUpperCase()} file — somebody has changed the words it was translated from since`
+            : `This translation was made from the ${from.toUpperCase()} file, and the entry is now written in ${written?.toUpperCase()} — translate it again from ${written?.toUpperCase()}`,
       });
     }
   }
@@ -222,12 +222,9 @@ export async function lastHiddenLong(
   return [];
 }
 
-const sourceOf = (data: unknown) => {
-  const mark = isObject(data) && isObject(data._i18n) ? data._i18n : {};
-  return typeof mark.sourceLocale === 'string'
-    ? `${mark.sourceLocale.toUpperCase()} file`
-    : 'source language';
-};
+// Only a complete mark is ever stale, so there is always a language to name.
+const markedFrom = (data: unknown) =>
+  String(isObject(data) && isObject(data._i18n) ? data._i18n.sourceLocale : '');
 
 interface Walk {
   siteId: string;

@@ -1138,6 +1138,7 @@
   "editor_or": "Or",
   "editor_no_file_written": "— no file is written for it.",
   "translation_source_changed": "{source} changed since this was translated",
+  "translation_other_source": "Translated from {language} — the source is now {source}",
   "translation_fill_empty": "Translate what’s empty",
   "translation_retry": "Retry translation",
   "translation_turn_off": "Turn {language} off",

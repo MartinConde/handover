@@ -485,7 +485,6 @@ export async function deleteLocales(
         offeredEntry(siteId, parseEntry(siteId, contents), {
           offered,
           locales: loc.i18n.locales,
-          gone: going,
           source: deps.source,
         }),
       ),

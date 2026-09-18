@@ -18,9 +18,9 @@ import {
 } from '@handover/core';
 import { formSchema } from '../../index.js';
 import {
-  entryLocales,
   entryPath,
   entryPaths,
+  entrySourceFor,
   entrySubject,
   formFor,
   heldByAnother,
@@ -74,11 +74,15 @@ export async function translatedFromView(
   locale: string,
 ): Promise<Response> {
   if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
-  const loaded = await entryLocales(ctx, collection, slug, config.i18n.locales);
+  const { loaded, source } = await entrySourceFor(ctx, collection, slug);
   const mark = (loaded[locale]?.data as { _i18n?: Partial<I18nMark> } | undefined)?._i18n;
   const from = typeof mark?.sourceLocale === 'string' ? mark.sourceLocale : undefined;
   const blob = typeof mark?.sourceBlob === 'string' ? mark.sourceBlob : undefined;
-  if (!from || !blob || from === locale || !(from in loaded)) return Response.json({ changed: {} });
+  // Decoration, never a refusal: an entry that cannot say its source just draws no marker.
+  if (!from || !blob || from === locale || !source || 'problem' in source)
+    return Response.json({ changed: {} });
+  // Made from a language that is not the source, so there is nothing of the source's to diff.
+  if (from !== source.locale) return Response.json({ from, otherSource: true, changed: {} });
   const was = await ctx.git().getBlob(blob);
   if (was === undefined) return Response.json({ changed: {} });
   return Response.json({

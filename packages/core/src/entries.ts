@@ -1,4 +1,5 @@
-import { parseEntry, staleLocales } from './content.js';
+import { entrySource, parseEntry, staleLocales } from './content.js';
+import type { I18nRouting } from './names.js';
 import type { Form } from './schema.js';
 
 export interface EntryLocale {
@@ -127,6 +128,7 @@ export function indexFrom(
 /** Taken once over the whole repository, so the dashboard need not read git per tile. */
 export async function staleFrom(
   siteId: string,
+  i18n: Pick<I18nRouting, 'locales' | 'defaultLocale'>,
   files: Iterable<ContentFile>,
   formFor: (collection: string, name: string) => Form | undefined,
 ): Promise<Record<string, string[]>> {
@@ -144,7 +146,10 @@ export async function staleFrom(
     const [collection = '', name = ''] = key.split('/');
     const form = formFor(collection, name);
     if (!form) continue;
-    const behind = await staleLocales(siteId, form, languages);
+    const source = entrySource(siteId, i18n, languages);
+    // An entry whose files disagree has no source to be behind; the admin says so instead.
+    if (!source || 'problem' in source) continue;
+    const behind = await staleLocales(siteId, form, languages, source.locale);
     if (behind.length) stale[key] = behind;
   }
   return stale;

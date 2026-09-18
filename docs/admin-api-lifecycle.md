@@ -37,7 +37,7 @@ Copies every locale file of the entry under a new name, as drafts — nothing is
 the copy can be abandoned the way a new entry can. Every `_id` is regenerated with one map
 shared across the languages, so the copy is still one entry with a matching skeleton; the
 staleness marks are dropped and the copy is written `_status: "hidden"`, so it cannot go live
-by accident. The address stays with the original, and the copy answers at its own filename.
+by accident. Each file keeps its `_source`, so the copy is written in the same language. The address stays with the original, and the copy answers at its own filename.
 
 `to` is optional and defaults to `<slug>-copy`; it goes through the same derivation as a new
 entry's title, so `slug` in the answer is the name that was actually used. `drafts: true` copies
@@ -50,8 +50,9 @@ POST /admin/api/entries/:collection/:slug/template   { "to": "…" }  →  { "na
 
 Writes the entry as one of the collection's [starters](site-files.md#templates) —
 `src/content/_templates/:collection/<name>.yaml`, committed at once. The file is the entry's
-own in the language it was written in, without its `_id`s, `_i18n`, `_locales`, `_status` and
-`slug`. `to` is optional and defaults to the entry's filename; it goes through the same
+own in the language it was written in, without its `_id`s, `_i18n`, `_locales`, `_source`,
+`_status` and `slug`. An entry made from a template records its own `_source`, never one the
+template carries. `to` is optional and defaults to the entry's filename; it goes through the same
 derivation as a new entry's title against the starters the collection already has, so `name`
 in the answer is the one actually written. The template is offered by the New entry dialog from
 then on, ahead of the build that reads it from the repository. Owners only: `403` for an editor,
@@ -69,14 +70,16 @@ Leaving out a language that **has** a file deletes that file, so this one commit
 of the editor drafts: one commit removes it, writes the mark into the files that stay and appends
 the redirect its URL owes, to where `redirect` says — the same four shapes a hide takes, resolved
 per language the same way. Without a `redirect` its readers go to the collection's `index` under
-that language's own segment, and nowhere when the collection has none. An `_i18n` naming a language that went is dropped from the
-files that carry it, and unpublished changes to a language that goes are dropped with its file.
+that language's own segment, and nowhere when the collection has none. An `_i18n` naming a
+language that went stays in the files that carry it and reads stale, and unpublished changes to
+a language that goes are dropped with its file.
 A language whose file is only a draft is not in the repository, so it makes no commit and no
 redirect: the draft is thrown away and the mark is drafted like any other.
 
 `409` when the entry would be left with no published file — that is deleting the entry, which is
 what `DELETE` is for, and a language whose file is only a draft does not stand in for one that is
-published; `404` when the entry has no file at all.
+published; `409 ENTRY_LOCALE_IS_SOURCE`, with the `locale`, when the language the entry is
+written in is left out, before anything is written; `404` when the entry has no file at all.
 
 ```
 POST /admin/api/status/:collection   { "entries": ["mill-house"], "hidden": true, "redirect": { "kind": "index" } }  →  {}

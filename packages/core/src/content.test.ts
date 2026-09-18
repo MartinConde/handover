@@ -1585,7 +1585,7 @@ test('the source language moving on makes the translation stale', async () => {
     en: parseEntry('default', moved),
     de: parseEntry('default', de),
   };
-  expect(await staleLocales('default', millHouse, files)).toEqual(['de']);
+  expect(await staleLocales('default', millHouse, files, 'en')).toEqual(['de']);
 });
 
 test('a shared value, a hidden one and a requoted file leave the translation current', async () => {
@@ -1598,7 +1598,7 @@ test('a shared value, a hidden one and a requoted file leave the translation cur
     notes: 'Completion moved to October.',
   };
 
-  expect(await staleLocales('default', millHouse, { en: same, de })).toEqual([]);
+  expect(await staleLocales('default', millHouse, { en: same, de }, 'en')).toEqual([]);
 });
 
 test('a file nobody has marked is not stale', async () => {
@@ -1607,7 +1607,7 @@ test('a file nobody has marked is not stale', async () => {
     de: parseEntry('default', localeFile('de')),
   };
 
-  expect(await staleLocales('default', millHouse, files)).toEqual([]);
+  expect(await staleLocales('default', millHouse, files, 'en')).toEqual([]);
 });
 
 test('a block moved in the source language is not something to retranslate', async () => {
@@ -1622,7 +1622,7 @@ test('a block moved in the source language is not something to retranslate', asy
   const [hero, cta] = en.blocks as Record<string, unknown>[];
 
   const files = { en: { ...en, blocks: [cta, hero] }, de: parseEntry('default', de) };
-  expect(await staleLocales('default', page, files)).toEqual([]);
+  expect(await staleLocales('default', page, files, 'en')).toEqual([]);
 });
 
 // A structural or shared-value edit rewrites the German file without anybody translating it.
@@ -1646,10 +1646,15 @@ test('a translation somebody typed into is marked with the source language as it
 
   expect(marks(marked).sourceHash).not.toBe(marks(was).sourceHash);
   expect(
-    await staleLocales('default', millHouse, {
-      en: parseEntry('default', en),
-      de: parseEntry('default', marked),
-    }),
+    await staleLocales(
+      'default',
+      millHouse,
+      {
+        en: parseEntry('default', en),
+        de: parseEntry('default', marked),
+      },
+      'en',
+    ),
   ).toEqual([]);
 });
 
@@ -1691,8 +1696,52 @@ test('a mark that says nothing about the values is not a claim to be stale', asy
   };
 
   expect(
-    await staleLocales('default', millHouse, { en: parseEntry('default', localeFile('en')), de }),
+    await staleLocales(
+      'default',
+      millHouse,
+      { en: parseEntry('default', localeFile('en')), de },
+      'en',
+    ),
   ).toEqual([]);
+});
+
+// Made from French while the entry is written in English: nothing says it matches the English.
+const fromFrench = (fr: string) =>
+  markTranslation(
+    'default',
+    millHouse,
+    { locale: 'fr', contents: fr, blob_sha: 'f7e6d5c4'.repeat(5) },
+    localeFile('de'),
+    undefined,
+  );
+
+test('a translation made from a language other than the source is stale, however current', async () => {
+  const fr = localeFile('en');
+  const de = parseEntry('default', await fromFrench(fr));
+
+  const files = { en: parseEntry('default', localeFile('en')), fr: parseEntry('default', fr), de };
+  expect(await staleLocales('default', millHouse, files, 'en')).toEqual(['de']);
+});
+
+test('a translation made from a language that has since gone still reads stale', async () => {
+  const de = parseEntry('default', await fromFrench(localeFile('en')));
+
+  expect(
+    await staleLocales(
+      'default',
+      millHouse,
+      { en: parseEntry('default', localeFile('en')), de },
+      'en',
+    ),
+  ).toEqual(['de']);
+});
+
+test('the source keeps the mark it was once translated with and is never stale', async () => {
+  const de = await translate(localeFile('en'), localeFile('de'));
+  const moved = localeFile('en').replace('Mill House', 'The Mill House');
+
+  const files = { en: parseEntry('default', moved), de: parseEntry('default', de) };
+  expect(await staleLocales('default', millHouse, files, 'de')).toEqual([]);
 });
 
 // A field with no editor in the second column is not filled, or nobody can take the badge off.

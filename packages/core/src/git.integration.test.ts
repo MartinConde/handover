@@ -251,10 +251,15 @@ test.skipIf(!configured)(
       path === de ? { locale: 'en', path: en, form: TRANSLATED } : undefined;
     // Both files as one commit has them: a moving branch read twice is two repositories.
     const stale = async (at: string) =>
-      staleLocales('default', TRANSLATED, {
-        en: parseEntry('default', (await git.getFile(en, at))?.contents ?? ''),
-        de: parseEntry('default', (await git.getFile(de, at))?.contents ?? ''),
-      });
+      staleLocales(
+        'default',
+        TRANSLATED,
+        {
+          en: parseEntry('default', (await git.getFile(en, at))?.contents ?? ''),
+          de: parseEntry('default', (await git.getFile(de, at))?.contents ?? ''),
+        },
+        'en',
+      );
     const seeded = await git.publish(
       [
         {

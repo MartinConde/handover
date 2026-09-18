@@ -19,6 +19,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   reorder `locales` or change `defaultLocale`, or those entries switch source. One commit; open
   drafts are kept. Settings → About shows the same count. New routes `GET`/`POST
   /admin/api/sources`, new activity kind `sources-recorded`.
+- A translation whose `_i18n` names a language other than the one the entry is written in now
+  reads stale, and side by side says *Translated from French — the source is now English*.
+  **Upgrade note:** a translation made from another translation (German from French on an
+  English entry) reads stale from this version on until it is translated again from the source;
+  recording source languages settles those it can and gives the count first. Turning a language
+  off keeps the `_i18n` that names it, and turning off the language an entry is written in is
+  refused with `409 ENTRY_LOCALE_IS_SOURCE`. Restoring a version keeps the entry's `_source`,
+  undoing a turn-off puts back the one it had, and templates never carry one.
 - Join the content form and live preview into one workspace, reduce nested field padding, and refresh the canvas toolbar, structure panel, inspector, and stage.
 
 - Redirects is laid out like the other lists: title, rule count and **Add redirect** on one

@@ -59,6 +59,16 @@ file requoted all leave the hash where it was — none is anything to retranslat
 or a block added changes it. It is only ever a warning: a stale translation publishes, builds and
 serves like any other file, and the mark stays until somebody translates it again.
 
+A mark has to name the language the entry is [written in](i18n.md#which-language-an-entry-is-written-in).
+One that names another language is stale however current it is against that language, because
+nothing says it matches the source: a German translation made from French reads stale in an
+entry written in English. Turning French off leaves that mark in place, so it goes on reading
+stale rather than vanishing. Side by side there is nothing to compare field by field, and the
+column's header says *Translated from French — the source is now English* instead. After an
+upgrade this is how a translation made from another translation first appears;
+[recording source languages](i18n.md#recording-the-source-of-existing-entries) settles those it can and tells
+you beforehand how many will read stale.
+
 Side by side, each field the source has moved on from carries an amber marker of its own. Opening
 one shows that field's source as it read when somebody translated it and as it reads now, with the
 words that went and the words that arrived marked; **Re-translate** runs the provider for that one

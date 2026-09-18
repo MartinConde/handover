@@ -1144,6 +1144,7 @@
   "editor_or": "Oder",
   "editor_no_file_written": "— dafür wird keine Datei geschrieben.",
   "translation_source_changed": "{source} wurde seit dieser Übersetzung geändert",
+  "translation_other_source": "Aus {language} übersetzt — die Ausgangssprache ist jetzt {source}",
   "translation_fill_empty": "Leere Felder übersetzen",
   "translation_retry": "Übersetzung erneut versuchen",
   "translation_turn_off": "{language} deaktivieren",

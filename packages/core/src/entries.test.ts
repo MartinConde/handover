@@ -287,6 +287,7 @@ test('a translation made from a source that has moved on since is stale at build
   expect(
     await staleFrom(
       'default',
+      { locales: ['en', 'de'], defaultLocale: 'en' },
       [
         listing('en', 'mill-house', 'title: "The Mill House"\n'),
         { path: 'src/content/listings/de/mill-house.yaml', contents: de },
@@ -302,8 +303,48 @@ test('an entry whose source has not moved is not in the map at all', async () =>
   expect(
     await staleFrom(
       'default',
+      { locales: ['en', 'de'], defaultLocale: 'en' },
       [
         listing('en', 'mill-house', 'title: "Mill House"\n'),
+        { path: 'src/content/listings/de/mill-house.yaml', contents: de },
+      ],
+      () => title,
+    ),
+  ).toEqual({});
+});
+
+test('a German-written entry is judged against German, not the default language', async () => {
+  // German once translated from English: that old mark is the source's own and never stale.
+  const de = (await translated('Mill House', 'Mühlenhaus')).replace(
+    '_version: 1',
+    '_version: 1\n_source: de',
+  );
+
+  expect(
+    await staleFrom(
+      'default',
+      { locales: ['en', 'de'], defaultLocale: 'en' },
+      [
+        listing('en', 'mill-house', 'title: "The Mill House"\n'),
+        { path: 'src/content/listings/de/mill-house.yaml', contents: de },
+      ],
+      () => title,
+    ),
+  ).toEqual({});
+});
+
+test('an entry whose files disagree about their source is left out', async () => {
+  const de = (await translated('Mill House', 'Mühlenhaus')).replace(
+    '_version: 1',
+    '_version: 1\n_source: de',
+  );
+
+  expect(
+    await staleFrom(
+      'default',
+      { locales: ['en', 'de'], defaultLocale: 'en' },
+      [
+        listing('en', 'mill-house', '_source: en\ntitle: "The Mill House"\n'),
         { path: 'src/content/listings/de/mill-house.yaml', contents: de },
       ],
       () => title,
@@ -318,6 +359,7 @@ test('a file that is not an entry, and a collection with no form, are left alone
   expect(
     await staleFrom(
       'default',
+      { locales: ['en', 'de'], defaultLocale: 'en' },
       [
         file('src/content/redirects.yaml', 'rules: []\n'),
         file('src/content/_templates/listings/blank.yaml', 'title: ""\n'),

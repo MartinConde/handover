@@ -422,8 +422,10 @@ vi.mock('virtual:handover/index', () => ({
     pages: [
       {
         name: 'landing',
+        // A hand-made starter may name a language; the entry made from it records its own.
         data: {
           _version: 1,
+          _source: 'de',
           title: 'New page',
           blocks: [{ _type: 'hero', heading: 'Move to the coast' }],
         },
@@ -2564,6 +2566,15 @@ test('creating from a template fills the entry from it and gives its blocks ids'
   expect(values._version).toBe(1);
 });
 
+test('a template that names a language gives a one-language entry none', async () => {
+  createDraft.mockClear();
+  await POST(
+    post('entries/pages', JSON.stringify({ title: 'Move to Devon', template: 'landing' })),
+  );
+
+  expect(createDraft.mock.calls[0]?.[4]).not.toHaveProperty('_source');
+});
+
 test('creating from a template no collection declares is 404', async () => {
   createDraft.mockClear();
   const res = await POST(
@@ -3829,27 +3840,6 @@ test('a collection with no index writes no redirect for the language that went',
     'src/content/pages/de/home.yaml',
     'src/content/pages/en/home.yaml',
   ]);
-});
-
-// The language a translation was made from can be the one that goes.
-test('turning off the language a translation was made from drops the mark that named it', async () => {
-  locales = ['en', 'de'];
-  files['src/content/pages/en/home.yaml'] = home.en;
-  files['src/content/pages/de/home.yaml'] = home.en
-    .replace(
-      '_version: 1',
-      '_version: 1\n_i18n:\n  sourceLocale: "en"\n  sourceHash: "8a41c0b2e9d7f350"',
-    )
-    .replace('Home', 'Startseite');
-  publish.mockClear();
-
-  const res = await POST(post('entries/pages/home/locales', JSON.stringify({ locales: ['de'] })));
-
-  expect(res.status).toBe(200);
-  const [written] = (publish.mock.calls[0] ?? []) as unknown as [PublishFile[]];
-  const german = written.find((f) => f.path === 'src/content/pages/de/home.yaml')?.contents ?? '';
-  expect(german).toContain('_locales:\n  - "de"');
-  expect(german).not.toContain('_i18n');
 });
 
 // Nothing of that language is in the repository.

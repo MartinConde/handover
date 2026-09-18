@@ -470,23 +470,16 @@ export function writtenEntry(
   return { _version: FORMAT_VERSION, ...ordered(fields, (entry ?? {}) as Record<string, unknown>) };
 }
 
-/** An `_i18n` mark against a language that has gone is dropped: nobody could ever clear it. */
+/** An `_i18n` mark against a language that has gone stays, and reads stale until retranslated. */
 export function offeredEntry(
   siteId: string,
   entry: unknown,
-  offer: { offered: string[]; locales: string[]; gone?: string[]; source?: string },
+  offer: { offered: string[]; locales: string[]; source?: string },
 ): Record<string, unknown> {
   const written = writtenEntry(siteId, entry);
   const kept = offer.locales.filter((locale) => offer.offered.includes(locale));
   if (kept.length === offer.locales.length) delete written._locales;
   else written._locales = kept;
-  const mark = written._i18n;
-  if (
-    isObject(mark) &&
-    typeof mark.sourceLocale === 'string' &&
-    offer.gone?.includes(mark.sourceLocale)
-  )
-    delete written._i18n;
   return offer.source ? withSource(siteId, written, offer.source) : written;
 }
 
@@ -961,21 +954,24 @@ export async function provenance(
   return out;
 }
 
-/** A file with no `_i18n`, no hash, or a source the entry has no file in is never stale. */
+/** Stale: a complete mark naming another language than the source, or the source as it no longer is. */
 export async function staleLocales(
   _siteId: string,
   form: Form,
   files: Record<string, unknown>,
+  source: string,
 ): Promise<string[]> {
-  const hashes = new Map<string, Promise<string>>();
+  let hash: Promise<string> | undefined;
   const stale: string[] = [];
   for (const [locale, data] of Object.entries(files)) {
-    const mark = isObject(data) && isObject(data._i18n) ? data._i18n : {};
-    const from = typeof mark.sourceLocale === 'string' ? mark.sourceLocale : undefined;
-    if (from === undefined || from === locale || !(from in files)) continue;
-    if (typeof mark.sourceHash !== 'string') continue;
-    if (!hashes.has(from)) hashes.set(from, hashOf(form, files[from]));
-    if ((await hashes.get(from)) !== mark.sourceHash) stale.push(locale);
+    const mark = completeMark(isObject(data) ? data._i18n : undefined);
+    if (locale === source || !mark) continue;
+    if (mark.sourceLocale !== source) {
+      stale.push(locale);
+      continue;
+    }
+    hash ??= hashOf(form, files[source]);
+    if ((await hash) !== mark.sourceHash) stale.push(locale);
   }
   return stale;
 }

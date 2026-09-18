@@ -652,8 +652,12 @@ export async function setEntryStatus(
   if (first) await db.batch([first, ...rest]);
 }
 
-/** Each of these is owned by a route that commits redirect rules beside it. */
-const KEPT_ON_RESTORE = ['slug', '_status', '_locales'] as const;
+/** Each of these is owned by an action of its own, never by a version of the words. */
+const KEPT_ON_RESTORE = ['slug', '_status', '_locales', '_source'] as const;
+
+// A key assigned in place lands after the other `_` keys; `_source` sits right after `_version`.
+const keptSource = (siteId: string, entry: Record<string, unknown>) =>
+  typeof entry._source === 'string' ? withSource(siteId, entry, entry._source) : entry;
 
 /** The base stays where it was, so the publish that follows is an ordinary forward commit. */
 export async function restoreDraft(
@@ -680,7 +684,10 @@ export async function restoreDraft(
       if (key in now) entry[key] = now[key];
       else delete entry[key];
     }
-    const contents = stringifyEntry(siteId, writtenEntry(siteId, entry, form.fields));
+    const contents = stringifyEntry(
+      siteId,
+      keptSource(siteId, writtenEntry(siteId, entry, form.fields)),
+    );
     return [upsert(db, siteId, file.path, contents, file.loaded, updatedAt, stampOf(by))];
   });
   const [first, ...rest] = writes;
@@ -977,7 +984,7 @@ export async function recordOffer(
   db: Db,
   path: string,
   committed: string,
-  offer: { offered: string[]; locales: string[]; gone: string[]; source?: string },
+  offer: { offered: string[]; locales: string[]; source?: string },
   commitSha: string,
 ): Promise<void> {
   const open = await loadDraft(siteId, db, path);
@@ -1676,7 +1683,7 @@ export async function revertCommit(
 }
 
 /** The `_` keys a turn-off rewrites, which are the ones a restore has to put back. */
-const MARKS = ['_locales', '_i18n'];
+const MARKS = ['_locales', '_i18n', '_source'];
 
 /** Open drafts take the restored marks, or the next publish writes the language off again. */
 export async function restoreCommit(
@@ -1706,7 +1713,7 @@ export async function restoreCommit(
       if (mark in restored) entry[mark] = restored[mark];
       else delete entry[mark];
     }
-    const contents = stringifyEntry(siteId, writtenEntry(siteId, entry));
+    const contents = stringifyEntry(siteId, keptSource(siteId, writtenEntry(siteId, entry)));
     if (contents === open.contents) continue;
     await db
       .update(drafts)

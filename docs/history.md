@@ -28,10 +28,11 @@ and publishing is the ordinary forward commit every other edit makes. Git is nev
 the version you restored stays in the list, and so does everything after it. With unpublished
 changes already on the entry, the confirmation says so — they are what the restore replaces.
 
-Three things are the entry's as it stands rather than the version's: its **web address**,
-whether it is **on the site**, and the **languages it is offered in**. Each of those is changed
-from its own control, which writes the redirects that go with it; an old value coming back here
-would move the page or take it away with nothing forwarding visitors. A language the version has
+Four things are the entry's as it stands rather than the version's: its **web address**,
+whether it is **on the site**, the **languages it is offered in**, and the **language it is
+written in** (`_source`). Each of those is changed from its own control; the first three write
+the redirects that go with them, and an old value coming back here would move the page or take
+it away with nothing forwarding visitors. A language the version has
 no file for is left where it stands — which, if the structure has changed since, is the
 languages disagreeing, and the editor asks about it before the publish goes out.
 

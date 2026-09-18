@@ -91,10 +91,17 @@ const path = (locale: string, slug = 'home') => `src/content/pages/${locale}/${s
 const EN = '_version: 1\ntitle: "Home"\nbody: "Welcome"\n';
 const DE = '_version: 1\ntitle: "Startseite"\nbody: "Willkommen"\n';
 
-function push(files: Record<string, string>) {
+let commits: Record<string, { sha: string; parent: string; paths: string[]; message: string }>;
+// A null takes the file away, as a commit's delete does.
+function push(files: Record<string, string | null>) {
   const parent = head;
   head = String(Object.keys(trees).length).padStart(40, '0');
-  trees[head] = { ...trees[parent], ...files };
+  const tree = { ...trees[parent] };
+  for (const [at, contents] of Object.entries(files))
+    if (contents === null) delete tree[at];
+    else tree[at] = contents;
+  trees[head] = tree;
+  commits[head] = { sha: head, parent, paths: Object.keys(files), message: '' };
   return head;
 }
 async function signIn(id: string, role: 'owner' | 'editor') {
@@ -153,6 +160,7 @@ beforeEach(async () => {
   await db.delete(tables.locks);
   head = '0'.repeat(40);
   trees = { [head]: {} };
+  commits = {};
   writes = [];
   boundary.translate.mockClear();
   boundary.repo = {
@@ -161,16 +169,20 @@ beforeEach(async () => {
       const contents = trees[sha]?.[at];
       return contents === undefined ? undefined : { contents, blob_sha: await blobSha(contents) };
     },
-    getCommit: async () => undefined,
+    getCommit: async (sha: string) => commits[sha],
+    getBlob: async (sha: string) => {
+      for (const tree of Object.values(trees))
+        for (const contents of Object.values(tree))
+          if ((await blobSha(contents)) === sha) return contents;
+      return undefined;
+    },
     fileCommits: async () => [],
     contentFiles: async (sha = head) =>
       Object.entries(trees[sha] ?? {}).map(([p, contents]) => ({ path: p, contents })),
     publish: async (files: PublishFile[], opts: { base_sha: string }) => {
       expect(head).toBe(opts.base_sha);
       writes.push(files);
-      return {
-        commit_sha: push(Object.fromEntries(files.map((f) => [f.path, f.contents ?? '']))),
-      };
+      return { commit_sha: push(Object.fromEntries(files.map((f) => [f.path, f.contents]))) };
     },
   };
 });
@@ -465,7 +477,7 @@ test('turning off English, the only marked file, writes the source into the Germ
   const res = await call('POST', 'entries/pages/home/locales', { locales: ['de', 'fr'] });
 
   expect(res.status).toBe(200);
-  expect(trees[head]?.[path('en')]).toBe('');
+  expect(trees[head]?.[path('en')]).toBeUndefined();
   expect(parseEntry('default', trees[head]?.[path('de')] ?? '')).toMatchObject({
     _source: 'de',
     _locales: ['de', 'fr'],
@@ -474,17 +486,30 @@ test('turning off English, the only marked file, writes the source into the Germ
   expect(await drafted('de')).toMatchObject({ _source: 'de', title: 'Neue Startseite' });
 });
 
-test('turning off the language a recorded entry is written in hands the source to what stays', async () => {
-  trees[head] = {
-    [path('en')]: '_version: 1\n_source: en\ntitle: "Home"\nbody: "Welcome"\n',
-    [path('de')]: '_version: 1\n_source: en\ntitle: "Startseite"\nbody: "Willkommen"\n',
-  };
+test('turning off the language the entry is written in is refused before anything is written', async () => {
+  const de = '_version: 1\n_source: de\ntitle: "Startseite"\nbody: "Willkommen"\n';
+  const en = '_version: 1\n_source: de\ntitle: "Home"\nbody: "Welcome"\n';
+  trees[head] = { [path('de')]: de, [path('en')]: en };
+  await db.insert(tables.drafts).values({
+    path: path('de'),
+    revision: 'r1',
+    contents: de.replace('Startseite', 'Neue Startseite'),
+    baseSha: head,
+    baseBlob: await blobSha(de),
+    updatedAt: Date.now(),
+  });
+  const before = head;
 
-  const res = await call('POST', 'entries/pages/home/locales', { locales: ['de', 'fr'] });
+  const res = await call('POST', 'entries/pages/home/locales', { locales: ['en', 'fr'] });
 
-  expect(res.status).toBe(200);
-  expect(parseEntry('default', trees[head]?.[path('de')] ?? '')).toMatchObject({ _source: 'de' });
-  expect((await opened()).sourceLocale).toBe('de');
+  expect(res.status).toBe(409);
+  expect(await res.json()).toMatchObject({ code: 'ENTRY_LOCALE_IS_SOURCE', locale: 'de' });
+  expect(head).toBe(before);
+  expect(await loadDraft('default', db, path('de'))).toMatchObject({
+    revision: 'r1',
+    contents: de.replace('Startseite', 'Neue Startseite'),
+  });
+  expect(await loadDraft('default', db, path('en'))).toBeUndefined();
 });
 
 test('a new entry on a site with several languages records the language it starts in', async () => {
@@ -528,4 +553,141 @@ test('a German-first entry published with English still opens in German', async 
 
   expect(trees[head]?.[path('de')]).toBe(DE);
   expect((await opened()).sourceLocale).toBe('de');
+});
+
+// Marks made by the real markTranslation, so the hash is one the CMS would have written.
+const FR = '_version: 1\n_source: en\ntitle: "Accueil"\nbody: "Bienvenue"\n';
+const fromFrench = async () =>
+  markTranslation(
+    'default',
+    form,
+    { locale: 'fr', contents: FR, blob_sha: await blobSha(FR) },
+    '_version: 1\n_source: en\ntitle: "Startseite"\nbody: "Willkommen"\n',
+    undefined,
+  );
+
+test('a translation made from a language that is turned off keeps its mark and still reads stale', async () => {
+  trees[head] = {
+    [path('en')]: '_version: 1\n_source: en\ntitle: "Home"\nbody: "Welcome"\n',
+    [path('fr')]: FR,
+    [path('de')]: await fromFrench(),
+  };
+
+  expect((await call('POST', 'entries/pages/home/locales', { locales: ['en', 'de'] })).status).toBe(
+    200,
+  );
+
+  expect(parseEntry('default', trees[head]?.[path('de')] ?? '')).toMatchObject({
+    _i18n: { sourceLocale: 'fr' },
+  });
+  const entry = (await (await call('GET', 'entries/pages/home')).json()) as { stale: string[] };
+  expect(entry.stale).toEqual(['de']);
+});
+
+test('the translated-from view says a mark names a language that is not the source', async () => {
+  trees[head] = {
+    [path('en')]: '_version: 1\n_source: en\ntitle: "Home"\nbody: "Welcome"\n',
+    [path('fr')]: FR,
+    [path('de')]: await fromFrench(),
+  };
+
+  const res = await call('GET', 'source/pages/home/de');
+
+  expect(await res.json()).toEqual({ from: 'fr', otherSource: true, changed: {} });
+});
+
+test('restoring an old version keeps the language the entry is written in now', async () => {
+  const old = push({ [path('en')]: EN, [path('de')]: DE.replace('Startseite', 'Alte Startseite') });
+  push({
+    [path('en')]: '_version: 1\n_source: de\ntitle: "Home"\nbody: "Welcome"\n',
+    [path('de')]: '_version: 1\n_source: de\ntitle: "Startseite"\nbody: "Willkommen"\n',
+  });
+
+  const res = await call('POST', 'history/pages/home/restore', { commit_sha: old });
+
+  expect(res.status).toBe(200);
+  expect((await loadDraft('default', db, path('de')))?.contents).toBe(
+    '_version: 1\n_source: "de"\ntitle: "Alte Startseite"\nbody: "Willkommen"\n',
+  );
+  expect((await opened()).sourceLocale).toBe('de');
+});
+
+test('undoing a turn-off puts back the source the reverted commit had', async () => {
+  // Unrecorded: the turn-off freezes English into the files it keeps, and the undo takes it out again.
+  trees[head] = {
+    [path('en')]: EN,
+    [path('de')]: DE,
+    [path('fr')]: FR.replace('_source: en\n', ''),
+  };
+  await db.insert(tables.drafts).values({
+    path: path('de'),
+    revision: 'r1',
+    contents: DE.replace('Startseite', 'Neue Startseite'),
+    baseSha: head,
+    baseBlob: await blobSha(DE),
+    updatedAt: Date.now(),
+  });
+  expect((await call('POST', 'entries/pages/home/locales', { locales: ['en', 'de'] })).status).toBe(
+    200,
+  );
+  expect(await drafted('de')).toMatchObject({ _source: 'en' });
+
+  const res = await call('POST', 'restore', { commit_sha: head });
+
+  expect(res.status).toBe(200);
+  expect((await loadDraft('default', db, path('de')))?.contents).toBe(
+    '_version: 1\ntitle: "Neue Startseite"\nbody: "Willkommen"\n',
+  );
+});
+
+const RECORDED_DE = () => ({
+  [path('en')]: '_version: 1\n_source: de\ntitle: "Home"\nbody: "Welcome"\n',
+  [path('de')]: '_version: 1\n_source: de\ntitle: "Startseite"\nbody: "Willkommen"\n',
+});
+
+test('a duplicate keeps the language the entry is written in', async () => {
+  trees[head] = RECORDED_DE();
+
+  expect((await call('POST', 'entries/pages/home/duplicate', { to: 'copy' })).status).toBe(200);
+
+  expect(await drafted('en', 'copy')).toMatchObject({ _source: 'de' });
+  expect(await drafted('de', 'copy')).toMatchObject({ _source: 'de' });
+  expect((await opened('copy')).sourceLocale).toBe('de');
+});
+
+test('a rename keeps the language the entry is written in', async () => {
+  trees[head] = RECORDED_DE();
+
+  expect((await call('POST', 'entries/pages/home/rename', { to: 'start' })).status).toBe(200);
+
+  expect(parseEntry('default', trees[head]?.[path('en', 'start')] ?? '')).toMatchObject({
+    _source: 'de',
+  });
+  expect((await opened('start')).sourceLocale).toBe('de');
+});
+
+test('an entry made from a template records its own language, not the one the template names', async () => {
+  trees[head] = {
+    'src/content/_templates/pages/landing.yaml': '_version: 1\n_source: de\nbody: "Text"\n',
+  };
+
+  const res = await call('POST', 'entries/pages', { title: 'About', template: 'landing' });
+
+  expect(await res.json()).toEqual({ slug: 'about' });
+  expect((await loadDraft('default', db, path('en', 'about')))?.contents).toBe(
+    '_version: 1\n_source: "en"\nbody: "Text"\ntitle: "About"\n',
+  );
+});
+
+test('saving an entry as a template leaves the language it is written in behind', async () => {
+  trees[head] = {
+    [path('en')]: '_version: 1\n_source: en\ntitle: "Home"\nbody: "Welcome"\n',
+    [path('de')]: '_version: 1\n_source: en\ntitle: "Startseite"\nbody: "Willkommen"\n',
+  };
+
+  expect((await call('POST', 'entries/pages/home/template', { to: 'landing' })).status).toBe(200);
+
+  expect(trees[head]?.['src/content/_templates/pages/landing.yaml']).toBe(
+    '_version: 1\ntitle: "Home"\nbody: "Welcome"\n',
+  );
 });

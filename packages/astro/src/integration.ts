@@ -272,7 +272,7 @@ export async function buildStale(
   root: URL,
   cms: HandoverConfig,
 ): Promise<Record<string, string[]>> {
-  return staleFrom('default', await contentFiles(root), (collection, name) =>
+  return staleFrom('default', cms.i18n, await contentFiles(root), (collection, name) =>
     entryForm(cms, collection, name),
   );
 }
@@ -431,7 +431,7 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
                   const index = indexFrom('default', files, titleFields);
                   const templates = templatesFrom('default', files);
                   const uses = mediaUsesFrom('default', files);
-                  const stale = await staleFrom('default', files, (collection, name) =>
+                  const stale = await staleFrom('default', cms.i18n, files, (collection, name) =>
                     entryForm(cms, collection, name),
                   );
                   return `export default JSON.parse(${JSON.stringify(JSON.stringify(index))});

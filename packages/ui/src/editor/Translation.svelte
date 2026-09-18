@@ -81,7 +81,12 @@ $effect(() => {
 });
 
 // Only read for a stale file, so an entry nobody has translated pays nothing for the marker.
-let behind = $state<{ translatedAt?: string; changed: Record<string, WordPart[]> }>({
+let behind = $state<{
+  from?: string;
+  otherSource?: boolean;
+  translatedAt?: string;
+  changed: Record<string, WordPart[]>;
+}>({
   changed: {},
 });
 $effect(() => {
@@ -157,7 +162,7 @@ const failureDetail = $derived(
   <div class="pane-head">
     <h2 id="pane-{locale}">{named(locale)}</h2>
     {#if stale}
-      <span class="mode">{m.translation_source_changed({ source: named(source) }, options)}</span>
+      <span class="mode">{behind.otherSource && behind.from ? m.translation_other_source({ language: named(behind.from), source: named(source) }, options) : m.translation_source_changed({ source: named(source) }, options)}</span>
     {/if}
     <span class={['autosave', { 'is-saving': saving, 'is-offline': failed }]}>
       {#if saving}{m.editor_save_saving({}, options)}{:else if failed}{m.editor_save_not_saved({}, options)} {#if fillFailure?.code === 'TRANSLATION_UNCONFIRMED'}<button type="button" class="btn-link" onclick={() => location.reload()}>{m.editor_lock_reload({}, options)}</button>{:else}<button type="button" class="btn-link" onclick={() => fillFailure ? fill(retryPaths) : flush()}>{fillFailure ? m.translation_retry({}, options) : m.editor_save_retry({}, options)}</button>{/if}{:else if isUnsaved}{m.editor_save_unsaved_changes({}, options)}{:else}{m.editor_save_saved({}, options)}{/if}

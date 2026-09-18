@@ -77,6 +77,26 @@ test('machine and stale feedback retranslate without replacing the target draft'
   expect(input.dataset.localeProof).toBe('same-translation-field');
 });
 
+test('a translation made from a language that is no longer the source says so in both interface languages', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ from: 'fr', otherSource: true, changed: {} })),
+  );
+  localeApp = mount(TranslationLocaleFixture, { target: document.body });
+  await vi.waitFor(() =>
+    expect(document.querySelector('.pane .mode')?.textContent).toBe(
+      'Translated from French — the source is now English',
+    ),
+  );
+
+  document.querySelector<HTMLButtonElement>('[data-locale-switch]')?.click();
+  flushSync();
+
+  expect(document.querySelector('.pane .mode')?.textContent).toBe(
+    'Aus Französisch übersetzt — die Ausgangssprache ist jetzt Englisch',
+  );
+});
+
 const deferred = <T>() => {
   let resolve!: (value: T) => void;
   const promise = new Promise<T>((done) => {
