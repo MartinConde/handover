@@ -1072,7 +1072,6 @@ test('a note about a page outside the set is listed under its own heading', asyn
   expect(root.querySelectorAll('.check-group .notice a')).toHaveLength(1);
 });
 
-
 test('closing keeps the drawer mounted until its exit animation finishes, then closes once', async () => {
   const root = show();
   const done = deferred<void>();

@@ -757,8 +757,11 @@ test('the indicator counts the pending entries and opens the drawer', async () =
   expect(document.activeElement).toBe(root.querySelector('.drawer'));
 
   root.querySelector<HTMLButtonElement>('.drawer [aria-label="Close"]')?.click();
-  flushSync();
-  expect(root.querySelector('.drawer')).toBeNull();
+  // The drawer stays mounted through its exit animation.
+  await vi.waitFor(() => {
+    flushSync();
+    expect(root.querySelector('.drawer')).toBeNull();
+  });
   expect(document.activeElement).toBe(indicator);
 });
 
@@ -1531,8 +1534,10 @@ test('a publish from the drawer is said in a notice that outlives the drawer', a
   expect(toasts(root)).toEqual(['Published 1 change — building']);
 
   root.querySelector<HTMLButtonElement>('.drawer [aria-label="Close"]')?.click();
-  flushSync();
-  expect(root.querySelector('.drawer')).toBeNull();
+  await vi.waitFor(() => {
+    flushSync();
+    expect(root.querySelector('.drawer')).toBeNull();
+  });
   expect(toasts(root)).toEqual(['Published 1 change — building']);
 
   root.querySelector<HTMLButtonElement>('.toast .close')?.click();

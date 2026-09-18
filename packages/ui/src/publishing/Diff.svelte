@@ -1,8 +1,8 @@
 <script lang="ts">
 import type { Change, DiffGroup } from '@handover/core';
-import MediaImage from '../shared/MediaImage.svelte';
 import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
+import MediaImage from '../shared/MediaImage.svelte';
 
 let {
   groups,

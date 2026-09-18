@@ -4527,11 +4527,9 @@ test("the account route reads the session's own user, never the request's", asyn
 test('the account route offers an email change only when the site can mail the links', async () => {
   const offered = async () =>
     (
-      (await body(
-        await GET(ctx('account', undefined, { handover: { ...owner, sessionId: 's1' } })),
-      )) as {
-        canChangeEmail: boolean;
-      }
+      (await (
+        await GET(ctx('account', undefined, { handover: { ...owner, sessionId: 's1' } }))
+      ).json()) as { canChangeEmail: boolean }
     ).canChangeEmail;
   siteMailer = fakeMailer;
   expect(await offered()).toBe(false);

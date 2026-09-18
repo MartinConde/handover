@@ -78,10 +78,15 @@ function onclose() {
   // Keep the native modal and focus boundary alive until the drawer has left the screen.
   panel.inert = true;
   exitAnimation = panel.animate(
-    [{ transform: 'translateX(0)', opacity: 1 }, { transform: 'translateX(32px)', opacity: 0 }],
+    [
+      { transform: 'translateX(0)', opacity: 1 },
+      { transform: 'translateX(32px)', opacity: 0 },
+    ],
     { duration: 200, easing: 'cubic-bezier(.4, 0, 1, 1)', fill: 'forwards' },
   );
-  const finish = () => { if (!destroyed) closed(); };
+  const finish = () => {
+    if (!destroyed) closed();
+  };
   void exitAnimation.finished.then(finish, finish);
 }
 

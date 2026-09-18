@@ -431,10 +431,7 @@ test('reference: only the collection the schema names is offered', async () => {
   );
   q<HTMLButtonElement>('#f-agent button').click();
   await settle();
-  expect(rows().map((b) => b.title)).toEqual([
-    'agents/jane-doe',
-    'agents/james-hartley',
-  ]);
+  expect(rows().map((b) => b.title)).toEqual(['agents/jane-doe', 'agents/james-hartley']);
 });
 
 test('nested link widgets and the picker share one catalogue request', async () => {
