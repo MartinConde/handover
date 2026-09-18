@@ -27,6 +27,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   off keeps the `_i18n` that names it, and turning off the language an entry is written in is
   refused with `409 ENTRY_LOCALE_IS_SOURCE`. Restoring a version keeps the entry's `_source`,
   undoing a turn-off puts back the one it had, and templates never carry one.
+- Save as template copies the file in the language the entry is written in, not the site's default
+  language's. In the language switcher, a translation made from another language is read out as
+  *translated from French, not from English* instead of *English changed since this was translated*.
 - Join the content form and live preview into one workspace, reduce nested field padding, and refresh the canvas toolbar, structure panel, inspector, and stage.
 
 - Redirects is laid out like the other lists: title, rule count and **Add redirect** on one

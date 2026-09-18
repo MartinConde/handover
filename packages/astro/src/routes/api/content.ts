@@ -59,7 +59,7 @@ export function entryTitle(entry: string): string {
 export const entryPath = (collection: string, slug: string, locale: string) =>
   `src/content/${collection}/${locale}/${slug}.yaml`;
 
-/** The baseline order, still how a template picks the published file it copies. */
+/** The baseline order: which published file a template copies where the files disagree about their source. */
 export const sourceOrder = () => [...new Set([config.i18n.defaultLocale, ...config.i18n.locales])];
 
 /** One read of every language answers both what the entry holds and which language it is written in. */

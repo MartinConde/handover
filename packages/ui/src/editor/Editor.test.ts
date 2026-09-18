@@ -1305,6 +1305,27 @@ test('a second language with nothing written in it still draws every control', (
   expect($(root, 'button.btn-sbs')).not.toBeNull();
 });
 
+test('a translation made from another language than the source says so to a screen reader', () => {
+  const root = show({
+    entry: {
+      ...trilingual,
+      translations: {
+        ...trilingual.translations,
+        de: { ...trilingual.translations.de, _i18n: { sourceLocale: 'fr' } },
+        fr: { ...trilingual.translations.fr, _i18n: { sourceLocale: 'en' } },
+      },
+      stale: ['de', 'fr'],
+    },
+  });
+
+  const seg = $(root, '[aria-label="Language"]');
+  expect(Array.from(seg?.querySelectorAll('button') ?? [], (b) => b.textContent?.trim())).toEqual([
+    'EN',
+    'DE— translated from French, not from English',
+    'FR— English changed since this was translated',
+  ]);
+});
+
 // Five languages is where a row of buttons stops fitting — Sveltia's threshold.
 test('a site with five languages picks its language from a menu', () => {
   const five = ['en', 'de', 'fr', 'es', 'it'];

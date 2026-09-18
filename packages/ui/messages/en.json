@@ -1124,6 +1124,7 @@
   "editor_language_off_a11y": "turned off for this entry",
   "editor_language_untranslated_a11y": "not translated yet",
   "editor_language_stale_a11y": "{source} changed since this was translated",
+  "editor_language_other_source_a11y": "translated from {language}, not from {source}",
   "editor_side_by_side": "Side by side",
   "editor_not_offered": "This entry is not offered in {language}. No {language} file is written and the site does not link to one.",
   "editor_turned_off_before": "It was turned off here on",

@@ -472,6 +472,12 @@ function setPending(of: string, pending: boolean) {
 }
 const dirty = $derived(hasPending() || entrySession.unsaved());
 const language = (of: string) => formatLanguageName(of, uiLocale);
+// A stale mark naming another language: there is no change of the source to point at.
+const otherSource = (of: string) => {
+  const from = (entry.translations[of]?._i18n as { sourceLocale?: unknown } | undefined)
+    ?.sourceLocale;
+  return typeof from === 'string' && from !== entry.sourceLocale ? from : undefined;
+};
 
 /** The soft lock on every language of this entry at once; `undefined` until the first answer. */
 type Lock = {
@@ -1434,7 +1440,7 @@ async function saveAddress() {
             <div class="seg" role="group" aria-label={m.editor_language({}, options)}>
               {#each entry.locales as of (of)}
                 <button type="button" class={{ 'is-off': off(of) }} aria-pressed={locale === of} onclick={() => leaving(() => (locale = of))}>
-                  {of.toUpperCase()}{#if off(of)}<span class="visually-hidden"> — {m.editor_language_off_a11y({}, options)}</span>{:else if untranslated(of)}<span class="visually-hidden"> — {m.editor_language_untranslated_a11y({}, options)}</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {m.editor_language_stale_a11y({ source: language(entry.sourceLocale) }, options)}</span><span class="mark" aria-hidden="true"></span>{/if}
+                  {of.toUpperCase()}{#if off(of)}<span class="visually-hidden"> — {m.editor_language_off_a11y({}, options)}</span>{:else if untranslated(of)}<span class="visually-hidden"> — {m.editor_language_untranslated_a11y({}, options)}</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {otherSource(of) ? m.editor_language_other_source_a11y({ language: language(otherSource(of) ?? ''), source: language(entry.sourceLocale) }, options) : m.editor_language_stale_a11y({ source: language(entry.sourceLocale) }, options)}</span><span class="mark" aria-hidden="true"></span>{/if}
                 </button>
               {/each}
             </div>

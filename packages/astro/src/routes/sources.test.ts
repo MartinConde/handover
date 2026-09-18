@@ -691,3 +691,13 @@ test('saving an entry as a template leaves the language it is written in behind'
     '_version: 1\ntitle: "Home"\nbody: "Welcome"\n',
   );
 });
+
+test('saving a German-written entry as a template copies the German file', async () => {
+  trees[head] = RECORDED_DE();
+
+  expect((await call('POST', 'entries/pages/home/template', { to: 'landing' })).status).toBe(200);
+
+  expect(trees[head]?.['src/content/_templates/pages/landing.yaml']).toBe(
+    '_version: 1\ntitle: "Startseite"\nbody: "Willkommen"\n',
+  );
+});

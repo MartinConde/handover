@@ -1394,8 +1394,15 @@ export async function saveTemplate(
   const git = ctx.git();
   const database = ctx.db();
   const files = await entryFiles(git, collection, slug);
-  // The language it was written in, or the first it is published in: the site's default first.
-  const from = sourceOrder()
+  // The language it is written in, judged by what is published; the baseline order where files disagree.
+  const answer = entrySource(
+    'default',
+    config.i18n,
+    Object.fromEntries(
+      files.flatMap((f) => (f.file ? [[f.locale, parseEntry('default', f.file.contents)]] : [])),
+    ),
+  );
+  const from = [...(answer && 'locale' in answer ? [answer.locale] : []), ...sourceOrder()]
     .map((locale) => files.find((f) => f.locale === locale && f.file))
     .find(Boolean);
   if (!from?.file)
