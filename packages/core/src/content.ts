@@ -474,7 +474,7 @@ export function writtenEntry(
 export function offeredEntry(
   siteId: string,
   entry: unknown,
-  offer: { offered: string[]; locales: string[]; gone?: string[] },
+  offer: { offered: string[]; locales: string[]; gone?: string[]; source?: string },
 ): Record<string, unknown> {
   const written = writtenEntry(siteId, entry);
   const kept = offer.locales.filter((locale) => offer.offered.includes(locale));
@@ -487,7 +487,7 @@ export function offeredEntry(
     offer.gone?.includes(mark.sourceLocale)
   )
     delete written._i18n;
-  return written;
+  return offer.source ? withSource(siteId, written, offer.source) : written;
 }
 
 // Undeclared keys, `_` keys and fields this locale's form never drew survive a save (decap#6978).

@@ -22,7 +22,7 @@ import {
 } from '@handover/core';
 import { mailer } from '../../auth.js';
 import { entryProblems } from '../../problems.js';
-import { deeplKey, entryPath, formFor, sourceOf, takenNames } from './content.js';
+import { deeplKey, entryPath, formFor, publishSources, takenNames } from './content.js';
 import type { RequestContext } from './context.js';
 import { mediaStore, missingMailer, NO_BUCKET, workerBuilds } from './environment.js';
 
@@ -337,7 +337,7 @@ export async function simulateConflict(
     );
     const path = entryPath(collection, slug, config.i18n.defaultLocale);
     await createDraft('default', database, git, path, { _version: FORMAT_VERSION, ...values });
-    const seeded = await publishDrafts('default', database, git, (path) => sourceOf(ctx, path), [
+    const seeded = await publishDrafts('default', database, git, publishSources(ctx), [
       `${collection}/${slug}`,
     ]);
     if (!seeded) return new Response('The scratch entry could not be committed', { status: 502 });

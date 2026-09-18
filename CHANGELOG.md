@@ -6,7 +6,14 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - `_source` is a new reserved key at the top of a file, naming the language the entry is written
   in. A `_source` that is empty, not text, or below the top level fails the read naming the path.
-  Nothing writes it yet; no existing file changes and the format version stays `1`.
+  No existing file changes and the format version stays `1`.
+- An entry keeps the language it is written in when another language is added: creating
+  English on a German entry, pre-filling it and publishing it leaves the entry German, and
+  machine translation keeps translating from German. On a site with two or more languages a new
+  entry and every new translation record `_source`, saves of a recorded entry write it into each
+  file they touch, and turning a language off writes it into the files that stay. Files whose
+  `_source` disagree are refused with `409` `ENTRY_SOURCE_CONFLICT`, `ENTRY_SOURCE_UNDECLARED` or
+  `ENTRY_SOURCE_MISSING` instead of being guessed at. One-language sites write nothing new.
 - Owners get a **Source languages** tile on the Dashboard while older entries with files in
   two or more languages don't record `_source`. **Upgrade note:** record them there before you
   reorder `locales` or change `defaultLocale`, or those entries switch source. One commit; open

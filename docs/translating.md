@@ -19,10 +19,11 @@ but continues to show none of the content-language controls described below.
 
 An entry opens on the language it is written in, and the header offers the others — buttons up
 to four languages, a menu above that. **The language an entry is written in is the entry's own,
-not the site's**: the default language where the entry has a file in it, and otherwise the first
-language it does. That is the language whose form carries the structure and the one every
-translation is made from. Nearly always that is the site's default; a legal notice written in
-German on an English site opens in German and offers *Create from German*. Which language a URL
+not the site's**: the language it was first written in, recorded in its files as `_source`
+([Languages](i18n.md#which-language-an-entry-is-written-in)). That is the language whose form
+carries the structure and the one every translation is made from. Nearly always that is the
+site's default; a legal notice written in German on an English site opens in German and offers
+*Create from German*, and creating its English file keeps it German. Which language a URL
 carries the segment of stays the site's answer.
 
 A hollow ring means no file for this entry, a filled one a translation the source language has
@@ -34,7 +35,9 @@ through, and choosing it says so.
 Choosing one draws the two ways out rather than an empty form, which would autosave a file nobody
 asked for. **Create from English** — from whichever language the entry is written in — writes that
 language's file: the same blocks in the same order, every value the languages share, and the text
-fields empty. It is a draft like any other, so nothing is in the repository until you publish, and
+fields empty. The new file records the language it was made from, so adding a language — the
+site's default included — never changes which one the entry is written in, and **Translate** keeps
+translating from it. It is a draft like any other, so nothing is in the repository until you publish, and
 what the schema still wants of it is ordinary validation until then. The entry's **Publish…** is
 offered the moment the file is written, without the column being typed in.
 

@@ -250,6 +250,8 @@ export interface LocaleSync {
   managed?: readonly string[];
   /** The immutable source bytes visible when this translated save was dispatched. */
   source?: TranslationSource;
+  /** The entry's recorded source, written into every file this save writes. */
+  stamp?: string;
   /** Locale-owned subtrees used only when structural history restores or duplicates rows. */
   restoration?: {
     /** The complete locale revision set captured with the restoration seeds. */
@@ -332,9 +334,12 @@ export async function saveDraft(
   }
   const edit = { before, after };
   const updatedAt = Date.now();
+  // Last, so the key also keeps its place after `_version` whatever the merge reordered.
+  const stamped = (data: Record<string, unknown>) =>
+    sync?.stamp ? withSource(siteId, data, sync.stamp) : data;
   let contents = stringifyEntry(
     siteId,
-    sync && !translated ? syncLocale(siteId, sync.form, sync.locale, edit, after) : after,
+    stamped(sync && !translated ? syncLocale(siteId, sync.form, sync.locale, edit, after) : after),
   );
   if (translated && sync?.source)
     contents = await markTranslation(siteId, translated, sync.source, contents, loaded.contents);
@@ -355,7 +360,7 @@ export async function saveDraft(
     const siblingRevision = crypto.randomUUID();
     revisions[locale] = siblingRevision;
     writes.push(
-      upsert(db, siteId, sibling, stringifyEntry(siteId, synced), other, updatedAt, {
+      upsert(db, siteId, sibling, stringifyEntry(siteId, stamped(synced)), other, updatedAt, {
         ...stamp,
         revision: siblingRevision,
       }),
@@ -529,6 +534,7 @@ export async function setEntryLocales(
   paths: string[],
   offered: string[],
   locales: string[],
+  source?: string,
 ): Promise<void> {
   const found = await Promise.all(
     paths.map(async (path) => {
@@ -541,7 +547,7 @@ export async function setEntryLocales(
     if (!f) return [];
     const contents = stringifyEntry(
       siteId,
-      offeredEntry(siteId, f.loaded.entry, { offered, locales }),
+      offeredEntry(siteId, f.loaded.entry, { offered, locales, source }),
     );
     return contents === stringifyEntry(siteId, writtenEntry(siteId, f.loaded.entry))
       ? []
@@ -971,7 +977,7 @@ export async function recordOffer(
   db: Db,
   path: string,
   committed: string,
-  offer: { offered: string[]; locales: string[]; gone: string[] },
+  offer: { offered: string[]; locales: string[]; gone: string[]; source?: string },
   commitSha: string,
 ): Promise<void> {
   const open = await loadDraft(siteId, db, path);
@@ -1439,13 +1445,17 @@ export async function saveTranslated(
   filled: Record<string, string>,
   by?: string,
   expectedRevision?: string,
-  provenance?: { form: Form; source: TranslationSource },
+  provenance?: { form: Form; source: TranslationSource; stamp?: string },
 ): Promise<{ updated_at: number; pending: boolean } | undefined> {
   const loaded = await load(siteId, db, git, path);
   if (!loaded) return undefined;
   if (expectedRevision !== undefined && loaded.revision !== expectedRevision)
     throw new DraftRevisionError();
-  let contents = stringifyEntry(siteId, machineFilled(siteId, loaded.entry, filled));
+  const filledEntry = machineFilled(siteId, loaded.entry, filled);
+  let contents = stringifyEntry(
+    siteId,
+    provenance?.stamp ? withSource(siteId, filledEntry, provenance.stamp) : filledEntry,
+  );
   if (provenance)
     contents = await markTranslation(
       siteId,

@@ -46,10 +46,10 @@ import {
   heldByAnother,
   localeData,
   pickable,
+  publishSources,
   schemaOf,
   sitePages,
   siteSeoDefaults,
-  sourceOf,
 } from './content.js';
 import type { RequestContext } from './context.js';
 import { mediaStore, workerBuilds } from './environment.js';
@@ -626,7 +626,7 @@ export async function publish(
       'default',
       database,
       ctx.git(),
-      (path) => sourceOf(ctx, path),
+      publishSources(ctx),
       chosen,
       pending,
       { userId: session?.user.id },

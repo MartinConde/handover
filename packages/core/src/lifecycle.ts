@@ -471,7 +471,7 @@ export async function deleteLocales(
   going: string[],
   offered: string[],
   redirectTo: ((locale: string) => string | undefined) | undefined,
-  deps: { now?: () => number; baseSha?: string; operationId?: string } = {},
+  deps: { now?: () => number; baseSha?: string; operationId?: string; source?: string } = {},
 ): Promise<{ commit_sha: string; kept: ContentFile[] }> {
   const base_sha = deps.baseSha ?? (await git.getHead());
   const files = await localeFiles(git, loc, name, base_sha);
@@ -486,6 +486,7 @@ export async function deleteLocales(
           offered,
           locales: loc.i18n.locales,
           gone: going,
+          source: deps.source,
         }),
       ),
     }));

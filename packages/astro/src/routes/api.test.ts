@@ -3646,6 +3646,7 @@ test('creating a language copies the structure and the shared values, not the wo
     'src/content/pages/de/home.yaml',
     {
       _version: 1,
+      _source: 'en',
       layout: 'wide',
       blocks: [{ _type: 'hero', _id: 'k3nf9a2p' }],
     },
@@ -3713,6 +3714,8 @@ test('turning a language off writes the ones it keeps into every file the entry 
     ['src/content/pages/en/home.yaml'],
     ['en'],
     ['en', 'de'],
+    // Nothing goes, so an unrecorded entry is not frozen.
+    undefined,
   );
 });
 
@@ -3877,6 +3880,7 @@ test('turning off a language whose file is only a draft commits nothing', async 
     ['src/content/pages/en/home.yaml'],
     ['en'],
     ['en', 'de'],
+    'en',
   );
 });
 
@@ -4457,7 +4461,7 @@ test('the missing default language is created from the language the entry has', 
     expect.anything(),
     expect.anything(),
     'src/content/pages/en/impressum.yaml',
-    { _version: 1, blocks: [{ _type: 'hero', _id: 'b7t4x1m9' }] },
+    { _version: 1, _source: 'de', blocks: [{ _type: 'hero', _id: 'b7t4x1m9' }] },
   );
 });
 

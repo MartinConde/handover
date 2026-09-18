@@ -57,8 +57,9 @@ field the editor's heading reads. `data` is `sourceLocale`'s file and `translati
 languages the entry has a file in, keyed by locale — what the editor's second column draws.
 `locales` is the languages the site declares, in config order, `defaultLocale` the site's own —
 which is what says whose URLs carry a language segment — and `sourceLocale` the language **this
-entry** is written in: the site default where the entry has that file, otherwise the first
-language it does ([Translating](translating.md#choosing-a-language)). `offered` is the languages
+entry** is written in: the `_source` its files record, or for an older entry that records none,
+the site default where the entry has that file, otherwise the first language it does
+([Languages](i18n.md#which-language-an-entry-is-written-in)). `offered` is the languages
 this entry is offered in — the rest are turned off for it. `drift` is the blocks the entry's
 languages disagree about, `[{ "path": "blocks[_id=z9y8x7w6]", "type": "quote", "in": ["de"],
 "expected": ["en", "de"], "values": { "de": ["Ein seltener Fund."] } }]`, and `stale` the
@@ -69,6 +70,20 @@ machine-translate with: false, and none of the buttons that offer it is drawn. `
 and `prefixDefaultLocale` are where the site serves the collection, which is what the editor
 builds a URL out of: the address row, and the URL it names when a language is turned off. A
 collection with no `route` has neither, and both are absent from the response.
+
+### Which language an entry is written in
+
+When an entry's files disagree about their `_source`, this route, the draft writes, **Create
+from English** and machine translation answer `409` with an `x-handover-error-code` header and
+`{ "code", "error", "marks" }`, and write nothing. `marks` is what each file says, by locale.
+
+| `code` | The files |
+|---|---|
+| `ENTRY_SOURCE_CONFLICT` | name two or more different languages |
+| `ENTRY_SOURCE_UNDECLARED` | name a language the site does not declare |
+| `ENTRY_SOURCE_MISSING` | name a language the entry has no file in |
+
+Make the files agree in the repository, then reopen the entry.
 
 ```
 GET /admin/api/globals  →  { "globals": [{ "key", "label", "description", "locales", "pending" }], "locales": ["en", "de"] }
@@ -92,7 +107,8 @@ POST /admin/api/entries/:collection         { "title": "…", "template": "house
 ```
 
 Creates an entry as a draft. `slug` is the derived filename, which is what the admin opens
-next. Nothing is committed. `404` if the collection is not configured.
+next. Nothing is committed. On a site with two or more languages the file records the default
+language as its `_source`. `404` if the collection is not configured.
 
 `template` is optional and names one of the collection's [starters](site-files.md#templates);
 without it the entry starts empty apart from its title. The starter's values are copied in, its

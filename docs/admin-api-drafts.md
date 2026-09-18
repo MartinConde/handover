@@ -51,8 +51,9 @@ POST /admin/api/drafts/:collection/:slug/:locale  →  {}
 **Create from English**: writes that language's file for the entry as a draft — the structure
 and the values the languages share, none of the words
 ([Translating](translating.md#a-language-with-no-file-yet)). It is made from the language the
-entry is written in, which is the site's default only where the entry has a file in it, so this
-is also how an entry written in one other language gets its default-language file. `409` when
+entry is written in, and the new file records that language as its `_source`, so this is also
+how an entry written in one other language gets its default-language file without changing
+source. `409` when
 the language already has a file or a draft, or when the entry is not offered in it; `404` for a
 language the site does not declare, or an entry with no file in any of them.
 

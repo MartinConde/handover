@@ -21,6 +21,7 @@ import {
   entryKey,
   entryName,
   entryOffer,
+  entrySource,
   entryUrl,
   FORMAT_VERSION,
   finalizeOperation,
@@ -71,6 +72,7 @@ import {
   syncLocale,
   takeLock,
   translatableText,
+  withSource,
 } from '@handover/core';
 import { formSchema } from '../../index.js';
 import { entryProblems } from '../../problems.js';
@@ -80,6 +82,7 @@ import {
   entryHref,
   entryLocales,
   entryPath,
+  entrySourceFor,
   entrySubject,
   formFor,
   globalLabel,
@@ -94,9 +97,8 @@ import {
   schemaOf,
   siblingPaths,
   siteSeoDefaults,
-  sourceFor,
-  sourceIn,
   sourceOrder,
+  sourceRefusal,
   tabOf,
   takenNames,
   translationSource,
@@ -143,9 +145,10 @@ export async function getEntry(
   const schema = global ?? collected?.schema;
   if (!schema) return entryNotFound();
   // One read of every language answers drift, staleness and pending drafts alike.
-  const loaded = await entryLocales(ctx, collection, slug, config.i18n.locales, true);
-  const source = sourceIn(loaded);
-  if (!source) return entryNotFound();
+  const { loaded, source: answer } = await entrySourceFor(ctx, collection, slug, true);
+  if (!answer) return entryNotFound();
+  if ('problem' in answer) return sourceRefusal(answer);
+  const source = answer.locale;
   const data = loaded[source]?.data;
   const hidden = !isLive('default', data);
   const form = formFor(collection, slug);
@@ -458,8 +461,12 @@ export async function autosave(
     );
 
   // The server works out the source language; a stale tab may believe an outranked one.
-  const source = await sourceFor(ctx, collection, slug);
-  if (!source) return new Response('Not found', { status: 404 });
+  const many = config.i18n.locales.length > 1;
+  const read = many ? await entrySourceFor(ctx, collection, slug) : undefined;
+  const answer = read ? read.source : { locale: config.i18n.defaultLocale, recorded: false };
+  if (!answer) return new Response('Not found', { status: 404 });
+  if ('problem' in answer) return sourceRefusal(answer);
+  const source = answer.locale;
   const at = locale ?? source;
   // Only a source-language save carries structure into the sibling files.
   const translation = at !== source;
@@ -476,11 +483,10 @@ export async function autosave(
       : structuralSave(body.structure, formFor(collection, slug), data, source);
   if (body?.structure !== undefined && !structure)
     return new Response('Bad request', { status: 400 });
-  if (!translation && config.i18n.locales.length > 1) {
-    // Re-read every current file at dispatch: a tab may have opened before external drift appeared.
+  if (!translation && read) {
+    // Read at dispatch: a tab may have opened before external drift appeared.
     // Intentional locale-only rows and entries with one file produce no report and keep saving.
-    const files = localeData(await entryLocales(ctx, collection, slug, config.i18n.locales));
-    if (driftReport('default', formFor(collection, slug), files).length)
+    if (driftReport('default', formFor(collection, slug), localeData(read.loaded)).length)
       return Response.json(
         {
           error:
@@ -507,6 +513,8 @@ export async function autosave(
             translation,
             ...(managed.length ? { managed } : {}),
             ...(provenance ? { source: provenance } : {}),
+            // An unrecorded entry stays unrecorded until a translation or turn-off freezes it.
+            ...(answer.recorded ? { stamp: source } : {}),
             ...(structure
               ? { restoration: { revisions: structure.revisions, seeds: structure.seeds } }
               : {}),
@@ -546,19 +554,25 @@ export async function createTranslation(
   const schema = schemaOf(collection, slug);
   if (!schema || !config.i18n.locales.includes(locale))
     return new Response('Not found', { status: 404 });
-  const loaded = await entryLocales(ctx, collection, slug, config.i18n.locales);
+  const { loaded, source: answer } = await entrySourceFor(ctx, collection, slug);
   // A missing default language is exactly what this route is for, so no extra guard on it.
   if (loaded[locale]) return new Response('That language already has a file', { status: 409 });
-  const source = sourceIn(loaded);
+  if (answer && 'problem' in answer) return sourceRefusal(answer);
+  const source = answer?.locale;
   const data = source === undefined ? undefined : loaded[source]?.data;
-  if (data === undefined) return new Response('Not found', { status: 404 });
+  if (source === undefined || data === undefined) return new Response('Not found', { status: 404 });
   const { offered, problems } = offeredIn(data, Object.keys(loaded));
   // A mark the files contradict is answered before the offer it would otherwise be read as.
   if (problems.length) return new Response(problems.join('\n'), { status: 409 });
   if (!offered.includes(locale))
     return new Response(`This entry is not offered in ${locale}`, { status: 409 });
   const form = formFor(collection, slug);
-  const made = syncLocale('default', form, locale, { before: data, after: data }, {});
+  // Stamped even on an unrecorded entry: adding a language must never move the source.
+  const made = withSource(
+    'default',
+    syncLocale('default', form, locale, { before: data, after: data }, {}),
+    source,
+  );
   if (offered.length < config.i18n.locales.length) made._locales = offered;
   await createDraft('default', ctx.db(), ctx.git(), entryPath(collection, slug, locale), made);
   return Response.json({});
@@ -583,8 +597,9 @@ export async function machineTranslate(
       'This site has nothing to translate with: paste a DeepL key in Settings, set DEEPL_API_KEY, or hand in an i18n.translate in cms.config.ts',
       { status: 409 },
     );
-  const loaded = await entryLocales(ctx, collection, slug, config.i18n.locales);
-  const from = sourceIn(loaded);
+  const { loaded, source: answer } = await entrySourceFor(ctx, collection, slug);
+  if (answer && 'problem' in answer) return sourceRefusal(answer);
+  const from = answer?.locale;
   const source =
     from === undefined ? undefined : await translationSource(ctx, collection, slug, from);
   if (!from || !source || from === locale || !loaded[locale])
@@ -613,7 +628,7 @@ export async function machineTranslate(
       Object.fromEntries(wanted.map((v, i) => [v.path, answers[i] ?? v.text])),
       session?.user.id,
       loaded[locale].revision,
-      { form, source },
+      { form, source, ...(answer?.recorded ? { stamp: from } : {}) },
     );
   }
   // The column redraws from this, so an edit in the other column survives a pre-fill.
@@ -655,6 +670,32 @@ export async function offering(
   if (!written.length) return new Response('Not found', { status: 404 });
   const going = written.filter((locale) => !offered.includes(locale));
   const staying = written.filter((locale) => offered.includes(locale));
+  const effective = Object.fromEntries(
+    capturedFiles.flatMap(({ locale, file }, index) => {
+      const contents = capturedRows[index]?.contents || file?.contents;
+      return contents || file ? [[locale, parseEntry('default', contents ?? '') ?? {}]] : [];
+    }),
+  );
+  let resolved = entrySource('default', config.i18n, effective);
+  // The source going, what stays is asked afresh as before `_source`, or its mark names no file.
+  if (resolved && 'locale' in resolved && going.includes(resolved.locale))
+    resolved = entrySource(
+      'default',
+      config.i18n,
+      Object.fromEntries(
+        Object.entries(effective)
+          .filter(([locale]) => !going.includes(locale))
+          .map(([locale, data]) => {
+            const { _source, ...rest } = data as Record<string, unknown>;
+            return [locale, rest];
+          }),
+      ),
+    );
+  // A change to the set of files is when an inferred source must be frozen into the ones kept.
+  const stamp =
+    resolved && 'locale' in resolved && (going.length || resolved.recorded)
+      ? resolved.locale
+      : undefined;
   const files = going.length ? capturedFiles : [];
   // A draft-only language cannot stand in for a published one this commit takes away.
   const published = files.filter((f) => f.file).map((f) => f.locale);
@@ -714,7 +755,7 @@ export async function offering(
         going,
         offered,
         (locale) => redirectTarget(answer, collected, picked, locale),
-        { baseSha: operation.baseSha, operationId: operation.id },
+        { baseSha: operation.baseSha, operationId: operation.id, source: stamp },
       );
       commit_sha = committed.commit_sha;
       kept = committed.kept;
@@ -731,7 +772,7 @@ export async function offering(
     }
     const result = { commit_sha };
     await markOperationCommitted('default', database, operation.id, commit_sha, result);
-    const offer = { offered, locales: config.i18n.locales, gone: going };
+    const offer = { offered, locales: config.i18n.locales, gone: going, source: stamp };
     try {
       for (const { locale, path, file } of files) {
         if (!going.includes(locale)) continue;
@@ -752,6 +793,7 @@ export async function offering(
           pathsOf(drafted),
           offered,
           config.i18n.locales,
+          stamp,
         );
       await finalizeOperation('default', database, operation.id);
     } catch (cause) {
@@ -770,7 +812,15 @@ export async function offering(
   // Nothing that goes is in the repository, so there is nothing to commit or redirect.
   for (const { locale, path } of files)
     if (going.includes(locale)) await discardDraft('default', database, path);
-  await setEntryLocales('default', database, git, pathsOf(staying), offered, config.i18n.locales);
+  await setEntryLocales(
+    'default',
+    database,
+    git,
+    pathsOf(staying),
+    offered,
+    config.i18n.locales,
+    stamp,
+  );
   return Response.json({});
 }
 
@@ -1437,8 +1487,15 @@ export async function createEntry(
   const values: Record<string, unknown> = { ...starter, _version: FORMAT_VERSION };
   if (fields.some((f) => f.path[0] === named && f.type === 'text')) values[named] = title;
   // A brand-new entry has no other file, so it starts in the site's default language.
-  const path = entryPath(collection, slug, config.i18n.defaultLocale);
-  await createDraft('default', database, ctx.git(), path, values);
+  const { defaultLocale, locales } = config.i18n;
+  const path = entryPath(collection, slug, defaultLocale);
+  await createDraft(
+    'default',
+    database,
+    ctx.git(),
+    path,
+    locales.length > 1 ? withSource('default', values, defaultLocale) : values,
+  );
   return Response.json({ slug });
 }
 

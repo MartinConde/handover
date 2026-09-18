@@ -4,8 +4,10 @@ import index from 'virtual:handover/index';
 import type {
   Db,
   EntryLocation,
+  EntrySource,
   Form,
   GitClient,
+  SourceOf,
   Translate,
   TranslationSource,
 } from '@handover/core';
@@ -15,6 +17,7 @@ import {
   deeplTranslate,
   entryAddress,
   entryOffer,
+  entrySource,
   entryUrl,
   formOf,
   labelIn,
@@ -56,29 +59,40 @@ export function entryTitle(entry: string): string {
 export const entryPath = (collection: string, slug: string, locale: string) =>
   `src/content/${collection}/${locale}/${slug}.yaml`;
 
-/** The language an entry is edited in is the entry's own: a German-only entry is German. */
+/** The baseline order, still how a template picks the published file it copies. */
 export const sourceOrder = () => [...new Set([config.i18n.defaultLocale, ...config.i18n.locales])];
 
-export const sourceIn = (loaded: Record<string, unknown>) => sourceOrder().find((l) => l in loaded);
-
-// Asked in order: an ordinary entry costs one read, a one-language site none.
-export async function sourceFor(
+/** One read of every language answers both what the entry holds and which language it is written in. */
+export async function entrySourceFor(
   ctx: RequestContext,
   collection: string,
   slug: string,
-): Promise<string | undefined> {
-  if (config.i18n.locales.length < 2) return config.i18n.defaultLocale;
-  const git = ctx.git();
-  const database = ctx.db();
-  for (const locale of sourceOrder()) {
-    const path = entryPath(collection, slug, locale);
-    const [file, row] = await Promise.all([
-      git.getFile(path),
-      loadDraft('default', database, path),
-    ]);
-    if (row || file) return locale;
-  }
-  return undefined;
+  capture = false,
+) {
+  const loaded = await entryLocales(ctx, collection, slug, config.i18n.locales, capture);
+  return { loaded, source: entrySource('default', config.i18n, localeData(loaded)) };
+}
+
+const SOURCE_PROBLEMS = {
+  conflict: 'ENTRY_SOURCE_CONFLICT',
+  undeclared: 'ENTRY_SOURCE_UNDECLARED',
+  missing: 'ENTRY_SOURCE_MISSING',
+} as const;
+
+/** Never promoted automatically: somebody has to say which language the entry is written in. */
+export function sourceRefusal(answer: Extract<EntrySource, { problem: string }>): Response {
+  const code = SOURCE_PROBLEMS[answer.problem];
+  const named = [...new Set(Object.values(answer.marks))].join(', ');
+  const error =
+    answer.problem === 'conflict'
+      ? `This entry's files disagree about which language it is written in (${named}): make their _source agree`
+      : answer.problem === 'undeclared'
+        ? `This entry says it is written in ${named}, which the site does not declare`
+        : `This entry says it is written in ${named}, which has no file`;
+  return Response.json(
+    { code, error, marks: answer.marks },
+    { status: 409, headers: { 'x-handover-error-code': code } },
+  );
 }
 
 /** Exact source bytes a translated save or provider request is based on. */
@@ -264,8 +278,11 @@ export async function entrySubject(
   collection: string,
   slug: string,
 ): Promise<string | null> {
-  const source = await sourceFor(ctx, collection, slug);
-  return source ? entryPath(collection, slug, source) : null;
+  if (config.i18n.locales.length < 2) return entryPath(collection, slug, config.i18n.defaultLocale);
+  const { loaded, source } = await entrySourceFor(ctx, collection, slug);
+  // A log line is no place to refuse: an unresolved entry still names a file it has.
+  const locale = source && 'locale' in source ? source.locale : Object.keys(loaded)[0];
+  return locale ? entryPath(collection, slug, locale) : null;
 }
 
 /** Every language of one entry as a path, whether or not it has a file yet. */
@@ -369,18 +386,27 @@ export async function pendingLocales(
 export const ENTRY_FILE = /^src\/content\/([a-z0-9-]+)\/([^/]+)\/([^/]+)\.yaml$/;
 
 /** Nothing on a one-language site, which keeps its publish the read-free write it was. */
-export const sourceOf = async (ctx: RequestContext, path: string) => {
-  const [, collection = '', locale = '', slug = ''] = ENTRY_FILE.exec(path) ?? [];
-  const schema = schemaOf(collection, slug);
-  if (!schema || !locale || config.i18n.locales.length < 2) return undefined;
-  const source = await sourceFor(ctx, collection, slug);
-  if (!source || source === locale) return undefined;
-  return {
-    locale: source,
-    path: entryPath(collection, slug, source),
-    form: formFor(collection, slug),
+export function publishSources(ctx: RequestContext): SourceOf {
+  // One publish asks once per file; the entry's languages are read once per entry.
+  const answers = new Map<string, Promise<EntrySource | undefined>>();
+  return async (path) => {
+    const [, collection = '', locale = '', slug = ''] = ENTRY_FILE.exec(path) ?? [];
+    if (!schemaOf(collection, slug) || !locale || config.i18n.locales.length < 2) return undefined;
+    const key = `${collection}/${slug}`;
+    if (!answers.has(key))
+      answers.set(
+        key,
+        entrySourceFor(ctx, collection, slug).then((found) => found.source),
+      );
+    const answer = await answers.get(key);
+    if (!answer || 'problem' in answer || answer.locale === locale) return undefined;
+    return {
+      locale: answer.locale,
+      path: entryPath(collection, slug, answer.locale),
+      form: formFor(collection, slug),
+    };
   };
-};
+}
 
 /** Where the admin edits this entry — a global is the entry screen under its own address. */
 export function entryHref(entry: string): string {
