@@ -312,11 +312,6 @@ async function remove() {
 
 <main class="main main-editor">
   <header class="entry-header">
-    <div class="crumbs">
-      <a href={sitePath(`/admin/site`)}>{m.globals_title({}, options)}</a><span class="sep" aria-hidden="true">/</span><span
-        >{m.redirect_title({}, options)}</span
-      >
-    </div>
     <div class="title-row"><h1>{m.redirect_title({}, options)}</h1></div>
     <p class="subline">
       {m.redirect_intro({}, options)}

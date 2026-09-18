@@ -54,6 +54,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   document.documentElement.lang = 'en';
   document.body.innerHTML = '';
+  localStorage.clear();
 });
 
 // The interface language is chosen on the Account screen only.
@@ -482,6 +483,34 @@ test('the menu button opens the sidebar, and a link inside it closes it again', 
   expect(root.querySelector('.sidebar.is-open')).toBeNull();
 });
 
+test('the sidebar collapses to icons, keeps each link named, and remembers it', () => {
+  drafts();
+  const root = show(session());
+  const toggle = root.querySelector<HTMLButtonElement>('.sidebar-toggle');
+  expect(toggle?.getAttribute('aria-label')).toBe('Collapse sidebar');
+  expect(toggle?.getAttribute('aria-expanded')).toBe('true');
+
+  toggle?.click();
+  flushSync();
+  expect(root.querySelector('.shell.is-collapsed')).not.toBeNull();
+  expect(toggle?.getAttribute('aria-label')).toBe('Expand sidebar');
+  expect(toggle?.getAttribute('aria-expanded')).toBe('false');
+  expect(root.querySelector('.sidebar a[href="/admin/media"]')?.textContent).toBe('Media');
+  expect(localStorage.getItem('handover:sidebar-collapsed')).toBe('1');
+
+  toggle?.click();
+  flushSync();
+  expect(root.querySelector('.shell.is-collapsed')).toBeNull();
+  expect(localStorage.getItem('handover:sidebar-collapsed')).toBeNull();
+});
+
+test('a remembered collapsed sidebar opens collapsed', () => {
+  localStorage.setItem('handover:sidebar-collapsed', '1');
+  drafts();
+  const root = show(session());
+  expect(root.querySelector('.shell.is-collapsed')).not.toBeNull();
+});
+
 // The oldest change and the held count are what decide whether to publish now.
 test('the indicator names the oldest change and how many are held', async () => {
   vi.stubGlobal(
@@ -834,6 +863,67 @@ test('a global path opens the entry editor on the globals collection', async () 
   expect(root.querySelector<HTMLInputElement>('input#f-footerText')?.value).toBe(
     'Coastal homes since 2009',
   );
+});
+
+// The editor's own header has no breadcrumb; the top bar carries it and follows a rename.
+test('the top bar names the open entry under its collection and follows its title', async () => {
+  // The shell imports the editor lazily; a cold import outlasts one fake-timer turn.
+  await import('./editor/Editor.svelte');
+  vi.useFakeTimers();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === '/admin/api/entries/listings/mill-house')
+        return Response.json({
+          fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+          blocks: {},
+          data: { title: 'The Mill House' },
+          pending: [],
+          problems: [],
+          locales: ['en'],
+          defaultLocale: 'en',
+          sourceLocale: 'en',
+          offered: ['en'],
+          translations: {},
+          stale: [],
+          drift: [],
+        });
+      if (url === '/admin/api/build') return Response.json({});
+      if (url.startsWith('/admin/api/locks/'))
+        return Response.json({ held_by: null, mine: true, expires_at: 1755864120000 });
+      if (url.startsWith('/admin/api/drafts/') && init?.method === 'PUT')
+        return Response.json({ updated_at: 1755864000000, pending: true, problems: [] });
+      return Response.json({ entries: [] });
+    }),
+  );
+  const root = show(session(), '/admin/c/listings/mill-house');
+  await vi.advanceTimersByTimeAsync(0);
+  flushSync();
+  expect(root.querySelector('.topbar .crumbs')?.textContent).toBe('Listings/The Mill House');
+  expect(root.querySelector('.topbar .crumbs a')?.getAttribute('href')).toBe('/admin/c/listings');
+  expect(root.querySelector('.entry-header .crumbs')).toBeNull();
+
+  const input = root.querySelector<HTMLInputElement>('input#f-title');
+  if (!input) throw new Error('no title field');
+  input.value = 'The Old Mill';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  flushSync();
+  expect(root.querySelector('.topbar .crumbs')?.textContent).toBe('Listings/The Old Mill');
+  vi.useRealTimers();
+});
+
+test('a global sits under Site settings in the top bar', () => {
+  drafts();
+  const root = show(session(), '/admin/site/site');
+  expect(root.querySelector('.topbar .crumbs a')?.textContent).toBe('Site settings');
+  expect(root.querySelector('.topbar .crumbs a')?.getAttribute('href')).toBe('/admin/site');
+});
+
+test('Redirects sits under Site settings in the top bar', () => {
+  drafts();
+  const root = show(session(), '/admin/site/redirects');
+  expect(root.querySelector('.topbar .crumbs')?.textContent).toBe('Site settings/Redirects');
+  expect(root.querySelector('.topbar .crumbs a')?.getAttribute('href')).toBe('/admin/site');
 });
 
 // The top-bar count and the Publish button describe the same fact, so a save must move both.

@@ -19,7 +19,6 @@ import OffsiteDialog, { type Target } from '../content/Offsite.svelte';
 import { invalidateEntryDirectory } from '../entry-directory.js';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
 import {
-  collectionName,
   formatExactTime,
   formatLanguageName,
   messageOptions,
@@ -72,6 +71,7 @@ let {
   site,
   uiLocale = 'en',
   onmode,
+  ontitle,
 }: {
   collection: string;
   slug: string;
@@ -158,6 +158,8 @@ let {
   restored?: string;
   /** Lets the application shell collapse its navigation only for full-width Canvas. */
   onmode?: (mode: EditorMode) => void;
+  /** Hands the shell a live read of the title for its top-bar breadcrumb. */
+  ontitle?: (read: () => string) => void;
 } = $props();
 const options = $derived(messageOptions(uiLocale));
 const feedbackText = (message: UiMessage) => messageText(message, uiLocale);
@@ -428,6 +430,7 @@ const named = $derived(data[entry.titleField ?? 'title']);
 const title = $derived(
   entry.labels?.[uiLocale] ?? entry.label ?? (typeof named === 'string' && named ? named : slug),
 );
+onMount(() => ontitle?.(() => title));
 // The SEO panel is its own tab, so the Content form omits the field; a global has no tabs.
 const seoField = $derived(!entry.singleton && entry.fields.some((f) => f.type === 'seo'));
 /** The key the seo field sits under, which is what a problem on it is named by. */
@@ -1125,7 +1128,6 @@ async function saveAddress() {
   onchanged();
 }
 
-const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 </script>
 
 <svelte:window
@@ -1220,12 +1222,6 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
     <div class="lock-banner is-drift">{m.editor_drift_blocked({}, options)}</div>
   {/if}
   <header class="entry-header" class:is-held={held} bind:offsetHeight={headerHeight}>
-    <div class="crumbs">
-      <a href={sitePath(entry.singleton ? '/admin/site' : `/admin/c/${collection}`)}>{entry.singleton ? m.editor_site_settings({}, options) : capitalise(collectionName(collection, uiLocale))}</a><span class="sep" aria-hidden="true">/</span><span>{title}</span>
-      <span class="autosave" class:is-saving={saving} class:is-offline={saveFailed}>
-        {#if saving}{m.editor_save_saving({}, options)}{:else if saveFailed}{m.editor_save_not_saved({}, options)}{:else if sourceUnsaved}{m.editor_save_unsaved_changes({}, options)}{:else}{m.editor_save_saved({}, options)}{/if}
-      </span>
-    </div>
     <div class="heading-row">
       <div class="title-row">
         <h1>{title}</h1>
@@ -1275,6 +1271,9 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
         </div>
       </div>
       <div class="actions">
+        <span class="autosave" class:is-saving={saving} class:is-offline={saveFailed}>
+          {#if saving}{m.editor_save_saving({}, options)}{:else if saveFailed}{m.editor_save_not_saved({}, options)}{:else if sourceUnsaved}{m.editor_save_unsaved_changes({}, options)}{:else}{m.editor_save_saved({}, options)}{/if}
+        </span>
         <button
           class="btn btn-primary"
           type="button"

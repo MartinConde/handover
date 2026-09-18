@@ -131,7 +131,7 @@ pnpm astro dev
 ```
 
 Open `http://localhost:4321/admin` and sign in as the owner `init` seeded. Each collection is a
-link in the sidebar; **Listings** lists every entry with its title, and each row opens the
+link in the sidebar (the button at the left of the top bar collapses it to icons); **Listings** lists every entry with its title, and each row opens the
 editor. **New listing** asks for a title, shows the filename it derives from it and opens
 the new entry — which is a draft until you publish it, so nothing is in git yet. **Rename**
 and **Delete** are on the row.

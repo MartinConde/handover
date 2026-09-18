@@ -174,7 +174,7 @@ test('a global labelled per language is named in the interface language', () => 
   expect($(root, 'h1')?.textContent).toBe('Website-Angaben');
 });
 
-test("a global is named by the dev's label, under Site settings", () => {
+test("a global is named by the dev's label", () => {
   const root = show({
     collection: 'globals',
     slug: 'site',
@@ -182,7 +182,6 @@ test("a global is named by the dev's label, under Site settings", () => {
   });
 
   expect($(root, 'h1')?.textContent).toBe('Site details');
-  expect($(root, '.crumbs')?.textContent).toContain('Site settings');
 });
 
 test('an unsupported field shows a marker instead of an input', () => {
@@ -3255,7 +3254,6 @@ test('the editor starts focused and opens its second pane only when requested', 
   const root = show({ entry: { ...bilingual, route: '/listings/[slug]' } });
   expect($(root, '.entry-body.has-pane')).toBeNull();
   expect($(root, '[aria-label="Right pane"]')).toBeNull();
-  expect($(root, '.crumbs a')?.getAttribute('href')).toBe('/admin/c/listings');
   $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
   flushSync();
   expect($(root, '.entry-body.has-pane .pane.is-locale')).not.toBeNull();

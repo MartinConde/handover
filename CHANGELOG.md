@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Collapse the sidebar to icons with the button at the left of the top bar; hovering or focusing an
+  icon shows its name. The browser remembers the choice.
+
+- Show the breadcrumb (*Pages / Home*, *Site settings / Redirects*) in the top bar, after the
+  sidebar button. The editor's autosave state now sits next to **Publish**.
+
 - Stop showing *This editing session expired while idle* after two minutes without typing. If
   nobody else opened the entry meanwhile, the next edit takes the lock back quietly.
 

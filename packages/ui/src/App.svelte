@@ -194,6 +194,24 @@ let revertError = $state<ShellMessage>();
 let drawer = $state(false);
 // Puts the sidebar back over the screen on a phone, where the narrow rule hides it.
 let menu = $state(false);
+// Read before the first paint so a collapsed sidebar does not open wide and then shrink.
+let collapsed = $state(readCollapsed());
+function readCollapsed() {
+  try {
+    return localStorage.getItem('handover:sidebar-collapsed') === '1';
+  } catch {
+    return false;
+  }
+}
+function toggleSidebar() {
+  collapsed = !collapsed;
+  try {
+    if (collapsed) localStorage.setItem('handover:sidebar-collapsed', '1');
+    else localStorage.removeItem('handover:sidebar-collapsed');
+  } catch {
+    // Unavailable storage only means the choice is not remembered.
+  }
+}
 // A disclosure, not role="menu": that role promises arrow keys and a roving tabindex.
 let account = $state(false);
 // Bumped when a screen's data has moved under it — the screen is thrown away and made again.
@@ -533,6 +551,22 @@ const oldest = $derived(Math.min(...pending.map((e) => e.updated_at)));
 const held = $derived(pending.filter((e) => e.held_by).length);
 
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** The editor's title getter, tied to its entry so the next one never shows the last name. */
+let titled = $state<{ entry: string; read: () => string }>();
+const crumb = $derived(
+  redirectRoute
+    ? { href: '/admin/site', parent: m.globals_title({}, options), current: m.redirect_title({}, options) }
+    : editing
+      ? {
+          href: editing.collection === 'globals' ? '/admin/site' : `/admin/c/${editing.collection}`,
+          parent:
+            editing.collection === 'globals'
+              ? m.shell_site_settings({}, options)
+              : capitalise(collectionName(editing.collection, uiLocale)),
+          current: titled?.entry === editingAt ? titled.read() : '',
+        }
+      : undefined,
+);
 const initial = $derived(
   (session?.user.name || session?.user.email || '?').charAt(0).toUpperCase(),
 );
@@ -551,7 +585,7 @@ const initial = $derived(
   <Login {methods} {path} {query} {uiLocale} onlocale={useDeviceLocale} onlogin={loadSession} />
 {:else}
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -- nested links handle keyboard input -->
-<div class="shell" class:is-canvas={Boolean(editing) && editorMode === 'canvas'} onclick={follow}>
+<div class="shell" class:is-canvas={Boolean(editing) && editorMode === 'canvas'} class:is-collapsed={collapsed} onclick={follow}>
   <a class="skip-link" href="#workspace" onclick={(event) => { event.preventDefault(); document.getElementById('workspace')?.focus(); }}>{m.shell_skip_to_content({}, options)}</a>
   <!-- A banner, not a toast, since it outlives a page load; the pill is the live region. -->
   {#if building}
@@ -563,10 +597,10 @@ const initial = $derived(
     <div class="banner banner-warn" role="alert">{text(revertError)}{#if revertError.detail}<span class="technical-detail">{m.common_technical_detail({ detail: revertError.detail }, options)}</span>{/if}</div>
   {/if}
   <aside class="sidebar" class:is-open={menu} aria-label={m.shell_main_navigation({}, options)} inert={drawer}>
-    <a class="site-name" href={sitePath(`/admin`)}><span class="site-mark" aria-hidden="true">H</span><span>Handover<span class="workspace-label">{m.shell_content_workspace({}, options)}</span></span></a>
+    <a class="site-name" href={sitePath(`/admin`)}><span class="site-mark" aria-hidden="true">H</span><span class="nav-text">Handover<span class="workspace-label">{m.shell_content_workspace({}, options)}</span></span></a>
     <nav class="nav">
       <div class="nav-group">
-        <a href={sitePath(`/admin`)} data-icon="dashboard" aria-current={path === '/admin' ? 'page' : undefined}>{m.dashboard_title({}, options)}</a>
+        <a href={sitePath(`/admin`)} data-icon="dashboard" aria-current={path === '/admin' ? 'page' : undefined}><span class="nav-text">{m.dashboard_title({}, options)}</span></a>
       </div>
     </nav>
     <!-- Always there, even with no globals: every site has redirects, listed on that screen. -->
@@ -577,7 +611,7 @@ const initial = $derived(
           href={sitePath(`/admin/site`)}
           data-icon="site"
           aria-current={path.startsWith('/admin/site') ? 'page' : undefined}
-        >{m.shell_site_settings({}, options)}</a>
+        ><span class="nav-text">{m.shell_site_settings({}, options)}</span></a>
       </div>
     </nav>
     <nav class="nav" aria-labelledby="nav-content">
@@ -588,7 +622,7 @@ const initial = $derived(
             href={sitePath(`/admin/c/${name}`)}
             data-icon={['listings', 'pages', 'team', 'blog'].includes(name) ? name : 'collection'}
             aria-current={(listRoute ?? entryRoute)?.[1] === name ? 'page' : undefined}
-          >{capitalise(collectionName(name, uiLocale))}</a>
+          ><span class="nav-text">{capitalise(collectionName(name, uiLocale))}</span></a>
         {/each}
       </div>
     </nav>
@@ -600,12 +634,12 @@ const initial = $derived(
             href={sitePath(item.path)}
             data-icon={item.icon}
             aria-current={path === item.path ? 'page' : undefined}
-          >{manageLabel(item.label)}</a>
+          ><span class="nav-text">{manageLabel(item.label)}</span></a>
         {/each}
       </div>
     </nav>
     {#if session.site}
-      <div class="sidebar-footer"><a class="site-link" href={session.site} target="_blank" rel="noreferrer">{m.shell_view_website({}, options)} <span aria-hidden="true">↗</span></a></div>
+      <div class="sidebar-footer"><a class="site-link" href={session.site} target="_blank" rel="noreferrer"><span class="nav-text">{m.shell_view_website({}, options)}</span> <span aria-hidden="true">↗</span></a></div>
     {/if}
   </aside>
   <div class="shell-body" id="workspace" tabindex="-1" inert={drawer}>
@@ -618,6 +652,20 @@ const initial = $derived(
         aria-expanded={menu}
         onclick={() => (menu = !menu)}>☰</button
       >
+      <!-- Only beside the sidebar; on a phone the menu button above stands in for it. -->
+      <button
+        class="btn btn-ghost sidebar-toggle"
+        type="button"
+        aria-label={collapsed ? m.shell_expand_sidebar({}, options) : m.shell_collapse_sidebar({}, options)}
+        aria-expanded={!collapsed}
+        onclick={toggleSidebar}
+        ><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></svg></button
+      >
+      {#if crumb}
+        <div class="crumbs">
+          <a href={sitePath(crumb.href)}>{crumb.parent}</a>{#if crumb.current}<span class="sep" aria-hidden="true">/</span><span class="current">{crumb.current}</span>{/if}
+        </div>
+      {/if}
       <button
         class="indicator"
         class:is-lit={pending.length && pendingKnown}
@@ -740,6 +788,7 @@ const initial = $derived(
           onrestored={(date) => (restored = { entry: editingAt, date })}
           restored={restored?.entry === editingAt ? restored.date : undefined}
           onmode={(mode) => (editorMode = mode)}
+          ontitle={(read) => (titled = { entry: editingAt, read })}
         />
       {:catch error}
         {@const failure = entryFailure(error)}

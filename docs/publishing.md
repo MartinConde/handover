@@ -38,7 +38,7 @@ a base that has moved on.
 
 ## What the editor shows
 
-The state next to the breadcrumb is the autosave, not the publish:
+The state next to **Publish** is the autosave, not the publish:
 
 | | |
 |---|---|
