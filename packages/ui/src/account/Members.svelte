@@ -233,7 +233,7 @@ async function remove() {
       {#each members as member (member.id)}
         <div class="row" role="row">
           <div class="td title" role="cell">
-            <span class="avatar avatar-sm" class:is-pending={member.pending} aria-hidden="true"
+            <span class={['avatar avatar-sm', { 'is-pending': member.pending }]} aria-hidden="true"
               >{initials(member)}</span
             >
             <span class="who">
@@ -246,7 +246,7 @@ async function remove() {
             </span>
           </div>
           <div class="td" role="cell" data-label={m.members_role({}, options)}>
-            <span class="badge" class:badge-accent={member.role === 'owner'}>
+            <span class={['badge', { 'badge-accent': member.role === 'owner' }]}>
               {member.role === 'owner' ? m.members_owner({}, options) : m.members_editor({}, options)}
             </span>
           </div>

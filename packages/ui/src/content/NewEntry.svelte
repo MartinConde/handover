@@ -16,7 +16,7 @@ let {
 const options = $derived(messageOptions(uiLocale));
 
 // Read when the dialog opens, so the dashboard opens it exactly as the list does.
-let taken = $state<string[]>([]);
+let taken = $state.raw<string[]>([]);
 let templates = $state<string[]>([]);
 let text = $state('');
 let starter = $state('');

@@ -97,14 +97,53 @@ const pageFields: Form['fields'] = [
     label: 'Blocks',
     type: 'blocks',
     required: true,
-    types: ['hero', 'textSection'],
+    types: ['hero', 'textSection', 'cta', 'columns'],
+  },
+  {
+    path: ['features'],
+    label: 'Features',
+    type: 'array',
+    required: true,
+    item: [
+      { path: ['label'], label: 'Label', type: 'text', required: true },
+      { path: ['detail'], label: 'Detail', type: 'richtext', required: false, tier: 'basic' },
+    ],
+  },
+  {
+    path: ['tags'],
+    label: 'Tags',
+    type: 'array',
+    required: false,
+    item: [{ path: [], label: 'Tag', type: 'text', required: false }],
   },
   seoField,
 ];
 const blocks: Form['blocks'] = {
   hero: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }, photoField],
   textSection: [{ path: ['body'], label: 'Body', type: 'richtext', required: true, tier: 'full' }],
+  cta: [
+    { path: ['heading'], label: 'Heading', type: 'text', required: true },
+    { path: ['button'], label: 'Button', type: 'link', required: false },
+  ],
+  columns: [
+    {
+      path: ['columns'],
+      label: 'Columns',
+      type: 'array',
+      required: true,
+      item: [
+        {
+          path: ['blocks'],
+          label: 'Blocks',
+          type: 'blocks',
+          required: true,
+          types: ['textSection', 'cta'],
+        },
+      ],
+    },
+  ],
 };
+const blockLabels = { cta: 'Call to action', columns: 'Two columns', textSection: 'Text section' };
 const pageData = {
   title: 'Home',
   blocks: [
@@ -114,7 +153,29 @@ const pageData = {
       _type: 'textSection',
       body: 'Find a place to call your own. Explore our collection of coastal homes.',
     },
+    {
+      _id: 'c0l5aa11',
+      _type: 'columns',
+      columns: [
+        {
+          _id: 'c0l1',
+          blocks: [
+            {
+              _id: 't3x7s3c1',
+              _type: 'textSection',
+              body: '## Why the coast\n\nTwo **sunny** bedrooms and a *quiet* garden.\n\n- Sea view\n- Walled garden',
+            },
+          ],
+        },
+      ],
+    },
+    { _id: 'c7a0b1d2', _type: 'cta', heading: 'Book a viewing', button: { type: 'entry' } },
   ],
+  features: [
+    { _id: 'f1', label: 'Parking', detail: 'Two spaces *off street*.' },
+    { _id: 'f2', label: 'Heating' },
+  ],
+  tags: ['Coastal', 'Family'],
 };
 const config = {
   collections: [
@@ -218,6 +279,21 @@ window.fetch = async (input, init) => {
   if (path === '/admin/api/drafts') return json({ entries: pending, defaultLocale: 'en' });
   if (path === '/admin/api/build') return json(build);
   if (path === '/admin/api/globals') return json({ globals, locales });
+  if (path === '/admin/api/entries')
+    return json({
+      locales,
+      entries: [
+        ...rows.map((row) => ({
+          collection: 'listings',
+          path: `listings/${row.id}`,
+          title: row.title,
+          locales: row.missing ? ['en'] : locales,
+          urls: { en: `/listings/${row.id}` },
+          hidden: row.hidden,
+        })),
+        { collection: 'pages', path: 'pages/home', title: 'Home', locales, urls: { en: '/' } },
+      ],
+    });
   if (path === '/admin/api/entries/listings') return json({ entries, locales, templates: [] });
   if (path === '/admin/api/entries/pages')
     return json({
@@ -252,6 +328,7 @@ window.fetch = async (input, init) => {
     return json({
       fields: isPage ? pageFields : fields,
       blocks,
+      blockLabels,
       data,
       pending: [],
       published: locales,

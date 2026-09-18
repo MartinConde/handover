@@ -254,7 +254,7 @@ const initials = (name: string) =>
           {/if}
         </p>
       </div>
-      <span class="compare-guide" class:is-active={chosen.length > 0}>
+      <span class={['compare-guide', { 'is-active': chosen.length > 0 }]}>
         <svg viewBox="0 0 20 20" aria-hidden="true">
           <path d="M6.5 4.5h-2v11h2M13.5 4.5h2v11h-2M8.5 7.5h3M8.5 12.5h3" />
         </svg>
@@ -324,7 +324,7 @@ const initials = (name: string) =>
       <ul class="version-list">
         {#each shown as version (version.sha)}
           <li>
-            <div class="version-row" class:is-current={selected?.sha === version.sha}>
+            <div class={['version-row', { 'is-current': selected?.sha === version.sha }]}>
               <input
                 type="checkbox"
                 checked={chosen.some((v) => v.sha === version.sha)}
@@ -378,7 +378,7 @@ const initials = (name: string) =>
       {/if}
     {/if}
   </div>
-  <div class="version-view" class:has-version={selected || chosen.length === 2}>
+  <div class={['version-view', { 'has-version': selected || chosen.length === 2 }]}>
     {#if diffError}
       <p class="notice notice-danger" role="alert">{messageText(diffError, uiLocale)}</p>
     {:else if reading}

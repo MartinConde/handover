@@ -26,7 +26,7 @@ let cursor = $state<string | null>(null);
 let loading = $state(true);
 let more = $state(false);
 let failure = $state<number>();
-let people = $state<Person[]>([]);
+let people = $state.raw<Person[]>([]);
 
 /** The typed box is separate, so the entry filter applies on change, not every keystroke. */
 let group = $state('');
@@ -155,7 +155,7 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
     <div class="filters">
       <!-- A native select brings its own keyboard, typeahead and the phone's picker. -->
       <label class="visually-hidden" for="activity-group">{m.activity_filter_kind({}, options)}</label>
-      <select class="filter" class:is-on={group} id="activity-group" bind:value={group}>
+      <select class={['filter', { 'is-on': group }]} id="activity-group" bind:value={group}>
         <option value="">{m.activity_all_kinds({}, options)}</option>
         {#each Object.keys(ACTIVITY_GROUPS) as name (name)}
           <option value={name}>{activityGroupLabel(ACTIVITY_GROUPS[name as keyof typeof ACTIVITY_GROUPS][0], uiLocale)}</option>
@@ -163,7 +163,7 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
       </select>
       {#if role === 'owner'}
         <label class="visually-hidden" for="activity-person">{m.activity_filter_person({}, options)}</label>
-        <select class="filter" class:is-on={person} id="activity-person" bind:value={person}>
+        <select class={['filter', { 'is-on': person }]} id="activity-person" bind:value={person}>
           <option value="">{m.activity_everyone({}, options)}</option>
           {#each people as member (member.id)}
             <option value={member.id}>{member.name || member.email}</option>
@@ -219,9 +219,10 @@ const RESTORABLE = ['entry-delete', 'locale-off'];
         <li>
           <div class="activity-row">
             <span
-              class="avatar avatar-sm"
-              class:is-system={!event.user}
-              class:is-gone={event.user && !event.user.name && !event.user.email}
+              class={[
+                'avatar avatar-sm',
+                { 'is-system': !event.user, 'is-gone': event.user && !event.user.name && !event.user.email },
+              ]}
               aria-hidden="true">{event.user ? initials(event) || '?' : '⚙'}</span
             >
             <p class="said">

@@ -1,5 +1,5 @@
 <script lang="ts">
-import { untrack } from 'svelte';
+import { onMount } from 'svelte';
 import {
   formatCalendarDate,
   formatLanguageName,
@@ -86,12 +86,9 @@ let keyError = $state<DiagnosticMessage>();
 let keySaid = $state<DiagnosticMessage>();
 let trigger = $state<HTMLElement | null>(null);
 
-// Untracked because `run` reads and writes `results`, so a tracking effect would loop for ever.
-$effect(() => {
-  untrack(() => {
-    checkAll();
-    void loadKeys();
-  });
+onMount(() => {
+  checkAll();
+  void loadKeys();
 });
 
 async function load(): Promise<Config> {
@@ -425,7 +422,7 @@ const mailerName = (provider: string) => {
     <p class="placeholder">{m.common_loading({}, options)}</p>
   {:then config}
     <div class="settings is-wide">
-      <div class="health" class:is-failing={failing.length > 0} class:is-busy={busy && !failing.length}>
+      <div class={['health', { 'is-failing': failing.length > 0, 'is-busy': busy && !failing.length }]}>
         <!-- The count says what stops working, because that is the half the owner can judge. -->
         {#if failing.length}
           <p class="page-alert" role="status">
@@ -506,7 +503,7 @@ const mailerName = (provider: string) => {
             {@const result = results[check.key]}
             {@const state = result?.state ?? 'unchecked'}
             {@const name = provider(check.key, config)}
-            <li class="check-card service-row is-{state}" class:has-action={check.sends}>
+            <li class={['check-card', `service-row is-${state}`, { 'has-action': check.sends }]}>
               <details bind:open={expanded[check.key]}>
                 <summary>
                   <svg class="chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 4l4 4-4 4" /></svg>
@@ -554,7 +551,7 @@ const mailerName = (provider: string) => {
                     <div>
                       <dt>{m.diagnostics_last_check({}, options)}</dt>
                       <dd>
-                        <span class="result" class:is-failed={result.state === 'failed'} role="status">
+                        <span class={['result', { 'is-failed': result.state === 'failed' }]} role="status">
                           {#if result.state === 'running'}
                             {m.diagnostics_checking({}, options)}
                           {:else if result.message}

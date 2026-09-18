@@ -1144,6 +1144,16 @@ $effect(() => {
   void version;
 });
 
+const fitWorkspace = () => {
+  if (!workspace || !active) return;
+  const bounds = workspace.getBoundingClientRect();
+  narrow = bounds.width < 1000;
+  workspace.style.setProperty(
+    '--canvas-height',
+    `${Math.max(420, window.innerHeight - Math.max(0, bounds.top))}px`,
+  );
+};
+
 onMount(() => {
   try {
     const stored = JSON.parse(localStorage.getItem(PANEL_WIDTH_STORAGE) ?? '{}') as Record<
@@ -1155,22 +1165,11 @@ onMount(() => {
   } catch {
     // Ignore malformed or unavailable local storage and keep the considered defaults.
   }
-  const fitWorkspace = () => {
-    if (!workspace || !active) return;
-    const bounds = workspace.getBoundingClientRect();
-    narrow = bounds.width < 1000;
-    workspace.style.setProperty(
-      '--canvas-height',
-      `${Math.max(420, window.innerHeight - Math.max(0, bounds.top))}px`,
-    );
-  };
   const resize = new ResizeObserver(fitWorkspace);
   if (workspace) resize.observe(workspace);
   const header = workspace?.closest('.main-editor')?.querySelector('.entry-header');
   if (header) resize.observe(header);
-  window.addEventListener('resize', fitWorkspace);
   fitWorkspace();
-  addEventListener('keydown', historyShortcut);
   void import('./canvas-renderer').then(({ createCanvasRenderer }) => {
     if (disposed || !stage) return;
     renderer = createCanvasRenderer({
@@ -1201,20 +1200,24 @@ onMount(() => {
   });
   return () => {
     resize.disconnect();
-    window.removeEventListener('resize', fitWorkspace);
-    removeEventListener('keydown', historyShortcut);
     disposed = true;
     renderer?.dispose();
   };
 });
 </script>
 
+<svelte:window onresize={fitWorkspace} onkeydown={historyShortcut} />
+
 <section
   bind:this={workspace}
-  class="canvas-workspace"
-  class:is-fullscreen={fullscreen}
-  class:is-inactive={!active}
-  class:is-mobile-hidden={mobileHidden}
+  class={[
+    'canvas-workspace',
+    {
+      'is-fullscreen': fullscreen,
+      'is-inactive': !active,
+      'is-mobile-hidden': mobileHidden,
+    },
+  ]}
   aria-label={m.canvas_label({}, options)}
   aria-hidden={!active}
   inert={!active}
@@ -1261,12 +1264,12 @@ onMount(() => {
         onclick={(event) => { event.preventDefault(); void openCurrentPreview(); }}>{m.preview_title({}, options)} <CanvasIcon name="external" /></a>
       {#if fullscreen}{@render publishAction?.()}{/if}
     </div>
-    <span class="visually-hidden canvas-render-state" class:is-busy={loading || rendererState.phase === 'rendering'} class:is-failed={rendererState.phase === 'failed'} role="status">{status}</span>
+    <span class={['visually-hidden canvas-render-state', { 'is-busy': loading || rendererState.phase === 'rendering', 'is-failed': rendererState.phase === 'failed' }]} role="status">{status}</span>
   </div>
   {#if actionRefusal}<div class="canvas-action-refusal" role="alert">{actionRefusalText}</div>{/if}
 
   {#if issues.length}
-    <div class="canvas-validation" class:is-incomplete={incompletePaths.length > 0} role="status">
+    <div class={['canvas-validation', { 'is-incomplete': incompletePaths.length > 0 }]} role="status">
       <div>
         {#if incompletePaths.length}
           <span>{m.canvas_complete_required({}, options)}</span>
@@ -1313,14 +1316,14 @@ onMount(() => {
   {/if}
 
   <div
-    class:has-structure={structureVisible}
-    class:has-inspector={inspectorOpen}
-    class:is-resizing={!!resizing}
-    class="canvas-workarea"
+    class={[
+      'canvas-workarea',
+      { 'has-structure': structureVisible, 'has-inspector': inspectorOpen, 'is-resizing': !!resizing },
+    ]}
     style={`--canvas-structure-width:${structureWidth}px;--canvas-inspector-width:${inspectorWidth}px`}
   >
-    <div class="canvas-panel-slot canvas-structure-slot" class:is-open={structureVisible} aria-hidden={!structureVisible} inert={!structureVisible}>
-      <aside class="canvas-structure" class:is-block-editor={!!blockEditor} id="canvas-structure" aria-labelledby="canvas-structure-title">
+    <div class={['canvas-panel-slot canvas-structure-slot', { 'is-open': structureVisible }]} aria-hidden={!structureVisible} inert={!structureVisible}>
+      <aside class={['canvas-structure', { 'is-block-editor': !!blockEditor }]} id="canvas-structure" aria-labelledby="canvas-structure-title">
         <div class="canvas-structure-home">
           <header>
             <div>
@@ -1337,7 +1340,7 @@ onMount(() => {
                 <button
                   type="button"
                   role="treeitem"
-                  class:is-branch={branch}
+                  class={{ 'is-branch': branch }}
                   aria-level={treeDepth(node)}
                   aria-posinset={node.position}
                   aria-setsize={node.setSize}
@@ -1400,8 +1403,7 @@ onMount(() => {
       {#if structureVisible && !narrow}
         <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -- ARIA's adjustable separator pattern is keyboard interactive. -->
         <div
-          class="canvas-panel-resizer canvas-structure-resizer"
-          class:is-active={resizing?.panel === 'structure'}
+          class={['canvas-panel-resizer canvas-structure-resizer', { 'is-active': resizing?.panel === 'structure' }]}
           role="separator"
           aria-label={m.canvas_resize_structure({}, options)}
           aria-orientation="vertical"
@@ -1423,13 +1425,12 @@ onMount(() => {
     <div class="canvas-stage-shell">
       <div class="canvas-stage is-{width}" bind:this={stage} aria-label={m.canvas_editable_page({}, options)}></div>
     </div>
-    <div class="canvas-panel-slot canvas-inspector-slot" class:is-open={inspectorOpen} aria-hidden={!inspectorOpen} inert={!inspectorOpen}>
+    <div class={['canvas-panel-slot canvas-inspector-slot', { 'is-open': inspectorOpen }]} aria-hidden={!inspectorOpen} inert={!inspectorOpen}>
       {#if inspectorOpen}
         {#if !narrow}
           <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -- ARIA's adjustable separator pattern is keyboard interactive. -->
           <div
-            class="canvas-panel-resizer canvas-inspector-resizer"
-            class:is-active={resizing?.panel === 'inspector'}
+            class={['canvas-panel-resizer canvas-inspector-resizer', { 'is-active': resizing?.panel === 'inspector' }]}
             role="separator"
             aria-label={m.canvas_resize_inspector({}, options)}
             aria-orientation="vertical"

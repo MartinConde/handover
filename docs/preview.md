@@ -107,12 +107,12 @@ which line to write: those are the site's own wiring, and only preview reads it.
 
 ## Beside the form, and Canvas
 
-The form is always on the left. **Beside the form** picks what sits on its right: **Page**, the
-page as the site renders it; **Side by side**, the entry in another language
-([Translating](translating.md#side-by-side)); or **Form only**, which gives the form the width and
-brings back the list of fields. **Page** is offered to entries with a `route`, a
-[loader](loaders.md), and preview enabled, and is where they open; everything else opens with
-**Form only**. The choice is remembered per browser.
+The form is always on the left. **Beside the form** picks what sits on its right: **Live
+preview**, the page as the site renders it, or **Translate**, the entry in another language
+([Translating](translating.md#side-by-side)). **Live preview** is offered to entries with a
+`route`, a [loader](loaders.md), and preview enabled, and is where they open; everything else
+opens with the form alone. Press **Live preview** again to fold the page away and give the form
+the full width. The choice is remembered per browser.
 
 The page beside the form stays in view while the form scrolls, under one row with its address, the
 device widths and **Preview**. It is for looking at: it scrolls and follows every edit, but clicking

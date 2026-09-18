@@ -208,7 +208,7 @@ function backToPassword() {
           <h1>{m.auth_set_new_password({}, messageOptions(uiLocale))}</h1>
         </div>
         <form onsubmit={saveNewPassword}>
-          <div class="field" class:is-invalid={fieldError}>
+          <div class={['field', { 'is-invalid': fieldError }]}>
             <label for="new-password">{m.auth_new_password({}, messageOptions(uiLocale))}</label>
             <div class="input-row">
               <input

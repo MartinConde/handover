@@ -26,12 +26,8 @@ let {
 } = $props();
 const options = $derived(messageOptions(uiLocale));
 
-// The list it replaced is gone from the drawer, so the panel takes the focus with it.
-let panel = $state<HTMLElement>();
-$effect(() => panel?.focus());
-
-let questions = $state<Question[]>([]);
-let merged = $state<MergedChange[]>([]);
+let questions = $state.raw<Question[]>([]);
+let merged = $state.raw<MergedChange[]>([]);
 /** The commit the repository is at, which is what "theirs" is of. */
 let head = $state('');
 let version = $state('');
@@ -158,7 +154,7 @@ const said = (change: Change): string => {
 <!-- What this side says, with what it added marked. -->
 {#snippet value(change: Change)}
   {#if change.kind === 'value'}{change.after ?? m.conflict_empty({}, options)}
-  {:else if change.kind === 'words'}{#each change.parts.filter((p) => p.mark !== 'del') as part, i (i)}{#if part.mark === 'ins'}<ins
+  {:else if change.kind === 'words'}{#each change.parts.filter((p) => p.mark !== 'del') as part}{#if part.mark === 'ins'}<ins
         >{part.text}</ins
       >{:else}{part.text}{/if}{/each}
   {:else}{m.conflict_rewritten({}, options)}{/if}
@@ -188,7 +184,8 @@ const said = (change: Change): string => {
   </label>
 {/snippet}
 
-<div class="resolve" aria-labelledby="resolve-h" tabindex="-1" bind:this={panel}>
+<!-- The list it replaced is gone from the drawer, so the panel takes the focus with it. -->
+<div class="resolve" aria-labelledby="resolve-h" tabindex="-1" {@attach (node) => node.focus()}>
   <header>
     <h3 id="resolve-h">{m.conflict_title({ title }, options)}</h3>
     <p>

@@ -22,7 +22,7 @@ type Global = {
   edited?: { at: number; by: string | null; kind: 'edit' | 'publish' } | null;
 };
 
-let globals = $state<Global[]>([]);
+let globals = $state.raw<Global[]>([]);
 // The site's languages in its own order; with one, no chips are drawn at all.
 let locales = $state<string[]>([]);
 let loading = $state(true);
@@ -81,8 +81,7 @@ async function load() {
                   <span class="chips">
                     {#each locales as locale (locale)}
                       <span
-                        class="chip"
-                        class:chip-missing={!global.locales.includes(locale)}
+                        class={['chip', { 'chip-missing': !global.locales.includes(locale) }]}
                         title="{locale}: {global.locales.includes(locale)
                           ? m.globals_written({}, options)
                           : m.globals_not_written({}, options)}"

@@ -100,10 +100,8 @@ onMount(() => {
   if (typeof modal?.showModal === 'function') modal.showModal();
   else modal?.setAttribute('open', '');
   focusFirst();
-  window.addEventListener('keydown', globalKeydown, true);
 
   return () => {
-    window.removeEventListener('keydown', globalKeydown, true);
     if (modal?.open && typeof modal.close === 'function') modal.close();
     if (opener?.isConnected) opener.focus();
     else {
@@ -117,6 +115,8 @@ onMount(() => {
   };
 });
 </script>
+
+<svelte:window onkeydowncapture={globalKeydown} />
 
 <dialog
   class="modal-host"

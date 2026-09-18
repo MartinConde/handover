@@ -88,7 +88,7 @@ const options = $derived(messageOptions(uiLocale));
 
 const menu = $derived(menus[tab]);
 const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-let known = $state<Pickable>({ entries: [], locales: [] });
+let known = $state.raw<Pickable>({ entries: [], locales: [] });
 let knownCurrent = $state(false);
 let knownError = $state(false);
 $effect(() => {
@@ -437,11 +437,11 @@ function walkTabs(event: KeyboardEvent) {
       {@const open = editing === item._id}
       {@const s = sortable(() => item._id, () => i)}
       <li>
-        <div class="menu-item" class:is-lifted={s.isDragging} class:is-open={open} class:is-added={lastAdded === item._id} {@attach s.attach}>
+        <div class={['menu-item', { 'is-lifted': s.isDragging, 'is-open': open, 'is-added': lastAdded === item._id }]} {@attach s.attach}>
           <button class="grip" type="button" aria-label={m.menus_reorder({ item: name(item) }, options)} {@attach s.attachHandle}>⠿</button>
           <button class="row-open" id="{id}-row-{item._id}" type="button" aria-expanded={open} onclick={() => (open ? (editing = '') : edit(item))}>
             <span class="row-copy">
-              <span class="lbl" class:is-default={!item.label}>{name(item)}</span>
+              <span class={['lbl', { 'is-default': !item.label }]}>{name(item)}</span>
               <span class="row-detail"><span class="kind">{kind(item)}</span><span class="row-path">{target(item)}</span></span>
             </span>
             <span class="row-status">
@@ -519,9 +519,9 @@ function walkTabs(event: KeyboardEvent) {
   {#if mark?.kind === 'line'}
     <li aria-hidden="true"><div class="drop-line"></div></li>
   {:else if mark?.kind === 'into' && mark.parent}
-    <li aria-hidden="true"><div class="drop-into" class:is-deeper={mark.deeper}>{mark.sib ? m.menus_drop_inside_after({ parent: name(mark.parent), sibling: name(mark.sib) }, options) : m.menus_drop_inside({ parent: name(mark.parent) }, options)}</div></li>
+    <li aria-hidden="true"><div class={['drop-into', { 'is-deeper': mark.deeper }]}>{mark.sib ? m.menus_drop_inside_after({ parent: name(mark.parent), sibling: name(mark.sib) }, options) : m.menus_drop_inside({ parent: name(mark.parent) }, options)}</div></li>
   {:else if mark}
-    <li aria-hidden="true"><div class="drop-blocked" class:is-deeper={mark.deeper}>{m.menus_drop_blocked({}, options)}</div></li>
+    <li aria-hidden="true"><div class={['drop-blocked', { 'is-deeper': mark.deeper }]}>{m.menus_drop_blocked({}, options)}</div></li>
   {/if}
 {/snippet}
 
@@ -551,7 +551,7 @@ function walkTabs(event: KeyboardEvent) {
   onclick={(e) => { const at = e.target as HTMLElement; if (menuFor && !at.closest('.row-menu')) menuFor = ''; }}
 />
 
-<div class="nav-build" class:is-labels={translating} {id} role="group" aria-labelledby={labelId}>
+<div class={['nav-build', { 'is-labels': translating }]} {id} role="group" aria-labelledby={labelId}>
   {#if knownError}
     <div class="notice notice-danger menu-directory-error" role="alert">
       {m.menus_directory_failed({}, options)}

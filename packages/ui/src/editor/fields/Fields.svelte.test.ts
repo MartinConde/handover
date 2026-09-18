@@ -116,7 +116,7 @@ const selectAll = (sel: string) => {
   flushSync();
 };
 const pickRow = (path: string) => {
-  const row = rows().find((b) => b.querySelector('.path')?.textContent === path);
+  const row = rows().find((b) => b.title === path);
   if (!row) throw new Error(`no row for ${path}`);
   row.click();
   flushSync();
@@ -431,7 +431,7 @@ test('reference: only the collection the schema names is offered', async () => {
   );
   q<HTMLButtonElement>('#f-agent button').click();
   await settle();
-  expect(rows().map((b) => b.querySelector('.path')?.textContent)).toEqual([
+  expect(rows().map((b) => b.title)).toEqual([
     'agents/jane-doe',
     'agents/james-hartley',
   ]);
@@ -715,7 +715,7 @@ test('rich text: an entry the language cannot serve is listed with the reason an
   selectAll('#f-summary');
   q<HTMLButtonElement>('[aria-label="Link"]').click();
   await settle();
-  const jane = rows().find((b) => b.querySelector('.path')?.textContent === 'agents/jane-doe');
+  const jane = rows().find((b) => b.title === 'agents/jane-doe');
   expect(jane?.getAttribute('aria-disabled')).toBe('true');
   expect(q(`#${CSS.escape(jane?.getAttribute('aria-describedby') ?? '')}`).textContent).toBe(
     'Nothing on the site renders this, so it has no address',

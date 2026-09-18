@@ -404,7 +404,7 @@ function askDiscard(entry: PendingEntry) {
 
 {#snippet change(entry: PendingEntry)}
   <li>
-    <div class="change-row" class:is-held={entry.held_by} class:is-blocked={blocked.includes(entry.key)}>
+    <div class={['change-row', { 'is-held': entry.held_by, 'is-blocked': blocked.includes(entry.key) }]}>
       <label class="lead" for="pending-{entry.key}">
         <span class="visually-hidden">{m.pending_include({ title: named(entry) }, options)}</span>
         <input

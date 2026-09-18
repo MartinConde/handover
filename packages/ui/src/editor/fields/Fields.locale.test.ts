@@ -225,7 +225,8 @@ test('structured field state and open feedback survive a live locale switch', as
     'Wer den direkten Link hat, kann die Seite weiterhin öffnen',
   );
   expect(q('#translated-summary-field .hint').textContent ?? '').toBe('In jeder Sprache gleich');
-  expect(q('#f-rooms .add').textContent ?? '').toBe('Zu Rooms hinzufügen');
+  expect(q('#f-rooms .add').textContent ?? '').toBe('Eintrag hinzufügen');
+  expect(q('#f-rooms .add').getAttribute('aria-label')).toBe('Einen Eintrag zu Rooms hinzufügen');
   expect(q('#f-blocks .add').textContent ?? '').toBe('Block hinzufügen');
   expect(q('#f-button-field legend').textContent ?? '').toBe('Ziel');
   expect(q('#f-seo\\.title-meter').textContent ?? '').toBe('Bis zu etwa 60 Zeichen');

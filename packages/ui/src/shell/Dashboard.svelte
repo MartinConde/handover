@@ -63,7 +63,7 @@ const options = $derived(messageOptions(uiLocale));
 // The collection whose New entry dialog is open — the list's own dialog, opened from here.
 let creating = $state('');
 
-let recent = $state<Recent[]>([]);
+let recent = $state.raw<Recent[]>([]);
 let health = $state<Health | null>(null);
 let published = $state<{ at: number; by: string | null } | null>(null);
 let events = $state<ActivityEvent[]>([]);
@@ -171,7 +171,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
     </div>
   {/if}
   <div class="dash">
-    <section class="dtile" class:is-lit={pending.length} aria-labelledby="d-pending">
+    <section class={['dtile', { 'is-lit': pending.length }]} aria-labelledby="d-pending">
       <header><h2 id="d-pending">{m.shell_unpublished_changes({}, options)}</h2></header>
       {#if pendingStatus === 'loading'}
         <p class="line">{m.shell_pending_checking({}, options)}</p>
@@ -195,10 +195,14 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
     </section>
 
     <section
-      class="dtile span-2"
-      class:is-live={build?.state === 'live'}
-      class:is-building={build?.state === 'building'}
-      class:is-failed={build?.state === 'failed'}
+      class={[
+        'dtile span-2',
+        {
+          'is-live': build?.state === 'live',
+          'is-building': build?.state === 'building',
+          'is-failed': build?.state === 'failed',
+        },
+      ]}
       aria-labelledby="d-build"
     >
       <header>
@@ -283,7 +287,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
           {#each health.locales as row (row.locale)}
             {@const where = row.where ?? []}
             <div class="locale-line">
-              <span class="chip" class:chip-missing={row.missing}>{row.locale.toUpperCase()}</span>
+              <span class={['chip', { 'chip-missing': row.missing }]}>{row.locale.toUpperCase()}</span>
               {#if row.locale === health.defaultLocale && !row.missing && !row.stale}
                 <span class="ok">{m.dashboard_source_language({}, options)}</span>
               {:else if !row.missing && !row.stale}
@@ -333,7 +337,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
             {@const line = said(event, [], uiLocale)}
             <li>
               <div class="activity-row">
-                <span class="avatar avatar-sm" class:is-system={!event.user} aria-hidden="true"
+                <span class={['avatar avatar-sm', { 'is-system': !event.user }]} aria-hidden="true"
                   >{event.user ? initials(event) || '?' : '⚙'}</span
                 >
                 <p class="said">

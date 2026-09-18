@@ -167,11 +167,6 @@ $effect(() => {
 // Dismiss lasts for the screen's life: what would bring the marker back is a reload anyway.
 let opened = $state('');
 let dismissed = $state<string[]>([]);
-// A `role="dialog"` takes focus when it opens and hands it back to the marker on close.
-let popover = $state<HTMLElement>();
-$effect(() => {
-  if (opened) popover?.focus();
-});
 const behind = (path: string) => !dismissed.includes(path) && sourceChanged[path] !== undefined;
 const when = (iso: string) => {
   const at = Date.parse(iso);
@@ -412,7 +407,7 @@ const blockFields = (row: unknown) =>
   block(row)._ref === undefined ? blocks[block(row)._type ?? ''] : undefined;
 
 // A stored reference names an entry this form never picked, so its title is looked up.
-let known = $state<Pickable>({ entries: [], locales: [] });
+let known = $state.raw<Pickable>({ entries: [], locales: [] });
 $effect(() => {
   if (fields.some((f) => f.type === 'reference' || f.type === 'link'))
     readEntryDirectory()
@@ -561,24 +556,25 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
 
 <!-- Before and after in full, so the question is "does the German still say this?" -->
 {#snippet stale(stalePath: string)}
+  <!-- A `role="dialog"` takes focus when it opens and hands it back to the marker on close. -->
   <div
     class="popover"
     role="dialog"
     tabindex="-1"
-    bind:this={popover}
+    {@attach (node) => node.focus()}
     aria-label={m.translation_changed_dialog({ source: sourceLabel }, options)}
     onkeydown={(e) => e.key === 'Escape' && close(stalePath, () => {})}
   >
     <div class="diff">
       <div class="row">
         <small>{translatedAt ? m.translation_when_at({ source: sourceLabel, date: when(translatedAt) }, options) : m.translation_when({ source: sourceLabel }, options)}</small
-        >{#each sourceChanged[stalePath] ?? [] as part, i (i)}{#if part.mark === 'del'}<del
+        >{#each sourceChanged[stalePath] ?? [] as part}{#if part.mark === 'del'}<del
             >{part.text}</del
           >{:else if part.mark !== 'ins'}{part.text}{/if}{/each}
       </div>
       <div class="row">
         <small>{m.translation_now({ source: sourceLabel }, options)}</small
-        >{#each sourceChanged[stalePath] ?? [] as part, i (i)}{#if part.mark === 'ins'}<ins
+        >{#each sourceChanged[stalePath] ?? [] as part}{#if part.mark === 'ins'}<ins
             >{part.text}</ins
           >{:else if part.mark !== 'del'}{part.text}{/if}{/each}
       </div>
@@ -597,11 +593,15 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   <div class="label-row"><span id="{id}-l">{text}{#if 'required' in field && field.required}<span class="req" aria-hidden="true">*</span>{/if}</span>{#if prose(field)}{@render machineMark(address(at), text)}{/if}</div>
 {/snippet}
 
+{#snippet icon(d: string)}
+  <svg class="field-icon" viewBox="0 0 24 24" aria-hidden="true"><path {d} /></svg>
+{/snippet}
+
 {#snippet controls(at: readonly string[], i: number, name: string, handle: (node: HTMLElement) => () => void, duplicable = false)}
   <div class="row-controls">
-    <button class="btn btn-ghost btn-icon handle" type="button" aria-label={m.field_reorder({ item: name }, messageOptions(uiLocale))} disabled={structureLocked} {@attach handle}>⋮⋮</button>
-    {#if duplicable}<button class="btn btn-ghost btn-icon" type="button" aria-label={m.field_duplicate({ item: name }, messageOptions(uiLocale))} disabled={structureLocked} onclick={() => duplicate(at, i)}>⧉</button>{/if}
-    <button class="btn btn-ghost btn-icon" type="button" aria-label={m.field_remove({ item: name }, messageOptions(uiLocale))} disabled={structureLocked} onclick={() => drop(at, i)}>×</button>
+    <button class="btn btn-ghost btn-icon handle" type="button" aria-label={m.field_reorder({ item: name }, messageOptions(uiLocale))} disabled={structureLocked} {@attach handle}>{@render icon('M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01')}</button>
+    {#if duplicable}<button class="btn btn-ghost btn-icon" type="button" aria-label={m.field_duplicate({ item: name }, messageOptions(uiLocale))} disabled={structureLocked} onclick={() => duplicate(at, i)}>{@render icon('M9 9h10v10H9zM5 15V5h10')}</button>{/if}
+    <button class="btn btn-ghost btn-icon remove-row" type="button" aria-label={m.field_remove({ item: name }, messageOptions(uiLocale))} disabled={structureLocked} onclick={() => drop(at, i)}>{@render icon('M7 7l10 10M17 7 7 17')}</button>
   </div>
 {/snippet}
 
@@ -649,13 +649,13 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   {@const described = [`${id}.${key}-meter`, hint ? `${id}.${key}-hint` : ''].filter(Boolean).join(' ')}
   {@const over = value.trim().length > limit}
   <div class="field">
-    <div class="label-row"><label for="{id}.{key}">{label}</label><span class="meter" class:is-over={over} id="{id}.{key}-meter">{value.trim().length ? m.field_seo_meter({ count: value.trim().length, limit }, messageOptions(uiLocale)) : m.field_seo_meter_empty({ limit }, messageOptions(uiLocale))}{over ? ` — ${m.field_seo_may_cut({}, messageOptions(uiLocale))}` : ''}</span></div>
+    <div class="label-row"><label for="{id}.{key}">{label}</label><span class={['meter', { 'is-over': over }]} id="{id}.{key}-meter">{value.trim().length ? m.field_seo_meter({ count: value.trim().length, limit }, messageOptions(uiLocale)) : m.field_seo_meter_empty({ limit }, messageOptions(uiLocale))}{over ? ` — ${m.field_seo_may_cut({}, messageOptions(uiLocale))}` : ''}</span></div>
     {#if key === 'description'}
       <textarea class="input textarea" id="{id}.{key}" {placeholder} aria-describedby={described} {value} oninput={(e) => seoWrite(at, key, e.currentTarget.value || undefined)}></textarea>
     {:else}
       <input class="input" id="{id}.{key}" type="text" {placeholder} aria-describedby={described} {value} oninput={(e) => seoWrite(at, key, e.currentTarget.value || undefined)} />
     {/if}
-    <div class="gauge" class:is-long={over} aria-hidden="true"><span style="width: {Math.min(100, Math.round((value.trim().length / limit) * 100))}%"></span></div>
+    <div class={['gauge', { 'is-long': over }]} aria-hidden="true"><span style="width: {Math.min(100, Math.round((value.trim().length / limit) * 100))}%"></span></div>
     {#if hint}<p class="hint" id="{id}.{key}-hint">{hint}</p>{/if}
   </div>
 {/snippet}
@@ -674,7 +674,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       </span>
       {#if found}
         <span class="chips">
-          {#each known.locales as of (of)}<span class="chip" class:chip-missing={!found.locales.includes(of)}>{of.toUpperCase()}</span>{/each}
+          {#each known.locales as of (of)}<span class={['chip', { 'chip-missing': !found.locales.includes(of) }]}>{of.toUpperCase()}</span>{/each}
         </span>
       {/if}
       <button class="btn btn-ghost btn-sm remove" type="button" onclick={open}>{m.field_change({}, messageOptions(uiLocale))}</button>
@@ -705,7 +705,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
   {@const bad = err ? 'true' : undefined}
   {@const says = err ? `${id}-err` : undefined}
   {@const marked = [address(at), childAddress(at, 'label')].find((p) => p && opened === p)}
-  <div class="field" data-field-type={field.type} id="{id}-field" tabindex="-1" class:is-invalid={err} class:pop-anchor={marked} inert={textOnly && !structural(field) && ((field.type !== 'text' && field.type !== 'richtext') || mode !== true) ? true : undefined}>
+  <div class={['field', { 'is-invalid': err, 'pop-anchor': marked }]} data-field-type={field.type} id="{id}-field" tabindex="-1" inert={textOnly && !structural(field) && ((field.type !== 'text' && field.type !== 'richtext') || mode !== true) ? true : undefined}>
     {#if field.type === 'menus'}
       {@render groupLabel(id, field, text, at)}
       <Menus {id} labelId="{id}-l" menus={rows(at) as Menu[]} {locale} {uiLocale} {translating} {sourceLabel} />
@@ -756,7 +756,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           </div>
           {#if linkType(at) === 'url'}
             {@const scheme = unsafeLinkScheme('default', str([...at, 'href']))}
-            <div class="field" class:is-invalid={scheme}>
+            <div class={['field', { 'is-invalid': scheme }]}>
               <div class="label-row"><label for="{id}.href">{m.field_link_address({}, messageOptions(uiLocale))}</label></div>
               <input class="input" id="{id}.href" type="url" placeholder={m.field_link_address_placeholder({}, messageOptions(uiLocale))} aria-invalid={scheme ? 'true' : undefined} aria-describedby={scheme ? `${id}.href-err` : undefined} value={str([...at, 'href'])} oninput={(e) => writeMany(at, [{ path: ['type'], value: 'url' }, { path: ['href'], value: e.currentTarget.value }])} />
               {#if scheme}<p class="error" id="{id}.href-err">{m.field_link_scheme_not_allowed({ scheme }, messageOptions(uiLocale))}</p>{/if}
@@ -789,7 +789,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         <DragDropProvider onDragStart={(e) => begun(at, e)} onDragOver={(e) => over(at, e)} onDragEnd={(e) => ended(at, e)}>
         {#each items as row, i (keyOf(items, i))}
           {@const s = sortable(() => keyOf(items, i), () => i)}
-          <div class="row-card" class:is-dragging={s.isDragging} {@attach s.attach}>
+          <div class={['row-card', { 'is-scalar': scalar, 'is-dragging': s.isDragging }]} {@attach s.attach}>
             <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
             {#if !translating}{@render controls(at, i, m.field_row_name({ field: text, index: i + 1 }, messageOptions(uiLocale)), s.attachHandle)}{/if}
           </div>
@@ -798,7 +798,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {/each}
         </DragDropProvider>
         {#if !translating}
-          <button class="btn btn-sm add" type="button" disabled={structureLocked} onclick={() => (isGallery ? (picker = id) : add(at, scalar ? '' : { _id: newId('default') }))}>{m.field_list_add({ field: text }, messageOptions(uiLocale))}</button>
+          <button class="btn btn-sm add" type="button" aria-label={m.field_list_add_label({ field: text }, messageOptions(uiLocale))} disabled={structureLocked} onclick={() => (isGallery ? (picker = id) : add(at, scalar ? '' : { _id: newId('default') }))}>{m.field_list_add({}, messageOptions(uiLocale))}</button>
         {/if}
       </div>
       {#if isGallery && picker === id}
@@ -824,9 +824,9 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
           {@const s = sortable(() => keyOf(items, i), () => i)}
           {@const open = broken([...at, String(i)])}
           {@const shut = !open && folded[keyOf(items, i)] === true}
-          <article class="block-card" id="{id}.{i}" aria-labelledby="{id}.{i}-h" class:is-dragging={s.isDragging} class:is-folded={shut} {@attach s.attach}>
+          <article class={['block-card', { 'is-dragging': s.isDragging, 'is-folded': shut }]} id="{id}.{i}" aria-labelledby="{id}.{i}-h" {@attach s.attach}>
             <header>
-              <button class="btn btn-ghost btn-icon fold" type="button" disabled={open} aria-expanded={!shut} aria-controls="{id}.{i}-b" aria-label={shut ? m.field_expand({ item: name }, messageOptions(uiLocale)) : m.field_collapse({ item: name }, messageOptions(uiLocale))} onclick={() => (folded[keyOf(items, i)] = !shut)}>{shut ? '▸' : '▾'}</button>
+              <button class="btn btn-ghost btn-icon fold" type="button" disabled={open} aria-expanded={!shut} aria-controls="{id}.{i}-b" aria-label={shut ? m.field_expand({ item: name }, messageOptions(uiLocale)) : m.field_collapse({ item: name }, messageOptions(uiLocale))} onclick={() => (folded[keyOf(items, i)] = !shut)}>{@render icon('m9 6 6 6-6 6')}</button>
               <span class="label" id="{id}.{i}-h" title="{block(row)._type} · {block(row)._id}">{block(row)._label || name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (letter) => letter.toUpperCase())}</span>
               {#if shut}<span class="excerpt">{excerpt(row, inner)}</span>{/if}
               {#if !translating}{@render controls(at, i, name, s.attachHandle, true)}{/if}
@@ -1038,7 +1038,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {#if host}{@render previews(at)}{/if}
         <details class="group">
           <summary>{m.field_seo_canonical({}, messageOptions(uiLocale))}{#if str([...at, 'canonical'])}<span class="count">{str([...at, 'canonical'])}</span>{/if}</summary>
-          <div class="field" class:is-invalid={scheme}>
+          <div class={['field', { 'is-invalid': scheme }]}>
             <div class="label-row"><label for="{id}.canonical">{m.field_seo_canonical({}, messageOptions(uiLocale))}</label></div>
             <input class="input" id="{id}.canonical" type="url" aria-invalid={scheme ? 'true' : undefined} aria-describedby="{id}.canonical-hint{scheme ? ` ${id}.canonical-err` : ''}" value={str([...at, 'canonical'])} oninput={(e) => seoWrite(at, 'canonical', e.currentTarget.value || undefined)} />
             {#if scheme}<p class="error" id="{id}.canonical-err">{m.field_link_scheme_not_allowed({ scheme }, messageOptions(uiLocale))}</p>{/if}

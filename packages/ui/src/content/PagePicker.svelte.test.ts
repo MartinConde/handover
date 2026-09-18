@@ -331,7 +331,7 @@ test('a live language change preserves picker drafts and selected authored data'
   expect(q<HTMLInputElement>('#p-q').placeholder).toBe('Seiten und Einträge durchsuchen');
   expect(document.body.textContent).toContain('Es gibt keine Seite auf Deutsch zum Verlinken');
   expect(q('#p-url-err').textContent).toBe('javascript: Links sind nicht erlaubt');
-  expect(document.querySelector('[title*="not_a_language"]')).not.toBeNull();
+  expect(document.querySelector('.library-only')?.textContent).toBe('Nur EN');
   expect(document.body.textContent).toContain('Old Mill House');
   expect(reads).toBe(1);
 });

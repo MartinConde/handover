@@ -426,7 +426,7 @@ test('visible validation and a pending save retranslate without losing queued ed
   expect(q('.notice-danger')?.textContent).toContain(
     'Der Status „Noch nicht bereit“ konnte nicht geändert werden.',
   );
-  expect(q('.hold-toggle')?.getAttribute('aria-pressed')).toBe('true');
+  expect(q('.hold-toggle')?.getAttribute('aria-checked')).toBe('false');
   switchLocale();
 
   refuseSave = true;

@@ -156,7 +156,7 @@ const status = $derived(
         </div>
       {/if}
       <div class="preview-acts">
-        <p class="preview-status" class:is-busy={working} class:is-warn={!working && (stale || problems.length > 0 || phase === 'failed' || phase === 'expired' || phase === 'timeout')} role="status">{status}</p>
+        <p class={['preview-status', { 'is-busy': working, 'is-warn': !working && (stale || problems.length > 0 || phase === 'failed' || phase === 'expired' || phase === 'timeout') }]} role="status">{status}</p>
         <span class="spacer"></span>
         <button class="btn btn-ghost btn-sm" type="button" onclick={refresh}>{m.preview_refresh({}, options)}</button>
         <a class="btn btn-ghost btn-sm" href={previewPath(url ?? '/')} target="_blank" rel="noreferrer">{m.preview_open_new_tab({}, options)} ↗</a>
@@ -202,7 +202,7 @@ const status = $derived(
           </div>
         </div>
       {:else}
-        <div class="preview-stage" class:is-updating={working}>
+        <div class={['preview-stage', { 'is-updating': working }]}>
           <div class="preview-frame is-{width}">
             <iframe {src} title={m.preview_frame_title({}, options)} onload={loaded}></iframe>
           </div>

@@ -63,7 +63,7 @@ const shown = $derived(groups.filter((g) => g.locale !== undefined || g.changes.
       {@render rows(change.changes, label)}
     {:else if change.kind === 'words'}
       <div class="row">
-        <small>{label}</small>{#each change.parts as part, i (i)}{#if part.mark === 'del'}<del
+        <small>{label}</small>{#each change.parts as part}{#if part.mark === 'del'}<del
             >{part.text}</del
           >{:else if part.mark === 'ins'}<ins>{part.text}</ins>{:else}{part.text}{/if}{/each}
       </div>

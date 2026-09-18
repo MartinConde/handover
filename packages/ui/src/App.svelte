@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { Labels, Preset, UiLocale } from '@handover/core';
+import { on } from 'svelte/events';
 import Account from './account/Account.svelte';
 import Activity from './account/Activity.svelte';
 import Diagnostics from './account/Diagnostics.svelte';
@@ -237,26 +238,20 @@ $effect(() => {
 });
 
 // A plain click on an admin route swaps the screen in place; anything else is the browser's.
-$effect(() => {
-  const moved = () => {
-    path = localPath(location.pathname);
-    if (session) loadPending();
-  };
-  const back = async () => {
-    const to = location.href;
-    if (!(await flushNavigation())) {
-      history.pushState({}, '', sitePath(path));
-      return;
-    }
-    if (location.href === to) moved();
-  };
-  addEventListener('popstate', back);
-  addEventListener('handover:navigate', moved);
-  return () => {
-    removeEventListener('popstate', back);
-    removeEventListener('handover:navigate', moved);
-  };
-});
+const moved = () => {
+  path = localPath(location.pathname);
+  if (session) loadPending();
+};
+const back = async () => {
+  const to = location.href;
+  if (!(await flushNavigation())) {
+    history.pushState({}, '', sitePath(path));
+    return;
+  }
+  if (location.href === to) moved();
+};
+// svelte:window has no typed attribute for a custom event, unlike popstate.
+$effect(() => on(window, 'handover:navigate', moved));
 
 function follow(event: MouseEvent) {
   // Runs before the toggle: the menu and drawer both re-open from the button that was pressed.
@@ -555,7 +550,11 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 let titled = $state<{ entry: string; read: () => string }>();
 const crumb = $derived(
   redirectRoute
-    ? { href: '/admin/site', parent: m.globals_title({}, options), current: m.redirect_title({}, options) }
+    ? {
+        href: '/admin/site',
+        parent: m.globals_title({}, options),
+        current: m.redirect_title({}, options),
+      }
     : editing
       ? {
           href: editing.collection === 'globals' ? '/admin/site' : `/admin/c/${editing.collection}`,
@@ -572,7 +571,10 @@ const initial = $derived(
 );
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && ((account = false), (menu = false))} />
+<svelte:window
+  onkeydown={(e) => e.key === 'Escape' && ((account = false), (menu = false))}
+  onpopstate={back}
+/>
 
 {#if session === undefined}
   <main class="main session-unavailable">
@@ -585,7 +587,7 @@ const initial = $derived(
   <Login {methods} {path} {query} {uiLocale} onlocale={useDeviceLocale} onlogin={loadSession} />
 {:else}
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -- nested links handle keyboard input -->
-<div class="shell" class:is-canvas={Boolean(editing) && editorMode === 'canvas'} class:is-collapsed={collapsed} onclick={follow}>
+<div class={['shell', { 'is-canvas': Boolean(editing) && editorMode === 'canvas', 'is-collapsed': collapsed }]} onclick={follow}>
   <a class="skip-link" href="#workspace" onclick={(event) => { event.preventDefault(); document.getElementById('workspace')?.focus(); }}>{m.shell_skip_to_content({}, options)}</a>
   <!-- A banner, not a toast, since it outlives a page load; the pill is the live region. -->
   {#if building}
@@ -596,7 +598,7 @@ const initial = $derived(
   {#if revertError}
     <div class="banner banner-warn" role="alert">{text(revertError)}{#if revertError.detail}<span class="technical-detail">{m.common_technical_detail({ detail: revertError.detail }, options)}</span>{/if}</div>
   {/if}
-  <aside class="sidebar" class:is-open={menu} aria-label={m.shell_main_navigation({}, options)} inert={drawer}>
+  <aside class={['sidebar', { 'is-open': menu }]} aria-label={m.shell_main_navigation({}, options)} inert={drawer}>
     <a class="site-name" href={sitePath(`/admin`)}><span class="site-mark" aria-hidden="true">H</span><span class="nav-text">Handover<span class="workspace-label">{m.shell_content_workspace({}, options)}</span></span></a>
     <nav class="nav">
       <div class="nav-group">
@@ -667,8 +669,7 @@ const initial = $derived(
         </div>
       {/if}
       <button
-        class="indicator"
-        class:is-lit={pending.length && pendingKnown}
+        class={['indicator', { 'is-lit': pending.length && pendingKnown }]}
         type="button"
         aria-haspopup="dialog"
         aria-expanded={drawer}

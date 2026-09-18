@@ -1,6 +1,7 @@
 <script lang="ts">
 import { type Field, type Form, formIn, labelIn } from '@handover/core';
 import { untrack } from 'svelte';
+import { on } from 'svelte/events';
 import type {
   EntrySession,
   FieldCommandResult,
@@ -214,15 +215,13 @@ function queueCompletion(policy?: 'continuous' | 'discrete') {
 function completionEvents(node: HTMLFormElement) {
   const continuous = () => queueCompletion('continuous');
   const discrete = () => queueCompletion('discrete');
-  node.addEventListener('input', continuous);
-  node.addEventListener('click', discrete);
-  node.addEventListener('change', discrete);
-  return {
-    destroy() {
-      node.removeEventListener('input', continuous);
-      node.removeEventListener('click', discrete);
-      node.removeEventListener('change', discrete);
-    },
+  const offInput = on(node, 'input', continuous);
+  const offClick = on(node, 'click', discrete);
+  const offChange = on(node, 'change', discrete);
+  return () => {
+    offInput();
+    offClick();
+    offChange();
   };
 }
 </script>
@@ -261,7 +260,7 @@ function completionEvents(node: HTMLFormElement) {
     <form
       class="form canvas-inspector-form"
       onsubmit={(event) => event.preventDefault()}
-      use:completionEvents
+      {@attach completionEvents}
     >
       <fieldset disabled={mutationBlocked}>
         {#key widgetKey}

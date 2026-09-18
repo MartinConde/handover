@@ -203,9 +203,7 @@ function when(at: number, locale: UiLocale): string {
 {#snippet feedback(at: typeof noticeAt)}
   {#if notice && noticeAt === at}
     <p
-      class="notice"
-      class:notice-success={!noticeError}
-      class:notice-danger={noticeError}
+      class={['notice', { 'notice-success': !noticeError, 'notice-danger': noticeError }]}
       role={noticeError ? 'alert' : 'status'}
     >
       {messageText(notice, uiLocale)}
@@ -336,7 +334,7 @@ function when(at: number, locale: UiLocale): string {
                   bind:value={current}
                 />
               </div>
-              <div class="field" class:is-invalid={passwordError}>
+              <div class={['field', { 'is-invalid': passwordError }]}>
                 <label for="change-new">{m.auth_new_password({}, messageOptions(uiLocale))}</label>
                 <div class="input-row">
                   <input
@@ -401,7 +399,7 @@ function when(at: number, locale: UiLocale): string {
                 <h2>{m.account_email_link_used({}, messageOptions(uiLocale))}</h2>
                 <p>{m.account_set_password_explanation({}, messageOptions(uiLocale))}</p>
               </header>
-              <div class="field" class:is-invalid={passwordError}>
+              <div class={['field', { 'is-invalid': passwordError }]}>
                 <label for="set-new">{m.auth_new_password({}, messageOptions(uiLocale))}</label>
                 <div class="input-row">
                   <input

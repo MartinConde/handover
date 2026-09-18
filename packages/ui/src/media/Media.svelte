@@ -202,7 +202,7 @@ function drop(e: DragEvent) {
     <div class="picker-body">
       <div class="picker-main">
         <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
-        <div class="dropzone" class:is-over={over} ondragover={(e) => { e.preventDefault(); over = true; }} ondragleave={() => (over = false)} ondrop={drop}>
+        <div class={['dropzone', { 'is-over': over }]} ondragover={(e) => { e.preventDefault(); over = true; }} ondragleave={() => (over = false)} ondrop={drop}>
           <span>{kind === 'images' ? m.media_picker_drop_images({}, options) : m.media_picker_drop_files({}, options)}</span>
           <span class="hint">
             {#if kind === 'images'}{m.media_picker_image_hint({ max: preset.max ?? 2400 }, options)}
@@ -216,10 +216,10 @@ function drop(e: DragEvent) {
           <fieldset class="picker-group">
             <legend>{m.media_picker_uploading({}, options)}</legend>
             <ul class="upload-queue">
-              {#each queue as row, i (i)}
+              {#each queue as row}
                 <li class="upload-row">
                   <span class="name">{row.name}</span>
-                  <span class="state" class:is-failed={row.failed} role={row.failed ? 'alert' : undefined} aria-live={row.failed ? undefined : 'polite'}>{queueText(row.state)}{#if typeof row.state !== 'string' && row.state.detail}<span class="technical-detail">{m.common_technical_detail({ detail: row.state.detail }, options)}</span>{/if}</span>
+                  <span class={['state', { 'is-failed': row.failed }]} role={row.failed ? 'alert' : undefined} aria-live={row.failed ? undefined : 'polite'}>{queueText(row.state)}{#if typeof row.state !== 'string' && row.state.detail}<span class="technical-detail">{m.common_technical_detail({ detail: row.state.detail }, options)}</span>{/if}</span>
                 </li>
               {/each}
             </ul>

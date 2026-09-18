@@ -18,12 +18,7 @@ import type { CanvasRenderRequest } from '../canvas/canvas-renderer';
 import OffsiteDialog, { type Target } from '../content/Offsite.svelte';
 import { invalidateEntryDirectory } from '../entry-directory.js';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
-import {
-  formatExactTime,
-  formatLanguageName,
-  messageOptions,
-  type UiLocale,
-} from '../i18n.js';
+import { formatExactTime, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import {
   guardEntryActions,
   guardNavigation,
@@ -243,13 +238,15 @@ let chosen = $state<Beside | undefined>(
   BESIDE.includes(saved as Beside) ? (saved as Beside) : undefined,
 );
 let canvasOpen = $state(saved === 'canvas');
+// Saved as 'form': a page could be shown, but the editor folded it away for a full-width form.
+let collapsed = $state(saved === 'form');
 const canvasSupported = $derived(preview && Boolean(entry.route));
 const pageShown = $derived(section === '' && canvasSupported);
 const besideOptions = $derived(
   BESIDE.filter((of) => (of === 'page' ? pageShown : of === 'language' ? many : !pageShown)),
 );
 const beside = $derived<Beside>(
-  chosen && besideOptions.includes(chosen) ? chosen : pageShown ? 'page' : 'none',
+  chosen && besideOptions.includes(chosen) ? chosen : pageShown && !collapsed ? 'page' : 'none',
 );
 const side = $derived(beside === 'language');
 const mode = $derived<EditorMode>(
@@ -269,14 +266,21 @@ function remember(value: string) {
 function setBeside(next: Beside) {
   if (next === 'none' && pageShown) next = 'page';
   chosen = next;
+  collapsed = false;
   canvasOpen = false;
   remember(next);
+}
+function collapse() {
+  chosen = undefined;
+  collapsed = true;
+  canvasOpen = false;
+  remember('form');
 }
 function setCanvas(open: boolean) {
   if (open && !canvasSupported) return;
   canvasOpen = open;
   if (open) mobilePane = 'page';
-  remember(open ? 'canvas' : beside);
+  remember(open ? 'canvas' : collapsed && pageShown ? 'form' : beside);
   if (open && section !== '') navigate(`/admin/c/${collection}/${slug}`);
 }
 
@@ -656,6 +660,12 @@ export function flush(): Promise<boolean> {
   return entrySession.flush();
 }
 const unsaved = () => entrySession.unsaved();
+const warn = (event: BeforeUnloadEvent) => {
+  if (unsaved()) {
+    event.preventDefault();
+    event.returnValue = '';
+  }
+};
 onMount(() => {
   const release = guardNavigation(flush);
   const reloadAfterExternalAction = () => (onreload ? onreload() : onchanged());
@@ -664,18 +674,10 @@ onMount(() => {
     publish: (request) => entrySession.finalPublish(request, reloadAfterExternalAction),
     replace: (request) => entrySession.authoritativeChange(request, reloadAfterExternalAction),
   });
-  const warn = (event: BeforeUnloadEvent) => {
-    if (unsaved()) {
-      event.preventDefault();
-      event.returnValue = '';
-    }
-  };
-  addEventListener('beforeunload', warn);
   return () => {
     entrySession.closeSaveGate();
     releaseActions();
     release();
-    removeEventListener('beforeunload', warn);
   };
 });
 
@@ -1037,6 +1039,8 @@ async function leaving(change: () => void) {
 let editing = $state(false);
 let typed = $state('');
 let addressFailed = $state<UiMessage>();
+let addressInput = $state<HTMLInputElement>();
+let addressTrigger = $state<HTMLButtonElement>();
 const address = $derived(entry.addresses?.[locale] ?? '');
 // A language with no file has no address: the offer to make one stands where the form would be.
 const addressable = $derived(
@@ -1104,6 +1108,27 @@ function editAddress() {
   typed = address;
   addressFailed = undefined;
   editing = true;
+  void tick().then(() => {
+    addressInput?.focus();
+    addressInput?.select();
+  });
+}
+
+async function cancelAddress() {
+  editing = false;
+  await tick();
+  addressTrigger?.focus();
+}
+
+function addressKeydown(event: KeyboardEvent) {
+  if (event.isComposing) return;
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    if (!busy) void saveAddress();
+  } else if (event.key === 'Escape') {
+    event.preventDefault();
+    if (!busy) void cancelAddress();
+  }
 }
 
 // The screen is read again afterwards so both columns get the address the server settled on.
@@ -1123,16 +1148,16 @@ async function saveAddress() {
     addressFailed = await retainedFailure(res, 'ENTRY_ACTION_FAILED');
     return;
   }
-  editing = false;
+  await cancelAddress();
   invalidateEntryDirectory();
   onchanged();
 }
-
 </script>
 
 <svelte:window
   onfocus={recheck}
   onpopstate={fromAddress}
+  onbeforeunload={warn}
 />
 <svelte:document onvisibilitychange={recheck} />
 
@@ -1143,8 +1168,13 @@ async function saveAddress() {
       <option value={of}>{of.toUpperCase()}{off(of) ? ` · ${m.editor_language_off({}, options)}` : untranslated(of) ? ` · ${m.editor_language_new({}, options)}` : entry.stale.includes(of) ? ` · ${m.editor_language_changed({}, options)}` : ''}</option>
     {/each}
   </select>
-  <span class="autosave" class:is-saving={entrySession.saveState(locale).phase === 'saving'}
-    class:is-offline={entrySession.saveState(locale).phase === 'failed'} role="status">
+  <span class={[
+    'autosave',
+    {
+      'is-saving': entrySession.saveState(locale).phase === 'saving',
+      'is-offline': entrySession.saveState(locale).phase === 'failed',
+    },
+  ]} role="status">
     {entrySession.saveState(locale).phase === 'saving'
       ? m.editor_save_saving({}, options)
       : entrySession.saveState(locale).phase === 'failed'
@@ -1161,7 +1191,7 @@ async function saveAddress() {
     onclick={askToPublish} bind:this={canvasPublishButton}>{m.editor_publish_short({}, options)}</button>
 {/snippet}
 
-<main class="main main-editor" class:is-canvas-fullscreen={mode === 'canvas'} style:--entry-header-h={`${headerHeight}px`}>
+<main class={['main main-editor', { 'is-canvas-fullscreen': mode === 'canvas' }]} style:--entry-header-h={`${headerHeight}px`}>
   {#if actionFailed && !renaming && !deleting && !offing}<p class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {feedbackDetail(actionFailed)}</p>{/if}
   {#if holdFailed}<p class="notice notice-danger" role="alert">{feedbackText(holdFailed)} {feedbackDetail(holdFailed)}</p>{/if}
   {#if saveError}<p class="notice notice-danger" role="alert">{feedbackText(saveError)} {feedbackDetail(saveError)} <button class="btn-link" type="button" onclick={() => flush()}>{m.editor_save_retry({}, options)}</button></p>{/if}
@@ -1208,7 +1238,7 @@ async function saveAddress() {
   {/if}
   {#if restored && entry.pending.length}
     <!-- The restore is over by the time this draws, so this is what says what just happened. -->
-    <div class="lock-banner" class:is-drift={entry.drift.length > 0} role="status">
+    <div class={['lock-banner', { 'is-drift': entry.drift.length > 0 }]} role="status">
       <span>
         <b>{m.editor_restored_version({ date: when(Date.parse(restored)).toLowerCase() }, options)}</b>
         {#if entry.drift.length}
@@ -1221,23 +1251,66 @@ async function saveAddress() {
   {:else if entry.drift.length}
     <div class="lock-banner is-drift">{m.editor_drift_blocked({}, options)}</div>
   {/if}
-  <header class="entry-header" class:is-held={held} bind:offsetHeight={headerHeight}>
+  <header class={['entry-header', { 'is-held': held }]} bind:offsetHeight={headerHeight}>
     <div class="heading-row">
       <div class="title-row">
-        <h1>{title}</h1>
+        <div class="title-stack">
+          <h1>{title}</h1>
+          {#if addressable}
+            <div class={['slug-row', { 'is-editing': editing }]}>
+              {#if editing}
+                <span class="url">{before}</span>
+                <label class="visually-hidden" for="entry-address">{m.editor_address_label({ language: formatLanguageName(locale, uiLocale) }, options)}</label>
+                <input
+                  class="slug-input"
+                  id="entry-address"
+                  type="text"
+                  style={`width: ${Math.max(4, Math.min(28, typed.length + 1))}ch`}
+                  bind:this={addressInput}
+                  bind:value={typed}
+                  placeholder={slug}
+                  onkeydown={addressKeydown}
+                />
+                <span class="slug-actions">
+                  <button class="btn btn-sm slug-action slug-save" type="button" aria-label={m.editor_address_save({}, options)} title={m.editor_address_save({}, options)} disabled={busy} onclick={saveAddress}>
+                    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 10.3 3.5 3.5L16 5.7" /></svg>
+                  </button>
+                  <button class="btn btn-ghost btn-sm slug-action slug-cancel" type="button" aria-label={m.editor_address_cancel({}, options)} title={m.editor_address_cancel({}, options)} disabled={busy} onclick={cancelAddress}>
+                    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 5 10 10m0-10L5 15" /></svg>
+                  </button>
+                </span>
+                {#if addressFailed}<span class="mode is-bad">{feedbackText(addressFailed)} {feedbackDetail(addressFailed)}</span>{/if}
+              {:else}
+                <button
+                  class="btn-link url slug-edit"
+                  type="button"
+                  bind:this={addressTrigger}
+                  disabled={locked}
+                  aria-label={`${m.editor_address_edit({}, options)}: ${url}`}
+                  onclick={editAddress}
+                >{url}</button>
+                {#if !address}<span class="mode">{m.editor_address_file_name({}, options)}</span>{/if}
+              {/if}
+            </div>
+          {/if}
+        </div>
         <div class="meta">
           <!-- Nothing lists a global, so there is nothing to take it off the site from. -->
           {#if !entry.singleton}
             <div class="pop-anchor">
               <button
-                class="status"
-                class:status-hidden={hidden}
+                class={['status', { 'status-hidden': hidden }]}
                 type="button"
                 aria-haspopup="menu"
                 aria-expanded={statusMenu}
                 disabled={locked || actionBusy}
                 onclick={() => (statusMenu = !statusMenu)}
-              ><span class="dot" aria-hidden="true"></span> {hidden ? m.editor_status_hidden({}, options) : m.editor_status_live({}, options)} ▾</button>
+              >
+                <span class="status-value"><span class="dot" aria-hidden="true"></span>{hidden ? m.editor_status_hidden({}, options) : m.editor_status_live({}, options)}</span>
+                <span class="status-chevron" aria-hidden="true">
+                  <svg viewBox="0 0 16 16"><path d="m4.5 6 3.5 3.5L11.5 6" /></svg>
+                </span>
+              </button>
               {#if statusMenu}
                 <div class="menu status-menu" role="menu" aria-label={m.editor_status_menu({}, options)}>
                   <button type="button" role="menuitem" aria-current={hidden ? undefined : 'true'} onclick={() => (hidden ? setStatus(false) : (statusMenu = false))}>
@@ -1258,11 +1331,12 @@ async function saveAddress() {
           <button
             class="hold-toggle"
             type="button"
-            aria-pressed={held}
+            role="switch"
+            aria-checked={!held}
             disabled={locked || lost || actionBusy || (!dirty && !held)}
             title={dirty || held ? undefined : m.editor_hold_unavailable({}, options)}
             onclick={toggleHold}
-          ><span class="dot" aria-hidden="true"></span> {m.editor_hold({}, options)}</button>
+          ><span class="switch-track" aria-hidden="true"><span class="switch-knob"></span></span><span>{m.editor_ready_to_publish({}, options)}</span></button>
           {#if missing.length}
             <button class="problems" type="button" onclick={goToFirst}>
               {m.editor_problem_count({ count: missing.length }, options)}
@@ -1271,7 +1345,7 @@ async function saveAddress() {
         </div>
       </div>
       <div class="actions">
-        <span class="autosave" class:is-saving={saving} class:is-offline={saveFailed}>
+        <span class={['autosave', { 'is-saving': saving, 'is-offline': saveFailed }]}>
           {#if saving}{m.editor_save_saving({}, options)}{:else if saveFailed}{m.editor_save_not_saved({}, options)}{:else if sourceUnsaved}{m.editor_save_unsaved_changes({}, options)}{:else}{m.editor_save_saved({}, options)}{/if}
         </span>
         <button
@@ -1293,14 +1367,14 @@ async function saveAddress() {
         {#if !entry.singleton}
           <div class="pop-anchor">
             <button
-              class="btn btn-ghost"
+              class="btn btn-ghost more-actions"
               type="button"
               aria-haspopup="menu"
               aria-expanded={moreMenu}
               aria-label={m.editor_more_actions({}, options)}
               disabled={locked || actionBusy}
               onclick={() => (moreMenu = !moreMenu)}
-            >⋯</button>
+            ><svg viewBox="0 0 18 18" aria-hidden="true"><circle cx="4" cy="9" r="1.25" /><circle cx="9" cy="9" r="1.25" /><circle cx="14" cy="9" r="1.25" /></svg></button>
             {#if moreMenu}
               <div class="menu" role="menu" aria-label={m.editor_more_actions({}, options)}>
                 <button type="button" role="menuitem" onclick={openRename}>{m.editor_rename({}, options)}</button>
@@ -1327,39 +1401,39 @@ async function saveAddress() {
       </p>
     {/if}
     {#if statusFailed}<p class="subline is-bad" role="alert">{feedbackText(statusFailed)} {feedbackDetail(statusFailed)}</p>{/if}
-    <div class="header-foot">
-    <!-- A global has no SEO or versions of its own: no tabs rather than three dead ones. -->
-    <!-- Links, not a tablist: each is an address the back button lands on; keep the roles off. -->
-    {#if !entry.singleton}
-      <nav class="tabs" aria-label={m.editor_sections({}, options)}>
-        <a href={sitePath(`/admin/c/${collection}/${slug}`)} aria-current={section === '' ? 'page' : undefined}>{m.editor_section_content({}, options)}</a>
-        {#if seoField}<a href={sitePath(`/admin/c/${collection}/${slug}/seo`)} aria-current={section === 'seo' ? 'page' : undefined}>{m.editor_section_seo({}, options)}</a>{/if}
-        <a href={sitePath(`/admin/c/${collection}/${slug}/history`)} aria-current={section === 'history' ? 'page' : undefined}>{m.editor_section_history({}, options)}</a>
-      </nav>
-    {/if}
-    {#if addressable}
-      <p class="slug-row">
-        {#if editing}
-          <span class="url">{before}</span>
-          <label class="visually-hidden" for="entry-address">{m.editor_address_label({ language: formatLanguageName(locale, uiLocale) }, options)}</label>
-          <input class="input" id="entry-address" type="text" bind:value={typed} placeholder={slug} />
-          <button class="btn btn-sm" type="button" disabled={busy} onclick={saveAddress}>{m.editor_address_save({}, options)}</button>
-          <button class="btn btn-ghost btn-sm" type="button" onclick={() => (editing = false)}>{m.editor_address_cancel({}, options)}</button>
-          {#if addressFailed}<span class="mode is-bad">{feedbackText(addressFailed)} {feedbackDetail(addressFailed)}</span>{/if}
-        {:else}
-          <span class="url">{url}</span>
-          {#if !address}<span class="mode">{m.editor_address_file_name({}, options)}</span>{/if}
-          <button class="btn-link" type="button" disabled={locked} onclick={editAddress}>{m.editor_address_edit({}, options)}</button>
-        {/if}
-      </p>
-    {/if}
-    </div>
     <div class="workspace-toolbar">
+      <div class="toolbar-start">
+        <!-- A global has no SEO or versions of its own: no dead section controls. -->
+        <!-- Links, not a tablist: each is an address the back button lands on; keep the roles off. -->
+        {#if !entry.singleton}
+          <nav class="tabs seg editor-sections" aria-label={m.editor_sections({}, options)}>
+            <a href={sitePath(`/admin/c/${collection}/${slug}`)} aria-current={section === '' ? 'page' : undefined}>{m.editor_section_content({}, options)}</a>
+            {#if seoField}<a href={sitePath(`/admin/c/${collection}/${slug}/seo`)} aria-current={section === 'seo' ? 'page' : undefined}>{m.editor_section_seo({}, options)}</a>{/if}
+            <a href={sitePath(`/admin/c/${collection}/${slug}/history`)} aria-current={section === 'history' ? 'page' : undefined}>{m.editor_section_history({}, options)}</a>
+          </nav>
+        {/if}
+      </div>
+      <div class="toolbar-center">
+        {#if besideOptions.length > 1 || pageShown}
+          <div class="seg editor-beside" role="group" aria-label={m.editor_beside({}, options)}>
+            {#each besideOptions.filter((of) => of !== 'none') as of (of)}
+              <button
+                type="button"
+                class={{ 'btn-sbs': of === 'language' }}
+                aria-pressed={beside === of && mode !== 'canvas'}
+                disabled={entry.drift.length > 0}
+                onclick={() => leaving(() => (of === 'page' && beside === 'page' ? collapse() : setBeside(!pageShown && side && of === 'language' ? 'none' : of)))}
+              ><svg class="workspace-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2" />{#if of === 'page'}<path d="M9 3v14M12 7h2M12 10h2" />{:else if of === 'language'}<path d="M10 3v14M5 7h2M13 7h2M5 10h2M13 10h2" />{:else}<path d="M6 7h8M6 10h8M6 13h5" />{/if}</svg><span>{of === 'page' ? m.editor_workspace_preview({}, options) : m.editor_workspace_translate({}, options)}</span></button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+      <div class="toolbar-end">
         {#if many}
           {#if entry.locales.length < 5}
             <div class="seg" role="group" aria-label={m.editor_language({}, options)}>
               {#each entry.locales as of (of)}
-                <button type="button" class:is-off={off(of)} aria-pressed={locale === of} onclick={() => leaving(() => (locale = of))}>
+                <button type="button" class={{ 'is-off': off(of) }} aria-pressed={locale === of} onclick={() => leaving(() => (locale = of))}>
                   {of.toUpperCase()}{#if off(of)}<span class="visually-hidden"> — {m.editor_language_off_a11y({}, options)}</span>{:else if untranslated(of)}<span class="visually-hidden"> — {m.editor_language_untranslated_a11y({}, options)}</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {m.editor_language_stale_a11y({ source: language(entry.sourceLocale) }, options)}</span><span class="mark" aria-hidden="true"></span>{/if}
                 </button>
               {/each}
@@ -1378,22 +1452,10 @@ async function saveAddress() {
             </select>
           {/if}
         {/if}
-        {#if besideOptions.length > 1}
-          <div class="seg editor-beside" role="group" aria-label={m.editor_beside({}, options)}>
-            {#each besideOptions.filter((of) => of !== 'none') as of (of)}
-              <button
-                type="button"
-                class:btn-sbs={of === 'language'}
-                aria-pressed={beside === of && mode !== 'canvas'}
-                disabled={entry.drift.length > 0}
-                onclick={() => leaving(() => setBeside(!pageShown && side && of === 'language' ? 'none' : of))}
-              ><svg class="workspace-icon" viewBox="0 0 20 20" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="2" />{#if of === 'page'}<path d="M9 3v14M12 7h2M12 10h2" />{:else if of === 'language'}<path d="M10 3v14M5 7h2M13 7h2M5 10h2M13 10h2" />{:else}<path d="M6 7h8M6 10h8M6 13h5" />{/if}</svg><span>{of === 'page' ? m.editor_workspace_preview({}, options) : m.editor_workspace_translate({}, options)}</span></button>
-            {/each}
-          </div>
-        {/if}
         {#if !entry.singleton && canvasSupported}
           <button class="btn canvas-open" type="button" disabled={entry.drift.length > 0} onclick={() => setCanvas(true)}>{m.editor_view_canvas({}, options)}</button>
         {/if}
+      </div>
     </div>
   </header>
   {#if section === 'history'}
@@ -1416,9 +1478,14 @@ async function saveAddress() {
   {:else}
   <!-- Stands where the form would be: every field belongs to a structure not yet agreed on. -->
   <div
-    class="entry-body"
-    class:has-pane={!entry.drift.length && (mode === 'split' || (mode === 'form' && !alone && shown !== undefined))}
-    class:is-canvas={mode === 'canvas'}
+    class={[
+      'entry-body',
+      {
+        'has-pane': !entry.drift.length && (mode === 'split' || (mode === 'form' && !alone && shown !== undefined)),
+        'is-canvas': mode === 'canvas',
+        'is-full': pageShown && beside === 'none' && !alone,
+      },
+    ]}
   >
     {#if entry.drift.length}
       <DriftPanel
@@ -1440,8 +1507,7 @@ async function saveAddress() {
       {#if mode !== 'canvas' && !alone}
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <form
-          class="form"
-          class:is-mobile-hidden={(mode === 'split' || side) && mobilePane === 'page'}
+          class={['form', { 'is-mobile-hidden': (mode === 'split' || side) && mobilePane === 'page' }]}
           onsubmit={(e) => e.preventDefault()}
           onfocusout={canvasCompleted}
         >
@@ -1458,8 +1524,7 @@ async function saveAddress() {
       {#if mode !== 'canvas' && !(mode === 'split' && !alone) && shown && untranslated(shown)}
         <!-- An empty form here would autosave a file nobody asked for. -->
         <section
-          class="pane is-locale"
-          class:is-mobile-hidden={(mode === 'split' && mobilePane === 'page') || (side && !alone && mobilePane === 'form')}
+          class={['pane is-locale', { 'is-mobile-hidden': (mode === 'split' && mobilePane === 'page') || (side && !alone && mobilePane === 'form') }]}
           aria-labelledby="pane-{shown}"
           onfocusout={canvasCompleted}
         >
@@ -1523,8 +1588,7 @@ async function saveAddress() {
         <!-- Keyed: another language is another file, not the same one under a new name. -->
         {#key shown}
           <div
-            class="canvas-form-surface"
-            class:is-mobile-hidden={(mode === 'split' && mobilePane === 'page') || (side && !alone && mobilePane === 'form')}
+            class={['canvas-form-surface', { 'is-mobile-hidden': (mode === 'split' && mobilePane === 'page') || (side && !alone && mobilePane === 'form') }]}
             onfocusout={canvasCompleted}
           >
             <Translation

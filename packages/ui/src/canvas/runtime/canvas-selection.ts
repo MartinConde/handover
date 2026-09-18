@@ -104,6 +104,21 @@ const parseMarker = (element: Element, attribute: string): CanvasTarget | undefi
   }
 };
 
+const ICONS = {
+  add: 'M12 5v14M5 12h14',
+  grip: 'M9 6h.01M9 12h.01M9 18h.01M15 6h.01M15 12h.01M15 18h.01',
+  more: 'M6 12h.01M12 12h.01M18 12h.01',
+};
+function icon(d: string): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', d);
+  svg.append(path);
+  return svg;
+}
+
 function readStructure(root: Document): InternalNode[] {
   const grouped = new Map<string, InternalNode>();
   for (const element of Array.from(root.querySelectorAll(SELECTOR))) {
@@ -248,6 +263,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     .actions button{all:initial;position:fixed;box-sizing:border-box;min-width:28px;min-height:28px;padding:4px 8px;border:1px solid #e5e8e5;border-radius:5px;background:#fff;color:#202420;box-shadow:0 2px 6px rgb(23 26 33/.1);font:600 12px/1.35 system-ui,sans-serif;text-align:center;cursor:pointer;pointer-events:auto;touch-action:none}
     .actions button:hover{background:#eef5e4}.actions button:disabled{cursor:default;opacity:.45}.actions button:focus-visible{outline:2px solid #537e2c;outline-offset:2px}.actions .insert{border-radius:999px;padding:3px 8px}.actions .danger{color:#b42318}.actions .danger:hover{background:#fde8e8}.actions .drag{cursor:grab}.actions .drag.is-dragging{cursor:grabbing;background:#eef5e4}
     .actions .menu-item{width:156px;text-align:left;border-radius:0;box-shadow:none;border-block-width:0;padding:7px 12px;min-height:32px}.actions .menu-item:first-of-type{border-radius:6px 6px 0 0}.actions .menu-item:last-child{border-bottom-width:1px;border-radius:0 0 6px 6px}
+    .actions svg{display:block;width:16px;height:16px;margin:auto;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.actions :is(.drag,[data-canvas-actions-toggle]) svg{stroke-width:2.6}
     .drop-slot{position:fixed;height:4px;border-radius:999px;background:#537e2c;box-shadow:0 0 0 2px #fff;pointer-events:none}
     .live{position:fixed;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
   </style><div class="layer"><div class="boxes"></div><div class="actions"></div><div class="drop-slot" hidden></div><div class="path" hidden></div><div class="live" role="status" aria-live="polite"></div></div>`;
@@ -531,14 +547,16 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       left: number,
       top: number,
       className = '',
-      text = action.startsWith('insert') ? '+' : label,
+      text?: string,
     ) => {
       const button = root.createElement('button');
       button.type = 'button';
       button.className = className;
       button.dataset.canvasAction = action;
       button.setAttribute('aria-label', label);
-      button.textContent = text;
+      const glyph = action.startsWith('insert') ? ICONS.add : action === 'move' ? ICONS.grip : '';
+      if (text === undefined && glyph) button.append(icon(glyph));
+      else button.textContent = text ?? label;
       button.style.left = `${Math.max(4, left)}px`;
       button.style.top = `${Math.max(4, top)}px`;
       if (action === 'move') button.addEventListener('pointerdown', startDrag);
@@ -573,33 +591,27 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       const candidates: Array<{
         action: CanvasBlockAction;
         label: string;
-        text: string;
         className?: string;
       }> = [
         {
           action: 'replace',
           label: m.canvas_selection_replace({ label: selectedNode.label }, message()),
-          text: m.canvas_replace_block({}, message()),
         },
         {
           action: 'move-up',
           label: m.canvas_selection_move_up({ label: selectedNode.label }, message()),
-          text: '↑',
         },
         {
           action: 'move-down',
           label: m.canvas_selection_move_down({ label: selectedNode.label }, message()),
-          text: '↓',
         },
         {
           action: 'duplicate',
           label: m.canvas_selection_duplicate({ label: selectedNode.label }, message()),
-          text: '⧉',
         },
         {
           action: 'delete',
           label: m.canvas_selection_delete({ label: selectedNode.label }, message()),
-          text: '×',
           className: 'danger',
         },
       ];
@@ -613,7 +625,6 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
           corner - 34,
           top,
           'drag',
-          '↕',
         );
         if (dragging) drag.classList.add('is-dragging');
       }
@@ -621,7 +632,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
         const toggle = root.createElement('button');
         toggle.type = 'button';
         toggle.dataset.canvasActionsToggle = '';
-        toggle.textContent = '⋯';
+        toggle.append(icon(ICONS.more));
         toggle.setAttribute(
           'aria-label',
           m.canvas_selection_actions({ label: selectedNode.label }, message()),

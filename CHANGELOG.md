@@ -4,6 +4,22 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Admin UI internals follow current Svelte 5 idioms (window listeners, attachments,
+  `$state.raw`, class arrays); no behaviour change.
+- Fold the live preview away by pressing **Live preview** again; it slides shut like the sidebar
+  and the form takes the full width. Entries on single-language sites get the toggle too, and the choice is remembered.
+- Tidy the editor's content pane: list rows stack their fields under a small header with the
+  grip, number and remove button, plain word lists sit one per line, block headers use a
+  clear chevron and line icons, and nested blocks keep their full width.
+- Show a link field's destination, label and new-tab option on one panel. The page picker lists
+  one line per page like the navigation editor, with Hidden and language tags and a tick on the
+  current choice; the address moves to the row's tooltip.
+- Label a list's add button "Add item" instead of "Add to {field}"; screen readers still hear
+  which list it adds to. The live-preview block controls use line icons too.
+
+- Show the tabs on collection lists, the media library and the menu editor as the same pill
+  switch the editor uses, instead of an underline.
+
 - Collapse the sidebar to icons with the button at the left of the top bar; hovering or focusing an
   icon shows its name. The browser remembers the choice.
 

@@ -63,10 +63,10 @@ let {
 } = $props();
 const options = $derived(messageOptions(uiLocale));
 
-let entries = $state<Entry[]>([]);
+let entries = $state.raw<Entry[]>([]);
 // A tab, not a filter: a deleted entry is in neither the index nor the drafts.
 let tab = $state<'all' | 'deleted'>('all');
-let deleted = $state<Deleted[]>([]);
+let deleted = $state.raw<Deleted[]>([]);
 let deletedLoading = $state(false);
 // The row whose restore is waiting to be confirmed.
 let putting = $state<Deleted>();
@@ -353,14 +353,14 @@ async function done() {
       </div>
     <div class="filters">
       <label class="visually-hidden" for="list-status">{m.entry_list_status({}, options)}</label>
-      <select class="filter" class:is-on={showing !== 'all'} id="list-status" bind:value={showing}>
+      <select class={['filter', { 'is-on': showing !== 'all' }]} id="list-status" bind:value={showing}>
         <option value="all">{m.entry_list_all({}, options)}</option>
         <option value="live">{m.entry_list_live({}, options)}</option>
         <option value="hidden">{m.entry_list_hidden({}, options)}</option>
       </select>
       {#if many}
         <label class="visually-hidden" for="list-locale">{m.entry_list_language({}, options)}</label>
-        <select class="filter" class:is-on={language} id="list-locale" bind:value={language}>
+        <select class={['filter', { 'is-on': language }]} id="list-locale" bind:value={language}>
           <option value="">{m.entry_list_every_language({}, options)}</option>
           {#each locales as locale (locale)}
             <option value={locale}>{m.entry_list_language_attention({ language: formatLanguageName(locale, uiLocale) }, options)}</option>
@@ -452,7 +452,7 @@ async function done() {
     </p>
   {:else if entries.length}
     <!-- Without the languages column the grid is the five-column `has-select.cols-4`. -->
-    <div class="table has-select" class:cols-4={!many} role="table" aria-label={capitalise(plural)}>
+    <div class={['table has-select', { 'cols-4': !many }]} role="table" aria-label={capitalise(plural)}>
       <!-- role="table" needs a row around its columnheaders; display: contents keeps the grid. -->
       <div class="row-head" role="row">
         <div class="th" role="columnheader">
@@ -470,7 +470,7 @@ async function done() {
         <div class="th" role="columnheader"><span class="visually-hidden">{m.entry_list_actions({}, options)}</span></div>
       </div>
       {#each shown as entry (entry.id)}
-        <div class="row" role="row" class:is-selected={chosen.includes(entry.id)}>
+        <div class={['row', { 'is-selected': chosen.includes(entry.id) }]} role="row">
           <div class="td" role="cell">
             <input
               type="checkbox"
@@ -493,10 +493,14 @@ async function done() {
               <span class="chips">
                 {#each locales as locale (locale)}
                   <span
-                    class="chip"
-                    class:chip-missing={!entry.locales[locale] && offered(entry, locale)}
-                    class:chip-disabled={!offered(entry, locale)}
-                    class:chip-stale={Boolean(entry.locales[locale]) && entry.stale?.includes(locale)}
+                    class={[
+                      'chip',
+                      {
+                        'chip-missing': !entry.locales[locale] && offered(entry, locale),
+                        'chip-disabled': !offered(entry, locale),
+                        'chip-stale': Boolean(entry.locales[locale]) && entry.stale?.includes(locale),
+                      },
+                    ]}
                     title="{locale}: {chipTitle(entry, locale)}"
                   >{locale.toUpperCase()}</span>
                 {/each}

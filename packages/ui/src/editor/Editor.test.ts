@@ -249,7 +249,7 @@ test('the page and Canvas are offered only where the site has a page to show', (
   expect($(none, '.canvas-open')).toBeNull();
   unmount(app);
   const root = show({ entry: { ...entry, route: '/listings/[slug]' }, preview: true });
-  expect(beside(root).map((b) => b.textContent)).toEqual([]);
+  expect(beside(root).map((b) => b.textContent)).toEqual(['Live preview']);
   expect($<HTMLButtonElement>(root, '.canvas-open')?.disabled).toBe(false);
 });
 
@@ -276,7 +276,7 @@ test('an entry with a page opens with the page beside the form', () => {
   const root = show({ entry: { ...entry, route: '/listings/[slug]' }, preview: true });
   flushSync();
 
-  expect(pressed(root)).toBeUndefined();
+  expect(pressed(root)).toBe('Live preview');
   expect($(root, '.entry-body.has-pane > .canvas-workspace:not(.is-inactive)')).not.toBeNull();
 });
 
@@ -315,7 +315,7 @@ test('the saved view is scoped to the site base and signed-in user', () => {
   $<HTMLButtonElement>(root, '.canvas-back')?.click();
   flushSync();
   expect($(root, '.canvas-workspace.is-fullscreen')).toBeNull();
-  expect(pressed(root)).toBeUndefined();
+  expect(pressed(root)).toBe('Live preview');
   expect(localStorage.getItem(key)).toBe('page');
 });
 
@@ -341,7 +341,7 @@ test('an unsupported preference falls back without being overwritten, an invalid
     userId: 'u1',
   });
   flushSync();
-  expect(pressed(invalid)).toBeUndefined();
+  expect(pressed(invalid)).toBe('Live preview');
   expect($(invalid, '.canvas-workspace:not(.is-inactive)')).not.toBeNull();
   expect(localStorage.getItem(key)).toBe('anything-else');
 });
@@ -581,7 +581,7 @@ test('an entry on hold can still be published from its own header', async () => 
   const root = show({ entry: { ...entry, pending: ['en'], held: true } });
   const button = $<HTMLButtonElement>(root, 'button.btn-primary');
   expect(button?.disabled).toBe(false);
-  expect($(root, '.hold-toggle')?.getAttribute('aria-pressed')).toBe('true');
+  expect($(root, '.hold-toggle')?.getAttribute('aria-checked')).toBe('false');
   button?.click();
   await tick();
   flushSync();
@@ -2211,6 +2211,26 @@ test('the address row shows the URL this language serves, and its fallback', () 
   expect(row?.querySelector('.mode')?.textContent).toBe('Same as the file name');
 });
 
+test('the inline address editor focuses its value and Escape returns focus to the slug', async () => {
+  const body = show({ entry: addressed });
+  const trigger = body.querySelector<HTMLButtonElement>('.slug-edit');
+
+  trigger?.click();
+  await tick();
+
+  const input = body.querySelector<HTMLInputElement>('#entry-address');
+  expect(input).not.toBeNull();
+  expect(input?.classList.contains('input')).toBe(false);
+  expect(document.activeElement).toBe(input);
+  expect(body.querySelector('.slug-actions')).not.toBeNull();
+
+  input?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  await tick();
+
+  expect(body.querySelector('#entry-address')).toBeNull();
+  expect(document.activeElement).toBe(body.querySelector('.slug-edit'));
+});
+
 test('a collection without localized slugs has no address row', () => {
   expect(show({ entry: bilingual }).querySelector('.slug-row')).toBe(null);
 });
@@ -2565,7 +2585,7 @@ test('Not ready yet stores the edit, then holds the entry', async () => {
     '/admin/api/hold/listings/seaview-cottage',
   ]);
   expect(wrote(fetchMock)[1]?.[1]).toMatchObject({ body: JSON.stringify({ hold: true }) });
-  expect($(root, '.hold-toggle')?.getAttribute('aria-pressed')).toBe('true');
+  expect($(root, '.hold-toggle')?.getAttribute('aria-checked')).toBe('false');
   expect($(root, '.entry-header')?.classList.contains('is-held')).toBe(true);
   vi.unstubAllGlobals();
 });
@@ -2577,7 +2597,7 @@ test('an entry with nothing unpublished has nothing to hold back', () => {
 
 test('an entry somebody is already holding back opens with the toggle on', () => {
   const root = show({ entry: { ...entry, pending: ['en'], held: true } });
-  expect($(root, '.hold-toggle')?.getAttribute('aria-pressed')).toBe('true');
+  expect($(root, '.hold-toggle')?.getAttribute('aria-checked')).toBe('false');
 });
 
 // The lock is the entry's, so a refusal in the second language surrenders the whole tab.
@@ -3351,6 +3371,27 @@ test('closing Translate returns to live preview when a page is available', async
   $<HTMLButtonElement>(root, '.pane-head button[aria-label]')?.click();
   await vi.waitFor(() => expect(pressed(root)).toBe('Live preview'));
   expect(localStorage.getItem('handover:editor-view:v3:/:u1')).toBe('page');
+});
+
+test('pressing Live preview again folds the page away for a full-width form, and it stays folded', () => {
+  const page = { entry: { ...entry, route: '/listings/[slug]' }, preview: true, userId: 'u1' };
+  const root = show(page);
+  flushSync();
+  beside(root)[0]?.click();
+  flushSync();
+
+  expect(pressed(root)).toBeUndefined();
+  expect($(root, '.canvas-workspace:not(.is-inactive)')).toBeNull();
+  expect($(root, '.entry-body.is-full:not(.has-pane) > .form')).not.toBeNull();
+
+  unmount(app);
+  const again = show(page);
+  flushSync();
+  expect(pressed(again)).toBeUndefined();
+  beside(again)[0]?.click();
+  flushSync();
+  expect(pressed(again)).toBe('Live preview');
+  expect($(again, '.entry-body.has-pane > .canvas-workspace:not(.is-inactive)')).not.toBeNull();
 });
 
 test('without preview, Translate toggles the comparison pane without a Write option', async () => {

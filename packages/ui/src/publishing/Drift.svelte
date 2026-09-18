@@ -136,7 +136,7 @@ async function apply() {
           <span class="visually-hidden">{m.drift_languages({}, options)}</span>
           <span class="chips">
             {#each shown(row) as locale (locale)}
-              <span class="chip" class:chip-missing={!row.in.includes(locale)}>
+              <span class={['chip', { 'chip-missing': !row.in.includes(locale) }]}>
                 {locale.toUpperCase()}
               </span>
             {/each}

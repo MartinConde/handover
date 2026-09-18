@@ -474,11 +474,11 @@ const queueText = (state: QueueState) => {
     <h1>{m.media_library_title({}, options)} <span class="count">{heading}</span></h1>
     <span class="spacer"></span>
     <div class="filters">
-      <button class="filter is-toggle" class:is-on={only.archived} type="button" aria-pressed={only.archived} onclick={() => (only.archived = !only.archived)}>{m.media_library_archived({}, options)}</button>
+      <button class={['filter is-toggle', { 'is-on': only.archived }]} type="button" aria-pressed={only.archived} onclick={() => (only.archived = !only.archived)}>{m.media_library_archived({}, options)}</button>
       {#if kind === 'images'}
-        <button class="filter is-toggle" class:is-on={only.recovered} type="button" aria-pressed={only.recovered} onclick={() => (only.recovered = !only.recovered)}>{m.media_library_recovered({}, options)}</button>
+        <button class={['filter is-toggle', { 'is-on': only.recovered }]} type="button" aria-pressed={only.recovered} onclick={() => (only.recovered = !only.recovered)}>{m.media_library_recovered({}, options)}</button>
       {/if}
-      <button class="filter is-toggle" class:is-on={only.unused} type="button" aria-pressed={only.unused} onclick={() => (only.unused = !only.unused)}>{m.media_library_unused({}, options)}</button>
+      <button class={['filter is-toggle', { 'is-on': only.unused }]} type="button" aria-pressed={only.unused} onclick={() => (only.unused = !only.unused)}>{m.media_library_unused({}, options)}</button>
     </div>
     <div class="field search">
       <label class="visually-hidden" for="lib-q">{m.media_library_search({}, options)}</label>
@@ -515,10 +515,10 @@ const queueText = (state: QueueState) => {
       {/if}
     </div>
   {/each}
-  <div class="lib-body" class:has-selection={!!chosen}>
+  <div class={['lib-body', { 'has-selection': !!chosen }]}>
     <div class="lib-main">
       <!-- svelte-ignore a11y_no_static_element_interactions -- the child button is the control -->
-      <div class="dropzone" class:is-big={!items.length} class:is-over={over} ondragover={(e) => { e.preventDefault(); over = true; }} ondragleave={() => (over = false)} ondrop={drop}>
+      <div class={['dropzone', { 'is-big': !items.length, 'is-over': over }]} ondragover={(e) => { e.preventDefault(); over = true; }} ondragleave={() => (over = false)} ondrop={drop}>
         <svg class="dz-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m0 0-4 4m4-4 4 4"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg>
         <span class="dz-text">
           <span>
@@ -532,10 +532,10 @@ const queueText = (state: QueueState) => {
       </div>
       {#if queue.length}
         <ul class="upload-queue">
-          {#each queue as row, i (i)}
+          {#each queue as row}
             <li class="upload-row">
               <span class="name">{row.name}</span>
-              <span class="state" class:is-failed={row.failed} role={row.failed ? 'alert' : undefined} aria-live={row.failed ? undefined : 'polite'}>{queueText(row.state)}</span>
+              <span class={['state', { 'is-failed': row.failed }]} role={row.failed ? 'alert' : undefined} aria-live={row.failed ? undefined : 'polite'}>{queueText(row.state)}</span>
               {#if typeof row.state !== 'string' && detailOf(row.state)}<span class="detail">{detailOf(row.state)}</span>{/if}
             </li>
           {/each}
@@ -546,7 +546,7 @@ const queueText = (state: QueueState) => {
       {:else if kind === 'images'}
         <div class="media-grid">
           {#each shown as item (item.id)}
-            <article class="tile" class:is-archived={item.archived} class:is-selected={chosen?.id === item.id}>
+            <article class={['tile', { 'is-archived': item.archived, 'is-selected': chosen?.id === item.id }]}>
               <span class="thumb">
                 <MediaImage src={item.url} alt="" {uiLocale} />
                 {#if item.archived}<span class="badge flag">{m.media_library_archived({}, options)}</span>
@@ -556,7 +556,7 @@ const queueText = (state: QueueState) => {
               <button class="tile-link name" type="button" onclick={() => pick(item)}>{name(item)}</button>
               <span class="sub">
                 <span>{item.width ? `${item.width} × ${item.height}` : fileSize(item.bytes, uiLocale)}</span>
-                <span class="badge" class:is-used={!!item.uses?.length}>{count(item)}</span>
+                <span class={['badge', { 'is-used': !!item.uses?.length }]}>{count(item)}</span>
               </span>
               <!-- Above the stretched link, so both are reachable. -->
               {#if item.archived}
@@ -570,7 +570,7 @@ const queueText = (state: QueueState) => {
       {:else}
         <div class="file-rows">
           {#each shown as item (item.id)}
-            <div class="file-row is-link" class:is-selected={chosen?.id === item.id}>
+            <div class={['file-row is-link', { 'is-selected': chosen?.id === item.id }]}>
               <span class="file-icon" aria-hidden="true">{extension(item)}</span>
               <span class="who">
                 <button class="tile-link name" type="button" onclick={() => pick(item)}>{name(item)}</button>
@@ -585,7 +585,7 @@ const queueText = (state: QueueState) => {
       {/if}
     </div>
     {#if chosen}
-      <aside class="lib-side" tabindex="-1" bind:this={detailsPanel} class:is-recovered={recovered(chosen)} aria-labelledby="lib-side-h">
+      <aside class={['lib-side', { 'is-recovered': recovered(chosen) }]} tabindex="-1" bind:this={detailsPanel} aria-labelledby="lib-side-h">
         <div class="side-head">
           <button class="btn btn-ghost btn-icon inspector-close" type="button" aria-label={m.media_library_close_details({}, options)} onclick={closeDetails}>×</button>
           <p class="side-title" id="lib-side-h">{name(chosen)}</p>

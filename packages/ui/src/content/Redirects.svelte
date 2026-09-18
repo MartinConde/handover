@@ -344,7 +344,7 @@ async function remove() {
         </div>
         <div class="filters">
           <label class="visually-hidden" for="rd-reason">{m.redirect_reason({}, options)}</label>
-          <select class="filter" class:is-on={reason} id="rd-reason" bind:value={reason}>
+          <select class={['filter', { 'is-on': reason }]} id="rd-reason" bind:value={reason}>
             <option value="">{m.redirect_every_reason({}, options)}</option>
             {#each ['slug-change', 'hidden', 'deleted', 'manual'] as key (key)}
               <option value={key}>{reasonLabel(key as Rule['reason'])}</option>
@@ -376,7 +376,7 @@ async function remove() {
           {#each shown as rule (rule._id)}
             {@const asking = tested?.id === rule._id}
             {@const verdict = asking ? tested?.verdict : undefined}
-            <div class="row" class:is-managed={managed(rule)} class:has-verdict={verdict} role="row">
+            <div class={['row', { 'is-managed': managed(rule), 'has-verdict': verdict }]} role="row">
               <div class="td route" role="cell">
                 <div class="hop">
                   <span class="from">{rule.from}</span>
@@ -385,7 +385,7 @@ async function remove() {
                 <div class="hop is-to">
                   <span class="arrow" aria-hidden="true">↳</span><span class="visually-hidden">{m.redirect_to({}, options)}</span>
                   <span class="to">{rule.to}</span>
-                  <span class="badge code" class:is-temp={rule.status === 302}
+                  <span class={['badge code', { 'is-temp': rule.status === 302 }]}
                     >{rule.status === 302 ? m.redirect_temporary({}, options) : rule.status}</span
                   >
                 </div>
@@ -496,7 +496,7 @@ async function remove() {
             <button class="btn-link" type="button" onclick={loadDirectory}>{m.common_retry({}, options)}</button>
           </div>
         {/if}
-        <div class="field" class:is-invalid={bad?.field === 'from'}>
+        <div class={['field', { 'is-invalid': bad?.field === 'from' }]}>
           <div class="label-row"><label for="rd-from">{m.redirect_old_address({}, options)}</label></div>
           <input
             class="input"
