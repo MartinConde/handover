@@ -135,8 +135,9 @@ file says:
 | name a language the site does not declare | *The source language isn't declared* |
 | name a language the entry has no file in | *The source language has no file* |
 
-Until it is settled the entry cannot be saved, translated, turned off in a language or held, and
-the drawer will not publish it: the check reads *The files of this entry disagree about which
+Until it is settled the entry cannot be saved, translated, turned off in a language, held,
+hidden, renamed or duplicated, and nothing publishes it; deleting it or discarding its unpublished
+changes still works. The drawer says why: the check reads *The files of this entry disagree about which
 language it is written in*. Fix it in the repository — every file's `_source` has to name the
 same language, and that language needs a file (put a deleted one back) — and the entry opens
 again as it was. Changing the interface language keeps the panel.

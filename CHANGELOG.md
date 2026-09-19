@@ -20,10 +20,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   drafts are kept. Settings → About shows the same count. New routes `GET`/`POST
   /admin/api/sources`, new activity kind `sources-recorded`.
 - An entry whose files disagree about their `_source` opens on a panel saying what each file
-  says, instead of its form. Turning a language off, a web address and the hold now refuse it
-  with the same `409` as saves, and every refusal also carries `files` and `offered`. The
-  pre-publish checks gain the error `source-unresolved`, so the drawer does not publish such an
-  entry.
+  says, instead of its form. Turning a language off, a web address, the hold, hiding and showing,
+  answering drift, rename and duplicate now refuse it with the same `409` as saves, every refusal
+  also carries `files` and `offered`, and a save refused mid-edit says so in the interface
+  language. The pre-publish checks gain the error `source-unresolved`, so the drawer does not
+  publish such an entry, and `POST /admin/api/publish` refuses it with `409
+  PUBLISH_SOURCE_UNRESOLVED`. Deleting the entry and discarding its changes still work.
 - A translation whose `_i18n` names a language other than the one the entry is written in now
   reads stale, and side by side says *Translated from French — the source is now English*.
   **Upgrade note:** a translation made from another translation (German from French on an

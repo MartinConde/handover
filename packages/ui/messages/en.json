@@ -1098,6 +1098,7 @@
   "editor_restored_drift": "The languages disagree about its blocks since then — decide what to keep, then publish.",
   "editor_restored_unpublished": "It is here as unpublished changes — nothing is live until you publish.",
   "editor_drift_blocked": "The languages of this entry disagree about its blocks — publishing is blocked until that is settled.",
+  "entry_source_unresolved": "This entry’s files no longer agree about the language it is written in. Reload it to see what each file says.",
   "source_recovery_conflict_blocked": "This entry’s files disagree about its source language — it can’t be edited or published until that is settled.",
   "source_recovery_conflict_title": "Which language is the source?",
   "source_recovery_conflict_intro": "Every language file names the entry’s source language, and these don’t agree. That usually means a file was edited or merged outside the CMS. Nothing is chosen for you.",
@@ -1463,6 +1464,16 @@
       "match": {
         "countPlural=one": "Nothing was published. One entry's languages disagree about which blocks it has — the files have to agree before it can go out.",
         "countPlural=other": "Nothing was published. {count} entries have languages that disagree about which blocks they have — the files have to agree before they can go out."
+      }
+    }
+  ],
+  "publish_source_unresolved": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Nothing was published. One entry’s files disagree about the language it is written in — open it to see what each file says.",
+        "countPlural=other": "Nothing was published. {count} entries have files that disagree about the language they are written in — open them to see what each file says."
       }
     }
   ],

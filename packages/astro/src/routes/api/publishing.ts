@@ -13,6 +13,7 @@ import {
   editRedirects,
   entryKey,
   entryOffer,
+  entrySource,
   finalizeOperation,
   heldDrafts,
   lastCommit,
@@ -455,8 +456,10 @@ const schemaFor = (path: string) => {
 };
 
 /** A file whose structure disagrees with its other languages is not committed. */
-async function driftedPaths(ctx: RequestContext, paths: string[]): Promise<string[]> {
-  if (config.i18n.locales.length < 2) return [];
+async function refusedPaths(ctx: RequestContext, paths: string[]) {
+  const drifted: string[] = [];
+  const unresolved: string[] = [];
+  if (config.i18n.locales.length < 2) return { drifted, unresolved };
   // One entry is one check, however many of its languages are waiting to be published.
   const entries = new Map<string, string[]>();
   for (const path of paths) {
@@ -465,7 +468,6 @@ async function driftedPaths(ctx: RequestContext, paths: string[]): Promise<strin
     const key = `${collection}/${slug}`;
     entries.set(key, [...(entries.get(key) ?? []), path]);
   }
-  const drifted: string[] = [];
   for (const [key, files] of entries) {
     const [collection = '', slug = ''] = key.split('/');
     // A path nothing owns — redirects.yaml — has no schema, so no form and no structure.
@@ -473,9 +475,11 @@ async function driftedPaths(ctx: RequestContext, paths: string[]): Promise<strin
     if (!schema) continue;
     const form = formFor(collection, slug);
     const locales = localeData(await entryLocales(ctx, collection, slug, config.i18n.locales));
-    if (driftReport('default', form, locales).length) drifted.push(...files);
+    const source = entrySource('default', config.i18n, locales);
+    if (source && 'problem' in source) unresolved.push(...files);
+    else if (driftReport('default', form, locales).length) drifted.push(...files);
   }
-  return drifted;
+  return { drifted, unresolved };
 }
 
 /** A request of its own so the pass gets its own CPU budget; nothing here refuses anything. */
@@ -601,10 +605,20 @@ export async function publish(
       { status: 422 },
     );
   }
-  const drifted = await driftedPaths(
+  const { drifted, unresolved } = await refusedPaths(
     ctx,
     pending.map((row) => row.path),
   );
+  // The drawer's check says the same; a request that skips the drawer is held here.
+  if (unresolved.length)
+    return Response.json(
+      {
+        code: 'PUBLISH_SOURCE_UNRESOLVED',
+        error: `${unresolved.join(', ')} belong to entries whose files disagree about the language they are written in — make their _source agree in the repository`,
+        paths: unresolved,
+      },
+      { status: 409, headers: { 'x-handover-error-code': 'PUBLISH_SOURCE_UNRESOLVED' } },
+    );
   if (drifted.length) {
     return Response.json(
       {

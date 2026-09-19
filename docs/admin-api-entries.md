@@ -74,11 +74,13 @@ collection with no `route` has neither, and both are absent from the response.
 ### Which language an entry is written in
 
 When an entry's files disagree about their `_source`, this route, the draft writes, **Create
-from English**, machine translation, turning a language off, a web address and the hold answer
+from English**, machine translation, turning a language off, a web address, the hold, hiding and
+showing, answering drift, rename and duplicate answer
 `409` with an `x-handover-error-code` header and
 `{ "code", "error", "marks", "files", "offered" }`, and write nothing. `marks` is what each file
 says, by locale, `files` the languages the entry has a file in, and `offered` the languages it is
-offered in, as the first of those files names them.
+offered in, as the first of those files names them. Deleting the entry and discarding its
+unpublished changes stay open, since either can be the way out.
 
 | `code` | The files |
 |---|---|

@@ -949,6 +949,8 @@ export async function setStatus(
   for (const slug of slugs) {
     const held = await heldByAnother(ctx, collection, slug, session, hidden ? 'hidden' : 'shown');
     if (held) return held;
+    const refused = await unresolvedSource(ctx, collection, slug);
+    if (refused) return refused;
   }
   const database = ctx.db();
   const git = ctx.git();
@@ -1010,6 +1012,8 @@ export async function reconcile(
   );
   const form = formFor(collection, slug);
   const locales = localeData(await entryLocales(ctx, collection, slug, config.i18n.locales));
+  const source = entrySource('default', config.i18n, locales);
+  if (source && 'problem' in source) return sourceRefusal(source, locales);
   const drift = new Set(driftReport('default', form, locales).map((row) => row.path));
   // A row the languages agree about has nothing to answer: the report moved on under the tab.
   if (!choices.length || choices.some((choice) => !drift.has(choice.path)))
@@ -1543,6 +1547,11 @@ export async function rename(
     await releaseOperationPaths('default', database, existing.id);
     return Response.json({ slug: to, commit_sha: completed.commit_sha });
   }
+  // A rename already under way is finished, not refused halfway.
+  if (!existing) {
+    const refused = await unresolvedSource(ctx, collection, slug);
+    if (refused) return refused;
+  }
   const baseSha = existing?.baseSha ?? (await git.getHead());
   const files = await entryFiles(git, collection, slug, baseSha);
   if (!files.some((f) => f.file) && !existing)
@@ -1659,6 +1668,8 @@ export async function duplicate(
   session: App.Locals['handover'],
 ): Promise<Response> {
   if (!config.collections[collection]) return new Response('Not found', { status: 404 });
+  const refused = await unresolvedSource(ctx, collection, slug);
+  if (refused) return refused;
   const body = (await request.json().catch(() => undefined)) as
     | { to?: unknown; drafts?: unknown }
     | undefined;

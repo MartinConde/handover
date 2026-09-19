@@ -472,6 +472,31 @@ test('an entry whose languages have drifted apart is named on its row as that', 
   expect(published).not.toHaveBeenCalled();
 });
 
+// Only a request that skipped the drawer's own check reaches this; nothing is offered to discard.
+test('an entry whose files disagree about their source is refused as that, not as a conflict', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json(
+        {
+          code: 'PUBLISH_SOURCE_UNRESOLVED',
+          error: 'legacy prose',
+          paths: ['src/content/listings/en/mill-house.yaml'],
+        },
+        { status: 409, headers: { 'x-handover-error-code': 'PUBLISH_SOURCE_UNRESOLVED' } },
+      ),
+    ),
+  );
+  const root = show();
+  await refused(root);
+
+  expect(q(root, '[role="alert"]')?.textContent).toBe(
+    'Nothing was published. One entry’s files disagree about the language it is written in — open it to see what each file says.',
+  );
+  expect(q(root, '.change-row.is-blocked')).toBe(null);
+  expect(published).not.toHaveBeenCalled();
+});
+
 // A hold is a promise between colleagues, so the drawer says what it kept back before Publish.
 const HELD = [
   ENTRIES[0] as (typeof ENTRIES)[number],

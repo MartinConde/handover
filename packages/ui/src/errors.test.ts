@@ -264,3 +264,19 @@ test('password length, token expiry, and general reset failures give different r
     'Das Passwort konnte nicht zurückgesetzt werden. Versuche es erneut.',
   );
 });
+
+test('an unresolved source refusal reads the same for all three codes, in either language', async () => {
+  for (const code of ['ENTRY_SOURCE_CONFLICT', 'ENTRY_SOURCE_UNDECLARED', 'ENTRY_SOURCE_MISSING']) {
+    const message = await responseMessage(
+      Response.json({ code, error: 'legacy prose', marks: { en: 'en' } }, { status: 409 }),
+      'EDITOR_SAVE_REFUSED',
+    );
+    expect(message).toEqual({ code, status: 409 });
+    expect(messageText(message, 'en')).toBe(
+      'This entry’s files no longer agree about the language it is written in. Reload it to see what each file says.',
+    );
+    expect(messageText(message, 'de')).toBe(
+      'Die Dateien dieses Eintrags nennen keine gemeinsame Ausgangssprache mehr. Lade ihn neu, um zu sehen, was jede Datei nennt.',
+    );
+  }
+});

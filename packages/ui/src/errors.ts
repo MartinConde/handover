@@ -81,10 +81,14 @@ const KNOWN_CODES = new Set([
   'ENTRY_ADDRESS_TAKEN',
   'ENTRY_LOCALE_LAST_PUBLISHED',
   'ENTRY_LOCALE_LAST_FILE',
+  'ENTRY_SOURCE_CONFLICT',
+  'ENTRY_SOURCE_UNDECLARED',
+  'ENTRY_SOURCE_MISSING',
   'REDIRECT_NOT_FOUND',
   'REDIRECT_MANAGED',
   'PUBLISH_INCOMPLETE',
   'PUBLISH_DRIFT',
+  'PUBLISH_SOURCE_UNRESOLVED',
   'PUBLISH_CONFLICT',
   'PUBLISH_REF_MOVED',
   'PUBLISH_REPOSITORY_UNAVAILABLE',
@@ -301,6 +305,10 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
         { languages: formatLanguageList(message.locales ?? [], locale) },
         options,
       );
+    case 'ENTRY_SOURCE_CONFLICT':
+    case 'ENTRY_SOURCE_UNDECLARED':
+    case 'ENTRY_SOURCE_MISSING':
+      return m.entry_source_unresolved({}, options);
     case 'REDIRECT_NOT_FOUND':
       return m.redirect_not_found({}, options);
     case 'REDIRECT_MANAGED':
@@ -357,6 +365,8 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
       return m.publish_incomplete({ count: message.count ?? 0 }, options);
     case 'PUBLISH_DRIFT':
       return m.publish_drift({ count: message.count ?? 0 }, options);
+    case 'PUBLISH_SOURCE_UNRESOLVED':
+      return m.publish_source_unresolved({ count: message.count ?? 0 }, options);
     case 'PUBLISH_CONFLICT':
       return m.publish_conflict({ count: message.count ?? 0 }, options);
     case 'PUBLISH_REF_MOVED':

@@ -67,12 +67,16 @@ when a stored draft is not everything its collection schema needs, with the same
 pending file belongs to an entry whose languages have
 [drifted apart](i18n.md#a-block-one-language-only-has) — `reason` is what tells that from a
 file somebody else changed, since the three-way view or Discard is the way out of one and
-the entry's own drift panel is the way out of the other. In all
+the entry's own drift panel is the way out of the other. `409` with
+`{ "code": "PUBLISH_SOURCE_UNRESOLVED", "error", "paths" }` when a pending file belongs to an
+entry whose files disagree about the language it is written in
+([Translating](translating.md#when-the-files-disagree-about-the-source-language)); the drawer's own check
+normally holds such an entry back before the request is made. In all
 of those cases nothing was written and no row was cleared. A path no collection owns —
 `redirects.yaml`, a global — has no schema to be held to and is never the reason for a `422`.
 
 Publish failures retain `error` as diagnostic compatibility text and add a stable `code` for UI
-presentation: `PUBLISH_INCOMPLETE` (`422`), `PUBLISH_DRIFT` (`409`), `PUBLISH_CONFLICT` (`409`),
+presentation: `PUBLISH_INCOMPLETE` (`422`), `PUBLISH_DRIFT` (`409`), `PUBLISH_SOURCE_UNRESOLVED` (`409`), `PUBLISH_CONFLICT` (`409`),
 `PUBLISH_REF_MOVED` (`409`), `PUBLISH_REPOSITORY_UNAVAILABLE` (`503`) or
 `PUBLISH_FINALIZATION_PENDING` (`503`). Path-bearing answers keep `paths`; drift keeps
 `reason: "drift"`; an unfinished finalization keeps its operation and commit identifiers. Clients

@@ -1104,6 +1104,7 @@
   "editor_restored_drift": "Seitdem stimmen die Sprachen bei den Blöcken nicht mehr überein — entscheide, was bleiben soll, und veröffentliche dann.",
   "editor_restored_unpublished": "Sie liegt jetzt als unveröffentlichte Änderungen vor — bis zur Veröffentlichung ist nichts live.",
   "editor_drift_blocked": "Die Sprachen dieses Eintrags stimmen bei den Blöcken nicht überein — die Veröffentlichung bleibt gesperrt, bis das geklärt ist.",
+  "entry_source_unresolved": "Die Dateien dieses Eintrags nennen keine gemeinsame Ausgangssprache mehr. Lade ihn neu, um zu sehen, was jede Datei nennt.",
   "source_recovery_conflict_blocked": "Die Dateien dieses Eintrags nennen verschiedene Ausgangssprachen — bearbeiten oder veröffentlichen geht erst, wenn das geklärt ist.",
   "source_recovery_conflict_title": "Welche Sprache ist die Ausgangssprache?",
   "source_recovery_conflict_intro": "Jede Sprachdatei nennt die Ausgangssprache des Eintrags, und diese stimmen nicht überein. Meist wurde eine Datei außerhalb des CMS bearbeitet oder zusammengeführt. Nichts wird für dich entschieden.",
@@ -1460,6 +1461,16 @@
       "match": {
         "countPlural=one": "Nichts wurde veröffentlicht. Bei einem Eintrag stimmen die Sprachen bei den Blöcken nicht überein. Die Dateien müssen vor der Veröffentlichung übereinstimmen.",
         "countPlural=other": "Nichts wurde veröffentlicht. Bei {count} Einträgen stimmen die Sprachen bei den Blöcken nicht überein. Die Dateien müssen vor der Veröffentlichung übereinstimmen."
+      }
+    }
+  ],
+  "publish_source_unresolved": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Nichts wurde veröffentlicht. Bei einem Eintrag nennen die Dateien verschiedene Ausgangssprachen — öffne ihn, um zu sehen, was jede Datei nennt.",
+        "countPlural=other": "Nichts wurde veröffentlicht. Bei {count} Einträgen nennen die Dateien verschiedene Ausgangssprachen — öffne sie, um zu sehen, was jede Datei nennt."
       }
     }
   ],

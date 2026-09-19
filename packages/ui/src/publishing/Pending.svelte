@@ -324,6 +324,11 @@ async function publish() {
     error = adrift(drifted);
     return;
   }
+  // Settled in the repository, not by Discard, so no row offers it.
+  if (parsed.code === 'PUBLISH_SOURCE_UNRESOLVED') {
+    error = { code: parsed.code, count: entriesOf(parsed.paths ?? []).length };
+    return;
+  }
   conflicts = entriesOf(parsed.paths ?? []);
   error = conflicts.length
     ? refusal(conflicts)

@@ -767,6 +767,10 @@ test.each([
   ['turning a language off', 'POST', 'entries/pages/home/locales', { locales: ['en', 'fr'] }],
   ['an address change', 'POST', 'entries/posts/home/address/de', { address: 'start' }],
   ['a hold', 'POST', 'hold/pages/home', { hold: true }],
+  ['hiding', 'POST', 'status/pages', { entries: ['home'], hidden: true }],
+  ['a drift answer', 'POST', 'drift/pages/home', { choices: [{ path: 'title', locales: ['en'] }] }],
+  ['a rename', 'POST', 'entries/pages/home/rename', { to: 'start' }],
+  ['a duplicate', 'POST', 'entries/pages/home/duplicate', { to: 'copy', drafts: true }],
 ] as const)(
   '%s on an entry whose files disagree is refused and writes nothing',
   async (_, method, route, body) => {
@@ -804,6 +808,29 @@ test('the drawer’s checks report an entry whose files disagree as an error', a
   expect(results.filter((r) => r.check === 'source-unresolved')).toMatchObject([
     { severity: 'error', entry: 'pages/home' },
   ]);
+});
+
+test('publishing an entry whose files disagree is refused and commits nothing', async () => {
+  trees[head] = { [path('en')]: '_version: 1\n_source: en\ntitle: "Home"\n' };
+  await db.insert(tables.drafts).values({
+    path: path('de'),
+    revision: 'r1',
+    contents: '_version: 1\n_source: de\ntitle: "Startseite"\n',
+    baseSha: head,
+    baseBlob: '',
+    updatedAt: Date.now(),
+  });
+  const before = head;
+
+  const res = await call('POST', 'publish', { entries: ['pages/home'] });
+
+  expect(res.status).toBe(409);
+  expect(await res.json()).toMatchObject({
+    code: 'PUBLISH_SOURCE_UNRESOLVED',
+    paths: [path('de')],
+  });
+  expect(head).toBe(before);
+  expect(writes).toEqual([]);
 });
 
 test('once every file names the same language again, the entry opens', async () => {
