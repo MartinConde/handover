@@ -119,6 +119,23 @@ column stays where it is.
 A block moved, added or removed on the left moves on the right at once, and a shared value reads on
 the right as it is typed — the same walk the save makes into the other language's stored draft.
 
+### A third language beside each field
+
+When the entry has files in other languages too, the right column's header offers **Beside each
+field**. Choose a language and every text the column translates shows that language's words
+under its input, read only. A French translator working from English can check the German
+wording without leaving the field. It covers the texts the count covers: text and rich text,
+link labels, alt text, file names, video titles and SEO text, in blocks and lists too. Rows are
+matched by their id, so a row the French file has in another order still shows its own German
+text. A German field with nothing in it reads *Not written in German yet*, and a row German does
+not have reads *This row is not in German*.
+
+The list offers only languages with a file, other than the entry's own language and the one being
+written, each with its header mark. It shows the language as it is saved, including changes not
+yet published. The choice is remembered in this browser for each site and account. A remembered
+language that is now the column's own, or has no file, shows *None* until it can be offered again.
+It never changes what **Translate** translates from, and nothing typed is written to that language.
+
 ## What a save of a translation writes
 
 A translation's form shows the fields that language owns. Saving it writes those and reads the

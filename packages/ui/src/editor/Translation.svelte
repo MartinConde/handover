@@ -13,6 +13,7 @@ import * as m from '../paraglide/messages.js';
 import { request as fetch, uncertainResponse } from '../request.js';
 import type { EntrySession } from './entry-session.svelte';
 import Fields from './fields/Fields.svelte';
+import type { Reference } from './fields/ReferencePeek.svelte';
 
 type Data = Record<string, unknown>;
 let {
@@ -38,6 +39,10 @@ let {
   uiLocale = 'en',
   heading,
   next,
+  reference,
+  references = [],
+  mark,
+  onreference,
   onsaved,
   onclose,
   onturnoff,
@@ -71,6 +76,13 @@ let {
   heading?: Snippet<[string]>;
   /** The queue's way on to the next entry, when the entry was opened from a filtered list. */
   next?: Snippet;
+  /** The language drawn read-only under each field, when one is chosen and still valid. */
+  reference?: Reference;
+  /** Languages that can be the reference; none draws no control. */
+  references?: string[];
+  /** The state mark a language carries in the editor's switchers. */
+  mark?: Snippet<[string]>;
+  onreference?: (locale: string | undefined) => void;
   /** The entry keeps `pending`: this column is thrown away on a screen change, its edit is not. */
   onsaved?: (pending: boolean, data?: Data) => void;
   onclose?: () => void;
@@ -162,11 +174,27 @@ async function flush(): Promise<boolean> {
 }
 
 const named = (of: string) => formatLanguageName(of, uiLocale);
+
+let referenceOpen = $state(false);
+let referenceTrigger = $state<HTMLButtonElement>();
+function closeReference() {
+  referenceOpen = false;
+  referenceTrigger?.focus();
+}
+function chooseReference(of: string | undefined) {
+  onreference?.(of);
+  closeReference();
+}
 const failureText = $derived(fillFailure ? messageText(fillFailure, uiLocale) : '');
 const failureDetail = $derived(
   fillFailure?.detail ? m.common_technical_detail({ detail: fillFailure.detail }, options) : '',
 );
 </script>
+
+<svelte:window
+  onclick={(e) => referenceOpen && !(e.target as HTMLElement).closest('.reference-pick') && (referenceOpen = false)}
+  onkeydown={(e) => e.key === 'Escape' && referenceOpen && (e.target as HTMLElement).closest('.reference-pick') && closeReference()}
+/>
 
 <section class="pane is-locale" aria-labelledby="pane-{locale}">
   <div class="pane-head">
@@ -182,6 +210,21 @@ const failureDetail = $derived(
     </span>
     <span class="spacer"></span>
     {@render next?.()}
+    {#if references.length}
+      <div class="pop-anchor reference-pick">
+        <button class="btn btn-sm" type="button" aria-expanded={referenceOpen} aria-controls="reference-languages" bind:this={referenceTrigger} onclick={() => (referenceOpen = !referenceOpen)}>
+          {m.translation_reference_pick({ language: reference?.label ?? m.translation_reference_none({}, options) }, options)}
+        </button>
+        {#if referenceOpen}
+          <div class="menu reference-menu" id="reference-languages">
+            <button type="button" aria-pressed={!reference} onclick={() => chooseReference(undefined)}>{m.translation_reference_none({}, options)}</button>
+            {#each references as of (of)}
+              <button type="button" aria-pressed={reference?.locale === of} onclick={() => chooseReference(of)}>{named(of)}{@render mark?.(of)}</button>
+            {/each}
+          </div>
+        {/if}
+      </div>
+    {/if}
     {#if translator}
       <button class="btn btn-sm btn-fill" type="button" disabled={filling || locked || actionBlocked} onclick={() => fill()}>
         {m.translation_fill_empty({}, options)}
@@ -225,6 +268,7 @@ const failureDetail = $derived(
         sourceLabel={named(source)}
         translatedAt={behind.translatedAt ?? ''}
         prefix="t"
+        {reference}
         {site}
         servedAt={url}
       />

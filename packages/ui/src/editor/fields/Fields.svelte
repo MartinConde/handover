@@ -41,6 +41,7 @@ import type {
   ListOperation,
 } from '../entry-session.svelte';
 import Fields from './Fields.svelte';
+import ReferencePeek, { type Reference } from './ReferencePeek.svelte';
 import RichText from './RichText.svelte';
 import TextField from './TextField.svelte';
 
@@ -74,6 +75,7 @@ let {
   viewRoot,
   structureLocked = false,
   textOnly = false,
+  reference,
 }: {
   fields: readonly Field[];
   root: Data;
@@ -127,6 +129,8 @@ let {
   structureLocked?: boolean;
   /** During machine translation, only plain and rich source prose remains editable. */
   textOnly?: boolean;
+  /** Another language's words drawn under each translated field, read only. */
+  reference?: Reference;
 } = $props();
 const options = $derived(messageOptions(uiLocale));
 
@@ -606,7 +610,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
 {/snippet}
 
 {#snippet altField(id: string, at: readonly string[])}
-  <div class="field"><div class="label-row"><label for="{id}.alt">{m.field_alt_text({}, messageOptions(uiLocale))}</label><span class="mode">{m.field_per_language({}, messageOptions(uiLocale))}</span></div><input class="input" id="{id}.alt" type="text" value={str([...at, 'alt'])} oninput={(e) => write([...at, 'alt'], e.currentTarget.value || undefined)} /></div>
+  <div class="field"><div class="label-row"><label for="{id}.alt">{m.field_alt_text({}, messageOptions(uiLocale))}</label><span class="mode">{m.field_per_language({}, messageOptions(uiLocale))}</span></div><input class="input" id="{id}.alt" type="text" value={str([...at, 'alt'])} oninput={(e) => write([...at, 'alt'], e.currentTarget.value || undefined)} />{#if reference}<ReferencePeek {reference} path={childAddress(at, 'alt')} {uiLocale} />{/if}</div>
 {/snippet}
 
 {#snippet embedThumbnail(value: EmbedValue)}
@@ -615,7 +619,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
 {/snippet}
 
 {#snippet titleField(id: string, at: readonly string[])}
-  <div class="field"><div class="label-row"><label for="{id}.title">{m.field_title({}, messageOptions(uiLocale))}</label><span class="mode">{m.field_per_language({}, messageOptions(uiLocale))}</span></div><input class="input" id="{id}.title" type="text" value={str([...at, 'title'])} oninput={(e) => write([...at, 'title'], e.currentTarget.value || undefined)} /></div>
+  <div class="field"><div class="label-row"><label for="{id}.title">{m.field_title({}, messageOptions(uiLocale))}</label><span class="mode">{m.field_per_language({}, messageOptions(uiLocale))}</span></div><input class="input" id="{id}.title" type="text" value={str([...at, 'title'])} oninput={(e) => write([...at, 'title'], e.currentTarget.value || undefined)} />{#if reference}<ReferencePeek {reference} path={childAddress(at, 'title')} {uiLocale} />{/if}</div>
 {/snippet}
 
 {#snippet previews(at: readonly string[])}
@@ -656,12 +660,13 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
       <input class="input" id="{id}.{key}" type="text" {placeholder} aria-describedby={described} {value} oninput={(e) => seoWrite(at, key, e.currentTarget.value || undefined)} />
     {/if}
     <div class={['gauge', { 'is-long': over }]} aria-hidden="true"><span style="width: {Math.min(100, Math.round((value.trim().length / limit) * 100))}%"></span></div>
+    {#if reference}<ReferencePeek {reference} path={childAddress(at, key)} {uiLocale} />{/if}
     {#if hint}<p class="hint" id="{id}.{key}-hint">{hint}</p>{/if}
   </div>
 {/snippet}
 
 {#snippet nameField(id: string, at: readonly string[])}
-  <div class="field"><div class="label-row"><label for="{id}.name">{m.field_display_name({}, messageOptions(uiLocale))}</label><span class="mode">{m.field_per_language({}, messageOptions(uiLocale))}</span></div><input class="input" id="{id}.name" type="text" value={str([...at, 'name'])} oninput={(e) => write([...at, 'name'], e.currentTarget.value || undefined)} /></div>
+  <div class="field"><div class="label-row"><label for="{id}.name">{m.field_display_name({}, messageOptions(uiLocale))}</label><span class="mode">{m.field_per_language({}, messageOptions(uiLocale))}</span></div><input class="input" id="{id}.name" type="text" value={str([...at, 'name'])} oninput={(e) => write([...at, 'name'], e.currentTarget.value || undefined)} />{#if reference}<ReferencePeek {reference} path={childAddress(at, 'name')} {uiLocale} />{/if}</div>
 {/snippet}
 
 {#snippet chosenEntry(id: string, labelId: string, says: string | undefined, ref: string, open: () => void)}
@@ -716,6 +721,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'text'}
       {@render labelRow(id, field, text, at)}
       <TextField {id} invalid={bad} describedBy={says} required={field.required} value={str(at)} onvalue={(value) => write(at, value)} />
+      {#if reference}<ReferencePeek {reference} path={address(at)} {uiLocale} />{/if}
     {:else if field.type === 'number'}
       {@render labelRow(id, field, text, at)}
       <input class="input" {id} type="number" step="any" aria-invalid={bad} aria-describedby={says} aria-required={field.required ? 'true' : undefined} value={num(at)} oninput={(e) => write(at, e.currentTarget.value === '' ? undefined : e.currentTarget.valueAsNumber)} />
@@ -744,7 +750,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'link' && translating}
       <!-- A link's label is the half a translation owns. -->
       {@render groupLabel(id, field, text, at)}
-      <div class="field"><div class="label-row"><label for="{id}.label">{m.field_link_label({}, messageOptions(uiLocale))}</label>{@render machineMark(childAddress(at, 'label'), `${text} label`)}</div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} /></div>
+      <div class="field"><div class="label-row"><label for="{id}.label">{m.field_link_label({}, messageOptions(uiLocale))}</label>{@render machineMark(childAddress(at, 'label'), `${text} label`)}</div><input class="input" id="{id}.label" type="text" value={str([...at, 'label'])} oninput={(e) => write([...at, 'label'], e.currentTarget.value || undefined)} />{#if reference}<ReferencePeek {reference} path={childAddress(at, 'label')} {uiLocale} />{/if}</div>
     {:else if field.type === 'link'}
       {@render groupLabel(id, field, text, at)}
       <div class="link-field-controls">
@@ -775,10 +781,11 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'richtext'}
       {@render groupLabel(id, field, text, at)}
       <RichText {id} labelId="{id}-l" {locale} {uiLocale} tier={field.tier} invalid={!!err} describedby={says} value={str(at)} address={address(at)} {session} onchange={(md, history) => write(at, md, history)} />
+      {#if reference}<ReferencePeek {reference} path={address(at)} tier={field.tier} {uiLocale} />{/if}
     {:else if field.type === 'group'}
       <details class="group" open>
         <summary>{text}<span class="count">{m.field_count({ count: field.fields.length }, messageOptions(uiLocale))}</span></summary>
-        <div class="form"><Fields fields={field.fields} bind:root {blocks} {blockLabels} {problems} path={at} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
+        <div class="form"><Fields fields={field.fields} bind:root {blocks} {blockLabels} {problems} path={at} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>
       </details>
     {:else if field.type === 'array'}
       {@const items = rows(at)}
@@ -790,7 +797,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
         {#each items as row, i (keyOf(items, i))}
           {@const s = sortable(() => keyOf(items, i), () => i)}
           <div class={['row-card', { 'is-scalar': scalar, 'is-dragging': s.isDragging }]} {@attach s.attach}>
-            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
+            <div class="row-fields"><Fields fields={field.item} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} rowLabel="{text} {i + 1}" {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>
             {#if !translating}{@render controls(at, i, m.field_row_name({ field: text, index: i + 1 }, messageOptions(uiLocale)), s.attachHandle)}{/if}
           </div>
         {:else}
@@ -834,7 +841,7 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
             {#if shut}
               <!-- folded: the header is the whole card -->
             {:else if inner}
-              <div class="form" id="{id}.{i}-b"><Fields fields={inner} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} /></div>
+              <div class="form" id="{id}.{i}-b"><Fields fields={inner} bind:root {blocks} {blockLabels} {problems} path={[...at, String(i)]} {translating} {machine} {ontranslate} {sourceChanged} {sourceLabel} {translatedAt} {onretranslate} {prefix} {mediaBase} {locale} {uiLocale} {site} {servedAt} {session} {oncommand} viewRoot={displayedRoot} inherited={mode} {structureLocked} {textOnly} {reference} /></div>
             {:else}
               <p class="ref-note" id="{id}.{i}-b">{block(row)._ref ?? m.field_block_missing({ type: block(row)._type ?? '' }, messageOptions(uiLocale))} — {m.field_not_editable({}, messageOptions(uiLocale))}</p>
             {/if}

@@ -21,6 +21,7 @@ import {
   formIn,
   type Labels,
   LOCK_TTL,
+  referenceText,
   resolveSeo,
   type SeoDefaultsValue,
 } from '@handover/core';
@@ -354,6 +355,40 @@ const partial = (of: string) => {
   const count = answered[of];
   return count && count.written < count.of ? count : undefined;
 };
+
+// The language read under each field of the pane; stored as chosen, drawn only while it is valid.
+// svelte-ignore state_referenced_locally -- one authenticated editor instance owns one preference key
+const referenceKey = `handover:editor-reference:v1:${siteBase() || '/'}:${userId}`;
+let referenceChoice = $state(
+  (() => {
+    try {
+      return localStorage.getItem(referenceKey) ?? '';
+    } catch {
+      return '';
+    }
+  })(),
+);
+function chooseReference(of: string | undefined) {
+  referenceChoice = of ?? '';
+  try {
+    localStorage.setItem(referenceKey, referenceChoice);
+  } catch {
+    // A blocked browser preference must never block editing.
+  }
+}
+// `snapshot()` throws without a file, so only languages the session holds are offered.
+const references = $derived(
+  entry.locales.filter(
+    (of) => of !== entry.sourceLocale && of !== shown && entrySession.hasSnapshot(of),
+  ),
+);
+const reference = $derived.by(() => {
+  const of = referenceChoice;
+  if (!references.includes(of)) return undefined;
+  const form = { fields: [...entry.fields], blocks: entry.blocks };
+  const text = referenceText('default', form, entrySession.snapshot(of), of);
+  return { locale: of, label: language(of), ...text };
+});
 
 // The list's language filter, carried in the address so remounts and section links keep it.
 const opening = new URLSearchParams(location.search);
@@ -2020,6 +2055,10 @@ async function saveAddress() {
               {mediaBase}
               heading={paneHeading}
               next={queue ? queueNext : undefined}
+              {reference}
+              {references}
+              mark={languageMark}
+              onreference={chooseReference}
               onclose={side ? () => leaving(() => setBeside('none')) : undefined}
               onturnoff={entry.singleton ? undefined : () => { rememberActionTrigger(); actionFailed = undefined; offing = shown; }}
             />

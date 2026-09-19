@@ -416,6 +416,35 @@ test('the language chosen in the pane survives an interface switch and the pane 
   expect(q('.editor-form-heading h2')?.textContent).toBe('Englisch');
 });
 
+test('the reference language survives an interface switch and is renamed', () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120_000 }),
+    ),
+  );
+  app = mount(EditorLocaleFixture, {
+    target: document.body,
+    props: { six: true, translations: { de: {}, fr: { title: 'Maison du port' } } },
+  });
+  flushSync();
+  q<HTMLButtonElement>('button.btn-sbs')?.click();
+  flushSync();
+  const pick = () => q<HTMLButtonElement>('.pane-head .reference-pick > button');
+  pick()?.click();
+  flushSync();
+  qa<HTMLButtonElement>('#reference-languages button')[1]?.click();
+  flushSync();
+  const peek = q('#t-title-field .reference-peek');
+  expect(peek?.textContent?.trim()).toBe('French Maison du port');
+
+  switchLocale();
+
+  expect(pick()?.textContent?.trim()).toBe('Neben jedem Feld: Französisch');
+  expect(q('#t-title-field .reference-peek')).toBe(peek);
+  expect(peek?.textContent?.trim()).toBe('Französisch Maison du port');
+});
+
 test('the pane count and partial mark follow an interface switch', () => {
   vi.stubGlobal(
     'fetch',

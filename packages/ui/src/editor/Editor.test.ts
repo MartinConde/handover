@@ -4798,3 +4798,233 @@ test('a first language refused outright leaves editing open and reloads nothing'
   });
   vi.unstubAllGlobals();
 });
+
+// Reference language: a third language read under each field of the pane.
+const referencePick = (root: ParentNode) =>
+  $<HTMLButtonElement>(root, '.pane-head .reference-pick > button');
+const referenceChoices = (root: ParentNode) =>
+  $$<HTMLButtonElement>(root, '#reference-languages button');
+const chooseReference = (root: ParentNode, name: string) => {
+  referencePick(root)?.click();
+  flushSync();
+  referenceChoices(root)
+    .find((b) => b.textContent?.startsWith(name))
+    ?.click();
+  flushSync();
+};
+const peek = (root: ParentNode, field: string) =>
+  $(root, `#t-${field}-field .reference-peek`)?.textContent?.trim();
+// `structured` with a French file whose rooms run in the other order from the German one.
+const structuredWithFrench = () => {
+  const six = sixLanguages('structured');
+  const german = six.entry.translations.de as Record<string, unknown>;
+  six.entry.translations.fr = {
+    ...structuredClone(german),
+    title: 'Maison du port',
+    rooms: [
+      { _id: 'room0001', name: 'Chambre du port' },
+      { _id: 'room0002', name: 'Chambre jardin' },
+    ],
+  };
+  return six;
+};
+const frenchBesideEnglish = async (root: ParentNode) => {
+  sideBySide(root);
+  paneLanguagePick(root)?.click();
+  flushSync();
+  paneChoices(root)
+    .find((b) => b.textContent?.startsWith('French'))
+    ?.click();
+  await tick();
+  flushSync();
+};
+
+test('German reads under the French title, rich text and a field inside a block', async () => {
+  const root = show(structuredWithFrench());
+  await frenchBesideEnglish(root);
+
+  chooseReference(root, 'German');
+
+  expect(peek(root, 'title')).toBe('German Haus am Hafen');
+  expect($(root, '#t-title-field .reference-peek [lang="de"]')?.textContent).toBe('Haus am Hafen');
+  expect($(root, '#t-summary-field .reference-peek [lang="de"]')?.innerHTML).toBe(
+    '<p><strong>Ruhige</strong> Zimmer über dem Hafen.</p>',
+  );
+  expect(peek(root, 'body\\.0\\.heading')).toBe('German Jetzt buchen');
+  expect(peek(root, 'body\\.0\\.button')).toBe('German Buchen');
+});
+
+test('a French row in another order still peeks at the German row with its id', async () => {
+  const root = show(structuredWithFrench());
+  await frenchBesideEnglish(root);
+
+  chooseReference(root, 'German');
+
+  expect($<HTMLInputElement>(root, '#t-rooms\\.0\\.name')?.value).toBe('Chambre du port');
+  expect(peek(root, 'rooms\\.0\\.name')).toBe('German Hafenzimmer');
+  expect(peek(root, 'rooms\\.1\\.name')).toBe('German Gartenzimmer');
+});
+
+test('an empty German value and a row German lacks say so instead of drawing nothing', async () => {
+  const six = structuredWithFrench();
+  const german = six.entry.translations.de as Record<string, unknown>;
+  german.title = '';
+  german.rooms = [{ _id: 'room0002', name: 'Gartenzimmer' }];
+  const root = show(six);
+  await frenchBesideEnglish(root);
+
+  chooseReference(root, 'German');
+
+  expect(peek(root, 'title')).toBe('German Not written in German yet');
+  expect(peek(root, 'rooms\\.0\\.name')).toBe('German This row is not in German');
+  expect(peek(root, 'rooms\\.1\\.name')).toBe('German Gartenzimmer');
+});
+
+test('a shared or source-only field gets no peek', async () => {
+  const root = show(sixLanguages('base'));
+  await frenchBesideEnglish(root);
+
+  chooseReference(root, 'German');
+
+  expect(peek(root, 'title')).toBe('German Haus am Hafen');
+  expect($(root, '#t-price-field')).not.toBeNull();
+  expect($(root, '#t-price-field .reference-peek')).toBeNull();
+  expect($(root, '#t-notes-field')).toBeNull();
+});
+
+test('beside English, French offers None, German and Italian — never source, target, missing or off', async () => {
+  const root = show(sixLanguages('base'));
+  await frenchBesideEnglish(root);
+
+  referencePick(root)?.click();
+  flushSync();
+
+  expect(referencePick(root)?.textContent?.trim()).toBe('Beside each field: None');
+  expect(referenceChoices(root).map((b) => b.textContent?.trim())).toEqual([
+    'None',
+    'German',
+    'Italian— partly written, 0 of 2 texts',
+  ]);
+  expect(referenceChoices(root).map((b) => b.getAttribute('aria-pressed'))).toEqual([
+    'true',
+    'false',
+    'false',
+  ]);
+});
+
+test('with files only for the source and the language beside it there is no reference control', () => {
+  const root = show(sixLanguages('legacy'));
+  sideBySide(root);
+
+  expect($(root, '.pane-head h2')?.textContent).toContain('German');
+  expect(referencePick(root)).toBeNull();
+});
+
+test('the chosen reference is stored per site and user and comes back on the next entry', async () => {
+  const key = 'handover:editor-reference:v1:/:u1';
+  const first = show({ ...sixLanguages('base'), userId: 'u1' });
+  await frenchBesideEnglish(first);
+  chooseReference(first, 'German');
+  expect(localStorage.getItem(key)).toBe('de');
+  unmount(app);
+  document.body.innerHTML = '';
+  localStorage.removeItem('handover:editor-view:v3:/:u1');
+
+  const root = show({ ...sixLanguages('base'), userId: 'u1' });
+  await frenchBesideEnglish(root);
+
+  expect(referencePick(root)?.textContent?.trim()).toBe('Beside each field: German');
+  expect(peek(root, 'title')).toBe('German Haus am Hafen');
+});
+
+test('a stored reference that is now the target shows None, stays stored and returns', async () => {
+  const key = 'handover:editor-reference:v1:/:u1';
+  localStorage.setItem(key, 'de');
+  const root = show({ ...sixLanguages('base'), userId: 'u1' });
+  sideBySide(root);
+
+  expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Haus am Hafen');
+  expect(referencePick(root)?.textContent?.trim()).toBe('Beside each field: None');
+  expect($(root, '.reference-peek')).toBeNull();
+  expect(localStorage.getItem(key)).toBe('de');
+
+  await choosePaneLanguage(root, 1);
+
+  expect(referencePick(root)?.textContent?.trim()).toBe('Beside each field: German');
+  expect(peek(root, 'title')).toBe('German Haus am Hafen');
+});
+
+test('a browser that refuses storage still lets the reference be chosen and drawn', async () => {
+  const refuse = () => {
+    throw new DOMException('blocked', 'SecurityError');
+  };
+  const read = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(refuse);
+  const write = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(refuse);
+  const root = show(sixLanguages('base'));
+  await frenchBesideEnglish(root);
+
+  chooseReference(root, 'German');
+
+  expect(peek(root, 'title')).toBe('German Haus am Hafen');
+  expect(write).toHaveBeenCalledWith('handover:editor-reference:v1:/:', 'de');
+  read.mockRestore();
+  write.mockRestore();
+});
+
+test('the peek is not an input, not a tab stop, and choosing it leaves nothing to save', async () => {
+  const six = structuredWithFrench();
+  (six.entry.translations.de as Record<string, unknown>).summary =
+    'Ruhige Zimmer über dem [Hafen](https://example.com/hafen).';
+  const root = show(six);
+  await frenchBesideEnglish(root);
+
+  chooseReference(root, 'German');
+
+  const peeks = $$<HTMLElement>(root, '.reference-peek');
+  expect(peeks.length).toBeGreaterThan(0);
+  for (const node of peeks) {
+    expect(
+      node.querySelector('input, textarea, button, select, a[href], [tabindex], [contenteditable]'),
+    ).toBeNull();
+    expect(node.hasAttribute('tabindex')).toBe(false);
+    expect(node.id).toBe('');
+  }
+  expect($(root, '[aria-describedby*="reference"]')).toBeNull();
+  expect($(root, '.pane-head .autosave')?.textContent?.trim()).toBe('Saved');
+});
+
+test('Escape closes the reference choice and gives focus back to its button', async () => {
+  const root = show(sixLanguages('base'));
+  await frenchBesideEnglish(root);
+  referencePick(root)?.click();
+  flushSync();
+  expect($(root, '#reference-languages')).not.toBeNull();
+
+  referenceChoices(root)[1]?.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+  );
+  flushSync();
+
+  expect($(root, '#reference-languages')).toBeNull();
+  expect(document.activeElement).toBe(referencePick(root));
+});
+
+test('Translate what’s empty still asks for the target alone with a reference chosen', async () => {
+  const fetchMock = vi.fn(async (url: string) =>
+    isLock(url) ? Response.json(HELD) : Response.json({ data: {}, pending: true }),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show(sixLanguages('machine'));
+  await frenchBesideEnglish(root);
+  chooseReference(root, 'German');
+
+  $<HTMLButtonElement>(root, 'button.btn-fill')?.click();
+  await tick();
+
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/translate/listings/seaview-cottage/fr', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({}),
+  });
+  vi.unstubAllGlobals();
+});

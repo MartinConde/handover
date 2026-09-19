@@ -43,7 +43,8 @@ signed-in session, editor content language, and the active editor field remain i
 
 Content-language controls, translation columns, machine/stale markers and block-drift decisions are
 also bilingual. Language names use the current interface locale. Switching keeps the selected
-content language, translated draft, focused field, drift choices and in-flight work; retained
+content language, the language chosen *Beside each field*, translated draft, focused field, drift
+choices and in-flight work; retained
 translation and drift failures reformat from stable state instead of retrying the operation.
 Site settings and the navigation builder are bilingual too. Their timestamps, language names,
 counts, warnings, actions, dialogs and retained failures update without rereading data. Shared menu

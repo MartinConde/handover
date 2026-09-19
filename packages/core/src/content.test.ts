@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test, vi } from 'vitest';
 import {
+  answeredPaths,
   answeredText,
   applyDrift,
   changeSource,
@@ -19,6 +20,7 @@ import {
   parseEntry,
   provenance,
   refErrors,
+  referenceText,
   sourceOnlyConflicts,
   staleLocales,
   staticSource,
@@ -2088,6 +2090,40 @@ test('a row written only to other languages is not owed by this one', () => {
     written: 0,
     of: 14,
   });
+});
+
+test('a reference reads out exactly the paths the answered count walks', () => {
+  const { values } = referenceText('default', harbourForm, harbourDe, 'de');
+
+  expect(Object.keys(values)).toEqual(answeredPaths('default', harbourForm, harbourDe).paths);
+});
+
+test('a reference carries the stored alt, link label and SEO text by core path', () => {
+  const { values } = referenceText('default', harbourForm, harbourDe, 'de');
+
+  expect(values['photo.alt']).toBe('Der Hafen in der Dämmerung');
+  expect(values['body[_id=cta00001].button.label']).toBe('Buchen');
+  expect(values['seo.title']).toBe('Ferienhaus am Hafen');
+  expect(values['seo.description']).toBe('Ein ruhiges Haus über dem Hafen.');
+  expect(values['seo.image.alt']).toBe('Der Hafen in der Dämmerung');
+  expect(values.summary).toBe('**Ruhige** Zimmer über dem Hafen.');
+});
+
+test("a row whose _locales leave the reference out is not among the reference's rows", () => {
+  const de = {
+    ...harbourDe,
+    rooms: [
+      { _id: 'room0002', _locales: ['en', 'fr'], name: 'Gartenzimmer' },
+      { _id: 'room0001', name: 'Hafenzimmer' },
+    ],
+  };
+
+  expect(referenceText('default', harbourForm, de, 'de').rows).toEqual([
+    'rooms[_id=room0001]',
+    'features[0]',
+    'features[1]',
+    'body[_id=cta00001]',
+  ]);
 });
 
 test('a source with no translated text owes nothing', () => {

@@ -76,6 +76,7 @@ export {
   parseEntry,
   provenance,
   refErrors,
+  referenceText,
   sourceOnlyConflicts,
   staleLocales,
   staticSource,

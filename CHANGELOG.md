@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Side by side offers **Beside each field**: another language with a file, drawn read only under
+  each translated field of the right column, with *Not written in German yet* and *This row is not
+  in German* for what it lacks. The choice is kept per site and account in the browser. Core
+  exports `referenceText(siteId, form, data, locale)`.
 - A language with no file offers **Create all N missing languages**, and with a translator
   **Create all N and pre-fill**, when more than one offered language is missing. They run one
   language at a time while the entry waits, stop at the first refusal or lost answer, and report
