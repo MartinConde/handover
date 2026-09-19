@@ -366,6 +366,33 @@ test('the language chosen in the pane survives an interface switch and the pane 
   expect(q('.editor-form-heading h2')?.textContent).toBe('Englisch');
 });
 
+test('the pane count and partial mark follow an interface switch', () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120_000 }),
+    ),
+  );
+  app = mount(EditorLocaleFixture, {
+    target: document.body,
+    props: { six: true, translations: { de: {} } },
+  });
+  flushSync();
+  q<HTMLButtonElement>('button.btn-sbs')?.click();
+  flushSync();
+  const pick = () => q<HTMLButtonElement>('.pane-head .language-pick > h2 > button');
+  const count = q('.pane-head .answered');
+  expect(count?.textContent).toBe('0 of 1 text written');
+
+  switchLocale();
+
+  expect(q('.pane-head .answered')).toBe(count);
+  expect(count?.textContent).toBe('0 von 1 Text geschrieben');
+  expect(pick()?.textContent?.trim()).toBe(
+    'Sprache neben Englisch: Deutsch— teilweise geschrieben, 0 von 1 Text',
+  );
+});
+
 test('the queue keeps its language and next entry through an interface switch and renames them', async () => {
   vi.stubGlobal(
     'fetch',

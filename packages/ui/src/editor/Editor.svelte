@@ -1,5 +1,6 @@
 <script lang="ts">
 import {
+  answeredText,
   type Drift,
   entryName,
   entryUrl,
@@ -310,6 +311,27 @@ const alone = $derived(!side && shown !== undefined);
 const untranslated = (of: string) => of !== entry.sourceLocale && !entrySession.hasSnapshot(of);
 // Turned off for this entry: no file is written for it and the site does not offer it.
 const off = (of: string) => !entry.offered.includes(of);
+// Recounted from both columns on every keystroke; nothing is saved or reloaded to learn it.
+const answered = $derived(
+  Object.fromEntries(
+    others
+      .filter((of) => entrySession.hasSnapshot(of))
+      .map((of) => [
+        of,
+        answeredText(
+          'default',
+          { fields: [...entry.fields], blocks: entry.blocks },
+          data,
+          entrySession.snapshot(of),
+          of,
+        ),
+      ]),
+  ),
+);
+const partial = (of: string) => {
+  const count = answered[of];
+  return count && count.written < count.of ? count : undefined;
+};
 
 // The list's language filter, carried in the address so remounts and section links keep it.
 const opening = new URLSearchParams(location.search);
@@ -1311,7 +1333,7 @@ async function saveAddress() {
 <svelte:document onvisibilitychange={recheck} />
 
 {#snippet languageMark(of: string)}
-  {#if off(of)}<span class="visually-hidden"> — {m.editor_language_off_a11y({}, options)}</span>{:else if untranslated(of)}<span class="visually-hidden"> — {m.editor_language_untranslated_a11y({}, options)}</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {otherSource(of) ? m.editor_language_other_source_a11y({ language: language(otherSource(of) ?? ''), source: language(entry.sourceLocale) }, options) : m.editor_language_stale_a11y({ source: language(entry.sourceLocale) }, options)}</span><span class="mark" aria-hidden="true"></span>{/if}
+  {#if off(of)}<span class="visually-hidden"> — {m.editor_language_off_a11y({}, options)}</span>{:else if untranslated(of)}<span class="visually-hidden"> — {m.editor_language_untranslated_a11y({}, options)}</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {otherSource(of) ? m.editor_language_other_source_a11y({ language: language(otherSource(of) ?? ''), source: language(entry.sourceLocale) }, options) : m.editor_language_stale_a11y({ source: language(entry.sourceLocale) }, options)}</span><span class="mark" aria-hidden="true"></span>{:else if partial(of)}{@const count = partial(of)}<span class="visually-hidden"> — {m.editor_language_partial_a11y({ written: count?.written ?? 0, count: count?.of ?? 0 }, options)}</span><span class="mark is-partial" aria-hidden="true"></span>{/if}
 {/snippet}
 
 {#snippet paneHeading(of: string)}
@@ -1357,7 +1379,7 @@ async function saveAddress() {
   <select class="canvas-locale" aria-label={m.editor_language({}, options)} value={locale}
     onchange={(event) => { const nextLocale = event.currentTarget.value; void leaving(() => (locale = nextLocale)); }}>
     {#each entry.locales as of (of)}
-      <option value={of}>{of.toUpperCase()}{off(of) ? ` · ${m.editor_language_off({}, options)}` : untranslated(of) ? ` · ${m.editor_language_new({}, options)}` : entry.stale.includes(of) ? ` · ${m.editor_language_changed({}, options)}` : ''}</option>
+      <option value={of}>{of.toUpperCase()}{off(of) ? ` · ${m.editor_language_off({}, options)}` : untranslated(of) ? ` · ${m.editor_language_new({}, options)}` : entry.stale.includes(of) ? ` · ${m.editor_language_changed({}, options)}` : partial(of) ? ` · ${m.editor_language_partial({}, options)}` : ''}</option>
     {/each}
   </select>
   <span class={[
@@ -1809,6 +1831,7 @@ async function saveAddress() {
               source={entry.sourceLocale}
               {locked}
               stale={entry.stale.includes(shown)}
+              answered={answered[shown]}
               translator={entry.translator}
               actionBlocked={busy || sending}
               url={localeUrl(shown)}

@@ -236,7 +236,13 @@ const variants = {
           required: false,
           item: [{ path: ['name'], label: 'Name', type: 'text', required: true }],
         },
-        { path: ['features'], label: 'Features', type: 'array', required: false, item: [] },
+        {
+          path: ['features'],
+          label: 'Features',
+          type: 'array',
+          required: false,
+          item: [{ path: [], label: '', type: 'text', required: true }],
+        },
         { path: ['photo'], label: 'Photo', type: 'image', required: false, preset: {} },
         {
           path: ['brochure'],

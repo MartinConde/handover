@@ -1346,7 +1346,7 @@ test('with six languages each choice names its language and says what state it i
     'English',
     'German',
     'French— English changed since this was translated',
-    'Italian',
+    'Italian— partly written, 0 of 2 texts',
     'Spanish— not translated yet',
     'Dutch— turned off for this entry',
   ]);
@@ -1460,7 +1460,7 @@ test('side by side lists the languages other than the source in the pane head, w
   expect(paneChoices(root).map((b) => b.textContent?.trim())).toEqual([
     'German',
     'French— English changed since this was translated',
-    'Italian',
+    'Italian— partly written, 0 of 2 texts',
     'Spanish— not translated yet',
     'Dutch— turned off for this entry',
   ]);
@@ -1486,6 +1486,106 @@ test('choosing French in the pane swaps only the second column', async () => {
   expect(document.activeElement).toBe(paneLanguagePick(root));
   // The pane's language is the entry's chosen language, so the header follows it.
   expect(languagePick(root)?.textContent).toContain('French');
+});
+
+const answered = (root: ParentNode) => $(root, '.pane-head .answered')?.textContent;
+
+// The base source owes two texts: its title and the hero heading. Price and notes are not the pane's.
+test('the pane head says how much of the source text the language beside it answers', async () => {
+  const root = show(sixLanguages('base'));
+  sideBySide(root);
+  expect(answered(root)).toBe('2 of 2 texts written');
+
+  await choosePaneLanguage(root, 2);
+
+  expect(answered(root)).toBe('0 of 2 texts written');
+});
+
+test('typing in either column recounts at once, without a save or a fresh pane', async () => {
+  const fetchMock = autosaved();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show(sixLanguages('base'));
+  sideBySide(root);
+  await choosePaneLanguage(root, 2);
+  const input = $<HTMLInputElement>(root, 'input#t-title');
+  const reads = fetchMock.mock.calls.length;
+
+  type(root, 'input#t-title', 'Casa sul porto');
+  expect(answered(root)).toBe('1 of 2 texts written');
+  type(root, 'input#f-subtitle', 'Sleeps six, dogs welcome');
+
+  expect(answered(root)).toBe('1 of 3 texts written');
+  expect(languagePick(root)?.textContent?.trim()).toBe(
+    'Language: Italian— partly written, 1 of 3 texts',
+  );
+  expect($(root, 'input#t-title')).toBe(input);
+  expect(fetchMock.mock.calls.length).toBe(reads);
+  vi.unstubAllGlobals();
+});
+
+test('a stale translation that is also partly written is marked stale, and still counted', async () => {
+  const root = show(sixLanguages('staleAndPartial'));
+  sideBySide(root);
+  paneLanguagePick(root)?.click();
+  flushSync();
+
+  expect(paneChoices(root)[1]?.textContent?.trim()).toBe(
+    'French— English changed since this was translated',
+  );
+  paneChoices(root)[1]?.click();
+  await tick();
+  flushSync();
+
+  expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Maison du port');
+  expect(answered(root)).toBe('1 of 2 texts written');
+});
+
+test('a file with no source text to answer says so, and a language with no file stays missing', async () => {
+  const opened = sixLanguages('base');
+  opened.entry.data = {
+    ...opened.entry.data,
+    title: ' ',
+    body: [{ _type: 'hero', _id: 'hero0001' }],
+  };
+  const root = show(opened);
+  sideBySide(root);
+  await choosePaneLanguage(root, 2);
+  paneLanguagePick(root)?.click();
+  flushSync();
+
+  expect(answered(root)).toBe('No source text to translate');
+  expect(paneChoices(root).map((b) => b.textContent?.trim())).toEqual([
+    'German',
+    'French— English changed since this was translated',
+    'Italian',
+    'Spanish— not translated yet',
+    'Dutch— turned off for this entry',
+  ]);
+});
+
+test("Canvas's language select names a partly written file as well", () => {
+  const opened = sixLanguages('base');
+  const root = show({ entry: { ...opened.entry, route: '/listings/[slug]' }, preview: true });
+  $<HTMLButtonElement>(root, '.canvas-open')?.click();
+  flushSync();
+
+  expect(
+    $$<HTMLOptionElement>(root, 'select.canvas-locale option').map((o) => o.textContent),
+  ).toEqual(['EN', 'DE', 'FR · Changed', 'IT · Partly written', 'ES · New', 'NL · Off']);
+});
+
+test('with four languages the buttons carry the partial mark too', () => {
+  const opened = sixLanguages('base');
+  opened.entry.locales = ['en', 'de', 'fr', 'it'];
+  opened.entry.offered = ['en', 'de', 'fr', 'it'];
+  const root = show(opened);
+
+  expect($$(root, '.seg[aria-label="Language"] button').map((b) => b.textContent?.trim())).toEqual([
+    'EN',
+    'DE',
+    'FR— English changed since this was translated',
+    'IT— partly written, 0 of 2 texts',
+  ]);
 });
 
 test('with one other language the pane head stays a plain heading', () => {

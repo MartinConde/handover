@@ -28,6 +28,7 @@ let {
   source,
   locked = false,
   stale = false,
+  answered,
   mediaBase = '',
   inheritedSeo,
   translator = false,
@@ -58,6 +59,8 @@ let {
   /** The lock is on all of the entry's languages, so this column reads like the other one. */
   locked?: boolean;
   stale?: boolean;
+  /** Source texts this file answers, out of those the source holds. */
+  answered?: { written: number; of: number };
   translator?: boolean;
   /** Another entry-wide persisted action is already in flight. */
   actionBlocked?: boolean;
@@ -168,6 +171,9 @@ const failureDetail = $derived(
 <section class="pane is-locale" aria-labelledby="pane-{locale}">
   <div class="pane-head">
     {#if heading}{@render heading(locale)}{:else}<h2 id="pane-{locale}">{named(locale)}</h2>{/if}
+    {#if answered}
+      <span class="mode answered">{answered.of ? m.editor_language_answered({ written: answered.written, count: answered.of }, options) : m.editor_language_no_source_text({}, options)}</span>
+    {/if}
     {#if stale}
       <span class="mode">{behind.otherSource && behind.from ? m.translation_other_source({ language: named(behind.from), source: named(source) }, options) : m.translation_source_changed({ source: named(source) }, options)}</span>
     {/if}

@@ -9,6 +9,17 @@ const textOf = (node: Nodes): string =>
 
 export type RichtextTier = 'basic' | 'full';
 
+/** Markup alone is no answer: the editor stores an emptied list as `- ` and a quote as `>`. */
+export function hasWords(markdown: string): boolean {
+  if (!markdown.trim()) return false;
+  const says = (node: Nodes): boolean =>
+    (node.type !== 'html' && 'value' in node && node.value.trim() !== '') ||
+    ('children' in node && node.children.some(says));
+  return says(
+    fromMarkdown(markdown, { extensions: [gfm()], mdastExtensions: [gfmFromMarkdown()] }),
+  );
+}
+
 // The editor-facing names; each one is one round-trip test in richtext.test.ts.
 export const RICHTEXT_CONSTRUCTS = {
   basic: ['paragraph', 'bold', 'italic', 'link', 'bulletList', 'numberedList'],

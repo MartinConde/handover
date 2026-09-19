@@ -1258,9 +1258,31 @@
   "editor_language_off": "Aus",
   "editor_language_new": "Neu",
   "editor_language_changed": "Geändert",
+  "editor_language_partial": "Teilweise geschrieben",
   "editor_language_off_a11y": "für diesen Eintrag deaktiviert",
   "editor_language_untranslated_a11y": "noch nicht übersetzt",
   "editor_language_stale_a11y": "{source} wurde seit dieser Übersetzung geändert",
+  "editor_language_partial_a11y": [
+    {
+      "declarations": ["input written", "input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "teilweise geschrieben, {written} von {count} Text",
+        "countPlural=other": "teilweise geschrieben, {written} von {count} Texten"
+      }
+    }
+  ],
+  "editor_language_answered": [
+    {
+      "declarations": ["input written", "input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{written} von {count} Text geschrieben",
+        "countPlural=other": "{written} von {count} Texten geschrieben"
+      }
+    }
+  ],
+  "editor_language_no_source_text": "Kein Ausgangstext zu übersetzen",
   "editor_language_other_source_a11y": "aus {language} übersetzt, nicht aus {source}",
   "editor_side_by_side": "Nebeneinander",
   "editor_not_offered": "Dieser Eintrag wird nicht auf {language} angeboten. Es wird keine Datei auf {language} geschrieben und die Website verlinkt keine solche Datei.",

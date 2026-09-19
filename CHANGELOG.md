@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A translation's column says how much of the source's text it answers (*3 of 5 texts
+  written*), counted as you type, and the language switchers mark a partly written file.
+- *When the languages disagree* is its own docs page, split out of Translating.
 - Opening an entry on a language from a link or a queue no longer saves side by side as your
   view for the entries after it.
 - The translating docs are three pages: Translating, The source language, and Translations in

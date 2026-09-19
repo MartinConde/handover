@@ -32,8 +32,23 @@ site's default; a legal notice written in German on an English site opens in Ger
 carries the segment of stays the site's answer.
 
 A hollow ring means no file for this entry, a filled one a translation the source language has
-moved on from since, and a finished language carries no mark. A language turned off is struck
-through, and choosing it says so.
+moved on from since, a half-filled one a file that answers only part of the source's text, and
+a finished language carries no mark. One mark each, in that order: a stale file that is also
+partly written shows as stale. A language turned off is struck through, and choosing it says so.
+
+### How much is written
+
+The column of a translation says how much of the source it answers — *3 of 5 texts written* —
+and counts again as either column is typed in, before anything is saved. The count is the
+source's own text that is stored and not empty: text and rich-text fields, a link's label, an
+image's alt text, a file's name, a video's title, and the SEO title, description and image alt
+text, inside groups, blocks and lists too. Rows are matched by their id, so a moved block still
+counts. It leaves out what the language does not own — shared and source-only values, numbers,
+dates, choices, references — and menu labels and empty SEO fields, since blank there means *use
+the page's own title*. Whitespace, and rich text with no words in it (an empty list or quote),
+answer nothing; text only the translation has adds nothing. A source with none of that text
+reads *No source text to translate*. The count says what is typed, not that the translation is
+reviewed or that the entry can be published.
 
 ## A language with no file yet
 
@@ -103,33 +118,13 @@ The right-hand column draws that: a shared field is shown as the value the langu
 than as something to type over, a field the entry's own language keeps to itself is not drawn at
 all, and a link offers its label and not where it points. Blocks are there to translate but not to
 add, remove or reorder, and the navigation menus are drawn the same way: the tree as one box a
-row, for the labels alone, with items added and moved in the other column. Pickers whose
-translated half has no editor yet — an image's `alt`, a file's name — are left out.
+row, for the labels alone, with items added and moved in the other column. A picture, a file
+and a video stay the ones the source chose; their alt text, name and title are the translation's
+to write.
 
 ## When the languages disagree
 
-Opening the entry compares the languages it has files in and reports every block they disagree
-about — one language having a block the others do not with nothing to say so, or a block in a
-language its `_locales` does not name ([Languages](i18n.md#a-block-one-language-only-has)).
-**Publishing an entry with one of those is refused** ([Drafts and
-publishing](publishing.md#publishing)) and the drawer marks the row *Languages disagree*; nothing
-is lost, since the edits stay where they are until the files agree. The entry opens on a panel
-instead of its form, with one card per block and the answers it allows:
-
-| The block | The answers |
-|---|---|
-| In German, missing from English, marked nothing | Add it to English · Keep it in German only · Remove it from German |
-| Marked `_locales: [de]` and in the English file too | Remove it from English · Let it be in every language |
-
-They are not a fixed three: they come from which languages have the block against which should
-have it, so a block missing from two languages offers to arrive in both. *Add it to English* writes
-the block with the values every language shares and nothing to read yet, so what the schema still
-wants is ordinary validation rather than another refusal; *Keep it in German only* writes
-`_locales`. Each card shows what every language has written in the block, so *Remove it from
-English* is answered against the words it would lose. Answering every card writes each language
-the answers change in one go, and the banner goes because the next read has nothing to report.
-Changing the interface language while deciding keeps each selected answer and focused control;
-an already-visible changed-entry or apply refusal is rendered again in the new interface language.
+Blocks the languages of an entry disagree about are [a page of their own](language-drift.md).
 
 A menu label is the one translated value a machine is never offered: an empty box is not a gap
 but *use the page's own title*, and that title is already translated.

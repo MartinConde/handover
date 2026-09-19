@@ -321,6 +321,7 @@ a.btn { text-decoration: none; }
 .seg button[disabled] { opacity: 0.45; cursor: not-allowed; }
 .seg button .mark, .language-pick .mark { display: inline-block; width: 8px; height: 8px; margin-left: var(--s-1); border-radius: 50%; background: var(--warn-ink); vertical-align: 1px; }
 .seg button .mark.is-empty, .language-pick .mark.is-empty { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
+.seg button .mark.is-partial, .language-pick .mark.is-partial { background: linear-gradient(90deg, var(--ink-3) 50%, transparent 50%); box-shadow: inset 0 0 0 1.5px var(--ink-3); }
 .seg button.is-off, .language-menu button.is-off { color: var(--ink-3); text-decoration: line-through; }
 .language-menu { min-width: 200px; }
 .pane-head .language-menu { left: 0; right: auto; }

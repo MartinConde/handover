@@ -3,6 +3,7 @@ import type { ContentFile } from './entries.js';
 import { blobSha } from './git.js';
 import { entryAddress, entryUrl, type I18nRouting } from './names.js';
 import { checkReserved, isLive, RESERVED_KEYS } from './reserved.js';
+import { hasWords } from './richtext.js';
 import { type Field, type Form, humanise, rowFields, type Translation } from './schema.js';
 import { fieldAddress, fieldPosition, keptMachine } from './translate.js';
 import { type Labels, labelsOf } from './ui-locale.js';
@@ -1496,6 +1497,73 @@ export function translatableText(
   const found: { path: string; text: string }[] = [];
   textIn(form, form.fields, data, '', true, found);
   return found;
+}
+
+/** How much of the source's own words `target` answers; a metric, not publish readiness. */
+export function answeredText(
+  _siteId: string,
+  form: Form,
+  source: unknown,
+  target: unknown,
+  locale: string,
+): { written: number; of: number } {
+  const owed = answeredIn(form, form.fields, source, '', true, locale, new Set());
+  const answered = answeredIn(form, form.fields, target, '', true, locale, new Set());
+  return { written: [...owed].filter((path) => answered.has(path)).length, of: owed.size };
+}
+
+// Not `rowFields`: a blank menu label means "use the page title", so it is never owed.
+function answeredIn(
+  form: Form,
+  fields: readonly Field[],
+  data: unknown,
+  at: string,
+  inherited: Translation,
+  locale: string,
+  found: Set<string>,
+): Set<string> {
+  for (const field of fields) {
+    const key = field.path[0];
+    if (key === undefined) continue;
+    const value = isObject(data) ? data[key] : undefined;
+    const path = at ? `${at}.${key}` : key;
+    const mode = field.i18n ?? inherited;
+    if (field.type === 'group') answeredIn(form, field.fields, value, path, mode, locale, found);
+    else if (field.type === 'blocks' || field.type === 'array') {
+      const scalar =
+        field.type === 'array' && field.item[0]?.path.length === 0 ? field.item[0] : undefined;
+      for (const [i, row] of (Array.isArray(value) ? value : []).entries()) {
+        if (scalar) answeredAt(scalar, row, `${path}[${i}]`, scalar.i18n ?? mode, found);
+        if (scalar || !isObject(row) || !inLocale(row, locale)) continue;
+        const id = rowKey(row, i);
+        const inner = field.type === 'blocks' ? form.blocks[String(row._type)] : field.item;
+        const rowAt = `${path}[${id.startsWith('#') ? id.slice(1) : `_id=${id}`}]`;
+        if (inner) answeredIn(form, inner, row, rowAt, mode, locale, found);
+      }
+    } else answeredAt(field, value, path, mode, found);
+  }
+  return found;
+}
+
+function answeredAt(
+  field: Field,
+  value: unknown,
+  path: string,
+  mode: Translation,
+  found: Set<string>,
+): void {
+  if (mode !== true) return;
+  if (field.type === 'text' || field.type === 'richtext') {
+    if (typeof value !== 'string') return;
+    if (field.type === 'text' ? value.trim() : hasWords(value)) found.add(path);
+    return;
+  }
+  for (const prop of TRANSLATED_PROPS[field.type] ?? []) {
+    const inner = prop
+      .split('.')
+      .reduce<unknown>((v, k) => (isObject(v) ? v[k] : undefined), value);
+    if (typeof inner === 'string' && inner.trim()) found.add(`${path}.${prop}`);
+  }
 }
 
 // The same descent `valuesIn` makes, over the fields a person types into.
