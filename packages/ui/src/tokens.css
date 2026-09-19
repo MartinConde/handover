@@ -534,7 +534,7 @@ a.btn { text-decoration: none; }
 .filters { display: flex; gap: var(--s-2); flex-wrap: wrap; }
 .filter { display: inline-flex; align-items: center; gap: var(--s-2); min-height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--ink-2); font-size: var(--text-xs); cursor: pointer; box-shadow: none; }
 .filter:hover { color: var(--ink); }
-.filter.is-on { background: var(--accent-soft); color: var(--accent-ink); border-color: transparent; font-weight: 500; }
+.filter.is-on { background-color: var(--accent-soft); color: var(--accent-ink); border-color: transparent; font-weight: 500; }
 .filter::after { content: "▾"; font-size: 10px; opacity: 0.7; }
 .filter.is-on::after { content: "×"; font-size: var(--text-md); }
 /* A toggle is not a menu: no caret, a tick when it is on. */
