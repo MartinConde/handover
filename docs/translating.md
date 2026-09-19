@@ -81,6 +81,10 @@ code the site does not declare is named the same way; both are fixed in the repo
 the chosen one on the right. They are separate files and separate saves — each column autosaves
 its own, and publishing takes both. Which language is on the right and whether the column is open
 are two different things: with the entry's own language chosen, it shows the first of the others.
+With two or more other languages, the right column's heading is a button that lists them, with the
+same marks as the header, so you can change the language on the right without leaving side by side
+or moving the left column. Typing in the old language is saved first; if that save fails, the
+column stays where it is.
 A block moved, added or removed on the left moves on the right at once, and a shared value reads on
 the right as it is typed — the same walk the save makes into the other language's stored draft.
 

@@ -1118,9 +1118,11 @@ async function leaving(change: () => void) {
   change();
 }
 
-// Five languages and up: a disclosure, not role="menu", as on the entry list rows.
-let languageMenu = $state(false);
+// Five languages and up in the header, two others and up in the pane: a disclosure, not role="menu", as on the entry list rows.
+let languageMenu = $state<'header' | 'pane'>();
 let languageTrigger = $state<HTMLButtonElement>();
+// Rebound when the pane remounts on its new language, so focus returns to the pane on screen.
+let paneTrigger = $state<HTMLButtonElement>();
 
 async function chooseLanguage(of: string) {
   await leaving(() => (locale = of));
@@ -1128,9 +1130,10 @@ async function chooseLanguage(of: string) {
 }
 
 async function closeLanguages() {
-  languageMenu = false;
+  const pane = languageMenu === 'pane';
+  languageMenu = undefined;
   await tick();
-  languageTrigger?.focus();
+  (pane ? paneTrigger : languageTrigger)?.focus();
 }
 
 // Unlike a field, an address is validated, unique and owes a redirect when it moves.
@@ -1253,7 +1256,7 @@ async function saveAddress() {
 </script>
 
 <svelte:window
-  onclick={(e) => languageMenu && !(e.target as HTMLElement).closest('.language-pick') && (languageMenu = false)}
+  onclick={(e) => languageMenu && !(e.target as HTMLElement).closest('.language-pick') && (languageMenu = undefined)}
   onkeydown={(e) => e.key === 'Escape' && languageMenu && (e.target as HTMLElement).closest('.language-pick') && void closeLanguages()}
   onfocus={recheck}
   onpopstate={fromAddress}
@@ -1263,6 +1266,27 @@ async function saveAddress() {
 
 {#snippet languageMark(of: string)}
   {#if off(of)}<span class="visually-hidden"> — {m.editor_language_off_a11y({}, options)}</span>{:else if untranslated(of)}<span class="visually-hidden"> — {m.editor_language_untranslated_a11y({}, options)}</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {otherSource(of) ? m.editor_language_other_source_a11y({ language: language(otherSource(of) ?? ''), source: language(entry.sourceLocale) }, options) : m.editor_language_stale_a11y({ source: language(entry.sourceLocale) }, options)}</span><span class="mark" aria-hidden="true"></span>{/if}
+{/snippet}
+
+{#snippet paneHeading(of: string)}
+  {#if side && others.length > 1}
+    <div class="pop-anchor language-pick">
+      <h2 id="pane-{of}">
+        <button class="btn btn-sm" type="button" aria-expanded={languageMenu === 'pane'} aria-controls="pane-languages" bind:this={paneTrigger} onclick={(e) => { languageMenu = languageMenu === 'pane' ? undefined : 'pane'; e.currentTarget.focus(); }}>
+          <span class="visually-hidden">{`${m.editor_pane_language({ source: language(entry.sourceLocale) }, options)}: `}</span>{language(of)}{@render languageMark(of)}
+        </button>
+      </h2>
+      {#if languageMenu === 'pane'}
+        <div class="menu language-menu" id="pane-languages">
+          {#each others as other (other)}
+            <button type="button" class={{ 'is-off': off(other) }} aria-pressed={of === other} onclick={() => chooseLanguage(other)}>{language(other)}{@render languageMark(other)}</button>
+          {/each}
+        </div>
+      {/if}
+    </div>
+  {:else}
+    <h2 id="pane-{of}">{language(of)}</h2>
+  {/if}
 {/snippet}
 
 {#snippet canvasEntryActions()}
@@ -1554,10 +1578,10 @@ async function saveAddress() {
             </div>
           {:else}
             <div class="pop-anchor language-pick">
-              <button class="btn" type="button" aria-expanded={languageMenu} aria-controls="entry-languages" bind:this={languageTrigger} onclick={(e) => { languageMenu = !languageMenu; e.currentTarget.focus(); }}>
+              <button class="btn" type="button" aria-expanded={languageMenu === 'header'} aria-controls="entry-languages" bind:this={languageTrigger} onclick={(e) => { languageMenu = languageMenu === 'header' ? undefined : 'header'; e.currentTarget.focus(); }}>
                 <span class="visually-hidden">{`${m.editor_language({}, options)}: `}</span>{language(locale)}{@render languageMark(locale)}
               </button>
-              {#if languageMenu}
+              {#if languageMenu === 'header'}
                 <div class="menu language-menu" id="entry-languages">
                   {#each entry.locales as of (of)}
                     <button type="button" class={{ 'is-off': off(of) }} aria-pressed={locale === of} onclick={() => chooseLanguage(of)}>{language(of)}{@render languageMark(of)}</button>
@@ -1644,7 +1668,7 @@ async function saveAddress() {
           aria-labelledby="pane-{shown}"
           onfocusout={canvasCompleted}
         >
-          <div class="pane-head"><h2 id="pane-{shown}">{language(shown)}</h2></div>
+          <div class="pane-head">{@render paneHeading(shown)}</div>
           <div class="empty">
             {#if off(shown)}
               <div class="is-wide">
@@ -1731,6 +1755,7 @@ async function saveAddress() {
                 setPending(shown, pending);
               }}
               {mediaBase}
+              heading={paneHeading}
               onclose={side ? () => leaving(() => setBeside('none')) : undefined}
               onturnoff={entry.singleton ? undefined : () => { rememberActionTrigger(); actionFailed = undefined; offing = shown; }}
             />

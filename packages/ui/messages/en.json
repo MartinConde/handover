@@ -1233,6 +1233,7 @@
   "editor_split_form": "Form",
   "editor_split_page": "Page",
   "editor_outline": "On this page",
+  "editor_pane_language": "Language beside {source}",
   "editor_language": "Language",
   "editor_language_off": "Off",
   "editor_language_new": "New",

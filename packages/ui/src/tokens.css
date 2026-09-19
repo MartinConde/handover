@@ -323,6 +323,7 @@ a.btn { text-decoration: none; }
 .seg button .mark.is-empty, .language-pick .mark.is-empty { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
 .seg button.is-off, .language-menu button.is-off { color: var(--ink-3); text-decoration: line-through; }
 .language-menu { min-width: 200px; }
+.pane-head .language-menu { left: 0; right: auto; }
 .language-menu button[aria-pressed="true"] { background: var(--surface-2); font-weight: 600; }
 .kbd-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent-ink); box-shadow: 0 0 0 3px var(--accent-soft); vertical-align: middle; }
 

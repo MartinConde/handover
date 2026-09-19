@@ -1435,6 +1435,154 @@ test('a language chosen while the last edit cannot be saved is not switched to',
   vi.unstubAllGlobals();
 });
 
+const paneLanguagePick = (root: ParentNode) =>
+  $<HTMLButtonElement>(root, '.pane-head .language-pick > h2 > button');
+const paneChoices = (root: ParentNode) => $$<HTMLButtonElement>(root, '#pane-languages button');
+const sideBySide = (root: ParentNode) => {
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+};
+const choosePaneLanguage = async (root: ParentNode, index: number) => {
+  paneLanguagePick(root)?.click();
+  flushSync();
+  paneChoices(root)[index]?.click();
+  await tick();
+  flushSync();
+};
+
+test('side by side lists the languages other than the source in the pane head, with their state', () => {
+  const root = show(sixLanguages('base'));
+  sideBySide(root);
+  paneLanguagePick(root)?.click();
+  flushSync();
+
+  expect(paneLanguagePick(root)?.textContent?.trim()).toBe('Language beside English: German');
+  expect(paneChoices(root).map((b) => b.textContent?.trim())).toEqual([
+    'German',
+    'French— English changed since this was translated',
+    'Italian',
+    'Spanish— not translated yet',
+    'Dutch— turned off for this entry',
+  ]);
+  expect(paneChoices(root).map((b) => b.getAttribute('aria-pressed'))).toEqual([
+    'true',
+    'false',
+    'false',
+    'false',
+    'false',
+  ]);
+});
+
+test('choosing French in the pane swaps only the second column', async () => {
+  const root = show(sixLanguages('base'));
+  sideBySide(root);
+
+  await choosePaneLanguage(root, 1);
+
+  expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Maison du port');
+  expect($<HTMLInputElement>(root, 'input#f-title')?.value).toBe('Harbour House');
+  expect($(root, '.editor-form-heading h2')?.textContent).toBe('English');
+  expect($(root, '#pane-languages')).toBeNull();
+  expect(document.activeElement).toBe(paneLanguagePick(root));
+  // The pane's language is the entry's chosen language, so the header follows it.
+  expect(languagePick(root)?.textContent).toContain('French');
+});
+
+test('with one other language the pane head stays a plain heading', () => {
+  const root = show({ entry: bilingual });
+  sideBySide(root);
+
+  expect($(root, '.pane-head .language-pick')).toBeNull();
+  expect($(root, '.pane-head h2')?.textContent).toBe('German');
+});
+
+test('German typed in the pane is saved before French replaces it, and is there on return', async () => {
+  const fetchMock = autosaved();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show(sixLanguages('base'));
+  sideBySide(root);
+  type(root, 'input#t-title', 'Hafenhaus');
+
+  await choosePaneLanguage(root, 1);
+  // French is stale, so its pane also reads what changed in English; only the saves matter here.
+  const saves = wrote(fetchMock).filter((call) => (call[1] as RequestInit)?.method === 'PUT');
+  expect(saves.map((call) => call[0])).toEqual(['/admin/api/drafts/listings/seaview-cottage/de']);
+  expect(JSON.parse(String((saves[0]?.[1] as RequestInit | undefined)?.body)).data.title).toBe(
+    'Hafenhaus',
+  );
+  expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Maison du port');
+
+  await choosePaneLanguage(root, 0);
+  expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Hafenhaus');
+  expect($(root, '.pane-head .autosave')?.textContent?.trim()).toBe('Saved');
+  vi.unstubAllGlobals();
+});
+
+test('a pane language chosen while German cannot be saved is not switched to', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (isLock(url)) return Response.json(HELD);
+      throw new TypeError('offline');
+    }),
+  );
+  const root = show(sixLanguages('base'));
+  sideBySide(root);
+  type(root, 'input#t-title', 'Hafenhaus');
+
+  await choosePaneLanguage(root, 1);
+
+  expect(paneLanguagePick(root)?.textContent).toContain('German');
+  expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Hafenhaus');
+  vi.unstubAllGlobals();
+});
+
+test('the pane goes to a missing or turned-off language and back from its empty pane', async () => {
+  const root = show(sixLanguages('base'));
+  sideBySide(root);
+
+  await choosePaneLanguage(root, 3);
+  expect(paneLanguagePick(root)?.textContent).toContain('Spanish');
+  expect($(root, '.pane-head')?.parentElement?.querySelector('.btn-create')).not.toBeNull();
+
+  await choosePaneLanguage(root, 4);
+  expect(paneLanguagePick(root)?.textContent).toContain('Dutch');
+  expect($(root, '.empty')?.textContent).toContain('This entry is not offered in Dutch.');
+
+  await choosePaneLanguage(root, 0);
+  expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Haus am Hafen');
+  expect($<HTMLInputElement>(root, 'input#f-title')?.value).toBe('Harbour House');
+});
+
+test('Escape closes the pane list and gives focus back to the pane button', async () => {
+  const root = show(sixLanguages('base'));
+  sideBySide(root);
+  paneLanguagePick(root)?.click();
+  flushSync();
+  paneChoices(root)[2]?.focus();
+
+  paneChoices(root)[2]?.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+  );
+  await tick();
+
+  expect($(root, '#pane-languages')).toBeNull();
+  expect(document.activeElement).toBe(paneLanguagePick(root));
+});
+
+test('a click outside the pane list closes it without choosing', () => {
+  const root = show(sixLanguages('base'));
+  sideBySide(root);
+  paneLanguagePick(root)?.click();
+  flushSync();
+
+  $<HTMLElement>(root, 'input#f-title')?.click();
+  flushSync();
+
+  expect($(root, '#pane-languages')).toBeNull();
+  expect(paneLanguagePick(root)?.textContent).toContain('German');
+});
+
 test('side by side edits the second language and saves it to its own file', async () => {
   const fetchMock = autosaved();
   vi.stubGlobal('fetch', fetchMock);

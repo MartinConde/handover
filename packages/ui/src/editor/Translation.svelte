@@ -6,6 +6,7 @@ import {
   type ResolvedSeo,
   type WordPart,
 } from '@handover/core';
+import type { Snippet } from 'svelte';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
 import { formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import * as m from '../paraglide/messages.js';
@@ -34,6 +35,7 @@ let {
   url,
   site,
   uiLocale = 'en',
+  heading,
   onsaved,
   onclose,
   onturnoff,
@@ -61,6 +63,8 @@ let {
   url?: string;
   site?: string;
   uiLocale?: UiLocale;
+  /** Draws the pane's `h2#pane-{locale}` when the editor offers a choice of language there. */
+  heading?: Snippet<[string]>;
   /** The entry keeps `pending`: this column is thrown away on a screen change, its edit is not. */
   onsaved?: (pending: boolean, data?: Data) => void;
   onclose?: () => void;
@@ -160,7 +164,7 @@ const failureDetail = $derived(
 
 <section class="pane is-locale" aria-labelledby="pane-{locale}">
   <div class="pane-head">
-    <h2 id="pane-{locale}">{named(locale)}</h2>
+    {#if heading}{@render heading(locale)}{:else}<h2 id="pane-{locale}">{named(locale)}</h2>{/if}
     {#if stale}
       <span class="mode">{behind.otherSource && behind.from ? m.translation_other_source({ language: named(behind.from), source: named(source) }, options) : m.translation_source_changed({ source: named(source) }, options)}</span>
     {/if}

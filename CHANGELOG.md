@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Side by side, with two or more languages besides the one an entry is written in, the right
+  column's heading lists them with their marks, so the column changes language without closing.
 - With five or more languages, the editor's language switcher is a list that shows which
   languages are missing, out of date or turned off, as the buttons do below five.
 - `_source` is a new reserved key at the top of a file, naming the language the entry is written

@@ -1239,6 +1239,7 @@
   "editor_split_form": "Formular",
   "editor_split_page": "Seite",
   "editor_outline": "Auf dieser Seite",
+  "editor_pane_language": "Sprache neben {source}",
   "editor_language": "Sprache",
   "editor_language_off": "Aus",
   "editor_language_new": "Neu",

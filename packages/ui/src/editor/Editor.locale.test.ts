@@ -328,6 +328,44 @@ test('the chosen content language survives an interface switch and the list foll
   expect(q('#entry-languages button[aria-pressed="true"]')?.textContent).toContain('Französisch');
 });
 
+test('the language chosen in the pane survives an interface switch and the pane list follows it', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120_000 }),
+    ),
+  );
+  app = mount(EditorLocaleFixture, { target: document.body, props: { six: true } });
+  flushSync();
+  q<HTMLButtonElement>('button.btn-sbs')?.click();
+  flushSync();
+  const pick = () => q<HTMLButtonElement>('.pane-head .language-pick > h2 > button');
+  pick()?.click();
+  flushSync();
+  qa<HTMLButtonElement>('#pane-languages button')[1]?.click();
+  await new Promise((resolve) => setTimeout(resolve));
+  flushSync();
+
+  switchLocale();
+  pick()?.click();
+  flushSync();
+
+  expect(pick()?.textContent?.trim()).toBe(
+    'Sprache neben Englisch: Französisch— noch nicht übersetzt',
+  );
+  expect(qa<HTMLButtonElement>('#pane-languages button').map((b) => b.textContent?.trim())).toEqual(
+    [
+      'Deutsch— noch nicht übersetzt',
+      'Französisch— noch nicht übersetzt',
+      'Italienisch— noch nicht übersetzt',
+      'Spanisch— noch nicht übersetzt',
+      'Niederländisch— für diesen Eintrag deaktiviert',
+    ],
+  );
+  expect(q('#pane-languages button[aria-pressed="true"]')?.textContent).toContain('Französisch');
+  expect(q('.editor-form-heading h2')?.textContent).toBe('Englisch');
+});
+
 test('visible scalar validation and controls reformat without validating or replacing input', async () => {
   vi.useFakeTimers();
   const fetchMock = vi.fn(async (url: string) =>
