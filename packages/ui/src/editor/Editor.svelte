@@ -11,7 +11,9 @@ export type CreatedAll = {
 
 <script lang="ts">
 import {
-  answeredText,
+  answeredCount,
+  answeredPaths,
+  answeredWork,
   type Drift,
   entryName,
   entryUrl,
@@ -335,21 +337,23 @@ const untranslated = (of: string) => of !== entry.sourceLocale && !entrySession.
 // Turned off for this entry: no file is written for it and the site does not offer it.
 const off = (of: string) => !entry.offered.includes(of);
 // Recounted from both columns on every keystroke; nothing is saved or reloaded to learn it.
-const answered = $derived(
+const wholeForm = $derived({ fields: [...entry.fields], blocks: entry.blocks });
+const sourceText = $derived(answeredPaths('default', wholeForm, data));
+const translated = $derived(
   Object.fromEntries(
     others
       .filter((of) => entrySession.hasSnapshot(of))
-      .map((of) => [
-        of,
-        answeredText(
-          'default',
-          { fields: [...entry.fields], blocks: entry.blocks },
-          data,
-          entrySession.snapshot(of),
-          of,
-        ),
-      ]),
+      .map((of) => [of, answeredPaths('default', wholeForm, entrySession.snapshot(of))]),
   ),
+);
+const answered = $derived(
+  Object.fromEntries(
+    Object.entries(translated).map(([of, paths]) => [of, answeredCount(sourceText, paths, of)]),
+  ),
+);
+// The pane's to-do list: the same paths the count is made of, in the form's own order.
+const paneWork = $derived(
+  shown && translated[shown] ? answeredWork(sourceText, translated[shown], shown) : undefined,
 );
 const partial = (of: string) => {
   const count = answered[of];
@@ -1119,6 +1123,50 @@ function goTo(path: string | undefined) {
   }
   land(field);
 }
+const focusable = (node: Element) =>
+  node.matches('input, textarea, select, [contenteditable="true"]');
+// A folded block draws no fields at all, so the way in is the fold button of each closed card.
+async function unfolded(id: string) {
+  for (let guard = 0; guard < 10; guard++) {
+    const field = document.getElementById(id);
+    if (field) return field;
+    const steps = id.split('.');
+    let card: HTMLElement | undefined;
+    for (steps.pop(); steps.length && !card; steps.pop()) {
+      const found = document.getElementById(steps.join('.'));
+      if (found?.classList.contains('is-folded')) card = found;
+    }
+    if (!card) return null;
+    card.querySelector<HTMLButtonElement>('button.fold')?.click();
+    await tick();
+  }
+  return null;
+}
+
+/** The pane's to-do jump: bring the field this source path names on screen and focus it. */
+async function jumpTo(path: string): Promise<boolean> {
+  const of = shown;
+  if (!of || !entrySession.hasSnapshot(of)) return false;
+  const at = fieldPosition('default', path, entrySession.snapshot(of));
+  if (!at) return false;
+  const wanted = seoField && at[0] === seoAt ? 'seo' : '';
+  if (section !== wanted) {
+    navigate(`/admin/c/${collection}/${slug}${wanted ? `/${wanted}` : ''}${queueTail}`);
+    await tick();
+  }
+  // On a narrow screen the two columns are tabs, and this one is the tab being worked in.
+  if (side && !alone) mobilePane = 'page';
+  const input = await unfolded(`t-${at.join('.')}`);
+  // The nearest drawn ancestor is not this field: a container taking focus is not a visit.
+  if (!input || !focusable(input)) return false;
+  for (let node = input.parentElement; node; node = node.parentElement)
+    if (node instanceof HTMLDetailsElement) node.open = true;
+  await tick();
+  input.scrollIntoView({ block: 'center' });
+  input.focus();
+  return document.activeElement === input || input.getAttribute('contenteditable') === 'true';
+}
+
 const goToFirst = () => {
   if (mode === 'canvas') {
     setCanvas(false);
@@ -2043,6 +2091,8 @@ async function saveAddress() {
               {locked}
               stale={entry.stale.includes(shown)}
               answered={answered[shown]}
+              work={paneWork}
+              onjump={jumpTo}
               translator={entry.translator}
               actionBlocked={busy || sending}
               url={localeUrl(shown)}

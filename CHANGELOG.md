@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The right column has **Next to do** (and `Alt` + `↓`), which moves through the texts the
+  language still owes — empty ones and those the source has changed — opening folded blocks and
+  the SEO tab on the way, wrapping after the last and saying *Nothing left to do* only when there
+  is none. Core exports `answeredWork(source, target, locale)` beside `answeredCount`.
 - **New entry** asks which language to write the entry in on a site with two or more languages,
   starting on the language the list is filtered to and otherwise on the site's default. The entry
   is created in that language and records it as its `_source`, templates included. `POST

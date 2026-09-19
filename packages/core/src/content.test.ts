@@ -5,6 +5,7 @@ import { expect, test, vi } from 'vitest';
 import {
   answeredPaths,
   answeredText,
+  answeredWork,
   applyDrift,
   changeSource,
   draftSource,
@@ -2090,6 +2091,41 @@ test('a row written only to other languages is not owed by this one', () => {
     written: 0,
     of: 14,
   });
+});
+
+test('the work of a language is every owed path, and the ones its file leaves empty', () => {
+  const de = { ...harbourCreated, title: 'Haus am Hafen' };
+
+  const work = answeredWork(
+    answeredPaths('default', harbourForm, harbourEn),
+    answeredPaths('default', harbourForm, de),
+    'de',
+  );
+
+  expect(work.paths).toEqual(answeredPaths('default', harbourForm, harbourEn).paths);
+  expect(work.unanswered[0]).toBe('summary');
+  expect(work.unanswered).toHaveLength(14);
+  expect(work.unanswered).not.toContain('title');
+});
+
+test('a row written only to other languages is no part of this one\u2019s work', () => {
+  const en = {
+    ...harbourEn,
+    rooms: [
+      { _id: 'room0001', name: 'Harbour room' },
+      { _id: 'room0002', _locales: ['en', 'fr'], name: 'Garden room' },
+    ],
+  };
+
+  const work = answeredWork(
+    answeredPaths('default', harbourForm, en),
+    answeredPaths('default', harbourForm, harbourCreated),
+    'de',
+  );
+
+  expect(work.paths).not.toContain('rooms[_id=room0002].name');
+  expect(work.unanswered).not.toContain('rooms[_id=room0002].name');
+  expect(work.paths).toHaveLength(14);
 });
 
 test('a reference reads out exactly the paths the answered count walks', () => {

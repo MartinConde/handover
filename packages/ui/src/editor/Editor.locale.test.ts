@@ -472,6 +472,43 @@ test('the pane count and partial mark follow an interface switch', () => {
   );
 });
 
+test('the to-do run keeps its place through an interface switch', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120_000 }),
+    ),
+  );
+  app = mount(EditorLocaleFixture, {
+    target: document.body,
+    props: { six: true, feedback: true, translations: { de: {} } },
+  });
+  flushSync();
+  q<HTMLButtonElement>('button.btn-sbs')?.click();
+  flushSync();
+  // A second English text, so German owes the title and the summary.
+  const summary = q<HTMLInputElement>('input#f-summary');
+  if (!summary) throw new Error('summary missing');
+  summary.value = 'Quiet rooms above the harbour';
+  summary.dispatchEvent(new Event('input', { bubbles: true }));
+  flushSync();
+  const todo = () => q<HTMLButtonElement>('.pane-head .btn-todo');
+  expect(todo()?.textContent?.trim()).toBe('Next to do');
+
+  todo()?.click();
+  await new Promise((resolve) => setTimeout(resolve));
+  flushSync();
+  expect(document.activeElement?.id).toBe('t-title');
+
+  switchLocale();
+  expect(todo()?.textContent?.trim()).toBe('Nächste Aufgabe');
+
+  todo()?.click();
+  await new Promise((resolve) => setTimeout(resolve));
+  flushSync();
+  expect(document.activeElement?.id).toBe('t-summary');
+});
+
 test('the queue keeps its language and next entry through an interface switch and renames them', async () => {
   vi.stubGlobal(
     'fetch',

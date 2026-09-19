@@ -1551,14 +1551,24 @@ export function answeredCount(
   target: AnsweredPaths,
   locale: string,
 ): { written: number; of: number } {
+  const { paths, unanswered } = answeredWork(source, target, locale);
+  return { written: paths.length - unanswered.length, of: paths.length };
+}
+
+/** What a language owes: the source paths it is asked for, and those its file leaves empty. */
+export function answeredWork(
+  source: AnsweredPaths,
+  target: AnsweredPaths,
+  locale: string,
+): { paths: string[]; unanswered: string[] } {
   // A path under a row written to other languages is nobody's work in this one.
   const within = ({ paths, rows = {} }: AnsweredPaths) =>
     paths.filter((path) =>
       Object.entries(rows).every(([row, to]) => to.includes(locale) || !path.startsWith(`${row}.`)),
     );
-  const owed = within(source);
+  const paths = within(source);
   const answered = new Set(within(target));
-  return { written: owed.filter((path) => answered.has(path)).length, of: owed.length };
+  return { paths, unanswered: paths.filter((path) => !answered.has(path)) };
 }
 
 // Not `rowFields`: a blank menu label means "use the page title", so it is never owed.

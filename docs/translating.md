@@ -141,6 +141,18 @@ yet published. The choice is remembered in this browser for each site and accoun
 language that is now the column's own, or has no file, shows *None* until it can be offered again.
 It never changes what **Translate** translates from, and nothing typed is written to that language.
 
+### Working through what is left
+
+The right column's **Next to do** goes to the next text the language still owes: one that is
+empty, or one the source has changed since it was translated. `Alt` + `↓` anywhere in the column
+does the same without the button. Each press puts the cursor in the field itself, opening a folded
+block or switching to the SEO tab when that is where the text is; after the last one it comes back
+to the first and says so. Typing an answer takes that field out of the run at once, and a changed
+text leaves it when its marker is dismissed
+([the amber markers](machine-translation.md#when-the-source-language-moves-on)).
+Reading a field is not answering it, and only a language with nothing outstanding says *Nothing
+left to do*.
+
 ## What a save of a translation writes
 
 A translation's form shows the fields that language owns. Saving it writes those and reads the

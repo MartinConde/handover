@@ -30,6 +30,7 @@ let {
   locked = false,
   stale = false,
   answered,
+  work,
   mediaBase = '',
   inheritedSeo,
   translator = false,
@@ -43,6 +44,7 @@ let {
   references = [],
   mark,
   onreference,
+  onjump,
   onsaved,
   onclose,
   onturnoff,
@@ -66,6 +68,8 @@ let {
   stale?: boolean;
   /** Source texts this file answers, out of those the source holds. */
   answered?: { written: number; of: number };
+  /** The source paths this language is asked for, and those its file leaves empty. */
+  work?: { paths: string[]; unanswered: string[] };
   translator?: boolean;
   /** Another entry-wide persisted action is already in flight. */
   actionBlocked?: boolean;
@@ -83,6 +87,8 @@ let {
   /** The state mark a language carries in the editor's switchers. */
   mark?: Snippet<[string]>;
   onreference?: (locale: string | undefined) => void;
+  /** Shows the field at this source path in this pane; false when it is no longer drawn. */
+  onjump?: (path: string) => Promise<boolean>;
   /** The entry keeps `pending`: this column is thrown away on a screen change, its edit is not. */
   onsaved?: (pending: boolean, data?: Data) => void;
   onclose?: () => void;
@@ -102,6 +108,7 @@ $effect(() => {
   if (saveState.phase === 'saving') fillFailure = undefined;
 });
 
+let behindLoaded = $state(false);
 // Only read for a stale file, so an entry nobody has translated pays nothing for the marker.
 let behind = $state<{
   from?: string;
@@ -119,7 +126,10 @@ $effect(() => {
     .then((body) => {
       if (live) behind = body as typeof behind;
     })
-    .catch(() => {});
+    .catch(() => {})
+    .finally(() => {
+      if (live) behindLoaded = true;
+    });
   return () => {
     live = false;
   };
@@ -185,6 +195,64 @@ function chooseReference(of: string | undefined) {
   onreference?.(of);
   closeReference();
 }
+// The markers the reader still sees, which is what the to-do list counts as stale work.
+let dismissed = $state<string[]>([]);
+const marked = $derived(Object.keys(behind.changed).filter((at) => !dismissed.includes(at)));
+const todo = $derived.by(() => {
+  const outstanding = new Set([...(work?.unanswered ?? []), ...marked]);
+  const inOrder = (work?.paths ?? []).filter((path) => outstanding.has(path));
+  const seen = new Set(inOrder);
+  return [...inOrder, ...marked.filter((path) => !seen.has(path))];
+});
+// Until the server has said what changed, an empty list is ignorance, not a finished language.
+const settled = $derived(!stale || behindLoaded);
+let cursor = $state<string>();
+// The run as it stood at the last jump: answering a field must not send the next press to the top.
+let trail = $state<string[]>([]);
+let said = $state('');
+
+function startFrom(list: string[]) {
+  const here = list.indexOf(cursor ?? '');
+  if (here >= 0) return here;
+  const was = trail.indexOf(cursor ?? '');
+  for (const path of was >= 0 ? trail.slice(was + 1) : []) {
+    const at = list.indexOf(path);
+    if (at >= 0) return at - 1;
+  }
+  return -1;
+}
+
+/** Visit the next outstanding field; what is no longer drawn is passed over, not announced. */
+async function nextTodo() {
+  const list = todo;
+  if (!list.length) {
+    said = settled ? m.translation_todo_none({}, options) : '';
+    return;
+  }
+  const start = startFrom(list);
+  for (let step = 1; step <= list.length; step++) {
+    const at = (start + step) % list.length;
+    const path = list[at];
+    if (path && (await onjump?.(path))) {
+      cursor = path;
+      trail = list;
+      said =
+        start >= 0 && start + step >= list.length ? m.translation_todo_wrapped({}, options) : '';
+      return;
+    }
+  }
+  said = '';
+}
+
+// No shortcut framework: one chord, in the pane it belongs to, yielding to whatever owns the key.
+function paneKey(event: KeyboardEvent) {
+  if (event.key !== 'ArrowDown' || !event.altKey) return;
+  if (event.defaultPrevented || event.isComposing || event.keyCode === 229) return;
+  if ((event.target as HTMLElement | null)?.closest('select, .picker, .popover, .menu')) return;
+  event.preventDefault();
+  void nextTodo();
+}
+
 const failureText = $derived(fillFailure ? messageText(fillFailure, uiLocale) : '');
 const failureDetail = $derived(
   fillFailure?.detail ? m.common_technical_detail({ detail: fillFailure.detail }, options) : '',
@@ -196,7 +264,8 @@ const failureDetail = $derived(
   onkeydown={(e) => e.key === 'Escape' && referenceOpen && (e.target as HTMLElement).closest('.reference-pick') && closeReference()}
 />
 
-<section class="pane is-locale" aria-labelledby="pane-{locale}">
+<!-- svelte-ignore a11y_no_noninteractive_element_interactions -- the chord belongs to the pane, not to one field -->
+<section class="pane is-locale" aria-labelledby="pane-{locale}" onkeydown={paneKey}>
   <div class="pane-head">
     {#if heading}{@render heading(locale)}{:else}<h2 id="pane-{locale}">{named(locale)}</h2>{/if}
     {#if answered}
@@ -209,6 +278,10 @@ const failureDetail = $derived(
       {#if saving}{m.editor_save_saving({}, options)}{:else if failed}{m.editor_save_not_saved({}, options)} {#if fillFailure?.code === 'TRANSLATION_UNCONFIRMED'}<button type="button" class="btn-link" onclick={() => location.reload()}>{m.editor_lock_reload({}, options)}</button>{:else}<button type="button" class="btn-link" onclick={() => fillFailure ? fill(retryPaths) : flush()}>{fillFailure ? m.translation_retry({}, options) : m.editor_save_retry({}, options)}</button>{/if}{:else if isUnsaved}{m.editor_save_unsaved_changes({}, options)}{:else}{m.editor_save_saved({}, options)}{/if}
     </span>
     <span class="spacer"></span>
+    <span class="visually-hidden" role="status">{said}</span>
+    {#if work}
+      <button class="btn btn-sm btn-todo" type="button" onclick={() => void nextTodo()}>{m.translation_todo_next({}, options)}</button>
+    {/if}
     {@render next?.()}
     {#if references.length}
       <div class="pop-anchor reference-pick">
@@ -265,6 +338,7 @@ const failureDetail = $derived(
         ontranslate={translator ? (path) => fill([path]) : undefined}
         onretranslate={translator ? (path) => fill([path]) : undefined}
         sourceChanged={behind.changed}
+        bind:dismissed
         sourceLabel={named(source)}
         translatedAt={behind.translatedAt ?? ''}
         prefix="t"

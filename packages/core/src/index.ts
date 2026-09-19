@@ -58,7 +58,10 @@ export type {
   TranslationSource,
 } from './content.js';
 export {
+  answeredCount,
+  answeredPaths,
   answeredText,
+  answeredWork,
   applyDrift,
   ContentError,
   changeSource,
