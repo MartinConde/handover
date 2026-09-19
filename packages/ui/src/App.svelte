@@ -9,6 +9,7 @@ import Members from './account/Members.svelte';
 import EntryList from './content/EntryList.svelte';
 import Globals from './content/Globals.svelte';
 import Redirects from './content/Redirects.svelte';
+import type { CreatedAll } from './editor/Editor.svelte';
 import SourceRecovery, { type SourceProblem } from './editor/SourceRecovery.svelte';
 import { invalidateEntryDirectory } from './entry-directory.js';
 import {
@@ -153,6 +154,8 @@ const editingAt = $derived(editing ? `${editing.collection}/${editing.slug}` : '
 let restored = $state<{ entry: string; date: string }>();
 /** Likewise the language an entry was just made to be written in. */
 let sourceChanged = $state<{ entry: string; locale: string }>();
+/** And what the last Create all did, which its reload would otherwise take with it. */
+let createdAll = $state<{ entry: string; report: CreatedAll }>();
 const openEntry = $derived.by(() => {
   // Read on purpose: a reload means the entry's files moved under it.
   void reload;
@@ -796,6 +799,8 @@ const initial = $derived(
           restored={restored?.entry === editingAt ? restored.date : undefined}
           onsourcechanged={(locale) => (sourceChanged = { entry: editingAt, locale })}
           sourceChanged={sourceChanged?.entry === editingAt ? sourceChanged.locale : undefined}
+          oncreatedall={(report) => (createdAll = report && { entry: editingAt, report })}
+          createdAll={createdAll?.entry === editingAt ? createdAll.report : undefined}
           onmode={(mode) => (editorMode = mode)}
           ontitle={(read) => (titled = { entry: editingAt, read })}
         />

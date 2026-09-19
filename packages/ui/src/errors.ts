@@ -344,6 +344,10 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
       return m.source_change_response_lost({}, options);
     case 'SOURCE_CHANGE_RELOAD_FAILED':
       return m.source_change_reload_failed({}, options);
+    case 'CREATE_ALL_SAVE_FAILED':
+      return m.create_all_save_failed({}, options);
+    case 'CREATE_ALL_RELOAD_FAILED':
+      return m.create_all_reload_failed({}, options);
     case 'REDIRECT_NOT_FOUND':
       return m.redirect_not_found({}, options);
     case 'REDIRECT_MANAGED':

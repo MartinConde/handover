@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { Drift, Field } from '@handover/core';
 import type { UiLocale } from '../i18n.js';
-import Editor from './Editor.svelte';
+import Editor, { type CreatedAll } from './Editor.svelte';
 
 let {
   initialUiLocale = 'en',
@@ -14,6 +14,7 @@ let {
   restored,
   six = false,
   translations = {},
+  createdAll,
 }: {
   initialUiLocale?: UiLocale;
   publishState?: 'clean' | 'drift' | 'missing';
@@ -26,6 +27,7 @@ let {
   restored?: string;
   six?: boolean;
   translations?: Record<string, Record<string, unknown>>;
+  createdAll?: CreatedAll;
 } = $props();
 // svelte-ignore state_referenced_locally -- each test mount intentionally fixes its initial locale
 let uiLocale = $state<UiLocale>(initialUiLocale);
@@ -126,6 +128,7 @@ const entry = {
   {entry}
   preview
   {restored}
+  {createdAll}
   {uiLocale}
   onchanged={() => {}}
 />

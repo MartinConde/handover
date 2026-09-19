@@ -13,7 +13,11 @@ a disconnected write cannot be confirmed, reload the entry before retrying it.
 
 With something to translate with configured, the second language's header offers **Translate
 what's empty** and each field a **Translate** button; the offer a language with no file draws gains
-**Create and pre-fill**, which writes the file and fills it in one go. Only prose is sent — the
+**Create and pre-fill**, which writes the file and fills it in one go, and **Create all 3 and
+pre-fill** where more than one language is missing ([Translating](translating.md#a-language-with-no-file-yet)):
+each language is created and filled before the next, from the language the entry is written in,
+and the run stops at the first that fails. One created but not filled keeps its file; its column's
+**Translate what's empty** fills it. Only prose is sent — the
 fields that column draws as something to type in; a shared value, a source-only field and where a
 link points are not translations.
 

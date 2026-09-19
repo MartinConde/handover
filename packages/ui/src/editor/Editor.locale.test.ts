@@ -875,3 +875,50 @@ test('an open offsite choice retranslates without losing its target draft', asyn
   expect(q<HTMLInputElement>('#offsite-url')).toBe(address);
   expect(address.value).toBe('https://example.com/archive');
 });
+
+test('the report of a Create all follows the interface language', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      url.startsWith('/admin/api/locks/')
+        ? Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120_000 })
+        : Response.json({}),
+    ),
+  );
+  app = mount(EditorLocaleFixture, {
+    target: document.body,
+    props: {
+      six: true,
+      translations: { de: { title: '' } },
+      createdAll: {
+        targets: ['de', 'fr', 'it'],
+        done: { de: 'created' },
+        failed: {
+          locale: 'fr',
+          step: 'create',
+          unconfirmed: false,
+          message: { code: 'TRANSLATION_CREATE_FAILED' },
+        },
+      },
+    },
+  });
+  await new Promise((resolve) => setTimeout(resolve));
+  flushSync();
+  const lines = () => qa('.created-all li').map((li) => li.textContent?.trim());
+  expect(lines()).toEqual([
+    'German: created',
+    'French: not created',
+    'Italian: not attempted, still missing',
+  ]);
+
+  switchLocale();
+
+  expect(lines()).toEqual([
+    'Deutsch: erstellt',
+    'Französisch: nicht erstellt',
+    'Italienisch: nicht versucht, fehlt weiterhin',
+  ]);
+  expect(q('.created-all p')?.textContent?.trim()).toBe(
+    'Die Sprache konnte nicht erstellt werden. Versuche es erneut.',
+  );
+});

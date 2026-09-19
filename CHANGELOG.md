@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A language with no file offers **Create all N missing languages**, and with a translator
+  **Create all N and pre-fill**, when more than one offered language is missing. They run one
+  language at a time while the entry waits, stop at the first refusal or lost answer, and report
+  each language as created, filled, not created or not attempted after the reload.
 - **Publish this entry** can leave an unfinished new language for later: the dialog lists what the
   schema still wants of each language, offers *Publish German later* for one the repository does
   not have yet, and publishes the rest while German keeps its draft. A translation's check errors

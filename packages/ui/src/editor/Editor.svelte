@@ -1,3 +1,14 @@
+<script lang="ts" module>
+import type { UiMessage } from '../errors.js';
+
+/** What one Create all did to each language it set out to make; the shell keeps it past the reload. */
+export type CreatedAll = {
+  targets: string[];
+  done: Record<string, 'created' | 'filled'>;
+  failed?: { locale: string; step: 'create' | 'fill'; message: UiMessage; unconfirmed: boolean };
+};
+</script>
+
 <script lang="ts">
 import {
   answeredText,
@@ -18,7 +29,7 @@ import CanvasWorkspace from '../canvas/CanvasWorkspace.svelte';
 import type { CanvasRenderRequest } from '../canvas/canvas-renderer';
 import OffsiteDialog, { type Target } from '../content/Offsite.svelte';
 import { invalidateEntryDirectory } from '../entry-directory.js';
-import { messageText, responseMessage, type UiMessage } from '../errors.js';
+import { messageText, responseMessage } from '../errors.js';
 import { formatExactTime, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import {
   guardEntryActions,
@@ -73,6 +84,8 @@ let {
   restored,
   onsourcechanged,
   sourceChanged,
+  oncreatedall,
+  createdAll,
   site,
   uiLocale = 'en',
   onmode,
@@ -165,6 +178,10 @@ let {
   onsourcechanged?: (locale: string) => void;
   /** The language this entry was just made to be written in, while that waits to publish. */
   sourceChanged?: string;
+  /** A Create all finished or stopped; the shell keeps its report past the reload. */
+  oncreatedall?: (report: CreatedAll | undefined) => void;
+  /** The report of this entry's last Create all, until it is dismissed. */
+  createdAll?: CreatedAll;
   /** Lets the application shell collapse its navigation only for full-width Canvas. */
   onmode?: (mode: EditorMode) => void;
   /** Hands the shell a live read of the title for its top-bar breadcrumb. */
@@ -479,6 +496,74 @@ async function createFilled(of: string) {
     return;
   }
   onchanged();
+}
+// Offered languages with no file, in configured order; the source always has one.
+const missingTargets = $derived(entry.locales.filter((of) => untranslated(of) && !off(of)));
+let creatingAll = $state<string>();
+let createAllFailure = $state<UiMessage>();
+// A report this mount did not make comes from before the reload, so the files now answer it.
+let reportedHere = $state(false);
+async function createAll(fill: boolean) {
+  const targets = [...missingTargets];
+  const report: CreatedAll = { targets, done: {} };
+  const failure = async (res: Response, locale: string, step: 'create' | 'fill') => {
+    const unconfirmed = uncertainResponse(res);
+    const fallback = step === 'create' ? 'TRANSLATION_CREATE_FAILED' : 'TRANSLATION_CREATED_FILL_FAILED';
+    return { locale, step, unconfirmed, message: await retainedFailure(res, fallback) };
+  };
+  createAllFailure = undefined;
+  const outcome = await entrySession.authoritativeChange(
+    async () => {
+      for (const of of targets) {
+        creatingAll = of;
+        const made = await fetch(`/admin/api/drafts/${collection}/${slug}/${of}`, { method: 'POST' });
+        if (!made.ok) {
+          report.failed = await failure(made, of, 'create');
+          break;
+        }
+        report.done[of] = 'created';
+        if (!fill) continue;
+        const filled = await fetch(`/admin/api/translate/${collection}/${slug}/${of}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        if (!filled.ok) {
+          report.failed = await failure(filled, of, 'fill');
+          break;
+        }
+        report.done[of] = 'filled';
+      }
+      creatingAll = undefined;
+      reportedHere = true;
+      oncreatedall?.(report);
+      // Not replayed: the reload is what says whether an unanswered request landed.
+      if (report.failed?.unconfirmed) throw new TypeError('A language was not confirmed.');
+      return Object.keys(report.done).length > 0;
+    },
+    () => (onreload ? onreload() : onchanged()),
+  );
+  creatingAll = undefined;
+  if (outcome.ok || outcome.reason === 'refused') return;
+  if (outcome.reason === 'save') createAllFailure = { code: 'CREATE_ALL_SAVE_FAILED' };
+  else if (outcome.reason === 'reload' || outcome.reason === 'uncertain')
+    createAllFailure = { code: 'CREATE_ALL_RELOAD_FAILED' };
+  else createAllFailure = { code: 'ENTRY_ACTION_FAILED' };
+}
+function createdLine(of: string, report: CreatedAll) {
+  const named = { language: language(of) };
+  const failed = report.failed?.locale === of ? report.failed : undefined;
+  if (failed?.step === 'fill')
+    return failed.unconfirmed
+      ? m.editor_created_all_fill_unconfirmed(named, options)
+      : m.editor_created_all_not_filled(named, options);
+  if (failed?.unconfirmed && reportedHere) return m.editor_created_all_unconfirmed(named, options);
+  if (failed?.unconfirmed && entrySession.hasSnapshot(of))
+    return m.editor_created_all_created(named, options);
+  if (failed) return m.editor_created_all_not_created(named, options);
+  if (report.done[of] === 'filled') return m.editor_created_all_filled(named, options);
+  if (report.done[of]) return m.editor_created_all_created(named, options);
+  return m.editor_created_all_not_attempted(named, options);
 }
 // Through `act`: a refused turn-off answers with a sentence the screen shows.
 async function offer(of: string, on: boolean, redirect?: Target) {
@@ -1522,6 +1607,19 @@ async function saveAddress() {
   {:else if sourceChanged === entry.sourceLocale && entry.pending.length}
     <div class="lock-banner" role="status">{m.editor_source_changed({ language: language(entry.sourceLocale) }, options)}</div>
   {/if}
+  {#if createdAll}
+    <div class={['lock-banner created-all', { 'is-offer': createdAll.failed }]} role="status">
+      <ul>
+        {#each createdAll.targets as of (of)}
+          <li>{createdLine(of, createdAll)}</li>
+        {/each}
+      </ul>
+      {#if createdAll.failed && !(createdAll.failed.unconfirmed && !reportedHere)}
+        <p>{feedbackText(createdAll.failed.message)} {feedbackDetail(createdAll.failed.message)}</p>
+      {/if}
+      <button class="btn-link" type="button" onclick={() => oncreatedall?.(undefined)}>{m.editor_created_all_dismiss({}, options)}</button>
+    </div>
+  {/if}
   <header class={['entry-header', { 'is-held': held }]} bind:offsetHeight={headerHeight}>
     <div class="heading-row">
       <div class="title-row">
@@ -1850,6 +1948,21 @@ async function saveAddress() {
                     {m.editor_create_prefill({}, options)}
                   </button>
                 {/if}
+                {#if missingTargets.length > 1}
+                  <p class="create-all">
+                    <button class="btn btn-create-all" type="button" disabled={actionBusy || locked} onclick={() => createAll(false)}>
+                      {m.editor_create_all({ count: missingTargets.length }, options)}
+                    </button>
+                    {#if entry.translator}
+                      <button class="btn btn-fill-all" type="button" disabled={actionBusy || locked} onclick={() => createAll(true)}>
+                        {m.editor_create_all_prefill({ count: missingTargets.length }, options)}
+                      </button>
+                    {/if}
+                  </p>
+                {/if}
+                {#if creatingAll}
+                  <p role="status">{m.editor_creating_language({ language: language(creatingAll) }, options)}</p>
+                {/if}
                 {#if !entry.singleton}
                   <p>
                     {m.editor_or({}, options)} <button class="btn-link" type="button" disabled={actionBusy || locked} onclick={() => offer(shown, false)}>{m.editor_do_not_offer({ language: language(shown) }, options)}</button> {m.editor_no_file_written({}, options)}
@@ -1859,6 +1972,14 @@ async function saveAddress() {
             {/if}
             {#if actionFailed}
               <div class="notice notice-danger" role="alert">{feedbackText(actionFailed)} {feedbackDetail(actionFailed)}</div>
+            {/if}
+            {#if createAllFailure}
+              <div class="notice notice-danger" role="alert">
+                {feedbackText(createAllFailure)}
+                {#if createAllFailure.code === 'CREATE_ALL_RELOAD_FAILED'}
+                  <button class="btn-link" type="button" onclick={() => void (onreload ? onreload() : onchanged())}>{m.editor_lock_reload({}, options)}</button>
+                {/if}
+              </div>
             {/if}
             {#if localeFailure?.locale === shown}
               <div class="notice notice-danger" role="alert">{feedbackText(localeFailure.message)} {feedbackDetail(localeFailure.message)}</div>

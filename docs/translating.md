@@ -64,6 +64,15 @@ what the schema still wants of it is ordinary validation until then. The entry's
 offered the moment the file is written, without the column being typed in, and its dialog can
 [leave the new language for later](publishing.md#publishing) while the rest of the entry publishes.
 
+With two or more offered languages still missing, the offer adds **Create all 3 missing
+languages**. It writes each one in the order `locales` lists them, one after another, and reads
+the entry again once at the end; a language turned off or already written is left alone. The
+fields, the language switcher and the entry's other actions wait while it runs. It stops at the
+first language that is refused or whose answer is lost, and a line above the entry says what
+happened to each: created, not created, or not attempted. The reload settles a lost answer — the
+language reads *created* if its file is there. Running it again writes only what is still missing,
+so it never replaces a language that has a file.
+
 ## Turning a language off
 
 Some pages genuinely belong to one market. The languages an entry is offered in go into the files

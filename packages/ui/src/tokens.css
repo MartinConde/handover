@@ -525,6 +525,8 @@ a.btn { text-decoration: none; }
 .lock-banner.is-lost { background: var(--warn-soft); color: var(--warn-ink); }
 .lock-banner.is-drift { background: var(--danger-soft); color: var(--danger-ink); }
 .lock-banner.is-offer { background: var(--warn-soft); color: var(--warn-ink); }
+.created-all ul { display: flex; flex-wrap: wrap; gap: var(--s-1) var(--s-4); margin: 0; padding: 0; list-style: none; }
+.created-all p { margin: 0; font-weight: 400; }
 .form-placeholder { min-height: 160px; border: 1.5px dashed var(--border); border-radius: var(--radius-lg); background: var(--surface-2); display: grid; place-items: center; color: var(--ink-3); font-size: var(--text-sm); text-align: center; padding: var(--s-6); }
 
 /* Entry list. */
