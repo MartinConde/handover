@@ -241,6 +241,56 @@ test('an open publish confirmation retranslates without rerunning checks', async
   expect(fetchMock).toHaveBeenCalledTimes(calls);
 });
 
+test('an open publish confirmation keeps the languages left for later across a switch', async () => {
+  const fetchMock = vi.fn(async (url: string) =>
+    url.startsWith('/admin/api/locks/')
+      ? Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120_000 })
+      : url === '/admin/api/publish/checks'
+        ? Response.json({
+            results: [],
+            readiness: {
+              'listings/seaview-cottage': {
+                en: { revision: 'r-en', problems: [], excludable: false, reason: 'published' },
+                de: {
+                  revision: 'r-de',
+                  problems: [{ path: 'title', message: 'Required' }],
+                  excludable: true,
+                },
+              },
+            },
+          })
+        : Response.json({}),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  app = mount(EditorLocaleFixture, {
+    target: document.body,
+    props: {
+      pending: ['en', 'de'],
+      targetOffered: true,
+      translations: { de: { title: '' } },
+    },
+  });
+  await vi.waitFor(() => expect(q<HTMLButtonElement>('.entry-header .btn-primary')).toBeTruthy());
+  q<HTMLButtonElement>('.entry-header .btn-primary')?.click();
+  await vi.waitFor(() => expect(q('.dialog input[type="checkbox"]')).toBeTruthy());
+  q<HTMLInputElement>('.dialog input[type="checkbox"]')?.click();
+  await vi.waitFor(() =>
+    expect(q<HTMLButtonElement>('.dialog .actions .btn-primary')?.disabled).toBe(false),
+  );
+  const calls = fetchMock.mock.calls.length;
+
+  switchLocale();
+
+  expect(q('.dialog .publish-later label')?.textContent?.trim()).toBe(
+    'Deutsch später veröffentlichen',
+  );
+  expect(q<HTMLInputElement>('.dialog input[type="checkbox"]')?.checked).toBe(true);
+  expect(q('.dialog .actions .btn-primary')?.textContent?.trim()).toBe(
+    'Diesen Eintrag veröffentlichen',
+  );
+  expect(fetchMock).toHaveBeenCalledTimes(calls);
+});
+
 test('content-language creation controls retranslate without changing the selected language', async () => {
   const fetchMock = vi.fn(async (url: string) =>
     url.startsWith('/admin/api/locks/')

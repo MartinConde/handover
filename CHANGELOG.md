@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Publish this entry** can leave an unfinished new language for later: the dialog lists what the
+  schema still wants of each language, offers *Publish German later* for one the repository does
+  not have yet, and publishes the rest while German keeps its draft. A translation's check errors
+  no longer disable the header's Publish, and the new publish refusals read in English and German.
 - `POST /admin/api/publish` and `/publish/checks` take `without: ["collection/name:locale"]` to
   leave an unfinished new translation out of an entry's publish; it keeps its draft and hold.
   The checks answer `readiness` per waiting language for the named entries. Both routes now

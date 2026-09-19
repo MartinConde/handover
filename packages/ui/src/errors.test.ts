@@ -253,6 +253,35 @@ test('publish descriptors preserve recovery identity and plural parameters', asy
   );
 });
 
+test('a refused publish selection is explained from its code in either language', async () => {
+  const refused = await responseMessage(
+    Response.json(
+      { code: 'PUBLISH_EXCLUDE_SOURCE', error: 'src/content/x/en/y.yaml is the language…' },
+      { status: 422, headers: { 'x-handover-error-code': 'PUBLISH_EXCLUDE_SOURCE' } },
+    ),
+    'PUBLISH_FAILED',
+  );
+  expect(refused).toEqual({ code: 'PUBLISH_EXCLUDE_SOURCE', status: 422 });
+  expect(messageText(refused, 'en')).toBe(
+    'Nothing was published. The language this entry is written in cannot be published later; it goes out with the entry.',
+  );
+  expect(messageText({ code: 'PUBLISH_EXCLUDE_PUBLISHED' }, 'en')).toBe(
+    'Nothing was published. A language you chose to publish later is already published, so it goes out with the entry.',
+  );
+  expect(messageText({ code: 'PUBLISH_EXCLUDE_NOT_PENDING' }, 'en')).toBe(
+    'Nothing was published. A language you chose to publish later has no unpublished changes any more. Check again and publish.',
+  );
+  expect(messageText({ code: 'PUBLISH_EXCLUDE_ALL' }, 'en')).toBe(
+    'Nothing was published. With those languages left for later there is nothing left to publish.',
+  );
+  expect(messageText({ code: 'PUBLISH_SELECTION_INVALID' }, 'en')).toBe(
+    'Nothing was published. The request did not say clearly what to publish. Reload and try again.',
+  );
+  expect(messageText({ code: 'PUBLISH_EXCLUDE_SOURCE' }, 'de')).toBe(
+    'Nichts wurde veröffentlicht. Die Sprache, in der dieser Eintrag geschrieben ist, kann nicht später veröffentlicht werden; sie wird mit dem Eintrag veröffentlicht.',
+  );
+});
+
 test('password length, token expiry, and general reset failures give different recovery', () => {
   expect(messageText({ code: 'PASSWORD_TOO_LONG' }, 'de')).toBe(
     'Darf höchstens 128 Zeichen lang sein',

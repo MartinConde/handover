@@ -870,6 +870,10 @@ select.filter.is-on { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .publish-set { display: grid; gap: var(--s-2); margin: var(--s-4) 0; padding: 0; list-style: none; font-size: var(--text-sm); }
 .publish-set li { display: flex; align-items: start; gap: var(--s-2); }
 .publish-set li > .chips { flex: none; white-space: nowrap; }
+.dialog .publish-later { display: grid; gap: var(--s-3); margin: 0 0 var(--s-4); padding: 0; border: 0; font-size: var(--text-sm); }
+.publish-later .later-row { display: grid; gap: var(--s-1); }
+.publish-later label { display: flex; align-items: center; gap: var(--s-2); }
+.publish-later .hint { color: var(--ink-2); font-size: var(--text-xs); }
 .rebuild-note { font-size: var(--text-xs); color: var(--ink-2); }
 .dialog.is-slim { width: min(380px, 100%); }
 

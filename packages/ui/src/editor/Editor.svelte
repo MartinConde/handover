@@ -28,7 +28,12 @@ import {
 } from '../navigate';
 import { type OwedRow, owes, queueQuery, rowTitle, workFrom } from '../owed.js';
 import * as m from '../paraglide/messages.js';
-import CheckLines, { type CheckItem, merged, verdict } from '../publishing/CheckLines.svelte';
+import CheckLines, {
+  type CheckItem,
+  localeOf,
+  merged,
+  verdict,
+} from '../publishing/CheckLines.svelte';
 import DriftPanel from '../publishing/Drift.svelte';
 import History from '../publishing/History.svelte';
 import {
@@ -210,11 +215,11 @@ let held = $state(entry.held === true);
 const schemaProblems = $derived(entrySession.positionalProblems(entry.sourceLocale, uiLocale));
 /** What the pre-publish checks found over this entry: read when it opens and after every save. */
 let checks = $state<CheckItem[]>([]);
-// Only check errors block the publish; they name rows by id, so the position is looked up now.
+// Only the source's check errors gate the header; a translation's are the dialog's to offer.
 const checkProblems = $derived(
   Object.fromEntries(
     checks
-      .filter((c) => c.severity === 'error')
+      .filter((c) => c.severity === 'error' && localeOf(c.path) === entry.sourceLocale)
       .flatMap((c) => {
         const at = fieldPosition('default', c.fieldPath, data);
         return at ? [[at.join('.'), c.message]] : [];
@@ -722,6 +727,8 @@ async function writeTranslationSave(
     renew();
     setPending(of, body.pending);
     invalidateEntryDirectory();
+    // A new revision makes an open dialog's readiness stale.
+    if (confirming) void lint();
     return true;
   } catch {
     return false;
@@ -1052,12 +1059,21 @@ onMount(() => {
   if (entry.pending.length) void lint();
 });
 
-// This entry whole and nothing else; it commits, so it confirms first.
+// This entry and nothing else, less any new language left for later; it commits, so it confirms first.
 let confirming = $state(false);
 let sending = $state(false);
 let publishFailed = $state<UiMessage>();
 /** The pass could not be run at all — which holds nothing back: it is a lint, not a gate. */
 let checksFailed = $state(false);
+type Readiness = {
+  problems: unknown[];
+  excludable: boolean;
+  reason?: 'published' | 'source';
+};
+/** What the schema wants of each waiting language, read by the server with the checks. */
+let readiness = $state<Record<string, Readiness>>();
+/** The languages the person chose to publish later, while the dialog is open. */
+let later = $state<string[]>([]);
 let pass = 0;
 const lines = $derived(merged(checks));
 const errors = $derived(lines.filter((c) => c.severity === 'error'));
@@ -1069,11 +1085,33 @@ let canvasPublishButton = $state<HTMLButtonElement>();
 let publishPanel = $state<HTMLElement>();
 
 const going = $derived(entry.locales.filter((of) => pendingByLocale[of]));
+const notReady = $derived(going.filter((of) => (readiness?.[of]?.problems.length ?? 0) > 0));
+// Only an unfinished language the repository does not have yet can wait, and only once that is known.
+const excludable = $derived(notReady.filter((of) => readiness?.[of]?.excludable));
+// Something else has to go, or waiting would publish nothing.
+const waitable = $derived(going.some((of) => !excludable.includes(of)) ? excludable : []);
+const leftOut = $derived(waitable.filter((of) => later.includes(of)));
+const kept = $derived(going.filter((of) => !leftOut.includes(of)));
+// One language is the whole entry: the server's own refusal still says what is missing.
+const unready = $derived(many ? notReady.filter((of) => kept.includes(of)) : []);
+const selection = (key: string, without: string[]) =>
+  JSON.stringify(
+    without.length
+      ? { entries: [key], without: without.map((of) => `${key}:${of}`) }
+      : { entries: [key] },
+  );
 
 async function askToPublish() {
   if (!(await flush())) return;
   publishFailed = undefined;
+  readiness = undefined;
+  later = [];
   confirming = true;
+  void lint();
+}
+
+function publishLater(of: string) {
+  later = later.includes(of) ? later.filter((l) => l !== of) : [...later, of];
   void lint();
 }
 
@@ -1081,17 +1119,28 @@ async function askToPublish() {
 async function lint() {
   const key = `${collection}/${slug}`;
   const mine = ++pass;
+  const sent = leftOut;
   const res = await fetch('/admin/api/publish/checks', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ entries: [key] }),
+    body: selection(key, sent),
   }).catch(() => undefined);
-  // The daily hidden check's note about some other page is the drawer's to list, not this entry's.
-  const results = (res?.ok && ((await res.json()) as { results?: CheckItem[] }).results) || [];
-  // A save since asked again; the older answer would put back what the newer one cleared.
+  const body = res?.ok
+    ? ((await res.json()) as {
+        results?: CheckItem[];
+        readiness?: Record<string, Record<string, Readiness>>;
+      })
+    : undefined;
+  // A save or another choice since asked again; the older answer would put back what the newer one cleared.
   if (mine !== pass) return;
   checksFailed = !res?.ok;
-  checks = results.filter((c) => c.entry === key);
+  // No exclusions without readiness; a kept choice would come back and be refused again.
+  if (checksFailed) later = [];
+  // The daily hidden check's note about some other page is the drawer's to list, not this entry's.
+  checks = (body?.results ?? []).filter((c) => c.entry === key);
+  readiness = body?.readiness?.[key];
+  // The answer changed what can wait, so these checks were over another set of files.
+  if (confirming && sent.join() !== leftOut.join()) void lint();
 }
 
 function closePublish() {
@@ -1108,15 +1157,16 @@ async function publishEntry() {
   const outcome = await entrySession.finalPublish(
     async () => {
       // Again after reserving the session: the dialog may have been open while more was typed.
+      const chosen = leftOut;
       await lint();
-      if (errors.length) {
+      if (errors.length || unready.length || chosen.join() !== leftOut.join()) {
         checksBlocked = true;
         return false;
       }
       res = await fetch('/admin/api/publish', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ entries: [`${collection}/${slug}`] }),
+        body: selection(`${collection}/${slug}`, leftOut),
       });
       if (uncertainResponse(res)) throw new TypeError('The publish response was not confirmed.');
       if (res.ok) await onpublished?.(title);
@@ -1150,6 +1200,11 @@ async function publishEntry() {
   }
   if (!res) {
     publishFailed = { code: 'PUBLISH_FAILED' };
+    return;
+  }
+  const code = res.headers.get('x-handover-error-code') ?? '';
+  if (code === 'PUBLISH_SELECTION_INVALID' || code.startsWith('PUBLISH_EXCLUDE_')) {
+    publishFailed = await retainedFailure(res, 'PUBLISH_FAILED');
     return;
   }
   if (res.status === 422) {
@@ -1882,7 +1937,7 @@ async function saveAddress() {
     {/if}
   </div>
   {/if}
-  <!-- Publishes whole or not at all: picking languages is what the drawer is for. -->
+  <!-- Publishes whole, less any new language left for later: picking entries is what the drawer is for. -->
   {#if confirming}
     <Modal
       labelledby="publish-h"
@@ -1900,13 +1955,47 @@ async function saveAddress() {
             <li>
               <span class="visually-hidden">{m.check_languages({}, options)}</span>
               <span class="chips">
-                {#each going as of (of)}<span class="chip">{of.toUpperCase()}</span>{/each}
+                {#each kept as of (of)}<span class="chip">{of.toUpperCase()}</span>{/each}
               </span>
-              {going.length === 1
-                ? m.pending_language_file({ language: language(going[0] ?? '') }, options)
-                : m.pending_language_files({ count: going.length }, options)}
+              {kept.length === 1
+                ? m.pending_language_file({ language: language(kept[0] ?? '') }, options)
+                : leftOut.length
+                  ? m.pending_language_files_some({ count: kept.length }, options)
+                  : m.pending_language_files({ count: kept.length }, options)}
             </li>
+            {#if leftOut.length}
+              <li>
+                <span class="visually-hidden">{m.check_languages({}, options)}</span>
+                <span class="chips">
+                  {#each leftOut as of (of)}<span class="chip">{of.toUpperCase()}</span>{/each}
+                </span>
+                {m.pending_languages_later({ count: leftOut.length }, options)}
+              </li>
+            {/if}
           </ul>
+        {/if}
+        {#if many && notReady.length}
+          <fieldset class="publish-later">
+            <legend class="group-title">{m.pending_not_ready({}, options)}</legend>
+            {#each notReady as of (of)}
+              <div class="later-row">
+                {#if waitable.includes(of)}
+                  <label>
+                    <input type="checkbox" checked={later.includes(of)} disabled={sending} onchange={() => publishLater(of)}>
+                    {m.pending_publish_later({ language: language(of) }, options)}
+                  </label>
+                  <span class="hint">{m.pending_language_unfinished({ count: readiness?.[of]?.problems.length ?? 0 }, options)}</span>
+                {:else}
+                  <span>{language(of)}</span>
+                  <span class="hint">{readiness?.[of]?.reason === 'source'
+                    ? m.pending_language_kept_source({}, options)
+                    : readiness?.[of]?.reason === 'published'
+                      ? m.pending_language_kept_published({}, options)
+                      : m.pending_language_kept_alone({}, options)}</span>
+                {/if}
+              </div>
+            {/each}
+          </fieldset>
         {/if}
         {#if checksFailed || lines.length}
           <section class="checks" aria-labelledby="publish-checks-h">
@@ -1915,6 +2004,7 @@ async function saveAddress() {
               <p class="checks-sum" role="status">
                 {m.pending_entry_checks_failed({}, options)}
               </p>
+              <button class="btn btn-ghost" type="button" disabled={sending} onclick={() => lint()}>{m.pending_checks_retry({}, options)}</button>
             {:else}
               <p class="checks-sum">{verdict(lines, uiLocale)}</p>
               <CheckLines {lines} chips={many} {uiLocale} />
@@ -1930,11 +2020,14 @@ async function saveAddress() {
           <button
             class="btn btn-primary"
             type="button"
-            disabled={sending || errors.length > 0 || entrySession.persistedActionPending()}
+            disabled={sending || errors.length > 0 || unready.length > 0 || entrySession.persistedActionPending()}
             onclick={publishEntry}
           >
             {#if sending}{m.pending_publishing({}, options)}
             {:else if errors.length}{m.pending_fix_errors({ count: errors.length }, options)}
+            {:else if unready.length}{unready.every((of) => waitable.includes(of))
+              ? m.pending_finish_or_leave_out({ count: unready.length }, options)
+              : m.pending_finish_languages({ count: unready.length }, options)}
             {:else if warnings.length}{m.pending_publish_anyway({ count: warnings.length }, options)}
             {:else}{m.pending_publish_this_entry({}, options)}{/if}
           </button>

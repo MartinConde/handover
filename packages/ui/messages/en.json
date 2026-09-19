@@ -1560,7 +1560,53 @@
   "pending_publish_entry_intro": "This publishes it on its own. Anything else you have been working on stays unpublished.",
   "pending_language_file": "The {language} file",
   "pending_language_files": "All {count} language files",
+  "pending_language_files_some": "{count} language files",
+  "pending_languages_later": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Published later; its draft stays",
+        "countPlural=other": "Published later; their drafts stay"
+      }
+    }
+  ],
+  "pending_publish_later": "Publish {language} later",
+  "pending_language_unfinished": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} thing the schema needs is still missing. The draft stays until it is published.",
+        "countPlural=other": "{count} things the schema needs are still missing. The draft stays until it is published."
+      }
+    }
+  ],
+  "pending_language_kept_source": "The entry is written in this language, so it publishes with the entry. Finish it first.",
+  "pending_language_kept_published": "Already published, so it publishes with the entry. Finish it first.",
+  "pending_language_kept_alone": "Nothing else in this entry is waiting to publish, so it cannot wait. Finish it first.",
+  "pending_finish_or_leave_out": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Finish or leave out {count} language to publish",
+        "countPlural=other": "Finish or leave out {count} languages to publish"
+      }
+    }
+  ],
+  "pending_finish_languages": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Finish {count} language to publish",
+        "countPlural=other": "Finish {count} languages to publish"
+      }
+    }
+  ],
   "pending_entry_checks_failed": "The checks could not be run this time, so nothing here has been looked at.",
+  "pending_checks_retry": "Run the checks again",
   "pending_entry_publish_explanation": "One commit, then the site rebuilds — live in 1–3 minutes. The admin may reload while it deploys.",
   "pending_publish_this_entry": "Publish this entry",
   "check_severity_error": "Error",
@@ -1646,6 +1692,11 @@
   "publish_finalization_pending": "The publish commit was made, but its result could not be confirmed. Reload before publishing again.",
   "publish_entry_incomplete": "Nothing was published. Something this entry needs is still missing — open each of its languages to see what.",
   "publish_entry_drift": "Nothing was published. This entry's languages disagree about which blocks it has — the panel on this screen is where that is settled.",
+  "publish_selection_invalid": "Nothing was published. The request did not say clearly what to publish. Reload and try again.",
+  "publish_exclude_not_pending": "Nothing was published. A language you chose to publish later has no unpublished changes any more. Check again and publish.",
+  "publish_exclude_all": "Nothing was published. With those languages left for later there is nothing left to publish.",
+  "publish_exclude_published": "Nothing was published. A language you chose to publish later is already published, so it goes out with the entry.",
+  "publish_exclude_source": "Nothing was published. The language this entry is written in cannot be published later; it goes out with the entry.",
   "pending_discard_save_failed": "Those changes were not discarded because the open entry could not finish saving.",
   "pending_discard_unconfirmed": "The discard result could not be confirmed. Reload the page before continuing.",
   "pending_discard_remote_changed": "Those changes may have changed remotely. Reload the page before continuing.",

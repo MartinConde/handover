@@ -1557,7 +1557,53 @@
   "pending_publish_entry_intro": "Damit wird nur dieser Eintrag veröffentlicht. Alles andere, woran du gearbeitet hast, bleibt unveröffentlicht.",
   "pending_language_file": "Die Datei auf {language}",
   "pending_language_files": "Alle {count} Sprachdateien",
+  "pending_language_files_some": "{count} Sprachdateien",
+  "pending_languages_later": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Wird später veröffentlicht; ihr Entwurf bleibt",
+        "countPlural=other": "Werden später veröffentlicht; ihre Entwürfe bleiben"
+      }
+    }
+  ],
+  "pending_publish_later": "{language} später veröffentlichen",
+  "pending_language_unfinished": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Es fehlt noch {count} Angabe, die das Schema verlangt. Der Entwurf bleibt, bis er veröffentlicht wird.",
+        "countPlural=other": "Es fehlen noch {count} Angaben, die das Schema verlangt. Der Entwurf bleibt, bis er veröffentlicht wird."
+      }
+    }
+  ],
+  "pending_language_kept_source": "Der Eintrag ist in dieser Sprache geschrieben, daher wird sie mit ihm veröffentlicht. Vervollständige sie zuerst.",
+  "pending_language_kept_published": "Bereits veröffentlicht, daher wird sie mit dem Eintrag veröffentlicht. Vervollständige sie zuerst.",
+  "pending_language_kept_alone": "Sonst wartet in diesem Eintrag nichts auf die Veröffentlichung, daher kann sie nicht warten. Vervollständige sie zuerst.",
+  "pending_finish_or_leave_out": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} Sprache fertigstellen oder zurückstellen, um zu veröffentlichen",
+        "countPlural=other": "{count} Sprachen fertigstellen oder zurückstellen, um zu veröffentlichen"
+      }
+    }
+  ],
+  "pending_finish_languages": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} Sprache fertigstellen, um zu veröffentlichen",
+        "countPlural=other": "{count} Sprachen fertigstellen, um zu veröffentlichen"
+      }
+    }
+  ],
   "pending_entry_checks_failed": "Die Prüfungen konnten diesmal nicht ausgeführt werden; daher wurde hier nichts geprüft.",
+  "pending_checks_retry": "Prüfungen erneut ausführen",
   "pending_entry_publish_explanation": "Ein Commit, dann wird die Website neu gebaut und ist in 1–3 Minuten live. Der Adminbereich kann beim Bereitstellen neu geladen werden.",
   "pending_publish_this_entry": "Diesen Eintrag veröffentlichen",
   "check_severity_error": "Fehler",
@@ -1643,6 +1689,11 @@
   "publish_finalization_pending": "Der Veröffentlichungs-Commit wurde erstellt, aber sein Ergebnis konnte nicht bestätigt werden. Lade die Seite neu, bevor du erneut veröffentlichst.",
   "publish_entry_incomplete": "Nichts wurde veröffentlicht. Etwas, das dieser Eintrag benötigt, fehlt noch. Öffne jede seiner Sprachen, um zu sehen, was fehlt.",
   "publish_entry_drift": "Nichts wurde veröffentlicht. Die Sprachen dieses Eintrags stimmen bei den Blöcken nicht überein. Dies wird im Panel auf dieser Seite geklärt.",
+  "publish_selection_invalid": "Nichts wurde veröffentlicht. Die Anfrage hat nicht eindeutig gesagt, was veröffentlicht werden soll. Lade neu und versuche es noch einmal.",
+  "publish_exclude_not_pending": "Nichts wurde veröffentlicht. Eine Sprache, die du später veröffentlichen wolltest, hat keine unveröffentlichten Änderungen mehr. Prüfe erneut und veröffentliche.",
+  "publish_exclude_all": "Nichts wurde veröffentlicht. Ohne die zurückgestellten Sprachen bleibt nichts zu veröffentlichen.",
+  "publish_exclude_published": "Nichts wurde veröffentlicht. Eine Sprache, die du später veröffentlichen wolltest, ist bereits veröffentlicht und wird deshalb mit dem Eintrag veröffentlicht.",
+  "publish_exclude_source": "Nichts wurde veröffentlicht. Die Sprache, in der dieser Eintrag geschrieben ist, kann nicht später veröffentlicht werden; sie wird mit dem Eintrag veröffentlicht.",
   "pending_discard_save_failed": "Die Änderungen wurden nicht verworfen, weil der geöffnete Eintrag das Speichern nicht abschließen konnte.",
   "pending_discard_unconfirmed": "Das Ergebnis des Verwerfens konnte nicht bestätigt werden. Lade die Seite neu, bevor du fortfährst.",
   "pending_discard_remote_changed": "Diese Änderungen wurden möglicherweise an anderer Stelle geändert. Lade die Seite neu, bevor du fortfährst.",

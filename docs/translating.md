@@ -61,7 +61,8 @@ fields empty. The new file records the language it was made from, so adding a la
 site's default included — never changes which one the entry is written in, and **Translate** keeps
 translating from it. It is a draft like any other, so nothing is in the repository until you publish, and
 what the schema still wants of it is ordinary validation until then. The entry's **Publish…** is
-offered the moment the file is written, without the column being typed in.
+offered the moment the file is written, without the column being typed in, and its dialog can
+[leave the new language for later](publishing.md#publishing) while the rest of the entry publishes.
 
 ## Turning a language off
 

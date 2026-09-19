@@ -27,11 +27,12 @@ export const severityLabel = (severity: CheckLine['severity'], locale: UiLocale)
 };
 
 const LOCALE = /^src\/content\/[^/]+\/([^/]+)\//;
+export const localeOf = (path: string) => LOCALE.exec(path)?.[1] ?? '';
 // The same field in two language files is one problem, since the client's edit is one edit.
 export function merged(items: CheckItem[]): CheckLine[] {
   const lines: CheckLine[] = [];
   for (const item of items) {
-    const locale = LOCALE.exec(item.path)?.[1] ?? '';
+    const locale = localeOf(item.path);
     const same = lines.find(
       (l) => l.check === item.check && l.fieldPath === item.fieldPath && l.message === item.message,
     );

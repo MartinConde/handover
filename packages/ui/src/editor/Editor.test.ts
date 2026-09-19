@@ -826,6 +826,226 @@ test('an entry with nothing pending asks the checks nothing when it opens', asyn
   vi.unstubAllGlobals();
 });
 
+// English is published and German is a new, untouched draft: both wait to publish.
+const withGerman = { ...bilingual, pending: ['en', 'de'], published: ['en'] };
+const KEY = 'listings/seaview-cottage';
+const GERMAN_ERROR = {
+  ...BROKEN,
+  path: 'src/content/listings/de/seaview-cottage.yaml',
+  fieldPath: 'title',
+};
+const ENGLISH_READY = { revision: 'r-en', problems: [], excludable: false, reason: 'published' };
+const GERMAN_UNFINISHED = {
+  revision: 'r-de',
+  problems: [{ path: 'title', message: 'Required' }],
+  excludable: true,
+};
+const readiness = (results: unknown[] = [], de: unknown = GERMAN_UNFINISHED) => ({
+  results,
+  readiness: { [KEY]: { en: ENGLISH_READY, de } },
+});
+type Pass = object | number | Promise<object>;
+/** Each checks pass answers the next of `passes`, the last one repeating. */
+const answering = (
+  passes: Pass[],
+  published: () => Response = () => Response.json({ commit_sha: 'def4567890', paths: [] }),
+) =>
+  vi.fn(async (url: string) => {
+    if (isLock(url)) return Response.json(HELD);
+    if (url === '/admin/api/publish/checks') {
+      const pass = await (passes.length > 1 ? passes.shift() : passes[0]);
+      return typeof pass === 'number' ? new Response('', { status: pass }) : Response.json(pass);
+    }
+    if (url === '/admin/api/publish') return published();
+    return Response.json({ updated_at: 1755864000000, pending: true, problems: [] });
+  });
+const checksBodies = (mock: { mock: { calls: unknown[][] } }) =>
+  mock.mock.calls
+    .filter((call) => call[0] === '/admin/api/publish/checks')
+    .map((call) => JSON.parse(String((call[1] as RequestInit).body)));
+const headerPublish = (root: ParentNode) =>
+  $<HTMLButtonElement>(root, '.entry-header .actions .btn-primary');
+const later = (root: ParentNode) => $<HTMLInputElement>(root, '.dialog input[type="checkbox"]');
+
+test('a check error only in a translation leaves the header Publish enabled', async () => {
+  vi.stubGlobal(
+    'fetch',
+    answering([readiness([GERMAN_ERROR], { ...GERMAN_UNFINISHED, problems: [] })]),
+  );
+  const root = show({ entry: withGerman });
+  await settled();
+
+  expect($(root, '.problems')).toBeNull();
+  expect(headerPublish(root)?.disabled).toBe(false);
+  vi.unstubAllGlobals();
+});
+
+test('a source error disables the header Publish and offers nothing to leave out', async () => {
+  vi.stubGlobal('fetch', answering([readiness([{ ...BROKEN, fieldPath: 'title' }])]));
+  const root = show({ entry: withGerman });
+  await settled();
+
+  expect($(root, '.problems')?.textContent).toBe('1 problem');
+  expect(headerPublish(root)?.disabled).toBe(true);
+  headerPublish(root)?.click();
+  await settled();
+  expect(later(root)).toBeNull();
+  vi.unstubAllGlobals();
+});
+
+test('an untouched German can be left out while English publishes', async () => {
+  const fetchMock = answering([readiness()]);
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: withGerman });
+  headerPublish(root)?.click();
+  await settled();
+
+  const button = $<HTMLButtonElement>(root, '.dialog .actions .btn-primary');
+  expect(button?.disabled).toBe(true);
+  expect(button?.textContent?.trim()).toBe('Finish or leave out 1 language to publish');
+  expect($(root, '.dialog .publish-later label')?.textContent?.trim()).toBe('Publish German later');
+  later(root)?.click();
+  await settled();
+
+  expect(checksBodies(fetchMock).at(-1)).toEqual({ entries: [KEY], without: [`${KEY}:de`] });
+  expect($$(root, '.dialog .publish-set li:first-child .chip').map((c) => c.textContent)).toEqual([
+    'EN',
+  ]);
+  expect(button?.disabled).toBe(false);
+  expect(button?.textContent?.trim()).toBe('Publish this entry');
+  button?.click();
+  await settled();
+  expect(
+    JSON.parse(String((publishCalls(fetchMock)[0]?.[1] as RequestInit | undefined)?.body)),
+  ).toEqual({
+    entries: [KEY],
+    without: [`${KEY}:de`],
+  });
+  vi.unstubAllGlobals();
+});
+
+test('a leave-out the server refuses is explained from its code', async () => {
+  const fetchMock = answering([readiness()], () =>
+    Response.json(
+      { code: 'PUBLISH_EXCLUDE_PUBLISHED', error: 'already published', paths: [] },
+      { status: 422, headers: { 'x-handover-error-code': 'PUBLISH_EXCLUDE_PUBLISHED' } },
+    ),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: withGerman });
+  headerPublish(root)?.click();
+  await settled();
+  later(root)?.click();
+  await settled();
+  $<HTMLButtonElement>(root, '.dialog .actions .btn-primary')?.click();
+  await settled();
+
+  expect($(root, '.dialog [role="alert"]')?.textContent).toBe(
+    'Nothing was published. A language you chose to publish later is already published, so it goes out with the entry.',
+  );
+  vi.unstubAllGlobals();
+});
+
+// Leaving the only language with changes out would publish nothing; the server refuses that.
+test('a new language that is the only one going is not offered to wait', async () => {
+  vi.stubGlobal(
+    'fetch',
+    answering([{ results: [], readiness: { [KEY]: { de: GERMAN_UNFINISHED } } }]),
+  );
+  const root = show({ entry: { ...withGerman, pending: ['de'] } });
+  headerPublish(root)?.click();
+  await settled();
+
+  expect(later(root)).toBeNull();
+  expect($(root, '.dialog .publish-later .hint')?.textContent).toBe(
+    'Nothing else in this entry is waiting to publish, so it cannot wait. Finish it first.',
+  );
+  const button = $<HTMLButtonElement>(root, '.dialog .actions .btn-primary');
+  expect(button?.disabled).toBe(true);
+  expect(button?.textContent?.trim()).toBe('Finish 1 language to publish');
+  vi.unstubAllGlobals();
+});
+
+test('a refused leave-out drops the choice instead of asking again and again', async () => {
+  const fetchMock = answering([
+    readiness(),
+    readiness(),
+    400,
+    readiness(),
+    new Promise<never>(() => {}),
+  ]);
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: withGerman });
+  headerPublish(root)?.click();
+  await settled();
+  later(root)?.click();
+  await settled();
+  await settled();
+
+  expect(checksBodies(fetchMock)).toHaveLength(4);
+  expect(later(root)?.checked).toBe(false);
+  vi.unstubAllGlobals();
+});
+
+test('readiness that could not be read offers a retry and nothing to leave out', async () => {
+  const fetchMock = answering([500, 500, readiness()]);
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: withGerman });
+  headerPublish(root)?.click();
+  await settled();
+
+  expect(later(root)).toBeNull();
+  expect($<HTMLButtonElement>(root, '.dialog .actions .btn-primary')?.disabled).toBe(false);
+  const retry = $<HTMLButtonElement>(root, '.dialog .checks button');
+  expect(retry?.textContent).toBe('Run the checks again');
+  retry?.click();
+  await settled();
+  expect(later(root)).not.toBeNull();
+  vi.unstubAllGlobals();
+});
+
+test('a changed selection discards the older check answer', async () => {
+  const late = deferred<ReturnType<typeof readiness>>();
+  // Nothing may be asked after the newer answer; if something is, it never answers.
+  const fetchMock = answering([
+    readiness(),
+    readiness(),
+    late.promise,
+    readiness(),
+    new Promise<never>(() => {}),
+  ]);
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: withGerman });
+  headerPublish(root)?.click();
+  await settled();
+  later(root)?.click();
+  await settled();
+  later(root)?.click();
+  await settled();
+  late.resolve(readiness([{ ...BROKEN, fieldPath: 'title' }]));
+  await settled();
+
+  expect($(root, '.dialog .checks .notice-danger')).toBeNull();
+  expect(later(root)?.checked).toBe(false);
+  vi.unstubAllGlobals();
+});
+
+test('a save discards the older check answer', async () => {
+  const late = deferred<ReturnType<typeof readiness>>();
+  vi.stubGlobal('fetch', answering([late.promise, readiness()]));
+  const root = show({ entry: pictured });
+  type(root, 'input#f-title', 'Seaview');
+  // Publish flushes the typing first, and that save asks the checks again.
+  headerPublish(root)?.click();
+  await settled();
+  late.resolve(readiness([BROKEN]));
+  await settled();
+
+  expect($(root, '.problems')).toBeNull();
+  expect($(root, '.dialog .checks .notice-danger')).toBeNull();
+  vi.unstubAllGlobals();
+});
+
 // Detection only: field-by-field resolution is the three-way view, not built yet.
 test('a file somebody changed in the repository badges the header and names the drawer', async () => {
   vi.stubGlobal(

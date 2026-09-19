@@ -102,6 +102,11 @@ const KNOWN_CODES = new Set([
   'PUBLISH_REPOSITORY_UNAVAILABLE',
   'PUBLISH_FINALIZATION_PENDING',
   'PUBLISH_CHECKS_FAILED',
+  'PUBLISH_SELECTION_INVALID',
+  'PUBLISH_EXCLUDE_NOT_PENDING',
+  'PUBLISH_EXCLUDE_ALL',
+  'PUBLISH_EXCLUDE_PUBLISHED',
+  'PUBLISH_EXCLUDE_SOURCE',
   'CONFLICT_SETTLED',
   'CONFLICT_CHANGED',
   'CONFLICT_ANSWERS_INVALID',
@@ -411,6 +416,16 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
       return m.publish_entry_drift({}, options);
     case 'PUBLISH_CHECKS_FAILED':
       return m.pending_checks_failed({}, options);
+    case 'PUBLISH_SELECTION_INVALID':
+      return m.publish_selection_invalid({}, options);
+    case 'PUBLISH_EXCLUDE_NOT_PENDING':
+      return m.publish_exclude_not_pending({}, options);
+    case 'PUBLISH_EXCLUDE_ALL':
+      return m.publish_exclude_all({}, options);
+    case 'PUBLISH_EXCLUDE_PUBLISHED':
+      return m.publish_exclude_published({}, options);
+    case 'PUBLISH_EXCLUDE_SOURCE':
+      return m.publish_exclude_source({}, options);
     case 'PENDING_DISCARD_SAVE_FAILED':
       return m.pending_discard_save_failed({}, options);
     case 'PENDING_DISCARD_UNCONFIRMED':

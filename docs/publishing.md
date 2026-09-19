@@ -72,12 +72,13 @@ show its legacy `message`. A collection schema's own message has no descriptor a
 as the developer wrote it.
 
 An error from the [pre-publish checks](pending-changes.md#checks-before-a-publish) — a picture whose file is
-gone — is counted and marked the same way, since it holds the publish back the same way. The
-checks run when a drafted entry opens and after every save. Warnings and notes are the
-dialog's and the drawer's; nothing stops on them.
+gone — is counted and marked the same way, since it holds the publish back the same way. Only
+the entry's own language is counted in the header; a translation's errors are listed in the
+publish dialog. The checks run when a drafted entry opens and after every save. Warnings and
+notes are the dialog's and the drawer's; nothing stops on them.
 
-**The schema decides at the publish.** *Publish…* on an entry with problems is disabled,
-and a publish from the drawer is refused whole while any file in the set is missing
+**The schema decides at the publish.** *Publish…* on an entry whose own language has problems
+is disabled, the dialog will not publish a language that is still missing something, and a publish from the drawer is refused whole while any file in the set is missing
 something: nothing is committed, and those rows are marked *Not ready to publish*. Finish
 the entry and press Publish again. This is what keeps a blank new entry from committing a
 file your own `content.config.ts` would reject and breaking the build behind it.
@@ -95,6 +96,18 @@ naming every language file that goes with the entry, runs the same [checks](pend
 the drawer does over that one entry, and then commits that entry and
 nothing else — whatever else you or anybody else has been working on stays unpublished. A
 notice at the bottom right says what went out; [Build status](build-status.md) takes it from there.
+
+**A new language that is not finished yet can wait.** The dialog lists each language the schema
+still wants something of under *Not ready to publish*. A language the repository does not have
+yet — German you created and have not written, say — gets a **Publish German later** checkbox
+while another language goes with the entry.
+Tick it and the rest of the entry publishes without it. German keeps its draft, and a held
+entry still reads *Not ready yet* until German goes out too. The checks run
+again over the files that are going, so a link from English to the German page is flagged. The
+language the entry is written in, and a language that is already published, go out with the
+entry; finish them first. Until every language that is going is finished, the button says so
+and stays disabled. If the checks could not be run, nothing can be left out until *Run the
+checks again* gets an answer.
 
 **"I have been working through a dozen pages."** The top bar says how many entries are
 waiting ("3 unpublished changes"); the button opens the **pending-changes drawer**, which

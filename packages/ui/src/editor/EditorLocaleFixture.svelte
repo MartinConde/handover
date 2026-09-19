@@ -21,7 +21,8 @@ let {
   scalarFeedback?: boolean;
   targetOffered?: boolean;
   translator?: boolean;
-  pending?: boolean;
+  /** `true` is English alone; a list names each language with a draft. */
+  pending?: boolean | string[];
   restored?: string;
   six?: boolean;
   translations?: Record<string, Record<string, unknown>>;
@@ -72,7 +73,7 @@ const entry = {
       ? { count: 0, featured: true, availableFrom: 'wrong', status: '', note: '' }
       : {}),
   },
-  pending: pending ? ['en'] : ([] as string[]),
+  pending: pending === true ? ['en'] : pending || ([] as string[]),
   published: ['en'],
   problems: scalarFeedback
     ? [
