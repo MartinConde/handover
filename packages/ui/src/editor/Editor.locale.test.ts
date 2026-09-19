@@ -293,6 +293,41 @@ test('content-language creation controls retranslate without changing the select
   );
 });
 
+test('the chosen content language survives an interface switch and the list follows it', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () =>
+      Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120_000 }),
+    ),
+  );
+  app = mount(EditorLocaleFixture, { target: document.body, props: { six: true } });
+  flushSync();
+  const pick = q<HTMLButtonElement>('.language-pick > button');
+  pick?.click();
+  flushSync();
+  qa<HTMLButtonElement>('#entry-languages button')[2]?.click();
+  await new Promise((resolve) => setTimeout(resolve));
+  flushSync();
+
+  switchLocale();
+  pick?.click();
+  flushSync();
+
+  expect(q('.language-pick > button')).toBe(pick);
+  expect(pick?.textContent?.trim()).toBe('Sprache: Französisch— noch nicht übersetzt');
+  expect(
+    qa<HTMLButtonElement>('#entry-languages button').map((b) => b.textContent?.trim()),
+  ).toEqual([
+    'Englisch',
+    'Deutsch— noch nicht übersetzt',
+    'Französisch— noch nicht übersetzt',
+    'Italienisch— noch nicht übersetzt',
+    'Spanisch— noch nicht übersetzt',
+    'Niederländisch— für diesen Eintrag deaktiviert',
+  ]);
+  expect(q('#entry-languages button[aria-pressed="true"]')?.textContent).toContain('Französisch');
+});
+
 test('visible scalar validation and controls reformat without validating or replacing input', async () => {
   vi.useFakeTimers();
   const fetchMock = vi.fn(async (url: string) =>

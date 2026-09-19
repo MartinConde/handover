@@ -1118,6 +1118,21 @@ async function leaving(change: () => void) {
   change();
 }
 
+// Five languages and up: a disclosure, not role="menu", as on the entry list rows.
+let languageMenu = $state(false);
+let languageTrigger = $state<HTMLButtonElement>();
+
+async function chooseLanguage(of: string) {
+  await leaving(() => (locale = of));
+  await closeLanguages();
+}
+
+async function closeLanguages() {
+  languageMenu = false;
+  await tick();
+  languageTrigger?.focus();
+}
+
 // Unlike a field, an address is validated, unique and owes a redirect when it moves.
 let editing = $state(false);
 let typed = $state('');
@@ -1238,11 +1253,17 @@ async function saveAddress() {
 </script>
 
 <svelte:window
+  onclick={(e) => languageMenu && !(e.target as HTMLElement).closest('.language-pick') && (languageMenu = false)}
+  onkeydown={(e) => e.key === 'Escape' && languageMenu && (e.target as HTMLElement).closest('.language-pick') && void closeLanguages()}
   onfocus={recheck}
   onpopstate={fromAddress}
   onbeforeunload={warn}
 />
 <svelte:document onvisibilitychange={recheck} />
+
+{#snippet languageMark(of: string)}
+  {#if off(of)}<span class="visually-hidden"> — {m.editor_language_off_a11y({}, options)}</span>{:else if untranslated(of)}<span class="visually-hidden"> — {m.editor_language_untranslated_a11y({}, options)}</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {otherSource(of) ? m.editor_language_other_source_a11y({ language: language(otherSource(of) ?? ''), source: language(entry.sourceLocale) }, options) : m.editor_language_stale_a11y({ source: language(entry.sourceLocale) }, options)}</span><span class="mark" aria-hidden="true"></span>{/if}
+{/snippet}
 
 {#snippet canvasEntryActions()}
   <select class="canvas-locale" aria-label={m.editor_language({}, options)} value={locale}
@@ -1527,22 +1548,23 @@ async function saveAddress() {
             <div class="seg" role="group" aria-label={m.editor_language({}, options)}>
               {#each entry.locales as of (of)}
                 <button type="button" class={{ 'is-off': off(of) }} aria-pressed={locale === of} onclick={() => leaving(() => (locale = of))}>
-                  {of.toUpperCase()}{#if off(of)}<span class="visually-hidden"> — {m.editor_language_off_a11y({}, options)}</span>{:else if untranslated(of)}<span class="visually-hidden"> — {m.editor_language_untranslated_a11y({}, options)}</span><span class="mark is-empty" aria-hidden="true"></span>{:else if entry.stale.includes(of)}<span class="visually-hidden"> — {otherSource(of) ? m.editor_language_other_source_a11y({ language: language(otherSource(of) ?? ''), source: language(entry.sourceLocale) }, options) : m.editor_language_stale_a11y({ source: language(entry.sourceLocale) }, options)}</span><span class="mark" aria-hidden="true"></span>{/if}
+                  {of.toUpperCase()}{@render languageMark(of)}
                 </button>
               {/each}
             </div>
           {:else}
-            <label class="visually-hidden" for="entry-locale">{m.editor_language({}, options)}</label>
-            <select
-              class="input"
-              id="entry-locale"
-              value={locale}
-              onchange={(e) => leaving(() => (locale = e.currentTarget.value))}
-            >
-              {#each entry.locales as of (of)}
-                <option value={of}>{language(of)}</option>
-              {/each}
-            </select>
+            <div class="pop-anchor language-pick">
+              <button class="btn" type="button" aria-expanded={languageMenu} aria-controls="entry-languages" bind:this={languageTrigger} onclick={(e) => { languageMenu = !languageMenu; e.currentTarget.focus(); }}>
+                <span class="visually-hidden">{`${m.editor_language({}, options)}: `}</span>{language(locale)}{@render languageMark(locale)}
+              </button>
+              {#if languageMenu}
+                <div class="menu language-menu" id="entry-languages">
+                  {#each entry.locales as of (of)}
+                    <button type="button" class={{ 'is-off': off(of) }} aria-pressed={locale === of} onclick={() => chooseLanguage(of)}>{language(of)}{@render languageMark(of)}</button>
+                  {/each}
+                </div>
+              {/if}
+            </div>
           {/if}
         {/if}
         {#if !entry.singleton && canvasSupported}

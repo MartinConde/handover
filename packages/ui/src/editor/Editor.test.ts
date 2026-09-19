@@ -2,6 +2,7 @@ import { type Drift, type Field, LOCK_TTL } from '@handover/core';
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Editor from './Editor.svelte';
+import { sixLanguages } from './six-languages.fixture';
 
 const entry = {
   fields: [
@@ -1327,13 +1328,111 @@ test('a translation made from another language than the source says so to a scre
 });
 
 // Five languages is where a row of buttons stops fitting — Sveltia's threshold.
-test('a site with five languages picks its language from a menu', () => {
-  const five = ['en', 'de', 'fr', 'es', 'it'];
-  const root = show({ entry: { ...bilingual, locales: five, offered: five } });
+const languagePick = (root: ParentNode) => $<HTMLButtonElement>(root, '.language-pick > button');
+const languageChoices = (root: ParentNode) =>
+  $$<HTMLButtonElement>(root, '#entry-languages button');
+const openLanguages = (root: ParentNode) => {
+  languagePick(root)?.click();
+  flushSync();
+};
 
-  expect($(root, '[aria-label="Language"]')).toBeNull();
-  const menu = $<HTMLSelectElement>(root, 'select#entry-locale');
-  expect(Array.from(menu?.options ?? [], (o) => o.value)).toEqual(five);
+test('with six languages each choice names its language and says what state it is in', () => {
+  const root = show(sixLanguages('base'));
+  openLanguages(root);
+
+  expect($(root, '.seg[aria-label="Language"]')).toBeNull();
+  expect(languagePick(root)?.getAttribute('aria-expanded')).toBe('true');
+  expect(languageChoices(root).map((b) => b.textContent?.trim())).toEqual([
+    'English',
+    'German',
+    'French— English changed since this was translated',
+    'Italian',
+    'Spanish— not translated yet',
+    'Dutch— turned off for this entry',
+  ]);
+  expect(languageChoices(root).map((b) => b.getAttribute('aria-pressed'))).toEqual([
+    'true',
+    'false',
+    'false',
+    'false',
+    'false',
+    'false',
+  ]);
+});
+
+test('choosing a language closes the list, switches to it and hands focus back', async () => {
+  const root = show(sixLanguages('base'));
+  openLanguages(root);
+
+  languageChoices(root)[2]?.click();
+  await tick();
+  flushSync();
+
+  expect($(root, '#entry-languages')).toBeNull();
+  expect(languagePick(root)?.getAttribute('aria-expanded')).toBe('false');
+  expect(languagePick(root)?.textContent).toContain('French');
+  expect(document.activeElement).toBe(languagePick(root));
+});
+
+test('Escape closes the language list and gives focus back to its button', async () => {
+  const root = show(sixLanguages('base'));
+  openLanguages(root);
+  languageChoices(root)[1]?.focus();
+
+  languageChoices(root)[1]?.dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+  );
+  await tick();
+
+  expect($(root, '#entry-languages')).toBeNull();
+  expect(document.activeElement).toBe(languagePick(root));
+  expect(languagePick(root)?.textContent).toContain('English');
+});
+
+// Safari does not focus a clicked button, so Escape must still reach an opened list.
+test('Escape closes a language list opened by pointer', async () => {
+  const root = show(sixLanguages('base'));
+  openLanguages(root);
+
+  (document.activeElement ?? document.body).dispatchEvent(
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+  );
+  await tick();
+
+  expect($(root, '#entry-languages')).toBeNull();
+  expect(document.activeElement).toBe(languagePick(root));
+});
+
+test('a click outside the language list closes it without choosing', () => {
+  const root = show(sixLanguages('base'));
+  openLanguages(root);
+
+  $<HTMLElement>(root, 'input#f-title')?.click();
+  flushSync();
+
+  expect($(root, '#entry-languages')).toBeNull();
+  expect(languagePick(root)?.textContent).toContain('English');
+});
+
+test('a language chosen while the last edit cannot be saved is not switched to', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (isLock(url)) return Response.json(HELD);
+      throw new TypeError('offline');
+    }),
+  );
+  const root = show(sixLanguages('base'));
+  type(root, 'input#f-title', 'Keep this text');
+  openLanguages(root);
+
+  languageChoices(root)[2]?.click();
+  await tick();
+  flushSync();
+
+  expect(languagePick(root)?.textContent).toContain('English');
+  expect($<HTMLInputElement>(root, 'input#f-title')?.value).toBe('Keep this text');
+  vi.unstubAllGlobals();
 });
 
 test('side by side edits the second language and saves it to its own file', async () => {

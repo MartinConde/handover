@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- With five or more languages, the editor's language switcher is a list that shows which
+  languages are missing, out of date or turned off, as the buttons do below five.
 - `_source` is a new reserved key at the top of a file, naming the language the entry is written
   in. A `_source` that is empty, not text, or below the top level fails the read naming the path.
   No existing file changes and the format version stays `1`.

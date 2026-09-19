@@ -12,6 +12,7 @@ let {
   translator = false,
   pending = false,
   restored,
+  six = false,
 }: {
   initialUiLocale?: UiLocale;
   publishState?: 'clean' | 'drift' | 'missing';
@@ -21,6 +22,7 @@ let {
   translator?: boolean;
   pending?: boolean;
   restored?: string;
+  six?: boolean;
 } = $props();
 // svelte-ignore state_referenced_locally -- each test mount intentionally fixes its initial locale
 let uiLocale = $state<UiLocale>(initialUiLocale);
@@ -100,10 +102,10 @@ const entry = {
       : publishState === 'missing'
         ? [{ path: 'title', message: 'Authored title requirement' }]
         : ([] as { path: string; message: string }[]),
-  locales: ['en', 'de'],
+  locales: six ? ['en', 'de', 'fr', 'it', 'es', 'nl'] : ['en', 'de'],
   defaultLocale: 'en',
   sourceLocale: 'en',
-  offered: targetOffered ? ['en', 'de'] : ['en'],
+  offered: six ? ['en', 'de', 'fr', 'it', 'es'] : targetOffered ? ['en', 'de'] : ['en'],
   translations: {} as Record<string, Record<string, unknown>>,
   stale: [] as string[],
   drift,

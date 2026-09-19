@@ -18,7 +18,8 @@ but continues to show none of the content-language controls described below.
 ## Choosing a language
 
 An entry opens on the language it is written in, and the header offers the others — buttons up
-to four languages, a menu above that. **The language an entry is written in is the entry's own,
+to four languages; from five, a button naming the current language opens a list of them all,
+with the same marks, and Escape closes it. **The language an entry is written in is the entry's own,
 not the site's**: the language it was first written in, recorded in its files as `_source`
 ([Languages](i18n.md#which-language-an-entry-is-written-in)). That is the language whose form
 carries the structure and the one every translation is made from. Nearly always that is the

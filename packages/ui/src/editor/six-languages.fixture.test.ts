@@ -100,14 +100,17 @@ test('every variant opens the editor on its source file', () => {
       props: { collection: 'listings', slug: name, onchanged: () => {}, ...sixLanguages(name) },
     });
     flushSync();
-    const options = Array.from(
-      document.querySelectorAll<HTMLOptionElement>('#entry-locale option'),
+    document.querySelector<HTMLButtonElement>('.language-pick > button')?.click();
+    flushSync();
+    const choices = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('#entry-languages button'),
+      (b) => b.firstChild?.textContent,
     );
     expect([name, document.querySelector<HTMLInputElement>('#f-title')?.value]).toEqual([
       name,
       titles[name],
     ]);
-    expect(options.map((o) => o.value)).toEqual(SIX);
+    expect(choices).toEqual(['English', 'German', 'French', 'Italian', 'Spanish', 'Dutch']);
     unmount(app);
     app = undefined;
     document.body.innerHTML = '';
