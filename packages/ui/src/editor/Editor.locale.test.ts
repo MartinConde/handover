@@ -366,6 +366,42 @@ test('the language chosen in the pane survives an interface switch and the pane 
   expect(q('.editor-form-heading h2')?.textContent).toBe('Englisch');
 });
 
+test('the queue keeps its language and next entry through an interface switch and renames them', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      url === '/admin/api/entries/listings'
+        ? Response.json({
+            entries: [
+              { id: 'seaview-cottage', locales: { en: { title: 'Seaview Cottage', path: 'a' } } },
+              { id: 'mill-house', locales: { en: { title: 'The Mill House', path: 'b' } } },
+            ],
+            locales: ['en', 'de', 'fr', 'it', 'es', 'nl'],
+          })
+        : Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120_000 }),
+    ),
+  );
+  history.replaceState({}, '', '/admin/c/listings/seaview-cottage?queue=es&owed=missing');
+  app = mount(EditorLocaleFixture, { target: document.body, props: { six: true } });
+  for (let i = 0; i < 3; i++) {
+    await new Promise((resolve) => setTimeout(resolve));
+    flushSync();
+  }
+  const next = q<HTMLAnchorElement>('.pane-head .queue-next a');
+  expect(next?.textContent?.trim()).toBe('Next in Spanish');
+
+  switchLocale();
+
+  expect(q('.pane-head .queue-next a')).toBe(next);
+  expect(next?.textContent?.trim()).toBe('Weiter mit Spanisch');
+  expect(next?.getAttribute('href')).toBe('/admin/c/listings/mill-house?queue=es&owed=missing');
+  expect(q('#queue-scope')?.textContent).toBe(
+    'Als Nächstes: The Mill House. Die Reihe geht in Listenreihenfolge durch die ganze Sammlung; Suche und Filter nach live oder verborgen aus der Liste gelten hier nicht.',
+  );
+  expect(q('#pane-es')?.textContent).toContain('Spanisch');
+  history.replaceState({}, '', '/');
+});
+
 test('visible scalar validation and controls reformat without validating or replacing input', async () => {
   vi.useFakeTimers();
   const fetchMock = vi.fn(async (url: string) =>

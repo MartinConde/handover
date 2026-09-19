@@ -207,3 +207,14 @@ The address can set both: `/admin/c/listings?locale=de` opens the list on what G
 which is where the dashboard's *Show* lands, and `?locale=fr&owed=stale` on the stale French
 translations. `owed` takes `missing` or `stale`; any other value means missing or stale, and a
 language the site does not declare filters nothing.
+
+A row opened from a filtered list starts a queue for that language. The entry opens with the
+language beside the source, on its *Create from …* offer when there is no file yet, and the right
+column's heading has **Next in German**: the next entry further down the list that still owes
+German the chosen work. The queue follows the whole collection in the list's order; the search
+and the live or hidden filter do not carry over. It never goes back to earlier entries, so after
+the last one the heading says *End of this queue*, which is not a claim that nothing above is
+owed. Creating or publishing the translation, the Content, SEO and History tabs, and showing
+another language in the right column all keep the queue and its place. The address carries it as
+`?queue=de&owed=missing`, and a language the site does not declare means no queue. Next saves
+what you typed first, and stays on the entry if that save fails.

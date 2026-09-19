@@ -25,6 +25,7 @@ import {
   navigate,
   navigateAfterAuthoritativeChange,
 } from '../navigate';
+import { type OwedRow, owes, queueQuery, rowTitle, workFrom } from '../owed.js';
 import * as m from '../paraglide/messages.js';
 import CheckLines, { type CheckItem, merged, verdict } from '../publishing/CheckLines.svelte';
 import DriftPanel from '../publishing/Drift.svelte';
@@ -288,7 +289,7 @@ function setCanvas(open: boolean) {
   canvasOpen = open;
   if (open) mobilePane = 'page';
   remember(open ? 'canvas' : collapsed && pageShown ? 'form' : beside);
-  if (open && section !== '') navigate(`/admin/c/${collection}/${slug}`);
+  if (open && section !== '') navigate(`/admin/c/${collection}/${slug}${queueTail}`);
 }
 
 $effect(() => {
@@ -308,6 +309,41 @@ const alone = $derived(!side && shown !== undefined);
 const untranslated = (of: string) => of !== entry.sourceLocale && !entrySession.hasSnapshot(of);
 // Turned off for this entry: no file is written for it and the site does not offer it.
 const off = (of: string) => !entry.offered.includes(of);
+
+// The list's language filter, carried in the address so remounts and section links keep it.
+const opening = new URLSearchParams(location.search);
+// svelte-ignore state_referenced_locally -- read once per mount, like `?locale=`
+const queue =
+  !entry.singleton && entry.locales.length > 1 && entry.locales.includes(opening.get('queue') ?? '')
+    ? (opening.get('queue') ?? undefined)
+    : undefined;
+const queueWork = workFrom(opening.get('owed'));
+const queueTail = queueQuery(queue, queueWork);
+let next = $state<
+  { at: 'loading' | 'failed' | 'lost' | 'end' } | { at: 'entry'; id: string; title: string }
+>({ at: 'loading' });
+
+// Found in the unfiltered order: this entry may no longer owe the language it was queued for.
+async function loadQueue() {
+  if (!queue) return;
+  next = { at: 'loading' };
+  try {
+    const res = await fetch(`/admin/api/entries/${collection}`);
+    if (!res.ok) throw new Error(`${res.status}`);
+    const body = (await res.json()) as { entries: OwedRow[]; locales?: string[] };
+    const here = body.entries.findIndex((row) => row.id === slug);
+    const row =
+      here < 0 ? undefined : body.entries.slice(here + 1).find((r) => owes(r, queue, queueWork));
+    next =
+      here < 0
+        ? { at: 'lost' }
+        : row
+          ? { at: 'entry', id: row.id, title: rowTitle(row, body.locales ?? entry.locales) }
+          : { at: 'end' };
+  } catch {
+    next = { at: 'failed' };
+  }
+}
 let busy = $state(false);
 const actionBusy = $derived(busy || entrySession.persistedActionPending());
 
@@ -874,7 +910,7 @@ async function rename(event: Event) {
   await announceCommit(res);
   const { slug: to } = (await res.json()) as { slug: string };
   invalidateEntryDirectory();
-  navigate(`/admin/c/${collection}/${to}`);
+  navigate(`/admin/c/${collection}/${to}${queueTail}`);
 }
 
 async function remove(redirect: Target) {
@@ -927,7 +963,7 @@ function goTo(path: string | undefined) {
   const field = drawn('f', path);
   // A field on the other tab is not on screen: go to that tab, then look for it once only.
   if (!field && path && seoField && path.split('.')[0] === seoAt) {
-    navigate(`/admin/c/${collection}/${slug}/seo`);
+    navigate(`/admin/c/${collection}/${slug}/seo${queueTail}`);
     void tick().then(() => land(drawn('f', path)));
     return;
   }
@@ -960,6 +996,14 @@ function fromAddress() {
   const query = new URLSearchParams(location.search);
   const field = query.get('field');
   const requestedLocale = query.get('locale');
+  // The queue's language opens beside the source, with its create pane when it has no file.
+  if (!field && !requestedLocale && queue && query.get('queue') === queue) {
+    leaving(() => {
+      if (queue !== entry.sourceLocale) locale = queue;
+      setBeside('language');
+    });
+    return;
+  }
   if (!field && !requestedLocale) return;
   const of = requestedLocale || entry.sourceLocale;
   const inColumn = of !== entry.sourceLocale && entry.locales.includes(of) && !untranslated(of);
@@ -980,6 +1024,7 @@ function fromAddress() {
 }
 onMount(() => {
   fromAddress();
+  void loadQueue();
   // Only a draft gets linted, so an entry with nothing pending is not asked about.
   if (entry.pending.length) void lint();
 });
@@ -1289,6 +1334,24 @@ async function saveAddress() {
   {/if}
 {/snippet}
 
+<!-- A link, so the shell drains unsaved typing before it leaves, as it does for every address. -->
+{#snippet queueNext()}
+  {#if queue}
+    {@const scope = m.editor_queue_scope({}, options)}
+    {@const detail = next.at === 'entry' ? `${m.editor_queue_next_detail({ title: next.title }, options)} ${scope}` : scope}
+    <span class="queue-next" title={detail}>
+      {#if next.at === 'entry'}
+        <a class="btn btn-sm" href={sitePath(`/admin/c/${collection}/${next.id}${queueTail}`)} aria-describedby="queue-scope">{m.editor_queue_next({ language: language(queue) }, options)}</a>
+      {:else if next.at === 'failed'}
+        {m.editor_queue_failed({}, options)} <button class="btn-link" type="button" onclick={loadQueue}>{m.common_retry({}, options)}</button>
+      {:else}
+        {next.at === 'loading' ? m.editor_queue_loading({}, options) : next.at === 'lost' ? m.editor_queue_lost({}, options) : m.editor_queue_end({}, options)}
+      {/if}
+      <span class="visually-hidden" id="queue-scope">{detail}</span>
+    </span>
+  {/if}
+{/snippet}
+
 {#snippet canvasEntryActions()}
   <select class="canvas-locale" aria-label={m.editor_language({}, options)} value={locale}
     onchange={(event) => { const nextLocale = event.currentTarget.value; void leaving(() => (locale = nextLocale)); }}>
@@ -1545,9 +1608,9 @@ async function saveAddress() {
         <!-- Links, not a tablist: each is an address the back button lands on; keep the roles off. -->
         {#if !entry.singleton}
           <nav class="tabs seg editor-sections" aria-label={m.editor_sections({}, options)}>
-            <a href={sitePath(`/admin/c/${collection}/${slug}`)} aria-current={section === '' ? 'page' : undefined}>{m.editor_section_content({}, options)}</a>
-            {#if seoField}<a href={sitePath(`/admin/c/${collection}/${slug}/seo`)} aria-current={section === 'seo' ? 'page' : undefined}>{m.editor_section_seo({}, options)}</a>{/if}
-            <a href={sitePath(`/admin/c/${collection}/${slug}/history`)} aria-current={section === 'history' ? 'page' : undefined}>{m.editor_section_history({}, options)}</a>
+            <a href={sitePath(`/admin/c/${collection}/${slug}${queueTail}`)} aria-current={section === '' ? 'page' : undefined}>{m.editor_section_content({}, options)}</a>
+            {#if seoField}<a href={sitePath(`/admin/c/${collection}/${slug}/seo${queueTail}`)} aria-current={section === 'seo' ? 'page' : undefined}>{m.editor_section_seo({}, options)}</a>{/if}
+            <a href={sitePath(`/admin/c/${collection}/${slug}/history${queueTail}`)} aria-current={section === 'history' ? 'page' : undefined}>{m.editor_section_history({}, options)}</a>
           </nav>
         {/if}
       </div>
@@ -1610,7 +1673,7 @@ async function saveAddress() {
         if (outcome === 'restored') onrestored?.(date);
         // The old session is already closed, so this authoritative replacement bypasses its
         // navigation guard and lands on Content before the parent re-reads every locale.
-        navigateAfterAuthoritativeChange(`/admin/c/${collection}/${slug}`);
+        navigateAfterAuthoritativeChange(`/admin/c/${collection}/${slug}${queueTail}`);
         await (onreload ? onreload() : onchanged());
       }}
     />
@@ -1668,7 +1731,7 @@ async function saveAddress() {
           aria-labelledby="pane-{shown}"
           onfocusout={canvasCompleted}
         >
-          <div class="pane-head">{@render paneHeading(shown)}</div>
+          <div class="pane-head">{@render paneHeading(shown)}<span class="spacer"></span>{@render queueNext()}</div>
           <div class="empty">
             {#if off(shown)}
               <div class="is-wide">
@@ -1756,6 +1819,7 @@ async function saveAddress() {
               }}
               {mediaBase}
               heading={paneHeading}
+              next={queue ? queueNext : undefined}
               onclose={side ? () => leaving(() => setBeside('none')) : undefined}
               onturnoff={entry.singleton ? undefined : () => { rememberActionTrigger(); actionFailed = undefined; offing = shown; }}
             />

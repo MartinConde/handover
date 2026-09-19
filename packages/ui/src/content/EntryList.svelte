@@ -11,6 +11,7 @@ import {
   type UiLocale,
 } from '../i18n.js';
 import { navigate } from '../navigate';
+import { missing, offered, owes, queueQuery, rowTitle, stale, workFrom } from '../owed.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
 import Modal from '../shared/Modal.svelte';
@@ -20,7 +21,6 @@ import OffsiteDialog, { type Target } from './Offsite.svelte';
 type Entry = {
   id: string;
   locales: Record<string, { title: string; path: string; status?: 'hidden' }>;
-  /** The languages it is offered in, absent when that is every language the site declares. */
   offered?: string[];
   /** Whether it has unpublished changes, which is what a duplicate can be asked to carry. */
   pending?: boolean;
@@ -28,7 +28,6 @@ type Entry = {
   editing?: { id: string; name: string | null };
   /** Who last touched it and how — the draft's editor, or the publish that carried it out. */
   edited?: { at: number; by: string | null; kind: 'edit' | 'publish' } | null;
-  /** The languages the last build found translated from a source that has moved on since. */
   stale?: string[];
 };
 /** One thing the CMS took away, as the activity log remembers it. */
@@ -105,14 +104,8 @@ const plural = $derived(collectionName(collection, uiLocale));
 const collectionLabel = $derived(
   uiLocale === 'en' ? collectionName(collection, uiLocale, 'singular') : plural,
 );
-// An entry that exists in German alone is listed by its German title, not its file name.
-const titleOf = (entry: Entry) =>
-  locales.map((l) => entry.locales[l]?.title).find(Boolean) ||
-  Object.values(entry.locales)[0]?.title ||
-  entry.id;
+const titleOf = (entry: Entry) => rowTitle(entry, locales);
 const many = $derived(locales.length > 1);
-// A language turned off for the entry gets no file, so it is not one still to write.
-const offered = (entry: Entry, locale: string) => entry.offered?.includes(locale) ?? true;
 // `_status` is the entry's rather than one language's, so any file of it saying so is the answer.
 const isHidden = (entry: Entry) => Object.values(entry.locales).some((l) => l.status === 'hidden');
 // The dashboard's *Show* arrives as `?locale=de`, read once when the list opens.
@@ -120,18 +113,7 @@ const address = new URLSearchParams(location.search);
 let search = $state('');
 let showing = $state<'all' | 'live' | 'hidden'>('all');
 let language = $state(address.get('locale') ?? '');
-const WORK = ['owed', 'missing', 'stale'] as const;
-// An unknown kind of work asks for all of it rather than for an empty list.
-let work = $state<(typeof WORK)[number]>(
-  WORK.find((kind) => kind === address.get('owed')) ?? 'owed',
-);
-const missing = (entry: Entry, locale: string) => offered(entry, locale) && !entry.locales[locale];
-const stale = (entry: Entry, locale: string) =>
-  offered(entry, locale) &&
-  Boolean(entry.locales[locale]) &&
-  (entry.stale?.includes(locale) ?? false);
-const owes = (entry: Entry, locale: string) =>
-  (work !== 'stale' && missing(entry, locale)) || (work !== 'missing' && stale(entry, locale));
+let work = $state(workFrom(address.get('owed')));
 // Above four languages a chip each stops reading at a glance, so a row counts and names the owed.
 const compact = $derived(locales.length > 4);
 const owedIn = (entry: Entry) => locales.filter((l) => missing(entry, l) || stale(entry, l));
@@ -158,7 +140,7 @@ const shown = $derived(
   entries.filter(
     (e) =>
       (showing === 'all' || isHidden(e) === (showing === 'hidden')) &&
-      (!language || owes(e, language)) &&
+      (!language || owes(e, language, work)) &&
       (!search.trim() ||
         [e.id, ...Object.values(e.locales).map((value) => value.title)].some((value) =>
           value.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()),
@@ -529,7 +511,7 @@ async function done() {
             />
           </div>
           <div class="td title" role="cell">
-            <a href={sitePath(`/admin/c/${collection}/${entry.id}`)}>{titleOf(entry)}</a>
+            <a href={sitePath(`/admin/c/${collection}/${entry.id}${queueQuery(language || undefined, work)}`)}>{titleOf(entry)}</a>
             {#if isHidden(entry)}<span class="badge">{m.entry_list_hidden({}, options)}</span>{/if}
             {#if entry.editing}<span class="badge">{entry.editing.name ? m.entry_list_being_edited_by({ name: entry.editing.name }, options) : m.entry_list_being_edited({}, options)}</span>{/if}
           </div>

@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- An entry opened from a filtered entry list opens that language beside the source, and the
+  right column's heading offers **Next in …** to the next entry further down the list that still
+  owes it, until *End of this queue*; `?queue=de&owed=missing` in the address carries it.
 - An active filter menu in the entry list shows one arrow again instead of a row of them.
 - With five or more languages, an entry-list row shows its language files created out of those
   offered (`4/5`) and up to three owed languages instead of a chip per language, and a second

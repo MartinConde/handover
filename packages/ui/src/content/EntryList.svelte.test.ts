@@ -601,13 +601,17 @@ const sixRows = () => {
 // The fixture's rows share titles, so they are told apart by file name.
 const names = (root: ParentNode) =>
   Array.from(root.querySelectorAll('.row .td.filename'), (cell) => cell.textContent);
+// A filtered row's link carries the queue, so it is matched with or without one.
+const rowOf = (root: ParentNode, id: string) =>
+  q(root, `a[href="/admin/c/listings/${id}"], a[href^="/admin/c/listings/${id}?"]`)?.closest(
+    '.row',
+  );
 const compact = (root: ParentNode, id: string) => {
-  const row = q(root, `a[href="/admin/c/listings/${id}"]`)?.closest('.row');
+  const row = rowOf(root, id);
   return Array.from(row?.querySelectorAll('.chips .chip') ?? [], (chip) => chip.textContent);
 };
 const summary = (root: ParentNode, id: string) =>
-  q(root, `a[href="/admin/c/listings/${id}"]`)?.closest('.row')?.querySelector('.chips')
-    ?.previousElementSibling?.textContent;
+  rowOf(root, id)?.querySelector('.chips')?.previousElementSibling?.textContent;
 
 test('above four languages a row counts its files and names at most three owed', async () => {
   sixRows();
@@ -678,6 +682,20 @@ test('the address can ask for one kind of work in a language', async () => {
     'structured',
     'sourceConflict',
   ]);
+});
+
+test('a filtered row opens its entry as a queue for that language and work; an unfiltered one does not', async () => {
+  sixRows();
+  history.replaceState({}, '', '/admin/c/listings?locale=fr&owed=stale');
+  const root = show();
+  await tick();
+
+  const title = () => q<HTMLAnchorElement>(root, '.row .title a')?.getAttribute('href');
+  expect(title()).toBe('/admin/c/listings/base?queue=fr&owed=stale');
+
+  q<HTMLButtonElement>(root, '.collection-controls .btn-ghost')?.click();
+  flushSync();
+  expect(title()).toBe('/admin/c/listings/base');
 });
 
 test('a language turned off for an entry is never owed in it', async () => {

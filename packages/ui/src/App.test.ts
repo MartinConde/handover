@@ -1,6 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import App from './App.svelte';
+import { SIX, sixLanguageRows, sixLanguages } from './editor/six-languages.fixture';
 import { type CollectionLabels, rememberUiLocale, type UiLocale } from './i18n.js';
 
 let app: ReturnType<typeof mount>;
@@ -1136,6 +1137,91 @@ test('discarding a draft loads the entry again instead of leaving the old one on
   expect(mutationOrder).toEqual(['save:Final local title', 'publish', 'discard']);
   expect(entryLoads).toBe(2);
   expect(root.querySelector<HTMLInputElement>('#f-title')?.value).toBe('Repository title');
+});
+
+// A queue opened from the filtered list: the entry, the collection's rows, and a save that can fail.
+const queueShell = (slug: string, { offline = false } = {}) => {
+  const state = { created: false, entryLoads: 0 };
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
+    if (url === '/admin/api/drafts') return Response.json({ entries: [] });
+    if (url === '/admin/api/build') return Response.json({});
+    if (url.startsWith('/admin/api/locks/'))
+      return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
+    if (url.startsWith('/admin/api/source/')) return Response.json({ changed: {} });
+    if (url === `/admin/api/drafts/${slug}/es` && init?.method === 'POST') {
+      state.created = true;
+      return Response.json({ pending: true });
+    }
+    if (url.startsWith('/admin/api/drafts/') && init?.method === 'PUT') {
+      if (offline) throw new TypeError('offline');
+      return Response.json({ pending: true, problems: [] });
+    }
+    if (url === '/admin/api/entries/listings') {
+      const rows = sixLanguageRows();
+      const row = rows.find((r) => `listings/${r.id}` === slug);
+      if (row && state.created)
+        row.locales.es = {
+          title: 'Harbour House',
+          path: `src/content/${slug.replace('/', '/es/')}.yaml`,
+        };
+      return Response.json({ entries: rows, locales: SIX });
+    }
+    if (url === `/admin/api/entries/${slug}`) {
+      state.entryLoads += 1;
+      const { entry } = sixLanguages('twoMissing');
+      if (state.created) entry.translations.es = { title: 'Harbour House' };
+      return Response.json(entry);
+    }
+    return Response.json({});
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return state;
+};
+const settleAll = async () => {
+  await vi.dynamicImportSettled();
+  for (let i = 0; i < 4; i++) {
+    await new Promise((r) => setTimeout(r, 0));
+    flushSync();
+  }
+};
+
+test('creating the queued translation reopens the entry on it with the queue in place', async () => {
+  const state = queueShell('listings/twoMissing');
+  history.replaceState({}, '', '/admin/c/listings/twoMissing?queue=es&owed=missing');
+  const root = show(session(), '/admin/c/listings/twoMissing');
+  await settleAll();
+  root.querySelector<HTMLButtonElement>('.btn-create')?.click();
+  await settleAll();
+
+  expect(state.entryLoads).toBe(2);
+  expect(location.search).toBe('?queue=es&owed=missing');
+  expect(root.querySelector<HTMLInputElement>('input#t-title')?.value).toBe('Harbour House');
+  expect(
+    root.querySelector<HTMLAnchorElement>('.pane-head .queue-next a')?.getAttribute('href'),
+  ).toBe('/admin/c/listings/germanFirst?queue=es&owed=missing');
+});
+
+test('Next stays on the entry while its typing cannot be saved', async () => {
+  queueShell('listings/twoMissing', { offline: true });
+  history.replaceState({}, '', '/admin/c/listings/twoMissing?queue=fr&owed=stale');
+  const root = show(session(), '/admin/c/listings/twoMissing');
+  await settleAll();
+  const input = root.querySelector<HTMLInputElement>('input#t-title');
+  if (!input) throw new Error(`Editor did not open: ${root.textContent}`);
+  input.value = 'Maison du port, rénovée';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  flushSync();
+
+  const next = root.querySelector<HTMLAnchorElement>('.pane-head .queue-next a');
+  expect(next?.getAttribute('href')).toBe('/admin/c/listings/machine?queue=fr&owed=stale');
+  next?.click();
+  await settleAll();
+
+  expect(location.pathname).toBe('/admin/c/listings/twoMissing');
+  expect(root.querySelector<HTMLInputElement>('input#t-title')?.value).toBe(
+    'Maison du port, rénovée',
+  );
 });
 
 const settle = async () => {

@@ -2,7 +2,7 @@ import { type Drift, type Field, LOCK_TTL } from '@handover/core';
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import Editor from './Editor.svelte';
-import { sixLanguages } from './six-languages.fixture';
+import { SIX, sixLanguageRows, sixLanguages } from './six-languages.fixture';
 
 const entry = {
   fields: [
@@ -3455,6 +3455,180 @@ test('the field is landed on when the address changes under an open entry', asyn
   flushSync();
 
   expect(document.activeElement?.id).toBe('f-title');
+});
+
+// The list the queue reads is the collection's own, in its order, with the last build's marks.
+const queueList = (rows: unknown[] | (() => Promise<Response>) = sixLanguageRows()) => {
+  const fetchMock = vi.fn(async (url: string) => {
+    if (isLock(url)) return Response.json(HELD);
+    if (url === '/admin/api/entries/listings')
+      return typeof rows === 'function' ? rows() : Response.json({ entries: rows, locales: SIX });
+    if (String(url).startsWith('/admin/api/source/')) return Response.json({ changed: {} });
+    return Response.json({});
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  return fetchMock;
+};
+const listReads = (mock: { mock: { calls: unknown[][] } }) =>
+  mock.mock.calls.filter((call) => call[0] === '/admin/api/entries/listings').length;
+const settle = async () => {
+  for (let i = 0; i < 3; i++) {
+    await tick();
+    flushSync();
+  }
+};
+const queueNext = (root: ParentNode) => $(root, '.pane-head .queue-next');
+const nextLink = (root: ParentNode) => $<HTMLAnchorElement>(root, '.pane-head .queue-next a');
+
+test('a queue opens its language beside the source and Next skips to the next row owing it', async () => {
+  queueList();
+  at('/admin/c/listings/twoMissing?queue=fr&owed=stale');
+  const root = show({ slug: 'twoMissing', ...sixLanguages('twoMissing') });
+  await settle();
+
+  expect($(root, '.editor-form-heading h2')?.textContent).toBe('English');
+  expect($(root, '#pane-fr')?.textContent).toContain('French');
+  expect(nextLink(root)?.textContent?.trim()).toBe('Next in French');
+  // germanFirst and legacy have no French file and partlyMarked's is current.
+  expect(nextLink(root)?.getAttribute('href')).toBe(
+    '/admin/c/listings/machine?queue=fr&owed=stale',
+  );
+  vi.unstubAllGlobals();
+});
+
+test('a queue for a language with no file opens its create pane, with Next in the pane head', async () => {
+  queueList();
+  at('/admin/c/listings/twoMissing?queue=es&owed=missing');
+  const root = show({ slug: 'twoMissing', ...sixLanguages('twoMissing') });
+  await settle();
+
+  expect($(root, '#pane-es')?.textContent).toContain('Spanish');
+  expect($(root, '.btn-create')).not.toBeNull();
+  expect(nextLink(root)?.getAttribute('href')).toBe(
+    '/admin/c/listings/germanFirst?queue=es&owed=missing',
+  );
+  vi.unstubAllGlobals();
+});
+
+// After the Spanish file is created the editor remounts; this entry no longer owes it.
+test('the queue keeps its place from an entry that is no longer owed the language', async () => {
+  const rows = sixLanguageRows();
+  const base = rows[0] as (typeof rows)[number];
+  base.locales.es = { title: 'Casa del puerto', path: 'src/content/listings/es/base.yaml' };
+  queueList(rows);
+  at('/admin/c/listings/base?queue=es&owed=missing');
+  const opened = sixLanguages('base');
+  opened.entry.translations.es = { title: 'Casa del puerto' };
+  const root = show({ slug: 'base', ...opened });
+  await settle();
+
+  expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Casa del puerto');
+  expect(nextLink(root)?.getAttribute('href')).toBe(
+    '/admin/c/listings/twoMissing?queue=es&owed=missing',
+  );
+  vi.unstubAllGlobals();
+});
+
+test('the last row owing the language says the queue ends, not that nothing is owed', async () => {
+  queueList();
+  at('/admin/c/listings/sourceConflict?queue=es&owed=owed');
+  const root = show({ slug: 'sourceConflict', ...sixLanguages('base') });
+  await settle();
+
+  expect(nextLink(root)).toBeNull();
+  expect(queueNext(root)?.textContent).toContain('End of this queue');
+  vi.unstubAllGlobals();
+});
+
+test('an entry the list does not have cannot continue the queue', async () => {
+  queueList();
+  at('/admin/c/listings/gone?queue=es&owed=owed');
+  const root = show({ slug: 'gone', ...sixLanguages('base') });
+  await settle();
+
+  expect(nextLink(root)).toBeNull();
+  expect(queueNext(root)?.textContent).toContain('This entry is not in the list');
+  expect(queueNext(root)?.textContent).not.toContain('End of this queue');
+  vi.unstubAllGlobals();
+});
+
+test('a queue in a language the site does not declare is no queue at all', async () => {
+  const fetchMock = queueList();
+  at('/admin/c/listings/base?queue=xx&owed=missing');
+  const root = show({ slug: 'base', ...sixLanguages('base') });
+  await settle();
+
+  expect($(root, '.pane-head')).toBeNull();
+  expect(queueNext(root)).toBeNull();
+  expect(listReads(fetchMock)).toBe(0);
+  vi.unstubAllGlobals();
+});
+
+test('an entry opened directly has no queue and does not read the list', async () => {
+  const fetchMock = queueList();
+  const root = show({ slug: 'base', ...sixLanguages('base') });
+  sideBySide(root);
+  await settle();
+
+  expect($(root, '#pane-de')).not.toBeNull();
+  expect(queueNext(root)).toBeNull();
+  expect(listReads(fetchMock)).toBe(0);
+  vi.unstubAllGlobals();
+});
+
+test('a failed queue read offers a retry instead of saying the queue ended', async () => {
+  let offline = true;
+  const fetchMock = queueList(async () => {
+    if (offline) throw new TypeError('offline');
+    return Response.json({ entries: sixLanguageRows(), locales: SIX });
+  });
+  at('/admin/c/listings/twoMissing?queue=fr&owed=stale');
+  const root = show({ slug: 'twoMissing', ...sixLanguages('twoMissing') });
+  await settle();
+
+  expect(queueNext(root)?.textContent).toContain('Could not find the next entry.');
+  expect(queueNext(root)?.textContent).not.toContain('End of this queue');
+  offline = false;
+  $<HTMLButtonElement>(root, '.queue-next button')?.click();
+  await settle();
+
+  expect(listReads(fetchMock)).toBe(2);
+  expect(nextLink(root)?.getAttribute('href')).toBe(
+    '/admin/c/listings/machine?queue=fr&owed=stale',
+  );
+  vi.unstubAllGlobals();
+});
+
+test('the Content, SEO and History links keep the queue', async () => {
+  queueList();
+  at('/admin/c/listings/structured?queue=fr&owed=stale');
+  const root = show({ slug: 'structured', ...sixLanguages('structured') });
+  await settle();
+
+  expect(
+    $$<HTMLAnchorElement>(root, '.editor-sections a').map((a) => a.getAttribute('href')),
+  ).toEqual([
+    '/admin/c/listings/structured?queue=fr&owed=stale',
+    '/admin/c/listings/structured/seo?queue=fr&owed=stale',
+    '/admin/c/listings/structured/history?queue=fr&owed=stale',
+  ]);
+  vi.unstubAllGlobals();
+});
+
+test('choosing another pane language leaves the queue on its own language', async () => {
+  queueList();
+  at('/admin/c/listings/twoMissing?queue=fr&owed=stale');
+  const root = show({ slug: 'twoMissing', ...sixLanguages('twoMissing') });
+  await settle();
+
+  await choosePaneLanguage(root, 0);
+
+  expect(paneLanguagePick(root)?.textContent).toContain('German');
+  expect(nextLink(root)?.textContent?.trim()).toBe('Next in French');
+  expect(nextLink(root)?.getAttribute('href')).toBe(
+    '/admin/c/listings/machine?queue=fr&owed=stale',
+  );
+  vi.unstubAllGlobals();
 });
 
 test('the take-over dialog exposes the modal boundary it now enforces', async () => {

@@ -36,6 +36,7 @@ let {
   site,
   uiLocale = 'en',
   heading,
+  next,
   onsaved,
   onclose,
   onturnoff,
@@ -65,6 +66,8 @@ let {
   uiLocale?: UiLocale;
   /** Draws the pane's `h2#pane-{locale}` when the editor offers a choice of language there. */
   heading?: Snippet<[string]>;
+  /** The queue's way on to the next entry, when the entry was opened from a filtered list. */
+  next?: Snippet;
   /** The entry keeps `pending`: this column is thrown away on a screen change, its edit is not. */
   onsaved?: (pending: boolean, data?: Data) => void;
   onclose?: () => void;
@@ -172,6 +175,7 @@ const failureDetail = $derived(
       {#if saving}{m.editor_save_saving({}, options)}{:else if failed}{m.editor_save_not_saved({}, options)} {#if fillFailure?.code === 'TRANSLATION_UNCONFIRMED'}<button type="button" class="btn-link" onclick={() => location.reload()}>{m.editor_lock_reload({}, options)}</button>{:else}<button type="button" class="btn-link" onclick={() => fillFailure ? fill(retryPaths) : flush()}>{fillFailure ? m.translation_retry({}, options) : m.editor_save_retry({}, options)}</button>{/if}{:else if isUnsaved}{m.editor_save_unsaved_changes({}, options)}{:else}{m.editor_save_saved({}, options)}{/if}
     </span>
     <span class="spacer"></span>
+    {@render next?.()}
     {#if translator}
       <button class="btn btn-sm btn-fill" type="button" disabled={filling || locked || actionBlocked} onclick={() => fill()}>
         {m.translation_fill_empty({}, options)}
