@@ -5,7 +5,6 @@ import EntryList from '../content/EntryList.svelte';
 import Editor from './Editor.svelte';
 import {
   SIX,
-  SIX_LANGUAGE_SOURCES,
   SIX_LANGUAGE_VARIANTS,
   sixLanguageFiles,
   sixLanguageRows,
@@ -27,15 +26,23 @@ afterEach(() => {
 });
 
 test('every variant resolves to the source it is written in', () => {
+  const resolved = {
+    base: { locale: 'en', recorded: true },
+    twoMissing: { locale: 'en', recorded: true },
+    germanFirst: { locale: 'de', recorded: true },
+    legacy: { locale: 'en', recorded: false },
+    partlyMarked: { locale: 'de', recorded: true },
+    machine: { locale: 'en', recorded: true },
+    untouchedInvalid: { locale: 'en', recorded: true },
+    staleAndPartial: { locale: 'en', recorded: true },
+    sourceDraft: { locale: 'en', recorded: true },
+    structured: { locale: 'en', recorded: true },
+  };
   for (const name of SIX_LANGUAGE_VARIANTS) {
     const { files } = sixLanguageFiles(name);
-    expect([name, entrySource('default', i18n, files)]).toEqual([
-      name,
-      {
-        locale: SIX_LANGUAGE_SOURCES[name],
-        recorded: name !== 'legacy',
-      },
-    ]);
+    const { entry } = sixLanguages(name);
+    expect([name, entrySource('default', i18n, files)]).toEqual([name, resolved[name]]);
+    expect([name, entry.sourceLocale]).toEqual([name, resolved[name].locale]);
   }
 });
 
