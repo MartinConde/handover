@@ -8,6 +8,10 @@ the missing translation is the thing to see.
 A first draft from a machine, and what happens when the source language moves on after a
 translation was made, are [a page of their own](machine-translation.md).
 
+Which language an entry is written in, and changing it, is [The source
+language](source-language.md); what the entry list shows about each language, and working through
+one language entry by entry, is [Translations in the entry list](translation-list.md).
+
 All Handover-owned controls on this screen follow the account's interface language, including
 content-language names, missing/off/stale indicators, the translation column, and the block-drift
 decision panel. Changing the interface language keeps the selected content language, open column,
@@ -127,94 +131,5 @@ the answers change in one go, and the banner goes because the next read has noth
 Changing the interface language while deciding keeps each selected answer and focused control;
 an already-visible changed-entry or apply refusal is rendered again in the new interface language.
 
-## When the files disagree about the source language
-
-Every file of an entry names the language it is written in as `_source`. When those disagree —
-usually because a file was edited or merged outside the CMS — the entry opens on a panel instead
-of its form, and nothing is chosen for you. The panel says which problem it is and what each
-file says:
-
-| The files | The panel |
-|---|---|
-| name two different languages | *Which language is the source?* |
-| name a language the site does not declare | *The source language isn't declared* |
-| name a language the entry has no file in | *The source language has no file* |
-
-Until it is settled the entry cannot be saved, translated, turned off in a language, held,
-hidden, renamed or duplicated, and nothing publishes it; deleting it or discarding its unpublished
-changes still works. The drawer says why: the check reads *The files of this entry disagree about which
-language it is written in*.
-
-There are two ways out. Choose on the panel: *Make one of them the source* lists every language
-the entry has a file in and is offered in, and *Make German the source* writes every file as an
-unpublished change naming German, then opens the entry; translations made from another language
-read as needing a look. Or fix it in the repository — every file's `_source` has to name the same
-language, and that language needs a file (put a deleted one back) — and the entry opens again as
-it was. Changing the interface language keeps the panel and the language chosen on it.
-
-## Changing the language an entry is written in
-
-An entry keeps its source when languages are added, removed or reordered, and opening side by
-side never changes it. Making German the source of an English entry is its own action: **⋯ →
-Change source language…** in the entry's header, drawn on a site with two or more languages for
-an entry with files in two or more. The dialog lists every other language; one that cannot be
-chosen says why — *No file yet*, *Turned off for this entry*, or its problems once it takes the
-source's shared and source-only values. *What happens* spells out, for the language chosen, which
-translations stay up to date and which will need a look. *Make German the source* saves unsaved
-typing first and sends nothing if that fails; the entry then reopens in German with the notice
-*German is now the source. It is on the site when you publish this entry*. The menu entry is
-greyed out with the reason while the languages disagree about the blocks or a save has failed,
-and the whole menu is closed while somebody else has the entry open. If somebody changed the
-entry meanwhile nothing is written and the dialog offers *Reload*; if the answer never arrived,
-editing stays closed until you reload, because the change may have gone through.
-
-The same change is a request of its own
-([`POST …/source`](admin-api-entries.md#changing-the-language-an-entry-is-written-in)), refused
-while German has no file, is turned off, would fail the schema, or holds its own value in a
-field only the source keeps, and while the languages disagree about the blocks. Every file
-becomes an unpublished change and nothing on the site moves until the entry is published, with
-every language going out together. Before that, discarding the entry's changes puts it back.
-German then carries the structure, the shared and source-only values it took from English, and
-its own words; English keeps its words, and machine translation translates from German.
-[Machine translation](machine-translation.md#when-the-source-language-changes) says which
-translations read stale afterwards.
-
 A menu label is the one translated value a machine is never offered: an empty box is not a gap
 but *use the page's own title*, and that title is already translated.
-
-## In the entry list
-
-Each row carries one chip per language in the site's own order: filled where the entry has that
-file, outlined where it has none, struck through where it is not offered in that language, tinted
-where the last build found the translation behind its source, and not drawn at all on a
-one-language site. An entry written in one language only is listed by the words it has, whichever
-language they are in, and opens in that language.
-
-Above four languages a chip each stops reading at a glance, so a row shows how many language files
-exist out of the languages the entry is offered in — `4/5` is *4 of 5 language files created*,
-counting the source and files that are empty or stale, not translations finished — followed by up
-to three chips for the languages still owed (missing or stale) in the site's order, and `+2` when
-more are owed. Hovering the row's languages, or a screen reader, gives every language's state in
-full. Sites with four languages or fewer keep one chip per language.
-
-The **Language** filter in the toolbar narrows the list to the rows a language is still owed in,
-and the filter beside it says which work: **Missing or stale** (the default), **Missing** (no
-file yet) or **Stale** (a translation the last build found behind its source). A language turned
-off for an entry is never owed in it. The second filter is off until a language is chosen. The
-heading counts what is shown, of the total.
-
-The address can set both: `/admin/c/listings?locale=de` opens the list on what German is owed,
-which is where the dashboard's *Show* lands, and `?locale=fr&owed=stale` on the stale French
-translations. `owed` takes `missing` or `stale`; any other value means missing or stale, and a
-language the site does not declare filters nothing.
-
-A row opened from a filtered list starts a queue for that language. The entry opens with the
-language beside the source, on its *Create from …* offer when there is no file yet, and the right
-column's heading has **Next in German**: the next entry further down the list that still owes
-German the chosen work. The queue follows the whole collection in the list's order; the search
-and the live or hidden filter do not carry over. It never goes back to earlier entries, so after
-the last one the heading says *End of this queue*, which is not a claim that nothing above is
-owed. Creating or publishing the translation, the Content, SEO and History tabs, and showing
-another language in the right column all keep the queue and its place. The address carries it as
-`?queue=de&owed=missing`, and a language the site does not declare means no queue. Next saves
-what you typed first, and stays on the entry if that save fails.

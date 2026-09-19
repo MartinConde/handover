@@ -5,7 +5,7 @@
 - [Configuration](configuration.md) — `cms.config.ts`: `collections`, `route`, `index`, `load`; how entry filenames are derived.
 - [Languages](i18n.md) — the `i18n` block, why it has to match `astro.config.mjs`, the folder per language, which fields are translated, and the structure every language shares.
 - [Interface language](interface-language.md) — choosing English or Deutsch for the CMS without changing content language, initial precedence, and save recovery.
-- [Translating](translating.md) — choosing a language, side by side, what a save of a translation writes, making the languages agree.
+- [Translating](translating.md) — choosing a language, side by side, what a save of a translation writes, making the languages agree; then [The source language](source-language.md) — files that disagree about it, changing it — and [Translations in the entry list](translation-list.md) — the language chips, the filters, working through one language.
 - [Machine translation and staleness](machine-translation.md) — the translate buttons, `_machine`, and the marker a moved-on source puts on a field.
 - [Content format](content-format.md) — what the YAML files look like, the reserved `_` keys, `_id` on blocks.
 - [Entry lifecycle](entry-lifecycle.md) — hiding an entry, creating one, renaming and deleting, the redirects those write, and putting a deleted one back.

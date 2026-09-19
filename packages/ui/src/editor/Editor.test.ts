@@ -3496,6 +3496,26 @@ test('a queue opens its language beside the source and Next skips to the next ro
   vi.unstubAllGlobals();
 });
 
+// A link opens a language for this visit; the view the person chose stays theirs.
+test('opening a queue or a language link leaves the saved view as it was', async () => {
+  const key = 'handover:editor-view:v3:/:u1';
+  localStorage.setItem(key, 'none');
+  queueList();
+  at('/admin/c/listings/twoMissing?queue=fr&owed=stale');
+  const root = show({ slug: 'twoMissing', userId: 'u1', ...sixLanguages('twoMissing') });
+  await settle();
+  expect($(root, '#pane-fr')).not.toBeNull();
+  expect(localStorage.getItem(key)).toBe('none');
+  unmount(app);
+
+  at('/admin/c/listings/twoMissing?locale=de');
+  const again = show({ slug: 'twoMissing', userId: 'u1', ...sixLanguages('twoMissing') });
+  await settle();
+  expect($(again, '#pane-de')).not.toBeNull();
+  expect(localStorage.getItem(key)).toBe('none');
+  vi.unstubAllGlobals();
+});
+
 test('a queue for a language with no file opens its create pane, with Next in the pane head', async () => {
   queueList();
   at('/admin/c/listings/twoMissing?queue=es&owed=missing');
@@ -3530,9 +3550,10 @@ test('the queue keeps its place from an entry that is no longer owed the languag
 });
 
 test('the last row owing the language says the queue ends, not that nothing is owed', async () => {
-  queueList();
-  at('/admin/c/listings/sourceConflict?queue=es&owed=owed');
-  const root = show({ slug: 'sourceConflict', ...sixLanguages('base') });
+  // Without the conflict row, which never opens in the editor, `structured` is the last one.
+  queueList(sixLanguageRows().filter((row) => row.id !== 'sourceConflict'));
+  at('/admin/c/listings/structured?queue=es&owed=owed');
+  const root = show({ slug: 'structured', ...sixLanguages('structured') });
   await settle();
 
   expect(nextLink(root)).toBeNull();

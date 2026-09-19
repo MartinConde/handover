@@ -35,7 +35,7 @@ by …*. A row somebody has open right now carries *… is editing*.
 
 **Translation health** — per language, how many entries owe it a file and how many of its
 translations were made from a source that has changed since. *Show* beside a language opens
-the entry list filtered to the rows that owe it ([translating.md](translating.md#in-the-entry-list));
+the entry list filtered to the rows that owe it ([Translations in the entry list](translation-list.md));
 when more than one collection owes it there is one link per list, each named. Not drawn on a
 site that declares one language.
 

@@ -91,7 +91,7 @@ open, since each can be the way out.
 
 Make the files agree in the repository and reopen the entry, or
 [choose a source](#changing-the-language-an-entry-is-written-in). The editor shows what each file
-says in place of the form ([Translating](translating.md#when-the-files-disagree-about-the-source-language)),
+says in place of the form ([The source language](source-language.md#when-the-files-disagree-about-the-source-language)),
 and the pre-publish checks hold the entry back with the error `source-unresolved`.
 
 ### Changing the language an entry is written in

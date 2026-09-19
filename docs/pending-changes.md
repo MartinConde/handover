@@ -62,7 +62,7 @@ about, worst first:
 
 | | |
 |---|---|
-| **Error** | the visitor sees the page broken, or the entry cannot say what it is. Two checks are errors: a picture or a download whose bytes are not in the bucket and not in the library any more, and an entry whose files disagree about the language it is written in ([Translating](translating.md#when-the-files-disagree-about-the-source-language)) |
+| **Error** | the visitor sees the page broken, or the entry cannot say what it is. Two checks are errors: a picture or a download whose bytes are not in the bucket and not in the library any more, and an entry whose files disagree about the language it is written in ([The source language](source-language.md#when-the-files-disagree-about-the-source-language)) |
 | **Warning** | the page says something nobody meant — a link to a page this site has none of, a link to a page that has no file in this language, a picture that has been archived, alt text left empty, a required translation standing blank, a menu item pointing at a page that is gone |
 | **Note** | worth reading before the words go out — a translation made from a version somebody has changed since, a value machine translation filled in that nobody has read, a search title over the length Google shows, no search description, no sharing image, a page hidden for more than 90 days |
 

@@ -70,7 +70,7 @@ file somebody else changed, since the three-way view or Discard is the way out o
 the entry's own drift panel is the way out of the other. `409` with
 `{ "code": "PUBLISH_SOURCE_UNRESOLVED", "error", "paths" }` when a pending file belongs to an
 entry whose files disagree about the language it is written in
-([Translating](translating.md#when-the-files-disagree-about-the-source-language)); the drawer's own check
+([The source language](source-language.md#when-the-files-disagree-about-the-source-language)); the drawer's own check
 normally holds such an entry back before the request is made. In all
 of those cases nothing was written and no row was cleared. A path no collection owns —
 `redirects.yaml`, a global — has no schema to be held to and is never the reason for a `422`.

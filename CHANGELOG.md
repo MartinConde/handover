@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Opening an entry on a language from a link or a queue no longer saves side by side as your
+  view for the entries after it.
+- The translating docs are three pages: Translating, The source language, and Translations in
+  the entry list.
 - An entry opened from a filtered entry list opens that language beside the source, and the
   right column's heading offers **Next in …** to the next entry further down the list that still
   owes it, until *End of this queue*; `?queue=de&owed=missing` in the address carries it.

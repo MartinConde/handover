@@ -271,12 +271,13 @@ function remember(value: string) {
     // A blocked browser preference must never block editing.
   }
 }
-function setBeside(next: Beside) {
+// A link that opens a language is for this visit; only the person's own choice is saved.
+function setBeside(next: Beside, save = true) {
   if (next === 'none' && pageShown) next = 'page';
   chosen = next;
   collapsed = false;
   canvasOpen = false;
-  remember(next);
+  if (save) remember(next);
 }
 function collapse() {
   chosen = undefined;
@@ -1000,7 +1001,7 @@ function fromAddress() {
   if (!field && !requestedLocale && queue && query.get('queue') === queue) {
     leaving(() => {
       if (queue !== entry.sourceLocale) locale = queue;
-      setBeside('language');
+      setBeside('language', false);
     });
     return;
   }
@@ -1010,7 +1011,7 @@ function fromAddress() {
   if (inColumn && shown !== of) {
     leaving(() => {
       locale = of;
-      setBeside('language');
+      setBeside('language', false);
     });
   } else if (!inColumn && alone) {
     leaving(() => {

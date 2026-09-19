@@ -112,7 +112,8 @@ preview**, the page as the site renders it, or **Translate**, the entry in anoth
 ([Translating](translating.md#side-by-side)). **Live preview** is offered to entries with a
 `route`, a [loader](loaders.md), and preview enabled, and is where they open; everything else
 opens with the form alone. Press **Live preview** again to fold the page away and give the form
-the full width. The choice is remembered per browser.
+the full width. The choice is remembered per browser; an entry opened on a language from a link,
+such as a queue from the entry list, shows it side by side without changing that choice.
 
 The page beside the form stays in view while the form scrolls, under one row with its address, the
 device widths and **Preview**. It is for looking at: it scrolls and follows every edit, but clicking
