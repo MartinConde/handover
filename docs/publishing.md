@@ -103,7 +103,8 @@ refuses, holding an entry back, and what happens after the commit — build stat
 are on [Pending changes](pending-changes.md).
 
 An entry whose [source language changed](translating.md#changing-the-language-an-entry-is-written-in)
-has an unpublished change in every language, so all of its files go out together.
+has an unpublished change in every language, so all of its files go out together; until then the
+editor says so above the entry's header.
 
 Both the one-entry confirmation and the pending-changes drawer follow the account's
 [interface language](interface-language.md). A live English/Deutsch switch preserves the exact

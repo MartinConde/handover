@@ -1106,6 +1106,14 @@
   "editor_restored_unpublished": "Sie liegt jetzt als unveröffentlichte Änderungen vor — bis zur Veröffentlichung ist nichts live.",
   "editor_drift_blocked": "Die Sprachen dieses Eintrags stimmen bei den Blöcken nicht überein — die Veröffentlichung bleibt gesperrt, bis das geklärt ist.",
   "entry_source_unresolved": "Die Dateien dieses Eintrags nennen keine gemeinsame Ausgangssprache mehr. Lade ihn neu, um zu sehen, was jede Datei nennt.",
+  "entry_source_target_undeclared": "Diese Sprache ist auf dieser Website nicht eingerichtet und kann daher nicht die Ausgangssprache sein.",
+  "entry_source_unchanged": "Dieser Eintrag ist bereits in dieser Sprache geschrieben. Nichts wurde geändert.",
+  "entry_source_target_missing": "Für diese Sprache hat der Eintrag noch keine Datei. Leg sie an, bevor du sie zur Ausgangssprache machst.",
+  "entry_source_target_off": "Diese Sprache ist für diesen Eintrag ausgeschaltet. Schalte sie ein und leg zuerst ihre Datei an.",
+  "entry_source_revision": "Jemand hat diesen Eintrag geändert, während du gewählt hast. Nichts wurde geändert — lade den Eintrag neu und versuch es noch einmal.",
+  "entry_source_drift": "Die Sprachen dieses Eintrags stimmen bei den Blöcken nicht überein — kläre das zuerst. Nichts wurde geändert.",
+  "entry_source_only_conflict": "Diese Sprache hat eigene Werte in Feldern, die nur die Ausgangssprache führt. Leere sie zuerst — nichts wurde geändert.",
+  "entry_source_target_invalid": "Als Ausgangssprache würde diese Sprache die Prüfungen der Website nicht bestehen. Behebe zuerst ihre Probleme — nichts wurde geändert.",
   "source_recovery_conflict_blocked": "Die Dateien dieses Eintrags nennen verschiedene Ausgangssprachen — bearbeiten oder veröffentlichen geht erst, wenn das geklärt ist.",
   "source_recovery_conflict_title": "Welche Sprache ist die Ausgangssprache?",
   "source_recovery_conflict_intro": "Jede Sprachdatei nennt die Ausgangssprache des Eintrags, und diese stimmen nicht überein. Meist wurde eine Datei außerhalb des CMS bearbeitet oder zusammengeführt. Nichts wird für dich entschieden.",
@@ -1120,6 +1128,98 @@
   "source_recovery_file_silent": "Die Datei für {file} nennt nichts",
   "source_recovery_hint_before": "Im Repository beheben: In jeder Datei muss",
   "source_recovery_hint_after": "dieselbe Sprache nennen, und für diese Sprache muss es eine Datei geben.",
+  "source_recovery_missing_choose": "Andernfalls wähle eine neue Ausgangssprache.",
+  "source_recovery_hint_or": "Oder im Repository beheben: In jeder Datei muss",
+  "editor_change_source": "Ausgangssprache ändern …",
+  "editor_change_source_sub": "{language} ist die Ausgangssprache: Dort werden Blöcke hinzugefügt und verschoben, und Übersetzen arbeitet von ihr aus.",
+  "editor_change_source_drift": "Die Sprachen stimmen bei den Blöcken nicht überein — kläre das zuerst",
+  "editor_change_source_unsaved": "Deine letzte Änderung konnte nicht gespeichert werden — das muss zuerst klappen",
+  "editor_source_changed": "{language} ist jetzt die Ausgangssprache. Auf der Website gilt das, sobald du diesen Eintrag veröffentlichst — jede Sprachdatei trägt die Änderung.",
+  "source_change_title": "Ausgangssprache ändern",
+  "source_change_intro": "In der Ausgangssprache werden Blöcke hinzugefügt, verschoben und entfernt, und von ihr aus arbeiten Übersetzen und Vorausfüllen.",
+  "source_change_is_now": "ist jetzt die Ausgangssprache.",
+  "source_change_legend": "Neue Ausgangssprache",
+  "source_change_up_to_date": "Auf dem Stand von {language}",
+  "source_change_behind": "{language} hat sich seit der Übersetzung geändert",
+  "source_change_from_other": "Aus {language} übersetzt",
+  "source_change_unmarked": "Nicht als Übersetzung aus {language} vermerkt",
+  "source_change_no_file": "Noch keine Datei",
+  "source_change_off": "Für diesen Eintrag ausgeschaltet",
+  "source_change_problems": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} Problem — erst beheben",
+        "countPlural=other": "{count} Probleme — erst beheben"
+      }
+    }
+  ],
+  "source_change_warn_behind": "{target} wurde aus einem älteren Stand von {source} übersetzt, daher ist nicht vermerkt, dass es jetzt zu {source} passt.",
+  "source_change_warn_unmarked": "{target} ist nicht als Übersetzung aus {source} vermerkt, daher ist nicht vermerkt, dass es zu {source} passt.",
+  "source_change_what": "Was passiert",
+  "source_change_becomes": "{language} wird die Ausgangssprache. Der Text darin bleibt genau, wie er ist.",
+  "source_change_old_up_to_date": "{source} behält jedes Wort und wird eine Übersetzung aus {language}, auf deren Stand.",
+  "source_change_so_does": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "Ebenso {languages}.",
+        "countPlural=other": "Ebenso {languages}."
+      }
+    }
+  ],
+  "source_change_still_behind": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{languages} war schon nicht mehr auf dem Stand von {source}. Die Markierung als prüfbedürftig bleibt, jetzt gegenüber {language}.",
+        "countPlural=other": "{languages} waren schon nicht mehr auf dem Stand von {source}. Die Markierung als prüfbedürftig bleibt, jetzt gegenüber {language}."
+      }
+    }
+  ],
+  "source_change_now_stale": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{languages} behält jedes Wort und gilt gegenüber {language} als prüfbedürftig, bis jemand neu übersetzt.",
+        "countPlural=other": "{languages} behalten jedes Wort und gelten gegenüber {language} als prüfbedürftig, bis jemand neu übersetzt."
+      }
+    }
+  ],
+  "source_change_unrecorded": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{languages} behält jedes Wort. Nichts vermerkt, dass es zu {language} passt.",
+        "countPlural=other": "{languages} behalten jedes Wort. Nichts vermerkt, dass sie zu {language} passen."
+      }
+    }
+  ],
+  "source_change_source_only": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{fields} gehört nur zur Ausgangssprache, daher bekommt {language} den Wert aus {source}. {source} behält seine Kopie, die nicht mehr angezeigt wird.",
+        "countPlural=other": "{fields} gehören nur zur Ausgangssprache, daher bekommt {language} die Werte aus {source}. {source} behält seine Kopien, die nicht mehr angezeigt werden."
+      }
+    }
+  ],
+  "source_change_machine": "Die Markierungen für maschinelle Übersetzung bleiben, wo sie sind, in jeder Sprache.",
+  "source_change_hint": "Auf der Website ändert sich nichts, bis du diesen Eintrag veröffentlichst. Jede Sprachdatei trägt die Änderung, und sie werden gemeinsam veröffentlicht.",
+  "source_change_confirm": "{language} zur Ausgangssprache machen",
+  "source_change_sending": "Wird geändert …",
+  "source_change_reload": "Neu laden",
+  "source_change_save_failed": "Deine letzte Änderung konnte nicht gespeichert werden. Nichts wurde geändert.",
+  "source_change_response_lost": "Es ließ sich nicht bestätigen, ob die Ausgangssprache geändert wurde. Lade den Eintrag neu, bevor du es noch einmal versuchst.",
+  "source_change_reload_failed": "Die Ausgangssprache wurde geändert, aber der Eintrag ließ sich nicht neu lesen. Lade ihn neu, bevor du weitermachst.",
+  "source_recovery_legend": "Eine davon zur Ausgangssprache machen",
+  "source_recovery_stale_note": "Übersetzungen aus einer anderen Sprache werden als prüfbedürftig angezeigt.",
   "editor_conflict_guidance": "Jemand hat diesen Eintrag nach dem Öffnen im Repository geändert. Öffne die unveröffentlichten Änderungen, um den Konflikt Feld für Feld zu lösen oder deine Änderungen zu verwerfen und den aktuellen Stand zu übernehmen.",
   "editor_more_actions": "Weitere Aktionen",
   "editor_rename": "Umbenennen",

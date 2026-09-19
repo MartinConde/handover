@@ -151,6 +151,8 @@ const editing = $derived(
 const editingAt = $derived(editing ? `${editing.collection}/${editing.slug}` : '');
 /** Kept here because the reload after a restore remounts the editor. */
 let restored = $state<{ entry: string; date: string }>();
+/** Likewise the language an entry was just made to be written in. */
+let sourceChanged = $state<{ entry: string; locale: string }>();
 const openEntry = $derived.by(() => {
   // Read on purpose: a reload means the entry's files moved under it.
   void reload;
@@ -792,12 +794,28 @@ const initial = $derived(
           }}
           onrestored={(date) => (restored = { entry: editingAt, date })}
           restored={restored?.entry === editingAt ? restored.date : undefined}
+          onsourcechanged={(locale) => (sourceChanged = { entry: editingAt, locale })}
+          sourceChanged={sourceChanged?.entry === editingAt ? sourceChanged.locale : undefined}
           onmode={(mode) => (editorMode = mode)}
           ontitle={(read) => (titled = { entry: editingAt, read })}
         />
       {:catch error}
         {#if error && typeof error === 'object' && 'source' in error}
-          <main class="main main-editor"><SourceRecovery problem={error.source as SourceProblem} {uiLocale} /></main>
+          <main class="main main-editor">
+            <SourceRecovery
+              problem={error.source as SourceProblem}
+              collection={editing.collection}
+              slug={editing.slug}
+              {uiLocale}
+              onchosen={async (locale) => {
+                sourceChanged = { entry: editingAt, locale };
+                invalidateEntryDirectory();
+                await loadPending();
+                reload += 1;
+              }}
+              onreload={() => (reload += 1)}
+            />
+          </main>
         {:else}
           {@const failure = entryFailure(error)}
           <main class="main"><p class="notice notice-danger" role="alert">{text(failure)}{#if failure.detail}<span class="technical-detail">{m.common_technical_detail({ detail: failure.detail }, options)}</span>{/if}</p></main>

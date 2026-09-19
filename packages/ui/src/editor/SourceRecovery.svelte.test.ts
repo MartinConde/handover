@@ -1,5 +1,5 @@
 import { flushSync, mount, unmount } from 'svelte';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 import SourceRecoveryLocaleFixture from './SourceRecoveryLocaleFixture.svelte';
 
 // Not testing: the shell around it, which App.svelte.test.ts opens it in.
@@ -24,11 +24,21 @@ const MISSING = {
 } as const;
 
 let app: ReturnType<typeof mount>;
-type Problem = typeof CONFLICT | typeof UNDECLARED | typeof MISSING;
-const show = (problem: Problem, initialUiLocale: 'en' | 'de') => {
+type Problem = {
+  code: (typeof CONFLICT | typeof UNDECLARED | typeof MISSING)['code'];
+  marks: Readonly<Record<string, string>>;
+  files: readonly string[];
+  offered: readonly string[];
+};
+const show = (
+  problem: Problem,
+  initialUiLocale: 'en' | 'de',
+  over: Record<string, unknown> = {},
+) => {
   app = mount(SourceRecoveryLocaleFixture, {
     target: document.body,
     props: {
+      ...over,
       problem: {
         ...problem,
         marks: { ...problem.marks },
@@ -126,7 +136,7 @@ test.each([
         'This entry’s source language has no file — it can’t be edited or published until that is settled.',
       title: 'The source language has no file',
       intro:
-        'Every file says Spanish is the source, and there is no Spanish file. If it was deleted by mistake, put it back in the repository.',
+        'Every file says Spanish is the source, and there is no Spanish file. If it was deleted by mistake, put it back in the repository. Otherwise choose a new source.',
       files: ['DE The German file says Spanish', 'EN The English file says Spanish'],
     },
   ],
@@ -139,7 +149,7 @@ test.each([
         'Die Ausgangssprache dieses Eintrags hat keine Datei — bearbeiten oder veröffentlichen geht erst, wenn das geklärt ist.',
       title: 'Die Ausgangssprache hat keine Datei',
       intro:
-        'Jede Datei nennt Spanisch als Ausgangssprache, und es gibt keine Datei für Spanisch. Wurde sie versehentlich gelöscht, stell sie im Repository wieder her.',
+        'Jede Datei nennt Spanisch als Ausgangssprache, und es gibt keine Datei für Spanisch. Wurde sie versehentlich gelöscht, stell sie im Repository wieder her. Andernfalls wähle eine neue Ausgangssprache.',
       files: [
         'DE Die Datei für Deutsch nennt Spanisch',
         'EN Die Datei für Englisch nennt Spanisch',
@@ -153,16 +163,82 @@ test.each([
 test('the repository guidance names the key every file has to agree on', () => {
   show(CONFLICT, 'en');
   expect(document.body.querySelector('.source-recovery .hint')?.textContent).toBe(
-    'Fix it in the repository: every file’s _source has to name the same language, and that language needs a file.',
+    'Or fix it in the repository: every file’s _source has to name the same language, and that language needs a file.',
   );
 });
 
-test('switching the interface language keeps the panel and retranslates it', () => {
+test('switching the interface language keeps the panel and the chosen language', () => {
   show(CONFLICT, 'en');
+  document.body.querySelector<HTMLInputElement>('#source-recovery-fr')?.click();
+  flushSync();
   document.body.querySelector<HTMLButtonElement>('[data-locale-switch]')?.click();
   flushSync();
   expect(document.body.querySelector('.source-recovery h2')?.textContent).toBe(
     'Welche Sprache ist die Ausgangssprache?',
   );
   expect(document.body.querySelectorAll('.source-files li')).toHaveLength(4);
+  expect(document.body.querySelector<HTMLInputElement>('#source-recovery-fr')?.checked).toBe(true);
+});
+
+test('a source is chosen among the offered languages with a file, and the choice is sent', async () => {
+  sessionStorage.setItem('handover-tab', 'tab-1');
+  const fetchMock = vi.fn(async () => Response.json({ source: 'en' }));
+  vi.stubGlobal('fetch', fetchMock);
+  const chosen = vi.fn();
+  show({ ...CONFLICT, offered: ['de', 'en', 'fr'] }, 'en', { onchosen: chosen });
+  expect(
+    Array.from(document.body.querySelectorAll('.source-recovery .choice'), (c) =>
+      c.textContent?.replace(/\s+/g, ' ').trim(),
+    ),
+  ).toEqual(['DE German', 'EN English', 'FR French']);
+  document.body.querySelector<HTMLInputElement>('#source-recovery-en')?.click();
+  flushSync();
+  const make = document.body.querySelector<HTMLButtonElement>('.source-recovery .btn-primary');
+  expect(make?.textContent?.trim()).toBe('Make English the source');
+  make?.click();
+  await vi.waitFor(() => expect(chosen).toHaveBeenCalledExactlyOnceWith('en'));
+
+  expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+    '/admin/api/entries/listings/muehlenhaus/source',
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ locale: 'en', tab: 'tab-1' }),
+    },
+  );
+  vi.unstubAllGlobals();
+});
+
+test('a lost answer to the choice offers only Reload', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () =>
+        new Response('Connection lost', {
+          status: 503,
+          headers: {
+            'x-handover-request-uncertain': 'true',
+            'x-handover-error-code': 'CONNECTION_LOST',
+          },
+        }),
+    ),
+  );
+  const chosen = vi.fn();
+  const reloaded = vi.fn();
+  show(CONFLICT, 'en', { onchosen: chosen, onreload: reloaded });
+  document.body.querySelector<HTMLButtonElement>('.source-recovery .btn-primary')?.click();
+  await vi.waitFor(() => expect(document.body.querySelector('[role="alert"]')).not.toBeNull());
+
+  expect(
+    document.body.querySelector('[role="alert"]')?.textContent?.replace(/\s+/g, ' ').trim(),
+  ).toBe(
+    'It could not be confirmed whether the source changed. Reload the entry before trying again. Reload',
+  );
+  expect(
+    document.body.querySelector<HTMLButtonElement>('.source-recovery .btn-primary')?.disabled,
+  ).toBe(true);
+  expect(chosen).not.toHaveBeenCalled();
+  document.body.querySelector<HTMLButtonElement>('[role="alert"] button')?.click();
+  expect(reloaded).toHaveBeenCalledOnce();
+  vi.unstubAllGlobals();
 });

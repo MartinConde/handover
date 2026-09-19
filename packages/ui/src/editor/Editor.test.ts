@@ -2829,6 +2829,245 @@ test('the header menu is closed while somebody else holds the entry', async () =
   vi.unstubAllGlobals();
 });
 
+// Entry-editor mockup 17: the source is changed on purpose, from the entry's own menu.
+const openMenu = async (root: ParentNode) => {
+  await tick();
+  $<HTMLButtonElement>(root, '[aria-label="More actions"]')?.click();
+  flushSync();
+};
+const changeSourceItem = (root: ParentNode) =>
+  $$<HTMLButtonElement>(root, '[role="menuitem"]').find((b) =>
+    b.textContent?.includes('Change source language'),
+  );
+const sourceCalls = (mock: { mock: { calls: unknown[][] } }) =>
+  mock.mock.calls.filter((call) => String(call[0]).endsWith('/source'));
+/** The source route answers `answer`; every other request is the autosave's. */
+const sourcing = (answer: () => Response) =>
+  vi.fn(async (url: string, _init?: RequestInit) =>
+    isLock(url)
+      ? Response.json(HELD)
+      : isLint(url)
+        ? Response.json({ results: [] })
+        : url.endsWith('/source')
+          ? answer()
+          : Response.json({ updated_at: 1755864000000, pending: true, problems: [] }),
+  );
+const chooseSource = async (root: ParentNode) => {
+  await openMenu(root);
+  // A real click focuses the item, which the menu then removes.
+  changeSourceItem(root)?.focus();
+  changeSourceItem(root)?.click();
+  await vi.waitFor(() => expect($(root, '.source-effects')).not.toBeNull());
+};
+const withRevisions = { ...bilingual, revisions: { en: 'rev-en', de: 'rev-de' } };
+
+test('Change source language is offered only with two languages and two files', async () => {
+  vi.stubGlobal('fetch', autosaved());
+  const one = show();
+  await openMenu(one);
+  expect(changeSourceItem(one)).toBeUndefined();
+  unmount(app);
+  document.body.innerHTML = '';
+
+  const single = show({ entry: { ...bilingual, translations: {} } });
+  await openMenu(single);
+  expect(changeSourceItem(single)).toBeUndefined();
+  unmount(app);
+  document.body.innerHTML = '';
+
+  const two = show({ entry: bilingual });
+  await openMenu(two);
+  expect(changeSourceItem(two)?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+    'Change source language… English is the source: blocks are added and moved there, and Translate works from it.',
+  );
+  expect(changeSourceItem(two)?.disabled).toBe(false);
+  vi.unstubAllGlobals();
+});
+
+test('languages that disagree about blocks disable Change source language with the reason', async () => {
+  vi.stubGlobal('fetch', autosaved());
+  const root = show({
+    entry: {
+      ...bilingual,
+      drift: [
+        {
+          path: 'blocks[_id=z9y8x7w6]',
+          type: 'quote',
+          in: ['de'],
+          expected: ['en', 'de'],
+          values: { de: ['Ein seltener Fund.'] },
+        },
+      ],
+    },
+  });
+  await openMenu(root);
+  expect(changeSourceItem(root)?.disabled).toBe(true);
+  expect($(root, '#change-source-sub')?.textContent).toBe(
+    'The languages disagree about blocks — settle that first',
+  );
+  vi.unstubAllGlobals();
+});
+
+test('a save that failed first sends nothing, then disables Change source language', async () => {
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) =>
+    isLock(url)
+      ? Response.json(HELD)
+      : init?.method === 'PUT'
+        ? new Response('', { status: 500 })
+        : Response.json({ source: 'de' }),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: withRevisions });
+  type(root, 'input#f-title', 'Typed before the change');
+  await chooseSource(root);
+  $<HTMLButtonElement>(root, '.source-dialog .btn-primary')?.click();
+  await settled();
+
+  expect(sourceCalls(fetchMock)).toHaveLength(0);
+  expect($(root, '.source-dialog [role="alert"]')?.textContent?.trim()).toBe(
+    'Your last change could not be saved. Nothing was changed.',
+  );
+  $<HTMLButtonElement>(root, '.source-dialog .actions .btn')?.click();
+  flushSync();
+  await openMenu(root);
+  expect(changeSourceItem(root)?.disabled).toBe(true);
+  expect($(root, '#change-source-sub')?.textContent).toBe(
+    'Your last change could not be saved — that has to work first',
+  );
+  vi.unstubAllGlobals();
+});
+
+test('a change sends the language and revisions, then reloads once and asks for the notice', async () => {
+  const fetchMock = sourcing(() => Response.json({ source: 'de' }));
+  vi.stubGlobal('fetch', fetchMock);
+  const reloaded = vi.fn();
+  const changed = vi.fn();
+  const root = show({ entry: withRevisions, onreload: reloaded, onsourcechanged: changed });
+  await chooseSource(root);
+  expect($(root, '.source-dialog .btn-primary')?.textContent?.trim()).toBe(
+    'Make German the source',
+  );
+  $<HTMLButtonElement>(root, '.source-dialog .btn-primary')?.click();
+  await settled();
+
+  expect(sourceCalls(fetchMock)).toEqual([
+    [
+      '/admin/api/entries/listings/seaview-cottage/source',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          locale: 'de',
+          tab: 'tab-1',
+          revisions: { en: 'rev-en', de: 'rev-de' },
+        }),
+      },
+    ],
+  ]);
+  expect(changed).toHaveBeenCalledExactlyOnceWith('de');
+  expect(reloaded).toHaveBeenCalledOnce();
+  vi.unstubAllGlobals();
+});
+
+test('a concurrent change is refused with Reload and editing stays open', async () => {
+  const fetchMock = sourcing(() =>
+    Response.json(
+      { code: 'ENTRY_SOURCE_REVISION', error: 'This entry changed since it was opened.' },
+      { status: 409, headers: { 'x-handover-error-code': 'ENTRY_SOURCE_REVISION' } },
+    ),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const reloaded = vi.fn();
+  const root = show({ entry: withRevisions, onreload: reloaded });
+  await chooseSource(root);
+  $<HTMLButtonElement>(root, '.source-dialog .btn-primary')?.click();
+  await settled();
+
+  expect(reloaded).not.toHaveBeenCalled();
+  expect($(root, '.source-dialog [role="alert"]')?.textContent).toContain(
+    'Somebody changed this entry while you were choosing.',
+  );
+  expect($<HTMLFieldSetElement>(root, '.entry-body > .form > fieldset')?.disabled).toBe(false);
+  $<HTMLButtonElement>(root, '.source-dialog [role="alert"] button')?.click();
+  expect(reloaded).toHaveBeenCalledOnce();
+  vi.unstubAllGlobals();
+});
+
+test('a lost answer keeps editing closed and offers only Reload', async () => {
+  const fetchMock = sourcing(
+    () =>
+      new Response('Connection lost', {
+        status: 503,
+        headers: {
+          'x-handover-request-uncertain': 'true',
+          'x-handover-error-code': 'CONNECTION_LOST',
+        },
+      }),
+  );
+  vi.stubGlobal('fetch', fetchMock);
+  const reloaded = vi.fn();
+  const root = show({ entry: withRevisions, onreload: reloaded });
+  await chooseSource(root);
+  $<HTMLButtonElement>(root, '.source-dialog .btn-primary')?.click();
+  await settled();
+
+  expect(reloaded).not.toHaveBeenCalled();
+  expect($(root, '.source-dialog [role="alert"]')?.textContent?.trim()).toBe(
+    'It could not be confirmed whether the source changed. Reload the entry before trying again. Reload',
+  );
+  expect($(root, '.source-dialog .actions')).toBeNull();
+  expect($<HTMLFieldSetElement>(root, '.entry-body > .form > fieldset')?.disabled).toBe(true);
+  $<HTMLButtonElement>(root, '.source-dialog [role="alert"] button')?.click();
+  expect(reloaded).toHaveBeenCalledOnce();
+  vi.unstubAllGlobals();
+});
+
+test('after the change a notice says it waits for the entry to publish', () => {
+  vi.stubGlobal('fetch', autosaved());
+  const german = { ...bilingual, sourceLocale: 'de', pending: ['en', 'de'] };
+  const root = show({ entry: german, sourceChanged: 'de' });
+  expect($(root, '.lock-banner[role="status"]')?.textContent).toBe(
+    'German is now the source. It is on the site when you publish this entry — every language file carries the change.',
+  );
+  unmount(app);
+  document.body.innerHTML = '';
+
+  const published = show({ entry: { ...german, pending: [] }, sourceChanged: 'de' });
+  expect($(published, '.lock-banner[role="status"]')).toBeNull();
+  vi.unstubAllGlobals();
+});
+
+test('Escape closes the source dialog and gives focus back to the menu button', async () => {
+  vi.stubGlobal('fetch', autosaved());
+  const root = show({ entry: bilingual });
+  $<HTMLButtonElement>(root, '[aria-label="More actions"]')?.focus();
+  await chooseSource(root);
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  flushSync();
+
+  expect($(root, '.source-dialog')).toBeNull();
+  expect(document.activeElement).toBe($(root, '[aria-label="More actions"]'));
+  vi.unstubAllGlobals();
+});
+
+test('side by side and creating a language never ask to change the source', async () => {
+  const fetchMock = posted();
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show({ entry: missing });
+  $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
+  flushSync();
+  $$<HTMLButtonElement>(root, '[aria-label="Language"] button')[1]?.click();
+  flushSync();
+  $<HTMLButtonElement>(root, 'button.btn-primary.btn-create')?.click();
+  await tick();
+
+  expect(fetchMock).toHaveBeenCalledWith('/admin/api/drafts/listings/seaview-cottage/de', {
+    method: 'POST',
+  });
+  expect(sourceCalls(fetchMock)).toHaveLength(0);
+  vi.unstubAllGlobals();
+});
+
 // The SEO field is drawn on its own tab only, so no screen carries two boxes with one id.
 const withSeo = {
   ...entry,

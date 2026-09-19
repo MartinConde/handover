@@ -84,6 +84,14 @@ const KNOWN_CODES = new Set([
   'ENTRY_SOURCE_CONFLICT',
   'ENTRY_SOURCE_UNDECLARED',
   'ENTRY_SOURCE_MISSING',
+  'ENTRY_SOURCE_TARGET_UNDECLARED',
+  'ENTRY_SOURCE_UNCHANGED',
+  'ENTRY_SOURCE_TARGET_MISSING',
+  'ENTRY_SOURCE_TARGET_OFF',
+  'ENTRY_SOURCE_REVISION',
+  'ENTRY_SOURCE_DRIFT',
+  'ENTRY_SOURCE_ONLY_CONFLICT',
+  'ENTRY_SOURCE_TARGET_INVALID',
   'REDIRECT_NOT_FOUND',
   'REDIRECT_MANAGED',
   'PUBLISH_INCOMPLETE',
@@ -309,6 +317,28 @@ export function messageText(message: UiMessage, locale: UiLocale): string {
     case 'ENTRY_SOURCE_UNDECLARED':
     case 'ENTRY_SOURCE_MISSING':
       return m.entry_source_unresolved({}, options);
+    case 'ENTRY_SOURCE_TARGET_UNDECLARED':
+      return m.entry_source_target_undeclared({}, options);
+    case 'ENTRY_SOURCE_UNCHANGED':
+      return m.entry_source_unchanged({}, options);
+    case 'ENTRY_SOURCE_TARGET_MISSING':
+      return m.entry_source_target_missing({}, options);
+    case 'ENTRY_SOURCE_TARGET_OFF':
+      return m.entry_source_target_off({}, options);
+    case 'ENTRY_SOURCE_REVISION':
+      return m.entry_source_revision({}, options);
+    case 'ENTRY_SOURCE_DRIFT':
+      return m.entry_source_drift({}, options);
+    case 'ENTRY_SOURCE_ONLY_CONFLICT':
+      return m.entry_source_only_conflict({}, options);
+    case 'ENTRY_SOURCE_TARGET_INVALID':
+      return m.entry_source_target_invalid({}, options);
+    case 'SOURCE_CHANGE_SAVE_FAILED':
+      return m.source_change_save_failed({}, options);
+    case 'SOURCE_CHANGE_RESPONSE_LOST':
+      return m.source_change_response_lost({}, options);
+    case 'SOURCE_CHANGE_RELOAD_FAILED':
+      return m.source_change_reload_failed({}, options);
     case 'REDIRECT_NOT_FOUND':
       return m.redirect_not_found({}, options);
     case 'REDIRECT_MANAGED':

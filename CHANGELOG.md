@@ -46,6 +46,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `ENTRY_SOURCE_REVISION`, `ENTRY_SOURCE_DRIFT`, `ENTRY_SOURCE_ONLY_CONFLICT` or
   `ENTRY_SOURCE_TARGET_INVALID`. On an entry whose files disagree about `_source`, the same route
   chooses one. New activity kind `entry-source`.
+- The entry's **⋯** menu gains **Change source language…** on an entry with files in two or
+  more languages. The dialog says why a language cannot be chosen and what happens to each
+  translation, saves unsaved typing first, and after the change the entry reopens with a notice
+  that it goes live when the entry publishes. The panel for files that disagree about `_source`
+  now offers *Make German the source* for each language with a file. Every refusal of the
+  change reads in the interface language.
 - Join the content form and live preview into one workspace, reduce nested field padding, and refresh the canvas toolbar, structure panel, inspector, and stage.
 
 - Redirects is laid out like the other lists: title, rule count and **Add redirect** on one

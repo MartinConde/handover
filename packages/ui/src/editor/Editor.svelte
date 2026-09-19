@@ -44,6 +44,7 @@ import {
   type StructuralSaveEnvelope,
 } from './entry-session.svelte';
 import Fields from './fields/Fields.svelte';
+import SourceChange from './SourceChange.svelte';
 import { classifyDraftSaveRefusal } from './save';
 import Translation from './Translation.svelte';
 
@@ -63,6 +64,8 @@ let {
   onpublished,
   onrestored,
   restored,
+  onsourcechanged,
+  sourceChanged,
   site,
   uiLocale = 'en',
   onmode,
@@ -151,6 +154,10 @@ let {
   onrestored?: (date: string) => void;
   /** The date of the version the unpublished changes were restored from, while they wait. */
   restored?: string;
+  /** The source was changed on purpose; the shell remembers the language past the reload. */
+  onsourcechanged?: (locale: string) => void;
+  /** The language this entry was just made to be written in, while that waits to publish. */
+  sourceChanged?: string;
   /** Lets the application shell collapse its navigation only for full-width Canvas. */
   onmode?: (mode: EditorMode) => void;
   /** Hands the shell a live read of the title for its top-bar breadcrumb. */
@@ -774,6 +781,76 @@ function startDeleting() {
   deleting = true;
 }
 
+// Every language with a file: the source always, the rest once loaded.
+const present = $derived(
+  entry.locales.filter((of) => of === entry.sourceLocale || entrySession.hasSnapshot(of)),
+);
+const saveBroken = $derived(present.some((of) => entrySession.saveState(of).phase === 'failed'));
+const sourceBlocked = $derived(
+  entry.drift.length
+    ? m.editor_change_source_drift({}, options)
+    : saveBroken
+      ? m.editor_change_source_unsaved({}, options)
+      : undefined,
+);
+let changingSource = $state(false);
+let sendingSource = $state(false);
+let sourceFailure = $state<UiMessage>();
+let sourceFiles = $state<Record<string, Data>>({});
+
+function openSourceChange() {
+  rememberActionTrigger();
+  moreMenu = false;
+  sourceFailure = undefined;
+  sourceFiles = Object.fromEntries(
+    present.map((of) => [of, $state.snapshot(entrySession.snapshot(of))]),
+  );
+  changingSource = true;
+}
+
+async function changeSourceTo(to: string) {
+  sendingSource = true;
+  sourceFailure = undefined;
+  let res: Response | undefined;
+  const outcome = await entrySession.authoritativeChange(
+    async () => {
+      // Read after the drain, which is what moves each language's revision on.
+      const revisions = Object.fromEntries(
+        entry.locales.flatMap((of) => {
+          const revision = entrySession.revision(of);
+          return revision ? [[of, revision]] : [];
+        }),
+      );
+      res = await fetch(`/admin/api/entries/${collection}/${slug}/source`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ locale: to, tab, revisions }),
+      });
+      if (uncertainResponse(res))
+        throw new TypeError('The source change response was not confirmed.');
+      return res.ok;
+    },
+    async (outcome) => {
+      // Unconfirmed: this session stays closed and only the dialog's Reload goes on from here.
+      if (outcome === 'uncertain') return;
+      onsourcechanged?.(to);
+      await (onreload ? onreload() : onchanged());
+    },
+  );
+  sendingSource = false;
+  if (outcome.ok) return;
+  if (outcome.reason === 'save') sourceFailure = { code: 'SOURCE_CHANGE_SAVE_FAILED' };
+  else if (outcome.reason === 'uncertain') sourceFailure = { code: 'SOURCE_CHANGE_RESPONSE_LOST' };
+  else if (outcome.reason === 'reload') sourceFailure = { code: 'SOURCE_CHANGE_RELOAD_FAILED' };
+  else if (res && !res.ok) {
+    const refusal = await classifyDraftSaveRefusal(res.clone());
+    if (refusal.kind === 'lock') {
+      changingSource = false;
+      loseLock(refusal.lock);
+    } else sourceFailure = await retainedFailure(res, 'ENTRY_ACTION_FAILED');
+  } else sourceFailure = { code: 'ENTRY_ACTION_FAILED' };
+}
+
 // A 409 body is the server's own sentence, which reads better than a generic one.
 async function act(url: string, init: RequestInit) {
   if (!(await flush())) return undefined;
@@ -1256,6 +1333,8 @@ async function saveAddress() {
     </div>
   {:else if entry.drift.length}
     <div class="lock-banner is-drift">{m.editor_drift_blocked({}, options)}</div>
+  {:else if sourceChanged === entry.sourceLocale && entry.pending.length}
+    <div class="lock-banner" role="status">{m.editor_source_changed({ language: language(entry.sourceLocale) }, options)}</div>
   {/if}
   <header class={['entry-header', { 'is-held': held }]} bind:offsetHeight={headerHeight}>
     <div class="heading-row">
@@ -1382,8 +1461,16 @@ async function saveAddress() {
               onclick={() => (moreMenu = !moreMenu)}
             ><svg viewBox="0 0 18 18" aria-hidden="true"><circle cx="4" cy="9" r="1.25" /><circle cx="9" cy="9" r="1.25" /><circle cx="14" cy="9" r="1.25" /></svg></button>
             {#if moreMenu}
-              <div class="menu" role="menu" aria-label={m.editor_more_actions({}, options)}>
+              <div class={['menu', { 'source-menu': many && present.length > 1 }]} role="menu" aria-label={m.editor_more_actions({}, options)}>
                 <button type="button" role="menuitem" onclick={openRename}>{m.editor_rename({}, options)}</button>
+                {#if many && present.length > 1}
+                  <hr />
+                  <button type="button" role="menuitem" aria-describedby="change-source-sub" disabled={sourceBlocked !== undefined} onclick={openSourceChange}>
+                    {m.editor_change_source({}, options)}
+                    <span class="sub" id="change-source-sub">{sourceBlocked ?? m.editor_change_source_sub({ language: language(entry.sourceLocale) }, options)}</span>
+                  </button>
+                  <hr />
+                {/if}
                 <button type="button" role="menuitem" onclick={() => { if (hidden) { moreMenu = false; setStatus(false); } else startHiding(); }}>
                   {hidden ? m.editor_show({}, options) : m.editor_hide({}, options)}
                 </button>
@@ -1731,6 +1818,24 @@ async function saveAddress() {
       returnTo={actionTrigger}
       onconfirm={(target: Target) => setStatus(true, target)}
       onclose={() => (hiding = false)}
+    />
+  {/if}
+  {#if changingSource}
+    <SourceChange
+      locales={entry.locales}
+      source={entry.sourceLocale}
+      files={sourceFiles}
+      offered={entry.offered}
+      stale={entry.stale}
+      fields={shownForm.fields}
+      blocks={shownForm.blocks}
+      {uiLocale}
+      sending={sendingSource}
+      failure={sourceFailure}
+      returnTo={actionTrigger}
+      onconfirm={changeSourceTo}
+      onclose={() => (changingSource = false)}
+      onreload={() => void (onreload ? onreload() : onchanged())}
     />
   {/if}
   {#if renaming}

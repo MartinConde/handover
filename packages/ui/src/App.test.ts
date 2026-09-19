@@ -650,6 +650,59 @@ test('an entry whose files disagree about their source opens the recovery panel,
   expect(root.querySelector('main [role="alert"]')).toBeNull();
 });
 
+test('choosing a source on the recovery panel opens the entry with the notice', async () => {
+  let chosen = false;
+  const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+    if (url === '/admin/api/entries/pages/home/source' && init?.method === 'POST') {
+      chosen = true;
+      return Response.json({ source: 'de' });
+    }
+    if (url === '/admin/api/entries/pages/home')
+      return chosen
+        ? Response.json({
+            fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+            blocks: {},
+            data: { title: 'Startseite' },
+            translations: { en: { title: 'Home' } },
+            pending: ['en', 'de'],
+            problems: [],
+            locales: ['en', 'de'],
+            defaultLocale: 'en',
+            sourceLocale: 'de',
+            offered: ['en', 'de'],
+            stale: [],
+            drift: [],
+          })
+        : Response.json(
+            {
+              code: 'ENTRY_SOURCE_CONFLICT',
+              error: 'The files disagree',
+              marks: { en: 'en', de: 'de' },
+              files: ['en', 'de'],
+              offered: ['en', 'de'],
+            },
+            { status: 409, headers: { 'x-handover-error-code': 'ENTRY_SOURCE_CONFLICT' } },
+          );
+    if (url.startsWith('/admin/api/locks/'))
+      return Response.json({ held_by: null, mine: true, expires_at: 1755864120000 });
+    if (url === '/admin/api/build') return Response.json({});
+    return Response.json({ entries: [] });
+  });
+  vi.stubGlobal('fetch', fetchMock);
+  const root = show(session(), '/admin/c/pages/home');
+  await vi.waitFor(() => expect(root.querySelector('#source-recovery-de')).not.toBeNull());
+  root.querySelector<HTMLInputElement>('#source-recovery-de')?.click();
+  flushSync();
+  root.querySelector<HTMLButtonElement>('.source-recovery .btn-primary')?.click();
+
+  await vi.waitFor(() =>
+    expect(root.querySelector('.lock-banner[role="status"]')?.textContent).toBe(
+      'German is now the source. It is on the site when you publish this entry — every language file carries the change.',
+    ),
+  );
+  expect(root.querySelector('.source-recovery')).toBeNull();
+});
+
 test('a failed pending read is unknown rather than fully published and retry recovers', async () => {
   let attempts = 0;
   vi.stubGlobal(

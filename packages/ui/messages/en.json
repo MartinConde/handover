@@ -1100,6 +1100,14 @@
   "editor_restored_unpublished": "It is here as unpublished changes — nothing is live until you publish.",
   "editor_drift_blocked": "The languages of this entry disagree about its blocks — publishing is blocked until that is settled.",
   "entry_source_unresolved": "This entry’s files no longer agree about the language it is written in. Reload it to see what each file says.",
+  "entry_source_target_undeclared": "That language isn’t one this site declares, so it can’t be the source.",
+  "entry_source_unchanged": "This entry is already written in that language. Nothing was changed.",
+  "entry_source_target_missing": "That language has no file for this entry yet. Create it before making it the source.",
+  "entry_source_target_off": "That language is turned off for this entry. Turn it on and create its file first.",
+  "entry_source_revision": "Somebody changed this entry while you were choosing. Nothing was changed — reload the entry and try again.",
+  "entry_source_drift": "The languages of this entry disagree about its blocks — settle that first. Nothing was changed.",
+  "entry_source_only_conflict": "That language has its own values in fields only the source keeps. Clear them first — nothing was changed.",
+  "entry_source_target_invalid": "As the source, that language would not pass the site’s checks. Fix its problems first — nothing was changed.",
   "source_recovery_conflict_blocked": "This entry’s files disagree about its source language — it can’t be edited or published until that is settled.",
   "source_recovery_conflict_title": "Which language is the source?",
   "source_recovery_conflict_intro": "Every language file names the entry’s source language, and these don’t agree. That usually means a file was edited or merged outside the CMS. Nothing is chosen for you.",
@@ -1114,6 +1122,98 @@
   "source_recovery_file_silent": "The {file} file says nothing",
   "source_recovery_hint_before": "Fix it in the repository: every file’s",
   "source_recovery_hint_after": "has to name the same language, and that language needs a file.",
+  "source_recovery_missing_choose": "Otherwise choose a new source.",
+  "source_recovery_hint_or": "Or fix it in the repository: every file’s",
+  "editor_change_source": "Change source language…",
+  "editor_change_source_sub": "{language} is the source: blocks are added and moved there, and Translate works from it.",
+  "editor_change_source_drift": "The languages disagree about blocks — settle that first",
+  "editor_change_source_unsaved": "Your last change could not be saved — that has to work first",
+  "editor_source_changed": "{language} is now the source. It is on the site when you publish this entry — every language file carries the change.",
+  "source_change_title": "Change the source language",
+  "source_change_intro": "The source is the language blocks are added, moved and removed in, and the one Translate and pre-fill work from.",
+  "source_change_is_now": "is the source now.",
+  "source_change_legend": "New source",
+  "source_change_up_to_date": "Up to date with {language}",
+  "source_change_behind": "{language} changed since it was translated",
+  "source_change_from_other": "Translated from {language}",
+  "source_change_unmarked": "Not marked as a translation of {language}",
+  "source_change_no_file": "No file yet",
+  "source_change_off": "Turned off for this entry",
+  "source_change_problems": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{count} problem — fix it first",
+        "countPlural=other": "{count} problems — fix them first"
+      }
+    }
+  ],
+  "source_change_warn_behind": "{target} was translated from an older {source}, so nothing records that it matches {source} now.",
+  "source_change_warn_unmarked": "{target} isn’t marked as a translation of {source}, so nothing records that it matches {source}.",
+  "source_change_what": "What happens",
+  "source_change_becomes": "{language} becomes the source. Its words stay exactly as they are.",
+  "source_change_old_up_to_date": "{source} keeps every word and becomes a translation of {language}, up to date with it.",
+  "source_change_so_does": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "So does {languages}.",
+        "countPlural=other": "So do {languages}."
+      }
+    }
+  ],
+  "source_change_still_behind": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{languages} was already behind {source}. It stays marked as needing a look, now against {language}.",
+        "countPlural=other": "{languages} were already behind {source}. They stay marked as needing a look, now against {language}."
+      }
+    }
+  ],
+  "source_change_now_stale": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{languages} keeps every word and shows as needing a look against {language} until somebody translates it again.",
+        "countPlural=other": "{languages} keep every word and show as needing a look against {language} until somebody translates them again."
+      }
+    }
+  ],
+  "source_change_unrecorded": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{languages} keeps every word. Nothing records that it matches {language}.",
+        "countPlural=other": "{languages} keep every word. Nothing records that they match {language}."
+      }
+    }
+  ],
+  "source_change_source_only": [
+    {
+      "declarations": ["input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "{fields} belongs to the source alone, so {language} gets {source}’s value. {source} keeps its copy, no longer shown.",
+        "countPlural=other": "{fields} belong to the source alone, so {language} gets {source}’s values. {source} keeps its copies, no longer shown."
+      }
+    }
+  ],
+  "source_change_machine": "Machine-translated badges stay where they are, in every language.",
+  "source_change_hint": "Nothing changes on the site until you publish this entry. Every language file carries the change, and they publish together.",
+  "source_change_confirm": "Make {language} the source",
+  "source_change_sending": "Changing…",
+  "source_change_reload": "Reload",
+  "source_change_save_failed": "Your last change could not be saved. Nothing was changed.",
+  "source_change_response_lost": "It could not be confirmed whether the source changed. Reload the entry before trying again.",
+  "source_change_reload_failed": "The source was changed, but the entry could not be read again. Reload it before you continue.",
+  "source_recovery_legend": "Make one of them the source",
+  "source_recovery_stale_note": "Translations made from another language will show as needing a look.",
   "editor_conflict_guidance": "Somebody changed this in the repository after you opened it. Open Unpublished changes to resolve it field by field, or to discard yours and take what is there now.",
   "editor_more_actions": "More actions",
   "editor_rename": "Rename",

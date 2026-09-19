@@ -265,6 +265,57 @@ test('password length, token expiry, and general reset failures give different r
   );
 });
 
+test.each([
+  [
+    'ENTRY_SOURCE_TARGET_UNDECLARED',
+    'That language isn’t one this site declares, so it can’t be the source.',
+    'Diese Sprache ist auf dieser Website nicht eingerichtet und kann daher nicht die Ausgangssprache sein.',
+  ],
+  [
+    'ENTRY_SOURCE_UNCHANGED',
+    'This entry is already written in that language. Nothing was changed.',
+    'Dieser Eintrag ist bereits in dieser Sprache geschrieben. Nichts wurde geändert.',
+  ],
+  [
+    'ENTRY_SOURCE_TARGET_MISSING',
+    'That language has no file for this entry yet. Create it before making it the source.',
+    'Für diese Sprache hat der Eintrag noch keine Datei. Leg sie an, bevor du sie zur Ausgangssprache machst.',
+  ],
+  [
+    'ENTRY_SOURCE_TARGET_OFF',
+    'That language is turned off for this entry. Turn it on and create its file first.',
+    'Diese Sprache ist für diesen Eintrag ausgeschaltet. Schalte sie ein und leg zuerst ihre Datei an.',
+  ],
+  [
+    'ENTRY_SOURCE_REVISION',
+    'Somebody changed this entry while you were choosing. Nothing was changed — reload the entry and try again.',
+    'Jemand hat diesen Eintrag geändert, während du gewählt hast. Nichts wurde geändert — lade den Eintrag neu und versuch es noch einmal.',
+  ],
+  [
+    'ENTRY_SOURCE_DRIFT',
+    'The languages of this entry disagree about its blocks — settle that first. Nothing was changed.',
+    'Die Sprachen dieses Eintrags stimmen bei den Blöcken nicht überein — kläre das zuerst. Nichts wurde geändert.',
+  ],
+  [
+    'ENTRY_SOURCE_ONLY_CONFLICT',
+    'That language has its own values in fields only the source keeps. Clear them first — nothing was changed.',
+    'Diese Sprache hat eigene Werte in Feldern, die nur die Ausgangssprache führt. Leere sie zuerst — nichts wurde geändert.',
+  ],
+  [
+    'ENTRY_SOURCE_TARGET_INVALID',
+    'As the source, that language would not pass the site’s checks. Fix its problems first — nothing was changed.',
+    'Als Ausgangssprache würde diese Sprache die Prüfungen der Website nicht bestehen. Behebe zuerst ihre Probleme — nichts wurde geändert.',
+  ],
+])('a source change refused with %s reads in either language', async (code, en, de) => {
+  const message = await responseMessage(
+    Response.json({ code, error: 'the API’s own sentence' }, { status: 409 }),
+    'ENTRY_ACTION_FAILED',
+  );
+  expect(message).toEqual({ code, status: 409 });
+  expect(messageText(message, 'en')).toBe(en);
+  expect(messageText(message, 'de')).toBe(de);
+});
+
 test('an unresolved source refusal reads the same for all three codes, in either language', async () => {
   for (const code of ['ENTRY_SOURCE_CONFLICT', 'ENTRY_SOURCE_UNDECLARED', 'ENTRY_SOURCE_MISSING']) {
     const message = await responseMessage(
