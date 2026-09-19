@@ -5259,3 +5259,98 @@ test('Alt and the down arrow run the pane, unless something else owns the key', 
   expect($(root, '.pane .popover')).not.toBeNull();
   vi.unstubAllGlobals();
 });
+
+const CHANGED_HEADING = {
+  'body[_id=hero0001].heading': [
+    { text: 'Above the ' },
+    { text: 'harbour', mark: 'del' },
+    { text: 'fish market', mark: 'ins' },
+  ],
+};
+
+test('a marker dismissed inside a block reaches the pane, which then has nothing left', async () => {
+  staleSource(CHANGED_HEADING);
+  const root = show(sixLanguages('base'));
+  await frenchBesideEnglish(root);
+  await settle();
+
+  $<HTMLButtonElement>(root, '.pane .block-card .stale')?.click();
+  flushSync();
+  $<HTMLButtonElement>(root, '.pane .popover .actions button:last-of-type')?.click();
+  await settle();
+  await runTodo(root);
+
+  expect(announced(root)).toBe('Nothing left to do');
+  vi.unstubAllGlobals();
+});
+
+test('a field that answers the chord itself keeps it', async () => {
+  staleSource(CHANGED_TITLE);
+  const root = show(owing());
+  await frenchBesideEnglish(root);
+  await settle();
+  const subtitle = $(root, 'input#t-subtitle');
+  if (!subtitle) throw new Error('subtitle missing');
+  subtitle.addEventListener('keydown', (e) => e.preventDefault());
+  subtitle.focus();
+
+  subtitle.dispatchEvent(
+    new KeyboardEvent('keydown', {
+      key: 'ArrowDown',
+      altKey: true,
+      bubbles: true,
+      cancelable: true,
+    }),
+  );
+  await settle();
+
+  expect(document.activeElement).toBe(subtitle);
+  vi.unstubAllGlobals();
+});
+
+test('a re-translated field is answered but stays in the run until its marker goes', async () => {
+  const opened = sixLanguages('machine');
+  (opened.entry.translations.fr as { body: Record<string, unknown>[] }).body = [
+    { _type: 'hero', _id: 'hero0001' },
+  ];
+  const filled = {
+    ...(opened.entry.translations.fr as Record<string, unknown>),
+    body: [{ _type: 'hero', _id: 'hero0001', heading: 'Au-dessus du marché' }],
+  };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      isLock(url)
+        ? Response.json(HELD)
+        : String(url).startsWith('/admin/api/source/')
+          ? Response.json({ changed: CHANGED_HEADING })
+          : String(url).startsWith('/admin/api/translate/')
+            ? Response.json({ data: filled, pending: true })
+            : Response.json({ updated_at: 1755864000000, pending: true, problems: [] }),
+    ),
+  );
+  const root = show(opened);
+  await frenchBesideEnglish(root);
+  await settle();
+  expect(answered(root)).toBe('1 of 2 texts written');
+
+  $<HTMLButtonElement>(root, '.pane .block-card .stale')?.click();
+  flushSync();
+  $<HTMLButtonElement>(root, '.pane .popover .actions button')?.click();
+  await settle();
+
+  expect(answered(root)).toBe('2 of 2 texts written');
+  await runTodo(root);
+  // The words are there, but the source's change has not been acknowledged.
+  expect(document.activeElement?.id).toBe('t-body.0.heading');
+  expect(announced(root)).toBe('');
+
+  $<HTMLButtonElement>(root, '.pane .block-card .stale')?.click();
+  flushSync();
+  $<HTMLButtonElement>(root, '.pane .popover .actions button:last-of-type')?.click();
+  await settle();
+  await runTodo(root);
+
+  expect(announced(root)).toBe('Nothing left to do');
+  vi.unstubAllGlobals();
+});
