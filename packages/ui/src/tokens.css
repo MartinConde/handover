@@ -617,6 +617,7 @@ select.filter.is-on { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .chip-missing { background: transparent; color: var(--ink-3); border: 1px dashed var(--border-strong); }
 .chip-disabled { background: var(--badge-bg); color: var(--badge-ink); text-decoration: line-through; }
 .chip-stale { background: var(--warn-soft); color: var(--warn-ink); }
+.chip-count { width: auto; min-width: 28px; padding: 0 var(--s-1); background: var(--badge-bg); color: var(--badge-ink); font-variant-numeric: tabular-nums; }
 .chip-disabled { background: var(--badge-bg); color: var(--badge-ink); text-decoration: line-through; }
 .table .note { font-size: var(--text-xs); color: var(--ink-2); }
 .table .note.hold { color: var(--warn-ink); font-weight: 500; }

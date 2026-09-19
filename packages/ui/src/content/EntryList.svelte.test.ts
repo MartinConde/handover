@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { SIX, sixLanguageRows } from '../editor/six-languages.fixture';
 import type { UiLocale } from '../i18n.js';
 import EntryList from './EntryList.svelte';
 
@@ -591,6 +592,152 @@ test('the language filter narrows to the rows a language is missing or stale in'
   language.dispatchEvent(new Event('change'));
   await tick();
   expect(titles(root).length).toBe(4);
+});
+
+// Above four languages a row is the files-created ratio and the languages that are owed.
+const sixRows = () => {
+  api(sixLanguageRows(), {}, SIX);
+};
+// The fixture's rows share titles, so they are told apart by file name.
+const names = (root: ParentNode) =>
+  Array.from(root.querySelectorAll('.row .td.filename'), (cell) => cell.textContent);
+const compact = (root: ParentNode, id: string) => {
+  const row = q(root, `a[href="/admin/c/listings/${id}"]`)?.closest('.row');
+  return Array.from(row?.querySelectorAll('.chips .chip') ?? [], (chip) => chip.textContent);
+};
+const summary = (root: ParentNode, id: string) =>
+  q(root, `a[href="/admin/c/listings/${id}"]`)?.closest('.row')?.querySelector('.chips')
+    ?.previousElementSibling?.textContent;
+
+test('above four languages a row counts its files and names at most three owed', async () => {
+  sixRows();
+  const root = show();
+  await tick();
+
+  expect(compact(root, 'base')).toEqual(['4/5', 'FR', 'ES']);
+  expect(compact(root, 'twoMissing')).toEqual(['3/5', 'FR', 'IT', 'ES']);
+  expect(compact(root, 'germanFirst')).toEqual(['1/6', 'EN', 'FR', 'IT', '+2']);
+  expect(compact(root, 'legacy')).toEqual(['2/6', 'FR', 'IT', 'ES', '+1']);
+});
+
+test('the compact row gives its whole state in words, not only on hover', async () => {
+  sixRows();
+  const root = show();
+  await tick();
+
+  const words =
+    'Languages: 4 of 5 language files created. English: written; German: written; ' +
+    'French: behind the language it was translated from; Italian: written; ' +
+    'Spanish: not written yet; Dutch: turned off for this entry.';
+  expect(summary(root, 'base')).toBe(words);
+  const chips = q(root, 'a[href="/admin/c/listings/base"]')
+    ?.closest('.row')
+    ?.querySelector('.chips');
+  expect(chips?.getAttribute('aria-hidden')).toBe('true');
+  expect(chips?.getAttribute('title')).toBe(words.slice('Languages: '.length));
+});
+
+test('four languages still draw one chip each', async () => {
+  api([{ ...ENTRIES[0], stale: ['fr'], offered: ['en', 'de', 'fr'] }], {}, [
+    'en',
+    'de',
+    'fr',
+    'it',
+  ]);
+  const root = show();
+  await tick();
+
+  expect(
+    Array.from(root.querySelectorAll('.chips .chip'), (chip) => [chip.textContent, chip.className]),
+  ).toEqual([
+    ['EN', 'chip'],
+    ['DE', 'chip chip-missing'],
+    ['FR', 'chip chip-missing'],
+    ['IT', 'chip chip-disabled'],
+  ]);
+});
+
+test('the address can ask for one kind of work in a language', async () => {
+  sixRows();
+  history.replaceState({}, '', '/admin/c/listings?locale=fr&owed=stale');
+  const root = show();
+  await tick();
+
+  expect(q<HTMLSelectElement>(root, 'select#list-owed')?.value).toBe('stale');
+  expect(names(root)).toEqual(['base', 'twoMissing', 'machine', 'staleAndPartial', 'sourceDraft']);
+
+  const owed = q<HTMLSelectElement>(root, 'select#list-owed');
+  if (!owed) throw new Error('work filter missing');
+  owed.value = 'missing';
+  owed.dispatchEvent(new Event('change'));
+  await tick();
+  expect(names(root)).toEqual([
+    'germanFirst',
+    'legacy',
+    'untouchedInvalid',
+    'structured',
+    'sourceConflict',
+  ]);
+});
+
+test('a language turned off for an entry is never owed in it', async () => {
+  sixRows();
+  history.replaceState({}, '', '/admin/c/listings?locale=nl&owed=missing');
+  const root = show();
+  await tick();
+
+  expect(names(root)).toEqual([
+    'germanFirst',
+    'legacy',
+    'partlyMarked',
+    'untouchedInvalid',
+    'sourceConflict',
+  ]);
+});
+
+test('an unknown kind of work asks for everything owed', async () => {
+  sixRows();
+  history.replaceState({}, '', '/admin/c/listings?locale=fr&owed=later');
+  const root = show();
+  await tick();
+
+  expect(q<HTMLSelectElement>(root, 'select#list-owed')?.value).toBe('owed');
+  expect(names(root)).not.toContain('partlyMarked');
+  expect(names(root).length).toBe(10);
+});
+
+test('without a declared language nothing is filtered and the work filter is off', async () => {
+  sixRows();
+  history.replaceState({}, '', '/admin/c/listings?locale=xx&owed=stale');
+  const root = show();
+  await tick();
+
+  expect(q<HTMLSelectElement>(root, 'select#list-locale')?.value).toBe('');
+  expect(q<HTMLSelectElement>(root, 'select#list-owed')?.disabled).toBe(true);
+  expect(names(root).length).toBe(11);
+});
+
+test('switching the interface language keeps both filters and renames them', async () => {
+  sixRows();
+  history.replaceState({}, '', '/admin/c/listings?locale=fr&owed=stale');
+  const props = $state<{ collection: string; onchanged: () => void; uiLocale: UiLocale }>({
+    collection: 'listings',
+    onchanged: changed,
+    uiLocale: 'en',
+  });
+  app = mount(EntryList, { target: document.body, props });
+  await tick();
+
+  props.uiLocale = 'de';
+  flushSync();
+  const owed = q<HTMLSelectElement>(document.body, 'select#list-owed');
+  expect(owed?.value).toBe('stale');
+  expect(owed?.selectedOptions[0]?.textContent).toBe('Veraltet');
+  expect(
+    q<HTMLSelectElement>(document.body, 'select#list-locale')?.selectedOptions[0]?.textContent,
+  ).toBe('Französisch');
+  expect(names(document.body).length).toBe(5);
+  expect(summary(document.body, 'base')).toMatch(/^Sprachen: 4 von 5 Sprachdateien angelegt\./);
 });
 
 test('a hidden entry is badged and offers to be shown again', async () => {

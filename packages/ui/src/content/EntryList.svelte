@@ -116,11 +116,44 @@ const offered = (entry: Entry, locale: string) => entry.offered?.includes(locale
 // `_status` is the entry's rather than one language's, so any file of it saying so is the answer.
 const isHidden = (entry: Entry) => Object.values(entry.locales).some((l) => l.status === 'hidden');
 // The dashboard's *Show* arrives as `?locale=de`, read once when the list opens.
+const address = new URLSearchParams(location.search);
 let search = $state('');
 let showing = $state<'all' | 'live' | 'hidden'>('all');
-let language = $state(new URLSearchParams(location.search).get('locale') ?? '');
+let language = $state(address.get('locale') ?? '');
+const WORK = ['owed', 'missing', 'stale'] as const;
+// An unknown kind of work asks for all of it rather than for an empty list.
+let work = $state<(typeof WORK)[number]>(
+  WORK.find((kind) => kind === address.get('owed')) ?? 'owed',
+);
+const missing = (entry: Entry, locale: string) => offered(entry, locale) && !entry.locales[locale];
+const stale = (entry: Entry, locale: string) =>
+  offered(entry, locale) &&
+  Boolean(entry.locales[locale]) &&
+  (entry.stale?.includes(locale) ?? false);
 const owes = (entry: Entry, locale: string) =>
-  offered(entry, locale) && (!entry.locales[locale] || (entry.stale?.includes(locale) ?? false));
+  (work !== 'stale' && missing(entry, locale)) || (work !== 'missing' && stale(entry, locale));
+// Above four languages a chip each stops reading at a glance, so a row counts and names the owed.
+const compact = $derived(locales.length > 4);
+const owedIn = (entry: Entry) => locales.filter((l) => missing(entry, l) || stale(entry, l));
+const counted = (entry: Entry) => {
+  const offer = locales.filter((l) => offered(entry, l));
+  return { created: offer.filter((l) => entry.locales[l]).length, offered: offer.length };
+};
+const summary = (entry: Entry) =>
+  m.entry_list_files_created(
+    {
+      ...counted(entry),
+      languages: locales
+        .map((l) =>
+          m.entry_list_language_state(
+            { language: formatLanguageName(l, uiLocale), state: chipTitle(entry, l) },
+            options,
+          ),
+        )
+        .join('; '),
+    },
+    options,
+  );
 const shown = $derived(
   entries.filter(
     (e) =>
@@ -363,12 +396,18 @@ async function done() {
         <select class={['filter', { 'is-on': language }]} id="list-locale" bind:value={language}>
           <option value="">{m.entry_list_every_language({}, options)}</option>
           {#each locales as locale (locale)}
-            <option value={locale}>{m.entry_list_language_attention({ language: formatLanguageName(locale, uiLocale) }, options)}</option>
+            <option value={locale}>{formatLanguageName(locale, uiLocale)}</option>
           {/each}
+        </select>
+        <label class="visually-hidden" for="list-owed">{m.entry_list_work({}, options)}</label>
+        <select class={['filter', { 'is-on': language && work !== 'owed' }]} id="list-owed" bind:value={work} disabled={!language}>
+          <option value="owed">{m.entry_list_work_owed({}, options)}</option>
+          <option value="missing">{m.entry_list_work_missing({}, options)}</option>
+          <option value="stale">{m.entry_list_work_stale({}, options)}</option>
         </select>
       {/if}
     </div>
-      {#if filtered}<button class="btn btn-ghost btn-sm" type="button" onclick={() => { search = ''; showing = 'all'; language = ''; }}>{m.entry_list_clear_filters({}, options)}</button>{/if}
+      {#if filtered}<button class="btn btn-ghost btn-sm" type="button" onclick={() => { search = ''; showing = 'all'; language = ''; work = 'owed'; }}>{m.entry_list_clear_filters({}, options)}</button>{/if}
     </div>
   {/if}
   {#if error && !dialog}<p class="notice notice-danger" role="alert">{textOf(error)}{#if error.detail}<span class="technical-detail">{errorDetail(error)}</span>{/if}</p>{/if}
@@ -445,7 +484,11 @@ async function done() {
       {search.trim()
         ? m.entry_list_no_search_results({ search: search.trim() }, options)
         : language
-        ? m.entry_list_language_complete({ language: formatLanguageName(language, uiLocale) }, options)
+        ? {
+            owed: m.entry_list_language_complete,
+            missing: m.entry_list_language_none_missing,
+            stale: m.entry_list_language_none_stale,
+          }[work]({ language: formatLanguageName(language, uiLocale) }, options)
         : showing === 'hidden'
           ? m.entry_list_no_hidden({ collection: plural }, options)
           : m.entry_list_no_live({ collection: plural }, options)}
@@ -489,6 +532,19 @@ async function done() {
           </div>
           {#if many}
             <div class="td" role="cell" data-label={m.entry_list_languages_heading({}, options)}>
+              {#if compact}
+                {@const words = summary(entry)}
+                {@const owed = owedIn(entry)}
+                {@const count = counted(entry)}
+                <span class="visually-hidden">{m.entry_list_languages({}, options)} {words}</span>
+                <span class="chips" aria-hidden="true" title={words}>
+                  <span class="chip chip-count">{count.created}/{count.offered}</span>
+                  {#each owed.slice(0, 3) as locale (locale)}
+                    <span class={['chip', missing(entry, locale) ? 'chip-missing' : 'chip-stale']}>{locale.toUpperCase()}</span>
+                  {/each}
+                  {#if owed.length > 3}<span class="chip chip-count">+{owed.length - 3}</span>{/if}
+                </span>
+              {:else}
               <span class="visually-hidden">{m.entry_list_languages({}, options)}</span>
               <span class="chips">
                 {#each locales as locale (locale)}
@@ -505,6 +561,7 @@ async function done() {
                   >{locale.toUpperCase()}</span>
                 {/each}
               </span>
+              {/if}
             </div>
           {/if}
           <div class="td edited" role="cell" data-label={m.entry_list_edited({}, options)}>

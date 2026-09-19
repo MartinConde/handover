@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- With five or more languages, an entry-list row shows its language files created out of those
+  offered (`4/5`) and up to three owed languages instead of a chip per language, and a second
+  filter beside **Language** picks missing, stale or both; `?locale=fr&owed=stale` opens it set.
 - Side by side, with two or more languages besides the one an entry is written in, the right
   column's heading lists them with their marks, so the column changes language without closing.
 - With five or more languages, the editor's language switcher is a list that shows which
