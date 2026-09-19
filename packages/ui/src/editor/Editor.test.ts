@@ -5289,7 +5289,7 @@ test('a field that answers the chord itself keeps it', async () => {
   const root = show(owing());
   await frenchBesideEnglish(root);
   await settle();
-  const subtitle = $(root, 'input#t-subtitle');
+  const subtitle = $<HTMLInputElement>(root, 'input#t-subtitle');
   if (!subtitle) throw new Error('subtitle missing');
   subtitle.addEventListener('keydown', (e) => e.preventDefault());
   subtitle.focus();
