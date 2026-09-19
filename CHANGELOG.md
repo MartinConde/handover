@@ -23,7 +23,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   says, instead of its form. Turning a language off, a web address and the hold now refuse it
   with the same `409` as saves, and every refusal also carries `files` and `offered`. The
   pre-publish checks gain the error `source-unresolved`, so the drawer does not publish such an
-  entry; it cannot be named in `checks.ignore`.
+  entry.
 - A translation whose `_i18n` names a language other than the one the entry is written in now
   reads stale, and side by side says *Translated from French — the source is now English*.
   **Upgrade note:** a translation made from another translation (German from French on an

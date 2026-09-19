@@ -257,7 +257,7 @@ export interface HandoverConfig {
     /** Cloudflare Email Sending, through a `send_email` binding named `EMAIL`. */
     | { provider: 'cloudflare'; from: string };
   /** Check ids this site turns off; nothing else about a check is configurable. */
-  checks?: { ignore?: readonly Exclude<CheckName, 'source-unresolved'>[] };
+  checks?: { ignore?: readonly CheckName[] };
   /** Required, a one-language site too: the files live in a locale folder either way. */
   i18n: {
     /** The folder names under `src/content/<collection>/`: `'en'`, `'de'`, `'pt-br'`. */
@@ -330,15 +330,10 @@ export function defineConfig(config: HandoverConfig): HandoverConfig {
           );
     }
   // A misspelled id is a check the site believes it turned off, with nothing saying why.
-  const ignorable = Object.keys(CHECKS).filter((id) => id !== 'source-unresolved');
-  for (const id of (config.checks?.ignore ?? []) as readonly string[])
-    if (id === 'source-unresolved')
+  for (const id of config.checks?.ignore ?? [])
+    if (!(id in CHECKS))
       errors.push(
-        'cms.config.ts › checks.ignore: "source-unresolved" cannot be turned off — an entry whose files disagree about their source language is never published',
-      );
-    else if (!ignorable.includes(id))
-      errors.push(
-        `cms.config.ts › checks.ignore: ${JSON.stringify(id)} is not one of the checks — ${ignorable.join(', ')}`,
+        `cms.config.ts › checks.ignore: ${JSON.stringify(id)} is not one of the checks — ${Object.keys(CHECKS).join(', ')}`,
       );
   // Unknown mailer providers must not fall through to Resend.
   const provider =
