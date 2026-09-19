@@ -69,8 +69,16 @@ export async function entrySourceFor(
   slug: string,
   capture = false,
 ) {
-  const loaded = await entryLocales(ctx, collection, slug, config.i18n.locales, capture);
-  return { loaded, source: entrySource('default', config.i18n, localeData(loaded)) };
+  // A refused open captures nothing, or its rows would hide the fix somebody pushes next.
+  const resolved = (data: Record<string, unknown>) => entrySource('default', config.i18n, data);
+  const loaded = await entryLocales(
+    ctx,
+    collection,
+    slug,
+    config.i18n.locales,
+    capture ? (data) => !('problem' in (resolved(data) ?? {})) : undefined,
+  );
+  return { loaded, source: resolved(localeData(loaded)) };
 }
 
 const SOURCE_PROBLEMS = {
@@ -80,8 +88,14 @@ const SOURCE_PROBLEMS = {
 } as const;
 
 /** Never promoted automatically: somebody has to say which language the entry is written in. */
-export function sourceRefusal(answer: Extract<EntrySource, { problem: string }>): Response {
+export function sourceRefusal(
+  answer: Extract<EntrySource, { problem: string }>,
+  data: Record<string, unknown>,
+): Response {
   const code = SOURCE_PROBLEMS[answer.problem];
+  const files = config.i18n.locales.filter((locale) => locale in data);
+  // With no source to read `_locales` from, the first file answers: the CMS writes it into all.
+  const { offered } = offeredIn(data[files[0] ?? ''], files);
   const named = [...new Set(Object.values(answer.marks))].join(', ');
   const error =
     answer.problem === 'conflict'
@@ -90,7 +104,7 @@ export function sourceRefusal(answer: Extract<EntrySource, { problem: string }>)
         ? `This entry says it is written in ${named}, which the site does not declare`
         : `This entry says it is written in ${named}, which has no file`;
   return Response.json(
-    { code, error, marks: answer.marks },
+    { code, error, marks: answer.marks, files, offered },
     { status: 409, headers: { 'x-handover-error-code': code } },
   );
 }
@@ -200,7 +214,7 @@ export async function entryLocales(
   collection: string,
   slug: string,
   locales: string[],
-  capture = false,
+  capture?: (data: Record<string, unknown>) => boolean,
 ): Promise<
   Record<
     string,
@@ -218,22 +232,40 @@ export async function entryLocales(
   const git = ctx.git();
   const database = ctx.db();
   const head = await git.getHead();
-  const loaded = await Promise.all(
+  const read = await Promise.all(
     locales.map(async (locale) => {
       const path = entryPath(collection, slug, locale);
       const file = await git.getFile(path, head);
-      const row = capture
-        ? await openDraft('default', database, path, head, file)
-        : await loadDraft('default', database, path);
-      const contents = row?.contents || file?.contents;
-      // An empty file is still the language's file, so it opens as an empty entry.
-      if (!contents && !file) return undefined;
+      return { locale, path, file, row: await loadDraft('default', database, path) };
+    }),
+  );
+  // An empty file is still the language's file, so it opens as an empty entry.
+  const dataOf = (contents: string | undefined, file: unknown) =>
+    contents ? parseEntry('default', contents) : file ? {} : undefined;
+  const parsed = read.map(({ file, row }) => dataOf(row?.contents || file?.contents, file));
+  const present = Object.fromEntries(
+    read.flatMap(({ locale }, i) => (parsed[i] === undefined ? [] : [[locale, parsed[i]]])),
+  );
+  if (capture?.(present))
+    await Promise.all(
+      read.map(async (at, i) => {
+        if (at.row) return;
+        at.row = await openDraft('default', database, at.path, head, at.file);
+        // Another tab's first save can land between the read and the capture.
+        if (at.row?.contents && at.row.contents !== at.file?.contents)
+          parsed[i] = dataOf(at.row.contents, at.file);
+      }),
+    );
+  const loaded = await Promise.all(
+    read.map(async ({ locale, file, row }, i) => {
+      const data = parsed[i];
+      if (data === undefined) return undefined;
       const pending = row ? (await blobSha(row.contents)) !== file?.blob_sha : false;
       return [
         locale,
         {
           revision: row?.revision,
-          data: contents ? parseEntry('default', contents) : {},
+          data,
           pending,
           held: Boolean(row?.heldBy),
           // A draft with no file behind it is a page only the preview can show.

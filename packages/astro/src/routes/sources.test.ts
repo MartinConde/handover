@@ -53,6 +53,12 @@ vi.mock('virtual:handover/config', async () => {
           schema: z.object({ title: z.string().min(1), body: z.string().optional() }),
           route: '/[slug]',
         },
+        // Only a collection with its own address per language has the address route.
+        posts: {
+          schema: z.object({ title: z.string().min(1), slug: z.string().optional() }),
+          route: '/posts/[slug]',
+          localizedSlugs: true,
+        },
       },
       globals: {},
     },
@@ -700,4 +706,113 @@ test('saving a German-written entry as a template copies the German file', async
   expect(trees[head]?.['src/content/_templates/pages/landing.yaml']).toBe(
     '_version: 1\ntitle: "Startseite"\nbody: "Willkommen"\n',
   );
+});
+
+const unresolved = {
+  conflict: {
+    files: {
+      en: '_version: 1\n_source: en\ntitle: "Home"\n',
+      de: '_version: 1\n_source: de\ntitle: "Startseite"\n',
+    },
+    code: 'ENTRY_SOURCE_CONFLICT',
+    marks: { en: 'en', de: 'de' },
+  },
+  undeclared: {
+    files: {
+      en: '_version: 1\n_source: pt\ntitle: "Home"\n',
+      de: '_version: 1\n_source: pt\ntitle: "Startseite"\n',
+    },
+    code: 'ENTRY_SOURCE_UNDECLARED',
+    marks: { en: 'pt', de: 'pt' },
+  },
+  missing: {
+    files: {
+      en: '_version: 1\n_source: fr\ntitle: "Home"\n',
+      de: '_version: 1\n_source: fr\ntitle: "Startseite"\n',
+    },
+    code: 'ENTRY_SOURCE_MISSING',
+    marks: { en: 'fr', de: 'fr' },
+  },
+} as const;
+const committed = (files: Record<string, string>, collection = 'pages') =>
+  Object.fromEntries(
+    Object.entries(files).map(([locale, contents]) => [
+      `src/content/${collection}/${locale}/home.yaml`,
+      contents,
+    ]),
+  );
+
+test.each(Object.entries(unresolved))(
+  'opening an entry whose source is %s answers what each file says',
+  async (_, { files, code, marks }) => {
+    trees[head] = committed(files);
+
+    const res = await call('GET', 'entries/pages/home');
+
+    expect(res.status).toBe(409);
+    expect(res.headers.get('x-handover-error-code')).toBe(code);
+    expect(await res.json()).toMatchObject({
+      code,
+      marks,
+      files: ['en', 'de'],
+      offered: ['en', 'de', 'fr'],
+    });
+  },
+);
+
+test.each([
+  ['a save', 'PUT', 'drafts/pages/home/en', { data: { title: 'Home!' }, revision: 'r' }],
+  ['creating a translation', 'POST', 'drafts/pages/home/fr', undefined],
+  ['machine translation', 'POST', 'translate/pages/home/de', {}],
+  ['turning a language off', 'POST', 'entries/pages/home/locales', { locales: ['en', 'fr'] }],
+  ['an address change', 'POST', 'entries/posts/home/address/de', { address: 'start' }],
+  ['a hold', 'POST', 'hold/pages/home', { hold: true }],
+] as const)(
+  '%s on an entry whose files disagree is refused and writes nothing',
+  async (_, method, route, body) => {
+    const { files } = unresolved.conflict;
+    trees[head] = { ...committed(files), ...committed(files, 'posts') };
+    const before = head;
+
+    const res = await call(method, route, body);
+
+    expect(res.status).toBe(409);
+    expect(res.headers.get('x-handover-error-code')).toBe('ENTRY_SOURCE_CONFLICT');
+    expect(await res.json()).toMatchObject({ code: 'ENTRY_SOURCE_CONFLICT', files: ['en', 'de'] });
+    expect(head).toBe(before);
+    expect(await db.select().from(tables.drafts)).toEqual([]);
+    expect(boundary.translate).not.toHaveBeenCalled();
+  },
+);
+
+test('the drawer’s checks report an entry whose files disagree as an error', async () => {
+  trees[head] = { [path('en')]: '_version: 1\n_source: en\ntitle: "Home"\n' };
+  await db.insert(tables.drafts).values({
+    path: path('de'),
+    revision: 'r1',
+    contents: '_version: 1\n_source: de\ntitle: "Startseite"\n',
+    baseSha: head,
+    baseBlob: '',
+    updatedAt: Date.now(),
+  });
+
+  const res = await call('POST', 'publish/checks', { entries: ['pages/home'] });
+
+  const { results } = (await res.json()) as {
+    results: { check: string; severity: string; entry: string }[];
+  };
+  expect(results.filter((r) => r.check === 'source-unresolved')).toMatchObject([
+    { severity: 'error', entry: 'pages/home' },
+  ]);
+});
+
+test('once every file names the same language again, the entry opens', async () => {
+  trees[head] = committed(unresolved.conflict.files);
+  expect((await call('GET', 'entries/pages/home')).status).toBe(409);
+
+  push({ [path('en')]: '_version: 1\n_source: de\ntitle: "Home"\n' });
+
+  const res = await call('GET', 'entries/pages/home');
+  expect(res.status).toBe(200);
+  expect(((await res.json()) as { sourceLocale: string }).sourceLocale).toBe('de');
 });

@@ -382,6 +382,28 @@ test('a translation made from a language that is not the source says which langu
   );
 });
 
+test('an entry whose files disagree about their source is an error on the file going out', async () => {
+  const results = await run([
+    entryOf(
+      'listings/mill-house',
+      { en: `_source: en\n${title}`, de: '_source: de\ntitle: "Das Mühlenhaus"\n' },
+      listing,
+      ['de'],
+    ),
+  ]);
+  const found = results.filter((r) => r.check === 'source-unresolved');
+  expect(found).toEqual([
+    {
+      check: 'source-unresolved',
+      path: file('listings', 'de', 'mill-house'),
+      fieldPath: '',
+      severity: 'error',
+      message:
+        'The files of this entry disagree about which language it is written in (en, de) — it is not published until every file’s _source names the same language',
+    },
+  ]);
+});
+
 test('a value a machine filled in and nobody has read is a note at that value’s own address', async () => {
   const results = await run([
     entryOf(

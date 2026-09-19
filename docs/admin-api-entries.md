@@ -74,8 +74,11 @@ collection with no `route` has neither, and both are absent from the response.
 ### Which language an entry is written in
 
 When an entry's files disagree about their `_source`, this route, the draft writes, **Create
-from English** and machine translation answer `409` with an `x-handover-error-code` header and
-`{ "code", "error", "marks" }`, and write nothing. `marks` is what each file says, by locale.
+from English**, machine translation, turning a language off, a web address and the hold answer
+`409` with an `x-handover-error-code` header and
+`{ "code", "error", "marks", "files", "offered" }`, and write nothing. `marks` is what each file
+says, by locale, `files` the languages the entry has a file in, and `offered` the languages it is
+offered in, as the first of those files names them.
 
 | `code` | The files |
 |---|---|
@@ -83,7 +86,9 @@ from English** and machine translation answer `409` with an `x-handover-error-co
 | `ENTRY_SOURCE_UNDECLARED` | name a language the site does not declare |
 | `ENTRY_SOURCE_MISSING` | name a language the entry has no file in |
 
-Make the files agree in the repository, then reopen the entry.
+Make the files agree in the repository, then reopen the entry. The editor shows what each file
+says in place of the form ([Translating](translating.md#when-the-files-disagree-about-the-source-language)),
+and the pre-publish checks hold the entry back with the error `source-unresolved`.
 
 ```
 GET /admin/api/globals  →  { "globals": [{ "key", "label", "description", "locales", "pending" }], "locales": ["en", "de"] }

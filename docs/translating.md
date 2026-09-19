@@ -122,6 +122,25 @@ the answers change in one go, and the banner goes because the next read has noth
 Changing the interface language while deciding keeps each selected answer and focused control;
 an already-visible changed-entry or apply refusal is rendered again in the new interface language.
 
+## When the files disagree about the source language
+
+Every file of an entry names the language it is written in as `_source`. When those disagree —
+usually because a file was edited or merged outside the CMS — the entry opens on a panel instead
+of its form, and nothing is chosen for you. The panel says which problem it is and what each
+file says:
+
+| The files | The panel |
+|---|---|
+| name two different languages | *Which language is the source?* |
+| name a language the site does not declare | *The source language isn't declared* |
+| name a language the entry has no file in | *The source language has no file* |
+
+Until it is settled the entry cannot be saved, translated, turned off in a language or held, and
+the drawer will not publish it: the check reads *The files of this entry disagree about which
+language it is written in*. Fix it in the repository — every file's `_source` has to name the
+same language, and that language needs a file (put a deleted one back) — and the entry opens
+again as it was. Changing the interface language keeps the panel.
+
 A menu label is the one translated value a machine is never offered: an empty box is not a gap
 but *use the page's own title*, and that title is already translated.
 

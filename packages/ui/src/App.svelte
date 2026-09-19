@@ -9,6 +9,7 @@ import Members from './account/Members.svelte';
 import EntryList from './content/EntryList.svelte';
 import Globals from './content/Globals.svelte';
 import Redirects from './content/Redirects.svelte';
+import SourceRecovery, { type SourceProblem } from './editor/SourceRecovery.svelte';
 import { invalidateEntryDirectory } from './entry-directory.js';
 import {
   type CollectionLabels,
@@ -504,6 +505,9 @@ async function revert() {
 async function loadEntry(collection: string, slug: string) {
   const res = await fetch(`/admin/api/entries/${collection}/${slug}`);
   if (res.ok) return res.json();
+  // Not a failure to load: the entry is there and needs somebody to say what it is written in.
+  if (res.status === 409 && res.headers.get('x-handover-error-code')?.startsWith('ENTRY_SOURCE_'))
+    throw { source: (await res.json()) as SourceProblem };
   // A 503 is about the repository, not about this entry, so it is the server's own sentence.
   if (res.status === 503)
     throw {
@@ -792,8 +796,12 @@ const initial = $derived(
           ontitle={(read) => (titled = { entry: editingAt, read })}
         />
       {:catch error}
-        {@const failure = entryFailure(error)}
-        <main class="main"><p class="notice notice-danger" role="alert">{text(failure)}{#if failure.detail}<span class="technical-detail">{m.common_technical_detail({ detail: failure.detail }, options)}</span>{/if}</p></main>
+        {#if error && typeof error === 'object' && 'source' in error}
+          <main class="main main-editor"><SourceRecovery problem={error.source as SourceProblem} {uiLocale} /></main>
+        {:else}
+          {@const failure = entryFailure(error)}
+          <main class="main"><p class="notice notice-danger" role="alert">{text(failure)}{#if failure.detail}<span class="technical-detail">{m.common_technical_detail({ detail: failure.detail }, options)}</span>{/if}</p></main>
+        {/if}
       {/await}
     {:else if listRoute}
       <EntryList

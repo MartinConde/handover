@@ -724,6 +724,10 @@ select.filter.is-on { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .drift .readonly { background: var(--surface); }
 .drift .drift-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s-3); }
 .drift .drift-cols > div { display: grid; gap: var(--s-2); align-content: start; }
+.source-files { display: grid; gap: var(--s-2); margin: 0; padding: 0; list-style: none; font-size: var(--text-sm); }
+.source-files li { display: flex; align-items: center; gap: var(--s-3); }
+.source-files .chip { flex: none; }
+.source-recovery .hint { font-size: var(--text-sm); color: var(--ink-2); }
 .drift fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: var(--s-2); }
 .drift legend { padding: 0; margin-bottom: var(--s-2); font-size: var(--text-sm); font-weight: 500; }
 .drift > .actions { display: flex; align-items: center; gap: var(--s-3); }

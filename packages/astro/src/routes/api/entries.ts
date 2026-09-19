@@ -147,7 +147,7 @@ export async function getEntry(
   // One read of every language answers drift, staleness and pending drafts alike.
   const { loaded, source: answer } = await entrySourceFor(ctx, collection, slug, true);
   if (!answer) return entryNotFound();
-  if ('problem' in answer) return sourceRefusal(answer);
+  if ('problem' in answer) return sourceRefusal(answer, localeData(loaded));
   const source = answer.locale;
   const data = loaded[source]?.data;
   const hidden = !isLive('default', data);
@@ -275,6 +275,13 @@ async function takeOver(
   };
 }
 
+// For the routes that write without reading the entry; a one-language site still reads nothing.
+async function unresolvedSource(ctx: RequestContext, collection: string, slug: string) {
+  if (config.i18n.locales.length < 2) return undefined;
+  const { loaded, source } = await entrySourceFor(ctx, collection, slug);
+  return source && 'problem' in source ? sourceRefusal(source, localeData(loaded)) : undefined;
+}
+
 /** Every possible language in one statement; a language with no draft has no row to hit. */
 export async function hold(
   ctx: RequestContext,
@@ -285,6 +292,8 @@ export async function hold(
 ): Promise<Response> {
   if (!session) return new Response('Unauthorized', { status: 401 });
   if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
+  const refused = await unresolvedSource(ctx, collection, slug);
+  if (refused) return refused;
   const body = (await request.json().catch(() => undefined)) as { hold?: unknown } | undefined;
   const held = body?.hold === true;
   const database = ctx.db();
@@ -465,7 +474,7 @@ export async function autosave(
   const read = many ? await entrySourceFor(ctx, collection, slug) : undefined;
   const answer = read ? read.source : { locale: config.i18n.defaultLocale, recorded: false };
   if (!answer) return new Response('Not found', { status: 404 });
-  if ('problem' in answer) return sourceRefusal(answer);
+  if ('problem' in answer) return sourceRefusal(answer, localeData(read?.loaded ?? {}));
   const source = answer.locale;
   const at = locale ?? source;
   // Only a source-language save carries structure into the sibling files.
@@ -557,7 +566,7 @@ export async function createTranslation(
   const { loaded, source: answer } = await entrySourceFor(ctx, collection, slug);
   // A missing default language is exactly what this route is for, so no extra guard on it.
   if (loaded[locale]) return new Response('That language already has a file', { status: 409 });
-  if (answer && 'problem' in answer) return sourceRefusal(answer);
+  if (answer && 'problem' in answer) return sourceRefusal(answer, localeData(loaded));
   const source = answer?.locale;
   const data = source === undefined ? undefined : loaded[source]?.data;
   if (source === undefined || data === undefined) return new Response('Not found', { status: 404 });
@@ -598,7 +607,7 @@ export async function machineTranslate(
       { status: 409 },
     );
   const { loaded, source: answer } = await entrySourceFor(ctx, collection, slug);
-  if (answer && 'problem' in answer) return sourceRefusal(answer);
+  if (answer && 'problem' in answer) return sourceRefusal(answer, localeData(loaded));
   const from = answer?.locale;
   const source =
     from === undefined ? undefined : await translationSource(ctx, collection, slug, from);
@@ -677,6 +686,7 @@ export async function offering(
     }),
   );
   const resolved = entrySource('default', config.i18n, effective);
+  if (resolved && 'problem' in resolved) return sourceRefusal(resolved, effective);
   // A change to the set of files is when an inferred source must be frozen into the ones kept.
   const stamp =
     resolved && 'locale' in resolved && (going.length || resolved.recorded)
@@ -861,6 +871,8 @@ export async function address(
   const git = ctx.git();
   const [file, row] = await Promise.all([git.getFile(path), loadDraft('default', ctx.db(), path)]);
   if (!file && !row) return new Response('Not found', { status: 404 });
+  const refused = await unresolvedSource(ctx, collection, slug);
+  if (refused) return refused;
   // Empty falls back to the file name, so that is the address being claimed either way.
   const after = wanted || slug;
   if ((await takenAddresses(ctx, collection, locale, slug)).includes(after))

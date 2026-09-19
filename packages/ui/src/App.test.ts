@@ -621,6 +621,35 @@ test('an unidentified legacy 404 stays a generic localized entry-load failure', 
   );
 });
 
+test('an entry whose files disagree about their source opens the recovery panel, not the form', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/entries/pages/home')
+        return Response.json(
+          {
+            code: 'ENTRY_SOURCE_CONFLICT',
+            error: 'The files disagree',
+            marks: { en: 'en', de: 'de' },
+            files: ['en', 'de'],
+            offered: ['en', 'de'],
+          },
+          { status: 409, headers: { 'x-handover-error-code': 'ENTRY_SOURCE_CONFLICT' } },
+        );
+      if (url === '/admin/api/build') return Response.json({});
+      return Response.json({ entries: [] });
+    }),
+  );
+  const root = show(session(), '/admin/c/pages/home');
+
+  await vi.waitFor(() =>
+    expect(root.querySelector('.source-recovery h2')?.textContent).toBe(
+      'Which language is the source?',
+    ),
+  );
+  expect(root.querySelector('main [role="alert"]')).toBeNull();
+});
+
 test('a failed pending read is unknown rather than fully published and retry recovers', async () => {
   let attempts = 0;
   vi.stubGlobal(

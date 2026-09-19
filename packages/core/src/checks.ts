@@ -1,7 +1,7 @@
-// Warnings and notes, never a refusal: only the schema and unresolved drift stop a publish.
+// Mostly warnings and notes; an error is what the drawer will not publish past.
 
 import { and, desc, eq, gt, inArray } from 'drizzle-orm';
-import { entrySource, isObject, parseEntry, staleLocales } from './content.js';
+import { type EntrySource, entrySource, isObject, parseEntry, staleLocales } from './content.js';
 import type { Db } from './db.js';
 import { type ContentIndex, entryParts, type IndexEntry } from './entries.js';
 import type { GitClient } from './git.js';
@@ -17,6 +17,7 @@ export type CheckSeverity = 'error' | 'warn' | 'info';
 /** Keyed by the id `checks.ignore` turns a check off with. */
 export const CHECKS = {
   'media-missing': 'error',
+  'source-unresolved': 'error',
   'link-target': 'warn',
   'link-locale': 'warn',
   'media-archived': 'warn',
@@ -120,6 +121,15 @@ export async function runChecks(
             'Filled in by machine translation and not read by anybody since — it goes to the site as it stands',
           );
     }
+    const going = entry.files[entry.publishing[0] ?? ''];
+    if (source && 'problem' in source && going)
+      found.push({
+        check: 'source-unresolved',
+        path: going.path,
+        fieldPath: '',
+        severity: CHECKS['source-unresolved'],
+        message: unresolved(source),
+      });
     const written = source && 'locale' in source ? source.locale : undefined;
     const stale = written ? await staleLocales(siteId, entry.form, parsed, written) : [];
     for (const locale of stale) {
@@ -220,6 +230,16 @@ export async function lastHiddenLong(
       );
   }
   return [];
+}
+
+// The entry's to settle, not one file's: it is reported once, on a file the publish carries.
+function unresolved(source: Extract<EntrySource, { problem: string }>): string {
+  const named = [...new Set(Object.values(source.marks))].join(', ');
+  if (source.problem === 'conflict')
+    return `The files of this entry disagree about which language it is written in (${named}) — it is not published until every file’s _source names the same language`;
+  if (source.problem === 'undeclared')
+    return `This entry says it is written in ${named}, which the site does not declare — it is not published until its _source names one of the site’s languages`;
+  return `This entry says it is written in ${named}, which has no file — it is not published until that file is back or its _source names a language it has`;
 }
 
 // Only a complete mark is ever stale, so there is always a language to name.

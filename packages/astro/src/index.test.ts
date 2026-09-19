@@ -1182,6 +1182,18 @@ test('defineConfig fails when a collection label names no interface language', (
   ).not.toThrow();
 });
 
+test('defineConfig fails when checks.ignore names the unresolved source check', () => {
+  expect(() =>
+    defineConfig({
+      i18n: EN,
+      collections: { posts: { schema: z.object({}) } },
+      checks: { ignore: ['source-unresolved'] as never },
+    }),
+  ).toThrow(
+    'cms.config.ts › checks.ignore: "source-unresolved" cannot be turned off — an entry whose files disagree about their source language is never published',
+  );
+});
+
 // A typo in checks.ignore is a check the site thinks it turned off, which nothing else would say.
 test('defineConfig fails when checks.ignore names no check', () => {
   expect(() =>

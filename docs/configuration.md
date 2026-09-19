@@ -215,7 +215,8 @@ A site with no SEO defaults gets *No search description* on every page it publis
 the one people turn off on day one. The ids are `media-missing`, `link-target`, `link-locale`,
 `media-archived`, `image-alt`, `menu-target`, `translation-empty`, `translation-stale`,
 `translation-machine`, `seo-title`, `seo-description`, `seo-image` and `hidden-long`; a name that is none of
-them fails the build rather than turning nothing off. There is nothing else to configure: a
+them fails the build rather than turning nothing off. `source-unresolved`, an entry whose files
+disagree about the language it is written in, cannot be turned off and fails the build too. There is nothing else to configure: a
 check is on or it is not, and the client never turns one off from the admin.
 
 ## Entry filenames
