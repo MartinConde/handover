@@ -80,6 +80,7 @@ vi.mock('virtual:handover/index', () => ({
   site: 'http://localhost',
   stale: {},
   templates: {},
+  texts: {},
   uses: {},
 }));
 vi.mock('@handover/core', async (original) => ({

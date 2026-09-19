@@ -1501,15 +1501,45 @@ export function translatableText(
 
 /** How much of the source's own words `target` answers; a metric, not publish readiness. */
 export function answeredText(
-  _siteId: string,
+  siteId: string,
   form: Form,
   source: unknown,
   target: unknown,
   locale: string,
 ): { written: number; of: number } {
-  const owed = answeredIn(form, form.fields, source, '', true, locale, new Set());
-  const answered = answeredIn(form, form.fields, target, '', true, locale, new Set());
-  return { written: [...owed].filter((path) => answered.has(path)).length, of: owed.size };
+  return answeredCount(
+    answeredPaths(siteId, form, source),
+    answeredPaths(siteId, form, target),
+    locale,
+  );
+}
+
+/** A file's answered text paths; `rows` holds the `_locales` of each row that names some. */
+export interface AnsweredPaths {
+  paths: string[];
+  rows?: Record<string, string[]>;
+}
+
+/** Every language at once, so a build can keep it and count any pair later. */
+export function answeredPaths(_siteId: string, form: Form, data: unknown): AnsweredPaths {
+  const rows: Record<string, string[]> = {};
+  const paths = [...answeredIn(form, form.fields, data, '', true, rows, new Set())];
+  return Object.keys(rows).length ? { paths, rows } : { paths };
+}
+
+export function answeredCount(
+  source: AnsweredPaths,
+  target: AnsweredPaths,
+  locale: string,
+): { written: number; of: number } {
+  // A path under a row written to other languages is nobody's work in this one.
+  const within = ({ paths, rows = {} }: AnsweredPaths) =>
+    paths.filter((path) =>
+      Object.entries(rows).every(([row, to]) => to.includes(locale) || !path.startsWith(`${row}.`)),
+    );
+  const owed = within(source);
+  const answered = new Set(within(target));
+  return { written: owed.filter((path) => answered.has(path)).length, of: owed.length };
 }
 
 // Not `rowFields`: a blank menu label means "use the page title", so it is never owed.
@@ -1519,7 +1549,7 @@ function answeredIn(
   data: unknown,
   at: string,
   inherited: Translation,
-  locale: string,
+  rows: Record<string, string[]>,
   found: Set<string>,
 ): Set<string> {
   for (const field of fields) {
@@ -1528,17 +1558,18 @@ function answeredIn(
     const value = isObject(data) ? data[key] : undefined;
     const path = at ? `${at}.${key}` : key;
     const mode = field.i18n ?? inherited;
-    if (field.type === 'group') answeredIn(form, field.fields, value, path, mode, locale, found);
+    if (field.type === 'group') answeredIn(form, field.fields, value, path, mode, rows, found);
     else if (field.type === 'blocks' || field.type === 'array') {
       const scalar =
         field.type === 'array' && field.item[0]?.path.length === 0 ? field.item[0] : undefined;
       for (const [i, row] of (Array.isArray(value) ? value : []).entries()) {
         if (scalar) answeredAt(scalar, row, `${path}[${i}]`, scalar.i18n ?? mode, found);
-        if (scalar || !isObject(row) || !inLocale(row, locale)) continue;
+        if (scalar || !isObject(row)) continue;
         const id = rowKey(row, i);
         const inner = field.type === 'blocks' ? form.blocks[String(row._type)] : field.item;
         const rowAt = `${path}[${id.startsWith('#') ? id.slice(1) : `_id=${id}`}]`;
-        if (inner) answeredIn(form, inner, row, rowAt, mode, locale, found);
+        if (Array.isArray(row._locales)) rows[rowAt] = row._locales.map(String);
+        if (inner) answeredIn(form, inner, row, rowAt, mode, rows, found);
       }
     } else answeredAt(field, value, path, mode, found);
   }

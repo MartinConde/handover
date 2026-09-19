@@ -27,6 +27,7 @@ import {
   type Template,
   type TitleFields,
   templatesFrom,
+  textsFrom,
   timestampErrors,
 } from '@handover/core';
 import type { AstroIntegration } from 'astro';
@@ -431,15 +432,17 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
                   const index = indexFrom('default', files, titleFields);
                   const templates = templatesFrom('default', files);
                   const uses = mediaUsesFrom('default', files);
-                  const stale = await staleFrom('default', cms.i18n, files, (collection, name) =>
-                    entryForm(cms, collection, name),
-                  );
+                  const formFor = (collection: string, name: string) =>
+                    entryForm(cms, collection, name);
+                  const stale = await staleFrom('default', cms.i18n, files, formFor);
+                  const texts = textsFrom('default', cms.i18n, files, formFor);
                   return `export default JSON.parse(${JSON.stringify(JSON.stringify(index))});
 export const preview = ${preview};
 export const site = ${JSON.stringify(String(config.site ?? '').replace(/\/$/, ''))};
 export const templates = JSON.parse(${JSON.stringify(JSON.stringify(templates))});
 export const uses = JSON.parse(${JSON.stringify(JSON.stringify(uses))});
-export const stale = JSON.parse(${JSON.stringify(JSON.stringify(stale))});`;
+export const stale = JSON.parse(${JSON.stringify(JSON.stringify(stale))});
+export const texts = JSON.parse(${JSON.stringify(JSON.stringify(texts))});`;
                 },
                 configureServer(server: ViteDevServer) {
                   server.watcher.on('all', (_event, file) => {

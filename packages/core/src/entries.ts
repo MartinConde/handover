@@ -1,4 +1,10 @@
-import { entrySource, parseEntry, staleLocales } from './content.js';
+import {
+  type AnsweredPaths,
+  answeredPaths,
+  entrySource,
+  parseEntry,
+  staleLocales,
+} from './content.js';
 import type { I18nRouting } from './names.js';
 import type { Form } from './schema.js';
 
@@ -153,6 +159,37 @@ export async function staleFrom(
     if (behind.length) stale[key] = behind;
   }
   return stale;
+}
+
+/** What a published file says toward its entry's counts, so a draft can be counted against it. */
+export interface FileTexts extends AnsweredPaths {
+  /** Its `_source` mark, which the resolver needs from files a draft does not replace. */
+  source?: string;
+  /** Some of its text is still a machine's. */
+  machine?: true;
+}
+
+/** Per entry and language; nothing on a one-language site, where there is nothing to count. */
+export function textsFrom(
+  siteId: string,
+  i18n: Pick<I18nRouting, 'locales'>,
+  files: Iterable<ContentFile>,
+  formFor: (collection: string, name: string) => Form | undefined,
+): Record<string, Record<string, FileTexts>> {
+  const texts: Record<string, Record<string, FileTexts>> = {};
+  if (i18n.locales.length < 2) return texts;
+  for (const file of files) {
+    const parts = entryParts(file.path);
+    const form = parts && formFor(parts.collection, parts.name);
+    if (!parts || !form) continue;
+    const data = parseEntry(siteId, file.contents) as Record<string, unknown> | null;
+    const found: FileTexts = answeredPaths(siteId, form, data);
+    if (typeof data?._source === 'string') found.source = data._source;
+    if (Array.isArray(data?._machine) && data._machine.length) found.machine = true;
+    const key = `${parts.collection}/${parts.name}`;
+    texts[key] = { ...texts[key], [parts.locale]: found };
+  }
+  return texts;
 }
 
 /** A draft is what the editor last saw, so its title and status win over the built index. */

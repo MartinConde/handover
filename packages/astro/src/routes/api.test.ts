@@ -399,6 +399,7 @@ vi.mock('virtual:handover/index', () => ({
   site: 'https://coastalhomes.example',
   // Only `posts/taken` has two languages, so it is the only entry the build can mark stale.
   stale: { 'posts/taken': ['de'] },
+  texts: {},
   // The mill house's two languages and the cottage share the photo: two places, not three.
   uses: {
     'src/content/listings/en/mill-house.yaml': [`media/${'a'.repeat(64)}.webp`],

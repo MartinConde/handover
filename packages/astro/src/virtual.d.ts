@@ -18,6 +18,8 @@ declare module 'virtual:handover/index' {
   export const uses: import('@handover/core').MediaUses;
   /** `"listings/mill-house" -> ["de"]`: translations made from a source that has moved on since. */
   export const stale: Record<string, string[]>;
+  /** `"listings/mill-house" -> { de: … }`: each published file's answered text, for the draft overlay. */
+  export const texts: Record<string, Record<string, import('@handover/core').FileTexts>>;
 }
 
 declare module 'virtual:handover/loaders' {

@@ -989,7 +989,8 @@ export const preview = false;
 export const site = "";
 export const templates = JSON.parse(${JSON.stringify(JSON.stringify(await buildTemplates(fixture)))});
 export const uses = JSON.parse(${JSON.stringify(JSON.stringify(await buildMediaUses(fixture)))});
-export const stale = JSON.parse("{}");`,
+export const stale = JSON.parse("{}");
+export const texts = JSON.parse("{}");`,
   );
 });
 
@@ -1031,7 +1032,8 @@ export const preview = false;
 export const site = "";
 export const templates = JSON.parse(${JSON.stringify(JSON.stringify(await buildTemplates(fixture)))});
 export const uses = JSON.parse(${JSON.stringify(JSON.stringify(await buildMediaUses(fixture)))});
-export const stale = JSON.parse("{}");`,
+export const stale = JSON.parse("{}");
+export const texts = JSON.parse("{}");`,
   );
 });
 

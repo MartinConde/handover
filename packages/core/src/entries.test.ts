@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { markTranslation } from './content.js';
+import { answeredCount, markTranslation } from './content.js';
 import {
   collectionEntries,
   contentPathErrors,
@@ -7,6 +7,7 @@ import {
   indexFrom,
   staleFrom,
   templatesFrom,
+  textsFrom,
 } from './entries.js';
 import type { Form } from './schema.js';
 
@@ -369,4 +370,87 @@ test('a file that is not an entry, and a collection with no form, are left alone
       (collection) => (collection === 'listings' ? undefined : title),
     ),
   ).toEqual({});
+});
+
+const rooms: Form = {
+  fields: [
+    { path: ['title'], label: 'Title', type: 'text', required: true },
+    {
+      path: ['rooms'],
+      label: 'Rooms',
+      type: 'array',
+      required: false,
+      item: [{ path: ['name'], label: 'Name', type: 'text', required: true }],
+    },
+  ],
+  blocks: {},
+};
+const SIX = { locales: ['en', 'de', 'fr', 'it', 'es', 'nl'] };
+
+test('each file of an entry keeps its answered paths, source mark and machine flag', () => {
+  expect(
+    textsFrom(
+      'default',
+      SIX,
+      [
+        listing(
+          'en',
+          'mill-house',
+          'title: Mill House\nrooms:\n  - { _id: room0001, name: Loft }\n',
+        ),
+        listing(
+          'de',
+          'mill-house',
+          '_source: en\n_machine: [title]\ntitle: Mühlenhaus\nrooms:\n  - { _id: room0001, name: "" }\n',
+        ),
+        listing('it', 'mill-house', '_source: en\n_machine: []\n'),
+      ],
+      () => rooms,
+    ),
+  ).toEqual({
+    'listings/mill-house': {
+      en: { paths: ['title', 'rooms[_id=room0001].name'] },
+      de: { paths: ['title'], source: 'en', machine: true },
+      it: { paths: [], source: 'en' },
+    },
+  });
+});
+
+test('a row written to some languages is owed only in those', () => {
+  const { en, fr } =
+    textsFrom(
+      'default',
+      SIX,
+      [
+        listing(
+          'en',
+          'mill-house',
+          'title: Mill House\nrooms:\n  - { _id: room0001, _locales: [en, de], name: Loft }\n  - { _id: room0002, name: Barn }\n',
+        ),
+        listing('fr', 'mill-house', 'title: Moulin\n'),
+      ],
+      () => rooms,
+    )['listings/mill-house'] ?? {};
+
+  expect(en?.rows).toEqual({ 'rooms[_id=room0001]': ['en', 'de'] });
+  expect(answeredCount(en ?? { paths: [] }, fr ?? { paths: [] }, 'fr')).toEqual({
+    written: 1,
+    of: 2,
+  });
+  expect(answeredCount(en ?? { paths: [] }, fr ?? { paths: [] }, 'de')).toEqual({
+    written: 1,
+    of: 3,
+  });
+});
+
+test('a file with no form, and every file of a one-language site, are not counted', () => {
+  const files = [
+    file('src/content/redirects.yaml', 'rules: []\n'),
+    listing('en', 'mill-house', 'title: Mill House\n'),
+    file('src/content/posts/en/hello.yaml', 'title: Hello\n'),
+  ];
+  const form = (collection: string) => (collection === 'posts' ? undefined : rooms);
+
+  expect(Object.keys(textsFrom('default', SIX, files, form))).toEqual(['listings/mill-house']);
+  expect(textsFrom('default', { locales: ['en'] }, files, form)).toEqual({});
 });

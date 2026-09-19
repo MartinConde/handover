@@ -68,6 +68,7 @@ vi.mock('virtual:handover/index', () => ({
   site: 'http://localhost',
   stale: {},
   templates: {},
+  texts: {},
   uses: boundary.uses,
 }));
 // Only replace the external repository boundary.

@@ -41,6 +41,7 @@ export type {
 } from './checks.js';
 export { CHECKS, findHiddenLong, lastHiddenLong, runChecks } from './checks.js';
 export type {
+  AnsweredPaths,
   AstroContent,
   ContentEntry,
   ContentSource,
@@ -144,6 +145,7 @@ export type {
   ContentFile,
   ContentIndex,
   EntryLocale,
+  FileTexts,
   IndexEntry,
   Template,
   TitleFields,
@@ -158,6 +160,7 @@ export {
   indexFrom,
   staleFrom,
   templatesFrom,
+  textsFrom,
 } from './entries.js';
 export type {
   CommitComparison,
