@@ -840,6 +840,26 @@ test('the two removals and a restore each read as their own sentence', async () 
   expect(root.querySelectorAll('.said a').length).toBe(2);
 });
 
+test('a source change names the language the entry is now written in, in either language', async () => {
+  server({
+    events: [
+      ev('entry-source', {
+        subject: 'src/content/listings/de/mill-house.yaml',
+        detail: { from: 'en', to: 'de' },
+      }),
+    ],
+    cursor: null,
+  });
+  const root = await show();
+
+  expect(sentences(root)).toEqual(['Anna Berg made DE the source language of mill-house DE.']);
+  props.uiLocale = 'de';
+  flushSync();
+  expect(sentences(root)).toEqual([
+    'Anna Berg hat DE zur Ausgangssprache von mill-house DE gemacht.',
+  ]);
+});
+
 // A publish is undone from the drawer, and a row with no commit has nothing to put back.
 test('restore is offered on a removal and sends the commit that row named', async () => {
   const calls = server({

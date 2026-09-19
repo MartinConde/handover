@@ -526,6 +526,25 @@ export async function resolveDrift(
   if (first) await db.batch([first, ...rest]);
 }
 
+/** Every file in one batch, each at the revision it was read at: one that moved refuses the lot. */
+export async function rewriteDrafts(
+  siteId: string,
+  db: Db,
+  git: Pick<GitClient, 'getFile' | 'getHead'>,
+  files: { path: string; revision?: string; contents: string }[],
+  by?: string,
+): Promise<void> {
+  const found = await Promise.all(files.map((f) => load(siteId, db, git, f.path)));
+  const updatedAt = Date.now();
+  const writes = files.map((f, i) => {
+    const loaded = found[i];
+    if (!loaded || loaded.revision !== f.revision) throw new DraftRevisionError();
+    return upsert(db, siteId, f.path, f.contents, loaded, updatedAt, stampOf(by));
+  });
+  const [first, ...rest] = writes;
+  if (first) await db.batch([first, ...rest]);
+}
+
 /** In the files, since the site builds from git alone; offered everywhere means no mark at all. */
 export async function setEntryLocales(
   siteId: string,

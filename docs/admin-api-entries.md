@@ -79,8 +79,9 @@ showing, answering drift, rename and duplicate answer
 `409` with an `x-handover-error-code` header and
 `{ "code", "error", "marks", "files", "offered" }`, and write nothing. `marks` is what each file
 says, by locale, `files` the languages the entry has a file in, and `offered` the languages it is
-offered in, as the first of those files names them. Deleting the entry and discarding its
-unpublished changes stay open, since either can be the way out.
+offered in, as the first of those files names them. Deleting the entry, discarding its
+unpublished changes and [choosing a source](#changing-the-language-an-entry-is-written-in) stay
+open, since each can be the way out.
 
 | `code` | The files |
 |---|---|
@@ -88,9 +89,47 @@ unpublished changes stay open, since either can be the way out.
 | `ENTRY_SOURCE_UNDECLARED` | name a language the site does not declare |
 | `ENTRY_SOURCE_MISSING` | name a language the entry has no file in |
 
-Make the files agree in the repository, then reopen the entry. The editor shows what each file
+Make the files agree in the repository and reopen the entry, or
+[choose a source](#changing-the-language-an-entry-is-written-in). The editor shows what each file
 says in place of the form ([Translating](translating.md#when-the-files-disagree-about-the-source-language)),
 and the pre-publish checks hold the entry back with the error `source-unresolved`.
+
+### Changing the language an entry is written in
+
+```
+POST /admin/api/entries/:collection/:slug/source   { "locale": "de", "tab": "…", "revisions": { "en": "…", "de": "…" } }  →  { "source": "de" }
+```
+
+Makes `locale` the language the entry is written in. `revisions` is the map the entry's `GET`
+answered and `tab` the one the lock was taken with. Every file of the entry is written as a
+draft in one step: each gets `_source: de`, German takes English's shared and source-only values
+row by row and loses its `_i18n`, and English keeps every word, its source-only values included.
+Nothing is committed: the site and the build keep English until the entry is published, and it
+publishes whole. Discarding the entry's unpublished changes undoes it. What happens to the
+translations' marks is on [Machine translation](machine-translation.md#when-the-source-language-changes).
+The activity log records `entry-source` with `{ "from", "to" }`.
+
+A refusal writes nothing. Those with a `code` carry it in `x-handover-error-code` too, as
+`{ "code", "error" }`:
+
+| Status | `code` | When |
+|---|---|---|
+| `401` | | Nobody is signed in |
+| `409` | | Somebody else holds the entry's lock; the body is a save's `held_by` |
+| `404` | | There is no such entry |
+| `400` | `ENTRY_SOURCE_TARGET_UNDECLARED` | The site does not declare `locale` |
+| `409` | `ENTRY_SOURCE_UNCHANGED` | The entry is already written in it |
+| `409` | `ENTRY_SOURCE_TARGET_OFF` | The entry is not offered in it |
+| `409` | `ENTRY_SOURCE_TARGET_MISSING` | The entry has no file in it yet |
+| `409` | `ENTRY_SOURCE_REVISION` | A file changed since `revisions` was read; reopen the entry |
+| `409` | `ENTRY_SOURCE_DRIFT` | The languages disagree about the blocks; answer the drift first |
+| `409` | `ENTRY_SOURCE_ONLY_CONFLICT` | The language has its own value in a field only the source keeps, and `paths` names them |
+| `422` | `ENTRY_SOURCE_TARGET_INVALID` | With the source's values it would fail the schema; `problems` is a save's |
+
+On an entry whose files disagree about `_source` the same route is how a source is chosen: any
+declared language the entry is offered in and has a file in. `revisions` can be left out, since
+the entry never opened; drift and the schema are not checked, nothing is taken from another file
+and no mark moves.
 
 ```
 GET /admin/api/globals  →  { "globals": [{ "key", "label", "description", "locales", "pending" }], "locales": ["en", "de"] }

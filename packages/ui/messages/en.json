@@ -674,6 +674,7 @@
   "activity_entry_deleted": "{actor} deleted {entry}.",
   "activity_locale_disabled": "{actor} turned {locales} off for {entry}.",
   "activity_locale_disabled_unknown": "{actor} turned {locales} off for an entry.",
+  "activity_entry_source": "{actor} made {to} the source language of {entry}.",
   "activity_sources_recorded": [
     {
       "declarations": ["input actor", "input count", "local p = count: plural"],

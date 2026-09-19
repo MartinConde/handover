@@ -954,6 +954,55 @@ export async function provenance(
   return out;
 }
 
+const EMPTY = new Set(['""', 'null', '[]', '{}']);
+
+/** Source-only values `target` holds that are not the source's; taking the source's would lose them. */
+export function sourceOnlyConflicts(form: Form, source: unknown, target: unknown): string[] {
+  const values = (data: unknown) => {
+    const found: [string, string][] = [];
+    valuesIn(form, form.fields, data, '', true, found, false);
+    return new Map(found);
+  };
+  const theirs = values(source);
+  return [...values(target)]
+    .filter(([path, value]) => !EMPTY.has(value) && theirs.get(path) !== value)
+    .map(([path]) => path);
+}
+
+/** Every file once `to` is the source; without `from` (recovery) files are only stamped. */
+export async function changeSource(
+  siteId: string,
+  form: Form,
+  files: Record<string, unknown>,
+  change: { from?: string; to: string; at: string },
+): Promise<Record<string, Record<string, unknown>>> {
+  const { from, to } = change;
+  const target = isObject(files[to]) ? files[to] : {};
+  const taken =
+    from === undefined
+      ? { ...target }
+      : overlay(form, form.fields, files[from], target, (m) => m !== true, true);
+  delete taken._i18n;
+  const out: Record<string, Record<string, unknown>> = {};
+  for (const [locale, data] of Object.entries(files))
+    out[locale] = withSource(siteId, locale === to ? taken : data, to);
+  if (from === undefined) return out;
+  // Handed its old mark back: that is what says whether the two languages are in sync.
+  const marks = await provenance(
+    siteId,
+    form,
+    { ...files, [to]: { ...out[to], _i18n: target._i18n } },
+    { from, to, blob: await blobSha(stringifyEntry(siteId, out[to])), at: change.at },
+  );
+  for (const [locale, mark] of Object.entries(marks)) {
+    const file = out[locale];
+    if (!file || locale === to) continue;
+    if (mark === undefined) delete file._i18n;
+    else file._i18n = mark;
+  }
+  return out;
+}
+
 /** Stale: a complete mark naming another language than the source, or the source as it no longer is. */
 export async function staleLocales(
   _siteId: string,
@@ -1001,6 +1050,7 @@ function valuesIn(
   at: string,
   inherited: Translation,
   found: [string, string][],
+  want: Translation = true,
 ): void {
   for (const field of fields) {
     const key = field.path[0];
@@ -1010,8 +1060,8 @@ function valuesIn(
     const mode = field.i18n ?? inherited;
     const props = TRANSLATED_PROPS[field.type];
     const row = rowFields(field);
-    if (field.type === 'group') valuesIn(form, field.fields, value, path, mode, found);
-    else if (props && mode === true)
+    if (field.type === 'group') valuesIn(form, field.fields, value, path, mode, found, want);
+    else if (props && mode === true && want === true)
       for (const prop of props) {
         const inner = prop
           .split('.')
@@ -1019,9 +1069,9 @@ function valuesIn(
         if (inner !== undefined) found.push([`${path}.${prop}`, JSON.stringify(inner)]);
       }
     else if (field.type === 'blocks')
-      valuesInRows(form, (row) => form.blocks[String(row._type)], value, path, mode, found);
-    else if (row) valuesInRows(form, () => row, value, path, mode, found);
-    else if (mode === true && value !== undefined) found.push([path, JSON.stringify(value)]);
+      valuesInRows(form, (row) => form.blocks[String(row._type)], value, path, mode, found, want);
+    else if (row) valuesInRows(form, () => row, value, path, mode, found, want);
+    else if (mode === want && value !== undefined) found.push([path, JSON.stringify(value)]);
   }
 }
 
@@ -1032,6 +1082,7 @@ function valuesInRows(
   at: string,
   mode: Translation,
   found: [string, string][],
+  want: Translation,
 ): void {
   if (!Array.isArray(rows)) return;
   for (const [i, row] of rows.entries()) {
@@ -1046,6 +1097,7 @@ function valuesInRows(
         `${at}[${key.startsWith('#') ? key.slice(1) : `_id=${key}`}]`,
         mode,
         found,
+        want,
       );
   }
 }

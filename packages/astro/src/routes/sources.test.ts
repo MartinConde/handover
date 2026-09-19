@@ -15,7 +15,7 @@ import { afterAll, beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import * as tables from '../../../core/src/tables.js';
 import { formSchema } from '../index.js';
 import { onRequest } from '../middleware.js';
-import { GET, POST, PUT } from './api.js';
+import { DELETE, GET, POST, PUT } from './api.js';
 
 // The workflows harness with a third language: a legacy mark can then name a non-source one.
 const boundary = vi.hoisted(() => ({
@@ -41,6 +41,7 @@ vi.mock('cloudflare:workers', () => ({
 }));
 vi.mock('virtual:handover/config', async () => {
   const { z } = await import('astro/zod');
+  const { blocks, defineBlock } = await import('../index.js');
   return {
     default: {
       i18n: {
@@ -58,6 +59,15 @@ vi.mock('virtual:handover/config', async () => {
           schema: z.object({ title: z.string().min(1), slug: z.string().optional() }),
           route: '/posts/[slug]',
           localizedSlugs: true,
+        },
+        // Blocks the languages can disagree about, and a note only the source keeps.
+        rooms: {
+          schema: z.object({
+            title: z.string().min(1),
+            notes: z.string().optional().meta({ i18n: false }),
+            blocks: blocks(() => ({ hero: defineBlock('hero', { heading: z.string() }) })),
+          }),
+          route: '/rooms/[slug]',
         },
       },
       globals: {},
@@ -205,7 +215,8 @@ async function call(method: string, route: string, body?: unknown, cookies = own
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const ctx = { url, request, params: { path: route }, locals: {} } as unknown as APIContext;
-  const handler = method === 'GET' ? GET : method === 'PUT' ? PUT : POST;
+  const handler =
+    method === 'GET' ? GET : method === 'PUT' ? PUT : method === 'DELETE' ? DELETE : POST;
   const response = await onRequest(ctx, () => Promise.resolve(handler(ctx)));
   if (!response) throw new Error('No response');
   return response;
@@ -842,4 +853,223 @@ test('once every file names the same language again, the entry opens', async () 
   const res = await call('GET', 'entries/pages/home');
   expect(res.status).toBe(200);
   expect(((await res.json()) as { sourceLocale: string }).sourceLocale).toBe('de');
+});
+
+const EN_MARKED = '_version: 1\n_source: en\ntitle: "Home"\nbody: "Welcome"\n';
+const makeSource = (locale: unknown, revisions?: Record<string, string>, collection = 'pages') =>
+  call('POST', `entries/${collection}/home/source`, { locale, tab: '', revisions });
+const draftRows = async () =>
+  (await db.select().from(tables.drafts)).map((row) => [row.path, row.revision, row.contents]);
+
+test('changing the source to German and publishing commits every file with German as the source', async () => {
+  trees[head] = {
+    [path('en')]: EN_MARKED,
+    [path('de')]: await marked(DE, 'en', EN_MARKED),
+    [path('fr')]: await marked(FR, 'en', EN_MARKED),
+  };
+  const { revisions } = await opened();
+
+  const res = await makeSource('de', revisions);
+
+  expect(res.status).toBe(200);
+  expect(await res.json()).toEqual({ source: 'de' });
+  expect(writes).toEqual([]);
+  expect((await opened()).sourceLocale).toBe('de');
+  const [logged] = await db.select().from(tables.activity);
+  expect(logged).toMatchObject({
+    kind: 'entry-source',
+    subject: path('de'),
+    detail: { from: 'en', to: 'de' },
+  });
+
+  expect((await call('POST', 'publish', { entries: ['pages/home'] })).status).toBe(200);
+  expect(writes.map((files) => files.map((f) => f.path).sort())).toEqual([
+    [path('de'), path('en'), path('fr')],
+  ]);
+  const german = trees[head]?.[path('de')] ?? '';
+  expect(german).toBe('_version: 1\n_source: "de"\ntitle: "Startseite"\nbody: "Willkommen"\n');
+  const fromGerman = { sourceLocale: 'de', sourceBlob: await blobSha(german) };
+  expect(parseEntry('default', trees[head]?.[path('en')] ?? '')).toMatchObject({
+    _source: 'de',
+    title: 'Home',
+    _i18n: fromGerman,
+  });
+  expect(parseEntry('default', trees[head]?.[path('fr')] ?? '')).toMatchObject({
+    _source: 'de',
+    _i18n: fromGerman,
+  });
+  const after = (await (await call('GET', 'entries/pages/home')).json()) as {
+    sourceLocale: string;
+    stale: string[];
+  };
+  expect(after).toMatchObject({ sourceLocale: 'de', stale: [] });
+});
+
+test('a second request with the same revisions is refused once the change has been made', async () => {
+  trees[head] = { [path('en')]: EN_MARKED, [path('de')]: DE };
+  const { revisions } = await opened();
+  expect((await makeSource('de', revisions)).status).toBe(200);
+  const rows = await draftRows();
+
+  const replay = await makeSource('de', revisions);
+
+  expect(replay.status).toBe(409);
+  expect(replay.headers.get('x-handover-error-code')).toBe('ENTRY_SOURCE_UNCHANGED');
+  expect(await draftRows()).toEqual(rows);
+});
+
+test('each refusal of a source change answers its code and writes nothing', async () => {
+  const cases: [string, Record<string, string>, unknown, number, string, string?][] = [
+    ['undeclared', { en: EN_MARKED, de: DE }, 'it', 400, 'ENTRY_SOURCE_TARGET_UNDECLARED'],
+    ['already the source', { en: EN_MARKED, de: DE }, 'en', 409, 'ENTRY_SOURCE_UNCHANGED'],
+    ['no file', { en: EN_MARKED, de: DE }, 'fr', 409, 'ENTRY_SOURCE_TARGET_MISSING'],
+    [
+      'turned off',
+      { en: `${EN_MARKED}_locales: [en, de]\n`, de: `${DE}_locales: [en, de]\n` },
+      'fr',
+      409,
+      'ENTRY_SOURCE_TARGET_OFF',
+    ],
+    [
+      'blocks disagree',
+      {
+        en: '_version: 1\ntitle: "Rooms"\nblocks:\n  - _type: hero\n    _id: k3nf9a2p\n    heading: "Hall"\n',
+        de: '_version: 1\ntitle: "Zimmer"\nblocks: []\n',
+      },
+      'de',
+      409,
+      'ENTRY_SOURCE_DRIFT',
+      'rooms',
+    ],
+    [
+      'German has its own note',
+      {
+        en: '_version: 1\ntitle: "Rooms"\nnotes: "Keys under the mat"\nblocks: []\n',
+        de: '_version: 1\ntitle: "Zimmer"\nnotes: "Schlüssel beim Nachbarn"\nblocks: []\n',
+      },
+      'de',
+      409,
+      'ENTRY_SOURCE_ONLY_CONFLICT',
+      'rooms',
+    ],
+    [
+      'German has no title',
+      { en: EN_MARKED, de: '_version: 1\ntitle: ""\n' },
+      'de',
+      422,
+      'ENTRY_SOURCE_TARGET_INVALID',
+    ],
+  ];
+  for (const [why, files, locale, status, code, collection = 'pages'] of cases) {
+    await db.delete(tables.drafts);
+    trees[head] = committed(files, collection);
+    const { revisions } = (await (await call('GET', `entries/${collection}/home`)).json()) as {
+      revisions: Record<string, string>;
+    };
+    const rows = await draftRows();
+
+    const res = await makeSource(locale, revisions, collection);
+
+    expect([why, res.status, res.headers.get('x-handover-error-code')]).toEqual([
+      why,
+      status,
+      code,
+    ]);
+    expect(await draftRows()).toEqual(rows);
+  }
+});
+
+test('the refusals name what is in the way', async () => {
+  trees[head] = committed(
+    {
+      en: '_version: 1\ntitle: "Rooms"\nnotes: "Keys under the mat"\nblocks: []\n',
+      de: '_version: 1\ntitle: ""\nnotes: "Schlüssel beim Nachbarn"\nblocks: []\n',
+    },
+    'rooms',
+  );
+  const { revisions } = (await (await call('GET', 'entries/rooms/home')).json()) as {
+    revisions: Record<string, string>;
+  };
+  expect(await (await makeSource('de', revisions, 'rooms')).json()).toMatchObject({
+    code: 'ENTRY_SOURCE_ONLY_CONFLICT',
+    paths: ['notes'],
+  });
+
+  trees[head] = committed({ en: EN_MARKED, de: '_version: 1\ntitle: ""\n' });
+  await db.delete(tables.drafts);
+  const opening = await opened();
+  expect(await (await makeSource('de', opening.revisions)).json()).toMatchObject({
+    code: 'ENTRY_SOURCE_TARGET_INVALID',
+    problems: [{ path: 'title' }],
+  });
+});
+
+test('a German save after the entry was opened refuses the change and writes nothing', async () => {
+  trees[head] = { [path('en')]: EN_MARKED, [path('de')]: DE };
+  const { revisions } = await opened();
+  await call('PUT', 'drafts/pages/home/de', {
+    data: { title: 'Neue Startseite', body: 'Willkommen' },
+    revision: revisions.de,
+  });
+  const rows = await draftRows();
+
+  const res = await makeSource('de', revisions);
+
+  expect(res.status).toBe(409);
+  expect(await res.json()).toMatchObject({ code: 'ENTRY_SOURCE_REVISION' });
+  expect(await draftRows()).toEqual(rows);
+});
+
+test("another member's lock refuses a source change", async () => {
+  trees[head] = { [path('en')]: EN_MARKED, [path('de')]: DE };
+  const { revisions } = await opened();
+  expect((await call('POST', 'locks/pages/home', { tab: 'erika' }, editor)).status).toBe(200);
+  const rows = await draftRows();
+
+  const res = await makeSource('de', revisions);
+
+  expect(res.status).toBe(409);
+  expect(await res.json()).toMatchObject({ held_by: { id: 'editor' } });
+  expect(await draftRows()).toEqual(rows);
+});
+
+test.each([
+  ['files that disagree', 'conflict', 'de'],
+  ['files that name a language with no file', 'missing', 'en'],
+] as const)('an entry with %s opens again once a source is chosen', async (_, problem, to) => {
+  trees[head] = committed(unresolved[problem].files);
+  expect((await call('GET', 'entries/pages/home')).status).toBe(409);
+
+  const res = await makeSource(to);
+
+  expect(res.status).toBe(200);
+  const entry = await opened();
+  expect(entry.sourceLocale).toBe(to);
+  expect(await drafted('en')).toMatchObject({ _source: to });
+  expect(await drafted('de')).toMatchObject({ _source: to });
+});
+
+test('after a change to German, a new French is made and pre-filled from German', async () => {
+  trees[head] = { [path('en')]: EN_MARKED, [path('de')]: DE };
+  const { revisions } = await opened();
+  expect((await makeSource('de', revisions)).status).toBe(200);
+
+  expect((await call('POST', 'drafts/pages/home/fr')).status).toBe(200);
+  expect((await call('POST', 'translate/pages/home/fr', {})).status).toBe(200);
+
+  expect(boundary.translate.mock.calls.map(([, from, to]) => [from, to])).toEqual([['de', 'fr']]);
+  expect(await drafted('fr')).toMatchObject({ _source: 'de', title: '[fr] Startseite' });
+  expect((await opened()).sourceLocale).toBe('de');
+});
+
+test('discarding the entry after a source change puts every file back', async () => {
+  trees[head] = { [path('en')]: EN_MARKED, [path('de')]: DE };
+  const { revisions } = await opened();
+  expect((await makeSource('de', revisions)).status).toBe(200);
+
+  expect((await call('DELETE', 'drafts/pages/home')).status).toBe(200);
+
+  const entry = await opened();
+  expect(entry.sourceLocale).toBe('en');
+  expect(entry.pending).toEqual([]);
 });

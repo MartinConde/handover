@@ -140,7 +140,23 @@ hidden, renamed or duplicated, and nothing publishes it; deleting it or discardi
 changes still works. The drawer says why: the check reads *The files of this entry disagree about which
 language it is written in*. Fix it in the repository — every file's `_source` has to name the
 same language, and that language needs a file (put a deleted one back) — and the entry opens
-again as it was. Changing the interface language keeps the panel.
+again as it was. The [API](admin-api-entries.md#changing-the-language-an-entry-is-written-in)
+can also choose one of the languages the entry has a file in. Changing the interface language
+keeps the panel.
+
+## Changing the language an entry is written in
+
+An entry keeps its source when languages are added, removed or reordered. Making German the
+source of an English entry is its own request
+([`POST …/source`](admin-api-entries.md#changing-the-language-an-entry-is-written-in)), refused
+while German has no file, is turned off, would fail the schema, or holds its own value in a
+field only the source keeps, and while the languages disagree about the blocks. Every file
+becomes an unpublished change and nothing on the site moves until the entry is published, with
+every language going out together. Before that, discarding the entry's changes puts it back.
+German then carries the structure, the shared and source-only values it took from English, and
+its own words; English keeps its words, and machine translation translates from German.
+[Machine translation](machine-translation.md#when-the-source-language-changes) says which
+translations read stale afterwards.
 
 A menu label is the one translated value a machine is never offered: an empty box is not a gap
 but *use the page's own title*, and that title is already translated.

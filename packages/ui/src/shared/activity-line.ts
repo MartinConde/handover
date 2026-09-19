@@ -301,6 +301,13 @@ export function said(event: ActivityEvent, people: Person[] = [], locale: UiLoca
           )
         : { lead: m.activity_locale_disabled_unknown({ actor, locales }, options) };
     }
+    case 'entry-source': {
+      const one = entryOf(event.subject);
+      const to = str(detail, 'to')?.toUpperCase();
+      if (one && to)
+        return linked(m.activity_entry_source({ actor, to, entry: SUBJECT_MARKER }, options), one);
+      break;
+    }
     case 'sources-recorded':
       return {
         lead: m.activity_sources_recorded({ actor, count: count(detail, 'entries') }, options),

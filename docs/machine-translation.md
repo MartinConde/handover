@@ -77,3 +77,14 @@ read from the blob the mark names, so it is the exact bytes the translation was 
 
 The [dashboard](dashboard.md) counts them per language. That count is taken at build over every
 file, so it is the last build's rather than today's: the warning in the editor is the live one.
+
+## When the source language changes
+
+Making German the source of an English entry
+([the route](admin-api-entries.md#changing-the-language-an-entry-is-written-in)) moves a mark only
+where nothing is lost by it. When German was up to date with English, English is marked as
+translated from German as it is now, dated at the change, and so is every translation that was up
+to date with English, keeping its own `translatedAt`. When German was behind or never marked,
+no mark moves and English gets none: every translation still names English, so each reads stale
+until it is translated again. German loses its own mark, being the source. No words change,
+`_machine` included.

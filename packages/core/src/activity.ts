@@ -57,6 +57,7 @@ export const ACTIVITY_GROUPS = {
     'entry-duplicate',
     'template-saved',
     'sources-recorded',
+    'entry-source',
   ],
   Media: ['upload', 'media-archive', 'media-delete'],
   Site: ['redirect-added', 'redirect-changed', 'redirect-deleted'],

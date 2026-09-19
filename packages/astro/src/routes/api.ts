@@ -27,6 +27,7 @@ import { requestContext } from './api/context.js';
 import {
   address,
   autosave,
+  changeEntrySource,
   createEntry,
   createTranslation,
   dashboard,
@@ -107,6 +108,7 @@ const RENAME = entryRoute('entries/<segment>/<segment>/rename');
 const DUPLICATE = entryRoute('entries/<segment>/<segment>/duplicate');
 const TEMPLATE = entryRoute('entries/<segment>/<segment>/template');
 const LOCALES = entryRoute('entries/<segment>/<segment>/locales');
+const ENTRY_SOURCE = entryRoute('entries/<segment>/<segment>/source');
 const ADDRESS = entryRoute('entries/<segment>/<segment>/address/<segment>');
 const DRIFT = entryRoute('drift/<segment>/<segment>');
 const DIFF = entryRoute('diff/<segment>/<segment>');
@@ -407,6 +409,11 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   if (offered)
     return answering(() =>
       offering(ctx, offered[1] ?? '', offered[2] ?? '', request, locals.handover),
+    );
+  const sourced = params.path?.match(ENTRY_SOURCE);
+  if (sourced)
+    return answering(() =>
+      changeEntrySource(ctx, sourced[1] ?? '', sourced[2] ?? '', request, locals.handover),
     );
   const restored = params.path?.match(RESTORE_VERSION);
   if (restored)

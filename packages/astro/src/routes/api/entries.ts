@@ -4,6 +4,7 @@ import type { Db, EntryEdit, Form, IndexEntry, Labels, LocaleSeed } from '@hando
 import {
   addressError,
   beginOperation,
+  changeSource,
   claimLock,
   collectionEntries,
   createDraft,
@@ -61,12 +62,14 @@ import {
   reservePaths,
   resolveDrift,
   resolveFieldTarget,
+  rewriteDrafts,
   saveDraft,
   savedTemplates,
   saveTranslated,
   setEntryAddress,
   setEntryLocales,
   setEntryStatus,
+  sourceOnlyConflicts,
   staleLocales,
   stringifyEntry,
   syncLocale,
@@ -1031,6 +1034,139 @@ export async function reconcile(
     session?.user.id,
   );
   return Response.json({});
+}
+
+const sourceAnswer = (
+  status: number,
+  code: string,
+  error: string,
+  more: Record<string, unknown> = {},
+) =>
+  Response.json({ code, error, ...more }, { status, headers: { 'x-handover-error-code': code } });
+
+/** Drafts only: the site and the build keep the old source until the entry publishes whole. */
+export async function changeEntrySource(
+  ctx: RequestContext,
+  collection: string,
+  slug: string,
+  request: Request,
+  session: App.Locals['handover'],
+): Promise<Response> {
+  if (!session) return new Response('Unauthorized', { status: 401 });
+  const body = (await request.json().catch(() => undefined)) as
+    | { locale?: unknown; tab?: unknown; revisions?: unknown }
+    | undefined;
+  const holder = await lockHolder('default', ctx.db(), `${collection}/${slug}`);
+  if (holder && !isHolder(holder, session, tabOf(body)))
+    return Response.json(
+      {
+        held_by: { id: holder.userId, name: holder.name },
+        mine: false,
+        expires_at: holder.expiresAt,
+      },
+      { status: 409 },
+    );
+  const schema = schemaOf(collection, slug);
+  const revisions = body?.revisions;
+  if (
+    revisions !== undefined &&
+    (!object(revisions) || Object.values(revisions).some((r) => typeof r !== 'string'))
+  )
+    return new Response('Bad request', { status: 400 });
+  const { loaded, source } = schema
+    ? await entrySourceFor(ctx, collection, slug)
+    : { loaded: {}, source: undefined };
+  if (!schema || !source) return entryNotFound();
+  const to = body?.locale;
+  if (typeof to !== 'string' || !config.i18n.locales.includes(to))
+    return sourceAnswer(
+      400,
+      'ENTRY_SOURCE_TARGET_UNDECLARED',
+      `${String(to)} is not a language this site declares`,
+    );
+  // Without one (the files disagree or name a language they cannot have) this is the recovery.
+  const from = 'locale' in source ? source.locale : undefined;
+  if (to === from)
+    return sourceAnswer(409, 'ENTRY_SOURCE_UNCHANGED', `This entry is already written in ${to}`);
+  const files = localeData(loaded);
+  const present = config.i18n.locales.filter((locale) => locale in files);
+  // Off before missing: a language turned off has no file either, and "off" is why.
+  if (!offeredIn(files[from ?? present[0] ?? ''], present).offered.includes(to))
+    return sourceAnswer(409, 'ENTRY_SOURCE_TARGET_OFF', `This entry is not offered in ${to}`);
+  if (!(to in files))
+    return sourceAnswer(
+      409,
+      'ENTRY_SOURCE_TARGET_MISSING',
+      `This entry has no ${to} file yet: create it before making it the source`,
+    );
+  // A recovery has no revisions to send, as the entry never opened; the write still asserts them.
+  const expected = (revisions ?? (from === undefined ? undefined : {})) as
+    | Record<string, string>
+    | undefined;
+  const moved = () =>
+    sourceAnswer(
+      409,
+      'ENTRY_SOURCE_REVISION',
+      'This entry changed since it was opened. Reload it and choose again.',
+    );
+  if (
+    expected &&
+    [...new Set([...Object.keys(expected), ...Object.keys(loaded)])].some(
+      (locale) => expected[locale] !== loaded[locale]?.revision,
+    )
+  )
+    return moved();
+  const form = formFor(collection, slug);
+  if (from !== undefined && driftReport('default', form, files).length)
+    return sourceAnswer(
+      409,
+      'ENTRY_SOURCE_DRIFT',
+      "This entry's languages disagree about which blocks it has. Reconcile them first.",
+    );
+  const paths = from === undefined ? [] : sourceOnlyConflicts(form, files[from], files[to]);
+  if (paths.length)
+    return sourceAnswer(
+      409,
+      'ENTRY_SOURCE_ONLY_CONFLICT',
+      `The ${to} file has its own values in fields only the source keeps: clear them first`,
+      { paths },
+    );
+  const changed = await changeSource('default', form, files, {
+    from,
+    to,
+    at: new Date().toISOString(),
+  });
+  const problems = from === undefined ? [] : entryProblems(schema, changed[to]);
+  if (problems.length)
+    return sourceAnswer(
+      422,
+      'ENTRY_SOURCE_TARGET_INVALID',
+      `The ${to} file would not pass the site's checks as the source: fix it first`,
+      { problems },
+    );
+  try {
+    await rewriteDrafts(
+      'default',
+      ctx.db(),
+      ctx.git(),
+      Object.entries(changed).map(([locale, data]) => ({
+        path: entryPath(collection, slug, locale),
+        revision: loaded[locale]?.revision,
+        contents: stringifyEntry('default', data),
+      })),
+      session.user.id,
+    );
+  } catch (err) {
+    if (err instanceof DraftRevisionError || isDraftRace(err)) return moved();
+    throw err;
+  }
+  await logActivity('default', ctx.db(), {
+    userId: session.user.id,
+    kind: 'entry-source',
+    subject: entryPath(collection, slug, to),
+    detail: { from: from ?? null, to },
+  });
+  return Response.json({ source: to });
 }
 
 // Nothing here touches GitHub: listing through the contents API is one request per file.

@@ -59,6 +59,7 @@ export type {
 export {
   applyDrift,
   ContentError,
+  changeSource,
   draftSource,
   driftReport,
   entryAt,
@@ -73,6 +74,7 @@ export {
   parseEntry,
   provenance,
   refErrors,
+  sourceOnlyConflicts,
   staleLocales,
   staticSource,
   stringifyEntry,
@@ -125,6 +127,7 @@ export {
   restoreCommit,
   restoreDraft,
   revertCommit,
+  rewriteDrafts,
   saveDraft,
   saveTranslated,
   setEntryAddress,

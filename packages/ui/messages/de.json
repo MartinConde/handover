@@ -680,6 +680,7 @@
   "activity_entry_deleted": "{actor} hat {entry} gelöscht.",
   "activity_locale_disabled": "{actor} hat {locales} für {entry} deaktiviert.",
   "activity_locale_disabled_unknown": "{actor} hat {locales} für einen Eintrag deaktiviert.",
+  "activity_entry_source": "{actor} hat {to} zur Ausgangssprache von {entry} gemacht.",
   "activity_sources_recorded": [
     {
       "declarations": ["input actor", "input count", "local p = count: plural"],

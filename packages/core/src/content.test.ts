@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { expect, test, vi } from 'vitest';
 import {
   applyDrift,
+  changeSource,
   draftSource,
   driftReport,
   entryAt,
@@ -17,6 +18,7 @@ import {
   parseEntry,
   provenance,
   refErrors,
+  sourceOnlyConflicts,
   staleLocales,
   staticSource,
   stringifyEntry,
@@ -2583,4 +2585,158 @@ test('a translation made from a language in sync with the source is rebased onto
     de: { ...rebased, translatedAt: markOf(de)?.translatedAt },
     fr: { ...rebased, translatedAt: markOf(fr)?.translatedAt },
   });
+});
+
+const at = change.at;
+
+test('a source change to a translation in sync rebases the old source and the translations in sync', async () => {
+  const en = { _version: 1, _source: 'en', title: 'Mill House', summary: 'A mill.' };
+  const de = await markedFrom(['en', en], {
+    _version: 1,
+    title: 'Mühlenhaus',
+    summary: 'Eine Mühle.',
+  });
+  const fr = await markedFrom(['en', en], { _version: 1, title: 'Moulin', summary: 'Un moulin.' });
+  const it = await markedFrom(['en', { ...en, summary: 'Old.' }], { _version: 1, title: 'Mulino' });
+
+  const out = await changeSource(
+    'default',
+    listing,
+    { en, de, fr, it },
+    { from: 'en', to: 'de', at },
+  );
+
+  const { _i18n, ...deWords } = de;
+  const rebased = {
+    sourceLocale: 'de',
+    sourceBlob: blobSha(stringifyEntry('default', out.de)),
+    sourceHash: markOf(await markedFrom(['de', out.de], {}))?.sourceHash,
+  };
+  expect(out).toEqual({
+    en: { ...en, _source: 'de', _i18n: { ...rebased, translatedAt: at } },
+    de: { ...deWords, _source: 'de' },
+    fr: { ...fr, _source: 'de', _i18n: { ...rebased, translatedAt: markOf(fr)?.translatedAt } },
+    it: { ...it, _source: 'de' },
+  });
+  expect(await staleLocales('default', listing, out, 'de')).toEqual(['it']);
+});
+
+test('a source change to a translation behind or never marked rebases nothing', async () => {
+  const en = { _version: 1, title: 'Mill House', summary: 'A mill.' };
+  const fr = await markedFrom(['en', en], { _version: 1, title: 'Moulin' });
+  const behind = await markedFrom(['en', { title: 'Mill' }], { _version: 1, title: 'Mühlenhaus' });
+
+  for (const de of [behind, { _version: 1, title: 'Mühlenhaus' }]) {
+    const out = await changeSource(
+      'default',
+      listing,
+      { en, de, fr },
+      { from: 'en', to: 'de', at },
+    );
+
+    expect(out).toEqual({
+      en: { ...en, _source: 'de' },
+      de: { _version: 1, _source: 'de', title: 'Mühlenhaus' },
+      fr: { ...fr, _source: 'de' },
+    });
+    expect(await staleLocales('default', listing, out, 'de')).toEqual(['fr']);
+  }
+});
+
+// `notes` and each room's `note` are source-only; `size` is every language's.
+const rooms: Form = {
+  fields: [
+    { path: ['title'], label: 'Title', type: 'text', required: true },
+    { path: ['notes'], label: 'Notes', type: 'text', required: false, i18n: false },
+    { path: ['rooms'], label: 'Rooms', type: 'blocks', required: true, types: ['room'] },
+  ],
+  blocks: {
+    room: [
+      { path: ['heading'], label: 'Heading', type: 'text', required: true },
+      { path: ['size'], label: 'Size', type: 'number', required: false, i18n: 'duplicate' },
+      { path: ['note'], label: 'Note', type: 'text', required: false, i18n: false },
+    ],
+  },
+};
+const roomsEn = {
+  _version: 1,
+  title: 'Mill House',
+  notes: 'Keys under the mat',
+  rooms: [
+    { _type: 'room', _id: 'k1tchen0', heading: 'Kitchen', size: 20, note: 'Tiles' },
+    { _type: 'room', _id: 'ha11way0', heading: 'Hall', size: 8, note: 'Draughty' },
+  ],
+  _machine: ['title'],
+};
+// Moved rows and an out-of-date size: the German file is paired by `_id`, not by position.
+const roomsDe = {
+  _version: 1,
+  _machine: ['rooms[_id=k1tchen0].heading'],
+  title: 'Mühlenhaus',
+  rooms: [
+    { _type: 'room', _id: 'ha11way0', heading: 'Flur', size: 7 },
+    { _type: 'room', _id: 'k1tchen0', heading: 'Küche', size: 18 },
+  ],
+};
+
+test('the new source takes the shared and source-only values row by row and keeps its words', async () => {
+  const out = await changeSource(
+    'default',
+    rooms,
+    { en: roomsEn, de: { ...roomsDe, _i18n: { sourceLocale: 'en' } } },
+    { from: 'en', to: 'de', at },
+  );
+
+  expect(out.de).toEqual({
+    _version: 1,
+    _source: 'de',
+    _machine: ['rooms[_id=k1tchen0].heading'],
+    title: 'Mühlenhaus',
+    notes: 'Keys under the mat',
+    rooms: [
+      { _type: 'room', _id: 'ha11way0', heading: 'Flur', size: 8, note: 'Draughty' },
+      { _type: 'room', _id: 'k1tchen0', heading: 'Küche', size: 20, note: 'Tiles' },
+    ],
+  });
+});
+
+test('the old source keeps its source-only values and every file keeps its machine marks', async () => {
+  const fr = { _version: 1, _machine: ['title'], title: 'Moulin', rooms: [] };
+
+  const out = await changeSource(
+    'default',
+    rooms,
+    { en: roomsEn, de: roomsDe, fr },
+    { from: 'en', to: 'de', at },
+  );
+
+  expect(out.en).toEqual({ ...roomsEn, _source: 'de' });
+  expect(out.fr).toEqual({ ...fr, _source: 'de' });
+});
+
+test('choosing a source for an entry without one stamps every file and takes nothing', async () => {
+  const fr = await markedFrom(['en', roomsEn], { _version: 1, _source: 'en', title: 'Moulin' });
+  const de = { ...roomsDe, _source: 'de', _i18n: { sourceLocale: 'en' } };
+
+  const out = await changeSource('default', rooms, { en: roomsEn, de, fr }, { to: 'de', at });
+
+  expect(out).toEqual({
+    en: { ...roomsEn, _source: 'de' },
+    de: { ...roomsDe, _source: 'de' },
+    fr: { ...fr, _source: 'de' },
+  });
+});
+
+test('a source-only value the new source holds and the old one does not is a conflict', () => {
+  const de = {
+    notes: 'Schlüssel beim Nachbarn',
+    rooms: [
+      { _type: 'room', _id: 'k1tchen0', note: 'Tiles' },
+      { _type: 'room', _id: 'ha11way0', note: 'Zugig' },
+    ],
+  };
+  const agreeing = { notes: '', rooms: [{ _type: 'room', _id: 'k1tchen0', note: 'Tiles' }] };
+
+  expect(sourceOnlyConflicts(rooms, roomsEn, de)).toEqual(['notes', 'rooms[_id=ha11way0].note']);
+  expect(sourceOnlyConflicts(rooms, roomsEn, agreeing)).toEqual([]);
 });

@@ -102,6 +102,9 @@ lists them with a checkbox each and commits the checked ones. What the drawer sh
 refuses, holding an entry back, and what happens after the commit — build status and revert —
 are on [Pending changes](pending-changes.md).
 
+An entry whose [source language changed](translating.md#changing-the-language-an-entry-is-written-in)
+has an unpublished change in every language, so all of its files go out together.
+
 Both the one-entry confirmation and the pending-changes drawer follow the account's
 [interface language](interface-language.md). A live English/Deutsch switch preserves the exact
 publish selection, checks, locks and pending operation. Already-visible Handover recovery text is

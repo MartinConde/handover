@@ -37,6 +37,15 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Save as template copies the file in the language the entry is written in, not the site's default
   language's. In the language switcher, a translation made from another language is read out as
   *translated from French, not from English* instead of *English changed since this was translated*.
+- `POST /admin/api/entries/:collection/:slug/source { locale, tab, revisions }` changes the
+  language an entry is written in. Every file becomes a draft carrying the new `_source`, the new
+  source takes the old one's shared and source-only values, and translations' `_i18n` marks move
+  only where the new source was up to date; nothing is committed until the entry publishes, all
+  languages together. Refusals write nothing and answer `ENTRY_SOURCE_TARGET_UNDECLARED`,
+  `ENTRY_SOURCE_UNCHANGED`, `ENTRY_SOURCE_TARGET_OFF`, `ENTRY_SOURCE_TARGET_MISSING`,
+  `ENTRY_SOURCE_REVISION`, `ENTRY_SOURCE_DRIFT`, `ENTRY_SOURCE_ONLY_CONFLICT` or
+  `ENTRY_SOURCE_TARGET_INVALID`. On an entry whose files disagree about `_source`, the same route
+  chooses one. New activity kind `entry-source`.
 - Join the content form and live preview into one workspace, reduce nested field padding, and refresh the canvas toolbar, structure panel, inspector, and stage.
 
 - Redirects is laid out like the other lists: title, rule count and **Add redirect** on one
