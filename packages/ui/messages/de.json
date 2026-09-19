@@ -413,9 +413,11 @@
   "dashboard_up_to_date": "Aktuell",
   "dashboard_missing_count": "{count} fehlen",
   "dashboard_stale_count": "{count} veraltet",
+  "dashboard_unfinished_count": "{count} teilweise geschrieben",
+  "dashboard_machine_count": "{count} maschinell übersetzt",
   "dashboard_show": "Anzeigen",
   "dashboard_show_collection": "{collection} anzeigen",
-  "dashboard_stale_hint": "Veraltet bedeutet, dass sich die Ausgangssprache seit der Übersetzung geändert hat. Die Anzahl stammt aus dem letzten Build; eine korrigierte, aber noch nicht veröffentlichte Übersetzung ist weiterhin enthalten.",
+  "dashboard_translation_hint": "Fehlend, teilweise geschrieben und maschinell übersetzt enthalten unveröffentlichte Änderungen. Veraltet bedeutet, dass sich die Ausgangssprache seit der Übersetzung geändert hat; diese Anzahl stammt aus dem letzten Build, eine korrigierte, aber noch nicht veröffentlichte Übersetzung ist also weiterhin enthalten. Ein Eintrag kann in mehreren Zahlen stehen.",
   "sources_title": "Ausgangssprachen",
   "sources_tile_line": [
     {
@@ -807,13 +809,17 @@
   "entry_list_nothing_deleted": "Nichts wurde gelöscht",
   "entry_list_nothing_deleted_hint": "Gelöschte Einträge in {collection} erscheinen hier, solange das Aktivitätsprotokoll sie aufbewahrt — auf dieser Website 180 Tage.",
   "entry_list_no_search_results": "Keine Ergebnisse für „{search}“. Versuche eine andere Suche oder lösche die Filter.",
-  "entry_list_language_complete": "In {language} fehlt nichts und nichts ist veraltet.",
+  "entry_list_language_complete": "In {language} fehlt nichts, nichts ist teilweise geschrieben und nichts veraltet.",
   "entry_list_language_none_missing": "In {language} fehlt keine Datei.",
   "entry_list_language_none_stale": "In {language} ist nichts veraltet.",
+  "entry_list_language_none_unfinished": "In {language} ist nichts teilweise geschrieben.",
+  "entry_list_language_none_machine": "In {language} ist nichts maschinell übersetzt.",
   "entry_list_work": "Zu tun",
-  "entry_list_work_owed": "Fehlt oder veraltet",
+  "entry_list_work_owed": "Fehlt, teilweise geschrieben oder veraltet",
   "entry_list_work_missing": "Fehlt",
   "entry_list_work_stale": "Veraltet",
+  "entry_list_work_unfinished": "Teilweise geschrieben",
+  "entry_list_work_machine": "Maschinell übersetzt",
   "entry_list_files_created": "{created} von {offered} Sprachdateien angelegt. {languages}.",
   "entry_list_language_state": "{language}: {state}",
   "entry_list_no_live": "Keine live geschalteten Einträge in {collection}.",
@@ -824,6 +830,16 @@
   "entry_list_chip_missing": "noch nicht geschrieben",
   "entry_list_chip_stale": "hinter der Ausgangssprache zurück",
   "entry_list_chip_written": "geschrieben",
+  "entry_list_chip_partial": [
+    {
+      "declarations": ["input written", "input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "teilweise geschrieben, {written} von {count} Text",
+        "countPlural=other": "teilweise geschrieben, {written} von {count} Texten"
+      }
+    }
+  ],
   "entry_list_select_all": "Alle auswählen",
   "entry_list_select_title": "{title} auswählen",
   "entry_list_being_edited_by": "Wird von {name} bearbeitet",

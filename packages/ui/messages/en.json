@@ -410,9 +410,11 @@
   "dashboard_up_to_date": "Up to date",
   "dashboard_missing_count": "{count} missing",
   "dashboard_stale_count": "{count} stale",
+  "dashboard_unfinished_count": "{count} partly written",
+  "dashboard_machine_count": "{count} machine translated",
   "dashboard_show": "Show",
   "dashboard_show_collection": "Show {collection}",
-  "dashboard_stale_hint": "Stale means the language it was translated from has changed since. The count is the last build's, so a translation you have fixed but not published is still in it.",
+  "dashboard_translation_hint": "Missing, partly written and machine translated include unpublished changes. Stale means the language it was translated from has changed since; that count is the last build's, so a translation you have fixed but not published is still in it. One entry can be in several counts.",
   "sources_title": "Source languages",
   "sources_tile_line": [
     {
@@ -801,13 +803,17 @@
   "entry_list_nothing_deleted": "Nothing has been deleted",
   "entry_list_nothing_deleted_hint": "Deleted entries in {collection} appear here while the activity log keeps them — 180 days on this site.",
   "entry_list_no_search_results": "No results for “{search}”. Try another search or clear the filters.",
-  "entry_list_language_complete": "Nothing is missing or stale in {language}.",
+  "entry_list_language_complete": "Nothing is missing, partly written or stale in {language}.",
   "entry_list_language_none_missing": "No file is missing in {language}.",
   "entry_list_language_none_stale": "Nothing is stale in {language}.",
+  "entry_list_language_none_unfinished": "Nothing is partly written in {language}.",
+  "entry_list_language_none_machine": "Nothing in {language} is machine translated.",
   "entry_list_work": "Work to do",
-  "entry_list_work_owed": "Missing or stale",
+  "entry_list_work_owed": "Missing, partly written or stale",
   "entry_list_work_missing": "Missing",
   "entry_list_work_stale": "Stale",
+  "entry_list_work_unfinished": "Partly written",
+  "entry_list_work_machine": "Machine translated",
   "entry_list_files_created": "{created} of {offered} language files created. {languages}.",
   "entry_list_language_state": "{language}: {state}",
   "entry_list_no_live": "No live entries in {collection}.",
@@ -818,6 +824,16 @@
   "entry_list_chip_missing": "not written yet",
   "entry_list_chip_stale": "behind the language it was translated from",
   "entry_list_chip_written": "written",
+  "entry_list_chip_partial": [
+    {
+      "declarations": ["input written", "input count", "local countPlural = count: plural"],
+      "selectors": ["countPlural"],
+      "match": {
+        "countPlural=one": "partly written, {written} of {count} text",
+        "countPlural=other": "partly written, {written} of {count} texts"
+      }
+    }
+  ],
   "entry_list_select_all": "Select all",
   "entry_list_select_title": "Select {title}",
   "entry_list_being_edited_by": "Being edited by {name}",

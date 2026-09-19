@@ -6,9 +6,13 @@ export type OwedRow = {
   offered?: string[];
   /** The languages the last build found translated from a source that has moved on since. */
   stale?: string[];
+  /** `[written, of]` per partly written language, drafts included. */
+  partial?: Record<string, [number, number]>;
+  /** The languages whose file still holds machine-translated text, drafts included. */
+  machine?: string[];
 };
 
-const WORK = ['owed', 'missing', 'stale'] as const;
+const WORK = ['owed', 'missing', 'stale', 'unfinished', 'machine'] as const;
 export type Work = (typeof WORK)[number];
 
 // An unknown kind of work asks for all of it rather than for an empty list.
@@ -19,12 +23,19 @@ export const workFrom = (value: string | null): Work =>
 export const offered = (entry: OwedRow, locale: string) => entry.offered?.includes(locale) ?? true;
 export const missing = (entry: OwedRow, locale: string) =>
   offered(entry, locale) && !entry.locales[locale];
+const written = (entry: OwedRow, locale: string) =>
+  offered(entry, locale) && Boolean(entry.locales[locale]);
 export const stale = (entry: OwedRow, locale: string) =>
-  offered(entry, locale) &&
-  Boolean(entry.locales[locale]) &&
-  (entry.stale?.includes(locale) ?? false);
+  written(entry, locale) && (entry.stale?.includes(locale) ?? false);
+export const partial = (entry: OwedRow, locale: string) =>
+  written(entry, locale) && Boolean(entry.partial?.[locale]);
+export const machine = (entry: OwedRow, locale: string) =>
+  written(entry, locale) && (entry.machine?.includes(locale) ?? false);
+// Machine translation is not a debt by itself, so owed leaves it to its own filter.
 export const owes = (entry: OwedRow, locale: string, work: Work) =>
-  (work !== 'stale' && missing(entry, locale)) || (work !== 'missing' && stale(entry, locale));
+  work === 'owed'
+    ? missing(entry, locale) || partial(entry, locale) || stale(entry, locale)
+    : { missing, stale, unfinished: partial, machine }[work](entry, locale);
 
 // An entry that exists in German alone is listed by its German title, not its file name.
 export const rowTitle = (entry: OwedRow, locales: string[]) =>

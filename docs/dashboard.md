@@ -33,8 +33,10 @@ admin made; the top bar offers it only on a failed build, where it is the way ou
 unpublished changes reads *Edited by …*; one whose changes are already out reads *Published
 by …*. A row somebody has open right now carries *… is editing*.
 
-**Translation health** — per language, how many entries owe it a file and how many of its
-translations were made from a source that has changed since. *Show* beside a language opens
+**Translation health** — per language, how many entries owe it a file, how many of its files are
+partly written, how many were made from a source that has changed since, and how many still hold
+text a machine wrote. One entry can be in several of these, so they are not added up. *Show*
+beside a language opens
 the entry list filtered to the rows that owe it ([Translations in the entry list](translation-list.md));
 when more than one collection owes it there is one link per list, each named. Not drawn on a
 site that declares one language.
@@ -65,6 +67,9 @@ whether their edit is out yet.
 **Missing** is the content index with today's drafts over it — exact, and it counts only the
 languages an entry is *offered* in. A language turned off for an entry is a decision, not a
 gap ([i18n.md](i18n.md)).
+
+**Partly written** and **machine translated** are the build's count of each file's text with
+today's drafts over it, the same numbers the entry list reads, globals included.
 
 **Stale** is taken at build, over every file in `src/content/`, and shipped with the content
 index. Judging one language against another needs every file of the entry, which would be a

@@ -1395,7 +1395,8 @@ function translationHealth(overlay: readonly { path: string; contents: string }[
   const unfinished: Record<string, number> = {};
   const machine: Record<string, number> = {};
   // Drafts included, unlike `behind`; an entry can count in both.
-  for (const summary of Object.values(textsNow(overlay))) {
+  const summaries = textsNow(overlay);
+  for (const summary of Object.values(summaries)) {
     for (const locale of Object.keys(summary.partial ?? {}))
       unfinished[locale] = (unfinished[locale] ?? 0) + 1;
     for (const locale of summary.machine ?? []) machine[locale] = (machine[locale] ?? 0) + 1;
@@ -1427,6 +1428,9 @@ function translationHealth(overlay: readonly { path: string; contents: string }[
           behind[locale] = (behind[locale] ?? 0) + 1;
           owed(locale, collection);
         }
+      // Machine-written is not owed, so it sends *Show* nowhere.
+      for (const locale of Object.keys(summaries[`${collection}/${entry.id}`]?.partial ?? {}))
+        owed(locale, collection);
     }
   return {
     defaultLocale: config.i18n.defaultLocale,

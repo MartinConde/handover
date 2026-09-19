@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The entry list marks a partly written language with a half-filled chip, counts it as owed, and
+  its work filter gains **Partly written** and **Machine translated** (`owed=unfinished`,
+  `owed=machine`); the editor's queue follows. The dashboard's translation tile shows both counts
+  and *Show* now finds a collection owed only partly written files.
 - `GET /admin/api/entries/:collection` rows carry `partial` and `machine`, and the dashboard's
   `translations` counts `unfinished` and `machine` per language, drafts included; nothing on
   screen changes yet.

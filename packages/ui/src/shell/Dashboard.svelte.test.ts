@@ -183,6 +183,35 @@ test('the translation tile counts what is missing and what is behind its source'
   expect(lines[1]?.querySelector('.chip-missing')).not.toBeNull();
 });
 
+// The categories overlap, so each is its own count and nothing adds them up.
+test('the translation tile counts partly written and machine translated beside the rest', async () => {
+  const health = {
+    defaultLocale: 'en',
+    locales: [
+      { locale: 'en', missing: 0, stale: 0, unfinished: 0, machine: 1, where: [] },
+      { locale: 'de', missing: 4, stale: 2, unfinished: 3, machine: 5, where: ['listings'] },
+      { locale: 'fr', missing: 0, stale: 0, unfinished: 1, machine: 0, where: ['listings'] },
+      { locale: 'it', missing: 0, stale: 0, unfinished: 0, machine: 2, where: [] },
+    ],
+  };
+  const root = show({ recent: [], published: null, translations: health });
+  await loaded();
+
+  const lines = all(tile(root, 'd-tr') as ParentNode, '.locale-line');
+  expect(lines.map((line) => line.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+    'EN Source language · 1 machine translated',
+    'DE 4 missing · 3 partly written · 2 stale · 5 machine translated Show',
+    'FR 1 partly written Show',
+    'IT Up to date · 2 machine translated',
+  ]);
+  expect(tile(root, 'd-tr')?.querySelector('.line')?.textContent?.trim()).toBe(
+    'Missing, partly written and machine translated include unpublished changes. ' +
+      'Stale means the language it was translated from has changed since; that count is the ' +
+      "last build's, so a translation you have fixed but not published is still in it. " +
+      'One entry can be in several counts.',
+  );
+});
+
 // One collection is *Show*; several are named, since a list is one collection's.
 test("the translation tile's Show lands on the list filtered to the language", async () => {
   const root = show({ recent: [], published: null, translations: HEALTH });

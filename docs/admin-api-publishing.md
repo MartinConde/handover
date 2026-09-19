@@ -45,9 +45,9 @@ redirect. `translations` is `null` on a one-language site; otherwise it is
 — `missing` from the content index with the drafts over it, `stale` from the map the build
 wrote, which is why it lags a publish, `unfinished` and `machine` the entries whose file in that
 language is partly written or still holds machine-translated text, counted like the entry list's
-`partial` and `machine` with the drafts over the build, and `where` the collections owing that
-language, in config order and without the globals, which have no list to be shown in. Globals
-count in every number. An entry can count as both stale and unfinished, so the numbers do not
+`partial` and `machine` with the drafts over the build, and `where` the collections where an
+entry is missing that language, partly written in it or stale in it, in config order and without
+the globals, which have no list to be shown in. Globals count in every number. An entry can count as both stale and unfinished, so the numbers do not
 add up to a count of entries.
 
 ```

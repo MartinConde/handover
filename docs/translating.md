@@ -48,7 +48,9 @@ dates, choices, references — and menu labels and empty SEO fields, since blank
 the page's own title*. Whitespace, and rich text with no words in it (an empty list or quote),
 answer nothing; text only the translation has adds nothing. A source with none of that text
 reads *No source text to translate*. The count says what is typed, not that the translation is
-reviewed or that the entry can be published.
+reviewed or that the entry can be published. The entry list and the dashboard count the same way,
+unpublished changes included, and the list can be filtered to the partly written files of one
+language ([Translations in the entry list](translation-list.md)).
 
 ## A language with no file yet
 

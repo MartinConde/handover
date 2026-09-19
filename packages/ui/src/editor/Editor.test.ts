@@ -3649,6 +3649,29 @@ test('the queue keeps its place from an entry that is no longer owed the languag
   vi.unstubAllGlobals();
 });
 
+test('a queue for everything owed stops at a partly written file, stale or not, once', async () => {
+  queueList();
+  at('/admin/c/listings/untouchedInvalid?queue=it&owed=owed');
+  const root = show({ slug: 'untouchedInvalid', ...sixLanguages('untouchedInvalid') });
+  await settle();
+
+  // Its Italian file answers none of the two texts English has.
+  expect(nextLink(root)?.getAttribute('href')).toBe(
+    '/admin/c/listings/staleAndPartial?queue=it&owed=owed',
+  );
+  unmount(app);
+  document.body.innerHTML = '';
+  at('/admin/c/listings/staleAndPartial?queue=fr&owed=owed');
+  const again = show({ slug: 'staleAndPartial', ...sixLanguages('staleAndPartial') });
+  await settle();
+
+  // French there is both stale and partly written; the queue moves past it all the same.
+  expect(nextLink(again)?.getAttribute('href')).toBe(
+    '/admin/c/listings/sourceDraft?queue=fr&owed=owed',
+  );
+  vi.unstubAllGlobals();
+});
+
 test('the last row owing the language says the queue ends, not that nothing is owed', async () => {
   // Without the conflict row, which never opens in the editor, `structured` is the last one.
   queueList(sixLanguageRows().filter((row) => row.id !== 'sourceConflict'));

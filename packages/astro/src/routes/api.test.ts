@@ -2066,6 +2066,28 @@ test('translation health counts unfinished and machine-written languages, drafts
   ]);
 });
 
+// Show opens the list filtered to what is owed, and a partly written file is owed.
+test('translation health sends Show to a collection whose only debt is a partly written file', async () => {
+  locales = ['en', 'de'];
+  Object.assign(texts, { 'presenters/rosa-hale': { en: { paths: ['name', 'portrait.alt'] } } });
+  overlayRows.mockImplementationOnce(async () => [
+    {
+      path: 'src/content/presenters/de/rosa-hale.yaml',
+      contents: '_version: 1\nname: Rosa Hale\n',
+    },
+  ]);
+
+  const { translations } = (await (await GET(ctx('dashboard'))).json()) as {
+    translations: { locales: { locale: string; where: string[] }[] };
+  };
+
+  expect(translations.locales[1]).toMatchObject({
+    locale: 'de',
+    unfinished: 1,
+    where: ['listings', 'presenters', 'posts'],
+  });
+});
+
 test('a one-language site has nothing to report about its languages', async () => {
   const { translations } = (await (await GET(ctx('dashboard'))).json()) as { translations: null };
 

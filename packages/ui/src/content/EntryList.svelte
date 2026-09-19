@@ -11,7 +11,7 @@ import {
   type UiLocale,
 } from '../i18n.js';
 import { navigate } from '../navigate';
-import { missing, offered, owes, queueQuery, rowTitle, stale, workFrom } from '../owed.js';
+import { missing, offered, owes, partial, queueQuery, rowTitle, stale, workFrom } from '../owed.js';
 import * as m from '../paraglide/messages.js';
 import { request as fetch, sitePath } from '../request.js';
 import Modal from '../shared/Modal.svelte';
@@ -119,7 +119,7 @@ let language = $state(address.get('locale') ?? '');
 let work = $state(workFrom(address.get('owed')));
 // Above four languages a chip each stops reading at a glance, so a row counts and names the owed.
 const compact = $derived(locales.length > 4);
-const owedIn = (entry: Entry) => locales.filter((l) => missing(entry, l) || stale(entry, l));
+const owedIn = (entry: Entry) => locales.filter((l) => owes(entry, l, 'owed'));
 const counted = (entry: Entry) => {
   const offer = locales.filter((l) => offered(entry, l));
   return { created: offer.filter((l) => entry.locales[l]).length, offered: offer.length };
@@ -158,7 +158,24 @@ const chipTitle = (entry: Entry, locale: string) =>
       ? m.entry_list_chip_missing({}, options)
       : entry.stale?.includes(locale)
         ? m.entry_list_chip_stale({}, options)
-        : m.entry_list_chip_written({}, options);
+        : partial(entry, locale)
+          ? m.entry_list_chip_partial(
+              {
+                written: entry.partial?.[locale]?.[0] ?? 0,
+                count: entry.partial?.[locale]?.[1] ?? 0,
+              },
+              options,
+            )
+          : m.entry_list_chip_written({}, options);
+// One mark per language, stale before partly written, as the editor's switcher has it.
+const chipClass = (entry: Entry, locale: string) =>
+  missing(entry, locale)
+    ? 'chip-missing'
+    : stale(entry, locale)
+      ? 'chip-stale'
+      : partial(entry, locale)
+        ? 'chip-partial'
+        : undefined;
 const named = (ids: string[]) =>
   ids.length === 1 ? (entries.find((e) => e.id === ids[0]) ?? undefined) : undefined;
 
@@ -391,7 +408,9 @@ async function done() {
         <select class={['filter', { 'is-on': language && work !== 'owed' }]} id="list-owed" bind:value={work} disabled={!language}>
           <option value="owed">{m.entry_list_work_owed({}, options)}</option>
           <option value="missing">{m.entry_list_work_missing({}, options)}</option>
+          <option value="unfinished">{m.entry_list_work_unfinished({}, options)}</option>
           <option value="stale">{m.entry_list_work_stale({}, options)}</option>
+          <option value="machine">{m.entry_list_work_machine({}, options)}</option>
         </select>
       {/if}
     </div>
@@ -476,6 +495,8 @@ async function done() {
             owed: m.entry_list_language_complete,
             missing: m.entry_list_language_none_missing,
             stale: m.entry_list_language_none_stale,
+            unfinished: m.entry_list_language_none_unfinished,
+            machine: m.entry_list_language_none_machine,
           }[work]({ language: formatLanguageName(language, uiLocale) }, options)
         : showing === 'hidden'
           ? m.entry_list_no_hidden({ collection: plural }, options)
@@ -528,7 +549,7 @@ async function done() {
                 <span class="chips" aria-hidden="true" title={words}>
                   <span class="chip chip-count">{count.created}/{count.offered}</span>
                   {#each owed.slice(0, 3) as locale (locale)}
-                    <span class={['chip', missing(entry, locale) ? 'chip-missing' : 'chip-stale']}>{locale.toUpperCase()}</span>
+                    <span class={['chip', chipClass(entry, locale)]}>{locale.toUpperCase()}</span>
                   {/each}
                   {#if owed.length > 3}<span class="chip chip-count">+{owed.length - 3}</span>{/if}
                 </span>
@@ -537,14 +558,7 @@ async function done() {
               <span class="chips">
                 {#each locales as locale (locale)}
                   <span
-                    class={[
-                      'chip',
-                      {
-                        'chip-missing': !entry.locales[locale] && offered(entry, locale),
-                        'chip-disabled': !offered(entry, locale),
-                        'chip-stale': Boolean(entry.locales[locale]) && entry.stale?.includes(locale),
-                      },
-                    ]}
+                    class={['chip', offered(entry, locale) ? chipClass(entry, locale) : 'chip-disabled']}
                     title="{locale}: {chipTitle(entry, locale)}"
                   >{locale.toUpperCase()}</span>
                 {/each}

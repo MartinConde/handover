@@ -137,13 +137,15 @@ test('the list draws each row with its files created and the languages it owes',
         ? `missing ${chip.textContent}`
         : chip.classList.contains('chip-stale')
           ? `stale ${chip.textContent}`
-          : chip.textContent,
+          : chip.classList.contains('chip-partial')
+            ? `partial ${chip.textContent}`
+            : chip.textContent,
     );
   };
   const rows = document.querySelectorAll('.table .row:not(.row-note)');
   expect(rows.length).toBe(11);
-  // Base: four files of five offered, `es` missing, `fr` stale, `nl` off and so not owed.
-  expect(chips('base')).toEqual(['4/5', 'stale FR', 'missing ES']);
+  // Base: four files of five offered, `fr` stale, `it` empty, `es` missing, `nl` off and not owed.
+  expect(chips('base')).toEqual(['4/5', 'stale FR', 'partial IT', 'missing ES']);
   // German-first: one file of six offered, five owed, three of them named.
   expect(chips('germanFirst')).toEqual(['1/6', 'missing EN', 'missing FR', 'missing IT', '+2']);
 });

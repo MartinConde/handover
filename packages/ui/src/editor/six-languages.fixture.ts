@@ -31,6 +31,8 @@ export type SixLanguageRow = {
   offered?: string[];
   pending?: boolean;
   stale?: string[];
+  partial?: Record<string, [number, number]>;
+  machine?: string[];
 };
 
 type Variant = {
@@ -345,6 +347,17 @@ export const SIX_LANGUAGE_SOURCES: Record<SixLanguageVariant, string> = {
   structured: 'en',
 };
 
+/** What core's `textSummaries` answers over each variant's files, copied from a run of it. */
+const SIX_LANGUAGE_TEXTS: Partial<
+  Record<SixLanguageVariant, Pick<SixLanguageRow, 'partial' | 'machine'>>
+> = {
+  base: { partial: { it: [0, 2] } },
+  machine: { machine: ['de'], partial: { it: [0, 2] } },
+  untouchedInvalid: { partial: { de: [0, 2] } },
+  staleAndPartial: { partial: { fr: [1, 2], it: [0, 2] } },
+  sourceDraft: { partial: { de: [2, 3], fr: [2, 3], it: [0, 3] } },
+};
+
 /** The effective files, form and offer, for core and route tests. */
 export function sixLanguageFiles(name: SixLanguageVariant = 'base') {
   const { form, files, offered } = variant(name);
@@ -394,6 +407,7 @@ export function sixLanguageRows(): SixLanguageRow[] {
       ...(v.offered.length < SIX.length ? { offered: v.offered } : {}),
       ...(v.pending.length ? { pending: true } : {}),
       ...((v.builtStale ?? v.stale).length ? { stale: v.builtStale ?? v.stale } : {}),
+      ...structuredClone(SIX_LANGUAGE_TEXTS[name]),
     };
   });
   const conflict = sourceConflict();

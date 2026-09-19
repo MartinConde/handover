@@ -263,17 +263,25 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
         <div class="locales">
           {#each health.locales as row (row.locale)}
             {@const where = row.where ?? []}
+            {@const rest = [
+              row.unfinished ? m.dashboard_unfinished_count({ count: row.unfinished }, options) : '',
+              row.stale ? m.dashboard_stale_count({ count: row.stale }, options) : '',
+              row.machine ? m.dashboard_machine_count({ count: row.machine }, options) : '',
+            ].filter(Boolean)}
             <div class="locale-line">
               <span class={['chip', { 'chip-missing': row.missing }]}>{row.locale.toUpperCase()}</span>
-              {#if row.locale === health.defaultLocale && !row.missing && !row.stale}
-                <span class="ok">{m.dashboard_source_language({}, options)}</span>
-              {:else if !row.missing && !row.stale}
-                <span class="ok">{m.dashboard_up_to_date({}, options)}</span>
+              <!-- Machine translated is not owed, so alone it leaves a language up to date. -->
+              {#if !row.missing && !row.stale && !row.unfinished}
+                <span
+                  ><span class="ok"
+                    >{row.locale === health.defaultLocale
+                      ? m.dashboard_source_language({}, options)
+                      : m.dashboard_up_to_date({}, options)}</span
+                  >{#if row.machine}{' · '}{rest[0]}{/if}</span
+                >
               {:else}
                 <span
-                  >{#if row.missing}<b>{m.dashboard_missing_count({ count: row.missing }, options)}</b>{/if}{row.missing && row.stale
-                    ? ' · '
-                    : ''}{row.stale ? m.dashboard_stale_count({ count: row.stale }, options) : ''}</span
+                  >{#if row.missing}<b>{m.dashboard_missing_count({ count: row.missing }, options)}</b>{rest.length ? ' · ' : ''}{/if}{rest.join(' · ')}</span
                 >
               {/if}
               <!-- One list is *Show*; several are named, since a list is one collection's. -->
@@ -288,7 +296,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
           {/each}
         </div>
         <p class="line">
-          {m.dashboard_stale_hint({}, options)}
+          {m.dashboard_translation_hint({}, options)}
         </p>
       </section>
     {/if}

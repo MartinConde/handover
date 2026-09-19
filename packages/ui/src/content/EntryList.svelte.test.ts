@@ -618,7 +618,7 @@ test('above four languages a row counts its files and names at most three owed',
   const root = show();
   await tick();
 
-  expect(compact(root, 'base')).toEqual(['4/5', 'FR', 'ES']);
+  expect(compact(root, 'base')).toEqual(['4/5', 'FR', 'IT', 'ES']);
   expect(compact(root, 'twoMissing')).toEqual(['3/5', 'FR', 'IT', 'ES']);
   expect(compact(root, 'germanFirst')).toEqual(['1/6', 'EN', 'FR', 'IT', '+2']);
   expect(compact(root, 'legacy')).toEqual(['2/6', 'FR', 'IT', 'ES', '+1']);
@@ -631,7 +631,7 @@ test('the compact row gives its whole state in words, not only on hover', async 
 
   const words =
     'Languages: 4 of 5 language files created. English: written; German: written; ' +
-    'French: behind the language it was translated from; Italian: written; ' +
+    'French: behind the language it was translated from; Italian: partly written, 0 of 2 texts; ' +
     'Spanish: not written yet; Dutch: turned off for this entry.';
   expect(summary(root, 'base')).toBe(words);
   const chips = q(root, 'a[href="/admin/c/listings/base"]')
@@ -642,12 +642,15 @@ test('the compact row gives its whole state in words, not only on hover', async 
 });
 
 test('four languages still draw one chip each', async () => {
-  api([{ ...ENTRIES[0], stale: ['fr'], offered: ['en', 'de', 'fr'] }], {}, [
-    'en',
-    'de',
-    'fr',
-    'it',
-  ]);
+  const german = { title: 'Die Mühle', path: 'src/content/listings/de/mill-house.yaml' };
+  api(
+    [
+      { ...ENTRIES[0], stale: ['fr'], offered: ['en', 'de', 'fr'] },
+      { ...ENTRIES[1], locales: { ...ENTRIES[1]?.locales, de: german }, partial: { de: [1, 2] } },
+    ],
+    {},
+    ['en', 'de', 'fr', 'it'],
+  );
   const root = show();
   await tick();
 
@@ -658,6 +661,10 @@ test('four languages still draw one chip each', async () => {
     ['DE', 'chip chip-missing'],
     ['FR', 'chip chip-missing'],
     ['IT', 'chip chip-disabled'],
+    ['EN', 'chip'],
+    ['DE', 'chip chip-partial'],
+    ['FR', 'chip chip-missing'],
+    ['IT', 'chip chip-missing'],
   ]);
 });
 
@@ -682,6 +689,63 @@ test('the address can ask for one kind of work in a language', async () => {
     'structured',
     'sourceConflict',
   ]);
+});
+
+test('a partly written file is owed, and its chip is partial unless the file is stale', async () => {
+  sixRows();
+  history.replaceState({}, '', '/admin/c/listings?locale=de');
+  const root = show();
+  await tick();
+
+  expect(names(root)).toContain('untouchedInvalid');
+  const chip = (id: string, text: string) =>
+    Array.from(rowOf(root, id)?.querySelectorAll('.chips .chip') ?? []).find(
+      (c) => c.textContent === text,
+    )?.className;
+  expect(compact(root, 'untouchedInvalid')).toEqual(['2/6', 'DE', 'FR', 'IT', '+2']);
+  expect(chip('untouchedInvalid', 'DE')).toBe('chip chip-partial');
+
+  const language = q<HTMLSelectElement>(root, 'select#list-locale');
+  if (!language) throw new Error('language filter missing');
+  language.value = '';
+  language.dispatchEvent(new Event('change'));
+  await tick();
+  expect(chip('staleAndPartial', 'FR')).toBe('chip chip-stale');
+  expect(chip('staleAndPartial', 'IT')).toBe('chip chip-partial');
+});
+
+test('partly written and machine translated are kinds of work of their own', async () => {
+  sixRows();
+  history.replaceState({}, '', '/admin/c/listings?locale=fr&owed=unfinished');
+  const root = show();
+  await tick();
+
+  expect(q<HTMLSelectElement>(root, 'select#list-owed')?.value).toBe('unfinished');
+  // Stale and partly written, so it is in both lists.
+  expect(names(root)).toEqual(['staleAndPartial', 'sourceDraft']);
+
+  const owed = q<HTMLSelectElement>(root, 'select#list-owed');
+  if (!owed) throw new Error('work filter missing');
+  owed.value = 'stale';
+  owed.dispatchEvent(new Event('change'));
+  await tick();
+  expect(names(root)).toContain('staleAndPartial');
+
+  const language = q<HTMLSelectElement>(root, 'select#list-locale');
+  if (!language) throw new Error('language filter missing');
+  language.value = 'de';
+  language.dispatchEvent(new Event('change'));
+  owed.value = 'machine';
+  owed.dispatchEvent(new Event('change'));
+  await tick();
+  expect(names(root)).toEqual(['machine']);
+
+  language.value = 'nl';
+  language.dispatchEvent(new Event('change'));
+  await tick();
+  expect(q(root, '.placeholder')?.textContent?.trim()).toBe(
+    'Nothing in Dutch is machine translated.',
+  );
 });
 
 test('a filtered row opens its entry as a queue for that language and work; an unfiltered one does not', async () => {
