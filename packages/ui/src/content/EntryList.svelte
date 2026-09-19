@@ -216,7 +216,10 @@ async function load(name: string) {
     index = body.index;
     templates = body.templates ?? [];
     // A language the address names and the site does not declare filters nothing.
-    if (!locales.includes(language)) language = '';
+    if (!locales.includes(language)) {
+      language = '';
+      work = 'owed';
+    }
   } else error = await responseMessage(res, 'ENTRY_LIST_LOAD_FAILED');
   loading = false;
 }

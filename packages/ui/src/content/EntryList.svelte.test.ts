@@ -714,6 +714,8 @@ test('without a declared language nothing is filtered and the work filter is off
 
   expect(q<HTMLSelectElement>(root, 'select#list-locale')?.value).toBe('');
   expect(q<HTMLSelectElement>(root, 'select#list-owed')?.disabled).toBe(true);
+  // Choosing a language later must not bring back a kind of work nobody picked.
+  expect(q<HTMLSelectElement>(root, 'select#list-owed')?.value).toBe('owed');
   expect(names(root).length).toBe(11);
 });
 
