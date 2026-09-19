@@ -265,3 +265,117 @@ test.each([
     expect(title.value).toBe('About');
   },
 );
+
+const directory = (body: unknown, posted: (init: RequestInit) => Response) =>
+  vi.fn(async (_url: string, init?: RequestInit) =>
+    init?.method === 'POST' ? posted(init) : Response.json(body),
+  );
+
+test('a new entry is created in the language the dialog chose', async () => {
+  let sent = '';
+  vi.stubGlobal(
+    'fetch',
+    directory({ entries: [], locales: ['en', 'de', 'fr'], defaultLocale: 'en' }, (init) => {
+      sent = String(init.body);
+      return Response.json({ slug: 'kuestenhaus' });
+    }),
+  );
+  app = mount(NewEntry, {
+    target: document.body,
+    props: { collection: 'pages', onclose: () => {} },
+  });
+  await settle();
+
+  const language = document.querySelector<HTMLSelectElement>('#new-locale');
+  if (!language) throw new Error('language select missing');
+  expect(Array.from(language.options, (o) => o.value)).toEqual(['en', 'de', 'fr']);
+  expect(language.value).toBe('en');
+  language.value = 'de';
+  language.dispatchEvent(new Event('change', { bubbles: true }));
+  document.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+  await settle();
+
+  expect(JSON.parse(sent)).toEqual({ title: '', locale: 'de' });
+});
+
+test('the language the list is filtered to is the one the dialog offers first', async () => {
+  vi.stubGlobal(
+    'fetch',
+    directory({ entries: [], locales: ['en', 'de', 'fr'], defaultLocale: 'en' }, () =>
+      Response.json({ slug: 'x' }),
+    ),
+  );
+  app = mount(NewEntry, {
+    target: document.body,
+    props: { collection: 'pages', preferred: 'fr', onclose: () => {} },
+  });
+  await settle();
+
+  expect(document.querySelector<HTMLSelectElement>('#new-locale')?.value).toBe('fr');
+});
+
+test('a filter language the site does not declare leaves the site default chosen', async () => {
+  vi.stubGlobal(
+    'fetch',
+    directory({ entries: [], locales: ['en', 'de'], defaultLocale: 'de' }, () =>
+      Response.json({ slug: 'x' }),
+    ),
+  );
+  app = mount(NewEntry, {
+    target: document.body,
+    props: { collection: 'pages', preferred: 'fr', onclose: () => {} },
+  });
+  await settle();
+
+  expect(document.querySelector<HTMLSelectElement>('#new-locale')?.value).toBe('de');
+});
+
+test('a one-language site is asked nothing and sends no language', async () => {
+  let sent = '';
+  vi.stubGlobal(
+    'fetch',
+    directory({ entries: [], locales: ['en'], defaultLocale: 'en' }, (init) => {
+      sent = String(init.body);
+      return Response.json({ slug: 'x' });
+    }),
+  );
+  app = mount(NewEntry, {
+    target: document.body,
+    props: { collection: 'pages', onclose: () => {} },
+  });
+  await settle();
+
+  expect(document.querySelector('#new-locale')).toBeNull();
+  document.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+  await settle();
+
+  expect(JSON.parse(sent)).toEqual({ title: '' });
+});
+
+test('an interface switch keeps the chosen language and the typed title', async () => {
+  vi.stubGlobal(
+    'fetch',
+    directory({ entries: [], locales: ['en', 'de'], defaultLocale: 'en' }, () =>
+      Response.json({ slug: 'x' }),
+    ),
+  );
+  const props = $state({ collection: 'pages', uiLocale: 'en' as UiLocale, onclose: () => {} });
+  app = mount(NewEntry, { target: document.body, props });
+  await settle();
+
+  const title = document.querySelector<HTMLInputElement>('#new-title');
+  const language = document.querySelector<HTMLSelectElement>('#new-locale');
+  if (!title || !language) throw new Error('creation controls missing');
+  title.value = 'Küstenhaus';
+  title.dispatchEvent(new Event('input', { bubbles: true }));
+  language.value = 'de';
+  language.dispatchEvent(new Event('change', { bubbles: true }));
+
+  props.uiLocale = 'de';
+  flushSync();
+
+  expect(document.querySelector('#new-locale')).toBe(language);
+  expect(language.value).toBe('de');
+  expect(Array.from(language.options, (o) => o.textContent)).toEqual(['Englisch', 'Deutsch']);
+  expect(title.value).toBe('Küstenhaus');
+});

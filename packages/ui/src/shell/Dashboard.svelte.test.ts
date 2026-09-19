@@ -259,6 +259,20 @@ test('a quick action opens the New entry dialog for that collection', async () =
   expect(fetch).toHaveBeenCalledWith('/admin/api/entries/listings');
 });
 
+// No list filter behind it, so the dashboard's dialog starts in the language the site declares.
+test('a quick action creates in the site default language', async () => {
+  const root = show(
+    { recent: [], published: null, translations: null, locales: ['en', 'de'], defaultLocale: 'de' },
+    { collections: ['listings'] },
+  );
+  await loaded();
+
+  (all(root, '.quick .btn')[0] as HTMLButtonElement).click();
+  await loaded();
+
+  expect(root.querySelector<HTMLSelectElement>('.dialog select#new-locale')?.value).toBe('de');
+});
+
 // Every site has a locale folder; a site with one language has nothing to report about it.
 test('a one-language site is drawn no translation tile at all', async () => {
   const root = show();

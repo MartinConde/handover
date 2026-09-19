@@ -539,6 +539,19 @@ test('a new entry on a site with several languages records the language it start
   );
 });
 
+test('an entry created in German opens in German before anything is published', async () => {
+  const res = await call('POST', 'entries/pages', { title: 'Impressum', locale: 'de' });
+
+  expect(await res.json()).toEqual({ slug: 'impressum' });
+  expect((await loadDraft('default', db, path('de', 'impressum')))?.contents).toBe(
+    '_version: 1\n_source: "de"\ntitle: "Impressum"\n',
+  );
+  const entry = (await (await call('GET', 'entries/pages/impressum')).json()) as {
+    sourceLocale: string;
+  };
+  expect(entry.sourceLocale).toBe('de');
+});
+
 test('saves of an unrecorded entry with several files write no source', async () => {
   trees[head] = { [path('en')]: EN, [path('de')]: DE };
   const { revisions } = await opened();

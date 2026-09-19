@@ -897,6 +897,7 @@
   "new_entry_checking_name": "Verfügbarer Dateiname wird geprüft…",
   "new_entry_name_unavailable": "Der verfügbare Dateiname konnte nicht geprüft werden.",
   "new_entry_directory_failed": "Vorhandene Einträge in {collection} konnten nicht geprüft werden. Prüfe deine Verbindung und versuche es erneut.",
+  "new_entry_language": "Schreiben in",
   "new_entry_start_from": "Ausgangspunkt",
   "new_entry_blank": "Leer",
   "new_entry_template": "Vorlage",

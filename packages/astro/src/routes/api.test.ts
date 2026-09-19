@@ -2536,6 +2536,74 @@ test('a name already taken by an unpublished entry counts as taken too', async (
   expect(await res.json()).toEqual({ slug: 'strandhaus-nord-2' });
 });
 
+test('the language a new entry is created in is the one it is written in', async () => {
+  createDraft.mockClear();
+  locales = ['en', 'de'];
+
+  const res = await POST(
+    post('entries/listings', JSON.stringify({ title: 'Strandhaus', locale: 'de' })),
+  );
+
+  expect(res.status).toBe(200);
+  expect(createDraft).toHaveBeenCalledWith(
+    'default',
+    expect.anything(),
+    expect.anything(),
+    'src/content/listings/de/strandhaus.yaml',
+    { _version: 1, _source: 'de', title: 'Strandhaus' },
+  );
+});
+
+test('a template creates its entry in the chosen language and records it there', async () => {
+  createDraft.mockClear();
+  locales = ['en', 'de'];
+
+  await POST(
+    post(
+      'entries/pages',
+      JSON.stringify({ title: 'Nach Devon', template: 'landing', locale: 'de' }),
+    ),
+  );
+
+  const [, , , path, values] = createDraft.mock.calls[0] as [
+    string,
+    unknown,
+    unknown,
+    string,
+    Record<string, unknown>,
+  ];
+  expect(path).toBe('src/content/pages/de/nach-devon.yaml');
+  expect(values._source).toBe('de');
+  expect(values.title).toBe('Nach Devon');
+});
+
+test('a new entry in a language the site does not declare is refused whole', async () => {
+  createDraft.mockClear();
+  locales = ['en', 'de'];
+
+  const res = await POST(
+    post('entries/listings', JSON.stringify({ title: 'Strandhaus', locale: 'fr' })),
+  );
+
+  expect(res.status).toBe(400);
+  expect(await res.text()).toBe('fr is not a language this site declares');
+  expect(createDraft).not.toHaveBeenCalled();
+});
+
+test('the one language of a one-language site is a valid choice and records nothing', async () => {
+  createDraft.mockClear();
+
+  const res = await POST(
+    post('entries/listings', JSON.stringify({ title: 'Strandhaus', locale: 'en' })),
+  );
+
+  expect(res.status).toBe(200);
+  expect(createDraft.mock.calls[0]?.[4]).not.toHaveProperty('_source');
+  expect(
+    (await POST(post('entries/listings', JSON.stringify({ title: 'x', locale: 'de' })))).status,
+  ).toBe(400);
+});
+
 test('creating in an unknown collection is 404', async () => {
   createDraft.mockClear();
   expect((await POST(post('entries/nope', JSON.stringify({ title: 'x' })))).status).toBe(404);
@@ -3096,9 +3164,14 @@ test('an entry carries the languages it has a file in beside the one it opens on
 test('the entry list says which languages the site declares', async () => {
   locales = ['en', 'de'];
 
-  const body = (await (await GET(ctx('entries/listings'))).json()) as { locales: unknown };
+  const body = (await (await GET(ctx('entries/listings'))).json()) as {
+    locales: unknown;
+    defaultLocale: unknown;
+  };
 
   expect(body.locales).toEqual(['en', 'de']);
+  // Which of them a new entry is written in when nothing else is chosen.
+  expect(body.defaultLocale).toBe('en');
 });
 
 // A menu can point at a collection's index, which is not an entry.

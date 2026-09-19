@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **New entry** asks which language to write the entry in on a site with two or more languages,
+  starting on the language the list is filtered to and otherwise on the site's default. The entry
+  is created in that language and records it as its `_source`, templates included. `POST
+  /admin/api/entries/:collection` takes an optional `locale` and refuses an undeclared one with
+  `400`; the collection listing carries `defaultLocale`.
 - Side by side offers **Beside each field**: another language with a file, drawn read only under
   each translated field of the right column, with *Not written in German yet* and *This row is not
   in German* for what it lacks. The choice is kept per site and account in the browser. Core

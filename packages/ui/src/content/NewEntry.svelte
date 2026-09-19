@@ -2,7 +2,7 @@
 import { addressError, entryName } from '@handover/core';
 import { invalidateEntryDirectory } from '../entry-directory.js';
 import { messageText, responseMessage, type UiMessage } from '../errors.js';
-import { collectionName, messageOptions, type UiLocale } from '../i18n.js';
+import { collectionName, formatLanguageName, messageOptions, type UiLocale } from '../i18n.js';
 import { navigate } from '../navigate';
 import * as m from '../paraglide/messages.js';
 import { request as fetch } from '../request.js';
@@ -11,13 +11,22 @@ import Modal from '../shared/Modal.svelte';
 let {
   collection,
   uiLocale = 'en',
+  preferred,
   onclose,
-}: { collection: string; uiLocale?: UiLocale; onclose: () => void } = $props();
+}: {
+  collection: string;
+  uiLocale?: UiLocale;
+  /** The language the list is filtered to, which the new entry is written in unless changed. */
+  preferred?: string;
+  onclose: () => void;
+} = $props();
 const options = $derived(messageOptions(uiLocale));
 
 // Read when the dialog opens, so the dashboard opens it exactly as the list does.
 let taken = $state.raw<string[]>([]);
 let templates = $state<string[]>([]);
+let locales = $state.raw<string[]>([]);
+let locale = $state('');
 let text = $state('');
 let starter = $state('');
 let busy = $state(false);
@@ -50,10 +59,19 @@ async function load(name: string) {
     directoryError = { code: 'NEW_ENTRY_DIRECTORY_FAILED' };
     return;
   }
-  const directory = body as { entries?: unknown; templates?: unknown };
+  const directory = body as {
+    entries?: unknown;
+    templates?: unknown;
+    locales?: unknown;
+    defaultLocale?: unknown;
+  };
   if (
     (directory.entries !== undefined && !Array.isArray(directory.entries)) ||
     (directory.templates !== undefined && !Array.isArray(directory.templates)) ||
+    (directory.locales !== undefined &&
+      (!Array.isArray(directory.locales) ||
+        !directory.locales.every((code): code is string => typeof code === 'string'))) ||
+    (directory.defaultLocale !== undefined && typeof directory.defaultLocale !== 'string') ||
     (Array.isArray(directory.entries) &&
       !directory.entries.every(
         (entry): entry is { id: string } =>
@@ -68,6 +86,13 @@ async function load(name: string) {
   }
   taken = ((directory.entries ?? []) as { id: string }[]).map((entry) => entry.id);
   templates = (directory.templates ?? []) as string[];
+  locales = (directory.locales ?? []) as string[];
+  // The filtered language when the site has it, the site's own otherwise; a retry keeps a choice.
+  if (!locales.includes(locale))
+    locale =
+      preferred && locales.includes(preferred)
+        ? preferred
+        : ((directory.defaultLocale as string | undefined) ?? '');
   directoryCurrent = true;
 }
 
@@ -97,7 +122,11 @@ async function create(event: Event) {
   const res = await fetch(`/admin/api/entries/${collection}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ title: text, ...(starter ? { template: starter } : {}) }),
+    body: JSON.stringify({
+      title: text,
+      ...(starter ? { template: starter } : {}),
+      ...(locales.length > 1 ? { locale } : {}),
+    }),
   });
   if (!res.ok) {
     const failure = await responseMessage(res, 'ENTRY_CREATE_FAILED');
@@ -147,6 +176,16 @@ async function create(event: Event) {
           {directoryText}
           {#if directoryError.detail}<span class="technical-detail">{m.common_technical_detail({ detail: directoryError.detail }, options)}</span>{/if}
           <button class="btn-link" type="button" onclick={() => load(collection)}>{m.common_retry({}, options)}</button>
+        </div>
+      {/if}
+      {#if locales.length > 1}
+        <div class="field">
+          <div class="label-row"><label for="new-locale">{m.new_entry_language({}, options)}</label></div>
+          <select class="input" id="new-locale" bind:value={locale}>
+            {#each locales as code (code)}
+              <option value={code}>{formatLanguageName(code, uiLocale)}</option>
+            {/each}
+          </select>
         </div>
       {/if}
       {#if templates.length}

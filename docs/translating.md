@@ -21,6 +21,11 @@ but continues to show none of the content-language controls described below.
 
 ## Choosing a language
 
+**New entry** asks which language to write the entry in whenever the site declares more than
+one. It starts on the language the list is filtered to, or on the site's default language, and
+the entry is created in the one chosen: writing a legal notice in German makes German its
+source, and creating its English file later leaves it German.
+
 An entry opens on the language it is written in, and the header offers the others — buttons up
 to four languages; from five, a button naming the current language opens a list of them all,
 with the same marks, and Escape closes it. **The language an entry is written in is the entry's own,

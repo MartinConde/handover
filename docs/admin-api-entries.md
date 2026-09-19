@@ -20,13 +20,14 @@ which the picker says on the row rather than dropping it. It is what the page pi
 wherever the picker appears.
 
 ```
-GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales", "pending", "edited", "stale", "partial", "machine" }], "locales": ["en", "de"], "index": "/listings", "templates": ["house"] }
+GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales", "pending", "edited", "stale", "partial", "machine" }], "locales": ["en", "de"], "defaultLocale": "en", "index": "/listings", "templates": ["house"] }
 ```
 
 The collection's entries for the list screen: one row per entry, `id` is the filename and
 `locales` maps each locale to `{ title, path }` plus `status: "hidden"` when it is hidden, and
 `offered` is there when the entry is not offered in every language. The response's own
-`locales` is the languages the site declares, in config order, and `index` the collection's
+`locales` is the languages the site declares, in config order, `defaultLocale` the one of them a
+new entry is written in unless another is chosen, and `index` the collection's
 page above them, which is where the hide dialog offers to send a hidden entry's readers.
 Titles come from the field the collection is keyed on — `title`, or its
 [`titleField`](configuration.md#collections); an entry that has not filled it in lists by
@@ -156,12 +157,17 @@ refused is what a collection's routes are for: create, rename, delete, address a
 language off ([entry lifecycle](admin-api-lifecycle.md)) all answer `404`.
 
 ```
-POST /admin/api/entries/:collection         { "title": "…", "template": "house" }  →  { "slug" }
+POST /admin/api/entries/:collection         { "title": "…", "template": "house", "locale": "de" }  →  { "slug" }
 ```
 
 Creates an entry as a draft. `slug` is the derived filename, which is what the admin opens
-next. Nothing is committed. On a site with two or more languages the file records the default
-language as its `_source`. `404` if the collection is not configured.
+next. Nothing is committed. `404` if the collection is not configured.
+
+`locale` is optional and names the language to write the entry in: its file goes in that
+language's folder and, on a site with two or more languages, records it as the entry's
+[`_source`](i18n.md#which-language-an-entry-is-written-in). Left out, the entry starts in the
+site's default language. `400`, with nothing written, when it names a language the site does not
+declare.
 
 `template` is optional and names one of the collection's [starters](site-files.md#templates);
 without it the entry starts empty apart from its title. The starter's values are copied in, its

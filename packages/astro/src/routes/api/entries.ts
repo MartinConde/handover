@@ -1215,6 +1215,8 @@ export async function listEntries(ctx: RequestContext, collection: string): Prom
     entries,
     // Which languages the list draws a column for, and in which order — one language, no column.
     locales: config.i18n.locales,
+    // The language a new entry is written in unless the dialog is pointed at another.
+    defaultLocale: config.i18n.defaultLocale,
     // The page above them, which is where the hide dialog offers to send a row's readers.
     index: collected.index,
     // The starters this collection ships, which the New entry dialog offers beside Blank.
@@ -1657,9 +1659,14 @@ export async function createEntry(
   const collected = config.collections[collection];
   if (!collected) return new Response('Not found', { status: 404 });
   const body = (await request.json().catch(() => undefined)) as
-    | { title?: unknown; template?: unknown }
+    | { title?: unknown; template?: unknown; locale?: unknown }
     | undefined;
   const title = typeof body?.title === 'string' ? body.title : '';
+  const { defaultLocale, locales } = config.i18n;
+  // The language the entry is written in from here on, so it is refused before anything is written.
+  const first = body?.locale === undefined ? defaultLocale : body.locale;
+  if (typeof first !== 'string' || !locales.includes(first))
+    return new Response(`${String(first)} is not a language this site declares`, { status: 400 });
   const starter =
     typeof body?.template === 'string' && body.template
       ? await startedFrom(ctx, collection, body.template)
@@ -1672,15 +1679,14 @@ export async function createEntry(
   const named = collected.titleField ?? 'title';
   const values: Record<string, unknown> = { ...starter, _version: FORMAT_VERSION };
   if (fields.some((f) => f.path[0] === named && f.type === 'text')) values[named] = title;
-  // A brand-new entry has no other file, so it starts in the site's default language.
-  const { defaultLocale, locales } = config.i18n;
-  const path = entryPath(collection, slug, defaultLocale);
+  // The language chosen in the dialog, which is also the entry's source from its first file on.
+  const path = entryPath(collection, slug, first);
   await createDraft(
     'default',
     database,
     ctx.git(),
     path,
-    locales.length > 1 ? withSource('default', values, defaultLocale) : values,
+    locales.length > 1 ? withSource('default', values, first) : values,
   );
   return Response.json({ slug });
 }

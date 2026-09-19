@@ -891,6 +891,7 @@
   "new_entry_checking_name": "Checking the available file name…",
   "new_entry_name_unavailable": "The available file name could not be checked.",
   "new_entry_directory_failed": "Could not check existing {collection}. Check the connection and try again.",
+  "new_entry_language": "Write it in",
   "new_entry_start_from": "Start from",
   "new_entry_blank": "Blank",
   "new_entry_template": "template",

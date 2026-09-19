@@ -691,7 +691,7 @@ async function done() {
 {/if}
 
 {#if dialog === 'new'}
-  <NewEntry {collection} {uiLocale} onclose={close} />
+  <NewEntry {collection} {uiLocale} preferred={language || undefined} onclose={close} />
 {:else if dialog}
   <Modal
     labelledby="entry-dialog-h"

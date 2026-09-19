@@ -33,7 +33,13 @@ const api = (
       ? Response.json(reply)
       : url === '/admin/api/entries'
         ? Response.json({ entries: [], locales })
-        : Response.json({ entries, locales, index: '/listings', templates }),
+        : Response.json({
+            entries,
+            locales,
+            defaultLocale: locales[0],
+            index: '/listings',
+            templates,
+          }),
   );
   vi.stubGlobal('fetch', fetcher);
   return fetcher;
@@ -592,6 +598,18 @@ test('the language filter narrows to the rows a language is missing or stale in'
   language.dispatchEvent(new Event('change'));
   await tick();
   expect(titles(root).length).toBe(4);
+});
+
+test('a new entry starts in the language the list is filtered to', async () => {
+  api(ENTRIES, {}, ['en', 'de']);
+  history.replaceState({}, '', '/admin/c/listings?locale=de');
+  const root = show();
+  await tick();
+
+  q<HTMLButtonElement>(root, '.list-toolbar .btn-primary')?.click();
+  await tick();
+
+  expect(q<HTMLSelectElement>(document.body, 'select#new-locale')?.value).toBe('de');
 });
 
 // Above four languages a row is the files-created ratio and the languages that are owed.
