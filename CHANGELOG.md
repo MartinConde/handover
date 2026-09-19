@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `POST /admin/api/publish` and `/publish/checks` take `without: ["collection/name:locale"]` to
+  leave an unfinished new translation out of an entry's publish; it keeps its draft and hold.
+  The checks answer `readiness` per waiting language for the named entries. Both routes now
+  refuse a malformed selection with a JSON `400` and `PUBLISH_SELECTION_INVALID`; nothing on
+  screen changes yet.
 - The entry list marks a partly written language with a half-filled chip, counts it as owed, and
   its work filter gains **Partly written** and **Machine translated** (`owed=unfinished`,
   `owed=machine`); the editor's queue follows. The dashboard's translation tile shows both counts

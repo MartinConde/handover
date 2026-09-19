@@ -107,7 +107,11 @@ const {
     // Localized addresses per language, and the one collection that carries the SEO panel.
     article: z.object({ title: z.string(), slug: z.string().optional(), seo: seo.optional() }),
     // The collection with the link the pre-publish checks follow.
-    notice: z.object({ title: z.string(), cta: link.optional() }),
+    // A refinement of the site's own: readiness reports what the schema says, not only what is required.
+    notice: z.object({
+      title: z.string().refine((title) => title.trim() !== 'TBD', 'Replace the placeholder title'),
+      cta: link.optional(),
+    }),
     // A global: the same editor path with no collection behind it; it also holds the SEO defaults.
     site: z
       .object({
@@ -170,7 +174,15 @@ const {
     ]),
     // What a publish will write: `pendingDrafts` minus the held entries; the filter is core's.
     readyDrafts: vi.fn<
-      (...args: unknown[]) => Promise<{ path: string; contents: string; updatedAt: number }[]>
+      (...args: unknown[]) => Promise<
+        {
+          path: string;
+          contents: string;
+          updatedAt: number;
+          revision?: string;
+          heldBy?: string | null;
+        }[]
+      >
     >(async () => [
       {
         path: 'src/content/listings/en/mill-house.yaml',
@@ -7408,4 +7420,266 @@ test('a plain collection label is available to the picker without changing menu 
   } finally {
     collection.label = original;
   }
+});
+
+// Publishing an entry without a language that is not ready yet.
+
+const MILL_EN = 'src/content/listings/en/mill-house.yaml';
+const MILL_DE = 'src/content/listings/de/mill-house.yaml';
+const millDrafts = (held: string | null = null) => [
+  {
+    path: MILL_EN,
+    contents: 'title: The Mill House\nrooms: 4\naddress:\n  street: Mill Lane\n',
+    updatedAt: 1755864000000,
+    revision: 'r-en',
+    heldBy: held,
+  },
+  // Created from English and never typed into: only the title came across.
+  {
+    path: MILL_DE,
+    contents: 'title: ""\n',
+    updatedAt: 1755864000000,
+    revision: 'r-de',
+    heldBy: held,
+  },
+];
+const selecting = (route: 'publish' | 'publish/checks', body: unknown) =>
+  POST(post(route, typeof body === 'string' ? body : JSON.stringify(body), owner));
+// A plain-text refusal carries no code, which is what these tests reject.
+const code = async (res: Response) =>
+  ((await res.json().catch(() => ({}))) as { code?: string }).code;
+
+test.each([
+  ['an unknown property', { entries: ['listings/mill-house'], also: 1 }],
+  ['a without that is not a list', { entries: ['listings/mill-house'], without: MILL_DE }],
+  ['a without with no entries', { without: ['listings/mill-house:de'] }],
+  ['an item that is not a file key', { entries: ['listings/mill-house'], without: ['de'] }],
+  [
+    'an entry the selection does not name',
+    { entries: ['listings/mill-house'], without: ['listings/barn:de'] },
+  ],
+  [
+    'a language the site does not declare',
+    { entries: ['listings/mill-house'], without: ['listings/mill-house:fr'] },
+  ],
+])('%s is refused by both publish routes before any draft is read', async (_, body) => {
+  locales = ['en', 'de'];
+  readyDrafts.mockClear();
+
+  for (const route of ['publish', 'publish/checks'] as const) {
+    const res = await selecting(route, body);
+    expect(res.status).toBe(400);
+    expect(await code(res)).toBe('PUBLISH_SELECTION_INVALID');
+  }
+  expect(readyDrafts).not.toHaveBeenCalled();
+});
+
+test('leaving out a language with nothing waiting is refused', async () => {
+  locales = ['en', 'de'];
+  readyDrafts.mockImplementationOnce(async () => millDrafts().slice(0, 1));
+
+  const res = await selecting('publish', {
+    entries: ['listings/mill-house'],
+    without: ['listings/mill-house:de'],
+  });
+
+  expect(res.status).toBe(400);
+  expect(await code(res)).toBe('PUBLISH_EXCLUDE_NOT_PENDING');
+});
+
+test('a language the repository already has cannot be left out', async () => {
+  locales = ['en', 'de'];
+  files[MILL_DE] = 'title: Das Mühlenhaus\nrooms: 3\naddress:\n  street: Mühlweg\n';
+  readyDrafts.mockImplementationOnce(async () => millDrafts());
+  publishDrafts.mockClear();
+
+  const res = await selecting('publish', {
+    entries: ['listings/mill-house'],
+    without: ['listings/mill-house:de'],
+  });
+
+  expect(res.status).toBe(422);
+  expect(await code(res)).toBe('PUBLISH_EXCLUDE_PUBLISHED');
+  expect(publishDrafts).not.toHaveBeenCalled();
+  delete files[MILL_DE];
+});
+
+// A file the dialog saw absent may have been committed since: the publish's own head decides.
+test('a language committed since the dialog read it is judged at the head the publish uses', async () => {
+  locales = ['en', 'de'];
+  getHead.mockResolvedValueOnce('head790');
+  files[`head790:${MILL_DE}`] = 'title: Das Mühlenhaus\nrooms: 3\naddress:\n  street: Mühlweg\n';
+  readyDrafts.mockImplementationOnce(async () => millDrafts());
+
+  const res = await selecting('publish', {
+    entries: ['listings/mill-house'],
+    without: ['listings/mill-house:de'],
+  });
+
+  expect(res.status).toBe(422);
+  expect(await code(res)).toBe('PUBLISH_EXCLUDE_PUBLISHED');
+  delete files[`head790:${MILL_DE}`];
+});
+
+test('the language the entry is written in cannot be left out, even when it is new', async () => {
+  locales = ['en', 'de'];
+  readyDrafts.mockImplementationOnce(async () => [
+    {
+      path: 'src/content/listings/de/new-barn.yaml',
+      contents: '_source: de\ntitle: Die neue Scheune\nrooms: 2\naddress:\n  street: Feldweg\n',
+      updatedAt: 1755864000000,
+    },
+    {
+      path: 'src/content/listings/en/new-barn.yaml',
+      contents: '_source: de\ntitle: ""\n',
+      updatedAt: 1755864000000,
+    },
+  ]);
+
+  const res = await selecting('publish', {
+    entries: ['listings/new-barn'],
+    without: ['listings/new-barn:de'],
+  });
+
+  expect(res.status).toBe(422);
+  expect(await code(res)).toBe('PUBLISH_EXCLUDE_SOURCE');
+});
+
+test('leaving out every file that is waiting is refused rather than publishing nothing', async () => {
+  locales = ['en', 'de'];
+  readyDrafts.mockImplementationOnce(async () => millDrafts().slice(1));
+
+  const res = await selecting('publish', {
+    entries: ['listings/mill-house'],
+    without: ['listings/mill-house:de'],
+  });
+
+  expect(res.status).toBe(400);
+  expect(await code(res)).toBe('PUBLISH_EXCLUDE_ALL');
+});
+
+test('an unfinished new language waits while the rest of the entry publishes on the head it was judged at', async () => {
+  locales = ['en', 'de'];
+  readyDrafts.mockImplementationOnce(async () => millDrafts());
+  publishDrafts.mockClear();
+  publishDrafts.mockImplementationOnce(async () => ({ commit_sha: 'def456', paths: [MILL_EN] }));
+
+  const res = await selecting('publish', {
+    entries: ['listings/mill-house'],
+    without: ['listings/mill-house:de'],
+  });
+
+  expect(res.status).toBe(200);
+  expect(publishDrafts.mock.calls[0]?.[5]).toEqual([expect.objectContaining({ path: MILL_EN })]);
+  expect(publishDrafts.mock.calls[0]?.[6]).toEqual({ userId: 'u1', baseSha: 'head789' });
+  expect(logged).toMatchObject([{ kind: 'publish', detail: { files: 1, paths: [MILL_EN] } }]);
+});
+
+// The German draft keeps its hold, so the entry still reads held and nothing says it was let go.
+test('a hold stays on an entry whose held language was left out', async () => {
+  locales = ['en', 'de'];
+  heldDrafts.mockResolvedValueOnce({ 'listings/mill-house': { id: 'u2', name: 'Anna Berg' } });
+  readyDrafts.mockImplementationOnce(async () => millDrafts('u2'));
+  publishDrafts.mockImplementationOnce(async () => ({
+    commit_sha: 'def456',
+    paths: [MILL_EN],
+    released: ['listings/mill-house'],
+  }));
+
+  const res = await selecting('publish', {
+    entries: ['listings/mill-house'],
+    without: ['listings/mill-house:de'],
+  });
+
+  expect(((await res.json().catch(() => ({}))) as { released?: string[] }).released).toEqual([]);
+  expect(logged.map((event) => event.kind)).toEqual(['publish']);
+});
+
+type Readiness = Record<
+  string,
+  Record<string, { excludable: boolean; reason?: string; revision?: string; problems: unknown[] }>
+>;
+const readinessOf = async (res: Response) =>
+  ((await res.json()) as { readiness: Readiness }).readiness;
+
+// An untouched translation has no cached problems in the browser; the server reads its draft.
+test('readiness names what the schema wants of an untouched translation and whether it can wait', async () => {
+  locales = ['en', 'de'];
+  readyDrafts.mockImplementationOnce(async () => millDrafts());
+
+  const readiness = await readinessOf(
+    await selecting('publish/checks', { entries: ['listings/mill-house'] }),
+  );
+
+  expect(readiness).toEqual({
+    'listings/mill-house': {
+      en: { revision: 'r-en', problems: [], excludable: false, reason: 'published' },
+      de: {
+        revision: 'r-de',
+        problems: [
+          expect.objectContaining({ path: 'rooms' }),
+          expect.objectContaining({ path: 'address' }),
+        ],
+        excludable: true,
+      },
+    },
+  });
+});
+
+test("readiness carries the site schema's own refinements", async () => {
+  locales = ['en', 'de'];
+  readyDrafts.mockImplementationOnce(async () => [
+    {
+      path: 'src/content/notices/en/opening.yaml',
+      contents: 'title: TBD\n',
+      updatedAt: 1755864000000,
+      revision: 'r-en',
+    },
+  ]);
+
+  const readiness = await readinessOf(
+    await selecting('publish/checks', { entries: ['notices/opening'] }),
+  );
+
+  expect(readiness?.['notices/opening']?.en?.problems).toEqual([
+    expect.objectContaining({ path: 'title', message: 'Replace the placeholder title' }),
+  ]);
+});
+
+test('a language left out is not linted and is no destination for the links that stay', async () => {
+  locales = ['en', 'de'];
+  const drafts = [
+    {
+      path: 'src/content/notices/en/opening.yaml',
+      contents: 'title: Opening times\ncta:\n  type: url\n  href: /de/listings/new-barn\n',
+      updatedAt: 1755864000000,
+    },
+    {
+      path: 'src/content/listings/en/new-barn.yaml',
+      contents: '_source: en\ntitle: The New Barn\nrooms: 2\naddress:\n  street: Barn Lane\n',
+      updatedAt: 1755864000000,
+    },
+    {
+      path: 'src/content/listings/de/new-barn.yaml',
+      contents: '_source: en\ntitle: Die neue Scheune\nrooms: 2\naddress:\n  street: Feldweg\n',
+      updatedAt: 1755864000000,
+    },
+  ];
+  const entries = ['notices/opening', 'listings/new-barn'];
+  readyDrafts.mockImplementationOnce(async () => drafts);
+  readyDrafts.mockImplementationOnce(async () => drafts);
+
+  const whole = await results(await selecting('publish/checks', { entries }));
+  const without = await results(
+    await selecting('publish/checks', { entries, without: ['listings/new-barn:de'] }),
+  );
+
+  expect(whole).toEqual([]);
+  expect(without).toEqual([
+    expect.objectContaining({
+      check: 'link-locale',
+      path: 'src/content/notices/en/opening.yaml',
+      fieldPath: 'cta.href',
+    }),
+  ]);
 });

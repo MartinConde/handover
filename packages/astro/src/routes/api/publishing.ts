@@ -1,6 +1,6 @@
 import config from 'virtual:handover/config';
 import index from 'virtual:handover/index';
-import type { CheckEntry, ContentIndex, SeoDefaultsValue } from '@handover/core';
+import type { CheckEntry, ContentIndex, Draft, SeoDefaultsValue } from '@handover/core';
 import {
   beginOperation,
   clearPublished,
@@ -449,12 +449,6 @@ export async function restore(
   return Response.json({ commit_sha: result.commit_sha, paths: result.paths });
 }
 
-// redirects.yaml belongs to no collection; a global's schema is keyed by the file name.
-const schemaFor = (path: string) => {
-  const [, collection = '', , slug = ''] = ENTRY_FILE.exec(path) ?? [];
-  return schemaOf(collection, slug);
-};
-
 /** A file whose structure disagrees with its other languages is not committed. */
 async function refusedPaths(ctx: RequestContext, paths: string[]) {
   const drifted: string[] = [];
@@ -482,14 +476,188 @@ async function refusedPaths(ctx: RequestContext, paths: string[]) {
   return { drifted, unresolved };
 }
 
+const refused = (status: number, code: string, error: string, paths?: string[]) =>
+  Response.json(
+    { code, error, ...(paths ? { paths } : {}) },
+    { status, headers: { 'x-handover-error-code': code } },
+  );
+
+const ENTRY_KEY = /^[\w-]+\/[\w-]+$/;
+const EXCLUSION = /^([\w-]+\/[\w-]+):([\w-]+)$/;
+
+/** Both publish routes take this; only an empty body means everything. */
+function selection(raw: string): { chosen?: string[]; without: string[] } | Response {
+  if (raw === '') return { without: [] };
+  let body: unknown;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    return refused(400, 'PUBLISH_SELECTION_INVALID', 'Invalid publish JSON');
+  }
+  const named = body && typeof body === 'object' && !Array.isArray(body) ? body : undefined;
+  if (
+    !named ||
+    Object.keys(named).some((key) => key !== 'entries' && key !== 'without') ||
+    !('entries' in named) ||
+    !Array.isArray(named.entries) ||
+    named.entries.some((key: unknown) => typeof key !== 'string' || !ENTRY_KEY.test(key))
+  )
+    return refused(400, 'PUBLISH_SELECTION_INVALID', 'Publish requires an array of entry keys');
+  const chosen = [...new Set(named.entries as string[])];
+  const without = 'without' in named ? named.without : [];
+  const bad = (item: unknown) => {
+    const [, key = '', locale = ''] = (typeof item === 'string' && EXCLUSION.exec(item)) || [];
+    return !chosen.includes(key) || !config.i18n.locales.includes(locale);
+  };
+  if (!Array.isArray(without) || without.some(bad))
+    return refused(
+      400,
+      'PUBLISH_SELECTION_INVALID',
+      'without lists "collection/name:locale" items, each a declared language of an entry in entries',
+    );
+  return { chosen, without: [...new Set(without as string[])] };
+}
+
+const draftPath = (item: string) => {
+  const [key = '', locale = ''] = item.split(':');
+  const [collection = '', slug = ''] = key.split('/');
+  return entryPath(collection, slug, locale);
+};
+
+/** An entry's files at `head` with its pending drafts over them, and whose language it is. */
+async function entryAt(ctx: RequestContext, head: string, key: string, pending: Draft[]) {
+  const [collection = '', slug = ''] = key.split('/');
+  const git = ctx.git();
+  const files = await Promise.all(
+    config.i18n.locales.map(async (locale) => {
+      const path = entryPath(collection, slug, locale);
+      const draft = pending.find((row) => row.path === path);
+      const file = await git.getFile(path, head);
+      // An emptied draft is the file's deletion; an empty file is still the language's file.
+      const contents = draft ? draft.contents || undefined : file ? file.contents : undefined;
+      return {
+        locale,
+        draft,
+        file,
+        published: Boolean(file),
+        data: contents === undefined ? undefined : contents ? parseEntry('default', contents) : {},
+      };
+    }),
+  );
+  const effective = Object.fromEntries(
+    files.flatMap(({ locale, data }) => (data === undefined ? [] : [[locale, data]])),
+  );
+  const source = entrySource('default', config.i18n, effective);
+  return { files, source: source && 'locale' in source ? source.locale : undefined };
+}
+
+/** Only a file the repository does not have at `head` can wait, and never the entry's own language. */
+const whyKept = (at: Awaited<ReturnType<typeof entryAt>>, locale: string) =>
+  at.files.find((file) => file.locale === locale)?.published
+    ? ('published' as const)
+    : at.source === undefined || at.source === locale
+      ? ('source' as const)
+      : undefined;
+
+// redirects.yaml belongs to no collection; a global's schema is keyed by the file name.
+const schemaFor = (path: string) => {
+  const [, collection = '', , slug = ''] = ENTRY_FILE.exec(path) ?? [];
+  return schemaOf(collection, slug);
+};
+
+const problemsOf = (row: Pick<Draft, 'path' | 'contents'>) => {
+  const schema = schemaFor(row.path);
+  return schema && row.contents ? entryProblems(schema, parseEntry('default', row.contents)) : [];
+};
+
+/** One resolver for the checks and the commit, so the lint is over exactly what goes out. */
+async function resolveSelection(ctx: RequestContext, raw: string, readiness = false) {
+  const asked = selection(raw);
+  if (asked instanceof Response) return asked;
+  const { chosen, without } = asked;
+  const pending = await readyDrafts('default', ctx.db(), chosen);
+  const left = new Set(without.map(draftPath));
+  const missing = [...left].filter((path) => !pending.some((row) => row.path === path));
+  if (missing.length)
+    return refused(
+      400,
+      'PUBLISH_EXCLUDE_NOT_PENDING',
+      `${missing.join(', ')} ${missing.length === 1 ? 'has' : 'have'} no unpublished changes to leave out`,
+      missing,
+    );
+  const keys = new Set(without.map((item) => item.split(':')[0] ?? ''));
+  if (readiness && chosen)
+    for (const row of pending) {
+      const key = entryKey(row.path);
+      if (key && schemaFor(row.path)) keys.add(key);
+    }
+  // The commit is made on this head, so a file created after it cannot slip past as absent.
+  const head = keys.size ? await ctx.git().getHead() : undefined;
+  const read = new Map(
+    await Promise.all(
+      [...keys].map(async (key) => [key, await entryAt(ctx, head ?? '', key, pending)] as const),
+    ),
+  );
+  for (const item of without) {
+    const [key = '', locale = ''] = item.split(':');
+    const at = read.get(key);
+    const why = at && whyKept(at, locale);
+    if (why === 'published')
+      return refused(
+        422,
+        'PUBLISH_EXCLUDE_PUBLISHED',
+        `${draftPath(item)} is already published; its languages publish together`,
+        [draftPath(item)],
+      );
+    if (why === 'source')
+      return refused(
+        422,
+        'PUBLISH_EXCLUDE_SOURCE',
+        `${draftPath(item)} is the language the entry is written in and publishes with it`,
+        [draftPath(item)],
+      );
+  }
+  const retained = pending.filter((row) => !left.has(row.path));
+  if (left.size && !retained.length)
+    return refused(400, 'PUBLISH_EXCLUDE_ALL', 'Leaving these files out leaves nothing to publish');
+  return {
+    chosen,
+    head: without.length ? head : undefined,
+    retained,
+    excluded: pending.filter((row) => left.has(row.path)),
+    read,
+  };
+}
+
 /** A request of its own so the pass gets its own CPU budget; nothing here refuses anything. */
 export async function prepublishChecks(ctx: RequestContext, request: Request): Promise<Response> {
   const database = ctx.db();
-  const body = (await request.json().catch(() => undefined)) as { entries?: unknown } | undefined;
-  const chosen = Array.isArray(body?.entries)
-    ? body.entries.filter((e): e is string => typeof e === 'string')
-    : undefined;
-  const rows = await readyDrafts('default', database, chosen);
+  const resolved = await resolveSelection(ctx, await request.text(), true);
+  if (resolved instanceof Response) return resolved;
+  const { retained: rows, read } = resolved;
+  // Per pending language, the draft as stored: what the dialog may offer to leave out.
+  const readiness = Object.fromEntries(
+    [...read].map(([key, at]) => [
+      key,
+      Object.fromEntries(
+        at.files.flatMap(({ locale, draft }) => {
+          if (!draft) return [];
+          const why = whyKept(at, locale);
+          return [
+            [
+              locale,
+              {
+                revision: draft.revision,
+                problems: problemsOf(draft),
+                excludable: !why,
+                ...(why ? { reason: why } : {}),
+              },
+            ],
+          ];
+        }),
+      ),
+    ]),
+  );
   // Overlay only the selected drafts: a link to a page only an unselected draft creates is bad.
   const overlay = rows.map(({ path, contents }) => ({ path, contents }));
   const overlaid: ContentIndex = Object.fromEntries(
@@ -517,7 +685,10 @@ export async function prepublishChecks(ctx: RequestContext, request: Request): P
           .filter((locale) => !(locale in drafted))
           .map(async (locale) => {
             const path = entryPath(collection, slug, locale);
-            const file = await git.getFile(path);
+            // Readiness read the entry already; the drawer names every entry it lints.
+            const file = read.has(key)
+              ? read.get(key)?.files.find((at) => at.locale === locale)?.file
+              : await git.getFile(path);
             return file ? ([locale, { path, contents: file.contents }] as const) : undefined;
           }),
       );
@@ -549,6 +720,7 @@ export async function prepublishChecks(ctx: RequestContext, request: Request): P
   // The drawer lists entries; the file says which language a result is about.
   return Response.json({
     results: results.map((result) => ({ ...result, entry: entryKey(result.path) ?? result.path })),
+    ...(resolved.chosen ? { readiness } : {}),
   });
 }
 
@@ -560,37 +732,13 @@ export async function publish(
 ): Promise<Response> {
   const database = ctx.db();
   // Only a genuinely empty body means all: a malformed selection must never widen scope.
-  const raw = await request.text();
-  let chosen: string[] | undefined;
-  if (raw !== '') {
-    let body: unknown;
-    try {
-      body = JSON.parse(raw);
-    } catch {
-      return new Response('Invalid publish JSON', { status: 400 });
-    }
-    if (
-      !body ||
-      typeof body !== 'object' ||
-      Array.isArray(body) ||
-      Object.keys(body).some((key) => key !== 'entries') ||
-      !('entries' in body) ||
-      !Array.isArray(body.entries) ||
-      body.entries.some((key: unknown) => typeof key !== 'string' || !/^[\w-]+\/[\w-]+$/.test(key))
-    )
-      return new Response('Publish requires an array of entry keys', { status: 400 });
-    chosen = [...new Set(body.entries as string[])];
-  }
-  // Held to the schema before anything is written, over exactly the set the commit is made of.
-  const pending = await readyDrafts('default', database, chosen);
+  const resolved = await resolveSelection(ctx, await request.text());
+  if (resolved instanceof Response) return resolved;
+  const { chosen, head, retained: pending, excluded } = resolved;
   // Who was holding what, read while the holds are still there: the publish releases them.
   const holders = chosen?.length ? await heldDrafts('default', database) : {};
-  const unready = pending.filter((row) => {
-    const schema = schemaFor(row.path);
-    return schema && row.contents
-      ? entryProblems(schema, parseEntry('default', row.contents)).length > 0
-      : false;
-  });
+  // Held to the schema before anything is written, over exactly the set the commit is made of.
+  const unready = pending.filter((row) => problemsOf(row).length > 0);
   if (unready.length) {
     const paths = unready.map((r) => r.path);
     return Response.json(
@@ -643,7 +791,7 @@ export async function publish(
       publishSources(ctx),
       chosen,
       pending,
-      { userId: session?.user.id },
+      { userId: session?.user.id, ...(head ? { baseSha: head } : {}) },
     );
   } catch (err) {
     // Only a repository refusal is logged: a schema or drift refusal is this person's own drafts.
@@ -659,8 +807,11 @@ export async function publish(
     });
     throw err;
   }
+  // A held file left out keeps the entry on hold, so its hold was not released.
+  const stillHeld = new Set(excluded.flatMap((row) => (row.heldBy && entryKey(row.path)) || []));
+  const released = (result?.released ?? []).filter((entry) => !stillHeld.has(entry));
   // A released hold is logged as the same event the toggle writes.
-  for (const entry of result?.released ?? []) {
+  for (const entry of released) {
     const [collection = '', slug = ''] = entry.split('/');
     const from = holders[entry]?.name;
     await logActivity('default', database, {
@@ -685,7 +836,9 @@ export async function publish(
       commitSha: result.commit_sha,
     });
   }
-  return Response.json(result ?? { paths: [] });
+  return Response.json(
+    result ? { ...result, ...(excluded.length ? { released } : {}) } : { paths: [] },
+  );
 }
 
 /** Capped at what the dashboard draws: the log's `detail` is small json. */

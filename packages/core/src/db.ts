@@ -16,7 +16,7 @@ import {
 } from './content.js';
 import { chunksOf, D1_MAX_BOUND_PARAMETERS } from './d1-limits.js';
 import { type ContentFile, type ContentIndex, entryKey, indexHasPath } from './entries.js';
-import { blobSha, type GitClient, type PublishFile } from './git.js';
+import { blobSha, type GitClient, type PublishFile, RefMovedError } from './git.js';
 import {
   appendRedirects,
   REDIRECTS,
@@ -1271,7 +1271,7 @@ export async function publishDrafts(
   sourceOf?: SourceOf,
   entries?: readonly string[],
   snapshot?: readonly Draft[],
-  durable?: { userId?: string },
+  durable?: { userId?: string; baseSha?: string },
 ): Promise<{ commit_sha: string; paths: string[]; released: string[] } | undefined> {
   let rows = snapshot ?? (await readyDrafts(siteId, db, entries));
   if (!rows.length) return undefined;
@@ -1308,7 +1308,11 @@ export async function publishDrafts(
       paths: completed.paths.filter((path): path is string => typeof path === 'string'),
       released: completed.released.filter((entry): entry is string => typeof entry === 'string'),
     };
-  const base_sha = existing?.baseSha ?? (await git.getHead());
+  // A caller that judged the selection at one revision commits on that one or not at all, and a
+  // moved branch is refused before an operation is recorded that every retry would then find.
+  const base_sha = existing?.baseSha ?? durable?.baseSha ?? (await git.getHead());
+  if (!existing && durable?.baseSha && (await git.getHead()) !== durable.baseSha)
+    throw new RefMovedError(`the branch moved past ${durable.baseSha}`);
   // Every read is of the commit the publish is made against, so the check and the parent agree.
   const current = await Promise.all(rows.map((r) => git.getFile(r.path, base_sha)));
   if (!existing) {

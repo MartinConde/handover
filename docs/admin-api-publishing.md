@@ -51,14 +51,33 @@ the globals, which have no list to be shown in. Globals count in every number. A
 add up to a count of entries.
 
 ```
-POST /admin/api/publish   { "entries": ["listings/mill-house"] }  →  { "commit_sha", "paths", "released" }
+POST /admin/api/publish   { "entries": ["listings/mill-house"], "without": ["listings/mill-house:de"] }  →  { "commit_sha", "paths", "released" }
 ```
 
 Publishes the entries the body names, or everything pending that is not on hold when there
-is no body. Malformed JSON, a missing or non-array `entries` property, unknown properties, and invalid array elements return `400` before draft selection. An empty array selects nothing; it never means all. An entry is `collection/name` — the same key for every language, since the
-languages of one entry are published together — and an entry that is **on hold** goes out
+is no body. Malformed JSON, a missing or non-array `entries` property, unknown properties, and invalid array elements return `400` with `{ "code": "PUBLISH_SELECTION_INVALID", "error" }` before draft selection. An empty array selects nothing; it never means all. An entry is `collection/name` — the same key for every language, since the
+languages of one entry are published together, apart from a new translation left out with
+`without` — and an entry that is **on hold** goes out
 when it is named, which releases the hold. Naming an entry with nothing pending, or passing
 an empty list, publishes nothing and is not an error.
+
+`without` is optional and leaves files of the named entries out of the commit, as
+`collection/name:locale`. Only a language with unpublished changes whose file the repository
+does not have yet can wait — a new translation nobody has finished. The files the repository
+already has publish together, and so does the language the entry is written in, even when it
+is new. A left-out draft keeps its words, its revision and its hold, and stays pending for the
+next publish; if it was held, the entry stays on hold and `released` does not name it. The
+eligibility is read at one commit and the publish is made on that commit, so a file somebody
+commits in between is `PUBLISH_REF_MOVED`, never published past. Refusals, each before anything
+is written:
+
+| Status | `code` | When |
+|---|---|---|
+| `400` | `PUBLISH_SELECTION_INVALID` | `without` is not a list, has an item that is not `collection/name:locale`, names an entry `entries` does not, or a language the site does not declare; or `without` comes with no `entries` |
+| `400` | `PUBLISH_EXCLUDE_NOT_PENDING` | a left-out file has no unpublished changes (`paths` names them) |
+| `400` | `PUBLISH_EXCLUDE_ALL` | leaving the files out leaves nothing to publish |
+| `422` | `PUBLISH_EXCLUDE_PUBLISHED` | the repository already has the file (`paths`) |
+| `422` | `PUBLISH_EXCLUDE_SOURCE` | the file is the language the entry is written in (`paths`) |
 
 The body never carries content: what is committed is what the server has stored, and this
 says only which of it. `paths` is what went into the commit, empty when there was nothing to
@@ -82,24 +101,38 @@ of those cases nothing was written and no row was cleared. A path no collection 
 Publish failures retain `error` as diagnostic compatibility text and add a stable `code` for UI
 presentation: `PUBLISH_INCOMPLETE` (`422`), `PUBLISH_DRIFT` (`409`), `PUBLISH_SOURCE_UNRESOLVED` (`409`), `PUBLISH_CONFLICT` (`409`),
 `PUBLISH_REF_MOVED` (`409`), `PUBLISH_REPOSITORY_UNAVAILABLE` (`503`) or
-`PUBLISH_FINALIZATION_PENDING` (`503`). Path-bearing answers keep `paths`; drift keeps
+`PUBLISH_FINALIZATION_PENDING` (`503`), plus the selection codes in the table above. Path-bearing answers keep `paths`; drift keeps
 `reason: "drift"`; an unfinished finalization keeps its operation and commit identifiers. Clients
 must continue to use status, `paths`, `reason` and the request uncertainty signal for control flow,
 not translated text or the descriptor alone.
 
 ```
-POST /admin/api/publish/checks   { "entries": ["listings/mill-house"] }  →  { "results": [{ "check", "entry", "path", "fieldPath", "severity", "message" }] }
+POST /admin/api/publish/checks   { "entries": ["listings/mill-house"], "without": [] }  →  { "results": [{ "check", "entry", "path", "fieldPath", "severity", "message" }], "readiness" }
 ```
 
 The [pre-publish checks](pending-changes.md#checks-before-a-publish) over the entries the body
-names — the same body `POST /admin/api/publish` takes, and the same set it would commit. What a
-link resolves against is the built content index with **those** drafts laid over it and no
-others, so a link to a page that only an unselected draft would create is reported. `severity`
+names — the same body `POST /admin/api/publish` takes, refused the same way, and the same set it
+would commit. What a link resolves against is the built content index with **those** drafts
+laid over it and no others, so a link to a page that only an unselected or left-out draft would
+create is reported, and a left-out file is not checked at all. `severity`
 is `error`, `warn` or `info`; `entry` is the key the drawer groups under and `fieldPath`
 addresses the field the way `_machine` does (`blocks[_id=b1x2y3z4].link.ref`), so it survives a
 block being moved.
 
-**It refuses nothing, and nothing refuses because of it.** The lint is a request of its own so
+With `entries`, the answer also carries `readiness`: per entry, per language with unpublished
+changes — a translation nobody has typed into included, and a left-out one too — what its
+stored draft lacks for the collection schema, and whether it could be left out:
+
+```json
+{ "listings/mill-house": {
+    "en": { "revision": "…", "problems": [], "excludable": false, "reason": "published" },
+    "de": { "revision": "…", "problems": [{ "path": "rooms", "message": "…" }], "excludable": true } } }
+```
+
+`reason` is `published` or `source` — the source also covers an entry whose files disagree
+about it. `problems` is what `POST /admin/api/publish` answers `422 PUBLISH_INCOMPLETE` over.
+
+**Past a selection it would refuse to publish, it refuses nothing, and nothing refuses because of it.** The lint is a request of its own so
 that it has its own CPU: a publish too heavily cross-linked to read in one pass costs a check
 result rather than the commit. `POST /admin/api/publish` does not run it, and an error is only
 a stop in the drawer, whose Publish button is disabled while one stands.

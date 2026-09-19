@@ -21,6 +21,7 @@ import {
   pendingDrafts,
   publishDrafts,
   RevertConflictError,
+  readyDrafts,
   recordDelete,
   recordOffer,
   recordRename,
@@ -1812,6 +1813,40 @@ test('choosing an entry somebody is holding back publishes it and releases the h
   expect(result?.paths.toSorted()).toEqual([PATH, LISTING_DE].toSorted());
   expect(result?.released).toEqual(['listings/mill-house']);
   expect((await db.select().from(drafts)).map((r) => r.heldBy)).toEqual([null, null]);
+});
+
+// A new translation left out of a publish is still the entry's, held with it until it goes too.
+test('a draft left out of a publish keeps its words, its revision and its hold', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  await createDraft('default', db, repo, LISTING_DE, { title: '' });
+  await holdEntry('default', db, [PATH, LISTING_DE], 'u1');
+  const [german] = (await db.select().from(drafts)).filter((row) => row.path === LISTING_DE);
+  const english = (await readyDrafts('default', db, ['listings/mill-house'])).filter(
+    (row) => row.path === PATH,
+  );
+
+  const result = await publishDrafts('default', db, repo, undefined, undefined, english);
+
+  expect(result?.paths).toEqual([PATH]);
+  expect((await db.select().from(drafts)).find((row) => row.path === LISTING_DE)).toEqual(german);
+  expect(await heldDrafts('default', db)).toMatchObject({ 'listings/mill-house': { id: 'u1' } });
+});
+
+// What an exclusion was judged against: a newer head could hold the file it said was absent.
+test('a publish judged against an older commit is refused and records nothing', async () => {
+  const db = await fresh();
+  const repo = fakeRepo({ [PATH]: FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+
+  await expect(
+    publishDrafts('default', db, repo, undefined, undefined, undefined, { baseSha: 'commit-old' }),
+  ).rejects.toBeInstanceOf(RefMovedError);
+
+  expect(repo.publish).not.toHaveBeenCalled();
+  expect(await db.select().from(tables.operations)).toEqual([]);
+  expect((await pendingDrafts('default', db)).map((row) => row.path)).toEqual([PATH]);
 });
 
 test('the entries left out of a publish keep their redirect rules', async () => {
