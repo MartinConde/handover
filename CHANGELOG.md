@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `GET /admin/api/entries/:collection` rows carry `partial` and `machine`, and the dashboard's
+  `translations` counts `unfinished` and `machine` per language, drafts included; nothing on
+  screen changes yet.
 - The build keeps how much text each language file answers, ready for the entry list and
   dashboard to show partly written translations; nothing on screen changes yet.
 - A translation's column says how much of the source's text it answers (*3 of 5 texts

@@ -1,5 +1,6 @@
 import { expect, test } from 'vitest';
 import { answeredCount, markTranslation } from './content.js';
+import type { ContentFile } from './entries.js';
 import {
   collectionEntries,
   contentPathErrors,
@@ -7,6 +8,7 @@ import {
   indexFrom,
   staleFrom,
   templatesFrom,
+  textSummaries,
   textsFrom,
 } from './entries.js';
 import type { Form } from './schema.js';
@@ -453,4 +455,127 @@ test('a file with no form, and every file of a one-language site, are not counte
 
   expect(Object.keys(textsFrom('default', SIX, files, form))).toEqual(['listings/mill-house']);
   expect(textsFrom('default', { locales: ['en'] }, files, form)).toEqual({});
+});
+
+const SIX_EN = { ...SIX, defaultLocale: 'en' };
+const MILL = 'listings/mill-house';
+// What the build kept of these files, then the drafts laid over it.
+const summaries = (published: ContentFile[], drafts: ContentFile[]) =>
+  textSummaries(
+    'default',
+    SIX_EN,
+    textsFrom('default', SIX, published, () => rooms),
+    drafts,
+    () => rooms,
+  );
+const ROOMED = 'title: Mill House\nrooms:\n  - { _id: room0001, name: Loft }\n';
+
+test('a new empty translation and a half-written published one are partial', () => {
+  expect(
+    summaries(
+      [listing('en', 'mill-house', ROOMED), listing('de', 'mill-house', 'title: Mühlenhaus\n')],
+      [listing('fr', 'mill-house', '_source: en\n')],
+    ),
+  ).toEqual({ [MILL]: { partial: { de: [1, 2], fr: [0, 2] } } });
+});
+
+test('a draft of the source alone recounts a language that has no draft', () => {
+  const published = [
+    listing('en', 'mill-house', 'title: Mill House\n'),
+    listing('de', 'mill-house', 'title: Mühlenhaus\n'),
+  ];
+
+  expect(summaries(published, [])).toEqual({});
+  expect(summaries(published, [listing('en', 'mill-house', ROOMED)])).toEqual({
+    [MILL]: { partial: { de: [1, 2] } },
+  });
+  expect(
+    summaries(
+      [listing('en', 'mill-house', ROOMED), listing('de', 'mill-house', 'title: Mühlenhaus\n')],
+      [listing('en', 'mill-house', 'title: Mill House\n')],
+    ),
+  ).toEqual({});
+});
+
+test('a change of source counts every language against the new one', () => {
+  const published = [
+    listing('en', 'mill-house', 'title: Mill House\n'),
+    listing(
+      'de',
+      'mill-house',
+      'title: Mühlenhaus\nrooms:\n  - { _id: room0001, name: Dachboden }\n',
+    ),
+    listing('fr', 'mill-house', 'title: Moulin\n'),
+  ];
+  const moved = [
+    listing('en', 'mill-house', '_source: de\ntitle: Mill House\n'),
+    listing(
+      'de',
+      'mill-house',
+      '_source: de\ntitle: Mühlenhaus\nrooms:\n  - { _id: room0001, name: Dachboden }\n',
+    ),
+    listing('fr', 'mill-house', '_source: de\ntitle: Moulin\n'),
+  ];
+
+  expect(summaries(published, [])).toEqual({});
+  expect(summaries(published, moved)).toEqual({
+    [MILL]: { partial: { en: [1, 2], fr: [1, 2] } },
+  });
+});
+
+test('writing English into a German entry keeps German its source', () => {
+  expect(
+    summaries(
+      [
+        listing(
+          'de',
+          'mill-house',
+          '_source: de\ntitle: Mühlenhaus\nrooms:\n  - { _id: room0001, name: Dachboden }\n',
+        ),
+      ],
+      [listing('en', 'mill-house', '_source: de\ntitle: Mill House\n')],
+    ),
+  ).toEqual({ [MILL]: { partial: { en: [1, 2] } } });
+});
+
+test('a deleted file, or a deleted entry, is counted no more', () => {
+  const published = [
+    listing('en', 'mill-house', ROOMED),
+    listing('de', 'mill-house', '_machine: [title]\ntitle: Mühlenhaus\n'),
+  ];
+  const gone = (locale: string) => ({
+    path: `src/content/listings/${locale}/mill-house.yaml`,
+    contents: '',
+  });
+
+  expect(summaries(published, [gone('de')])).toEqual({});
+  expect(summaries(published, [gone('en'), gone('de')])).toEqual({});
+});
+
+test('a draft takes a machine mark away and gives one', () => {
+  const published = [
+    listing('en', 'mill-house', 'title: Mill House\n'),
+    listing('de', 'mill-house', '_machine: [title]\ntitle: Mühlenhaus\n'),
+    listing('fr', 'mill-house', 'title: Moulin\n'),
+  ];
+
+  expect(summaries(published, [])).toEqual({ [MILL]: { machine: ['de'] } });
+  expect(
+    summaries(published, [
+      listing('de', 'mill-house', '_machine: []\ntitle: Mühlenhaus\n'),
+      listing('fr', 'mill-house', '_machine: [title]\ntitle: Moulin\n'),
+    ]),
+  ).toEqual({ [MILL]: { machine: ['fr'] } });
+});
+
+test('an entry whose files disagree on their source has no summary', () => {
+  expect(
+    summaries(
+      [
+        listing('en', 'mill-house', `_source: en\n${ROOMED}`),
+        listing('de', 'mill-house', '_source: de\ntitle: Mühlenhaus\n'),
+      ],
+      [],
+    ),
+  ).toEqual({});
 });

@@ -28,7 +28,14 @@ type Recent = {
 type Health = {
   defaultLocale: string;
   /** `where` is the collections owing the language, in config order — the lists *Show* opens. */
-  locales: { locale: string; missing: number; stale: number; where?: string[] }[];
+  locales: {
+    locale: string;
+    missing: number;
+    stale: number;
+    unfinished?: number;
+    machine?: number;
+    where?: string[];
+  }[];
 };
 
 // The two big tiles are handed the shell's own counts, so a count and the drawer never disagree.

@@ -1,3 +1,4 @@
+import { texts } from 'virtual:handover/index';
 import {
   applyDrift,
   createGitClient,
@@ -768,6 +769,7 @@ afterEach(() => {
   deeplKey = undefined;
   settingsSecret = 'c2VjcmV0';
   for (const key of Object.keys(stored)) delete stored[key];
+  for (const key of Object.keys(texts)) delete texts[key];
   siteMailer = undefined;
   lastCommitRow = { sha: 'def456', at: 1755864000000, kind: 'publish', by: 'Anna Berg' };
   publishes = [];
@@ -2025,12 +2027,43 @@ test('translation health counts the languages an entry owes and the ones behind 
   expect(translations).toEqual({
     defaultLocale: 'en',
     locales: [
-      { locale: 'en', missing: 0, stale: 0, where: [] },
+      { locale: 'en', missing: 0, stale: 0, unfinished: 0, machine: 0, where: [] },
       // Everything the index holds but `posts/taken`, which is the one entry with two files.
-      { locale: 'de', missing: 5, stale: 1, where: ['listings', 'presenters', 'posts'] },
+      {
+        locale: 'de',
+        missing: 5,
+        stale: 1,
+        unfinished: 0,
+        machine: 0,
+        where: ['listings', 'presenters', 'posts'],
+      },
     ],
   });
   locales = ['en'];
+});
+
+// The build's inventories with the drafts over them; a global counts though it has no list.
+test('translation health counts unfinished and machine-written languages, drafts and globals included', async () => {
+  locales = ['en', 'de'];
+  Object.assign(texts, {
+    'posts/taken': { en: { paths: ['title', 'seo.title'] }, de: { paths: ['title'] } },
+    'globals/site': { en: { paths: ['footerText'] } },
+  });
+  overlayRows.mockImplementationOnce(async () => [
+    {
+      path: 'src/content/globals/de/site.yaml',
+      contents: '_version: 1\n_machine: [footerText]\nfooterText: "Häuser an der Küste"\n',
+    },
+  ]);
+
+  const { translations } = (await (await GET(ctx('dashboard'))).json()) as {
+    translations: { locales: { locale: string }[] };
+  };
+
+  expect(translations.locales).toEqual([
+    expect.objectContaining({ locale: 'en', unfinished: 0, machine: 0 }),
+    expect.objectContaining({ locale: 'de', unfinished: 1, machine: 1 }),
+  ]);
 });
 
 test('a one-language site has nothing to report about its languages', async () => {
@@ -2314,6 +2347,28 @@ test('a row names the languages the build marked stale', async () => {
     ['hello', undefined],
     ['taken', ['de']],
   ]);
+});
+
+// Stale is the build's and partial is counted now, so one language can be both.
+test('a row carries partial and machine languages beside stale, and none of the paths', async () => {
+  locales = ['en', 'de'];
+  Object.assign(texts, {
+    'posts/taken': {
+      en: { paths: ['title', 'seo.title'] },
+      de: { paths: ['title'], machine: true },
+    },
+  });
+
+  const { entries } = (await (await GET(ctx('entries/posts'))).json()) as {
+    entries: Record<string, unknown>[];
+  };
+
+  expect(entries.find((e) => e.id === 'taken')).toMatchObject({
+    stale: ['de'],
+    partial: { de: [1, 2] },
+    machine: ['de'],
+  });
+  expect(JSON.stringify(entries)).not.toContain('seo.title');
 });
 
 // The dashboard's line, on every row: the draft's editor where there is a draft.

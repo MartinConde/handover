@@ -1,5 +1,6 @@
 import {
   type AnsweredPaths,
+  answeredCount,
   answeredPaths,
   entrySource,
   parseEntry,
@@ -190,6 +191,60 @@ export function textsFrom(
     texts[key] = { ...texts[key], [parts.locale]: found };
   }
   return texts;
+}
+
+/** What an entry's languages owe beyond having a file; the list and dashboard both read it. */
+export interface TextSummary {
+  /** `[written, of]` for each language with a file that answers only some of the source. */
+  partial?: Record<string, [number, number]>;
+  /** The languages whose file still holds a machine's words, the source included. */
+  machine?: string[];
+}
+
+/** The build's inventories with the drafts over them; a draft with no contents is a deletion. */
+export function textSummaries(
+  siteId: string,
+  i18n: Pick<I18nRouting, 'locales' | 'defaultLocale'>,
+  texts: Record<string, Record<string, FileTexts>>,
+  drafts: readonly ContentFile[],
+  formFor: (collection: string, name: string) => Form | undefined,
+): Record<string, TextSummary> {
+  const summaries: Record<string, TextSummary> = {};
+  if (i18n.locales.length < 2) return summaries;
+  const effective = { ...texts };
+  const written = textsFrom(
+    siteId,
+    i18n,
+    drafts.filter((draft) => draft.contents),
+    formFor,
+  );
+  for (const draft of drafts) {
+    const parts = entryParts(draft.path);
+    if (!parts) continue;
+    const key = `${parts.collection}/${parts.name}`;
+    const { [parts.locale]: _published, ...others } = effective[key] ?? {};
+    const now = written[key]?.[parts.locale];
+    effective[key] = now ? { ...others, [parts.locale]: now } : others;
+  }
+  for (const [key, languages] of Object.entries(effective)) {
+    const marks = Object.fromEntries(
+      Object.entries(languages).map(([locale, file]) => [locale, { _source: file.source }]),
+    );
+    const source = entrySource(siteId, i18n, marks);
+    if (!source || 'problem' in source) continue;
+    const owed = languages[source.locale] ?? { paths: [] };
+    const summary: TextSummary = {};
+    for (const locale of i18n.locales) {
+      const file = languages[locale];
+      if (!file) continue;
+      if (file.machine) summary.machine = [...(summary.machine ?? []), locale];
+      if (locale === source.locale) continue;
+      const { written: done, of } = answeredCount(owed, file, locale);
+      if (done < of) summary.partial = { ...summary.partial, [locale]: [done, of] };
+    }
+    if (summary.partial || summary.machine) summaries[key] = summary;
+  }
+  return summaries;
 }
 
 /** A draft is what the editor last saw, so its title and status win over the built index. */

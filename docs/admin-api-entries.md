@@ -20,7 +20,7 @@ which the picker says on the row rather than dropping it. It is what the page pi
 wherever the picker appears.
 
 ```
-GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales", "pending", "edited", "stale" }], "locales": ["en", "de"], "index": "/listings", "templates": ["house"] }
+GET /admin/api/entries/:collection          →  { "entries": [{ "id", "locales", "pending", "edited", "stale", "partial", "machine" }], "locales": ["en", "de"], "index": "/listings", "templates": ["house"] }
 ```
 
 The collection's entries for the list screen: one row per entry, `id` is the filename and
@@ -39,6 +39,13 @@ entry — `{ at, by, kind }`, where `kind` is `"edit"` for a draft nobody has pu
 `"publish"` for the commit that carried the last one out — and `null` when the activity log
 goes back no further. `stale` names the languages the last build found translated from a
 source that has moved on since, and is absent where there are none.
+`partial` maps each language whose file answers only some of the source's text to
+`[written, of]` (`{ "de": [3, 5] }`), and `machine` names the languages whose file still holds
+machine-translated text. Both are counted from the build with the pending drafts over it, so a
+new translation or an edit to the source shows at once, while `stale` waits for the next build;
+a language can be both stale and partial. A missing, complete or turned-off language is not in
+`partial`, and both are absent where there are none, or where the entry's files disagree about
+its [source language](source-language.md).
 
 ```
 GET /admin/api/entries/:collection/:slug  →  { fields, blocks, data, translations, pending, problems, hidden, redirects, titleField, locales, defaultLocale, sourceLocale, offered, drift, stale, translator, route, index, prefixDefaultLocale }

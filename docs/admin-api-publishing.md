@@ -41,10 +41,14 @@ one. `href` is where that entry is edited, which for a global is `/admin/site/<n
 
 `published` is the newest commit the admin made, when it was a publish and not a rename or a
 redirect. `translations` is `null` on a one-language site; otherwise it is
-`{ "defaultLocale", "locales": [{ "locale", "missing", "stale", "where" }] }` — `missing` from
-the content index with the drafts over it, `stale` from the map the build wrote, which is why
-it lags a publish, and `where` the collections owing that language, in config order and without
-the globals, which have no list to be shown in.
+`{ "defaultLocale", "locales": [{ "locale", "missing", "stale", "unfinished", "machine", "where" }] }`
+— `missing` from the content index with the drafts over it, `stale` from the map the build
+wrote, which is why it lags a publish, `unfinished` and `machine` the entries whose file in that
+language is partly written or still holds machine-translated text, counted like the entry list's
+`partial` and `machine` with the drafts over the build, and `where` the collections owing that
+language, in config order and without the globals, which have no list to be shown in. Globals
+count in every number. An entry can count as both stale and unfinished, so the numbers do not
+add up to a count of entries.
 
 ```
 POST /admin/api/publish   { "entries": ["listings/mill-house"] }  →  { "commit_sha", "paths", "released" }

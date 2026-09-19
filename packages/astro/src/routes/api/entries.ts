@@ -1,5 +1,5 @@
 import config from 'virtual:handover/config';
-import index, { stale, templates } from 'virtual:handover/index';
+import index, { stale, templates, texts } from 'virtual:handover/index';
 import type { Db, EntryEdit, Form, IndexEntry, Labels, LocaleSeed } from '@handover/core';
 import {
   addressError,
@@ -74,10 +74,11 @@ import {
   stringifyEntry,
   syncLocale,
   takeLock,
+  textSummaries,
   translatableText,
   withSource,
 } from '@handover/core';
-import { formSchema } from '../../index.js';
+import { entryForm, formSchema } from '../../index.js';
 import { entryProblems } from '../../problems.js';
 import {
   ENTRY_FILE,
@@ -1184,6 +1185,7 @@ export async function listEntries(ctx: RequestContext, collection: string): Prom
   // Says which rows get the "duplicate including unpublished changes?" question.
   const unpublished = new Set(waiting.map((row) => row.path));
   const edits = lastEdits(waiting, published, editors);
+  const summaries = textsNow(rows, collection);
   // The same reading of `_locales` the editor makes, so list and form agree on chips.
   const entries = collectionEntries('default', index, collection, rows, collected.titleField).map(
     (entry) => {
@@ -1205,6 +1207,7 @@ export async function listEntries(ctx: RequestContext, collection: string): Prom
         stale: stale[`${collection}/${entry.id}`]?.length
           ? stale[`${collection}/${entry.id}`]
           : undefined,
+        ...summaries[`${collection}/${entry.id}`],
       };
     },
   );
@@ -1217,6 +1220,19 @@ export async function listEntries(ctx: RequestContext, collection: string): Prom
     // The starters this collection ships, which the New entry dialog offers beside Blank.
     templates: await templateNames(collection, database),
   });
+}
+
+/** The build's counts with the drafts over them, read the same way by list and dashboard. */
+function textsNow(overlay: readonly { path: string; contents: string }[], collection?: string) {
+  // A list parses only its own drafts; the dashboard needs every entry, globals too.
+  const within = (key = '') => !collection || key.startsWith(`${collection}/`);
+  return textSummaries(
+    'default',
+    config.i18n,
+    Object.fromEntries(Object.entries(texts).filter(([key]) => within(key))),
+    overlay.filter((row) => within(entryKey(row.path))),
+    (of, name) => entryForm(config, of, name),
+  );
 }
 
 /** A global's label in every language, for the rows that name it; nothing for an entry. */
@@ -1376,6 +1392,14 @@ function translationHealth(overlay: readonly { path: string; contents: string }[
   if (locales.length < 2) return null;
   const missing: Record<string, number> = {};
   const behind: Record<string, number> = {};
+  const unfinished: Record<string, number> = {};
+  const machine: Record<string, number> = {};
+  // Drafts included, unlike `behind`; an entry can count in both.
+  for (const summary of Object.values(textsNow(overlay))) {
+    for (const locale of Object.keys(summary.partial ?? {}))
+      unfinished[locale] = (unfinished[locale] ?? 0) + 1;
+    for (const locale of summary.machine ?? []) machine[locale] = (machine[locale] ?? 0) + 1;
+  }
   // Which lists to send somebody to: a global has none, so it counts and is not named.
   const where: Record<string, Set<string>> = {};
   const owed = (locale: string, collection: string) => {
@@ -1410,6 +1434,8 @@ function translationHealth(overlay: readonly { path: string; contents: string }[
       locale,
       missing: missing[locale] ?? 0,
       stale: behind[locale] ?? 0,
+      unfinished: unfinished[locale] ?? 0,
+      machine: machine[locale] ?? 0,
       where: [...(where[locale] ?? [])],
     })),
   };

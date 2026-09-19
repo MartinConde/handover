@@ -29,6 +29,9 @@ type Entry = {
   /** Who last touched it and how — the draft's editor, or the publish that carried it out. */
   edited?: { at: number; by: string | null; kind: 'edit' | 'publish' } | null;
   stale?: string[];
+  /** `[written, of]` per partly written language, drafts included. */
+  partial?: Record<string, [number, number]>;
+  machine?: string[];
 };
 /** One thing the CMS took away, as the activity log remembers it. */
 type Deleted = {

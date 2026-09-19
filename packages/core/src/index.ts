@@ -148,6 +148,7 @@ export type {
   FileTexts,
   IndexEntry,
   Template,
+  TextSummary,
   TitleFields,
 } from './entries.js';
 export {
@@ -160,6 +161,7 @@ export {
   indexFrom,
   staleFrom,
   templatesFrom,
+  textSummaries,
   textsFrom,
 } from './entries.js';
 export type {
