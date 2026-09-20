@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- **Review and record** counts the entries with unpublished changes the way the rest of the admin
+  counts them, so an entry published since its last edit is no longer counted, and the file that
+  becomes the source is written without an `_i18n` mark of its own.
 - The right column has **Next to do** (and `Alt` + `↓`), which moves through the texts the
   language still owes — empty ones and those the source has changed — opening folded blocks and
   the SEO tab on the way, wrapping after the last and saying *Nothing left to do* only when there

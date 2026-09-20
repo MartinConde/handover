@@ -126,11 +126,12 @@ POST /admin/api/sources   { "base": "…" }  →  { "commit_sha", "entries", "st
 Owner only; `403` for an editor. `GET` lists the entries with files in two or more languages and
 no `_source`, read at the branch tip it returns as `base`, with drafts laid over the files. Each
 is `{ "key", "collection", "title", "href", "source", "locales", "drafts", "stale" }`: `source`
-is the language recorded, `stale` the translations `{ "locale", "from" }` whose mark will still
-name another language. A one-language site answers an empty list.
+is the language recorded, `drafts` whether the entry has unpublished changes, `stale` the
+translations `{ "locale", "from" }` whose mark will still name another language. A one-language site answers an empty list.
 
-`POST` records all of them in one commit that adds `_source` to each of their files, moves legacy
-marks onto the source where the chain is in sync, then moves every open draft onto that commit.
+`POST` records all of them in one commit that adds `_source` to each of their files, takes the
+`_i18n` mark off the file that becomes the source, moves legacy marks onto the source where the
+chain is in sync, then moves every open draft onto that commit.
 `entries` and `stale` are counts, `sources` the entries per language. Refused with nothing
 written: `409 SOURCES_CHANGED` when the branch is no longer at `base`, and `409 SOURCES_LOCKED`
 with `held: [{ "key", "name" }]` while somebody else holds one of the entries' locks. A retry

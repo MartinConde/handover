@@ -6,6 +6,7 @@ import {
   openDb,
   type PublishFile,
   parseEntry,
+  pendingDrafts,
 } from '@handover/core';
 import type { APIContext } from 'astro';
 import { z } from 'astro/zod';
@@ -325,6 +326,36 @@ test('an open draft is rebased onto the commit and publishes without a conflict'
     _source: 'en',
     title: 'Neue Startseite',
   });
+});
+
+test('an entry published since its last edit has no unpublished changes', async () => {
+  trees[head] = { [path('en')]: EN, [path('de')]: DE };
+  const opened = (await (await call('GET', 'entries/pages/home')).json()) as {
+    revisions: Record<string, string>;
+  };
+  const saved = await call('PUT', 'drafts/pages/home/de', {
+    data: { title: 'Neue Startseite', body: 'Willkommen' },
+    revision: opened.revisions.de,
+  });
+  expect(saved.status).toBe(200);
+  expect((await call('POST', 'publish', { entries: ['pages/home'] })).status).toBe(200);
+  // The publish leaves the row behind, matching the file it wrote: nothing is pending any more.
+  expect((await loadDraft('default', db, path('de')))?.contents).toBeTruthy();
+  expect(await pendingDrafts('default', db)).toEqual([]);
+
+  const found = await listing();
+  expect(found.entries).toMatchObject([{ key: 'pages/home', drafts: false }]);
+});
+
+test('the file that becomes the source is written without a mark of its own', async () => {
+  // A legacy English file recording that it was translated from German, on an English-source entry.
+  trees[head] = { [path('en')]: await marked(EN, 'de', DE), [path('de')]: DE };
+
+  const found = await listing();
+  expect(await (await record(found.base)).json()).toMatchObject({ entries: 1 });
+
+  expect(markOf(trees[head]?.[path('en')])).toBeUndefined();
+  expect(parseEntry('default', trees[head]?.[path('de')] ?? '')).toMatchObject({ _source: 'en' });
 });
 
 test('a French mark made from German moves to English only while German is in sync', async () => {

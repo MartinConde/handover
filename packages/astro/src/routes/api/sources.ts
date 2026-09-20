@@ -1,5 +1,5 @@
 import config from 'virtual:handover/config';
-import type { ContentFile, Operation } from '@handover/core';
+import type { ContentFile, Db, Operation } from '@handover/core';
 import {
   beginOperation,
   blobSha,
@@ -14,6 +14,7 @@ import {
   OperationFinalizationError,
   operationMessage,
   parseEntry,
+  pendingDrafts,
   provenance,
   recentOperations,
   recordSource,
@@ -66,6 +67,7 @@ const known = (collection: string, slug: string) =>
 async function unrecorded(
   published: readonly ContentFile[],
   drafted: readonly ContentFile[],
+  pending: ReadonlySet<string>,
 ): Promise<Unrecorded[]> {
   const { locales } = config.i18n;
   if (locales.length < 2) return [];
@@ -104,7 +106,11 @@ async function unrecorded(
     if (!(source in entry.published)) continue;
     const committed = present.filter((l) => l in entry.published);
     const data = Object.fromEntries(committed.map((l) => [l, asData(entry.published[l] ?? '')]));
-    const stamped = stringifyEntry('default', withSource('default', data[source], source));
+    // The source is written without a mark of its own, as `provenance` clears the one it moves to.
+    const stamped = stringifyEntry(
+      'default',
+      withMark(withSource('default', data[source], source), undefined),
+    );
     const blob = await blobSha(stamped);
     const form = formFor(collection, slug);
     const marks: Record<string, unknown> = {};
@@ -134,7 +140,7 @@ async function unrecorded(
       key,
       source,
       locales: present,
-      drafts: present.some((l) => entry.drafted[l]),
+      drafts: present.some((l) => pending.has(entryPath(collection, slug, l))),
       stale,
       files: committed.map((l) => ({
         path: entryPath(collection, slug, l),
@@ -149,6 +155,10 @@ async function unrecorded(
   return found;
 }
 
+// Unpublished changes are counted as the rest of the admin counts them, not as draft rows.
+const pendingPaths = async (database: Db) =>
+  new Set((await pendingDrafts('default', database)).map((draft) => draft.path));
+
 /** Owner only: it commits, and it is the upgrade step of the site, not an editor's task. */
 export async function sourcesList(
   ctx: RequestContext,
@@ -158,11 +168,12 @@ export async function sourcesList(
   const database = ctx.db();
   // One head for the read and the answer, so the POST compares what the dialog showed.
   const base = await ctx.git().getHead();
-  const [published, drafted] = await Promise.all([
+  const [published, drafted, pending] = await Promise.all([
     ctx.git().contentFiles(base),
     draftFiles('default', database),
+    pendingPaths(database),
   ]);
-  const found = await unrecorded(published, drafted);
+  const found = await unrecorded(published, drafted, pending);
   const titles = entryTitles(
     found.map((entry) => entry.key),
     drafted,
@@ -217,11 +228,12 @@ export async function recordSources(
     if (unfinished) return finish(ctx, unfinished, session);
   }
   if ((await git.getHead()) !== body.base) return changed();
-  const [published, drafted] = await Promise.all([
+  const [published, drafted, pending] = await Promise.all([
     git.contentFiles(body.base),
     draftFiles('default', database),
+    pendingPaths(database),
   ]);
-  const found = await unrecorded(published, drafted);
+  const found = await unrecorded(published, drafted, pending);
   if (!found.length) return Response.json({ entries: 0, stale: 0, sources: {} });
   const holders = await lockHolders('default', database);
   const held = found.flatMap(({ key }) => {
