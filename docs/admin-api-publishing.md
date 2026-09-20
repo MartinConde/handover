@@ -68,7 +68,10 @@ already has publish together, and so does the language the entry is written in, 
 is new. A left-out draft keeps its words, its revision and its hold, and stays pending for the
 next publish; if it was held, the entry stays on hold and `released` does not name it. The
 eligibility is read at one commit and the publish is made on that commit, so a file somebody
-commits in between is `PUBLISH_REF_MOVED`, never published past. Refusals, each before anything
+commits in between is `PUBLISH_REF_MOVED`, never published past. That commit is read inside the
+`/publish` request: a commit that lands between a `/publish/checks` call and the `/publish` call
+is not refused, because the publish reads the branch again and resolves eligibility against the
+newer head. Refusals, each before anything
 is written:
 
 | Status | `code` | When |

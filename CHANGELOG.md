@@ -4,6 +4,9 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `admin-api-publishing.md` says which window `PUBLISH_REF_MOVED` covers: the head is read inside
+  the `/publish` request, so a commit landing between a `/publish/checks` call and the publish is
+  resolved against the newer head rather than refused.
 - **Review and record** counts the entries with unpublished changes the way the rest of the admin
   counts them, so an entry published since its last edit is no longer counted, and the file that
   becomes the source is written without an `_i18n` mark of its own.
