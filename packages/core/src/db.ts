@@ -63,6 +63,15 @@ export function openDb(_siteId: string, binding: D1Binding | undefined) {
 export type Db = ReturnType<typeof openDb>;
 export type Draft = typeof drafts.$inferSelect;
 
+// A source change deliberately decides every file's provenance. Keep that decision through
+// unrelated draft rewrites; a real translation save writes its own mark into the contents.
+// Keep `:` out: durable publish snapshots separate revision, base SHA and blob with that delimiter.
+const SOURCE_CHANGE_REVISION = 'source-change-';
+const nextRevision = (
+  current?: string,
+  sourceChange = current?.startsWith(SOURCE_CHANGE_REVISION),
+) => `${sourceChange ? SOURCE_CHANGE_REVISION : ''}${crypto.randomUUID()}`;
+
 /** Published empty rows are deletion markers; an unpublished empty file can still be edited. */
 export function loadDraft(siteId: string, db: Db, path: string): Promise<Draft | undefined> {
   return db.query.drafts.findFirst({
@@ -311,7 +320,7 @@ export async function saveDraft(
     )
       throw new DraftRevisionError();
   }
-  const revision = crypto.randomUUID();
+  const revision = nextRevision(loaded.revision);
   const revisions: Record<string, string> = {
     [locale]: revision,
   };
@@ -357,7 +366,7 @@ export async function saveDraft(
     const synced = syncLocale(siteId, sync.form, locale, edit, other.entry, {
       seeds: sync.restoration?.seeds[locale],
     });
-    const siblingRevision = crypto.randomUUID();
+    const siblingRevision = nextRevision(other.revision);
     revisions[locale] = siblingRevision;
     writes.push(
       upsert(db, siteId, sibling, stringifyEntry(siteId, stamped(synced)), other, updatedAt, {
@@ -452,7 +461,7 @@ export async function resolveConflict(
     db
       .update(drafts)
       .set({
-        revision: sql`case when ${drafts.revision} = ${revision ?? ''} then ${crypto.randomUUID()} else null end`,
+        revision: sql`case when ${drafts.revision} = ${revision ?? ''} then ${nextRevision(revision)} else null end`,
         contents: availableContents(
           siteId,
           stringifyEntry(siteId, writtenEntry(siteId, resolved[locale], form.fields)),
@@ -531,15 +540,36 @@ export async function rewriteDrafts(
   siteId: string,
   db: Db,
   git: Pick<GitClient, 'getFile' | 'getHead'>,
-  files: { path: string; revision?: string; contents: string }[],
+  files: { path: string; revision?: string; contents: string; preserveProvenance?: boolean }[],
   by?: string,
+  expected: readonly { path: string; revision?: string }[] = files,
 ): Promise<void> {
   const found = await Promise.all(files.map((f) => load(siteId, db, git, f.path)));
   const updatedAt = Date.now();
+  const captured = sql.join(
+    expected.map(({ path, revision }) =>
+      revision === undefined
+        ? sql`not exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and (contents <> '' or published_sha is null))`
+        : sql`exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and revision = ${revision})`,
+    ),
+    sql` and `,
+  );
   const writes = files.map((f, i) => {
     const loaded = found[i];
     if (!loaded || loaded.revision !== f.revision) throw new DraftRevisionError();
-    return upsert(db, siteId, f.path, f.contents, loaded, updatedAt, stampOf(by));
+    return upsert(
+      db,
+      siteId,
+      f.path,
+      f.contents,
+      loaded,
+      updatedAt,
+      {
+        ...stampOf(by),
+        ...(f.preserveProvenance ? { revision: nextRevision(undefined, true) } : {}),
+      },
+      i === 0 ? captured : sql`true`,
+    );
   });
   const [first, ...rest] = writes;
   if (first) await db.batch([first, ...rest]);
@@ -758,13 +788,14 @@ function upsert(
   { open, baseSha, baseBlob, revision }: Loaded,
   updatedAt: number,
   extra: { pendingRedirects?: RedirectRule[] | null; updatedBy?: string; revision?: string } = {},
+  guard = sql`true`,
 ) {
   // A conditional UPDATE would silently succeed; violating NOT NULL aborts the whole D1 batch.
-  const next = extra.revision ?? crypto.randomUUID();
+  const next = extra.revision ?? nextRevision(revision);
   const matches = revision
     ? sql`exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and revision = ${revision})`
     : sql`not exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and (contents <> '' or published_sha is null))`;
-  const asserted = sql<string>`case when ${matches} and not exists (select 1 from path_reservations r join operations o on o.site_id = r.site_id and o.id = r.operation_id where r.site_id = ${siteId} and r.path = ${path} and o.state <> 'finalized') then ${next} else null end`;
+  const asserted = sql<string>`case when ${matches} and ${guard} and not exists (select 1 from path_reservations r join operations o on o.site_id = r.site_id and o.id = r.operation_id where r.site_id = ${siteId} and r.path = ${path} and o.state <> 'finalized') then ${next} else null end`;
   const available = availableContents(siteId, contents);
   return db
     .insert(drafts)
@@ -805,8 +836,9 @@ export async function createDraft(
   git: Pick<GitClient, 'getHead'>,
   path: string,
   values: Record<string, unknown>,
+  expected?: Readonly<Record<string, string | undefined>>,
 ): Promise<{ updated_at: number }> {
-  return createDrafts(siteId, db, git, [{ path, values }]);
+  return createDrafts(siteId, db, git, [{ path, values }], expected);
 }
 
 /** All locale paths of a new entry are claimed in one transaction, including duplicates. */
@@ -815,10 +847,21 @@ export async function createDrafts(
   db: Db,
   git: Pick<GitClient, 'getHead'>,
   files: readonly { path: string; values: Record<string, unknown> }[],
+  expected?: Readonly<Record<string, string | undefined>>,
 ): Promise<{ updated_at: number }> {
   const updatedAt = Date.now();
   const baseSha = await git.getHead();
-  const writes = files.map(({ path, values }) => {
+  const captured = expected
+    ? sql.join(
+        Object.entries(expected).map(([path, revision]) =>
+          revision === undefined
+            ? sql`not exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and (contents <> '' or published_sha is null))`
+            : sql`exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and revision = ${revision})`,
+        ),
+        sql` and `,
+      )
+    : sql`true`;
+  const writes = files.map(({ path, values }, i) => {
     const contents = stringifyEntry(siteId, values);
     return (
       db
@@ -830,7 +873,7 @@ export async function createDrafts(
           baseSha,
           baseBlob: '',
           updatedAt,
-          revision: sql`case when not exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and (contents <> '' or published_sha is null)) and not exists (select 1 from path_reservations r join operations o on o.site_id = r.site_id and o.id = r.operation_id where r.site_id = ${siteId} and r.path = ${path} and o.state <> 'finalized') then lower(hex(randomblob(16))) else null end`,
+          revision: sql`case when ${i === 0 ? captured : sql`true`} and not exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and (contents <> '' or published_sha is null)) and not exists (select 1 from path_reservations r join operations o on o.site_id = r.site_id and o.id = r.operation_id where r.site_id = ${siteId} and r.path = ${path} and o.state <> 'finalized') then lower(hex(randomblob(16))) else null end`,
         })
         // Only a removed row can be at this path: a name a live row holds is never picked again.
         .onConflictDoUpdate({
@@ -1012,7 +1055,7 @@ export async function recordOffer(
   await db
     .update(drafts)
     .set({
-      revision: sql`case when ${drafts.revision} = ${open.revision} then ${crypto.randomUUID()} else null end`,
+      revision: sql`case when ${drafts.revision} = ${open.revision} then ${nextRevision(open.revision)} else null end`,
       contents: stringifyEntry(siteId, entry),
       baseSha: commitSha,
       baseBlob: await blobSha(committed),
@@ -1045,7 +1088,7 @@ export async function recordSource(
   await db
     .update(drafts)
     .set({
-      revision: sql`case when ${drafts.revision} = ${open.revision} then ${crypto.randomUUID()} else null end`,
+      revision: sql`case when ${drafts.revision} = ${open.revision} then ${nextRevision(open.revision)} else null end`,
       contents: stringifyEntry(siteId, entry),
       ...(commit ? { baseSha: commit.sha, baseBlob: await blobSha(commit.contents) } : {}),
     })
@@ -1332,6 +1375,7 @@ export async function publishDrafts(
         ? { contents: drafted, blob_sha: await blobSha(drafted) }
         : await git.getFile(source.path, base_sha);
       if (!file) return { path, contents };
+      if (rows[i]?.revision.startsWith(SOURCE_CHANGE_REVISION)) return { path, contents };
       const marked = await markTranslation(
         siteId,
         source.form,
@@ -1663,7 +1707,7 @@ export async function revertCommit(
             baseSha: commit_sha,
             baseBlob: blob,
             publishedSha: null,
-            revision: crypto.randomUUID(),
+            revision: nextRevision(revision),
           })
           .where(and(where, eq(drafts.revision, revision)));
   });
@@ -1742,7 +1786,7 @@ export async function restoreCommit(
       .update(drafts)
       .set({
         contents,
-        revision: sql`case when ${drafts.revision} = ${open.revision} then ${crypto.randomUUID()} else null end`,
+        revision: sql`case when ${drafts.revision} = ${open.revision} then ${nextRevision(open.revision)} else null end`,
       })
       .where(and(eq(drafts.siteId, siteId), eq(drafts.path, file.path)));
   }

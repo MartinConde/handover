@@ -177,7 +177,7 @@ test('the translation tile counts what is missing and what is behind its source'
 
   const lines = all(tile(root, 'd-tr') as ParentNode, '.locale-line');
   expect(lines.map((line) => line.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
-    'EN Source language',
+    'EN Up to date',
     'DE 4 missing · 2 stale Show',
   ]);
   expect(lines[1]?.querySelector('.chip-missing')).not.toBeNull();
@@ -199,7 +199,7 @@ test('the translation tile counts partly written and machine translated beside t
 
   const lines = all(tile(root, 'd-tr') as ParentNode, '.locale-line');
   expect(lines.map((line) => line.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
-    'EN Source language · 1 machine translated',
+    'EN Up to date · 1 machine translated',
     'DE 4 missing · 3 partly written · 2 stale · 5 machine translated Show',
     'FR 1 partly written Show',
     'IT Up to date · 2 machine translated',

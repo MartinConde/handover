@@ -115,7 +115,13 @@ row by row and loses its `_i18n`, and English keeps every word, its source-only 
 Nothing is committed: the site and the build keep English until the entry is published, and it
 publishes whole. Discarding the entry's unpublished changes undoes it. What happens to the
 translations' marks is on [Machine translation](machine-translation.md#when-the-source-language-changes).
-The activity log records `entry-source` with `{ "from", "to" }`.
+Publishing preserves an intentionally absent translation mark created by this transition; an
+ordinary later translation edit records fresh provenance. The activity log records `entry-source`
+with `{ "from", "to" }`.
+
+The revision check covers every declared language in the same database write, including one with
+no draft row. If a translation is created while this request is being prepared, or this request
+lands while translation creation is being prepared, one request receives `409` and writes nothing.
 
 A refusal writes nothing. Those with a `code` carry it in `x-handover-error-code` too, as
 `{ "code", "error" }`:
@@ -129,7 +135,7 @@ A refusal writes nothing. Those with a `code` carry it in `x-handover-error-code
 | `409` | `ENTRY_SOURCE_UNCHANGED` | The entry is already written in it |
 | `409` | `ENTRY_SOURCE_TARGET_OFF` | The entry is not offered in it |
 | `409` | `ENTRY_SOURCE_TARGET_MISSING` | The entry has no file in it yet |
-| `409` | `ENTRY_SOURCE_REVISION` | A file changed since `revisions` was read; reopen the entry |
+| `409` | `ENTRY_SOURCE_REVISION` | A file was created or changed since `revisions` was read; reopen the entry |
 | `409` | `ENTRY_SOURCE_DRIFT` | The languages disagree about the blocks; answer the drift first |
 | `409` | `ENTRY_SOURCE_ONLY_CONFLICT` | The language has its own value in a field only the source keeps, and `paths` names them |
 | `422` | `ENTRY_SOURCE_TARGET_INVALID` | With the source's values it would fail the schema; `problems` is a save's |

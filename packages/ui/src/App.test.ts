@@ -651,6 +651,95 @@ test('an entry whose files disagree about their source opens the recovery panel,
   expect(root.querySelector('main [role="alert"]')).toBeNull();
 });
 
+test.each([
+  ['confirmed writes', false, false],
+  ['an unconfirmed write', true, false],
+  ['writes followed by a source conflict', false, true],
+] as const)(
+  'Create all recovers from a failed authoritative entry read after %s',
+  async (_, uncertain, sourceConflict) => {
+    history.replaceState({}, '', '/admin/c/listings/twoMissing?queue=it&owed=missing');
+    let entryLoads = 0;
+    let createCalls = 0;
+    const opened = sixLanguages('twoMissing').entry;
+    const refreshed = structuredClone(opened);
+    refreshed.translations.it = { title: '' };
+    if (!uncertain) refreshed.translations.es = { title: '' };
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === '/admin/api/entries/listings/twoMissing') {
+        entryLoads += 1;
+        if (entryLoads === 2) return new Response('Unavailable', { status: 500 });
+        if (entryLoads === 3 && sourceConflict)
+          return Response.json(
+            {
+              code: 'ENTRY_SOURCE_CONFLICT',
+              error: 'The files disagree',
+              marks: { en: 'en', de: 'de' },
+              files: ['en', 'de'],
+              offered: ['en', 'de', 'fr', 'it', 'es'],
+            },
+            { status: 409, headers: { 'x-handover-error-code': 'ENTRY_SOURCE_CONFLICT' } },
+          );
+        return Response.json(entryLoads === 1 ? opened : refreshed);
+      }
+      if (url.startsWith('/admin/api/drafts/listings/twoMissing/') && init?.method === 'POST') {
+        createCalls += 1;
+        if (uncertain && createCalls === 1)
+          return new Response('Connection lost', {
+            status: 503,
+            headers: { 'x-handover-request-uncertain': 'true' },
+          });
+        return Response.json({});
+      }
+      if (url.startsWith('/admin/api/locks/'))
+        return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
+      if (url === '/admin/api/build') return Response.json({});
+      if (url === '/admin/api/drafts') return Response.json({ entries: [] });
+      if (url === '/admin/api/entries/listings') return Response.json({ entries: [] });
+      return Response.json({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const root = show(session(), '/admin/c/listings/twoMissing');
+    const settle = async () => {
+      for (let i = 0; i < 4; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        flushSync();
+      }
+    };
+    await vi.dynamicImportSettled();
+    await settle();
+
+    const create = root.querySelector<HTMLButtonElement>('button.btn-create-all');
+    expect(create?.textContent).toContain('Create all');
+    create?.click();
+    await settle();
+
+    const failure = root.querySelector('.pane [role="alert"]');
+    expect(failure?.textContent).toContain('could not be read again');
+    expect(root.textContent).not.toContain('Could not load the entry (500)');
+    const writesBeforeRetry = createCalls;
+    failure?.querySelector<HTMLButtonElement>('button')?.click();
+    await settle();
+
+    expect(entryLoads).toBe(3);
+    expect(createCalls).toBe(writesBeforeRetry);
+    expect(root.querySelector('.pane [role="alert"]')).toBeNull();
+    if (sourceConflict) {
+      expect(root.querySelector('.source-recovery')).not.toBeNull();
+      return;
+    }
+    expect(root.querySelector('.created-all')).not.toBeNull();
+
+    history.pushState({}, '', '/admin/c/listings');
+    dispatchEvent(new Event('handover:navigate'));
+    await settle();
+    history.pushState({}, '', '/admin/c/listings/twoMissing');
+    dispatchEvent(new Event('handover:navigate'));
+    await settle();
+    expect(entryLoads).toBe(4);
+  },
+);
+
 test('choosing a source on the recovery panel opens the entry with the notice', async () => {
   let chosen = false;
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {

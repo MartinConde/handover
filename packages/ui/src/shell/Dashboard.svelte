@@ -274,9 +274,7 @@ const oldest = $derived(Math.min(...pending.map((entry) => entry.updated_at)));
               {#if !row.missing && !row.stale && !row.unfinished}
                 <span
                   ><span class="ok"
-                    >{row.locale === health.defaultLocale
-                      ? m.dashboard_source_language({}, options)
-                      : m.dashboard_up_to_date({}, options)}</span
+                    >{m.dashboard_up_to_date({}, options)}</span
                   >{#if row.machine}{' · '}{rest[0]}{/if}</span
                 >
               {:else}

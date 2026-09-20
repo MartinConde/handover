@@ -5355,3 +5355,64 @@ test('a re-translated field is answered but stays in the run until its marker go
   expect(announced(root)).toBe('Nothing left to do');
   vi.unstubAllGlobals();
 });
+
+test('failed stale-marker loading does not announce that the work is finished', async () => {
+  const page = owing();
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      isLock(url)
+        ? Response.json(HELD)
+        : String(url).startsWith('/admin/api/source/')
+          ? new Response('Unavailable', { status: 500 })
+          : Response.json({ results: [], updated_at: 1755864000000, pending: true, problems: [] }),
+    ),
+  );
+  const root = show(page);
+  await frenchBesideEnglish(root);
+  await settle();
+  type(root, 'input#t-subtitle', 'Sous-titre');
+  type(root, 'input#t-body\\.0\\.heading', 'Titre');
+  await settle();
+
+  expect(answered(root)).toBe('3 of 3 texts written');
+  await runTodo(root);
+  expect(announced(root)).not.toBe('Nothing left to do');
+  expect($(root, '.marker-load-failure')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+    'Could not load what changed in the source. Retry',
+  );
+  vi.unstubAllGlobals();
+});
+
+test('a network failure loading stale markers can be retried successfully', async () => {
+  const page = owing();
+  let markers = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (isLock(url)) return Response.json(HELD);
+      if (String(url).endsWith('/fr')) {
+        markers += 1;
+        if (markers === 1) throw new TypeError('offline');
+        return Response.json({ changed: {} });
+      }
+      if (String(url).startsWith('/admin/api/source/')) return Response.json({ changed: {} });
+      return Response.json({ results: [], updated_at: 1755864000000, pending: true, problems: [] });
+    }),
+  );
+  const root = show(page);
+  await frenchBesideEnglish(root);
+  await settle();
+  type(root, 'input#t-subtitle', 'Sous-titre');
+  type(root, 'input#t-body\\.0\\.heading', 'Titre');
+  await settle();
+
+  await runTodo(root);
+  expect(announced(root)).toBe('');
+  $<HTMLButtonElement>(root, '.marker-load-failure button')?.click();
+  await settle();
+  expect(root.querySelector('.marker-load-failure')).toBeNull();
+  await runTodo(root);
+  expect(announced(root)).toBe('Nothing left to do');
+  vi.unstubAllGlobals();
+});

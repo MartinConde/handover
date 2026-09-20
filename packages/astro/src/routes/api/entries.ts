@@ -587,7 +587,24 @@ export async function createTranslation(
     source,
   );
   if (offered.length < config.i18n.locales.length) made._locales = offered;
-  await createDraft('default', ctx.db(), ctx.git(), entryPath(collection, slug, locale), made);
+  try {
+    await createDraft(
+      'default',
+      ctx.db(),
+      ctx.git(),
+      entryPath(collection, slug, locale),
+      made,
+      Object.fromEntries(
+        config.i18n.locales.map((at) => [entryPath(collection, slug, at), loaded[at]?.revision]),
+      ),
+    );
+  } catch (err) {
+    if (err instanceof DraftRevisionError || isDraftRace(err))
+      return new Response('This entry changed while the language was being created', {
+        status: 409,
+      });
+    throw err;
+  }
   return Response.json({});
 }
 
@@ -1154,8 +1171,13 @@ export async function changeEntrySource(
         path: entryPath(collection, slug, locale),
         revision: loaded[locale]?.revision,
         contents: stringifyEntry('default', data),
+        preserveProvenance: true,
       })),
       session.user.id,
+      config.i18n.locales.map((locale) => ({
+        path: entryPath(collection, slug, locale),
+        revision: loaded[locale]?.revision,
+      })),
     );
   } catch (err) {
     if (err instanceof DraftRevisionError || isDraftRace(err)) return moved();

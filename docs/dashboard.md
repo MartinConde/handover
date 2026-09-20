@@ -39,7 +39,9 @@ text a machine wrote. One entry can be in several of these, so they are not adde
 beside a language opens
 the entry list filtered to the rows that owe it ([Translations in the entry list](translation-list.md));
 when more than one collection owes it there is one link per list, each named. Not drawn on a
-site that declares one language.
+site that declares one language. A language with none of these says *Up to date*, including the
+site's default language: the source belongs to each entry and is not implied by the routing
+default.
 
 **Source languages** — owners only, and only while entries with files in two or more
 languages do not record the language they are written in. *Review and record* opens a dialog

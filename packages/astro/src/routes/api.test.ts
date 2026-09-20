@@ -3824,6 +3824,10 @@ test('creating a language copies the structure and the shared values, not the wo
       layout: 'wide',
       blocks: [{ _type: 'hero', _id: 'k3nf9a2p' }],
     },
+    {
+      'src/content/pages/en/home.yaml': undefined,
+      'src/content/pages/de/home.yaml': undefined,
+    },
   );
 });
 
@@ -4615,6 +4619,10 @@ test('the missing default language is created from the language the entry has', 
     expect.anything(),
     'src/content/pages/en/impressum.yaml',
     { _version: 1, _source: 'de', blocks: [{ _type: 'hero', _id: 'b7t4x1m9' }] },
+    {
+      'src/content/pages/en/impressum.yaml': undefined,
+      'src/content/pages/de/impressum.yaml': undefined,
+    },
   );
 });
 

@@ -76,7 +76,9 @@ fields, the language switcher and the entry's other actions wait while it runs. 
 first language that is refused or whose answer is lost, and a line above the entry says what
 happened to each: created, not created, or not attempted. The reload settles a lost answer — the
 language reads *created* if its file is there. Running it again writes only what is still missing,
-so it never replaces a language that has a file.
+so it never replaces a language that has a file. If that final read fails, the report stays above
+the closed editor with **Reload**. Reload reads the entry again without repeating any create or
+translation request.
 
 ## Turning a language off
 
@@ -151,7 +153,8 @@ to the first and says so. Typing an answer takes that field out of the run at on
 text leaves it when its marker is dismissed
 ([the amber markers](machine-translation.md#when-the-source-language-moves-on)).
 Reading a field is not answering it, and only a language with nothing outstanding says *Nothing
-left to do*.
+left to do*. If the changed-source markers cannot be read, the column says so and offers **Retry**;
+it never calls the run finished until that read succeeds.
 
 ## What a save of a translation writes
 

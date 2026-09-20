@@ -44,7 +44,9 @@ typing first and sends nothing if that fails; the entry then reopens in German w
 greyed out with the reason while the languages disagree about the blocks or a save has failed,
 and the whole menu is closed while somebody else has the entry open. If somebody changed the
 entry meanwhile nothing is written and the dialog offers *Reload*; if the answer never arrived,
-editing stays closed until you reload, because the change may have gone through.
+editing stays closed until you reload, because the change may have gone through. Creating a
+missing language and changing the source also exclude one another at the database write: if they
+overlap, one is refused and reopening shows one complete language set rather than a mixed result.
 
 The same change is a request of its own
 ([`POST …/source`](admin-api-entries.md#changing-the-language-an-entry-is-written-in)), refused
@@ -55,4 +57,6 @@ every language going out together. Before that, discarding the entry's changes p
 German then carries the structure, the shared and source-only values it took from English, and
 its own words; English keeps its words, and machine translation translates from German.
 [Machine translation](machine-translation.md#when-the-source-language-changes) says which
-translations read stale afterwards.
+translations read stale afterwards. Publishing preserves the provenance the source change chose,
+including an intentionally absent `_i18n` mark when a stale or older unmarked language becomes the
+source. A later translation edit writes a fresh mark as usual.

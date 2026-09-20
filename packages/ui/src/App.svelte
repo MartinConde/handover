@@ -156,10 +156,25 @@ let restored = $state<{ entry: string; date: string }>();
 let sourceChanged = $state<{ entry: string; locale: string }>();
 /** And what the last Create all did, which its reload would otherwise take with it. */
 let createdAll = $state<{ entry: string; report: CreatedAll }>();
+/** An authoritative action reads the replacement before retiring the editor that can retry it. */
+let preparedEntry:
+  | {
+      entry: string;
+      reload: number;
+      outcome:
+        | { value: Awaited<ReturnType<typeof loadEntry>>; error?: never }
+        | { value?: never; error: { source: SourceProblem } };
+    }
+  | undefined;
 const openEntry = $derived.by(() => {
   // Read on purpose: a reload means the entry's files moved under it.
-  void reload;
+  const at = reload;
   if (!editingAt) return undefined;
+  if (preparedEntry?.entry === editingAt && preparedEntry.reload === at) {
+    const outcome = preparedEntry.outcome;
+    preparedEntry = undefined;
+    return outcome.error ? Promise.reject(outcome.error) : Promise.resolve(outcome.value);
+  }
   const [collection = '', slug = ''] = editingAt.split('/');
   return loadEntry(collection, slug);
 });
@@ -529,6 +544,26 @@ async function loadEntry(collection: string, slug: string) {
   } satisfies ShellMessage;
 }
 
+/** Read first: on failure the closed editor remains mounted and can offer a safe retry. */
+async function reloadEntry() {
+  if (!editing || !editingAt) return;
+  const at = editingAt;
+  const collection = editing.collection;
+  const slug = editing.slug;
+  invalidateEntryDirectory();
+  await loadPending();
+  let outcome: NonNullable<typeof preparedEntry>['outcome'];
+  try {
+    outcome = { value: await loadEntry(collection, slug) };
+  } catch (error) {
+    if (!error || typeof error !== 'object' || !('source' in error)) throw error;
+    outcome = { error: error as { source: SourceProblem } };
+  }
+  if (editingAt !== at) return;
+  preparedEntry = { entry: at, reload: reload + 1, outcome };
+  reload += 1;
+}
+
 const entryFailure = (error: unknown): ShellMessage =>
   error &&
   typeof error === 'object' &&
@@ -783,11 +818,9 @@ const initial = $derived(
             if (await flushNavigation()) reload += 1;
           }}
           onreload={async () => {
-            invalidateEntryDirectory();
-            await loadPending();
-            // Restore/reconciliation already closed the old session. A fresh entry read is what
-            // establishes the next save epoch, so it must not ask that closed session to flush.
-            reload += 1;
+            // Restore/reconciliation already closed the old session. The read happens before
+            // remounting so a failure leaves that session's reload-only recovery control visible.
+            await reloadEntry();
           }}
           onpending={loadPending}
           oncommitted={commitChanged}

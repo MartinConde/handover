@@ -1,5 +1,6 @@
 import {
   blobSha,
+  createDraft,
   formOf,
   loadDraft,
   markTranslation,
@@ -22,6 +23,8 @@ import { DELETE, GET, POST, PUT } from './api.js';
 const boundary = vi.hoisted(() => ({
   binding: undefined as unknown,
   repo: undefined as unknown,
+  beforeCreate: undefined as undefined | (() => Promise<void>),
+  beforeRewrite: undefined as undefined | (() => Promise<void>),
   // The provider as the route meets it: what it is asked to translate from is the point.
   translate: vi.fn(async (texts: string[], _from: string, to: string) =>
     texts.map((t) => `[${to}] ${t}`),
@@ -87,6 +90,18 @@ vi.mock('virtual:handover/index', () => ({
 vi.mock('@handover/core', async (original) => ({
   ...(await original<typeof import('@handover/core')>()),
   createGitClient: () => boundary.repo,
+  createDraft: async (...args: Parameters<typeof import('@handover/core')['createDraft']>) => {
+    const hook = boundary.beforeCreate;
+    boundary.beforeCreate = undefined;
+    if (hook) await hook();
+    return (await original<typeof import('@handover/core')>()).createDraft(...args);
+  },
+  rewriteDrafts: async (...args: Parameters<typeof import('@handover/core')['rewriteDrafts']>) => {
+    const hook = boundary.beforeRewrite;
+    boundary.beforeRewrite = undefined;
+    if (hook) await hook();
+    return (await original<typeof import('@handover/core')>()).rewriteDrafts(...args);
+  },
 }));
 
 const mf = new Miniflare({
@@ -180,6 +195,8 @@ beforeEach(async () => {
   trees = { [head]: {} };
   commits = {};
   writes = [];
+  boundary.beforeCreate = undefined;
+  boundary.beforeRewrite = undefined;
   boundary.translate.mockClear();
   boundary.repo = {
     getHead: async () => head,
@@ -458,6 +475,8 @@ const opened = async (slug = 'home') =>
     sourceLocale: string;
     pending: string[];
     revisions: Record<string, string>;
+    translations: Record<string, unknown>;
+    stale: string[];
   };
 
 test('a German-first entry stays German-sourced while English and French are created and pre-filled', async () => {
@@ -1117,4 +1136,175 @@ test('discarding the entry after a source change puts every file back', async ()
   const entry = await opened();
   expect(entry.sourceLocale).toBe('en');
   expect(entry.pending).toEqual([]);
+});
+
+test('a translation created after a source change was captured makes the source change retry', async () => {
+  trees[head] = { [path('en')]: EN_MARKED, [path('de')]: DE };
+  const { revisions } = await opened();
+  boundary.beforeRewrite = async () => {
+    expect((await call('POST', 'drafts/pages/home/fr')).status).toBe(200);
+  };
+
+  const changed = await makeSource('de', revisions);
+
+  expect(changed.status).toBe(409);
+  expect(changed.headers.get('x-handover-error-code')).toBe('ENTRY_SOURCE_REVISION');
+  const entry = await opened();
+  expect(entry.sourceLocale).toBe('en');
+  expect(await drafted('fr')).toMatchObject({ _source: 'en' });
+});
+
+test('a source change completed after translation creation was captured makes creation retry', async () => {
+  trees[head] = { [path('en')]: EN_MARKED, [path('de')]: DE };
+  const { revisions } = await opened();
+  boundary.beforeCreate = async () => {
+    expect((await makeSource('de', revisions)).status).toBe(200);
+  };
+
+  const created = await call('POST', 'drafts/pages/home/fr');
+
+  expect(created.status).toBe(409);
+  const entry = await opened();
+  expect(entry.sourceLocale).toBe('de');
+  expect(entry.translations).not.toHaveProperty('fr');
+});
+
+test('recovery source changes remain consistent when translation creation overlaps', async () => {
+  trees[head] = {
+    [path('en')]: `${EN_MARKED.replace('_source: en', '_source: de')}`,
+    [path('de')]: `${DE}_source: en\n`,
+  };
+  boundary.beforeRewrite = async () => {
+    expect((await call('POST', 'drafts/pages/home/fr')).status).toBe(409);
+  };
+
+  expect((await makeSource('de')).status).toBe(200);
+  const entry = await opened();
+  expect(entry.sourceLocale).toBe('de');
+  expect(entry.translations).not.toHaveProperty('fr');
+});
+
+test('publishing a stale language promoted to source preserves deliberately absent provenance', async () => {
+  trees[head] = { [path('en')]: EN_MARKED, [path('de')]: await marked(DE, 'en', EN_MARKED) };
+  const { revisions } = await opened();
+  expect(
+    (
+      await call('PUT', 'drafts/pages/home/en', {
+        data: { title: 'Home', body: 'New facts not translated into German' },
+        revision: revisions.en,
+      })
+    ).status,
+  ).toBe(200);
+  const before = await opened();
+  expect(before.stale).toContain('de');
+  expect((await makeSource('de', before.revisions)).status).toBe(200);
+  expect(await drafted('en')).not.toHaveProperty('_i18n');
+
+  expect((await call('POST', 'publish', { entries: ['pages/home'] })).status).toBe(200);
+
+  expect(parseEntry('default', trees[head]?.[path('en')] ?? '')).not.toHaveProperty('_i18n');
+});
+
+test('a no-op save after stale source promotion keeps the old source deliberately unmarked', async () => {
+  trees[head] = { [path('en')]: EN_MARKED, [path('de')]: await marked(DE, 'en', EN_MARKED) };
+  const openedFirst = await opened();
+  expect(
+    (
+      await call('PUT', 'drafts/pages/home/en', {
+        data: { title: 'Home', body: 'Changed English' },
+        revision: openedFirst.revisions.en,
+      })
+    ).status,
+  ).toBe(200);
+  expect((await makeSource('de', (await opened()).revisions)).status).toBe(200);
+  const promoted = await opened();
+  expect(
+    (
+      await call('PUT', 'drafts/pages/home/en', {
+        data: { title: 'Home', body: 'Changed English' },
+        revision: promoted.revisions.en,
+      })
+    ).status,
+  ).toBe(200);
+
+  expect((await call('POST', 'publish', { entries: ['pages/home'] })).status).toBe(200);
+  expect(parseEntry('default', trees[head]?.[path('en')] ?? '')).not.toHaveProperty('_i18n');
+});
+
+test('a genuine translation edit after stale source promotion receives fresh provenance', async () => {
+  trees[head] = { [path('en')]: EN_MARKED, [path('de')]: await marked(DE, 'en', EN_MARKED) };
+  const openedFirst = await opened();
+  expect(
+    (
+      await call('PUT', 'drafts/pages/home/en', {
+        data: { title: 'Home', body: 'Changed English' },
+        revision: openedFirst.revisions.en,
+      })
+    ).status,
+  ).toBe(200);
+  expect((await makeSource('de', (await opened()).revisions)).status).toBe(200);
+  const promoted = await opened();
+  expect(
+    (
+      await call('PUT', 'drafts/pages/home/en', {
+        data: { title: 'Home translated anew', body: 'Fresh English translation' },
+        revision: promoted.revisions.en,
+      })
+    ).status,
+  ).toBe(200);
+
+  expect((await call('POST', 'publish', { entries: ['pages/home'] })).status).toBe(200);
+  const german = trees[head]?.[path('de')] ?? '';
+  expect(parseEntry('default', trees[head]?.[path('en')] ?? '')).toMatchObject({
+    _i18n: {
+      sourceLocale: 'de',
+      sourceBlob: await blobSha(german),
+      sourceHash: expect.any(String),
+      translatedAt: expect.any(String),
+    },
+  });
+});
+
+test('an unpublished legacy source change preserves absent provenance on first publication', async () => {
+  await createDraft(
+    'default',
+    db,
+    boundary.repo as never,
+    path('en'),
+    parseEntry('default', EN) as Record<string, unknown>,
+  );
+  await createDraft(
+    'default',
+    db,
+    boundary.repo as never,
+    path('de'),
+    parseEntry('default', DE) as Record<string, unknown>,
+  );
+  const before = await opened();
+  expect(before.sourceLocale).toBe('en');
+
+  expect((await makeSource('de', before.revisions)).status).toBe(200);
+  expect((await call('POST', 'publish', { entries: ['pages/home'] })).status).toBe(200);
+
+  expect(parseEntry('default', trees[head]?.[path('en')] ?? '')).not.toHaveProperty('_i18n');
+});
+
+test('changing a stale source back again does not manufacture provenance in either direction', async () => {
+  trees[head] = { [path('en')]: EN_MARKED, [path('de')]: await marked(DE, 'en', EN_MARKED) };
+  const first = await opened();
+  expect(
+    (
+      await call('PUT', 'drafts/pages/home/en', {
+        data: { title: 'Home', body: 'Changed English' },
+        revision: first.revisions.en,
+      })
+    ).status,
+  ).toBe(200);
+  expect((await makeSource('de', (await opened()).revisions)).status).toBe(200);
+  expect((await call('POST', 'publish', { entries: ['pages/home'] })).status).toBe(200);
+  expect(await pendingDrafts('default', db)).toEqual([]);
+  expect((await makeSource('en', (await opened()).revisions)).status).toBe(200);
+  expect((await call('POST', 'publish', { entries: ['pages/home'] })).status).toBe(200);
+
+  expect(parseEntry('default', trees[head]?.[path('de')] ?? '')).not.toHaveProperty('_i18n');
 });

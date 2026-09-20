@@ -108,7 +108,8 @@ $effect(() => {
   if (saveState.phase === 'saving') fillFailure = undefined;
 });
 
-let behindLoaded = $state(false);
+let behindState = $state<'idle' | 'loading' | 'loaded' | 'failed'>('idle');
+let behindRequest = 0;
 // Only read for a stale file, so an entry nobody has translated pays nothing for the marker.
 let behind = $state<{
   from?: string;
@@ -118,20 +119,28 @@ let behind = $state<{
 }>({
   changed: {},
 });
+async function loadBehind() {
+  const mine = ++behindRequest;
+  behindState = 'loading';
+  try {
+    const res = await fetch(`/admin/api/source/${collection}/${slug}/${locale}`);
+    if (!res.ok) throw new Error(`Marker request failed (${res.status})`);
+    const body = (await res.json()) as typeof behind;
+    if (mine !== behindRequest) return;
+    behind = body;
+    behindState = 'loaded';
+  } catch {
+    if (mine === behindRequest) behindState = 'failed';
+  }
+}
 $effect(() => {
-  if (!stale) return;
-  let live = true;
-  fetch(`/admin/api/source/${collection}/${slug}/${locale}`)
-    .then((res) => (res.ok ? res.json() : { changed: {} }))
-    .then((body) => {
-      if (live) behind = body as typeof behind;
-    })
-    .catch(() => {})
-    .finally(() => {
-      if (live) behindLoaded = true;
-    });
+  if (!stale) {
+    behindState = 'loaded';
+    return;
+  }
+  void loadBehind();
   return () => {
-    live = false;
+    behindRequest += 1;
   };
 });
 
@@ -205,7 +214,7 @@ const todo = $derived.by(() => {
   return [...inOrder, ...marked.filter((path) => !seen.has(path))];
 });
 // Until the server has said what changed, an empty list is ignorance, not a finished language.
-const settled = $derived(!stale || behindLoaded);
+const settled = $derived(!stale || behindState === 'loaded');
 let cursor = $state<string>();
 // The run as it stood at the last jump: answering a field must not send the next press to the top.
 let trail = $state<string[]>([]);
@@ -319,6 +328,12 @@ const failureDetail = $derived(
   </div>
   {#if fillFailure}
     <div class="notice notice-danger" role="alert">{failureText} {failureDetail}</div>
+  {/if}
+  {#if stale && behindState === 'failed'}
+    <div class="notice notice-danger marker-load-failure" role="alert">
+      {m.translation_markers_load_failed({}, options)}
+      <button class="btn-link" type="button" onclick={loadBehind}>{m.common_retry({}, options)}</button>
+    </div>
   {/if}
   <form class="form" onsubmit={(e) => e.preventDefault()}>
     <fieldset disabled={mutationBlocked}>

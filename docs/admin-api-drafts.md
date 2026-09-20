@@ -53,9 +53,11 @@ and the values the languages share, none of the words
 ([Translating](translating.md#a-language-with-no-file-yet)). It is made from the language the
 entry is written in, and the new file records that language as its `_source`, so this is also
 how an entry written in one other language gets its default-language file without changing
-source. `409` when
-the language already has a file or a draft, or when the entry is not offered in it; `404` for a
-language the site does not declare, or an entry with no file in any of them.
+source. `409` when the language already has a file or a draft, when the entry is not offered in it,
+or when any language of the entry changed while the request was being prepared. That last check is
+atomic with the insert, including languages that had no draft row, so a concurrent source change
+and translation creation cannot leave the files with different sources. `404` for a language the
+site does not declare, or an entry with no file in any of them.
 
 ```
 POST /admin/api/translate/:collection/:slug/:locale  { "paths": ["title"] }  →  { "data", "pending", "revision" }

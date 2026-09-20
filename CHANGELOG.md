@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Source-language changes and translation creation now exclude concurrent writes across every
+  declared locale, preserve deliberate provenance through publication, and leave later genuine
+  translation edits to record a fresh source mark. The editor keeps batch-create results through
+  a failed authoritative reload, retries only the read, and does not report translation work as
+  finished when stale-source markers could not be loaded. Translation health also labels a clear
+  default locale *Up to date* instead of calling it the source language.
 - `admin-api-publishing.md` says which window `PUBLISH_REF_MOVED` covers: the head is read inside
   the `/publish` request, so a commit landing between a `/publish/checks` call and the publish is
   resolved against the newer head rather than refused.
