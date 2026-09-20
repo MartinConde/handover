@@ -28,18 +28,22 @@ async function run(path: string) {
     { request: new Request(url), url, locals } as unknown as APIContext,
     next,
   )) as Response;
-  return { status: res.status, passed: next.mock.calls.length === 1, locals };
+  return { status: res.status, passed: next.mock.calls.length === 1, locals, headers: res.headers };
 }
 
 test('an API call with no session is 401', async () => {
   session = null;
-  expect(await run('/admin/api/drafts')).toMatchObject({ status: 401, passed: false });
+  const result = await run('/admin/api/drafts');
+  expect(result).toMatchObject({ status: 401, passed: false });
+  expect(result.headers.get('cache-control')).toBe('private, no-store');
 });
 
 test("the login's own endpoints are reachable without a session", async () => {
   session = null;
   for (const path of ['/admin/api/auth/sign-in/email', '/admin/api/auth/get-session']) {
-    expect(await run(path), path).toMatchObject({ status: 200, passed: true });
+    const result = await run(path);
+    expect(result, path).toMatchObject({ status: 200, passed: true });
+    expect(result.headers.get('cache-control'), path).toBe('private, no-store');
   }
   expect(getSession).not.toHaveBeenCalled();
 });
@@ -63,6 +67,46 @@ test('a signed-in call passes through carrying the user and the role', async () 
     role: 'owner',
     sessionId: 's1',
   });
+});
+
+test('authenticated API responses preserve their headers while disabling storage', async () => {
+  session = {
+    user: { id: 'u1', name: 'Martin', email: 'martin@example.com', role: 'owner' },
+    session: { id: 's1' },
+  };
+  const url = new URL('/admin/api/drafts', 'https://x');
+  const next = vi.fn(
+    async () =>
+      new Response('{"ok":true}', {
+        headers: { 'content-type': 'application/json', 'set-cookie': 'x=y' },
+      }),
+  );
+  const res = (await onRequest(
+    { request: new Request(url), url, locals: {} } as unknown as APIContext,
+    next,
+  )) as Response;
+  expect(res.headers.get('cache-control')).toBe('private, no-store');
+  expect(res.headers.get('content-type')).toBe('application/json');
+  expect(res.headers.get('set-cookie')).toBe('x=y');
+});
+
+test('unexpected API and authentication errors are generic and cannot be cached', async () => {
+  for (const path of ['/admin/api/auth/sign-in/email', '/admin/api/drafts']) {
+    session = {
+      user: { id: 'u1', name: 'Martin', email: 'martin@example.com', role: 'owner' },
+      session: { id: 's1' },
+    };
+    const url = new URL(path, 'https://x');
+    const response = (await onRequest(
+      { request: new Request(url), url, locals: {} } as unknown as APIContext,
+      async () => {
+        throw new Error('private diagnostic');
+      },
+    )) as Response;
+    expect(response.status).toBe(500);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(await response.text()).not.toContain('private diagnostic');
+  }
 });
 
 test('a session whose row carries no role is an editor', async () => {

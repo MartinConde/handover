@@ -4,6 +4,17 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Security hardening makes redirect sources literal, normalized exact paths; prevents the admin
+  from being framed; and marks every admin API and authentication response `private, no-store`.
+  JSON requests are limited to 1 MiB with bounded nesting. Uploads now pass through an
+  authenticated, byte-limited `MEDIA_UPLOADS` private R2 binding and a single-use D1 intent before
+  verified bytes reach the public media bucket. Persistent per-account and per-site budgets, plus
+  fenced translation leases, limit uploads and provider-paid translation work; interrupted
+  in-progress intents cannot be reclaimed. Custom `i18n.translate` hooks receive an optional
+  fourth `AbortSignal` and should stop provider work when it aborts. **Upgrade note:**
+  regenerate and apply the schema-version-11 D1 migration, provision the private upload bucket and
+  its one-day `uploads/` lifecycle before deploying, and apply `X-Content-Type-Options: nosniff` on
+  the public media domain. Astro, Sharp, Tiptap, Vitest and audited transitive packages are updated.
 - Source-language changes and translation creation now exclude concurrent writes across every
   declared locale, preserve deliberate provenance through publication, and leave later genuine
   translation edits to record a fresh source mark. The editor keeps batch-create results through

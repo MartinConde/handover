@@ -1,7 +1,12 @@
 import { type Field, type Form, rowFields } from './schema.js';
 
 /** A site swaps DeepL for its own function; callers only know a machine answered. */
-export type Translate = (texts: string[], from: string, to: string) => Promise<string[]>;
+export type Translate = (
+  texts: string[],
+  from: string,
+  to: string,
+  signal?: AbortSignal,
+) => Promise<string[]>;
 
 // DeepL's cap on one request, so the call is split and the answers reassembled in order.
 const PER_REQUEST = 50;
@@ -9,12 +14,13 @@ const PER_REQUEST = 50;
 /** A `:fx` key only answers on the free host; a source language has no regional variant. */
 export function deeplTranslate(_siteId: string, key: string): Translate {
   const host = key.trimEnd().endsWith(':fx') ? 'api-free.deepl.com' : 'api.deepl.com';
-  return async (texts, from, to) => {
+  return async (texts, from, to, signal) => {
     const out: string[] = [];
     for (let i = 0; i < texts.length; i += PER_REQUEST) {
       const batch = texts.slice(i, i + PER_REQUEST);
       const res = await fetch(`https://${host}/v2/translate`, {
         method: 'POST',
+        signal: signal ?? AbortSignal.timeout(15_000),
         headers: { authorization: `DeepL-Auth-Key ${key}`, 'content-type': 'application/json' },
         body: JSON.stringify({
           text: batch,

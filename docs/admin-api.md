@@ -9,6 +9,9 @@ outside. They can change between versions, and `CHANGELOG.md` says when they do.
 
 Conventions across all of them:
 
+- Responses, including authentication and errors, use `Cache-Control: private, no-store`.
+  Non-upload request bodies are capped at 1 MiB regardless of Content-Type (`413`), with
+  JSON nesting and node limits (`400`). Upload and translation budgets return `429`.
 - **`:collection` is a key from `cms.config.ts` and `:slug` is an entry's file name.**
   `404` whenever the collection is not configured, and generally when the entry has no
   file at all. A [global](site-files.md#globals) is addressed the same way, with `globals`

@@ -67,6 +67,22 @@ test("DeepL's own message is what a refused translation says", async () => {
   );
 });
 
+test('DeepL passes cancellation through to the provider request', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true });
+        }),
+    ),
+  );
+  const controller = new AbortController();
+  const translating = deeplTranslate('default', 'key')(['One'], 'en', 'de', controller.signal);
+  controller.abort(new Error('provider deadline'));
+  await expect(translating).rejects.toThrow('provider deadline');
+});
+
 const page = {
   title: 'Home',
   blocks: [

@@ -2,11 +2,16 @@ import config from 'virtual:handover/config';
 import index, { stale, templates, texts } from 'virtual:handover/index';
 import type { Db, EntryEdit, Form, IndexEntry, Labels, LocaleSeed } from '@handover/core';
 import {
+  abandonCostlyOperation,
   addressError,
   beginOperation,
   changeSource,
+  claimCostlyOperation,
   claimLock,
+  claimResource,
   collectionEntries,
+  completeCostlyOperation,
+  costlyOperationResult,
   createDraft,
   createDrafts,
   DraftRevisionError,
@@ -50,6 +55,7 @@ import {
   pendingDrafts,
   publishedEntries,
   RenameCollisionError,
+  ResourceLimitError,
   readRedirects,
   recordDelete,
   recordOffer,
@@ -58,6 +64,7 @@ import {
   regenerateIds,
   releaseOperationPaths,
   releasePaths,
+  releaseResource,
   renameEntry,
   reservePaths,
   resolveDrift,
@@ -80,6 +87,7 @@ import {
 } from '@handover/core';
 import { entryForm, formSchema } from '../../index.js';
 import { entryProblems } from '../../problems.js';
+import { readJson } from './body.js';
 import {
   ENTRY_FILE,
   entryFiles,
@@ -453,7 +461,7 @@ export async function autosave(
     return new Response('Not found', { status: 404 });
   // The lock is enforced here: a tab that lost a take-over keeps typing and finds out on save.
   const holder = await lockHolder('default', ctx.db(), `${collection}/${slug}`);
-  const body = (await request.json().catch(() => undefined)) as
+  const body = (await readJson(request)) as
     | { data?: unknown; tab?: unknown; revision?: unknown; structure?: unknown }
     | undefined;
   if (holder && !isHolder(holder, session, tabOf(body)))
@@ -634,7 +642,7 @@ export async function machineTranslate(
     from === undefined ? undefined : await translationSource(ctx, collection, slug, from);
   if (!from || !source || from === locale || !loaded[locale])
     return new Response('Not found', { status: 404 });
-  const body = (await request.json().catch(() => undefined)) as { paths?: unknown } | undefined;
+  const body = (await readJson(request)) as { paths?: unknown } | undefined;
   const named = Array.isArray(body?.paths) ? body.paths.map(String) : undefined;
   const form = formFor(collection, slug);
   // A pre-fill is for the gaps; a Translate button names its field whether filled or not.
@@ -645,21 +653,114 @@ export async function machineTranslate(
     (v) => (named ? named.includes(v.path) : !written.has(v.path)),
   );
   if (wanted.length) {
-    const answers = await translate(
-      wanted.map((v) => v.text),
-      from,
+    const database = ctx.db();
+    const user = session?.user.id ?? 'unknown';
+    const characters = Math.max(
+      1,
+      wanted.reduce((total, field) => total + field.text.length, 0),
+    );
+    const identity = JSON.stringify({
+      user,
+      collection,
+      slug,
       locale,
-    );
-    await saveTranslated(
-      'default',
-      ctx.db(),
-      ctx.git(),
-      entryPath(collection, slug, locale),
-      Object.fromEntries(wanted.map((v, i) => [v.path, answers[i] ?? v.text])),
-      session?.user.id,
-      loaded[locale].revision,
-      { form, source, ...(answer?.recorded ? { stamp: from } : {}) },
-    );
+      from,
+      revision: loaded[locale].revision,
+      fields: wanted.map((field) => [field.path, field.text]),
+    });
+    const operationKey = Array.from(
+      new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(identity))),
+      (byte) => byte.toString(16).padStart(2, '0'),
+    ).join('');
+    const operation = await claimCostlyOperation('default', database, operationKey, user);
+    if (!operation.owner) {
+      if (operation.result !== undefined) return Response.json(operation.result);
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        const shared = await costlyOperationResult('default', database, operationKey);
+        if (shared !== undefined) return Response.json(shared);
+      }
+      throw new ResourceLimitError('The same translation is already running; try again shortly');
+    }
+    const activeLeases: { key: string; token: string }[] = [];
+    const budgets: Awaited<ReturnType<typeof claimResource>>[] = [];
+    let providerStarted = false;
+    try {
+      const userActive = `translation-active:user:${user}`;
+      const userLease = await claimCostlyOperation('default', database, userActive, user);
+      if (!userLease.owner)
+        throw new ResourceLimitError('A translation is already running for this account');
+      activeLeases.push({ key: userActive, token: userLease.token as string });
+      let siteLease: { key: string; token: string } | undefined;
+      for (let slot = 0; slot < 3 && !siteLease; slot += 1) {
+        const key = `translation-active:site:${slot}`;
+        const lease = await claimCostlyOperation('default', database, key, user);
+        if (lease.owner) siteLease = { key, token: lease.token as string };
+      }
+      if (!siteLease) throw new ResourceLimitError('The site is already translating at capacity');
+      activeLeases.push(siteLease);
+      budgets.push(
+        await claimResource('default', database, {
+          subject: 'site',
+          kind: 'translation-characters',
+          cost: characters,
+          limit: 250_000,
+        }),
+      );
+      budgets.push(
+        await claimResource('default', database, {
+          subject: user,
+          kind: 'translation-characters',
+          cost: characters,
+          limit: 75_000,
+        }),
+      );
+      const controller = new AbortController();
+      const timeout = setTimeout(
+        () => controller.abort(new Error('Translation provider timed out')),
+        15_000,
+      );
+      let answers: string[];
+      providerStarted = true;
+      try {
+        answers = await translate(
+          wanted.map((v) => v.text),
+          from,
+          locale,
+          controller.signal,
+        );
+      } finally {
+        clearTimeout(timeout);
+      }
+      await saveTranslated(
+        'default',
+        database,
+        ctx.git(),
+        entryPath(collection, slug, locale),
+        Object.fromEntries(wanted.map((v, i) => [v.path, answers[i] ?? v.text])),
+        session?.user.id,
+        loaded[locale].revision,
+        { form, source, ...(answer?.recorded ? { stamp: from } : {}) },
+      );
+      const after = await entryLocales(ctx, collection, slug, [locale]);
+      const result = after[locale] ?? {};
+      await completeCostlyOperation(
+        'default',
+        database,
+        operationKey,
+        operation.token as string,
+        result,
+      );
+      return Response.json(result);
+    } catch (error) {
+      if (!providerStarted)
+        for (const budget of budgets) await releaseResource('default', database, budget);
+      await abandonCostlyOperation('default', database, operationKey, operation.token as string);
+      throw error;
+    } finally {
+      for (const lease of activeLeases)
+        await abandonCostlyOperation('default', database, lease.key, lease.token);
+    }
   }
   // The column redraws from this, so an edit in the other column survives a pre-fill.
   const after = await entryLocales(ctx, collection, slug, [locale]);

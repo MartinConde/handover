@@ -14,21 +14,29 @@ there. Setting the bucket up is [Media](media.md).
 2. It hashes the result, SHA-256, and asks the admin whether the site already has those
    bytes. If it does, **nothing is uploaded at all** — the same picture chosen twice is
    one object and one row
-3. Otherwise the admin answers with a PUT URL signed for five minutes, for a key it chose
-   itself: `uploads/<uuid>/media/<sha256>.webp`. The browser PUTs the bytes to it
+3. Otherwise the admin records an expiring upload intent tied to the signed-in user, exact
+   byte count, MIME type and key. It returns a same-origin authenticated PUT URL. The browser
+   sends the bytes there; ingestion checks ownership and enforces the byte limit while reading,
+   then writes to the private `MEDIA_UPLOADS` bucket
 4. The browser returns the temporary key. The admin reads the bytes with a bounded size limit,
    checks the SHA-256 and type, and reads image dimensions from the encoded container.
    A bad upload is deleted without creating a media row
 5. The admin writes the exact verified bytes to `media/<sha256>.webp` (or `files/<sha256>.pdf`),
    sets immutable caching and PDF download headers, writes the row, and deletes the temporary object.
-   Replaying the upload URL can only affect the temporary key
+   The staging intent permits one ingestion; it cannot be used to overwrite an existing upload
 
-Step 4 is the size limit. R2 cannot bind a maximum size into a signed URL, so the declared
-size is checked before anything is signed and the object is checked after it arrives.
+The size limit is enforced before bytes enter R2, including a streamed request without
+Content-Length. The received size must match the recorded declaration; inventing a staging
+key or skipping the declaration does not bypass the upload budget.
 
-The cap is **10MB** per upload and the types are `image/webp`, `image/jpeg`, `image/png`,
-`image/gif`, `image/avif` and `application/pdf`. Anything else is refused before a signature
-exists.
+The cap is **10 MiB** per upload and the types are `image/webp`, `image/jpeg`, `image/png`,
+`image/gif`, `image/avif` and `application/pdf`. Anything else is refused before an upload intent
+is created.
+
+Hourly limits are 30 intents and 30 MiB per account, and 500 intents and 250 MiB per site.
+They are stored in D1 and return `429` when exhausted. Failed or abandoned declarations still
+consume their reservations. Ingestion stops after 60 seconds; if a Worker dies during ingestion,
+start a new declaration rather than reclaiming an in-progress intent.
 
 A file skips step 1 — nothing re-encodes a PDF. Its signature must identify a PDF and the
 server stores the final object with `content-disposition: attachment`. An object whose signature
@@ -37,7 +45,7 @@ CDN domain would be a cross-site scripting hole, and a name is not evidence.
 
 ## Failure and recovery
 
-The picker distinguishes image preparation, declaration, bucket PUT and confirmation failures with
+The picker distinguishes image preparation, declaration, upload PUT and confirmation failures with
 stable operation descriptors. It does not guess from English response text or status alone. A
 connection loss or malformed success after a possible write is reported as unconfirmed: check the
 library before starting another upload. Server or provider diagnostics remain separate from the
@@ -47,6 +55,9 @@ The same contract applies on the full media-library screen: its selected asset, 
 draft and queue stay in place, and a pending upload completes in the language currently selected.
 The library reload after completion keeps the selected detail panel and authored metadata rather
 than treating the locale change as a new request.
+
+Unconfirmed private objects expire through the bucket lifecycle rule even when the Worker
+cron is unavailable. They are never automatically published.
 
 ## Keys are content-addressed
 

@@ -135,7 +135,11 @@ export async function addRedirect(
     prior ? readRedirects('default', git, baseSha) : current,
     pickable(ctx),
   ]);
-  const bad = redirectError('default', typed, { pages: sitePages(entries), rules });
+  const bad = redirectError('default', typed, {
+    pages: sitePages(entries),
+    rules,
+    base: config.i18n.base,
+  });
   if (bad) return Response.json(bad, { status: 422 });
   const typed_ =
     ruleDetail(prior?.detail) ??
@@ -222,7 +226,12 @@ export async function changeRedirect(
     return Response.json({ code: 'REDIRECT_NOT_FOUND', error: 'Not found' }, { status: 404 });
   if (found.reason === 'hidden')
     return Response.json({ code: 'REDIRECT_MANAGED', error: MANAGED }, { status: 409 });
-  const bad = redirectError('default', typed, { pages: sitePages(entries), rules }, id);
+  const bad = redirectError(
+    'default',
+    typed,
+    { pages: sitePages(entries), rules, base: config.i18n.base },
+    id,
+  );
   if (bad) return Response.json(bad, { status: 422 });
   const operation =
     prior ??

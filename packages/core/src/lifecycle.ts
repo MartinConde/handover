@@ -42,8 +42,44 @@ const unsafeRedirectText = (value: string) =>
 export function redirectSourceError(value: string): string | undefined {
   if (!value.startsWith('/')) return 'a path starting with "/"';
   if (unsafeRedirectText(value)) return 'a path without whitespace or control characters';
+  if (/[\\*:?#[\]{}]/.test(value) || /%2f|%5c/i.test(value))
+    return 'a literal path without patterns, queries, fragments, or encoded separators';
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(value);
+  } catch {
+    return 'a path with valid URL encoding';
+  }
+  if (/[\\*:?#[\]{}]/.test(decoded))
+    return 'a literal path without encoded pattern, query, or fragment syntax';
+  if (decoded.includes('//') || /\/(?:\.{1,2})(?:\/|$)/.test(decoded))
+    return 'a normalized literal path without repeated slashes or dot segments';
   return undefined;
 }
+
+const canonicalRedirectPath = (value: string) => {
+  if (!value.startsWith('/') || value.startsWith('//')) return value;
+  // Redirect matching ignores queries; URL parsing also resolves destination dot segments.
+  const path = new URL(value, 'https://redirect.invalid').pathname;
+  let decoded = path;
+  try {
+    decoded = decodeURIComponent(path);
+  } catch {
+    // Destinations can legitimately contain a literal percent sign.
+  }
+  return decoded === '/' ? decoded : decoded.replace(/\/+$/, '') || '/';
+};
+
+const reservedRedirectSource = (value: string, base = '') => {
+  const root = canonicalRedirectPath(base || '/');
+  const local =
+    root !== '/' && (value === root || value.startsWith(`${root}/`))
+      ? value.slice(root.length) || '/'
+      : value;
+  return ['/admin', '/_preview', '/_astro', '/_server-islands'].some(
+    (prefix) => local === prefix || local.startsWith(`${prefix}/`),
+  );
+};
 
 export function redirectDestinationError(value: string): string | undefined {
   if (unsafeRedirectText(value))
@@ -60,7 +96,7 @@ export function redirectDestinationError(value: string): string | undefined {
   return 'a path or an absolute HTTP(S) URL';
 }
 
-const assertRedirectRule = (rule: Pick<RedirectRule, 'from' | 'to'>) => {
+const assertRedirectRule = (rule: Pick<RedirectRule, 'from' | 'to'>, base = '') => {
   const from = redirectSourceError(rule.from);
   if (from)
     throw new Error(
@@ -68,6 +104,8 @@ const assertRedirectRule = (rule: Pick<RedirectRule, 'from' | 'to'>) => {
         ? 'redirect source cannot contain whitespace or control characters'
         : `redirect source must be ${from}`,
     );
+  if (reservedRedirectSource(canonicalRedirectPath(rule.from), base))
+    throw new Error('redirect source is reserved for the site application');
   const to = redirectDestinationError(rule.to);
   if (to)
     throw new Error(
@@ -149,20 +187,25 @@ export function collapseRedirects(
   for (const rule of written) {
     const list = all.some((r) => r._id === rule._id) ? all : [...all, rule];
     // Rules leading to this `from` are no step onward, or `A → B` over `B → A` chases its tail.
-    const onward = list.filter((r) => r._id !== rule._id && r.to !== rule.from);
-    const seen = new Set([rule.from]);
+    const onward = list.filter(
+      (r) => r._id !== rule._id && canonicalRedirectPath(r.to) !== canonicalRedirectPath(rule.from),
+    );
+    const seen = new Set([canonicalRedirectPath(rule.from)]);
     let to = rule.to;
-    for (let next = onward.find((r) => r.from === to); next && !seen.has(next.to); ) {
-      seen.add(to);
+    for (
+      let next = onward.find((r) => canonicalRedirectPath(r.from) === canonicalRedirectPath(to));
+      next && !seen.has(canonicalRedirectPath(next.to));
+    ) {
+      seen.add(canonicalRedirectPath(to));
       to = next.to;
-      next = onward.find((r) => r.from === to);
+      next = onward.find((r) => canonicalRedirectPath(r.from) === canonicalRedirectPath(to));
     }
     const landed = { ...rule, to };
     all = list
       .map((r) =>
         r._id === rule._id
           ? landed
-          : r.to === rule.from
+          : canonicalRedirectPath(r.to) === canonicalRedirectPath(rule.from)
             ? {
                 ...r,
                 to,
@@ -171,7 +214,7 @@ export function collapseRedirects(
               }
             : r,
       )
-      .filter((r) => r.from !== r.to);
+      .filter((r) => canonicalRedirectPath(r.from) !== canonicalRedirectPath(r.to));
   }
   return all;
 }
@@ -211,6 +254,7 @@ export async function editRedirects(
 export interface RedirectSite {
   pages: Record<string, string>;
   rules: readonly RedirectRule[];
+  base?: string;
 }
 
 export interface RedirectProblem {
@@ -252,10 +296,15 @@ export function redirectError(
       code: 'REDIRECT_FROM_SLASH',
       suggestion: `/${from}`,
     });
-  if (redirectSourceError(from))
-    return at('from', 'An old address cannot contain spaces or control characters.', {
-      code: 'REDIRECT_FROM_WHITESPACE',
-    });
+  const sourceError = redirectSourceError(from);
+  if (sourceError)
+    return sourceError.includes('whitespace')
+      ? at('from', 'An old address cannot contain spaces or control characters.', {
+          code: 'REDIRECT_FROM_WHITESPACE',
+        })
+      : at('from', `An old address must be ${sourceError}.`, {
+          code: 'REDIRECT_FROM_INVALID',
+        });
   if (!to) return at('to', 'A destination is needed.', { code: 'REDIRECT_TO_REQUIRED' });
   const toError = redirectDestinationError(to);
   if (toError?.includes('whitespace'))
@@ -271,17 +320,23 @@ export function redirectError(
         suggestion: `/${to.replace(/^\/+/, '')}`,
       },
     );
-  if (from === to)
+  const canonicalFrom = canonicalRedirectPath(from);
+  const canonicalTo = to.startsWith('/') ? canonicalRedirectPath(to) : to;
+  if (reservedRedirectSource(canonicalFrom, site.base))
+    return at('from', 'This address is reserved for the site application.', {
+      code: 'REDIRECT_FROM_RESERVED',
+    });
+  if (canonicalFrom === canonicalTo)
     return at('to', 'This sends visitors back where they came from. Pick somewhere else.', {
       code: 'REDIRECT_SAME_ADDRESS',
     });
-  const page = site.pages[from];
+  const page = site.pages[canonicalFrom] ?? site.pages[`${canonicalFrom}/`];
   if (page)
     return at('from', `This is a real page. A redirect here would hide ${page} from visitors.`, {
       code: 'REDIRECT_SHADOWS_PAGE',
       page,
     });
-  if (site.rules.some((r) => r.from === from && r._id !== id))
+  if (site.rules.some((r) => canonicalRedirectPath(r.from) === canonicalFrom && r._id !== id))
     return at('from', 'There is already a redirect from this address.', {
       code: 'REDIRECT_FROM_EXISTS',
     });
@@ -520,8 +575,13 @@ export async function deleteLocales(
 }
 
 /** Static Assets matches `from` exactly, so each is written with and without a trailing slash. */
-export const redirectsText = (_siteId: string, rules: RedirectRule[], slash: boolean): string => {
-  for (const rule of rules) assertRedirectRule(rule);
+export const redirectsText = (
+  _siteId: string,
+  rules: RedirectRule[],
+  slash: boolean,
+  base = '',
+): string => {
+  for (const rule of rules) assertRedirectRule(rule, base);
   return rules
     .flatMap((r) => {
       const to = withSlash(r.to, slash);

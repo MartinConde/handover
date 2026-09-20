@@ -121,7 +121,12 @@ export async function uiAssetsModule(dir: string): Promise<string> {
 }
 
 // The adapter's own hook runs after this one and appends Astro's redirects to the same file.
-export async function emitRedirects(root: URL, clientDir: URL, slash: boolean): Promise<number> {
+export async function emitRedirects(
+  root: URL,
+  clientDir: URL,
+  slash: boolean,
+  base = '',
+): Promise<number> {
   const path = 'src/content/redirects.yaml';
   const source = await readFile(new URL(path, root), 'utf8').catch(() => undefined);
   if (source === undefined) return 0;
@@ -138,7 +143,7 @@ export async function emitRedirects(root: URL, clientDir: URL, slash: boolean): 
   await mkdir(clientDir, { recursive: true });
   await appendFile(
     new URL('_redirects', clientDir),
-    redirectsText('default', parsed.data.rules, slash),
+    redirectsText('default', parsed.data.rules, slash, base),
   );
   return parsed.data.rules.length;
 }
@@ -370,7 +375,7 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
         if (error) throw new Error(error);
       },
       'astro:build:done': async ({ logger }) => {
-        const n = await emitRedirects(root, clientDir, slash);
+        const n = await emitRedirects(root, clientDir, slash, cms.i18n.base);
         if (n) logger.info(`Wrote ${n} redirect${n === 1 ? '' : 's'} to _redirects`);
         if (!crawl)
           logger.warn(

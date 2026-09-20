@@ -162,12 +162,14 @@ function fixture(tag: string, mime = 'image/png') {
 
 test('only a temporary key can receive a five-minute client PUT', async () => {
   const key = temporary(`media/${HASH}.webp`);
-  const url = new URL(await presignUpload(store, key));
+  const url = new URL(await presignUpload(store, key, 'image/webp'));
   expect(url.pathname).toBe(`/${store.bucket}/${key}`);
   expect(url.searchParams.get('X-Amz-Expires')).toBe('300');
-  expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe('host');
+  expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe('content-type;host');
   expect(url.searchParams.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/);
-  await expect(presignUpload(store, `media/${HASH}.webp`)).rejects.toThrow(UploadRefusedError);
+  await expect(presignUpload(store, `media/${HASH}.webp`, 'image/webp')).rejects.toThrow(
+    UploadRefusedError,
+  );
 });
 
 test.each(['size', 'mime', 'hash', 'image'])(
@@ -245,7 +247,7 @@ test('finalization derives dimensions and replaying the upload URL cannot change
     createdAt: 1700,
   });
   expect(f.objects.has(f.upload.key ?? '')).toBe(false);
-  const url = await presignUpload(store, f.upload.key ?? '');
+  const url = await presignUpload(store, f.upload.key ?? '', f.upload.mime);
   await f.fetch(
     new Request(url, { method: 'PUT', body: 'replaced', headers: { 'content-type': 'text/html' } }),
   );

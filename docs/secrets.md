@@ -29,7 +29,7 @@ Optional, each turning on the feature that reads it:
 | `SMTP_PASS` | the password for that login. Without both, the admin treats the site as having no mailer ([Sending email](email.md#smtp)) |
 | `GITHUB_CLIENT_ID` | *Continue with GitHub* on the login. An OAuth app whose callback URL is `<HANDOVER_BASE_URL>/admin/api/auth/callback/github`; one app per origin, so local dev needs its own ([Accounts](auth.md#continue-with-github)) |
 | `GITHUB_CLIENT_SECRET` | the same app's client secret. Without both, GitHub is not offered |
-| `R2_ACCESS_KEY_ID` | uploading pictures. An **R2 API token** with *Object Read & Write* on the one bucket: dashboard → R2 → API → Manage API tokens ([Media](media.md)) |
+| `R2_ACCESS_KEY_ID` | uploading pictures. An **R2 API token** with *Object Read & Write* on the public media bucket: dashboard → R2 → API → Manage API tokens ([Media](media.md)) |
 | `R2_SECRET_ACCESS_KEY` | the same token's secret. Without both, the admin refuses uploads and names what is missing |
 
 `mailer: { provider: 'cloudflare', … }` has no secret at all: it sends through a `send_email`
@@ -62,8 +62,9 @@ private:
 "vars": { "R2_ACCOUNT_ID": "<account-id>", "R2_BUCKET": "your-site-media" }
 ```
 
-The bucket also needs a CORS rule and a hostname of its own before anything can be uploaded to
-it; [Media](media.md) is the whole setup in four steps.
+Uploads also need a private R2 binding named `MEDIA_UPLOADS`, with no public hostname and
+a one-day lifecycle expiry rule. Only verified bytes reach the public media bucket, whose
+GET CORS, hostname and response headers are covered in [Media](media.md).
 
 One value is neither a secret nor a var: `PREVIEW_ENABLED` belongs to the **build**, because
 the integration reads it while it sets up and leaves the `/_preview` route out of the bundle

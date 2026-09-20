@@ -46,6 +46,8 @@ test('the shell HTML links only the admin entry and its stylesheet closure', asy
   const res = await GET(ctx(undefined));
   expect(res.status).toBe(200);
   expect(res.headers.get('content-type')).toBe('text/html; charset=utf-8');
+  expect(res.headers.get('content-security-policy')).toBe("frame-ancestors 'none'");
+  expect(res.headers.get('x-frame-options')).toBe('DENY');
   const html = await res.text();
   expect(html).toContain('<script type="module" src="/admin/_assets/admin.js"></script>');
   expect(html).toContain('<link rel="stylesheet" href="/admin/_assets/admin.css">');
@@ -104,6 +106,7 @@ test('entry, shared, Canvas, and lazy assets are served immutable with their con
   expect(js.headers.get('content-type')).toBe('text/javascript; charset=utf-8');
   expect(js.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
   expect(js.headers.get('vary')).toBeNull();
+  expect(js.headers.get('content-security-policy')).toBeNull();
   expect(await js.text()).toBe('console.log("shell")');
   const css = await GET(ctx('_assets/shared.css'));
   expect(css.headers.get('content-type')).toBe('text/css; charset=utf-8');

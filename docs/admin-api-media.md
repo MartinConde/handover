@@ -4,7 +4,7 @@ Conventions, status codes and what these routes are for: [The admin API](admin-a
 
 ## Media
 
-The upload pipeline, in two calls around a PUT the browser makes straight to the bucket,
+The upload pipeline, in two calls around an authenticated same-origin PUT,
 and the library the picker reads. What has to be set up before any of them answers anything
 is [Media](media.md).
 
@@ -35,10 +35,24 @@ POST /admin/api/media  { "hash", "bytes", "mime", "filename?", "width?", "height
 
 "Do you have these bytes?" `hash` is the SHA-256 of the file, hex. The first answer is the
 asset the site already holds, and the upload is over before it started — the same picture
-chosen twice is one object and one row. The second is a PUT URL signed for five minutes,
-for a temporary key the server chose: `uploads/<uuid>/media/<sha256>.<ext>`, or
-`uploads/<uuid>/files/<sha256>.<ext>` for a PDF. Return that `key` when confirming; the signed URL never permits a write to the public asset. `422` when the type is not one the bucket takes or the declared size
-is over 10MB, `503` when the site has no bucket configured.
+chosen twice is one object and one row. The second is an authenticated PUT URL for a
+private staging key the server chose. The intent is tied to the signed-in user, exact byte
+count and MIME type. Return its `key` when confirming. `422` rejects unsupported types or
+sizes over 10 MiB, `429` rejects exhausted budgets, and `503` means storage is not configured.
+
+```
+PUT /admin/api/uploads/:uuid/media/:hash.:ext
+PUT /admin/api/uploads/:uuid/files/:hash.pdf
+Content-Type: <the declared MIME type>
+<body: the declared file bytes>
+  →  204
+```
+
+This requires the same authenticated user as the declaration and an unexpired, unused
+intent. Invented keys are refused. A mismatched MIME type returns `415`; a declared size above
+the cap returns `413`, actual bytes that differ from the intent return `422`, and a stream that
+takes over 60 seconds returns `408`. The server checks the actual byte count before writing to the
+private staging bucket, including when Content-Length is absent.
 
 `focal` is the two fractions every crop of the picture holds around, `[0.5, 0.5]` for one nobody
 has framed. `derivedFrom` is the id of the picture a crop was taken out of, and is written to the
@@ -91,6 +105,6 @@ PUT /admin/api/media/:hash  { "key", "hash", "bytes", "mime", "filename?", "widt
 
 The Worker reads the temporary object's actual bytes with a bounded size limit, verifies its SHA-256 and type, and derives image dimensions from the encoded container. Caller dimensions are ignored. A bad temporary object is deleted and answered `422`; a failed storage request leaves it available for retry.
 
-After verification, the Worker writes the exact verified bytes to the public `media/` or `files/` key with immutable caching. PDFs must have a PDF signature and the final object is forced to download. Copying the temporary key is deliberately avoided: another PUT could change it between verification and a copy. Reusing a still-valid upload URL can only change the temporary object.
+After verification, the Worker writes the exact verified bytes to the public `media/` or `files/` key with immutable caching. PDFs must have a PDF signature and the final object is forced to download. Copying the temporary key is deliberately avoided: another PUT could change it between verification and a copy. The single-use staging intent prevents another ingestion from replacing the temporary object.
 
-Only after finalization is the media row inserted. Existing rows remain the inexpensive dedupe path. Hourly reconciliation verifies final objects before adoption and finalizes abandoned temporary uploads after their five-minute lease; it uses the same byte/hash/type checks.
+Only after finalization is the media row inserted. Existing rows remain the inexpensive dedupe path. Hourly reconciliation verifies final objects before adoption. Private staging is never adopted automatically; its lifecycle rule removes abandoned objects independently of the CMS cron.

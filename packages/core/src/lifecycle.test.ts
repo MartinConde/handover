@@ -10,6 +10,7 @@ import {
   readRedirects,
   redirectError,
   redirectRule,
+  redirectSourceError,
   redirectsText,
   renamedFrom,
   renameEntry,
@@ -559,6 +560,67 @@ test('an empty box is asked for rather than corrected', () => {
     message: 'A destination is needed.',
     descriptor: { code: 'REDIRECT_TO_REQUIRED' },
   });
+});
+
+test('redirect sources are literal paths and slash variants share one address', () => {
+  expect(redirectSourceError('/listings/*')).toContain('literal');
+  expect(redirectSourceError('/listings/:slug')).toContain('literal');
+  expect(redirectSourceError('/listings//harbour-flat')).toContain('normalized');
+  expect(redirectSourceError('/listings/%2e%2e/admin')).toContain('normalized');
+  expect(redirectSourceError('/listings/%2a')).toContain('literal');
+  expect(
+    redirectError('default', { from: '/listings/harbour-flat/', to: '/listings' }, site),
+  ).toMatchObject({ descriptor: { code: 'REDIRECT_SHADOWS_PAGE' } });
+  expect(redirectError('default', { from: '/summer-offer/', to: '/listings' }, site)).toMatchObject(
+    { descriptor: { code: 'REDIRECT_FROM_EXISTS' } },
+  );
+});
+
+test.each(['/admin', '/admin/api/drafts', '/_preview/home', '/_astro/app.js'])(
+  'redirect source %s is reserved for the application',
+  (from) => {
+    expect(redirectError('default', { from, to: '/listings' }, site)).toMatchObject({
+      descriptor: { code: 'REDIRECT_FROM_RESERVED' },
+    });
+  },
+);
+
+test('encoded paths and slash-normalized loops use their served address', () => {
+  expect(
+    redirectError('default', { from: '/listings/%68arbour-flat', to: '/listings' }, site),
+  ).toMatchObject({ descriptor: { code: 'REDIRECT_SHADOWS_PAGE' } });
+  expect(collapseRedirects([manual('/a', '/b/', 'one')], [manual('/b', '/a/', 'two')])).toEqual([
+    manual('/b', '/a/', 'two'),
+  ]);
+});
+
+test('redirect destinations may contain literal percent signs in queries or external paths', () => {
+  for (const to of ['/offer?discount=10%', 'https://example.com/10%-off']) {
+    expect(redirectError('default', { from: '/sale', to }, site)).toBeUndefined();
+    expect(collapseRedirects([], [manual('/sale', to)])).toEqual([manual('/sale', to)]);
+  }
+});
+
+test.each(['/sale?campaign=x', '/sale#details', '/offers/../sale', '/offers/%2e%2e/sale/'])(
+  'a redirect cannot loop back through the destination %s',
+  (to) => {
+    expect(redirectError('default', { from: '/sale', to }, site)).toMatchObject({
+      descriptor: { code: 'REDIRECT_SAME_ADDRESS' },
+    });
+  },
+);
+
+test('configured-base and build-time application paths cannot become redirects', () => {
+  expect(
+    redirectError(
+      'default',
+      { from: '/studio/%61dmin/api', to: '/listings' },
+      { ...site, base: '/studio' },
+    ),
+  ).toMatchObject({ descriptor: { code: 'REDIRECT_FROM_RESERVED' } });
+  expect(() => redirectsText('default', [manual('/admin/api', '/listings')], false)).toThrow(
+    /reserved/,
+  );
 });
 
 test('an old address that is not a path says so with the path it meant', () => {

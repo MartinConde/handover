@@ -19,6 +19,28 @@ const D1_LIST = JSON.stringify([{ uuid: 'db-uuid', name: 'my-site' }]);
 interface CloudState {
   database?: boolean;
   bucket?: boolean;
+  uploads?: boolean;
+  publicUploads?: boolean;
+  uploadDomain?: boolean;
+  lifecycle?: string;
+}
+
+const UPLOAD_LIFECYCLE =
+  'name: handover-expire-uploads\nenabled: Yes\nprefix: uploads/\naction: Expire objects after 1 days';
+
+function cloudOutput(argv: string[], cloud: CloudState): string {
+  if (argv[1] === 'd1' && argv[2] === 'list') return cloud.database ? D1_LIST : '[]';
+  if (argv[3] === 'dev-url')
+    return cloud.publicUploads
+      ? "Public access is enabled at 'https://example.r2.dev'."
+      : 'Public access via the r2.dev URL is disabled.';
+  if (argv[3] === 'domain')
+    return cloud.uploadDomain
+      ? 'domain: media.example.com\nenabled: Yes'
+      : 'There are no custom domains connected to this bucket.';
+  if (argv[3] === 'lifecycle')
+    return cloud.lifecycle ?? "There are no lifecycle rules for bucket 'my-site-uploads'.";
+  return '1.0.0';
 }
 
 function generateMigration(cwd: string, directory = '.handover-migrations') {
@@ -38,18 +60,23 @@ async function run(argv: string[], cwd: string, ran: string[][] = [], cloud: Clo
     run: (a) => {
       ran.push(a);
       if (a.slice(0, 3).join(' ') === 'wrangler d1 create') cloud.database = true;
-      if (a.slice(0, 4).join(' ') === 'wrangler r2 bucket create') cloud.bucket = true;
+      if (a.slice(0, 4).join(' ') === 'wrangler r2 bucket create') {
+        if (a[4] === 'my-site-media') cloud.bucket = true;
+        else cloud.uploads = true;
+      }
+      if (a[3] === 'lifecycle' && a[4] === 'add') cloud.lifecycle = UPLOAD_LIFECYCLE;
       if (a[0] === 'drizzle-kit' && a[2] === '--config') generateMigration(cwd);
     },
     capture: (a) => {
       ran.push(a);
       if (a.includes('whoami')) return WHOAMI;
-      if (a.includes('list')) return cloud.database ? D1_LIST : '[]';
-      return '1.0.0';
+      return cloudOutput(a, cloud);
     },
     probe: (a) => {
       ran.push(a);
-      return cloud.bucket ? JSON.stringify({ name: 'my-site-media' }) : undefined;
+      return (a[4] === 'my-site-media' ? cloud.bucket : cloud.uploads)
+        ? JSON.stringify({ name: a[4] })
+        : undefined;
     },
   });
   return { code, out: out.join('\n') };
@@ -142,13 +169,84 @@ test('db generate --check passes when the marker matches', async () => {
   expect(out).toBe(`migrations/ is at schema version ${SCHEMA_VERSION}`);
 });
 
+test('init provisions private upload staging and one-day expiry before migrations', async () => {
+  const cwd = site({ 'package.json': '{ "name": "my-site" }' });
+  const ran: string[][] = [];
+  const cloud: CloudState = {};
+  const result = await run(['init', 'you@example.com'], cwd, ran, cloud);
+  expect(result.code, result.out).toBe(0);
+  expect(cloud.uploads).toBe(true);
+  expect(cloud.lifecycle).toBe(
+    'name: handover-expire-uploads\nenabled: Yes\nprefix: uploads/\naction: Expire objects after 1 days',
+  );
+  expect(readFileSync(join(cwd, 'wrangler.jsonc'), 'utf8')).toContain(
+    '"binding": "MEDIA_UPLOADS", "bucket_name": "my-site-uploads"',
+  );
+  expect(ran.findIndex((a) => a[3] === 'lifecycle' && a[4] === 'add')).toBeLessThan(
+    ran.findIndex((a) => a[0] === 'drizzle-kit' && a[1] === 'generate'),
+  );
+});
+
+test.each(['publicUploads', 'uploadDomain'] as const)(
+  'init refuses %s on the staging bucket',
+  async (setting) => {
+    const cwd = site({ 'package.json': '{ "name": "my-site" }' });
+    const ran: string[][] = [];
+    const result = await run(['init', 'you@example.com'], cwd, ran, {
+      uploads: true,
+      [setting]: true,
+    });
+    expect(result.code).toBe(1);
+    expect(result.out).toContain('must be private');
+    expect(ran.some((a) => a.includes('migrations'))).toBe(false);
+  },
+);
+
+test('init preserves an existing correct staging expiry rule without duplicating it', async () => {
+  const cwd = site({ 'package.json': '{ "name": "my-site" }' });
+  const ran: string[][] = [];
+  const result = await run(['init', 'you@example.com'], cwd, ran, {
+    uploads: true,
+    lifecycle: UPLOAD_LIFECYCLE,
+  });
+  expect(result.code, result.out).toBe(0);
+  expect(ran).toContainEqual(['wrangler', 'r2', 'bucket', 'lifecycle', 'list', 'my-site-uploads']);
+  expect(ran.some((a) => a[3] === 'lifecycle' && a[4] === 'add')).toBe(false);
+});
+
+test('init refuses a conflicting staging expiry rule without replacing it', async () => {
+  const cwd = site({ 'package.json': '{ "name": "my-site" }' });
+  const ran: string[][] = [];
+  const result = await run(['init', 'you@example.com'], cwd, ran, {
+    uploads: true,
+    lifecycle:
+      'name: handover-expire-uploads\nenabled: No\nprefix: uploads/\naction: Expire objects after 30 days',
+  });
+  expect(result.code).toBe(1);
+  expect(result.out).toContain('handover-expire-uploads');
+  expect(ran.some((a) => a[3] === 'lifecycle' && a[4] !== 'list')).toBe(false);
+});
+
+test('init rejects a staging binding aimed at the public bucket before provisioning', async () => {
+  const cwd = site({
+    'package.json': '{ "name": "my-site" }',
+    'wrangler.jsonc':
+      '{ "r2_buckets": [{ "binding": "MEDIA_UPLOADS", "bucket_name": "my-site-media" }] }',
+  });
+  const ran: string[][] = [];
+  const result = await run(['init', 'you@example.com'], cwd, ran);
+  expect(result.code).toBe(1);
+  expect(result.out).toContain('MEDIA_UPLOADS');
+  expect(ran.some((a) => a.includes('create'))).toBe(false);
+});
+
 test('init creates the database and the bucket, wires them up and seeds the owner', async () => {
   const cwd = site({ 'package.json': '{ "name": "my-site" }' });
   const ran: string[][] = [];
   const { code, out } = await run(['init', 'you@example.com'], cwd, ran);
 
   expect(code).toBe(0);
-  expect(ran.slice(0, 10)).toEqual([
+  expect(ran.slice(0, 16)).toEqual([
     ['drizzle-kit', '--version'],
     ['wrangler', '--version'],
     ['wrangler', 'whoami', '--json'],
@@ -157,8 +255,25 @@ test('init creates the database and the bucket, wires them up and seeds the owne
     ['wrangler', 'd1', 'list', '--json'],
     ['wrangler', 'r2', 'bucket', 'info', 'my-site-media', '--json'],
     ['wrangler', 'r2', 'bucket', 'create', 'my-site-media'],
+    ['wrangler', 'r2', 'bucket', 'info', 'my-site-uploads', '--json'],
+    ['wrangler', 'r2', 'bucket', 'create', 'my-site-uploads'],
+    ['wrangler', 'r2', 'bucket', 'dev-url', 'get', 'my-site-uploads'],
+    ['wrangler', 'r2', 'bucket', 'domain', 'list', 'my-site-uploads'],
+    ['wrangler', 'r2', 'bucket', 'lifecycle', 'list', 'my-site-uploads'],
+    [
+      'wrangler',
+      'r2',
+      'bucket',
+      'lifecycle',
+      'add',
+      'my-site-uploads',
+      'handover-expire-uploads',
+      'uploads/',
+      '--expire-days',
+      '1',
+    ],
+    ['wrangler', 'r2', 'bucket', 'lifecycle', 'list', 'my-site-uploads'],
     ['drizzle-kit', 'generate', '--config', '.handover-drizzle.config.ts'],
-    ['wrangler', 'd1', 'migrations', 'apply', 'my-site', '--local'],
   ]);
 
   const config = readFileSync(join(cwd, 'wrangler.jsonc'), 'utf8');
@@ -220,7 +335,7 @@ test('init leaves a wrangler config it did not write alone and prints the block 
 
   writeFileSync(
     join(cwd, 'wrangler.jsonc'),
-    `{ "name": "theirs", "vars": { "R2_ACCOUNT_ID": "acc0unt1d", "R2_BUCKET": "my-site-media" }, "d1_databases": [{ "binding": "DB", "database_name": "my-site", "database_id": "db-uuid" }] }\n`,
+    `{ "name": "theirs", "vars": { "R2_ACCOUNT_ID": "acc0unt1d", "R2_BUCKET": "my-site-media" }, "d1_databases": [{ "binding": "DB", "database_name": "my-site", "database_id": "db-uuid" }], "r2_buckets": [{ "binding": "MEDIA_UPLOADS", "bucket_name": "my-site-uploads" }] }\n`,
   );
   const resumed: string[][] = [];
   const result = await run(['init', 'you@example.com'], cwd, resumed, cloud);
@@ -265,7 +380,7 @@ test.each([
 
 test('init accepts matching user-owned Wrangler and Drizzle configs without rewriting them', async () => {
   const wrangler =
-    '{ "name": "custom-worker", "vars": { "R2_ACCOUNT_ID": "acc0unt1d", "R2_BUCKET": "my-site-media" }, "d1_databases": [{ "binding": "DB", "database_name": "my-site", "database_id": "db-uuid" }] }\n';
+    '{ "name": "custom-worker", "vars": { "R2_ACCOUNT_ID": "acc0unt1d", "R2_BUCKET": "my-site-media" }, "d1_databases": [{ "binding": "DB", "database_name": "my-site", "database_id": "db-uuid" }], "r2_buckets": [{ "binding": "MEDIA_UPLOADS", "bucket_name": "my-site-uploads" }] }\n';
   const drizzle = [
     "import { defineConfig } from 'drizzle-kit';",
     'export default defineConfig({',
@@ -284,6 +399,7 @@ test('init accepts matching user-owned Wrangler and Drizzle configs without rewr
   const { code } = await run(['init', 'you@example.com'], cwd, ran, {
     database: true,
     bucket: true,
+    uploads: true,
   });
 
   expect(code).toBe(0);
@@ -310,6 +426,8 @@ test('init verifies a configured database id in the selected account before crea
 test.each([
   'wrangler d1 create my-site',
   'wrangler r2 bucket create my-site-media',
+  'wrangler r2 bucket create my-site-uploads',
+  'wrangler r2 bucket lifecycle add my-site-uploads handover-expire-uploads uploads/ --expire-days 1',
   'drizzle-kit generate --config .handover-drizzle.config.ts',
   'wrangler d1 migrations apply my-site --local',
   'wrangler d1 migrations apply my-site --remote',
@@ -329,7 +447,11 @@ test.each([
         calls.push(argv);
         const command = argv.slice(0, argv[2] === 'execute' ? 5 : undefined).join(' ');
         if (argv.slice(0, 3).join(' ') === 'wrangler d1 create') cloud.database = true;
-        if (argv.slice(0, 4).join(' ') === 'wrangler r2 bucket create') cloud.bucket = true;
+        if (argv.slice(0, 4).join(' ') === 'wrangler r2 bucket create') {
+          if (argv[4] === 'my-site-media') cloud.bucket = true;
+          else cloud.uploads = true;
+        }
+        if (argv[3] === 'lifecycle' && argv[4] === 'add') cloud.lifecycle = UPLOAD_LIFECYCLE;
         if (argv[0] === 'drizzle-kit' && argv[2] === '--config') {
           if (interrupt && command === boundary) {
             mkdirSync(join(cwd, '.handover-migrations/meta'), { recursive: true });
@@ -347,12 +469,13 @@ test.each([
       capture: (argv) => {
         calls.push(argv);
         if (argv.includes('whoami')) return WHOAMI;
-        if (argv.includes('list')) return cloud.database ? D1_LIST : '[]';
-        return '1.0.0';
+        return cloudOutput(argv, cloud);
       },
       probe: (argv) => {
         calls.push(argv);
-        return cloud.bucket ? JSON.stringify({ name: 'my-site-media' }) : undefined;
+        return (argv[4] === 'my-site-media' ? cloud.bucket : cloud.uploads)
+          ? JSON.stringify({ name: argv[4] })
+          : undefined;
       },
     });
     return { code, out: out.join('\n') };
@@ -373,6 +496,10 @@ test.each([
       (argv) => argv.slice(0, 5).join(' ') === 'wrangler r2 bucket create my-site-media',
     ),
   ).toHaveLength(1);
+  expect(
+    calls.filter((a) => a.slice(0, 5).join(' ') === 'wrangler r2 bucket create my-site-uploads'),
+  ).toHaveLength(1);
+  expect(calls.filter((a) => a[3] === 'lifecycle' && a[4] === 'add')).toHaveLength(1);
   const seeds = calls.filter((argv) => argv[2] === 'execute');
   expect(new Set(seeds.map((argv) => argv[6])).size).toBe(1);
   expect(existsSync(join(cwd, '.handover-init.json'))).toBe(false);
@@ -395,7 +522,7 @@ test('init resumes after completed migrations moved into place but before their 
       ownerId: '10516ab2-5108-42a7-9bc2-3828f5a416ba',
     })}\n`,
     'wrangler.jsonc':
-      '{ "vars": { "R2_ACCOUNT_ID": "acc0unt1d", "R2_BUCKET": "my-site-media" }, "d1_databases": [{ "binding": "DB", "database_name": "my-site", "database_id": "db-uuid" }] }\n',
+      '{ "vars": { "R2_ACCOUNT_ID": "acc0unt1d", "R2_BUCKET": "my-site-media" }, "d1_databases": [{ "binding": "DB", "database_name": "my-site", "database_id": "db-uuid" }], "r2_buckets": [{ "binding": "MEDIA_UPLOADS", "bucket_name": "my-site-uploads" }] }\n',
     'drizzle.config.ts':
       "export default { dialect: 'sqlite', schema: './node_modules/astro-handover/dist/schema.js', out: './migrations' };\n",
   });
@@ -404,6 +531,7 @@ test('init resumes after completed migrations moved into place but before their 
   const { code } = await run(['init', 'you@example.com'], cwd, ran, {
     database: true,
     bucket: true,
+    uploads: true,
   });
 
   expect(code).toBe(0);
@@ -672,13 +800,19 @@ test('init scaffolds before it creates anything, so a nothing is left behind to 
   const order: string[] = [];
   let database = false;
   let bucket = false;
+  let uploads = false;
+  let lifecycle: string | undefined;
   const note = (a: string[]) => {
     order.push(a.join(' '));
     if (a.slice(0, 3).join(' ') === 'wrangler d1 create') {
       order.push(`scaffolded=${existsSync(join(cwd, 'cms.config.ts'))}`);
       database = true;
     }
-    if (a.slice(0, 4).join(' ') === 'wrangler r2 bucket create') bucket = true;
+    if (a.slice(0, 4).join(' ') === 'wrangler r2 bucket create') {
+      if (a[4] === 'my-site-media') bucket = true;
+      else uploads = true;
+    }
+    if (a[3] === 'lifecycle' && a[4] === 'add') lifecycle = UPLOAD_LIFECYCLE;
     if (a[0] === 'drizzle-kit' && a[2] === '--config') generateMigration(cwd);
   };
   await main(['init', 'you@example.com'], {
@@ -688,12 +822,13 @@ test('init scaffolds before it creates anything, so a nothing is left behind to 
     capture: (a) => {
       note(a);
       if (a.includes('whoami')) return WHOAMI;
-      if (a.includes('list')) return database ? D1_LIST : '[]';
-      return '1.0.0';
+      return cloudOutput(a, { database, bucket, uploads, lifecycle });
     },
     probe: (a) => {
       note(a);
-      return bucket ? JSON.stringify({ name: 'my-site-media' }) : undefined;
+      return (a[4] === 'my-site-media' ? bucket : uploads)
+        ? JSON.stringify({ name: a[4] })
+        : undefined;
     },
   });
   expect(

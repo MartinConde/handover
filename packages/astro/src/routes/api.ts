@@ -16,12 +16,14 @@ import {
   RefMovedError,
   RenameCollisionError,
   RepoUnreachableError,
+  ResourceLimitError,
   RevertConflictError,
   UploadRefusedError,
 } from '@handover/core';
 import type { APIRoute } from 'astro';
 import { createAuth } from '../auth.js';
 import { formSchema } from '../index.js';
+import { BodyTooLargeError, bodyErrorResponse } from './api/body.js';
 import { tabOf } from './api/content.js';
 import { requestContext } from './api/context.js';
 import {
@@ -59,7 +61,14 @@ import {
   translatedFromView,
   versionDiff,
 } from './api/history.js';
-import { askUpload, deleteAsset, describeMedia, finishUpload, library } from './api/media.js';
+import {
+  askUpload,
+  deleteAsset,
+  describeMedia,
+  finishUpload,
+  ingestUpload,
+  library,
+} from './api/media.js';
 import {
   account,
   activityLog,
@@ -120,6 +129,7 @@ const LOCK = entryRoute('locks/<segment>/<segment>');
 const HOLD = entryRoute('hold/<segment>/<segment>');
 const STATUS = entryRoute('status/<segment>');
 const MEDIA = /^media\/([0-9a-f]{64})$/;
+const UPLOAD = /^(uploads\/[0-9a-f-]{36}\/(?:media|files)\/[0-9a-f]{64}\.[a-z0-9]+)$/;
 const CHECK = /^checks\/([\w-]+)$/;
 const SETTING = /^settings\/([\w-]+)$/;
 const REDIRECT = /^redirects\/([\w-]+)$/;
@@ -217,6 +227,10 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
 };
 
 export const PUT: APIRoute = async ({ params, request, locals }) => {
+  const staging = params.path?.match(UPLOAD);
+  if (staging) return ingestUpload(requestContext(), staging[1] ?? '', request, locals.handover);
+  const invalidBody = await bodyErrorResponse(request);
+  if (invalidBody) return invalidBody;
   const ctx = requestContext();
   const setting = params.path?.match(SETTING);
   if (setting) return setIntegration(ctx, setting[1] ?? '', request, locals.handover);
@@ -245,6 +259,8 @@ export const PUT: APIRoute = async ({ params, request, locals }) => {
 
 // The one verb that changes an asset without changing its bytes, which are named by their hash.
 export const PATCH: APIRoute = async ({ params, request, locals }) => {
+  const invalidBody = await bodyErrorResponse(request);
+  if (invalidBody) return invalidBody;
   const ctx = requestContext();
   const asset = params.path?.match(MEDIA);
   if (asset) return describeMedia(ctx, asset[1] ?? '', request, locals.handover);
@@ -317,11 +333,17 @@ async function answering(
     // A refused upload is the chooser's own file, so it is answered to them by the rule it broke.
     if (err instanceof UploadRefusedError)
       return Response.json({ error: err.message }, { status: 422 });
+    if (err instanceof BodyTooLargeError)
+      return Response.json({ code: 'BODY_TOO_LARGE', error: err.message }, { status: 413 });
+    if (err instanceof ResourceLimitError)
+      return Response.json({ code: 'RESOURCE_LIMIT', error: err.message }, { status: 429 });
     throw err;
   }
 }
 
 export const POST: APIRoute = async ({ params, request, url, locals }) => {
+  const invalidBody = await bodyErrorResponse(request);
+  if (invalidBody) return invalidBody;
   const ctx = requestContext();
   if (mounted(url.pathname)) return createAuth(url, locals.cfContext).handler(request);
   const checked = params.path?.match(CHECK);
@@ -342,7 +364,7 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   const resent = params.path?.match(MEMBER_INVITE);
   if (resent)
     return resendInvite(ctx, resent[1] ?? '', request, url, locals.cfContext, locals.handover);
-  if (params.path === 'media') return answering(() => askUpload(ctx, request));
+  if (params.path === 'media') return answering(() => askUpload(ctx, request, locals.handover));
   if (params.path === 'redirects')
     return answering(() => addRedirect(ctx, request, locals.handover));
   if (params.path === 'publish/checks')
@@ -451,6 +473,8 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
 };
 
 export const DELETE: APIRoute = async ({ params, request, url, locals }) => {
+  const invalidBody = await bodyErrorResponse(request);
+  if (invalidBody) return invalidBody;
   const ctx = requestContext();
   const setting = params.path?.match(SETTING);
   if (setting) return clearIntegration(ctx, setting[1] ?? '', locals.handover);

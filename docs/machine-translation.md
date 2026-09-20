@@ -40,6 +40,12 @@ The site's owner can paste a DeepL key of their own into **Settings** without a 
 one is used ahead of `DEEPL_API_KEY` ([Translation and AI](diagnostics.md#translation-and-ai)). A site that
 hands in its own `i18n.translate` is translated by that code whatever is stored there.
 
+Translation has persistent hourly character budgets: 75,000 per account and 250,000 per site,
+with one active provider request per account and three per site. Identical concurrent work
+shares its result. Exhausted capacity returns `429`. A provider call has a 15-second deadline;
+custom hooks must honor the supplied abort signal. Once provider work starts, its characters
+remain charged even if saving the result fails, because the provider may already have billed it.
+
 ## When the source language moves on
 
 A translation is made from the entry's own language as it stood at some moment, and writes that

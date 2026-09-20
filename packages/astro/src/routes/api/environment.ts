@@ -42,8 +42,27 @@ export function mediaStore(): R2Store | undefined {
     : undefined;
 }
 
+export interface UploadBucket {
+  put(
+    key: string,
+    value: ReadableStream | ArrayBuffer | ArrayBufferView,
+    options?: { httpMetadata?: { contentType?: string; contentDisposition?: string } },
+  ): Promise<unknown>;
+  get(key: string): Promise<{
+    arrayBuffer(): Promise<ArrayBuffer>;
+    httpMetadata?: { contentType?: string; contentDisposition?: string };
+  } | null>;
+  delete(key: string): Promise<void>;
+}
+
+export function uploadBucket(): UploadBucket | undefined {
+  return (env as { MEDIA_UPLOADS?: UploadBucket }).MEDIA_UPLOADS;
+}
+
 export const NO_BUCKET =
   'No bucket is configured: set R2_ACCOUNT_ID and R2_BUCKET in wrangler.jsonc, and R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY with `wrangler secret put`';
+export const NO_UPLOAD_BUCKET =
+  'No private upload bucket is configured: add an R2 binding named MEDIA_UPLOADS';
 
 export function db(): Db {
   return openDb('default', (env as { DB?: Parameters<typeof openDb>[1] }).DB);

@@ -579,5 +579,6 @@ SMTP_PASS (email), R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY (uploads), CLOUDFLA
 (Continue with GitHub), HANDOVER_SETTINGS_KEY (keys the owner pastes in Settings). Every one
 of them is a row in docs/deploy.md, and Settings in the admin says which are missing.
 
-The bucket needs a CORS rule and a hostname of its own before anything can be uploaded to it:
-docs/media.md. The rule names the deployed site's origin, which this command cannot know.`;
+Keep the MEDIA_UPLOADS bucket private: no r2.dev URL or custom domain. Its uploads/ objects
+expire after one day. The public media bucket needs a hostname, GET CORS for editor reads,
+and X-Content-Type-Options: nosniff on responses: docs/media.md.`;

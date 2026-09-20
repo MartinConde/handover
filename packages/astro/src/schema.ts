@@ -2,6 +2,7 @@
 export {
   account,
   activity,
+  costlyOperations,
   cronState,
   drafts,
   locks,
@@ -9,8 +10,10 @@ export {
   operations,
   pathReservations,
   rateLimit,
+  resourceLimits,
   session,
   settings,
+  uploadIntents,
   user,
   verification,
 } from '@handover/core';

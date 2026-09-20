@@ -19,7 +19,7 @@ pnpm add -D wrangler drizzle-kit drizzle-orm
 
 The address is the first owner's. Everything is named after the project — `name` in
 `package.json`, or the folder — so `my-site` gets a D1 database called `my-site` and an R2
-bucket called `my-site-media`.
+public-media bucket called `my-site-media`, plus a private staging bucket called `my-site-uploads`.
 
 Example output follows; the schema version is the one shipped by the installed package:
 
@@ -46,9 +46,11 @@ In order, it:
 3. reads the account from `wrangler whoami`. With more than one, it stops and lists them —
    set `CLOUDFLARE_ACCOUNT_ID` to the one you want and run it again, rather than have the
    database created in the wrong account
-4. looks up the database and bucket in that account, reuses an exact name/identity recorded by
-   this initialization, or creates the missing resource
-5. writes `wrangler.jsonc` with the `DB` binding and the bucket's two vars, `src/worker.ts`
+4. looks up the database and both buckets in that account, reuses exact names/identities, or
+   creates missing resources. It refuses public access on the staging bucket and adds or verifies
+   a one-day expiry rule for its `uploads/` prefix without replacing other lifecycle rules
+5. writes `wrangler.jsonc` with `DB`, the private `MEDIA_UPLOADS` binding and the public
+   bucket's two vars, `src/worker.ts`
    ([the schedule](deploy.md#the-schedule)) and `drizzle.config.ts`
 6. runs [`db generate`](cli.md#handover-db-generate) and applies the result with
    `wrangler d1 migrations apply`, once `--local` and once `--remote`
@@ -77,10 +79,10 @@ npx handover init you@example.com
 ```
 
 While work is incomplete, `.handover-init.json` records the selected account, exact D1 database,
-bucket, owner address and generated owner id. It contains no secrets and is removed only after
+buckets, owner address and generated owner id. It contains no secrets and is removed only after
 both databases have the owner. A retry therefore lists and verifies the recorded D1 database,
-checks the bucket with
-`wrangler r2 bucket info`, and refuses a different account, project name, owner address or
+checks the buckets with
+`wrangler r2 bucket info`, and verifies private access and expiry on the staging bucket, and refuses a different account, project name, owner address or
 binding instead of creating around it.
 
 Initial Drizzle output is generated under `.handover-migrations/`. Initialization verifies that
@@ -147,8 +149,8 @@ it is left out and named on stdout — move it into `src/content/schemas.ts`
 The last thing it prints is the checklist, because none of it is Cloudflare's: the
 [GitHub App](deploy.md#the-github-app) with the link to create one, the five required
 [secrets](secrets.md) and the `HANDOVER_BASE_URL` var, the optional secrets and what
-each turns on, and the bucket's [CORS rule and hostname](media.md). The origin the last two
-want is the deployed site's, which `init` cannot know. The site cannot serve `/admin` until
+each turns on, and the public bucket's [GET CORS, hostname and response headers](media.md).
+Never attach a hostname or enable r2.dev on the staging bucket. The site cannot serve `/admin` until
 the required secrets are set, and once it can, **Settings** says which of the rest are
 missing ([Settings](diagnostics.md)).
 

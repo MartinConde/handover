@@ -170,8 +170,59 @@ export const cronState = sqliteTable(
   (t) => [primaryKey({ columns: [t.siteId, t.job] })],
 );
 
+/** Persistent abuse budgets shared by every Worker isolate. */
+export const resourceLimits = sqliteTable(
+  'resource_limits',
+  {
+    siteId: text('site_id').notNull(),
+    subject: text('subject').notNull(),
+    kind: text('kind').notNull(),
+    windowAt: integer('window_at').notNull(),
+    used: integer('used').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.siteId, t.subject, t.kind] })],
+);
+
+/** Lease and replay result for one provider-paid request. */
+export const costlyOperations = sqliteTable(
+  'costly_operations',
+  {
+    siteId: text('site_id').notNull(),
+    key: text('key').notNull(),
+    userId: text('user_id').notNull(),
+    leaseToken: text('lease_token').notNull(),
+    state: text('state').$type<'active' | 'complete'>().notNull(),
+    leaseUntil: integer('lease_until'),
+    result: text('result', { mode: 'json' }),
+    expiresAt: integer('expires_at').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.siteId, t.key] }),
+    index('costly_operations_expiry').on(t.siteId, t.expiresAt),
+  ],
+);
+
+/** One authenticated declaration for one private staging write. */
+export const uploadIntents = sqliteTable(
+  'upload_intents',
+  {
+    siteId: text('site_id').notNull(),
+    key: text('key').notNull(),
+    userId: text('user_id').notNull(),
+    hash: text('hash').notNull(),
+    bytes: integer('bytes').notNull(),
+    mime: text('mime').notNull(),
+    state: text('state').$type<'pending' | 'uploading' | 'stored'>().notNull(),
+    expiresAt: integer('expires_at').notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.siteId, t.key] }),
+    index('upload_intents_expiry').on(t.siteId, t.expiresAt),
+  ],
+);
+
 /** Bumped whenever a table changes; the build refuses a stale `migrations/handover.json`. */
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 const GENERATE = 'run `npx handover db generate` and commit migrations/';
 

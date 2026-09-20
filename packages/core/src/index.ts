@@ -235,6 +235,7 @@ export {
   mediaList,
   mediaUsage,
   mediaUsesFrom,
+  mimeForMediaKey,
   namedBy,
   objectExists,
   presignUpload,
@@ -270,6 +271,16 @@ export {
 } from './operations.js';
 export { filterLive, isLive, newId, RESERVED_KEYS, regenerateIds } from './reserved.js';
 export type { Answer, MergedChange, Question, ThreeWay } from './resolve.js';
+export {
+  abandonCostlyOperation,
+  claimCostlyOperation,
+  claimResource,
+  completeCostlyOperation,
+  costlyOperationResult,
+  type ResourceClaim,
+  ResourceLimitError,
+  releaseResource,
+} from './resource-limits.js';
 export type { RichtextTier } from './richtext.js';
 export {
   RICHTEXT_CONSTRUCTS,
@@ -306,6 +317,7 @@ export {
 export {
   account,
   activity,
+  costlyOperations,
   cronState,
   drafts,
   locks,
@@ -313,10 +325,12 @@ export {
   operations,
   pathReservations,
   rateLimit,
+  resourceLimits,
   SCHEMA_VERSION,
   schemaVersionError,
   session,
   settings,
+  uploadIntents,
   user,
   verification,
 } from './tables.js';
@@ -331,3 +345,12 @@ export {
 } from './translate.js';
 export type { Labels, UiLocale } from './ui-locale.js';
 export { DEFAULT_UI_LOCALE, isUiLocale, labelIn, labelsOf, UI_LOCALES } from './ui-locale.js';
+export {
+  claimUploadIntent,
+  finishUploadIntent,
+  issueUploadIntent,
+  markUploadStored,
+  releaseUploadIntent,
+  storedUploadIntent,
+  type UploadIntent,
+} from './upload-intents.js';

@@ -106,6 +106,8 @@ export const GET: APIRoute = ({ params, request }) => {
     headers: {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': 'private, no-store',
+      'content-security-policy': "frame-ancestors 'none'",
+      'x-frame-options': 'DENY',
       vary: 'Cookie, Accept-Language',
     },
   });

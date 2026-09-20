@@ -19,10 +19,13 @@ const bindings = (
   name: string,
   account: string,
   database: string,
-) => `  // Not secrets: an account id and a bucket name. The keys that sign an upload are.
+) => `  // Not secrets: an account id and a bucket name. The public-bucket access keys are.
   "vars": { "R2_ACCOUNT_ID": "${account}", "R2_BUCKET": "${name}-media" },
   "d1_databases": [
     { "binding": "DB", "database_name": "${name}", "database_id": "${database}" }
+  ],
+  "r2_buckets": [
+    { "binding": "MEDIA_UPLOADS", "bucket_name": "${name}-uploads" }
   ]`;
 
 const bindingSnippet = (file: string, name: string, account: string, database: string) =>
@@ -34,7 +37,11 @@ R2_BUCKET = "${name}-media"
 [[d1_databases]]
 binding = "DB"
 database_name = "${name}"
-database_id = "${database}"`
+database_id = "${database}"
+
+[[r2_buckets]]
+binding = "MEDIA_UPLOADS"
+bucket_name = "${name}-uploads"`
     : bindings(name, account, database);
 
 const wranglerJsonc = (name: string, account: string, database: string) => `{
@@ -77,6 +84,7 @@ interface InitRecord {
   databaseId?: string;
   bucketName: string;
   bucketReady: boolean;
+  uploadsReady?: boolean;
   ownerEmail: string;
   ownerId: string;
 }
@@ -85,6 +93,7 @@ interface WranglerConfig {
   file: string;
   vars?: Record<string, unknown>;
   databases?: Record<string, unknown>[];
+  buckets?: Record<string, unknown>[];
 }
 
 export function init(env: Env, email: string): number {
@@ -142,6 +151,15 @@ export function init(env: Env, email: string): number {
     saveInitRecord(env, record);
     provisionBucket(env, record);
     saveInitRecord(env, record);
+    const uploads = {
+      ...record,
+      bucketName: `${name}-uploads`,
+      bucketReady: record.uploadsReady ?? false,
+    };
+    provisionBucket(env, uploads);
+    record.uploadsReady = uploads.bucketReady;
+    saveInitRecord(env, record);
+    secureUploadBucket(env, uploads.bucketName);
 
     const configFile = config?.file;
     if (!configFile) put(env, 'wrangler.jsonc', wranglerJsonc(name, account, record.databaseId));
@@ -198,6 +216,7 @@ function validateInitRecord(record: InitRecord | undefined, name: string, email:
     typeof record.accountId !== 'string' ||
     (record.databaseId !== undefined && typeof record.databaseId !== 'string') ||
     typeof record.bucketReady !== 'boolean' ||
+    (record.uploadsReady !== undefined && typeof record.uploadsReady !== 'boolean') ||
     typeof record.ownerId !== 'string' ||
     !record.ownerId
   )
@@ -328,6 +347,54 @@ function provisionBucket(env: Env, record: InitRecord): void {
   record.bucketReady = true;
 }
 
+function secureUploadBucket(env: Env, bucket: string): void {
+  const devUrl = env.capture(['wrangler', 'r2', 'bucket', 'dev-url', 'get', bucket]);
+  const domains = env.capture(['wrangler', 'r2', 'bucket', 'domain', 'list', bucket]);
+  // These Wrangler commands have no JSON mode; unfamiliar output must fail closed.
+  if (
+    !/^Public access via the r2\.dev URL is disabled\.$/m.test(devUrl) ||
+    !/^There are no custom domains connected to this bucket\.$/m.test(domains)
+  )
+    throw new Error(
+      `${bucket} must be private: disable its r2.dev URL and remove custom domains before continuing.`,
+    );
+
+  const ruleName = 'handover-expire-uploads';
+  const readRule = () => {
+    const output = env.capture(['wrangler', 'r2', 'bucket', 'lifecycle', 'list', bucket]);
+    return output
+      .split(/(?=^name:\s*)/m)
+      .find((rule) => new RegExp(`^name:\\s*${ruleName}\\s*$`, 'm').test(rule));
+  };
+  const valid = (rule: string) =>
+    /^enabled:\s*Yes\s*$/m.test(rule) &&
+    /^prefix:\s*uploads\/\s*$/m.test(rule) &&
+    /^action:\s*Expire objects after 1 days\s*$/m.test(rule);
+  const existing = readRule();
+  if (existing && valid(existing)) return;
+  if (existing)
+    throw new Error(
+      `${bucket}: ${ruleName} must enable expiry after 1 day for uploads/. Its existing rule was left alone.`,
+    );
+  env.run([
+    'wrangler',
+    'r2',
+    'bucket',
+    'lifecycle',
+    'add',
+    bucket,
+    ruleName,
+    'uploads/',
+    '--expire-days',
+    '1',
+  ]);
+  const created = readRule();
+  if (!created || !valid(created))
+    throw new Error(
+      `${bucket}: Wrangler could not verify ${ruleName}; initialization did not continue.`,
+    );
+}
+
 function wranglerConfig(env: Env): WranglerConfig | undefined {
   const files = CONFIGS.filter((file) => existsSync(join(env.cwd, file)));
   if (files.length > 1)
@@ -341,6 +408,7 @@ function wranglerConfig(env: Env): WranglerConfig | undefined {
   let parsed: {
     vars?: unknown;
     d1_databases?: unknown;
+    r2_buckets?: unknown;
   };
   try {
     parsed = JSON.parse(stripTrailingCommas(stripJsonComments(text))) as typeof parsed;
@@ -360,6 +428,11 @@ function wranglerConfig(env: Env): WranglerConfig | undefined {
       : parsed.d1_databases === undefined
         ? undefined
         : [{ __invalid: parsed.d1_databases }],
+    buckets: Array.isArray(parsed.r2_buckets)
+      ? (parsed.r2_buckets as Record<string, unknown>[])
+      : parsed.r2_buckets === undefined
+        ? undefined
+        : [{ __invalid: parsed.r2_buckets }],
   };
 }
 
@@ -419,6 +492,7 @@ function stripTrailingCommas(text: string): string {
 function tomlWranglerConfig(file: string, text: string): WranglerConfig {
   const vars: Record<string, unknown> = {};
   const databases: Record<string, unknown>[] = [];
+  const buckets: Record<string, unknown>[] = [];
   let section = '';
   let database: Record<string, unknown> | undefined;
   for (const raw of text.split('\n')) {
@@ -427,8 +501,8 @@ function tomlWranglerConfig(file: string, text: string): WranglerConfig {
     const array = /^\[\[([^\]]+)\]\]$/.exec(line)?.[1];
     if (array) {
       section = array;
-      database = array === 'd1_databases' ? {} : undefined;
-      if (database) databases.push(database);
+      database = ['d1_databases', 'r2_buckets'].includes(array) ? {} : undefined;
+      if (database) (array === 'd1_databases' ? databases : buckets).push(database);
       continue;
     }
     if (table) {
@@ -439,12 +513,14 @@ function tomlWranglerConfig(file: string, text: string): WranglerConfig {
     const pair = /^([A-Za-z0-9_]+)\s*=\s*(["'])(.*?)\2$/.exec(line);
     if (!pair) continue;
     if (section === 'vars') vars[pair[1] as string] = pair[3];
-    if (section === 'd1_databases' && database) database[pair[1] as string] = pair[3];
+    if (['d1_databases', 'r2_buckets'].includes(section) && database)
+      database[pair[1] as string] = pair[3];
   }
   return {
     file,
     vars: Object.keys(vars).length ? vars : undefined,
     databases: databases.length ? databases : undefined,
+    buckets: buckets.length ? buckets : undefined,
   };
 }
 
@@ -459,6 +535,15 @@ function validateWranglerConfig(
     throw new Error(`${config.file}: vars must be an object/table`);
   if (config.databases?.[0]?.__invalid !== undefined)
     throw new Error(`${config.file}: d1_databases must be an array of bindings`);
+  if (config.buckets?.[0]?.__invalid !== undefined)
+    throw new Error(`${config.file}: r2_buckets must be an array of bindings`);
+  const uploads = (config.buckets ?? []).filter((item) => item.binding === 'MEDIA_UPLOADS');
+  if (uploads.length > 1)
+    throw new Error(`${config.file}: more than one R2 binding is named MEDIA_UPLOADS`);
+  if (uploads[0]?.bucket_name !== undefined && uploads[0].bucket_name !== `${name}-uploads`)
+    throw new Error(
+      `${config.file}: MEDIA_UPLOADS must point to ${name}-uploads. Nothing changed.`,
+    );
   const expected = { R2_ACCOUNT_ID: account, R2_BUCKET: bucket };
   for (const [key, value] of Object.entries(expected)) {
     const found = config.vars?.[key];
@@ -483,6 +568,7 @@ function validateWranglerConfig(
   return [
     ...(config.vars?.R2_ACCOUNT_ID === account ? [] : ['R2_ACCOUNT_ID']),
     ...(config.vars?.R2_BUCKET === bucket ? [] : ['R2_BUCKET']),
+    ...(uploads[0]?.bucket_name === `${name}-uploads` ? [] : ['MEDIA_UPLOADS']),
     ...(database?.database_name === name && database.database_id === databaseId ? [] : ['DB']),
   ];
 }

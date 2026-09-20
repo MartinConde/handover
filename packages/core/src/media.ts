@@ -15,6 +15,11 @@ export interface R2Store {
   secretAccessKey: string;
 }
 
+export interface UploadStaging {
+  read(key: string): Promise<{ data: Uint8Array; mime: string; disposition?: string } | undefined>;
+  delete(key: string): Promise<void>;
+}
+
 /** What the browser declares, and what the object is then held to. */
 export interface Upload {
   /** sha-256 hex of the bytes; names the object, so it is also the row's id. */
@@ -255,15 +260,16 @@ const signer = (store: R2Store) =>
     region: 'auto',
   });
 
-/** Neither size nor type can be signed on R2, so `confirmUpload` is the enforcement. */
-export async function presignUpload(store: R2Store, key: string): Promise<string> {
+/** R2 signs the declared type; finalization still verifies the size, hash and real bytes. */
+export async function presignUpload(store: R2Store, key: string, mime: string): Promise<string> {
   if (!/^uploads\/[0-9a-f-]{36}\/(?:media|files)\/[0-9a-f]{64}\.[a-z]+$/.test(key))
     throw new UploadRefusedError('Only temporary upload keys may be signed');
   const url = new URL(objectUrl(store, key));
   url.searchParams.set('X-Amz-Expires', String(TTL));
   const signed = await signer(store).sign(url.toString(), {
     method: 'PUT',
-    aws: { signQuery: true },
+    headers: { 'content-type': mime },
+    aws: { signQuery: true, allHeaders: true },
   });
   return signed.url;
 }
@@ -324,9 +330,9 @@ export async function confirmUpload(
   db: Db,
   store: R2Store,
   upload: Upload,
-  deps: { fetch?: typeof globalThis.fetch; now?: number } = {},
+  deps: { fetch?: typeof globalThis.fetch; now?: number; staging?: UploadStaging } = {},
 ): Promise<{ media: MediaRow; created: boolean }> {
-  const { fetch = globalThis.fetch, now = Date.now() } = deps;
+  const { fetch = globalThis.fetch, now = Date.now(), staging } = deps;
   const key = mediaKey(upload);
   const known = await findMedia(siteId, db, upload.hash);
   if (known?.state === 'active') return { media: known, created: false };
@@ -339,9 +345,12 @@ export async function confirmUpload(
     throw new UploadRefusedError('Confirm the temporary key returned by the upload request');
   let verified: Awaited<ReturnType<typeof verifyObject>>;
   try {
-    verified = await verifyObject(store, upload.key, upload, fetch);
+    verified = staging
+      ? await verifyStaged(await staging.read(upload.key), upload)
+      : await verifyObject(store, upload.key, upload, fetch);
   } catch (error) {
-    if (error instanceof UploadRefusedError) await object(store, upload.key, 'DELETE', fetch);
+    if (error instanceof UploadRefusedError)
+      await (staging ? staging.delete(upload.key) : object(store, upload.key, 'DELETE', fetch));
     throw error;
   }
   // The verified buffer is written: copying the temporary key would race another PUT.
@@ -384,7 +393,9 @@ export async function confirmUpload(
   if (!stored) throw new Error(`the media row for ${upload.hash} was not written`);
   if (stored.state !== 'active') throw new MediaUnavailableError();
   // Staging outlives registration so a failed database write can retry.
-  await object(store, upload.key, 'DELETE', fetch).catch(() => undefined);
+  await (staging ? staging.delete(upload.key) : object(store, upload.key, 'DELETE', fetch)).catch(
+    () => undefined,
+  );
   return { media: stored, created: Boolean(written ?? restored) };
 }
 
@@ -442,6 +453,9 @@ const OURS = /^(?:media|files)\/([0-9a-f]{64})\.([a-z0-9]+)$/;
 const MIMES: Record<string, string> = Object.fromEntries(
   Object.entries(EXTENSIONS).map(([mime, ext]) => [ext, mime]),
 );
+
+export const mimeForMediaKey = (key: string): string | undefined =>
+  MIMES[key.match(/\.([a-z0-9]+)$/)?.[1] ?? ''];
 
 const listPage = async (store: R2Store, fetch: typeof globalThis.fetch, token?: string) => {
   const url = new URL(`https://${store.accountId}.r2.cloudflarestorage.com/${store.bucket}`);
@@ -558,8 +572,6 @@ async function verifyObject(
   const response = await object(store, key, 'GET', fetch);
   if (response.status === 404) throw new UploadRefusedError('The upload never reached the bucket');
   if (!response.ok) throw new Error(`R2 GET ${key} failed: ${response.status}`);
-  if (response.headers.get('content-type') !== upload.mime)
-    throw new UploadRefusedError('The uploaded content type differs from its declaration');
   const reader = response.body?.getReader();
   if (!reader) throw new UploadRefusedError('The upload is empty');
   const data = new Uint8Array(upload.bytes);
@@ -578,16 +590,36 @@ async function verifyObject(
   }
   if (size !== data.length)
     throw new UploadRefusedError('The uploaded size differs from its declaration');
+  return verifyStaged(
+    {
+      data,
+      mime: response.headers.get('content-type') ?? '',
+      disposition: response.headers.get('content-disposition') ?? undefined,
+    },
+    upload,
+    key,
+  );
+}
+
+async function verifyStaged(
+  staged: { data: Uint8Array; mime: string; disposition?: string } | undefined,
+  upload: Upload,
+  key = upload.key ?? '',
+) {
+  mediaKey(upload);
+  if (!staged) throw new UploadRefusedError('The upload never reached the bucket');
+  if (staged.mime !== upload.mime)
+    throw new UploadRefusedError('The uploaded content type differs from its declaration');
+  const data = staged.data;
+  if (data.byteLength !== upload.bytes)
+    throw new UploadRefusedError('The uploaded size differs from its declaration');
   const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', data)), (n) =>
     n.toString(16).padStart(2, '0'),
   ).join('');
   if (hash !== upload.hash)
     throw new UploadRefusedError('The uploaded SHA-256 does not match its key');
   if (upload.mime === 'application/pdf') {
-    if (
-      key.startsWith('files/') &&
-      !response.headers.get('content-disposition')?.startsWith('attachment')
-    )
+    if (key.startsWith('files/') && !staged.disposition?.startsWith('attachment'))
       throw new UploadRefusedError('A public PDF must be stored as a download');
     if (!new TextDecoder().decode(data.slice(0, 5)).startsWith('%PDF-'))
       throw new UploadRefusedError('The uploaded bytes are not a PDF');

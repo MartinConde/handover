@@ -85,7 +85,7 @@ const mediaItem = (value: unknown): value is MediaItem => {
   );
 };
 
-/** Bytes go to the bucket, never the Worker; the confirm afterwards turns the object into a row. */
+/** Bytes pass through the authenticated upload route into private staging, then confirmation publishes them. */
 export async function uploadBlob(
   blob: Blob,
   about: { filename?: string; width?: number; height?: number; derivedFrom?: string },

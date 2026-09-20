@@ -36,23 +36,39 @@ export const onRequest: MiddlewareHandler = async ({ request, url, locals }, nex
     return new Response(previewLinks(await res.text()), { status: res.status, headers });
   }
   if (!path.startsWith('/admin/api/')) return next();
-  // The login's own endpoints are the way in, so the session assert cannot sit in front of them.
-  if (path.startsWith(`${AUTH_BASE_PATH}/`)) return next();
-
-  const session = await createAuth(url, locals.cfContext).api.getSession({
-    headers: request.headers,
-  });
-  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  const user = session.user as typeof session.user & { uiLocale: UiLocale | null };
-  locals.handover = {
-    user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      uiLocale: user.uiLocale,
-    },
-    role: roleOf('default', user),
-    sessionId: session.session.id,
+  const privateResponse = async (work: () => Promise<Response>) => {
+    let response: Response;
+    try {
+      response = await work();
+    } catch {
+      response = Response.json({ error: 'Internal server error' }, { status: 500 });
+    }
+    const headers = new Headers(response.headers);
+    headers.set('cache-control', 'private, no-store');
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    });
   };
-  return next();
+  return privateResponse(async () => {
+    // Authentication endpoints are the way in, so session checks cannot precede them.
+    if (path.startsWith(`${AUTH_BASE_PATH}/`)) return next();
+    const session = await createAuth(url, locals.cfContext).api.getSession({
+      headers: request.headers,
+    });
+    if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    const user = session.user as typeof session.user & { uiLocale: UiLocale | null };
+    locals.handover = {
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        uiLocale: user.uiLocale,
+      },
+      role: roleOf('default', user),
+      sessionId: session.session.id,
+    };
+    return next();
+  });
 };

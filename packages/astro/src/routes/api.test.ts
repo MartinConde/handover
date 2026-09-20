@@ -1,6 +1,7 @@
 import { texts } from 'virtual:handover/index';
 import {
   applyDrift,
+  claimResource,
   createGitClient,
   DraftRevisionError,
   type EmailSender,
@@ -11,6 +12,9 @@ import {
   type PublishFile,
   parseEntry,
   RepoUnreachableError,
+  ResourceLimitError,
+  releaseResource,
+  releaseUploadIntent,
   stringifyEntry,
 } from '@handover/core';
 import type { APIContext } from 'astro';
@@ -366,6 +370,8 @@ let hiddenLong: { path: string; since: string }[] = [];
 let siteChecks: { ignore?: string[] } | undefined;
 // Whether the site has been told where its bucket is: all four values, or none of them.
 let bucketed = true;
+let uploadIntentAvailable = true;
+const privateUploads: { key: string; bytes: number; type?: string }[] = [];
 // The R2 and D1 boundaries as the checks meet them: both run for real in core's own tests.
 let storeRefusal: Error | undefined;
 let dbRefusal: Error | undefined;
@@ -534,6 +540,27 @@ vi.mock('cloudflare:workers', () => ({
     get R2_SECRET_ACCESS_KEY() {
       return bucketed ? 'secret' : undefined;
     },
+    get MEDIA_UPLOADS() {
+      return bucketed
+        ? {
+            put: vi.fn(
+              async (
+                key: string,
+                value: ArrayBufferView,
+                options?: { httpMetadata?: { contentType?: string } },
+              ) => {
+                privateUploads.push({
+                  key,
+                  bytes: value.byteLength,
+                  type: options?.httpMetadata?.contentType,
+                });
+              },
+            ),
+            get: vi.fn(async () => null),
+            delete: vi.fn(async () => {}),
+          }
+        : undefined;
+    },
     DB: {},
   },
 }));
@@ -609,6 +636,34 @@ const dropped: string[] = [];
 let asked: unknown[] = [];
 vi.mock('@handover/core', async (original) => ({
   ...(await original<typeof import('@handover/core')>()),
+  claimResource: vi.fn(async () => ({ subject: 'u1', kind: 'test', windowAt: 0, cost: 1 })),
+  releaseResource: vi.fn(async () => {}),
+  claimCostlyOperation: async () => ({ owner: true }),
+  completeCostlyOperation: async () => {},
+  costlyOperationResult: async () => undefined,
+  abandonCostlyOperation: async () => {},
+  issueUploadIntent: async () => {},
+  claimUploadIntent: async (_site: string, _db: unknown, key: string) =>
+    uploadIntentAvailable
+      ? {
+          key,
+          userId: 'u1',
+          hash: key.match(/[0-9a-f]{64}/)?.[0] ?? HASH,
+          bytes: key.includes(HASH) ? 12_345 : 4,
+          mime: 'image/webp',
+          state: 'pending',
+        }
+      : undefined,
+  releaseUploadIntent: vi.fn(async () => {}),
+  markUploadStored: async () => {},
+  finishUploadIntent: async () => {},
+  storedUploadIntent: async (_site: string, _db: unknown, key: string) => ({
+    key,
+    hash: key.match(/[0-9a-f]{64}/)?.[0] ?? HASH,
+    bytes: key.includes(HASH) ? 12_345 : 4,
+    mime: 'image/webp',
+    state: 'stored',
+  }),
   findOperation: async () => undefined,
   recentOperations: async () => [],
   beginOperation: async (_site: string, _db: unknown, intent: Record<string, unknown>) => ({
@@ -791,6 +846,8 @@ afterEach(() => {
   cloudflareToken = 'cf-token';
   cloudflareWorker = 'acct/handover-demo';
   bucketed = true;
+  uploadIntentAvailable = true;
+  privateUploads.length = 0;
   siteChecks = undefined;
   storeRefusal = undefined;
   dbRefusal = undefined;
@@ -1092,8 +1149,8 @@ test('the database check answers with the schema version the tables are at', asy
   expect(await res.json()).toEqual({
     ok: true,
     code: 'DIAGNOSTIC_DATABASE_OK',
-    detail: "The database answered — the admin's tables are there. Schema version 10.",
-    version: 10,
+    detail: "The database answered — the admin's tables are there. Schema version 11.",
+    version: 11,
   });
 });
 
@@ -4111,7 +4168,12 @@ test('a machine is asked for the fields the translation has not got, and no othe
 
   expect(res.status).toBe(200);
   // `title` is there in German already; the hero's heading is the gap.
-  expect(translate).toHaveBeenCalledWith(['Move to the coast'], 'en', 'de');
+  expect(translate).toHaveBeenCalledWith(
+    ['Move to the coast'],
+    'en',
+    'de',
+    expect.any(AbortSignal),
+  );
   expect(saveTranslated).toHaveBeenCalledWith(
     'default',
     expect.anything(),
@@ -4171,7 +4233,7 @@ test('a named field is translated whether it is empty or not', async () => {
   const res = await POST(post('translate/pages/home/de', JSON.stringify({ paths: ['title'] })));
 
   expect(res.status).toBe(200);
-  expect(translate).toHaveBeenCalledWith(['Home'], 'en', 'de');
+  expect(translate).toHaveBeenCalledWith(['Home'], 'en', 'de', expect.any(AbortSignal));
   expect(saveTranslated).toHaveBeenCalledWith(
     'default',
     expect.anything(),
@@ -6046,15 +6108,43 @@ test('bytes the site already holds are answered from the row, with nothing signe
   });
 });
 
-test('a hash the site does not have is answered with a presigned PUT to its own key', async () => {
+test('a hash the site does not have is answered with an authenticated private upload route', async () => {
   const res = await POST(post('media', declared));
   expect(res.status).toBe(200);
   const { upload } = (await res.json()) as { upload: { key: string; url: string } };
   expect(upload.key).toMatch(new RegExp(`^uploads/[0-9a-f-]{36}/media/${HASH}\\.webp$`));
-  const url = new URL(upload.url);
-  expect(url.pathname).toBe(`/site-media/${upload.key}`);
-  expect(url.searchParams.get('X-Amz-Expires')).toBe('300');
-  expect(url.searchParams.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/);
+  expect(upload.url).toBe(`/admin/api/${upload.key}`);
+});
+
+const stagingRequest = (key: string, bytes: Uint8Array, type = 'image/webp') =>
+  ctx(
+    key,
+    new Request(`https://x/admin/api/${key}`, {
+      method: 'PUT',
+      headers: { 'content-type': type, 'content-length': String(bytes.byteLength) },
+      body: bytes,
+    }),
+  );
+
+test('private ingestion requires a persisted upload intent for the exact key', async () => {
+  uploadIntentAvailable = false;
+  const key = `uploads/12345678-1234-1234-1234-123456789abc/media/${'b'.repeat(64)}.webp`;
+  expect((await PUT(stagingRequest(key, new Uint8Array(4)))).status).toBe(404);
+  expect(privateUploads).toEqual([]);
+});
+
+test('private ingestion binds the declared MIME and actual byte count', async () => {
+  const key = `uploads/12345678-1234-1234-1234-123456789abc/media/${'b'.repeat(64)}.webp`;
+  expect((await PUT(stagingRequest(key, new Uint8Array(4), 'text/plain'))).status).toBe(415);
+  expect((await PUT(stagingRequest(key, new Uint8Array(5)))).status).toBe(422);
+  expect(privateUploads).toEqual([]);
+
+  const accepted = await PUT(stagingRequest(key, new Uint8Array(4)));
+  expect({ status: accepted.status, body: await accepted.text() }).toEqual({
+    status: 204,
+    body: '',
+  });
+  expect(privateUploads).toEqual([{ key, bytes: 4, type: 'image/webp' }]);
 });
 
 test('a type the bucket does not serve is refused rather than signed', async () => {
@@ -6066,7 +6156,8 @@ test('a type the bucket does not serve is refused rather than signed', async () 
 });
 
 test('a verified upload answers with the asset and is one line in the log', async () => {
-  const res = await PUT(put(`media/${HASH}`, declared));
+  const key = `uploads/12345678-1234-1234-1234-123456789abc/media/${HASH}.webp`;
+  const res = await PUT(put(`media/${HASH}`, JSON.stringify({ ...JSON.parse(declared), key })));
   expect(res.status).toBe(200);
   expect(await res.json()).toMatchObject({ media: { id: HASH, src: `media/${HASH}.webp` } });
   expect(confirmUpload).toHaveBeenCalledWith(
@@ -6085,7 +6176,9 @@ test('a verified upload answers with the asset and is one line in the log', asyn
       filename: 'seaview.jpg',
       width: 2400,
       height: 1350,
+      key,
     },
+    expect.objectContaining({ staging: expect.any(Object) }),
   );
   expect(logged.at(-1)).toMatchObject({
     kind: 'upload',
@@ -6108,7 +6201,8 @@ test('confirming bytes that were already there writes no second log line', async
     },
     created: false,
   }));
-  await PUT(put(`media/${HASH}`, declared));
+  const key = `uploads/12345678-1234-1234-1234-123456789abc/media/${HASH}.webp`;
+  await PUT(put(`media/${HASH}`, JSON.stringify({ ...JSON.parse(declared), key })));
   expect(logged.filter((row) => row.kind === 'upload')).toEqual([]);
 });
 
@@ -6667,12 +6761,14 @@ test('a cropped copy declares the picture it came from', async () => {
   const crop = 'b'.repeat(64);
   const parent = { hash: crop, bytes: 4, mime: 'image/webp', derivedFrom: PHOTO };
   await POST(post('media', JSON.stringify(parent)));
-  await PUT(put(`media/${crop}`, JSON.stringify(parent)));
+  const key = `uploads/12345678-1234-1234-1234-123456789abc/media/${crop}.webp`;
+  await PUT(put(`media/${crop}`, JSON.stringify({ ...parent, key })));
   expect(confirmUpload).toHaveBeenCalledWith(
     'default',
     expect.anything(),
     expect.anything(),
     expect.objectContaining({ hash: crop, derivedFrom: PHOTO }),
+    expect.objectContaining({ staging: expect.any(Object) }),
   );
 });
 
@@ -7763,4 +7859,66 @@ test('a language left out is not linted and is no destination for the links that
       fieldPath: 'cta.href',
     }),
   ]);
+});
+
+test('a failed save after translation keeps the provider charge in the budget', async () => {
+  machine();
+  vi.mocked(releaseResource).mockClear();
+  saveTranslated.mockRejectedValueOnce(new Error('revision changed after provider started'));
+  await expect(POST(post('translate/pages/home/de', ''))).rejects.toThrow('revision changed');
+  expect(releaseResource).not.toHaveBeenCalled();
+});
+
+test('a user budget refusal refunds the unused site reservation before calling a provider', async () => {
+  machine();
+  translate.mockClear();
+  vi.mocked(releaseResource).mockClear();
+  vi.mocked(claimResource)
+    .mockResolvedValueOnce({
+      subject: 'site',
+      kind: 'translation-characters',
+      windowAt: 0,
+      cost: 17,
+    })
+    .mockRejectedValueOnce(new ResourceLimitError('Account limit reached'));
+  const response = await POST(post('translate/pages/home/de', ''));
+  expect(response.status).toBe(429);
+  expect(translate).not.toHaveBeenCalled();
+  expect(releaseResource).toHaveBeenCalledExactlyOnceWith('default', expect.anything(), {
+    subject: 'site',
+    kind: 'translation-characters',
+    windowAt: 0,
+    cost: 17,
+  });
+});
+
+test('stalled ingestion stops after a minute even when stream cancellation never settles', async () => {
+  vi.useFakeTimers();
+  vi.mocked(releaseUploadIntent).mockClear();
+  const key = `uploads/12345678-1234-1234-1234-123456789abc/media/${'b'.repeat(64)}.webp`;
+  let status: number | undefined;
+  const cancel = vi.fn(() => new Promise<void>(() => {}));
+  try {
+    const request = new Request(`https://x/admin/api/${key}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'image/webp' },
+      body: new ReadableStream<Uint8Array>({ cancel }),
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+    void Promise.resolve(PUT(ctx(key, request))).then((response) => {
+      status = response.status;
+    });
+    await vi.advanceTimersByTimeAsync(60_001);
+    expect(status).toBe(408);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(releaseUploadIntent).toHaveBeenCalledExactlyOnceWith(
+      'default',
+      expect.anything(),
+      key,
+      'unknown',
+    );
+    expect(privateUploads).toEqual([]);
+  } finally {
+    vi.useRealTimers();
+  }
 });

@@ -48,13 +48,15 @@ block goes in `astro.config.mjs` and the build stops if the two disagree — the
 
 `translate` is optional and only for using something other than DeepL to
 [machine-translate](machine-translation.md#a-machines-first-draft): given the texts and the two
-language codes, hand back the same texts translated, in the same order.
+language codes, hand back the same texts translated, in the same order. The optional fourth
+argument is an `AbortSignal`; pass it to the provider request and stop when it aborts so the
+15-second deadline also stops billable work.
 
 ```ts
 i18n: {
   locales: ['en', 'de'],
   defaultLocale: 'en',
-  translate: async (texts, from, to) => myProvider.translate(texts, { from, to }),
+  translate: async (texts, from, to, signal) => myProvider.translate(texts, { from, to, signal }),
 }
 ```
 

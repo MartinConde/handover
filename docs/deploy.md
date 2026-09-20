@@ -2,14 +2,14 @@
 
 The site is one Cloudflare Worker: static pages as assets, `/admin` and `/admin/api` as
 SSR routes, and `/_preview` where [preview](preview.md) is turned on. Handover needs one
-binding — a D1 database for unpublished edits — five required [secrets](secrets.md), and one more
-per optional feature.
+D1 database for unpublished edits, five required [secrets](secrets.md), and extra setup for
+optional features. Uploads require a private R2 staging binding named `MEDIA_UPLOADS`.
 
 ## wrangler.jsonc
 
 [`handover init`](init.md) writes this file and `src/worker.ts` below. Where a
-config file already exists it is left alone, and the `d1_databases` binding and the bucket's
-`vars` are printed to paste in.
+config file already exists it is left alone; `DB`, `MEDIA_UPLOADS` and the public bucket's
+`vars` are printed to merge in.
 
 ```jsonc
 {
@@ -25,6 +25,9 @@ config file already exists it is left alone, and the `d1_databases` binding and 
       "database_name": "your-site",
       "database_id": "the id wrangler prints when you create it"
     }
+  ],
+  "r2_buckets": [
+    { "binding": "MEDIA_UPLOADS", "bucket_name": "your-site-uploads" }
   ]
 }
 ```
@@ -39,6 +42,11 @@ import { scheduled } from 'astro-handover/cron';
 
 export default { ...handler, scheduled };
 ```
+
+Create the private bucket and its independent expiry rule before deploying uploads; keep
+r2.dev disabled and attach no custom domain. [Media](media.md) covers the commands and
+the migration from older public staging. The public bucket access keys stay scoped to
+that public bucket; staging uses the Worker binding.
 
 ## The schedule
 
@@ -109,6 +117,9 @@ the deploy command below.
 The interface-preference schema adds nullable `user.ui_locale`. Apply its additive migration to
 local and remote D1 before deploying the package version that selects this column. It has no
 default and does not rewrite existing users.
+
+Resource limits and upload/translation operation records add tables without rewriting existing
+content. Generate and apply their migration before the new routes start accepting work.
 
 For an upgrade, keep this order: install the new package, run and commit `handover db generate`,
 apply the new migration, build, then deploy. Test an archive installation when validating an

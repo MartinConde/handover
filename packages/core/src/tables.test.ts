@@ -39,6 +39,7 @@ test('the migration creates every table and index the docs specify', async () =>
   expect(await names('table')).toEqual([
     'account',
     'activity',
+    'costly_operations',
     'cron_state',
     'drafts',
     'locks',
@@ -46,8 +47,10 @@ test('the migration creates every table and index the docs specify', async () =>
     'operations',
     'path_reservations',
     'rate_limit',
+    'resource_limits',
     'session',
     'settings',
+    'upload_intents',
     'user',
     'verification',
   ]);
@@ -58,6 +61,8 @@ test('the migration creates every table and index the docs specify', async () =>
       'operations_site_commit',
       'operations_site_created',
       'path_reservations_site_operation',
+      'costly_operations_expiry',
+      'upload_intents_expiry',
     ]),
   );
 });
