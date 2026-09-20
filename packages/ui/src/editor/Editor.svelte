@@ -1113,12 +1113,14 @@ function drawn(prefix: string, path: string | undefined) {
   }
   return null;
 }
-function goTo(path: string | undefined) {
+async function goTo(path: string | undefined) {
   const field = drawn('f', path);
   // A field on the other tab is not on screen: go to that tab, then look for it once only.
   if (!field && path && seoField && path.split('.')[0] === seoAt) {
-    navigate(`/admin/c/${collection}/${slug}/seo${queueTail}`);
-    void tick().then(() => land(drawn('f', path)));
+    // As in `jumpTo`: the shell redraws the section from the address, so the move has to land first.
+    if (!(await navigate(`/admin/c/${collection}/${slug}/seo${queueTail}`))) return;
+    await tick();
+    land(drawn('f', path));
     return;
   }
   land(field);
@@ -1151,7 +1153,9 @@ async function jumpTo(path: string): Promise<boolean> {
   if (!at) return false;
   const wanted = seoField && at[0] === seoAt ? 'seo' : '';
   if (section !== wanted) {
-    navigate(`/admin/c/${collection}/${slug}${wanted ? `/${wanted}` : ''}${queueTail}`);
+    // The shell redraws the section from the address, so the move has to land before the look-up.
+    if (!(await navigate(`/admin/c/${collection}/${slug}${wanted ? `/${wanted}` : ''}${queueTail}`)))
+      return false;
     await tick();
   }
   // On a narrow screen the two columns are tabs, and this one is the tab being worked in.

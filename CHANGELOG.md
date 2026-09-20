@@ -8,6 +8,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   language still owes — empty ones and those the source has changed — opening folded blocks and
   the SEO tab on the way, wrapping after the last and saying *Nothing left to do* only when there
   is none. Core exports `answeredWork(source, target, locale)` beside `answeredCount`.
+- A jump to a field on the other tab lands on it. **Next to do** crosses between Content and SEO
+  in one press, so a run whose remaining work spans both tabs keeps its place instead of cycling
+  through the SEO fields, and the problem count in the left column focuses an SEO field it is
+  counting. Both waited for the address to be taken up rather than for the section to be redrawn.
 - **New entry** asks which language to write the entry in on a site with two or more languages,
   starting on the language the list is filtered to and otherwise on the site's default. The entry
   is created in that language and records it as its `_source`, templates included. `POST

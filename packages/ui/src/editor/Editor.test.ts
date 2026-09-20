@@ -5174,6 +5174,7 @@ test('a folded block is opened so the run lands on the input itself', async () =
   vi.unstubAllGlobals();
 });
 
+// The section is the shell's to redraw, so the focus that lands there is proven in `App.test.ts`.
 test('an SEO text takes the run to the SEO tab without dropping the queue', async () => {
   queueList();
   at('/admin/c/listings/structured?queue=de&owed=missing');

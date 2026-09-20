@@ -1224,6 +1224,73 @@ test('Next stays on the entry while its typing cannot be saved', async () => {
   );
 });
 
+// M13b's W5: a run whose remaining work spans both tabs, walked through the real shell so the
+// section the address names is the section drawn.
+test('the to-do run crosses between the Content and SEO tabs without losing its place', async () => {
+  const opened = sixLanguages('structured');
+  const german = opened.entry.translations.de as Record<string, unknown>;
+  german.title = '';
+  german.seo = { image: (german.seo as Record<string, unknown>).image };
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
+      if (url === '/admin/api/drafts') return Response.json({ entries: [] });
+      if (url === '/admin/api/build') return Response.json({});
+      if (url.startsWith('/admin/api/locks/'))
+        return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
+      if (url.startsWith('/admin/api/source/')) return Response.json({ changed: {} });
+      if (url === '/admin/api/entries/listings')
+        return Response.json({ entries: sixLanguageRows(), locales: SIX });
+      if (url === '/admin/api/entries/listings/structured') return Response.json(opened.entry);
+      return Response.json({});
+    }),
+  );
+  history.replaceState({}, '', '/admin/c/listings/structured?queue=de&owed=missing');
+  const root = show(session(), '/admin/c/listings/structured');
+  await settleAll();
+  const press = async () => {
+    root.querySelector<HTMLButtonElement>('.pane-head .btn-todo')?.click();
+    await settleAll();
+  };
+
+  await press();
+  expect(document.activeElement?.id).toBe('t-title');
+  await press();
+  expect(document.activeElement?.id).toBe('t-seo.title');
+  await press();
+  expect(document.activeElement?.id).toBe('t-seo.description');
+  await press();
+  expect(document.activeElement?.id).toBe('t-title');
+});
+
+// The source column's own jump to the other tab, which the count button makes.
+test('the problem count crosses to the SEO tab and lands on the field it is counting', async () => {
+  const opened = sixLanguages('structured');
+  opened.entry.problems = [{ path: 'seo.title', message: 'Required' }];
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
+      if (url === '/admin/api/drafts') return Response.json({ entries: [] });
+      if (url === '/admin/api/build') return Response.json({});
+      if (url.startsWith('/admin/api/locks/'))
+        return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
+      if (url.startsWith('/admin/api/source/')) return Response.json({ changed: {} });
+      if (url === '/admin/api/entries/listings/structured') return Response.json(opened.entry);
+      return Response.json({});
+    }),
+  );
+  const root = show(session(), '/admin/c/listings/structured');
+  await settleAll();
+
+  root.querySelector<HTMLButtonElement>('.problems')?.click();
+  await settleAll();
+
+  expect(location.pathname).toBe('/admin/c/listings/structured/seo');
+  expect(document.activeElement?.id).toBe('f-seo.title');
+});
+
 const settle = async () => {
   await new Promise((r) => setTimeout(r, 0));
   flushSync();
