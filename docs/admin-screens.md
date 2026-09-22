@@ -34,6 +34,10 @@ Without it pnpm installs a peer of that message component and pulls in about 600
 translation compiler your site never runs. It is a blunt setting — peer auto-install is off
 for every dependency you have — so anything that was relying on it has to be listed by hand.
 
+Once it is set, every install that resolves — a `pnpm add`, or anything that is not
+`--frozen-lockfile` — prints `✕ missing peer @inlang/paraglide-js@">=2.11.0 <3"`. That peer is
+the compiler your site never runs, so the line is expected.
+
 ## Declare it
 
 ```ts
@@ -67,13 +71,16 @@ type Answer =
   | { configured: true; error: string }
   | { configured: true; page: unknown };
 
+// svelte-ignore state_referenced_locally -- the admin's fetch never changes; asked once, on mount
 const answer = request('/admin/api/openpanel').then((r) => r.json() as Promise<Answer>);
 
 // The screen brings its own strings: the admin translates its shell, not a site's pages.
-const t = {
-  en: { title: 'Analytics', off: 'Not connected.', on: 'The last ten events:' },
-  de: { title: 'Statistik', off: 'Nicht verbunden.', on: 'Die letzten zehn Ereignisse:' },
-}[uiLocale];
+const t = $derived(
+  {
+    en: { title: 'Analytics', off: 'Not connected.', on: 'The last ten events:' },
+    de: { title: 'Statistik', off: 'Nicht verbunden.', on: 'Die letzten zehn Ereignisse:' },
+  }[uiLocale],
+);
 </script>
 
 <h1>{t.title}</h1>

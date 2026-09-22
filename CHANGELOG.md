@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The admin screens example reads the interface language reactively, so a site that copies it
+  compiles without Svelte's `state_referenced_locally` warning, and the page now says the
+  `✕ missing peer @inlang/paraglide-js` that `autoInstallPeers: false` prints is expected.
+  See [Admin screens](docs/admin-screens.md).
+
 - A site's own endpoint can type the session: the integration writes an `App.Locals`
   declaration into `.astro/`, so `locals.handover` is known under `src/pages/admin/api/`.
   `Session` is exported from `astro-handover` beside it.
