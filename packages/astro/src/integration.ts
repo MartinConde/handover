@@ -415,6 +415,10 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
         const contentDir = fileURLToPath(new URL('src/content/', config.root));
         updateConfig({
           vite: {
+            // Installed from a registry the package sits in node_modules, where Vite's dev
+            // optimiser stops looking for dependencies, and `@handover/core`'s CommonJS
+            // transitives reach workerd raw: every route answers `module is not defined`.
+            ssr: { optimizeDeps: { include: ['astro-handover > @handover/core'] } },
             plugins: [
               {
                 name: 'handover-config',

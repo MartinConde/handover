@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `astro dev` works in a site that installs the package rather than linking it. Every route
+  answered `500 module is not defined`, because Vite's dev optimiser does not look for
+  dependencies inside `node_modules` and `@handover/core`'s CommonJS transitives reached the
+  Workers runtime untouched; the integration now asks Vite to pre-bundle them.
 - `@handover/ui` ships as a package and `astro-handover` depends on it. The archive carries the
   admin SPA's Svelte source and its compiled interface messages, so a site will be able to build
   the SPA again with its own admin screens compiled in. Installing from archives now packs and

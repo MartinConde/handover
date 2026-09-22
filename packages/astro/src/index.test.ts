@@ -317,6 +317,15 @@ test('registers the password-gate middleware before the routes', () => {
   expect(String(addMiddleware.mock.calls[0]?.[0].entrypoint)).toMatch(/\/middleware\.js$/);
 });
 
+// Installed from a registry the package is in node_modules, where the dev optimiser stops
+// looking: without this entry every route answers `module is not defined`.
+test('asks Vite to pre-bundle core for the SSR environment', () => {
+  const { updateConfig } = runSetup({ name: 'fake-adapter', hooks: {} });
+  expect(updateConfig.mock.calls[0]?.[0].vite.ssr).toEqual({
+    optimizeDeps: { include: ['astro-handover > @handover/core'] },
+  });
+});
+
 const adapter = { name: 'fake-adapter', hooks: {} };
 const drift = (cms: unknown, i18n?: unknown) =>
   runSetup(adapter, new URL('file:///site/'), cms as Parameters<typeof handover>[0], { i18n });
