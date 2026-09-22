@@ -5,5 +5,5 @@
     "types": ["svelte", "vite/client"],
     "allowJs": true
   },
-  "include": ["dev/**/*.ts", "src/**/*.ts", "src/**/*.svelte", "vite.config.ts"]
+  "include": ["build.ts", "dev/**/*.ts", "src/**/*.ts", "src/**/*.svelte", "vite.config.ts"]
 }

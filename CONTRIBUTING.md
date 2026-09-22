@@ -131,6 +131,13 @@ not create or apply a consumer site's SQL migrations. After installing a Handove
 tables changed, consumers run `npx handover db generate` in their site and commit the resulting
 `migrations/`; deployment applies those migrations separately.
 
+### The UI build options
+
+`packages/ui/build.ts` exports `uiBuildConfig({ outDir, screens })`, the whole Vite build of the
+admin SPA. `vite.config.ts` calls it with `packages/astro/dist/ui` and adds only the test-mode
+settings, so the shipped bundle and a site-local rebuild run the identical build. `screens` is the
+source of the `virtual:handover/screens` module; without it the module is `export default {}`.
+
 ### UI build cost
 
 The UI has separate `admin` and `canvas` entries, lazy editor and rich-text code, and an Astro
