@@ -62,14 +62,36 @@ import type { ScreenProps } from 'astro-handover/screen';
 
 let { session, request, uiLocale }: ScreenProps = $props();
 
-const visitors = request('/admin/api/analytics').then((r) => r.json());
+type Answer =
+  | { configured: false }
+  | { configured: true; error: string }
+  | { configured: true; page: unknown };
+
+const answer = request('/admin/api/openpanel').then((r) => r.json() as Promise<Answer>);
+
+// The screen brings its own strings: the admin translates its shell, not a site's pages.
+const t = {
+  en: { title: 'Analytics', off: 'Not connected.', on: 'The last ten events:' },
+  de: { title: 'Statistik', off: 'Nicht verbunden.', on: 'Die letzten zehn Ereignisse:' },
+}[uiLocale];
 </script>
 
-<h1>Analytics</h1>
-{#await visitors then data}
-  <p>{data.visitors} visitors</p>
+<h1>{t.title}</h1>
+<p>Signed in as {session.user.name}.</p>
+
+{#await answer then data}
+  {#if !data.configured}
+    <p>{t.off}</p>
+  {:else if 'error' in data}
+    <p>{data.error}</p>
+  {:else}
+    <p>{t.on}</p>
+    <pre>{JSON.stringify(data.page, null, 2)}</pre>
+  {/if}
 {/await}
 ```
+
+The demo's copy of this file says more in each language and scopes a panel in a `<style>` block.
 
 Four props, and nothing else:
 
@@ -89,10 +111,45 @@ left; it gets no other context from the shell.
 Put the endpoint it reads in your own site, at `src/pages/admin/api/<name>.ts`. Everything
 under `/admin/api/` is behind the admin's session: your endpoint answers `401` without one,
 and `locals.handover` holds the signed-in user and their role, the same as the admin's own
-endpoints see them.
+endpoints see them. It is typed for you — the integration writes the declaration into `.astro/`.
 
 A screen is browser code, so anything it must not hold — an API key, a provider token — is
 read in that endpoint and never sent to it ([Secrets](secrets.md)).
+
+```ts
+// src/pages/admin/api/openpanel.ts
+import { env } from 'cloudflare:workers';
+import type { APIRoute } from 'astro';
+
+export const prerender = false;
+
+export const GET: APIRoute = async ({ locals }) => {
+  if (locals.handover?.role !== 'owner') {
+    return Response.json({ error: 'Owners only' }, { status: 403 });
+  }
+
+  const { OPENPANEL_CLIENT_ID: clientId, OPENPANEL_SECRET: secret } = env;
+  if (!clientId || !secret) return Response.json({ configured: false });
+
+  const answer = await fetch('https://api.openpanel.dev/export/events?limit=10', {
+    headers: { 'openpanel-client-id': clientId, 'openpanel-client-secret': secret },
+  });
+  if (!answer.ok) {
+    return Response.json({ configured: true, error: `OpenPanel answered ${answer.status}` });
+  }
+  return Response.json({ configured: true, page: await answer.json() });
+};
+```
+
+Secrets reach a Worker through `cloudflare:workers`. If your site does not generate Worker types
+with `wrangler types`, declare the module once, anywhere under `src/`:
+
+```ts
+// src/env.d.ts
+declare module 'cloudflare:workers' {
+  export const env: Record<string, string | undefined>;
+}
+```
 
 ## Who sees it
 

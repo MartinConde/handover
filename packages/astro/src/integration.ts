@@ -403,7 +403,13 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
   return {
     name: 'astro-handover',
     hooks: {
-      'astro:config:done': async ({ config }) => {
+      'astro:config:done': async ({ config, injectTypes }) => {
+        // A site's own endpoint under /admin/api/ reads the session the middleware set.
+        injectTypes({
+          filename: 'locals.d.ts',
+          content:
+            "declare namespace App {\n  interface Locals {\n    handover?: import('astro-handover').Session;\n  }\n}\n",
+        });
         root = config.root;
         clientDir = config.build.client;
         // A sitemap of URLs the asset server redirects is one more hop per page.

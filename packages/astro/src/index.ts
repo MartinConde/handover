@@ -22,6 +22,7 @@ export {
   menusAt,
   staticSource,
 } from '@handover/core';
+export type { Session } from './auth.js';
 export type {
   CanvasDocumentIdentity,
   EditAttributes,

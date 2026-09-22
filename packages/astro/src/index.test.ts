@@ -872,6 +872,7 @@ async function runBuild(astro: Record<string, unknown> = {}) {
       build: { client, format: 'directory' },
       ...astro,
     },
+    injectTypes: vi.fn(),
   } as unknown as Done);
   const info = vi.fn();
   await (hooks['astro:build:done'] as (o: BuildDone) => Promise<void>)({
@@ -1147,10 +1148,25 @@ test('the demo schema produces a full descriptor tree', () => {
   expect(form).toMatchSnapshot();
 });
 
+// A site's own endpoint under /admin/api/ has nothing else to read the session's type from.
+test('the session type is written into the site', () => {
+  const injectTypes = vi.fn();
+  const hooks = handover({ collections: {}, i18n: EN }).hooks;
+  (hooks['astro:config:done'] as (o: unknown) => void)({
+    config: { root: fixture, build: { client: fixture } },
+    injectTypes,
+  });
+  expect(injectTypes).toHaveBeenCalledWith({
+    filename: 'locals.d.ts',
+    content: expect.stringContaining("handover?: import('astro-handover').Session"),
+  });
+});
+
 async function runBuildStart(root: URL) {
   const hooks = handover({ collections: {}, i18n: EN }).hooks;
   (hooks['astro:config:done'] as (o: unknown) => void)({
     config: { root, build: { client: new URL('dist/client/', root) } },
+    injectTypes: vi.fn(),
   });
   await (hooks['astro:build:start'] as (o: unknown) => Promise<void>)({});
 }

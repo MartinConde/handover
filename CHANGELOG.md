@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A site's own endpoint can type the session: the integration writes an `App.Locals`
+  declaration into `.astro/`, so `locals.handover` is known under `src/pages/admin/api/`.
+  `Session` is exported from `astro-handover` beside it.
+
 - A site's admin screens are compiled into the admin. `astro build` rebuilds the admin SPA inside
   the site before the site's own build, with the components `admin.screens` names compiled in, and
   serves that bundle from `/admin/x/<key>`; `astro dev` rebuilds it whenever a screen is saved. A
