@@ -4,6 +4,12 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `cms.config.ts` takes an `admin.screens` block: a site names pages of its own by key, Svelte
+  component path, label and the roles that see them. The build refuses a key that is not an
+  address segment, a label in a language the admin does not have, a role that is not `owner` or
+  `editor`, and a component file that is not there. `GET /admin/api/ping` answers with the list,
+  empty for a site that declares none. The admin does not serve the screens yet.
+
 - `astro dev` works in a site that installs the package rather than linking it. Every route
   answered `500 module is not defined`, because Vite's dev optimiser does not look for
   dependencies inside `node_modules` and `@handover/core`'s CommonJS transitives reached the

@@ -49,6 +49,13 @@ saved value from the next `GET /admin/api/ping`, where `user.uiLocale` is `null`
 chooses one. Unsupported values answer `400` with code `VALIDATION_ERROR`. Omitting `uiLocale`
 leaves the stored preference unchanged.
 
+`GET /admin/api/ping` is what the admin boots from: who is signed in, the collection keys and
+their names, the media base, the image presets the focal picker offers, whether this build has
+a preview route, the site's address, and `screens`. That last one is the site's own admin
+screens as `[{ "key", "label", "roles" }]` in the order `cms.config.ts` declares them — `[]`
+for a site that declares none, and `roles` absent where the screen is open to both roles
+([Configuration](configuration.md#admin)).
+
 Authentication failures keep Better Auth's `code` alongside its existing `message`. The guarded
 `POST /admin/api/account/set-password` wrapper likewise returns `{ "error", "code" }` for a known
 Better Auth refusal, preserving its `400` status and legacy `error` field. Clients should classify a

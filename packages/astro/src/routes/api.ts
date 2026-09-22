@@ -172,6 +172,12 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
       preview,
       // `site` from astro.config; absent rather than guessed, so the SEO panel draws no preview.
       site: site || undefined,
+      // Drawn as sidebar links before any screen loads; no `roles` means both of them.
+      screens: Object.entries(config.admin?.screens ?? {}).map(([key, { label, roles }]) => ({
+        key,
+        label,
+        ...(roles ? { roles } : {}),
+      })),
     });
     response.headers.set('cache-control', 'private, no-store');
     return response;

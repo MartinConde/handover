@@ -969,7 +969,34 @@ test('ping returns the collection names and who is signed in', async () => {
     preview: true,
     // `site` from astro.config, which is what the SEO panel's previews print addresses under.
     site: 'https://coastalhomes.example',
+    // A site that declares no screens of its own still says so, so the shell draws no Site group.
+    screens: [],
   });
+});
+
+// The sidebar is drawn before any screen is loaded, so ping carries what a link needs.
+test('ping lists the screens the site declares', async () => {
+  const { default: config } = await import('virtual:handover/config');
+  config.admin = {
+    screens: {
+      analytics: {
+        component: './src/admin/Analytics.svelte',
+        label: { en: 'Analytics', de: 'Statistik' },
+        roles: ['owner'],
+      },
+      bookings: { component: './src/admin/Bookings.svelte', label: 'Bookings' },
+    },
+  };
+  try {
+    const body = (await (await GET(ctx('ping'))).json()) as { screens: unknown };
+    expect(body.screens).toEqual([
+      { key: 'analytics', label: { en: 'Analytics', de: 'Statistik' }, roles: ['owner'] },
+      // No roles means both of them, which is why the key is absent rather than listed twice.
+      { key: 'bookings', label: 'Bookings' },
+    ]);
+  } finally {
+    config.admin = undefined;
+  }
 });
 
 test('ping exposes an unset interface preference', async () => {

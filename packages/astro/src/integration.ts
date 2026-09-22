@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { appendFile, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import process from 'node:process';
@@ -387,6 +388,14 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
         if (!config.adapter) throw new Error(NO_ADAPTER_MESSAGE);
         const drift = i18nErrors(cms.i18n, config.i18n, config.base);
         if (drift.length) throw new Error(`\n${drift.join('\n')}`);
+        // `defineConfig` runs in the Worker too, where there is no filesystem to ask.
+        const missing = Object.entries(cms.admin?.screens ?? {})
+          .filter(([, screen]) => !existsSync(new URL(screen.component, config.root)))
+          .map(
+            ([key, screen]) =>
+              `cms.config.ts › admin.screens.${key}.component: ${JSON.stringify(screen.component)} does not exist — write the component, or drop the key`,
+          );
+        if (missing.length) throw new Error(`\n${missing.join('\n')}`);
         logger.info('astro-handover integration loaded');
 
         injectRoute({

@@ -326,6 +326,24 @@ test('asks Vite to pre-bundle core for the SSR environment', () => {
   });
 });
 
+// `component` is a path into the site's own src/, so only the build can see whether it is there.
+test('a screen naming a file the site does not have is refused at config time', () => {
+  const cms = (component: string) => ({
+    collections: {},
+    i18n: EN,
+    admin: { screens: { analytics: { component, label: 'Analytics' } } },
+  });
+  const root = new URL('./', import.meta.url);
+  expect(() =>
+    runSetup({ name: 'fake-adapter', hooks: {} }, root, cms('./src/admin/A.svelte')),
+  ).toThrow(
+    'cms.config.ts › admin.screens.analytics.component: "./src/admin/A.svelte" does not exist — write the component, or drop the key',
+  );
+  expect(() =>
+    runSetup({ name: 'fake-adapter', hooks: {} }, root, cms('./index.test.ts')),
+  ).not.toThrow();
+});
+
 const adapter = { name: 'fake-adapter', hooks: {} };
 const drift = (cms: unknown, i18n?: unknown) =>
   runSetup(adapter, new URL('file:///site/'), cms as Parameters<typeof handover>[0], { i18n });
@@ -1187,6 +1205,72 @@ test('defineConfig fails when a collection label names no interface language', (
           schema: z.object({}),
           label: { en: 'posts', de: 'Beiträge' },
           singular: { en: 'post', de: 'Beitrag' },
+        },
+      },
+    }),
+  ).not.toThrow();
+});
+
+// The key is the address segment: a capital or a space would be a link nothing reaches.
+test('defineConfig fails when a screen key is not an address segment', () => {
+  expect(() =>
+    defineConfig({
+      i18n: EN,
+      collections: {},
+      admin: { screens: { Analytics: { component: './src/admin/A.svelte', label: 'Analytics' } } },
+    }),
+  ).toThrow(
+    'cms.config.ts › admin.screens.Analytics: screen keys are lowercase letters, digits and dashes starting with a letter (it is the address segment under /admin/x/)',
+  );
+});
+
+test('defineConfig fails when a screen label names no interface language', () => {
+  expect(() =>
+    defineConfig({
+      i18n: EN,
+      collections: {},
+      admin: {
+        screens: {
+          analytics: {
+            component: './src/admin/A.svelte',
+            label: { en: 'Analytics', ger: 'Statistik' } as never,
+          },
+        },
+      },
+    }),
+  ).toThrow(
+    'cms.config.ts › admin.screens.analytics.label: "ger" is not an interface language — en, de',
+  );
+});
+
+// Roles hide the link; a misspelled one would hide it from everybody with nothing saying why.
+test('defineConfig fails when a screen names no role', () => {
+  expect(() =>
+    defineConfig({
+      i18n: EN,
+      collections: {},
+      admin: {
+        screens: {
+          analytics: {
+            component: './src/admin/A.svelte',
+            label: 'Analytics',
+            roles: ['admin'] as never,
+          },
+        },
+      },
+    }),
+  ).toThrow('cms.config.ts › admin.screens.analytics.roles: "admin" is not a role — owner, editor');
+  expect(() =>
+    defineConfig({
+      i18n: EN,
+      collections: {},
+      admin: {
+        screens: {
+          analytics: {
+            component: './src/admin/A.svelte',
+            label: { en: 'Analytics', de: 'Statistik' },
+            roles: ['owner'],
+          },
         },
       },
     }),

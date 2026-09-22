@@ -220,6 +220,32 @@ the one people turn off on day one. The ids are `media-missing`, `source-unresol
 them fails the build rather than turning nothing off. There is nothing else to configure: a
 check is on or it is not, and the client never turns one off from the admin.
 
+## `admin`
+
+Optional. `screens` names pages of your own that the admin serves at `/admin/x/<key>` — an
+analytics view, a board that reads a booking system, anything that is not content:
+
+```ts
+admin: {
+  screens: {
+    analytics: {
+      component: './src/admin/Analytics.svelte',
+      label: { en: 'Analytics', de: 'Statistik' },
+      roles: ['owner'],
+    },
+  },
+},
+```
+
+| Key | Required | What it is |
+|---|---|---|
+| `component` | yes | The Svelte component's path from the project root. A path, never an `import`: the same `cms.config.ts` is read by the Worker, the cron and the CLI, and none of them can carry a component. The build stops if the file is not there. |
+| `label` | yes | What the sidebar calls it: `'Analytics'` or `{ en: 'Analytics', de: 'Statistik' }`, the same shape as a collection's ([Names in each interface language](#names-in-each-interface-language)). |
+| `roles` | no | Who is shown the link: `['owner']`, `['editor']` or both. Absent means both. This hides a link — it is not a permission. Whatever the screen reads has to check `locals.handover.role` itself ([Roles](roles.md)). |
+
+The key is the address segment, so it is lowercase letters, digits and dashes and starts with
+a letter.
+
 ## Entry filenames
 
 "New entry" derives the filename from the name you type — the collection's `titleField`

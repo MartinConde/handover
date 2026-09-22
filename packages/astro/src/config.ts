@@ -9,6 +9,7 @@ import {
   type Mailer,
   type Preset,
   type RichtextTier,
+  type Role,
   redirectDestinationError,
   redirectSourceError,
   richtextErrors,
@@ -256,6 +257,20 @@ export interface HandoverConfig {
     | { provider: 'smtp'; from: string; host: string; port?: number }
     /** Cloudflare Email Sending, through a `send_email` binding named `EMAIL`. */
     | { provider: 'cloudflare'; from: string };
+  /** Pages of the site's own under `/admin/x/<key>`, compiled into the admin SPA. */
+  admin?: {
+    screens?: Record<
+      string,
+      {
+        /** A path to a `.svelte` file relative to the site root, never an import: the Worker reads this file too. */
+        component: string;
+        /** What the sidebar calls it: `'Analytics'` or `{ en: 'Analytics', de: 'Statistik' }`. */
+        label: string | Labels;
+        /** Who sees the link; absent means both roles. Authorisation lives in the screen's own endpoints. */
+        roles?: readonly Role[];
+      }
+    >;
+  };
   /** Check ids this site turns off; nothing else about a check is configurable. */
   checks?: { ignore?: readonly CheckName[] };
   /** Required, a one-language site too: the files live in a locale folder either way. */
@@ -342,6 +357,23 @@ export function defineConfig(config: HandoverConfig): HandoverConfig {
     errors.push(
       `cms.config.ts › mailer.provider: ${JSON.stringify(provider)} is not one of the providers — resend, smtp, cloudflare`,
     );
+  for (const [key, screen] of Object.entries(config.admin?.screens ?? {})) {
+    if (!/^[a-z][a-z0-9-]*$/.test(key))
+      errors.push(
+        `cms.config.ts › admin.screens.${key}: screen keys are lowercase letters, digits and dashes starting with a letter (it is the address segment under /admin/x/)`,
+      );
+    if (typeof screen.label === 'object')
+      for (const locale of Object.keys(screen.label))
+        if (!(UI_LOCALES as readonly string[]).includes(locale))
+          errors.push(
+            `cms.config.ts › admin.screens.${key}.label: ${JSON.stringify(locale)} is not an interface language — ${UI_LOCALES.join(', ')}`,
+          );
+    for (const role of screen.roles ?? [])
+      if (!['owner', 'editor'].includes(role))
+        errors.push(
+          `cms.config.ts › admin.screens.${key}.roles: ${JSON.stringify(role)} is not a role — owner, editor`,
+        );
+  }
   if (errors.length) throw new Error(errors.join('\n'));
   return config;
 }
