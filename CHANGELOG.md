@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The admin bundle resolves its preloaded chunks against the importing module, so the editor
+  no longer requests them from the site root and logs a 404 for each one.
 - Security hardening makes redirect sources literal, normalized exact paths; prevents the admin
   from being framed; and marks every admin API and authentication response `private, no-store`.
   JSON requests are limited to 1 MiB with bounded nesting. Uploads now pass through an

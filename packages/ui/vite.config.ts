@@ -6,6 +6,9 @@ import { defineConfig } from 'vite';
 // admin shell and Canvas documents can select an entry without making the other one execute.
 export default defineConfig(({ mode }) => ({
   plugins: [svelte()],
+  // The bundle is served from /admin/_assets/, so preload URLs must resolve against the
+  // importing module; a root base would point them at /chunks/ and 404.
+  base: './',
   // Tests run in jsdom, so svelte must resolve to its browser build there but not in the build.
   ...(mode === 'test' ? { resolve: { conditions: ['browser'] } } : {}),
   test: { environment: 'jsdom', setupFiles: ['vitest.setup.ts'] },
