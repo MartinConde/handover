@@ -1,7 +1,7 @@
 # Handover docs
 
 - [Getting started](getting-started.md) — install the integration, describe a collection, edit and publish an entry.
-- [Install from archives](unpublished-install.md) — pack and install all three private packages on a build machine without the source checkout.
+- [Install from archives](unpublished-install.md) — pack and install all four private packages on a build machine without the source checkout.
 - [Configuration](configuration.md) — `cms.config.ts`: `collections`, `route`, `index`, `load`; how entry filenames are derived.
 - [Languages](i18n.md) — the `i18n` block, why it has to match `astro.config.mjs`, the folder per language, which fields are translated, and the structure every language shares.
 - [Interface language](interface-language.md) — choosing English or Deutsch for the CMS without changing content language, initial precedence, and save recovery.

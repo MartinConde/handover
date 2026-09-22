@@ -4,6 +4,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `@handover/ui` ships as a package and `astro-handover` depends on it. The archive carries the
+  admin SPA's Svelte source and its compiled interface messages, so a site will be able to build
+  the SPA again with its own admin screens compiled in. Installing from archives now packs and
+  overrides four packages instead of three; a site's install grows by about 19 MB.
 - The admin SPA's Vite build is a single exported options object, `uiBuildConfig` in
   `@handover/ui`'s `build.ts`, so the same build can be run again inside a site. The shipped
   bundle is unchanged.

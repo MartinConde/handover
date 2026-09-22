@@ -7,7 +7,8 @@ pnpm monorepo, Node 22+.
 ```
 packages/core    framework-agnostic logic — see packages/core/CONVENTIONS.md
 packages/astro   the `astro-handover` integration
-packages/ui      admin SPA (Svelte 5 + Vite), built into packages/astro/dist/ui/
+packages/ui      admin SPA (Svelte 5 + Vite), built into packages/astro/dist/ui/ and
+                 shipped as source for sites that declare admin screens
 packages/cli     scaffolding and migrations
 ```
 
@@ -138,6 +139,23 @@ admin SPA. `vite.config.ts` calls it with `packages/astro/dist/ui` and adds only
 settings, so the shipped bundle and a site-local rebuild run the identical build. `screens` is the
 source of the `virtual:handover/screens` module; without it the module is `export default {}`.
 
+### Packing @handover/ui
+
+`astro-handover` depends on `@handover/ui`, and the archive carries `src/` and `build.ts` rather
+than build output, because a site with admin screens runs that build itself. Three consequences for
+the manifest:
+
+- Anything `src/` imports at runtime is a real dependency. `svelte`, `vite` and
+  `@inlang/paraglide-js-svelte` are optional peers instead: the shipped bundle is prebuilt, so a
+  site without screens never resolves them, and `@inlang/paraglide-js-svelte`'s own peer on the
+  Inlang compiler would otherwise add about 590 MB to every install.
+- `prepack` compiles the messages and writes an empty `src/paraglide/.npmignore`. Paraglide
+  generates its own `src/paraglide/.gitignore` of `*`, which both packers obey; neither the `files`
+  field nor a package-root `.npmignore` overrides it, so without that file the archive ships no
+  interface messages.
+- `packages/astro/test/package-smoke.mjs` packs all four archives and asserts both — run
+  `pnpm test:package` after changing any of these manifests.
+
 ### UI build cost
 
 The UI has separate `admin` and `canvas` entries, lazy editor and rich-text code, and an Astro
@@ -190,5 +208,5 @@ accident, and CI is what catches the decision.
 
 A separate repository installs this package with `"astro-handover": "link:../handover/packages/astro"`
 and is how every change is exercised end to end. Its deploy cannot see this checkout, so it
-commits `pnpm pack` tarballs of `core` and `astro` under `vendor/` (`pnpm vendor` there)
-and swaps them in at build time.
+commits `pnpm pack` tarballs of `core`, `cli`, `ui` and `astro` under `vendor/` (`pnpm vendor`
+there) and swaps them in at build time.

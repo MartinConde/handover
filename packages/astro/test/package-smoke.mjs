@@ -59,9 +59,10 @@ try {
 
   const coreArchive = pack(join(root, 'packages/core'));
   const cliArchive = pack(join(root, 'packages/cli'));
+  const uiArchive = pack(join(root, 'packages/ui'));
   const astroArchive = pack(join(root, 'packages/astro'));
-  for (const archive of [coreArchive, cliArchive, astroArchive])
-    cpSync(archive, join(vendor, basename(archive)));
+  const vendored = [coreArchive, cliArchive, uiArchive, astroArchive];
+  for (const archive of vendored) cpSync(archive, join(vendor, basename(archive)));
 
   const astroFiles = run('tar', ['-tf', astroArchive], root, true).trim().split('\n');
   for (const path of [
@@ -81,6 +82,19 @@ try {
     throw new Error(
       `astro-handover archive contains component tests: ${componentTests.join(', ')}`,
     );
+
+  // The SPA ships as source so a site with screens can rebuild it, and Paraglide writes its own
+  // .gitignore of `*` beside the compiled messages, which both packers obey without prepack's
+  // .npmignore.
+  const uiFiles = run('tar', ['-tf', uiArchive], root, true).trim().split('\n');
+  for (const path of [
+    'package/build.ts',
+    'package/src/main.ts',
+    'package/src/paraglide/messages.js',
+  ])
+    if (!uiFiles.includes(path)) throw new Error(`@handover/ui archive does not contain ${path}`);
+  const uiTests = uiFiles.filter((path) => /package\/src\/.*\.test\.ts$/.test(path));
+  if (uiTests.length) throw new Error(`@handover/ui archive contains tests: ${uiTests.join(', ')}`);
 
   const astroVersion = json(join(root, 'node_modules/astro/package.json')).version;
   const nodeAdapterVersion = json(join(root, 'node_modules/@astrojs/node/package.json')).version;
@@ -107,7 +121,7 @@ try {
   );
   put(
     join(consumer, 'pnpm-workspace.yaml'),
-    `overrides:\n  '@handover/core': file:vendor/${archiveName(join(root, 'packages/core'))}\n  '@handover/cli': file:vendor/${archiveName(join(root, 'packages/cli'))}\n`,
+    `overrides:\n  '@handover/core': file:vendor/${archiveName(join(root, 'packages/core'))}\n  '@handover/cli': file:vendor/${archiveName(join(root, 'packages/cli'))}\n  '@handover/ui': file:vendor/${archiveName(join(root, 'packages/ui'))}\n`,
   );
   put(
     join(consumer, 'astro.config.mjs'),
@@ -221,7 +235,7 @@ export const config: HandoverConfig['i18n'] = { locales: ['en'], defaultLocale: 
   const lockfile = readFileSync(join(consumer, 'pnpm-lock.yaml'), 'utf8');
   if (lockfile.includes('link:') || lockfile.includes(root))
     throw new Error('isolated install used a workspace or checkout link');
-  for (const archive of [coreArchive, cliArchive, astroArchive])
+  for (const archive of vendored)
     if (!lockfile.includes(`file:vendor/${basename(archive)}`))
       throw new Error(`${basename(archive)} was not recorded as a local archive dependency`);
   const installed = realpathSync(join(consumer, 'node_modules/astro-handover'));

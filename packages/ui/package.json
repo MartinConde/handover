@@ -3,6 +3,11 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "files": [
+    "src",
+    "!src/**/*.test.ts",
+    "build.ts"
+  ],
   "scripts": {
     "generate": "node ./scripts/messages.mjs",
     "prebuild": "node ./scripts/messages.mjs",
@@ -11,6 +16,7 @@
     "dev": "vite build --watch",
     "prefixtures": "node ./scripts/messages.mjs",
     "fixtures": "vite dev",
+    "prepack": "node ./scripts/messages.mjs && node -e \"require('node:fs').writeFileSync('src/paraglide/.npmignore', '')\"",
     "pretest": "node ./scripts/messages.mjs",
     "test": "vitest run --exclude 'scripts/*.test.mjs' && vitest run --config vitest.catalogs.config.mjs",
     "pretypecheck": "node ./scripts/messages.mjs",
@@ -18,13 +24,9 @@
     "validate:messages": "node ./scripts/messages.mjs --validate-only",
     "review:pseudo": "node ./scripts/pseudo-locale.mjs"
   },
-  "devDependencies": {
+  "dependencies": {
     "@dnd-kit/svelte": "^0.5.0",
     "@handover/core": "workspace:*",
-    "@inlang/paraglide-js": "2.25.2",
-    "@inlang/paraglide-js-svelte": "1.0.4",
-    "@inlang/plugin-message-format": "4.4.4",
-    "@inlang/sdk": "3.0.5",
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
     "@tiptap/core": "^3.31.3",
     "@tiptap/extension-blockquote": "^3.31.3",
@@ -37,7 +39,29 @@
     "@tiptap/extension-paragraph": "^3.31.3",
     "@tiptap/extension-text": "^3.31.3",
     "@tiptap/markdown": "^3.31.3",
-    "@tiptap/pm": "^3.31.3",
+    "@tiptap/pm": "^3.31.3"
+  },
+  "peerDependencies": {
+    "@inlang/paraglide-js-svelte": "1.0.4",
+    "svelte": "^5.56.10",
+    "vite": "^8.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@inlang/paraglide-js-svelte": {
+      "optional": true
+    },
+    "svelte": {
+      "optional": true
+    },
+    "vite": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@inlang/paraglide-js": "2.25.2",
+    "@inlang/paraglide-js-svelte": "1.0.4",
+    "@inlang/plugin-message-format": "4.4.4",
+    "@inlang/sdk": "3.0.5",
     "jsdom": "^30.0.1",
     "svelte": "^5.56.10",
     "svelte-check": "^4.0.0",
