@@ -1,5 +1,6 @@
 <script lang="ts">
-import type { Labels, Preset, UiLocale } from '@handover/core';
+import { type Labels, labelIn, type Preset, type UiLocale } from '@handover/core';
+import type { Component } from 'svelte';
 import { on } from 'svelte/events';
 import Account from './account/Account.svelte';
 import Activity from './account/Activity.svelte';
@@ -30,6 +31,7 @@ import { coordinateEntryReplacement, flushNavigation, navigate } from './navigat
 import * as m from './paraglide/messages.js';
 import Pending from './publishing/Pending.svelte';
 import { request as fetch, localPath, sitePath, uncertainResponse } from './request.js';
+import type { ScreenProps } from './screen.js';
 import Modal from './shared/Modal.svelte';
 import BuildPill, { type Build } from './shell/BuildPill.svelte';
 import Dashboard from './shell/Dashboard.svelte';
@@ -46,6 +48,8 @@ export interface Session {
   preview?: boolean;
   /** `site` from astro.config, which the SEO previews print each language's address under. */
   site?: string;
+  /** The site's own screens, as ping listed them: the sidebar is drawn before any screen loads. */
+  screens?: { key: string; label: string | Labels; roles?: readonly ('owner' | 'editor')[] }[];
   user: { id: string; name: string; email: string; uiLocale: UiLocale | null };
   role: 'owner' | 'editor';
 }
@@ -56,12 +60,15 @@ let {
   query = '',
   methods = { emailLink: false, github: false },
   initialUiLocale = 'en',
+  screens = {},
 }: {
   session?: Session | null;
   path: string;
   query?: string;
   methods?: LoginMethods;
   initialUiLocale?: InterfaceLocale;
+  /** What the site's build compiled in, by key; empty in the bundle the package ships. */
+  screens?: Record<string, Component<ScreenProps>>;
 } = $props();
 // svelte-ignore state_referenced_locally -- the prop is only the initial value
 let session = $state(signedIn);
@@ -141,6 +148,7 @@ const listRoute = $derived(path.match(/^\/admin\/c\/([\w-]+)$/));
 // Redirects are taken out first, or a global called `redirects` would reach neither screen.
 const redirectRoute = $derived(path === '/admin/site/redirects');
 const globalRoute = $derived(redirectRoute ? null : path.match(/^\/admin\/site\/([\w-]+)$/));
+const screenRoute = $derived(path.match(/^\/admin\/x\/([a-z][a-z0-9-]*)$/));
 const editing = $derived(
   globalRoute
     ? { collection: 'globals', slug: globalRoute[1] ?? '' }
@@ -186,6 +194,28 @@ const MANAGE = [
   { path: '/admin/settings', icon: 'settings', label: 'settings', ownerOnly: true },
 ] as const;
 const manage = $derived(MANAGE.filter((item) => !item.ownerOnly || session?.role === 'owner'));
+
+const screenLabel = (screen: { key: string; label: string | Labels }) =>
+  labelIn(screen.label, uiLocale) ?? screen.key;
+/** A role that is not listed is not shown the link and is not served the address either. */
+const siteScreens = $derived(
+  (session?.screens ?? []).filter(
+    (screen) => !screen.roles || (session && screen.roles.includes(session.role)),
+  ),
+);
+/** The compiled bundle can outlive the config that named a screen, so ping's list decides. */
+const openScreen = $derived.by(() => {
+  const key = screenRoute?.[1];
+  const listed = key ? siteScreens.find((screen) => screen.key === key) : undefined;
+  const component = key ? screens[key] : undefined;
+  if (!listed || !component || !session) return undefined;
+  // Its own object, so a screen's effects do not re-run every time the shell polls something.
+  return {
+    component,
+    label: screenLabel(listed),
+    session: { user: session.user, role: session.role },
+  };
+});
 
 const collections = $derived(session?.collections ?? []);
 let pending = $state<
@@ -593,22 +623,25 @@ const capitalise = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 /** The editor's title getter, tied to its entry so the next one never shows the last name. */
 let titled = $state<{ entry: string; read: () => string }>();
 const crumb = $derived(
-  redirectRoute
-    ? {
-        href: '/admin/site',
-        parent: m.globals_title({}, options),
-        current: m.redirect_title({}, options),
-      }
-    : editing
+  openScreen
+    ? { href: '/admin', parent: m.dashboard_title({}, options), current: openScreen.label }
+    : redirectRoute
       ? {
-          href: editing.collection === 'globals' ? '/admin/site' : `/admin/c/${editing.collection}`,
-          parent:
-            editing.collection === 'globals'
-              ? m.shell_site_settings({}, options)
-              : capitalise(collectionName(editing.collection, uiLocale)),
-          current: titled?.entry === editingAt ? titled.read() : '',
+          href: '/admin/site',
+          parent: m.globals_title({}, options),
+          current: m.redirect_title({}, options),
         }
-      : undefined,
+      : editing
+        ? {
+            href:
+              editing.collection === 'globals' ? '/admin/site' : `/admin/c/${editing.collection}`,
+            parent:
+              editing.collection === 'globals'
+                ? m.shell_site_settings({}, options)
+                : capitalise(collectionName(editing.collection, uiLocale)),
+            current: titled?.entry === editingAt ? titled.read() : '',
+          }
+        : undefined,
 );
 const initial = $derived(
   (session?.user.name || session?.user.email || '?').charAt(0).toUpperCase(),
@@ -658,6 +691,13 @@ const initial = $derived(
           data-icon="site"
           aria-current={path.startsWith('/admin/site') ? 'page' : undefined}
         ><span class="nav-text">{m.shell_site_settings({}, options)}</span></a>
+        {#each siteScreens as screen (screen.key)}
+          <a
+            href={sitePath(`/admin/x/${screen.key}`)}
+            data-icon="screen"
+            aria-current={path === `/admin/x/${screen.key}` ? 'page' : undefined}
+          ><span class="nav-text">{screenLabel(screen)}</span></a>
+        {/each}
       </div>
     </nav>
     <nav class="nav" aria-labelledby="nav-content">
@@ -873,6 +913,17 @@ const initial = $derived(
       />
     {:else if redirectRoute}
       <Redirects {uiLocale} oncommitted={commitChanged} />
+    {:else if openScreen}
+      {@const Screen = openScreen.component}
+      <!-- The shell owns the landmark, so a site's screen is only its own content. -->
+      <main class="main">
+        <Screen
+          session={openScreen.session}
+          request={fetch}
+          {navigate}
+          {uiLocale}
+        />
+      </main>
     {:else if path === '/admin/site'}
       <Globals {uiLocale} />
     {:else if path === '/admin/media'}

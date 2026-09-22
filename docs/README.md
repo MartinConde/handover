@@ -18,6 +18,7 @@
 - [Template convention](template-convention.md) — the three rules, `schemas.ts` and `content.config.ts`.
 - [Loaders and pages](loaders.md) — `load()` and `ContentSource`, what a loader returns and what renders it, an address per language, layouts that take their data as props.
 - [Blocks](blocks.md) — `<Blocks />`, the component registry, blocks that nest, and `_ref` blocks filled from a global.
+- [Admin screens](admin-screens.md) — a page of your own inside the admin at `/admin/x/<key>`: the config key, the four props a screen is handed, its endpoint, and the variables to style it with.
 - [Canvas editing](canvas.md) — annotate page fields, blocks, nested and empty lists; guard site-side effects during editable renders.
 - [Rendering content](rendering.md) — `<Markdown />`, `<Embed />`, `<Seo />` and hidden entries.
 - [The language switcher](language-switcher.md) — `getEntryLocales()`, `<LocaleSwitcher />`, and a URL per language for a page that is not an entry.

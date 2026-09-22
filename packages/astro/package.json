@@ -25,6 +25,10 @@
       "types": "./dist/schema.d.ts",
       "import": "./dist/schema.js"
     },
+    "./screen": {
+      "types": "./dist/screen.d.ts",
+      "import": "./dist/screen.js"
+    },
     "./Blocks.astro": "./components/Blocks.astro",
     "./Embed.astro": "./components/Embed.astro",
     "./LocaleSwitcher.astro": "./components/LocaleSwitcher.astro",

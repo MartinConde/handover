@@ -4,11 +4,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- The admin serves a site's own screens: `/admin/x/<key>` renders the component `admin.screens`
+  names, links it in the sidebar under **Site**, and hides both from a role the key does not
+  list. A screen is handed the session, the admin's own authed `fetch`, its navigation and the
+  interface language — `ScreenProps` from `astro-handover/screen`. The build that compiles a
+  site's component into the admin is still to come, so the address answers the dashboard until
+  then. See [Admin screens](docs/admin-screens.md).
+
 - `cms.config.ts` takes an `admin.screens` block: a site names pages of its own by key, Svelte
   component path, label and the roles that see them. The build refuses a key that is not an
   address segment, a label in a language the admin does not have, a role that is not `owner` or
   `editor`, and a component file that is not there. `GET /admin/api/ping` answers with the list,
-  empty for a site that declares none. The admin does not serve the screens yet.
+  empty for a site that declares none.
 
 - `astro dev` works in a site that installs the package rather than linking it. Every route
   answered `500 module is not defined`, because Vite's dev optimiser does not look for

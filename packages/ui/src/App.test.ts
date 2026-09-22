@@ -3,6 +3,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import App from './App.svelte';
 import { SIX, sixLanguageRows, sixLanguages } from './editor/six-languages.fixture';
 import { type CollectionLabels, rememberUiLocale, type UiLocale } from './i18n.js';
+import Screen from './shell/screen.fixture.svelte';
 
 let app: ReturnType<typeof mount>;
 const session = (role: 'owner' | 'editor' = 'owner') => ({
@@ -15,10 +16,11 @@ const show = (
   signedIn: ReturnType<typeof session> | null | undefined,
   path = '/admin',
   initialUiLocale: UiLocale = signedIn?.user.uiLocale ?? 'en',
+  screens: Record<string, typeof Screen> = {},
 ) => {
   app = mount(App, {
     target: document.body,
-    props: { session: signedIn, path, initialUiLocale },
+    props: { session: signedIn, path, initialUiLocale, screens },
   });
   flushSync();
   return document.body;
@@ -1002,6 +1004,57 @@ test('Site settings is offered on a site that declares no globals', async () => 
   expect(root.querySelector('[aria-labelledby="nav-site"] a')?.getAttribute('aria-current')).toBe(
     'page',
   );
+});
+
+// A site's own screens: ping names them, the build compiled them in, the shell puts them together.
+const analytics = { key: 'analytics', label: { en: 'Analytics', de: 'Statistik' } };
+const withScreens = (
+  role: 'owner' | 'editor',
+  screens: { key: string; label: unknown; roles?: string[] }[],
+) => ({ ...session(role), screens });
+
+test('a declared screen is linked under Site and mounted with the session and the shell fetch', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) =>
+      url === '/admin/api/screen-probe'
+        ? Response.json({ from: 'site' })
+        : Response.json({ entries: [] }),
+    ),
+  );
+  const root = show(withScreens('owner', [analytics]), '/admin/x/analytics', 'en', {
+    analytics: Screen,
+  });
+  const link = root.querySelector<HTMLAnchorElement>(
+    '[aria-labelledby="nav-site"] a[href="/admin/x/analytics"]',
+  );
+  expect(link?.textContent).toBe('Analytics');
+  expect(root.querySelector('main .screen-session')?.textContent).toBe('owner · en');
+  root.querySelector<HTMLButtonElement>('main .screen-ask')?.click();
+  await vi.waitFor(() =>
+    expect(root.querySelector('main .screen-answer')?.textContent).toBe('{"from":"site"}'),
+  );
+});
+
+test('a screen declared for the other role is neither linked nor rendered', () => {
+  drafts();
+  const root = show(
+    withScreens('editor', [{ ...analytics, roles: ['owner'] }]),
+    '/admin/x/analytics',
+    'en',
+    { analytics: Screen },
+  );
+  expect(root.querySelector('a[href="/admin/x/analytics"]')).toBeNull();
+  expect(root.querySelector('main .screen-session')).toBeNull();
+  expect(root.querySelector('main.main h1')?.textContent).toBe('Dashboard');
+});
+
+// The compiled bundle outlives one config edit, so the list ping answers is what may be served.
+test('a screen address ping does not name is answered like any unknown admin address', () => {
+  drafts();
+  const root = show(withScreens('owner', []), '/admin/x/analytics', 'en', { analytics: Screen });
+  expect(root.querySelector('main .screen-session')).toBeNull();
+  expect(root.querySelector('main.main h1')?.textContent).toBe('Dashboard');
 });
 
 // /admin/site/site is entries/globals/site, edited on the entry screen.

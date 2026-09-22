@@ -1,3 +1,4 @@
+import screens from 'virtual:handover/screens';
 import { mount } from 'svelte';
 import App from './App.svelte';
 import { readDeviceLocale, resolveUiLocale, showUiLocale } from './i18n.js';
@@ -25,5 +26,6 @@ mount(App, {
     path: localPath(location.pathname),
     query: location.search,
     methods,
+    screens,
   },
 });
