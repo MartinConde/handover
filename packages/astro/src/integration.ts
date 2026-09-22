@@ -31,8 +31,9 @@ import {
   textsFrom,
   timestampErrors,
 } from '@handover/core';
+import type { uiBuildConfig } from '@handover/ui/build.js';
 import type { AstroIntegration } from 'astro';
-import type { ViteDevServer } from 'vite';
+import type { InlineConfig, Plugin, ViteDevServer } from 'vite';
 import { formSchema, type HandoverConfig, redirects } from './config.js';
 
 export const NO_ADAPTER_MESSAGE =
@@ -51,6 +52,61 @@ export function loadersModule(root: URL, collections: HandoverConfig['collection
     ...names.map((name, i) => `import * as m${i} from ${at(name)};`),
     `export default { ${names.map((name, i) => `${JSON.stringify(name)}: m${i}`).join(', ')} };`,
   ].join('\n');
+}
+
+type Screens = NonNullable<NonNullable<HandoverConfig['admin']>['screens']>;
+
+/** The site's own screens by key, for the admin build that compiles them into the shell. */
+export function screensModule(root: URL, screens: Screens): string {
+  const entries = Object.entries(screens);
+  const at = (component: string) => JSON.stringify(fileURLToPath(new URL(component, root)));
+  return [
+    ...entries.map(([, screen], i) => `import s${i} from ${at(screen.component)};`),
+    `export default { ${entries.map(([key], i) => `${JSON.stringify(key)}: s${i}`).join(', ')} };`,
+  ].join('\n');
+}
+
+/** The shipped bundle, or the site's own rebuild of it when the site declares screens. */
+export function uiDir(root: URL, screens: Screens | undefined): URL {
+  return screens && Object.keys(screens).length
+    ? new URL('.astro/handover/ui/', root)
+    : new URL('./ui/', import.meta.url);
+}
+
+// Two copies compile two runtimes into one document, and a screen mounts against the wrong one.
+const oneSvelte: Plugin = {
+  name: 'handover-one-svelte',
+  generateBundle(_options, bundle) {
+    const roots = new Set<string>();
+    for (const chunk of Object.values(bundle)) {
+      if (chunk.type !== 'chunk') continue;
+      for (const id of chunk.moduleIds) {
+        const root = /^(.*[/\\]node_modules[/\\]svelte)[/\\]/.exec(id)?.[1];
+        if (root) roots.add(root);
+      }
+    }
+    if (roots.size > 1)
+      throw new Error(
+        `the admin build found ${roots.size} copies of svelte and can compile only one:\n${[...roots].join('\n')}\nList svelte in the site's own dependencies so every import resolves to it.`,
+      );
+  },
+};
+
+/**
+ * The admin SPA built again inside the site with its screens compiled in. `uiBuildConfig` is
+ * TypeScript inside `@handover/ui`, which Node refuses to import from `node_modules`; Vite's
+ * runner reads it anyway. `configFile: false` keeps a site's own `vite.config.ts` out of it.
+ */
+async function uiBuildOptions(root: URL, screens: Screens): Promise<InlineConfig> {
+  const { runnerImport } = await import('vite');
+  const { module } = await runnerImport<{ uiBuildConfig: typeof uiBuildConfig }>(
+    fileURLToPath(import.meta.resolve('@handover/ui/build.ts')),
+  );
+  const options = module.uiBuildConfig({
+    outDir: fileURLToPath(uiDir(root, screens)),
+    screens: screensModule(root, screens),
+  });
+  return { ...options, configFile: false, plugins: [...(options.plugins ?? []), oneSvelte] };
 }
 
 interface UiBuildChunk {
@@ -338,8 +394,10 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
       c.titleField ? [[name, c.titleField]] : [],
     ),
   );
+  const screens = Object.keys(cms.admin?.screens ?? {}).length ? cms.admin?.screens : undefined;
   let root: URL;
   let clientDir: URL;
+  let closeUi: (() => Promise<void>) | undefined;
   let crawl: SitemapSite | undefined;
   let slash = true;
   return {
@@ -368,12 +426,49 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
         if (errors.length) throw new Error(`\n${errors.join('\n')}`);
       },
       // A migrations/ behind the package's tables is caught here, not by the first query.
-      'astro:build:start': async () => {
+      'astro:build:start': async ({ logger }) => {
         const marker = await readFile(new URL('migrations/handover.json', root), 'utf8').catch(
           () => undefined,
         );
         const error = schemaVersionError(marker);
         if (error) throw new Error(error);
+        if (!screens) return;
+        // Finished before the site's own build starts, so `virtual:handover/ui` reads the output.
+        const { build } = await import('vite');
+        logger.info("Building the admin with this site's screens");
+        await build(await uiBuildOptions(root, screens)).catch((cause: Error) => {
+          throw new Error(
+            `the admin could not be built with this site's screens:\n${cause.message}`,
+            { cause },
+          );
+        });
+      },
+      // No HMR: the screen is rebuilt into the same bundle and the browser is reloaded by hand.
+      'astro:server:setup': async ({ server, logger }) => {
+        if (!screens) return;
+        const { build } = await import('vite');
+        const options = await uiBuildOptions(root, screens);
+        const built = await build({ ...options, build: { ...options.build, watch: {} } });
+        const watcher = built as Extract<typeof built, { close: () => Promise<void> }>;
+        closeUi = () => watcher.close();
+        // The admin has to be on disk before the first request reads `virtual:handover/ui`.
+        await new Promise<void>((ready) => {
+          watcher.on('event', (event) => {
+            if (event.code === 'ERROR')
+              logger.error(
+                `the admin could not be built with this site's screens:\n${event.error.message}`,
+              );
+            if (event.code !== 'END') return;
+            const mod = server.moduleGraph.getModuleById(`\0${VIRTUAL_UI}`);
+            if (mod) server.moduleGraph.invalidateModule(mod);
+            ready();
+          });
+        });
+      },
+      // A watcher left running would keep writing over the next one's output.
+      'astro:server:done': async () => {
+        await closeUi?.();
+        closeUi = undefined;
       },
       'astro:build:done': async ({ logger }) => {
         const n = await emitRedirects(root, clientDir, slash, cms.i18n.base);
@@ -475,7 +570,7 @@ export const texts = JSON.parse(${JSON.stringify(JSON.stringify(texts))});`;
                 resolveId: (id) => (id === VIRTUAL_UI ? `\0${VIRTUAL_UI}` : undefined),
                 load: (id) =>
                   id === `\0${VIRTUAL_UI}`
-                    ? uiAssetsModule(fileURLToPath(new URL('./ui/', import.meta.url)))
+                    ? uiAssetsModule(fileURLToPath(uiDir(config.root, screens)))
                     : undefined,
               },
               // Preview calls the page's own loader and renders the component it names.

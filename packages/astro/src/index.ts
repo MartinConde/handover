@@ -46,5 +46,7 @@ export {
   loadersModule,
   modifiedAt,
   NO_ADAPTER_MESSAGE,
+  screensModule,
   uiAssetsModule,
+  uiDir,
 } from './integration.js';

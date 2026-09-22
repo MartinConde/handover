@@ -139,6 +139,9 @@ admin SPA. `vite.config.ts` calls it with `packages/astro/dist/ui` and adds only
 settings, so the shipped bundle and a site-local rebuild run the identical build. `screens` is the
 source of the `virtual:handover/screens` module; without it the module is `export default {}`.
 
+The integration reads that file with Vite's `runnerImport`, not a plain `import`: it stays
+TypeScript in the archive, and Node refuses to strip types from a file under `node_modules`.
+
 ### Packing @handover/ui
 
 `astro-handover` depends on `@handover/ui`, and the archive carries `src/` and `build.ts` rather
@@ -154,7 +157,8 @@ the manifest:
   field nor a package-root `.npmignore` overrides it, so without that file the archive ships no
   interface messages.
 - `packages/astro/test/package-smoke.mjs` packs all four archives and asserts both — run
-  `pnpm test:package` after changing any of these manifests.
+  `pnpm test:package` after changing any of these manifests. Its consumer declares an admin
+  screen, so it is also the proof that the site-local admin build works from the archives.
 
 ### UI build cost
 

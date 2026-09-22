@@ -18,6 +18,7 @@ const temporary = mkdtempSync(join(tmpdir(), 'handover-package-smoke-'));
 const archives = join(temporary, 'archives');
 const consumer = join(temporary, 'consumer');
 const vendor = join(consumer, 'vendor');
+const SCREEN_MARK = 'Screen compiled into an installed admin';
 
 function run(command, args, cwd, capture = false) {
   const result = spawnSync(command, args, {
@@ -97,6 +98,10 @@ try {
   if (uiTests.length) throw new Error(`@handover/ui archive contains tests: ${uiTests.join(', ')}`);
 
   const astroVersion = json(join(root, 'node_modules/astro/package.json')).version;
+  const svelteVersion = json(join(root, 'node_modules/svelte/package.json')).version;
+  const paraglideSvelteVersion = json(
+    join(root, 'node_modules/@inlang/paraglide-js-svelte/package.json'),
+  ).version;
   const nodeAdapterVersion = json(join(root, 'node_modules/@astrojs/node/package.json')).version;
   const typescriptVersion = json(join(root, 'node_modules/typescript/package.json')).version;
   put(
@@ -110,8 +115,12 @@ try {
         scripts: { build: 'astro build', typecheck: 'tsc --noEmit' },
         dependencies: {
           '@astrojs/node': nodeAdapterVersion,
+          // What a site with admin screens installs: one svelte for the rebuilt admin, and the
+          // message component its media screens use.
+          '@inlang/paraglide-js-svelte': paraglideSvelteVersion,
           astro: astroVersion,
           'astro-handover': `file:vendor/${archiveName(join(root, 'packages/astro'))}`,
+          svelte: svelteVersion,
         },
         devDependencies: { typescript: typescriptVersion },
       },
@@ -121,7 +130,7 @@ try {
   );
   put(
     join(consumer, 'pnpm-workspace.yaml'),
-    `overrides:\n  '@handover/core': file:vendor/${archiveName(join(root, 'packages/core'))}\n  '@handover/cli': file:vendor/${archiveName(join(root, 'packages/cli'))}\n  '@handover/ui': file:vendor/${archiveName(join(root, 'packages/ui'))}\n`,
+    `autoInstallPeers: false\noverrides:\n  '@handover/core': file:vendor/${archiveName(join(root, 'packages/core'))}\n  '@handover/cli': file:vendor/${archiveName(join(root, 'packages/cli'))}\n  '@handover/ui': file:vendor/${archiveName(join(root, 'packages/ui'))}\n`,
   );
   put(
     join(consumer, 'astro.config.mjs'),
@@ -163,7 +172,20 @@ export const page = z.object({ title: z.string(), blocks: blocks(() => registry)
 export default defineConfig({
   i18n: { locales: ['en'], defaultLocale: 'en' },
   collections: { pages: { schema: page } },
+  admin: { screens: { probe: { component: './src/admin/Probe.svelte', label: 'Probe' } } },
 });
+`,
+  );
+  put(
+    join(consumer, 'src/admin/Probe.svelte'),
+    `<script lang="ts">
+import type { ScreenProps } from 'astro-handover/screen';
+
+let { session }: ScreenProps = $props();
+</script>
+
+<h1>${SCREEN_MARK}</h1>
+<p>{session.role}</p>
 `,
   );
   put(
@@ -246,7 +268,11 @@ export const config: HandoverConfig['i18n'] = { locales: ['en'], defaultLocale: 
   if (!help.includes('Usage: handover')) throw new Error('the packaged handover CLI did not run');
   run('pnpm', ['typecheck'], consumer);
   run('pnpm', ['build'], consumer);
-  console.log('Packaged install, CLI, public imports, types, and Astro build passed.');
+  // Only the admin the site built itself holds this screen; the archive's own bundle cannot.
+  const inlined = spawnSync('grep', ['-rlF', SCREEN_MARK, join(consumer, 'dist/server')]);
+  if (inlined.status !== 0)
+    throw new Error('the built server does not inline the admin this site built with its screen');
+  console.log('Packaged install, CLI, public imports, types, screens, and Astro build passed.');
 } finally {
   rmSync(temporary, { recursive: true, force: true });
 }

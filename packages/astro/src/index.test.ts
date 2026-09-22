@@ -40,8 +40,10 @@ import handover, {
   redirects,
   reference,
   richtext,
+  screensModule,
   seo,
   uiAssetsModule,
+  uiDir,
 } from './index.js';
 
 test('the scalar field types are detected from real Zod output', () => {
@@ -309,6 +311,31 @@ test('the loaders module imports each named loader once, from the site itself', 
   expect(source).toBe(
     'import * as m0 from "/site/src/loaders/listing";\nexport default { "listing": m0 };',
   );
+});
+
+// A screen is a default export the shell mounts, where a loader is a module it calls into.
+test('the screens module imports each screen from the site by its own path', () => {
+  const source = screensModule(new URL('file:///site/'), {
+    analytics: { component: './src/admin/Analytics.svelte', label: 'Analytics' },
+    board: { component: './src/admin/Board.svelte', label: { en: 'Board', de: 'Tafel' } },
+  });
+
+  expect(source).toBe(
+    'import s0 from "/site/src/admin/Analytics.svelte";\nimport s1 from "/site/src/admin/Board.svelte";\nexport default { "analytics": s0, "board": s1 };',
+  );
+});
+
+// Nothing is rebuilt for a site with no screens: it inlines the bundle the package shipped.
+test("the admin bundle is the package's own until a site declares a screen", () => {
+  expect(uiDir(new URL('file:///site/'), undefined).href).toBe(
+    new URL('./ui/', import.meta.url).href,
+  );
+  expect(uiDir(new URL('file:///site/'), {}).href).toBe(new URL('./ui/', import.meta.url).href);
+});
+
+test('a site with a screen inlines the admin its own build wrote', () => {
+  const screens = { analytics: { component: './src/admin/Analytics.svelte', label: 'A' } };
+  expect(uiDir(new URL('file:///site/'), screens).href).toBe('file:///site/.astro/handover/ui/');
 });
 
 test('registers the password-gate middleware before the routes', () => {

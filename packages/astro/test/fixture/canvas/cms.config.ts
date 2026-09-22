@@ -33,4 +33,5 @@ export default defineConfig({
     pages: { schema: page, route: '/[slug]', load: 'page' },
   },
   globals: { 'shared-promo': sharedPromo },
+  admin: { screens: { probe: { component: './src/admin/Probe.svelte', label: 'Probe' } } },
 });

@@ -4,12 +4,18 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- A site's admin screens are compiled into the admin. `astro build` rebuilds the admin SPA inside
+  the site before the site's own build, with the components `admin.screens` names compiled in, and
+  serves that bundle from `/admin/x/<key>`; `astro dev` rebuilds it whenever a screen is saved. A
+  site without screens builds nothing extra and ships the admin as it came. A site with them lists
+  `svelte` and `@inlang/paraglide-js-svelte` itself and, on pnpm, sets `autoInstallPeers: false`.
+  See [Admin screens](docs/admin-screens.md).
+
 - The admin serves a site's own screens: `/admin/x/<key>` renders the component `admin.screens`
   names, links it in the sidebar under **Site**, and hides both from a role the key does not
   list. A screen is handed the session, the admin's own authed `fetch`, its navigation and the
-  interface language — `ScreenProps` from `astro-handover/screen`. The build that compiles a
-  site's component into the admin is still to come, so the address answers the dashboard until
-  then. See [Admin screens](docs/admin-screens.md).
+  interface language — `ScreenProps` from `astro-handover/screen`.
+  See [Admin screens](docs/admin-screens.md).
 
 - `cms.config.ts` takes an `admin.screens` block: a site names pages of its own by key, Svelte
   component path, label and the roles that see them. The build refuses a key that is not an

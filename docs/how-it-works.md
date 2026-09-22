@@ -9,7 +9,9 @@ free to change.
   `ContentSource`, the Zod → field walker, YAML parse/stringify, the GitHub client.
   Every function takes a `siteId` first, unused until multi-site.
 - `packages/astro` — the integration. Re-exports what sites need from core.
-- `packages/ui` — the admin SPA (Svelte 5 + Vite), built into `packages/astro/dist/ui/`.
+- `packages/ui` — the admin SPA (Svelte 5 + Vite), built into `packages/astro/dist/ui/`. Its
+  whole Vite build is `build.ts`'s `uiBuildConfig`, so a site with admin screens can run the
+  identical build again with its own components compiled in.
 - `packages/cli` — the `handover` bin (`migrate`, `db generate`), declared on `astro-handover` so
   `npx handover` resolves in a site.
 
@@ -19,7 +21,12 @@ free to change.
 
 - `/admin/[...path]` serves the SPA shell and its hashed JS/CSS (`/admin/_assets/*`). The
   built assets are inlined into the Worker bundle through a virtual module, so the site's
-  own Vite config never knows about them.
+  own Vite config never knows about them. A site that declares
+  [admin screens](admin-screens.md) inlines its own build of the SPA instead: at
+  `astro:build:start` the integration runs `uiBuildConfig` again with the site's components
+  as `virtual:handover/screens`, writing to `<root>/.astro/handover/ui/`, and
+  `virtual:handover/ui` reads that directory. It costs about two seconds a build, and
+  nothing at all for a site without screens. `astro dev` runs the same build in watch mode.
 - `/admin/api/[...path]` is the JSON API the SPA talks to. Routes are matched by hand on
   `params.path`.
 - `/_preview/[...path]` exists only where the build had `PREVIEW_ENABLED` set. It is the
