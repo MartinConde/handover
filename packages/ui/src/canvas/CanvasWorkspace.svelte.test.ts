@@ -12,9 +12,10 @@ const fields = [
 let app: ReturnType<typeof mount>;
 
 afterEach(async () => {
-  // Settle this test's lazy renderer import before a later test mocks the same module.
-  await import('./canvas-renderer');
+  // Unmounted first, the workspace drops its lazy renderer import instead of building one.
   if (app) unmount(app);
+  // Settle that import before a later test mocks the same module.
+  await import('./canvas-renderer');
   vi.useRealTimers();
   document.body.innerHTML = '';
   vi.doUnmock('./canvas-renderer');
