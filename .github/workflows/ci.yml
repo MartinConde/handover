@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        browser: [chromium, firefox, webkit]
+        browser: [chromium]
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v5

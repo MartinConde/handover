@@ -3,9 +3,7 @@ import { expect, test } from '@playwright/test';
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`Canvas centers the blocks overview inside a fixed canvas (${reducedMotion})`, async ({
     page,
-    browserName,
   }, testInfo) => {
-    test.skip(browserName === 'webkit', 'Drag geometry is checked manually in Safari');
     await page.emulateMedia({ reducedMotion });
     await page.goto('/canvas-assets');
     const entries = JSON.parse((await page.locator('body').getAttribute('data-entries')) ?? '{}');
