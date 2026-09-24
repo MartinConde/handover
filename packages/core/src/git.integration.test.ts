@@ -1,19 +1,12 @@
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
 import { Miniflare } from 'miniflare';
 import { expect, onTestFinished, test } from 'vitest';
+import { entryConflict, resolveConflict } from './conflicts.js';
 import { parseEntry, staleLocales } from './content.js';
-import {
-  DraftConflictError,
-  entryConflict,
-  loadDraft,
-  openDb,
-  pendingDrafts,
-  publishDrafts,
-  resolveConflict,
-  saveDraft,
-} from './db.js';
+import { loadDraft, openDb, pendingDrafts, saveDraft } from './db.js';
 import { createGitClient, type GitClient, RefMovedError } from './git.js';
 import { deleteEntry, renameEntry } from './lifecycle.js';
+import { DraftConflictError, publishDrafts } from './publish.js';
 import type { Form } from './schema.js';
 import * as tables from './tables.js';
 

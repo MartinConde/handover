@@ -40,6 +40,8 @@ export type {
   HiddenLong,
 } from './checks.js';
 export { CHECKS, findHiddenLong, lastHiddenLong, runChecks } from './checks.js';
+export type { EntryConflict } from './conflicts.js';
+export { entryConflict, resolveConflict, resolveDrift } from './conflicts.js';
 export type {
   AnsweredPaths,
   AstroContent,
@@ -93,20 +95,14 @@ export {
 } from './content.js';
 export type { CronReport, JobDeps } from './cron.js';
 export { JOB_NAMES, runDue, runJob } from './cron.js';
-export type { Db, Draft, SourceOf } from './db.js';
+export type { Db, Draft } from './db.js';
 export {
-  CommitScopeError,
-  clearPublished,
-  commitScope,
   createDraft,
   createDrafts,
-  DraftConflictError,
   DraftRevisionError,
   discardDraft,
   draftEditors,
   draftFiles,
-  type EntryConflict,
-  entryConflict,
   heldDrafts,
   holdEntry,
   isDraftRace,
@@ -115,24 +111,13 @@ export {
   openDb,
   openDraft,
   overlayRows,
-  type PathReservation,
   pendingDrafts,
-  publishDrafts,
-  RevertConflictError,
-  readyDrafts,
   recordDelete,
   recordOffer,
   recordRename,
   recordRenames,
   recordSource,
-  releaseOperationPaths,
-  releasePaths,
-  reservePaths,
-  resolveConflict,
-  resolveDrift,
-  restoreCommit,
   restoreDraft,
-  revertCommit,
   rewriteDrafts,
   saveDraft,
   saveTranslated,
@@ -269,6 +254,16 @@ export {
   recentOperations,
   recoverOperationCommit,
 } from './operations.js';
+export type { PathReservation } from './paths.js';
+export { releaseOperationPaths, releasePaths, reservePaths } from './paths.js';
+export type { SourceOf } from './publish.js';
+export {
+  CommitScopeError,
+  commitScope,
+  DraftConflictError,
+  publishDrafts,
+  readyDrafts,
+} from './publish.js';
 export { filterLive, isLive, newId, RESERVED_KEYS, regenerateIds } from './reserved.js';
 export type { Answer, MergedChange, Question, ThreeWay } from './resolve.js';
 export {
@@ -281,6 +276,7 @@ export {
   ResourceLimitError,
   releaseResource,
 } from './resource-limits.js';
+export { clearPublished, RevertConflictError, restoreCommit, revertCommit } from './revert.js';
 export type { RichtextTier } from './richtext.js';
 export {
   RICHTEXT_CONSTRUCTS,

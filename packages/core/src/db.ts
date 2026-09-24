@@ -1,8 +1,6 @@
-import { and, eq, gt, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, lt, ne, or, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import {
-  applyDrift,
-  type DriftChoice,
   type LocaleSeed,
   markTranslation,
   mergeEntry,
@@ -16,36 +14,11 @@ import {
 } from './content.js';
 import { chunksOf, D1_MAX_BOUND_PARAMETERS } from './d1-limits.js';
 import { type ContentFile, type ContentIndex, entryKey, indexHasPath } from './entries.js';
-import { blobSha, type GitClient, type PublishFile, RefMovedError } from './git.js';
-import {
-  appendRedirects,
-  REDIRECTS,
-  type RedirectRule,
-  RevertConflictError,
-  redirectRule,
-  revertRedirects,
-} from './lifecycle.js';
-import {
-  beginOperation,
-  finalizeOperationStatement,
-  findOperation,
-  markOperationCommitted,
-  OperationFinalizationError,
-  operationMessage,
-  recentOperations,
-  recoverOperationCommit,
-} from './operations.js';
-import { checkReserved, isLive } from './reserved.js';
-import {
-  type Answer,
-  applyResolution,
-  conflictReport,
-  type MergedChange,
-  type Question,
-  type ThreeWay,
-} from './resolve.js';
+import { blobSha, type GitClient } from './git.js';
+import { type RedirectRule, redirectRule } from './lifecycle.js';
+import { checkReserved } from './reserved.js';
 import type { Form } from './schema.js';
-import { activity, drafts, locks, media, operations, pathReservations, user } from './tables.js';
+import { drafts, media, pathReservations, user } from './tables.js';
 import { machineFilled } from './translate.js';
 
 type D1Binding = Parameters<typeof drizzle>[0];
@@ -63,11 +36,18 @@ export function openDb(_siteId: string, binding: D1Binding | undefined) {
 export type Db = ReturnType<typeof openDb>;
 export type Draft = typeof drafts.$inferSelect;
 
+// Defined here, not in paths.ts, so recordRenames' signature below needs no cycle back to it.
+export interface PathReservation {
+  operationId: string;
+  paths: string[];
+  token: string;
+}
+
 // A source change deliberately decides every file's provenance. Keep that decision through
 // unrelated draft rewrites; a real translation save writes its own mark into the contents.
 // Keep `:` out: durable publish snapshots separate revision, base SHA and blob with that delimiter.
-const SOURCE_CHANGE_REVISION = 'source-change-';
-const nextRevision = (
+export const SOURCE_CHANGE_REVISION = 'source-change-';
+export const nextRevision = (
   current?: string,
   sourceChange = current?.startsWith(SOURCE_CHANGE_REVISION),
 ) => `${sourceChange ? SOURCE_CHANGE_REVISION : ''}${crypto.randomUUID()}`;
@@ -109,7 +89,7 @@ export function isMediaRace(error: unknown): boolean {
   return /NOT NULL constraint failed: drafts.contents/.test(message);
 }
 
-const availableContents = (siteId: string, contents: string) =>
+export const availableContents = (siteId: string, contents: string) =>
   sql<string>`case when not exists (select 1 from ${media} where ${media.siteId} = ${siteId} and ${media.state} <> 'active' and instr(${contents}, ${media.r2Key}) > 0) then ${contents} else null end`;
 
 /** Seed precisely the immutable file shown on GET; concurrent opens share the winning row. */
@@ -137,113 +117,6 @@ export async function openDraft(
       .onConflictDoNothing();
   }
   return loadDraft(siteId, db, path);
-}
-
-export interface PathReservation {
-  operationId: string;
-  paths: string[];
-  token: string;
-}
-
-const ownedReservation = async (
-  siteId: string,
-  db: Db,
-  operationId: string,
-  paths: string[],
-): Promise<PathReservation | undefined> => {
-  const claimed = await db
-    .select()
-    .from(pathReservations)
-    .where(and(eq(pathReservations.siteId, siteId), inArray(pathReservations.path, paths)));
-  if (
-    claimed.length !== paths.length ||
-    claimed.some((row) => row.operationId !== operationId || row.token !== claimed[0]?.token)
-  )
-    return undefined;
-  const token = claimed[0]?.token;
-  return token ? { operationId, paths, token } : undefined;
-};
-
-/** Reserve every locale destination together; a crashed request's operation rejoins its claim. */
-export async function reservePaths(
-  siteId: string,
-  db: Db,
-  paths: string[],
-  operationId: string,
-): Promise<PathReservation> {
-  const unique = [...new Set(paths)].sort();
-  if (!unique.length) throw new Error('A destination reservation needs at least one path');
-  const [owner] = await db
-    .select({ state: operations.state })
-    .from(operations)
-    .where(and(eq(operations.siteId, siteId), eq(operations.id, operationId)))
-    .limit(1);
-  if (!owner || owner.state === 'finalized')
-    throw new Error('A destination reservation needs an active operation owner');
-  // A worker may have stopped after finalization but before cleanup. Finalization is monotonic,
-  // so these claims are safe to discard and can never become active again.
-  await db
-    .delete(pathReservations)
-    .where(
-      and(
-        eq(pathReservations.siteId, siteId),
-        inArray(pathReservations.path, unique),
-        sql`exists (select 1 from operations where operations.site_id = ${siteId} and operations.id = ${pathReservations.operationId} and operations.state = 'finalized')`,
-      ),
-    );
-  const existing = await ownedReservation(siteId, db, operationId, unique);
-  if (existing) return existing;
-  const token = crypto.randomUUID();
-  const writes = unique.map((path) =>
-    db.insert(pathReservations).values({
-      siteId,
-      path,
-      operationId,
-      token: sql`case when not exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and (contents <> '' or published_sha is null)) then ${token} else null end`,
-    }),
-  );
-  const [first, ...rest] = writes;
-  try {
-    if (first) await db.batch([first, ...rest]);
-  } catch (error) {
-    // Simultaneous retries of one durable operation join whichever token won the batch.
-    const joined = await ownedReservation(siteId, db, operationId, unique);
-    if (joined) return joined;
-    throw error;
-  }
-  return { operationId, paths: unique, token };
-}
-export async function releasePaths(
-  siteId: string,
-  db: Db,
-  reservation: Pick<PathReservation, 'operationId' | 'token'>,
-): Promise<void> {
-  await db
-    .delete(pathReservations)
-    .where(
-      and(
-        eq(pathReservations.siteId, siteId),
-        eq(pathReservations.operationId, reservation.operationId),
-        eq(pathReservations.token, reservation.token),
-      ),
-    );
-}
-
-/** Safe crash cleanup when finalization won but the request stopped before releasing its token. */
-export async function releaseOperationPaths(
-  siteId: string,
-  db: Db,
-  operationId: string,
-): Promise<void> {
-  await db
-    .delete(pathReservations)
-    .where(
-      and(
-        eq(pathReservations.siteId, siteId),
-        eq(pathReservations.operationId, operationId),
-        sql`exists (select 1 from operations where operations.site_id = ${siteId} and operations.id = ${operationId} and operations.state = 'finalized')`,
-      ),
-    );
 }
 
 /** The entry's other languages, so one save can keep their structure in step with this one. */
@@ -384,155 +257,6 @@ export async function saveDraft(
     revision,
     revisions,
   };
-}
-
-/** One entry's conflict as it was read: the three sides, and the questions they raise. */
-export interface EntryConflict {
-  head: string;
-  version?: string;
-  snapshots?: { path: string; revision?: string }[];
-  sides: Record<string, ThreeWay>;
-  /** locale → the path and the blob HEAD has it at, for the languages that moved. */
-  conflicted: Record<string, { path: string; blob: string; revision?: string }>;
-  questions: Question[];
-  merged: MergedChange[];
-}
-
-/** Languages with no draft are read too: a shared value is only shared while its files agree. */
-export async function entryConflict(
-  siteId: string,
-  db: Db,
-  git: Pick<GitClient, 'getFile' | 'getHead'>,
-  form: Form,
-  files: Record<string, string>,
-): Promise<EntryConflict | undefined> {
-  const head = await git.getHead();
-  const read = await Promise.all(
-    Object.entries(files).map(async ([locale, path]) => {
-      const row = await loadDraft(siteId, db, path);
-      const at = await git.getFile(path, head);
-      const was = row?.baseSha === head ? at : await git.getFile(path, row?.baseSha ?? head);
-      if (!row && !at) return undefined;
-      return {
-        locale,
-        path,
-        blob: at?.blob_sha ?? '',
-        revision: row?.revision,
-        moved: Boolean(row) && (at?.blob_sha ?? '') !== row?.baseBlob,
-        side: {
-          base: parseEntry(siteId, was?.contents ?? ''),
-          ours: parseEntry(siteId, row?.contents ?? at?.contents ?? ''),
-          theirs: parseEntry(siteId, at?.contents ?? ''),
-        },
-      };
-    }),
-  );
-  const found = read.filter((f) => f !== undefined);
-  if (!found.some((f) => f.moved)) return undefined;
-  const sides = Object.fromEntries(found.map((f) => [f.locale, f.side]));
-  return {
-    head,
-    version: await blobSha(JSON.stringify({ head, files: read })),
-    snapshots: Object.values(files).map((path) => ({
-      path,
-      revision: found.find((f) => f.path === path)?.revision,
-    })),
-    sides,
-    conflicted: Object.fromEntries(
-      found
-        .filter((f) => f.moved)
-        .map((f) => [f.locale, { path: f.path, blob: f.blob, revision: f.revision }]),
-    ),
-    ...conflictReport(siteId, form, sides),
-  };
-}
-
-/** The row's base becomes the file at HEAD: the draft is now measured against what is there. */
-export async function resolveConflict(
-  siteId: string,
-  db: Db,
-  form: Form,
-  conflict: EntryConflict,
-  answers: Answer[],
-): Promise<{ paths: string[] }> {
-  const resolved = applyResolution(siteId, form, conflict.sides, answers);
-  const updatedAt = Date.now();
-  const writes = Object.entries(conflict.conflicted).map(([locale, { path, blob, revision }]) =>
-    db
-      .update(drafts)
-      .set({
-        revision: sql`case when ${drafts.revision} = ${revision ?? ''} then ${nextRevision(revision)} else null end`,
-        contents: availableContents(
-          siteId,
-          stringifyEntry(siteId, writtenEntry(siteId, resolved[locale], form.fields)),
-        ),
-        baseSha: conflict.head,
-        baseBlob: blob,
-        publishedSha: null,
-        updatedAt,
-      })
-      .where(and(eq(drafts.siteId, siteId), eq(drafts.path, path))),
-  );
-  const [first, ...rest] = writes;
-  if (first) {
-    const anchor = Object.values(conflict.conflicted)[0];
-    if (!anchor) return { paths: [] };
-    const matches = sql.join(
-      (conflict.snapshots ?? Object.values(conflict.conflicted)).map(({ path, revision }) =>
-        revision === undefined
-          ? sql`not exists (select 1 from drafts where site_id = ${siteId} and path = ${path})`
-          : sql`exists (select 1 from drafts where site_id = ${siteId} and path = ${path} and revision = ${revision})`,
-      ),
-      sql` and `,
-    );
-    // The insert's NOT NULL assertion runs even when its conflict handler leaves the row alone.
-    const guard = db
-      .insert(drafts)
-      .values({
-        siteId,
-        path: anchor.path,
-        contents: '',
-        baseSha: '',
-        baseBlob: '',
-        updatedAt,
-        revision: sql`case when ${matches} then ${anchor.revision ?? ''} else null end`,
-      })
-      .onConflictDoNothing();
-    await db.batch([guard, first, ...rest]);
-  }
-  return { paths: Object.values(conflict.conflicted).map((c) => c.path) };
-}
-
-/** Not a saveDraft: that carries one language's values and cannot move a block out of German. */
-export async function resolveDrift(
-  siteId: string,
-  db: Db,
-  git: Pick<GitClient, 'getFile' | 'getHead'>,
-  form: Form,
-  locales: string[],
-  files: Record<string, string>,
-  choices: DriftChoice[],
-  by?: string,
-): Promise<void> {
-  const found = await Promise.all(
-    Object.entries(files).map(async ([locale, path]) => {
-      const loaded = await load(siteId, db, git, path);
-      return loaded && { locale, path, loaded };
-    }),
-  );
-  const open = found.filter((f) => f !== undefined);
-  const before = Object.fromEntries(open.map((f) => [f.locale, f.loaded.entry]));
-  const after = applyDrift(siteId, form, locales, before, choices);
-  const updatedAt = Date.now();
-  // Both sides stamped, so a file the answer leaves alone is not written for the stamp's sake.
-  const writes = open.flatMap(({ locale, path, loaded }) => {
-    const contents = stringifyEntry(siteId, writtenEntry(siteId, after[locale], form.fields));
-    return contents === stringifyEntry(siteId, writtenEntry(siteId, before[locale], form.fields))
-      ? []
-      : [upsert(db, siteId, path, contents, loaded, updatedAt, stampOf(by))];
-  });
-  const [first, ...rest] = writes;
-  if (first) await db.batch([first, ...rest]);
 }
 
 /** Every file in one batch, each at the revision it was read at: one that moved refuses the lot. */
@@ -705,7 +429,7 @@ export async function setEntryStatus(
 const KEPT_ON_RESTORE = ['slug', '_status', '_locales', '_source'] as const;
 
 // A key assigned in place lands after the other `_` keys; `_source` sits right after `_version`.
-const keptSource = (siteId: string, entry: Record<string, unknown>) =>
+export const keptSource = (siteId: string, entry: Record<string, unknown>) =>
   typeof entry._source === 'string' ? withSource(siteId, entry, entry._source) : entry;
 
 /** The base stays where it was, so the publish that follows is an ordinary forward commit. */
@@ -745,7 +469,7 @@ export async function restoreDraft(
 }
 
 // A file as the editor has it: its open draft, or the repository when there is none.
-async function load(
+export async function load(
   siteId: string,
   db: Db,
   git: Pick<GitClient, 'getFile' | 'getHead'>,
@@ -780,7 +504,7 @@ async function load(
 type Loaded = NonNullable<Awaited<ReturnType<typeof load>>>;
 
 // The base moves only when just read from git; an open row keeps the one it was loaded against.
-function upsert(
+export function upsert(
   db: Db,
   siteId: string,
   path: string,
@@ -823,7 +547,7 @@ function upsert(
 }
 
 // A write with nobody signed in leaves the last name standing rather than blanking it.
-const stampOf = (by?: string) => (by ? { updatedBy: by } : {});
+export const stampOf = (by?: string) => (by ? { updatedBy: by } : {});
 
 // Two equal skeletons mean the other languages have nothing to write.
 const skeleton = (siteId: string, form: Form, locale: string, data: unknown) =>
@@ -1263,253 +987,6 @@ export async function draftEditors(siteId: string, db: Db): Promise<Record<strin
   return Object.fromEntries(rows.map((row) => [row.path, row.name]));
 }
 
-/** Picking a held entry releases its hold; the unit of selection is the entry, never the file. */
-export async function readyDrafts(
-  siteId: string,
-  db: Db,
-  entries?: readonly string[],
-): Promise<Draft[]> {
-  const rows = await pendingDrafts(siteId, db);
-  if (entries) {
-    const chosen = new Set(entries);
-    return rows.filter((row) => {
-      const entry = entryKey(row.path);
-      return entry !== undefined && chosen.has(entry);
-    });
-  }
-  const held = await heldDrafts(siteId, db);
-  return rows.filter((row) => {
-    const entry = entryKey(row.path);
-    return !entry || !(entry in held);
-  });
-}
-
-/** A file someone changed in the repository after the editor loaded it. */
-export class DraftConflictError extends Error {
-  override name = 'DraftConflictError';
-  constructor(readonly paths: string[]) {
-    super(
-      paths.length === 1
-        ? `${paths[0]} changed in the repository after it was opened`
-        : `${paths.length} files changed in the repository after they were opened — ${paths.join(', ')}`,
-    );
-  }
-}
-
-const commitMessage = (paths: string[]) =>
-  paths.length === 1 && paths[0]
-    ? `Update ${paths[0].replace(/^src\/content\//, '').replace(/\.[^.]+$/, '')}`
-    : `Update ${paths.length} files\n\n${paths.map((p) => `- ${p}`).join('\n')}`;
-
-/** Async: the language an entry is written in is the entry's own, not the site's default. */
-export type SourceOf = (
-  path: string,
-) => Promise<{ locale: string; path: string; form: Form } | undefined>;
-
-/** Rows are re-seeded on the committed bytes: a translation is stamped on the way past. */
-export async function publishDrafts(
-  siteId: string,
-  db: Db,
-  git: Pick<GitClient, 'getFile' | 'getHead' | 'publish'>,
-  sourceOf?: SourceOf,
-  entries?: readonly string[],
-  snapshot?: readonly Draft[],
-  durable?: { userId?: string; baseSha?: string },
-): Promise<{ commit_sha: string; paths: string[]; released: string[] } | undefined> {
-  let rows = snapshot ?? (await readyDrafts(siteId, db, entries));
-  if (!rows.length) return undefined;
-  const retryKey = `publish:${rows
-    .map((row) => `${row.path}\u0000${row.revision}\u0000${row.baseSha}\u0000${row.baseBlob}`)
-    .sort()
-    .join('\u0001')}`;
-  let existing = durable ? await findOperation(siteId, db, retryKey) : undefined;
-  if (durable && !existing) {
-    const selected = new Set(rows.map((row) => row.path));
-    existing = (await recentOperations(siteId, db, 'publish')).find(
-      (operation) =>
-        operation.state !== 'finalized' &&
-        Object.keys(operation.revisions).every((path) => selected.has(path)),
-    );
-  }
-  if (existing) {
-    const captured = new Set(Object.keys(existing.revisions));
-    rows = rows.filter((row) => captured.has(row.path));
-  }
-  const completed = existing?.result as {
-    commit_sha?: unknown;
-    paths?: unknown;
-    released?: unknown;
-  } | null;
-  if (
-    existing?.state === 'finalized' &&
-    typeof completed?.commit_sha === 'string' &&
-    Array.isArray(completed.paths) &&
-    Array.isArray(completed.released)
-  )
-    return {
-      commit_sha: completed.commit_sha,
-      paths: completed.paths.filter((path): path is string => typeof path === 'string'),
-      released: completed.released.filter((entry): entry is string => typeof entry === 'string'),
-    };
-  // A caller that judged the selection at one revision commits on that one or not at all, and a
-  // moved branch is refused before an operation is recorded that every retry would then find.
-  const base_sha = existing?.baseSha ?? durable?.baseSha ?? (await git.getHead());
-  if (!existing && durable?.baseSha && (await git.getHead()) !== durable.baseSha)
-    throw new RefMovedError(`the branch moved past ${durable.baseSha}`);
-  // Every read is of the commit the publish is made against, so the check and the parent agree.
-  const current = await Promise.all(rows.map((r) => git.getFile(r.path, base_sha)));
-  if (!existing) {
-    const conflicts = rows
-      .filter((r, i) => (current[i]?.blob_sha ?? '') !== r.baseBlob)
-      .map((r) => r.path);
-    if (conflicts.length) throw new DraftConflictError(conflicts);
-  }
-  const paths = rows.map((r) => r.path);
-  let written = await Promise.all(
-    rows.map(async ({ path, contents }, i) => {
-      const source = await sourceOf?.(path);
-      if (!source || source.path === path) return { path, contents };
-      // The source language as this commit leaves it: its own draft if this publish writes one.
-      const drafted = rows.find((r) => r.path === source.path)?.contents;
-      const file = drafted
-        ? { contents: drafted, blob_sha: await blobSha(drafted) }
-        : await git.getFile(source.path, base_sha);
-      if (!file) return { path, contents };
-      if (rows[i]?.revision.startsWith(SOURCE_CHANGE_REVISION)) return { path, contents };
-      const marked = await markTranslation(
-        siteId,
-        source.form,
-        { locale: source.locale, ...file },
-        contents,
-        current[i]?.contents,
-        true,
-      );
-      return { path, contents: marked };
-    }),
-  );
-  const files: PublishFile[] = [...written];
-  // A moved but hidden page never served its pending address, so it owes no slug-change redirect.
-  const rules = rows.flatMap((r) =>
-    (r.pendingRedirects ?? []).filter(
-      (rule) => rule.reason !== 'slug-change' || isLive(siteId, parseEntry(siteId, r.contents)),
-    ),
-  );
-  // An entry this commit puts back on the site takes its hide rules with it.
-  const back = new Set(
-    rows.flatMap((r, i) =>
-      current[i] &&
-      !isLive(siteId, parseEntry(siteId, current[i]?.contents ?? '')) &&
-      isLive(siteId, parseEntry(siteId, r.contents))
-        ? (entryKey(r.path) ?? [])
-        : [],
-    ),
-  );
-  const undone = (rule: RedirectRule) =>
-    rule.reason === 'hidden' && rule.entry !== undefined && back.has(rule.entry);
-  if (rules.length || back.size) {
-    const file = await appendRedirects(siteId, git, rules, base_sha, undone);
-    if (file) files.push(file);
-  }
-  const released = [
-    ...new Set(rows.filter((r) => r.heldBy).flatMap((r) => entryKey(r.path) ?? [])),
-  ];
-  const operation = durable
-    ? (existing ??
-      (await beginOperation(siteId, db, {
-        retryKey,
-        kind: 'publish',
-        paths: files.map((file) => file.path),
-        revisions: Object.fromEntries(
-          rows.map((row) => [row.path, `${row.revision}:${row.baseSha}:${row.baseBlob}`]),
-        ),
-        baseSha: base_sha,
-        userId: durable.userId,
-        subject: paths.length === 1 ? (paths[0] ?? null) : null,
-        detail: {
-          files: paths.length,
-          entries: [...new Set(paths.flatMap((path) => entryKey(path) ?? []))].slice(0, 8),
-          paths,
-        },
-      })))
-    : undefined;
-  let commit_sha = operation?.commitSha;
-  if (operation && !commit_sha)
-    commit_sha = await recoverOperationCommit(siteId, db, git, operation);
-  if (!commit_sha) {
-    const published = await git.publish(files, {
-      base_sha,
-      message: operation
-        ? operationMessage(commitMessage(paths), operation.id)
-        : commitMessage(paths),
-    });
-    commit_sha = published.commit_sha;
-  }
-  if (operation && (operation.commitSha || (existing && commit_sha)))
-    written = await Promise.all(
-      rows
-        .filter((row) => row.path in operation.revisions)
-        .map(async (row) => ({
-          path: row.path,
-          contents: (await git.getFile(row.path, commit_sha))?.contents ?? '',
-        })),
-    );
-  const result = {
-    commit_sha,
-    paths,
-    released,
-  };
-  if (operation) await markOperationCommitted(siteId, db, operation.id, commit_sha, result);
-  // Await the blobs first: a drizzle statement is thenable and would run outside the batch.
-  const finalizedRows = operation
-    ? written.map((file) => {
-        const currentRow = rows.find((row) => row.path === file.path);
-        const [revision, baseSha, baseBlob] = (operation.revisions[file.path] ?? '').split(':');
-        if (!currentRow || !revision || baseSha === undefined || baseBlob === undefined)
-          throw new Error(`Missing captured revision for ${file.path}`);
-        return { ...currentRow, revision, baseSha, baseBlob };
-      })
-    : rows;
-  const seeded = await Promise.all(
-    written.map(async (file) => ({ ...file, blob: await blobSha(file.contents) })),
-  );
-  const writes = seeded.map(({ path, contents, blob }, i) => {
-    const row = finalizedRows[i];
-    if (!row) throw new Error('Missing published snapshot');
-    const unchanged = eq(drafts.revision, row.revision);
-    return db
-      .update(drafts)
-      .set({
-        contents: sql`case when ${unchanged} then ${contents} else ${drafts.contents} end`,
-        baseSha: commit_sha,
-        baseBlob: blob,
-        publishedSha: sql`case when ${unchanged} then ${commit_sha} else null end`,
-        heldBy: sql`case when ${unchanged} then null else ${drafts.heldBy} end`,
-        heldAt: sql`case when ${unchanged} then null else ${drafts.heldAt} end`,
-        pendingRedirects: sql`case when ${unchanged} then null else ${drafts.pendingRedirects} end`,
-      })
-      .where(
-        and(
-          eq(drafts.siteId, siteId),
-          eq(drafts.path, path),
-          eq(drafts.baseSha, row.baseSha),
-          eq(drafts.baseBlob, row.baseBlob),
-        ),
-      );
-  });
-  const statements = operation
-    ? [...writes, finalizeOperationStatement(siteId, db, operation.id)]
-    : writes;
-  const [first, ...rest] = statements;
-  if (first)
-    try {
-      await db.batch([first, ...rest]);
-    } catch (cause) {
-      if (operation) throw new OperationFinalizationError(operation.id, commit_sha, { cause });
-      throw cause;
-    }
-  return result;
-}
-
 /** Not a `saveDraft`: the paths it fills go into `_machine` and stay there until typed over. */
 export async function saveTranslated(
   siteId: string,
@@ -1541,368 +1018,4 @@ export async function saveTranslated(
   const updatedAt = Date.now();
   await db.batch([upsert(db, siteId, path, contents, loaded, updatedAt, stampOf(by))]);
   return { updated_at: updatedAt, pending: (await blobSha(contents)) !== loaded.baseBlob };
-}
-
-export { RevertConflictError } from './lifecycle.js';
-
-/** The operation record and exact configured paths jointly bound repository write authority. */
-export class CommitScopeError extends Error {
-  override name = 'CommitScopeError';
-  constructor() {
-    super('This commit is not an eligible CMS operation, or contains paths outside its scope.');
-  }
-}
-export async function commitScope(siteId: string, db: Db, sha: string, restore = false) {
-  const durable = await db
-    .select()
-    .from(operations)
-    .where(
-      and(
-        eq(operations.siteId, siteId),
-        eq(operations.commitSha, sha),
-        eq(operations.state, 'finalized'),
-      ),
-    );
-  const events = await db
-    .select()
-    .from(activity)
-    .where(and(eq(activity.siteId, siteId), eq(activity.commitSha, sha)));
-  const kinds = restore
-    ? ['entry-delete', 'locale-off']
-    : [
-        'publish',
-        'entry-delete',
-        'locale-off',
-        'entry-rename',
-        'redirect-added',
-        'redirect-changed',
-        'redirect-deleted',
-      ];
-  const event = [...durable, ...events].find((e) => kinds.includes(e.kind));
-  if (!event) throw new CommitScopeError();
-  const detail = event.detail as { entries?: string[]; from?: string; paths?: string[] } | null;
-  const keys = new Set(Array.isArray(detail?.entries) ? detail.entries : []);
-  const subject = entryKey(event.subject ?? '');
-  if (subject) keys.add(subject);
-  if (event.kind === 'entry-rename' && subject && typeof detail?.from === 'string')
-    keys.add(`${subject.split('/')[0]}/${detail.from}`);
-  return {
-    kind: event.kind,
-    allows: (path: string) =>
-      'paths' in event && Array.isArray(event.paths)
-        ? event.paths.includes(path)
-        : path === REDIRECTS ||
-          (Array.isArray(detail?.paths)
-            ? detail.paths.includes(path)
-            : keys.has(entryKey(path) ?? '')),
-  };
-}
-
-/** Not `git revert`: the trees API has no three-way merge, so the inverse is composed here. */
-export async function revertCommit(
-  siteId: string,
-  db: Db,
-  git: Pick<GitClient, 'getCommit' | 'getFile' | 'getHead' | 'publish'>,
-  commitSha: string,
-  allowedPath: (path: string) => boolean = (path) =>
-    /^src\/content\/[\w-]+\/[\w-]+\/[\w-]+\.yaml$/.test(path) || path === REDIRECTS,
-  restoring = false,
-  durable?: { userId?: string },
-): Promise<{ commit_sha: string; paths: string[]; files: PublishFile[]; operation_id?: string }> {
-  const scope = await commitScope(siteId, db, commitSha, restoring);
-  const commit = await git.getCommit(commitSha);
-  if (!commit.paths.every((path) => scope.allows(path) && allowedPath(path)))
-    throw new CommitScopeError();
-  const parent = commit.parent;
-  if (!parent) throw new Error(`${commitSha} has no commit before it to go back to`);
-  const retryKey = `${restoring ? 'restore' : 'revert'}:${commitSha}`;
-  const existing = durable ? await findOperation(siteId, db, retryKey) : undefined;
-  const head = existing?.baseSha ?? (await git.getHead());
-  const paths = commit.paths.filter((p) => p !== REDIRECTS);
-  const [then, now, before] = await Promise.all([
-    Promise.all(paths.map((p) => git.getFile(p, commitSha))),
-    Promise.all(paths.map((p) => git.getFile(p, head))),
-    Promise.all(paths.map((p) => git.getFile(p, parent))),
-  ]);
-  if (!existing) {
-    const moved = paths.filter((_, i) => (now[i]?.blob_sha ?? '') !== (then[i]?.blob_sha ?? ''));
-    if (moved.length) throw new RevertConflictError(moved);
-  }
-  const files: PublishFile[] = paths.map((path, i) => ({
-    path,
-    contents: before[i]?.contents ?? null,
-  }));
-  const rules = await revertRedirects(siteId, git, { commit: commitSha, parent, head });
-  const changed = rules ? [...files, rules] : files;
-  const rows: Draft[] = [];
-  // Reading candidates is independent; the later revision-guarded writes remain one batch.
-  for (const chunk of chunksOf(paths, D1_MAX_BOUND_PARAMETERS - 1))
-    rows.push(
-      ...(await db
-        .select()
-        .from(drafts)
-        .where(and(eq(drafts.siteId, siteId), inArray(drafts.path, chunk)))),
-    );
-  const operation = durable
-    ? await beginOperation(siteId, db, {
-        retryKey,
-        kind: restoring ? 'restore' : 'revert',
-        paths: changed.map((file) => file.path),
-        revisions: Object.fromEntries(
-          rows.map((row) => [row.path, `${row.revision}:${row.baseSha}:${row.baseBlob}`]),
-        ),
-        baseSha: head,
-        userId: durable.userId,
-        detail: { of: commitSha, files: paths.length, ...(restoring ? { restore: true } : {}) },
-      })
-    : undefined;
-  const completed = operation?.result as { commit_sha?: unknown; paths?: unknown } | null;
-  if (
-    operation?.state === 'finalized' &&
-    typeof completed?.commit_sha === 'string' &&
-    Array.isArray(completed.paths)
-  )
-    return {
-      commit_sha: completed.commit_sha,
-      paths: completed.paths.filter((path): path is string => typeof path === 'string'),
-      files,
-      operation_id: operation.id,
-    };
-  let commit_sha = operation?.commitSha;
-  if (operation && !commit_sha)
-    commit_sha = await recoverOperationCommit(siteId, db, git, operation);
-  if (!commit_sha) {
-    const message = `Revert "${commit.message.split('\n')[0]}"\n\nThis reverts commit ${commit.sha}.`;
-    const published = await git.publish(changed, {
-      base_sha: head,
-      message: operation ? operationMessage(message, operation.id) : message,
-    });
-    commit_sha = published.commit_sha;
-  }
-  const result = {
-    commit_sha,
-    paths: files.map((file) => file.path),
-    ...(operation ? { operation_id: operation.id } : {}),
-  };
-  if (operation) await markOperationCommitted(siteId, db, operation.id, commit_sha, result);
-  // Await the blobs first: a drizzle statement is thenable and would run outside the batch.
-  const rebased = await Promise.all(
-    rows.map(async (row) => {
-      const restored = files.find((f) => f.path === row.path)?.contents ?? null;
-      return {
-        path: row.path,
-        revision: row.revision,
-        gone: row.contents === '' && Boolean(row.publishedSha) && restored !== null,
-        blob: restored === null ? '' : await blobSha(restored),
-      };
-    }),
-  );
-  const writes = rebased.map(({ path, revision, gone, blob }) => {
-    const where = and(eq(drafts.siteId, siteId), eq(drafts.path, path));
-    return gone
-      ? db.delete(drafts).where(and(where, eq(drafts.revision, revision)))
-      : db
-          .update(drafts)
-          .set({
-            baseSha: commit_sha,
-            baseBlob: blob,
-            publishedSha: null,
-            revision: nextRevision(revision),
-          })
-          .where(and(where, eq(drafts.revision, revision)));
-  });
-  const publishWrites =
-    scope.kind === 'publish'
-      ? then.flatMap((published, i) => {
-          const path = paths[i];
-          if (!published || !path) return [];
-          return [
-            db
-              .insert(drafts)
-              .values({
-                siteId,
-                path,
-                revision: crypto.randomUUID(),
-                contents: published.contents,
-                baseSha: commit_sha,
-                baseBlob: before[i]?.blob_sha ?? '',
-                updatedAt: Date.now(),
-              })
-              .onConflictDoNothing(),
-          ];
-        })
-      : [];
-  const statements = [
-    ...writes,
-    ...publishWrites,
-    ...(operation && !restoring ? [finalizeOperationStatement(siteId, db, operation.id)] : []),
-  ];
-  const [first, ...rest] = statements;
-  if (first)
-    try {
-      await db.batch([first, ...rest]);
-    } catch (cause) {
-      if (operation) throw new OperationFinalizationError(operation.id, commit_sha, { cause });
-      throw cause;
-    }
-  // ⚠️ `files` carries file contents for `restoreCommit`; a route must never answer with it.
-  return { ...result, files };
-}
-
-/** The `_` keys a turn-off rewrites, which are the ones a restore has to put back. */
-const MARKS = ['_locales', '_i18n', '_source'];
-
-/** Open drafts take the restored marks, or the next publish writes the language off again. */
-export async function restoreCommit(
-  siteId: string,
-  db: Db,
-  git: Pick<GitClient, 'getCommit' | 'getFile' | 'getHead' | 'publish'>,
-  commitSha: string,
-  allowedPath?: (path: string) => boolean,
-  durable?: { userId?: string },
-): Promise<{ commit_sha: string; paths: string[]; operation_id?: string }> {
-  const { commit_sha, paths, files, operation_id } = await revertCommit(
-    siteId,
-    db,
-    git,
-    commitSha,
-    allowedPath,
-    true,
-    durable,
-  );
-  for (const file of files) {
-    if (file.contents === null) continue;
-    const open = await loadDraft(siteId, db, file.path);
-    if (!open) continue;
-    const entry = writtenEntry(siteId, parseEntry(siteId, open.contents));
-    const restored = parseEntry(siteId, file.contents) as Record<string, unknown>;
-    for (const mark of MARKS) {
-      if (mark in restored) entry[mark] = restored[mark];
-      else delete entry[mark];
-    }
-    const contents = stringifyEntry(siteId, keptSource(siteId, writtenEntry(siteId, entry)));
-    if (contents === open.contents) continue;
-    await db
-      .update(drafts)
-      .set({
-        contents,
-        revision: sql`case when ${drafts.revision} = ${open.revision} then ${nextRevision(open.revision)} else null end`,
-      })
-      .where(and(eq(drafts.siteId, siteId), eq(drafts.path, file.path)));
-  }
-  return { commit_sha, paths, ...(operation_id ? { operation_id } : {}) };
-}
-
-type DeploymentGit = Pick<GitClient, 'compareCommits' | 'contentFiles'>;
-
-/** Green is not enough: an entry still being edited keeps its row until its lock runs out. */
-export async function clearPublished(
-  siteId: string,
-  db: Db,
-  deployedSha: string,
-  deploymentOrNow: DeploymentGit | number = Date.now(),
-  currentTime = Date.now(),
-): Promise<string[]> {
-  const deployment = typeof deploymentOrNow === 'number' ? undefined : deploymentOrNow;
-  const now = typeof deploymentOrNow === 'number' ? deploymentOrNow : currentTime;
-  let rows = await db
-    .select({
-      path: drafts.path,
-      revision: drafts.revision,
-      baseBlob: drafts.baseBlob,
-      publishedSha: drafts.publishedSha,
-    })
-    .from(drafts)
-    .where(
-      and(
-        eq(drafts.siteId, siteId),
-        deployment ? isNotNull(drafts.publishedSha) : eq(drafts.publishedSha, deployedSha),
-        ne(drafts.contents, ''),
-      ),
-    );
-  if (!rows.length) return [];
-  if (deployment) {
-    const deployed = new Map(
-      (await deployment.contentFiles(deployedSha)).map((file) => [file.path, file.contents]),
-    );
-    const deployedBlobs = new Map(
-      await Promise.all(
-        rows.flatMap((row) => {
-          const contents = deployed.get(row.path);
-          return contents === undefined
-            ? []
-            : [blobSha(contents).then((blob) => [row.path, blob] as const)];
-        }),
-      ),
-    );
-    const unresolved = [
-      ...new Set(
-        rows.flatMap((row) =>
-          row.publishedSha && deployedBlobs.get(row.path) !== row.baseBlob
-            ? [row.publishedSha]
-            : [],
-        ),
-      ),
-    ];
-    const ancestry = new Map(
-      await Promise.all(
-        unresolved.map(
-          async (publishedSha) =>
-            [publishedSha, await deployment.compareCommits(publishedSha, deployedSha)] as const,
-        ),
-      ),
-    );
-    // A descendant supersedes the overlay even if it changed the file. Outside that history,
-    // byte equality is the only proof that removing the overlay reveals what is actually live.
-    rows = rows.filter(
-      (row) =>
-        deployedBlobs.get(row.path) === row.baseBlob ||
-        ancestry.get(row.publishedSha ?? '') === 'ahead' ||
-        ancestry.get(row.publishedSha ?? '') === 'identical',
-    );
-    if (!rows.length) return [];
-  }
-  const editing = new Set(
-    (
-      await db
-        .select({ entry: locks.entry })
-        .from(locks)
-        .where(and(eq(locks.siteId, siteId), gt(locks.expiresAt, now)))
-    ).map((l) => l.entry),
-  );
-  // Rows are paths and locks are entries, so the two only meet through the entry a path is of.
-  const clear = rows.flatMap(({ path }) => {
-    const entry = entryKey(path);
-    return entry && editing.has(entry) ? [] : [path];
-  });
-  if (!clear.length) return [];
-  const selected = new Set(clear);
-  const candidates = rows.filter((r) => selected.has(r.path));
-  // Site is one binding. Each row adds path, revision, publish/blob identity, and the three
-  // lock-subquery values, so fourteen rows use 99 of D1's 100 available bindings.
-  const perQuery = Math.floor((D1_MAX_BOUND_PARAMETERS - 1) / 7);
-  const removed: { path: string }[] = [];
-  for (const chunk of chunksOf(candidates, perQuery))
-    removed.push(
-      ...(await db
-        .delete(drafts)
-        .where(
-          and(
-            eq(drafts.siteId, siteId),
-            or(
-              ...chunk.map((r) =>
-                and(
-                  eq(drafts.path, r.path),
-                  eq(drafts.revision, r.revision),
-                  eq(drafts.publishedSha, r.publishedSha ?? deployedSha),
-                  eq(drafts.baseBlob, r.baseBlob),
-                  sql`not exists (select 1 from locks where site_id = ${siteId} and entry = ${entryKey(r.path) ?? ''} and expires_at > ${now})`,
-                ),
-              ),
-            ),
-          ),
-        )
-        .returning({ path: drafts.path })),
-    );
-  return removed.map((row) => row.path);
 }
