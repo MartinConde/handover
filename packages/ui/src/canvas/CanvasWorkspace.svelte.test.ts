@@ -11,7 +11,9 @@ const fields = [
 
 let app: ReturnType<typeof mount>;
 
-afterEach(() => {
+afterEach(async () => {
+  // Settle this test's lazy renderer import before a later test mocks the same module.
+  await import('./canvas-renderer');
   if (app) unmount(app);
   vi.useRealTimers();
   document.body.innerHTML = '';
