@@ -1,6 +1,6 @@
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
 import { Miniflare } from 'miniflare';
-import { expect, test } from 'vitest';
+import { expect, onTestFinished, test } from 'vitest';
 import { parseEntry, staleLocales } from './content.js';
 import {
   DraftConflictError,
@@ -12,7 +12,7 @@ import {
   resolveConflict,
   saveDraft,
 } from './db.js';
-import { createGitClient, RefMovedError } from './git.js';
+import { createGitClient, type GitClient, RefMovedError } from './git.js';
 import { deleteEntry, renameEntry } from './lifecycle.js';
 import type { Form } from './schema.js';
 import * as tables from './tables.js';
@@ -25,6 +25,19 @@ const env = process.env;
 const configured = Boolean(
   env.GITHUB_APP_ID && env.GITHUB_PRIVATE_KEY && env.GITHUB_INSTALLATION_ID && env.GITHUB_REPO,
 );
+
+// Registered before the seed, so a failed assert still leaves the throwaway repo clean.
+const removeAfter = (git: GitClient, name: string, paths: string[]) =>
+  onTestFinished(async () => {
+    const head = await git.getHead();
+    const left: string[] = [];
+    for (const path of paths) if (await git.getFile(path, head)) left.push(path);
+    if (left.length === 0) return;
+    await git.publish(
+      left.map((path) => ({ path, contents: null })),
+      { base_sha: head, message: `Clean up after ${name}` },
+    );
+  });
 
 test.skipIf(!configured)('getFile reads a file from the throwaway repo', async () => {
   const [owner, repo] = (env.GITHUB_REPO ?? '').split('/');
@@ -114,6 +127,11 @@ test.skipIf(!configured)(
           .filter((l) => l.startsWith('+  - _id:')).length,
       };
     };
+    removeAfter(git, name, [
+      `src/content/listings/en/${name}.yaml`,
+      `src/content/listings/en/${name}-b.yaml`,
+      redirects,
+    ]);
     const { commit_sha: seeded } = await git.publish(
       [
         {
@@ -142,11 +160,6 @@ test.skipIf(!configured)(
       files: [`modified ${redirects}`, `removed src/content/listings/en/${name}-b.yaml`],
       newRules: 1,
     });
-
-    await git.publish([{ path: redirects, contents: null }], {
-      base_sha: deleted,
-      message: `Clean up after ${name}`,
-    });
   },
   60_000,
 );
@@ -169,6 +182,7 @@ test.skipIf(!configured)(
       script: 'export default {}',
       d1Databases: { DB: ':memory:' },
     });
+    onTestFinished(() => mf.dispose());
     const binding = await mf.getD1Database('DB');
     const ddl = await generateSQLiteMigration(
       await generateSQLiteDrizzleJson({}),
@@ -179,6 +193,7 @@ test.skipIf(!configured)(
 
     const name = `it-${(await git.getHead()).slice(0, 7)}`;
     const paths = [1, 2].map((n) => `src/content/listings/en/${name}-${n}.yaml`);
+    removeAfter(git, name, paths);
     const { commit_sha: seeded } = await git.publish(
       paths.map((path) => ({ path, contents: `_version: 1\ntitle: "${name}"\n` })),
       { base_sha: await git.getHead(), message: `Seed ${name}` },
@@ -198,12 +213,6 @@ test.skipIf(!configured)(
     expect(diff.files.map((f) => f.filename).toSorted()).toEqual(paths.toSorted());
     // The rows are re-seeded rather than deleted, so "went out" means nothing is pending any more.
     expect(await pendingDrafts('default', db)).toEqual([]);
-
-    await git.publish(
-      paths.map((path) => ({ path, contents: null })),
-      { base_sha: published?.commit_sha ?? '', message: `Clean up after ${name}` },
-    );
-    await mf.dispose();
   },
   60_000,
 );
@@ -236,6 +245,7 @@ test.skipIf(!configured)(
       script: 'export default {}',
       d1Databases: { DB: ':memory:' },
     });
+    onTestFinished(() => mf.dispose());
     const binding = await mf.getD1Database('DB');
     const ddl = await generateSQLiteMigration(
       await generateSQLiteDrizzleJson({}),
@@ -247,6 +257,7 @@ test.skipIf(!configured)(
     const name = `it-${(await git.getHead()).slice(0, 7)}`;
     const en = `src/content/listings/en/${name}.yaml`;
     const de = `src/content/listings/de/${name}.yaml`;
+    removeAfter(git, name, [en, de]);
     const sourceOf = async (path: string) =>
       path === de ? { locale: 'en', path: en, form: TRANSLATED } : undefined;
     // Both files as one commit has them: a moving branch read twice is two repositories.
@@ -260,7 +271,7 @@ test.skipIf(!configured)(
         },
         'en',
       );
-    const seeded = await git.publish(
+    await git.publish(
       [
         {
           path: en,
@@ -302,12 +313,6 @@ test.skipIf(!configured)(
     const caught = await publishDrafts('default', db, git, sourceOf);
 
     expect(await stale(caught?.commit_sha ?? '')).toEqual([]);
-
-    await git.publish(
-      [en, de].map((path) => ({ path, contents: null })),
-      { base_sha: caught?.commit_sha ?? seeded.commit_sha, message: `Clean up after ${name}` },
-    );
-    await mf.dispose();
   },
   120_000,
 );
@@ -329,6 +334,7 @@ const harness = async () => {
     script: 'export default {}',
     d1Databases: { DB: ':memory:' },
   });
+  onTestFinished(() => mf.dispose());
   const binding = await mf.getD1Database('DB');
   const ddl = await generateSQLiteMigration(
     await generateSQLiteDrizzleJson({}),
@@ -339,7 +345,7 @@ const harness = async () => {
     const res = await git.request(`/repos/${app.owner}/${app.repo}/git/commits/${sha}`);
     return ((await res.json()) as { parents: { sha: string }[] }).parents[0]?.sha;
   };
-  return { app, git, db: openDb('default', binding), parentOf, dispose: () => mf.dispose() };
+  return { app, git, db: openDb('default', binding), parentOf };
 };
 
 const LISTING = (name: string) =>
@@ -348,10 +354,11 @@ const LISTING = (name: string) =>
 test.skipIf(!configured)(
   'a publish that follows your own is not a conflict with it',
   async () => {
-    const { git, db, parentOf, dispose } = await harness();
+    const { git, db, parentOf } = await harness();
     const name = `it-self-${(await git.getHead()).slice(0, 7)}`;
     const en = `src/content/listings/en/${name}.yaml`;
     const de = `src/content/listings/de/${name}.yaml`;
+    removeAfter(git, name, [en, de]);
     // The publish stamps the translation, so the repository's bytes are not the row's.
     const sourceOf = async (path: string) =>
       path === de ? { locale: 'en', path: en, form: TRANSLATED } : undefined;
@@ -382,12 +389,6 @@ test.skipIf(!configured)(
     const row = await loadDraft('default', db, de);
     expect(row?.baseSha).toBe(second?.commit_sha);
     expect(row?.baseBlob).toBe((await git.getFile(de, second?.commit_sha ?? ''))?.blob_sha);
-
-    await git.publish(
-      [en, de].map((path) => ({ path, contents: null })),
-      { base_sha: second?.commit_sha ?? '', message: `Clean up after ${name}` },
-    );
-    await dispose();
   },
   120_000,
 );
@@ -395,9 +396,10 @@ test.skipIf(!configured)(
 test.skipIf(!configured)(
   'a commit that rewrites the file with identical bytes is not a conflict',
   async () => {
-    const { git, db, parentOf, dispose } = await harness();
+    const { git, db, parentOf } = await harness();
     const name = `it-same-${(await git.getHead()).slice(0, 7)}`;
     const path = `src/content/listings/en/${name}.yaml`;
+    removeAfter(git, name, [path]);
     const { commit_sha: seeded } = await git.publish([{ path, contents: LISTING(name) }], {
       base_sha: await git.getHead(),
       message: `Seed ${name}`,
@@ -422,12 +424,6 @@ test.skipIf(!configured)(
     expect((await git.getFile(path, published?.commit_sha ?? ''))?.contents).toContain(
       'A restored mill.',
     );
-
-    await git.publish([{ path, contents: null }], {
-      base_sha: published?.commit_sha ?? '',
-      message: `Clean up after ${name}`,
-    });
-    await dispose();
   },
   120_000,
 );
@@ -435,9 +431,10 @@ test.skipIf(!configured)(
 test.skipIf(!configured)(
   'a commit that changed the file is a conflict, and nothing is written',
   async () => {
-    const { git, db, dispose } = await harness();
+    const { git, db } = await harness();
     const name = `it-theirs-${(await git.getHead()).slice(0, 7)}`;
     const path = `src/content/listings/en/${name}.yaml`;
+    removeAfter(git, name, [path]);
     const { commit_sha: seeded } = await git.publish([{ path, contents: LISTING(name) }], {
       base_sha: await git.getHead(),
       message: `Seed ${name}`,
@@ -462,12 +459,6 @@ test.skipIf(!configured)(
     expect((caught as DraftConflictError).paths).toEqual([path]);
     expect(await git.getHead()).toBe(theirs);
     expect((await git.getFile(path, theirs))?.contents).toContain('A mill above the weir.');
-
-    await git.publish([{ path, contents: null }], {
-      base_sha: theirs,
-      message: `Clean up after ${name}`,
-    });
-    await dispose();
   },
   120_000,
 );
@@ -475,10 +466,11 @@ test.skipIf(!configured)(
 test.skipIf(!configured)(
   'a commit to a different file leaves the publish alone',
   async () => {
-    const { app, git, db, dispose } = await harness();
+    const { app, git, db } = await harness();
     const name = `it-other-${(await git.getHead()).slice(0, 7)}`;
     const mine = `src/content/listings/en/${name}.yaml`;
     const theirs = `src/content/listings/en/${name}-theirs.yaml`;
+    removeAfter(git, name, [mine, theirs]);
     const { commit_sha: seeded } = await git.publish(
       [mine, theirs].map((path) => ({ path, contents: LISTING(name) })),
       { base_sha: await git.getHead(), message: `Seed ${name}` },
@@ -502,20 +494,15 @@ test.skipIf(!configured)(
     const diff = (await res.json()) as { total_commits: number; files: { filename: string }[] };
     expect(diff.total_commits).toBe(1);
     expect(diff.files.map((f) => f.filename)).toEqual([mine]);
-
-    await git.publish(
-      [mine, theirs].map((path) => ({ path, contents: null })),
-      { base_sha: published?.commit_sha ?? '', message: `Clean up after ${name}` },
-    );
-    await dispose();
   },
   120_000,
 );
 
 // The way out of the conflict above that is not giving up the draft.
 const conflicted = async (name: string) => {
-  const { git, db, parentOf, dispose } = await harness();
+  const { git, db, parentOf } = await harness();
   const path = `src/content/listings/en/${name}.yaml`;
+  removeAfter(git, name, [path]);
   const { commit_sha: seeded } = await git.publish([{ path, contents: LISTING(name) }], {
     base_sha: await git.getHead(),
     message: `Seed ${name}`,
@@ -541,14 +528,14 @@ const conflicted = async (name: string) => {
   await expect(publishDrafts('default', db, git)).rejects.toBeInstanceOf(DraftConflictError);
   const conflict = await entryConflict('default', db, git, TRANSLATED, { en: path });
   if (!conflict) throw new Error('the commit above is what makes this a conflict');
-  return { git, db, path, theirs, conflict, parentOf, dispose };
+  return { git, db, path, theirs, conflict, parentOf };
 };
 
 test.skipIf(!configured)(
   'keeping all mine resolves the conflict and publishes over the code',
   async () => {
     const name = `it-mine-${Date.now().toString(36)}`;
-    const { git, db, path, conflict, parentOf, dispose } = await conflicted(name);
+    const { git, db, path, conflict, parentOf } = await conflicted(name);
 
     expect(conflict.questions.map((q) => [q.path, q.base])).toEqual([['price', '425000']]);
     await resolveConflict(
@@ -567,12 +554,6 @@ test.skipIf(!configured)(
     expect(file).toContain('price: 400000');
     expect(file).toContain(`title: "${name} b"`);
     expect(file).toContain('A restored mill.');
-
-    await git.publish([{ path, contents: null }], {
-      base_sha: published?.commit_sha ?? '',
-      message: `Clean up after ${name}`,
-    });
-    await dispose();
   },
   180_000,
 );
@@ -581,7 +562,7 @@ test.skipIf(!configured)(
   'taking all theirs resolves it too, and publishes what is left of the draft',
   async () => {
     const name = `it-theirs2-${Date.now().toString(36)}`;
-    const { git, db, path, conflict, parentOf, dispose } = await conflicted(name);
+    const { git, db, path, conflict, parentOf } = await conflicted(name);
 
     await resolveConflict(
       'default',
@@ -597,12 +578,6 @@ test.skipIf(!configured)(
     const file = (await git.getFile(path, published?.commit_sha ?? ''))?.contents ?? '';
     expect(file).toContain('price: 450000');
     expect(file).toContain('A restored mill.');
-
-    await git.publish([{ path, contents: null }], {
-      base_sha: published?.commit_sha ?? '',
-      message: `Clean up after ${name}`,
-    });
-    await dispose();
   },
   180_000,
 );
