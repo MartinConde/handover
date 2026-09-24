@@ -187,6 +187,13 @@ interface TokenSlot {
 
 // One shared token per GitHub: a fresh token reads the branch head from a replica seconds behind.
 const tokens = new WeakMap<typeof globalThis.fetch, Map<string, TokenSlot>>();
+// Per branch, each head this isolate replaced → its commit on it: the shared token lags too.
+const successors = new WeakMap<
+  typeof globalThis.fetch,
+  Map<string, Map<string, { sha: string; at: number }>>
+>();
+// The observed lag is seconds; older entries could only undo a later force-push.
+const SUCCESSOR_TTL_MS = 60_000;
 
 export function createGitClient(
   _siteId: string,
@@ -198,6 +205,12 @@ export function createGitClient(
   tokens.set(fetch, perGitHub);
   const slot = perGitHub.get(`${app.appId}/${app.installationId}`) ?? {};
   perGitHub.set(`${app.appId}/${app.installationId}`, slot);
+  const perBranch =
+    successors.get(fetch) ?? new Map<string, Map<string, { sha: string; at: number }>>();
+  successors.set(fetch, perBranch);
+  const branchKey = `${app.owner}/${app.repo}/${app.branch ?? 'main'}`;
+  const replaced = perBranch.get(branchKey) ?? new Map<string, { sha: string; at: number }>();
+  perBranch.set(branchKey, replaced);
 
   async function api(path: string, init: RequestInit = {}, token?: string): Promise<Response> {
     return fetch(`${API}${path}`, {
@@ -261,7 +274,13 @@ export function createGitClient(
         {},
         'getHead',
       );
-      return body.object.sha;
+      let sha = body.object.sha;
+      let next = replaced.get(sha);
+      while (next && now() - next.at < SUCCESSOR_TTL_MS) {
+        sha = next.sha;
+        next = replaced.get(sha);
+      }
+      return sha;
     },
 
     /** ⚠️ Pass `ref` for a read that is written back: branch reads come from a lagging replica. */
@@ -422,6 +441,9 @@ export function createGitClient(
       if (res.status === 422)
         throw new RefMovedError(`${app.branch ?? 'main'} moved past ${base_sha}`);
       if (!res.ok) throw new Error(`GitHub update ref failed: ${res.status}`);
+      for (const [base, next] of replaced)
+        if (now() - next.at >= SUCCESSOR_TTL_MS) replaced.delete(base);
+      replaced.set(base_sha, { sha: commit.sha, at: now() });
       return { commit_sha: commit.sha };
     },
   };

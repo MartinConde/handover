@@ -98,6 +98,7 @@ and shows them as Verified.
 
 The GitHub client mints an installation token from the App's private key (RS256 via
 WebCrypto) and keeps it in the Worker's memory until it is about to expire, shared by every
-request in the meantime. Nothing writes it anywhere. One token per isolate is also what keeps
-a publish straight after your own from reading a stale branch head: GitHub answers a token
-minted moments ago from a replica that can be seconds behind.
+request in the meantime. Nothing writes it anywhere. GitHub can answer a branch read from a
+replica that is seconds behind, most often for a token minted moments ago. So the client
+shares one token per isolate, and for a minute after each publish it treats a branch head it
+has itself replaced as the commit it wrote on top.

@@ -327,6 +327,31 @@ test('publish removes a file with a null-sha tree entry', async () => {
   });
 });
 
+test('getHead skips a lagging ref read of heads this client has already replaced', async () => {
+  let commits = 0;
+  const fetch = async (url: string, init: RequestInit = {}): Promise<Response> => {
+    const path = url.replace('https://api.github.com', '');
+    if (path === '/app/installations/67890/access_tokens')
+      return Response.json({ token: 'ghs_1', expires_at: '2099-01-01T00:00:00Z' }, { status: 201 });
+    // The replica still answers with the head from before both writes.
+    if (path === '/repos/acme/site/git/ref/heads%2Fmain')
+      return Response.json({ object: { sha: 'commit-A' } });
+    if (path.startsWith('/repos/acme/site/git/commits/'))
+      return Response.json({ tree: { sha: 'tree' } });
+    if (path === '/repos/acme/site/git/trees') return Response.json({ sha: 'tree' });
+    if (path === '/repos/acme/site/git/commits' && init.method === 'POST')
+      return Response.json({ sha: `commit-${++commits === 1 ? 'B' : 'C'}` });
+    if (path === '/repos/acme/site/git/refs/heads%2Fmain') return Response.json({});
+    return new Response('{}', { status: 404 });
+  };
+  const git = createGitClient('default', app, { fetch: fetch as typeof globalThis.fetch });
+
+  await git.publish([{ path: 'a.yaml', contents: 'a' }], { base_sha: 'commit-A', message: 'm' });
+  await git.publish([{ path: 'b.yaml', contents: 'b' }], { base_sha: 'commit-B', message: 'm' });
+
+  expect(await git.getHead()).toBe('commit-C');
+});
+
 test('publish throws RefMovedError when the branch moved past base_sha', async () => {
   const gh = fakeGitData({ headMovesTo: 'commit-X' });
   const git = createGitClient('default', app, { fetch: gh.fetch });
