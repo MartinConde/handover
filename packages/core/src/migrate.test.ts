@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { FORMAT_VERSION } from './content.js';
+import { FORMAT_VERSION } from './entry-format.js';
 import { MIGRATIONS, type MigrationStep, migrateDocument, versionOf } from './migrate.js';
 
 const steps: MigrationStep[] = [

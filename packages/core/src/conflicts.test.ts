@@ -1,7 +1,6 @@
 import type { Miniflare } from 'miniflare';
 import { beforeAll, expect, test } from 'vitest';
 import { entryConflict, resolveConflict, resolveDrift } from './conflicts.js';
-import { parseEntry, stringifyEntry } from './content.js';
 import {
   draftDb,
   fakeHistory,
@@ -16,6 +15,7 @@ import {
   page,
 } from './db.fixtures.js';
 import { draftFiles, loadDraft, pendingDrafts, saveDraft } from './db.js';
+import { parseEntry, stringifyEntry } from './entry-format.js';
 import { blobSha } from './git.js';
 import type { Form } from './schema.js';
 import { drafts } from './tables.js';

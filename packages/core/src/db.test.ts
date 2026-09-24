@@ -1,6 +1,5 @@
 import type { Miniflare } from 'miniflare';
 import { beforeAll, expect, test } from 'vitest';
-import { driftReport, parseEntry } from './content.js';
 import {
   ADDRESSED,
   BLOB,
@@ -61,8 +60,10 @@ import {
   sweepOrphans,
 } from './db.js';
 import { entryKey } from './entries.js';
+import { parseEntry } from './entry-format.js';
 import { blobSha } from './git.js';
 import type { RedirectRule } from './lifecycle.js';
+import { driftReport } from './locale-sync.js';
 import { claimLock } from './locks.js';
 import { publishDrafts } from './publish.js';
 import { clearPublished } from './revert.js';

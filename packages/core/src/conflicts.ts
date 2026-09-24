@@ -1,12 +1,5 @@
 import { and, eq, sql } from 'drizzle-orm';
 import {
-  applyDrift,
-  type DriftChoice,
-  parseEntry,
-  stringifyEntry,
-  writtenEntry,
-} from './content.js';
-import {
   availableContents,
   type Db,
   load,
@@ -15,7 +8,9 @@ import {
   stampOf,
   upsert,
 } from './db.js';
+import { parseEntry, stringifyEntry, writtenEntry } from './entry-format.js';
 import { blobSha, type GitClient } from './git.js';
+import { applyDrift, type DriftChoice } from './locale-sync.js';
 import {
   type Answer,
   applyResolution,

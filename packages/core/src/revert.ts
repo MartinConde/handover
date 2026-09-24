@@ -1,8 +1,8 @@
 import { and, eq, gt, inArray, isNotNull, ne, or, sql } from 'drizzle-orm';
-import { parseEntry, stringifyEntry, writtenEntry } from './content.js';
 import { chunksOf, D1_MAX_BOUND_PARAMETERS } from './d1-limits.js';
 import { type Db, type Draft, keptSource, loadDraft, nextRevision } from './db.js';
 import { entryKey } from './entries.js';
+import { parseEntry, stringifyEntry, writtenEntry } from './entry-format.js';
 import { blobSha, type GitClient, type PublishFile } from './git.js';
 import { REDIRECTS, RevertConflictError, revertRedirects } from './lifecycle.js';
 import {

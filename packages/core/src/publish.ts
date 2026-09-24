@@ -1,7 +1,7 @@
 import { and, eq, sql } from 'drizzle-orm';
-import { markTranslation, parseEntry } from './content.js';
 import { type Db, type Draft, heldDrafts, pendingDrafts, SOURCE_CHANGE_REVISION } from './db.js';
 import { entryKey } from './entries.js';
+import { parseEntry } from './entry-format.js';
 import { blobSha, type GitClient, type PublishFile, RefMovedError } from './git.js';
 import { appendRedirects, REDIRECTS, type RedirectRule } from './lifecycle.js';
 import {
@@ -14,6 +14,7 @@ import {
   recentOperations,
   recoverOperationCommit,
 } from './operations.js';
+import { markTranslation } from './provenance.js';
 import { isLive } from './reserved.js';
 import type { Form } from './schema.js';
 import { activity, drafts, operations } from './tables.js';

@@ -1,7 +1,6 @@
 import type { Miniflare } from 'miniflare';
 import { beforeAll, expect, test } from 'vitest';
 import { logActivity } from './activity.js';
-import { offeredEntry, parseEntry, stringifyEntry } from './content.js';
 import {
   draftDb,
   FILE,
@@ -21,6 +20,7 @@ import {
 } from './db.fixtures.js';
 import { createDraft, pendingDrafts, recordDelete, recordOffer, saveDraft } from './db.js';
 import { entryKey } from './entries.js';
+import { offeredEntry, parseEntry, stringifyEntry } from './entry-format.js';
 import { claimLock } from './locks.js';
 import { publishDrafts } from './publish.js';
 import { clearPublished, RevertConflictError, restoreCommit, revertCommit } from './revert.js';

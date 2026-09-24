@@ -1,5 +1,5 @@
-import { offeredEntry, parseEntry, stringifyEntry, writtenEntry } from './content.js';
 import type { ContentFile } from './entries.js';
+import { offeredEntry, parseEntry, stringifyEntry, writtenEntry } from './entry-format.js';
 import type { GitClient, PublishFile } from './git.js';
 import { entryAddress, entryUrl, type I18nRouting, withSlash } from './names.js';
 import { operationMessage } from './operations.js';

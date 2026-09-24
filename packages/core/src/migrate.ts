@@ -1,4 +1,4 @@
-import { FORMAT_VERSION } from './content.js';
+import { FORMAT_VERSION } from './entry-format.js';
 
 export interface MigrationStep {
   /** The `_version` this step upgrades from; it writes `from + 1`. */

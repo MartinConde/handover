@@ -43,55 +43,24 @@ export { CHECKS, findHiddenLong, lastHiddenLong, runChecks } from './checks.js';
 export type { EntryConflict } from './conflicts.js';
 export { entryConflict, resolveConflict, resolveDrift } from './conflicts.js';
 export type {
-  AnsweredPaths,
   AstroContent,
   ContentEntry,
   ContentSource,
-  Drift,
-  DriftChoice,
-  EntrySource,
   GlobalsSelection,
-  I18nMark,
   LocaleLink,
-  LocaleSeed,
   LocaleSite,
-  LocaleSyncOptions,
   NavLink,
-  TranslationSource,
 } from './content.js';
 export {
-  answeredCount,
-  answeredPaths,
-  answeredText,
-  answeredWork,
-  applyDrift,
   ContentError,
-  changeSource,
   draftSource,
-  driftReport,
   entryAt,
-  entrySource,
-  FORMAT_VERSION,
   getEntryLocales,
   globalsAt,
   indexName,
-  markTranslation,
   menusAt,
-  mergeEntry,
-  parseEntry,
-  provenance,
   refErrors,
-  referenceText,
-  sourceOnlyConflicts,
-  staleLocales,
   staticSource,
-  stringifyEntry,
-  syncLocale,
-  syncLocaleField,
-  TRANSLATED_PROPS,
-  timestampErrors,
-  translatableText,
-  withSource,
 } from './content.js';
 export type { CronReport, JobDeps } from './cron.js';
 export { JOB_NAMES, runDue, runJob } from './cron.js';
@@ -153,6 +122,16 @@ export {
   textSummaries,
   textsFrom,
 } from './entries.js';
+export type { LocaleSeed } from './entry-format.js';
+export {
+  FORMAT_VERSION,
+  mergeEntry,
+  parseEntry,
+  stringifyEntry,
+  TRANSLATED_PROPS,
+  timestampErrors,
+  withSource,
+} from './entry-format.js';
 export type {
   CommitComparison,
   CommitPage,
@@ -191,6 +170,8 @@ export {
   renameEntry,
   revertRedirects,
 } from './lifecycle.js';
+export type { Drift, DriftChoice, LocaleSyncOptions } from './locale-sync.js';
+export { applyDrift, driftReport, syncLocale, syncLocaleField } from './locale-sync.js';
 export type { Lock } from './locks.js';
 export {
   claimLock,
@@ -256,6 +237,21 @@ export {
 } from './operations.js';
 export type { PathReservation } from './paths.js';
 export { releaseOperationPaths, releasePaths, reservePaths } from './paths.js';
+export type { AnsweredPaths, EntrySource, I18nMark, TranslationSource } from './provenance.js';
+export {
+  answeredCount,
+  answeredPaths,
+  answeredText,
+  answeredWork,
+  changeSource,
+  entrySource,
+  markTranslation,
+  provenance,
+  referenceText,
+  sourceOnlyConflicts,
+  staleLocales,
+  translatableText,
+} from './provenance.js';
 export type { SourceOf } from './publish.js';
 export {
   CommitScopeError,

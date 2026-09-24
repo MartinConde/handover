@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { parseEntry, stringifyEntry } from './content.js';
+import { parseEntry, stringifyEntry } from './entry-format.js';
 import { filterLive, isLive, newId, regenerateIds } from './reserved.js';
 
 const roundTrip = (data: unknown) => parseEntry('default', stringifyEntry('default', data));

@@ -1,12 +1,12 @@
+import { parseEntry } from './entry-format.js';
+import type { I18nRouting } from './names.js';
 import {
   type AnsweredPaths,
   answeredCount,
   answeredPaths,
   entrySource,
-  parseEntry,
   staleLocales,
-} from './content.js';
-import type { I18nRouting } from './names.js';
+} from './provenance.js';
 import type { Form } from './schema.js';
 
 export interface EntryLocale {

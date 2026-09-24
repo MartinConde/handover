@@ -1,7 +1,7 @@
 // All three files are static, so a search engine reading them costs the site nothing.
 
-import { parseEntry } from './content.js';
 import { type ContentFile, entryParts } from './entries.js';
+import { parseEntry } from './entry-format.js';
 import { entryAddress, entryUrl, type I18nRouting, withSlash } from './names.js';
 import { isLive } from './reserved.js';
 

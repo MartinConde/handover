@@ -1,12 +1,13 @@
 // Mostly warnings and notes; an error is what the drawer will not publish past.
 
 import { and, desc, eq, gt, inArray } from 'drizzle-orm';
-import { type EntrySource, entrySource, isObject, parseEntry, staleLocales } from './content.js';
 import type { Db } from './db.js';
 import { type ContentIndex, entryParts, type IndexEntry } from './entries.js';
+import { isObject, parseEntry } from './entry-format.js';
 import type { GitClient } from './git.js';
 import { objectExists, type R2Store } from './media.js';
 import { type I18nRouting, previewTarget } from './names.js';
+import { type EntrySource, entrySource, staleLocales } from './provenance.js';
 import { richtextLinks } from './richtext.js';
 import { type Field, type Form, rowFields, type Translation } from './schema.js';
 import { resolveSeo, SEO_TITLE_LIMIT, type SeoDefaultsValue, type SeoValue } from './seo.js';

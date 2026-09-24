@@ -1,9 +1,9 @@
 import { AwsClient } from 'aws4fetch';
 import { type AnyColumn, and, desc, eq, like, ne, not, or, sql } from 'drizzle-orm';
-import { parseEntry } from './content.js';
 import type { Db } from './db.js';
 import type { ContentFile } from './entries.js';
 import { entryKey } from './entries.js';
+import { parseEntry } from './entry-format.js';
 import { drafts, media } from './tables.js';
 import { imageDimensions } from './upload-bytes.js';
 

@@ -1,5 +1,4 @@
 import { expect, test } from 'vitest';
-import { answeredCount, markTranslation } from './content.js';
 import type { ContentFile } from './entries.js';
 import {
   collectionEntries,
@@ -11,6 +10,7 @@ import {
   textSummaries,
   textsFrom,
 } from './entries.js';
+import { answeredCount, markTranslation } from './provenance.js';
 import type { Form } from './schema.js';
 
 const file = (path: string, body: string) => ({ path, contents: `_version: 1\n${body}` });

@@ -1,4 +1,5 @@
-import { isObject, rowKey, TRANSLATED_PROPS, translatedValues } from './content.js';
+import { isObject, rowKey, TRANSLATED_PROPS } from './entry-format.js';
+import { translatedValues } from './provenance.js';
 import { type Field, type Form, humanise, rowFields, type Translation } from './schema.js';
 import { type Labels, labelIn, labelsOf, UI_LOCALES } from './ui-locale.js';
 
