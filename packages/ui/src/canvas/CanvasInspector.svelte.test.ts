@@ -113,7 +113,7 @@ test('reuses the complete image widget and schedules its accepted media action',
   );
   const remove = Array.from(
     root.querySelectorAll<HTMLButtonElement>('.canvas-inspector button'),
-  ).find((button) => button.textContent === 'Remove');
+  ).find((button) => button.getAttribute('aria-label') === 'Remove');
   remove?.click();
   await tick();
 

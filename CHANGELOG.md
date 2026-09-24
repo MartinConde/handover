@@ -4,6 +4,79 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Canvas continues updating after inline editing ends on a different Structure selection.
+  Command deduplication uses compact fingerprints and a bounded reply cache to reduce memory
+  retained while editing long text. Deeply nested field addresses are supported up to 4,096
+  UTF-16 code units; longer addresses fail explicitly, and long Structure labels are shortened.
+- Canvas reports renderer and inline rich-text download failures with a way to continue editing
+  without losing pending changes. Structure supports arrow-key, Home, and End navigation with
+  one focused row and accessible nested groups. Review fields opens the affected Inspector field.
+- Browser acceptance checks now run in CI for Chromium, Firefox, and WebKit.
+- Canvas block sorting keeps its drop position when the pointer stops and sibling animations finish.
+  Reduced-motion drag previews keep the same scale as the blocks overview.
+
+- Canvas labels and selection outlines use softer borders without a heavy focus ring.
+  Structure dims rows outside the active block list while dragging, keeping valid
+  siblings clear and restoring all rows on drop or cancel.
+
+- Structure supports dnd-kit sorting with drag previews, animated sibling movement,
+  keyboard controls, and Escape cancellation. Nested content moves with its block;
+  drops stay within the same block list. Expand/collapse arrows are larger SVG icons.
+- Canvas action icons use a transparent, borderless treatment. Pointer selection no
+  longer shows the browser's blue focus ring around labels; keyboard focus remains visible.
+
+- Canvas actions sit above the selection outline beside its label. Blocks expose direct
+  drag, move up/down, duplicate, and delete icons with tooltips; the overflow menu and
+  on-canvas block replacement action are removed. Field Inspector controls align there too.
+
+- Canvas pointer drags now show a dashed drop slot and temporarily scale the active
+  blocks wrapper to 65%, centered horizontally. The iframe and surrounding page stay
+  fixed. Drop or cancel restores the wrapper; reduced-motion preferences skip animation.
+
+- Canvas block dragging now uses dnd-kit, with a floating block preview, animated
+  sibling reordering, automatic scrolling, and Escape cancellation.
+
+- Canvas labels now include clickable block ancestors (for example, Hero › Image).
+  Select an ancestor to move or manage the whole block without opening Structure;
+  clicking its content still selects the field. The element name itself also selects
+  that element, so every breadcrumb segment is clickable. Structural wrappers are skipped.
+
+- Soft newlines used to wrap Markdown source now enter the Canvas rich-text editor as
+  spaces, matching the rendered page instead of becoming visible line breaks. Paragraph
+  boundaries and typed spaces are preserved; opening the editor does not save a change.
+
+- Rich-text editing mounts onto the authored prose container instead of inserting a
+  wrapper. Direct-child styling, margin behavior, and layout sizing stay intact when
+  the caret appears; the container’s original attributes are restored on exit.
+
+- Plain array-row wrappers, such as columns without their own block editor, no longer
+  highlight or become active in Canvas. Their editable children and empty block lists
+  remain accessible; Structure retains the wrappers as expandable groups.
+
+- Shared Canvas content has a dashed outline and a Shared label. Selecting it opens a
+  floating explanation with a link to edit its source in a new tab. Hovered elements
+  have their own labels, and selected labels stay visible during inline text editing.
+
+- The on-element Inspector button now closes the panel when clicked again for the same
+  selection. Hover outlines remain visible outside active text, including parent blocks
+  and images behind a hero heading.
+
+- Populated block-list wrappers no longer receive hover or selection outlines or act as
+  selection targets. Individual blocks and fields remain selectable; empty lists retain
+  their Add block control.
+
+- Canvas edits text on the first click. Clicking an annotated text or rich-text field puts the
+  caret where the pointer landed instead of opening the Inspector, and a button at the field's top
+  right opens the Inspector when the whole field is wanted — while the editor is open, too. Double
+  click inside the open editor selects a word, as it does anywhere else. Selecting a field or block on the page or in
+  Structure preserves the Inspector’s open/closed state; an open Inspector follows selection.
+  Links and buttons keep their floating link editor. Explicit Inspector and media replacement
+  actions still open the panel.
+  Inline editing no longer re-wraps the text it opens on: the rendered `overflow-wrap`,
+  `word-break` and `line-break` are held for as long as the editor is open, so a long word keeps
+  the line breaks the page gave it. Selection and hover outlines are lime over a dark hairline,
+  which stays visible on a pale page and over a dark hero alike.
+
 - The admin screens example reads the interface language reactively, so a site that copies it
   compiles without Svelte's `state_referenced_locally` warning, and the page now says the
   `✕ missing peer @inlang/paraglide-js` that `autoInstallPeers: false` prints is expected.

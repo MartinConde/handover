@@ -273,6 +273,7 @@ test('Split shows the page to look at: no editing, Inspector or navigation until
     actions: vi.fn(),
     select: vi.fn(),
     uiLocale: vi.fn(),
+    problems: vi.fn(),
     render: vi.fn(async () => ({ ok: true })),
     schedule: vi.fn(),
     flushScheduled: vi.fn(),
@@ -333,4 +334,52 @@ test('Split shows the page to look at: no editing, Inspector or navigation until
   flushSync();
   expect(renderer.mode).toHaveBeenLastCalledWith('edit');
   vi.doUnmock('./canvas-renderer');
+});
+
+test('reviews a missing unrendered field in the canvas inspector and clears validation after editing', async () => {
+  const session = createEntrySession({
+    document: 'pages/home',
+    sourceLocale: 'en',
+    data: { title: '' },
+    translations: {},
+    form: {
+      fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+      blocks: {},
+    },
+  });
+  const leaveCanvas = vi.fn();
+  app = mount(CanvasWorkspace, {
+    target: document.body,
+    props: {
+      active: true,
+      fullscreen: true,
+      locale: 'en',
+      url: '/',
+      request: (): CanvasRenderRequest => ({ url: '/preview', snapshot: {} as never }),
+      currentVersion: () => session.contentVersion('en'),
+      entryDocument: { collection: 'pages', id: 'home' },
+      ownerLabel: 'Home',
+      sourceLocale: 'en',
+      session,
+      blocks: {},
+      onform: leaveCanvas,
+      onreviewproblems: leaveCanvas,
+      onnavigateentry: () => {},
+    },
+  });
+  await tick();
+  document.querySelector<HTMLButtonElement>('.canvas-validation button')?.click();
+  await tick();
+  const input = document.querySelector<HTMLInputElement>('.canvas-inspector input');
+  expect(input).not.toBeNull();
+  expect(input?.getAttribute('aria-invalid')).toBe('true');
+  expect(leaveCanvas).not.toHaveBeenCalled();
+  if (input) {
+    input.value = 'Ready';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  await tick();
+  expect(session.snapshot('en').title).toBe('Ready');
+  expect(document.querySelector('.canvas-validation')).toBeNull();
+  expect(input?.getAttribute('aria-invalid')).not.toBe('true');
 });

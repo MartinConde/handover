@@ -11,6 +11,8 @@ import { createCanvasSelectionRuntime } from './canvas/runtime/canvas-selection'
 import { createCanvasPlainTextRuntime } from './canvas/runtime/canvas-text';
 import { createCanvasUiLocaleState } from './canvas/runtime/canvas-ui-locale';
 import { createEntryDirectoryReader } from './entry-directory';
+import { messageOptions } from './i18n';
+import * as m from './paraglide/messages.js';
 
 export * from './canvas/canvas-bridge';
 export * from './canvas/canvas-renderer';
@@ -42,8 +44,28 @@ if (typeof window !== 'undefined' && window.parent !== window) {
           selection: import('./canvas/canvas-bridge').CanvasSelection;
           element: Element;
           trigger?: Element;
+          caret?: number;
+          point?: { x: number; y: number };
         }
       | undefined;
+    const loadFailure = document.createElement('div');
+    loadFailure.dataset.handoverCanvasRichtextFailure = '';
+    loadFailure.style.cssText =
+      'all:initial;position:fixed;bottom:12px;left:12px;right:12px;z-index:2147483647';
+    const failureShadow = loadFailure.attachShadow({ mode: 'open' });
+    failureShadow.innerHTML = `<style>
+      div{display:flex;align-items:center;gap:12px;padding:12px;background:#fff;color:#202420;border:1px solid #c0271b;border-radius:6px;font:14px/1.5 system-ui;box-shadow:0 2px 8px #0002}
+      span{flex:1}button{font:inherit;background:#fff;color:inherit;border:1px solid #767676;border-radius:4px;min-height:32px;cursor:pointer}button:focus-visible{outline:2px solid #537e2c;outline-offset:2px}
+    </style><div role="alert"><span></span><button type="button"></button></div>`;
+    const failureText = failureShadow.querySelector('span');
+    const failureDismiss = failureShadow.querySelector('button');
+    failureDismiss?.addEventListener('click', () => loadFailure.remove());
+    uiLocale.subscribe((locale) => {
+      loadFailure.lang = locale;
+      const options = messageOptions(locale);
+      if (failureText) failureText.textContent = m.canvas_richtext_load_failed({}, options);
+      if (failureDismiss) failureDismiss.textContent = m.canvas_dismiss({}, options);
+    });
     const activateRequested = () => {
       const pending = requested;
       if (!pending || !field || !sameCanvasTarget(pending.selection.target, field.target)) return;
@@ -54,11 +76,11 @@ if (typeof window !== 'undefined' && window.parent !== window) {
       } else if (field.kind === 'text') {
         if (richText?.active() || link?.active()) return;
         requested = undefined;
-        text?.activate(pending.selection, pending.element);
+        text?.activate(pending.selection, pending.element, pending.caret);
       } else {
         if (!richText || text?.active() || link?.active()) return;
         requested = undefined;
-        richText.activate(pending.selection, pending.element, pending.trigger);
+        richText.activate(pending.selection, pending.element, pending.trigger, pending.point);
       }
     };
     const interaction = (
@@ -70,20 +92,29 @@ if (typeof window !== 'undefined' && window.parent !== window) {
     };
     const configureField = (next: import('./canvas/canvas-bridge').CanvasTextField | undefined) => {
       if (mode !== 'edit') next = undefined;
+      if (next?.kind !== 'richtext') loadFailure.remove();
       field = next;
       text?.configure(next?.kind === 'text' ? next : undefined);
       link?.configure(next?.kind === 'link' ? next : undefined);
       richText?.configure(next?.kind === 'richtext' ? next : undefined);
       if (!next) {
+        const pending = requested;
         requested = undefined;
+        // The parent resolves non-inline fields against the schema before opening media controls.
+        if (pending && mode === 'edit') {
+          const { left, top, width, height } = pending.element.getBoundingClientRect();
+          bridge.action('edit-media', pending.selection, undefined, { left, top, width, height });
+        }
         return;
       }
       if (next.kind === 'text' || next.kind === 'link') return activateRequested();
       if (richText) return activateRequested();
       richTextLoad ??= loadCanvasRichTextEditor();
-      void richTextLoad
+      const loading = richTextLoad;
+      void loading
         .then(({ createCanvasRichTextRuntime }) => {
           if (richText) return;
+          loadFailure.remove();
           richText = createCanvasRichTextRuntime({
             command: (target, command) => bridge.command(target, command),
             interaction,
@@ -95,8 +126,13 @@ if (typeof window !== 'undefined' && window.parent !== window) {
           activateRequested();
         })
         .catch(() => {
+          if (richTextLoad !== loading) return;
+          richText?.dispose();
+          richText = undefined;
           requested = undefined;
           richTextLoad = undefined;
+          if (field?.kind === 'richtext' && mode === 'edit')
+            document.documentElement.append(loadFailure);
         });
     };
     const bridge = createCanvasChildBridge({
@@ -114,6 +150,7 @@ if (typeof window !== 'undefined' && window.parent !== window) {
           configureField(undefined);
         }
       },
+      onProblems: (addresses) => selection?.problems(addresses),
       onUiLocale: (next) => uiLocale.set(next),
     });
     text = createCanvasPlainTextRuntime({
@@ -128,6 +165,8 @@ if (typeof window !== 'undefined' && window.parent !== window) {
       uiLocale,
     });
     selection = createCanvasSelectionRuntime({
+      entryDocument: manifest.entry,
+      adminBase: (manifest.entryDirectory ?? '/admin/api/entries').replace(/\/api\/entries$/, ''),
       onSelection: (value) => bridge.selection(value),
       onStructure: (nodes) => bridge.structure(nodes),
       onAction: (action, value, destination) => bridge.action(action, value, destination),
@@ -137,10 +176,10 @@ if (typeof window !== 'undefined' && window.parent !== window) {
           composing: false,
           dragging: state.dragging,
         }),
-      onActivate: (value, element, trigger) => {
+      onActivate: (value, element, intent) => {
         bridge.selection(value);
         if (value.kind !== 'field') return false;
-        requested = { selection: value, element, trigger };
+        requested = { selection: value, element, ...intent };
         field = undefined;
         return true;
       },

@@ -728,6 +728,134 @@ test('plain-text capability and editing state cross only the current selected br
   });
 });
 
+test('the active editor can stop after parent selection moves to another target', () => {
+  const candidate = frame();
+  let selected = target;
+  let version = 4;
+  const onEditing = vi.fn();
+  const rejected = vi.fn();
+  const bridge = createCanvasParentBridge({
+    manifest,
+    frame: candidate,
+    origin: 'https://cms.example',
+    contentVersion: () => version,
+    currentTarget: () => selected,
+    onCommand: vi.fn(),
+    onEditing,
+    onRejected: rejected,
+    listen: false,
+  });
+  bridge.receive(event(candidate, 'https://cms.example', ready));
+  const editing = (address: string, inlineEditing: boolean, interactionId = 'edit-1') => ({
+    ...ready,
+    type: 'handover:canvas:editing',
+    target: { ...target, address },
+    state: { inlineEditing, composing: false },
+    interactionId,
+  });
+  bridge.receive(event(candidate, 'https://cms.example', editing(target.address, true)));
+  selected = { ...target, address: 'body' };
+  version = 5;
+  bridge.receive(
+    event(candidate, 'https://cms.example', {
+      ...editing(target.address, false),
+      contentVersion: 6,
+    }),
+  );
+  bridge.receive(
+    event(candidate, 'https://cms.example', {
+      ...editing(target.address, false),
+      contentVersion: 3,
+    }),
+  );
+  expect(onEditing).toHaveBeenCalledTimes(1);
+  expect(rejected).toHaveBeenCalledWith('stale-version', expect.anything());
+  bridge.receive(
+    event(candidate, 'https://cms.example', {
+      ...editing(target.address, false),
+      contentVersion: 4,
+    }),
+  );
+  expect(onEditing).toHaveBeenCalledTimes(2);
+  expect(onEditing).toHaveBeenLastCalledWith(target, { inlineEditing: false, composing: false });
+  bridge.receive(
+    event(candidate, 'https://cms.example', {
+      ...editing(target.address, false),
+      contentVersion: 5,
+    }),
+  );
+  expect(rejected).toHaveBeenCalledWith('stale-target', expect.anything());
+});
+
+test('a delayed stop from a previous edit cannot end a newer interaction', () => {
+  const candidate = frame();
+  const onEditing = vi.fn();
+  const rejected = vi.fn();
+  const bridge = createCanvasParentBridge({
+    manifest,
+    frame: candidate,
+    origin: 'https://cms.example',
+    contentVersion: () => 4,
+    currentTarget: () => target,
+    onCommand: vi.fn(),
+    onEditing,
+    onRejected: rejected,
+    listen: false,
+  });
+  bridge.receive(event(candidate, 'https://cms.example', ready));
+  const editing = (interactionId: string, inlineEditing: boolean) => ({
+    ...ready,
+    type: 'handover:canvas:editing',
+    target,
+    state: { inlineEditing, composing: false },
+    interactionId,
+  });
+  bridge.receive(event(candidate, 'https://cms.example', editing('first', true)));
+  bridge.receive(event(candidate, 'https://cms.example', editing('second', true)));
+  bridge.receive(event(candidate, 'https://cms.example', editing('first', false)));
+  expect(onEditing).toHaveBeenCalledTimes(2);
+  expect(rejected).toHaveBeenCalledWith('stale-target', expect.anything());
+  bridge.receive(event(candidate, 'https://cms.example', editing('second', false)));
+  expect(onEditing).toHaveBeenCalledTimes(3);
+});
+
+test('nested annotation addresses cross the bridge and addresses beyond its bound fail visibly', () => {
+  const candidate = frame();
+  const onSelection = vi.fn();
+  const rejected = vi.fn();
+  const bridge = createCanvasParentBridge({
+    manifest,
+    frame: candidate,
+    origin: 'https://cms.example',
+    contentVersion: () => 4,
+    currentTarget: () => target,
+    onCommand: vi.fn(),
+    onSelection,
+    onRejected: rejected,
+    listen: false,
+  });
+  bridge.receive(event(candidate, 'https://cms.example', ready));
+  const address = `blocks${'[_id=abcdefgh].blocks'.repeat(12)}[_id=abcdefgh].heading`;
+  bridge.receive(
+    event(candidate, 'https://cms.example', {
+      ...ready,
+      type: 'handover:canvas:selection',
+      selection: { kind: 'field', target: { ...target, address } },
+    }),
+  );
+  expect(onSelection).toHaveBeenCalledWith({ kind: 'field', target: { ...target, address } });
+  expect(rejected).not.toHaveBeenCalled();
+  bridge.receive(
+    event(candidate, 'https://cms.example', {
+      ...ready,
+      type: 'handover:canvas:selection',
+      selection: { kind: 'field', target: { ...target, address: 'a'.repeat(4_097) } },
+    }),
+  );
+  expect(onSelection).toHaveBeenCalledTimes(1);
+  expect(rejected).toHaveBeenCalledWith('malformed', expect.anything());
+});
+
 test('stale commands and targets receive explicit acknowledgements without mutating', () => {
   const candidate = frame();
   const onCommand = vi.fn();
@@ -816,6 +944,141 @@ test('a repeated command replays its acknowledgement and never runs twice', asyn
   expect(candidate.postMessage).toHaveBeenNthCalledWith(
     3,
     expect.objectContaining({ commandId: 'command-1', ok: false, reason: 'duplicate-command' }),
+    'https://cms.example',
+  );
+});
+
+test('commands with different undefined values cannot reuse a command ID', async () => {
+  const candidate = frame();
+  const onCommand = vi.fn(() => ({ ok: true as const, contentVersion: 4 }));
+  const bridge = createCanvasParentBridge({
+    manifest,
+    frame: candidate,
+    origin: 'https://cms.example',
+    contentVersion: () => 4,
+    currentTarget: () => target,
+    onCommand,
+    listen: false,
+  });
+  bridge.receive(event(candidate, 'https://cms.example', ready));
+  const send = (commandId: string, value: unknown) =>
+    bridge.receive(
+      event(
+        candidate,
+        'https://cms.example',
+        command({ commandId, command: { type: 'field', changes: [{ value }] } }),
+      ),
+    );
+  send('object', { a: undefined });
+  await settle();
+  send('object', {});
+  send('array', [undefined]);
+  await settle();
+  send('array', [null]);
+  send('sparse', Array(1));
+  await settle();
+  send('sparse', [undefined]);
+  expect(onCommand).toHaveBeenCalledTimes(3);
+  expect(candidate.postMessage).toHaveBeenNthCalledWith(
+    2,
+    expect.objectContaining({ commandId: 'object', reason: 'duplicate-command' }),
+    'https://cms.example',
+  );
+  expect(candidate.postMessage).toHaveBeenNthCalledWith(
+    4,
+    expect.objectContaining({ commandId: 'array', reason: 'duplicate-command' }),
+    'https://cms.example',
+  );
+  expect(candidate.postMessage).toHaveBeenNthCalledWith(
+    6,
+    expect.objectContaining({ commandId: 'sparse', reason: 'duplicate-command' }),
+    'https://cms.example',
+  );
+});
+
+test('a duplicate while its original command is pending waits for the same acknowledgement', async () => {
+  const candidate = frame();
+  let resolve!: (result: { ok: true; contentVersion: number }) => void;
+  const onCommand = vi.fn(
+    () =>
+      new Promise<{ ok: true; contentVersion: number }>((done) => {
+        resolve = done;
+      }),
+  );
+  const bridge = createCanvasParentBridge({
+    manifest,
+    frame: candidate,
+    origin: 'https://cms.example',
+    contentVersion: () => 4,
+    currentTarget: () => target,
+    onCommand,
+    listen: false,
+  });
+  bridge.receive(event(candidate, 'https://cms.example', ready));
+  bridge.receive(event(candidate, 'https://cms.example', command()));
+  bridge.receive(event(candidate, 'https://cms.example', command()));
+  bridge.receive(
+    event(
+      candidate,
+      'https://cms.example',
+      command({
+        command: { type: 'field', changes: [{ value: 'different' }] },
+      }),
+    ),
+  );
+  await settle();
+  expect(onCommand).toHaveBeenCalledTimes(1);
+  expect(candidate.postMessage).toHaveBeenCalledWith(
+    expect.objectContaining({ reason: 'duplicate-command' }),
+    'https://cms.example',
+  );
+  resolve({ ok: true, contentVersion: 5 });
+  await settle();
+  expect(candidate.postMessage).toHaveBeenCalledTimes(3);
+  expect(candidate.postMessage).toHaveBeenNthCalledWith(
+    2,
+    expect.objectContaining({ ok: true, acceptedVersion: 5 }),
+    'https://cms.example',
+  );
+  expect(candidate.postMessage).toHaveBeenNthCalledWith(
+    3,
+    expect.objectContaining({ ok: true, acceptedVersion: 5 }),
+    'https://cms.example',
+  );
+});
+
+test('an oversized recovery reply becomes a duplicate tombstone without replaying or rerunning', async () => {
+  const candidate = frame();
+  const onCommand = vi.fn(() => ({
+    ok: true as const,
+    contentVersion: 5,
+    update: { value: 'x'.repeat(150_000) },
+  }));
+  const bridge = createCanvasParentBridge({
+    manifest,
+    frame: candidate,
+    origin: 'https://cms.example',
+    contentVersion: () => 4,
+    currentTarget: () => target,
+    onCommand,
+    listen: false,
+  });
+  bridge.receive(event(candidate, 'https://cms.example', ready));
+  const large = command({
+    command: { type: 'field', changes: [{ value: 'a'.repeat(100_000) }] },
+  });
+  bridge.receive(event(candidate, 'https://cms.example', large));
+  await settle();
+  bridge.receive(event(candidate, 'https://cms.example', large));
+  expect(onCommand).toHaveBeenCalledOnce();
+  expect(candidate.postMessage).toHaveBeenNthCalledWith(
+    1,
+    expect.objectContaining({ ok: true, update: { value: 'x'.repeat(150_000) } }),
+    'https://cms.example',
+  );
+  expect(candidate.postMessage).toHaveBeenNthCalledWith(
+    2,
+    expect.objectContaining({ ok: false, reason: 'duplicate-command' }),
     'https://cms.example',
   );
 });
@@ -962,9 +1225,86 @@ test('a structure node crosses with its optional keys and is refused any key bey
     );
   bridge.receive(event(candidate, 'https://cms.example', ready));
 
-  send([root, node]);
-  expect(onStructure).toHaveBeenCalledWith([root, node]);
+  send([{ ...root, container: true }, node]);
+  expect(onStructure).toHaveBeenCalledWith([{ ...root, container: true }, node]);
+  send([{ ...root, container: 'true' }, node]);
+  expect(onStructure).toHaveBeenCalledTimes(1);
 
   send([root, { ...node, named: 'Blocks' }]);
   expect(onStructure).toHaveBeenCalledTimes(1);
+});
+
+test('validation updates are scoped to the active frame and accept clearing all problems', () => {
+  const browserParent = frame();
+  const onProblems = vi.fn();
+  const child = createCanvasChildBridge({
+    manifest,
+    parent: browserParent,
+    origin: 'https://cms.example',
+    onProblems,
+    listen: false,
+  });
+  const message = { ...ready, type: 'handover:canvas:problems', addresses: [target.address] };
+  child.receive(event(frame(), 'https://cms.example', message));
+  child.receive(event(browserParent, 'https://attacker.example', message));
+  child.receive(event(browserParent, 'https://cms.example', { ...message, epoch: 'old' }));
+  child.receive(event(browserParent, 'https://cms.example', { ...message, addresses: [null] }));
+  expect(onProblems).not.toHaveBeenCalled();
+  child.receive(event(browserParent, 'https://cms.example', message));
+  expect(onProblems).toHaveBeenLastCalledWith([target.address]);
+  child.receive(event(browserParent, 'https://cms.example', { ...message, addresses: [] }));
+  expect(onProblems).toHaveBeenLastCalledWith([]);
+  child.dispose();
+});
+
+test('image activation validates its geometry and retains the normal target boundary', () => {
+  const candidate = frame();
+  const onAction = vi.fn();
+  const rejected = vi.fn();
+  const bridge = createCanvasParentBridge({
+    manifest,
+    frame: candidate,
+    origin: 'https://cms.example',
+    contentVersion: () => 4,
+    currentTarget: () => target,
+    onCommand: vi.fn(),
+    onAction,
+    onRejected: rejected,
+    listen: false,
+  });
+  bridge.receive(event(candidate, 'https://cms.example', ready));
+  const message = {
+    ...ready,
+    type: 'handover:canvas:action',
+    action: 'edit-media',
+    selection: { kind: 'field', target },
+    anchor: { left: 20, top: 30, width: 300, height: 200 },
+  };
+  bridge.receive(
+    event(candidate, 'https://cms.example', {
+      ...message,
+      anchor: { ...message.anchor, width: NaN },
+    }),
+  );
+  bridge.receive(
+    event(candidate, 'https://cms.example', {
+      ...message,
+      anchor: { ...message.anchor, height: -1 },
+    }),
+  );
+  bridge.receive(
+    event(candidate, 'https://cms.example', {
+      ...message,
+      selection: { kind: 'field', target: { ...target, address: 'another-image' } },
+    }),
+  );
+  expect(onAction).not.toHaveBeenCalled();
+  expect(rejected.mock.calls.map(([reason]) => reason)).toEqual([
+    'malformed',
+    'malformed',
+    'stale-target',
+  ]);
+  bridge.receive(event(candidate, 'https://cms.example', message));
+  expect(onAction).toHaveBeenCalledWith(message);
+  bridge.dispose();
 });

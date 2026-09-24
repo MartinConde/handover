@@ -85,6 +85,12 @@ Every block or object row passed to `block()` needs a unique, persisted `_id`. I
 the owner of `_ref` blocks: selecting shared content opens its global editor, while removing the
 block still removes only that occurrence from the page.
 
+Plain object rows without `_type` or a global `_ref` are marked as structural containers
+when passed to `block(row)`. They remain in Structure as expandable groups but do not
+highlight or become selected on the page. Annotated fields inside them and empty lists
+remain selectable. Pass the whole row to enable this distinction; a string ID alone
+does not identify whether the row is a content block.
+
 ## Context API
 
 `createEditContext(Astro)` returns `EditContext`:
@@ -100,6 +106,9 @@ block still removes only that occurrence from the page.
 
 The generated marker values include the verified collection, stable entry ID, locale, and address.
 Do not construct `data-handover-*` values by hand or infer an address from visible text.
+Complete field addresses support up to 4,096 UTF-16 code units, including nested stable row IDs.
+Longer addresses fail the Canvas render explicitly. Structure labels are shortened to 200 code
+units for display; this does not change the stored block name.
 
 `isCanvas(Astro)` reports the same verified state without creating a context. The integration also
 types `Astro.locals.handoverCanvas` as `HandoverCanvas`; it contains the protocol, render request,
@@ -130,6 +139,17 @@ require an explicit open action.
   outside its configured Markdown tier is read-only in place and opens the Inspector.
 - Shared globals and referenced entries keep their own ownership and open in their own editor;
   Canvas does not write through the current page as if it owned them.
+- Selection actions sit above the outline, aligned with its label. Blocks offer direct
+  drag, move up/down, duplicate, and delete icons with tooltips. These controls have no
+  background or border until hovered; keyboard focus stays visible. Delete and insert a new
+  block to change its type; image replacement remains available for image fields.
+- Drag a block by its handle to see a floating preview, a dashed drop slot, and animated
+  sibling reordering. Pointer dragging temporarily scales the active blocks wrapper to 65%,
+  centered horizontally, then restores it on drop or cancel. The iframe, layout width,
+  and surrounding page content stay unchanged. Reduced-motion preferences
+  skip the zoom animation.
+  Escape cancels the move. Pointer dragging uses dnd-kit and requires each sibling block
+  to render one root under the same DOM parent; fragmented layouts retain Move up/down.
 - Blocks reorder only within their current list. Cross-container movement, freeform layout or style
   controls, and collaborative editing are not included.
 - A promoted render restores the logical selection without scrolling it into view, preserving the
@@ -173,26 +193,36 @@ and the embedded page's frame title all update immediately. A language switch up
 frame rather than rendering or replacing it, so the selected content, field state, scroll position,
 and pending edits remain intact. Known render failures use translated recovery guidance; exact
 technical detail remains separate when it is available.
+If the Canvas runtime cannot download, the failure notice offers **Go to Form**;
+returning to Form keeps pending edits. Save there before reloading to try Canvas again, because
+the browser can cache the failed module download. If the inline rich-text editor cannot download, Canvas
+explains how to continue in Inspector while keeping the rendered content and current draft.
 
-Inspector and the staged block-replacement panel follow the same language. Their field-kind labels,
+Inspector follows the same language. Its field-kind labels,
 content-language names, guidance, retained refusals, actions, tooltips and accessibility text switch
-without replacing the selected field or focused widget, or clearing a configured replacement. Entry
+without replacing the selected field or focused widget. Entry
 names, paths and edited values remain site-authored text; field labels and block type names switch
 where the site gives one per language, except in Structure, which the site renders. Panel
 controls allow longer German labels to wrap within the available width.
 
 Structure lists blocks by the same name the form editor gives them — a block's `_label`, else its
-type — and a row with children collapses from its own arrow, or with `←` and `→` while it has
-focus. Selecting content in the page opens whatever branch it sits in. Adding a block commits the
-chosen type immediately, selects the new block, and opens its fields in Inspector; replacement
-continues to use the staged block form so existing data is not discarded accidentally.
+type. Use `↑` and `↓` to move between visible rows, Home/End to reach the first/last row, and
+`←`/`→` to collapse, expand, or move between a parent and its children. Enter selects the focused
+row. Drag a block by the handle at the right of its row to reorder it within its list;
+its nested content moves with it. While dragging, rows outside that list dim so valid
+sibling destinations remain clear. Handles appear on hover or keyboard focus. From a focused
+handle, press Space to pick up, use the arrow keys to move, and Space to drop; Escape cancels.
+Reordering uses the same undo history as the canvas controls.
+Selecting content in the page opens whatever branch it sits in. Adding a block commits the
+chosen type immediately, selects the new block, and opens its fields in Inspector. To change a
+block’s type, delete it and add a new block.
 
 Incomplete required fields pause Canvas rendering while draft autosave continues. The last working
 page and the new block’s Inspector remain available, with one neutral completion hint instead of
 validation and render-error banners. Completing the fields resumes rendering automatically.
 Server validation remains authoritative; other field problems and genuine render failures keep
 their existing feedback. Field validation appears above the canvas even when Inspector is closed. **Review fields** opens
-Form and focuses the affected field in the current language. The header problem count also opens
+Inspector and focuses the affected field in the current language. The header problem count opens
 Form when needed. Validation still prevents publishing; it does not disable unrelated field edits.
 
 Selected content uses a short field label; the full path stays in the editor rail. During inline
@@ -214,10 +244,9 @@ switch starts in the latest language. Entry titles, paths, typed copy and techni
 remain authored or diagnostic text.
 
 Selection outlines, path badges and block actions use the same interface language. This includes
-insert, replace, move, duplicate, delete and image-replacement names plus keyboard-selection and
-drag-position announcements. Switching language keeps the selected annotation, an open action menu,
-its focused action and an active block drag in place. Template-authored block names and field-path
-labels are not translated; only Handover's fallback names and surrounding presentation change.
+insert, move, duplicate, delete and image-replacement names plus keyboard-selection and
+drag-position announcements. Switching language keeps the selected annotation, the focused action,
+and an active block drag in place. Template-authored block names and field-path labels are not translated; only Handover's fallback names and surrounding presentation change.
 
 Plain-text inline-editing recovery follows the interface language too. A switch during IME
 composition keeps the composition, caret, accepted value and session history intact; retained

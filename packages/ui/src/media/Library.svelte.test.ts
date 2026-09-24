@@ -623,7 +623,7 @@ test('the previews end with a phone-shaped portrait beside the site’s own shap
   click(setFocal);
   flushSync();
   const labels = Array.from(document.querySelectorAll('.ratio-item .lbl'), (el) => el.textContent);
-  expect(labels).toEqual(['16:9', '9:16']);
+  expect(labels).toEqual(['16:9', '3:2', '4:3', '1:1', '4:5', '9:16']);
   expect(q('.ratio-item:last-child .sub').textContent).toBe('Phone, upright');
 });
 

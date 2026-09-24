@@ -870,27 +870,24 @@ function setLinkType(at: readonly string[], type: 'url' | 'entry') {
     {:else if field.type === 'image' && translating}
       <!-- A translation owns the words and not the picture: the alt, and nothing else. -->
       {@render groupLabel(id, field, text, at)}
-      <div class="media-card" {id} role="group" tabindex="-1" aria-labelledby="{id}-l">
+      <div class="media-card is-image" {id} role="group" tabindex="-1" aria-labelledby="{id}-l">
         <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><MediaImage src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" {uiLocale} /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></span>
         <div class="meta">
-          <div><div class="sub">{str([...at, 'src'])}</div></div>
           {@render altField(id, at)}
           <p class="hint">{m.field_picture_same({}, messageOptions(uiLocale))}</p>
         </div>
       </div>
     {:else if field.type === 'image' && read(at) !== undefined}
       {@render groupLabel(id, field, text, at)}
-      <div class="media-card" {id} role="group" tabindex="-1" aria-labelledby="{id}-l">
+      <div class="media-card is-image" {id} role="group" tabindex="-1" aria-labelledby="{id}-l">
         <span class="thumb" style="aspect-ratio: {aspect(field.preset)}"><MediaImage src={src(at)} alt="" style="object-position: {dot(at)[0]}% {dot(at)[1]}%" {uiLocale} /><span class="focal" style="left: {dot(at)[0]}%; top: {dot(at)[1]}%" aria-hidden="true"></span></span>
         <div class="meta">
-          <div><div class="sub">{str([...at, 'src'])} · {num([...at, 'width'])} × {num([...at, 'height'])}</div></div>
           {@render altField(id, at)}
           <div class="actions">
             <button class="btn btn-sm" type="button" onclick={() => (framing = id)}>{m.field_picture_set_focal({}, messageOptions(uiLocale))}</button>
             <button class="btn btn-sm" type="button" onclick={() => (picker = id)}>{m.field_replace({}, messageOptions(uiLocale))}</button>
-            <button class="btn btn-sm btn-ghost" type="button" onclick={() => write(at, undefined)}>{m.field_remove_value({}, messageOptions(uiLocale))}</button>
+            <button class="btn btn-sm btn-ghost btn-icon image-remove" type="button" aria-label={m.field_remove_value({}, messageOptions(uiLocale))} title={m.field_remove_value({}, messageOptions(uiLocale))} onclick={() => write(at, undefined)}>{@render icon('M3 6h18M9 6V4h6v2M5 6l1 14h12l1-14M10 10v6M14 10v6')}</button>
           </div>
-          {#if field.preset.ratio}<p class="hint">{m.field_image_ratio({ ratio: field.preset.ratio }, messageOptions(uiLocale))}</p>{/if}
         </div>
       </div>
     {:else if field.type === 'image'}

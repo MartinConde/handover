@@ -4,6 +4,8 @@ import { sameCanvasDocument, sameCanvasTarget } from './canvas-target';
 import type { CanvasInteractionMode, CanvasNavigationRequest } from './runtime/canvas-navigation';
 
 export const CANVAS_PROTOCOL = 1 as const;
+/** Maximum UTF-16 code units in a complete Canvas field address. */
+export const CANVAS_ADDRESS_LIMIT = 4_096;
 export interface CanvasDocumentIdentity {
   collection: string;
   id: string;
@@ -23,9 +25,11 @@ export type CanvasBlockAction =
   | 'insert-before'
   | 'insert-after'
   | 'insert-empty'
+  | 'inspect'
   | 'move'
   | 'move-down'
   | 'move-up'
+  | 'edit-media'
   | 'replace-media'
   | 'redo'
   | 'undo'
@@ -43,6 +47,7 @@ export interface CanvasStructureNode extends CanvasSelection {
   setSize: number;
   occurrences: number;
   empty?: boolean;
+  container?: boolean;
 }
 interface CanvasIdentity {
   protocol: number;
@@ -125,10 +130,18 @@ export interface CanvasUiLocaleMessage extends CanvasIdentity {
   type: 'handover:canvas:ui-locale';
   uiLocale: UiLocale;
 }
+export interface CanvasAnchor {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
 export interface CanvasActionMessage extends CanvasIdentity {
   type: 'handover:canvas:action';
   action: CanvasBlockAction;
   selection: CanvasSelection;
+  /** Viewport bounds of the clicked image in the child frame. */
+  anchor?: CanvasAnchor;
   /** Stable same-list destination for a completed pointer move. */
   destination?: CanvasSelection;
 }
@@ -195,6 +208,55 @@ const REFUSALS = new Set<CanvasCommandRefusal>([
   'structural',
 ]);
 const BASE = ['protocol', 'requestId', 'epoch', 'entry', 'locale', 'contentVersion'];
+const MAX_RETAINED_REPLY_BYTES = 256 * 1024;
+const fingerprint = (value: CanvasCommandMessage) => {
+  let a = 0x811c9dc5,
+    b = 0x9e3779b9,
+    c = 0x85ebca6b,
+    d = 0xc2b2ae35;
+  let length = 0;
+  const feed = (part: string) => {
+    length += part.length;
+    for (let index = 0; index < part.length; index += 1) {
+      const code = part.charCodeAt(index);
+      a = Math.imul(a ^ code, 0x01000193);
+      b = Math.imul(b ^ code, 0x5bd1e995);
+      c = Math.imul(c ^ code, 0x27d4eb2d);
+      d = Math.imul(d ^ code, 0x165667b1);
+    }
+  };
+  const write = (item: unknown): void => {
+    if (item === null) {
+      feed('z;');
+      return;
+    }
+    if (item === undefined) {
+      feed('u;');
+      return;
+    }
+    if (typeof item === 'boolean') {
+      feed(item ? 't;' : 'f;');
+      return;
+    }
+    if (typeof item === 'number') {
+      feed(`n${Object.is(item, -0) ? '-0' : item};`);
+      return;
+    }
+    if (typeof item === 'string') {
+      feed(`s${item.length}:`);
+      feed(item);
+      return;
+    }
+    const keys = Object.keys(item as object);
+    feed(Array.isArray(item) ? `a${item.length}:${keys.length}:` : `o${keys.length}:`);
+    for (const key of keys) {
+      write(key);
+      write((item as Record<string, unknown>)[key]);
+    }
+  };
+  write(value);
+  return `${length}:${[a, b, c, d].map((part) => (part >>> 0).toString(16).padStart(8, '0')).join('')}`;
+};
 const record = (value: unknown): value is Record<string, unknown> =>
   value !== null && typeof value === 'object' && !Array.isArray(value);
 const keys = (value: Record<string, unknown>, expected: readonly string[]) =>
@@ -202,6 +264,8 @@ const keys = (value: Record<string, unknown>, expected: readonly string[]) =>
   Object.keys(value).every((key) => expected.includes(key));
 const id = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0 && value.length <= 200;
+const address = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0 && value.length <= CANVAS_ADDRESS_LIMIT;
 const documentIdentity = (value: unknown): value is CanvasDocumentIdentity =>
   record(value) && keys(value, ['collection', 'id']) && id(value.collection) && id(value.id);
 const location = (value: unknown): value is CanvasLocation =>
@@ -209,7 +273,7 @@ const location = (value: unknown): value is CanvasLocation =>
   keys(value, ['document', 'locale', 'address']) &&
   documentIdentity(value.document) &&
   id(value.locale) &&
-  id(value.address);
+  address(value.address);
 const target = (value: unknown): value is CanvasTarget =>
   record(value) &&
   keys(
@@ -220,7 +284,7 @@ const target = (value: unknown): value is CanvasTarget =>
   ) &&
   documentIdentity(value.document) &&
   id(value.locale) &&
-  id(value.address) &&
+  address(value.address) &&
   (value.occurrence === undefined || location(value.occurrence));
 export const isCanvasTarget = target;
 const annotationKind = (value: unknown): value is CanvasAnnotationKind =>
@@ -231,9 +295,11 @@ const blockAction = (value: unknown): value is CanvasBlockAction =>
   value === 'insert-before' ||
   value === 'insert-after' ||
   value === 'insert-empty' ||
+  value === 'inspect' ||
   value === 'move' ||
   value === 'move-down' ||
   value === 'move-up' ||
+  value === 'edit-media' ||
   value === 'replace-media' ||
   value === 'redo' ||
   value === 'undo' ||
@@ -256,6 +322,7 @@ const structureNode = (value: unknown): value is CanvasStructureNode =>
     'occurrences',
     ...(value.parentId === undefined ? [] : ['parentId']),
     ...(value.empty === undefined ? [] : ['empty']),
+    ...(value.container === undefined ? [] : ['container']),
   ]) &&
   id(value.id) &&
   annotationKind(value.kind) &&
@@ -273,7 +340,8 @@ const structureNode = (value: unknown): value is CanvasStructureNode =>
   (value.setSize as number) >= (value.position as number) &&
   Number.isSafeInteger(value.occurrences) &&
   (value.occurrences as number) >= 1 &&
-  (value.empty === undefined || typeof value.empty === 'boolean');
+  (value.empty === undefined || typeof value.empty === 'boolean') &&
+  (value.container === undefined || typeof value.container === 'boolean');
 const structure = (value: unknown): value is CanvasStructureNode[] => {
   if (!Array.isArray(value) || value.length > 5_000 || !value.every(structureNode)) return false;
   const nodes = value as CanvasStructureNode[];
@@ -503,20 +571,29 @@ const editingMessage = (
       type: 'handover:canvas:editing';
       target: CanvasTarget;
       state: CanvasEditingState;
+      interactionId?: string;
     })
   | undefined => {
   if (
     record(value) &&
-    keys(value, ['type', ...BASE, 'target', 'state']) &&
+    keys(value, [
+      'type',
+      ...BASE,
+      'target',
+      'state',
+      ...(value.interactionId === undefined ? [] : ['interactionId']),
+    ]) &&
     value.type === 'handover:canvas:editing' &&
     identity(value) &&
     target(value.target) &&
-    editingState(value.state)
+    editingState(value.state) &&
+    (value.interactionId === undefined || id(value.interactionId))
   )
     return value as unknown as CanvasIdentity & {
       type: 'handover:canvas:editing';
       target: CanvasTarget;
       state: CanvasEditingState;
+      interactionId?: string;
     };
 };
 const selectionMessage = (
@@ -553,6 +630,12 @@ const structureMessage = (
       nodes: CanvasStructureNode[];
     };
 };
+const canvasAnchor = (value: unknown): value is CanvasAnchor =>
+  record(value) &&
+  keys(value, ['left', 'top', 'width', 'height']) &&
+  Object.values(value).every((part) => typeof part === 'number' && Number.isFinite(part)) &&
+  (value.width as number) >= 0 &&
+  (value.height as number) >= 0;
 const actionMessage = (value: unknown): CanvasActionMessage | undefined => {
   if (
     record(value) &&
@@ -560,13 +643,16 @@ const actionMessage = (value: unknown): CanvasActionMessage | undefined => {
       value,
       value.action === 'move'
         ? ['type', ...BASE, 'action', 'selection', 'destination']
-        : ['type', ...BASE, 'action', 'selection'],
+        : value.action === 'edit-media'
+          ? ['type', ...BASE, 'action', 'selection', 'anchor']
+          : ['type', ...BASE, 'action', 'selection'],
     ) &&
     value.type === 'handover:canvas:action' &&
     identity(value) &&
     blockAction(value.action) &&
     selection(value.selection) &&
-    (value.action !== 'move' || selection(value.destination))
+    (value.action !== 'move' || selection(value.destination)) &&
+    (value.action !== 'edit-media' || canvasAnchor(value.anchor))
   )
     return value as unknown as CanvasActionMessage;
 };
@@ -655,6 +741,21 @@ const modeMessage = (
       mode: CanvasInteractionMode;
     };
 };
+type CanvasProblemsMessage = CanvasIdentity & {
+  type: 'handover:canvas:problems';
+  addresses: string[];
+};
+const problemsMessage = (value: unknown): CanvasProblemsMessage | undefined => {
+  if (
+    record(value) &&
+    keys(value, ['type', ...BASE, 'addresses']) &&
+    value.type === 'handover:canvas:problems' &&
+    identity(value) &&
+    Array.isArray(value.addresses) &&
+    value.addresses.every(address)
+  )
+    return value as unknown as CanvasProblemsMessage;
+};
 const uiLocaleMessage = (value: unknown): CanvasUiLocaleMessage | undefined => {
   if (
     record(value) &&
@@ -740,14 +841,37 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
   const owner = options.owner ?? window;
   const completed = new Map<
     string,
-    { fingerprint: string; reply: Promise<CanvasAcknowledgement> }
+    {
+      fingerprint: string;
+      reply?: Promise<CanvasAcknowledgement>;
+      bytes: number;
+    }
   >();
+  let retainedReplyBytes = 0;
+  const trimCompleted = () => {
+    while (completed.size > 500) {
+      const oldest = completed.keys().next().value as string;
+      const entry = completed.get(oldest);
+      if (entry) retainedReplyBytes -= entry.bytes;
+      completed.delete(oldest);
+    }
+    for (const entry of completed.values()) {
+      if (retainedReplyBytes <= MAX_RETAINED_REPLY_BYTES) break;
+      if (!entry.bytes) continue;
+      retainedReplyBytes -= entry.bytes;
+      entry.bytes = 0;
+      entry.reply = undefined;
+    }
+  };
   let connected = false;
   let disposed = false;
   let replyPort: MessagePort | undefined;
   // The parent session can advance before this rendered document receives a field update. Locale
   // synchronization follows the child's accepted version so it remains independent of form edits.
   let childVersion = manifest.contentVersion;
+  let editingOwner:
+    | { target: CanvasTarget; interactionId?: string; startVersion: number }
+    | undefined;
   const reject = (reason: CanvasBridgeRejection, message: unknown) =>
     options.onRejected?.(reason, message);
   const post = (reply: CanvasAcknowledgement) => {
@@ -835,22 +959,53 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
       return;
     }
     if (editing) {
-      const reason = stale(editing, manifest, options.contentVersion());
+      const ending =
+        !editing.state.inlineEditing &&
+        !editing.state.composing &&
+        editing.state.dragging === undefined;
+      const ownedEnd =
+        ending &&
+        editingOwner &&
+        sameCanvasTarget(editing.target, editingOwner.target) &&
+        editing.interactionId === editingOwner.interactionId;
+      const currentVersion = options.contentVersion();
+      const reason = stale(editing, manifest, ownedEnd ? editing.contentVersion : currentVersion);
       if (reason) return reject(reason, editing);
+      if (
+        ownedEnd &&
+        editingOwner &&
+        (editing.contentVersion < editingOwner.startVersion ||
+          editing.contentVersion > currentVersion)
+      )
+        return reject('stale-version', editing);
       if (!connected) return reject('not-ready', editing);
       const current = options.currentTarget();
-      if (!current || !sameCanvasTarget(editing.target, current))
+      if (!ownedEnd && (!current || !sameCanvasTarget(editing.target, current)))
         return reject('stale-target', editing);
+      if (ending && editingOwner && !ownedEnd) return reject('stale-target', editing);
+      if (editing.state.inlineEditing)
+        editingOwner = {
+          target: editing.target,
+          interactionId: editing.interactionId,
+          startVersion:
+            editingOwner &&
+            sameCanvasTarget(editing.target, editingOwner.target) &&
+            editing.interactionId === editingOwner.interactionId
+              ? editingOwner.startVersion
+              : currentVersion,
+        };
+      else if (ownedEnd) editingOwner = undefined;
       options.onEditing?.(editing.target, editing.state);
       return;
     }
     const message = event.data as CanvasCommandMessage;
     const identityReason = stale(message, manifest, message.contentVersion);
     if (identityReason) return refusal(message, identityReason);
-    const fingerprint = JSON.stringify(message);
+    const commandFingerprint = fingerprint(message);
     const prior = completed.get(message.commandId);
     if (prior) {
-      if (prior.fingerprint !== fingerprint) return refusal(message, 'duplicate-command');
+      if (prior.fingerprint !== commandFingerprint) return refusal(message, 'duplicate-command');
+      if (!prior.reply) return refusal(message, 'duplicate-command');
       void prior.reply.then(post);
       return;
     }
@@ -897,8 +1052,16 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
           reason: 'handler-error',
         }),
       );
-    completed.set(message.commandId, { fingerprint, reply });
-    if (completed.size > 500) completed.delete(completed.keys().next().value as string);
+    completed.set(message.commandId, { fingerprint: commandFingerprint, reply, bytes: 0 });
+    trimCompleted();
+    void reply.then((ack) => {
+      const entry = completed.get(message.commandId);
+      if (!entry || entry.reply !== reply) return;
+      entry.reply = Promise.resolve(ack);
+      entry.bytes = JSON.stringify(ack).length * 2;
+      retainedReplyBytes += entry.bytes;
+      trimCompleted();
+    });
     void reply.then(post);
   };
   if (options.listen !== false) owner.addEventListener('message', receive);
@@ -964,6 +1127,18 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
       );
       return true;
     },
+    problems(addresses: string[]) {
+      if (disposed || !connected || !addresses.every(address)) return false;
+      frame.postMessage(
+        {
+          ...base(manifest, childVersion),
+          type: 'handover:canvas:problems',
+          addresses: [...addresses],
+        } satisfies CanvasProblemsMessage,
+        origin,
+      );
+      return true;
+    },
     uiLocale(value: UiLocale) {
       if (disposed || !connected || !isUiLocale(value)) return false;
       frame.postMessage(
@@ -982,7 +1157,9 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
       owner.removeEventListener('message', receive);
       replyPort?.close();
       replyPort = undefined;
+      editingOwner = undefined;
       completed.clear();
+      retainedReplyBytes = 0;
     },
   };
 }
@@ -998,6 +1175,7 @@ export interface CanvasChildBridgeOptions {
   onTextField?: (field: CanvasTextField | undefined) => void;
   onActions?: (capability: CanvasActionCapability) => void;
   onMode?: (mode: CanvasInteractionMode) => void;
+  onProblems?: (addresses: string[]) => void;
   onUiLocale?: (locale: UiLocale) => void;
 }
 
@@ -1009,6 +1187,7 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
     { version: number; target: CanvasTarget; resolve: (reply: CanvasAcknowledgement) => void }
   >();
   let version = manifest.contentVersion;
+  let interactionOwner: { target: CanvasTarget; id: string } | undefined;
   let started = false;
   let disposed = false;
   let replyPort: MessagePort | undefined;
@@ -1046,6 +1225,7 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
     const configuredActions = actionCapabilityMessage(event.data);
     const configuredMode = modeMessage(event.data);
     const configuredUiLocale = uiLocaleMessage(event.data);
+    const configuredProblems = problemsMessage(event.data);
     if (requested) {
       if (!stale(requested, manifest, version))
         options.onSelect?.(requested.selection, { scroll: requested.scroll !== false });
@@ -1072,6 +1252,11 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
     }
     if (configuredMode) {
       if (!stale(configuredMode, manifest, version)) options.onMode?.(configuredMode.mode);
+      return;
+    }
+    if (configuredProblems) {
+      if (!stale(configuredProblems, manifest, version))
+        options.onProblems?.(configuredProblems.addresses);
       return;
     }
     if (configuredUiLocale) {
@@ -1115,13 +1300,19 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
       );
       return true;
     },
-    action(action: CanvasBlockAction, selected: CanvasSelection, destination?: CanvasSelection) {
+    action(
+      action: CanvasBlockAction,
+      selected: CanvasSelection,
+      destination?: CanvasSelection,
+      anchor?: CanvasAnchor,
+    ) {
       if (!started || disposed || !blockAction(action) || !selection(selected)) return false;
       if (
         (action === 'move' && !selection(destination)) ||
         (action !== 'move' && destination !== undefined)
       )
         return false;
+      if (action === 'edit-media' && !canvasAnchor(anchor)) return false;
       parent.postMessage(
         {
           ...base(manifest, version),
@@ -1129,6 +1320,7 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
           action,
           selection: selected,
           ...(action === 'move' ? { destination } : {}),
+          ...(action === 'edit-media' ? { anchor } : {}),
         },
         origin,
       );
@@ -1156,15 +1348,29 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
     },
     interaction(targetValue: CanvasTarget, state: CanvasEditingState) {
       if (!started || disposed || !target(targetValue) || !editingState(state)) return false;
+      if (
+        state.inlineEditing &&
+        (!interactionOwner || !sameCanvasTarget(targetValue, interactionOwner.target))
+      )
+        interactionOwner = { target: targetValue, id: crypto.randomUUID() };
+      const interactionId =
+        state.dragging === undefined &&
+        interactionOwner &&
+        sameCanvasTarget(targetValue, interactionOwner.target)
+          ? interactionOwner.id
+          : undefined;
       parent.postMessage(
         {
           ...base(manifest, version),
           type: 'handover:canvas:editing',
           target: targetValue,
           state,
+          ...(interactionId ? { interactionId } : {}),
         },
         origin,
       );
+      if (!state.inlineEditing && state.dragging === undefined && interactionId)
+        interactionOwner = undefined;
       return true;
     },
     navigate(request: CanvasNavigationRequest) {

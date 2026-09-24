@@ -602,6 +602,20 @@ test('the narrow editor shell switches panes without losing its working snapshot
   await expect(title).toHaveValue('Canvas fixture');
   await title.fill('Unsaved narrow edit');
 
+  const preview = page.getByRole('group', { name: 'Beside the form' }).getByRole('button', {
+    name: 'Live preview',
+  });
+  const wasPressed = await preview.getAttribute('aria-pressed');
+  await preview.click();
+  await expect(preview).toHaveAttribute('aria-pressed', wasPressed === 'true' ? 'false' : 'true');
+  if ((await preview.getAttribute('aria-pressed')) !== 'true') await preview.click();
+  const panes = page.getByRole('group', { name: 'Split view pane' });
+  await panes.getByRole('button', { name: 'Page' }).click();
+  await expect(page.locator('.canvas-workspace')).toBeVisible();
+  await expect(title).not.toBeVisible();
+  await panes.getByRole('button', { name: 'Form' }).click();
+  await expect(title).toHaveValue('Unsaved narrow edit');
+
   await page.getByRole('button', { name: 'Canvas', exact: true }).click();
   await expect(page.locator('.shell')).toHaveClass(/is-canvas/);
   await expect(page.locator('.canvas-workspace')).toBeVisible();
@@ -609,14 +623,6 @@ test('the narrow editor shell switches panes without losing its working snapshot
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 
   await page.getByRole('button', { name: /^(Form|Back to form)$/ }).click();
-  await expect(page.getByLabel('Title')).toHaveValue('Unsaved narrow edit');
-
-  await page.getByRole('button', { name: 'Split', exact: true }).click();
-  const panes = page.getByRole('group', { name: 'Split view pane' });
-  await expect(panes).toBeVisible();
-  await panes.getByRole('button', { name: 'Page' }).click();
-  await expect(page.locator('.canvas-workspace')).toBeVisible();
-  await expect(page.getByLabel('Title')).not.toBeVisible();
   await panes.getByRole('button', { name: 'Form' }).click();
   await expect(page.getByLabel('Title')).toHaveValue('Unsaved narrow edit');
 });
@@ -916,6 +922,22 @@ test('Canvas Inspector and acknowledged plain-text editing share the entry sessi
     .getByRole('dialog', { name: 'Edit link' });
   await expect(linkEditor).toBeVisible();
   await expect(linkEditor.getByLabel('Label')).toHaveValue('Book a viewing');
+  expect(
+    await linkEditor.evaluate((panel) => {
+      const label = panel.ownerDocument
+        .querySelector('[data-handover-canvas-overlay]')
+        ?.shadowRoot?.querySelector<HTMLElement>('.path');
+      if (!label) throw new Error('Canvas label is missing');
+      const previous = label.style.cssText;
+      const rect = panel.getBoundingClientRect();
+      // Force the label underneath the dialog to exercise the overlapping stacking contexts.
+      label.style.left = `${rect.left + 20}px`;
+      label.style.top = `${rect.top + 20}px`;
+      const hit = panel.ownerDocument.elementFromPoint(rect.left + 30, rect.top + 25);
+      label.style.cssText = previous;
+      return panel.contains(hit);
+    }),
+  ).toBe(true);
   await expect(linkEditor.getByLabel('Address')).toHaveValue('https://example.com/book');
   await linkEditor.getByLabel('Label').fill('Book by phone');
   await linkEditor.getByLabel('Address').fill('https://example.com/phone');
@@ -927,6 +949,8 @@ test('Canvas Inspector and acknowledged plain-text editing share the entry sessi
     .contentFrame()
     .getByRole('link', { name: 'Book by phone' });
   await expect(updatedCanvasButton).toHaveAttribute('href', 'https://example.com/phone');
+  await expect(inspector).toHaveCount(0);
+  await inspectorButton.click();
   await expect(page.locator('#canvas-inspector').getByLabel('Label')).toHaveValue('Book by phone');
   await expect(page.locator('#canvas-inspector').getByLabel('Address')).toHaveValue(
     'https://example.com/phone',
@@ -949,23 +973,25 @@ test('Canvas Inspector and acknowledged plain-text editing share the entry sessi
 
   await page.getByRole('button', { name: 'Back to form' }).click();
   await expect(page.locator('#f-button\\.label')).toHaveValue('Book by phone');
-  await page.getByRole('button', { name: 'Split', exact: true }).click();
-  const splitHeading = page
+  await page.getByRole('button', { name: 'Canvas', exact: true }).click();
+  const heading = page
     .locator('iframe[data-handover-canvas-frame="active"]')
     .contentFrame()
     .getByRole('heading', { level: 1 });
-  await splitHeading.click();
-  await splitHeading.dblclick();
-  await expect(splitHeading).toHaveAttribute('contenteditable', 'true');
+  await heading.click();
+  await page.getByRole('button', { name: 'Inspector', exact: true }).click();
+  await expect(page.locator('#canvas-inspector').getByLabel('Title')).toHaveValue(
+    'Edited through Inspector',
+  );
+  await heading.click();
+  await expect(heading).toHaveAttribute('contenteditable', 'true');
   await page.evaluate(() => {
     const frame = document.querySelector<HTMLIFrameElement>(
       'iframe[data-handover-canvas-frame="active"]',
     );
     const heading = frame?.contentDocument?.querySelector<HTMLElement>('h1');
-    const input = [...document.querySelectorAll<HTMLInputElement>('input')].find(
-      (candidate) => candidate.value === 'Edited through Inspector',
-    );
-    if (!heading || !input) throw new Error('Split text fixtures are missing.');
+    const input = document.querySelector<HTMLInputElement>('#canvas-inspector-title');
+    if (!heading || !input) throw new Error('Canvas and Inspector text fixtures are missing.');
     const before = new Event('beforeinput', { bubbles: true, cancelable: true });
     Object.defineProperty(before, 'inputType', { value: 'insertText' });
     heading.dispatchEvent(before);
@@ -973,14 +999,14 @@ test('Canvas Inspector and acknowledged plain-text editing share the entry sessi
     const changed = new Event('input', { bubbles: true });
     Object.defineProperty(changed, 'inputType', { value: 'insertText' });
     heading.dispatchEvent(changed);
-    input.value = 'External Form edit';
+    input.value = 'External Inspector edit';
     input.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
   });
-  await expect(splitHeading).toHaveText('External Form edit');
-  await expect(splitHeading).toHaveAttribute('data-handover-inline-refusal', 'stale-version');
+  await expect(heading).toHaveText('External Inspector edit');
+  await expect(heading).toHaveAttribute('data-handover-inline-refusal', 'stale-version');
   await page.keyboard.press('Escape');
-  await expect(page.locator('#canvas-inspector')).toHaveCount(0);
-  await expect(page.getByLabel('Title')).toHaveValue('External Form edit');
+  await page.getByRole('button', { name: 'Back to form' }).click();
+  await expect(page.locator('#f-title')).toHaveValue('External Inspector edit');
 });
 
 test('drift blocks editing until reconciliation reloads a fresh Canvas session', async ({
@@ -1165,6 +1191,9 @@ test('Canvas rich text lazily reuses formatting, selection, composition, and For
   const legacy = frame.locator('[data-rich-legacy]');
   await legacy.dblclick();
   await expect(legacy.locator('[contenteditable="true"]')).toHaveCount(0);
+  const legacyInspectorButton = page.getByRole('button', { name: 'Inspector', exact: true });
+  if ((await legacyInspectorButton.getAttribute('aria-expanded')) !== 'true')
+    await legacyInspectorButton.click();
   await expect(page.locator('#canvas-inspector')).toBeVisible();
   await expect(page.locator('#canvas-inspector')).toContainText('edited in code');
 
@@ -1281,13 +1310,11 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
     await expect(page.locator('#canvas-structure')).toBeVisible();
   };
   const useCanvasAction = async (
-    name: 'Replace' | 'Insert after' | 'Duplicate',
+    name: 'Delete' | 'Insert after' | 'Duplicate',
     selectedLabel: string,
   ) => {
-    if (name === 'Replace' || name === 'Duplicate')
-      await frame.getByRole('button', { name: `Actions for ${selectedLabel}` }).click();
     const action = frame.getByRole('button', {
-      name: name === 'Replace' ? `Replace ${selectedLabel}` : `${name} ${selectedLabel}`,
+      name: `${name} ${selectedLabel}`,
     });
     await expect(action).toBeVisible();
     await action.evaluate((button) => button.click());
@@ -1296,6 +1323,74 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
   const inspector = page.locator('#canvas-inspector');
   const structure = page.locator('#canvas-structure');
   await openStructure();
+  const treeRow = (address: string) =>
+    structure.locator(`.canvas-structure-row:has(> [data-target-address="${address}"])`);
+  expect(
+    await treeRow('blocks[_id=columns1].columns[_id=column01]').evaluate((row) => {
+      const group = row.parentElement?.parentElement;
+      const parent = group?.parentElement?.querySelector(
+        ':scope > .canvas-structure-row > [role="treeitem"]',
+      );
+      return (
+        group?.getAttribute('role') === 'group' && parent?.getAttribute('aria-expanded') === 'true'
+      );
+    }),
+  ).toBe(true);
+  const treeDrag = async (cancel: boolean) => {
+    const handle = treeRow('blocks[_id=repeat01]').locator('.canvas-structure-drag');
+    await expect(handle).toBeVisible();
+    const box = await handle.boundingBox();
+    if (!box) throw new Error('Missing Structure drag handle');
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 + 12, { steps: 4 });
+    await expect(structure.locator('[data-dnd-dragging]')).toBeVisible();
+    await expect(treeRow('blocks[_id=columns1]')).toHaveCSS('opacity', '1');
+    await expect(treeRow('blocks[_id=columns1].columns[_id=column01]')).toHaveCSS('opacity', '0.3');
+    const target = await treeRow('blocks[_id=columns1]').locator('[role="treeitem"]').boundingBox();
+    if (!target) throw new Error('Missing Structure drop target');
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height - 2, { steps: 15 });
+    await page.screenshot({ path: testInfo.outputPath(`structure-drag-${cancel}.png`) });
+    if (cancel) await page.keyboard.press('Escape');
+    await page.mouse.up();
+    await expect(structure.locator('[data-dnd-dragging]')).toHaveCount(0);
+    await expect(treeRow('blocks[_id=columns1].columns[_id=column01]')).toHaveCSS('opacity', '1');
+  };
+  const rootOrder = async () => {
+    try {
+      return await frame
+        .locator('main > [data-block-id]')
+        .evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-block-id')));
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Frame was detached')) return [];
+      throw error;
+    }
+  };
+  const beforeTreeDrag = await rootOrder();
+  const rendersBeforeCancel = posts;
+  await treeDrag(true);
+  expect(await rootOrder()).toEqual(beforeTreeDrag);
+  expect(posts).toBe(rendersBeforeCancel);
+  await treeDrag(false);
+  await expect.poll(rootOrder).toEqual(['columns1', 'repeat01', ...beforeTreeDrag.slice(2)]);
+  await expect(frame.locator('[data-block-id="columns1"] [data-block-id="repeat02"]')).toHaveCount(
+    1,
+  );
+  await page.screenshot({ path: testInfo.outputPath('structure-sorting.png') });
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect.poll(rootOrder).toEqual(beforeTreeDrag);
+  const columnsHandle = treeRow('blocks[_id=columns1]').locator('.canvas-structure-drag');
+  await columnsHandle.focus();
+  await page.keyboard.press('Space');
+  await expect(structure.locator('[data-dnd-dragging]')).toBeVisible();
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Space');
+  await expect.poll(rootOrder).toEqual(['columns1', 'repeat01', ...beforeTreeDrag.slice(2)]);
+  await expect(frame.locator('[data-block-id="columns1"] [data-block-id="repeat02"]')).toHaveCount(
+    1,
+  );
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect.poll(rootOrder).toEqual(beforeTreeDrag);
   await structure.getByRole('button', { name: 'Add block', exact: true }).click();
   await expect(editor).toBeVisible();
   await expect(structure.locator('.canvas-block-editor')).toBeVisible();
@@ -1308,6 +1403,7 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
   await expect(structure.getByRole('button', { name: 'Add block', exact: true })).toBeFocused();
   const first = frame.locator('[data-block-id="repeat01"]');
   await first.click({ position: { x: 5, y: 5 } });
+  await page.getByRole('button', { name: 'Inspector', exact: true }).click();
   await expect(inspector.locator('.canvas-inspector-context')).toContainText('Block 1');
   const insertAfterFirst = frame.getByRole('button', { name: 'Insert after Block 1' });
   await expect(insertAfterFirst).toBeVisible();
@@ -1328,7 +1424,7 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
   await expect(page.locator('.canvas-entry-actions .autosave')).toContainText('Saved');
   expect(posts).toBe(postsBeforeIncompleteBlock);
   await expect(page.locator('.canvas-failure')).toHaveCount(0);
-  await expect(inspector.locator('.error')).toHaveCount(0);
+  await expect(inspector.locator('.error')).toHaveCount(1);
   await page.screenshot({ path: testInfo.outputPath('incomplete-block.png') });
 
   await inspector.getByLabel('Heading').fill('Inserted beside the first block');
@@ -1340,16 +1436,19 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
     .locator('..')
     .click({ position: { x: 5, y: 5 } });
   await openStructure();
-  await useCanvasAction('Replace', 'Block 2');
+  await useCanvasAction('Delete', 'Block 2');
+  await expect(frame.getByText('Inserted beside the first block')).toHaveCount(0);
+  await first.click({ position: { x: 5, y: 5 } });
+  await useCanvasAction('Insert after', 'Block 1');
   await editor.getByRole('button', { name: /promo/ }).click();
-  await editor.getByLabel('Heading').fill('Replacement promotion');
-  await editor.getByRole('button', { name: 'Apply' }).click();
-  await expect(frame.getByText('Replacement promotion')).toBeVisible();
+  await inspector.getByLabel('Heading').fill('New promotion');
+  await inspector.getByLabel('Heading').press('Tab');
+  await expect(frame.getByText('New promotion')).toBeVisible();
   await expect(frame.getByText('Inserted beside the first block')).toHaveCount(0);
 
   const beforeCancel = posts;
   await frame
-    .getByText('Replacement promotion')
+    .getByText('New promotion')
     .locator('..')
     .click({ position: { x: 5, y: 5 } });
   await openStructure();
@@ -1381,42 +1480,43 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
   expect(generated).not.toContain('');
 
   const originalNested = frame.locator('[data-block-id="columns1"] [data-block-id="repeat02"]');
-  await originalNested.click({ position: { x: 5, y: 5 } });
   const pointerDrag = async (finish: 'drop' | 'escape') => {
-    await frame.getByRole('button', { name: /^Drag Block/ }).evaluate((button, finish) => {
-      const source = button as HTMLButtonElement;
-      const sibling = source.ownerDocument.querySelector(
-        '[data-block-id="columns1"] [data-block-id="promo001"]',
-      );
-      const y = sibling?.getBoundingClientRect().top ?? 0;
-      source.dispatchEvent(
-        new PointerEvent('pointerdown', {
-          bubbles: true,
-          cancelable: true,
-          button: 0,
-          clientY: source.getBoundingClientRect().top,
-          pointerId: 31,
-        }),
-      );
-      source.ownerDocument.dispatchEvent(
-        new PointerEvent('pointermove', {
-          bubbles: true,
-          cancelable: true,
-          clientY: y + 2,
-          pointerId: 31,
-        }),
-      );
-      source.ownerDocument.dispatchEvent(
-        finish === 'escape'
-          ? new KeyboardEvent('keydown', { bubbles: true, key: 'Escape' })
-          : new PointerEvent('pointerup', {
-              bubbles: true,
-              cancelable: true,
-              clientY: y + 2,
-              pointerId: 31,
-            }),
-      );
-    }, finish);
+    await originalNested.click({ position: { x: 5, y: 5 } });
+    await expect(frame.getByRole('button', { name: /^Drag Block/ })).toBeVisible();
+    let handle: { x: number; y: number; width: number; height: number } | null = null;
+    await expect
+      .poll(async () => {
+        handle = await frame.getByRole('button', { name: /^Drag Block/ }).boundingBox();
+        return handle;
+      })
+      .not.toBeNull();
+    const box = handle as { x: number; y: number; width: number; height: number } | null;
+    if (!box) throw new Error('Missing drag handle');
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await page.mouse.move(x, y);
+    await page.mouse.down();
+    await page.mouse.move(x, y + 10, { steps: 3 });
+    await expect(frame.locator('[data-dnd-dragging]')).toBeVisible();
+    await expect
+      .poll(() =>
+        frame
+          .locator('[data-dnd-dragging]')
+          .evaluate((node) =>
+            node.parentElement ? getComputedStyle(node.parentElement).scale : '',
+          ),
+      )
+      .toBe('0.65');
+    const sibling = await frame
+      .locator('[data-block-id="columns1"] [data-block-id="promo001"]')
+      .boundingBox();
+    if (!sibling) throw new Error('Missing drop target');
+    await page.mouse.move(x, sibling.y + sibling.height / 2 + 10, { steps: 15 });
+    await expect(frame.locator('.live')).toContainText('position 2');
+    if (finish === 'escape') await page.keyboard.press('Escape');
+    await page.mouse.up();
+    await expect(frame.locator('[data-dnd-dragging]')).toHaveCount(0);
+    await expect(frame.locator('.actions')).toHaveCSS('opacity', '1');
   };
   const nestedOrder = async () => {
     try {
@@ -1432,12 +1532,28 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
   };
   await pointerDrag('escape');
   await expect.poll(nestedOrder).toEqual(['repeat02', 'promo001']);
+  await openStructure();
+  const nestedTreeHandle = treeRow(
+    'blocks[_id=columns1].columns[_id=column01].blocks[_id=promo001]',
+  ).locator('.canvas-structure-drag');
+  await nestedTreeHandle.focus();
+  await page.keyboard.press('Space');
+  await expect(structure.locator('[data-dnd-dragging]')).toBeVisible();
+  await expect(treeRow('blocks[_id=columns1]')).toHaveCSS('opacity', '0.3');
+  await expect(
+    treeRow('blocks[_id=columns1].columns[_id=column01].blocks[_id=repeat02]'),
+  ).toHaveCSS('opacity', '1');
+  await page.screenshot({ path: testInfo.outputPath('structure-drag-scope.png') });
+  await page.keyboard.press('ArrowUp');
+  await page.keyboard.press('Space');
+  await expect.poll(nestedOrder).toEqual(['promo001', 'repeat02']);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await expect.poll(nestedOrder).toEqual(['repeat02', 'promo001']);
   await pointerDrag('drop');
   await expect.poll(nestedOrder).toEqual(['promo001', 'repeat02']);
   await frame
     .locator('[data-block-id="columns1"] [data-block-id="repeat02"]')
     .click({ position: { x: 5, y: 5 } });
-  await frame.getByRole('button', { name: /^Actions for Block/ }).click();
   await expect(frame.getByRole('button', { name: /^Move Block.* up/ })).toBeVisible();
   await originalNested.evaluate((node) =>
     node.ownerDocument.dispatchEvent(
@@ -1448,7 +1564,6 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
   await frame
     .locator('[data-block-id="columns1"] [data-block-id="repeat02"]')
     .click({ position: { x: 5, y: 5 } });
-  await frame.getByRole('button', { name: /^Actions for Block/ }).click();
   await expect(frame.getByRole('button', { name: /^Move Block.* down/ })).toBeVisible();
   await originalNested.evaluate((node) =>
     node.ownerDocument.dispatchEvent(
@@ -1465,7 +1580,6 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
     'data-selected-address',
     promoAddress,
   );
-  await frame.getByRole('button', { name: /^Actions for Block/ }).click();
   const deletePromo = frame.getByRole('button', { name: /^Delete Block/ });
   await expect(deletePromo).toBeVisible();
   await deletePromo.evaluate((button) => button.click());
@@ -1485,7 +1599,6 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
     'data-selected-address',
     repeatedAddress,
   );
-  await frame.getByRole('button', { name: /^Actions for Block/ }).click();
   const deleteRepeated = frame.getByRole('button', { name: /^Delete Block/ });
   await expect(deleteRepeated).toBeVisible();
   await deleteRepeated.evaluate((button) => button.click());
@@ -1520,7 +1633,7 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
     1,
   );
   await page.getByRole('button', { name: /^(Form|Back to form)$/ }).click();
-  await page.getByRole('button', { name: 'DE', exact: true }).click();
+  await page.getByRole('button', { name: /^DE(?: —|$)/ }).click();
   await expect
     .poll(() =>
       page
@@ -1528,13 +1641,13 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
         .evaluateAll((inputs) => inputs.some((input) => input.value === 'Verschachteltes Feld')),
     )
     .toBe(true);
-  await page.getByRole('button', { name: 'EN', exact: true }).click();
+  await page.getByRole('button', { name: /^EN(?: —|$)/ }).click();
   await page.getByRole('button', { name: 'Canvas', exact: true }).click();
   await expect(page.locator('.canvas-render-state')).toHaveText('Canvas updated');
   await expect(page.locator('iframe[data-handover-canvas-frame="candidate"]')).toHaveCount(0);
 
   await frame
-    .getByText('Replacement promotion')
+    .getByText('New promotion')
     .locator('..')
     .click({ position: { x: 5, y: 5 } });
   await openStructure();

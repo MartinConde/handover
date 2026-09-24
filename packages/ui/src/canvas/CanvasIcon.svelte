@@ -1,6 +1,10 @@
 <script lang="ts">
 let { name }: { name: string } = $props();
 const paths: Record<string, string> = {
+  'chevron-right': 'm7 4 6 6-6 6',
+  'chevron-down': 'm4 7 6 6 6-6',
+  grip: 'M7 5h.01M7 10h.01M7 15h.01M13 5h.01M13 10h.01M13 15h.01',
+  close: 'm5 5 10 10M15 5 5 15',
   back: 'm12 4-6 6 6 6M6 10h12',
   undo: 'M7 4 3 8l4 4M3 8h8a5 5 0 1 1 0 10',
   redo: 'm13 4 4 4-4 4M17 8H9a5 5 0 1 0 0 10',

@@ -1,4 +1,6 @@
 export const CANVAS_PROTOCOL = 1 as const;
+/** Keep in sync with the parent bridge's complete-address bound. */
+export const CANVAS_ADDRESS_LIMIT = 4_096;
 
 export interface CanvasDocumentIdentity {
   collection: string;
@@ -32,7 +34,11 @@ export interface EditTarget extends EditLocation {
 
 export type EditAttributes = Partial<
   Record<
-    'data-handover-field' | 'data-handover-list' | 'data-handover-block' | 'data-handover-name',
+    | 'data-handover-field'
+    | 'data-handover-list'
+    | 'data-handover-block'
+    | 'data-handover-name'
+    | 'data-handover-container',
     string
   >
 >;
@@ -120,8 +126,12 @@ const location = (
   canvas: HandoverCanvas | undefined,
   document: CanvasDocumentIdentity | undefined,
   address: string,
-): EditLocation | undefined =>
-  canvas && document ? { document, locale: canvas.locale, address } : undefined;
+): EditLocation | undefined => {
+  if (!canvas || !document) return undefined;
+  if (address.length > CANVAS_ADDRESS_LIMIT)
+    throw new Error(`Canvas address exceeds ${CANVAS_ADDRESS_LIMIT} characters.`);
+  return { document, locale: canvas.locale, address };
+};
 
 const target = (
   canvas: HandoverCanvas | undefined,
@@ -142,7 +152,7 @@ const blockName = (block: EditBlock) => {
       .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
       .trim();
   if (!named || hasControlCharacter(named)) return undefined;
-  return named.charAt(0).toUpperCase() + named.slice(1);
+  return (named.charAt(0).toUpperCase() + named.slice(1)).slice(0, 200);
 };
 
 const globalDocument = (reference: string | undefined): CanvasDocumentIdentity | undefined => {
@@ -197,8 +207,24 @@ function editContext(
         const blockTarget = target(canvas, document, blockAddress, occurrence);
         const named = typeof block === 'string' ? undefined : blockName(block);
         const owner = typeof block === 'string' ? undefined : globalDocument(block._ref);
-        if (!owner)
-          return editContext(canvas, document, blockAddress, 'block', occurrence, undefined, named);
+        if (!owner) {
+          const context = editContext(
+            canvas,
+            document,
+            blockAddress,
+            'block',
+            occurrence,
+            undefined,
+            named,
+          );
+          // Plain array rows provide nesting, but only typed blocks have a block editor.
+          if (canvas && typeof block !== 'string' && !block._type)
+            Object.defineProperty(context, 'data-handover-container', {
+              enumerable: true,
+              value: 'true',
+            });
+          return context;
+        }
 
         const renderedAt = occurrence ?? location(canvas, document, blockAddress);
         return editContext(canvas, owner, '', 'block', renderedAt, blockTarget, named);

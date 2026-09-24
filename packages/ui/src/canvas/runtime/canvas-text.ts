@@ -29,6 +29,35 @@ export interface CanvasPlainTextOptions {
 
 const length = (element: HTMLElement) => element.textContent?.length ?? 0;
 
+/** Chrome's UA sheet gives `[contenteditable]` its own wrapping, which re-flows the reader's text
+ * the moment editing opens. Hold the rendered values so the line breaks never move. `white-space`
+ * stays out: the UA leaves it alone, and a rich-text root needs the `pre-wrap` TipTap gives it. */
+const WRAPPING = ['overflow-wrap', 'word-break', 'line-break'] as const;
+
+export const readWrapping = (element: HTMLElement) => {
+  const computed = element.ownerDocument.defaultView?.getComputedStyle(element);
+  return WRAPPING.map((property) => [property, computed?.getPropertyValue(property)] as const);
+};
+
+export const pinWrapping = (element: HTMLElement, rendered = readWrapping(element)) => {
+  const held = WRAPPING.map(
+    (property) =>
+      [
+        property,
+        element.style.getPropertyValue(property),
+        element.style.getPropertyPriority(property),
+      ] as const,
+  );
+  for (const [property, value] of rendered)
+    if (value) element.style.setProperty(property, value, 'important');
+  return () => {
+    for (const [property, value, priority] of held) {
+      element.style.removeProperty(property);
+      if (value) element.style.setProperty(property, value, priority);
+    }
+  };
+};
+
 const pointOffset = (element: HTMLElement, node: Node | null, offset: number) => {
   if (!node || !element.contains(node)) return length(element);
   const range = element.ownerDocument.createRange();
@@ -101,7 +130,7 @@ const replaceSelection = (element: HTMLElement, value: string) => {
 export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
   const root = options.root ?? document;
   let configured: PlainField | undefined;
-  let requested: { selection: CanvasSelection; element: HTMLElement } | undefined;
+  let requested: { selection: CanvasSelection; element: HTMLElement; caret?: number } | undefined;
   let active:
     | {
         element: HTMLElement;
@@ -109,6 +138,7 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
         accepted: string;
         attribute: string | null;
         spellcheck: string | null;
+        unpin: () => void;
       }
     | undefined;
   let disposed = false;
@@ -229,6 +259,7 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
     else held.element.setAttribute('contenteditable', held.attribute);
     if (held.spellcheck === null) held.element.removeAttribute('spellcheck');
     else held.element.setAttribute('spellcheck', held.spellcheck);
+    held.unpin();
     options.interaction(held.target, { inlineEditing: false, composing: false });
   };
 
@@ -241,10 +272,10 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
     });
   };
 
-  const activate = (selection: CanvasSelection, element: Element) => {
+  const activate = (selection: CanvasSelection, element: Element, caret?: number) => {
     if (disposed || selection.kind !== 'field' || !(element instanceof HTMLElement)) return false;
     if (!configured || !sameCanvasTarget(selection.target, configured.target)) {
-      requested = { selection, element };
+      requested = { selection, element, caret };
       return true;
     }
     requested = undefined;
@@ -256,6 +287,7 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
       accepted: configured.value,
       attribute: element.getAttribute('contenteditable'),
       spellcheck: element.getAttribute('spellcheck'),
+      unpin: pinWrapping(element),
     };
     if (element.textContent !== configured.value) element.textContent = configured.value;
     // `plaintext-only` still fails to emit normal editing events in current WebKit. The paste
@@ -264,7 +296,8 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
     element.setAttribute('spellcheck', 'true');
     element.dataset.handoverInlineEditing = '';
     element.focus({ preventScroll: true });
-    restoreSelection(element, { anchor: length(element), head: length(element) });
+    const point = Math.max(0, Math.min(length(element), caret ?? length(element)));
+    restoreSelection(element, { anchor: point, head: point });
     publish({ inlineEditing: true, composing: false });
     return true;
   };
@@ -362,7 +395,7 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
       if (pending) {
         if (field && sameCanvasTarget(pending.selection.target, field.target)) {
           requested = undefined;
-          activate(pending.selection, pending.element);
+          activate(pending.selection, pending.element, pending.caret);
         } else if (!field) {
           requested = undefined;
         }
@@ -376,10 +409,10 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
       active.accepted = field.value;
       if (!queued && !composing) apply(field.value);
     },
-    requestActivation(selection: CanvasSelection, element: Element) {
+    requestActivation(selection: CanvasSelection, element: Element, caret?: number) {
       if (disposed || selection.kind !== 'field' || !(element instanceof HTMLElement)) return false;
       configured = undefined;
-      requested = { selection, element };
+      requested = { selection, element, caret };
       return true;
     },
     activate,

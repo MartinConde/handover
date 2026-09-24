@@ -4360,8 +4360,9 @@ test('Canvas exposes validation problems with a working jump to the affected fie
   expect($(root, '.canvas-validation')?.textContent).toContain('1 field needs attention');
   expect($(root, '.canvas-validation')?.textContent).toContain('Required');
   $<HTMLButtonElement>(root, '.canvas-validation button')?.click();
-  await vi.waitFor(() => expect(document.activeElement?.id).toBe('f-title'));
-  expect($(root, '.canvas-workspace.is-fullscreen')).toBeNull();
+  await vi.waitFor(() => expect(document.activeElement?.id).toBe('canvas-inspector-title'));
+  expect($(root, '#canvas-inspector input[aria-invalid="true"]')).not.toBeNull();
+  expect($(root, '.canvas-workspace.is-fullscreen')).not.toBeNull();
 });
 
 test('the mobile translation switch keeps both language forms mounted and changes the visible pane', () => {

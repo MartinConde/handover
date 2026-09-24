@@ -1,4 +1,6 @@
 <script lang="ts">
+import { type DragDropEventHandlers, DragDropProvider } from '@dnd-kit/svelte';
+import { createSortable, isSortable } from '@dnd-kit/svelte/sortable';
 import { richtextErrors } from '@handover/core';
 import { onMount, type Snippet, tick, untrack } from 'svelte';
 import { cubicOut } from 'svelte/easing';
@@ -9,10 +11,12 @@ import * as m from '../paraglide/messages.js';
 import { previewPath } from '../request';
 import CanvasBlockEditor from './CanvasBlockEditor.svelte';
 import CanvasIcon from './CanvasIcon.svelte';
+import CanvasImagePopover from './CanvasImagePopover.svelte';
 import CanvasInspector from './CanvasInspector.svelte';
 import { resolveStagedBlockIndex, type StagedBlockTarget } from './canvas-block-target';
 import type {
   CanvasActionMessage,
+  CanvasAnchor,
   CanvasBlockAction,
   CanvasCommandMessage,
   CanvasCommandResult,
@@ -48,6 +52,7 @@ const PANEL_WIDTHS = {
 } as const;
 const PANEL_WIDTH_STORAGE = 'handover.canvas.panel-widths';
 const MIN_CANVAS_WIDTH = 360;
+const treeDomId = $props.id();
 
 let {
   active,
@@ -71,7 +76,6 @@ let {
   servedAt,
   locked = false,
   onform,
-  onreviewproblems,
   onnavigateentry,
   mobileHidden = false,
 }: {
@@ -122,6 +126,23 @@ $effect(() => {
   }
 });
 let inspectorOpen = $state(false);
+let imagePopover = $state<{ selection: CanvasSelection; anchor: CanvasAnchor }>();
+const canvasFrame = $derived.by(() => {
+  loading;
+  rendererState.phase;
+  return renderer?.activeFrame();
+});
+$effect(() => {
+  if (
+    !active ||
+    interactionMode !== 'edit' ||
+    inspectorOpen ||
+    (imagePopover &&
+      (imagePopover.selection.target.locale !== locale ||
+        !sameCanvasSelection(imagePopover.selection, selected)))
+  )
+    imagePopover = undefined;
+});
 // Split is for looking at the page: editing in it, and the panels that go with it, are Canvas's.
 $effect(() => {
   const next = fullscreen ? 'edit' : 'interact';
@@ -137,19 +158,50 @@ let resizing = $state<{
 const incomplete = $derived(session.incompleteFields(locale, uiLocale));
 const incompletePaths = $derived(Object.keys(incomplete));
 const issues = $derived(Object.entries({ ...incomplete, ...problems }));
-// Untouched required fields are an ordinary work-in-progress state. Review fields reveals
-// their validation in Form; unrelated schema errors remain visible beside their controls.
-const inspectorProblems = $derived(
-  Object.fromEntries(
-    Object.entries(problems).filter(
-      ([path]) =>
-        !incompletePaths.some((missing) => path === missing || path.startsWith(`${missing}.`)),
-    ),
-  ),
+const inspectorProblems = $derived({ ...incomplete, ...problems });
+const issueTargets = $derived(
+  issues.map(([path, message]) => {
+    const address = session.addressForPath(locale, path);
+    const inspected = address ? session.inspectField(locale, address) : undefined;
+    return { path, message, address: inspected?.ok ? inspected.target.address : address };
+  }),
 );
+let reviewingProblems = $state(false);
+function reviewProblem(issue = issueTargets[0]) {
+  reviewingProblems = true;
+  if (!issue?.address) return;
+  setInteractionMode('edit');
+  const next: CanvasSelection = {
+    kind: 'field',
+    target: { document: entryDocument, locale, address: issue.address },
+  };
+  selectionChanged(next);
+  inspectorOpen = true;
+  blockEditor = undefined;
+  // Empty fields may not be rendered; scroll to their nearest annotated owner.
+  const node = structure
+    .filter(
+      (node) =>
+        sameDocument(node.target) &&
+        (node.target.address === issue.address ||
+          issue.address?.startsWith(`${node.target.address}.`) ||
+          issue.address?.startsWith(`${node.target.address}[`)),
+    )
+    .sort((a, b) => b.target.address.length - a.target.address.length)[0];
+  void tick().then(() => {
+    if (node) renderer?.select(node);
+    const inspector = workspace?.querySelector('.canvas-inspector');
+    const control =
+      inspector?.querySelector<HTMLElement>('[aria-invalid="true"]') ??
+      inspector?.querySelector<HTMLElement>('input, textarea, select, button');
+    control?.focus({ preventScroll: true });
+  });
+}
 let structure = $state<CanvasStructureNode[]>([]);
 let selected = $state<CanvasSelection>();
 let loading = $state(true);
+let rendererImportFailed = $state(false);
+let importingRenderer = false;
 let lastLocale = '';
 let lastVersion = -1;
 let wasActive = false;
@@ -161,6 +213,9 @@ type NavigationError = 'form-get' | 'form-post' | 'navigation-save' | 'preview-s
 let navigationError = $state<NavigationError>();
 let navigationBusy = false;
 let mediaPickerRequest = $state(0);
+$effect(() => {
+  if (!inspectorOpen) mediaPickerRequest = 0;
+});
 let navigationAction = $state<{
   destination: CanvasNavigationDestination;
   download: boolean;
@@ -184,19 +239,22 @@ const widths = $derived([
 const status = $derived(
   loading
     ? m.canvas_preparing({}, options)
-    : incompletePaths.length
-      ? m.canvas_complete_required_status({}, options)
-      : rendererState.phase === 'rendering'
-        ? m.canvas_updating({}, options)
-        : rendererState.phase === 'ready'
-          ? m.canvas_updated({}, options)
-          : rendererState.phase === 'failed'
-            ? m.canvas_update_failed({}, options)
-            : m.canvas_ready({}, options),
+    : rendererImportFailed
+      ? m.canvas_update_failed({}, options)
+      : incompletePaths.length
+        ? m.canvas_complete_required_status({}, options)
+        : rendererState.phase === 'rendering'
+          ? m.canvas_updating({}, options)
+          : rendererState.phase === 'ready'
+            ? m.canvas_updated({}, options)
+            : rendererState.phase === 'failed'
+              ? m.canvas_update_failed({}, options)
+              : m.canvas_ready({}, options),
 );
 const failure = $derived(rendererState.phase === 'failed' ? rendererState : undefined);
 const failureText = $derived.by(() => {
   if (!failure) return '';
+  if (rendererImportFailed) return m.canvas_renderer_load_failed({}, options);
   if (failure.reason === 'timeout') return m.canvas_failure_timeout({}, options);
   if (failure.reason === 'stale') return m.canvas_failure_stale({}, options);
   if (failure.reason === 'render')
@@ -261,6 +319,90 @@ const hiddenWrappers = $derived(
 const visibleStructure = $derived(
   visibleCanvasNodes(structure, collapsed).filter((node) => !hiddenWrappers.has(node.id)),
 );
+let focusedTreeKey = $state('');
+const treeFocusKey = $derived.by(() => {
+  if (visibleStructure.some((node) => canvasNodeKey(node) === focusedTreeKey))
+    return focusedTreeKey;
+  const first = treeChildren()[0];
+  return first ? canvasNodeKey(first) : '';
+});
+let structureOrder = $state<string[]>([]);
+function treeChildren(parent?: CanvasStructureNode) {
+  return visibleStructure
+    .filter((node) => {
+      let ancestor = parentOf(node);
+      while (ancestor && hiddenWrappers.has(ancestor.id)) ancestor = parentOf(ancestor);
+      return ancestor?.id === parent?.id;
+    })
+    .sort((a, b) => {
+      const from = structureIndex(a);
+      const to = structureIndex(b);
+      return from === undefined || to === undefined ? 0 : from - to;
+    });
+}
+function structureIndex(node: CanvasStructureNode) {
+  const projected = structureOrder.indexOf(canvasNodeKey(node));
+  return projected < 0 ? blockLocation(node)?.index : projected;
+}
+const structureSortable = (node: () => CanvasStructureNode) =>
+  createSortable({
+    get id() {
+      return canvasNodeKey(node());
+    },
+    get index() {
+      return structureIndex(node()) ?? 0;
+    },
+    get group() {
+      return blockLocation(node())?.address;
+    },
+    get type() {
+      return blockLocation(node())?.address;
+    },
+    get accept() {
+      return blockLocation(node())?.address ?? [];
+    },
+    get disabled() {
+      return !blockActionsFor(node()).includes('move');
+    },
+    transition: { duration: 200 },
+  });
+type StructureDragHandlers = Required<DragDropEventHandlers>;
+let structureDrag:
+  | { node: CanvasStructureNode; siblings: CanvasStructureNode[]; version: number }
+  | undefined;
+const structureDragStart: StructureDragHandlers['onDragStart'] = ({ operation }) => {
+  const node = structure.find((candidate) => canvasNodeKey(candidate) === operation.source?.id);
+  const location = node && blockLocation(node);
+  if (!node || !location) return;
+  structureDrag = {
+    node,
+    siblings: structure
+      .filter((candidate) => blockLocation(candidate)?.address === location.address)
+      .sort((a, b) => (blockLocation(a)?.index ?? 0) - (blockLocation(b)?.index ?? 0)),
+    version: session.contentVersion(locale),
+  };
+  structureOrder = structureDrag.siblings.map(canvasNodeKey);
+};
+const structureDragOver: StructureDragHandlers['onDragOver'] = ({ operation }) => {
+  const { source, target } = operation;
+  if (!isSortable(source) || !isSortable(target) || source.group !== target.group) return;
+  const from = structureOrder.indexOf(String(source.id));
+  const to = structureOrder.indexOf(String(target.id));
+  if (from < 0 || to < 0 || from === to) return;
+  const next = [...structureOrder];
+  next.splice(to, 0, ...next.splice(from, 1));
+  structureOrder = next;
+};
+const structureDragEnd: StructureDragHandlers['onDragEnd'] = ({ canceled }) => {
+  const held = structureDrag;
+  const to = held ? structureOrder.indexOf(canvasNodeKey(held.node)) : -1;
+  structureDrag = undefined;
+  structureOrder = [];
+  if (canceled || !held || to < 0 || held.siblings[to] === held.node) return;
+  if (held.version !== session.contentVersion(locale)) return;
+  const destination = held.siblings[to];
+  if (destination) canvasAction({ action: 'move', selection: held.node, destination });
+};
 function treeDepth(node: CanvasStructureNode) {
   let depth = node.depth;
   for (let parent = parentOf(node); parent; parent = parentOf(parent))
@@ -287,6 +429,70 @@ function nodeIcon(node: CanvasStructureNode) {
 function toggleBranch(node: CanvasStructureNode) {
   const key = canvasNodeKey(node);
   collapsed = { ...collapsed, [key]: !collapsed[key] };
+}
+
+function focusTreeNode(node?: CanvasStructureNode) {
+  if (!node) return;
+  const key = canvasNodeKey(node);
+  focusedTreeKey = key;
+  void tick().then(() => {
+    const item = Array.from(
+      workspace?.querySelectorAll<HTMLButtonElement>('[role="treeitem"]') ?? [],
+    ).find((element) => element.dataset.treeKey === key);
+    item?.focus();
+  });
+}
+
+function treeKeydown(
+  event: KeyboardEvent,
+  node: CanvasStructureNode,
+  branch: boolean,
+  shut: boolean,
+) {
+  const items = Array.from(
+    workspace?.querySelectorAll<HTMLButtonElement>('[role="treeitem"]') ?? [],
+  );
+  const index = items.findIndex((item) => item.dataset.treeKey === canvasNodeKey(node));
+  const visible = visibleStructure.find(
+    (candidate) => canvasNodeKey(candidate) === items[index + 1]?.dataset.treeKey,
+  );
+  let destination: CanvasStructureNode | undefined;
+  switch (event.key) {
+    case 'ArrowDown':
+      destination = visible;
+      break;
+    case 'ArrowUp':
+      destination = visibleStructure.find(
+        (candidate) => canvasNodeKey(candidate) === items[index - 1]?.dataset.treeKey,
+      );
+      break;
+    case 'Home':
+      destination = visibleStructure.find(
+        (candidate) => canvasNodeKey(candidate) === items[0]?.dataset.treeKey,
+      );
+      break;
+    case 'End':
+      destination = visibleStructure.find(
+        (candidate) => canvasNodeKey(candidate) === items.at(-1)?.dataset.treeKey,
+      );
+      break;
+    case 'ArrowRight':
+      if (branch && shut) toggleBranch(node);
+      else if (branch) destination = treeChildren(node)[0];
+      break;
+    case 'ArrowLeft':
+      if (branch && !shut) toggleBranch(node);
+      else {
+        destination = parentOf(node);
+        while (destination && hiddenWrappers.has(destination.id))
+          destination = parentOf(destination);
+      }
+      break;
+    default:
+      return;
+  }
+  event.preventDefault();
+  if (destination) focusTreeNode(destination);
 }
 
 // A target picked in the page must not land inside a branch the editor left collapsed. Only a
@@ -387,6 +593,7 @@ function retry() {
 }
 
 function selectNode(node: CanvasStructureNode) {
+  if (node.container || (node.kind === 'list' && !node.empty)) return;
   const next = { kind: node.kind, target: node.target };
   selectionChanged(next);
   renderer?.select(next);
@@ -507,38 +714,14 @@ $effect(() => {
   );
 });
 
-function selectionChanged(next: CanvasSelection | undefined, reason?: 'restore') {
+function selectionChanged(next: CanvasSelection | undefined) {
   if (interactionMode !== 'edit') return;
+  // Selection updates the Inspector's content without changing its visibility.
   selected = next;
   void tick().then(() => {
     renderer?.textField(textField(next));
     if (next) renderer?.actions(next, blockActionsFor(next));
   });
-  if (!next) return;
-  // A background render restores selection without overriding panels the editor closed.
-  if (reason === 'restore') return;
-  const owner = next.target.document;
-  const foreign = owner.collection !== entryDocument.collection || owner.id !== entryDocument.id;
-  const resolved =
-    !foreign && next.kind === 'field'
-      ? session.inspectField(next.target.locale, next.target.address)
-      : undefined;
-  const current = resolved?.ok
-    ? read(session.snapshot(next.target.locale), resolved.target.path)
-    : undefined;
-  const unsupportedRichtext =
-    resolved?.ok &&
-    resolved.target.field.type === 'richtext' &&
-    typeof current === 'string' &&
-    richtextErrors('default', current, resolved.target.field.tier).length > 0;
-  if (
-    (!narrow && fullscreen) ||
-    foreign ||
-    unsupportedRichtext ||
-    (resolved?.ok && !['text', 'richtext'].includes(resolved.target.field.type))
-  ) {
-    inspectorOpen = true;
-  }
 }
 
 function blockLocation(selection: CanvasSelection) {
@@ -632,7 +815,7 @@ const blockActionsFor = (selection: CanvasSelection): CanvasBlockAction[] => {
       locale === sourceLocale &&
       !locked &&
       !session.localeMutationBlocked(locale);
-    return [...(canReplaceImage ? (['replace-media'] as const) : []), ...history];
+    return ['inspect', ...(canReplaceImage ? (['replace-media'] as const) : []), ...history];
   }
   if (selection.kind === 'list')
     return blockEditorFor('insert-empty', selection) ? ['insert-empty', ...history] : history;
@@ -760,8 +943,33 @@ function applyBlock(value: Record<string, unknown>) {
   return result;
 }
 
-function canvasAction(message: Pick<CanvasActionMessage, 'action' | 'destination' | 'selection'>) {
+function canvasAction(
+  message: Pick<CanvasActionMessage, 'action' | 'destination' | 'selection' | 'anchor'>,
+) {
   if (interactionMode !== 'edit') return;
+  if (message.action === 'edit-media') {
+    if (
+      message.selection.kind !== 'field' ||
+      !message.anchor ||
+      !sameDocument(message.selection.target) ||
+      message.selection.target.locale !== locale
+    )
+      return;
+    const inspected = session.inspectField(locale, message.selection.target.address);
+    if (!inspected.ok || inspected.target.field.type !== 'image') return;
+    selected = message.selection;
+    blockEditor = undefined;
+    inspectorOpen = false;
+    imagePopover = { selection: message.selection, anchor: message.anchor };
+    return;
+  }
+  if (message.action === 'inspect') {
+    const close = inspectorOpen && sameCanvasSelection(selected, message.selection);
+    selected = message.selection;
+    blockEditor = undefined;
+    inspectorOpen = !close;
+    return;
+  }
   if (message.action === 'replace-media') {
     selected = message.selection;
     blockEditor = undefined;
@@ -1122,6 +1330,13 @@ $effect(() => {
 });
 
 $effect(() => {
+  const addresses = issueTargets.flatMap((issue) => (issue.address ? [issue.address] : []));
+  loading;
+  rendererState.phase;
+  untrack(() => renderer?.problems(addresses));
+});
+
+$effect(() => {
   const next = uiLocale;
   untrack(() => renderer?.uiLocale(next));
 });
@@ -1154,6 +1369,58 @@ const fitWorkspace = () => {
   );
 };
 
+function bootstrapRenderer() {
+  if (importingRenderer || disposed) return;
+  importingRenderer = true;
+  loading = true;
+  rendererImportFailed = false;
+  rendererState = { phase: 'idle' };
+  void import('./canvas-renderer')
+    .then(({ createCanvasRenderer }) => {
+      if (disposed || !stage) return;
+      renderer = createCanvasRenderer({
+        stage,
+        contentVersion: currentVersion,
+        currentTarget: () => selected?.target,
+        uiLocale: () => uiLocale,
+        currentSelection: () => selected,
+        onCommand: canvasCommand,
+        commandRecovery: (message) => {
+          const field = textField({ kind: 'field', target: message.target });
+          return field
+            ? { value: field.kind === 'link' ? field.value.label : field.value }
+            : undefined;
+        },
+        onSelectionChange: selectionChanged,
+        onStructureChange: (next) => (structure = next),
+        onAction: canvasAction,
+        onNavigate: canvasNavigate,
+        onInteractionChange: interactionChanged,
+        onBridgeRejected: (reason) => {
+          if (reason === 'stale-version') setTimeout(() => renderer?.textField(textField()), 0);
+        },
+        onStateChange: (next) => (rendererState = next),
+      });
+      loading = false;
+      if (active) void submit('render');
+    })
+    .catch((error: unknown) => {
+      if (disposed) return;
+      loading = false;
+      rendererImportFailed = true;
+      rendererState = {
+        phase: 'failed',
+        requestId: crypto.randomUUID(),
+        contentVersion: currentVersion(),
+        reason: 'bootstrap',
+        ...(error instanceof Error ? { message: error.message } : {}),
+      };
+    })
+    .finally(() => {
+      importingRenderer = false;
+    });
+}
+
 onMount(() => {
   try {
     const stored = JSON.parse(localStorage.getItem(PANEL_WIDTH_STORAGE) ?? '{}') as Record<
@@ -1170,34 +1437,7 @@ onMount(() => {
   const header = workspace?.closest('.main-editor')?.querySelector('.entry-header');
   if (header) resize.observe(header);
   fitWorkspace();
-  void import('./canvas-renderer').then(({ createCanvasRenderer }) => {
-    if (disposed || !stage) return;
-    renderer = createCanvasRenderer({
-      stage,
-      contentVersion: currentVersion,
-      currentTarget: () => selected?.target,
-      uiLocale: () => uiLocale,
-      currentSelection: () => selected,
-      onCommand: canvasCommand,
-      commandRecovery: (message) => {
-        const field = textField({ kind: 'field', target: message.target });
-        return field
-          ? { value: field.kind === 'link' ? field.value.label : field.value }
-          : undefined;
-      },
-      onSelectionChange: selectionChanged,
-      onStructureChange: (next) => (structure = next),
-      onAction: canvasAction,
-      onNavigate: canvasNavigate,
-      onInteractionChange: interactionChanged,
-      onBridgeRejected: (reason) => {
-        if (reason === 'stale-version') setTimeout(() => renderer?.textField(textField()), 0);
-      },
-      onStateChange: (next) => (rendererState = next),
-    });
-    loading = false;
-    if (active) void submit('render');
-  });
+  bootstrapRenderer();
   return () => {
     resize.disconnect();
     disposed = true;
@@ -1205,6 +1445,34 @@ onMount(() => {
   };
 });
 </script>
+
+{#snippet inspectorFields(floating = false)}
+  {#if selected}
+    <CanvasInspector
+      selection={selected}
+      selectionLabel={selectedNode?.label}
+      context={breadcrumb}
+      {mediaPickerRequest}
+      blockInspection={blockInspectorFor(selected)}
+      {entryDocument}
+      {ownerLabel}
+      {locale}
+      {uiLocale}
+      {sourceLocale}
+      {session}
+      {blocks}
+      {blockLabels}
+      problems={inspectorProblems}
+      {mediaBase}
+      {site}
+      {servedAt}
+      {locked}
+      onschedule={(policy) => void schedule(policy)}
+      {floating}
+      onclose={() => { inspectorOpen = false; imagePopover = undefined; if (floating) canvasFrame?.focus({ preventScroll: true }); }}
+    />
+  {/if}
+{/snippet}
 
 <svelte:window onresize={fitWorkspace} onkeydown={historyShortcut} />
 
@@ -1223,6 +1491,61 @@ onMount(() => {
   inert={!active}
   data-selected-address={selected?.target.occurrence?.address ?? selected?.target.address}
 >
+  {#snippet structureRows(parent?: CanvasStructureNode)}
+    {@const siblings = treeChildren(parent)}
+    {#each siblings as node, index (canvasNodeKey(node))}
+      {@const sortable = structureSortable(() => node)}
+      {@const movable = blockActionsFor(node).includes('move')}
+      {@const branch = branches.has(node.id)}
+      {@const shut = branch && collapsed[canvasNodeKey(node)] === true}
+      <div class="canvas-structure-branch" {@attach movable ? sortable.attach : undefined}>
+        <div class={['canvas-structure-row', { 'is-outside-drag-list': structureOrder.length > 0 && !structureOrder.includes(canvasNodeKey(node)) }]} {@attach movable ? sortable.attachTarget : undefined}>
+          <button
+            type="button"
+            role="treeitem"
+            class={{ 'is-branch': branch }}
+            aria-level={treeDepth(node)}
+            aria-posinset={index + 1}
+            aria-setsize={siblings.length}
+            aria-owns={branch && !shut ? `${treeDomId}-group-${node.id}` : undefined}
+            aria-selected={sameCanvasSelection(node, selected)}
+            aria-expanded={branch ? !shut : undefined}
+            aria-current={sameCanvasSelection(node, selected) ? 'true' : undefined}
+            data-target-address={node.target.occurrence?.address ?? node.target.address}
+            data-tree-key={canvasNodeKey(node)}
+            tabindex={treeFocusKey === canvasNodeKey(node) ? 0 : -1}
+            onfocus={() => (focusedTreeKey = canvasNodeKey(node))}
+            style={`--canvas-indent:${7 + (treeDepth(node) - 1) * 12}px`}
+            onclick={(event) => {
+              if (branch && (node.container || (event.target as Element).closest('.canvas-structure-twisty'))) toggleBranch(node);
+              else selectNode(node);
+            }}
+            onkeydown={(event) => treeKeydown(event, node, branch, shut)}
+          >
+            {#if branch}
+              <span class="canvas-structure-twisty" aria-hidden="true"><CanvasIcon name={shut ? 'chevron-right' : 'chevron-down'} /></span>
+            {:else}
+              <span class="canvas-structure-twisty is-leaf" aria-hidden="true"></span>
+            {/if}
+            <span class="canvas-structure-kind" aria-hidden="true"><CanvasIcon name={nodeIcon(node)} /></span>
+            <span class="canvas-structure-name">{treeLabel(node)}</span>
+            {#if node.empty}<small>{m.canvas_empty({}, options)}</small>{/if}
+            {#if node.occurrences > 1}<small>{node.occurrences}×</small>{/if}
+          </button>
+          {#if movable}
+            <button class="canvas-structure-drag" type="button" {@attach sortable.attachHandle}
+              tabindex={treeFocusKey === canvasNodeKey(node) ? 0 : -1}
+              aria-label={m.canvas_selection_drag({ label: treeLabel(node) }, options)}
+              title={m.canvas_selection_drag({ label: treeLabel(node) }, options)}><CanvasIcon name="grip" /></button>
+          {/if}
+        </div>
+        {#if branch && !shut}
+          <div role="group" id={`${treeDomId}-group-${node.id}`}>{@render structureRows(node)}</div>
+        {/if}
+      </div>
+    {/each}
+  {/snippet}
+
   <div class="canvas-rail">
     {#if fullscreen}
       <button class="btn btn-ghost canvas-back" type="button" aria-label={m.canvas_back_to_form({}, options)} title={m.canvas_back_to_form({}, options)} onclick={onform}><CanvasIcon name="back" /></button>
@@ -1278,7 +1601,15 @@ onMount(() => {
           <span>{issues[0]?.[1]}{issues.length > 1 ? ` · ${m.canvas_more_issues({ count: issues.length - 1 }, options)}` : ''}. {m.canvas_review_to_update({}, options)}</span>
         {/if}
       </div>
-      <button class="btn btn-sm" type="button" onclick={onreviewproblems}>{m.canvas_review_fields({}, options)}</button>
+      <button class="btn btn-sm" type="button" onclick={() => reviewProblem()}>{m.canvas_review_fields({}, options)}</button>
+    </div>
+  {/if}
+
+  {#if reviewingProblems && issues.length}
+    <div class="canvas-validation-issues" aria-label={m.canvas_review_fields({}, options)}>
+      {#each issueTargets as issue (issue.path)}
+        <button class="btn btn-sm" type="button" onclick={() => reviewProblem(issue)}>{issue.message}</button>
+      {/each}
     </div>
   {/if}
 
@@ -1303,7 +1634,7 @@ onMount(() => {
     </div>
   {/if}
 
-  {#if failure && !incompletePaths.length}
+  {#if failure && (!incompletePaths.length || rendererImportFailed)}
     <div class="canvas-failure" role="alert">
       <div>
         <strong>{m.canvas_could_not_update({}, options)}</strong>
@@ -1311,8 +1642,21 @@ onMount(() => {
         {#if failure.message}<small>{failure.message}</small>{/if}
       </div>
       <button class="btn btn-sm" type="button" onclick={onform}>{m.canvas_go_to_form({}, options)}</button>
-      <button class="btn btn-sm" type="button" onclick={retry}>{m.common_retry({}, options)}</button>
+      {#if !rendererImportFailed}
+        <button class="btn btn-sm" type="button" onclick={retry}>{m.common_retry({}, options)}</button>
+      {/if}
     </div>
+  {/if}
+
+  {#if imagePopover && selected}
+    <CanvasImagePopover
+      anchor={imagePopover.anchor}
+      frame={canvasFrame}
+      label={selectedNode?.label ?? m.canvas_type_image({}, options)}
+      onclose={() => (imagePopover = undefined)}
+    >
+      {@render inspectorFields(true)}
+    </CanvasImagePopover>
   {/if}
 
   <div
@@ -1334,43 +1678,9 @@ onMount(() => {
           </header>
           {#if structure.length}
             <div class="canvas-structure-tree" aria-label={m.canvas_page_structure({}, options)} role="tree">
-              {#each visibleStructure as node (canvasNodeKey(node))}
-                {@const branch = branches.has(node.id)}
-                {@const shut = branch && collapsed[canvasNodeKey(node)] === true}
-                <button
-                  type="button"
-                  role="treeitem"
-                  class={{ 'is-branch': branch }}
-                  aria-level={treeDepth(node)}
-                  aria-posinset={node.position}
-                  aria-setsize={node.setSize}
-                  aria-selected={sameCanvasSelection(node, selected)}
-                  aria-expanded={branch ? !shut : undefined}
-                  aria-current={sameCanvasSelection(node, selected) ? 'true' : undefined}
-                  data-target-address={node.target.occurrence?.address ?? node.target.address}
-                  style={`--canvas-indent:${7 + (treeDepth(node) - 1) * 12}px`}
-                  onclick={(event) => {
-                    if (branch && (event.target as Element).closest('.canvas-structure-twisty')) toggleBranch(node);
-                    else selectNode(node);
-                  }}
-                  onkeydown={(event) => {
-                    if (!branch || (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft')) return;
-                    if (shut === (event.key === 'ArrowLeft')) return;
-                    event.preventDefault();
-                    toggleBranch(node);
-                  }}
-                >
-                  {#if branch}
-                    <span class="canvas-structure-twisty" aria-hidden="true">{shut ? '▸' : '▾'}</span>
-                  {:else}
-                    <span class="canvas-structure-twisty is-leaf" aria-hidden="true"></span>
-                  {/if}
-                  <span class="canvas-structure-kind" aria-hidden="true"><CanvasIcon name={nodeIcon(node)} /></span>
-                  <span class="canvas-structure-name">{treeLabel(node)}</span>
-                  {#if node.empty}<small>{m.canvas_empty({}, options)}</small>{/if}
-                  {#if node.occurrences > 1}<small>{node.occurrences}×</small>{/if}
-                </button>
-              {/each}
+              <DragDropProvider onDragStart={structureDragStart} onDragOver={structureDragOver} onDragEnd={structureDragEnd}>
+                {@render structureRows()}
+              </DragDropProvider>
             </div>
           {:else}
             <p class="canvas-structure-empty">{m.canvas_no_annotations({}, options)}</p>
@@ -1450,28 +1760,7 @@ onMount(() => {
         {/if}
         <div class="canvas-inspector-motion" transition:fly={{ x: 20, duration: 200, easing: cubicOut }}>
           {#if selected}
-            <CanvasInspector
-              selection={selected}
-              selectionLabel={selectedNode?.label}
-              context={breadcrumb}
-              {mediaPickerRequest}
-              blockInspection={blockInspectorFor(selected)}
-              {entryDocument}
-              {ownerLabel}
-              {locale}
-              {uiLocale}
-              {sourceLocale}
-              {session}
-              {blocks}
-              {blockLabels}
-              problems={inspectorProblems}
-              {mediaBase}
-              {site}
-              {servedAt}
-              {locked}
-              onschedule={(policy) => void schedule(policy)}
-              onclose={() => (inspectorOpen = false)}
-            />
+            {@render inspectorFields()}
           {:else}
             <aside class="canvas-inspector canvas-inspector-empty" id="canvas-inspector" aria-labelledby="canvas-inspector-heading">
               <header>

@@ -245,3 +245,51 @@ test('live locale changes retranslate retained feedback without disturbing compo
   expect(document.documentElement.lang).toBe('en');
   runtime.dispose();
 });
+
+test('inline editing holds the wrapping the page rendered and gives it back on exit', () => {
+  document.body.innerHTML = '<h1>Move to the coast</h1>';
+  const heading = fixture('h1');
+  heading.style.setProperty('word-break', 'keep-all');
+  vi.spyOn(window, 'getComputedStyle').mockReturnValue({
+    getPropertyValue: (property: string) =>
+      property === 'overflow-wrap' ? 'normal' : property === 'word-break' ? 'break-all' : '',
+  } as CSSStyleDeclaration);
+  const runtime = createCanvasPlainTextRuntime({
+    command: vi.fn(),
+    interaction: vi.fn(),
+  } as never);
+  runtime.start();
+  runtime.configure({ kind: 'text', target, value: 'Move to the coast' });
+
+  runtime.activate(selected, heading);
+  expect(heading.style.getPropertyValue('overflow-wrap')).toBe('normal');
+  expect(heading.style.getPropertyPriority('overflow-wrap')).toBe('important');
+  expect(heading.style.getPropertyValue('word-break')).toBe('break-all');
+  expect(heading.style.getPropertyPriority('word-break')).toBe('important');
+
+  runtime.configure(undefined);
+  expect(heading.style.getPropertyValue('overflow-wrap')).toBe('');
+  expect(heading.style.getPropertyValue('word-break')).toBe('keep-all');
+  expect(heading.style.getPropertyPriority('word-break')).toBe('');
+
+  runtime.dispose();
+});
+
+test('activation puts the caret at the offset the click reported', () => {
+  document.body.innerHTML = '<h1>Move to the coast</h1>';
+  const heading = fixture('h1');
+  const runtime = createCanvasPlainTextRuntime({
+    command: vi.fn(),
+    interaction: vi.fn(),
+  } as never);
+  runtime.start();
+  runtime.configure({ kind: 'text', target, value: 'Move to the coast' });
+
+  runtime.activate(selected, heading, 8);
+
+  const selection = document.getSelection();
+  expect(selection?.focusNode?.textContent).toBe('Move to the coast');
+  expect(selection?.focusOffset).toBe(8);
+
+  runtime.dispose();
+});

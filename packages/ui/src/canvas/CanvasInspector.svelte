@@ -16,6 +16,7 @@ import type { CanvasDocumentIdentity, CanvasSelection } from './canvas-bridge';
 
 let {
   selection,
+  floating = false,
   selectionLabel,
   context,
   mediaPickerRequest = 0,
@@ -37,6 +38,7 @@ let {
   onclose,
 }: {
   selection: CanvasSelection;
+  floating?: boolean;
   selectionLabel?: string;
   context?: string;
   /** A changing request opens the selected image's library directly from the Canvas overlay. */
@@ -59,6 +61,7 @@ let {
   onclose: () => void;
 } = $props();
 
+const panelId = $derived(floating ? 'canvas-image-editor' : 'canvas-inspector');
 const sameDocument = $derived(
   selection.target.document.collection === entryDocument.collection &&
     selection.target.document.id === entryDocument.id,
@@ -227,21 +230,21 @@ function completionEvents(node: HTMLFormElement) {
 </script>
 
 <aside
-  class="canvas-inspector"
-  id="canvas-inspector"
-  aria-labelledby="canvas-inspector-heading"
+  class={["canvas-inspector", { "is-floating": floating }]}
+  id={panelId}
+  aria-labelledby={`${panelId}-heading`}
 >
   <header>
     <div class="canvas-inspector-title">
       <span class="canvas-selection-icon"><CanvasIcon name={imageField ? 'image' : selection.kind === 'field' ? 'text' : 'block'} /></span>
       <div>
-        <span class="canvas-inspector-kicker">{m.canvas_inspector({}, options)} · {fieldType}</span>
-        <h2 id="canvas-inspector-heading">{selectionLabel || heading}</h2>
+        {#if !floating}<span class="canvas-inspector-kicker">{m.canvas_inspector({}, options)} · {fieldType}</span>{/if}
+        <h2 id={`${panelId}-heading`}>{selectionLabel || heading}</h2>
       </div>
     </div>
-    <button class="btn btn-ghost btn-sm" type="button" aria-label={m.canvas_close_inspector({}, options)} onclick={onclose}><CanvasIcon name="collapse-right" /></button>
+    <button class="btn btn-ghost btn-sm" type="button" aria-label={floating ? m.canvas_image_close({}, options) : m.canvas_close_inspector({}, options)} onclick={onclose}><CanvasIcon name={floating ? 'close' : 'collapse-right'} /></button>
   </header>
-  {#if context}<p class="canvas-inspector-context" title={context}>{context}</p>{/if}
+  {#if context && !floating}<p class="canvas-inspector-context" title={context}>{context}</p>{/if}
 
   {#if !sameDocument}
     <div class="canvas-inspector-message">
@@ -279,7 +282,7 @@ function completionEvents(node: HTMLFormElement) {
             {session}
             translating={translating}
             inherited={inspected?.mode ?? true}
-            prefix="canvas-inspector"
+            prefix={panelId}
             openMediaPicker={mediaPickerRequest}
             oncommand={command}
             structureLocked={session.structureMutationBlocked()}
@@ -293,8 +296,8 @@ function completionEvents(node: HTMLFormElement) {
       <p>{m.canvas_select_block_field({}, options)}</p>
     </div>
   {/if}
-  <div class="canvas-inspector-owner">
+  {#if !floating}<div class="canvas-inspector-owner">
     <span class="visually-hidden">{m.canvas_owned_by({}, options)}</span>
     <strong>{sameDocument ? ownerLabel : `${selection.target.document.collection}/${selection.target.document.id}`} · {formatLanguageName(selection.target.locale, uiLocale)}</strong>
-  </div>
+  </div>{/if}
 </aside>

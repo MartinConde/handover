@@ -88,7 +88,7 @@ test('uses the shared basic tier, formats through the command lane, and restores
   expect(runtime.activate(selected, element)).toBe(true);
   expect(element.textContent).toBe('Harbour home');
   expect(element.querySelectorAll('p')).toHaveLength(1);
-  const editor = element.querySelector<HTMLElement>('[contenteditable="true"]');
+  const editor = element.matches('[contenteditable="true"]') ? element : null;
   if (!editor) throw new Error('TipTap editable missing');
   expect(document.querySelectorAll('[aria-label="Rich text formatting"] button')).toHaveLength(5);
   selectAll(editor);
@@ -137,7 +137,7 @@ test('uses the Canvas link editor to create and revisit a rich-text link', async
   runtime.start();
   runtime.configure({ kind: 'richtext', target, value: 'Harbour home', tier: 'basic' });
   runtime.activate(selected, element);
-  const prose = element.querySelector<HTMLElement>('[contenteditable="true"]');
+  const prose = element.matches('[contenteditable="true"]') ? element : null;
   if (!prose) throw new Error('TipTap editable missing');
   selectAll(prose);
   document.querySelector<HTMLButtonElement>('[aria-label="Link"]')?.click();
@@ -192,7 +192,7 @@ test('a lazy rich-text runtime starts in the latest locale and switches without 
   runtime.start();
   runtime.configure({ kind: 'richtext', target, value: 'Harbour home', tier: 'basic' });
   runtime.activate(selected, element);
-  const editor = element.querySelector<HTMLElement>('[contenteditable="true"]');
+  const editor = element.matches('[contenteditable="true"]') ? element : null;
   if (!editor) throw new Error('TipTap editable missing');
   editor.focus();
   expect(editor.getAttribute('aria-label')).toBe('Rich Text in Canvas');
@@ -201,7 +201,7 @@ test('a lazy rich-text runtime starts in the latest locale and switches without 
 
   uiLocale.set('en');
 
-  expect(element.querySelector('[contenteditable="true"]')).toBe(editor);
+  expect(element.matches('[contenteditable="true"]')).toBe(true);
   expect(document.activeElement).toBe(editor);
   expect(editor.textContent).toBe('Harbour home');
   expect(document.querySelector('[aria-label="Rich text formatting"]')).not.toBeNull();
@@ -236,7 +236,7 @@ test('full tier adds only its supported controls and composition commits once', 
   runtime.activate(selected, element);
   expect(document.querySelectorAll('[aria-label="Rich text formatting"] button')).toHaveLength(8);
 
-  const editor = element.querySelector<HTMLElement>('[contenteditable="true"]');
+  const editor = element.matches('[contenteditable="true"]') ? element : null;
   if (!editor) throw new Error('TipTap editable missing');
   editor.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
   const paragraph = editor.querySelector('p');
@@ -294,7 +294,7 @@ test('finishing keeps the accepted prose visible and unchanged sessions restore 
 
   runtime.configure({ kind: 'richtext', target, value: 'Harbour home', tier: 'basic' });
   runtime.activate(selected, element);
-  const editor = element.querySelector<HTMLElement>('[contenteditable="true"]');
+  const editor = element.matches('[contenteditable="true"]') ? element : null;
   if (!editor) throw new Error('TipTap editable missing');
   selectAll(editor);
   document.querySelector<HTMLButtonElement>('[aria-label="Bold"]')?.click();
@@ -305,4 +305,53 @@ test('finishing keeps the accepted prose visible and unchanged sessions restore 
   expect(element.querySelector('strong')?.textContent).toBe('Harbour home');
   expect(element.textContent).toBe('Harbour home');
   runtime.dispose();
+});
+
+test('edits the authored prose root without adding a layout wrapper and restores its attributes', () => {
+  const element = fixture();
+  element.className = 'site-prose';
+  element.style.cssText = 'position: static; font-variant-ligatures: common-ligatures';
+  element.setAttribute('role', 'region');
+  element.setAttribute('aria-label', 'Article');
+  const attributes = () =>
+    Array.from(element.attributes)
+      .map(({ name, value }) => [name, value])
+      .sort();
+  const before = attributes();
+  const paragraph = element.firstElementChild;
+  const runtime = createCanvasRichTextRuntime({ command: vi.fn(), interaction: vi.fn() });
+  runtime.start();
+  runtime.configure({ kind: 'richtext', target, value: 'Harbour home', tier: 'basic' });
+  expect(runtime.activate(selected, element)).toBe(true);
+  expect(element.matches('[contenteditable="true"]')).toBe(true);
+  expect(element.children).toHaveLength(1);
+  expect(element.firstElementChild?.tagName).toBe('P');
+  expect(element.querySelector('.ProseMirror')).toBeNull();
+  expect(element.classList.contains('site-prose')).toBe(true);
+  expect(element.style.getPropertyValue('position')).toBe('static');
+  expect(runtime.activate(selected, element)).toBe(true);
+  runtime.dispose();
+  expect(attributes()).toEqual(before);
+  expect(element.firstElementChild).toBe(paragraph);
+});
+
+test('source soft line breaks render as spaces without changing paragraphs or saving on activation', () => {
+  const element = fixture();
+  element.innerHTML = '<p>Five minutes from the\nbeach.</p><p>Another paragraph.</p>';
+  const original = element.innerHTML;
+  const command = vi.fn();
+  const runtime = createCanvasRichTextRuntime({ command, interaction: vi.fn() });
+  runtime.start();
+  runtime.configure({
+    kind: 'richtext',
+    target,
+    value: 'Five minutes from the\nbeach.\n\nAnother paragraph.',
+    tier: 'basic',
+  });
+  runtime.activate(selected, element);
+  expect(element.children).toHaveLength(2);
+  expect(element.firstElementChild?.textContent).toBe('Five minutes from the beach.');
+  expect(command).not.toHaveBeenCalled();
+  runtime.dispose();
+  expect(element.innerHTML).toBe(original);
 });

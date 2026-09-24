@@ -1,5 +1,5 @@
 import { richtextErrors } from '@handover/core';
-import { Editor, Extension } from '@tiptap/core';
+import { Editor, Extension, type JSONContent } from '@tiptap/core';
 import { type Selection, TextSelection } from '@tiptap/pm/state';
 import type { EditorView } from '@tiptap/pm/view';
 import {
@@ -22,6 +22,7 @@ import type {
 } from '../canvas-bridge';
 import { sameCanvasTarget } from '../canvas-target';
 import { type CanvasLinkEditorFeedback, createCanvasLinkEditor } from './canvas-link-editor';
+import { pinWrapping, readWrapping } from './canvas-text';
 import type { CanvasUiLocaleState } from './canvas-ui-locale';
 
 type RichField = Extract<CanvasTextField, { kind: 'richtext' }>;
@@ -39,6 +40,14 @@ export interface CanvasRichTextOptions {
   readDirectory?: () => Promise<Pickable>;
   uiLocale?: CanvasUiLocaleState;
 }
+
+// Markdown source line wrapping is a space in rendered prose. TipTap's break-spaces
+// would otherwise display these text-node newlines as hard line breaks.
+const proseSoftBreaks = (node: JSONContent): JSONContent => ({
+  ...node,
+  ...(node.type === 'text' && node.text ? { text: node.text.replace(/\r?\n/g, ' ') } : {}),
+  ...(node.content ? { content: node.content.map(proseSoftBreaks) } : {}),
+});
 
 const historySelection = (selection: Selection): CanvasTextSelection => proseSelection(selection);
 
@@ -84,6 +93,7 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
         editor: Editor;
         original: DocumentFragment;
         initialValue: string;
+        unpin: () => void;
       }
     | undefined;
   let disposed = false;
@@ -109,7 +119,6 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
   style.dataset.handoverCanvasRichText = '';
   style.textContent = `
     [data-handover-richtext-editing],[data-handover-richtext-editing] .ProseMirror{outline:none!important;caret-color:currentColor!important;cursor:text!important}
-    [data-handover-richtext-editing] .ProseMirror{min-height:1.5em;display:flow-root}
     [data-handover-inline-refusal]{outline:1px solid #b42318!important;outline-offset:2px!important}
     [data-handover-canvas-richtext-toolbar]{all:initial;position:fixed;z-index:2147483647;top:12px;left:12px;display:flex;flex-wrap:wrap;justify-content:center;box-sizing:border-box;width:max-content;max-width:calc(100vw - 24px);gap:3px;padding:5px;border:1px solid #e5e8e5;border-radius:7px;background:#fff;color:#202420;box-shadow:0 4px 16px rgb(23 26 33/.12);font:600 12px/1 system-ui,sans-serif}
     [data-handover-richtext-editing] ::selection{background:#dce8bd;color:inherit}
@@ -140,7 +149,10 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
     reconciling = true;
     try {
       if (active.editor.getMarkdown() !== value)
-        active.editor.commands.setContent(value, { contentType: 'markdown', emitUpdate: false });
+        active.editor.commands.setContent(
+          proseSoftBreaks(active.editor.markdown?.parse(value) ?? active.editor.getJSON()),
+          { emitUpdate: false },
+        );
       const restored = restoreProseSelection(active.editor.state.doc, {
         kind: held.kind ?? 'text',
         anchor: held.anchor,
@@ -508,6 +520,7 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
     held.element.removeAttribute('data-handover-richtext-editing');
     held.element.removeAttribute('data-handover-inline-refusal');
     held.editor.destroy();
+    held.unpin();
     held.element.replaceChildren(content);
     if (linkEditor.active()) linkEditor.close('cancel');
     toolbar.hidden = true;
@@ -524,11 +537,17 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
     });
   };
 
-  const activate = (selection: CanvasSelection, element: Element, trigger?: Element) => {
+  const activate = (
+    selection: CanvasSelection,
+    element: Element,
+    trigger?: Element,
+    point?: { x: number; y: number },
+  ) => {
     if (
       disposed ||
       selection.kind !== 'field' ||
-      !compatible(element) ||
+      !(element instanceof HTMLElement) ||
+      (!compatible(element) && active?.element !== element) ||
       !configured ||
       !sameCanvasTarget(selection.target, configured.target) ||
       richtextErrors('default', configured.value, configured.tier).length
@@ -541,13 +560,39 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
       trigger instanceof HTMLAnchorElement && element.contains(trigger)
         ? { href: trigger.getAttribute('href') ?? '' }
         : undefined;
-    // TipTap appends its own editable root; detach the rendered prose first.
+    // Read the rendered wrapping before TipTap's editable root brings the UA's own.
+    const wrapping = readWrapping(element);
+    const attributes = [
+      'class',
+      'style',
+      'contenteditable',
+      'role',
+      'aria-label',
+      'aria-multiline',
+      'tabindex',
+      'translate',
+    ];
+    const previousAttributes = attributes.map(
+      (name) => [name, element.getAttribute(name)] as const,
+    );
+    const restoreAttributes = () => {
+      for (const [name, value] of previousAttributes) {
+        if (value === null) element.removeAttribute(name);
+        else element.setAttribute(name, value);
+      }
+    };
+    const computed = owner.getComputedStyle(element);
+    const presentation = ['position', 'font-variant-ligatures', 'font-feature-settings'].map(
+      (property) => [property, computed.getPropertyValue(property)] as const,
+    );
+    // Mount onto the authored prose root so direct-child selectors, flex/grid sizing,
+    // and margin collapsing keep the same DOM relationships during editing.
     const original = root.createDocumentFragment();
     original.append(...Array.from(element.childNodes));
     let editor!: Editor;
     try {
       editor = new Editor({
-        element,
+        element: { mount: element },
         extensions: richTextExtensions(field.tier, [SessionHistory]),
         content: field.value,
         contentType: 'markdown',
@@ -630,9 +675,14 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
         },
       });
     } catch (error) {
+      restoreAttributes();
       element.replaceChildren(original);
       throw error;
     }
+    const parsed = editor.getJSON();
+    const rendered = proseSoftBreaks(parsed);
+    if (JSON.stringify(parsed) !== JSON.stringify(rendered))
+      editor.commands.setContent(rendered, { emitUpdate: false });
     active = {
       element,
       target: field.target,
@@ -641,7 +691,11 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
       editor,
       original,
       initialValue: field.value,
+      unpin: restoreAttributes,
     };
+    pinWrapping(element, wrapping);
+    for (const [property, value] of presentation)
+      if (value) element.style.setProperty(property, value, 'important');
     element.dataset.handoverRichtextEditing = '';
     buttons(field);
     toolbar.hidden = false;
@@ -658,7 +712,10 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
         else if (position === linkRange.to) linkRange.to = position + node.nodeSize;
       });
     }
-    editor.commands.setTextSelection(linkRange ?? editor.state.doc.content.size);
+    const clicked = point
+      ? editor.view.posAtCoords({ left: point.x, top: point.y })?.pos
+      : undefined;
+    editor.commands.setTextSelection(linkRange ?? clicked ?? editor.state.doc.content.size);
     editor.view.focus();
     refreshToolbar();
     publish({ inlineEditing: true, composing: false });

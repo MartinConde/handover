@@ -31,15 +31,19 @@ let across = $state(Math.round(focal[0] * 100));
 let down = $state(Math.round(focal[1] * 100));
 let stage = $state<HTMLElement>();
 
-// A phone holds a picture upright whatever the site's fields crop to.
 const options = $derived(messageOptions(uiLocale));
-const phone = $derived<(typeof presets)[number]>({
-  label: m.focal_phone_upright({}, options),
-  preset: { ratio: '9:16' } as Preset,
+const shapes = $derived.by(() => {
+  const defaults = ['16:9', '3:2', '4:3', '1:1', '4:5', '9:16'].map((ratio) => ({
+    label: ratio === '9:16' ? m.focal_phone_upright({}, options) : '',
+    preset: { ratio } as Preset,
+  }));
+  const unique = new Map<string, (typeof presets)[number]>();
+  for (const shape of [...presets, ...defaults]) {
+    const ratio = shape.preset.ratio;
+    if (ratio && !unique.has(ratio)) unique.set(ratio, shape);
+  }
+  return [...unique.values()];
 });
-const shapes = $derived(
-  presets.some((p) => p.preset.ratio === phone.preset.ratio) ? presets : [...presets, phone],
-);
 
 function point(e: PointerEvent) {
   const box = stage?.getBoundingClientRect();
@@ -65,49 +69,43 @@ function nudge(e: KeyboardEvent) {
   e.preventDefault();
 }
 
+const previewWidth = (preset: Preset) => {
+  const [width = 4, height = 3] = (preset.ratio ?? '4:3').split(':').map(Number);
+  return (96 * width) / height;
+};
 const aspect = (preset: Preset) => preset.ratio?.replace(':', ' / ') ?? '4 / 3';
 </script>
 
-<Modal labelledby="focal-h" panelClass="dialog focal-dialog" {onclose}>
+<Modal labelledby="focal-h" describedby="focal-description" panelClass="dialog focal-dialog" {onclose}>
+  <header>
     <h2 id="focal-h">{m.focal_title({ name }, options)}</h2>
-    <p>{m.focal_intro({}, options)}</p>
-    <div class="dialog-cols">
-      <div>
-        <!-- svelte-ignore a11y_no_static_element_interactions -- the handle is the control -->
-        <div class="focal-stage" bind:this={stage} onpointerdown={grab} onpointermove={(e) => e.buttons === 1 && point(e)}>
-          <img src={url} alt="" draggable="false" />
-          <button
-            class="focal-handle"
-            type="button"
-            style="left: {across}%; top: {down}%"
-            aria-label={m.focal_position({ across, down }, options)}
-            onkeydown={nudge}
-          ></button>
+    <p id="focal-description">{m.focal_intro({}, options)}</p>
+  </header>
+  <!-- svelte-ignore a11y_no_static_element_interactions -- the handle is the control -->
+  <div class="focal-stage" bind:this={stage} onpointerdown={grab} onpointermove={(e) => e.buttons === 1 && point(e)}>
+    <img src={url} alt="" draggable="false" />
+    <button
+      class="focal-handle"
+      type="button"
+      style="left: {across}%; top: {down}%"
+      aria-label={m.focal_position({ across, down }, options)}
+      onkeydown={nudge}
+    ></button>
+  </div>
+  <h3 class="variant-title">{m.focal_live_previews({}, options)}</h3>
+  <div class="ratio-strip">
+    {#each shapes as p (p.preset.ratio)}
+      <div class="ratio-item" style:--preview-width={`${previewWidth(p.preset)}px`}>
+        <div class="ratio-preview" style="aspect-ratio: {aspect(p.preset)}">
+          <img src={url} alt="" style="object-position: {across}% {down}%" />
         </div>
+        <span class="lbl">{p.preset.ratio}</span>
+        {#if p.label}<span class="sub">{p.labels?.[uiLocale] ?? p.label}</span>{/if}
       </div>
-      <div class="side-note">
-        <p><b>{m.focal_preview_intro({}, options)}</b></p>
-        <p>{m.focal_page_hint({}, options)}</p>
-      </div>
-    </div>
-    {#if presets.length}
-      <h3 class="variant-title">{m.focal_live_previews({}, options)}</h3>
-      <div class="ratio-strip">
-        {#each shapes as p (p.preset.ratio)}
-          <div class="ratio-item">
-            <div class="ratio-preview" style="aspect-ratio: {aspect(p.preset)}">
-              <img src={url} alt="" style="object-position: {across}% {down}%" />
-            </div>
-            <span class="lbl">{p.preset.ratio}</span>
-            <span class="sub">{[p.labels?.[uiLocale] ?? p.label, p.preset.max && `${p.preset.max} px`].filter(Boolean).join(' · ')}</span>
-          </div>
-        {/each}
-      </div>
-    {:else}
-      <p class="hint">{m.focal_no_presets({}, options)}</p>
-    {/if}
-    <div class="actions">
-      <button class="btn" type="button" onclick={onclose}>{m.common_cancel({}, options)}</button>
-      <button class="btn btn-primary" type="button" onclick={() => onsave([across / 100, down / 100])}>{m.focal_save({}, options)}</button>
-    </div>
+    {/each}
+  </div>
+  <div class="actions">
+    <button class="btn" type="button" onclick={onclose}>{m.common_cancel({}, options)}</button>
+    <button class="btn btn-primary" type="button" onclick={() => onsave([across / 100, down / 100])}>{m.focal_save({}, options)}</button>
+  </div>
 </Modal>

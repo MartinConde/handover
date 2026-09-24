@@ -236,6 +236,7 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
     dragging: false,
   };
   let mode: CanvasInteractionMode = 'edit';
+  let problemAddresses: string[] = [];
   const setInteractionState = (next: Partial<CanvasInteractionState>) => {
     for (const value of Object.values(next))
       if (value !== undefined && typeof value !== 'boolean')
@@ -415,6 +416,7 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
         held.ready = true;
         held.bridge.uiLocale(options.uiLocale());
         held.bridge.mode(mode);
+        held.bridge.problems(problemAddresses);
         promote(held);
       },
       onSelection: (selection) => {
@@ -629,6 +631,10 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
     mode(next: CanvasInteractionMode) {
       mode = next;
       return active?.bridge.mode(next) ?? false;
+    },
+    problems(addresses: string[]) {
+      problemAddresses = [...addresses];
+      return active?.bridge.problems(addresses) ?? false;
     },
     uiLocale(next: UiLocale) {
       if (active) active.frame.title = frameTitle(next);

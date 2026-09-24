@@ -1116,6 +1116,11 @@ export function createEntrySession({
           )
         : {};
     },
+    /** Convert a validation path to a stable Canvas target, including missing values. */
+    addressForPath(locale: string, path: string) {
+      const current = snapshots[locale];
+      return current && form ? fieldAddress('default', path.split('.'), current, form) : undefined;
+    },
     /** Stable addresses are consumed directly by Canvas and future session commands. */
     problemAddresses(locale: string, uiLocale: UiLocale = 'en'): Record<string, string> {
       return Object.fromEntries(

@@ -20,6 +20,30 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
 
+  browser:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm --filter astro-handover exec playwright install --with-deps ${{ matrix.browser }}
+      - run: pnpm --filter astro-handover test:browser --project=${{ matrix.browser }}
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-${{ matrix.browser }}-results
+          path: packages/astro/test-results/browser/
+          if-no-files-found: ignore
+
   format-lock:
     runs-on: ubuntu-latest
     steps:

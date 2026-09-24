@@ -25,6 +25,8 @@
     "review:pseudo": "node ./scripts/pseudo-locale.mjs"
   },
   "dependencies": {
+    "@dnd-kit/collision": "^0.5.0",
+    "@dnd-kit/dom": "^0.5.0",
     "@dnd-kit/svelte": "^0.5.0",
     "@handover/core": "workspace:*",
     "@sveltejs/vite-plugin-svelte": "^7.0.0",
