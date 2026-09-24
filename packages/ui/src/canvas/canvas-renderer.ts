@@ -251,12 +251,13 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
   };
   let mode: CanvasInteractionMode = 'edit';
   let problemAddresses: string[] = [];
+  let lostStop = false;
   const setInteractionState = (next: Partial<CanvasInteractionState>) => {
     for (const value of Object.values(next))
       if (value !== undefined && typeof value !== 'boolean')
         throw new Error('Canvas interaction state must contain booleans.');
     interaction = { ...interaction, ...next };
-    if (candidate) promote(candidate);
+    if (candidate) settle(candidate);
   };
 
   const update = (next: CanvasRendererState) => {
@@ -311,8 +312,10 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
       return finishFailure(held, 'stale');
     // A stop can be lost; an editor that still runs leaves its marker in the page. No callback
     // here: the workspace would re-enter and supersede this candidate mid-promote.
-    if (interaction.inlineEditing && active && !editorOpen(active.frame))
+    if (interaction.inlineEditing && active && !editorOpen(active.frame)) {
       interaction = { ...interaction, inlineEditing: false, composing: false };
+      lostStop = true;
+    }
     if (interaction.inlineEditing || interaction.composing || interaction.dragging) return;
 
     const previous = active;
@@ -361,6 +364,19 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
       requestId: held.manifest.requestId,
       contentVersion: held.manifest.contentVersion,
     });
+  };
+
+  // The workspace still owes the cleared edit its history boundary.
+  const settle = (held: RenderFrame) => {
+    promote(held);
+    if (!lostStop) return;
+    lostStop = false;
+    options.onInteractionChange?.({ inlineEditing: false, composing: false });
+  };
+
+  // Any later message from the page is a chance to notice a stop that never arrived.
+  const recheck = (held: RenderFrame) => {
+    if (active === held && candidate && interaction.inlineEditing) settle(candidate);
   };
 
   const frameName = () => {
@@ -443,11 +459,12 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
         held.bridge.uiLocale(options.uiLocale());
         held.bridge.mode(mode);
         held.bridge.problems(problemAddresses);
-        promote(held);
+        settle(held);
       },
       onSelection: (selection) => {
         held.selection = selection;
         if (active === held) options.onSelectionChange?.(selection);
+        recheck(held);
       },
       onStructure: (nodes) => {
         held.structure = nodes;
@@ -460,12 +477,15 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
           else if (wanted && held.manifest.contentVersion === options.contentVersion())
             options.onSelectionChange?.(undefined);
         }
+        recheck(held);
       },
       onAction: (message) => {
         if (active === held) options.onAction?.(message);
+        recheck(held);
       },
       onNavigate: (message) => {
         if (active === held) options.onNavigate?.(message);
+        recheck(held);
       },
       onEditing: (_target, state) => {
         if (active !== held) return;
@@ -496,7 +516,7 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
       }
       if (!sameManifest(found, manifest)) return finishFailure(held, 'stale');
       held.loaded = true;
-      promote(held);
+      settle(held);
     };
     const onerror = () => finishFailure(held, 'bootstrap');
     held = {

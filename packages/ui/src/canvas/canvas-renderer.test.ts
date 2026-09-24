@@ -270,7 +270,7 @@ test('a stop accepted after a locale switch still lets the waiting candidate pro
   canvas.dispose();
 });
 
-test('a lost stop with no editor left in the page lets the candidate promote and stay', () => {
+test('a lost stop with no editor left in the page lets the candidate promote and stay', async () => {
   fakeHandshake();
   const stage = document.createElement('div');
   document.body.append(stage);
@@ -311,12 +311,93 @@ test('a lost stop with no editor left in the page lets the candidate promote and
     }),
   );
 
-  void canvas.render(request(4));
+  const second = canvas.render(request(4));
   const promoted = canvas.candidateFrame();
   settleCandidate(canvas, 'req-2', 4);
 
-  expect(canvas.state().phase).toBe('ready');
+  // The report re-renders after the promote, so req-3 is rendering behind the promoted frame.
+  await expect(second).resolves.toMatchObject({ ok: true, requestId: 'req-2' });
   expect(canvas.activeFrame()).toBe(promoted);
   expect(promoted?.isConnected).toBe(true);
+  canvas.dispose();
+});
+
+const lostStopCanvas = (onInteractionChange?: () => void) => {
+  fakeHandshake();
+  const stage = document.createElement('div');
+  document.body.append(stage);
+  let ids = 0;
+  const target = { document: { collection: 'pages', id: 'home' }, locale: 'en', address: 'title' };
+  const onSelectionChange = vi.fn();
+  const canvas = createCanvasRenderer({
+    stage,
+    contentVersion: () => 4,
+    currentTarget: () => target,
+    uiLocale: () => 'en',
+    onCommand: () => ({ ok: false, reason: 'readonly' }),
+    requestId: () => `req-${++ids}`,
+    onSelectionChange,
+    onInteractionChange,
+  });
+  void canvas.render(request(4));
+  const first = settleCandidate(canvas, 'req-1', 4);
+  const identity = {
+    protocol: 1,
+    requestId: 'req-1',
+    epoch: 'canvas-session',
+    entry: { collection: 'pages', id: 'home' },
+    locale: 'en',
+    contentVersion: 4,
+  };
+  const post = (data: Record<string, unknown>) =>
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        origin: location.origin,
+        source: first.win,
+        data: { ...identity, ...data },
+      }),
+    );
+  const editor = first.doc.createElement('h1');
+  editor.setAttribute('data-handover-inline-editing', '');
+  first.doc.body.append(editor);
+  post({
+    type: 'handover:canvas:editing',
+    target,
+    state: { inlineEditing: true, composing: false },
+    interactionId: 'i1',
+  });
+  // The candidate is ready while the editor still runs, so it waits.
+  void canvas.render(request(4));
+  const waiting = canvas.candidateFrame();
+  settleCandidate(canvas, 'req-2', 4);
+  // The editor closes and its stop is lost; the next thing the page says is a click.
+  editor.remove();
+  const selection = { kind: 'field', target };
+  const click = () => post({ type: 'handover:canvas:selection', selection });
+  return { canvas, waiting, click, selection, onSelectionChange };
+};
+
+test('a lost stop while a candidate waits lets it promote on the next page message', () => {
+  const { canvas, waiting, click, selection, onSelectionChange } = lostStopCanvas();
+  expect(canvas.state().phase).toBe('rendering');
+
+  click();
+
+  expect(onSelectionChange).toHaveBeenCalledWith(selection);
+  expect(canvas.state().phase).toBe('ready');
+  expect(canvas.activeFrame()).toBe(waiting);
+  canvas.dispose();
+});
+
+test('a lost stop cleared silently is reported once, after the candidate is active', () => {
+  const reports: (HTMLIFrameElement | undefined)[] = [];
+  let canvas: ReturnType<typeof createCanvasRenderer> | undefined;
+  const setup = lostStopCanvas(() => reports.push(canvas?.activeFrame()));
+  canvas = setup.canvas;
+  reports.length = 0;
+
+  setup.click();
+
+  expect(reports).toEqual([setup.waiting]);
   canvas.dispose();
 });

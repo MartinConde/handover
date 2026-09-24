@@ -12,6 +12,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   page's editing controls once the save is acknowledged.
 - When an inline edit's stop is lost, the next Canvas render checks the page for an open
   editor instead of staying on "Updating…".
+- A lost inline-edit stop is also noticed on the next click or message from the page, so a
+  waiting update shows without another edit, and that edit still gets its own undo step.
 - Canvas no longer stays on "Updating…" when an inline edit's stop arrives after a language
   switch or the live page reloads, and a drag end is accepted after a mid-drag content change.
 - Inline text edits keep saving after an input-method composition is interrupted; Escape during
