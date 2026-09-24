@@ -14,10 +14,10 @@ import { z } from 'astro/zod';
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
 import { Miniflare } from 'miniflare';
 import { afterAll, beforeAll, beforeEach, expect, test, vi } from 'vitest';
-import * as tables from '../../../core/src/tables.js';
-import { formSchema } from '../index.js';
-import { onRequest } from '../middleware.js';
-import { DELETE, GET, POST, PUT } from './api.js';
+import * as tables from '../../../../core/src/tables.js';
+import { formSchema } from '../../index.js';
+import { onRequest } from '../../middleware.js';
+import { DELETE, GET, POST, PUT } from '../api.js';
 
 // The workflows harness with a third language: a legacy mark can then name a non-source one.
 const boundary = vi.hoisted(() => ({
@@ -45,7 +45,7 @@ vi.mock('cloudflare:workers', () => ({
 }));
 vi.mock('virtual:handover/config', async () => {
   const { z } = await import('astro/zod');
-  const { blocks, defineBlock } = await import('../index.js');
+  const { blocks, defineBlock } = await import('../../index.js');
   return {
     default: {
       i18n: {
