@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Canvas reads the page's structure in one pass, so pages with thousands of annotated fields
+  and blocks rebuild Structure much faster.
 - A Canvas field address over 4,096 characters now fails with a 422 that names the limit, so
   Canvas reports a render failure instead of "Canvas could not start".
 - Switching the admin's language while a Canvas edit is being saved now also translates the
