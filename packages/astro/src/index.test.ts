@@ -714,7 +714,7 @@ test('the redirects golden parses; from must be a path and to a path or absolute
   }
 });
 
-const fixture = new URL('../test/fixture/', import.meta.url);
+const fixture = new URL('../test/fixtures/basic/', import.meta.url);
 
 test("emitRedirects appends every rule to the client dir, in the site's form", async () => {
   const client = new URL(`${await mkdtemp(join(tmpdir(), 'handover-client-'))}/`, 'file://');

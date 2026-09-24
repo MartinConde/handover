@@ -39,8 +39,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
-    "fixture:build": "pnpm -w build && pnpm --filter @handover/ui build && astro build --root test/fixture/canvas",
-    "fixture:start": "node test/fixture/canvas/dist/server/entry.mjs",
+    "fixture:build": "pnpm -w build && pnpm --filter @handover/ui build && astro build --root test/fixtures/canvas",
+    "fixture:start": "node test/fixtures/canvas/dist/server/entry.mjs",
     "test": "vitest run",
     "test:package": "node test/package-smoke.mjs",
     "test:browser": "playwright test",
