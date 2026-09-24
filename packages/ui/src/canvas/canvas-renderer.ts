@@ -150,6 +150,9 @@ const sameManifest = (a: CanvasSuccessManifest, b: CanvasSuccessManifest) =>
 
 const randomId = () => crypto.randomUUID();
 const markerSelector = '[data-handover-field], [data-handover-list], [data-handover-block]';
+const EDITING_MARKERS =
+  '[data-handover-inline-editing],[data-handover-richtext-editing],[data-handover-link-editing]';
+
 const frameTitle = (locale: UiLocale) => m.preview_frame_title({}, messageOptions(locale));
 
 const findTarget = (root: Document, expected: CanvasTarget): Element | undefined => {
@@ -208,6 +211,15 @@ const restoreView = (held: RenderFrame, state: CanvasViewState | undefined) => {
     top: clamp(top, maximumTop),
     behavior: 'instant',
   });
+};
+
+const editorOpen = (frame: HTMLIFrameElement) => {
+  try {
+    const page = frame.contentDocument;
+    return !page || page.querySelector(EDITING_MARKERS) !== null;
+  } catch {
+    return true;
+  }
 };
 
 /**
@@ -297,6 +309,10 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
     clearTimeout(held.timer);
     if (options.contentVersion() !== held.manifest.contentVersion)
       return finishFailure(held, 'stale');
+    // A stop can be lost; an editor that still runs leaves its marker in the page. No callback
+    // here: the workspace would re-enter and supersede this candidate mid-promote.
+    if (interaction.inlineEditing && active && !editorOpen(active.frame))
+      interaction = { ...interaction, inlineEditing: false, composing: false };
     if (interaction.inlineEditing || interaction.composing || interaction.dragging) return;
 
     const previous = active;

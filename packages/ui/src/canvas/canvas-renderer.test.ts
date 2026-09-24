@@ -184,7 +184,11 @@ test('reloading the active frame clears a lost editing flag so the candidate pro
   });
 
   void canvas.render(request(4));
-  settleCandidate(canvas, 'req-1', 4);
+  const { doc } = settleCandidate(canvas, 'req-1', 4);
+  // The reloaded document would lose this; the fake keeps it so only the load event can unblock.
+  const heading = doc.createElement('h1');
+  heading.setAttribute('data-handover-inline-editing', '');
+  doc.body.append(heading);
   // A stop the parent never received (e.g. the frame reloaded mid-edit) leaves this stuck true.
   canvas.setInteractionState({ inlineEditing: true, composing: false });
 
@@ -217,6 +221,9 @@ test('a stop accepted after a locale switch still lets the waiting candidate pro
   void canvas.render(request(4, 'en'));
   const en = settleCandidate(canvas, 'req-1', 4, 'en');
   expect(canvas.state().phase).toBe('ready');
+  const heading = en.doc.createElement('h1');
+  heading.setAttribute('data-handover-inline-editing', '');
+  en.doc.body.append(heading);
 
   // 2. An editor starts in the active `en` frame.
   const editing = (inlineEditing: boolean, contentVersion: number) => ({
@@ -260,5 +267,56 @@ test('a stop accepted after a locale switch still lets the waiting candidate pro
   // 6. Accepted despite the admin now being on a lower-versioned locale: the candidate promotes.
   expect(canvas.state().phase).toBe('ready');
   expect(canvas.candidateFrame()).toBeUndefined();
+  canvas.dispose();
+});
+
+test('a lost stop with no editor left in the page lets the candidate promote and stay', () => {
+  fakeHandshake();
+  const stage = document.createElement('div');
+  document.body.append(stage);
+  let ids = 0;
+  const target = { document: { collection: 'pages', id: 'home' }, locale: 'en', address: 'title' };
+  const canvas = createCanvasRenderer({
+    stage,
+    contentVersion: () => 4,
+    currentTarget: () => target,
+    uiLocale: () => 'en',
+    onCommand: () => ({ ok: false, reason: 'readonly' }),
+    requestId: () => `req-${++ids}`,
+    // The workspace schedules a render on every stop; a call mid-promote would supersede the frame.
+    onInteractionChange: (state) => {
+      if (!state.inlineEditing) void canvas.render(request(4));
+    },
+  });
+
+  void canvas.render(request(4));
+  const first = settleCandidate(canvas, 'req-1', 4);
+  // The link editor opened, then its stop was lost; the page has no editing marker left.
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      origin: location.origin,
+      source: first.win,
+      data: {
+        protocol: 1,
+        requestId: 'req-1',
+        epoch: 'canvas-session',
+        entry: { collection: 'pages', id: 'home' },
+        locale: 'en',
+        type: 'handover:canvas:editing',
+        target,
+        state: { inlineEditing: true, composing: false },
+        interactionId: 'i1',
+        contentVersion: 4,
+      },
+    }),
+  );
+
+  void canvas.render(request(4));
+  const promoted = canvas.candidateFrame();
+  settleCandidate(canvas, 'req-2', 4);
+
+  expect(canvas.state().phase).toBe('ready');
+  expect(canvas.activeFrame()).toBe(promoted);
+  expect(promoted?.isConnected).toBe(true);
   canvas.dispose();
 });

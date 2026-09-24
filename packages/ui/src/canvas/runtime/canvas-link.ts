@@ -59,6 +59,7 @@ export function createCanvasLinkRuntime(options: CanvasLinkOptions) {
     const held = active;
     if (!held) return;
     active = undefined;
+    held.element.removeAttribute('data-handover-link-editing');
     editor.close('cancel');
     options.interaction(held.field.target, { inlineEditing: false, composing: false });
   };
@@ -75,6 +76,8 @@ export function createCanvasLinkRuntime(options: CanvasLinkOptions) {
     if (active) finish();
     const field = configured;
     active = { element, field };
+    // The parent checks for this marker when an editing stop may have been lost.
+    element.dataset.handoverLinkEditing = '';
     options.interaction(field.target, { inlineEditing: true, composing: false });
     editor.open({
       anchor: element,
@@ -104,6 +107,7 @@ export function createCanvasLinkRuntime(options: CanvasLinkOptions) {
       onClose: () => {
         if (!active || active.field !== field) return;
         active = undefined;
+        element.removeAttribute('data-handover-link-editing');
         options.interaction(field.target, { inlineEditing: false, composing: false });
       },
     });

@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Canvas no longer stays on "Updating…" when an inline edit's stop is lost for any reason; it
+  checks the page for an open editor before holding back the next render.
 - Canvas no longer stays on "Updating…" when an inline edit's stop arrives after a language
   switch or the live page reloads, and a drag end is accepted after a mid-drag content change.
 - Inline text edits keep saving after an input-method composition is interrupted; Escape during

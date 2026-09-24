@@ -269,3 +269,26 @@ test('uses the same editor to choose a page or entry destination', async () => {
   });
   runtime.dispose();
 });
+
+test('marks the link in the page for exactly as long as its editor is open', () => {
+  document.body.innerHTML = '<a href="/contact">Contact</a>';
+  const anchor = document.querySelector('a');
+  if (!anchor) throw new Error('link fixture missing');
+  const marked: boolean[] = [];
+  const runtime = createCanvasLinkRuntime({
+    command: vi.fn(),
+    interaction: () => marked.push(anchor.hasAttribute('data-handover-link-editing')),
+  });
+  runtime.configure({
+    kind: 'link',
+    target,
+    value: { type: 'url', ref: '', href: '/contact', label: 'Contact', newTab: false },
+  });
+
+  runtime.activate({ kind: 'field', target }, anchor);
+  document.querySelector<HTMLButtonElement>('[data-link-close]')?.click();
+
+  expect(marked).toEqual([true, false]);
+  expect(anchor.hasAttribute('data-handover-link-editing')).toBe(false);
+  runtime.dispose();
+});
