@@ -19,19 +19,11 @@ import {
   CANVAS_PROTOCOL,
   canvasErrorDocument,
   errorManifest,
+  GATE,
   type HandoverCanvas,
   serializeCanvasManifest,
   successManifest,
 } from '../canvas.js';
-
-/** Draft content on the client's own domain is a phishing primitive. */
-export const GATE = {
-  'cache-control': 'private, no-store',
-  'x-robots-tag': 'noindex, nofollow',
-  'content-security-policy': "frame-ancestors 'self'",
-  // A draft page's links would otherwise hand the preview's address to every site they point at.
-  'referrer-policy': 'no-referrer',
-};
 
 const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (character) => {

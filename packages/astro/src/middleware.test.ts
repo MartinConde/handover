@@ -1,3 +1,4 @@
+import { ContentError } from '@handover/core';
 import type { APIContext } from 'astro';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { onRequest } from './middleware.js';
@@ -177,4 +178,52 @@ test('a Canvas POST keeps the site links real for its browser bridge', async () 
 
   expect(await res.text()).toBe(page);
   expect(next).toHaveBeenCalledOnce();
+});
+
+test('a Canvas render that throws a content error mid-page answers with its reason', async () => {
+  const url = new URL('/_preview/listings/mill-house', 'https://x');
+  const page = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('<h1>Mill house</h1>'));
+      controller.error(new ContentError('Canvas address exceeds 4096 characters.'));
+    },
+  });
+  const next = vi.fn(
+    async () => new Response(page, { headers: { 'content-type': 'text/html; charset=utf-8' } }),
+  );
+  const handoverCanvas = {
+    protocol: 1,
+    requestId: 'req-1',
+    epoch: 'e1',
+    entry: { collection: 'listings', id: 'mill-house' },
+    locale: 'en',
+    contentVersion: 3,
+  };
+
+  const res = (await onRequest(
+    {
+      request: new Request(url, { method: 'POST', body: 'snapshot={}' }),
+      url,
+      locals: { handoverCanvas },
+    } as unknown as APIContext,
+    next,
+  )) as Response;
+
+  expect(res.status).toBe(422);
+  const html = await res.text();
+  const manifest = JSON.parse(
+    html.match(/data-handover-canvas-manifest>(.*?)<\/script>/)?.[1] ?? '{}',
+  );
+  expect(manifest).toEqual({
+    mode: 'canvas',
+    status: 'error',
+    protocol: 1,
+    requestId: 'req-1',
+    epoch: 'e1',
+    contentVersion: 3,
+    error: {
+      status: 422,
+      message: 'This draft cannot be rendered:\nCanvas address exceeds 4096 characters.',
+    },
+  });
 });

@@ -107,7 +107,8 @@ does not identify whether the row is a content block.
 The generated marker values include the verified collection, stable entry ID, locale, and address.
 Do not construct `data-handover-*` values by hand or infer an address from visible text.
 Complete field addresses support up to 4,096 UTF-16 code units, including nested stable row IDs.
-Longer addresses fail the Canvas render; the server log names the limit. Structure labels are
+Longer addresses fail the Canvas render with status 422, which Canvas reports as a page the site
+could not render; the response names the limit. Structure labels are
 shortened to 200 code units for display, without splitting a character; this does not change the
 stored block name.
 

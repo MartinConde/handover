@@ -1,7 +1,8 @@
 import config from 'virtual:handover/config';
-import { AUTH_BASE_PATH, roleOf, type UiLocale } from '@handover/core';
+import { AUTH_BASE_PATH, ContentError, roleOf, type UiLocale } from '@handover/core';
 import type { MiddlewareHandler } from 'astro';
 import { createAuth } from './auth.js';
+import { canvasErrorDocument, errorManifest, GATE } from './canvas.js';
 
 // A draft page's links point at the live site, so clicking through a preview would leave it.
 const base = () => (config.i18n.base ?? '').replace(/\/+$/, '');
@@ -34,6 +35,27 @@ export const onRequest: MiddlewareHandler = async ({ request, url, locals }, nex
     const headers = new Headers(res.headers);
     headers.delete('content-length');
     return new Response(previewLinks(await res.text()), { status: res.status, headers });
+  }
+  // Canvas annotations throw while the page streams, after the preview route's own catch.
+  if (request.method === 'POST' && /^\/_preview(?:\/|$)/.test(path)) {
+    let res: Response;
+    let html: string;
+    try {
+      res = await next();
+      if (!res.headers.get('content-type')?.includes('text/html')) return res;
+      html = await res.text();
+    } catch (error) {
+      const canvas = locals.handoverCanvas;
+      if (!(error instanceof ContentError) || !canvas) throw error;
+      const message = `This draft cannot be rendered:\n${error.message}`;
+      return new Response(canvasErrorDocument(errorManifest(422, message, canvas)), {
+        status: 422,
+        headers: { ...GATE, 'content-type': 'text/html; charset=utf-8' },
+      });
+    }
+    const headers = new Headers(res.headers);
+    headers.delete('content-length');
+    return new Response(html, { status: res.status, statusText: res.statusText, headers });
   }
   if (!path.startsWith('/admin/api/')) return next();
   const privateResponse = async (work: () => Promise<Response>) => {
