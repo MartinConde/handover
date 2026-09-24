@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 
 test('saved interface language wins before first paint and an Account switch preserves work', async ({
   context,
@@ -1203,11 +1203,8 @@ test('Canvas rich text lazily reuses formatting, selection, composition, and For
   await expect(page.locator('#f-legacy-hint')).toContainText('edited in code');
 });
 
-test('Canvas block controls configure, duplicate, delete, reorder, restore, and retain failed renders', async ({
-  page,
-}, testInfo) => {
-  // One long scenario: WebKit under parallel load needs ~40 s against the 30 s default.
-  test.slow();
+// Serves the block-controls page from the POSTed snapshot so each command re-renders for real.
+async function openBlockControls(page: Page) {
   await page.goto('/canvas-assets');
   const entries = JSON.parse(
     (await page.locator('body').getAttribute('data-entries')) ?? '{}',
@@ -1324,11 +1321,38 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
   const editor = page.locator('.canvas-block-editor');
   const inspector = page.locator('#canvas-inspector');
   const structure = page.locator('#canvas-structure');
-  await openStructure();
   const treeRow = (address: string) =>
     structure.locator(
       `[role="treeitem"][data-target-address="${address}"] > .canvas-structure-row`,
     );
+  const first = frame.locator('[data-block-id="repeat01"]');
+  // The page-top block's hover label is drawn over its top edge, so click its bottom padding.
+  const clickFirst = async () => {
+    const box = await first.boundingBox();
+    if (!box) throw new Error('Missing first block');
+    await first.click({ position: { x: 5, y: box.height - 5 } });
+  };
+  return {
+    frame,
+    editor,
+    inspector,
+    structure,
+    openStructure,
+    useCanvasAction,
+    treeRow,
+    clickFirst,
+    posts: () => posts,
+    failNextRender: () => {
+      failNext = true;
+    },
+  };
+}
+
+test('Structure drags blocks by pointer and keyboard, cancels with Escape, and undoes', async ({
+  page,
+}, testInfo) => {
+  const { frame, structure, openStructure, treeRow, posts } = await openBlockControls(page);
+  await openStructure();
   expect(
     await treeRow('blocks[_id=columns1].columns[_id=column01]').evaluate((row) => {
       const group = row.parentElement?.closest('[role="group"]');
@@ -1370,10 +1394,10 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
     }
   };
   const beforeTreeDrag = await rootOrder();
-  const rendersBeforeCancel = posts;
+  const rendersBeforeCancel = posts();
   await treeDrag(true);
   expect(await rootOrder()).toEqual(beforeTreeDrag);
-  expect(posts).toBe(rendersBeforeCancel);
+  expect(posts()).toBe(rendersBeforeCancel);
   await treeDrag(false);
   await expect.poll(rootOrder).toEqual(['columns1', 'repeat01', ...beforeTreeDrag.slice(2)]);
   await expect(frame.locator('[data-block-id="columns1"] [data-block-id="repeat02"]')).toHaveCount(
@@ -1394,6 +1418,13 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
   );
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect.poll(rootOrder).toEqual(beforeTreeDrag);
+});
+
+test('Add block in Structure opens the block editor and Back returns focus', async ({
+  page,
+}, testInfo) => {
+  const { editor, structure, openStructure } = await openBlockControls(page);
+  await openStructure();
   await structure.getByRole('button', { name: 'Add block', exact: true }).click();
   await expect(editor).toBeVisible();
   await expect(structure.locator('.canvas-block-editor')).toBeVisible();
@@ -1404,13 +1435,13 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
   await expect(editor).toHaveCount(0);
   await expect(structure.getByRole('tree')).toBeVisible();
   await expect(structure.getByRole('button', { name: 'Add block', exact: true })).toBeFocused();
-  const first = frame.locator('[data-block-id="repeat01"]');
-  // The page-top block's hover label is drawn over its top edge, so click its bottom padding.
-  const clickFirst = async () => {
-    const box = await first.boundingBox();
-    if (!box) throw new Error('Missing first block');
-    await first.click({ position: { x: 5, y: box.height - 5 } });
-  };
+});
+
+test('an inserted block saves while incomplete, renders once completed, and deletes', async ({
+  page,
+}, testInfo) => {
+  const { frame, editor, inspector, openStructure, useCanvasAction, clickFirst, posts } =
+    await openBlockControls(page);
   await clickFirst();
   await page.getByRole('button', { name: 'Inspector', exact: true }).click();
   await expect(inspector.locator('.canvas-inspector-context')).toContainText('Block 1');
@@ -1420,7 +1451,7 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
   await expect(
     editor.getByRole('list', { name: 'Allowed block types' }).getByRole('button'),
   ).toHaveText([/repeated/, /promo/, /columns/]);
-  const postsBeforeIncompleteBlock = posts;
+  const postsBeforeIncompleteBlock = posts();
   await editor.getByRole('button', { name: /repeated/ }).click();
   await expect(editor).toHaveCount(0);
   await expect(inspector).toBeVisible();
@@ -1431,7 +1462,7 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
     () => (window as unknown as { canvasDraftWrites: unknown[] }).canvasDraftWrites.length > 0,
   );
   await expect(page.locator('.canvas-entry-actions .autosave')).toContainText('Saved');
-  expect(posts).toBe(postsBeforeIncompleteBlock);
+  expect(posts()).toBe(postsBeforeIncompleteBlock);
   await expect(page.locator('.canvas-failure')).toHaveCount(0);
   await expect(inspector.locator('.error')).toHaveCount(1);
   await page.screenshot({ path: testInfo.outputPath('incomplete-block.png') });
@@ -1447,15 +1478,21 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
   await openStructure();
   await useCanvasAction('Delete', 'Block 2');
   await expect(frame.getByText('Inserted beside the first block')).toHaveCount(0);
+});
+
+test('Insert after renders the new block, Back cancels without a render, and empty lists take blocks', async ({
+  page,
+}) => {
+  const { frame, editor, inspector, openStructure, useCanvasAction, clickFirst, posts } =
+    await openBlockControls(page);
   await clickFirst();
   await useCanvasAction('Insert after', 'Block 1');
   await editor.getByRole('button', { name: /promo/ }).click();
   await inspector.getByLabel('Heading').fill('New promotion');
   await inspector.getByLabel('Heading').press('Tab');
   await expect(frame.getByText('New promotion')).toBeVisible();
-  await expect(frame.getByText('Inserted beside the first block')).toHaveCount(0);
 
-  const beforeCancel = posts;
+  const beforeCancel = posts();
   await frame
     .getByText('New promotion')
     .locator('..')
@@ -1464,7 +1501,7 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
   await useCanvasAction('Insert after', 'Block 2');
   await editor.getByRole('button', { name: 'Back to Structure' }).click();
   await expect(editor).toHaveCount(0);
-  expect(posts).toBe(beforeCancel);
+  expect(posts()).toBe(beforeCancel);
 
   await frame.locator('[data-empty-list]').click();
   await frame.getByRole('button', { name: 'Add block to Blocks' }).click();
@@ -1472,12 +1509,15 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
   await inspector.getByLabel('Heading').fill('Nested list insertion');
   await inspector.getByLabel('Heading').press('Tab');
   await expect(frame.getByText('Nested list insertion')).toBeVisible();
+});
 
+test('duplicating a block gives every nested copy a fresh ID', async ({ page }) => {
+  const { frame, openStructure, useCanvasAction } = await openBlockControls(page);
   const columns = frame.locator('[data-block-id="columns1"]');
   await columns.click({ position: { x: 5, y: 5 } });
   await openStructure();
-  await useCanvasAction('Duplicate', 'Block 3');
-  await expect(frame.locator('main > [data-block-id]')).toHaveCount(4);
+  await useCanvasAction('Duplicate', 'Block 2');
+  await expect(frame.locator('main > [data-block-id]')).toHaveCount(3);
   const generated = await frame
     .locator('[data-block-id], [data-column-id]')
     .evaluateAll((nodes) =>
@@ -1487,7 +1527,12 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
     );
   expect(new Set(generated).size).toBe(generated.length);
   expect(generated).not.toContain('');
+});
 
+test('nested blocks reorder by pointer, Structure keyboard, and Alt+Arrow, and Escape cancels', async ({
+  page,
+}, testInfo) => {
+  const { frame, structure, openStructure, treeRow } = await openBlockControls(page);
   const originalNested = frame.locator('[data-block-id="columns1"] [data-block-id="repeat02"]');
   const pointerDrag = async (finish: 'drop' | 'escape') => {
     await originalNested.click({ position: { x: 5, y: 5 } });
@@ -1580,7 +1625,10 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
     ),
   );
   await expect.poll(nestedOrder).toEqual(['promo001', 'repeat02']);
+});
 
+test('deleting nested blocks writes the draft and Undo restores them', async ({ page }) => {
+  const { frame } = await openBlockControls(page);
   const promoAddress = 'blocks[_id=columns1].columns[_id=column01].blocks[_id=promo001]';
   await frame
     .locator('[data-block-id="columns1"] [data-block-id="promo001"]')
@@ -1641,6 +1689,10 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
   await expect(frame.locator('[data-block-id="columns1"] [data-block-id="repeat02"]')).toHaveCount(
     1,
   );
+});
+
+test('Canvas comes back updated after a language round trip through Form', async ({ page }) => {
+  await openBlockControls(page);
   await page.getByRole('button', { name: /^(Form|Back to form)$/ }).click();
   await page.getByRole('button', { name: /^DE(?: —|$)/ }).click();
   await expect
@@ -1654,15 +1706,16 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
   await page.getByRole('button', { name: 'Canvas', exact: true }).click();
   await expect(page.locator('.canvas-render-state')).toHaveText('Canvas updated');
   await expect(page.locator('iframe[data-handover-canvas-frame="candidate"]')).toHaveCount(0);
+});
 
-  await frame
-    .getByText('New promotion')
-    .locator('..')
-    .click({ position: { x: 5, y: 5 } });
+test('a failed render keeps the last page and the edit, and Retry renders it', async ({ page }) => {
+  const { frame, editor, inspector, openStructure, useCanvasAction, clickFirst, failNextRender } =
+    await openBlockControls(page);
+  await clickFirst();
   await openStructure();
-  await useCanvasAction('Insert after', 'Block 2');
+  await useCanvasAction('Insert after', 'Block 1');
   await editor.getByRole('button', { name: /repeated/ }).click();
-  failNext = true;
+  failNextRender();
   await inspector.getByLabel('Heading').fill('Retained after render failure');
   await inspector.getByLabel('Heading').press('Tab');
   await expect(page.getByText('Canvas could not update')).toBeVisible();
