@@ -1375,6 +1375,48 @@ test('a problems update stamped ahead of a pending command is applied once it ac
   expect(onProblems).toHaveBeenCalledWith([target.address]);
 });
 
+test('an interface language stamped ahead of a pending command is applied once it acks', () => {
+  const parent = frame();
+  const onUiLocale = vi.fn();
+  const child = createCanvasChildBridge({
+    manifest,
+    parent,
+    origin: 'https://cms.example',
+    onUiLocale,
+    listen: false,
+    commandId: () => 'command-1',
+  });
+  child.start();
+  void child.command(target, { type: 'field', changes: [{ value: 'A brighter coast' }] });
+
+  child.receive(
+    event(parent, 'https://cms.example', {
+      ...ready,
+      type: 'handover:canvas:ui-locale',
+      uiLocale: 'de',
+      contentVersion: 5,
+    }),
+  );
+  expect(onUiLocale).not.toHaveBeenCalled();
+
+  child.receive(
+    event(parent, 'https://cms.example', {
+      type: 'handover:canvas:ack',
+      protocol: 1,
+      requestId: manifest.requestId,
+      epoch: manifest.epoch,
+      entry: manifest.entry,
+      locale: 'en',
+      contentVersion: 4,
+      commandId: 'command-1',
+      target,
+      ok: true,
+      acceptedVersion: 5,
+    }),
+  );
+  expect(onUiLocale).toHaveBeenCalledWith('de');
+});
+
 test('validation updates are scoped to the active frame and accept clearing all problems', () => {
   const browserParent = frame();
   const onProblems = vi.fn();

@@ -1211,6 +1211,7 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
   let deferredField: NonNullable<ReturnType<typeof textFieldMessage>> | undefined;
   // Problems can be stamped ahead of this child while a command is in flight; apply them after.
   let deferredProblems: NonNullable<ReturnType<typeof problemsMessage>> | undefined;
+  let deferredUiLocale: NonNullable<ReturnType<typeof uiLocaleMessage>> | undefined;
   const applyField = (message: NonNullable<ReturnType<typeof textFieldMessage>>) => {
     if (message.contentVersion < version) return;
     version = message.contentVersion;
@@ -1240,6 +1241,11 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
         const message = deferredProblems;
         deferredProblems = undefined;
         options.onProblems?.(message.addresses);
+      }
+      if (deferredUiLocale) {
+        const message = deferredUiLocale;
+        deferredUiLocale = undefined;
+        options.onUiLocale?.(message.uiLocale);
       }
     }
     held.resolve(reply);
@@ -1295,8 +1301,17 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
       return;
     }
     if (configuredUiLocale) {
-      if (!stale(configuredUiLocale, manifest, version))
-        options.onUiLocale?.(configuredUiLocale.uiLocale);
+      const identityReason = stale(configuredUiLocale, manifest, configuredUiLocale.contentVersion);
+      if (identityReason || configuredUiLocale.contentVersion < version) return;
+      if (pending.size) {
+        if (
+          !deferredUiLocale ||
+          configuredUiLocale.contentVersion >= deferredUiLocale.contentVersion
+        )
+          deferredUiLocale = configuredUiLocale;
+        return;
+      }
+      options.onUiLocale?.(configuredUiLocale.uiLocale);
       return;
     }
     acceptReply(event.data);
@@ -1425,6 +1440,7 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
       replyPort = undefined;
       deferredField = undefined;
       deferredProblems = undefined;
+      deferredUiLocale = undefined;
       for (const [commandId, held] of pending)
         held.resolve({
           ...base(manifest, held.version),

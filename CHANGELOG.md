@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Switching the admin's language while a Canvas edit is being saved now also translates the
+  page's editing controls once the save is acknowledged.
 - Canvas no longer stays on "Updating…" when an inline edit's stop is lost for any reason; it
   checks the page for an open editor before holding back the next render.
 - Canvas no longer stays on "Updating…" when an inline edit's stop arrives after a language
