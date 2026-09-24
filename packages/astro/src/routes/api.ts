@@ -26,29 +26,21 @@ import { formSchema } from '../index.js';
 import { BodyTooLargeError, bodyErrorResponse } from './api/body.js';
 import { tabOf } from './api/content.js';
 import { requestContext } from './api/context.js';
+import { dashboard, globalsList, listEntries, pendingList, pickList } from './api/dashboard.js';
 import {
   address,
   autosave,
   changeEntrySource,
-  createEntry,
-  createTranslation,
-  dashboard,
   deletedList,
   discard,
   duplicate,
   getEntry,
-  globalsList,
   hold,
-  listEntries,
   lockState,
-  machineTranslate,
   offering,
-  pendingList,
-  pickList,
   reconcile,
   remove,
   rename,
-  saveTemplate,
   setStatus,
 } from './api/entries.js';
 import {
@@ -100,6 +92,8 @@ import {
   testEmail,
 } from './api/settings.js';
 import { recordSources, sourcesList } from './api/sources.js';
+import { createEntry, saveTemplate } from './api/templates.js';
+import { createTranslation, machineTranslate } from './api/translation.js';
 
 export { db, gitClient, mediaStore } from './api/environment.js';
 

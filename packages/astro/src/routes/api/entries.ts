@@ -1,70 +1,49 @@
 import config from 'virtual:handover/config';
-import index, { stale, templates, texts } from 'virtual:handover/index';
-import type { Db, EntryEdit, Form, IndexEntry, Labels, LocaleSeed } from '@handover/core';
+import index, { templates } from 'virtual:handover/index';
+import type { Db, Form, IndexEntry, LocaleSeed } from '@handover/core';
 import {
-  abandonCostlyOperation,
   addressError,
   beginOperation,
   changeSource,
-  claimCostlyOperation,
   claimLock,
-  claimResource,
   collectionEntries,
-  completeCostlyOperation,
-  costlyOperationResult,
-  createDraft,
   createDrafts,
   DraftRevisionError,
   deletedEntries,
   deleteEntry,
   deleteLocales,
   discardDraft,
-  draftEditors,
   driftReport,
   dropLock,
   duplicateEntry,
   entryAddress,
   entryKey,
   entryName,
-  entryOffer,
   entrySource,
   entryUrl,
-  FORMAT_VERSION,
   finalizeOperation,
   findOperation,
   formOf,
-  heldDrafts,
   holdEntry,
-  humanise,
-  indexName,
   isDraftRace,
   isLive,
   isMediaRace,
-  labelsOf,
-  lastCommit,
   loadDraft,
   lockHolder,
-  lockHolders,
   logActivity,
   markOperationCommitted,
   moveLock,
   OperationFinalizationError,
-  operationMessage,
   overlayRows,
   parseEntry,
-  pendingDrafts,
-  publishedEntries,
   RenameCollisionError,
-  ResourceLimitError,
   readRedirects,
   recordDelete,
   recordOffer,
   recordRenames,
   recoverOperationCommit,
-  regenerateIds,
   releaseOperationPaths,
   releasePaths,
-  releaseResource,
   renameEntry,
   reservePaths,
   resolveDrift,
@@ -72,26 +51,19 @@ import {
   rewriteDrafts,
   saveDraft,
   savedTemplates,
-  saveTranslated,
   setEntryAddress,
   setEntryLocales,
   setEntryStatus,
   sourceOnlyConflicts,
   staleLocales,
   stringifyEntry,
-  syncLocale,
   takeLock,
-  textSummaries,
-  translatableText,
-  withSource,
 } from '@handover/core';
-import { entryForm, formSchema } from '../../index.js';
+import { formSchema } from '../../index.js';
 import { entryProblems } from '../../problems.js';
 import { readJson } from './body.js';
 import {
-  ENTRY_FILE,
   entryFiles,
-  entryHref,
   entryLocales,
   entryPath,
   entrySourceFor,
@@ -105,11 +77,9 @@ import {
   locationOf,
   offeredIn,
   pendingLocales,
-  pickable,
   schemaOf,
   siblingPaths,
   siteSeoDefaults,
-  sourceOrder,
   sourceRefusal,
   tabOf,
   takenNames,
@@ -563,208 +533,6 @@ export async function autosave(
   }
   if (!saved) return new Response('Not found', { status: 404 });
   return Response.json({ ...saved, problems: entryProblems(schema, data) });
-}
-
-/** Structure and shared values from the source file, none of its words, as a draft. */
-export async function createTranslation(
-  ctx: RequestContext,
-  collection: string,
-  slug: string,
-  locale: string,
-): Promise<Response> {
-  const schema = schemaOf(collection, slug);
-  if (!schema || !config.i18n.locales.includes(locale))
-    return new Response('Not found', { status: 404 });
-  const { loaded, source: answer } = await entrySourceFor(ctx, collection, slug);
-  // A missing default language is exactly what this route is for, so no extra guard on it.
-  if (loaded[locale]) return new Response('That language already has a file', { status: 409 });
-  if (answer && 'problem' in answer) return sourceRefusal(answer, localeData(loaded));
-  const source = answer?.locale;
-  const data = source === undefined ? undefined : loaded[source]?.data;
-  if (source === undefined || data === undefined) return new Response('Not found', { status: 404 });
-  const { offered, problems } = offeredIn(data, Object.keys(loaded));
-  // A mark the files contradict is answered before the offer it would otherwise be read as.
-  if (problems.length) return new Response(problems.join('\n'), { status: 409 });
-  if (!offered.includes(locale))
-    return new Response(`This entry is not offered in ${locale}`, { status: 409 });
-  const form = formFor(collection, slug);
-  // Stamped even on an unrecorded entry: adding a language must never move the source.
-  const made = withSource(
-    'default',
-    syncLocale('default', form, locale, { before: data, after: data }, {}),
-    source,
-  );
-  if (offered.length < config.i18n.locales.length) made._locales = offered;
-  try {
-    await createDraft(
-      'default',
-      ctx.db(),
-      ctx.git(),
-      entryPath(collection, slug, locale),
-      made,
-      Object.fromEntries(
-        config.i18n.locales.map((at) => [entryPath(collection, slug, at), loaded[at]?.revision]),
-      ),
-    );
-  } catch (err) {
-    if (err instanceof DraftRevisionError || isDraftRace(err))
-      return new Response('This entry changed while the language was being created', {
-        status: 409,
-      });
-    throw err;
-  }
-  return Response.json({});
-}
-
-/** Answers land in `_machine`, so the badge stands until somebody types over the field. */
-export async function machineTranslate(
-  ctx: RequestContext,
-  collection: string,
-  slug: string,
-  locale: string,
-  request: Request,
-  session: App.Locals['handover'],
-): Promise<Response> {
-  const schema = schemaOf(collection, slug);
-  if (!schema || !config.i18n.locales.includes(locale))
-    return new Response('Not found', { status: 404 });
-  // Checked before the entry is read: having no translator is about the site, not this entry.
-  const translate = await translator(ctx);
-  if (!translate)
-    return new Response(
-      'This site has nothing to translate with: paste a DeepL key in Settings, set DEEPL_API_KEY, or hand in an i18n.translate in cms.config.ts',
-      { status: 409 },
-    );
-  const { loaded, source: answer } = await entrySourceFor(ctx, collection, slug);
-  if (answer && 'problem' in answer) return sourceRefusal(answer, localeData(loaded));
-  const from = answer?.locale;
-  const source =
-    from === undefined ? undefined : await translationSource(ctx, collection, slug, from);
-  if (!from || !source || from === locale || !loaded[locale])
-    return new Response('Not found', { status: 404 });
-  const body = (await readJson(request)) as { paths?: unknown } | undefined;
-  const named = Array.isArray(body?.paths) ? body.paths.map(String) : undefined;
-  const form = formFor(collection, slug);
-  // A pre-fill is for the gaps; a Translate button names its field whether filled or not.
-  const written = new Set(
-    translatableText('default', form, loaded[locale].data).map((v) => v.path),
-  );
-  const wanted = translatableText('default', form, parseEntry('default', source.contents)).filter(
-    (v) => (named ? named.includes(v.path) : !written.has(v.path)),
-  );
-  if (wanted.length) {
-    const database = ctx.db();
-    const user = session?.user.id ?? 'unknown';
-    const characters = Math.max(
-      1,
-      wanted.reduce((total, field) => total + field.text.length, 0),
-    );
-    const identity = JSON.stringify({
-      user,
-      collection,
-      slug,
-      locale,
-      from,
-      revision: loaded[locale].revision,
-      fields: wanted.map((field) => [field.path, field.text]),
-    });
-    const operationKey = Array.from(
-      new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(identity))),
-      (byte) => byte.toString(16).padStart(2, '0'),
-    ).join('');
-    const operation = await claimCostlyOperation('default', database, operationKey, user);
-    if (!operation.owner) {
-      if (operation.result !== undefined) return Response.json(operation.result);
-      for (let attempt = 0; attempt < 60; attempt += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 250));
-        const shared = await costlyOperationResult('default', database, operationKey);
-        if (shared !== undefined) return Response.json(shared);
-      }
-      throw new ResourceLimitError('The same translation is already running; try again shortly');
-    }
-    const activeLeases: { key: string; token: string }[] = [];
-    const budgets: Awaited<ReturnType<typeof claimResource>>[] = [];
-    let providerStarted = false;
-    try {
-      const userActive = `translation-active:user:${user}`;
-      const userLease = await claimCostlyOperation('default', database, userActive, user);
-      if (!userLease.owner)
-        throw new ResourceLimitError('A translation is already running for this account');
-      activeLeases.push({ key: userActive, token: userLease.token as string });
-      let siteLease: { key: string; token: string } | undefined;
-      for (let slot = 0; slot < 3 && !siteLease; slot += 1) {
-        const key = `translation-active:site:${slot}`;
-        const lease = await claimCostlyOperation('default', database, key, user);
-        if (lease.owner) siteLease = { key, token: lease.token as string };
-      }
-      if (!siteLease) throw new ResourceLimitError('The site is already translating at capacity');
-      activeLeases.push(siteLease);
-      budgets.push(
-        await claimResource('default', database, {
-          subject: 'site',
-          kind: 'translation-characters',
-          cost: characters,
-          limit: 250_000,
-        }),
-      );
-      budgets.push(
-        await claimResource('default', database, {
-          subject: user,
-          kind: 'translation-characters',
-          cost: characters,
-          limit: 75_000,
-        }),
-      );
-      const controller = new AbortController();
-      const timeout = setTimeout(
-        () => controller.abort(new Error('Translation provider timed out')),
-        15_000,
-      );
-      let answers: string[];
-      providerStarted = true;
-      try {
-        answers = await translate(
-          wanted.map((v) => v.text),
-          from,
-          locale,
-          controller.signal,
-        );
-      } finally {
-        clearTimeout(timeout);
-      }
-      await saveTranslated(
-        'default',
-        database,
-        ctx.git(),
-        entryPath(collection, slug, locale),
-        Object.fromEntries(wanted.map((v, i) => [v.path, answers[i] ?? v.text])),
-        session?.user.id,
-        loaded[locale].revision,
-        { form, source, ...(answer?.recorded ? { stamp: from } : {}) },
-      );
-      const after = await entryLocales(ctx, collection, slug, [locale]);
-      const result = after[locale] ?? {};
-      await completeCostlyOperation(
-        'default',
-        database,
-        operationKey,
-        operation.token as string,
-        result,
-      );
-      return Response.json(result);
-    } catch (error) {
-      if (!providerStarted)
-        for (const budget of budgets) await releaseResource('default', database, budget);
-      await abandonCostlyOperation('default', database, operationKey, operation.token as string);
-      throw error;
-    } finally {
-      for (const lease of activeLeases)
-        await abandonCostlyOperation('default', database, lease.key, lease.token);
-    }
-  }
-  // The column redraws from this, so an edit in the other column survives a pre-fill.
-  const after = await entryLocales(ctx, collection, slug, [locale]);
-  return Response.json(after[locale] ?? {});
 }
 
 /** The mark lives in the files, so turning off a published language commits a delete. */
@@ -1293,525 +1061,11 @@ export async function changeEntrySource(
   return Response.json({ source: to });
 }
 
-// Nothing here touches GitHub: listing through the contents API is one request per file.
-export async function listEntries(ctx: RequestContext, collection: string): Promise<Response> {
-  const collected = config.collections[collection];
-  if (!collected) return new Response('Not found', { status: 404 });
-  const database = ctx.db();
-  const [rows, waiting, editing, published, editors] = await Promise.all([
-    overlayRows('default', database, index),
-    pendingDrafts('default', database),
-    lockHolders('default', database),
-    publishedEntries('default', database),
-    draftEditors('default', database),
-  ]);
-  // Says which rows get the "duplicate including unpublished changes?" question.
-  const unpublished = new Set(waiting.map((row) => row.path));
-  const edits = lastEdits(waiting, published, editors);
-  const summaries = textsNow(rows, collection);
-  // The same reading of `_locales` the editor makes, so list and form agree on chips.
-  const entries = collectionEntries('default', index, collection, rows, collected.titleField).map(
-    (entry) => {
-      const { offered } = entryOffer(
-        'default',
-        config.i18n.locales,
-        entry.offered,
-        Object.keys(entry.locales),
-      );
-      // Absent when that is every language the site declares, as the built index has it.
-      return {
-        ...entry,
-        offered: offered.length === config.i18n.locales.length ? undefined : offered,
-        pending: Object.values(entry.locales).some((l) => unpublished.has(l.path)) || undefined,
-        editing: editing[`${collection}/${entry.id}`],
-        // Goes as far back as the log does; an untouched row has nothing rather than a guess.
-        edited: edits.get(`${collection}/${entry.id}`) ?? null,
-        // The last build's mark, the same one the dashboard counts, for the language filter.
-        stale: stale[`${collection}/${entry.id}`]?.length
-          ? stale[`${collection}/${entry.id}`]
-          : undefined,
-        ...summaries[`${collection}/${entry.id}`],
-      };
-    },
-  );
-  return Response.json({
-    entries,
-    // Which languages the list draws a column for, and in which order — one language, no column.
-    locales: config.i18n.locales,
-    // The language a new entry is written in unless the dialog is pointed at another.
-    defaultLocale: config.i18n.defaultLocale,
-    // The page above them, which is where the hide dialog offers to send a row's readers.
-    index: collected.index,
-    // The starters this collection ships, which the New entry dialog offers beside Blank.
-    templates: await templateNames(collection, database),
-  });
-}
-
-/** The build's counts with the drafts over them, read the same way by list and dashboard. */
-function textsNow(overlay: readonly { path: string; contents: string }[], collection?: string) {
-  // A list parses only its own drafts; the dashboard needs every entry, globals too.
-  const within = (key = '') => !collection || key.startsWith(`${collection}/`);
-  return textSummaries(
-    'default',
-    config.i18n,
-    Object.fromEntries(Object.entries(texts).filter(([key]) => within(key))),
-    overlay.filter((row) => within(entryKey(row.path))),
-    (of, name) => entryForm(config, of, name),
-  );
-}
-
-/** A global's label in every language, for the rows that name it; nothing for an entry. */
-const globalLabels = (key: string) => {
-  const [collection, name = ''] = key.split('/');
-  const schema = collection === 'globals' ? config.globals?.[name] : undefined;
-  const labels = schema && globalLabel(name, schema).labels;
-  return labels ? { labels } : {};
-};
-
-/** One answer for every picker: they choose from the same set and differ only afterwards. */
-export async function pickList(ctx: RequestContext): Promise<Response> {
-  return Response.json({
-    entries: await pickable(ctx),
-    // A collection's index page is not an entry, but a menu can point at one.
-    indexes: Object.entries(config.collections).flatMap(([collection, { index: page }]) => {
-      if (!page) return [];
-      const { label } = config.collections[collection] ?? {};
-      const labels = typeof label === 'string' && label ? { en: label } : labelsOf(label);
-      const urls: Record<string, string> = {};
-      for (const locale of config.i18n.locales) {
-        const url = entryUrl('default', config.i18n, page, '', locale);
-        if (url) urls[locale] = url;
-      }
-      return [
-        {
-          collection,
-          index: true,
-          path: collection,
-          // What a menu item pointing here is called on the site; `labels` is the admin's name.
-          title: humanise(collection),
-          titles: Object.fromEntries(
-            config.i18n.locales.map((locale) => [locale, indexName(collection, label, locale)]),
-          ),
-          ...(labels
-            ? {
-                // Written as it reads mid-sentence; a picker row is a heading.
-                labels: Object.fromEntries(
-                  Object.entries(labels).map(([locale, text]) => [
-                    locale,
-                    text.charAt(0).toUpperCase() + text.slice(1),
-                  ]),
-                ),
-              }
-            : {}),
-          locales: config.i18n.locales,
-          urls,
-        },
-      ];
-    }),
-    locales: config.i18n.locales,
-    // A typed path's language is read off its segment, and the default one has none.
-    defaultLocale: config.i18n.defaultLocale,
-  });
-}
-
-/** Costs what the entry list costs: a global is an entry of the `globals` collection. */
-export async function globalsList(ctx: RequestContext): Promise<Response> {
-  const database = ctx.db();
-  const [rows, waiting, editing, published, editors] = await Promise.all([
-    overlayRows('default', database, index),
-    pendingDrafts('default', database),
-    lockHolders('default', database),
-    publishedEntries('default', database),
-    draftEditors('default', database),
-  ]);
-  const pending = new Set(waiting.map((row) => row.path));
-  const edits = lastEdits(waiting, published, editors);
-  const entries = collectionEntries('default', index, 'globals', rows);
-  return Response.json({
-    globals: Object.entries(config.globals ?? {}).map(([key, schema]) => {
-      const found = entries.find((entry) => entry.id === key);
-      const locales = Object.entries(found?.locales ?? {});
-      return {
-        ...globalLabel(key, schema),
-        // Languages with a file; the rest become the dashed chip that offers to make one.
-        locales: config.i18n.locales.filter((locale) => found?.locales[locale]),
-        pending: locales.some(([, file]) => pending.has(file.path)),
-        editing: editing[`globals/${key}`],
-        // Goes as far back as the log does; an untouched row has nothing rather than a guess.
-        edited: edits.get(`globals/${key}`) ?? null,
-      };
-    }),
-    locales: config.i18n.locales,
-  });
-}
-
-/** When an entry was last touched, by whom, and whether that edit is out on the site yet. */
-interface LastEdit {
-  key: string;
-  at: number;
-  /** Their name, or nothing: a member who has gone leaves the date standing on its own. */
-  by: string | null;
-  /** An unpublished edit, or the publish that carried one out. */
-  kind: 'edit' | 'publish';
-}
-
-/** The draft row wins; a draft is deleted once its build is live, so the log is the fallback. */
-function lastEdits(
-  drafts: readonly { path: string; updatedAt: number }[],
-  published: readonly EntryEdit[],
-  editors: Record<string, string | null>,
-): Map<string, LastEdit> {
-  const rows = new Map<string, LastEdit>();
-  // Already newest first, so the first row an entry has is the one kept.
-  for (const draft of drafts) {
-    const key = entryKey(draft.path);
-    if (!key || rows.has(key)) continue;
-    rows.set(key, { key, at: draft.updatedAt, by: editors[draft.path] ?? null, kind: 'edit' });
-  }
-  for (const done of published)
-    if (!rows.has(done.entry))
-      rows.set(done.entry, { key: done.entry, at: done.at, by: done.by, kind: 'publish' });
-  return rows;
-}
-
-/** The unpublished count and build pill stay the shell's, or the two would disagree. */
-export async function dashboard(ctx: RequestContext): Promise<Response> {
-  const database = ctx.db();
-  const [drafts, published, editing, editors, overlay, last] = await Promise.all([
-    pendingDrafts('default', database),
-    publishedEntries('default', database),
-    lockHolders('default', database),
-    draftEditors('default', database),
-    overlayRows('default', database, index),
-    lastCommit('default', database),
-  ]);
-  const newest = [...lastEdits(drafts, published, editors).values()]
-    .sort((a, b) => b.at - a.at)
-    .slice(0, 8);
-  const titles = entryTitles(
-    newest.map((row) => row.key),
-    overlay,
-  );
-  const recent = newest.map((row) => {
-    const [collection = '', slug = ''] = row.key.split('/');
-    return {
-      ...row,
-      collection,
-      title: titles.get(row.key) || slug,
-      ...globalLabels(row.key),
-      href: entryHref(row.key),
-      editing: editing[row.key],
-    };
-  });
-  return Response.json({
-    recent,
-    // Only when the newest commit is a publish: a rename or redirect is a commit too.
-    published: last?.kind === 'publish' ? { at: last.at, by: last.by } : null,
-    translations: translationHealth(overlay),
-  });
-}
-
-/** Stale is the last build's: judging it with drafts would cost a fetch per entry. */
-function translationHealth(overlay: readonly { path: string; contents: string }[]) {
-  const locales = config.i18n.locales;
-  if (locales.length < 2) return null;
-  const missing: Record<string, number> = {};
-  const behind: Record<string, number> = {};
-  const unfinished: Record<string, number> = {};
-  const machine: Record<string, number> = {};
-  // Drafts included, unlike `behind`; an entry can count in both.
-  const summaries = textsNow(overlay);
-  for (const summary of Object.values(summaries)) {
-    for (const locale of Object.keys(summary.partial ?? {}))
-      unfinished[locale] = (unfinished[locale] ?? 0) + 1;
-    for (const locale of summary.machine ?? []) machine[locale] = (machine[locale] ?? 0) + 1;
-  }
-  // Which lists to send somebody to: a global has none, so it counts and is not named.
-  const where: Record<string, Set<string>> = {};
-  const owed = (locale: string, collection: string) => {
-    if (collection === 'globals') return;
-    where[locale] ??= new Set();
-    where[locale].add(collection);
-  };
-  for (const collection of [...Object.keys(config.collections), 'globals'])
-    for (const entry of collectionEntries(
-      'default',
-      index,
-      collection,
-      overlay,
-      config.collections[collection]?.titleField,
-    )) {
-      const { offered } = entryOffer('default', locales, entry.offered, Object.keys(entry.locales));
-      // A language the entry is not offered in is a decision somebody made, not a gap to fill.
-      for (const locale of offered)
-        if (!entry.locales[locale]) {
-          missing[locale] = (missing[locale] ?? 0) + 1;
-          owed(locale, collection);
-        }
-      for (const locale of stale[`${collection}/${entry.id}`] ?? [])
-        if (entry.locales[locale]) {
-          behind[locale] = (behind[locale] ?? 0) + 1;
-          owed(locale, collection);
-        }
-      // Machine-written is not owed, so it sends *Show* nowhere.
-      for (const locale of Object.keys(summaries[`${collection}/${entry.id}`]?.partial ?? {}))
-        owed(locale, collection);
-    }
-  return {
-    defaultLocale: config.i18n.defaultLocale,
-    locales: locales.map((locale) => ({
-      locale,
-      missing: missing[locale] ?? 0,
-      stale: behind[locale] ?? 0,
-      unfinished: unfinished[locale] ?? 0,
-      machine: machine[locale] ?? 0,
-      where: [...(where[locale] ?? [])],
-    })),
-  };
-}
-
-/** The entry list's own reading, so one entry is named the same thing on every screen. */
-export function entryTitles(
-  keys: Iterable<string>,
-  overlay: readonly { path: string; contents: string }[],
-) {
-  const titles = new Map<string, string>();
-  for (const collection of new Set([...keys].map((key) => key.split('/')[0] ?? '')))
-    for (const entry of collectionEntries(
-      'default',
-      index,
-      collection,
-      overlay,
-      config.collections[collection]?.titleField,
-    ))
-      titles.set(
-        `${collection}/${entry.id}`,
-        config.i18n.locales.map((l) => entry.locales[l]?.title).find(Boolean) ||
-          Object.values(entry.locales)[0]?.title ||
-          entry.id,
-      );
-  for (const [key, schema] of Object.entries(config.globals ?? {}))
-    titles.set(`globals/${key}`, globalLabel(key, schema).label);
-  return titles;
-}
-
-/** Grouped here because titles come from the build index only the Worker can read. */
-export async function pendingList(ctx: RequestContext): Promise<Response> {
-  const database = ctx.db();
-  const [rows, held, overlay] = await Promise.all([
-    pendingDrafts('default', database),
-    heldDrafts('default', database),
-    overlayRows('default', database, index),
-  ]);
-  const titles = entryTitles(
-    rows.flatMap((r) => entryKey(r.path) ?? []),
-    overlay,
-  );
-  type Row = {
-    key: string;
-    title: string;
-    labels?: Labels;
-    collection: string;
-    locales: string[];
-    files: string[];
-    redirects?: number;
-    updated_at: number;
-    held_by: { id: string; name: string | null; since: number | null } | null;
-  };
-  const entries: Row[] = [];
-  // Newest first, and the row that made an entry appear is the newest it has.
-  for (const row of rows) {
-    const [, collection = '', locale = '', slug = ''] = ENTRY_FILE.exec(row.path) ?? [];
-    const key = entryKey(row.path) ?? row.path;
-    let found = entries.find((e) => e.key === key);
-    if (!found) {
-      found = {
-        key,
-        title: titles.get(key) || slug || key,
-        ...globalLabels(key),
-        collection,
-        locales: [],
-        files: [],
-        updated_at: row.updatedAt,
-        held_by: held[key] ?? null,
-      };
-      entries.push(found);
-    }
-    found.files.push(row.path);
-    if (locale) found.locales.push(locale);
-    // redirects.yaml is assembled at publish from the entries' rules, so it is never a row here.
-    const rules = row.pendingRedirects?.length ?? 0;
-    if (rules) found.redirects = (found.redirects ?? 0) + rules;
-  }
-  for (const entry of entries)
-    entry.locales = config.i18n.locales.filter((l) => entry.locales.includes(l));
-  // For the drawer's check lines: a problem found in several languages opens the default one.
-  return Response.json({ entries, defaultLocale: config.i18n.defaultLocale });
-}
-
-const templatePath = (collection: string, name: string) =>
-  `src/content/_templates/${collection}/${name}.yaml`;
-
 // The starters the dialog offers: the build's, and the ones saved from the admin since it ran.
-async function templateNames(collection: string, database: Db): Promise<string[]> {
+export async function templateNames(collection: string, database: Db): Promise<string[]> {
   const built = (templates[collection] ?? []).map((t) => t.name);
   const saved = await savedTemplates('default', database, collection);
   return [...new Set([...built, ...saved])].sort((a, b) => a.localeCompare(b));
-}
-
-// Identity keys stay out, or every entry made from the template would share one address.
-async function startedFrom(
-  ctx: RequestContext,
-  collection: string,
-  name: string,
-): Promise<Record<string, unknown> | undefined> {
-  const built = templates[collection]?.find((t) => t.name === name)?.data;
-  const file =
-    built === undefined ? await ctx.git().getFile(templatePath(collection, name)) : undefined;
-  const data = built ?? (file && parseEntry('default', file.contents));
-  if (data === undefined) return undefined;
-  const values = regenerateIds('default', data) as Record<string, unknown>;
-  for (const key of ['_i18n', '_locales', '_source', '_status', 'slug']) delete values[key];
-  return values;
-}
-
-// Every `_id` taken out: creating from the template stamps fresh ones.
-const withoutIds = (value: unknown): unknown =>
-  Array.isArray(value)
-    ? value.map(withoutIds)
-    : value && typeof value === 'object'
-      ? Object.fromEntries(
-          Object.entries(value)
-            .filter(([k]) => k !== '_id')
-            .map(([k, v]) => [k, withoutIds(v)]),
-        )
-      : value;
-
-/** Committed now so the next build offers it, and logged so the dialog offers it before then. */
-export async function saveTemplate(
-  ctx: RequestContext,
-  collection: string,
-  slug: string,
-  request: Request,
-  session: App.Locals['handover'],
-): Promise<Response> {
-  if (!config.collections[collection]) return new Response('Not found', { status: 404 });
-  if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
-  const body = (await request.json().catch(() => undefined)) as { to?: unknown } | undefined;
-  const git = ctx.git();
-  const database = ctx.db();
-  const files = await entryFiles(git, collection, slug);
-  // The language it is written in, judged by what is published; the baseline order where files disagree.
-  const answer = entrySource(
-    'default',
-    config.i18n,
-    Object.fromEntries(
-      files.flatMap((f) => (f.file ? [[f.locale, parseEntry('default', f.file.contents)]] : [])),
-    ),
-  );
-  const from = [...(answer && 'locale' in answer ? [answer.locale] : []), ...sourceOrder()]
-    .map((locale) => files.find((f) => f.locale === locale && f.file))
-    .find(Boolean);
-  if (!from?.file)
-    return new Response('Publish this entry before saving it as a template', { status: 409 });
-  const wanted = typeof body?.to === 'string' && body.to ? body.to : slug;
-  const name = entryName('default', wanted, await templateNames(collection, database));
-  const retryKey = `template-saved:${collection}/${slug}:${name}`;
-  const existing = await findOperation('default', database, retryKey);
-  const completed = existing?.result as { commit_sha?: unknown; name?: unknown } | null;
-  if (
-    existing?.state === 'finalized' &&
-    typeof completed?.commit_sha === 'string' &&
-    completed.name === name
-  )
-    return Response.json({ name });
-  const values = withoutIds(parseEntry('default', from.file.contents)) as Record<string, unknown>;
-  for (const key of ['_i18n', '_locales', '_source', '_status', '_machine', 'slug'])
-    delete values[key];
-  const baseSha = existing?.baseSha ?? (await git.getHead());
-  const path = templatePath(collection, name);
-  const operation =
-    existing ??
-    (await beginOperation('default', database, {
-      retryKey,
-      kind: 'template-saved',
-      paths: [path],
-      baseSha,
-      userId: session?.user.id,
-      subject: from.path,
-      detail: { template: name },
-    }));
-  let commit_sha: string | undefined = operation.commitSha ?? undefined;
-  if (!commit_sha) commit_sha = await recoverOperationCommit('default', database, git, operation);
-  if (!commit_sha)
-    ({ commit_sha } = await git.publish(
-      [{ path: templatePath(collection, name), contents: stringifyEntry('default', values) }],
-      {
-        base_sha: operation.baseSha,
-        message: operationMessage(
-          `Save ${collection}/${slug} as the template ${name}`,
-          operation.id,
-        ),
-      },
-    ));
-  await markOperationCommitted('default', database, operation.id, commit_sha, {
-    commit_sha,
-    name,
-  });
-  try {
-    await finalizeOperation('default', database, operation.id);
-  } catch (cause) {
-    throw new OperationFinalizationError(operation.id, commit_sha, { cause });
-  }
-  await logActivity('default', database, {
-    userId: session?.user.id,
-    kind: 'template-saved',
-    subject: from.path,
-    detail: { template: name },
-    commitSha: commit_sha,
-  });
-  return Response.json({ name });
-}
-
-/** A draft, not a commit: the name stays editable and an abandoned entry stays out of git. */
-export async function createEntry(
-  ctx: RequestContext,
-  collection: string,
-  request: Request,
-): Promise<Response> {
-  const collected = config.collections[collection];
-  if (!collected) return new Response('Not found', { status: 404 });
-  const body = (await request.json().catch(() => undefined)) as
-    | { title?: unknown; template?: unknown; locale?: unknown }
-    | undefined;
-  const title = typeof body?.title === 'string' ? body.title : '';
-  const { defaultLocale, locales } = config.i18n;
-  // The language the entry is written in from here on, so it is refused before anything is written.
-  const first = body?.locale === undefined ? defaultLocale : body.locale;
-  if (typeof first !== 'string' || !locales.includes(first))
-    return new Response(`${String(first)} is not a language this site declares`, { status: 400 });
-  const starter =
-    typeof body?.template === 'string' && body.template
-      ? await startedFrom(ctx, collection, body.template)
-      : {};
-  if (!starter) return new Response('No such template', { status: 404 });
-  const database = ctx.db();
-  const slug = entryName('default', title, await takenNames(collection, database));
-  const { fields } = formOf('default', formSchema(collected.schema));
-  // The field the collection lists by is the one the title typed into the dialog belongs in.
-  const named = collected.titleField ?? 'title';
-  const values: Record<string, unknown> = { ...starter, _version: FORMAT_VERSION };
-  if (fields.some((f) => f.path[0] === named && f.type === 'text')) values[named] = title;
-  // The language chosen in the dialog, which is also the entry's source from its first file on.
-  const path = entryPath(collection, slug, first);
-  await createDraft(
-    'default',
-    database,
-    ctx.git(),
-    path,
-    locales.length > 1 ? withSource('default', values, first) : values,
-  );
-  return Response.json({ slug });
 }
 
 // Same derivation as a new entry's: a rename cannot produce a name the CMS could not create.

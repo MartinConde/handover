@@ -24,7 +24,7 @@ import {
 } from '@handover/core';
 import { entryHref, entryPath, formFor } from './content.js';
 import type { RequestContext } from './context.js';
-import { entryTitles } from './entries.js';
+import { entryTitles } from './dashboard.js';
 
 const KIND = 'sources-recorded';
 
