@@ -1,5 +1,5 @@
 import { defaultCollisionDetection } from '@dnd-kit/collision';
-import { Accessibility, DragDropManager } from '@dnd-kit/dom';
+import { Accessibility, DragDropManager, type Draggable } from '@dnd-kit/dom';
 import { isSortable, Sortable } from '@dnd-kit/dom/sortable';
 import { messageOptions, type UiLocale } from '../../i18n';
 import * as m from '../../paraglide/messages.js';
@@ -102,6 +102,14 @@ const isAncestor = (parent: StructuralLocation, child: StructuralLocation) => {
     return false;
   const boundary = child.address[parent.address.length];
   return boundary === '.' || boundary === '[';
+};
+
+// `slice` can cut an emoji's surrogate pair in half.
+const trimUnits = (value: string, limit: number) => {
+  if (value.length <= limit) return value;
+  const clipped = value.slice(0, limit);
+  const last = clipped.charCodeAt(limit - 1);
+  return last >= 0xd800 && last <= 0xdbff ? clipped.slice(0, -1) : clipped;
 };
 
 const humanize = (value: string) => {
@@ -240,6 +248,33 @@ function readStructure(root: Document): InternalNode[] {
   return ordered;
 }
 
+// Every sibling's collision detector asks in the same pass; look the animation up once per pass.
+export function createReorderAnimationLookup(getSource: () => Draggable | null) {
+  let cached: { source: Draggable | null; animation: Animation | undefined } | undefined;
+  return () => {
+    const source = getSource();
+    if (cached && cached.source === source) return cached.animation;
+    const animation =
+      isSortable(source) &&
+      source.sortable.element?.getAnimations().find((animation) => {
+        const effect = animation.effect as KeyframeEffect | null;
+        return (
+          animation.playState === 'running' &&
+          !('animationName' in animation) &&
+          !('transitionProperty' in animation) &&
+          effect?.getTiming().duration === source.sortable.transition?.duration &&
+          effect?.getTiming().iterations === 1 &&
+          effect?.getKeyframes?.().some((frame) => frame.translate !== undefined)
+        );
+      });
+    cached = { source, animation: animation || undefined };
+    queueMicrotask(() => {
+      if (cached?.source === source) cached = undefined;
+    });
+    return cached.animation;
+  };
+}
+
 const eligibleKey = (event: KeyboardEvent) => {
   const target = event.target;
   return !(
@@ -280,11 +315,15 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
   });
   let sortables: Sortable[] = [];
   const watchedDragAnimations = new WeakSet<Animation>();
+  const reorderAnimation = createReorderAnimationLookup(() => dragManager.dragOperation.source);
   let sortableNodes: InternalNode[] = [];
+  // A different selected block rebuilds even when the siblings are the same.
+  let sortablesOwner: string | undefined;
   const clearSortables = () => {
     for (const sortable of sortables) sortable.destroy();
     sortables = [];
     sortableNodes = [];
+    sortablesOwner = undefined;
   };
   let problemAddresses: string[] = [];
   let nodeByKey = new Map<string, InternalNode>();
@@ -480,7 +519,8 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     }
     scheduleDraw();
   };
-  const bindDragHandle = (node: InternalNode, handle: HTMLButtonElement) => {
+  // Runs on every redraw, so reuse the Sortables while the siblings are unchanged.
+  const syncSortables = (node: InternalNode, handle: HTMLButtonElement) => {
     const siblings = (childrenByParent.get(node.parentId) ?? []).filter(
       (candidate) => candidate.kind === 'block',
     );
@@ -493,10 +533,29 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
           candidate.elements[0]?.parentElement !== node.elements[0]?.parentElement,
       )
     ) {
+      clearSortables();
       handle.disabled = true;
       return;
     }
+    handle.disabled = false;
     handle.addEventListener('pointerdown', () => handle.focus({ preventScroll: true }));
+    const unchanged =
+      sortablesOwner === node.id &&
+      sortables.length === siblings.length &&
+      sortableNodes.every((existing, index) => existing.id === siblings[index]?.id);
+    if (unchanged) {
+      sortables.forEach((sortable, index) => {
+        const candidate = siblings[index];
+        if (!candidate) return;
+        sortable.index = index;
+        sortable.element = candidate.elements[0];
+        sortable.handle = handle;
+      });
+      sortableNodes = siblings;
+      return;
+    }
+    clearSortables();
+    sortablesOwner = node.id;
     sortableNodes = siblings;
     sortables = siblings.map(
       (candidate, index) =>
@@ -513,19 +572,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
               // FLIP animations move siblings through the pointer after a reorder. Wait for their
               // resting rectangles so an animation cannot immediately undo the intended move.
               const source = dragManager.dragOperation.source;
-              const animation =
-                isSortable(source) &&
-                source.sortable.element?.getAnimations().find((animation) => {
-                  const effect = animation.effect as KeyframeEffect | null;
-                  return (
-                    animation.playState === 'running' &&
-                    !('animationName' in animation) &&
-                    !('transitionProperty' in animation) &&
-                    effect?.getTiming().duration === source.sortable.transition?.duration &&
-                    effect?.getTiming().iterations === 1 &&
-                    effect?.getKeyframes?.().some((frame) => frame.translate !== undefined)
-                  );
-                });
+              const animation = reorderAnimation();
               if (animation && !watchedDragAnimations.has(animation)) {
                 watchedDragAnimations.add(animation);
                 const held = dragging;
@@ -618,7 +665,6 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     }
     actions.style.opacity = '';
     dropPreview.hidden = true;
-    clearSortables();
     const focused = shadow.activeElement instanceof HTMLElement ? shadow.activeElement : undefined;
     const focusedAncestor = focused?.dataset.canvasAncestor;
     const focusedLabel = focused?.closest('.path');
@@ -640,6 +686,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     hoverPath.hidden = true;
     sharedPanel.hidden = !sharedOpen || !enabled;
     if (!enabled) {
+      clearSortables();
       path.hidden = true;
       restoreActionFocus();
       return;
@@ -655,6 +702,9 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
     path.style.maxWidth = '';
     const selectedNode = nodeForSelection(selected);
     const hoveredNode = nodeForElement(hoveredElement);
+    const wantsSortables =
+      selectedNode?.kind === 'block' && allowedActions.includes('move') && !options.isEditing?.();
+    if (!wantsSortables) clearSortables();
     const makeBox = (element: Element, state: 'selected' | 'hover' | 'invalid') => {
       if (visible.get(element) === false) return;
       const bounds = boundsOf(element);
@@ -760,7 +810,8 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       const element = hoveredElement ?? hoveredNode.elements[0];
       if (element) {
         makeBox(element, 'hover');
-        labelFor(hoverPath, hoveredNode, element);
+        // Without a selection the breadcrumb is hidden; skip building and measuring it.
+        if (selectedNode) labelFor(hoverPath, hoveredNode, element);
       }
     }
     const labelled = selectedNode ?? hoveredNode;
@@ -953,7 +1004,7 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
       for (const { action, label, className } of candidates) {
         if (!allowedActions.includes(action)) continue;
         const button = addRowAction(action, label, className);
-        if (action === 'move') bindDragHandle(selectedNode, button);
+        if (action === 'move') syncSortables(selectedNode, button);
       }
     } else if (selectedNode.kind === 'field' && allowedActions.includes('replace-media')) {
       addRowAction(
@@ -984,14 +1035,14 @@ export function createCanvasSelectionRuntime(options: CanvasSelectionRuntimeOpti
   const publishStructure = () => options.onStructure?.(nodes.map(publicNode));
   const labelNodes = () => {
     for (const node of nodes) {
-      node.label = (
+      const label =
         node.kind === 'block'
           ? node.named || m.canvas_selection_block_position({ position: node.position }, message())
           : humanize(node.target.address) ||
             (node.kind === 'list'
               ? m.canvas_type_array({}, message())
-              : m.canvas_selection_field({}, message()))
-      ).slice(0, 200);
+              : m.canvas_selection_field({}, message()));
+      node.label = trimUnits(label, 200);
     }
   };
   const observerRealm = owner as unknown as typeof globalThis;

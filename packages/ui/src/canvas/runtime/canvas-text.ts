@@ -260,6 +260,10 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
     if (held.spellcheck === null) held.element.removeAttribute('spellcheck');
     else held.element.setAttribute('spellcheck', held.spellcheck);
     held.unpin();
+    // A composition cut off here never gets its compositionend, which would block every later commit.
+    composing = false;
+    compositionBefore = undefined;
+    compositionGroup = '';
     options.interaction(held.target, { inlineEditing: false, composing: false });
   };
 
@@ -313,6 +317,30 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
       });
       return;
     }
+    // Plain text has no breaks or marks; the commit reads only textContent and would drop them.
+    if (
+      event.inputType === 'insertParagraph' ||
+      event.inputType === 'insertLineBreak' ||
+      event.inputType.startsWith('format')
+    ) {
+      event.preventDefault();
+      return;
+    }
+    if (event.inputType === 'insertFromDrop') {
+      event.preventDefault();
+      const before = readSelection(active.element);
+      const [drop] = event.getTargetRanges();
+      if (drop) {
+        const range = active.element.ownerDocument.createRange();
+        range.setStart(drop.startContainer, drop.startOffset);
+        range.setEnd(drop.endContainer, drop.endOffset);
+        active.element.ownerDocument.getSelection()?.removeAllRanges();
+        active.element.ownerDocument.getSelection()?.addRange(range);
+      }
+      replaceSelection(active.element, event.dataTransfer?.getData('text/plain') ?? '');
+      commit('paste', before);
+      return;
+    }
     beforeInput = readSelection(active.element);
   };
 
@@ -357,6 +385,8 @@ export function createCanvasPlainTextRuntime(options: CanvasPlainTextOptions) {
   const onKeyDown = (event: KeyboardEvent) => {
     if (!active?.element.contains(event.target as Node)) return;
     if (event.key === 'Escape') {
+      // An IME uses Escape to cancel its own conversion; that must not also close the editor.
+      if (event.isComposing) return;
       event.preventDefault();
       event.stopPropagation();
       finish();

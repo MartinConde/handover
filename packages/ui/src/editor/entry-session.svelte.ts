@@ -167,6 +167,7 @@ type HistoryTransaction = FieldHistoryTransaction | StructuralHistoryTransaction
 
 export type HistoryStats = {
   redoTransactions: number;
+  retainedCharacters: number;
   retainedFieldValues: number;
   undoTransactions: number;
 };
@@ -285,6 +286,17 @@ function write(root: EntryData, path: readonly string[], value: unknown): void {
   if (value === undefined) delete node[key];
   else node[key] = value;
 }
+
+// A long typing session must not keep every copy of a large field forever.
+const HISTORY_TRANSACTION_LIMIT = 200;
+const HISTORY_CHARACTER_LIMIT = 2_000_000;
+const historyCharacters = (transaction: HistoryTransaction): number =>
+  transaction.type === 'field'
+    ? [...transaction.forward, ...transaction.inverse].reduce(
+        (total, change) => total + (typeof change.value === 'string' ? change.value.length : 0),
+        0,
+      )
+    : 0;
 
 const STRUCTURAL = new Set<Field['type']>(['array', 'blocks', 'group', 'menus']);
 const PROPERTIES: Partial<Record<Field['type'], readonly string[]>> = {
@@ -443,6 +455,7 @@ export function createEntrySession({
   const validation = $state<Record<string, Record<string, EntryProblem>>>({});
   const undoStack = $state<HistoryTransaction[]>([]);
   const redoStack = $state<HistoryTransaction[]>([]);
+  let undoCharacters = 0;
   const pendingStructure = $state<PendingStructure[]>([]);
   const coordinators = new Map<string, ReturnType<typeof saveCoordinator>>();
   const drifted = drift.length > 0;
@@ -546,9 +559,19 @@ export function createEntrySession({
   const clearActiveHistoryGroup = () => {
     activeHistoryGroup = undefined;
   };
+  const trimHistory = () => {
+    while (
+      undoStack.length > 1 &&
+      (undoStack.length > HISTORY_TRANSACTION_LIMIT || undoCharacters > HISTORY_CHARACTER_LIMIT)
+    ) {
+      const dropped = undoStack.shift();
+      if (dropped) undoCharacters -= historyCharacters(dropped);
+    }
+  };
   const resetHistory = () => {
     undoStack.splice(0);
     redoStack.splice(0);
+    undoCharacters = 0;
     logicalSelection = undefined;
     clearActiveHistoryGroup();
     historyIsFrozen = !mutationOpen;
@@ -562,6 +585,7 @@ export function createEntrySession({
       item.type === 'structure' ? Object.hasOwn(item.beforeSeeds, locale) : item.locale === locale;
     undoStack.splice(0, undoStack.length, ...undoStack.filter((item) => !belongsToLocale(item)));
     redoStack.splice(0, redoStack.length, ...redoStack.filter((item) => !belongsToLocale(item)));
+    undoCharacters = undoStack.reduce((total, item) => total + historyCharacters(item), 0);
     if (activeHistoryGroup?.locale === locale) clearActiveHistoryGroup();
     if (logicalSelection?.locale === locale) logicalSelection = undefined;
   };
@@ -642,6 +666,7 @@ export function createEntrySession({
         equal(current.forward[0]?.path, forward[0]?.path) &&
         equal(current.inverse[0]?.path, inverse[0]?.path) &&
         equal(forward[0]?.path, inverse[0]?.path);
+      const beforeChars = historyCharacters(current);
       if (compactTyping) {
         // The first inverse and latest forward are the only values needed to replay a
         // same-property typing group. Intermediate Markdown/text values can be large.
@@ -651,10 +676,23 @@ export function createEntrySession({
         current.inverse.unshift(...inverse);
       }
       current.after = after;
+      undoCharacters += historyCharacters(current) - beforeChars;
     } else {
-      undoStack.push({ type: 'field', address, after, before, forward, inverse, kind, locale });
+      const transaction: HistoryTransaction = {
+        type: 'field',
+        address,
+        after,
+        before,
+        forward,
+        inverse,
+        kind,
+        locale,
+      };
+      undoStack.push(transaction);
+      undoCharacters += historyCharacters(transaction);
     }
     redoStack.splice(0);
+    trimHistory();
     logicalSelection = after;
     activeHistoryGroup =
       kind === 'typing' || (kind === 'composition' && history?.group !== undefined)
@@ -991,6 +1029,8 @@ export function createEntrySession({
     if (!result.ok) return result;
     from.pop();
     to.push(transaction);
+    if (direction === 'undo') undoCharacters -= historyCharacters(transaction);
+    else undoCharacters += historyCharacters(transaction);
     const selection = validSelection(
       transaction.type === 'structure' ? sourceLocale : transaction.locale,
       transaction.type === 'structure'
@@ -1291,6 +1331,7 @@ export function createEntrySession({
         afterSeeds,
       });
       redoStack.splice(0);
+      trimHistory();
       queueStructure(command.address, beforeRows, afterRows, afterSeeds);
       return { ok: true, contentVersion: nextVersion };
     },
@@ -1321,8 +1362,13 @@ export function createEntrySession({
             : total,
         0,
       );
+      const retainedCharacters = [...undoStack, ...redoStack].reduce(
+        (total, transaction) => total + historyCharacters(transaction),
+        0,
+      );
       return {
         redoTransactions: redoStack.length,
+        retainedCharacters,
         retainedFieldValues,
         undoTransactions: undoStack.length,
       };

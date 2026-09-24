@@ -172,6 +172,41 @@ test('reformats an already-visible link refusal in the latest interface language
   runtime.dispose();
 });
 
+test('applying a new label preserves icon markup inside the link', async () => {
+  document.body.innerHTML =
+    '<a href="https://example.com/book">\n  <svg data-icon></svg>\n  <span>Book a viewing</span>\n</a>';
+  const anchor = document.querySelector('a');
+  const iconElement = document.querySelector('svg');
+  if (!anchor || !iconElement) throw new Error('link fixture missing');
+  const runtime = createCanvasLinkRuntime({
+    command: async () => reply(1),
+    interaction: vi.fn(),
+  });
+  runtime.configure({
+    kind: 'link',
+    target,
+    value: {
+      type: 'url',
+      ref: '',
+      href: 'https://example.com/book',
+      label: 'Book a viewing',
+      newTab: false,
+    },
+  });
+  runtime.activate({ kind: 'field', target }, anchor);
+  const dialog = document.querySelector<HTMLElement>('[data-handover-canvas-link-editor]');
+  const label = dialog?.querySelector<HTMLInputElement>('#handover-canvas-link-label');
+  if (!dialog || !label) throw new Error('link editor controls missing');
+  label.value = 'Book by phone';
+  label.dispatchEvent(new InputEvent('input', { bubbles: true }));
+  dialog.querySelector<HTMLButtonElement>('[data-link-apply]')?.click();
+
+  await vi.waitFor(() => expect(anchor.querySelector('span')?.textContent).toBe('Book by phone'));
+  expect(anchor.textContent?.trim()).toBe('Book by phone');
+  expect(anchor.firstElementChild).toBe(iconElement);
+  runtime.dispose();
+});
+
 test('uses the same editor to choose a page or entry destination', async () => {
   vi.stubGlobal(
     'fetch',

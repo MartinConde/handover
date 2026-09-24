@@ -1,3 +1,5 @@
+import { ContentError } from '@handover/core';
+
 export const CANVAS_PROTOCOL = 1 as const;
 /** Keep in sync with the parent bridge's complete-address bound. */
 export const CANVAS_ADDRESS_LIMIT = 4_096;
@@ -129,7 +131,7 @@ const location = (
 ): EditLocation | undefined => {
   if (!canvas || !document) return undefined;
   if (address.length > CANVAS_ADDRESS_LIMIT)
-    throw new Error(`Canvas address exceeds ${CANVAS_ADDRESS_LIMIT} characters.`);
+    throw new ContentError(`Canvas address exceeds ${CANVAS_ADDRESS_LIMIT} characters.`);
   return { document, locale: canvas.locale, address };
 };
 
@@ -143,6 +145,13 @@ const target = (
   return source ? { ...source, ...(occurrence ? { occurrence } : {}) } : undefined;
 };
 
+// `slice` can cut an emoji's surrogate pair in half.
+const trimUnits = (value: string, limit: number) => {
+  if (value.length <= limit) return value;
+  const code = value.charCodeAt(limit - 1);
+  return value.slice(0, code >= 0xd800 && code <= 0xdbff ? limit - 1 : limit);
+};
+
 /** Matches the block cards in the form editor, so one block reads the same in both surfaces. */
 const blockName = (block: EditBlock) => {
   const named =
@@ -152,7 +161,7 @@ const blockName = (block: EditBlock) => {
       .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
       .trim();
   if (!named || hasControlCharacter(named)) return undefined;
-  return (named.charAt(0).toUpperCase() + named.slice(1)).slice(0, 200);
+  return trimUnits(named.charAt(0).toUpperCase() + named.slice(1), 200);
 };
 
 const globalDocument = (reference: string | undefined): CanvasDocumentIdentity | undefined => {

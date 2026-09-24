@@ -19,6 +19,18 @@ import type { CanvasUiLocaleState } from './canvas-ui-locale';
 
 type LinkField = Extract<CanvasTextField, { kind: 'link' }>;
 
+// `textContent =` would wipe icon markup inside the link until the next render.
+const setLabelText = (element: HTMLElement, label: string) => {
+  const walker = element.ownerDocument.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+  const texts: Text[] = [];
+  while (walker.nextNode())
+    if (walker.currentNode.nodeValue?.trim()) texts.push(walker.currentNode as Text);
+  const [first, ...rest] = texts;
+  if (!first) return element.append(label);
+  first.data = label;
+  for (const node of rest) node.remove();
+};
+
 export interface CanvasLinkOptions {
   command: (target: CanvasTarget, command: CanvasFieldMutation) => Promise<CanvasAcknowledgement>;
   interaction: (target: CanvasTarget, state: CanvasEditingState) => void;
@@ -86,7 +98,7 @@ export function createCanvasLinkRuntime(options: CanvasLinkOptions) {
               messageOptions(locale),
             )) satisfies CanvasLinkEditorFeedback;
         field.value = { ...value };
-        element.textContent = value.label;
+        setLabelText(element, value.label);
         return undefined;
       },
       onClose: () => {

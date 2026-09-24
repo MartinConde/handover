@@ -1206,6 +1206,8 @@ test('Canvas rich text lazily reuses formatting, selection, composition, and For
 test('Canvas block controls configure, duplicate, delete, reorder, restore, and retain failed renders', async ({
   page,
 }, testInfo) => {
+  // One long scenario: WebKit under parallel load needs ~40 s against the 30 s default.
+  test.slow();
   await page.goto('/canvas-assets');
   const entries = JSON.parse(
     (await page.locator('body').getAttribute('data-entries')) ?? '{}',
@@ -1324,15 +1326,16 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
   const structure = page.locator('#canvas-structure');
   await openStructure();
   const treeRow = (address: string) =>
-    structure.locator(`.canvas-structure-row:has(> [data-target-address="${address}"])`);
+    structure.locator(
+      `[role="treeitem"][data-target-address="${address}"] > .canvas-structure-row`,
+    );
   expect(
     await treeRow('blocks[_id=columns1].columns[_id=column01]').evaluate((row) => {
-      const group = row.parentElement?.parentElement;
-      const parent = group?.parentElement?.querySelector(
-        ':scope > .canvas-structure-row > [role="treeitem"]',
-      );
+      const group = row.parentElement?.closest('[role="group"]');
+      const parent = group?.parentElement;
       return (
-        group?.getAttribute('role') === 'group' && parent?.getAttribute('aria-expanded') === 'true'
+        parent?.getAttribute('role') === 'treeitem' &&
+        parent.getAttribute('aria-expanded') === 'true'
       );
     }),
   ).toBe(true);
@@ -1347,7 +1350,7 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
     await expect(structure.locator('[data-dnd-dragging]')).toBeVisible();
     await expect(treeRow('blocks[_id=columns1]')).toHaveCSS('opacity', '1');
     await expect(treeRow('blocks[_id=columns1].columns[_id=column01]')).toHaveCSS('opacity', '0.3');
-    const target = await treeRow('blocks[_id=columns1]').locator('[role="treeitem"]').boundingBox();
+    const target = await treeRow('blocks[_id=columns1]').boundingBox();
     if (!target) throw new Error('Missing Structure drop target');
     await page.mouse.move(target.x + target.width / 2, target.y + target.height - 2, { steps: 15 });
     await page.screenshot({ path: testInfo.outputPath(`structure-drag-${cancel}.png`) });
@@ -1402,7 +1405,13 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
   await expect(structure.getByRole('tree')).toBeVisible();
   await expect(structure.getByRole('button', { name: 'Add block', exact: true })).toBeFocused();
   const first = frame.locator('[data-block-id="repeat01"]');
-  await first.click({ position: { x: 5, y: 5 } });
+  // The page-top block's hover label is drawn over its top edge, so click its bottom padding.
+  const clickFirst = async () => {
+    const box = await first.boundingBox();
+    if (!box) throw new Error('Missing first block');
+    await first.click({ position: { x: 5, y: box.height - 5 } });
+  };
+  await clickFirst();
   await page.getByRole('button', { name: 'Inspector', exact: true }).click();
   await expect(inspector.locator('.canvas-inspector-context')).toContainText('Block 1');
   const insertAfterFirst = frame.getByRole('button', { name: 'Insert after Block 1' });
@@ -1438,7 +1447,7 @@ test('Canvas block controls configure, duplicate, delete, reorder, restore, and 
   await openStructure();
   await useCanvasAction('Delete', 'Block 2');
   await expect(frame.getByText('Inserted beside the first block')).toHaveCount(0);
-  await first.click({ position: { x: 5, y: 5 } });
+  await clickFirst();
   await useCanvasAction('Insert after', 'Block 1');
   await editor.getByRole('button', { name: /promo/ }).click();
   await inspector.getByLabel('Heading').fill('New promotion');

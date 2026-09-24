@@ -1484,6 +1484,7 @@ test('contiguous typing retains only its boundary values and logical selections'
 
   expect(session.historyStats()).toEqual({
     redoTransactions: 0,
+    retainedCharacters: 6,
     retainedFieldValues: 2,
     undoTransactions: 1,
   });
@@ -1504,10 +1505,64 @@ test('contiguous typing retains only its boundary values and logical selections'
   expect(session.snapshot('en').title).toBe('He');
   expect(session.historyStats()).toEqual({
     redoTransactions: 0,
+    retainedCharacters: 6,
     retainedFieldValues: 2,
     undoTransactions: 1,
   });
   vi.useRealTimers();
+});
+
+test('the undo stack keeps at most 200 transactions, dropping the oldest first', () => {
+  const session = createEntrySession({
+    document: 'pages/home',
+    sourceLocale: 'en',
+    data: widgetData(),
+    translations: {},
+    form: widgetForm,
+  });
+  for (let i = 0; i < 205; i += 1)
+    expect(
+      session.fieldCommand('en', {
+        address: 'title',
+        contentVersion: i,
+        changes: [{ value: `Version ${i}` }],
+        history: { kind: 'change' },
+      }),
+    ).toEqual({ ok: true, contentVersion: i + 1 });
+
+  expect(session.historyStats().undoTransactions).toBe(200);
+  // The oldest five (setting "Version 0" through "Version 4") were dropped, not the newest.
+  for (let i = 0; i < 200; i += 1) session.undo();
+  expect(session.snapshot('en').title).toBe('Version 4');
+  expect(session.canUndo()).toBe(false);
+});
+
+test('the undo stack keeps at most ~2,000,000 retained characters, dropping the oldest first', () => {
+  const session = createEntrySession({
+    document: 'pages/home',
+    sourceLocale: 'en',
+    data: widgetData(),
+    translations: {},
+    form: widgetForm,
+  });
+  const big = (letter: string) => letter.repeat(800_000);
+  for (const [index, letter] of ['A', 'B', 'C'].entries())
+    expect(
+      session.fieldCommand('en', {
+        address: 'title',
+        contentVersion: index,
+        changes: [{ value: big(letter) }],
+        history: { kind: 'change' },
+      }),
+    ).toEqual({ ok: true, contentVersion: index + 1 });
+
+  // Only the newest edit remains: its own 800,000 characters plus the 800,000 it replaced.
+  expect(session.historyStats()).toEqual({
+    redoTransactions: 0,
+    retainedCharacters: 1_600_000,
+    retainedFieldValues: 2,
+    undoTransactions: 1,
+  });
 });
 
 test('time, selection, locale, paste, and structural actions end typing groups', () => {

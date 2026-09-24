@@ -15,6 +15,7 @@ afterEach(() => {
   if (app) unmount(app);
   vi.useRealTimers();
   document.body.innerHTML = '';
+  vi.doUnmock('./canvas-renderer');
 });
 
 test('checks locale and version before materializing, then lazily renders the final burst', async () => {
@@ -336,6 +337,76 @@ test('Split shows the page to look at: no editing, Inspector or navigation until
   vi.doUnmock('./canvas-renderer');
 });
 
+test('does not re-post identical validation problems on every keystroke', async () => {
+  const renderer = {
+    mode: vi.fn(),
+    textField: vi.fn(),
+    actions: vi.fn(),
+    select: vi.fn(),
+    uiLocale: vi.fn(),
+    problems: vi.fn(),
+    render: vi.fn(async () => ({ ok: true })),
+    schedule: vi.fn(),
+    flushScheduled: vi.fn(),
+    pause: vi.fn(),
+    dispose: vi.fn(),
+  };
+  let options: import('./canvas-renderer').CanvasRendererOptions | undefined;
+  vi.doMock('./canvas-renderer', () => ({
+    createCanvasRenderer: (given: typeof options) => {
+      options = given;
+      return renderer;
+    },
+  }));
+  const session = createEntrySession({
+    document: 'pages/home',
+    sourceLocale: 'en',
+    data: { title: '', body: '' },
+    translations: {},
+    form: {
+      fields: [
+        { path: ['title'], label: 'Title', type: 'text', required: true },
+        { path: ['body'], label: 'Body', type: 'text', required: false },
+      ],
+      blocks: {},
+    },
+  });
+  app = mount(CanvasWorkspace, {
+    target: document.body,
+    props: {
+      active: true,
+      fullscreen: true,
+      locale: 'en',
+      url: '/',
+      request: (): CanvasRenderRequest => ({ url: '/preview', snapshot: {} as never }),
+      currentVersion: () => session.contentVersion('en'),
+      entryDocument: { collection: 'pages', id: 'home' },
+      ownerLabel: 'Home',
+      sourceLocale: 'en',
+      session,
+      blocks: {},
+      onform: () => {},
+      onreviewproblems: () => {},
+      onnavigateentry: () => {},
+    },
+  });
+  await vi.waitFor(() => expect(options).toBeDefined());
+  options?.onStateChange?.({ phase: 'ready', requestId: 'r1', contentVersion: 0 });
+  flushSync();
+  const callsAfterReady = renderer.problems.mock.calls.length;
+  expect(callsAfterReady).toBeGreaterThan(0);
+
+  session.fieldCommand('en', {
+    address: 'body',
+    contentVersion: session.contentVersion('en'),
+    changes: [{ path: [], value: 'x' }],
+  });
+  flushSync();
+
+  expect(renderer.problems).toHaveBeenCalledTimes(callsAfterReady);
+  vi.doUnmock('./canvas-renderer');
+});
+
 test('reviews a missing unrendered field in the canvas inspector and clears validation after editing', async () => {
   const session = createEntrySession({
     document: 'pages/home',
@@ -382,4 +453,78 @@ test('reviews a missing unrendered field in the canvas inspector and clears vali
   expect(session.snapshot('en').title).toBe('Ready');
   expect(document.querySelector('.canvas-validation')).toBeNull();
   expect(input?.getAttribute('aria-invalid')).not.toBe('true');
+});
+
+test('Review fields in Live preview hands off to the Form review instead of opening a second Inspector', async () => {
+  const session = createEntrySession({
+    document: 'pages/home',
+    sourceLocale: 'en',
+    data: { title: '' },
+    translations: {},
+    form: {
+      fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+      blocks: {},
+    },
+  });
+  const reviewProblems = vi.fn();
+  app = mount(CanvasWorkspace, {
+    target: document.body,
+    props: {
+      active: true,
+      fullscreen: false,
+      locale: 'en',
+      url: '/',
+      request: (): CanvasRenderRequest => ({ url: '/preview', snapshot: {} as never }),
+      currentVersion: () => session.contentVersion('en'),
+      entryDocument: { collection: 'pages', id: 'home' },
+      ownerLabel: 'Home',
+      sourceLocale: 'en',
+      session,
+      blocks: {},
+      onform: () => {},
+      onreviewproblems: reviewProblems,
+      onnavigateentry: () => {},
+    },
+  });
+  await tick();
+  document.querySelector<HTMLButtonElement>('.canvas-validation button')?.click();
+  await tick();
+  expect(reviewProblems).toHaveBeenCalledOnce();
+  expect(document.querySelector('.canvas-inspector')).toBeNull();
+});
+
+test('the reviewed-problems list exposes a role for its ungrouped buttons', async () => {
+  const session = createEntrySession({
+    document: 'pages/home',
+    sourceLocale: 'en',
+    data: { title: '' },
+    translations: {},
+    form: {
+      fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+      blocks: {},
+    },
+  });
+  app = mount(CanvasWorkspace, {
+    target: document.body,
+    props: {
+      active: true,
+      fullscreen: true,
+      locale: 'en',
+      url: '/',
+      request: (): CanvasRenderRequest => ({ url: '/preview', snapshot: {} as never }),
+      currentVersion: () => session.contentVersion('en'),
+      entryDocument: { collection: 'pages', id: 'home' },
+      ownerLabel: 'Home',
+      sourceLocale: 'en',
+      session,
+      blocks: {},
+      onform: () => {},
+      onreviewproblems: () => {},
+      onnavigateentry: () => {},
+    },
+  });
+  await tick();
+  document.querySelector<HTMLButtonElement>('.canvas-validation button')?.click();
+  await tick();
+  expect(document.querySelector('.canvas-validation-issues')?.getAttribute('role')).toBe('group');
 });

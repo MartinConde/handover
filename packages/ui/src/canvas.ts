@@ -111,8 +111,9 @@ if (typeof window !== 'undefined' && window.parent !== window) {
       if (richText) return activateRequested();
       richTextLoad ??= loadCanvasRichTextEditor();
       const loading = richTextLoad;
-      void loading
-        .then(({ createCanvasRichTextRuntime }) => {
+      // Only a failed download gets the download notice, not an error thrown while starting.
+      void loading.then(
+        ({ createCanvasRichTextRuntime }) => {
           if (richText) return;
           loadFailure.remove();
           richText = createCanvasRichTextRuntime({
@@ -124,8 +125,8 @@ if (typeof window !== 'undefined' && window.parent !== window) {
           richText.start();
           richText.configure(field?.kind === 'richtext' ? field : undefined);
           activateRequested();
-        })
-        .catch(() => {
+        },
+        () => {
           if (richTextLoad !== loading) return;
           richText?.dispose();
           richText = undefined;
@@ -133,7 +134,8 @@ if (typeof window !== 'undefined' && window.parent !== window) {
           richTextLoad = undefined;
           if (field?.kind === 'richtext' && mode === 'edit')
             document.documentElement.append(loadFailure);
-        });
+        },
+      );
     };
     const bridge = createCanvasChildBridge({
       manifest,

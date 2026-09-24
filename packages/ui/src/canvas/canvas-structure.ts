@@ -23,3 +23,46 @@ export function visibleCanvasNodes(
     return true;
   });
 }
+
+export const structuralName = (node: CanvasStructureNode) =>
+  node.target.address.split('.').at(-1)?.replace(/\[.*$/, '').toLowerCase();
+
+export type CanvasStructureIndex = {
+  parentOf: (node: CanvasStructureNode) => CanvasStructureNode | undefined;
+  branches: Set<string>;
+  hiddenWrappers: Set<string>;
+  depthOf: (node: CanvasStructureNode) => number;
+};
+
+/** One pass over the tree so parent lookup, depth and hidden-wrapper checks are O(1) per row. */
+export function buildStructureIndex(nodes: readonly CanvasStructureNode[]): CanvasStructureIndex {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const parentOf = (node: CanvasStructureNode) =>
+    node.parentId ? byId.get(node.parentId) : undefined;
+  const branches = new Set(
+    nodes.map((node) => node.parentId).filter((id): id is string => Boolean(id)),
+  );
+  // Hide only generic, nonempty wrapper lists; retain empty lists as insertion targets.
+  const hiddenWrappers = new Set(
+    nodes
+      .filter(
+        (node) =>
+          node.kind === 'list' &&
+          node.parentId &&
+          !node.empty &&
+          (structuralName(node) === 'blocks' || structuralName(node) === 'columns'),
+      )
+      .map((node) => node.id),
+  );
+  const depths = new Map<string, number>();
+  const depthOf = (node: CanvasStructureNode): number => {
+    const cached = depths.get(node.id);
+    if (cached !== undefined) return cached;
+    let depth = node.depth;
+    for (let parent = parentOf(node); parent; parent = parentOf(parent))
+      if (hiddenWrappers.has(parent.id)) depth -= 1;
+    depths.set(node.id, depth);
+    return depth;
+  };
+  return { parentOf, branches, hiddenWrappers, depthOf };
+}

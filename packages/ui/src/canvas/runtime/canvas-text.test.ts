@@ -275,6 +275,70 @@ test('inline editing holds the wrapping the page rendered and gives it back on e
   runtime.dispose();
 });
 
+test('a composition interrupted by focus loss does not block later commits after reactivation', async () => {
+  document.body.innerHTML = '<h1>Sea</h1>';
+  const heading = fixture('h1');
+  let version = 0;
+  const commands: CanvasMutation[] = [];
+  const runtime = createCanvasPlainTextRuntime({
+    command: async (_target: CanvasTarget, command: CanvasMutation) => {
+      commands.push(command);
+      version += 1;
+      const value = command.type === 'field' ? String(command.changes[0]?.value ?? '') : '';
+      return reply(`command-${version}`, version, { ok: true, update: { value } });
+    },
+    interaction: vi.fn(),
+  });
+  runtime.start();
+  runtime.configure({ kind: 'text', target, value: 'Sea' });
+  runtime.activate(selected, heading);
+
+  heading.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+  expect(runtime.composing()).toBe(true);
+  heading.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+  await vi.waitFor(() => expect(runtime.active()).toBe(false));
+  expect(runtime.composing()).toBe(false);
+
+  document.body.innerHTML = '<h1>Sea</h1>';
+  const reactivated = fixture('h1');
+  runtime.configure({ kind: 'text', target, value: 'Sea' });
+  runtime.activate(selected, reactivated);
+  beforeInput(reactivated);
+  reactivated.textContent = 'Seas';
+  cursor(reactivated, 4);
+  reactivated.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText' }));
+  await vi.waitFor(() => expect(commands).toHaveLength(1));
+  expect(commands[0]).toMatchObject({ type: 'field', changes: [{ value: 'Seas' }] });
+  runtime.dispose();
+});
+
+test('plain text ignores Enter and inline formatting so nothing is silently dropped on save', () => {
+  document.body.innerHTML = '<h1>Title</h1>';
+  const heading = fixture('h1');
+  const runtime = createCanvasPlainTextRuntime({ command: vi.fn(), interaction: vi.fn() });
+  runtime.start();
+  runtime.configure({ kind: 'text', target, value: 'Title' });
+  runtime.activate(selected, heading);
+
+  const paragraph = new InputEvent('beforeinput', {
+    bubbles: true,
+    cancelable: true,
+    inputType: 'insertParagraph',
+  });
+  heading.dispatchEvent(paragraph);
+  expect(paragraph.defaultPrevented).toBe(true);
+
+  const bold = new InputEvent('beforeinput', {
+    bubbles: true,
+    cancelable: true,
+    inputType: 'formatBold',
+  });
+  heading.dispatchEvent(bold);
+  expect(bold.defaultPrevented).toBe(true);
+
+  runtime.dispose();
+});
+
 test('activation puts the caret at the offset the click reported', () => {
   document.body.innerHTML = '<h1>Move to the coast</h1>';
   const heading = fixture('h1');

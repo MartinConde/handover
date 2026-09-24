@@ -869,6 +869,8 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
   // The parent session can advance before this rendered document receives a field update. Locale
   // synchronization follows the child's accepted version so it remains independent of form edits.
   let childVersion = manifest.contentVersion;
+  // Not the admin's current version: after a locale switch that counts another locale.
+  let stopVersionCeiling = manifest.contentVersion;
   let editingOwner:
     | { target: CanvasTarget; interactionId?: string; startVersion: number }
     | undefined;
@@ -883,6 +885,7 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
     reject(reason, message);
     const update = options.commandRecovery?.(message);
     childVersion = options.contentVersion();
+    stopVersionCeiling = Math.max(stopVersionCeiling, childVersion);
     post({
       ...base(manifest, message.contentVersion),
       type: 'handover:canvas:ack',
@@ -968,19 +971,28 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
         editingOwner &&
         sameCanvasTarget(editing.target, editingOwner.target) &&
         editing.interactionId === editingOwner.interactionId;
+      // A drag end changes nothing, so a version bump mid-drag must not strand it.
+      const draggingEnd =
+        editing.state.dragging === false &&
+        !editing.state.inlineEditing &&
+        !editing.state.composing;
       const currentVersion = options.contentVersion();
-      const reason = stale(editing, manifest, ownedEnd ? editing.contentVersion : currentVersion);
+      const reason = stale(
+        editing,
+        manifest,
+        ownedEnd || draggingEnd ? editing.contentVersion : currentVersion,
+      );
       if (reason) return reject(reason, editing);
       if (
         ownedEnd &&
         editingOwner &&
         (editing.contentVersion < editingOwner.startVersion ||
-          editing.contentVersion > currentVersion)
+          editing.contentVersion > stopVersionCeiling)
       )
         return reject('stale-version', editing);
       if (!connected) return reject('not-ready', editing);
       const current = options.currentTarget();
-      if (!ownedEnd && (!current || !sameCanvasTarget(editing.target, current)))
+      if (!ownedEnd && !draggingEnd && (!current || !sameCanvasTarget(editing.target, current)))
         return reject('stale-target', editing);
       if (ending && editingOwner && !ownedEnd) return reject('stale-target', editing);
       if (editing.state.inlineEditing)
@@ -1027,7 +1039,10 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
             : !REFUSALS.has(result.reason))
         )
           throw new Error('Invalid Canvas command result');
-        if (result.ok) childVersion = result.contentVersion;
+        if (result.ok) {
+          childVersion = result.contentVersion;
+          stopVersionCeiling = Math.max(stopVersionCeiling, childVersion);
+        }
         return {
           ...base(manifest, message.contentVersion),
           type: 'handover:canvas:ack',
@@ -1084,6 +1099,7 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
     textField(value?: CanvasTextField) {
       if (disposed || !connected || (value !== undefined && !textField(value))) return false;
       childVersion = options.contentVersion();
+      stopVersionCeiling = Math.max(stopVersionCeiling, childVersion);
       frame.postMessage(
         {
           ...base(manifest, options.contentVersion()),
@@ -1128,12 +1144,13 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
       return true;
     },
     problems(addresses: string[]) {
-      if (disposed || !connected || !addresses.every(address)) return false;
+      if (disposed || !connected) return false;
+      // One over-long address must not hide every other valid one from the child.
       frame.postMessage(
         {
           ...base(manifest, childVersion),
           type: 'handover:canvas:problems',
-          addresses: [...addresses],
+          addresses: addresses.filter(address),
         } satisfies CanvasProblemsMessage,
         origin,
       );
@@ -1192,6 +1209,8 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
   let disposed = false;
   let replyPort: MessagePort | undefined;
   let deferredField: NonNullable<ReturnType<typeof textFieldMessage>> | undefined;
+  // Problems can be stamped ahead of this child while a command is in flight; apply them after.
+  let deferredProblems: NonNullable<ReturnType<typeof problemsMessage>> | undefined;
   const applyField = (message: NonNullable<ReturnType<typeof textFieldMessage>>) => {
     if (message.contentVersion < version) return;
     version = message.contentVersion;
@@ -1211,10 +1230,17 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
     pending.delete(reply.commandId);
     if (reply.ok) version = reply.acceptedVersion;
     else if (reply.acceptedVersion !== undefined) version = reply.acceptedVersion;
-    if (!pending.size && deferredField) {
-      const message = deferredField;
-      deferredField = undefined;
-      applyField(message);
+    if (!pending.size) {
+      if (deferredField) {
+        const message = deferredField;
+        deferredField = undefined;
+        applyField(message);
+      }
+      if (deferredProblems) {
+        const message = deferredProblems;
+        deferredProblems = undefined;
+        options.onProblems?.(message.addresses);
+      }
     }
     held.resolve(reply);
   };
@@ -1255,8 +1281,17 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
       return;
     }
     if (configuredProblems) {
-      if (!stale(configuredProblems, manifest, version))
-        options.onProblems?.(configuredProblems.addresses);
+      const identityReason = stale(configuredProblems, manifest, configuredProblems.contentVersion);
+      if (identityReason || configuredProblems.contentVersion < version) return;
+      if (pending.size) {
+        if (
+          !deferredProblems ||
+          configuredProblems.contentVersion >= deferredProblems.contentVersion
+        )
+          deferredProblems = configuredProblems;
+        return;
+      }
+      options.onProblems?.(configuredProblems.addresses);
       return;
     }
     if (configuredUiLocale) {
@@ -1389,6 +1424,7 @@ export function createCanvasChildBridge(options: CanvasChildBridgeOptions) {
       replyPort?.close();
       replyPort = undefined;
       deferredField = undefined;
+      deferredProblems = undefined;
       for (const [commandId, held] of pending)
         held.resolve({
           ...base(manifest, held.version),

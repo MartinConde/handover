@@ -525,6 +525,10 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
     if (linkEditor.active()) linkEditor.close('cancel');
     toolbar.hidden = true;
     toolbar.replaceChildren();
+    // A composition cut off here never gets its compositionend, which would block every later commit.
+    composing = false;
+    compositionBefore = undefined;
+    compositionGroup = '';
     options.interaction(held.target, { inlineEditing: false, composing: false });
   };
 
@@ -739,6 +743,8 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
     )
       return;
     if (event.key !== 'Escape') return;
+    // An IME uses Escape to cancel its own conversion; that must not also close the editor.
+    if (event.isComposing) return;
     event.preventDefault();
     event.stopPropagation();
     finish();

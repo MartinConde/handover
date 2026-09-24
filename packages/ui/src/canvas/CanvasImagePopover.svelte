@@ -80,14 +80,23 @@ $effect(() => {
   anchor;
   const child = frame?.contentDocument;
   void tick().then(position);
-  const scroll = () => {
+  // restoreView scrolls the frame after every re-render; only a user-driven scroll should close.
+  const userScroll = () => {
     if (!modalOpen()) onclose();
   };
+  const scrollKeys = new Set(['PageUp', 'PageDown', 'Home', 'End', 'ArrowUp', 'ArrowDown', ' ']);
+  const userScrollKey = (event: KeyboardEvent) => {
+    if (scrollKeys.has(event.key)) userScroll();
+  };
   child?.addEventListener('pointerdown', outside, true);
-  child?.addEventListener('scroll', scroll, true);
+  child?.addEventListener('wheel', userScroll, true);
+  child?.addEventListener('touchmove', userScroll, true);
+  child?.addEventListener('keydown', userScrollKey, true);
   return () => {
     child?.removeEventListener('pointerdown', outside, true);
-    child?.removeEventListener('scroll', scroll, true);
+    child?.removeEventListener('wheel', userScroll, true);
+    child?.removeEventListener('touchmove', userScroll, true);
+    child?.removeEventListener('keydown', userScrollKey, true);
   };
 });
 </script>

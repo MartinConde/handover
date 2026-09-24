@@ -29,7 +29,8 @@ let {
 let across = $state(Math.round(focal[0] * 100));
 // svelte-ignore state_referenced_locally -- the dialog edits an initial snapshot
 let down = $state(Math.round(focal[1] * 100));
-let stage = $state<HTMLElement>();
+let area = $state<HTMLElement>();
+let ratio = $state<number>();
 
 const options = $derived(messageOptions(uiLocale));
 const shapes = $derived.by(() => {
@@ -45,8 +46,19 @@ const shapes = $derived.by(() => {
   return [...unique.values()];
 });
 
+// The stage is 3:2 and the picture is contained in it; dot and pointer use the picture's own box.
+const frame = $derived.by(() => {
+  if (!ratio) return 'inset: 0';
+  if (ratio < 1.5) {
+    const width = (ratio / 1.5) * 100;
+    return `top: 0; bottom: 0; left: ${(100 - width) / 2}%; width: ${width}%`;
+  }
+  const height = (1.5 / ratio) * 100;
+  return `left: 0; right: 0; top: ${(100 - height) / 2}%; height: ${height}%`;
+});
+
 function point(e: PointerEvent) {
-  const box = stage?.getBoundingClientRect();
+  const box = area?.getBoundingClientRect();
   if (!box?.width || !box.height) return;
   across = Math.round(Math.min(Math.max((e.clientX - box.left) / box.width, 0), 1) * 100);
   down = Math.round(Math.min(Math.max((e.clientY - box.top) / box.height, 0), 1) * 100);
@@ -82,15 +94,30 @@ const aspect = (preset: Preset) => preset.ratio?.replace(':', ' / ') ?? '4 / 3';
     <p id="focal-description">{m.focal_intro({}, options)}</p>
   </header>
   <!-- svelte-ignore a11y_no_static_element_interactions -- the handle is the control -->
-  <div class="focal-stage" bind:this={stage} onpointerdown={grab} onpointermove={(e) => e.buttons === 1 && point(e)}>
-    <img src={url} alt="" draggable="false" />
-    <button
-      class="focal-handle"
-      type="button"
-      style="left: {across}%; top: {down}%"
-      aria-label={m.focal_position({ across, down }, options)}
-      onkeydown={nudge}
-    ></button>
+  <div class="focal-stage" onpointerdown={grab} onpointermove={(e) => e.buttons === 1 && point(e)}>
+    <img
+      src={url}
+      alt=""
+      draggable="false"
+      onload={(e) => {
+        const { naturalWidth, naturalHeight } = e.currentTarget as HTMLImageElement;
+        ratio = naturalWidth / naturalHeight || undefined;
+      }}
+    />
+    <div class="focal-frame" style={frame} bind:this={area}>
+      <button
+        class="focal-handle"
+        type="button"
+        style="left: {across}%; top: {down}%"
+        aria-label={m.focal_position({ across, down }, options)}
+        onkeydown={nudge}
+      ></button>
+    </div>
+  </div>
+  <!-- Screen readers in browse mode keep arrow keys for themselves; native sliders still work there. -->
+  <div class="focal-axes">
+    <label>{m.focal_across({}, options)} <input type="range" min="0" max="100" bind:value={across} /></label>
+    <label>{m.focal_down({}, options)} <input type="range" min="0" max="100" bind:value={down} /></label>
   </div>
   <h3 class="variant-title">{m.focal_live_previews({}, options)}</h3>
   <div class="ratio-strip">

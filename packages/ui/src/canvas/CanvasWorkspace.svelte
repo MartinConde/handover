@@ -1,7 +1,4 @@
 <script lang="ts">
-import { type DragDropEventHandlers, DragDropProvider } from '@dnd-kit/svelte';
-import { createSortable, isSortable } from '@dnd-kit/svelte/sortable';
-import { richtextErrors } from '@handover/core';
 import { onMount, type Snippet, tick, untrack } from 'svelte';
 import { cubicOut } from 'svelte/easing';
 import { fly } from 'svelte/transition';
@@ -18,22 +15,18 @@ import type {
   CanvasActionMessage,
   CanvasAnchor,
   CanvasBlockAction,
-  CanvasCommandMessage,
-  CanvasCommandResult,
   CanvasEditingState,
   CanvasNavigationMessage,
   CanvasSelection,
   CanvasStructureNode,
-  CanvasTarget,
-  CanvasTextField,
-  CanvasTextSelection,
 } from './canvas-bridge';
+import { createCanvasCommands, read } from './canvas-commands.svelte';
 import type {
   CanvasRendererState,
   CanvasRenderRequest,
   createCanvasRenderer,
 } from './canvas-renderer';
-import { canvasNodeKey, visibleCanvasNodes } from './canvas-structure';
+import { buildStructureIndex, structuralName } from './canvas-structure';
 import { sameCanvasSelection } from './canvas-target';
 import {
   type CanvasInteractionMode,
@@ -41,6 +34,7 @@ import {
   type CanvasNavigationIndex,
   classifyCanvasNavigation,
 } from './runtime/canvas-navigation';
+import StructureTree from './StructureTree.svelte';
 
 type Renderer = ReturnType<typeof createCanvasRenderer>;
 type Width = 'desktop' | 'tablet' | 'phone';
@@ -76,6 +70,7 @@ let {
   servedAt,
   locked = false,
   onform,
+  onreviewproblems,
   onnavigateentry,
   mobileHidden = false,
 }: {
@@ -114,7 +109,7 @@ let workspace = $state<HTMLElement>();
 let stage = $state<HTMLElement>();
 let narrow = $state(false);
 let renderer: Renderer | undefined;
-let rendererState = $state<CanvasRendererState>({ phase: 'idle' });
+let rendererState = $state.raw<CanvasRendererState>({ phase: 'idle' });
 let width = $state<Width>('desktop');
 let structureOpen = $state(false);
 let structureWidth = $state<number>(PANEL_WIDTHS.structure.default);
@@ -126,7 +121,7 @@ $effect(() => {
   }
 });
 let inspectorOpen = $state(false);
-let imagePopover = $state<{ selection: CanvasSelection; anchor: CanvasAnchor }>();
+let imagePopover = $state.raw<{ selection: CanvasSelection; anchor: CanvasAnchor }>();
 const canvasFrame = $derived.by(() => {
   loading;
   rendererState.phase;
@@ -168,8 +163,12 @@ const issueTargets = $derived(
 );
 let reviewingProblems = $state(false);
 function reviewProblem(issue = issueTargets[0]) {
+  // A Live-preview review has no second Inspector to open; hand off to Form instead.
+  if (!fullscreen || !issue?.address) {
+    onreviewproblems();
+    return;
+  }
   reviewingProblems = true;
-  if (!issue?.address) return;
   setInteractionMode('edit');
   const next: CanvasSelection = {
     kind: 'field',
@@ -197,7 +196,7 @@ function reviewProblem(issue = issueTargets[0]) {
     control?.focus({ preventScroll: true });
   });
 }
-let structure = $state<CanvasStructureNode[]>([]);
+let structure = $state.raw<CanvasStructureNode[]>([]);
 let selected = $state<CanvasSelection>();
 let loading = $state(true);
 let rendererImportFailed = $state(false);
@@ -296,228 +295,20 @@ const actionRefusalText = $derived.by(() => {
   return m.canvas_action_refused({ reason: actionRefusal }, options);
 });
 const selectedNode = $derived(structure.find((node) => sameCanvasSelection(node, selected)));
-let collapsed = $state<Record<string, boolean>>({});
-const parentOf = (node: CanvasStructureNode) =>
-  node.parentId ? structure.find((candidate) => candidate.id === node.parentId) : undefined;
-const structuralName = (node: CanvasStructureNode) =>
-  node.target.address.split('.').at(-1)?.replace(/\[.*$/, '').toLowerCase();
-const branches = $derived(new Set(structure.map((node) => node.parentId).filter(Boolean)));
-// Hide only generic, nonempty wrapper lists; retain empty lists as insertion targets.
-const hiddenWrappers = $derived(
-  new Set(
-    structure
-      .filter(
-        (node) =>
-          node.kind === 'list' &&
-          node.parentId &&
-          !node.empty &&
-          (structuralName(node) === 'blocks' || structuralName(node) === 'columns'),
-      )
-      .map((node) => node.id),
-  ),
-);
-const visibleStructure = $derived(
-  visibleCanvasNodes(structure, collapsed).filter((node) => !hiddenWrappers.has(node.id)),
-);
-let focusedTreeKey = $state('');
-const treeFocusKey = $derived.by(() => {
-  if (visibleStructure.some((node) => canvasNodeKey(node) === focusedTreeKey))
-    return focusedTreeKey;
-  const first = treeChildren()[0];
-  return first ? canvasNodeKey(first) : '';
-});
-let structureOrder = $state<string[]>([]);
-function treeChildren(parent?: CanvasStructureNode) {
-  return visibleStructure
-    .filter((node) => {
-      let ancestor = parentOf(node);
-      while (ancestor && hiddenWrappers.has(ancestor.id)) ancestor = parentOf(ancestor);
-      return ancestor?.id === parent?.id;
-    })
-    .sort((a, b) => {
-      const from = structureIndex(a);
-      const to = structureIndex(b);
-      return from === undefined || to === undefined ? 0 : from - to;
-    });
-}
-function structureIndex(node: CanvasStructureNode) {
-  const projected = structureOrder.indexOf(canvasNodeKey(node));
-  return projected < 0 ? blockLocation(node)?.index : projected;
-}
-const structureSortable = (node: () => CanvasStructureNode) =>
-  createSortable({
-    get id() {
-      return canvasNodeKey(node());
-    },
-    get index() {
-      return structureIndex(node()) ?? 0;
-    },
-    get group() {
-      return blockLocation(node())?.address;
-    },
-    get type() {
-      return blockLocation(node())?.address;
-    },
-    get accept() {
-      return blockLocation(node())?.address ?? [];
-    },
-    get disabled() {
-      return !blockActionsFor(node()).includes('move');
-    },
-    transition: { duration: 200 },
-  });
-type StructureDragHandlers = Required<DragDropEventHandlers>;
-let structureDrag:
-  | { node: CanvasStructureNode; siblings: CanvasStructureNode[]; version: number }
-  | undefined;
-const structureDragStart: StructureDragHandlers['onDragStart'] = ({ operation }) => {
-  const node = structure.find((candidate) => canvasNodeKey(candidate) === operation.source?.id);
-  const location = node && blockLocation(node);
-  if (!node || !location) return;
-  structureDrag = {
-    node,
-    siblings: structure
-      .filter((candidate) => blockLocation(candidate)?.address === location.address)
-      .sort((a, b) => (blockLocation(a)?.index ?? 0) - (blockLocation(b)?.index ?? 0)),
-    version: session.contentVersion(locale),
-  };
-  structureOrder = structureDrag.siblings.map(canvasNodeKey);
-};
-const structureDragOver: StructureDragHandlers['onDragOver'] = ({ operation }) => {
-  const { source, target } = operation;
-  if (!isSortable(source) || !isSortable(target) || source.group !== target.group) return;
-  const from = structureOrder.indexOf(String(source.id));
-  const to = structureOrder.indexOf(String(target.id));
-  if (from < 0 || to < 0 || from === to) return;
-  const next = [...structureOrder];
-  next.splice(to, 0, ...next.splice(from, 1));
-  structureOrder = next;
-};
-const structureDragEnd: StructureDragHandlers['onDragEnd'] = ({ canceled }) => {
-  const held = structureDrag;
-  const to = held ? structureOrder.indexOf(canvasNodeKey(held.node)) : -1;
-  structureDrag = undefined;
-  structureOrder = [];
-  if (canceled || !held || to < 0 || held.siblings[to] === held.node) return;
-  if (held.version !== session.contentVersion(locale)) return;
-  const destination = held.siblings[to];
-  if (destination) canvasAction({ action: 'move', selection: held.node, destination });
-};
-function treeDepth(node: CanvasStructureNode) {
-  let depth = node.depth;
-  for (let parent = parentOf(node); parent; parent = parentOf(parent))
-    if (hiddenWrappers.has(parent.id)) depth -= 1;
-  return depth;
-}
+const structureIndex = $derived(buildStructureIndex(structure));
 function treeLabel(node: CanvasStructureNode) {
   if (!node.parentId && node.kind === 'list' && structuralName(node) === 'blocks')
     return m.canvas_page({}, options);
   if (
-    structuralName(parentOf(node) ?? node) === 'columns' &&
+    structuralName(structureIndex.parentOf(node) ?? node) === 'columns' &&
     node.label === m.canvas_selection_block_position({ position: node.position }, options)
   )
     return m.canvas_column({ number: node.position }, options);
   return node.label;
 }
-function nodeIcon(node: CanvasStructureNode) {
-  if (node.target.occurrence) return 'external';
-  if (node.kind !== 'field') return node.kind === 'list' ? 'structure' : 'block';
-  const field = session.inspectField(locale, node.target.address);
-  return field.ok && ['image', 'file'].includes(field.target.field.type) ? 'image' : 'text';
-}
-
-function toggleBranch(node: CanvasStructureNode) {
-  const key = canvasNodeKey(node);
-  collapsed = { ...collapsed, [key]: !collapsed[key] };
-}
-
-function focusTreeNode(node?: CanvasStructureNode) {
-  if (!node) return;
-  const key = canvasNodeKey(node);
-  focusedTreeKey = key;
-  void tick().then(() => {
-    const item = Array.from(
-      workspace?.querySelectorAll<HTMLButtonElement>('[role="treeitem"]') ?? [],
-    ).find((element) => element.dataset.treeKey === key);
-    item?.focus();
-  });
-}
-
-function treeKeydown(
-  event: KeyboardEvent,
-  node: CanvasStructureNode,
-  branch: boolean,
-  shut: boolean,
-) {
-  const items = Array.from(
-    workspace?.querySelectorAll<HTMLButtonElement>('[role="treeitem"]') ?? [],
-  );
-  const index = items.findIndex((item) => item.dataset.treeKey === canvasNodeKey(node));
-  const visible = visibleStructure.find(
-    (candidate) => canvasNodeKey(candidate) === items[index + 1]?.dataset.treeKey,
-  );
-  let destination: CanvasStructureNode | undefined;
-  switch (event.key) {
-    case 'ArrowDown':
-      destination = visible;
-      break;
-    case 'ArrowUp':
-      destination = visibleStructure.find(
-        (candidate) => canvasNodeKey(candidate) === items[index - 1]?.dataset.treeKey,
-      );
-      break;
-    case 'Home':
-      destination = visibleStructure.find(
-        (candidate) => canvasNodeKey(candidate) === items[0]?.dataset.treeKey,
-      );
-      break;
-    case 'End':
-      destination = visibleStructure.find(
-        (candidate) => canvasNodeKey(candidate) === items.at(-1)?.dataset.treeKey,
-      );
-      break;
-    case 'ArrowRight':
-      if (branch && shut) toggleBranch(node);
-      else if (branch) destination = treeChildren(node)[0];
-      break;
-    case 'ArrowLeft':
-      if (branch && !shut) toggleBranch(node);
-      else {
-        destination = parentOf(node);
-        while (destination && hiddenWrappers.has(destination.id))
-          destination = parentOf(destination);
-      }
-      break;
-    default:
-      return;
-  }
-  event.preventDefault();
-  if (destination) focusTreeNode(destination);
-}
-
-// A target picked in the page must not land inside a branch the editor left collapsed. Only a
-// change of selection opens the chain, so collapsing the branch you are working in still holds.
-let openedFor = '';
-$effect(() => {
-  const node = selectedNode;
-  if (!node) return;
-  const key = canvasNodeKey(node);
-  if (key === openedFor) return;
-  openedFor = key;
-  untrack(() => {
-    const opened = { ...collapsed };
-    let changed = false;
-    for (let parent = parentOf(node); parent; parent = parentOf(parent)) {
-      if (!opened[canvasNodeKey(parent)]) continue;
-      opened[canvasNodeKey(parent)] = false;
-      changed = true;
-    }
-    if (changed) collapsed = opened;
-  });
-});
 const actionNode = $derived.by(() => {
   let node = selectedNode;
-  while (node && node.kind !== 'block') node = parentOf(node);
+  while (node && node.kind !== 'block') node = structureIndex.parentOf(node);
   return node;
 });
 const insertionNode = $derived.by(() => {
@@ -540,11 +331,12 @@ const breadcrumb = $derived.by(() => {
   const result: string[] = [];
   let node: CanvasStructureNode | undefined = selectedNode;
   while (node) {
-    if (!hiddenWrappers.has(node.id) && treeLabel(node) !== m.canvas_page({}, options))
+    if (
+      !structureIndex.hiddenWrappers.has(node.id) &&
+      treeLabel(node) !== m.canvas_page({}, options)
+    )
       result.unshift(treeLabel(node));
-    node = node.parentId
-      ? structure.find((candidate) => candidate.id === node?.parentId)
-      : undefined;
+    node = structureIndex.parentOf(node);
   }
   return [m.canvas_page({}, options), ...result].join(' / ');
 });
@@ -724,163 +516,25 @@ function selectionChanged(next: CanvasSelection | undefined) {
   });
 }
 
-function blockLocation(selection: CanvasSelection) {
-  if (selection.kind !== 'block') return;
-  const target = selection.target.occurrence ?? selection.target;
-  if (
-    target.document.collection !== entryDocument.collection ||
-    target.document.id !== entryDocument.id ||
-    target.locale !== locale ||
-    locale !== sourceLocale ||
-    locked ||
-    session.structureMutationBlocked()
-  )
-    return;
-  const match = /^(.*)\[_id=([^\]]+)\]$/.exec(target.address);
-  if (!match) return;
-  const address = match[1] ?? '';
-  const inspected = session.inspectField(locale, address);
-  if (!inspected.ok || inspected.target.field.type !== 'blocks') return;
-  const value = read(session.snapshot(locale), inspected.target.path);
-  if (!Array.isArray(value)) return;
-  const index = value.findIndex(
-    (row) =>
-      typeof row === 'object' &&
-      row !== null &&
-      !Array.isArray(row) &&
-      (row as Record<string, unknown>)._id === match[2],
-  );
-  if (index < 0) return;
-  const row = value[index];
-  const currentType =
-    typeof row === 'object' && row !== null && !Array.isArray(row)
-      ? String((row as Record<string, unknown>)._type ?? '')
-      : undefined;
-  return {
-    address,
-    id: match[2] as string,
-    index,
-    rows: value,
-    types: inspected.target.field.types,
-    ...(currentType ? { currentType } : {}),
-  };
-}
-
-function blockInspectorFor(selection: CanvasSelection | undefined) {
-  if (
-    selection?.kind !== 'block' ||
-    !sameDocument(selection.target) ||
-    selection.target.locale !== locale
-  )
-    return;
-  const match = /^(.*)\[_id=([^\]]+)\]$/.exec(selection.target.address);
-  if (!match) return;
-  const address = match[1] ?? '';
-  const inspected = session.inspectField(locale, address);
-  if (!inspected.ok || inspected.target.field.type !== 'blocks') return;
-  const rows = read(session.snapshot(locale), inspected.target.path);
-  if (!Array.isArray(rows)) return;
-  const index = rows.findIndex(
-    (row) =>
-      typeof row === 'object' &&
-      row !== null &&
-      !Array.isArray(row) &&
-      (row as Record<string, unknown>)._id === match[2],
-  );
-  if (index < 0) return;
-  const row = rows[index];
-  const type =
-    typeof row === 'object' && row !== null && !Array.isArray(row)
-      ? String((row as Record<string, unknown>)._type ?? '')
-      : '';
-  const fields = blocks[type];
-  if (!type || !fields) return;
-  return { fields, path: [...inspected.target.path, String(index)], type };
-}
-
-const blockActionsFor = (selection: CanvasSelection): CanvasBlockAction[] => {
-  if (interactionMode !== 'edit') return [];
-  const history: CanvasBlockAction[] = [
-    ...(session.canUndo() ? (['undo'] as const) : []),
-    ...(session.canRedo() ? (['redo'] as const) : []),
-  ];
-  if (selection.kind === 'field') {
-    const resolved =
-      sameDocument(selection.target) && selection.target.locale === locale
-        ? session.inspectField(locale, selection.target.address)
-        : undefined;
-    const canReplaceImage =
-      resolved?.ok &&
-      resolved.target.field.type === 'image' &&
-      locale === sourceLocale &&
-      !locked &&
-      !session.localeMutationBlocked(locale);
-    return ['inspect', ...(canReplaceImage ? (['replace-media'] as const) : []), ...history];
-  }
-  if (selection.kind === 'list')
-    return blockEditorFor('insert-empty', selection) ? ['insert-empty', ...history] : history;
-  if (selection.kind !== 'block') return history;
-  const location = blockLocation(selection);
-  if (!location) return history;
-  return [
-    'insert-before',
-    'insert-after',
-    'replace',
-    ...(location.rows.length > 1 ? (['move'] as const) : []),
-    ...(location.index > 0 ? (['move-up'] as const) : []),
-    ...(location.index < location.rows.length - 1 ? (['move-down'] as const) : []),
-    'duplicate',
-    'delete',
-    ...history,
-  ];
-};
-
-function blockEditorFor(action: CanvasBlockAction, selection: CanvasSelection) {
-  const target = selection.target.occurrence ?? selection.target;
-  if (
-    target.document.collection !== entryDocument.collection ||
-    target.document.id !== entryDocument.id ||
-    target.locale !== locale ||
-    locale !== sourceLocale ||
-    locked ||
-    session.structureMutationBlocked()
-  )
-    return;
-  let address = target.address;
-  let currentType: string | undefined;
-  if (selection.kind === 'block') {
-    const location = blockLocation(selection);
-    if (!location) return;
-    ({ address, currentType } = location);
-    return {
-      ...(action === 'replace'
-        ? {
-            mode: 'replace' as const,
-            targetId: location.id,
-            original: structuredClone($state.snapshot(location.rows[location.index])),
-          }
-        : {
-            mode: 'insert' as const,
-            placement: action === 'insert-after' ? ('after' as const) : ('before' as const),
-            anchorId: location.id,
-          }),
-      address,
-      types: location.types,
-      ...(currentType ? { currentType } : {}),
-    };
-  }
-  if (selection.kind !== 'list' || action !== 'insert-empty') return;
-  const inspected = session.inspectField(locale, address);
-  if (!inspected.ok || inspected.target.field.type !== 'blocks') return;
-  const value = read(session.snapshot(locale), inspected.target.path);
-  if (value !== undefined && (!Array.isArray(value) || value.length > 0)) return;
-  return {
-    mode: 'insert' as const,
-    placement: 'empty' as const,
-    address,
-    types: inspected.target.field.types,
-  };
-}
+const commands = createCanvasCommands({
+  session: () => session,
+  entryDocument: () => entryDocument,
+  locale: () => locale,
+  sourceLocale: () => sourceLocale,
+  locked: () => locked,
+  active: () => active,
+  interactionMode: () => interactionMode,
+  blocks: () => blocks,
+});
+const {
+  sameDocument,
+  blockLocation,
+  blockInspectorFor,
+  blockEditorFor,
+  blockActionsFor,
+  textField,
+  canvasCommand,
+} = commands;
 
 function openBlockEditor(
   action: CanvasBlockAction,
@@ -998,6 +652,8 @@ function canvasAction(
       : undefined;
   if (message.action === 'move' && (!destination || destination.address !== location.address)) {
     actionRefusal = 'schema';
+    // The page already shows the dragged order; redraw it from the session.
+    void submit('render', true);
     return;
   }
   const operation =
@@ -1017,6 +673,7 @@ function canvasAction(
   });
   if (!result.ok) {
     actionRefusal = result.reason;
+    if (message.action === 'move') void submit('render', true);
     return;
   }
   actionRefusal = '';
@@ -1092,155 +749,6 @@ function historyShortcut(event: KeyboardEvent) {
   replay(direction);
 }
 
-const sameDocument = (target: CanvasTarget) =>
-  target.document.collection === entryDocument.collection &&
-  target.document.id === entryDocument.id;
-
-const read = (root: Record<string, unknown>, path: readonly string[]) =>
-  path.reduce<unknown>((node, key) => {
-    if (Array.isArray(node)) return node[Number(key)];
-    return typeof node === 'object' && node !== null
-      ? (node as Record<string, unknown>)[key]
-      : undefined;
-  }, root);
-
-function textField(value: CanvasSelection | undefined = selected): CanvasTextField | undefined {
-  if (
-    !active ||
-    locked ||
-    value?.kind !== 'field' ||
-    !sameDocument(value.target) ||
-    value.target.locale !== locale ||
-    session.localeMutationBlocked(locale)
-  )
-    return;
-  const resolved = session.inspectField(locale, value.target.address);
-  if (
-    !resolved.ok ||
-    !['text', 'richtext', 'link'].includes(resolved.target.field.type) ||
-    resolved.target.address !== value.target.address ||
-    (locale !== sourceLocale && resolved.target.mode !== true)
-  )
-    return;
-  const current = read(session.snapshot(locale), resolved.target.path);
-  if (resolved.target.field.type === 'link') {
-    if (
-      current !== undefined &&
-      (typeof current !== 'object' || current === null || Array.isArray(current))
-    )
-      return;
-    const link = (current as Record<string, unknown> | undefined) ?? {};
-    const label = link.label;
-    if (label !== undefined && typeof label !== 'string') return;
-    if (locale === sourceLocale)
-      return {
-        kind: 'link' as const,
-        target: value.target,
-        value: {
-          type: link.type === 'url' ? ('url' as const) : ('entry' as const),
-          ref: typeof link.ref === 'string' ? link.ref : '',
-          href: typeof link.href === 'string' ? link.href : '',
-          label: label ?? '',
-          newTab: link.newTab === true,
-        },
-      };
-    return { kind: 'text' as const, target: value.target, value: label ?? '' };
-  }
-  if (current !== undefined && typeof current !== 'string') return;
-  const text = current ?? '';
-  if (resolved.target.field.type === 'richtext') {
-    if (richtextErrors('default', text, resolved.target.field.tier).length) return;
-    return {
-      kind: 'richtext' as const,
-      target: value.target,
-      value: text,
-      tier: resolved.target.field.tier,
-    };
-  }
-  return { kind: 'text' as const, target: value.target, value: text };
-}
-
-const historySelection = (target: CanvasTarget, value: CanvasTextSelection | undefined) =>
-  value
-    ? {
-        document: session.documentIdentity(),
-        locale: target.locale,
-        address: target.address,
-        kind: value.kind ?? ('text' as const),
-        anchor: value.anchor,
-        head: value.head,
-      }
-    : undefined;
-
-const updateFor = (
-  target: CanvasTarget,
-  selection?: import('../editor/entry-session.svelte').LogicalSelection,
-) => {
-  const resolved = session.resolveField(target.locale, target.address);
-  if (!resolved.ok || !['text', 'richtext', 'link'].includes(resolved.target.field.type)) return;
-  const value = read(session.snapshot(target.locale), resolved.target.path);
-  const text =
-    resolved.target.field.type === 'link'
-      ? typeof value === 'object' && value !== null && !Array.isArray(value)
-        ? (value as Record<string, unknown>).label
-        : undefined
-      : value;
-  if (text !== undefined && typeof text !== 'string') return;
-  const matches =
-    selection?.document === session.documentIdentity() &&
-    selection.locale === target.locale &&
-    selection.address === target.address &&
-    (selection.kind === 'text' || selection.kind === 'node');
-  return {
-    value: text ?? '',
-    ...(matches && selection.anchor !== undefined && selection.head !== undefined
-      ? { selection: { kind: selection.kind, anchor: selection.anchor, head: selection.head } }
-      : {}),
-  };
-};
-
-function canvasCommand(message: CanvasCommandMessage): CanvasCommandResult {
-  if (interactionMode !== 'edit') return { ok: false, reason: 'readonly' };
-  const target = message.target;
-  const editable = textField({ kind: 'field', target });
-  if (!editable) return { ok: false, reason: 'readonly' };
-  if (message.command.type === 'history') {
-    const result = session[message.command.direction]();
-    if (!result.ok) return result;
-    return {
-      ok: true,
-      contentVersion: session.contentVersion(locale),
-      update: updateFor(target, result.selection),
-    };
-  }
-  const history = message.command.history;
-  const resolved = session.inspectField(target.locale, target.address);
-  const changes =
-    resolved.ok && resolved.target.field.type === 'link' && editable.kind === 'text'
-      ? message.command.changes.map((change) => ({
-          ...change,
-          path: ['label', ...(change.path ?? [])],
-        }))
-      : message.command.changes;
-  const result = session.fieldCommand(target.locale, {
-    address: target.address,
-    contentVersion: message.contentVersion,
-    changes,
-    ...(history
-      ? {
-          history: {
-            kind: history.kind,
-            ...(history.group ? { group: history.group } : {}),
-            before: historySelection(target, history.before),
-            after: historySelection(target, history.after),
-          },
-        }
-      : {}),
-  });
-  if (!result.ok) return result;
-  return result;
-}
-
 function interactionChanged(state: CanvasEditingState) {
   const completed = inlineEditing && !state.inlineEditing;
   inlineEditing = state.inlineEditing;
@@ -1260,7 +768,7 @@ function setInteractionMode(next: CanvasInteractionMode) {
   }
   renderer?.mode(next);
   if (next === 'edit') {
-    renderer?.textField(textField());
+    renderer?.textField(textField(selected));
     if (selected) renderer?.actions(selected, blockActionsFor(selected));
   }
 }
@@ -1329,8 +837,12 @@ $effect(() => {
   wasActive = shown;
 });
 
+// Keyed on a string so an unrelated keystroke doesn't re-post the same problems.
+const problemAddressesKey = $derived(
+  issueTargets.flatMap((issue) => (issue.address ? [issue.address] : [])).join('\u0000'),
+);
 $effect(() => {
-  const addresses = issueTargets.flatMap((issue) => (issue.address ? [issue.address] : []));
+  const addresses = problemAddressesKey ? problemAddressesKey.split('\u0000') : [];
   loading;
   rendererState.phase;
   untrack(() => renderer?.problems(addresses));
@@ -1397,7 +909,8 @@ function bootstrapRenderer() {
         onNavigate: canvasNavigate,
         onInteractionChange: interactionChanged,
         onBridgeRejected: (reason) => {
-          if (reason === 'stale-version') setTimeout(() => renderer?.textField(textField()), 0);
+          if (reason === 'stale-version')
+            setTimeout(() => renderer?.textField(textField(selected)), 0);
         },
         onStateChange: (next) => (rendererState = next),
       });
@@ -1491,61 +1004,6 @@ onMount(() => {
   inert={!active}
   data-selected-address={selected?.target.occurrence?.address ?? selected?.target.address}
 >
-  {#snippet structureRows(parent?: CanvasStructureNode)}
-    {@const siblings = treeChildren(parent)}
-    {#each siblings as node, index (canvasNodeKey(node))}
-      {@const sortable = structureSortable(() => node)}
-      {@const movable = blockActionsFor(node).includes('move')}
-      {@const branch = branches.has(node.id)}
-      {@const shut = branch && collapsed[canvasNodeKey(node)] === true}
-      <div class="canvas-structure-branch" {@attach movable ? sortable.attach : undefined}>
-        <div class={['canvas-structure-row', { 'is-outside-drag-list': structureOrder.length > 0 && !structureOrder.includes(canvasNodeKey(node)) }]} {@attach movable ? sortable.attachTarget : undefined}>
-          <button
-            type="button"
-            role="treeitem"
-            class={{ 'is-branch': branch }}
-            aria-level={treeDepth(node)}
-            aria-posinset={index + 1}
-            aria-setsize={siblings.length}
-            aria-owns={branch && !shut ? `${treeDomId}-group-${node.id}` : undefined}
-            aria-selected={sameCanvasSelection(node, selected)}
-            aria-expanded={branch ? !shut : undefined}
-            aria-current={sameCanvasSelection(node, selected) ? 'true' : undefined}
-            data-target-address={node.target.occurrence?.address ?? node.target.address}
-            data-tree-key={canvasNodeKey(node)}
-            tabindex={treeFocusKey === canvasNodeKey(node) ? 0 : -1}
-            onfocus={() => (focusedTreeKey = canvasNodeKey(node))}
-            style={`--canvas-indent:${7 + (treeDepth(node) - 1) * 12}px`}
-            onclick={(event) => {
-              if (branch && (node.container || (event.target as Element).closest('.canvas-structure-twisty'))) toggleBranch(node);
-              else selectNode(node);
-            }}
-            onkeydown={(event) => treeKeydown(event, node, branch, shut)}
-          >
-            {#if branch}
-              <span class="canvas-structure-twisty" aria-hidden="true"><CanvasIcon name={shut ? 'chevron-right' : 'chevron-down'} /></span>
-            {:else}
-              <span class="canvas-structure-twisty is-leaf" aria-hidden="true"></span>
-            {/if}
-            <span class="canvas-structure-kind" aria-hidden="true"><CanvasIcon name={nodeIcon(node)} /></span>
-            <span class="canvas-structure-name">{treeLabel(node)}</span>
-            {#if node.empty}<small>{m.canvas_empty({}, options)}</small>{/if}
-            {#if node.occurrences > 1}<small>{node.occurrences}×</small>{/if}
-          </button>
-          {#if movable}
-            <button class="canvas-structure-drag" type="button" {@attach sortable.attachHandle}
-              tabindex={treeFocusKey === canvasNodeKey(node) ? 0 : -1}
-              aria-label={m.canvas_selection_drag({ label: treeLabel(node) }, options)}
-              title={m.canvas_selection_drag({ label: treeLabel(node) }, options)}><CanvasIcon name="grip" /></button>
-          {/if}
-        </div>
-        {#if branch && !shut}
-          <div role="group" id={`${treeDomId}-group-${node.id}`}>{@render structureRows(node)}</div>
-        {/if}
-      </div>
-    {/each}
-  {/snippet}
-
   <div class="canvas-rail">
     {#if fullscreen}
       <button class="btn btn-ghost canvas-back" type="button" aria-label={m.canvas_back_to_form({}, options)} title={m.canvas_back_to_form({}, options)} onclick={onform}><CanvasIcon name="back" /></button>
@@ -1606,7 +1064,7 @@ onMount(() => {
   {/if}
 
   {#if reviewingProblems && issues.length}
-    <div class="canvas-validation-issues" aria-label={m.canvas_review_fields({}, options)}>
+    <div class="canvas-validation-issues" role="group" aria-label={m.canvas_review_fields({}, options)}>
       {#each issueTargets as issue (issue.path)}
         <button class="btn btn-sm" type="button" onclick={() => reviewProblem(issue)}>{issue.message}</button>
       {/each}
@@ -1668,28 +1126,26 @@ onMount(() => {
   >
     <div class={['canvas-panel-slot canvas-structure-slot', { 'is-open': structureVisible }]} aria-hidden={!structureVisible} inert={!structureVisible}>
       <aside class={['canvas-structure', { 'is-block-editor': !!blockEditor }]} id="canvas-structure" aria-labelledby="canvas-structure-title">
-        <div class="canvas-structure-home">
-          <header>
-            <div>
-              <h2 id="canvas-structure-title">{m.canvas_structure({}, options)}</h2>
-              <span>{m.canvas_editable_items({ count: structure.length }, options)}</span>
-            </div>
-            <button class="btn btn-ghost btn-sm" type="button" aria-label={m.canvas_close_structure({}, options)} onclick={() => (structureOpen = false)}><CanvasIcon name="collapse-left" /></button>
-          </header>
-          {#if structure.length}
-            <div class="canvas-structure-tree" aria-label={m.canvas_page_structure({}, options)} role="tree">
-              <DragDropProvider onDragStart={structureDragStart} onDragOver={structureDragOver} onDragEnd={structureDragEnd}>
-                {@render structureRows()}
-              </DragDropProvider>
-            </div>
-          {:else}
-            <p class="canvas-structure-empty">{m.canvas_no_annotations({}, options)}</p>
-          {/if}
-          <footer>
-            <button bind:this={addBlockButton} class="btn btn-sm" type="button" disabled={!insertionNode || interactionMode !== 'edit'}
-              onclick={() => { if (insertionNode) openBlockEditor(insertionNode.kind === 'list' ? 'insert-empty' : 'insert-after', insertionNode); }}><CanvasIcon name="plus" /> {m.canvas_add_block({}, options)}</button>
-          </footer>
-        </div>
+        <StructureTree
+          {treeDomId}
+          {structure}
+          {selected}
+          {selectedNode}
+          index={structureIndex}
+          {treeLabel}
+          {session}
+          {locale}
+          {uiLocale}
+          {interactionMode}
+          {insertionNode}
+          {blockLocation}
+          {blockActionsFor}
+          onselectnode={selectNode}
+          onaction={canvasAction}
+          oninsert={(action, node) => openBlockEditor(action, node)}
+          onclose={() => (structureOpen = false)}
+          bind:addBlockButton
+        />
         {#if blockEditor}
           <div class="canvas-structure-forward" transition:fly={{ x: 40, duration: 220, easing: cubicOut }}>
             <CanvasBlockEditor

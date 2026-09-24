@@ -10,19 +10,25 @@ const fields = [
   { path: ['title'], label: 'Title', type: 'text', required: false },
 ] satisfies Field[];
 let app: ReturnType<typeof mount>;
+let render: ReturnType<typeof vi.fn>;
 afterEach(() => {
   if (app) unmount(app);
   document.body.innerHTML = '';
   vi.doUnmock('./canvas-renderer');
 });
 
-test('Structure uses one tree focus and navigates visible nested rows', async () => {
+/** Mounts CanvasWorkspace with a mocked renderer and returns its onStructureChange hook. */
+async function mountWithMockedRenderer(
+  session: ReturnType<typeof createEntrySession>,
+  blocks: Record<string, Field[]> = {},
+) {
   let options: import('./canvas-renderer').CanvasRendererOptions | undefined;
   vi.doMock('./canvas-renderer', () => ({
     createCanvasRenderer: (given: typeof options) => {
       options = given;
+      render = vi.fn();
       return {
-        render: vi.fn(),
+        render,
         mode: vi.fn(),
         textField: vi.fn(),
         actions: vi.fn(),
@@ -35,13 +41,6 @@ test('Structure uses one tree focus and navigates visible nested rows', async ()
       };
     },
   }));
-  const session = createEntrySession({
-    document: 'pages/home',
-    sourceLocale: 'en',
-    data: { title: 'Draft' },
-    translations: {},
-    form: { fields, blocks: {} },
-  });
   app = mount(CanvasWorkspace, {
     target: document.body,
     props: {
@@ -55,24 +54,38 @@ test('Structure uses one tree focus and navigates visible nested rows', async ()
       ownerLabel: 'Home',
       sourceLocale: 'en',
       session,
-      blocks: {},
+      blocks,
       onform: () => {},
       onreviewproblems: () => {},
       onnavigateentry: () => {},
     },
   });
   await vi.waitFor(() => expect(options).toBeDefined());
-  const target = (address: string) => ({
-    document: { collection: 'pages', id: 'home' },
-    locale: 'en',
-    address,
+  if (!options) throw new Error('Canvas renderer was not created');
+  return options;
+}
+
+const targetFor = (address: string) => ({
+  document: { collection: 'pages', id: 'home' },
+  locale: 'en',
+  address,
+});
+
+test('Structure uses one tree focus and navigates visible nested rows', async () => {
+  const session = createEntrySession({
+    document: 'pages/home',
+    sourceLocale: 'en',
+    data: { title: 'Draft' },
+    translations: {},
+    form: { fields, blocks: {} },
   });
+  const options = await mountWithMockedRenderer(session);
   const nodes: CanvasStructureNode[] = [
     {
       id: 'root',
       kind: 'list',
       label: 'Page',
-      target: target('blocks'),
+      target: targetFor('blocks'),
       depth: 1,
       position: 1,
       setSize: 1,
@@ -83,7 +96,7 @@ test('Structure uses one tree focus and navigates visible nested rows', async ()
       parentId: 'root',
       kind: 'list',
       label: 'Blocks',
-      target: target('blocks[abc].blocks'),
+      target: targetFor('blocks[abc].blocks'),
       depth: 2,
       position: 1,
       setSize: 2,
@@ -94,7 +107,7 @@ test('Structure uses one tree focus and navigates visible nested rows', async ()
       parentId: 'wrapper',
       kind: 'field',
       label: 'Title',
-      target: target('title'),
+      target: targetFor('title'),
       depth: 3,
       position: 1,
       setSize: 2,
@@ -105,7 +118,7 @@ test('Structure uses one tree focus and navigates visible nested rows', async ()
       parentId: 'wrapper',
       kind: 'field',
       label: 'Body',
-      target: target('body'),
+      target: targetFor('body'),
       depth: 3,
       position: 2,
       setSize: 2,
@@ -116,23 +129,25 @@ test('Structure uses one tree focus and navigates visible nested rows', async ()
       parentId: 'root',
       kind: 'field',
       label: 'Footer',
-      target: target('footer'),
+      target: targetFor('footer'),
       depth: 2,
       position: 2,
       setSize: 2,
       occurrences: 1,
     },
   ];
-  options?.onStructureChange?.(nodes);
+  options.onStructureChange?.(nodes);
   flushSync();
-  const rows = () => Array.from(document.querySelectorAll<HTMLButtonElement>('[role="treeitem"]'));
-  expect(rows().map((row) => row.textContent?.trim())).toEqual(['Page', 'Title', 'Body', 'Footer']);
+  const rows = () => Array.from(document.querySelectorAll<HTMLElement>('[role="treeitem"]'));
+  const label = (row: HTMLElement) =>
+    row.querySelector('.canvas-structure-name')?.textContent?.trim();
+  expect(rows().map(label)).toEqual(['Page', 'Title', 'Body', 'Footer']);
   expect(rows().map((row) => row.tabIndex)).toEqual([0, -1, -1, -1]);
   expect(rows()[1]?.getAttribute('aria-posinset')).toBe('1');
   expect(rows()[1]?.getAttribute('aria-setsize')).toBe('3');
-  const groupId = rows()[0]?.getAttribute('aria-owns');
-  expect(groupId).toBeTruthy();
-  expect(document.getElementById(groupId ?? '')?.getAttribute('role')).toBe('group');
+  const group = rows()[0]?.querySelector(':scope > [role="group"]');
+  expect(group?.getAttribute('role')).toBe('group');
+  expect(group?.querySelectorAll('[role="treeitem"]')).toHaveLength(3);
   rows()[0]?.focus();
   rows()[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
   await tick();
@@ -151,10 +166,169 @@ test('Structure uses one tree focus and navigates visible nested rows', async ()
   expect(document.activeElement).toBe(rows()[0]);
   rows()[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
   await tick();
-  expect(rows().map((row) => row.textContent?.trim())).toEqual(['Page']);
+  expect(rows().map(label)).toEqual(['Page']);
   expect(rows()[0]?.getAttribute('aria-expanded')).toBe('false');
   rows()[0]?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
   await tick();
   expect(rows()).toHaveLength(4);
   expect(rows().map((row) => row.tabIndex)).toEqual([0, -1, -1, -1]);
+});
+
+/** The accessible children a `tree`/`group` owns: the nearest role-bearing descendant on each
+ * branch, walking down through elements that carry no role of their own. */
+function ownedChildRoles(root: Element): string[] {
+  const roles: string[] = [];
+  const walk = (element: Element) => {
+    for (const child of Array.from(element.children)) {
+      const role = child.getAttribute('role') ?? (child.tagName === 'BUTTON' ? 'button' : null);
+      if (role) roles.push(role);
+      else walk(child);
+    }
+  };
+  walk(root);
+  return roles;
+}
+
+const movableBlockFields = {
+  section: [{ path: ['title'], label: 'Title', type: 'text', required: false }],
+} satisfies Record<string, Field[]>;
+
+function movableSession() {
+  return createEntrySession({
+    document: 'pages/home',
+    sourceLocale: 'en',
+    data: {
+      blocks: [
+        { _id: 'a', _type: 'section', title: 'One' },
+        { _id: 'b', _type: 'section', title: 'Two' },
+      ],
+    },
+    translations: {},
+    form: {
+      fields: [
+        { path: ['blocks'], label: 'Blocks', type: 'blocks', required: false, types: ['section'] },
+      ],
+      blocks: movableBlockFields,
+    },
+  });
+}
+
+const movableNodes: CanvasStructureNode[] = [
+  {
+    id: 'root',
+    kind: 'list',
+    label: 'Page',
+    target: targetFor('blocks'),
+    depth: 1,
+    position: 1,
+    setSize: 1,
+    occurrences: 1,
+  },
+  {
+    id: 'a',
+    parentId: 'root',
+    kind: 'block',
+    label: 'One',
+    target: targetFor('blocks[_id=a]'),
+    depth: 2,
+    position: 1,
+    setSize: 2,
+    occurrences: 1,
+  },
+  {
+    id: 'b',
+    parentId: 'root',
+    kind: 'block',
+    label: 'Two',
+    target: targetFor('blocks[_id=b]'),
+    depth: 2,
+    position: 2,
+    setSize: 2,
+    occurrences: 1,
+  },
+];
+
+test('the structure tree owns only treeitem/group children, even with a movable row', async () => {
+  const options = await mountWithMockedRenderer(movableSession(), movableBlockFields);
+  options.onStructureChange?.(movableNodes);
+  flushSync();
+
+  expect(document.querySelector('.canvas-structure-drag')).not.toBeNull();
+  const tree = document.querySelector('.canvas-structure-tree');
+  if (!tree) throw new Error('structure tree not rendered');
+  for (const root of [tree, ...Array.from(tree.querySelectorAll('[role="group"]'))]) {
+    for (const role of ownedChildRoles(root)) expect(['treeitem', 'group']).toContain(role);
+  }
+  for (const group of Array.from(tree.querySelectorAll('[role="group"]'))) {
+    let ancestor: Element | null = group.parentElement;
+    while (ancestor && !ancestor.getAttribute('role')) ancestor = ancestor.parentElement;
+    expect(ancestor?.getAttribute('role')).toBe('treeitem');
+  }
+});
+
+test('a keydown on the drag handle does not also move tree focus', async () => {
+  const options = await mountWithMockedRenderer(movableSession(), movableBlockFields);
+  options.onStructureChange?.(movableNodes);
+  flushSync();
+
+  const handle = document.querySelector<HTMLElement>('.canvas-structure-drag');
+  if (!handle) throw new Error('drag handle not rendered');
+  handle.focus();
+  expect(document.activeElement).toBe(handle);
+  handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+  await tick();
+  expect(document.activeElement).toBe(handle);
+});
+
+test('Enter on a treeitem selects it, matching a click', async () => {
+  const options = await mountWithMockedRenderer(movableSession(), movableBlockFields);
+  options.onStructureChange?.(movableNodes);
+  flushSync();
+
+  const rows = () => Array.from(document.querySelectorAll<HTMLElement>('[role="treeitem"]'));
+  const one = rows().find((row) => row.getAttribute('data-target-address') === 'blocks[_id=a]');
+  if (!one) throw new Error('row for block "a" not rendered');
+  one.focus();
+  one.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await tick();
+  flushSync();
+  expect(one.getAttribute('aria-current')).toBe('true');
+});
+
+test('a plain field sibling keeps its position among promoted block rows', async () => {
+  const options = await mountWithMockedRenderer(movableSession(), movableBlockFields);
+  const nodes: CanvasStructureNode[] = [
+    ...movableNodes,
+    {
+      id: 'caption',
+      parentId: 'root',
+      kind: 'field',
+      label: 'Caption',
+      target: targetFor('caption'),
+      depth: 2,
+      position: 3,
+      setSize: 3,
+      occurrences: 1,
+    },
+  ];
+  options.onStructureChange?.(nodes);
+  flushSync();
+
+  const label = (row: Element) => row.querySelector('.canvas-structure-name')?.textContent?.trim();
+  const names = Array.from(document.querySelectorAll('[role="treeitem"]')).map(label);
+  expect(names).toEqual(['Page', 'One', 'Two', 'Caption']);
+});
+
+test('a refused drag redraws the page from the session', async () => {
+  const options = await mountWithMockedRenderer(movableSession(), movableBlockFields);
+  options.onStateChange?.({ phase: 'ready', requestId: 'r1', contentVersion: 0 });
+  flushSync();
+  const renders = render.mock.calls.length;
+
+  options.onAction?.({
+    action: 'move',
+    selection: { kind: 'block', target: targetFor('blocks[_id=a]') },
+    destination: { kind: 'block', target: targetFor('blocks[_id=gone]') },
+  } as never);
+  await vi.waitFor(() => expect(render.mock.calls.length).toBe(renders + 1));
 });

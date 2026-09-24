@@ -107,8 +107,9 @@ does not identify whether the row is a content block.
 The generated marker values include the verified collection, stable entry ID, locale, and address.
 Do not construct `data-handover-*` values by hand or infer an address from visible text.
 Complete field addresses support up to 4,096 UTF-16 code units, including nested stable row IDs.
-Longer addresses fail the Canvas render explicitly. Structure labels are shortened to 200 code
-units for display; this does not change the stored block name.
+Longer addresses fail the Canvas render; the server log names the limit. Structure labels are
+shortened to 200 code units for display, without splitting a character; this does not change the
+stored block name.
 
 `isCanvas(Astro)` reports the same verified state without creating a context. The integration also
 types `Astro.locals.handoverCanvas` as `HandoverCanvas`; it contains the protocol, render request,
@@ -207,12 +208,13 @@ controls allow longer German labels to wrap within the available width.
 
 Structure lists blocks by the same name the form editor gives them — a block's `_label`, else its
 type. Use `↑` and `↓` to move between visible rows, Home/End to reach the first/last row, and
-`←`/`→` to collapse, expand, or move between a parent and its children. Enter selects the focused
-row. Drag a block by the handle at the right of its row to reorder it within its list;
+`←`/`→` to collapse, expand, or move between a parent and its children. Enter or Space selects the
+focused row. Drag a block by the handle at the right of its row to reorder it within its list;
 its nested content moves with it. While dragging, rows outside that list dim so valid
 sibling destinations remain clear. Handles appear on hover or keyboard focus. From a focused
 handle, press Space to pick up, use the arrow keys to move, and Space to drop; Escape cancels.
-Reordering uses the same undo history as the canvas controls.
+Reordering uses the same undo history as the canvas controls. A move the editor refuses redraws
+the page in its saved order.
 Selecting content in the page opens whatever branch it sits in. Adding a block commits the
 chosen type immediately, selects the new block, and opens its fields in Inspector. To change a
 block’s type, delete it and add a new block.
@@ -222,7 +224,8 @@ page and the new block’s Inspector remain available, with one neutral completi
 validation and render-error banners. Completing the fields resumes rendering automatically.
 Server validation remains authoritative; other field problems and genuine render failures keep
 their existing feedback. Field validation appears above the canvas even when Inspector is closed. **Review fields** opens
-Inspector and focuses the affected field in the current language. The header problem count opens
+Inspector and focuses the affected field in the current language; in Live preview it opens the
+field in Form instead. The header problem count opens
 Form when needed. Validation still prevents publishing; it does not disable unrelated field edits.
 
 Selected content uses a short field label; the full path stays in the editor rail. During inline

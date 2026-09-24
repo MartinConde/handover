@@ -1,5 +1,8 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { ContentError } from '@handover/core';
 import { expect, test } from 'vitest';
-import { createEditContext } from './canvas';
+import { CANVAS_ADDRESS_LIMIT, CANVAS_PROTOCOL, createEditContext } from './canvas';
 
 const astro = {
   locals: {
@@ -41,6 +44,8 @@ test('nested stable-row addresses remain annotated until the documented protocol
 
 test('an address beyond the browser protocol bound fails while the template renders', () => {
   expect(() => createEditContext(astro).field('a'.repeat(4_097))).toThrow(/Canvas address/);
+  // A ContentError, not a bare Error: the same family the preview route already renders readably.
+  expect(() => createEditContext(astro).field('a'.repeat(4_097))).toThrow(ContentError);
 });
 
 test('a long authored block label is bounded for Structure transport', () => {
@@ -52,4 +57,32 @@ test('a long authored block label is bounded for Structure transport', () => {
       _label: 'A'.repeat(201),
     });
   expect(context['data-handover-name']).toHaveLength(200);
+});
+
+test('trimming a label to its bound never splits a surrogate pair', () => {
+  const context = createEditContext(astro)
+    .list('blocks')
+    .block({
+      _id: 'hero',
+      _type: 'hero',
+      _label: `${'A'.repeat(199)}😀`,
+    });
+  // A 200-unit cut would land inside the emoji's surrogate pair; the whole emoji is dropped instead.
+  expect(context['data-handover-name']).toBe('A'.repeat(199));
+});
+
+// Reads the sibling package's source directly, rather than importing @handover/ui: that package
+// has no built entry point for a plain Node test to resolve, in CI or otherwise.
+test('protocol and address-limit constants match the browser bridge exactly', () => {
+  const bridgePath = fileURLToPath(
+    new URL('../../ui/src/canvas/canvas-bridge.ts', import.meta.url),
+  );
+  const source = readFileSync(bridgePath, 'utf8');
+  const constant = (name: string) => {
+    const match = source.match(new RegExp(`export const ${name} = ([\\d_]+)`));
+    if (!match?.[1]) throw new Error(`${name} not found in canvas-bridge.ts`);
+    return Number(match[1].replace(/_/g, ''));
+  };
+  expect(constant('CANVAS_PROTOCOL')).toBe(CANVAS_PROTOCOL);
+  expect(constant('CANVAS_ADDRESS_LIMIT')).toBe(CANVAS_ADDRESS_LIMIT);
 });

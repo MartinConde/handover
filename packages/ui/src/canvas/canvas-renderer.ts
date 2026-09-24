@@ -110,6 +110,8 @@ interface RenderFrame {
   timer: ReturnType<typeof setTimeout>;
   onload: () => void;
   onerror: () => void;
+  // A reload or navigation of the live frame loses any in-flight editing stop.
+  onActiveLoad?: () => void;
   resolve: (result: CanvasRenderResult) => void;
   selection?: CanvasSelection;
   structure: CanvasStructureNode[];
@@ -258,6 +260,7 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
 
   const remove = (held: RenderFrame) => {
     detach(held);
+    if (held.onActiveLoad) held.frame.removeEventListener('load', held.onActiveLoad);
     held.bridge.dispose();
     held.frame.remove();
   };
@@ -311,6 +314,13 @@ export function createCanvasRenderer(options: CanvasRendererOptions) {
     held.frame.removeAttribute('tabindex');
 
     active = held;
+    held.onActiveLoad = () => {
+      if (active !== held) return;
+      interaction = { ...interaction, inlineEditing: false, composing: false };
+      options.onInteractionChange?.({ inlineEditing: false, composing: false });
+      if (candidate) promote(candidate);
+    };
+    held.frame.addEventListener('load', held.onActiveLoad);
     if (previous) remove(previous);
     restoreView(held, view);
     options.onStructureChange?.(held.structure);

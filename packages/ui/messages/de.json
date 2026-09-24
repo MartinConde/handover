@@ -2554,6 +2554,8 @@
   "focal_title": "Fokuspunkt — {name}",
   "focal_intro": "Ziehe den Punkt auf dein Motiv oder nutze die Pfeiltasten.",
   "focal_position": "Fokuspunkt, {across} % von links, {down} % von oben",
+  "focal_across": "Horizontal",
+  "focal_down": "Vertikal",
   "focal_preview_intro": "Jeder Ausschnitt wird um den Punkt angeordnet. Dies sind die Formen, die diese Website rendert, ergänzt um ein hochkant gehaltenes Smartphone; das Bild selbst wird nicht verändert.",
   "focal_page_hint": "Dieser Punkt wird anfangs verwendet, wenn das Bild auf einer Seite eingefügt wird. Hat eine Seite einen eigenen Punkt, behält sie ihn — eine Änderung hier wirkt sich nicht rückwirkend auf diese Seiten aus.",
   "focal_live_previews": "Live-Vorschauen",

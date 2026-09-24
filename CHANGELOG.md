@@ -4,6 +4,26 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Canvas no longer stays on "Updating…" when an inline edit's stop arrives after a language
+  switch or the live page reloads, and a drag end is accepted after a mid-drag content change.
+- Inline text edits keep saving after an input-method composition is interrupted; Escape during
+  composition cancels only the composition. Plain-text fields ignore Enter and formatting
+  shortcuts, and dropped text is inserted as plain text where it is dropped.
+- A refused block move redraws the page in its saved order instead of keeping the dragged order.
+- Editing a link label keeps icon markup inside the link.
+- Selecting a block no longer rebuilds every sibling's drag handler on each scroll or redraw.
+- Undo history keeps at most 200 steps and about 2 million characters of field text per entry.
+- Validation highlights reach the page when some addresses are too long, and after a pending
+  edit is acknowledged.
+- Structure labels and block names are shortened without splitting an emoji.
+- The focal-point dialog places the dot inside the picture for non-3:2 images and adds Across
+  and Down sliders that work with screen readers.
+- The image popover no longer closes when the page scrolls programmatically after an edit;
+  it now closes only on user-driven scroll (wheel, touch, or keyboard).
+- "Review fields" in Live preview hands off to Form instead of opening a second Inspector.
+- Structure's tree rows use the standard nested-group accessibility pattern (no more
+  `aria-owns`) and support Enter/Space activation, fixing an `aria-required-children`
+  violation on rows with a drag handle.
 - Canvas continues updating after inline editing ends on a different Structure selection.
   Command deduplication uses compact fingerprints and a bounded reply cache to reduce memory
   retained while editing long text. Deeply nested field addresses are supported up to 4,096

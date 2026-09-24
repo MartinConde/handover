@@ -819,6 +819,86 @@ test('a delayed stop from a previous edit cannot end a newer interaction', () =>
   expect(onEditing).toHaveBeenCalledTimes(3);
 });
 
+test('an owned stop is not refused as stale after the admin switches to a lower-versioned locale', () => {
+  const candidate = frame();
+  const onEditing = vi.fn();
+  const rejected = vi.fn();
+  let version = 4;
+  const bridge = createCanvasParentBridge({
+    manifest,
+    frame: candidate,
+    origin: 'https://cms.example',
+    contentVersion: () => version,
+    currentTarget: () => target,
+    onCommand: vi.fn(),
+    onEditing,
+    onRejected: rejected,
+    listen: false,
+  });
+  bridge.receive(event(candidate, 'https://cms.example', ready));
+  // Raises this frame's own high-water mark to 6, independent of whichever locale is selected later.
+  version = 6;
+  bridge.textField({ kind: 'text', target, value: 'A brighter coast' });
+  const editing = (inlineEditing: boolean) => ({
+    ...ready,
+    type: 'handover:canvas:editing',
+    target,
+    state: { inlineEditing, composing: false },
+    contentVersion: 6,
+    interactionId: 'i1',
+  });
+  bridge.receive(event(candidate, 'https://cms.example', editing(true)));
+  // The admin switches locale; the new locale's own version is lower than this frame's.
+  version = 0;
+  bridge.receive(event(candidate, 'https://cms.example', editing(false)));
+  expect(rejected).not.toHaveBeenCalledWith('stale-version', expect.anything());
+  expect(onEditing).toHaveBeenLastCalledWith(target, { inlineEditing: false, composing: false });
+});
+
+test('a drag end is accepted after the content version changes mid-drag', () => {
+  const candidate = frame();
+  const onEditing = vi.fn();
+  const rejected = vi.fn();
+  let version = 4;
+  const bridge = createCanvasParentBridge({
+    manifest,
+    frame: candidate,
+    origin: 'https://cms.example',
+    contentVersion: () => version,
+    currentTarget: () => target,
+    onCommand: vi.fn(),
+    onEditing,
+    onRejected: rejected,
+    listen: false,
+  });
+  bridge.receive(event(candidate, 'https://cms.example', ready));
+  bridge.receive(
+    event(candidate, 'https://cms.example', {
+      ...ready,
+      type: 'handover:canvas:editing',
+      target,
+      state: { inlineEditing: false, composing: false, dragging: true },
+    }),
+  );
+  // A drag end carries no interactionId, so without owned-interaction handling this drag-end
+  // message is checked against the admin's now-different version and refused as stale.
+  version = 6;
+  bridge.receive(
+    event(candidate, 'https://cms.example', {
+      ...ready,
+      type: 'handover:canvas:editing',
+      target,
+      state: { inlineEditing: false, composing: false, dragging: false },
+    }),
+  );
+  expect(rejected).not.toHaveBeenCalled();
+  expect(onEditing).toHaveBeenLastCalledWith(target, {
+    inlineEditing: false,
+    composing: false,
+    dragging: false,
+  });
+});
+
 test('nested annotation addresses cross the bridge and addresses beyond its bound fail visibly', () => {
   const candidate = frame();
   const onSelection = vi.fn();
@@ -1232,6 +1312,67 @@ test('a structure node crosses with its optional keys and is refused any key bey
 
   send([root, { ...node, named: 'Blocks' }]);
   expect(onStructure).toHaveBeenCalledTimes(1);
+});
+
+test('problems() still sends the addresses within bound when another exceeds it', () => {
+  const candidate = frame();
+  const bridge = createCanvasParentBridge({
+    manifest,
+    frame: candidate,
+    origin: 'https://cms.example',
+    contentVersion: () => 4,
+    currentTarget: () => target,
+    onCommand: vi.fn(),
+    listen: false,
+  });
+  bridge.receive(event(candidate, 'https://cms.example', ready));
+  expect(bridge.problems([target.address, 'a'.repeat(4_097)])).toBe(true);
+  expect(candidate.postMessage).toHaveBeenLastCalledWith(
+    expect.objectContaining({ type: 'handover:canvas:problems', addresses: [target.address] }),
+    'https://cms.example',
+  );
+});
+
+test('a problems update stamped ahead of a pending command is applied once it acks', () => {
+  const parent = frame();
+  const onProblems = vi.fn();
+  const child = createCanvasChildBridge({
+    manifest,
+    parent,
+    origin: 'https://cms.example',
+    onProblems,
+    listen: false,
+    commandId: () => 'command-1',
+  });
+  child.start();
+  void child.command(target, { type: 'field', changes: [{ value: 'A brighter coast' }] });
+
+  child.receive(
+    event(parent, 'https://cms.example', {
+      ...ready,
+      type: 'handover:canvas:problems',
+      addresses: [target.address],
+      contentVersion: 5,
+    }),
+  );
+  expect(onProblems).not.toHaveBeenCalled();
+
+  child.receive(
+    event(parent, 'https://cms.example', {
+      type: 'handover:canvas:ack',
+      protocol: 1,
+      requestId: manifest.requestId,
+      epoch: manifest.epoch,
+      entry: manifest.entry,
+      locale: 'en',
+      contentVersion: 4,
+      commandId: 'command-1',
+      target,
+      ok: true,
+      acceptedVersion: 5,
+    }),
+  );
+  expect(onProblems).toHaveBeenCalledWith([target.address]);
 });
 
 test('validation updates are scoped to the active frame and accept clearing all problems', () => {

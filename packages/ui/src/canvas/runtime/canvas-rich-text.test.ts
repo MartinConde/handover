@@ -262,6 +262,48 @@ test('full tier adds only its supported controls and composition commits once', 
   runtime.dispose();
 });
 
+test('a composition interrupted by focus loss does not block later commits after reactivation', async () => {
+  const element = fixture();
+  let version = 0;
+  const commands: CanvasMutation[] = [];
+  const runtime = createCanvasRichTextRuntime({
+    command: async (_target, mutation) => {
+      commands.push(mutation);
+      version += 1;
+      const value = mutation.type === 'field' ? String(mutation.changes[0]?.value ?? '') : '';
+      return reply(version, { ok: true, update: { value } });
+    },
+    interaction: vi.fn(),
+  });
+  runtime.start();
+  runtime.configure({ kind: 'richtext', target, value: 'Harbour home', tier: 'basic' });
+  runtime.activate(selected, element);
+  const editor = element.matches('[contenteditable="true"]') ? element : null;
+  if (!editor) throw new Error('TipTap editable missing');
+
+  editor.dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+  expect(runtime.composing()).toBe(true);
+  const elsewhere = document.createElement('button');
+  document.body.append(elsewhere);
+  elsewhere.focus();
+  await vi.waitFor(() => expect(runtime.active()).toBe(false));
+  expect(runtime.composing()).toBe(false);
+
+  const reactivatedRoot = fixture();
+  runtime.configure({ kind: 'richtext', target, value: 'Harbour home', tier: 'basic' });
+  runtime.activate(selected, reactivatedRoot);
+  const reactivated = reactivatedRoot.matches('[contenteditable="true"]') ? reactivatedRoot : null;
+  if (!reactivated) throw new Error('TipTap editable missing after reactivation');
+  selectAll(reactivated);
+  document.querySelector<HTMLButtonElement>('[aria-label="Bold"]')?.click();
+  await vi.waitFor(() => expect(commands).toHaveLength(1));
+  expect(commands[0]).toMatchObject({
+    type: 'field',
+    changes: [{ value: '**Harbour home**' }],
+  });
+  runtime.dispose();
+});
+
 test('unsupported Markdown and non-prose annotations remain read-only', () => {
   const element = fixture();
   const runtime = createCanvasRichTextRuntime({ command: vi.fn(), interaction: vi.fn() });

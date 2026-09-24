@@ -1,16 +1,16 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { type CanvasRenderRequest, createCanvasRenderer } from './canvas-renderer';
 
-const request = (contentVersion: number): CanvasRenderRequest => ({
+const request = (contentVersion: number, locale = 'en'): CanvasRenderRequest => ({
   url: '/preview',
   snapshot: {
     mode: 'canvas',
     protocol: 1,
     epoch: 'canvas-session',
     entry: { collection: 'pages', id: 'home' },
-    locale: 'en',
+    locale,
     contentVersion,
-    snapshots: { en: { title: `Version ${contentVersion}` } },
+    snapshots: { [locale]: { title: `Version ${contentVersion}` } },
   },
 });
 
@@ -26,8 +26,72 @@ const renderer = (stage: HTMLElement) =>
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
   document.body.innerHTML = '';
 });
+
+// Fakes the child handshake so `promote()` runs for real, including the editing-interaction gate.
+const fakeFrames = new Map<HTMLIFrameElement, { win: Window; doc: Document }>();
+const fakeHandshake = () => {
+  vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
+  vi.spyOn(HTMLIFrameElement.prototype, 'contentWindow', 'get').mockImplementation(function (
+    this: HTMLIFrameElement,
+  ) {
+    if (!fakeFrames.has(this))
+      fakeFrames.set(this, {
+        win: {
+          location: { href: 'http://localhost/preview' },
+          postMessage: vi.fn(),
+          scrollTo: () => {},
+          scrollX: 0,
+          scrollY: 0,
+          innerWidth: 0,
+          innerHeight: 0,
+        } as unknown as Window,
+        doc: document.implementation.createHTMLDocument(),
+      });
+    return fakeFrames.get(this)?.win ?? null;
+  });
+  vi.spyOn(HTMLIFrameElement.prototype, 'contentDocument', 'get').mockImplementation(function (
+    this: HTMLIFrameElement,
+  ) {
+    return fakeFrames.get(this)?.doc ?? null;
+  });
+};
+
+/** Drives one candidate through `load` + the ready handshake so it reaches `promote()`. */
+const settleCandidate = (
+  canvas: ReturnType<typeof createCanvasRenderer>,
+  requestId: string,
+  contentVersion: number,
+  locale = 'en',
+) => {
+  const frame = canvas.candidateFrame();
+  const fake = frame && fakeFrames.get(frame);
+  if (!fake) throw new Error('Missing candidate frame');
+  const { win, doc } = fake;
+  const manifest = {
+    mode: 'canvas',
+    status: 'success',
+    protocol: 1,
+    requestId,
+    epoch: 'canvas-session',
+    entry: { collection: 'pages', id: 'home' },
+    locale,
+    contentVersion,
+  };
+  doc.body.innerHTML = `<script type="application/json" data-handover-canvas-manifest>${JSON.stringify(manifest)}</script>`;
+  frame.dispatchEvent(new Event('load'));
+  const { mode, status, ...identity } = manifest;
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      origin: location.origin,
+      source: win,
+      data: { ...identity, type: 'handover:canvas:ready' },
+    }),
+  );
+  return { win, doc };
+};
 
 test('materializes only the last request after a full quiet period', async () => {
   vi.useFakeTimers();
@@ -102,5 +166,99 @@ test('updates candidate frame presentation when the UI locale changes', () => {
 
   expect(canvas.candidateFrame()).toBe(frame);
   expect(frame?.title).toBe('Die Seite, wie sie von der Website ausgeliefert würde');
+  canvas.dispose();
+});
+
+test('reloading the active frame clears a lost editing flag so the candidate promotes', () => {
+  fakeHandshake();
+  const stage = document.createElement('div');
+  document.body.append(stage);
+  let ids = 0;
+  const canvas = createCanvasRenderer({
+    stage,
+    contentVersion: () => 4,
+    currentTarget: () => undefined,
+    uiLocale: () => 'en',
+    onCommand: () => ({ ok: false, reason: 'readonly' }),
+    requestId: () => `req-${++ids}`,
+  });
+
+  void canvas.render(request(4));
+  settleCandidate(canvas, 'req-1', 4);
+  // A stop the parent never received (e.g. the frame reloaded mid-edit) leaves this stuck true.
+  canvas.setInteractionState({ inlineEditing: true, composing: false });
+
+  void canvas.render(request(4));
+  expect(canvas.state().phase).toBe('rendering');
+
+  canvas.activeFrame()?.dispatchEvent(new Event('load'));
+  settleCandidate(canvas, 'req-2', 4);
+  expect(canvas.state().phase).toBe('ready');
+  canvas.dispose();
+});
+
+test('a stop accepted after a locale switch still lets the waiting candidate promote', () => {
+  fakeHandshake();
+  const stage = document.createElement('div');
+  document.body.append(stage);
+  let ids = 0;
+  let version = 4;
+  const target = { document: { collection: 'pages', id: 'home' }, locale: 'en', address: 'title' };
+  const canvas = createCanvasRenderer({
+    stage,
+    contentVersion: () => version,
+    currentTarget: () => target,
+    uiLocale: () => 'en',
+    onCommand: () => ({ ok: false, reason: 'readonly' }),
+    requestId: () => `req-${++ids}`,
+  });
+
+  // 1. Render `en` at v4 so it becomes active.
+  void canvas.render(request(4, 'en'));
+  const en = settleCandidate(canvas, 'req-1', 4, 'en');
+  expect(canvas.state().phase).toBe('ready');
+
+  // 2. An editor starts in the active `en` frame.
+  const editing = (inlineEditing: boolean, contentVersion: number) => ({
+    protocol: 1,
+    requestId: 'req-1',
+    epoch: 'canvas-session',
+    entry: { collection: 'pages', id: 'home' },
+    locale: 'en',
+    type: 'handover:canvas:editing',
+    target,
+    state: { inlineEditing, composing: false },
+    interactionId: 'i1',
+    contentVersion,
+  });
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      origin: location.origin,
+      source: en.win,
+      data: editing(true, 4),
+    }),
+  );
+
+  // 3. The admin switches locale; `de`'s own version is lower than `en`'s.
+  version = 0;
+
+  // 4. A `de` candidate reaches ready but stays blocked: the editor is still open.
+  void canvas.render(request(0, 'de'));
+  settleCandidate(canvas, 'req-2', 0, 'de');
+  expect(canvas.state().phase).toBe('rendering');
+  expect(canvas.candidateFrame()).toBeDefined();
+
+  // 5. The stop arrives from the still-active `en` frame, at `en`'s own version.
+  window.dispatchEvent(
+    new MessageEvent('message', {
+      origin: location.origin,
+      source: en.win,
+      data: editing(false, 4),
+    }),
+  );
+
+  // 6. Accepted despite the admin now being on a lower-versioned locale: the candidate promotes.
+  expect(canvas.state().phase).toBe('ready');
+  expect(canvas.candidateFrame()).toBeUndefined();
   canvas.dispose();
 });

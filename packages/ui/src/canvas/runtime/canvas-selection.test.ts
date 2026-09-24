@@ -1,8 +1,29 @@
+import { DragDropManager } from '@dnd-kit/dom';
+import { Sortable } from '@dnd-kit/dom/sortable';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { CanvasTarget } from '../canvas-bridge';
 import { canvasNodeKey, visibleCanvasNodes } from '../canvas-structure';
-import { createCanvasSelectionRuntime } from './canvas-selection';
+import { createCanvasSelectionRuntime, createReorderAnimationLookup } from './canvas-selection';
 import { createCanvasUiLocaleState } from './canvas-ui-locale';
+
+// `Sortable#destroy` is an instance property (not on the prototype), so counting rebuilds needs a
+// subclass wrapper rather than a plain vi.spyOn.
+const sortableCounts = vi.hoisted(() => ({ constructed: 0, destroyed: 0 }));
+vi.mock('@dnd-kit/dom/sortable', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@dnd-kit/dom/sortable')>();
+  class InstrumentedSortable extends actual.Sortable {
+    constructor(...args: ConstructorParameters<typeof actual.Sortable>) {
+      super(...args);
+      sortableCounts.constructed += 1;
+      const destroy = this.destroy;
+      this.destroy = () => {
+        sortableCounts.destroyed += 1;
+        destroy();
+      };
+    }
+  }
+  return { ...actual, Sortable: InstrumentedSortable };
+});
 
 const target = (address: string): CanvasTarget => ({
   document: { collection: 'pages', id: 'home' },
@@ -322,6 +343,21 @@ test('a long authored block name stays within the Structure wire limit', () => {
   const runtime = createCanvasSelectionRuntime();
   runtime.start();
   expect(runtime.structure().find((node) => node.kind === 'block')?.label).toHaveLength(200);
+  runtime.dispose();
+});
+
+test('trimming a long block name to the wire limit does not split a surrogate pair', () => {
+  const name = `${'A'.repeat(199)}\u{1F600}`; // 😀 straddles the 200-unit cutoff
+  document.body.innerHTML = `
+    <main ${mark('list', 'blocks')}>
+      <section ${mark('block', 'blocks[_id=hero]')} data-handover-name="${name}"></section>
+    </main>`;
+  const runtime = createCanvasSelectionRuntime();
+  runtime.start();
+  const label = runtime.structure().find((node) => node.kind === 'block')?.label ?? '';
+  const lastUnit = label.charCodeAt(label.length - 1);
+  expect(lastUnit).not.toBeGreaterThanOrEqual(0xd800);
+  expect(label).toBe('A'.repeat(199));
   runtime.dispose();
 });
 
@@ -712,4 +748,74 @@ test('validation outlines the closest rendered owner, excludes shared content, a
   await settle();
   expect(shadow?.querySelectorAll('.box.invalid')).toHaveLength(0);
   runtime.dispose();
+});
+
+test('a redraw with the same block selected reuses Sortables; a selection change rebuilds them', async () => {
+  document.body.innerHTML = `
+    <main ${mark('list', 'blocks')}>
+      <section data-handover-name="One" ${mark('block', 'blocks[_id=one]')}><p>One</p></section>
+      <section data-handover-name="Two" ${mark('block', 'blocks[_id=two]')}><p>Two</p></section>
+      <section data-handover-name="Three" ${mark('block', 'blocks[_id=three]')}><p>Three</p></section>
+    </main>`;
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 100, 40));
+  sortableCounts.constructed = 0;
+  sortableCounts.destroyed = 0;
+  const runtime = createCanvasSelectionRuntime();
+  runtime.start();
+  runtime.select({ kind: 'block', target: target('blocks[_id=one]') });
+  runtime.actions({ kind: 'block', target: target('blocks[_id=one]') }, ['move']);
+  await settle();
+  expect(sortableCounts.destroyed).toBe(0);
+
+  window.dispatchEvent(new Event('resize'));
+  await settle();
+  window.dispatchEvent(new Event('resize'));
+  await settle();
+  expect(sortableCounts.destroyed).toBe(0);
+
+  runtime.select({ kind: 'block', target: target('blocks[_id=two]') });
+  runtime.actions({ kind: 'block', target: target('blocks[_id=two]') }, ['move']);
+  await settle();
+  expect(sortableCounts.destroyed).toBeGreaterThan(0);
+
+  runtime.dispose();
+});
+
+test('hovering with nothing selected never builds the hidden hover breadcrumb', async () => {
+  document.body.innerHTML = `<h1 id="hero" ${mark('field', 'heading')}>Move to the coast</h1>`;
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue(
+    new DOMRect(10, 20, 200, 40),
+  );
+  const runtime = createCanvasSelectionRuntime();
+  runtime.start();
+
+  document
+    .querySelector('#hero')
+    ?.dispatchEvent(new MouseEvent('pointermove', { bubbles: true, clientX: 40, clientY: 40 }));
+  await settle();
+
+  const shadow = document.querySelector('[data-handover-canvas-overlay]')?.shadowRoot;
+  expect(shadow?.querySelector('.hover-path .path-current')).toBeNull();
+  runtime.dispose();
+});
+
+test('the reorder-animation lookup runs getAnimations once per synchronous pass', async () => {
+  const manager = new DragDropManager();
+  const element = document.createElement('div');
+  const getAnimations = vi.fn(() => [] as Animation[]);
+  element.getAnimations = getAnimations;
+  const sortable = new Sortable({ id: 'a', index: 0, element }, manager);
+  const lookup = createReorderAnimationLookup(() => sortable.draggable);
+
+  lookup();
+  lookup();
+  lookup();
+  expect(getAnimations).toHaveBeenCalledTimes(1);
+
+  await Promise.resolve();
+  lookup();
+  expect(getAnimations).toHaveBeenCalledTimes(2);
+
+  sortable.destroy();
+  manager.destroy();
 });
