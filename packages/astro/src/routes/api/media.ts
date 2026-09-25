@@ -29,6 +29,8 @@ import { entryHref, entryTitle } from './content.js';
 import type { RequestContext } from './environment.js';
 import { mediaStore, NO_BUCKET, NO_UPLOAD_BUCKET, uploadBucket } from './environment.js';
 
+export const UPLOAD_KEY = /^uploads\/[0-9a-f-]{36}\/(?:media|files)\/[0-9a-f]{64}\.[a-z0-9]+$/;
+
 /** The key a content file stores, and where the asset is served from. */
 function mediaItem(row: MediaRow) {
   const base = config.media?.publicBase?.replace(/\/$/, '');
@@ -298,8 +300,7 @@ export async function ingestUpload(
   const bucket = uploadBucket();
   if (!bucket) return Response.json({ error: NO_UPLOAD_BUCKET }, { status: 503 });
   const keyMime = mimeForMediaKey(key);
-  if (!keyMime || !/^uploads\/[0-9a-f-]{36}\/(?:media|files)\/[0-9a-f]{64}\.[a-z0-9]+$/.test(key))
-    return new Response('Not found', { status: 404 });
+  if (!keyMime || !UPLOAD_KEY.test(key)) return new Response('Not found', { status: 404 });
   const user = session?.user.id ?? 'unknown';
   const intent = await claimUploadIntent('default', ctx.db(), key, user);
   if (!intent) return new Response('Not found', { status: 404 });

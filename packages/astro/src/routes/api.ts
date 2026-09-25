@@ -56,6 +56,7 @@ import {
   finishUpload,
   ingestUpload,
   library,
+  UPLOAD_KEY,
 } from './api/media.js';
 import {
   account,
@@ -81,8 +82,6 @@ import {
 import { recordSources, sourcesList } from './api/sources.js';
 import { createEntry, saveTemplate } from './api/templates.js';
 import { createTranslation, machineTranslate } from './api/translation.js';
-
-export { db, gitClient, mediaStore } from './api/environment.js';
 
 const MEMBER = /^members\/([\w-]+)$/;
 const MEMBER_ROLE = /^members\/([\w-]+)\/role$/;
@@ -110,24 +109,28 @@ const LOCK = entryRoute('locks/<segment>/<segment>');
 const HOLD = entryRoute('hold/<segment>/<segment>');
 const STATUS = entryRoute('status/<segment>');
 const MEDIA = /^media\/([0-9a-f]{64})$/;
-const UPLOAD = /^(uploads\/[0-9a-f-]{36}\/(?:media|files)\/[0-9a-f]{64}\.[a-z0-9]+)$/;
 const CHECK = /^checks\/([\w-]+)$/;
 const SETTING = /^settings\/([\w-]+)$/;
 const REDIRECT = /^redirects\/([\w-]+)$/;
 const TRANSLATE = entryRoute('translate/<segment>/<segment>/<segment>');
 const SOURCE = entryRoute('source/<segment>/<segment>/<segment>');
 
+// Every group in these patterns is required, so a match fills each one.
+const groups = (path: string | undefined, re: RegExp) =>
+  path?.match(re) as [string, string, string, string] | null | undefined;
+
 // The middleware exempts Better Auth's paths, so this is the only thing in front of the login.
 const mounted = (pathname: string) =>
   pathname.startsWith(`${(config.i18n.base ?? '').replace(/\/+$/, '')}${AUTH_BASE_PATH}/`);
 
 export const GET: APIRoute = async ({ params, request, url, locals }) => {
+  const session = locals.handover;
   const ctx = requestContext();
   if (mounted(url.pathname)) return createAuth(url, locals.cfContext).handler(request);
-  if (params.path === 'account') return account(ctx, locals.handover);
-  if (params.path === 'activity') return activityLog(ctx, url, locals.handover);
-  if (params.path === 'activity/diff') return activityDiff(ctx, url, locals.handover);
-  if (params.path === 'members') return members(ctx, locals.handover);
+  if (params.path === 'account') return account(ctx, session);
+  if (params.path === 'activity') return activityLog(ctx, url, session);
+  if (params.path === 'activity/diff') return activityDiff(ctx, url, session);
+  if (params.path === 'members') return members(ctx, session);
   if (params.path === 'ping') {
     const response = Response.json({
       ok: true,
@@ -138,8 +141,8 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
         ),
       ),
       // The middleware has already asserted a session by the time any of this runs.
-      user: locals.handover?.user,
-      role: locals.handover?.role,
+      user: session?.user,
+      role: session?.role,
       // Where a media key is served from, for values already in a content file.
       mediaBase: config.media?.publicBase?.replace(/\/$/, ''),
       // Every crop the site renders, for the focal picker; it cannot change while a tab is open.
@@ -164,93 +167,74 @@ export const GET: APIRoute = async ({ params, request, url, locals }) => {
     return response;
   }
   if (params.path === 'entries') return pickList(ctx);
-  const removed = params.path?.match(DELETED);
-  if (removed) return answering(() => deletedList(ctx, removed[1] ?? ''));
+  const removed = groups(params.path, DELETED);
+  if (removed) return answering(() => deletedList(ctx, removed[1]));
   if (params.path === 'media') return library(ctx, url);
   if (params.path === 'globals') return globalsList(ctx);
   if (params.path === 'redirects') return answering(() => redirectList(ctx));
   if (params.path === 'drafts') return pendingList(ctx);
   if (params.path === 'dashboard') return dashboard(ctx);
   if (params.path === 'build') return buildStatus(ctx);
-  if (params.path === 'diagnostics') return diagnostics(locals.handover);
-  if (params.path === 'sources') return answering(() => sourcesList(ctx, locals.handover));
-  if (params.path === 'settings') return answering(() => integrations(ctx, locals.handover));
-  const held = params.path?.match(LOCK);
+  if (params.path === 'diagnostics') return diagnostics(session);
+  if (params.path === 'sources') return answering(() => sourcesList(ctx, session));
+  if (params.path === 'settings') return answering(() => integrations(ctx, session));
+  const held = groups(params.path, LOCK);
   if (held)
-    return lockState(
-      ctx,
-      held[1] ?? '',
-      held[2] ?? '',
-      locals.handover,
-      'read',
-      url.searchParams.get('tab') ?? '',
-    );
-  const changed = params.path?.match(DIFF);
-  if (changed) return answering(() => entryDiff(ctx, changed[1] ?? '', changed[2] ?? ''));
-  const translatedFrom = params.path?.match(SOURCE);
+    return lockState(ctx, held[1], held[2], session, 'read', url.searchParams.get('tab') ?? '');
+  const changed = groups(params.path, DIFF);
+  if (changed) return answering(() => entryDiff(ctx, changed[1], changed[2]));
+  const translatedFrom = groups(params.path, SOURCE);
   if (translatedFrom)
     return answering(() =>
-      translatedFromView(
-        ctx,
-        translatedFrom[1] ?? '',
-        translatedFrom[2] ?? '',
-        translatedFrom[3] ?? '',
-      ),
+      translatedFromView(ctx, translatedFrom[1], translatedFrom[2], translatedFrom[3]),
     );
-  const version = params.path?.match(VERSION);
-  if (version) return answering(() => versionDiff(ctx, version[1] ?? '', version[2] ?? '', url));
-  const past = params.path?.match(HISTORY);
-  if (past) return answering(() => entryHistory(ctx, past[1] ?? '', past[2] ?? '', url));
-  const against = params.path?.match(CONFLICT);
+  const version = groups(params.path, VERSION);
+  if (version) return answering(() => versionDiff(ctx, version[1], version[2], url));
+  const past = groups(params.path, HISTORY);
+  if (past) return answering(() => entryHistory(ctx, past[1], past[2], url));
+  const against = groups(params.path, CONFLICT);
   if (against)
-    return answering(() => conflictView(ctx, against[1] ?? '', against[2] ?? ''), {
+    return answering(() => conflictView(ctx, against[1], against[2]), {
       repository: 'CONFLICT_REPOSITORY_UNAVAILABLE',
     });
-  const entry = params.path?.match(ENTRY);
-  if (entry) return answering(() => getEntry(ctx, entry[1] ?? '', entry[2] ?? ''));
-  const list = params.path?.match(ENTRIES);
-  if (list) return listEntries(ctx, list[1] ?? '');
+  const entry = groups(params.path, ENTRY);
+  if (entry) return answering(() => getEntry(ctx, entry[1], entry[2]));
+  const list = groups(params.path, ENTRIES);
+  if (list) return listEntries(ctx, list[1]);
   return new Response('Not found', { status: 404 });
 };
 
 export const PUT: APIRoute = async ({ params, request, locals }) => {
-  const staging = params.path?.match(UPLOAD);
-  if (staging) return ingestUpload(requestContext(), staging[1] ?? '', request, locals.handover);
+  const session = locals.handover;
+  const staging = groups(params.path, UPLOAD_KEY);
+  if (staging) return ingestUpload(requestContext(), staging[0], request, session);
   const invalidBody = await bodyErrorResponse(request);
   if (invalidBody) return invalidBody;
   const ctx = requestContext();
-  const setting = params.path?.match(SETTING);
-  if (setting) return setIntegration(ctx, setting[1] ?? '', request, locals.handover);
-  const translated = params.path?.match(TRANSLATION);
+  const setting = groups(params.path, SETTING);
+  if (setting) return setIntegration(ctx, setting[1], request, session);
+  const translated = groups(params.path, TRANSLATION);
   if (translated)
     return answering(() =>
-      autosave(
-        ctx,
-        translated[1] ?? '',
-        translated[2] ?? '',
-        request,
-        locals.handover,
-        translated[3],
-      ),
+      autosave(ctx, translated[1], translated[2], request, session, translated[3]),
     );
-  const draft = params.path?.match(DRAFT);
-  if (draft)
-    return answering(() => autosave(ctx, draft[1] ?? '', draft[2] ?? '', request, locals.handover));
-  const uploaded = params.path?.match(MEDIA);
-  if (uploaded)
-    return answering(() => finishUpload(ctx, uploaded[1] ?? '', request, locals.handover));
-  const rule = params.path?.match(REDIRECT);
-  if (rule) return answering(() => changeRedirect(ctx, rule[1] ?? '', request, locals.handover));
+  const draft = groups(params.path, DRAFT);
+  if (draft) return answering(() => autosave(ctx, draft[1], draft[2], request, session));
+  const uploaded = groups(params.path, MEDIA);
+  if (uploaded) return answering(() => finishUpload(ctx, uploaded[1], request, session));
+  const rule = groups(params.path, REDIRECT);
+  if (rule) return answering(() => changeRedirect(ctx, rule[1], request, session));
   return new Response('Not found', { status: 404 });
 };
 
 // The one verb that changes an asset without changing its bytes, which are named by their hash.
 export const PATCH: APIRoute = async ({ params, request, locals }) => {
+  const session = locals.handover;
   const invalidBody = await bodyErrorResponse(request);
   if (invalidBody) return invalidBody;
   const ctx = requestContext();
-  const asset = params.path?.match(MEDIA);
-  if (asset) return describeMedia(ctx, asset[1] ?? '', request, locals.handover);
+  const asset = groups(params.path, MEDIA);
+  if (asset) return describeMedia(ctx, asset[1], request, session);
   return new Response('Not found', { status: 404 });
 };
 
@@ -327,6 +311,7 @@ async function answering(
 }
 
 export const POST: APIRoute = async ({ params, request, url, locals }) => {
+  const session = locals.handover;
   if (mounted(url.pathname)) {
     const invalidBody = await bodyErrorResponse(request, true);
     return invalidBody ?? createAuth(url, locals.cfContext).handler(request);
@@ -334,152 +319,106 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   const invalidBody = await bodyErrorResponse(request);
   if (invalidBody) return invalidBody;
   const ctx = requestContext();
-  const checked = params.path?.match(CHECK);
+  const checked = groups(params.path, CHECK);
   if (checked) {
-    const name = checked[1] ?? '';
-    if (name === 'email') return testEmail(locals.handover);
-    if (name === 'conflict') return answering(() => simulateConflict(ctx, locals.handover));
+    const name = checked[1];
+    if (name === 'email') return testEmail(session);
+    if (name === 'conflict') return answering(() => simulateConflict(ctx, session));
     // Not `answering`: every branch catches for itself.
-    return connection(ctx, name, locals.handover);
+    return connection(ctx, name, session);
   }
   if (params.path === 'account/set-password')
-    return setPassword(ctx, request, url, locals.cfContext, locals.handover);
-  if (params.path === 'members')
-    return invite(ctx, request, url, locals.cfContext, locals.handover);
-  const roled = params.path?.match(MEMBER_ROLE);
-  if (roled)
-    return setMemberRole(ctx, roled[1] ?? '', request, url, locals.cfContext, locals.handover);
-  const resent = params.path?.match(MEMBER_INVITE);
-  if (resent)
-    return resendInvite(ctx, resent[1] ?? '', request, url, locals.cfContext, locals.handover);
-  if (params.path === 'media') return answering(() => askUpload(ctx, request, locals.handover));
-  if (params.path === 'redirects')
-    return answering(() => addRedirect(ctx, request, locals.handover));
+    return setPassword(ctx, request, url, locals.cfContext, session);
+  if (params.path === 'members') return invite(ctx, request, url, locals.cfContext, session);
+  const roled = groups(params.path, MEMBER_ROLE);
+  if (roled) return setMemberRole(ctx, roled[1], request, url, locals.cfContext, session);
+  const resent = groups(params.path, MEMBER_INVITE);
+  if (resent) return resendInvite(ctx, resent[1], request, url, locals.cfContext, session);
+  if (params.path === 'media') return answering(() => askUpload(ctx, request, session));
+  if (params.path === 'redirects') return answering(() => addRedirect(ctx, request, session));
   if (params.path === 'publish/checks')
     return answering(() => prepublishChecks(ctx, request), {
       repository: 'PUBLISH_CHECKS_FAILED',
     });
   if (params.path === 'publish')
-    return answering(() => publish(ctx, request, locals.handover), {
+    return answering(() => publish(ctx, request, session), {
       conflict: 'PUBLISH_CONFLICT',
       finalization: 'PUBLISH_FINALIZATION_PENDING',
       refMoved: 'PUBLISH_REF_MOVED',
       repository: 'PUBLISH_REPOSITORY_UNAVAILABLE',
     });
-  if (params.path === 'revert') return answering(() => revert(ctx, request, locals.handover));
+  if (params.path === 'revert') return answering(() => revert(ctx, request, session));
   if (params.path === 'sources')
-    return answering(() => recordSources(ctx, request, locals.handover), {
+    return answering(() => recordSources(ctx, request, session), {
       refMoved: 'SOURCES_CHANGED',
     });
-  if (params.path === 'restore') return answering(() => restore(ctx, request, locals.handover));
-  const beat = params.path?.match(LOCK);
+  if (params.path === 'restore') return answering(() => restore(ctx, request, session));
+  const beat = groups(params.path, LOCK);
   if (beat) {
     const body = (await readJson(request)) as { take?: unknown } | undefined;
     return answering(() =>
-      lockState(
-        ctx,
-        beat[1] ?? '',
-        beat[2] ?? '',
-        locals.handover,
-        body?.take === true ? 'take' : 'beat',
-        tabOf(body),
-      ),
+      lockState(ctx, beat[1], beat[2], session, body?.take === true ? 'take' : 'beat', tabOf(body)),
     );
   }
-  const holding = params.path?.match(HOLD);
-  if (holding)
-    return answering(() => hold(ctx, holding[1] ?? '', holding[2] ?? '', request, locals.handover));
-  const showing = params.path?.match(STATUS);
-  if (showing) return answering(() => setStatus(ctx, showing[1] ?? '', request, locals.handover));
-  const filling = params.path?.match(TRANSLATE);
+  const holding = groups(params.path, HOLD);
+  if (holding) return answering(() => hold(ctx, holding[1], holding[2], request, session));
+  const showing = groups(params.path, STATUS);
+  if (showing) return answering(() => setStatus(ctx, showing[1], request, session));
+  const filling = groups(params.path, TRANSLATE);
   if (filling)
     return answering(() =>
-      machineTranslate(
-        ctx,
-        filling[1] ?? '',
-        filling[2] ?? '',
-        filling[3] ?? '',
-        request,
-        locals.handover,
-      ),
+      machineTranslate(ctx, filling[1], filling[2], filling[3], request, session),
     );
-  const made = params.path?.match(TRANSLATION);
-  if (made)
-    return answering(() => createTranslation(ctx, made[1] ?? '', made[2] ?? '', made[3] ?? ''));
-  const addressed = params.path?.match(ADDRESS);
+  const made = groups(params.path, TRANSLATION);
+  if (made) return answering(() => createTranslation(ctx, made[1], made[2], made[3]));
+  const addressed = groups(params.path, ADDRESS);
   if (addressed)
     return answering(() =>
-      address(
-        ctx,
-        addressed[1] ?? '',
-        addressed[2] ?? '',
-        addressed[3] ?? '',
-        request,
-        locals.handover,
-      ),
+      address(ctx, addressed[1], addressed[2], addressed[3], request, session),
     );
-  const offered = params.path?.match(LOCALES);
-  if (offered)
-    return answering(() =>
-      offering(ctx, offered[1] ?? '', offered[2] ?? '', request, locals.handover),
-    );
-  const sourced = params.path?.match(ENTRY_SOURCE);
+  const offered = groups(params.path, LOCALES);
+  if (offered) return answering(() => offering(ctx, offered[1], offered[2], request, session));
+  const sourced = groups(params.path, ENTRY_SOURCE);
   if (sourced)
-    return answering(() =>
-      changeEntrySource(ctx, sourced[1] ?? '', sourced[2] ?? '', request, locals.handover),
-    );
-  const restored = params.path?.match(RESTORE_VERSION);
+    return answering(() => changeEntrySource(ctx, sourced[1], sourced[2], request, session));
+  const restored = groups(params.path, RESTORE_VERSION);
   if (restored)
-    return answering(() =>
-      restoreVersion(ctx, restored[1] ?? '', restored[2] ?? '', request, locals.handover),
-    );
-  const settling = params.path?.match(CONFLICT);
+    return answering(() => restoreVersion(ctx, restored[1], restored[2], request, session));
+  const settling = groups(params.path, CONFLICT);
   if (settling)
-    return answering(() => resolve(ctx, settling[1] ?? '', settling[2] ?? '', request), {
+    return answering(() => resolve(ctx, settling[1], settling[2], request), {
       repository: 'CONFLICT_REPOSITORY_UNAVAILABLE',
     });
-  const answered = params.path?.match(DRIFT);
-  if (answered)
-    return answering(() =>
-      reconcile(ctx, answered[1] ?? '', answered[2] ?? '', request, locals.handover),
-    );
-  const renamed = params.path?.match(RENAME);
-  if (renamed)
-    return answering(() =>
-      rename(ctx, renamed[1] ?? '', renamed[2] ?? '', request, locals.handover),
-    );
-  const copied = params.path?.match(DUPLICATE);
-  if (copied)
-    return answering(() =>
-      duplicate(ctx, copied[1] ?? '', copied[2] ?? '', request, locals.handover),
-    );
-  const templated = params.path?.match(TEMPLATE);
+  const answered = groups(params.path, DRIFT);
+  if (answered) return answering(() => reconcile(ctx, answered[1], answered[2], request, session));
+  const renamed = groups(params.path, RENAME);
+  if (renamed) return answering(() => rename(ctx, renamed[1], renamed[2], request, session));
+  const copied = groups(params.path, DUPLICATE);
+  if (copied) return answering(() => duplicate(ctx, copied[1], copied[2], request, session));
+  const templated = groups(params.path, TEMPLATE);
   if (templated)
-    return answering(() =>
-      saveTemplate(ctx, templated[1] ?? '', templated[2] ?? '', request, locals.handover),
-    );
-  const created = params.path?.match(ENTRIES);
-  if (created) return answering(() => createEntry(ctx, created[1] ?? '', request));
+    return answering(() => saveTemplate(ctx, templated[1], templated[2], request, session));
+  const created = groups(params.path, ENTRIES);
+  if (created) return answering(() => createEntry(ctx, created[1], request));
   return new Response('Not found', { status: 404 });
 };
 
 export const DELETE: APIRoute = async ({ params, request, url, locals }) => {
+  const session = locals.handover;
   const invalidBody = await bodyErrorResponse(request);
   if (invalidBody) return invalidBody;
   const ctx = requestContext();
-  const setting = params.path?.match(SETTING);
-  if (setting) return clearIntegration(ctx, setting[1] ?? '', locals.handover);
-  const member = params.path?.match(MEMBER);
-  if (member)
-    return removeMember(ctx, member[1] ?? '', request, url, locals.cfContext, locals.handover);
-  const draft = params.path?.match(DRAFT);
-  if (draft) return answering(() => discard(ctx, draft[1] ?? '', draft[2] ?? '', locals.handover));
-  const asset = params.path?.match(MEDIA);
-  if (asset) return answering(() => deleteAsset(ctx, asset[1] ?? '', locals.handover));
-  const rule = params.path?.match(REDIRECT);
-  if (rule) return answering(() => removeRedirect(ctx, rule[1] ?? '', locals.handover));
-  const entry = params.path?.match(ENTRY);
-  if (entry)
-    return answering(() => remove(ctx, entry[1] ?? '', entry[2] ?? '', request, locals.handover));
+  const setting = groups(params.path, SETTING);
+  if (setting) return clearIntegration(ctx, setting[1], session);
+  const member = groups(params.path, MEMBER);
+  if (member) return removeMember(ctx, member[1], request, url, locals.cfContext, session);
+  const draft = groups(params.path, DRAFT);
+  if (draft) return answering(() => discard(ctx, draft[1], draft[2], session));
+  const asset = groups(params.path, MEDIA);
+  if (asset) return answering(() => deleteAsset(ctx, asset[1], session));
+  const rule = groups(params.path, REDIRECT);
+  if (rule) return answering(() => removeRedirect(ctx, rule[1], session));
+  const entry = groups(params.path, ENTRY);
+  if (entry) return answering(() => remove(ctx, entry[1], entry[2], request, session));
   return new Response('Not found', { status: 404 });
 };

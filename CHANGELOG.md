@@ -32,6 +32,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   removed or folded into tables.
 - Internal: the admin API body reader has one size limit, and the route wrapper drops its
   unreachable body-size branch.
+- Internal: the admin API dispatcher reads route groups through one helper and shares the
+  upload key pattern with the media routes.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth
