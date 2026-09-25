@@ -1,6 +1,13 @@
 import { isObject, rowAddress, rowKey, TRANSLATED_PROPS } from './entry-format.js';
-import { translatedValues } from './provenance.js';
-import { type Field, type Form, humanise, rowFields, type Translation } from './schema.js';
+import { translatedValues } from './field-text.js';
+import {
+  type Field,
+  type FieldsOf,
+  type Form,
+  humanise,
+  rowFields,
+  type Translation,
+} from './schema.js';
 import { type Labels, labelIn, labelsOf, UI_LOCALES } from './ui-locale.js';
 
 export interface WordPart {
@@ -202,7 +209,7 @@ function propsIn(
 /** Keyed by `_id` so a moved block says so; rows without one pair by position and never move. */
 function rowsIn(
   form: Form,
-  fieldsOf: (row: Record<string, unknown>) => readonly Field[] | undefined,
+  fieldsOf: FieldsOf,
   before: unknown,
   after: unknown,
   at: string,

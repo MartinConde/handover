@@ -2,7 +2,7 @@
 
 import { and, eq, inArray } from 'drizzle-orm';
 import { type ContentIndex, entryParts, type IndexEntry } from '../content/entries.js';
-import { isObject, parseEntry, rowAddress, rowKey } from '../content/entry-format.js';
+import { eachRow, isObject, parseEntry, rowAddress, rowKey } from '../content/entry-format.js';
 import { type I18nRouting, previewTarget } from '../content/names.js';
 import { type EntrySource, entrySource, staleLocales } from '../content/provenance.js';
 import { richtextLinks } from '../content/richtext.js';
@@ -222,29 +222,25 @@ function fieldsIn(
     const mode = field.i18n ?? inherited;
     if (field.type === 'group') fieldsIn(w, field.fields, value, path, mode);
     else if (field.type === 'blocks')
-      rowsIn(w, (row) => w.form.blocks[String(row._type)], value, path, mode);
+      eachRow(
+        value,
+        (row) => w.form.blocks[String(row._type)],
+        path,
+        (inner, row, address) => fieldsIn(w, inner, row, address, mode),
+      );
     // Before `rowFields`, which knows a menu's rows: an item is a link and a label, not fields.
     else if (field.type === 'menus') menusIn(w, value, path);
     else {
       const rows = rowFields(field);
-      if (rows) rowsIn(w, () => rows, value, path, mode);
+      if (rows)
+        eachRow(
+          value,
+          () => rows,
+          path,
+          (inner, row, address) => fieldsIn(w, inner, row, address, mode),
+        );
       else valueIn(w, field, value, path, mode);
     }
-  }
-}
-
-function rowsIn(
-  w: Walk,
-  fieldsOf: (row: Record<string, unknown>) => readonly Field[] | undefined,
-  rows: unknown,
-  at: string,
-  mode: Translation,
-): void {
-  if (!Array.isArray(rows)) return;
-  for (const [i, row] of rows.entries()) {
-    if (!isObject(row)) continue;
-    const fields = fieldsOf(row);
-    if (fields) fieldsIn(w, fields, row, rowAddress(at, rowKey(row, i)), mode);
   }
 }
 

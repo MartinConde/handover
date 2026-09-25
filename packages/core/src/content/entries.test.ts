@@ -10,7 +10,8 @@ import {
   textSummaries,
   textsFrom,
 } from './entries.js';
-import { answeredCount, markTranslation } from './provenance.js';
+import { answeredCount } from './field-text.js';
+import { markTranslation } from './provenance.js';
 import type { Form } from './schema.js';
 
 const file = (path: string, body: string) => ({ path, contents: `_version: 1\n${body}` });

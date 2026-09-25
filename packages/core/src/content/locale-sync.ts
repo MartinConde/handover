@@ -10,8 +10,8 @@ import {
   skeletonOf,
   TRANSLATED_PROPS,
 } from './entry-format.js';
-import { type FieldsOf, translatedValues } from './provenance.js';
-import { type Field, type Form, rowFields, type Translation } from './schema.js';
+import { translatedValues } from './field-text.js';
+import { type Field, type FieldsOf, type Form, rowFields, type Translation } from './schema.js';
 import { fieldAddress, fieldPosition, keptMachine } from './translate.js';
 
 export interface LocaleSyncOptions {
@@ -356,7 +356,7 @@ function driftIn(
 
 function driftRows(
   form: Form,
-  fieldsOf: (row: Record<string, unknown>) => readonly Field[] | undefined,
+  fieldsOf: FieldsOf,
   copies: Copy[],
   at: string,
   found: Drift[],

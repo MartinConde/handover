@@ -1,6 +1,6 @@
 import { type Change, type DiffGroup, diffEntry, joinedName } from '../content/diff.js';
 import { isObject, rowAddress, rowKey, TRANSLATED_PROPS } from '../content/entry-format.js';
-import { type Field, type Form, rowFields } from '../content/schema.js';
+import { type Field, type FieldsOf, type Form, rowFields } from '../content/schema.js';
 import type { Labels } from '../content/ui-locale.js';
 
 /** One file of an entry as the three sides have it: what it was, what we wrote, what is in git. */
@@ -247,7 +247,7 @@ function propsIn(field: Field, at: ThreeWay, path: string, under: string[], ctx:
 /** Rows keyed by `_id`; ours is the order, since a position has no pair of answers to offer. */
 function rowsIn(
   form: Form,
-  fieldsOf: (row: Record<string, unknown>) => readonly Field[] | undefined,
+  fieldsOf: FieldsOf,
   at: ThreeWay,
   path: string,
   ctx: Sides,

@@ -19,6 +19,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Internal: the draft store's SQL guards and batch writes are named helpers.
 - Internal: `drafts/drafts.ts` is split into entry settings and committed-change records.
 - Internal: core builds a row's address in one place.
+- Internal: core's single-language row walkers share one `eachRow` helper.
+- Internal: field-text extraction moved from `content/provenance.ts` to `content/field-text.ts`.
 - Internal: the stored media key format is one pattern, and the publish checks chunk their media
   lookups with the shared D1 helper.
 - Internal: the cron dispatcher runs its jobs directly; the unreachable unknown-job guard is gone.

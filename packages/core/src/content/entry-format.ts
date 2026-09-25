@@ -1,6 +1,6 @@
 import { Document, isMap, isScalar, isSeq, parse, parseDocument, visit } from 'yaml';
 import { checkReserved, RESERVED_KEYS } from './reserved.js';
-import { type Field, type Form, rowFields, type Translation } from './schema.js';
+import { type Field, type FieldsOf, type Form, rowFields, type Translation } from './schema.js';
 import { keptMachine } from './translate.js';
 
 export function parseEntry(_siteId: string, contents: string): unknown {
@@ -283,6 +283,21 @@ export const rowKey = (row: unknown, i: number) =>
 export const rowAddress = (at: string, key: string) =>
   `${at}[${key.startsWith('#') ? key.slice(1) : `_id=${key}`}]`;
 
+/** Here and not in `schema.ts`, which this file imports: rows need `rowKey` and `rowAddress`. */
+export function eachRow(
+  rows: unknown,
+  fieldsOf: FieldsOf,
+  at: string,
+  visit: (fields: readonly Field[], row: Record<string, unknown>, address: string) => void,
+): void {
+  if (!Array.isArray(rows)) return;
+  for (const [i, row] of rows.entries()) {
+    if (!isObject(row)) continue;
+    const fields = fieldsOf(row);
+    if (fields) visit(fields, row, rowAddress(at, rowKey(row, i)));
+  }
+}
+
 // A row is written to the languages `_locales` names, and to all of them when it names none.
 const inLocale = (row: unknown, locale: string) =>
   !isObject(row) || !Array.isArray(row._locales) || row._locales.includes(locale);
@@ -290,7 +305,7 @@ const inLocale = (row: unknown, locale: string) =>
 // The written file keeps its own rows and order; the other side supplies values, paired by `_id`.
 function pairRows(
   form: Form,
-  fieldsOf: (row: Record<string, unknown>) => readonly Field[] | undefined,
+  fieldsOf: FieldsOf,
   from: unknown,
   onto: unknown,
   pick: (mode: Translation) => boolean,
@@ -338,7 +353,7 @@ export function overlayProps(
 /** A row only `onto` has holds its place behind the last row both sides know. */
 function syncRows(
   form: Form,
-  fieldsOf: (row: Record<string, unknown>) => readonly Field[] | undefined,
+  fieldsOf: FieldsOf,
   from: unknown,
   onto: unknown,
   pick: (mode: Translation) => boolean,

@@ -82,6 +82,8 @@ const menuFields: Field[] = [
   { path: ['items'], label: 'Items', type: 'array', required: true, item: menuItem },
 ];
 
+export type FieldsOf = (row: Record<string, unknown>) => readonly Field[] | undefined;
+
 /** Kept off the `Field` the browser gets: `menuItem` names itself, a cycle JSON cannot carry. */
 export const rowFields = (field: Field): readonly Field[] | undefined =>
   field.type === 'menus'

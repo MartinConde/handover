@@ -54,6 +54,14 @@ export {
   timestampErrors,
   withSource,
 } from './content/entry-format.js';
+export type { AnsweredPaths } from './content/field-text.js';
+export {
+  answeredCount,
+  answeredPaths,
+  answeredWork,
+  referenceText,
+  translatableText,
+} from './content/field-text.js';
 export type { Drift, DriftChoice, LocaleSyncOptions } from './content/locale-sync.js';
 export { applyDrift, driftReport, syncLocale, syncLocaleField } from './content/locale-sync.js';
 export type { MigrationStep } from './content/migrate.js';
@@ -69,24 +77,14 @@ export {
   previewTarget,
   withSlash,
 } from './content/names.js';
-export type {
-  AnsweredPaths,
-  EntrySource,
-  I18nMark,
-  TranslationSource,
-} from './content/provenance.js';
+export type { EntrySource, I18nMark, TranslationSource } from './content/provenance.js';
 export {
-  answeredCount,
-  answeredPaths,
-  answeredWork,
   changeSource,
   entrySource,
   markTranslation,
   provenance,
-  referenceText,
   sourceOnlyConflicts,
   staleLocales,
-  translatableText,
 } from './content/provenance.js';
 export type { RedirectRule, RedirectSite } from './content/redirects.js';
 export {
