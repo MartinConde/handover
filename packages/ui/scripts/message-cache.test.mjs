@@ -33,10 +33,8 @@ function fixture() {
     'package.json': '{}\n',
     '../core/src/content/ui-locale.ts': "export const UI_LOCALES = ['en', 'de'];\n",
     'project.inlang/settings.json': '{}\n',
-    'scripts/catalog-validator.mjs': 'validator implementation\n',
     'scripts/message-cache.mjs': 'cache\n',
     'scripts/messages.mjs': 'messages\n',
-    'scripts/validate-catalogs.mjs': 'validator\n',
     'messages/en.json': '{"title":"Title"}\n',
     'messages/de.json': '{"title":"Titel"}\n',
     ...Object.fromEntries(

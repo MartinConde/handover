@@ -51,20 +51,24 @@ This command validates every catalog before invoking the compiler. To run only t
 pnpm --filter @handover/ui validate:messages
 ```
 
-The UI's build, dev, test, typecheck, and fixture commands all use the same validation/generation
-entry point, including when selected through the root recursive commands. The gate checks that
-every supported locale has exactly the English keys, translations are non-empty, and parsed
-placeholders, declarations, selector inputs and selectors keep their contracts before Inlang merges
-locales. Each variant message must also have its required `other` or `*` fallback. The gate requires
-exact agreement between the compiler locales/base locale and `UI_LOCALES` / `DEFAULT_UI_LOCALE` in
-framework-neutral core code. Paraglide's subsequent syntax/type compilation is a separate check;
-its English fallback does not make an incomplete German catalog valid.
+The UI's build, dev, test, typecheck, and fixture commands all run the same entry point,
+`scripts/messages.mjs`, including when selected through the root recursive commands. It reads the
+JSON catalogs directly and checks that:
+
+- the Inlang locales and base locale equal `UI_LOCALES` / `DEFAULT_UI_LOCALE` in core
+- every locale has exactly the English keys, each with the same shape, and no text is empty
+- every message and variant keeps the English placeholders and markup
+- every variant message keeps the English declarations and selectors and has an `other` or `*`
+  fallback
+
+Paraglide then compiles the catalogs and checks their syntax. The gate also fails when the compile
+emitted no module for a message. Paraglide's English fallback does not make an incomplete German
+catalog valid.
 
 That entry point records a fingerprint beside the ignored generated modules. An unchanged catalog,
-compiler configuration, lockfile, validator, and UI-locale allowlist reuse the already validated
+compiler configuration, lockfile, gate script, and UI-locale allowlist reuse the already validated
 output; changing any of them, deleting a required generated module, or passing `--force` validates
-and compiles again. The validator and compiler run in separate processes so their Inlang SDK heaps
-do not overlap. Delete `packages/ui/src/paraglide/` to reproduce a clean-cache generation.
+and compiles again. Delete `packages/ui/src/paraglide/` to reproduce a clean-cache generation.
 
 When adding or changing a message, use a stable surface prefix such as `account_`, `editor_`,
 `media_`, or `canvas_`; add the English source and reviewed German translation together; and retain
@@ -98,8 +102,8 @@ cover a control initialized after the switch when it can load lazily.
 `../../node_modules/@inlang/plugin-message-format/dist/index.js`; the repository pins pnpm's
 hoisted linker in `.npmrc`, which places the package at the workspace root, and Inlang resolves
 this path from `packages/ui/`, the directory containing `project.inlang`. It also defines
-`plugin.inlang.messageFormat.pathPattern`, so removing that setting can yield a successful compile
-with no messages.
+`plugin.inlang.messageFormat.pathPattern`. Without it Paraglide compiles successfully with no
+messages, so the gate refuses settings that lack it.
 
 After `pnpm install` in a fresh checkout, run the root `pnpm build` once before invoking a filtered
 UI test, typecheck, or fixture command. The UI imports public `@handover/core` exports from its built

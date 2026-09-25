@@ -19,10 +19,8 @@ const inputFiles = (root) => [
   'package.json',
   '../core/src/content/ui-locale.ts',
   'project.inlang/settings.json',
-  'scripts/catalog-validator.mjs',
   'scripts/message-cache.mjs',
   'scripts/messages.mjs',
-  'scripts/validate-catalogs.mjs',
   ...fs
     .readdirSync(path.join(root, 'messages'))
     .filter((file) => file.endsWith('.json'))

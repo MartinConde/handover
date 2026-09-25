@@ -51,6 +51,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   suite used.
 - Internal: the editor's entry session drops four methods only its tests called and stops
   exporting 14 types nothing imports.
+- Internal: the admin message catalogs are checked as plain JSON before Paraglide compiles them,
+  instead of through the Inlang SDK, and a compile that emits no message modules now fails.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth
@@ -413,8 +415,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the editor's language and switch without a reload. A collection label with a key other than
   `en` or `de` stops the build.
 
-- Cache validated Paraglide output by its complete compiler-input fingerprint, and isolate catalog
-  validation from compilation so repeated release builds avoid overlapping Inlang SDK heaps. The
+- Cache validated Paraglide output by its complete compiler-input fingerprint. The
   release proof now covers archive installation, fresh and upgraded consumer migrations, packaged
   Worker size, browser timing, and the absence of admin translation assets on public pages.
 
@@ -425,7 +426,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   the catalog, locale, authentication and bootstrap contracts.
 
 - Review the complete English/German admin at desktop and phone widths, standardize German on
-  informal `du` and inclusive role labels, and add a generated long-string pseudo-locale check.
+  informal `du` and inclusive role labels, and add a generated long-string pseudo-locale for
+  layout review.
   Locale-sensitive formatters now accept a newly configured UI locale without component changes.
 
 - Finish the English/German admin string and error audit: translate retained editor

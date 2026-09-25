@@ -4,9 +4,20 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, test } from 'vitest';
-import { validateCatalogs } from './catalog-validator.mjs';
+import { DEFAULT_UI_LOCALE, UI_LOCALES } from '@handover/core';
+import { afterEach, expect, test } from 'vitest';
+import { catalogProblems, readCatalogs, uncompiledKeys } from './messages.mjs';
 
+const root = path.resolve(import.meta.dirname, '..');
+const settings = () =>
+  JSON.parse(fs.readFileSync(path.join(root, 'project.inlang/settings.json'), 'utf8'));
+const problems = (changeSettings, changeGerman) => {
+  const project = settings();
+  changeSettings(project);
+  const catalogs = readCatalogs(root, settings(), UI_LOCALES);
+  changeGerman(catalogs.de);
+  return catalogProblems(project, catalogs, UI_LOCALES, DEFAULT_UI_LOCALE);
+};
 const temporaryDirectories = [];
 
 afterEach(() => {
@@ -15,168 +26,100 @@ afterEach(() => {
   }
 });
 
-const messageFormatModule = path.resolve(
-  import.meta.dirname,
-  '../../../node_modules/@inlang/plugin-message-format/dist/index.js',
-);
+test('the shipped catalogs pass', () => {
+  expect(
+    problems(
+      () => {},
+      () => {},
+    ),
+  ).toEqual([]);
+});
 
-function fixture({ locales = ['en', 'de'], en = baseMessages(), de = baseMessages() } = {}) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'handover-catalog-'));
-  temporaryDirectories.push(root);
-  const projectPath = path.join(root, 'project.inlang');
-  const messagesPath = path.join(root, 'messages');
-  fs.mkdirSync(projectPath);
-  fs.mkdirSync(messagesPath);
-  fs.writeFileSync(
-    path.join(projectPath, 'settings.json'),
-    JSON.stringify({
-      baseLocale: 'en',
-      locales,
-      modules: [messageFormatModule],
-      'plugin.inlang.messageFormat': { pathPattern: './messages/{locale}.json' },
-    }),
+test.each([
+  [
+    'a missing key',
+    (de) => {
+      delete de.account_title;
+    },
+    'de missing keys: account_title',
+  ],
+  [
+    'a renamed placeholder',
+    (de) => {
+      de.diagnostics_checked_when = 'geprüft {wann}';
+    },
+    'de placeholders differ: diagnostics_checked_when',
+  ],
+  [
+    'no other fallback',
+    (de) => {
+      delete de.account_last_used_minutes[0].match['countPlural=other'];
+    },
+    'de has no * or other fallback: account_last_used_minutes',
+  ],
+  [
+    'empty text',
+    (de) => {
+      de.account_title = '  ';
+    },
+    'de empty text: account_title',
+  ],
+  [
+    'a changed declaration',
+    (de) => {
+      de.account_last_used_minutes[0].declarations[1] = 'local countPlural = count: number';
+    },
+    'de declarations differ: account_last_used_minutes',
+  ],
+])('a German catalog with %s is refused', (_name, change, problem) => {
+  expect(problems(() => {}, change)).toEqual([problem]);
+});
+
+test.each([
+  [
+    'a locale core does not list',
+    (project) => {
+      project.locales = ['en', 'de', 'fr'];
+    },
+    "locales must equal core's UI_LOCALES (en, de): en, de, fr",
+  ],
+  [
+    'another base locale',
+    (project) => {
+      project.baseLocale = 'de';
+    },
+    "baseLocale must equal core's DEFAULT_UI_LOCALE (en): de",
+  ],
+])('settings with %s are refused', (_name, change, problem) => {
+  expect(problems(change, () => {})).toEqual([problem]);
+});
+
+test('settings without a {locale} pathPattern are refused', () => {
+  const project = settings();
+  delete project['plugin.inlang.messageFormat'].pathPattern;
+  expect(() => readCatalogs(root, project, UI_LOCALES)).toThrow(
+    'project.inlang/settings.json needs a plugin.inlang.messageFormat.pathPattern with {locale}',
   );
-  fs.writeFileSync(path.join(messagesPath, 'en.json'), JSON.stringify(en));
-  fs.writeFileSync(path.join(messagesPath, 'de.json'), JSON.stringify(de));
-  return projectPath;
-}
+});
 
-function baseMessages() {
-  return {
-    title: 'Title',
-    save_failed: 'Could not save {field}.',
-    pending: [
-      {
-        declarations: ['input count', 'local countPlural = count: plural'],
-        selectors: ['countPlural'],
-        match: {
-          'countPlural=one': '{count} pending change',
-          'countPlural=other': '{count} pending changes',
-        },
-      },
-    ],
-  };
-}
+test('a compile that emitted no module for a message is caught', () => {
+  const outdir = fs.mkdtempSync(path.join(os.tmpdir(), 'handover-paraglide-'));
+  temporaryDirectories.push(outdir);
+  fs.mkdirSync(path.join(outdir, 'messages'));
+  fs.writeFileSync(path.join(outdir, 'messages/account_title.js'), '');
+  expect(uncompiledKeys(outdir, ['account_title', 'account_loading'])).toEqual(['account_loading']);
+});
 
-function rewriteSettings(projectPath, update) {
-  const settingsPath = path.join(projectPath, 'settings.json');
-  const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
-  update(settings);
-  fs.writeFileSync(settingsPath, JSON.stringify(settings));
-}
-
-describe('validateCatalogs', () => {
-  test('accepts complete catalogs', async () => {
-    await expect(
-      validateCatalogs({ projectPath: fixture(), expectedLocales: ['en', 'de'] }),
-    ).resolves.toBeUndefined();
-  });
-
-  test.each([
-    ['missing key', () => ({ ...baseMessages(), title: undefined }), 'missing keys: title'],
-    ['extra key', () => ({ ...baseMessages(), extra: 'Extra' }), 'extra keys: extra'],
-    ['empty value', () => ({ ...baseMessages(), title: '   ' }), 'empty translation: title'],
-    [
-      'placeholder mismatch',
-      () => ({ ...baseMessages(), save_failed: 'Could not save {name}.' }),
-      'placeholder contract differs: save_failed',
-    ],
-    [
-      'missing fallback',
-      () => ({
-        ...baseMessages(),
-        pending: [
-          {
-            declarations: ['input count', 'local countPlural = count: plural'],
-            selectors: ['countPlural'],
-            match: { 'countPlural=one': '{count} pending change' },
-          },
-        ],
-      }),
-      'required fallback is missing: pending',
-    ],
-    [
-      'selector input mismatch',
-      () => ({
-        ...baseMessages(),
-        pending: [
-          {
-            declarations: [
-              'input count',
-              'input otherCount',
-              'local countPlural = otherCount: plural',
-            ],
-            selectors: ['countPlural'],
-            match: {
-              'countPlural=one': '{count} pending change',
-              'countPlural=other': '{count} pending changes',
-            },
-          },
-        ],
-      }),
-      'declaration contract differs: pending',
-    ],
-  ])('rejects a %s', async (_name, mutate, message) => {
-    const de = JSON.parse(JSON.stringify(mutate(), (_key, value) => value));
-    await expect(
-      validateCatalogs({ projectPath: fixture({ de }), expectedLocales: ['en', 'de'] }),
-    ).rejects.toThrow(message);
-  });
-
-  test('rejects locale configuration that differs from core', async () => {
-    await expect(
-      validateCatalogs({
-        projectPath: fixture({ locales: ['en', 'de', 'fr'] }),
-        expectedLocales: ['en', 'de'],
-      }),
-    ).rejects.toThrow('configured locales must exactly match the core UI locale allowlist');
-  });
-
-  test('rejects a base locale that differs from the core default', async () => {
-    const projectPath = fixture();
-    rewriteSettings(projectPath, (settings) => {
-      settings.baseLocale = 'de';
-    });
-    await expect(
-      validateCatalogs({
-        projectPath,
-        expectedLocales: ['en', 'de'],
-        expectedBaseLocale: 'en',
-      }),
-    ).rejects.toThrow('configured base locale must match the core UI default (en): de');
-  });
-
-  test('does not treat malformed plugin configuration as an empty catalog', async () => {
-    const projectPath = fixture();
-    rewriteSettings(projectPath, (settings) => {
-      settings.modules = [`/missing/${messageFormatModule}`];
-    });
-    await expect(validateCatalogs({ projectPath, expectedLocales: ['en', 'de'] })).rejects.toThrow(
-      'Inlang project could not be loaded',
-    );
-  });
-
-  test('requires the configured catalog path pattern', async () => {
-    const projectPath = fixture();
-    rewriteSettings(projectPath, (settings) => {
-      delete settings['plugin.inlang.messageFormat'].pathPattern;
-    });
-    await expect(validateCatalogs({ projectPath, expectedLocales: ['en', 'de'] })).rejects.toThrow(
-      'message-format pathPattern must include {locale}',
-    );
-  });
-
-  test('propagates compiler failure through the shared command', () => {
-    const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'handover-compiler-'));
-    temporaryDirectories.push(bin);
-    const compiler = path.join(bin, 'paraglide-js');
-    fs.writeFileSync(compiler, '#!/bin/sh\nexit 7\n');
-    fs.chmodSync(compiler, 0o755);
-    const result = spawnSync(
-      process.execPath,
-      [path.join(import.meta.dirname, 'messages.mjs'), '--force'],
-      { env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } },
-    );
-    expect(result.status).toBe(7);
-  });
+test('a compiler failure is the command’s exit status', () => {
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'handover-compiler-'));
+  temporaryDirectories.push(bin);
+  const compiler = path.join(bin, 'paraglide-js');
+  fs.writeFileSync(compiler, '#!/bin/sh\nexit 7\n');
+  fs.chmodSync(compiler, 0o755);
+  const result = spawnSync(
+    process.execPath,
+    [path.join(import.meta.dirname, 'messages.mjs'), '--force'],
+    { env: { ...process.env, PATH: `${bin}:${process.env.PATH}` } },
+  );
+  expect(result.status).toBe(7);
 });
