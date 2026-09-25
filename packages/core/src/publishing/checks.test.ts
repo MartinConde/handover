@@ -1,7 +1,7 @@
 import { beforeAll, expect, test } from 'vitest';
 import type { ContentIndex } from '../content/entries.js';
 import type { Form } from '../content/schema.js';
-import { migrateTestD1, newTestD1 } from '../db.fixtures.js';
+import { migrateTestD1, newTestD1 } from '../db.fixture.js';
 import { type Db, openDb } from '../db.js';
 import type { R2Store } from '../media/media.js';
 import * as tables from '../tables.js';

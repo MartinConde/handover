@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
-import { article, listing, localeFile } from './content.fixtures.js';
+import { article, listing, localeFile } from './content.fixture.js';
 import {
   mergeEntry,
   offeredEntry,

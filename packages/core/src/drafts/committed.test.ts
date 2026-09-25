@@ -20,7 +20,7 @@ import {
   page,
   RENAMED,
   VALUES,
-} from '../db.fixtures.js';
+} from '../db.fixture.js';
 import type { openDb } from '../db.js';
 import { blobSha } from '../publishing/git.js';
 import { publishDrafts } from '../publishing/publish.js';

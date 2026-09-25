@@ -21,7 +21,7 @@ import {
   page,
   REDIRECT,
   ruleFor,
-} from '../db.fixtures.js';
+} from '../db.fixture.js';
 import { publishDrafts } from '../publishing/publish.js';
 import { drafts } from '../tables.js';
 import {

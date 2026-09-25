@@ -22,7 +22,7 @@ import {
   RENAMED,
   seedPublishedRows,
   VALUES,
-} from '../db.fixtures.js';
+} from '../db.fixture.js';
 import { recordDelete, recordOffer } from '../drafts/committed.js';
 import { createDraft, loadDraft, pendingDrafts, saveDraft } from '../drafts/drafts.js';
 import { claimLock } from '../drafts/locks.js';

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { fakeGit, manual, RULE, redirects } from '../db.fixtures.js';
+import { fakeGit, manual, RULE, redirects } from '../db.fixture.js';
 import {
   collapseRedirects,
   editRedirects,

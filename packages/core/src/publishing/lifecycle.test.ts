@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
 import { parse } from 'yaml';
-import { fakeGit, redirects } from '../db.fixtures.js';
+import { fakeGit, redirects } from '../db.fixture.js';
 import { deleteEntry, duplicateEntry, renamedFrom, renameEntry } from './lifecycle.js';
 
 const i18n = { locales: ['en', 'de', 'fr'], defaultLocale: 'en' };

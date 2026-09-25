@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { beforeAll, expect, test, vi } from 'vitest';
-import { migrateTestD1, newTestD1 } from '../db.fixtures.js';
+import { migrateTestD1, newTestD1 } from '../db.fixture.js';
 import { openDb } from '../db.js';
 import * as tables from '../tables.js';
 import {

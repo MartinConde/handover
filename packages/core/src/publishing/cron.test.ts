@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { beforeAll, beforeEach, expect, test } from 'vitest';
-import { newTestD1, resetTestD1 } from '../db.fixtures.js';
+import { newTestD1, resetTestD1 } from '../db.fixture.js';
 import { type Db, openDb } from '../db.js';
 import type { R2Store } from '../media/media.js';
 import * as tables from '../tables.js';

@@ -28,7 +28,7 @@ import {
   page,
   SYNC,
   VALUES,
-} from '../db.fixtures.js';
+} from '../db.fixture.js';
 import { openDb } from '../db.js';
 import { blobSha } from '../publishing/git.js';
 import { publishDrafts } from '../publishing/publish.js';

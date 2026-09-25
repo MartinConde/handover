@@ -14,7 +14,7 @@ import {
   PAGE_EN,
   PAGE_FORM,
   page,
-} from '../db.fixtures.js';
+} from '../db.fixture.js';
 import { blobSha } from '../publishing/git.js';
 import { drafts } from '../tables.js';
 import { draftFiles } from './committed.js';

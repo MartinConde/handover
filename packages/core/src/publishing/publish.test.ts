@@ -31,7 +31,7 @@ import {
   ruleFor,
   SYNC,
   VALUES,
-} from '../db.fixtures.js';
+} from '../db.fixture.js';
 import { openDb } from '../db.js';
 import {
   createDraft,

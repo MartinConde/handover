@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, expect, test } from 'vitest';
-import { migrateTestD1, newTestD1 } from '../db.fixtures.js';
+import { migrateTestD1, newTestD1 } from '../db.fixture.js';
 import { openDb } from '../db.js';
 import { settings } from '../tables.js';
 import { readSetting, removeSetting, settingFacts, writeSetting } from './settings.js';

@@ -9,7 +9,7 @@ import {
   newTestD1,
   PATH,
   VALUES,
-} from '../db.fixtures.js';
+} from '../db.fixture.js';
 import {
   beginOperation,
   finalizeOperation,

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test } from 'vitest';
-import { article, listing, localeFile } from './content.fixtures.js';
+import { article, listing, localeFile } from './content.fixture.js';
 import { parseEntry, stringifyEntry } from './entry-format.js';
 import { applyDrift, driftReport, syncLocale, syncLocaleField } from './locale-sync.js';
 import type { Form } from './schema.js';
