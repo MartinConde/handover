@@ -14,7 +14,6 @@ import {
   heldBy,
   isLint,
   isLock,
-  opened,
   show,
   state,
   tick,
@@ -64,35 +63,39 @@ test('a key no descriptor mentions is written back, not dropped', async () => {
   });
   type(root, 'input#f-title', 'Seaview House');
   $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
-  await tick();
-  flushSync();
-  expect(fetchMock).toHaveBeenCalledWith('/admin/api/drafts/listings/seaview-cottage', {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      data: {
-        title: 'Seaview House',
-        seo: { description: 'Harbour view' },
-        photos: [],
-        subtitle: 'By the harbour',
-      },
-      tab: 'tab-1',
-    }),
+  await vi.waitFor(() => {
+    expect(fetchMock).toHaveBeenCalledWith('/admin/api/drafts/listings/seaview-cottage', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        data: {
+          title: 'Seaview House',
+          seo: { description: 'Harbour view' },
+          photos: [],
+          subtitle: 'By the harbour',
+        },
+        tab: 'tab-1',
+      }),
+    });
   });
   vi.unstubAllGlobals();
 });
 
 test('an edit that could not be stored does not open the drawer', async () => {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async () => new Response('nope', { status: 500 })),
-  );
+  const fetchMock = vi.fn(async (url: string) => {
+    if (isLock(url)) return Response.json(HELD);
+    if (url === '/admin/api/drafts/listings/seaview-cottage')
+      return new Response('nope', { status: 500 });
+    throw new Error(`Unexpected editor request: ${url}`);
+  });
+  vi.stubGlobal('fetch', fetchMock);
   const root = show();
   type(root, 'input#f-title', 'Seaview House');
   $<HTMLButtonElement>(root, 'button.btn-primary')?.click();
   await tick();
   flushSync();
-  expect(opened).not.toHaveBeenCalled();
+  expect($(root, '.dialog')).toBeNull();
+  expect(fetchMock.mock.calls.some(([url]) => url === '/admin/api/publish')).toBe(false);
   expect($(root, '.autosave')?.textContent).toBe('Not saved');
   vi.unstubAllGlobals();
 });
@@ -296,7 +299,6 @@ test('a draft that is ahead of the published file can be published on load', () 
       collection: 'listings',
       slug: 'seaview-cottage',
       entry: { ...entry, pending: ['en'] },
-      onpublish: opened,
       onchanged: () => {},
     },
   });
@@ -354,7 +356,6 @@ const withProblems = (problems: { path: string; message: string }[]) => {
       collection: 'listings',
       slug: 'seaview-cottage',
       entry: { ...entry, pending: ['en'], problems },
-      onpublish: opened,
       onchanged: () => {},
     },
   });

@@ -20,6 +20,7 @@ import {
   runChecks,
 } from '@handover/core';
 import { entryProblems } from '../../problems.js';
+import { readBodyText, readJson } from './body.js';
 import {
   codedError,
   ENTRY_FILE,
@@ -89,14 +90,13 @@ const ENTRY_KEY = /^[\w-]+\/[\w-]+$/;
 const EXCLUSION = /^([\w-]+\/[\w-]+):([\w-]+)$/;
 
 /** Both publish routes take this; only an empty body means everything. */
-function selection(raw: string): { chosen?: string[]; without: string[] } | Response {
+function selection(
+  raw: string,
+  body: unknown,
+): { chosen?: string[]; without: string[] } | Response {
   if (raw === '') return { without: [] };
-  let body: unknown;
-  try {
-    body = JSON.parse(raw);
-  } catch {
+  if (body === undefined)
     return codedError(400, 'PUBLISH_SELECTION_INVALID', 'Invalid publish JSON');
-  }
   const named = body && typeof body === 'object' && !Array.isArray(body) ? body : undefined;
   if (
     !named ||
@@ -174,8 +174,9 @@ const problemsOf = (row: Pick<Draft, 'path' | 'contents'>) => {
 };
 
 /** One resolver for the checks and the commit, so the lint is over exactly what goes out. */
-async function resolveSelection(ctx: RequestContext, raw: string, readiness = false) {
-  const asked = selection(raw);
+async function resolveSelection(ctx: RequestContext, request: Request, readiness = false) {
+  const raw = await readBodyText(request);
+  const asked = selection(raw, await readJson(request));
   if (asked instanceof Response) return asked;
   const { chosen, without } = asked;
   const pending = await readyDrafts('default', ctx.db(), chosen);
@@ -239,7 +240,7 @@ async function resolveSelection(ctx: RequestContext, raw: string, readiness = fa
 /** A request of its own so the pass gets its own CPU budget; nothing here refuses anything. */
 export async function prepublishChecks(ctx: RequestContext, request: Request): Promise<Response> {
   const database = ctx.db();
-  const resolved = await resolveSelection(ctx, await request.text(), true);
+  const resolved = await resolveSelection(ctx, request, true);
   if (resolved instanceof Response) return resolved;
   const { retained: rows, read } = resolved;
   // Per pending language, the draft as stored: what the dialog may offer to leave out.
@@ -339,7 +340,7 @@ export async function publish(
 ): Promise<Response> {
   const database = ctx.db();
   // Only a genuinely empty body means all: a malformed selection must never widen scope.
-  const resolved = await resolveSelection(ctx, await request.text());
+  const resolved = await resolveSelection(ctx, request);
   if (resolved instanceof Response) return resolved;
   const { chosen, head, retained: pending, excluded } = resolved;
   // Who was holding what, read while the holds are still there: the publish releases them.

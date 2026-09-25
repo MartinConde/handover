@@ -22,14 +22,14 @@ changed=$(git diff --name-only --no-renames --diff-filter=MD "$base...$head" -- 
 [ -n "$changed" ] || exit 0
 
 version() {
-  git show "$1:packages/core/src/content.ts" 2>/dev/null |
+  git grep -h '^export const FORMAT_VERSION = [0-9][0-9]*;$' "$1" -- packages/core/src |
     sed -n 's/^export const FORMAT_VERSION = \([0-9][0-9]*\);$/\1/p'
 }
 before=$(version "$base")
 after=$(version "$head")
 
 if [ -z "$before" ] || [ -z "$after" ]; then
-  echo "format-lock: could not read FORMAT_VERSION from packages/core/src/content.ts"
+  echo "format-lock: could not read FORMAT_VERSION from the core sources"
   echo "  at $base: '${before:-not found}'   at $head: '${after:-not found}'"
   exit 1
 fi
@@ -37,8 +37,8 @@ fi
 if [ "$after" -le "$before" ]; then
   echo "format-lock: the content format is locked, and these golden files changed:"
   echo "$changed" | sed 's/^/  /'
-  echo "FORMAT_VERSION is still $after. Raise it in packages/core/src/content.ts and add the"
-  echo "matching step to MIGRATIONS in packages/core/src/migrate.ts, so existing content files"
+  echo "FORMAT_VERSION is still $after. Raise it in packages/core/src/content/entry-format.ts and add the"
+  echo "matching step to MIGRATIONS in packages/core/src/content/migrate.ts, so existing content files"
   echo "are migrated to the new shape instead of being read as if they were always in it."
   exit 1
 fi

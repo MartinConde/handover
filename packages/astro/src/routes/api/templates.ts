@@ -22,6 +22,7 @@ import {
   withSource,
 } from '@handover/core';
 import { formSchema } from '../../index.js';
+import { readJson } from './body.js';
 import { entryFiles, entryPath, sourceOrder, takenNames } from './content.js';
 import type { RequestContext } from './environment.js';
 
@@ -73,7 +74,7 @@ export async function saveTemplate(
 ): Promise<Response> {
   if (!config.collections[collection]) return new Response('Not found', { status: 404 });
   if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
-  const body = (await request.json().catch(() => undefined)) as { to?: unknown } | undefined;
+  const body = (await readJson(request)) as { to?: unknown } | undefined;
   const git = ctx.git();
   const database = ctx.db();
   const files = await entryFiles(git, collection, slug);
@@ -157,7 +158,7 @@ export async function createEntry(
 ): Promise<Response> {
   const collected = config.collections[collection];
   if (!collected) return new Response('Not found', { status: 404 });
-  const body = (await request.json().catch(() => undefined)) as
+  const body = (await readJson(request)) as
     | { title?: unknown; template?: unknown; locale?: unknown }
     | undefined;
   const title = typeof body?.title === 'string' ? body.title : '';

@@ -22,6 +22,7 @@ import {
 } from '@handover/core';
 import { mailer } from '../../auth.js';
 import { entryProblems } from '../../problems.js';
+import { readJson } from './body.js';
 import { deeplKey, entryPath, formFor, publishSources, takenNames } from './content.js';
 import type { RequestContext } from './environment.js';
 import { mediaStore, missingMailer, NO_BUCKET, workerBuilds } from './environment.js';
@@ -122,7 +123,7 @@ export async function setIntegration(
 ): Promise<Response> {
   if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
   if (!INTEGRATIONS.includes(key as Integration)) return new Response('Not found', { status: 404 });
-  const body = (await request.json().catch(() => undefined)) as { value?: unknown } | undefined;
+  const body = (await readJson(request)) as { value?: unknown } | undefined;
   const value = typeof body?.value === 'string' ? body.value.trim() : '';
   if (!value)
     return Response.json(

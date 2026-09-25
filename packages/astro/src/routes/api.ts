@@ -23,25 +23,19 @@ import {
 import type { APIRoute } from 'astro';
 import { createAuth } from '../auth.js';
 import { formSchema } from '../index.js';
-import { BodyTooLargeError, bodyErrorResponse } from './api/body.js';
+import { BodyTooLargeError, bodyErrorResponse, readJson } from './api/body.js';
 import { tabOf } from './api/content.js';
 import { dashboard, globalsList, listEntries, pendingList, pickList } from './api/dashboard.js';
+import { autosave, hold, lockState } from './api/entries/editing.js';
+import { discard, duplicate, remove, rename } from './api/entries/lifecycle.js';
 import {
   address,
-  autosave,
   changeEntrySource,
-  deletedList,
-  discard,
-  duplicate,
-  getEntry,
-  hold,
-  lockState,
   offering,
   reconcile,
-  remove,
-  rename,
   setStatus,
-} from './api/entries.js';
+} from './api/entries/locales.js';
+import { deletedList, getEntry } from './api/entries/reading.js';
 import { requestContext } from './api/environment.js';
 import {
   activityDiff,
@@ -335,10 +329,13 @@ async function answering(
 }
 
 export const POST: APIRoute = async ({ params, request, url, locals }) => {
+  if (mounted(url.pathname)) {
+    const invalidBody = await bodyErrorResponse(request, true);
+    return invalidBody ?? createAuth(url, locals.cfContext).handler(request);
+  }
   const invalidBody = await bodyErrorResponse(request);
   if (invalidBody) return invalidBody;
   const ctx = requestContext();
-  if (mounted(url.pathname)) return createAuth(url, locals.cfContext).handler(request);
   const checked = params.path?.match(CHECK);
   if (checked) {
     const name = checked[1] ?? '';
@@ -379,7 +376,7 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   if (params.path === 'restore') return answering(() => restore(ctx, request, locals.handover));
   const beat = params.path?.match(LOCK);
   if (beat) {
-    const body = (await request.json().catch(() => undefined)) as { take?: unknown } | undefined;
+    const body = (await readJson(request)) as { take?: unknown } | undefined;
     return lockState(
       ctx,
       beat[1] ?? '',

@@ -9,10 +9,10 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
-import type { RedirectRule } from './redirects.js';
+import type { RedirectRule } from './content/redirects.js';
 
 // Better Auth owns those five; `auth-schema.ts` is committed as `npx auth generate` emits it.
-export * from './auth-schema.js';
+export * from './identity/auth-schema.js';
 
 /** `contents` is what a publish would commit, so "nothing pending" is a blob-SHA comparison. */
 export const drafts = sqliteTable(

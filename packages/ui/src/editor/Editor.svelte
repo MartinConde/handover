@@ -14,18 +14,12 @@ import {
   answeredCount,
   answeredPaths,
   answeredWork,
-  type Drift,
   entryName,
   entryUrl,
-  type Field,
-  type Form,
   fieldPosition,
   formIn,
-  type Labels,
-  LOCK_TTL,
   referenceText,
   resolveSeo,
-  type SeoDefaultsValue,
 } from '@handover/core';
 import { onMount, tick } from 'svelte';
 import CanvasWorkspace from '../canvas/CanvasWorkspace.svelte';
@@ -42,12 +36,7 @@ import {
 } from '../navigate';
 import { type OwedRow, owes, queueQuery, rowTitle, workFrom } from '../owed.js';
 import * as m from '../paraglide/messages.js';
-import CheckLines, {
-  type CheckItem,
-  localeOf,
-  merged,
-  verdict,
-} from '../publishing/CheckLines.svelte';
+import { type CheckItem, localeOf, merged } from '../publishing/CheckLines.svelte';
 import DriftPanel from '../publishing/Drift.svelte';
 import History from '../publishing/History.svelte';
 import {
@@ -59,14 +48,18 @@ import {
 } from '../request.js';
 import { when } from '../shared/activity-line';
 import Modal from '../shared/Modal.svelte';
+import PublishConfirmation from './PublishConfirmation.svelte';
 import {
   createEntrySession,
   type EntryProblem,
   type StructuralSaveEnvelope,
 } from './entry-session.svelte';
 import Fields from './fields/Fields.svelte';
+import type { EditorEntry } from './entry-payload';
 import SourceChange from './SourceChange.svelte';
 import { classifyDraftSaveRefusal } from './save';
+import { createEntryLock } from './entry-lock.svelte';
+import { createPublishChoice, type Readiness } from './publish-choice.svelte';
 import Translation from './Translation.svelte';
 
 type Data = Record<string, unknown>;
@@ -102,62 +95,7 @@ let {
   mediaBase?: string;
   /** This build serves `/_preview`: without it the pane says so rather than framing a 404. */
   preview?: boolean;
-  entry: {
-    fields: readonly Field[];
-    blocks: Record<string, Field[]>;
-    blockLabels?: Form['blockLabels'];
-    data: Data;
-    revisions?: Record<string, string>;
-    /** The languages whose file this entry has a draft ahead of in git. */
-    pending: string[];
-    /** The languages the repository already has a file for; the rest are only in the preview. */
-    published: string[];
-    /** Somebody marked it "Not ready yet" — the toggle opens pressed, whoever they were. */
-    held?: boolean;
-    /** Off the site for every language, since `_status` is shared across the files. */
-    hidden?: boolean;
-    /** Where each language sends its readers while it is hidden; empty for "nowhere". */
-    redirects?: Record<string, string>;
-    /** What the collection schema will not accept yet, by field path. */
-    problems: EntryProblem[];
-    /** The field this collection is keyed on, when it is not `title`. */
-    titleField?: string;
-    /** The site's own SEO defaults per language; absent for an entry with no `seo` field. */
-    seoDefaults?: Record<string, SeoDefaultsValue>;
-    /** A global: one file the schema names, so nothing that renames, hides or copies it. */
-    singleton?: boolean;
-    /** What the dev calls this global — a global has no title field to be named by. */
-    label?: string;
-    labels?: Labels;
-    /** The languages the site declares. */
-    locales: string[];
-    /** The site's default, which is what says whether a language's URLs carry its segment. */
-    defaultLocale: string;
-    /** The language the structure is edited in and a translation is made from. */
-    sourceLocale: string;
-    /** The languages it is offered in; the rest are turned off and get no file. */
-    offered: string[];
-    /** What its own `_locales` says that the files it has contradict — a hand edit or a merge. */
-    offerProblems?: string[];
-    /** The other languages this entry has a file in, parsed; none where it has no other file. */
-    translations: Record<string, Data>;
-    /** Which of them were translated from a source language that has moved on since. */
-    stale: string[];
-    /** The blocks this entry's languages disagree about; publishing waits on these. */
-    drift: Drift[];
-    /** The site has something to machine-translate with: without one, none of it is offered. */
-    translator?: boolean;
-    /** This collection serves an address per language; without it the row is not drawn at all. */
-    localizedSlugs?: boolean;
-    /** The address each language serves this entry at, empty meaning under the file name. */
-    addresses?: Record<string, string>;
-    /** The collection's own route, which is what an address is a segment of. */
-    route?: string;
-    /** The page above it, where a language that loses its file sends its readers. */
-    index?: string;
-    /** Whether the default language's URLs carry its segment. */
-    prefixDefaultLocale?: boolean;
-  };
+  entry: EditorEntry;
   /** Which of the entry's tabs the address is on; empty is the form itself. */
   section?: string;
   /** The site's origin, for the SEO previews; none, and the panel draws none. */
@@ -674,96 +612,31 @@ const otherSource = (of: string) => {
   return typeof from === 'string' && from !== entry.sourceLocale ? from : undefined;
 };
 
-/** The soft lock on every language of this entry at once; `undefined` until the first answer. */
-type Lock = {
-  held_by: { id: string; name: string | null } | null;
-  mine: boolean;
-  expires_at: number | null;
-};
-let lock = $state<Lock>();
-// A per-tab token, kept in session storage so a tab that returns to an entry is still itself.
-const tab = (() => {
-  try {
-    const kept = sessionStorage.getItem('handover-tab');
-    if (kept) return kept;
-    const made = crypto.randomUUID();
-    sessionStorage.setItem('handover-tab', made);
-    return made;
-  } catch {
-    return crypto.randomUUID();
-  }
-})();
-// Separate from the lock: the lost and locked banners say different things about the same fact.
-let lost = $state(false);
-function loseLock(next?: Lock) {
-  if (next) lock = next;
-  if (lost) return;
-  lost = true;
-  entrySession.closeSaveGate();
-}
-let taking = $state(false);
+// svelte-ignore state_referenced_locally -- the opened entry owns this lock until remount
+const entryLock = createEntryLock({
+  collection,
+  slug,
+  userId,
+  onlost: () => entrySession.closeSaveGate(),
+  onchanged,
+  failure: retainedFailure,
+});
+const tab = entryLock.tab;
+const lock = $derived(entryLock.lock);
+const lost = $derived(entryLock.lost);
+const locked = $derived(entryLock.locked);
+const holderName = $derived(entryLock.holderName);
+const otherTab = $derived(entryLock.otherTab);
+const idle = $derived(entryLock.idle);
+const taking = $derived(entryLock.taking);
+const lockFailed = $derived(entryLock.takeFailure);
+const takeBusy = $derived(entryLock.takeBusy);
 let takeTrigger = $state<HTMLButtonElement>();
-function cancelTake() {
-  taking = false;
-  lockFailed = undefined;
-}
-// When the last answer came back, and when this tab last extended a lock of its own.
-let asked = $state(0);
-let beatAt = 0;
-const locked = $derived(lost || (lock !== undefined && !lock.mine));
-const holderName = $derived(lock?.held_by?.name);
-// The holder is this same person, in another tab.
-const otherTab = $derived(lock?.held_by?.id !== undefined && lock?.held_by?.id === userId);
-// Beats ride on the autosave, so the expiry is the holder's last keystroke plus one lifetime.
-const idle = $derived(lock?.expires_at ? asked - (lock.expires_at - LOCK_TTL) : 0);
-
-$effect(() => {
-  void beat(true);
-});
-
-// The poll only reads; it runs on both sides so a holder hears of a take-over without typing.
-$effect(() => {
-  if (lost) return;
-  const timer = setInterval(() => beat(false), 15000);
-  return () => clearInterval(timer);
-});
-// Coming back to the front means somebody is about to type, so ask now rather than next tick.
-const recheck = () => {
-  if (lock?.mine && !lost && document.visibilityState === 'visible') void beat(false);
-};
-
-let renewing = false;
-function renew() {
-  if (!lock?.mine || lost || renewing || Date.now() - beatAt < 45000) return;
-  renewing = true;
-  void beat(true).finally(() => {
-    renewing = false;
-  });
-}
-async function beat(claim: boolean) {
-  const res = await fetch(
-    `/admin/api/locks/${collection}/${slug}${claim ? '' : `?tab=${tab}`}`,
-    claim
-      ? {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ tab }),
-        }
-      : { method: 'GET' },
-  ).catch(() => undefined);
-  if (!res?.ok) return;
-  const had = lock?.mine === true;
-  const answer = (await res.json()) as Lock;
-  asked = Date.now();
-  // Lapsed with nobody after it: the next edit claims it back, and the save revision catches edits meanwhile.
-  if (had && !answer.mine && !answer.held_by) return;
-  lock = answer;
-  if (lock.mine && claim) beatAt = asked;
-  else if (had && !lock.mine) {
-    // A take-over or another tab requires a fresh read before this tab can resume editing.
-    loseLock();
-  }
-}
+const loseLock = entryLock.lose;
+function renew() { entryLock.renew(); }
+const recheck = entryLock.recheck;
+const cancelTake = entryLock.cancelTake;
+const takeOver = entryLock.takeOver;
 
 entrySession.configureAutosave((of, snapshot, revision, contentVersion, structure) =>
   of === entry.sourceLocale
@@ -884,25 +757,6 @@ onMount(() => {
   };
 });
 
-// The entry is read again afterwards: carrying on means loading the shared draft they left.
-async function takeOver() {
-  busy = true;
-  lockFailed = undefined;
-  const res = await fetch(`/admin/api/locks/${collection}/${slug}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ take: true, tab }),
-  });
-  busy = false;
-  if (!res.ok) {
-    lockFailed = await retainedFailure(res, 'EDITOR_LOCK_TAKE_FAILED');
-    return;
-  }
-  taking = false;
-  lock = (await res.json()) as Lock;
-  onchanged();
-}
-
 // svelte-ignore state_referenced_locally -- the loaded entry is the initial value on purpose
 let hidden = $state(entry.hidden === true);
 let statusMenu = $state(false);
@@ -940,7 +794,6 @@ let deleting = $state(false);
 let actionTrigger = $state<HTMLElement>();
 let newName = $state('');
 let actionFailed = $state<UiMessage>();
-let lockFailed = $state<UiMessage>();
 let holdFailed = $state<UiMessage>();
 const willBe = $derived(entryName('default', newName, []));
 
@@ -1237,35 +1090,21 @@ let sending = $state(false);
 let publishFailed = $state<UiMessage>();
 /** The pass could not be run at all — which holds nothing back: it is a lint, not a gate. */
 let checksFailed = $state(false);
-type Readiness = {
-  problems: unknown[];
-  excludable: boolean;
-  reason?: 'published' | 'source';
-};
-/** What the schema wants of each waiting language, read by the server with the checks. */
-let readiness = $state<Record<string, Readiness>>();
-/** The languages the person chose to publish later, while the dialog is open. */
-let later = $state<string[]>([]);
+const publishChoice = createPublishChoice(
+  () => entry.locales.filter((of) => pendingByLocale[of]),
+  () => many,
+);
 let pass = 0;
 const lines = $derived(merged(checks));
 const errors = $derived(lines.filter((c) => c.severity === 'error'));
-const warnings = $derived(lines.filter((c) => c.severity === 'warn'));
 // Detection only; resolving it is the drawer's job.
 let conflicted = $state(false);
 let publishButton = $state<HTMLButtonElement>();
 let canvasPublishButton = $state<HTMLButtonElement>();
 let publishPanel = $state<HTMLElement>();
 
-const going = $derived(entry.locales.filter((of) => pendingByLocale[of]));
-const notReady = $derived(going.filter((of) => (readiness?.[of]?.problems.length ?? 0) > 0));
-// Only an unfinished language the repository does not have yet can wait, and only once that is known.
-const excludable = $derived(notReady.filter((of) => readiness?.[of]?.excludable));
-// Something else has to go, or waiting would publish nothing.
-const waitable = $derived(going.some((of) => !excludable.includes(of)) ? excludable : []);
-const leftOut = $derived(waitable.filter((of) => later.includes(of)));
-const kept = $derived(going.filter((of) => !leftOut.includes(of)));
-// One language is the whole entry: the server's own refusal still says what is missing.
-const unready = $derived(many ? notReady.filter((of) => kept.includes(of)) : []);
+const leftOut = $derived(publishChoice.leftOut);
+const unready = $derived(publishChoice.unready);
 const selection = (key: string, without: string[]) =>
   JSON.stringify(
     without.length
@@ -1276,14 +1115,13 @@ const selection = (key: string, without: string[]) =>
 async function askToPublish() {
   if (!(await flush())) return;
   publishFailed = undefined;
-  readiness = undefined;
-  later = [];
+  publishChoice.reset();
   confirming = true;
   void lint();
 }
 
 function publishLater(of: string) {
-  later = later.includes(of) ? later.filter((l) => l !== of) : [...later, of];
+  publishChoice.toggle(of);
   void lint();
 }
 
@@ -1306,11 +1144,9 @@ async function lint() {
   // A save or another choice since asked again; the older answer would put back what the newer one cleared.
   if (mine !== pass) return;
   checksFailed = !res?.ok;
-  // No exclusions without readiness; a kept choice would come back and be refused again.
-  if (checksFailed) later = [];
   // The daily hidden check's note about some other page is the drawer's to list, not this entry's.
   checks = (body?.results ?? []).filter((c) => c.entry === key);
-  readiness = body?.readiness?.[key];
+  publishChoice.receive(body?.readiness?.[key], checksFailed);
   // The answer changed what can wait, so these checks were over another set of files.
   if (confirming && sent.join() !== leftOut.join()) void lint();
 }
@@ -1658,7 +1494,7 @@ async function saveAddress() {
     <div class="lock-banner">
       {#if otherTab}
         {m.editor_lock_other_tab({}, options)}
-        <button class="btn-link" type="button" bind:this={takeTrigger} onclick={() => (taking = true)}>{m.editor_lock_edit_here({}, options)}</button>
+        <button class="btn-link" type="button" bind:this={takeTrigger} onclick={entryLock.openTake}>{m.editor_lock_edit_here({}, options)}</button>
       {:else if lock?.held_by}
         {#if holderName}
           {m.editor_lock_held_by({ holder: holderName }, options)}
@@ -1670,7 +1506,7 @@ async function saveAddress() {
             ? m.editor_lock_idle({}, options)
             : m.editor_lock_active({}, options)}
         </span>
-        <button class="btn-link" type="button" bind:this={takeTrigger} onclick={() => (taking = true)}>{m.editor_lock_take_over({}, options)}</button>
+        <button class="btn-link" type="button" bind:this={takeTrigger} onclick={entryLock.openTake}>{m.editor_lock_take_over({}, options)}</button>
       {:else}
         {m.editor_lock_nobody({}, options)}
         <button class="btn-link" type="button" onclick={() => void (onreload ? onreload() : onchanged())}>{m.editor_lock_reload({}, options)}</button>
@@ -2151,102 +1987,24 @@ async function saveAddress() {
     {/if}
   </div>
   {/if}
-  <!-- Publishes whole, less any new language left for later: picking entries is what the drawer is for. -->
   {#if confirming}
-    <Modal
-      labelledby="publish-h"
+    <PublishConfirmation
+      {title}
+      {many}
+      choice={publishChoice}
+      {lines}
+      {checksFailed}
+      {sending}
+      failed={publishFailed}
+      {uiLocale}
       returnTo={mode === 'canvas' ? canvasPublishButton : publishButton}
-      dismissible={!sending}
       bind:panel={publishPanel}
       onclose={closePublish}
-    >
-        <h2 id="publish-h">{m.pending_publish_entry_question({ title }, options)}</h2>
-        <p>
-          {m.pending_publish_entry_intro({}, options)}
-        </p>
-        {#if many && going.length}
-          <ul class="publish-set">
-            <li>
-              <span class="visually-hidden">{m.check_languages({}, options)}</span>
-              <span class="chips">
-                {#each kept as of (of)}<span class="chip">{of.toUpperCase()}</span>{/each}
-              </span>
-              {kept.length === 1
-                ? m.pending_language_file({ language: language(kept[0] ?? '') }, options)
-                : leftOut.length
-                  ? m.pending_language_files_some({ count: kept.length }, options)
-                  : m.pending_language_files({ count: kept.length }, options)}
-            </li>
-            {#if leftOut.length}
-              <li>
-                <span class="visually-hidden">{m.check_languages({}, options)}</span>
-                <span class="chips">
-                  {#each leftOut as of (of)}<span class="chip">{of.toUpperCase()}</span>{/each}
-                </span>
-                {m.pending_languages_later({ count: leftOut.length }, options)}
-              </li>
-            {/if}
-          </ul>
-        {/if}
-        {#if many && notReady.length}
-          <fieldset class="publish-later">
-            <legend class="group-title">{m.pending_not_ready({}, options)}</legend>
-            {#each notReady as of (of)}
-              <div class="later-row">
-                {#if waitable.includes(of)}
-                  <label>
-                    <input type="checkbox" checked={later.includes(of)} disabled={sending} onchange={() => publishLater(of)}>
-                    {m.pending_publish_later({ language: language(of) }, options)}
-                  </label>
-                  <span class="hint">{m.pending_language_unfinished({ count: readiness?.[of]?.problems.length ?? 0 }, options)}</span>
-                {:else}
-                  <span>{language(of)}</span>
-                  <span class="hint">{readiness?.[of]?.reason === 'source'
-                    ? m.pending_language_kept_source({}, options)
-                    : readiness?.[of]?.reason === 'published'
-                      ? m.pending_language_kept_published({}, options)
-                      : m.pending_language_kept_alone({}, options)}</span>
-                {/if}
-              </div>
-            {/each}
-          </fieldset>
-        {/if}
-        {#if checksFailed || lines.length}
-          <section class="checks" aria-labelledby="publish-checks-h">
-            <h3 class="group-title" id="publish-checks-h">{m.pending_checks({}, options)}</h3>
-            {#if checksFailed}
-              <p class="checks-sum" role="status">
-                {m.pending_entry_checks_failed({}, options)}
-              </p>
-              <button class="btn btn-ghost" type="button" disabled={sending} onclick={() => lint()}>{m.pending_checks_retry({}, options)}</button>
-            {:else}
-              <p class="checks-sum">{verdict(lines, uiLocale)}</p>
-              <CheckLines {lines} chips={many} {uiLocale} />
-            {/if}
-          </section>
-        {/if}
-        <p class="rebuild-note">
-          {m.pending_entry_publish_explanation({}, options)}
-        </p>
-        {#if publishFailed}<div class="notice notice-danger" role="alert">{feedbackText(publishFailed)}{#if feedbackDetail(publishFailed)} {feedbackDetail(publishFailed)}{/if}</div>{/if}
-        <div class="actions">
-          <button class="btn" type="button" disabled={sending} onclick={closePublish}>{m.common_cancel({}, options)}</button>
-          <button
-            class="btn btn-primary"
-            type="button"
-            disabled={sending || errors.length > 0 || unready.length > 0 || entrySession.persistedActionPending()}
-            onclick={publishEntry}
-          >
-            {#if sending}{m.pending_publishing({}, options)}
-            {:else if errors.length}{m.pending_fix_errors({ count: errors.length }, options)}
-            {:else if unready.length}{unready.every((of) => waitable.includes(of))
-              ? m.pending_finish_or_leave_out({ count: unready.length }, options)
-              : m.pending_finish_languages({ count: unready.length }, options)}
-            {:else if warnings.length}{m.pending_publish_anyway({ count: warnings.length }, options)}
-            {:else}{m.pending_publish_this_entry({}, options)}{/if}
-          </button>
-        </div>
-    </Modal>
+      onchoose={publishLater}
+      onretry={() => void lint()}
+      onpublish={publishEntry}
+      pending={() => entrySession.persistedActionPending()}
+    />
   {/if}
   {#if hiding}
     <OffsiteDialog
@@ -2332,7 +2090,7 @@ async function saveAddress() {
     />
   {/if}
   {#if taking}
-    <Modal labelledby="take-h" returnTo={takeTrigger} dismissible={!busy} onclose={cancelTake}>
+    <Modal labelledby="take-h" returnTo={takeTrigger} dismissible={!takeBusy} onclose={cancelTake}>
         <h2 id="take-h">{holderName
           ? m.editor_lock_take_question({ holder: holderName }, options)
           : m.editor_lock_take_question_anonymous({}, options)}</h2>
@@ -2342,8 +2100,8 @@ async function saveAddress() {
         <p>{m.editor_lock_take_refusal({}, options)}</p>
         {#if lockFailed}<p class="notice notice-danger" role="alert">{feedbackText(lockFailed)} {feedbackDetail(lockFailed)}</p>{/if}
         <div class="actions">
-          <button class="btn" type="button" disabled={busy} onclick={cancelTake}>{m.common_cancel({}, options)}</button>
-          <button class="btn btn-primary" type="button" disabled={busy} onclick={takeOver}>{m.editor_lock_take_over({}, options)}</button>
+          <button class="btn" type="button" disabled={takeBusy} onclick={cancelTake}>{m.common_cancel({}, options)}</button>
+          <button class="btn btn-primary" type="button" disabled={takeBusy} onclick={takeOver}>{m.editor_lock_take_over({}, options)}</button>
         </div>
     </Modal>
   {/if}

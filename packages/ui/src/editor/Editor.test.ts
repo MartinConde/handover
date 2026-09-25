@@ -284,11 +284,13 @@ test('the header shows the field the collection is keyed on', () => {
       blocks: {},
       data: { name: 'Rosa Hale' },
       pending: [],
+      published: ['en'],
       problems: [],
       titleField: 'name',
       locales: ['en'],
       defaultLocale: 'en',
       sourceLocale: 'en',
+      offered: ['en'],
       translations: {},
       stale: [],
       drift: [],
@@ -341,12 +343,15 @@ test('final confirmation saves source and translation edits made after the dialo
   $<HTMLButtonElement>(root, 'button.btn-sbs')?.click();
   flushSync();
   $<HTMLButtonElement>(root, '.entry-header button.btn-primary')?.click();
-  await settled();
+  await vi.waitFor(() => {
+    flushSync();
+    expect($(root, '.dialog h2')).not.toBeNull();
+  });
 
   type(root, 'input#f-title', 'Source after confirmation opened');
   type(root, 'input#t-title', 'Ziel nach dem Öffnen');
   $<HTMLButtonElement>(root, '.dialog .btn-primary')?.click();
-  await settled();
+  await vi.waitFor(() => expect(order.at(-1)).toBe('publish'));
 
   const finalChecks = order.lastIndexOf('checks');
   const sourceSave = order.lastIndexOf('/admin/api/drafts/listings/seaview-cottage');
@@ -385,11 +390,19 @@ test('a failed final save prevents publish and releases the editor for another a
   vi.stubGlobal('fetch', fetchMock);
   const root = show({ entry: { ...entry, pending: ['en'] } });
   $<HTMLButtonElement>(root, '.entry-header button.btn-primary')?.click();
-  await settled();
+  await vi.waitFor(() => {
+    flushSync();
+    expect($(root, '.dialog h2')).not.toBeNull();
+  });
   type(root, 'input#f-title', 'Unsaved final words');
 
   $<HTMLButtonElement>(root, '.dialog .btn-primary')?.click();
-  await settled();
+  await vi.waitFor(() => {
+    flushSync();
+    expect($(root, '.dialog [role="alert"]')?.textContent).toContain(
+      'Your latest changes could not be saved',
+    );
+  });
 
   expect(publishCalls(fetchMock)).toHaveLength(0);
   expect($(root, '.dialog [role="alert"]')?.textContent).toContain(

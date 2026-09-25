@@ -22,6 +22,7 @@ import {
   stringifyEntry,
   withSource,
 } from '@handover/core';
+import { readJson } from './body.js';
 import { entryHref, entryPath, formFor } from './content.js';
 import { entryTitles } from './dashboard.js';
 import type { RequestContext } from './environment.js';
@@ -208,7 +209,7 @@ export async function recordSources(
   session: App.Locals['handover'],
 ): Promise<Response> {
   if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
-  const body = (await request.json().catch(() => undefined)) as { base?: unknown } | undefined;
+  const body = (await readJson(request)) as { base?: unknown } | undefined;
   if (typeof body?.base !== 'string' || !body.base)
     return new Response('Bad request', { status: 400 });
   const database = ctx.db();

@@ -17,7 +17,7 @@ const requiredOutputs = [
 const inputFiles = (root) => [
   '../../pnpm-lock.yaml',
   'package.json',
-  '../core/src/ui-locale.ts',
+  '../core/src/content/ui-locale.ts',
   'project.inlang/settings.json',
   'scripts/catalog-validator.mjs',
   'scripts/message-cache.mjs',

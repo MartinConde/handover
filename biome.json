@@ -6,7 +6,7 @@
       "**",
       "!packages/ui/src/tokens.css",
       "!packages/ui/src/paraglide",
-      "!packages/core/src/auth-schema.ts"
+      "!packages/core/src/identity/auth-schema.ts"
     ]
   },
   "formatter": { "indentStyle": "space", "lineWidth": 100 },

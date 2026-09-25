@@ -7,7 +7,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "auth:generate": "auth generate --config ./scripts/auth-config.ts --output ./packages/core/src/auth-schema.ts --yes",
+    "auth:generate": "auth generate --config ./scripts/auth-config.ts --output ./packages/core/src/identity/auth-schema.ts --yes",
     "build": "pnpm -r build",
     "dev": "pnpm -r --parallel dev",
     "test": "pnpm -r test",

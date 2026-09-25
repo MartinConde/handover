@@ -11,6 +11,7 @@ import {
   releaseLocks,
 } from '@handover/core';
 import { createAuth, loginMethods, mailer } from '../../auth.js';
+import { readJson } from './body.js';
 import { entryTitle } from './content.js';
 import type { RequestContext } from './environment.js';
 import { missingMailer } from './environment.js';
@@ -41,7 +42,7 @@ export async function setPassword(
   cfContext: App.Locals['cfContext'],
   session: App.Locals['handover'],
 ): Promise<Response> {
-  const { newPassword } = (await request.json()) as { newPassword?: unknown };
+  const { newPassword } = (await readJson(request)) as { newPassword?: unknown };
   if (typeof newPassword !== 'string')
     return Response.json({ error: 'No password was sent' }, { status: 400 });
   try {
@@ -116,7 +117,7 @@ export async function invite(
   session: App.Locals['handover'],
 ): Promise<Response> {
   if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });
-  const body = (await request.json().catch(() => ({}))) as { email?: unknown };
+  const body = ((await readJson(request)) ?? {}) as { email?: unknown };
   const role = roleIn(body);
   if (typeof body.email !== 'string' || !body.email.trim())
     return Response.json(
@@ -211,7 +212,7 @@ export async function setMemberRole(
       { code: 'MEMBER_SELF_ROLE', error: 'You cannot change your own role' },
       { status: 400 },
     );
-  const role = roleIn(await request.json().catch(() => ({})));
+  const role = roleIn((await readJson(request)) ?? {});
   if (!role)
     return Response.json(
       { code: 'MEMBER_ROLE_INVALID', error: 'That is not a role' },

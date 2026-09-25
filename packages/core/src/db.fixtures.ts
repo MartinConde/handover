@@ -2,10 +2,11 @@ import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/
 import { Miniflare } from 'miniflare';
 import { afterAll, vi } from 'vitest';
 import { parse } from 'yaml';
-import { openDb, overlayRows } from './db.js';
-import { type ContentIndex, collectionEntries, indexFrom } from './entries.js';
-import { blobSha, type GitClient, type PublishFile } from './git.js';
-import type { Form } from './schema.js';
+import { type ContentIndex, collectionEntries, indexFrom } from './content/entries.js';
+import type { Form } from './content/schema.js';
+import { openDb } from './db.js';
+import { overlayRows } from './drafts/drafts.js';
+import { blobSha, type GitClient, type PublishFile } from './publishing/git.js';
 import * as tables from './tables.js';
 import { drafts } from './tables.js';
 

@@ -22,10 +22,10 @@ import {
   resetState,
   setMediaDetails,
   state,
-} from './harness.js';
+} from './harness.fixture.js';
 
 const { workerMailerMock, configMock, indexMock, cloudflareMock, authMock, coreMock } =
-  await vi.hoisted(async () => import('./harness.js'));
+  await vi.hoisted(async () => import('./harness.fixture.js'));
 
 vi.mock('worker-mailer', () => workerMailerMock());
 vi.mock('virtual:handover/config', () => configMock());

@@ -4,6 +4,11 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- `handover init` reads Wrangler JSONC and TOML with standard parsers, preserving comment
+  characters inside quoted values and reporting invalid configuration before provisioning.
+- The published `astro-handover` package excludes route test fixtures. Core modules are
+  organized by feature, and editor publishing and lock state have separate owners; public
+  imports and content formats are unchanged.
 - `astro-handover` no longer exports its build internals: `buildIndex`, `buildMediaUses`,
   `buildStale`, `buildTemplates`, `contentErrors`, `contentFiles`, `emitRedirects`,
   `emitSitemap`, `loadersModule`, `modifiedAt`, `NO_ADAPTER_MESSAGE`, `screensModule`,

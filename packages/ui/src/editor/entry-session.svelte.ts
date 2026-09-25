@@ -619,6 +619,78 @@ export function createEntrySession({
     for (const saves of coordinators.values()) saves.close();
   };
 
+  type ReplacementKind = 'final-publish' | 'authoritative-change' | 'historical-restore';
+  type ReplacementResult =
+    | { ok: true }
+    | {
+        ok: false;
+        reason: 'busy' | 'closed' | 'refused' | 'reload' | 'save' | 'stale' | 'uncertain';
+        error?: UiMessage;
+      };
+  async function replaceAuthoritatively<Outcome extends 'published' | 'changed' | 'restored'>(
+    kind: ReplacementKind,
+    request: () => Promise<{ ok: boolean; error?: UiMessage }>,
+    reload: (outcome: Outcome | 'uncertain') => void | Promise<void>,
+    outcome: Outcome,
+  ): Promise<ReplacementResult> {
+    if (!mutationOpen) return { ok: false, reason: 'closed' };
+    if (persistedAction) return { ok: false, reason: 'busy' };
+    if (!lane) return { ok: false, reason: 'closed' };
+
+    const admitted = { id: ++nextActionId, kind, phase: 'preflush' as const, epoch };
+    persistedAction = admitted;
+    // Drift can be replaced by a historical version only after every local edit has settled.
+    const flushed =
+      kind === 'historical-restore' && drifted ? !locales().some(dirty) : await drain();
+    if (!flushed) {
+      if (persistedAction?.id === admitted.id) persistedAction = undefined;
+      return { ok: false, reason: 'save' };
+    }
+
+    const running = { ...admitted, phase: 'running' as const };
+    let keepClosed = false;
+    try {
+      return await lane(async (): Promise<ReplacementResult> => {
+        if (!mutationOpen || epoch !== admitted.epoch) return { ok: false, reason: 'stale' };
+        persistedAction = running;
+
+        let response: { ok: boolean; error?: UiMessage };
+        try {
+          response = await request();
+        } catch {
+          // A request may have reached the server; stale snapshots cannot save over its result.
+          keepClosed = true;
+          retire({ ...running, phase: 'reloading' });
+          try {
+            await reload('uncertain');
+          } catch {
+            // The old session remains closed until a fresh page read.
+          }
+          return { ok: false, reason: 'uncertain' };
+        }
+        if (!response.ok)
+          return {
+            ok: false,
+            reason: 'refused',
+            ...(response.error ? { error: response.error } : {}),
+          };
+
+        keepClosed = true;
+        retire({ ...running, phase: 'reloading' });
+        try {
+          await reload(outcome);
+        } catch {
+          return { ok: false, reason: 'reload' };
+        }
+        return { ok: true };
+      });
+    } catch {
+      return { ok: false, reason: keepClosed ? 'reload' : 'stale' };
+    } finally {
+      if (!keepClosed && persistedAction?.id === admitted.id) persistedAction = undefined;
+    }
+  }
+
   for (const [locale, found] of Object.entries(problems)) {
     const snapshot = snapshots[locale];
     if (snapshot) validation[locale] = normalize(snapshot, found);
@@ -1460,117 +1532,24 @@ export function createEntrySession({
     ): Promise<FinalPublishResult> {
       if (!mutationOpen) return { ok: false, reason: 'closed' };
       if (drifted) return { ok: false, reason: 'drift' };
-      if (persistedAction) return { ok: false, reason: 'busy' };
-      if (!lane) return { ok: false, reason: 'closed' };
-
-      const admitted = {
-        id: ++nextActionId,
-        kind: 'final-publish' as const,
-        phase: 'preflush' as const,
-        epoch,
-      };
-      persistedAction = admitted;
-      if (!(await drain())) {
-        if (persistedAction?.id === admitted.id) persistedAction = undefined;
-        return { ok: false, reason: 'save' };
-      }
-
-      const running = { ...admitted, phase: 'running' as const };
-      let keepClosed = false;
-      try {
-        return await lane(async (): Promise<FinalPublishResult> => {
-          if (!mutationOpen || epoch !== admitted.epoch) return { ok: false, reason: 'stale' };
-          persistedAction = running;
-
-          let published: boolean;
-          try {
-            published = await request();
-          } catch {
-            // The commit may have reached the server. Nothing from this stale session may save
-            // again until the parent has established the authoritative published/draft state.
-            keepClosed = true;
-            retire({ ...running, phase: 'reloading' });
-            try {
-              await reload('uncertain');
-            } catch {
-              // The old session stays closed; a later page reload is the only safe recovery.
-            }
-            return { ok: false, reason: 'uncertain' };
-          }
-          if (!published) return { ok: false, reason: 'refused' };
-
-          keepClosed = true;
-          retire({ ...running, phase: 'reloading' });
-          try {
-            await reload('published');
-          } catch {
-            return { ok: false, reason: 'reload' };
-          }
-          return { ok: true };
-        });
-      } catch {
-        return { ok: false, reason: keepClosed ? 'reload' : 'stale' };
-      } finally {
-        if (!keepClosed && persistedAction?.id === admitted.id) persistedAction = undefined;
-      }
+      return replaceAuthoritatively(
+        'final-publish',
+        async () => ({ ok: await request() }),
+        reload,
+        'published',
+      );
     },
     /** Drain local writes, run an outside replacement, then retire this session before reload. */
     async authoritativeChange(
       request: () => Promise<boolean>,
       reload: (outcome: 'changed' | 'uncertain') => void | Promise<void>,
     ): Promise<AuthoritativeChangeResult> {
-      if (!mutationOpen) return { ok: false, reason: 'closed' };
-      if (persistedAction) return { ok: false, reason: 'busy' };
-      if (!lane) return { ok: false, reason: 'closed' };
-
-      const admitted = {
-        id: ++nextActionId,
-        kind: 'authoritative-change' as const,
-        phase: 'preflush' as const,
-        epoch,
-      };
-      persistedAction = admitted;
-      if (!(await drain())) {
-        if (persistedAction?.id === admitted.id) persistedAction = undefined;
-        return { ok: false, reason: 'save' };
-      }
-
-      const running = { ...admitted, phase: 'running' as const };
-      let keepClosed = false;
-      try {
-        return await lane(async (): Promise<AuthoritativeChangeResult> => {
-          if (!mutationOpen || epoch !== admitted.epoch) return { ok: false, reason: 'stale' };
-          persistedAction = running;
-
-          let changed: boolean;
-          try {
-            changed = await request();
-          } catch {
-            keepClosed = true;
-            retire({ ...running, phase: 'reloading' });
-            try {
-              await reload('uncertain');
-            } catch {
-              // The old session stays closed; a later page reload is the only safe recovery.
-            }
-            return { ok: false, reason: 'uncertain' };
-          }
-          if (!changed) return { ok: false, reason: 'refused' };
-
-          keepClosed = true;
-          retire({ ...running, phase: 'reloading' });
-          try {
-            await reload('changed');
-          } catch {
-            return { ok: false, reason: 'reload' };
-          }
-          return { ok: true };
-        });
-      } catch {
-        return { ok: false, reason: keepClosed ? 'reload' : 'stale' };
-      } finally {
-        if (!keepClosed && persistedAction?.id === admitted.id) persistedAction = undefined;
-      }
+      return replaceAuthoritatively(
+        'authoritative-change',
+        async () => ({ ok: await request() }),
+        reload,
+        'changed',
+      );
     },
     /** Reserve the entry, drain old writes, then translate and acknowledge on the shared lane. */
     async machineTranslate(
@@ -1645,66 +1624,7 @@ export function createEntrySession({
       request: () => Promise<HistoricalRestoreResponse>,
       reload: (outcome: 'restored' | 'uncertain') => void | Promise<void>,
     ): Promise<HistoricalRestoreResult> {
-      if (!mutationOpen) return { ok: false, reason: 'closed' };
-      if (persistedAction) return { ok: false, reason: 'busy' };
-      if (!lane) return { ok: false, reason: 'closed' };
-
-      const admitted = {
-        id: ++nextActionId,
-        kind: 'historical-restore' as const,
-        phase: 'preflush' as const,
-        epoch,
-      };
-      persistedAction = admitted;
-      // Drift itself does not forbid replacing the drafts with a historical version, but there
-      // must not be an older local snapshot waiting to overwrite that replacement.
-      const flushed = drifted ? !locales().some(dirty) : await drain();
-      if (!flushed) {
-        if (persistedAction?.id === admitted.id) persistedAction = undefined;
-        return { ok: false, reason: 'save' };
-      }
-
-      const running = { ...admitted, phase: 'running' as const };
-      let keepClosed = false;
-      try {
-        return await lane(async (): Promise<HistoricalRestoreResult> => {
-          if (!mutationOpen || epoch !== admitted.epoch) return { ok: false, reason: 'stale' };
-          persistedAction = running;
-
-          let response: HistoricalRestoreResponse;
-          try {
-            response = await request();
-          } catch {
-            // The request may have reached the server. Preserve the local snapshots for this
-            // component's remaining lifetime, but never let them save over an unknown result.
-            keepClosed = true;
-            retire({ ...running, phase: 'reloading' });
-            try {
-              await reload('uncertain');
-            } catch {
-              // The old session remains closed; a later page reload is the only safe recovery.
-            }
-            return { ok: false, reason: 'uncertain' };
-          }
-
-          if (!response.ok) return { ok: false, reason: 'refused', error: response.error };
-
-          // A confirmed restore invalidates this session and any render made from its snapshots.
-          // The replacement session is created only after the parent has re-read every locale.
-          keepClosed = true;
-          retire({ ...running, phase: 'reloading' });
-          try {
-            await reload('restored');
-          } catch {
-            return { ok: false, reason: 'reload' };
-          }
-          return { ok: true };
-        });
-      } catch {
-        return { ok: false, reason: keepClosed ? 'reload' : 'stale' };
-      } finally {
-        if (!keepClosed && persistedAction?.id === admitted.id) persistedAction = undefined;
-      }
+      return replaceAuthoritatively('historical-restore', request, reload, 'restored');
     },
     /** Keep the gate closed until the parent replaces this session with one fresh entry read. */
     async afterReconciliation(): Promise<void> {

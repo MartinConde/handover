@@ -19,6 +19,8 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@handover/core": "workspace:*"
+    "@handover/core": "workspace:*",
+    "jsonc-parser": "^3.3.1",
+    "smol-toml": "^1.8.0"
   }
 }

@@ -1,47 +1,4 @@
 export type {
-  ActivityEntry,
-  ActivityEvent,
-  ActivityGroup,
-  ActivityQuery,
-  EntryEdit,
-} from './activity.js';
-export {
-  ACTIVITY_GROUPS,
-  activityGroupOf,
-  activityPage,
-  commitAuthors,
-  deletedEntries,
-  lastCommit,
-  logActivity,
-  publishedEntries,
-  savedTemplates,
-} from './activity.js';
-export type { AccountFacts, Auth, AuthConfig, Member, MemberApi, Role } from './auth.js';
-export {
-  AUTH_BASE_PATH,
-  accountFacts,
-  createAuth,
-  demoteOwner,
-  memberApi,
-  memberList,
-  roleOf,
-  userExists,
-} from './auth.js';
-export type { BuildState, BuildStatus, WorkerBuilds } from './builds.js';
-export { commitBuild } from './builds.js';
-export type {
-  CheckEntry,
-  CheckInput,
-  CheckName,
-  CheckResult,
-  CheckSeverity,
-  CheckSite,
-  HiddenLong,
-} from './checks.js';
-export { CHECKS, lastHiddenLong, runChecks } from './checks.js';
-export type { EntryConflict } from './conflicts.js';
-export { entryConflict, resolveConflict, resolveDrift } from './conflicts.js';
-export type {
   AstroContent,
   ContentEntry,
   ContentSource,
@@ -49,7 +6,7 @@ export type {
   LocaleLink,
   LocaleSite,
   NavLink,
-} from './content.js';
+} from './content/content.js';
 export {
   ContentError,
   draftSource,
@@ -60,10 +17,144 @@ export {
   menusAt,
   refErrors,
   staticSource,
-} from './content.js';
-export type { CronReport, JobDeps } from './cron.js';
-export { runDue } from './cron.js';
+} from './content/content.js';
+export type { Change, DiffGroup, RowAt, WordPart } from './content/diff.js';
+export { diffEntry, sourceChanges } from './content/diff.js';
+export type { EmbedParse, EmbedProvider, EmbedRefusalReason, EmbedValue } from './content/embed.js';
+export { EMBED_LABELS, embedSrc, embedThumb, parseEmbedUrl } from './content/embed.js';
+export type {
+  ContentFile,
+  ContentIndex,
+  EntryLocale,
+  FileTexts,
+  IndexEntry,
+  Template,
+  TextSummary,
+  TitleFields,
+} from './content/entries.js';
+export {
+  collectionEntries,
+  contentPathErrors,
+  ENTRY_SEGMENT_SOURCE,
+  entryKey,
+  entryOffer,
+  entryParts,
+  indexFrom,
+  staleFrom,
+  templatesFrom,
+  textSummaries,
+  textsFrom,
+} from './content/entries.js';
+export type { LocaleSeed } from './content/entry-format.js';
+export {
+  FORMAT_VERSION,
+  parseEntry,
+  stringifyEntry,
+  TRANSLATED_PROPS,
+  timestampErrors,
+  withSource,
+} from './content/entry-format.js';
+export type { Drift, DriftChoice, LocaleSyncOptions } from './content/locale-sync.js';
+export { applyDrift, driftReport, syncLocale, syncLocaleField } from './content/locale-sync.js';
+export type { MigrationStep } from './content/migrate.js';
+export { migrateDocument, versionOf } from './content/migrate.js';
+export type { CollectionRoutes, I18nConfig, I18nRouting, PreviewTarget } from './content/names.js';
+export {
+  addressError,
+  checkCollections,
+  checkI18n,
+  entryAddress,
+  entryName,
+  entryUrl,
+  previewTarget,
+  withSlash,
+} from './content/names.js';
+export type {
+  AnsweredPaths,
+  EntrySource,
+  I18nMark,
+  TranslationSource,
+} from './content/provenance.js';
+export {
+  answeredCount,
+  answeredPaths,
+  answeredWork,
+  changeSource,
+  entrySource,
+  markTranslation,
+  provenance,
+  referenceText,
+  sourceOnlyConflicts,
+  staleLocales,
+  translatableText,
+} from './content/provenance.js';
+export type { RedirectRule, RedirectSite } from './content/redirects.js';
+export {
+  collapseRedirects,
+  editRedirects,
+  readRedirects,
+  redirectDestinationError,
+  redirectError,
+  redirectRule,
+  redirectSourceError,
+  redirectsText,
+} from './content/redirects.js';
+export { filterLive, isLive, newId, regenerateIds } from './content/reserved.js';
+export type { Answer, MergedChange, Question, ThreeWay } from './content/resolve.js';
+export type { RichtextTier } from './content/richtext.js';
+export {
+  renderRichtext,
+  richtextErrors,
+  unsafeLinkScheme,
+} from './content/richtext.js';
+export type { Field, Form, JsonSchema, Preset, Translation } from './content/schema.js';
+export {
+  DEFAULT_MAX,
+  fieldsFrom,
+  formIn,
+  formOf,
+  humanise,
+  imagePresets,
+} from './content/schema.js';
+export type { ResolvedSeo, SeoDefaultsValue, SeoImage, SeoValue } from './content/seo.js';
+export {
+  resolveSeo,
+  SEO_DESCRIPTION_LIMIT,
+  SEO_TITLE_LIMIT,
+} from './content/seo.js';
+export type { SitemapPage, SitemapSite } from './content/sitemap.js';
+export {
+  modifiedFrom,
+  robotsText,
+  sitemapFrom,
+  sitemapIndexXml,
+  sitemapXml,
+} from './content/sitemap.js';
+export type {
+  FieldTarget,
+  FieldTargetFailure,
+  FieldTargetResult,
+  Translate,
+} from './content/translate.js';
+export {
+  deeplTranslate,
+  fieldAddress,
+  fieldPosition,
+  keptMachine,
+  resolveFieldTarget,
+} from './content/translate.js';
+export type { Labels, UiLocale } from './content/ui-locale.js';
+export {
+  DEFAULT_UI_LOCALE,
+  isUiLocale,
+  labelIn,
+  labelsOf,
+  UI_LOCALES,
+} from './content/ui-locale.js';
 export type { Db, Draft } from './db.js';
+export { openDb } from './db.js';
+export type { EntryConflict } from './drafts/conflicts.js';
+export { entryConflict, resolveConflict, resolveDrift } from './drafts/conflicts.js';
 export {
   createDraft,
   createDrafts,
@@ -76,7 +167,6 @@ export {
   isDraftRace,
   isMediaRace,
   loadDraft,
-  openDb,
   openDraft,
   overlayRows,
   pendingDrafts,
@@ -91,62 +181,8 @@ export {
   setEntryAddress,
   setEntryLocales,
   setEntryStatus,
-} from './db.js';
-export type { Change, DiffGroup, RowAt, WordPart } from './diff.js';
-export { diffEntry, sourceChanges } from './diff.js';
-export type { EmbedParse, EmbedProvider, EmbedRefusalReason, EmbedValue } from './embed.js';
-export { EMBED_LABELS, embedSrc, embedThumb, parseEmbedUrl } from './embed.js';
-export type {
-  ContentFile,
-  ContentIndex,
-  EntryLocale,
-  FileTexts,
-  IndexEntry,
-  Template,
-  TextSummary,
-  TitleFields,
-} from './entries.js';
-export {
-  collectionEntries,
-  contentPathErrors,
-  ENTRY_SEGMENT_SOURCE,
-  entryKey,
-  entryOffer,
-  entryParts,
-  indexFrom,
-  staleFrom,
-  templatesFrom,
-  textSummaries,
-  textsFrom,
-} from './entries.js';
-export type { LocaleSeed } from './entry-format.js';
-export {
-  FORMAT_VERSION,
-  parseEntry,
-  stringifyEntry,
-  TRANSLATED_PROPS,
-  timestampErrors,
-  withSource,
-} from './entry-format.js';
-export type {
-  CommitComparison,
-  CommitPage,
-  EntryVersion,
-  FileCommit,
-  GitClient,
-  GitCommit,
-  GitFile,
-  GitHubApp,
-  PublishFile,
-} from './git.js';
-export {
-  blobSha,
-  createGitClient,
-  mergeFileCommits,
-  RefMovedError,
-  RepoUnreachableError,
-} from './git.js';
-export type { EntryLocation } from './lifecycle.js';
+} from './drafts/drafts.js';
+export type { EntryLocation } from './drafts/lifecycle.js';
 export {
   deleteEntry,
   deleteLocales,
@@ -154,10 +190,8 @@ export {
   RenameCollisionError,
   renamedFrom,
   renameEntry,
-} from './lifecycle.js';
-export type { Drift, DriftChoice, LocaleSyncOptions } from './locale-sync.js';
-export { applyDrift, driftReport, syncLocale, syncLocaleField } from './locale-sync.js';
-export type { Lock } from './locks.js';
+} from './drafts/lifecycle.js';
+export type { Lock } from './drafts/locks.js';
 export {
   claimLock,
   dropLock,
@@ -168,10 +202,42 @@ export {
   moveLock,
   releaseLocks,
   takeLock,
-} from './locks.js';
-export type { EmailSender, Mailer } from './mailer.js';
-export { cloudflareMailer, resendMailer, senderAddress } from './mailer.js';
-export type { MediaQuery, MediaRow, MediaUses, R2Store, Upload } from './media.js';
+} from './drafts/locks.js';
+export type { Operation, OperationIntent } from './drafts/operations.js';
+export {
+  beginOperation,
+  finalizeOperation,
+  findOperation,
+  markOperationCommitted,
+  OperationFinalizationError,
+  operationMessage,
+  recentOperations,
+  recoverOperationCommit,
+} from './drafts/operations.js';
+export type { PathReservation } from './drafts/paths.js';
+export { releaseOperationPaths, releasePaths, reservePaths } from './drafts/paths.js';
+export type { AccountFacts, Auth, AuthConfig, Member, MemberApi, Role } from './identity/auth.js';
+export {
+  AUTH_BASE_PATH,
+  accountFacts,
+  createAuth,
+  demoteOwner,
+  memberApi,
+  memberList,
+  roleOf,
+  userExists,
+} from './identity/auth.js';
+export type { EmailSender, Mailer } from './identity/mailer.js';
+export { cloudflareMailer, resendMailer, senderAddress } from './identity/mailer.js';
+export type { Integration, SettingFact } from './identity/settings.js';
+export {
+  INTEGRATIONS,
+  readSetting,
+  removeSetting,
+  settingFacts,
+  writeSetting,
+} from './identity/settings.js';
+export type { MediaQuery, MediaRow, MediaUses, R2Store, Upload } from './media/media.js';
 export {
   checkStore,
   confirmUpload,
@@ -190,68 +256,81 @@ export {
   ratioOf,
   SOCIAL_CARD,
   setMediaDetails,
-} from './media.js';
-export type { MigrationStep } from './migrate.js';
-export { migrateDocument, versionOf } from './migrate.js';
-export type { CollectionRoutes, I18nConfig, I18nRouting, PreviewTarget } from './names.js';
+} from './media/media.js';
+export { UploadRefusedError } from './media/upload-bytes.js';
 export {
-  addressError,
-  checkCollections,
-  checkI18n,
-  entryAddress,
-  entryName,
-  entryUrl,
-  previewTarget,
-  withSlash,
-} from './names.js';
-export type { Operation, OperationIntent } from './operations.js';
+  claimUploadIntent,
+  finishUploadIntent,
+  issueUploadIntent,
+  markUploadStored,
+  releaseUploadIntent,
+  storedUploadIntent,
+  type UploadIntent,
+} from './media/upload-intents.js';
+export type {
+  ActivityEntry,
+  ActivityEvent,
+  ActivityGroup,
+  ActivityQuery,
+  EntryEdit,
+} from './publishing/activity.js';
 export {
-  beginOperation,
-  finalizeOperation,
-  findOperation,
-  markOperationCommitted,
-  OperationFinalizationError,
-  operationMessage,
-  recentOperations,
-  recoverOperationCommit,
-} from './operations.js';
-export type { PathReservation } from './paths.js';
-export { releaseOperationPaths, releasePaths, reservePaths } from './paths.js';
-export type { AnsweredPaths, EntrySource, I18nMark, TranslationSource } from './provenance.js';
+  ACTIVITY_GROUPS,
+  activityGroupOf,
+  activityPage,
+  commitAuthors,
+  deletedEntries,
+  lastCommit,
+  logActivity,
+  publishedEntries,
+  savedTemplates,
+} from './publishing/activity.js';
+export type { BuildState, BuildStatus, WorkerBuilds } from './publishing/builds.js';
+export { commitBuild } from './publishing/builds.js';
+export type {
+  CheckEntry,
+  CheckInput,
+  CheckName,
+  CheckResult,
+  CheckSeverity,
+  CheckSite,
+  HiddenLong,
+} from './publishing/checks.js';
+export { CHECKS, lastHiddenLong, runChecks } from './publishing/checks.js';
+export type { CronReport, JobDeps } from './publishing/cron.js';
+export { runDue } from './publishing/cron.js';
+export type {
+  CommitComparison,
+  CommitPage,
+  EntryVersion,
+  FileCommit,
+  GitClient,
+  GitCommit,
+  GitFile,
+  GitHubApp,
+  PublishFile,
+} from './publishing/git.js';
 export {
-  answeredCount,
-  answeredPaths,
-  answeredWork,
-  changeSource,
-  entrySource,
-  markTranslation,
-  provenance,
-  referenceText,
-  sourceOnlyConflicts,
-  staleLocales,
-  translatableText,
-} from './provenance.js';
-export type { SourceOf } from './publish.js';
+  blobSha,
+  createGitClient,
+  mergeFileCommits,
+  RefMovedError,
+  RepoUnreachableError,
+} from './publishing/git.js';
+export type { SourceOf } from './publishing/publish.js';
 export {
   CommitScopeError,
   commitScope,
   DraftConflictError,
   publishDrafts,
   readyDrafts,
-} from './publish.js';
-export type { RedirectRule, RedirectSite } from './redirects.js';
+} from './publishing/publish.js';
 export {
-  collapseRedirects,
-  editRedirects,
-  readRedirects,
-  redirectDestinationError,
-  redirectError,
-  redirectRule,
-  redirectSourceError,
-  redirectsText,
-} from './redirects.js';
-export { filterLive, isLive, newId, regenerateIds } from './reserved.js';
-export type { Answer, MergedChange, Question, ThreeWay } from './resolve.js';
+  clearPublished,
+  RevertConflictError,
+  restoreCommit,
+  revertCommit,
+} from './publishing/revert.js';
 export {
   abandonCostlyOperation,
   claimCostlyOperation,
@@ -262,42 +341,6 @@ export {
   ResourceLimitError,
   releaseResource,
 } from './resource-limits.js';
-export {
-  clearPublished,
-  RevertConflictError,
-  restoreCommit,
-  revertCommit,
-} from './revert.js';
-export type { RichtextTier } from './richtext.js';
-export {
-  renderRichtext,
-  richtextErrors,
-  unsafeLinkScheme,
-} from './richtext.js';
-export type { Field, Form, JsonSchema, Preset, Translation } from './schema.js';
-export { DEFAULT_MAX, fieldsFrom, formIn, formOf, humanise, imagePresets } from './schema.js';
-export type { ResolvedSeo, SeoDefaultsValue, SeoImage, SeoValue } from './seo.js';
-export {
-  resolveSeo,
-  SEO_DESCRIPTION_LIMIT,
-  SEO_TITLE_LIMIT,
-} from './seo.js';
-export type { Integration, SettingFact } from './settings.js';
-export {
-  INTEGRATIONS,
-  readSetting,
-  removeSetting,
-  settingFacts,
-  writeSetting,
-} from './settings.js';
-export type { SitemapPage, SitemapSite } from './sitemap.js';
-export {
-  modifiedFrom,
-  robotsText,
-  sitemapFrom,
-  sitemapIndexXml,
-  sitemapXml,
-} from './sitemap.js';
 export {
   account,
   activity,
@@ -318,23 +361,3 @@ export {
   user,
   verification,
 } from './tables.js';
-export type { FieldTarget, FieldTargetFailure, FieldTargetResult, Translate } from './translate.js';
-export {
-  deeplTranslate,
-  fieldAddress,
-  fieldPosition,
-  keptMachine,
-  resolveFieldTarget,
-} from './translate.js';
-export type { Labels, UiLocale } from './ui-locale.js';
-export { DEFAULT_UI_LOCALE, isUiLocale, labelIn, labelsOf, UI_LOCALES } from './ui-locale.js';
-export { UploadRefusedError } from './upload-bytes.js';
-export {
-  claimUploadIntent,
-  finishUploadIntent,
-  issueUploadIntent,
-  markUploadStored,
-  releaseUploadIntent,
-  storedUploadIntent,
-  type UploadIntent,
-} from './upload-intents.js';

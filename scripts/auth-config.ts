@@ -1,7 +1,7 @@
 // Only `pnpm auth:generate` loads this: the Worker must never hold a module-scope instance.
 import { betterAuth } from 'better-auth/minimal';
-import { authOptions } from '../packages/core/src/auth.js';
 import { openDb } from '../packages/core/src/db.js';
+import { authOptions } from '../packages/core/src/identity/auth.js';
 
 export const auth = betterAuth(
   authOptions('default', openDb('default', {} as never), {

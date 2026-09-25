@@ -77,6 +77,12 @@ importers:
       '@handover/core':
         specifier: workspace:*
         version: link:../core
+      jsonc-parser:
+        specifier: ^3.3.1
+        version: 3.3.1
+      smol-toml:
+        specifier: ^1.8.0
+        version: 1.8.0
 
   packages/core:
     dependencies:

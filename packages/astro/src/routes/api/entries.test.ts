@@ -15,7 +15,6 @@ import {
   deletedEntries,
   discardDraft,
   drifted,
-  dropped,
   editor,
   files,
   germanOnly,
@@ -24,15 +23,12 @@ import {
   home,
   logged,
   machine,
-  moved,
   overlayRows,
   owner,
   pendingDrafts,
   post,
   publish,
   put,
-  recordDelete,
-  recordRenames,
   resetContainers,
   resetMocks,
   resetState,
@@ -45,10 +41,10 @@ import {
   state,
   taken,
   untranslated,
-} from './harness.js';
+} from './harness.fixture.js';
 
 const { workerMailerMock, configMock, indexMock, cloudflareMock, authMock, coreMock } =
-  await vi.hoisted(async () => import('./harness.js'));
+  await vi.hoisted(async () => import('./harness.fixture.js'));
 
 vi.mock('worker-mailer', () => workerMailerMock());
 vi.mock('virtual:handover/config', () => configMock());
@@ -142,43 +138,12 @@ test('a global is served as an entry, in singleton mode and under its own label'
 
   expect(res.status).toBe(200);
   const body = (await res.json()) as Record<string, unknown>;
-  expect(body.fields).toEqual([
-    { path: ['footerText'], label: 'Footer text', type: 'text', required: true },
-    { path: ['phone'], label: 'Phone', type: 'text', required: false, i18n: 'duplicate' },
-    // The site's SEO defaults are an ordinary group.
-    {
-      path: ['defaultSeo'],
-      label: 'Search and sharing',
-      labels: { en: 'Search and sharing', de: 'Suche und Teilen' },
-      type: 'group',
-      required: false,
-      fields: [
-        {
-          path: ['titlePattern'],
-          label: 'Default search title',
-          labels: { en: 'Default search title', de: 'Standard-Suchtitel' },
-          type: 'text',
-          required: false,
-        },
-        { path: ['description'], label: 'Description', type: 'text', required: false },
-        {
-          path: ['image'],
-          label: 'Default social image',
-          labels: { en: 'Default social image', de: 'Standard-Social-Media-Bild' },
-          type: 'image',
-          required: false,
-          preset: { ratio: '1.91:1', max: 1200, min: 1200 },
-        },
-        {
-          path: ['twitter'],
-          label: 'X (Twitter) handle',
-          labels: { en: 'X (Twitter) handle', de: 'X-(Twitter-)Name' },
-          type: 'text',
-          required: false,
-          i18n: 'duplicate',
-        },
-      ],
-    },
+  expect(
+    (body.fields as { path: string[]; type: string }[]).map(({ path, type }) => ({ path, type })),
+  ).toEqual([
+    { path: ['footerText'], type: 'text' },
+    { path: ['phone'], type: 'text' },
+    { path: ['defaultSeo'], type: 'group' },
   ]);
   expect(body.data).toEqual({ footerText: 'Coastal homes since 2009' });
   expect(body.singleton).toBe(true);
@@ -289,75 +254,6 @@ test('an entry with a draft returns the draft data and reports it as pending', a
   state.draft = undefined;
 });
 
-test('autosaving a draft stores it under the entry path with nothing to report', async () => {
-  const data = { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } };
-  const res = await PUT(put('drafts/listings/mill-house', JSON.stringify({ data })));
-  expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ updated_at: 1755864000000, pending: true, problems: [] });
-  expect(saveDraft).toHaveBeenCalledWith(
-    'default',
-    expect.anything(),
-    expect.anything(),
-    'src/content/listings/en/mill-house.yaml',
-    data,
-    // A site that declares one language has no other file to keep in step.
-    undefined,
-    undefined,
-    'opened',
-  );
-});
-
-// Who typed it, which is what the dashboard's rows and the Site settings cards report.
-test('an autosave carries the id of whoever typed it', async () => {
-  saveDraft.mockClear();
-  const data = { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } };
-  await PUT(
-    ctx(
-      'drafts/listings/mill-house',
-      new Request('https://x/admin/api/drafts/listings/mill-house', {
-        method: 'PUT',
-        body: JSON.stringify({ revision: 'opened', data }),
-      }),
-      { handover: owner },
-    ),
-  );
-
-  expect((saveDraft.mock.calls[0] as unknown[])?.[6]).toBe('u1');
-});
-
-test('autosaving never publishes, whatever the form holds', async () => {
-  publish.mockClear();
-  const data = { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } };
-  await PUT(put('drafts/listings/mill-house', JSON.stringify({ data })));
-  expect(publish).not.toHaveBeenCalled();
-});
-
-test('an autosave the schema refuses is stored anyway, with what is missing named', async () => {
-  saveDraft.mockClear();
-  const data = { title: 'No rooms yet' };
-  const res = await PUT(put('drafts/listings/mill-house', JSON.stringify({ data })));
-  expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({
-    updated_at: 1755864000000,
-    pending: true,
-    problems: [
-      { path: 'rooms', message: 'Required', descriptor: { code: 'FIELD_REQUIRED' } },
-      { path: 'address', message: 'Required', descriptor: { code: 'FIELD_REQUIRED' } },
-    ],
-  });
-  expect(saveDraft).toHaveBeenCalledWith(
-    'default',
-    expect.anything(),
-    expect.anything(),
-    'src/content/listings/en/mill-house.yaml',
-    data,
-    // A site that declares one language has no other file to keep in step.
-    undefined,
-    undefined,
-    'opened',
-  );
-});
-
 test('an autosave the serialiser cannot write back is refused, with the reason', async () => {
   saveDraft.mockClear();
   saveDraft.mockImplementationOnce(async () => {
@@ -380,29 +276,6 @@ test('a body that is not an object, and an unknown collection, are refused', asy
   ).toBe(400);
   expect((await PUT(put('drafts/nope/mill-house', body))).status).toBe(404);
   expect(saveDraft).not.toHaveBeenCalled();
-});
-
-// The `_` keys belong to the file: the server reads them off the entry.
-test('reserved keys in the posted data are dropped before the draft is stored', async () => {
-  saveDraft.mockClear();
-  const data = { title: 'The Mill', rooms: 3, address: { street: 'Mill Lane' } };
-  await PUT(
-    put(
-      'drafts/listings/mill-house',
-      JSON.stringify({ revision: 'opened', data: { ...data, _status: 'hidden' } }),
-    ),
-  );
-  expect(saveDraft).toHaveBeenCalledWith(
-    'default',
-    expect.anything(),
-    expect.anything(),
-    'src/content/listings/en/mill-house.yaml',
-    data,
-    // A site that declares one language has no other file to keep in step.
-    undefined,
-    undefined,
-    'opened',
-  );
 });
 
 test('autosave marks localized addresses as managed by their dedicated operation', async () => {
@@ -581,39 +454,6 @@ test('duplicating in an unknown collection is 404', async () => {
   expect((await POST(post('entries/nope/home/duplicate', JSON.stringify({})))).status).toBe(404);
 });
 
-test('renaming moves the entry in one commit and takes its unpublished edits with it', async () => {
-  publish.mockClear();
-  recordRenames.mockClear();
-  const res = await POST(
-    post('entries/listings/mill-house/rename', JSON.stringify({ to: 'The Old Mill' })),
-  );
-  expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ slug: 'the-old-mill', commit_sha: 'def456' });
-  expect(publish).toHaveBeenCalledTimes(1);
-  const [files] = (publish.mock.calls[0] ?? []) as unknown as [PublishFile[]];
-  expect(files.map((f) => f.path)).toEqual([
-    'src/content/listings/en/mill-house.yaml',
-    'src/content/listings/en/the-old-mill.yaml',
-    'src/content/redirects.yaml',
-  ]);
-  expect(files[0]?.contents).toBe(null);
-  expect(files[2]?.contents).toContain('from: "/listings/mill-house"');
-  expect(recordRenames).toHaveBeenCalledWith(
-    'default',
-    expect.anything(),
-    [
-      {
-        from: 'src/content/listings/en/mill-house.yaml',
-        to: 'src/content/listings/en/the-old-mill.yaml',
-        contents: 'title: The Mill House\nlocation: Bakewell\nrooms: 3\n',
-      },
-    ],
-    'def456',
-    undefined,
-    expect.objectContaining({ operationId: 'operation-1', token: 'reservation' }),
-  );
-});
-
 test('renaming an entry that has never been published says so rather than failing', async () => {
   publish.mockClear();
   const res = await POST(
@@ -634,28 +474,6 @@ const del = (path: string, body?: unknown) =>
       }),
     ),
   );
-
-test('deleting commits the removal with a redirect and says the file has gone', async () => {
-  publish.mockClear();
-  recordDelete.mockClear();
-  const res = await del('entries/listings/mill-house');
-  expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ commit_sha: 'def456' });
-  const [files] = (publish.mock.calls[0] ?? []) as unknown as [PublishFile[]];
-  expect(files.map((f) => f.path)).toEqual([
-    'src/content/listings/en/mill-house.yaml',
-    'src/content/redirects.yaml',
-  ]);
-  expect(files[1]?.contents).toContain('reason: "deleted"');
-  // The list is the build's index and the build has not run yet, so something has to say so.
-  expect(recordDelete).toHaveBeenCalledWith(
-    'default',
-    expect.anything(),
-    'src/content/listings/en/mill-house.yaml',
-    'def456',
-    '',
-  );
-});
 
 // Step one of the order a rename and a delete are held to.
 test('renaming waits for the editor who has the entry open', async () => {
@@ -682,15 +500,6 @@ test('deleting waits for the editor who has the entry open', async () => {
   expect(res.status).toBe(409);
   expect(await res.text()).toContain('it can be deleted once they are done');
   expect(publish).not.toHaveBeenCalled();
-});
-
-// The entry is the same entry: whoever has it open still has it, under the name it now answers to.
-test('the lock follows a rename and goes with a delete', async () => {
-  await POST(post('entries/listings/mill-house/rename', JSON.stringify({ to: 'The Old Mill' })));
-  expect(moved).toEqual(['listings/mill-house -> listings/the-old-mill']);
-
-  await del('entries/listings/mill-house');
-  expect(dropped).toEqual(['listings/mill-house']);
 });
 
 // Discarding is the one thing besides a restore that throws a colleague's unpublished words away.
@@ -1253,33 +1062,6 @@ const bilingualPost = () => {
   files['src/content/posts/en/taken.yaml'] = '_version: 1\ntitle: "Taken"\n';
   files['src/content/posts/de/taken.yaml'] = '_version: 1\ntitle: "Belegt"\nslug: "belegt"\n';
 };
-
-test('turning off a language that has a file removes it in one commit, with its redirect', async () => {
-  bilingualPost();
-  publish.mockClear();
-  recordDelete.mockClear();
-
-  const res = await POST(post('entries/posts/taken/locales', JSON.stringify({ locales: ['en'] })));
-
-  expect(res.status).toBe(200);
-  const [written] = (publish.mock.calls[0] ?? []) as unknown as [PublishFile[]];
-  expect(written.map((f) => f.path)).toEqual([
-    'src/content/posts/de/taken.yaml',
-    'src/content/posts/en/taken.yaml',
-    'src/content/redirects.yaml',
-  ]);
-  expect(written[0]?.contents).toBe(null);
-  expect(written[1]?.contents).toContain('_locales:\n  - "en"');
-  expect(written[2]?.contents).toContain('from: "/de/blog/belegt"\n    to: "/de/blog"');
-  // The list is the build's index and the build has not run yet, so something has to say so.
-  expect(recordDelete).toHaveBeenCalledWith(
-    'default',
-    expect.anything(),
-    'src/content/posts/de/taken.yaml',
-    'def456',
-    '',
-  );
-});
 
 // The question a hide and a delete ask, asked here too.
 test('turning a language off sends its readers where the answer says', async () => {

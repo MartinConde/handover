@@ -7,7 +7,8 @@ free to change.
 
 - `packages/core` — logic with no Astro or Cloudflare imports (a test enforces it):
   `ContentSource`, the Zod → field walker, YAML parse/stringify, the GitHub client.
-  Every function takes a `siteId` first, unused until multi-site.
+  Modules and their tests are grouped by content, drafts, publishing, media, and identity.
+  Database operations use `siteId` to scope rows; public helpers retain their existing signatures.
 - `packages/astro` — the integration. Re-exports what sites need from core.
 - `packages/ui` — the admin SPA (Svelte 5 + Vite), built into `packages/astro/dist/ui/`. Its
   whole Vite build is `build.ts`'s `uiBuildConfig`, so a site with admin screens can run the

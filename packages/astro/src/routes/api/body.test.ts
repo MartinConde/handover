@@ -4,6 +4,7 @@ import {
   BodyTooLargeError,
   bodyErrorResponse,
   MAX_JSON_BYTES,
+  readBodyText,
   readJson,
 } from './body.js';
 
@@ -87,11 +88,23 @@ test('oversized chunked API bodies are rejected without waiting for the unread r
   expect(cancelled).toBe(true);
 });
 
-test('valid bounded bodies remain available to downstream JSON handlers', async () => {
+test('valid bounded bodies are parsed once for downstream JSON and text handlers', async () => {
+  let reads = 0;
   const request = new Request('https://x/admin/api/members', {
     method: 'POST',
-    body: '{"name":"Lea"}',
-  });
+    body: new ReadableStream<Uint8Array>({
+      pull(controller) {
+        reads++;
+        controller.enqueue(new TextEncoder().encode('{"name":"Lea"}'));
+        controller.close();
+      },
+    }),
+    duplex: 'half',
+  } as RequestInit & { duplex: 'half' });
   expect(await bodyErrorResponse(request)).toBeUndefined();
-  expect(await request.json()).toEqual({ name: 'Lea' });
+  const parsed = await readJson(request);
+  expect(parsed).toEqual({ name: 'Lea' });
+  expect(await readJson(request)).toBe(parsed);
+  expect(await readBodyText(request)).toBe('{"name":"Lea"}');
+  expect(reads).toBe(1);
 });

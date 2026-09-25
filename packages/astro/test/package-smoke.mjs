@@ -83,6 +83,11 @@ try {
     throw new Error(
       `astro-handover archive contains component tests: ${componentTests.join(', ')}`,
     );
+  const astroTestSupport = astroFiles.filter((path) =>
+    /package\/dist\/.*(?:harness|fixture|test-support)/.test(path),
+  );
+  if (astroTestSupport.length)
+    throw new Error(`astro-handover archive contains test support: ${astroTestSupport.join(', ')}`);
 
   // The SPA ships as source so a site with screens can rebuild it, and Paraglide writes its own
   // .gitignore of `*` beside the compiled messages, which both packers obey without prepack's

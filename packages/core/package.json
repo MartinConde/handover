@@ -16,6 +16,7 @@
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "test": "vitest run",
+    "test:integration": "HANDOVER_LIVE_GIT_TESTS=1 vitest run src/publishing/git.integration.test.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {

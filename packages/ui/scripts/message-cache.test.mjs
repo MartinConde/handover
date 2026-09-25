@@ -20,12 +20,18 @@ function fixture() {
   const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'handover-message-cache-'));
   temporaryDirectories.push(workspace);
   const root = path.join(workspace, 'packages/ui');
-  for (const directory of ['messages', 'project.inlang', 'scripts', 'src/paraglide', '../core/src'])
+  for (const directory of [
+    'messages',
+    'project.inlang',
+    'scripts',
+    'src/paraglide',
+    '../core/src/content',
+  ])
     fs.mkdirSync(path.join(root, directory), { recursive: true });
   const files = {
     '../../pnpm-lock.yaml': 'lockfileVersion: 9\n',
     'package.json': '{}\n',
-    '../core/src/ui-locale.ts': "export const UI_LOCALES = ['en', 'de'];\n",
+    '../core/src/content/ui-locale.ts': "export const UI_LOCALES = ['en', 'de'];\n",
     'project.inlang/settings.json': '{}\n',
     'scripts/catalog-validator.mjs': 'validator implementation\n',
     'scripts/message-cache.mjs': 'cache\n',

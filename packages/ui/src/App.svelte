@@ -11,6 +11,7 @@ import EntryList from './content/EntryList.svelte';
 import Globals from './content/Globals.svelte';
 import Redirects from './content/Redirects.svelte';
 import type { CreatedAll } from './editor/Editor.svelte';
+import type { EditorEntry } from './editor/entry-payload';
 import SourceRecovery, { type SourceProblem } from './editor/SourceRecovery.svelte';
 import { invalidateEntryDirectory } from './entry-directory.js';
 import {
@@ -552,9 +553,9 @@ async function revert() {
   drawerKey += 1;
 }
 
-async function loadEntry(collection: string, slug: string) {
+async function loadEntry(collection: string, slug: string): Promise<EditorEntry> {
   const res = await fetch(`/admin/api/entries/${collection}/${slug}`);
-  if (res.ok) return res.json();
+  if (res.ok) return (await res.json()) as EditorEntry;
   // Not a failure to load: the entry is there and needs somebody to say what it is written in.
   if (res.status === 409 && res.headers.get('x-handover-error-code')?.startsWith('ENTRY_SOURCE_'))
     throw { source: (await res.json()) as SourceProblem };
@@ -846,7 +847,7 @@ const initial = $derived(
           collection={editing.collection}
           slug={editing.slug}
           section={editing.section ?? ''}
-          {entry}
+          entry={entry as EditorEntry}
           mediaBase={session?.mediaBase ?? ''}
           preview={session?.preview ?? false}
           site={session?.site}

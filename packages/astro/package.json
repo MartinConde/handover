@@ -5,6 +5,8 @@
   "type": "module",
   "files": [
     "dist",
+    "!dist/**/harness.*",
+    "!dist/**/*.fixture.*",
     "components",
     "!components/**/*.test.ts",
     "bin"

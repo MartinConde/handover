@@ -21,6 +21,7 @@ import { Miniflare } from 'miniflare';
 import { afterAll, beforeAll, beforeEach, expect, test, vi } from 'vitest';
 import * as tables from '../../../core/src/tables.js';
 import { onRequest } from '../middleware.js';
+import { MAX_JSON_BYTES } from './api/body.js';
 import { DELETE, GET, POST, PUT } from './api.js';
 
 const boundary = vi.hoisted(() => ({
@@ -289,6 +290,23 @@ async function call(method: string, path: string, body?: unknown, cookies = cook
   if (!response) throw new Error('No response');
   return response;
 }
+test('oversized auth requests are refused before Better Auth reads their body', async () => {
+  const url = new URL('http://localhost/admin/api/auth/sign-in/email');
+  const request = new Request(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'content-length': String(MAX_JSON_BYTES + 1) },
+    body: '{}',
+  });
+  const ctx = {
+    url,
+    request,
+    params: { path: 'auth/sign-in/email' },
+    locals: {},
+  } as unknown as APIContext;
+  const response = await onRequest(ctx, () => Promise.resolve(POST(ctx)));
+  expect(response?.status).toBe(413);
+  expect(await response?.json()).toMatchObject({ code: 'BODY_TOO_LARGE' });
+});
 async function opened() {
   const res = await call('GET', 'entries/pages/home');
   expect(res.status).toBe(200);
@@ -324,6 +342,42 @@ test('S01 open → save → publish → cleanup → revert preserves the publish
     title: 'Edited home',
   });
   expect((await loadDraft('default', db, PATH))?.publishedSha).toBeNull();
+});
+
+test('autosave stores editable fields in D1 without changing the repository', async () => {
+  const entry = await opened();
+  const response = await call('PUT', 'drafts/pages/home', {
+    revision: entry.revisions.en,
+    data: { title: 'Edited draft', body: 'Draft body', _status: 'hidden' },
+  });
+  expect(response.status).toBe(200);
+  expect(parseEntry('default', (await loadDraft('default', db, PATH))?.contents ?? '')).toEqual({
+    _version: 1,
+    title: 'Edited draft',
+    body: 'Draft body',
+  });
+  expect(trees[head]?.[PATH]).toBe(INITIAL);
+});
+
+test('autosave records the signed-in editor on the persisted draft', async () => {
+  const entry = await opened();
+  expect((await save('Owner draft', entry.revisions.en ?? '')).status).toBe(200);
+  expect((await loadDraft('default', db, PATH))?.updatedBy).toBe('owner');
+});
+
+test('autosave keeps an incomplete draft and reports its missing title', async () => {
+  const entry = await opened();
+  const response = await save('', entry.revisions.en ?? '');
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({
+    pending: true,
+    problems: [{ path: 'title', descriptor: { code: 'FIELD_TEXT_TOO_SMALL' } }],
+  });
+  expect(
+    parseEntry('default', (await loadDraft('default', db, PATH))?.contents ?? ''),
+  ).toMatchObject({
+    title: '',
+  });
 });
 
 test('S01 a save during publication keeps newer bytes pending and commits the validated bytes', async () => {
@@ -527,6 +581,41 @@ test('rename moves a draft-only translation and preserves its unpublished state'
   });
   expect(trees[head]?.[from]).toBeUndefined();
   expect(trees[head]?.[to]).toBeUndefined();
+});
+
+test('turning off a published translation removes its file and records the redirect', async () => {
+  const translated = 'src/content/pages/de/home.yaml';
+  push([{ path: translated, contents: '_version: 1\ntitle: "Startseite"\n' }]);
+  const response = await call('POST', 'entries/pages/home/locales', {
+    locales: ['en'],
+    redirect: { kind: 'url', value: 'https://example.com/de/other' },
+  });
+  expect(response.status).toBe(200);
+  expect(trees[head]?.[translated]).toBeUndefined();
+  expect(trees[head]?.['src/content/redirects.yaml'] ?? '').toContain(
+    'https://example.com/de/other',
+  );
+  expect((await db.select().from(tables.activity)).map((row) => row.kind)).toContain('locale-off');
+});
+
+test('deleting a published entry commits its redirect and finalizes the operation', async () => {
+  const response = await call('DELETE', 'entries/pages/home', {
+    redirect: { kind: 'url', value: 'https://example.com/elsewhere' },
+  });
+  expect(response.status).toBe(200);
+  expect(trees[head]?.[PATH]).toBeUndefined();
+  expect(trees[head]?.['src/content/redirects.yaml'] ?? '').toContain(
+    'https://example.com/elsewhere',
+  );
+  expect((await db.select().from(tables.operations))[0]?.state).toBe('finalized');
+});
+
+test('the editor lock follows a rename and is released by deletion', async () => {
+  await claimLock('default', db, 'pages/home', 'owner', 'tab');
+  expect((await call('POST', 'entries/pages/home/rename', { to: 'moved' })).status).toBe(200);
+  expect((await db.select().from(tables.locks)).map((row) => row.entry)).toEqual(['pages/moved']);
+  expect((await call('DELETE', 'entries/pages/moved')).status).toBe(200);
+  expect(await db.select().from(tables.locks)).toEqual([]);
 });
 
 test('an unrelated successful build cannot clean overlays for an unbuilt commit', async () => {

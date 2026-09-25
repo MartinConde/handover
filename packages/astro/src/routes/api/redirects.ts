@@ -15,6 +15,7 @@ import {
   redirectError,
   redirectRule,
 } from '@handover/core';
+import { readJson } from './body.js';
 import { pickable, sitePages } from './content.js';
 import type { RequestContext } from './environment.js';
 
@@ -49,7 +50,7 @@ const MANAGED =
   'This redirect belongs to the entry that is hidden. Show that entry again and the redirect goes with it.';
 
 const typedRule = async (request: Request) => {
-  const body = (await request.json().catch(() => undefined)) as
+  const body = (await readJson(request)) as
     | { from?: unknown; to?: unknown; status?: unknown }
     | undefined;
   return {

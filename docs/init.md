@@ -62,6 +62,10 @@ includes `wrangler.jsonc`: a config file you wrote is yours, so the block to pas
 is printed instead. Initialization stops there, before migration generation, application or
 owner creation. Merge the block and run the continuation command it prints.
 
+Existing Wrangler configuration can use JSON, JSONC, or TOML. Comments and trailing commas
+are accepted in JSONC, and comment characters inside quoted values are preserved. Invalid
+syntax is reported with the configuration filename before resources are provisioned.
+
 It refuses outright on a project that already has a `migrations/` folder without the matching
 initialization record, rather than guess how to merge the numbering. It also validates an
 existing `drizzle.config.ts` before recording a schema version: the dialect must be SQLite, the

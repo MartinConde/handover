@@ -423,6 +423,22 @@ test('init verifies a configured database id in the selected account before crea
   expect(ran.some((argv) => argv.includes('migrations'))).toBe(false);
 });
 
+test('init reads a quoted hash in a user-owned Wrangler TOML value', async () => {
+  const cwd = site({
+    'package.json': '{ "name": "my-site" }',
+    'wrangler.toml': '[vars]\nR2_BUCKET = "wrong#bucket"\n',
+  });
+  const ran: string[][] = [];
+  const { code, out } = await run(['init', 'you@example.com'], cwd, ran);
+
+  expect(code).toBe(1);
+  expect(out).toContain('R2_BUCKET is wrong#bucket');
+  expect(ran).toEqual([
+    ['drizzle-kit', '--version'],
+    ['wrangler', '--version'],
+  ]);
+});
+
 test.each([
   'wrangler d1 create my-site',
   'wrangler r2 bucket create my-site-media',

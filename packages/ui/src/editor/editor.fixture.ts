@@ -1,5 +1,5 @@
 import { type Drift, type Field, LOCK_TTL } from '@handover/core';
-import { flushSync, mount, unmount } from 'svelte';
+import { type ComponentProps, flushSync, mount, unmount } from 'svelte';
 import { afterEach, vi } from 'vitest';
 import Editor from './Editor.svelte';
 
@@ -38,7 +38,9 @@ export const bilingual = {
     { path: ['notes'], label: 'Notes', type: 'text', required: false, i18n: false },
     { path: ['body'], label: 'Body', type: 'blocks', required: true, types: ['hero'] },
   ] satisfies Field[],
-  blocks: { hero: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }] },
+  blocks: {
+    hero: [{ path: ['heading'], label: 'Heading', type: 'text', required: true }] satisfies Field[],
+  },
   data: {
     title: 'Seaview Cottage',
     price: '£1,200 per week',
@@ -56,17 +58,14 @@ export const bilingual = {
   },
 };
 
-export const opened = vi.fn();
-
 export const state = {} as { app: ReturnType<typeof mount> };
-export const show = (over: Record<string, unknown> = {}) => {
+export const show = (over: Partial<ComponentProps<typeof Editor>> = {}) => {
   state.app = mount(Editor, {
     target: document.body,
     props: {
       collection: 'listings',
       slug: 'seaview-cottage',
       entry,
-      onpublish: opened,
       onchanged: () => {},
       ...over,
     },
@@ -96,11 +95,13 @@ export const isLint = (url: unknown) => url === '/admin/api/publish/checks';
 export const wrote = (mock: { mock: { calls: unknown[][] } }) =>
   mock.mock.calls.filter((call) => !isLock(call[0]) && !isLint(call[0]));
 export const autosaved = () =>
-  vi.fn(async (url: string) =>
-    isLock(url)
-      ? Response.json(HELD)
-      : Response.json({ updated_at: 1755864000000, pending: true, problems: [] }),
-  );
+  vi.fn(async (url: string) => {
+    if (isLock(url)) return Response.json(HELD);
+    if (url.startsWith('/admin/api/drafts/'))
+      return Response.json({ updated_at: 1755864000000, pending: true, problems: [] });
+    if (isLint(url)) return Response.json({ results: [], readiness: {} });
+    throw new Error(`Unexpected editor request: ${url}`);
+  });
 
 export const settled = async () => {
   await tick();
@@ -110,17 +111,17 @@ export const settled = async () => {
 
 // The lock is the entry's, so what it takes away is everything that writes to any of its files.
 export const heldBy = (over: Record<string, unknown> = {}) =>
-  vi.fn(async (url: string) =>
-    isLock(url)
-      ? Response.json({
-          held_by: { id: 'u1', name: 'Anna Berg' },
-          mine: false,
-          expires_at: Date.now() + LOCK_TTL,
-          base: {},
-          ...over,
-        })
-      : Response.json({}),
-  );
+  vi.fn(async (url: string) => {
+    if (isLock(url))
+      return Response.json({
+        held_by: { id: 'u1', name: 'Anna Berg' },
+        mine: false,
+        expires_at: Date.now() + LOCK_TTL,
+        base: {},
+        ...over,
+      });
+    throw new Error(`Unexpected editor request: ${url}`);
+  });
 
 export const languagePick = (root: ParentNode) =>
   $<HTMLButtonElement>(root, '.language-pick > button');
@@ -152,10 +153,14 @@ export const useEditorSetup = () => {
   // The tab token lives in session storage, so pinning it makes the request bodies literal.
   sessionStorage.setItem('handover-tab', 'tab-1');
   afterEach(() => {
-    unmount(state.app);
-    opened.mockClear();
-    localStorage.clear();
-    document.body.innerHTML = '';
+    try {
+      if (state.app) unmount(state.app);
+    } finally {
+      localStorage.clear();
+      document.body.innerHTML = '';
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
   });
   afterEach(() => at('/admin/c/listings/seaview-cottage'));
 };

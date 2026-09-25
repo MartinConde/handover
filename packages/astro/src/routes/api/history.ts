@@ -24,6 +24,7 @@ import {
   sourceChanges,
 } from '@handover/core';
 import { formSchema } from '../../index.js';
+import { readJson } from './body.js';
 import {
   entryLocales,
   entryPath,
@@ -266,9 +267,7 @@ export async function restoreVersion(
 ): Promise<Response> {
   const schema = schemaOf(collection, slug);
   if (!schema) return new Response('Not found', { status: 404 });
-  const body = (await request.json().catch(() => undefined)) as
-    | { commit_sha?: unknown; name?: unknown }
-    | undefined;
+  const body = (await readJson(request)) as { commit_sha?: unknown; name?: unknown } | undefined;
   const sha = typeof body?.commit_sha === 'string' ? body.commit_sha : '';
   if (!SHA.test(sha)) return new Response('A commit_sha is needed to restore', { status: 400 });
   // Read under the name the files had then, written under the current one: a restore never renames.
@@ -348,9 +347,7 @@ export async function resolve(
   request: Request,
 ): Promise<Response> {
   if (!schemaOf(collection, slug)) return new Response('Not found', { status: 404 });
-  const body = (await request.json().catch(() => undefined)) as
-    | { answers?: unknown; version?: unknown }
-    | undefined;
+  const body = (await readJson(request)) as { answers?: unknown; version?: unknown } | undefined;
   const answers = (Array.isArray(body?.answers) ? body.answers : []).filter(
     (answer): answer is Answer =>
       typeof answer?.path === 'string' &&
@@ -428,9 +425,7 @@ const undoPath = (_session: App.Locals['handover']) => (path: string) => {
 };
 
 async function undoing(request: Request): Promise<string> {
-  const body = (await request.json().catch(() => undefined)) as
-    | { commit_sha?: unknown }
-    | undefined;
+  const body = (await readJson(request)) as { commit_sha?: unknown } | undefined;
   return typeof body?.commit_sha === 'string' ? body.commit_sha : '';
 }
 
