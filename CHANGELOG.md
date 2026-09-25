@@ -10,6 +10,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   with the repository's message when GitHub cannot be reached, instead of a generic 500.
 - Internal: a raw NUL byte in core's conflict resolver is written as `\u0000`, so git and grep
   read the file as text.
+- Internal: the dated September security review is removed from the repository.
 - `handover init` reads Wrangler JSONC and TOML with standard parsers, preserving comment
   characters inside quoted values and reporting invalid configuration before provisioning.
 - The published `astro-handover` package excludes route test fixtures. Core modules are
