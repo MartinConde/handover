@@ -13,6 +13,8 @@ export interface ResourceClaim {
   cost: number;
 }
 
+const WINDOW = 60 * 60_000;
+
 export async function claimResource(
   siteId: string,
   db: Db,
@@ -21,12 +23,11 @@ export async function claimResource(
     kind: string;
     cost: number;
     limit: number;
-    windowMs?: number;
     now?: number;
   },
 ): Promise<ResourceClaim> {
-  const { subject, kind, cost, limit, windowMs = 60 * 60_000, now = Date.now() } = request;
-  const windowAt = Math.floor(now / windowMs) * windowMs;
+  const { subject, kind, cost, limit, now = Date.now() } = request;
+  const windowAt = Math.floor(now / WINDOW) * WINDOW;
   if (!(Number.isInteger(cost) && cost > 0 && Number.isInteger(limit) && limit >= cost))
     throw new ResourceLimitError('Invalid resource budget');
   const [row] = await db

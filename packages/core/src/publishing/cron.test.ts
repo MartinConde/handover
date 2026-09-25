@@ -4,7 +4,7 @@ import { newTestD1, resetTestD1 } from '../db.fixture.js';
 import { type Db, openDb } from '../db.js';
 import type { R2Store } from '../media/media.js';
 import * as tables from '../tables.js';
-import { findHiddenLong, JOB_NAMES, lastHiddenLong, runDue, runJob } from './cron.js';
+import { findHiddenLong, lastHiddenLong, runDue } from './cron.js';
 
 // The same harness the other D1 files use.
 const mf = newTestD1();
@@ -244,13 +244,6 @@ test('a claim that cannot be written does not run work or stop checking independ
   const deps = { db: claimFails(db), store, fetch: listing([]), now: NOW };
 
   expect(await runDue('default', deps)).toEqual({});
-});
-
-test('a name nothing is registered under is refused', async () => {
-  await expect(runJob('default', 'sitemap', { db, store, now: NOW })).rejects.toThrow(
-    'there is no cron job called sitemap: this site runs reconcile, retention, orphans, hidden',
-  );
-  expect(JOB_NAMES).toEqual(['reconcile', 'retention', 'orphans', 'hidden']);
 });
 
 // The sweep needs the repository, and the dispatcher is the only thing that hands it over.

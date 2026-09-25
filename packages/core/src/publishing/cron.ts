@@ -39,17 +39,6 @@ const JOBS: Record<
   hidden: { every: 24 * HOUR, run: (siteId, d) => findHiddenLong(siteId, d.git, d.now) },
 };
 
-/** What this site runs, in the order the dispatcher walks them. */
-export const JOB_NAMES = Object.keys(JOBS);
-
-/** Unknown job names are never registered. */
-export async function runJob(siteId: string, name: string, deps: JobDeps): Promise<JobDone> {
-  const job = JOBS[name];
-  if (!job)
-    throw new Error(`there is no cron job called ${name}: this site runs ${JOB_NAMES.join(', ')}`);
-  return job.run(siteId, deps);
-}
-
 /** What each job this tick belonged to did, or the message it failed with. */
 export type CronReport = Record<string, number | string>;
 
@@ -115,7 +104,7 @@ export async function runDue(siteId: string, deps: JobDeps): Promise<CronReport>
     }
     if (!claim) continue;
     try {
-      const out = await runJob(siteId, name, { ...deps, now });
+      const out = await job.run(siteId, { ...deps, now });
       const done = typeof out === 'number' ? out : out.done;
       report[name] = done;
       if (done)

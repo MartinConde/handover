@@ -85,7 +85,6 @@ test('a persistent concurrency claim is exclusive until released', async () => {
     kind: 'translate-active',
     cost: 1,
     limit: 1,
-    windowMs: 60_000,
     now: 1,
   });
   await expect(
@@ -94,7 +93,6 @@ test('a persistent concurrency claim is exclusive until released', async () => {
       kind: 'translate-active',
       cost: 1,
       limit: 1,
-      windowMs: 60_000,
       now: 2,
     }),
   ).rejects.toThrow(ResourceLimitError);
@@ -105,7 +103,6 @@ test('a persistent concurrency claim is exclusive until released', async () => {
       kind: 'translate-active',
       cost: 1,
       limit: 1,
-      windowMs: 60_000,
       now: 3,
     }),
   ).resolves.toBeDefined();

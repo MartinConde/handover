@@ -21,7 +21,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Internal: core builds a row's address in one place.
 - Internal: the stored media key format is one pattern, and the publish checks chunk their media
   lookups with the shared D1 helper.
+- Internal: the cron dispatcher runs its jobs directly; the unreachable unknown-job guard is gone.
 - Internal: core's test fixture files end in `.fixture.ts`, like the other packages'.
+- `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
+  longer takes `windowMs`; the window is always one hour.
 - `handover init` reads Wrangler JSONC and TOML with standard parsers, preserving comment
   characters inside quoted values and reporting invalid configuration before provisioning.
 - The published `astro-handover` package excludes route test fixtures. Core modules are

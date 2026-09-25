@@ -87,7 +87,6 @@ export async function setEntryStatus(
   form: Form,
   files: readonly { path: string; redirect?: { from: string; to: string } }[],
   hidden: boolean,
-  deps: { now?: () => number } = {},
 ): Promise<void> {
   const found = await Promise.all(
     files.map(async (file) => {
@@ -95,7 +94,7 @@ export async function setEntryStatus(
       return loaded && { ...file, loaded };
     }),
   );
-  const updatedAt = deps.now?.() ?? Date.now();
+  const updatedAt = Date.now();
   const writes = found.flatMap((file) => {
     if (!file) return [];
     const entry = { ...(file.loaded.entry as Record<string, unknown>) };
