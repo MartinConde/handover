@@ -1,3 +1,4 @@
+import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
 import { uses } from 'virtual:handover/index';
 import type { MediaRow, Upload } from '@handover/core';
@@ -24,12 +25,32 @@ import {
   setMediaDetails,
   storedUploadIntent,
 } from '@handover/core';
+import type { RequestContext } from '../../environment.js';
+import { mediaStore, NO_BUCKET } from '../../environment.js';
 import { readJson } from './body.js';
 import { entryHref, entryTitle } from './content.js';
-import type { RequestContext } from './environment.js';
-import { mediaStore, NO_BUCKET, NO_UPLOAD_BUCKET, uploadBucket } from './environment.js';
+
+interface UploadBucket {
+  put(
+    key: string,
+    value: ReadableStream | ArrayBuffer | ArrayBufferView,
+    options?: { httpMetadata?: { contentType?: string; contentDisposition?: string } },
+  ): Promise<unknown>;
+  get(key: string): Promise<{
+    arrayBuffer(): Promise<ArrayBuffer>;
+    httpMetadata?: { contentType?: string; contentDisposition?: string };
+  } | null>;
+  delete(key: string): Promise<void>;
+}
+
+function uploadBucket(): UploadBucket | undefined {
+  return (env as { MEDIA_UPLOADS?: UploadBucket }).MEDIA_UPLOADS;
+}
 
 export const UPLOAD_KEY = /^uploads\/[0-9a-f-]{36}\/(?:media|files)\/[0-9a-f]{64}\.[a-z0-9]+$/;
+
+const NO_UPLOAD_BUCKET =
+  'No private upload bucket is configured: add an R2 binding named MEDIA_UPLOADS';
 
 /** The key a content file stores, and where the asset is served from. */
 function mediaItem(row: MediaRow) {

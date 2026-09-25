@@ -15,9 +15,9 @@ import {
   redirectError,
   redirectRule,
 } from '@handover/core';
+import type { RequestContext } from '../../environment.js';
 import { readJson } from './body.js';
 import { pickable, sitePages } from './content.js';
-import type { RequestContext } from './environment.js';
 
 /** Committed rules in file order, then the rules waiting on an entry's draft, flagged. */
 export async function redirectList(ctx: RequestContext): Promise<Response> {

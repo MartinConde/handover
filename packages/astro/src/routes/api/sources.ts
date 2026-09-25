@@ -22,10 +22,10 @@ import {
   stringifyEntry,
   withSource,
 } from '@handover/core';
+import type { RequestContext } from '../../environment.js';
 import { readJson } from './body.js';
 import { entryHref, entryPath, formFor } from './content.js';
 import { entryTitles } from './dashboard.js';
-import type { RequestContext } from './environment.js';
 
 const KIND = 'sources-recorded';
 

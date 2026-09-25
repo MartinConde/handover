@@ -10,6 +10,7 @@ import {
   readRedirects,
   staleLocales,
 } from '@handover/core';
+import type { RequestContext } from '../../../environment.js';
 import { entryProblems } from '../../../problems.js';
 import {
   type entryLocales,
@@ -24,7 +25,6 @@ import {
   sourceRefusal,
   translator,
 } from '../content.js';
-import type { RequestContext } from '../environment.js';
 
 /** Committed and draft rules are both read; empty means the client answered "nowhere". */
 async function hideTargets(

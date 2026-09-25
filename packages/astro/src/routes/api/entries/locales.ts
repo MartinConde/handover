@@ -35,6 +35,7 @@ import {
   sourceOnlyConflicts,
   stringifyEntry,
 } from '@handover/core';
+import type { RequestContext } from '../../../environment.js';
 import { formSchema } from '../../../index.js';
 import { entryProblems } from '../../../problems.js';
 import { readJson } from '../body.js';
@@ -55,7 +56,6 @@ import {
   sourceRefusal,
   tabOf,
 } from '../content.js';
-import type { RequestContext } from '../environment.js';
 import { object, unresolvedSource } from './editing.js';
 import { entryNotFound } from './reading.js';
 

@@ -8,13 +8,13 @@ import {
   type EmailSender,
   logActivity,
   type Mailer,
-  openDb,
   type Role,
   resendMailer,
   senderAddress,
   type UiLocale,
   userExists,
 } from '@handover/core';
+import { db } from './environment.js';
 
 /** Named here rather than from `workers-types`: `waitUntil` is all this package asks of it. */
 export interface CloudflareContext {
@@ -120,10 +120,10 @@ export function createAuth(url: URL, ctx?: CloudflareContext, options?: { invite
     );
   }
   const e = env as Record<string, string | undefined>;
-  const db = openDb('default', (env as { DB?: Parameters<typeof openDb>[1] }).DB);
+  const database = db();
   const base = baseUrl();
   const send = mailer();
-  return create('default', db, {
+  return create('default', database, {
     secret,
     baseURL: base,
     basePath: `${(config.i18n.base ?? '').replace(/\/+$/, '')}/admin/api/auth`,
@@ -135,8 +135,8 @@ export function createAuth(url: URL, ctx?: CloudflareContext, options?: { invite
     ...(send
       ? {
           sendMagicLink: options?.invite
-            ? inviteLink(db, send, base ?? url.origin)
-            : signInLink(db, send),
+            ? inviteLink(database, send, base ?? url.origin)
+            : signInLink(database, send),
           ...(options?.invite ? { magicLinkMinutes: INVITE_HOURS * 60 } : {}),
           sendPasswordReset: ({ email, url: link }) =>
             send({
@@ -144,7 +144,7 @@ export function createAuth(url: URL, ctx?: CloudflareContext, options?: { invite
               subject: 'Set a new password',
               text: `Open this link to choose a new password for ${email}. It works once and expires in an hour.\n\n${link}\n\nIf you did not ask for this, ignore it — nothing has changed.`,
             })
-              .catch(mailFailed(db, 'password reset'))
+              .catch(mailFailed(database, 'password reset'))
               .then(() => undefined),
           sendEmailChangeApproval: ({ email, newEmail, url: link }) =>
             send({
@@ -152,7 +152,7 @@ export function createAuth(url: URL, ctx?: CloudflareContext, options?: { invite
               subject: 'Approve your new email address',
               text: `Somebody signed in as ${email} asked to change this account's email to ${newEmail}.\n\nOpen this link to approve it. We then send a link to ${newEmail}, and the change happens when that one is opened. It expires in an hour.\n\n${link}\n\nIf this was not you, do not open the link and change your password — somebody may be signed in as you.`,
             })
-              .catch(mailFailed(db, 'email change approval'))
+              .catch(mailFailed(database, 'email change approval'))
               .then(() => undefined),
           sendEmailChangeLink: ({ email, url: link }) =>
             send({
@@ -160,7 +160,7 @@ export function createAuth(url: URL, ctx?: CloudflareContext, options?: { invite
               subject: 'Confirm your new email address',
               text: `Open this link to make ${email} the address you sign in with. It works once and expires in an hour.\n\n${link}\n\nIf you did not ask for this, ignore it — nothing has changed.`,
             })
-              .catch(mailFailed(db, 'email change link'))
+              .catch(mailFailed(database, 'email change link'))
               .then(() => undefined),
         }
       : {}),

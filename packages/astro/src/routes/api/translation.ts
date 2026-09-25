@@ -16,6 +16,7 @@ import {
   translatableText,
   withSource,
 } from '@handover/core';
+import type { RequestContext } from '../../environment.js';
 import { readJson } from './body.js';
 import {
   entryLocales,
@@ -29,7 +30,6 @@ import {
   translationSource,
   translator,
 } from './content.js';
-import type { RequestContext } from './environment.js';
 
 /** Structure and shared values from the source file, none of its words, as a draft. */
 export async function createTranslation(

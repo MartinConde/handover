@@ -1,4 +1,3 @@
-import { env } from 'cloudflare:workers';
 import config from 'virtual:handover/config';
 import loaders from 'virtual:handover/loaders';
 import {
@@ -9,7 +8,6 @@ import {
   draftFiles,
   draftSource,
   entryAt,
-  openDb,
   previewTarget,
   roleOf,
   staticSource,
@@ -24,6 +22,7 @@ import {
   serializeCanvasManifest,
   successManifest,
 } from '../canvas.js';
+import { db } from '../environment.js';
 
 const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (character) => {
@@ -287,12 +286,11 @@ export async function preview(ctx: Ctx, astro: AstroContent<string>): Promise<Re
       `src/loaders/${name}.ts is asked for ${index ? "a collection's index" : 'an entry'} page and exports no ${index ? 'loadIndex and Index' : 'load and Page'}.`,
     );
 
-  const db = openDb('default', (env as { DB?: Parameters<typeof openDb>[1] }).DB);
   const transient = snapshot ? snapshotFiles(snapshot) : [];
   const source = draftSource(
     'default',
     staticSource('default', astro),
-    [...transient, ...(await draftFiles('default', db))],
+    [...transient, ...(await draftFiles('default', db()))],
     validate,
   );
 

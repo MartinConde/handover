@@ -13,6 +13,7 @@ import {
   saveDraft,
   takeLock,
 } from '@handover/core';
+import type { RequestContext } from '../../../environment.js';
 import { entryProblems } from '../../../problems.js';
 import { readJson } from '../body.js';
 import {
@@ -28,7 +29,6 @@ import {
   tabOf,
   translationSource,
 } from '../content.js';
-import type { RequestContext } from '../environment.js';
 
 /** One lock per entry: `read` never takes it, `beat` extends ours, `take` moves it. */
 export async function lockState(

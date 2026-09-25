@@ -19,6 +19,8 @@ import {
   readyDrafts,
   runChecks,
 } from '@handover/core';
+import type { RequestContext } from '../../environment.js';
+import { mediaStore, workerBuilds } from '../../environment.js';
 import { entryProblems } from '../../problems.js';
 import { readBodyText, readJson } from './body.js';
 import {
@@ -33,8 +35,6 @@ import {
   schemaOf,
   siteSeoDefaults,
 } from './content.js';
-import type { RequestContext } from './environment.js';
-import { mediaStore, workerBuilds } from './environment.js';
 
 /** Read from the log: a publish redeploys the Worker, so the tab that pressed it may reload. */
 export async function buildStatus(ctx: RequestContext): Promise<Response> {

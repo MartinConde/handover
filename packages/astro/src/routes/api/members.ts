@@ -11,10 +11,10 @@ import {
   releaseLocks,
 } from '@handover/core';
 import { createAuth, loginMethods, mailer } from '../../auth.js';
+import type { RequestContext } from '../../environment.js';
+import { missingMailer } from '../../environment.js';
 import { readJson } from './body.js';
 import { entryTitle } from './content.js';
-import type { RequestContext } from './environment.js';
-import { missingMailer } from './environment.js';
 
 /** Only the facts the page cannot work out itself; everything else is a Better Auth endpoint. */
 export async function account(

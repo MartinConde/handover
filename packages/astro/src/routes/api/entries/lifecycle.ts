@@ -27,6 +27,7 @@ import {
   renameEntry,
   reservePaths,
 } from '@handover/core';
+import type { RequestContext } from '../../../environment.js';
 import { readJson } from '../body.js';
 import {
   entryFiles,
@@ -38,7 +39,6 @@ import {
   schemaOf,
   takenNames,
 } from '../content.js';
-import type { RequestContext } from '../environment.js';
 import { unresolvedSource } from './editing.js';
 import { redirectTarget } from './locales.js';
 

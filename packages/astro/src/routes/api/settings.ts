@@ -21,11 +21,11 @@ import {
   writeSetting,
 } from '@handover/core';
 import { mailer } from '../../auth.js';
+import type { RequestContext } from '../../environment.js';
+import { mediaStore, missingMailer, NO_BUCKET, workerBuilds } from '../../environment.js';
 import { entryProblems } from '../../problems.js';
 import { readJson } from './body.js';
 import { deeplKey, entryPath, formFor, publishSources, takenNames } from './content.js';
-import type { RequestContext } from './environment.js';
-import { mediaStore, missingMailer, NO_BUCKET, workerBuilds } from './environment.js';
 
 export async function testEmail(session: App.Locals['handover']): Promise<Response> {
   if (session?.role !== 'owner') return new Response('Forbidden', { status: 403 });

@@ -1,5 +1,5 @@
 import { type GitClient, runDue } from '@handover/core';
-import { db, gitClient, mediaStore } from './routes/api/environment.js';
+import { db, gitClient, mediaStore } from './environment.js';
 
 /** One trigger in `wrangler.jsonc`; `runDue` decides which jobs the tick belongs to. */
 export async function scheduled(controller: { cron: string }): Promise<void> {

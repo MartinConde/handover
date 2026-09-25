@@ -34,6 +34,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   unreachable body-size branch.
 - Internal: the admin API dispatcher reads route groups through one helper and shares the
   upload key pattern with the media routes.
+- Internal: the Worker bindings helpers moved to `src/environment.ts`; auth and preview open D1
+  through them.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth
