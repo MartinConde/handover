@@ -138,13 +138,12 @@ the editor instead; its navigation and external-effect rules are in the [Canvas 
 
 ## Interface language
 
-The preview pane's controls, widths, status, banners, recovery actions, and accessibility labels
-are available in English and German. Changing the interface language updates that surrounding CMS
-chrome in place. It does not replace or reload the iframe, change its URL, request another render,
-or change the selected content language.
+The controls around the page beside the form and in Canvas, its device widths, render failures
+with their Retry and Form actions, and accessibility labels are available in English and German.
+Changing the interface language updates that surrounding CMS chrome in place. It does not replace
+or reload the iframe, change its URL, request another render, or change the selected content
+language.
 
 The page inside the frame remains the site-rendered content in the selected content language. Its
 `<html lang>`, words, links, dates, and formatting belong to the site, not the CMS interface
-preference. Schema-authored validation messages also remain authored copy. The
-preview's elapsed-time wording follows the interface language while retaining the existing browser
-timezone and render timestamp.
+preference. Schema-authored validation messages also remain authored copy.

@@ -93,7 +93,7 @@ let {
   userId?: string;
   /** Where a stored media key is served from; the image and file widgets draw from it. */
   mediaBase?: string;
-  /** This build serves `/_preview`: without it the pane says so rather than framing a 404. */
+  /** This build serves `/_preview`: without it the editor offers Form only, never Canvas. */
   preview?: boolean;
   entry: EditorEntry;
   /** Which of the entry's tabs the address is on; empty is the form itself. */

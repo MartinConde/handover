@@ -1108,41 +1108,6 @@ select.filter.is-on { background-image: url("data:image/svg+xml,%3Csvg xmlns='ht
 .resolve > .actions { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-3); }
 .resolve > .actions .foot-note { flex-basis: 100%; }
 
-/* Preview. */
-/* The pane stops being a dashed placeholder and becomes a panel. */
-.pane.is-preview { position: static; display: grid; place-items: stretch; align-content: start; padding: 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--ink); font-size: var(--text-md); text-align: left; }
-.entry-body.has-pane:has(> .pane.is-preview) { grid-template-columns: minmax(0, 1fr) minmax(360px, 50%); }
-.preview-tools { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s-2); padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--border); background: var(--surface-2); }
-/* Two rows by design: the width and language toggles above. */
-.preview-acts { display: flex; align-items: center; gap: var(--s-2); flex-basis: 100%; }
-.preview-acts .spacer { flex: 1; }
-/* .pane's placeholder rules stop applying once the pane is a real panel. */
-.pane.is-preview strong { display: inline; margin: 0; color: inherit; }
-.preview-status { font-size: var(--text-xs); color: var(--ink-2); }
-.preview-status.is-warn { color: var(--warn-ink); font-weight: 500; }
-.preview-status.is-busy { color: var(--ink); font-weight: 500; }
-.preview-banner { padding: var(--s-2) var(--s-3); border-bottom: 1px solid var(--border); background: var(--info-soft); color: var(--info-ink); font-size: var(--text-sm); font-weight: 500; }
-.preview-banner.is-stale { background: var(--warn-soft); color: var(--warn-ink); }
-.preview-banner code { font-family: var(--font-mono); font-size: var(--text-xs); }
-/* A narrower device letterboxes inside the same stage rather than resizing the pane. */
-.preview-stage { display: flex; flex-direction: column; align-items: center; gap: var(--s-3); padding: var(--s-4); background: var(--bg); overflow: hidden; }
-/* Updating: the ground behind the render changes, the render itself does not. */
-.preview-stage.is-updating { background: var(--badge-bg); }
-.preview-frame { width: 100%; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-chip); }
-.preview-frame.is-tablet { max-width: 768px; }
-.preview-frame.is-phone { max-width: 390px; }
-/* Cross-document previews need their own viewport. */
-.preview-frame iframe { display: block; width: 100%; height: min(72vh, 900px); border: 0; background: var(--surface); }
-/* A draft that fails validation cannot be rendered. */
-.preview-error { display: grid; gap: var(--s-3); align-content: start; margin: var(--s-6); padding: var(--s-5); border-radius: var(--radius-lg); background: var(--danger-soft); color: var(--danger-ink); }
-.preview-error h3 { font-size: var(--text-lg); letter-spacing: var(--tracking-tight); }
-.preview-error p { font-size: var(--text-sm); }
-.preview-error code { font-family: var(--font-mono); }
-.preview-error .actions { display: flex; flex-wrap: wrap; gap: var(--s-2); margin-top: var(--s-1); }
-.preview-error.is-quiet { background: var(--surface-2); color: var(--ink); box-shadow: inset 0 0 0 1px var(--border); }
-.preview-error.is-quiet p { color: var(--ink-2); }
-/* On a narrow screen the two cannot sit beside each other. */
-
 /* The media library reuses the picker layout as a page. */
 .file-rows { display: grid; gap: var(--s-2); border: 0; margin: 0; padding: 0; }
 .file-row { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-3); border-radius: var(--radius); background: var(--surface-2); }
@@ -1689,10 +1654,6 @@ input[type="date"].input { padding-right: var(--s-3); }
 .scrim:has(> .picker-dialog) { grid-template-rows: minmax(0, 1fr); }
 .scrim.is-full { padding: 0; place-items: stretch; }
 
-/* Preview additions. */
-.preview-tools .spacer { flex: 1; }
-.preview-banner.is-hidden { background: var(--badge-bg); color: var(--ink); }
-
 /* Settings and diagnostics. */
 /* Build minutes: the picture is never the number. */
 .usage { display: grid; gap: var(--s-2); }
@@ -1842,7 +1803,6 @@ input[type="checkbox"] { accent-color: var(--accent-ink); }
   .picker-dialog { width: 100%; max-height: none; border-radius: 0; }
   .picker-side { border-left: 0; border-top: 1px solid var(--border); }
   .picker-tools .search { max-width: none; }
-  .entry-body.has-pane:has(> .pane.is-preview) { grid-template-columns: minmax(0, 1fr); }
   :root .entry-body.has-pane { grid-template-columns: minmax(0, 1fr); }
   :root .entry-body.is-canvas { padding: 0; }
   :root .canvas-mobile-tabs { display: inline-flex; justify-self: start; grid-column: 1 / -1; }
@@ -1866,9 +1826,6 @@ input[type="checkbox"] { accent-color: var(--accent-ink); }
   :root .canvas-stage, :root .canvas-stage.is-tablet, :root .canvas-stage.is-phone { width: 100%; min-width: 0; }
   :root .canvas-failure { align-items: flex-start; flex-wrap: wrap; }
   :root .canvas-failure > div { flex-basis: 100%; }
-  .pane.is-preview .seg[aria-label="Screen width"] { display: none; }
-  .preview-stage { padding: var(--s-2); }
-  .preview-frame, .preview-frame.is-tablet, .preview-frame.is-phone { max-width: none; }
   .lib-body, .lib-body.has-selection { grid-template-columns: minmax(0, 1fr); }
   .lib-side { position: static; }
   .crop-dialog .dialog-cols { grid-template-columns: minmax(0, 1fr); }
