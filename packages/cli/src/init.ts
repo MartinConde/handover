@@ -11,7 +11,7 @@ import {
 import { basename, join } from 'node:path';
 import { SCHEMA_VERSION, schemaVersionError } from '@handover/core';
 import type { Env } from './index.js';
-import { writeMigrationMarker } from './migrate.js';
+import { MIGRATION_MARKER, writeMigrationMarker } from './migrate.js';
 import { CHECKLIST, cmsConfig, collectionsOf, i18nOf, starter } from './scaffold.js';
 
 /** The bindings the site needs; also what init prints when the config file is not its own. */
@@ -172,7 +172,7 @@ export function init(env: Env, email: string): number {
       );
     }
 
-    const marker = migrationMarker(env);
+    const marker = readJson(join(env.cwd, MIGRATION_MARKER));
     const error =
       marker?.schemaVersion === undefined ? undefined : schemaVersionError(JSON.stringify(marker));
     if (error) throw new Error(error);
@@ -238,10 +238,6 @@ function readJson(path: string): Record<string, unknown> | undefined {
   } catch (error) {
     throw new Error(`${path}: ${error instanceof Error ? error.message : error}`);
   }
-}
-
-function migrationMarker(env: Env): Record<string, unknown> | undefined {
-  return readJson(join(env.cwd, 'migrations/handover.json'));
 }
 
 function generateInitialMigrations(env: Env): void {

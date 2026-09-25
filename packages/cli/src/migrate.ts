@@ -12,8 +12,10 @@ import {
 } from '@handover/core';
 import type { Env } from './index.js';
 
+export const MIGRATION_MARKER = 'migrations/handover.json';
+
 export function writeMigrationMarker(env: Env, marker: Record<string, unknown>): void {
-  const path = join(env.cwd, 'migrations/handover.json');
+  const path = join(env.cwd, MIGRATION_MARKER);
   mkdirSync(join(path, '..'), { recursive: true });
   writeFileSync(`${path}.tmp`, `${JSON.stringify(marker, null, 2)}\n`);
   renameSync(`${path}.tmp`, path);
@@ -71,7 +73,7 @@ export function migrate(env: Env, dryRun: boolean): number {
 }
 
 export function dbGenerate(env: Env, check: boolean): number {
-  const marker = join(env.cwd, 'migrations/handover.json');
+  const marker = join(env.cwd, MIGRATION_MARKER);
   const read = () => {
     try {
       return readFileSync(marker, 'utf8');
