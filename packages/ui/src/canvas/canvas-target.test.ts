@@ -2,7 +2,6 @@ import { expect, test } from 'vitest';
 import type { CanvasSelection, CanvasTarget } from './canvas-bridge';
 import {
   canvasSelectionKey,
-  canvasTargetKey,
   sameCanvasLocation,
   sameCanvasSelection,
   sameCanvasTarget,
@@ -36,7 +35,6 @@ const reordered: CanvasTarget = {
 test('compares and keys equivalent targets independently of property order', () => {
   expect(JSON.stringify(reordered)).not.toBe(JSON.stringify(target));
   expect(sameCanvasTarget(target, reordered)).toBe(true);
-  expect(canvasTargetKey(target)).toBe(canvasTargetKey(reordered));
   expect(canvasSelectionKey({ kind: 'field', target })).toBe(
     canvasSelectionKey({ kind: 'field', target: reordered }),
   );
@@ -64,7 +62,6 @@ test.each([
   ['missing occurrence', { ...target, occurrence: undefined }],
 ] satisfies [string, CanvasTarget][])('keeps a different %s distinct', (_label, other) => {
   expect(sameCanvasTarget(target, other)).toBe(false);
-  expect(canvasTargetKey(target)).not.toBe(canvasTargetKey(other));
 });
 
 test('uses the annotation kind as part of selection identity', () => {

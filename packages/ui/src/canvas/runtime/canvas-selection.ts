@@ -20,8 +20,6 @@ import type { CanvasUiLocaleState } from './canvas-ui-locale';
 
 type Announcement = { kind: 'selected' | 'empty' | 'focus' } | DragAnnouncement;
 
-export { createReorderAnimationLookup } from './canvas-drag';
-
 export interface CanvasSelectionRuntimeOptions {
   entryDocument?: CanvasTarget['document'];
   adminBase?: string;

@@ -10,11 +10,7 @@ import type {
   CanvasTextField,
 } from '../canvas-bridge';
 import { sameCanvasTarget } from '../canvas-target';
-import {
-  type CanvasLinkDraft,
-  type CanvasLinkEditorFeedback,
-  createCanvasLinkEditor,
-} from './canvas-link-editor';
+import { type CanvasLinkEditorFeedback, createCanvasLinkEditor } from './canvas-link-editor';
 import type { CanvasUiLocaleState } from './canvas-ui-locale';
 
 type LinkField = Extract<CanvasTextField, { kind: 'link' }>;
@@ -83,7 +79,6 @@ export function createCanvasLinkRuntime(options: CanvasLinkOptions) {
       anchor: element,
       value: field.value,
       locale: field.target.locale,
-      allowLabel: true,
       allowNewTab: true,
       onApply: async (value) => {
         const changes: CanvasFieldMutation['changes'] = [
@@ -130,5 +125,3 @@ export function createCanvasLinkRuntime(options: CanvasLinkOptions) {
     },
   };
 }
-
-export type { CanvasLinkDraft };

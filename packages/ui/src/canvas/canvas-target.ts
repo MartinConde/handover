@@ -33,8 +33,5 @@ const targetIdentity = (target: CanvasTarget) => [
   target.occurrence ? locationIdentity(target.occurrence) : null,
 ];
 
-/** Stable across object property order and explicit about every field that defines target identity. */
-export const canvasTargetKey = (target: CanvasTarget) => JSON.stringify(targetIdentity(target));
-
 export const canvasSelectionKey = (selection: CanvasSelection) =>
   JSON.stringify([selection.kind, targetIdentity(selection.target)]);

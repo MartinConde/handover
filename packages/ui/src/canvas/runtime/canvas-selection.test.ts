@@ -1,9 +1,7 @@
-import { DragDropManager } from '@dnd-kit/dom';
-import { Sortable } from '@dnd-kit/dom/sortable';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { CanvasTarget } from '../canvas-bridge';
 import { canvasNodeKey, visibleCanvasNodes } from '../canvas-structure';
-import { createCanvasSelectionRuntime, createReorderAnimationLookup } from './canvas-selection';
+import { createCanvasSelectionRuntime } from './canvas-selection';
 import { createCanvasUiLocaleState } from './canvas-ui-locale';
 
 // `Sortable#destroy` is an instance property (not on the prototype), so counting rebuilds needs a
@@ -797,25 +795,4 @@ test('hovering with nothing selected never builds the hidden hover breadcrumb', 
   const shadow = document.querySelector('[data-handover-canvas-overlay]')?.shadowRoot;
   expect(shadow?.querySelector('.hover-path .path-current')).toBeNull();
   runtime.dispose();
-});
-
-test('the reorder-animation lookup runs getAnimations once per synchronous pass', async () => {
-  const manager = new DragDropManager();
-  const element = document.createElement('div');
-  const getAnimations = vi.fn(() => [] as Animation[]);
-  element.getAnimations = getAnimations;
-  const sortable = new Sortable({ id: 'a', index: 0, element }, manager);
-  const lookup = createReorderAnimationLookup(() => sortable.draggable);
-
-  lookup();
-  lookup();
-  lookup();
-  expect(getAnimations).toHaveBeenCalledTimes(1);
-
-  await Promise.resolve();
-  lookup();
-  expect(getAnimations).toHaveBeenCalledTimes(2);
-
-  sortable.destroy();
-  manager.destroy();
 });

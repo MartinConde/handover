@@ -313,7 +313,6 @@ export function createCanvasRichTextRuntime(options: CanvasRichTextOptions) {
       anchor: () => bounds,
       value: { type: 'url', ref: '', href, label, newTab: false },
       locale: active?.target.locale ?? '',
-      allowLabel: true,
       allowRemove: remove,
       onApply: (value) => {
         nextIntent = 'format';

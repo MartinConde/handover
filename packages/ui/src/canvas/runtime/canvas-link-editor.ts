@@ -19,8 +19,6 @@ export interface CanvasLinkEditorOpen {
   anchor: Element | (() => DOMRect);
   value: CanvasLinkDraft;
   locale: string;
-  label?: string;
-  allowLabel?: boolean;
   allowNewTab?: boolean;
   allowRemove?: boolean;
   onApply: (
@@ -164,17 +162,14 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
     heading.append(title, closeButton);
     panel.append(heading);
 
-    let labelInput: HTMLInputElement | undefined;
-    if (opened.allowLabel) {
-      labelInput = root.createElement('input');
-      labelInput.type = 'text';
-      labelInput.id = 'handover-canvas-link-label';
-      labelInput.value = draft.label;
-      labelInput.addEventListener('input', () => {
-        if (draft) draft.label = labelInput?.value ?? '';
-      });
-      panel.append(field('', labelInput));
-    }
+    const labelInput = root.createElement('input');
+    labelInput.type = 'text';
+    labelInput.id = 'handover-canvas-link-label';
+    labelInput.value = draft.label;
+    labelInput.addEventListener('input', () => {
+      if (draft) draft.label = labelInput.value;
+    });
+    panel.append(field('', labelInput));
 
     const destination = root.createElement('fieldset');
     destination.dataset.linkDestination = '';
@@ -385,12 +380,12 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
     refreshTranslation = () => {
       if (!opened || !draft || panel.hidden) return;
       const options = messageOptions(locale());
-      const headingText = opened.label ?? m.canvas_link_edit({}, options);
+      const headingText = m.canvas_link_edit({}, options);
       panel.setAttribute('aria-label', headingText);
       title.textContent = headingText;
       closeButton.textContent = m.canvas_link_close({}, options);
       closeButton.setAttribute('aria-label', m.canvas_link_close({}, options));
-      if (labelInput) labelInput.labels?.item(0)?.replaceChildren(m.field_link_label({}, options));
+      labelInput.labels?.item(0)?.replaceChildren(m.field_link_label({}, options));
       legend.textContent = m.field_link_destination({}, options);
       tabs.setAttribute('aria-label', m.field_link_type({}, options));
       entryTab.textContent = m.field_link_page_entry({}, options);
@@ -436,7 +431,7 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
           !draft ||
           refused ||
           (draft.type === 'url' ? !draft.href.trim() : !draft.ref.trim()) ||
-          (opened?.allowLabel && !draft.label.trim()),
+          !draft.label.trim(),
       );
     }
     updateApply();
@@ -449,7 +444,7 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
         ? apply
         : focus === 'search' || focus === 'url'
           ? destinationInput
-          : (labelInput ?? destinationInput ?? apply);
+          : labelInput;
     focused?.focus({ preventScroll: true });
     if (focused instanceof HTMLInputElement) focused.select();
   };
@@ -484,7 +479,7 @@ export function createCanvasLinkEditor(options: CanvasLinkEditorOptions = {}) {
       opened = value;
       draft = copy(value.value);
       touchedDestination = false;
-      draw(value.allowLabel ? 'label' : value.value.type === 'entry' ? 'search' : 'url');
+      draw('label');
     },
     close,
     active: () => Boolean(opened && !panel.hidden),
