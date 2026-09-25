@@ -25,6 +25,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Internal: core's test fixture files end in `.fixture.ts`, like the other packages'.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
+- `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth
+  argument: `clearPublished(siteId, db, deployedSha, deployment, now?)`.
 - `handover init` reads Wrangler JSONC and TOML with standard parsers, preserving comment
   characters inside quoted values and reporting invalid configuration before provisioning.
 - The published `astro-handover` package excludes route test fixtures. Core modules are

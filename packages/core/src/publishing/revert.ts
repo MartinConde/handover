@@ -277,11 +277,9 @@ export async function clearPublished(
   siteId: string,
   db: Db,
   deployedSha: string,
-  deploymentOrNow: DeploymentGit | number = Date.now(),
-  currentTime = Date.now(),
+  deployment: DeploymentGit,
+  now = Date.now(),
 ): Promise<string[]> {
-  const deployment = typeof deploymentOrNow === 'number' ? undefined : deploymentOrNow;
-  const now = typeof deploymentOrNow === 'number' ? deploymentOrNow : currentTime;
   let rows = await db
     .select({
       path: drafts.path,
@@ -290,55 +288,45 @@ export async function clearPublished(
       publishedSha: drafts.publishedSha,
     })
     .from(drafts)
-    .where(
-      and(
-        eq(drafts.siteId, siteId),
-        deployment ? isNotNull(drafts.publishedSha) : eq(drafts.publishedSha, deployedSha),
-        ne(drafts.contents, ''),
-      ),
-    );
+    .where(and(eq(drafts.siteId, siteId), isNotNull(drafts.publishedSha), ne(drafts.contents, '')));
   if (!rows.length) return [];
-  if (deployment) {
-    const deployed = new Map(
-      (await deployment.contentFiles(deployedSha)).map((file) => [file.path, file.contents]),
-    );
-    const deployedBlobs = new Map(
-      await Promise.all(
-        rows.flatMap((row) => {
-          const contents = deployed.get(row.path);
-          return contents === undefined
-            ? []
-            : [blobSha(contents).then((blob) => [row.path, blob] as const)];
-        }),
+  const deployed = new Map(
+    (await deployment.contentFiles(deployedSha)).map((file) => [file.path, file.contents]),
+  );
+  const deployedBlobs = new Map(
+    await Promise.all(
+      rows.flatMap((row) => {
+        const contents = deployed.get(row.path);
+        return contents === undefined
+          ? []
+          : [blobSha(contents).then((blob) => [row.path, blob] as const)];
+      }),
+    ),
+  );
+  const unresolved = [
+    ...new Set(
+      rows.flatMap((row) =>
+        row.publishedSha && deployedBlobs.get(row.path) !== row.baseBlob ? [row.publishedSha] : [],
       ),
-    );
-    const unresolved = [
-      ...new Set(
-        rows.flatMap((row) =>
-          row.publishedSha && deployedBlobs.get(row.path) !== row.baseBlob
-            ? [row.publishedSha]
-            : [],
-        ),
+    ),
+  ];
+  const ancestry = new Map(
+    await Promise.all(
+      unresolved.map(
+        async (publishedSha) =>
+          [publishedSha, await deployment.compareCommits(publishedSha, deployedSha)] as const,
       ),
-    ];
-    const ancestry = new Map(
-      await Promise.all(
-        unresolved.map(
-          async (publishedSha) =>
-            [publishedSha, await deployment.compareCommits(publishedSha, deployedSha)] as const,
-        ),
-      ),
-    );
-    // A descendant supersedes the overlay even if it changed the file. Outside that history,
-    // byte equality is the only proof that removing the overlay reveals what is actually live.
-    rows = rows.filter(
-      (row) =>
-        deployedBlobs.get(row.path) === row.baseBlob ||
-        ancestry.get(row.publishedSha ?? '') === 'ahead' ||
-        ancestry.get(row.publishedSha ?? '') === 'identical',
-    );
-    if (!rows.length) return [];
-  }
+    ),
+  );
+  // A descendant supersedes the overlay even if it changed the file. Outside that history,
+  // byte equality is the only proof that removing the overlay reveals what is actually live.
+  rows = rows.filter(
+    (row) =>
+      deployedBlobs.get(row.path) === row.baseBlob ||
+      ancestry.get(row.publishedSha ?? '') === 'ahead' ||
+      ancestry.get(row.publishedSha ?? '') === 'identical',
+  );
+  if (!rows.length) return [];
   const editing = new Set(
     (
       await db

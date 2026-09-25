@@ -252,7 +252,7 @@ test('a published row is cleared once the build carrying it is live', async () =
   await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
   const published = await publishDrafts('default', db, repo);
 
-  expect(await clearPublished('default', db, published?.commit_sha ?? '')).toEqual([PATH]);
+  expect(await clearPublished('default', db, published?.commit_sha ?? '', repo)).toEqual([PATH]);
   expect(await only(db)).toBe(undefined);
 });
 
@@ -262,7 +262,7 @@ test.each([19, 20, 61])(
     const db = await fresh();
     const { paths, publishedSha } = await seedPublishedRows(db, count);
 
-    expect((await clearPublished('default', db, publishedSha)).toSorted()).toEqual(
+    expect((await clearPublished('default', db, publishedSha, fakeHistory({}))).toSorted()).toEqual(
       paths.toSorted(),
     );
     expect(await db.select().from(drafts)).toEqual([]);
@@ -329,7 +329,7 @@ test('a published row whose entry somebody is editing is kept', async () => {
   const published = await publishDrafts('default', db, repo);
   await claimLock('default', db, 'listings/mill-house', 'anna', 'tab');
 
-  expect(await clearPublished('default', db, published?.commit_sha ?? '')).toEqual([]);
+  expect(await clearPublished('default', db, published?.commit_sha ?? '', repo)).toEqual([]);
   expect((await only(db))?.path).toBe(PATH);
 });
 
@@ -338,7 +338,7 @@ test('a row that says a path has gone is not cleared by the build going live', a
   const db = await fresh();
   await recordDelete('default', db, PATH, 'commit-9');
 
-  expect(await clearPublished('default', db, 'commit-9')).toEqual([]);
+  expect(await clearPublished('default', db, 'commit-9', fakeHistory({}))).toEqual([]);
   expect((await only(db))?.path).toBe(PATH);
 });
 
@@ -354,7 +354,7 @@ test('cleanup rechecks the revision when a newer save arrives after selecting ca
       await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 5 });
     },
   );
-  await clearPublished('default', raced, published?.commit_sha ?? '');
+  await clearPublished('default', raced, published?.commit_sha ?? '', repo);
   expect((await loadDraft('default', db, PATH))?.contents).toContain('rooms: 5');
   expect((await loadDraft('default', db, PATH))?.publishedSha).toBeNull();
 });
@@ -371,7 +371,7 @@ test('cleanup rechecks a lock acquired after its lock read', async () => {
       await claimLock('default', db, 'listings/mill-house', 'editing', 'tab');
     },
   );
-  await clearPublished('default', raced, published?.commit_sha ?? '');
+  await clearPublished('default', raced, published?.commit_sha ?? '', repo);
   expect(await loadDraft('default', db, PATH)).toBeDefined();
   await db.delete(tables.locks);
 });
@@ -399,7 +399,7 @@ test('chunked cleanup preserves a newer save and lock that arrive between chunks
     },
   );
 
-  const removed = await clearPublished('default', raced, publishedSha);
+  const removed = await clearPublished('default', raced, publishedSha, fakeHistory({}));
 
   expect(removed).toHaveLength(18);
   expect((await loadDraft('default', db, savedPath))?.revision).toBe('newer-save');
