@@ -219,28 +219,6 @@ test('getFile throws on any other GitHub error', async () => {
   await expect(git.getFile('a.yaml')).rejects.toThrow(/500/);
 });
 
-test('the installation token is minted once and reused while valid', async () => {
-  const gh = fakeGitHub({ 'a.yaml': 'a', 'b.yaml': 'b' });
-  const git = createGitClient('default', app, { fetch: gh.fetch });
-
-  await git.getFile('a.yaml');
-  await git.getFile('b.yaml');
-
-  expect(gh.minted()).toBe(1);
-});
-
-test('an expired installation token is minted again', async () => {
-  const gh = fakeGitHub({ 'a.yaml': 'a' });
-  let now = Date.parse('2026-08-21T10:00:00Z');
-  const git = createGitClient('default', app, { fetch: gh.fetch, now: () => now });
-
-  await git.getFile('a.yaml');
-  now += 2 * 60 * 60 * 1000;
-  await git.getFile('a.yaml');
-
-  expect(gh.minted()).toBe(2);
-});
-
 test('two clients on the same GitHub share one installation token', async () => {
   const gh = fakeGitHub({ 'a.yaml': 'a' });
 

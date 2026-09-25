@@ -373,7 +373,6 @@ test('cleanup rechecks a lock acquired after its lock read', async () => {
   );
   await clearPublished('default', raced, published?.commit_sha ?? '', repo);
   expect(await loadDraft('default', db, PATH)).toBeDefined();
-  await db.delete(tables.locks);
 });
 
 test('chunked cleanup preserves a newer save and lock that arrive between chunks', async () => {
@@ -404,7 +403,6 @@ test('chunked cleanup preserves a newer save and lock that arrive between chunks
   expect(removed).toHaveLength(18);
   expect((await loadDraft('default', db, savedPath))?.revision).toBe('newer-save');
   expect(await loadDraft('default', db, lockedPath)).toBeDefined();
-  await db.delete(tables.locks);
 });
 
 const undoRules = (before: RedirectRule[], after: RedirectRule[], head: RedirectRule[]) =>

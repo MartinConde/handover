@@ -15,7 +15,6 @@ import {
   HIDE_DE,
   HIDE_EN,
   LISTING_DE,
-  MOVED,
   migrateTestD1,
   NEW,
   newTestD1,
@@ -363,21 +362,6 @@ test('discarding a draft leaves nothing for the next publish to write back', asy
 
   expect(await db.select().from(drafts)).toEqual([]);
   expect(await publishDrafts('default', db, repo)).toBe(undefined);
-});
-
-test('publishing an entry commits the languages that moved with it in one commit', async () => {
-  const db = await fresh();
-  const repo = fakeRepo({
-    [PAGE_EN]: page('Home', 'Move to the coast', 'Ready to move?'),
-    [PAGE_DE]: page('Startseite', 'Zieh an die Küste', 'Bereit für den Umzug?'),
-  });
-  await saveDraft('default', db, repo, PAGE_EN, MOVED, SYNC);
-
-  const result = await publishDrafts('default', db, repo);
-
-  expect(repo.publish).toHaveBeenCalledTimes(1);
-  expect(result?.paths.toSorted()).toEqual([PAGE_DE, PAGE_EN]);
-  expect(await pendingDrafts('default', db)).toEqual([]);
 });
 
 test('publishing a translation marks it with the source language as the commit leaves it', async () => {

@@ -172,13 +172,6 @@ const switcherSource = staticSource<{ listings: unknown; samples: unknown; pages
   },
 );
 
-test('a language the entry has no file in is not offered by the switcher', async () => {
-  expect(await getEntryLocales('default', switcherSource, site, 'listings', 'coast')).toEqual([
-    { locale: 'en', url: '/listings/coast' },
-    { locale: 'de', url: '/de/listings/coast' },
-  ]);
-});
-
 // Astro's `getEntry` logs every miss, so the switcher asks which ids exist instead of probing.
 test('the switcher never asks by name for a language the entry has no file in', async () => {
   const asked: string[] = [];

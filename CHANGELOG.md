@@ -28,6 +28,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Internal: the draft-store tests share their fixtures and drop three tests others cover.
 - Internal: the provenance, locale-sync and diff tests share fixtures and a table, and drop two
   duplicates.
+- Internal: redundant core tests in auth, git, media, content, publish and entry-format are
+  removed or folded into tables.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth

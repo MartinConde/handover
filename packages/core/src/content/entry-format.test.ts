@@ -90,15 +90,6 @@ const scalars: Record<string, unknown> = {
   },
 };
 
-for (const [type, fixture] of Object.entries(scalars)) {
-  test(`${type} round-trips through its golden file`, () => {
-    const golden = readFileSync(join(goldenDir, `${type}.yaml`), 'utf8');
-    const out = stringifyEntry('default', fixture);
-    expect(out).toBe(golden);
-    expect(parseEntry('default', out)).toEqual(fixture);
-  });
-}
-
 // Structured types: the shapes are locked before their upload/editor UI exists.
 const structured: Record<string, unknown> = {
   image: {
@@ -137,15 +128,6 @@ const structured: Record<string, unknown> = {
   },
   reference: { _version: 1, agent: 'agents/jane-doe' },
 };
-
-for (const [type, fixture] of Object.entries(structured)) {
-  test(`${type} round-trips through its golden file`, () => {
-    const golden = readFileSync(join(goldenDir, `${type}.yaml`), 'utf8');
-    const out = stringifyEntry('default', fixture);
-    expect(out).toBe(golden);
-    expect(parseEntry('default', out)).toEqual(fixture);
-  });
-}
 
 // `blocks` nests three levels deep — blocks → array of groups → blocks — with one `_ref`.
 const nesting: Record<string, unknown> = {
@@ -195,15 +177,6 @@ const nesting: Record<string, unknown> = {
     ],
   },
 };
-
-for (const [type, fixture] of Object.entries(nesting)) {
-  test(`${type} round-trips through its golden file`, () => {
-    const golden = readFileSync(join(goldenDir, `${type}.yaml`), 'utf8');
-    const out = stringifyEntry('default', fixture);
-    expect(out).toBe(golden);
-    expect(parseEntry('default', out)).toEqual(fixture);
-  });
-}
 
 test('a date is stored as a quoted string, never a YAML timestamp or a Date', () => {
   expect(parseEntry('default', 'availableFrom: 2026-09-01\n')).toEqual({
@@ -380,7 +353,12 @@ const conventions: Record<string, unknown> = {
   },
 };
 
-for (const [type, fixture] of Object.entries(conventions)) {
+for (const [type, fixture] of Object.entries({
+  ...scalars,
+  ...structured,
+  ...nesting,
+  ...conventions,
+})) {
   test(`${type} round-trips through its golden file`, () => {
     const golden = readFileSync(join(goldenDir, `${type}.yaml`), 'utf8');
     const out = stringifyEntry('default', fixture);
@@ -454,31 +432,41 @@ test('a save of a translated entry keeps the fields its form does not show', () 
 
 const dated = (body: string) => timestampErrors('default', 'src/content/notes/en/one.yaml', body);
 
-test('an unquoted date is named with its file, its key and the quotes it needs', () => {
-  expect(dated('title: Note\npublished: 2026-07-14\n')).toEqual([
-    'src/content/notes/en/one.yaml › published: an unquoted date is a timestamp, not a string. Quote it: "2026-07-14"',
-  ]);
-});
-
-test('a quoted date is a string to both parsers and passes', () => {
-  expect(dated('published: "2026-07-14"\nalso: \'2026-07-14\'\n')).toEqual([]);
-});
-
-test('an unquoted date-time is a timestamp too', () => {
-  expect(dated('at: 2026-07-14 10:30:00\niso: 2026-07-14T10:30:00Z\n')).toEqual([
-    'src/content/notes/en/one.yaml › at: an unquoted date is a timestamp, not a string. Quote it: "2026-07-14 10:30:00"',
-    'src/content/notes/en/one.yaml › iso: an unquoted date is a timestamp, not a string. Quote it: "2026-07-14T10:30:00Z"',
-  ]);
-});
-
-test('a single-digit month or day is a string to js-yaml as well, so it passes', () => {
-  expect(dated('published: 2026-7-4\n')).toEqual([]);
-});
-
-test('a date nested in an array of groups is named by its path', () => {
-  expect(dated('slots:\n  - _id: "a1"\n    starts: 2026-07-14\n')).toEqual([
-    'src/content/notes/en/one.yaml › slots[0].starts: an unquoted date is a timestamp, not a string. Quote it: "2026-07-14"',
-  ]);
+test.each([
+  {
+    name: 'an unquoted date is named with its file, its key and the quotes it needs',
+    body: 'title: Note\npublished: 2026-07-14\n',
+    errors: [
+      'src/content/notes/en/one.yaml › published: an unquoted date is a timestamp, not a string. Quote it: "2026-07-14"',
+    ],
+  },
+  {
+    name: 'a quoted date is a string to both parsers and passes',
+    body: 'published: "2026-07-14"\nalso: \'2026-07-14\'\n',
+    errors: [],
+  },
+  {
+    name: 'an unquoted date-time is a timestamp too',
+    body: 'at: 2026-07-14 10:30:00\niso: 2026-07-14T10:30:00Z\n',
+    errors: [
+      'src/content/notes/en/one.yaml › at: an unquoted date is a timestamp, not a string. Quote it: "2026-07-14 10:30:00"',
+      'src/content/notes/en/one.yaml › iso: an unquoted date is a timestamp, not a string. Quote it: "2026-07-14T10:30:00Z"',
+    ],
+  },
+  {
+    name: 'a single-digit month or day is a string to js-yaml as well, so it passes',
+    body: 'published: 2026-7-4\n',
+    errors: [],
+  },
+  {
+    name: 'a date nested in an array of groups is named by its path',
+    body: 'slots:\n  - _id: "a1"\n    starts: 2026-07-14\n',
+    errors: [
+      'src/content/notes/en/one.yaml › slots[0].starts: an unquoted date is a timestamp, not a string. Quote it: "2026-07-14"',
+    ],
+  },
+])('$name', ({ body, errors }) => {
+  expect(dated(body)).toEqual(errors);
 });
 
 test('a translated field its form left empty goes, rather than coming back', () => {

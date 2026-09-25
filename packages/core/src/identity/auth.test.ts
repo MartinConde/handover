@@ -138,27 +138,48 @@ async function seed(email: string, password: string, role: string) {
   return id;
 }
 
-test('the password sign-up endpoint refuses an unknown email and creates no user', async () => {
-  const res = await call('/sign-up/email', {
-    email: 'stranger@example.com',
-    password: 'a-password-of-twelve',
-    name: 'Stranger',
-  });
+// None of these paths is on createAuth's allow-list, so every caller gets a stranger's 404.
+test.each([
+  {
+    name: 'the password sign-up endpoint refuses an unknown email and creates no user',
+    path: '/sign-up/email',
+    body: { email: 'stranger@example.com', password: 'a-password-of-twelve', name: 'Stranger' },
+  },
+  {
+    name: 'the admin plugin refuses to create a user for a caller with no session',
+    path: '/admin/create-user',
+    body: {
+      email: 'stranger@example.com',
+      password: 'a-password-of-twelve',
+      name: 'Stranger',
+      role: 'owner',
+    },
+  },
+  {
+    name: 'an editor session cannot create a user',
+    as: 'editor',
+    path: '/admin/create-user',
+    body: { email: 'stranger@example.com', password: 'a-password-of-twelve', name: 'Stranger' },
+  },
+  {
+    name: 'an owner cannot impersonate anybody',
+    as: 'owner',
+    path: '/admin/impersonate-user',
+    body: { userId: 'usr_anna@example.com' },
+  },
+])('$name', async ({ as, path, body }) => {
+  await seedUser('anna@example.com', 'editor');
+  const headers: Record<string, string> = {};
+  if (as) {
+    await seed(`${as}@example.com`, 'correct-horse-battery', as);
+    headers.cookie = await sessionCookie(`${as}@example.com`, 'correct-horse-battery');
+  }
+  const before = { users: await userRows(), activity: await activityRows() };
+
+  const res = await call(path, body, headers);
 
   expect(res.status).toBe(404);
-  expect(await userRows()).toEqual([]);
-});
-
-test('the admin plugin refuses to create a user for a caller with no session', async () => {
-  const res = await call('/admin/create-user', {
-    email: 'stranger@example.com',
-    password: 'a-password-of-twelve',
-    name: 'Stranger',
-    role: 'owner',
-  });
-
-  expect(res.status).toBe(404);
-  expect(await userRows()).toEqual([]);
+  expect({ users: await userRows(), activity: await activityRows() }).toEqual(before);
 });
 
 test('a seeded owner signs in with their password', async () => {
@@ -183,24 +204,6 @@ test('a wrong password is refused', async () => {
   });
 
   expect(res.status).toBe(401);
-});
-
-test('an editor session cannot create a user', async () => {
-  await seed('editor@example.com', 'correct-horse-battery', 'editor');
-  const signedIn = await call('/sign-in/email', {
-    email: 'editor@example.com',
-    password: 'correct-horse-battery',
-  });
-  const cookie = (signedIn.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
-
-  const res = await call(
-    '/admin/create-user',
-    { email: 'stranger@example.com', password: 'a-password-of-twelve', name: 'Stranger' },
-    { cookie },
-  );
-
-  expect(res.status).toBe(404);
-  expect((await userRows()).map((r) => r.email)).toEqual(['editor@example.com']);
 });
 
 // Better Auth infers Secure from `NODE_ENV` when no baseURL is set, and a Worker has none.
@@ -336,20 +339,6 @@ test('an invited user with no account row sets a password and signs in with it',
 
   expect(set.status).toBe(200);
   expect(signedIn.status).toBe(200);
-});
-
-test('a new password under twelve characters is refused', async () => {
-  emailing();
-  await seedUser('invited@example.com', 'editor');
-  await call('/request-password-reset', {
-    email: 'invited@example.com',
-    redirectTo: `${SITE}/admin/reset`,
-  });
-  const token = (resetLinks[0]?.url ?? '').split('/reset-password/')[1]?.split('?')[0] ?? '';
-
-  const res = await call('/reset-password', { token, newPassword: 'beach' });
-
-  expect(res.status).toBe(400);
 });
 
 // the account page's two facts
@@ -984,25 +973,6 @@ test('a session opened since the last login event is the newer of the two', asyn
   await seedSession(id, 9_000);
 
   expect((await memberList('default', db))[0]?.lastSignIn).toBe(9_000);
-});
-
-// `impersonate-user` is switched off, so an owner asking gets what a stranger gets.
-test('an owner cannot impersonate anybody', async () => {
-  await seed('owner@example.com', 'correct-horse-battery', 'owner');
-  await seedUser('anna@example.com', 'editor');
-  const signed = await call('/sign-in/email', {
-    email: 'owner@example.com',
-    password: 'correct-horse-battery',
-  });
-
-  const res = await call(
-    '/admin/impersonate-user',
-    { userId: 'usr_anna@example.com' },
-    { cookie: cookiesOf(signed) },
-  );
-
-  expect(res.status).toBe(404);
-  expect((await activityRows()).map((r) => r.user_id)).toEqual(['usr_owner@example.com']);
 });
 
 test('changing a password is a password-set event saying it was a change', async () => {

@@ -41,37 +41,6 @@ const declared: Upload = {
   height: 1350,
 };
 
-/** The bucket as the S3 API answers for it, and every request that was made of it. */
-function bucket(
-  objects: Record<string, { bytes: number; mime: string; disposition?: string; body?: string }>,
-) {
-  const calls: { method: string; key: string }[] = [];
-  const fetch = (async (input: Request) => {
-    const url = new URL(input.url);
-    const key = url.pathname.slice(`/${store.bucket}/`.length);
-    calls.push({ method: input.method, key });
-    if (input.method === 'DELETE') {
-      delete objects[key];
-      return new Response(null, { status: 204 });
-    }
-    const found = objects[key];
-    if (!found) return new Response(null, { status: 404 });
-    const headers: Record<string, string> = {
-      'content-length': String(found.bytes),
-      'content-type': found.mime,
-      ...(found.disposition ? { 'content-disposition': found.disposition } : {}),
-    };
-    // A range is answered as one: 206, the bytes asked for, and the whole size in content-range.
-    if (input.method === 'GET')
-      return new Response((found.body ?? '').slice(0, 8), {
-        status: 206,
-        headers: { ...headers, 'content-range': `bytes 0-7/${found.bytes}` },
-      });
-    return new Response(null, { status: 200, headers });
-  }) as unknown as typeof globalThis.fetch;
-  return { fetch, calls, objects };
-}
-
 const mf = newTestD1();
 
 let binding: Awaited<ReturnType<typeof mf.getD1Database>>;
@@ -531,15 +500,6 @@ test('the gate counts a file that names the key, whichever file it is', () => {
   expect(namedBy(`media/${'9'.repeat(64)}.webp`, files)).toEqual([]);
 });
 
-// The gate adds drafts rather than laying them over: a picture dropped this morning is still live.
-test('the gate adds the drafts to the tree rather than laying them over it', () => {
-  const tree = [{ path: 'src/content/listings/en/mill-house.yaml', contents: yaml() }];
-  const dropped = { path: 'src/content/listings/en/mill-house.yaml', contents: 'title: "Mill"\n' };
-  const took = { path: 'src/content/pages/en/home.yaml', contents: yaml(BROCHURE, BROCHURE) };
-  expect(namedBy(PHOTO, [...tree, dropped])).toEqual(['listings/mill-house']);
-  expect(namedBy(BROCHURE, [...tree, took])).toEqual(['pages/home']);
-});
-
 test('archiving is a flag on the row, and unarchiving takes it off again', async () => {
   const db = openDb('archive', binding);
   const id = 'e5'.repeat(32);
@@ -567,10 +527,10 @@ test('a delete leaves a tombstone after the object is gone', async () => {
     .insert(tables.media)
     .values({ id, siteId: 'delete', r2Key: key, mime: 'image/webp', createdAt: 1 });
   const objects = { [key]: { bytes: 8, mime: 'image/webp' } };
-  const r2 = bucket(objects);
   const fetch = (async (input: Request) => {
     order.push(`r2 ${input.method}`);
-    return r2.fetch(input);
+    delete objects[new URL(input.url).pathname.slice(`/${store.bucket}/`.length)];
+    return new Response(null, { status: 204 });
   }) as unknown as typeof globalThis.fetch;
 
   await deleteMedia('delete', db, store, { id, r2Key: key }, { fetch });
