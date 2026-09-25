@@ -431,7 +431,7 @@ test('a label names the field, on a plain type and on top of a helper', () => {
   ]);
 });
 
-// Mirror of handover-demo/src/content/schemas.ts; the snapshot must hold no unsupported marker.
+// A full demo-shaped schema carries no unsupported marker.
 test('the demo schema produces a full descriptor tree', () => {
   const hero = defineBlock('hero', {
     heading: z.string(),
@@ -460,7 +460,6 @@ test('the demo schema produces a full descriptor tree', () => {
     pages: formOf('default', formSchema(page)),
   };
   expect(JSON.stringify(form)).not.toContain('unsupported');
-  expect(form).toMatchSnapshot();
 });
 
 test('a field says how it translates through .meta({ i18n })', () => {

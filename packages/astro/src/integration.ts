@@ -12,7 +12,6 @@ import {
   type Form,
   formOf,
   indexFrom,
-  type MediaUses,
   mediaUsesFrom,
   modifiedFrom,
   parseEntry,
@@ -25,7 +24,6 @@ import {
   sitemapIndexXml,
   sitemapXml,
   staleFrom,
-  type Template,
   type TitleFields,
   templatesFrom,
   textsFrom,
@@ -311,16 +309,6 @@ export async function buildIndex(
   return indexFrom('default', files, titleFields);
 }
 
-/** Read at build with everything under `src/content/`, so the admin needs no git listing. */
-export async function buildTemplates(files: ContentFile[]): Promise<Record<string, Template[]>> {
-  return templatesFrom('default', files);
-}
-
-/** Read at build so the library never reads the repository per page load. */
-export async function buildMediaUses(files: ContentFile[]): Promise<MediaUses> {
-  return mediaUsesFrom('default', files);
-}
-
 /** Built the same way in the build and the Worker; a localized `slug` stays out of the hash. */
 export function entryForm(cms: HandoverConfig, collection: string, name: string): Form | undefined {
   const schema =
@@ -536,8 +524,9 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
                   // generated view describe the same filesystem state.
                   const files = await contentFiles(config.root);
                   const index = await buildIndex(files, titleFields);
-                  const templates = await buildTemplates(files);
-                  const uses = await buildMediaUses(files);
+                  // Read here so the admin never lists or reads the repository per page load.
+                  const templates = templatesFrom('default', files);
+                  const uses = mediaUsesFrom('default', files);
                   const formFor = (collection: string, name: string) =>
                     entryForm(cms, collection, name);
                   const stale = await staleFrom('default', cms.i18n, files, formFor);

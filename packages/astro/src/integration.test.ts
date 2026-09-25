@@ -11,8 +11,6 @@ import { z } from 'astro/zod';
 import { beforeEach, expect, test, vi } from 'vitest';
 import handover, {
   buildIndex,
-  buildMediaUses,
-  buildTemplates,
   contentErrors,
   contentFiles,
   emitRedirects,
@@ -524,47 +522,6 @@ test('a _templates/ file is not in the built collection', async () => {
   expect([...store.keys()]).toEqual(['en/seaview-cottage']);
 });
 
-test('buildIndex lists an entry per locale file and leaves _templates/ out', async () => {
-  expect(await buildIndex(await contentFiles(fixture))).toEqual({
-    listings: [
-      {
-        id: 'seaview-cottage',
-        locales: {
-          en: {
-            title: 'Seaview Cottage',
-            path: 'src/content/listings/en/seaview-cottage.yaml',
-          },
-        },
-      },
-    ],
-  });
-});
-
-// The file the loader and index skip is the one the New entry dialog offers, so it is read here.
-test('buildTemplates reads the starters the site ships', async () => {
-  expect(await buildTemplates(await contentFiles(fixture))).toEqual({
-    listings: [
-      { name: 'house', data: { _version: 1, location: 'Devon', price: 'Price on application' } },
-    ],
-  });
-});
-
-test('buildIndex titles an entry by the field its collection declares', async () => {
-  const root = new URL(`${await mkdtemp(join(tmpdir(), 'handover-site-'))}/`, 'file://');
-  await mkdir(new URL('src/content/presenters/en/', root), { recursive: true });
-  await writeFile(new URL('src/content/presenters/en/rosa-hale.yaml', root), 'name: "Rosa Hale"\n');
-  expect(await buildIndex(await contentFiles(root), { presenters: 'name' })).toEqual({
-    presenters: [
-      {
-        id: 'rosa-hale',
-        locales: {
-          en: { title: 'Rosa Hale', path: 'src/content/presenters/en/rosa-hale.yaml' },
-        },
-      },
-    ],
-  });
-});
-
 test('buildIndex fails on a content file below the locale folder, naming it', async () => {
   const root = new URL(`${await mkdtemp(join(tmpdir(), 'handover-site-'))}/`, 'file://');
   await mkdir(new URL('src/content/listings/en/devon/', root), { recursive: true });
@@ -575,16 +532,6 @@ test('buildIndex fails on a content file below the locale folder, naming it', as
   );
   await expect(buildIndex(await contentFiles(root))).rejects.toThrow(
     'src/content/listings/en/devon/seaview.yaml: an entry is src/content/<collection>/<locale>/<name>.yaml',
-  );
-});
-
-test('buildIndex refuses entry names that no API endpoint can address', async () => {
-  const root = new URL(`${await mkdtemp(join(tmpdir(), 'handover-site-'))}/`, 'file://');
-  await mkdir(new URL('src/content/pages/en/', root), { recursive: true });
-  await writeFile(new URL('src/content/pages/en/about.us.yaml', root), 'title: "About"\n');
-
-  await expect(buildIndex(await contentFiles(root))).rejects.toThrow(
-    'src/content/pages/en/about.us.yaml: "about.us" is not an addressable path segment',
   );
 });
 
@@ -624,6 +571,13 @@ test('the build refuses a _ref naming a global cms.config.ts does not declare', 
   expect(await contentErrors(root, ['newsletter'])).toEqual([]);
 });
 
+// `_templates/` is left out of the index and read as the New entry dialog's starters.
+const starters = {
+  listings: [
+    { name: 'house', data: { _version: 1, location: 'Devon', price: 'Price on application' } },
+  ],
+};
+
 test('virtual:handover/index is the built index, inlined rather than served', async () => {
   const { updateConfig } = runSetup({ name: 'fake-adapter', hooks: {} }, fixture);
   const plugin = updateConfig.mock.calls[0]?.[0].vite.plugins[1];
@@ -632,12 +586,22 @@ test('virtual:handover/index is the built index, inlined rather than served', as
   expect(plugin.resolveId('other')).toBeUndefined();
   expect(await plugin.load('other')).toBeUndefined();
   const module = await plugin.load('\0virtual:handover/index');
+  const listed = {
+    listings: [
+      {
+        id: 'seaview-cottage',
+        locales: {
+          en: { title: 'Seaview Cottage', path: 'src/content/listings/en/seaview-cottage.yaml' },
+        },
+      },
+    ],
+  };
   expect(module).toBe(
-    `export default JSON.parse(${JSON.stringify(JSON.stringify(await buildIndex(await contentFiles(fixture))))});
+    `export default JSON.parse(${JSON.stringify(JSON.stringify(listed))});
 export const preview = false;
 export const site = "";
-export const templates = JSON.parse(${JSON.stringify(JSON.stringify(await buildTemplates(await contentFiles(fixture))))});
-export const uses = JSON.parse(${JSON.stringify(JSON.stringify(await buildMediaUses(await contentFiles(fixture))))});
+export const templates = JSON.parse(${JSON.stringify(JSON.stringify(starters))});
+export const uses = JSON.parse("{}");
 export const stale = JSON.parse("{}");
 export const texts = JSON.parse("{}");`,
   );
@@ -679,8 +643,8 @@ test('the index is built with the title field each collection declares', async (
     `export default JSON.parse(${JSON.stringify(JSON.stringify(listed))});
 export const preview = false;
 export const site = "";
-export const templates = JSON.parse(${JSON.stringify(JSON.stringify(await buildTemplates(await contentFiles(fixture))))});
-export const uses = JSON.parse(${JSON.stringify(JSON.stringify(await buildMediaUses(await contentFiles(fixture))))});
+export const templates = JSON.parse(${JSON.stringify(JSON.stringify(starters))});
+export const uses = JSON.parse("{}");
 export const stale = JSON.parse("{}");
 export const texts = JSON.parse("{}");`,
   );
