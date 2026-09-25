@@ -6,6 +6,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Canvas: **Review fields** scrolls the page to the problem field again, and inserting or moving
   a block from Structure keeps the page's selection and its action buttons.
+- Discarding a draft, holding or releasing an entry and taking over an edit lock now answer 503
+  with the repository's message when GitHub cannot be reached, instead of a generic 500.
 - Internal: a raw NUL byte in core's conflict resolver is written as `\u0000`, so git and grep
   read the file as text.
 - `handover init` reads Wrangler JSONC and TOML with standard parsers, preserving comment

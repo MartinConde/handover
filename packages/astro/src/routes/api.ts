@@ -377,17 +377,20 @@ export const POST: APIRoute = async ({ params, request, url, locals }) => {
   const beat = params.path?.match(LOCK);
   if (beat) {
     const body = (await readJson(request)) as { take?: unknown } | undefined;
-    return lockState(
-      ctx,
-      beat[1] ?? '',
-      beat[2] ?? '',
-      locals.handover,
-      body?.take === true ? 'take' : 'beat',
-      tabOf(body),
+    return answering(() =>
+      lockState(
+        ctx,
+        beat[1] ?? '',
+        beat[2] ?? '',
+        locals.handover,
+        body?.take === true ? 'take' : 'beat',
+        tabOf(body),
+      ),
     );
   }
   const holding = params.path?.match(HOLD);
-  if (holding) return hold(ctx, holding[1] ?? '', holding[2] ?? '', request, locals.handover);
+  if (holding)
+    return answering(() => hold(ctx, holding[1] ?? '', holding[2] ?? '', request, locals.handover));
   const showing = params.path?.match(STATUS);
   if (showing) return answering(() => setStatus(ctx, showing[1] ?? '', request, locals.handover));
   const filling = params.path?.match(TRANSLATE);
@@ -472,7 +475,7 @@ export const DELETE: APIRoute = async ({ params, request, url, locals }) => {
   if (member)
     return removeMember(ctx, member[1] ?? '', request, url, locals.cfContext, locals.handover);
   const draft = params.path?.match(DRAFT);
-  if (draft) return discard(ctx, draft[1] ?? '', draft[2] ?? '', locals.handover);
+  if (draft) return answering(() => discard(ctx, draft[1] ?? '', draft[2] ?? '', locals.handover));
   const asset = params.path?.match(MEDIA);
   if (asset) return answering(() => deleteAsset(ctx, asset[1] ?? '', locals.handover));
   const rule = params.path?.match(REDIRECT);

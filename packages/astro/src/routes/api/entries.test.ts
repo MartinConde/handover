@@ -334,6 +334,19 @@ test('discarding a draft drops the row and commits nothing', async () => {
   expect(publish).not.toHaveBeenCalled();
 });
 
+test('discarding a draft while the repository is unreachable answers 503 with its message', async () => {
+  drifted();
+  const message = 'The GitHub App cannot see acme/site.';
+  getFile.mockImplementationOnce(async () => {
+    throw new RepoUnreachableError(message);
+  });
+
+  const res = await DELETE(ctx('drafts/pages/home'));
+
+  expect(res.status).toBe(503);
+  expect(await res.text()).toBe(message);
+});
+
 test('discarding a draft of a collection that is not configured is 404', async () => {
   discardDraft.mockClear();
   expect((await DELETE(ctx('drafts/nope/mill-house'))).status).toBe(404);
