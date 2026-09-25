@@ -1,6 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { UiLocale } from '../i18n.js';
+import { settle } from '../test-helpers.fixture.js';
 import Globals from './Globals.svelte';
 
 // Testing: one card per declared global, in the order the API returned.
@@ -34,15 +35,10 @@ afterEach(() => {
 });
 
 const all = (root: ParentNode, sel: string) => Array.from(root.querySelectorAll(sel));
-// The list arrives after the fetch settles, which is two turns after the mount.
-const loaded = async () => {
-  await new Promise((r) => setTimeout(r, 0));
-  flushSync();
-};
 
 test('one card per global, named and described by the schema', async () => {
   const root = show();
-  await loaded();
+  await settle();
 
   // Redirects is last and is not a global.
   expect(all(root, '.global-card h2 a').map((a) => a.textContent)).toEqual([
@@ -67,14 +63,14 @@ test('a global labelled per language is named in the interface language', async 
     ['en', 'de'],
     'de',
   );
-  await loaded();
+  await settle();
 
   expect(all(root, '.global-card h2 a')[0]?.textContent).toBe('Website-Angaben');
 });
 
 test('a language with no file yet is the dashed chip, and an unpublished change is the dot', async () => {
   const root = show();
-  await loaded();
+  await settle();
 
   const [site, cta] = all(root, '.global-card');
   expect(site?.querySelector('.pdot')).not.toBeNull();
@@ -85,14 +81,14 @@ test('a language with no file yet is the dashed chip, and an unpublished change 
 
 test('a site with one language draws no chips at all', async () => {
   const root = show(GLOBALS, ['en']);
-  await loaded();
+  await settle();
 
   expect(all(root, '.chip')).toEqual([]);
 });
 
 test('a global somebody has open carries their name on the card', async () => {
   const root = show([{ ...GLOBALS[0], editing: { id: 'u2', name: 'Anna Berg' } }, GLOBALS[1]]);
-  await loaded();
+  await settle();
 
   const [site, cta] = all(root, '.global-card');
   expect(site?.querySelector('.badge')?.textContent).toBe('Being edited by Anna Berg');
@@ -108,7 +104,7 @@ test('a card says who last edited it, and a card nobody has touched says nothing
     },
     { ...GLOBALS[1], edited: null },
   ]);
-  await loaded();
+  await settle();
 
   const [site, cta] = all(root, '.global-card');
   expect(site?.querySelector('.sub')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
@@ -125,7 +121,7 @@ test('a live interface switch retranslates the list without rereading or replaci
       edited: { at: Date.now() - 2 * 60 * 60 * 1000, by: 'Anna Berg', kind: 'edit' },
     },
   ]);
-  await loaded();
+  await settle();
   const card = root.querySelector('.global-card');
   const requests = vi.mocked(fetch).mock.calls.length;
 
@@ -149,7 +145,7 @@ test('a visible list failure retranslates without another request', async () => 
   );
   props.uiLocale = 'en';
   app = mount(Globals, { target: document.body, props });
-  await loaded();
+  await settle();
   expect(document.querySelector('[role="alert"]')?.textContent).toBe(
     'Could not load the list (503)',
   );

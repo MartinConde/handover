@@ -107,7 +107,6 @@ test('typing in either column recounts at once, without a save or a fresh pane',
   );
   expect($(root, 'input#t-title')).toBe(input);
   expect(fetchMock.mock.calls.length).toBe(reads);
-  vi.unstubAllGlobals();
 });
 
 test('a stale translation that is also partly written is marked stale, and still counted', async () => {
@@ -202,7 +201,6 @@ test('German typed in the pane is saved before French replaces it, and is there 
   await choosePaneLanguage(root, 0);
   expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Hafenhaus');
   expect($(root, '.pane-head .autosave')?.textContent?.trim()).toBe('Saved');
-  vi.unstubAllGlobals();
 });
 
 test('a pane language chosen while German cannot be saved is not switched to', async () => {
@@ -221,7 +219,6 @@ test('a pane language chosen while German cannot be saved is not switched to', a
 
   expect(paneLanguagePick(root)?.textContent).toContain('German');
   expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Hafenhaus');
-  vi.unstubAllGlobals();
 });
 
 test('the pane goes to a missing or turned-off language and back from its empty pane', async () => {
@@ -239,35 +236,6 @@ test('the pane goes to a missing or turned-off language and back from its empty 
   await choosePaneLanguage(root, 0);
   expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Haus am Hafen');
   expect($<HTMLInputElement>(root, 'input#f-title')?.value).toBe('Harbour House');
-});
-
-test('Escape closes the pane list and gives focus back to the pane button', async () => {
-  const root = show(sixLanguages('base'));
-  sideBySide(root);
-  paneLanguagePick(root)?.click();
-  flushSync();
-  paneChoices(root)[2]?.focus();
-
-  paneChoices(root)[2]?.dispatchEvent(
-    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
-  );
-  await tick();
-
-  expect($(root, '#pane-languages')).toBeNull();
-  expect(document.activeElement).toBe(paneLanguagePick(root));
-});
-
-test('a click outside the pane list closes it without choosing', () => {
-  const root = show(sixLanguages('base'));
-  sideBySide(root);
-  paneLanguagePick(root)?.click();
-  flushSync();
-
-  $<HTMLElement>(root, 'input#f-title')?.click();
-  flushSync();
-
-  expect($(root, '#pane-languages')).toBeNull();
-  expect(paneLanguagePick(root)?.textContent).toContain('German');
 });
 
 // The list the queue reads is the collection's own, in its order, with the last build's marks.
@@ -292,7 +260,7 @@ test('a queue opens its language beside the source and Next skips to the next ro
   queueList();
   at('/admin/c/listings/twoMissing?queue=fr&owed=stale');
   const root = show({ slug: 'twoMissing', ...sixLanguages('twoMissing') });
-  await settle();
+  await settle(3);
 
   expect($(root, '.editor-form-heading h2')?.textContent).toBe('English');
   expect($(root, '#pane-fr')?.textContent).toContain('French');
@@ -301,7 +269,6 @@ test('a queue opens its language beside the source and Next skips to the next ro
   expect(nextLink(root)?.getAttribute('href')).toBe(
     '/admin/c/listings/machine?queue=fr&owed=stale',
   );
-  vi.unstubAllGlobals();
 });
 
 // A link opens a language for this visit; the view the person chose stays theirs.
@@ -311,31 +278,29 @@ test('opening a queue or a language link leaves the saved view as it was', async
   queueList();
   at('/admin/c/listings/twoMissing?queue=fr&owed=stale');
   const root = show({ slug: 'twoMissing', userId: 'u1', ...sixLanguages('twoMissing') });
-  await settle();
+  await settle(3);
   expect($(root, '#pane-fr')).not.toBeNull();
   expect(localStorage.getItem(key)).toBe('none');
   unmount(state.app);
 
   at('/admin/c/listings/twoMissing?locale=de');
   const again = show({ slug: 'twoMissing', userId: 'u1', ...sixLanguages('twoMissing') });
-  await settle();
+  await settle(3);
   expect($(again, '#pane-de')).not.toBeNull();
   expect(localStorage.getItem(key)).toBe('none');
-  vi.unstubAllGlobals();
 });
 
 test('a queue for a language with no file opens its create pane, with Next in the pane head', async () => {
   queueList();
   at('/admin/c/listings/twoMissing?queue=es&owed=missing');
   const root = show({ slug: 'twoMissing', ...sixLanguages('twoMissing') });
-  await settle();
+  await settle(3);
 
   expect($(root, '#pane-es')?.textContent).toContain('Spanish');
   expect($(root, '.btn-create')).not.toBeNull();
   expect(nextLink(root)?.getAttribute('href')).toBe(
     '/admin/c/listings/germanFirst?queue=es&owed=missing',
   );
-  vi.unstubAllGlobals();
 });
 
 // After the Spanish file is created the editor remounts; this entry no longer owes it.
@@ -348,20 +313,19 @@ test('the queue keeps its place from an entry that is no longer owed the languag
   const opened = sixLanguages('base');
   opened.entry.translations.es = { title: 'Casa del puerto' };
   const root = show({ slug: 'base', ...opened });
-  await settle();
+  await settle(3);
 
   expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Casa del puerto');
   expect(nextLink(root)?.getAttribute('href')).toBe(
     '/admin/c/listings/twoMissing?queue=es&owed=missing',
   );
-  vi.unstubAllGlobals();
 });
 
 test('a queue for everything owed stops at a partly written file, stale or not, once', async () => {
   queueList();
   at('/admin/c/listings/untouchedInvalid?queue=it&owed=owed');
   const root = show({ slug: 'untouchedInvalid', ...sixLanguages('untouchedInvalid') });
-  await settle();
+  await settle(3);
 
   // Its Italian file answers none of the two texts English has.
   expect(nextLink(root)?.getAttribute('href')).toBe(
@@ -371,13 +335,12 @@ test('a queue for everything owed stops at a partly written file, stale or not, 
   document.body.innerHTML = '';
   at('/admin/c/listings/staleAndPartial?queue=fr&owed=owed');
   const again = show({ slug: 'staleAndPartial', ...sixLanguages('staleAndPartial') });
-  await settle();
+  await settle(3);
 
   // French there is both stale and partly written; the queue moves past it all the same.
   expect(nextLink(again)?.getAttribute('href')).toBe(
     '/admin/c/listings/sourceDraft?queue=fr&owed=owed',
   );
-  vi.unstubAllGlobals();
 });
 
 test('the last row owing the language says the queue ends, not that nothing is owed', async () => {
@@ -385,47 +348,43 @@ test('the last row owing the language says the queue ends, not that nothing is o
   queueList(sixLanguageRows().filter((row) => row.id !== 'sourceConflict'));
   at('/admin/c/listings/structured?queue=es&owed=owed');
   const root = show({ slug: 'structured', ...sixLanguages('structured') });
-  await settle();
+  await settle(3);
 
   expect(nextLink(root)).toBeNull();
   expect(queueNext(root)?.textContent).toContain('End of this queue');
-  vi.unstubAllGlobals();
 });
 
 test('an entry the list does not have cannot continue the queue', async () => {
   queueList();
   at('/admin/c/listings/gone?queue=es&owed=owed');
   const root = show({ slug: 'gone', ...sixLanguages('base') });
-  await settle();
+  await settle(3);
 
   expect(nextLink(root)).toBeNull();
   expect(queueNext(root)?.textContent).toContain('This entry is not in the list');
   expect(queueNext(root)?.textContent).not.toContain('End of this queue');
-  vi.unstubAllGlobals();
 });
 
 test('a queue in a language the site does not declare is no queue at all', async () => {
   const fetchMock = queueList();
   at('/admin/c/listings/base?queue=xx&owed=missing');
   const root = show({ slug: 'base', ...sixLanguages('base') });
-  await settle();
+  await settle(3);
 
   expect($(root, '.pane-head')).toBeNull();
   expect(queueNext(root)).toBeNull();
   expect(listReads(fetchMock)).toBe(0);
-  vi.unstubAllGlobals();
 });
 
 test('an entry opened directly has no queue and does not read the list', async () => {
   const fetchMock = queueList();
   const root = show({ slug: 'base', ...sixLanguages('base') });
   sideBySide(root);
-  await settle();
+  await settle(3);
 
   expect($(root, '#pane-de')).not.toBeNull();
   expect(queueNext(root)).toBeNull();
   expect(listReads(fetchMock)).toBe(0);
-  vi.unstubAllGlobals();
 });
 
 test('a failed queue read offers a retry instead of saying the queue ended', async () => {
@@ -436,26 +395,25 @@ test('a failed queue read offers a retry instead of saying the queue ended', asy
   });
   at('/admin/c/listings/twoMissing?queue=fr&owed=stale');
   const root = show({ slug: 'twoMissing', ...sixLanguages('twoMissing') });
-  await settle();
+  await settle(3);
 
   expect(queueNext(root)?.textContent).toContain('Could not find the next entry.');
   expect(queueNext(root)?.textContent).not.toContain('End of this queue');
   offline = false;
   $<HTMLButtonElement>(root, '.queue-next button')?.click();
-  await settle();
+  await settle(3);
 
   expect(listReads(fetchMock)).toBe(2);
   expect(nextLink(root)?.getAttribute('href')).toBe(
     '/admin/c/listings/machine?queue=fr&owed=stale',
   );
-  vi.unstubAllGlobals();
 });
 
 test('the Content, SEO and History links keep the queue', async () => {
   queueList();
   at('/admin/c/listings/structured?queue=fr&owed=stale');
   const root = show({ slug: 'structured', ...sixLanguages('structured') });
-  await settle();
+  await settle(3);
 
   expect(
     $$<HTMLAnchorElement>(root, '.editor-sections a').map((a) => a.getAttribute('href')),
@@ -464,14 +422,13 @@ test('the Content, SEO and History links keep the queue', async () => {
     '/admin/c/listings/structured/seo?queue=fr&owed=stale',
     '/admin/c/listings/structured/history?queue=fr&owed=stale',
   ]);
-  vi.unstubAllGlobals();
 });
 
 test('choosing another pane language leaves the queue on its own language', async () => {
   queueList();
   at('/admin/c/listings/twoMissing?queue=fr&owed=stale');
   const root = show({ slug: 'twoMissing', ...sixLanguages('twoMissing') });
-  await settle();
+  await settle(3);
 
   await choosePaneLanguage(root, 0);
 
@@ -480,7 +437,6 @@ test('choosing another pane language leaves the queue on its own language', asyn
   expect(nextLink(root)?.getAttribute('href')).toBe(
     '/admin/c/listings/machine?queue=fr&owed=stale',
   );
-  vi.unstubAllGlobals();
 });
 
 // Reference language: a third language read under each field of the pane.
@@ -710,7 +666,6 @@ test('Translate what’s empty still asks for the target alone with a reference 
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({}),
   });
-  vi.unstubAllGlobals();
 });
 
 // M12 — the pane's run through what its language still owes.
@@ -718,7 +673,7 @@ const todoNext = (root: ParentNode) => $<HTMLButtonElement>(root, '.pane-head .b
 const announced = (root: ParentNode) => $(root, '.pane-head [role="status"]')?.textContent;
 const runTodo = async (root: ParentNode) => {
   todoNext(root)?.click();
-  await settle();
+  await settle(3);
 };
 const staleSource = (changed: Record<string, unknown>) => {
   const fetchMock = vi.fn(async (url: string) =>
@@ -747,7 +702,7 @@ test('a press visits each empty and stale field in turn, and the last one wraps'
   staleSource(CHANGED_TITLE);
   const root = show(owing());
   await frenchBesideEnglish(root);
-  await settle();
+  await settle(3);
 
   await runTodo(root);
   expect(document.activeElement?.id).toBe('t-title');
@@ -761,14 +716,13 @@ test('a press visits each empty and stale field in turn, and the last one wraps'
   await runTodo(root);
   expect(document.activeElement?.id).toBe('t-title');
   expect(announced(root)).toBe('Back to the first field');
-  vi.unstubAllGlobals();
 });
 
 test('an answered field drops out of the run as it is typed', async () => {
   staleSource(CHANGED_TITLE);
   const root = show(owing());
   await frenchBesideEnglish(root);
-  await settle();
+  await settle(3);
 
   await runTodo(root);
   await runTodo(root);
@@ -779,19 +733,18 @@ test('an answered field drops out of the run as it is typed', async () => {
 
   await runTodo(root);
   expect(document.activeElement?.id).toBe('t-title');
-  vi.unstubAllGlobals();
 });
 
 test('a dismissed marker leaves the run with the empty fields it left behind', async () => {
   staleSource(CHANGED_TITLE);
   const root = show(owing());
   await frenchBesideEnglish(root);
-  await settle();
+  await settle(3);
 
   $<HTMLButtonElement>(root, '.pane .stale')?.click();
   flushSync();
   $<HTMLButtonElement>(root, '.pane .popover .actions button:last-of-type')?.click();
-  await settle();
+  await settle(3);
 
   await runTodo(root);
   expect(document.activeElement?.id).toBe('t-subtitle');
@@ -800,19 +753,17 @@ test('a dismissed marker leaves the run with the empty fields it left behind', a
   await runTodo(root);
   expect(document.activeElement?.id).toBe('t-subtitle');
   expect(announced(root)).toBe('Back to the first field');
-  vi.unstubAllGlobals();
 });
 
 test('only a language with nothing outstanding is told there is nothing left to do', async () => {
   vi.stubGlobal('fetch', autosaved());
   const root = show(sixLanguages('base'));
   sideBySide(root);
-  await settle();
+  await settle(3);
 
   await runTodo(root);
 
   expect(announced(root)).toBe('Nothing left to do');
-  vi.unstubAllGlobals();
 });
 
 test('a stale language claims nothing while the list of changes is still being read', async () => {
@@ -829,24 +780,23 @@ test('a stale language claims nothing while the list of changes is still being r
   );
   const root = show(sixLanguages('base'));
   await frenchBesideEnglish(root);
-  await settle();
+  await settle(3);
 
   await runTodo(root);
   expect(announced(root)).toBe('');
 
   gate.resolve(Response.json({ changed: {} }));
-  await settle();
+  await settle(3);
   await runTodo(root);
 
   expect(announced(root)).toBe('Nothing left to do');
-  vi.unstubAllGlobals();
 });
 
 test('a folded block is opened so the run lands on the input itself', async () => {
   staleSource({});
   const root = show(sixLanguages('staleAndPartial'));
   await frenchBesideEnglish(root);
-  await settle();
+  await settle(3);
   $<HTMLButtonElement>(root, '.pane .block-card button.fold')?.click();
   flushSync();
   expect($(root, 'input#t-body\\.0\\.heading')).toBeNull();
@@ -855,7 +805,6 @@ test('a folded block is opened so the run lands on the input itself', async () =
 
   expect(document.activeElement?.id).toBe('t-body.0.heading');
   expect(document.activeElement?.tagName).toBe('INPUT');
-  vi.unstubAllGlobals();
 });
 
 // The section is the shell's to redraw, so the focus that lands there is proven in `App.test.ts`.
@@ -866,13 +815,12 @@ test('an SEO text takes the run to the SEO tab without dropping the queue', asyn
   delete ((opened.entry.translations.de as Record<string, unknown>).seo as Record<string, unknown>)
     .description;
   const root = show({ slug: 'structured', ...opened });
-  await settle();
+  await settle(3);
 
   await runTodo(root);
 
   expect(location.pathname).toBe('/admin/c/listings/structured/seo');
   expect(location.search).toBe('?queue=de&owed=missing');
-  vi.unstubAllGlobals();
 });
 
 test('a marker on a row the file no longer has is passed over', async () => {
@@ -882,7 +830,7 @@ test('a marker on a row the file no longer has is passed over', async () => {
   });
   const root = show(sixLanguages('base'));
   await frenchBesideEnglish(root);
-  await settle();
+  await settle(3);
 
   await runTodo(root);
   expect(document.activeElement?.id).toBe('t-title');
@@ -890,7 +838,6 @@ test('a marker on a row the file no longer has is passed over', async () => {
   expect(document.activeElement?.id).toBe('t-title');
   // The run came round to the title again rather than resting on the row that is gone.
   expect(announced(root)).toBe('Back to the first field');
-  vi.unstubAllGlobals();
 });
 
 test('a row that sits elsewhere in this language is still matched by its identity', async () => {
@@ -900,21 +847,20 @@ test('a row that sits elsewhere in this language is still matched by its identit
     delete row.name;
   const root = show({ slug: 'structured', ...opened });
   sideBySide(root);
-  await settle();
+  await settle(3);
 
   // German has the garden room first, so the source's first room is its second row.
   await runTodo(root);
   expect(document.activeElement?.id).toBe('t-rooms.1.name');
   await runTodo(root);
   expect(document.activeElement?.id).toBe('t-rooms.0.name');
-  vi.unstubAllGlobals();
 });
 
 test('Alt and the down arrow run the pane, unless something else owns the key', async () => {
   staleSource(CHANGED_TITLE);
   const root = show(owing());
   await frenchBesideEnglish(root);
-  await settle();
+  await settle(3);
   const chord = async (target: Element, init: KeyboardEventInit = {}) => {
     target.dispatchEvent(
       new KeyboardEvent('keydown', {
@@ -925,7 +871,7 @@ test('Alt and the down arrow run the pane, unless something else owns the key', 
         ...init,
       }),
     );
-    await settle();
+    await settle(3);
   };
   const subtitle = $(root, 'input#t-subtitle');
   if (!subtitle) throw new Error('subtitle missing');
@@ -942,7 +888,6 @@ test('Alt and the down arrow run the pane, unless something else owns the key', 
   flushSync();
   await chord($(root, '.pane .popover') as Element);
   expect($(root, '.pane .popover')).not.toBeNull();
-  vi.unstubAllGlobals();
 });
 
 const CHANGED_HEADING = {
@@ -957,23 +902,22 @@ test('a marker dismissed inside a block reaches the pane, which then has nothing
   staleSource(CHANGED_HEADING);
   const root = show(sixLanguages('base'));
   await frenchBesideEnglish(root);
-  await settle();
+  await settle(3);
 
   $<HTMLButtonElement>(root, '.pane .block-card .stale')?.click();
   flushSync();
   $<HTMLButtonElement>(root, '.pane .popover .actions button:last-of-type')?.click();
-  await settle();
+  await settle(3);
   await runTodo(root);
 
   expect(announced(root)).toBe('Nothing left to do');
-  vi.unstubAllGlobals();
 });
 
 test('a field that answers the chord itself keeps it', async () => {
   staleSource(CHANGED_TITLE);
   const root = show(owing());
   await frenchBesideEnglish(root);
-  await settle();
+  await settle(3);
   const subtitle = $<HTMLInputElement>(root, 'input#t-subtitle');
   if (!subtitle) throw new Error('subtitle missing');
   subtitle.addEventListener('keydown', (e) => e.preventDefault());
@@ -987,10 +931,9 @@ test('a field that answers the chord itself keeps it', async () => {
       cancelable: true,
     }),
   );
-  await settle();
+  await settle(3);
 
   expect(document.activeElement).toBe(subtitle);
-  vi.unstubAllGlobals();
 });
 
 test('a re-translated field is answered but stays in the run until its marker goes', async () => {
@@ -1016,13 +959,13 @@ test('a re-translated field is answered but stays in the run until its marker go
   );
   const root = show(opened);
   await frenchBesideEnglish(root);
-  await settle();
+  await settle(3);
   expect(answered(root)).toBe('1 of 2 texts written');
 
   $<HTMLButtonElement>(root, '.pane .block-card .stale')?.click();
   flushSync();
   $<HTMLButtonElement>(root, '.pane .popover .actions button')?.click();
-  await settle();
+  await settle(3);
 
   expect(answered(root)).toBe('2 of 2 texts written');
   await runTodo(root);
@@ -1033,11 +976,10 @@ test('a re-translated field is answered but stays in the run until its marker go
   $<HTMLButtonElement>(root, '.pane .block-card .stale')?.click();
   flushSync();
   $<HTMLButtonElement>(root, '.pane .popover .actions button:last-of-type')?.click();
-  await settle();
+  await settle(3);
   await runTodo(root);
 
   expect(announced(root)).toBe('Nothing left to do');
-  vi.unstubAllGlobals();
 });
 
 test('failed stale-marker loading does not announce that the work is finished', async () => {
@@ -1054,10 +996,10 @@ test('failed stale-marker loading does not announce that the work is finished', 
   );
   const root = show(page);
   await frenchBesideEnglish(root);
-  await settle();
+  await settle(3);
   type(root, 'input#t-subtitle', 'Sous-titre');
   type(root, 'input#t-body\\.0\\.heading', 'Titre');
-  await settle();
+  await settle(3);
 
   expect(answered(root)).toBe('3 of 3 texts written');
   await runTodo(root);
@@ -1065,7 +1007,6 @@ test('failed stale-marker loading does not announce that the work is finished', 
   expect($(root, '.marker-load-failure')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
     'Could not load what changed in the source. Retry',
   );
-  vi.unstubAllGlobals();
 });
 
 test('a network failure loading stale markers can be retried successfully', async () => {
@@ -1086,17 +1027,16 @@ test('a network failure loading stale markers can be retried successfully', asyn
   );
   const root = show(page);
   await frenchBesideEnglish(root);
-  await settle();
+  await settle(3);
   type(root, 'input#t-subtitle', 'Sous-titre');
   type(root, 'input#t-body\\.0\\.heading', 'Titre');
-  await settle();
+  await settle(3);
 
   await runTodo(root);
   expect(announced(root)).toBe('');
   $<HTMLButtonElement>(root, '.marker-load-failure button')?.click();
-  await settle();
+  await settle(3);
   expect(root.querySelector('.marker-load-failure')).toBeNull();
   await runTodo(root);
   expect(announced(root)).toBe('Nothing left to do');
-  vi.unstubAllGlobals();
 });

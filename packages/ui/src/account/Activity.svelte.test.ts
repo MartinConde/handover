@@ -439,15 +439,6 @@ test('the exact instant is on the row even where the words are relative', async 
   expect(when.getAttribute('title')).toContain('22 August 2025');
 });
 
-test('choosing a kind group asks the server for that group', async () => {
-  const calls = server({ events: [], cursor: null });
-  const root = await show();
-
-  await choose(root, 'activity-group', 'Publishing');
-
-  expect(activityCalls(calls).at(-1)).toBe('/admin/api/activity?group=Publishing');
-});
-
 test('choosing a person asks the server for that person', async () => {
   const calls = server({ events: [], cursor: null }, [
     { id: 'u9', name: 'Jonas Weber', email: 'jonas@example.com' },

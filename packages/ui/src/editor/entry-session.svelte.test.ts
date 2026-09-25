@@ -1011,22 +1011,61 @@ test('final publish reserves all mutations, drains every locale, and stays close
   expect(reload).toHaveBeenCalledWith('published');
 });
 
-test('final publish never requests after a failed save and releases a refused operation', async () => {
-  const session = translationSession();
-  session.configureAutosave(async () => false);
-  session.fieldCommand('en', {
-    address: 'sections[_id=first].title',
-    contentVersion: 0,
-    changes: [{ value: 'Keep this local edit' }],
-  });
-  const request = vi.fn(async () => true);
+test.each([
+  [
+    'final publish',
+    (session: ReturnType<typeof translationSession>, sent: () => void, reload: () => void) =>
+      session.finalPublish(async () => {
+        sent();
+        return true;
+      }, reload),
+  ],
+  [
+    'an authoritative outside change',
+    (session: ReturnType<typeof translationSession>, sent: () => void, reload: () => void) =>
+      session.authoritativeChange(async () => {
+        sent();
+        return true;
+      }, reload),
+  ],
+  [
+    'a historical restore',
+    (session: ReturnType<typeof translationSession>, sent: () => void, reload: () => void) =>
+      session.historicalRestore(async () => {
+        sent();
+        return { ok: true as const };
+      }, reload),
+  ],
+] as const)(
+  '%s never requests after a failed save and releases the action gate',
+  async (_, run) => {
+    const session = translationSession();
+    session.configureAutosave(async () => false);
+    session.fieldCommand('en', {
+      address: 'sections[_id=first].title',
+      contentVersion: 0,
+      changes: [{ value: 'Keep this local edit' }],
+    });
+    const request = vi.fn();
+    const reload = vi.fn();
+
+    expect(await run(session, request, reload)).toEqual({ ok: false, reason: 'save' });
+    expect(request).not.toHaveBeenCalled();
+    expect(reload).not.toHaveBeenCalled();
+    expect(session.persistedActionPending()).toBe(false);
+    expect(session.localeMutationBlocked('en')).toBe(false);
+    expect(
+      session.fieldCommand('en', {
+        address: 'sections[_id=second].title',
+        contentVersion: 1,
+        changes: [{ value: 'Editing resumes' }],
+      }),
+    ).toEqual({ ok: true, contentVersion: 2 });
+  },
+);
+
+test('final publish releases a refused operation', async () => {
   const reload = vi.fn();
-
-  expect(await session.finalPublish(request, reload)).toEqual({ ok: false, reason: 'save' });
-  expect(request).not.toHaveBeenCalled();
-  expect(session.persistedActionPending()).toBe(false);
-  expect(session.localeMutationBlocked('en')).toBe(false);
-
   const clean = translationSession();
   clean.configureAutosave(async () => true);
   expect(await clean.finalPublish(async () => false, reload)).toEqual({
@@ -1090,25 +1129,6 @@ test('an authoritative outside change drains old writes and retires the session 
   expect(await replacing).toEqual({ ok: true });
   expect(session.persistedActionPending()).toBe(true);
   expect(reload).toHaveBeenCalledWith('changed');
-});
-
-test('an authoritative outside change never starts after the final save is refused', async () => {
-  const session = translationSession();
-  session.configureAutosave(async () => false);
-  session.fieldCommand('en', {
-    address: 'sections[_id=first].title',
-    contentVersion: 0,
-    changes: [{ value: 'Keep this local edit' }],
-  });
-  const request = vi.fn(async () => true);
-
-  expect(await session.authoritativeChange(request, vi.fn())).toEqual({
-    ok: false,
-    reason: 'save',
-  });
-  expect(request).not.toHaveBeenCalled();
-  expect(session.persistedActionPending()).toBe(false);
-  expect(session.localeMutationBlocked('en')).toBe(false);
 });
 
 test('machine translation closes admission before its preflush and dispatches after old writes', async () => {
@@ -1348,33 +1368,6 @@ test('historical restore closes admission before preflush and reloads after ever
       operation: { type: 'remove', index: 0 },
     }),
   ).toEqual({ ok: false, reason: 'closed' });
-});
-
-test('a failed restore preflush never dispatches and releases the action gate', async () => {
-  const session = translationSession();
-  session.configureAutosave(async () => false);
-  session.fieldCommand('en', {
-    address: 'sections[_id=first].title',
-    contentVersion: 0,
-    changes: [{ value: 'Keep this local edit' }],
-  });
-  const request = vi.fn(async () => ({ ok: true as const }));
-  const reload = vi.fn();
-
-  expect(await session.historicalRestore(request, reload)).toEqual({
-    ok: false,
-    reason: 'save',
-  });
-  expect(request).not.toHaveBeenCalled();
-  expect(reload).not.toHaveBeenCalled();
-  expect(session.persistedActionPending()).toBe(false);
-  expect(
-    session.fieldCommand('en', {
-      address: 'sections[_id=second].title',
-      contentVersion: 1,
-      changes: [{ value: 'Editing resumes' }],
-    }),
-  ).toEqual({ ok: true, contentVersion: 2 });
 });
 
 test('a confirmed restore refusal retains snapshots and reopens ordinary editing', async () => {

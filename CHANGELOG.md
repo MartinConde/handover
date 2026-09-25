@@ -53,6 +53,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   exporting 14 types nothing imports.
 - Internal: the admin message catalogs are checked as plain JSON before Paraglide compiles them,
   instead of through the Inlang SDK, and a compile that emits no message modules now fails.
+- Internal: the admin UI tests share one `settle`, the Editor setup and a fetch router for the
+  shell's own reads, and drop tests that others already cover.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth

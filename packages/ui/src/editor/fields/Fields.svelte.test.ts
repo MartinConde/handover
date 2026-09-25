@@ -894,7 +894,7 @@ tags:
   - "garden"
 `;
 
-test('array: reordering by keyboard emits the reordered YAML and both _ids survive', async () => {
+test('array: reordering by keyboard and by mouse emit the same YAML and both _ids survive', async () => {
   laidOut();
   show([rooms, tags], arrayData());
   expect(document.querySelectorAll('#f-rooms .row-card')).toHaveLength(2);
@@ -902,15 +902,8 @@ test('array: reordering by keyboard emits the reordered YAML and both _ids survi
   expect(stringifyEntry('default', snap())).toBe(MOVED);
   await keyMove('Rooms row 2', -1);
   expect(stringifyEntry('default', snap())).toBe(golden('array'));
-});
-
-test('array: reordering by mouse emits the same YAML as the keyboard', async () => {
-  laidOut();
-  show([rooms, tags], arrayData());
   await mouseMove('Rooms row 1', 100);
   expect(stringifyEntry('default', snap())).toBe(MOVED);
-  await mouseMove('Rooms row 2', -100);
-  expect(stringifyEntry('default', snap())).toBe(golden('array'));
 });
 
 test('array: drag projection moves the cards without changing or saving the entry', async () => {
@@ -1301,6 +1294,8 @@ test('seo: without a site origin there are no previews', () => {
 test('seo: the meters count what is typed and say when it will be cut off', () => {
   show([seoField], { _version: 1 });
   expect(q('#f-seo\\.title-meter').textContent).toBe('Up to about 60 characters');
+  type('input#f-seo\\.title', 'A');
+  expect(q('#f-seo\\.title-meter').textContent).toBe('About 1 of ≈60 characters');
   type('input#f-seo\\.title', 'Move to the coast');
   expect(q('#f-seo\\.title-meter').textContent).toBe('About 17 of ≈60 characters');
   type('textarea#f-seo\\.description', 'x'.repeat(160));

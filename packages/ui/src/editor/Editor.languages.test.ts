@@ -13,7 +13,7 @@ import {
   languageChoices,
   languagePick,
   openLanguages,
-  settled,
+  settle,
   show,
   state,
   tick,
@@ -176,7 +176,6 @@ test('a language chosen while the last edit cannot be saved is not switched to',
 
   expect(languagePick(root)?.textContent).toContain('English');
   expect($<HTMLInputElement>(root, 'input#f-title')?.value).toBe('Keep this text');
-  vi.unstubAllGlobals();
 });
 
 test('side by side edits the second language and saves it to its own file', async () => {
@@ -203,7 +202,6 @@ test('side by side edits the second language and saves it to its own file', asyn
       tab: 'tab-1',
     }),
   });
-  vi.unstubAllGlobals();
 });
 
 test('side by side keeps source edits bound to the source after selecting another language', async () => {
@@ -256,7 +254,6 @@ test('side by side keeps source edits bound to the source after selecting anothe
       ],
     ]),
   );
-  vi.unstubAllGlobals();
 });
 
 // Autosave is independent of rendering: the live Canvas shell must stay mounted through it.
@@ -276,7 +273,6 @@ test('a save in the second language keeps the Canvas workspace mounted', async (
   flushSync();
 
   expect($(root, '.canvas-workspace')).toBe(canvas);
-  vi.unstubAllGlobals();
 });
 
 // The skeleton is one edit to every language, so the second column must move at once.
@@ -343,7 +339,6 @@ test('a block moved in the source column moves in the second column at once', as
   expect($<HTMLInputElement>(root, 'input#t-body\\.1\\.heading')?.value).toBe('Über dem Hafen');
   expect(wrote(fetchMock)).toHaveLength(0);
   vi.restoreAllMocks();
-  vi.unstubAllGlobals();
 });
 
 test('a duplicated block autosaves its scoped locale subtree and captured revisions', async () => {
@@ -392,8 +387,6 @@ test('a duplicated block autosaves its scoped locale subtree and captured revisi
       ],
     },
   });
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 test('a shared value typed in the source column reads in the second column as it is typed', () => {
@@ -405,7 +398,6 @@ test('a shared value typed in the source column reads in the second column as it
   type(root, 'input#f-price', '£1,300 per week');
 
   expect($(root, '.pane.is-locale')?.textContent).toContain('£1,300 per week');
-  vi.unstubAllGlobals();
 });
 
 // The mirror runs on open too; a save there would make every side-by-side look like a change.
@@ -419,8 +411,6 @@ test('opening the second column on an untouched entry writes nothing', async () 
   await vi.advanceTimersByTimeAsync(5000);
 
   expect(wrote(fetchMock)).toHaveLength(0);
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 test('the second language shows a shared field without offering to change it', () => {
@@ -448,7 +438,6 @@ test('an edit made only in the second language is still something to publish', a
   flushSync();
 
   expect($<HTMLButtonElement>(root, 'button.btn-primary')?.disabled).toBe(false);
-  vi.unstubAllGlobals();
 });
 
 // The second column holds its own copy of one language, so leaving it must store it first.
@@ -477,7 +466,6 @@ test('closing the second column stores what was typed in it', async () => {
       }),
     }),
   );
-  vi.unstubAllGlobals();
 });
 
 test('choosing a third language draws that language and not the one before it', async () => {
@@ -536,7 +524,6 @@ test('what the schema still wants of the second language is marked on its own fi
   flushSync();
 
   expect($(root, '#t-title-err')?.textContent).toBe('Required');
-  vi.unstubAllGlobals();
 });
 
 test('a translation typed and then closed is still something to publish', async () => {
@@ -551,7 +538,6 @@ test('a translation typed and then closed is still something to publish', async 
   flushSync();
 
   expect($<HTMLButtonElement>(root, 'button.btn-primary')?.disabled).toBe(false);
-  vi.unstubAllGlobals();
 });
 
 // Create from English leaves a draft ahead of the repository, which is the entry's to publish.
@@ -588,8 +574,6 @@ test('switching languages keeps the pending draft attached to the locale that sa
   expect($(root, '.dialog .publish-set')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
     'Languages: DE The German file',
   );
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 test('a clean response for one translation does not clear another locale pending in this session', async () => {
@@ -624,8 +608,6 @@ test('a clean response for one translation does not clear another locale pending
   expect($(root, '.dialog .publish-set')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
     'Languages: DE The German file',
   );
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 // An empty form would autosave a file nobody asked for, so a missing language gets offers instead.
@@ -650,7 +632,6 @@ test('a language the entry has no file in offers one made from the source langua
     method: 'POST',
   });
   expect(changed).toHaveBeenCalled();
-  vi.unstubAllGlobals();
 });
 
 test('turning a language off sends the ones the entry keeps', async () => {
@@ -668,7 +649,6 @@ test('turning a language off sends the ones the entry keeps', async () => {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ locales: ['en'] }),
   });
-  vi.unstubAllGlobals();
 });
 
 // Turning off a language with a file deletes it, so it gets a delete's dialog with a redirect.
@@ -703,7 +683,6 @@ test('a language with a file is turned off from its own column, through a dialog
     body: JSON.stringify({ locales: ['en'], redirect: { kind: 'index' } }),
   });
   expect(committed).toHaveBeenCalledOnce();
-  vi.unstubAllGlobals();
 });
 
 // The redirect answer rides with the turn-off rather than the route deciding on the overview.
@@ -728,7 +707,6 @@ test('turning a language off asks where its readers go and sends the answer', as
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ locales: ['en'], redirect: { kind: 'none' } }),
   });
-  vi.unstubAllGlobals();
 });
 
 // The refusal's sentence is worth reading, so the dialog stays open and shows it.
@@ -765,7 +743,6 @@ test('a turn-off the server refuses keeps the dialog open with its reason', asyn
   expect($<HTMLButtonElement>(root, '.dialog button.btn-danger')?.disabled).toBe(false);
   expect(changed).not.toHaveBeenCalled();
   expect(committed).not.toHaveBeenCalled();
-  vi.unstubAllGlobals();
 });
 
 // Turning German off deleted its file, so the log's commit is what brings the words back.
@@ -811,7 +788,6 @@ test('a language the CMS turned off offers the words back rather than an empty f
   expect(committed).toHaveBeenCalledOnce();
   // The empty form is still there for a language the CMS never had the words for.
   expect($(root, '.pane button.btn-link')?.textContent).toContain('empty form');
-  vi.unstubAllGlobals();
 });
 
 test('a language turned off is struck through and offers no way to write it', () => {
@@ -876,7 +852,6 @@ test('the second language offers to fill what it has nothing in', async () => {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({}),
   });
-  vi.unstubAllGlobals();
 });
 
 test('one field is translated on its own and the answer lands in the input', async () => {
@@ -901,7 +876,6 @@ test('one field is translated on its own and the answer lands in the input', asy
   });
   expect($<HTMLInputElement>(root, 'input#t-title')?.value).toBe('Meerblick-Häuschen');
   expect($(root, '.badge-machine')).not.toBeNull();
-  vi.unstubAllGlobals();
 });
 
 test('translation reserves preflush, freezes target and structure, then saves newer source prose', async () => {
@@ -991,8 +965,6 @@ test('translation reserves preflush, freezes target and structure, then saves ne
     wrote(fetchMock).filter(([url]) => url === '/admin/api/drafts/listings/seaview-cottage/de'),
   ).toHaveLength(0);
   expect($<HTMLFieldSetElement>(root, '.pane.is-locale fieldset')?.disabled).toBe(false);
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 test('a block a machine filled is badged where the block is, not at the top', () => {
@@ -1032,7 +1004,6 @@ test('a language with no file can be made and filled in one go', async () => {
     '/admin/api/translate/listings/seaview-cottage/de',
   ]);
   expect(changed).toHaveBeenCalledTimes(1);
-  vi.unstubAllGlobals();
 });
 
 test('typing over a machine-filled field takes its badge off there and then', () => {
@@ -1103,7 +1074,6 @@ test('Change source language is offered only with two languages and two files', 
     'Change source language… English is the source: blocks are added and moved there, and Translate works from it.',
   );
   expect(changeSourceItem(two)?.disabled).toBe(false);
-  vi.unstubAllGlobals();
 });
 
 test('languages that disagree about blocks disable Change source language with the reason', async () => {
@@ -1127,7 +1097,6 @@ test('languages that disagree about blocks disable Change source language with t
   expect($(root, '#change-source-sub')?.textContent).toBe(
     'The languages disagree about blocks — settle that first',
   );
-  vi.unstubAllGlobals();
 });
 
 test('a save that failed first sends nothing, then disables Change source language', async () => {
@@ -1143,7 +1112,7 @@ test('a save that failed first sends nothing, then disables Change source langua
   type(root, 'input#f-title', 'Typed before the change');
   await chooseSource(root);
   $<HTMLButtonElement>(root, '.source-dialog .btn-primary')?.click();
-  await settled();
+  await settle(2);
 
   expect(sourceCalls(fetchMock)).toHaveLength(0);
   expect($(root, '.source-dialog [role="alert"]')?.textContent?.trim()).toBe(
@@ -1156,7 +1125,6 @@ test('a save that failed first sends nothing, then disables Change source langua
   expect($(root, '#change-source-sub')?.textContent).toBe(
     'Your last change could not be saved — that has to work first',
   );
-  vi.unstubAllGlobals();
 });
 
 test('a change sends the language and revisions, then reloads once and asks for the notice', async () => {
@@ -1170,7 +1138,7 @@ test('a change sends the language and revisions, then reloads once and asks for 
     'Make German the source',
   );
   $<HTMLButtonElement>(root, '.source-dialog .btn-primary')?.click();
-  await settled();
+  await settle(2);
 
   expect(sourceCalls(fetchMock)).toEqual([
     [
@@ -1188,7 +1156,6 @@ test('a change sends the language and revisions, then reloads once and asks for 
   ]);
   expect(changed).toHaveBeenCalledExactlyOnceWith('de');
   expect(reloaded).toHaveBeenCalledOnce();
-  vi.unstubAllGlobals();
 });
 
 test('a concurrent change is refused with Reload and editing stays open', async () => {
@@ -1203,7 +1170,7 @@ test('a concurrent change is refused with Reload and editing stays open', async 
   const root = show({ entry: withRevisions, onreload: reloaded });
   await chooseSource(root);
   $<HTMLButtonElement>(root, '.source-dialog .btn-primary')?.click();
-  await settled();
+  await settle(2);
 
   expect(reloaded).not.toHaveBeenCalled();
   expect($(root, '.source-dialog [role="alert"]')?.textContent).toContain(
@@ -1212,7 +1179,6 @@ test('a concurrent change is refused with Reload and editing stays open', async 
   expect($<HTMLFieldSetElement>(root, '.entry-body > .form > fieldset')?.disabled).toBe(false);
   $<HTMLButtonElement>(root, '.source-dialog [role="alert"] button')?.click();
   expect(reloaded).toHaveBeenCalledOnce();
-  vi.unstubAllGlobals();
 });
 
 test('a lost answer keeps editing closed and offers only Reload', async () => {
@@ -1231,7 +1197,7 @@ test('a lost answer keeps editing closed and offers only Reload', async () => {
   const root = show({ entry: withRevisions, onreload: reloaded });
   await chooseSource(root);
   $<HTMLButtonElement>(root, '.source-dialog .btn-primary')?.click();
-  await settled();
+  await settle(2);
 
   expect(reloaded).not.toHaveBeenCalled();
   expect($(root, '.source-dialog [role="alert"]')?.textContent?.trim()).toBe(
@@ -1241,7 +1207,6 @@ test('a lost answer keeps editing closed and offers only Reload', async () => {
   expect($<HTMLFieldSetElement>(root, '.entry-body > .form > fieldset')?.disabled).toBe(true);
   $<HTMLButtonElement>(root, '.source-dialog [role="alert"] button')?.click();
   expect(reloaded).toHaveBeenCalledOnce();
-  vi.unstubAllGlobals();
 });
 
 test('after the change a notice says it waits for the entry to publish', () => {
@@ -1256,7 +1221,6 @@ test('after the change a notice says it waits for the entry to publish', () => {
 
   const published = show({ entry: { ...german, pending: [] }, sourceChanged: 'de' });
   expect($(published, '.lock-banner[role="status"]')).toBeNull();
-  vi.unstubAllGlobals();
 });
 
 test('Escape closes the source dialog and gives focus back to the menu button', async () => {
@@ -1269,7 +1233,6 @@ test('Escape closes the source dialog and gives focus back to the menu button', 
 
   expect($(root, '.source-dialog')).toBeNull();
   expect(document.activeElement).toBe($(root, '[aria-label="More actions"]'));
-  vi.unstubAllGlobals();
 });
 
 test('side by side and creating a language never ask to change the source', async () => {
@@ -1287,5 +1250,4 @@ test('side by side and creating a language never ask to change the source', asyn
     method: 'POST',
   });
   expect(sourceCalls(fetchMock)).toHaveLength(0);
-  vi.unstubAllGlobals();
 });

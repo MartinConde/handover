@@ -52,7 +52,7 @@ const openMissing = async (
     entry: { ...opened.entry, ...(translator ? { translator: true } : {}) },
     ...over,
   });
-  await settle();
+  await settle(3);
   return root;
 };
 const createAll = (root: ParentNode) => $<HTMLButtonElement>(root, 'button.btn-create-all');
@@ -78,7 +78,7 @@ test('Create all makes every offered missing language in order, then reloads onc
   expect(createAll(root)?.textContent?.trim()).toBe('Create all 2 missing languages');
   expect(fillAll(root)).toBeNull();
   createAll(root)?.click();
-  await settle();
+  await settle(3);
 
   expect(madeOrFilled(fetchMock)).toEqual([
     '/admin/api/drafts/listings/twoMissing/it',
@@ -89,7 +89,6 @@ test('Create all makes every offered missing language in order, then reloads onc
     targets: ['it', 'es'],
     done: { it: 'created', es: 'created' },
   });
-  vi.unstubAllGlobals();
 });
 
 test('the report of a Create all is drawn after the reload, one line per language', async () => {
@@ -104,10 +103,9 @@ test('the report of a Create all is drawn after the reload, one line per languag
       done: { it: 'filled', es: 'created' },
     },
   });
-  await settle();
+  await settle(3);
 
   expect(reportLines(root)).toEqual(['Italian: created and pre-filled', 'Spanish: created']);
-  vi.unstubAllGlobals();
 });
 
 test('pre-fill on a German entry creates and fills English first, then each later language', async () => {
@@ -123,7 +121,7 @@ test('pre-fill on a German entry creates and fills English first, then each late
 
   expect(fillAll(root)?.textContent?.trim()).toBe('Create all 5 and pre-fill');
   fillAll(root)?.click();
-  await settle();
+  await settle(3);
 
   expect(madeOrFilled(fetchMock)).toEqual(
     ['en', 'fr', 'it', 'es', 'nl'].flatMap((of) => [
@@ -137,7 +135,6 @@ test('pre-fill on a German entry creates and fills English first, then each late
     targets: ['en', 'fr', 'it', 'es', 'nl'],
     done: { en: 'filled', fr: 'filled', it: 'filled', es: 'filled', nl: 'filled' },
   });
-  vi.unstubAllGlobals();
 });
 
 test('a Create all whose first save fails sends nothing and leaves editing open', async () => {
@@ -152,7 +149,7 @@ test('a Create all whose first save fails sends nothing and leaves editing open'
   type(root, 'input#f-title', 'Unsaved words');
 
   createAll(root)?.click();
-  await settle();
+  await settle(3);
 
   expect(madeOrFilled(fetchMock)).toEqual([]);
   expect(reloaded).not.toHaveBeenCalled();
@@ -161,7 +158,6 @@ test('a Create all whose first save fails sends nothing and leaves editing open'
   );
   expect($<HTMLFieldSetElement>(root, '.entry-body > .form > fieldset')?.disabled).toBe(false);
   expect($<HTMLInputElement>(root, 'input#f-title')?.value).toBe('Unsaved words');
-  vi.unstubAllGlobals();
 });
 
 test('while Create all waits, typing, switching language and other actions are held', async () => {
@@ -171,7 +167,7 @@ test('while Create all waits, typing, switching language and other actions are h
   const root = await openMissing('twoMissing', 'it', { onreload: vi.fn() });
 
   createAll(root)?.click();
-  await settle();
+  await settle(3);
 
   expect($(root, '.pane [role="status"]')?.textContent?.trim()).toBe('Creating Italian…');
   expect($<HTMLFieldSetElement>(root, '.entry-body > .form > fieldset')?.disabled).toBe(true);
@@ -179,18 +175,17 @@ test('while Create all waits, typing, switching language and other actions are h
   expect(createAll(root)?.disabled).toBe(true);
   openLanguages(root);
   languageChoices(root)[1]?.click();
-  await settle();
+  await settle(3);
   expect(languagePick(root)?.textContent).toContain('Italian');
   expect(madeOrFilled(fetchMock)).toEqual(['/admin/api/drafts/listings/twoMissing/it']);
 
   first.resolve(Response.json({}));
-  await settle();
+  await settle(3);
 
   expect(madeOrFilled(fetchMock)).toEqual([
     '/admin/api/drafts/listings/twoMissing/it',
     '/admin/api/drafts/listings/twoMissing/es',
   ]);
-  vi.unstubAllGlobals();
 });
 
 test('a refused second language stops the batch, keeps the first and reloads once', async () => {
@@ -211,7 +206,7 @@ test('a refused second language stops the batch, keeps the first and reloads onc
   });
 
   createAll(root)?.click();
-  await settle();
+  await settle(3);
 
   expect(madeOrFilled(fetchMock)).toEqual([
     '/admin/api/drafts/listings/germanFirst/en',
@@ -230,7 +225,7 @@ test('a refused second language stops the batch, keeps the first and reloads onc
   const opened = sixLanguages('germanFirst');
   opened.entry.translations.en = { title: '' };
   const again = show({ slug: 'germanFirst', ...opened, createdAll: report });
-  await settle();
+  await settle(3);
   expect(reportLines(again)).toEqual([
     'English: created',
     'French: not created',
@@ -239,7 +234,6 @@ test('a refused second language stops the batch, keeps the first and reloads onc
     'Dutch: not attempted, still missing',
   ]);
   expect($(again, '.created-all')?.textContent).toContain('This entry is not offered in fr');
-  vi.unstubAllGlobals();
 });
 
 test('a created language whose pre-fill fails stops the batch there', async () => {
@@ -262,7 +256,7 @@ test('a created language whose pre-fill fails stops the batch there', async () =
   );
 
   fillAll(root)?.click();
-  await settle();
+  await settle(3);
 
   expect(madeOrFilled(fetchMock)).toEqual([
     '/admin/api/drafts/listings/twoMissing/it',
@@ -277,12 +271,11 @@ test('a created language whose pre-fill fails stops the batch there', async () =
   unmount(state.app);
   document.body.innerHTML = '';
   const again = show({ slug: 'twoMissing', ...sixLanguages('twoMissing'), createdAll: report });
-  await settle();
+  await settle(3);
   expect(reportLines(again)).toEqual([
     'Italian: created, not pre-filled',
     'Spanish: not attempted, still missing',
   ]);
-  vi.unstubAllGlobals();
 });
 
 test('a lost answer stops the batch and reloads; the fresh read settles it and a retry skips it', async () => {
@@ -296,7 +289,7 @@ test('a lost answer stops the batch and reloads; the fresh read settles it and a
   });
 
   createAll(root)?.click();
-  await settle();
+  await settle(3);
 
   expect(madeOrFilled(fetchMock)).toEqual(['/admin/api/drafts/listings/germanFirst/en']);
   expect(reloaded).toHaveBeenCalledOnce();
@@ -312,15 +305,14 @@ test('a lost answer stops the batch and reloads; the fresh read settles it and a
   opened.entry.translations.en = { title: '' };
   at('/admin/c/listings/germanFirst?queue=fr&owed=missing');
   const fresh = show({ slug: 'germanFirst', ...opened, createdAll: report, onreload: vi.fn() });
-  await settle();
+  await settle(3);
   expect(reportLines(fresh)[0]).toBe('English: created');
   expect(createAll(fresh)?.textContent?.trim()).toBe('Create all 4 missing languages');
   createAll(fresh)?.click();
-  await settle();
+  await settle(3);
   expect(madeOrFilled(fetchMock)).toEqual(
     ['fr', 'it', 'es', 'nl'].map((of) => `/admin/api/drafts/listings/germanFirst/${of}`),
   );
-  vi.unstubAllGlobals();
 });
 
 test('a failed reload after Create all keeps editing closed and offers Reload', async () => {
@@ -329,7 +321,7 @@ test('a failed reload after Create all keeps editing closed and offers Reload', 
   const root = await openMissing('twoMissing', 'it', { onreload: reloaded });
 
   createAll(root)?.click();
-  await settle();
+  await settle(3);
 
   expect($(root, '.pane [role="alert"]')?.textContent?.trim()).toBe(
     'The entry could not be read again after creating languages. Reload it before you continue. Reload',
@@ -337,7 +329,6 @@ test('a failed reload after Create all keeps editing closed and offers Reload', 
   expect($<HTMLFieldSetElement>(root, '.entry-body > .form > fieldset')?.disabled).toBe(true);
   $<HTMLButtonElement>(root, '.pane [role="alert"] button')?.click();
   expect(reloaded).toHaveBeenCalledTimes(2);
-  vi.unstubAllGlobals();
 });
 
 test('a first language refused outright leaves editing open and reloads nothing', async () => {
@@ -357,7 +348,7 @@ test('a first language refused outright leaves editing open and reloads nothing'
   });
 
   createAll(root)?.click();
-  await settle();
+  await settle(3);
 
   expect(madeOrFilled(fetchMock)).toEqual(['/admin/api/drafts/listings/twoMissing/it']);
   expect(reloaded).not.toHaveBeenCalled();
@@ -367,5 +358,4 @@ test('a first language refused outright leaves editing open and reloads nothing'
     done: {},
     failed: { locale: 'it', step: 'create', unconfirmed: false },
   });
-  vi.unstubAllGlobals();
 });

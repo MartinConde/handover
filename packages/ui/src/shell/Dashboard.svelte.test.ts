@@ -1,6 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { UiLocale } from '../i18n.js';
+import { settle } from '../test-helpers.fixture.js';
 import Dashboard from './Dashboard.svelte';
 
 // Testing: each tile's two states, buttons deferring to the shell; not the grid or activity lines.
@@ -82,10 +83,6 @@ afterEach(() => {
 });
 
 const all = (root: ParentNode, sel: string) => Array.from(root.querySelectorAll(sel));
-const loaded = async () => {
-  await new Promise((r) => setTimeout(r, 0));
-  flushSync();
-};
 const tile = (root: ParentNode, id: string) =>
   root.querySelector(`.dtile[aria-labelledby="${id}"]`);
 
@@ -93,7 +90,7 @@ test('the unpublished tile counts the changes, the holds and the age of the olde
   const root = show(undefined, {
     pending: [pendingEntry('listings/mill-house'), pendingEntry('pages/home', 'Anna Berg')],
   });
-  await loaded();
+  await settle();
 
   const waiting = tile(root, 'd-pending');
   expect(waiting?.querySelector('.big')?.textContent?.trim()).toBe('2 changes');
@@ -106,7 +103,7 @@ test('the unpublished tile counts the changes, the holds and the age of the olde
 // The calm state: it should read as finished rather than as an empty box.
 test('with nothing waiting the tile says so and offers no button', async () => {
   const root = show();
-  await loaded();
+  await settle();
 
   const waiting = tile(root, 'd-pending');
   expect(waiting?.querySelector('.big')?.textContent?.trim()).toBe('Everything is published');
@@ -116,7 +113,7 @@ test('with nothing waiting the tile says so and offers no button', async () => {
 
 test('Review and publish opens the drawer rather than publishing anything', async () => {
   const root = show(undefined, { pending: [pendingEntry('listings/mill-house')] });
-  await loaded();
+  await settle();
 
   tile(root, 'd-pending')?.querySelector<HTMLButtonElement>('button')?.click();
 
@@ -128,7 +125,7 @@ test('the build tile names who published and hands a revert back to the shell', 
     { recent: [], published: { at: Date.now() - 3600_000, by: 'Anna Berg' }, translations: null },
     { build: { state: 'live', commit_sha: 'def456', live_at: Date.now() - 3600_000 } },
   );
-  await loaded();
+  await settle();
 
   const built = tile(root, 'd-build');
   expect(built?.querySelector('.pill-live')).not.toBeNull();
@@ -146,14 +143,14 @@ test('a build this admin did not commit is not offered a revert', async () => {
     { recent: [], published: { at: Date.now() - 3600_000, by: 'Anna Berg' }, translations: null },
     { build: { state: 'live', live_at: Date.now() } },
   );
-  await loaded();
+  await settle();
 
   expect(tile(root, 'd-build')?.querySelector('.tile-actions')).toBeNull();
 });
 
 test('a recently edited row is named, addressed and says who and when', async () => {
   const root = show();
-  await loaded();
+  await settle();
 
   const rows = all(tile(root, 'd-recent') as ParentNode, '.recent li');
   expect(rows.map((li) => li.querySelector('a')?.getAttribute('href'))).toEqual([
@@ -173,7 +170,7 @@ test('a recently edited row is named, addressed and says who and when', async ()
 
 test('the translation tile counts what is missing and what is behind its source', async () => {
   const root = show({ recent: [], published: null, translations: HEALTH });
-  await loaded();
+  await settle();
 
   const lines = all(tile(root, 'd-tr') as ParentNode, '.locale-line');
   expect(lines.map((line) => line.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
@@ -195,7 +192,7 @@ test('the translation tile counts partly written and machine translated beside t
     ],
   };
   const root = show({ recent: [], published: null, translations: health });
-  await loaded();
+  await settle();
 
   const lines = all(tile(root, 'd-tr') as ParentNode, '.locale-line');
   expect(lines.map((line) => line.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
@@ -215,7 +212,7 @@ test('the translation tile counts partly written and machine translated beside t
 // One collection is *Show*; several are named, since a list is one collection's.
 test("the translation tile's Show lands on the list filtered to the language", async () => {
   const root = show({ recent: [], published: null, translations: HEALTH });
-  await loaded();
+  await settle();
 
   const lines = all(tile(root, 'd-tr') as ParentNode, '.locale-line');
   expect(lines[0]?.querySelector('a')).toBeNull();
@@ -233,7 +230,7 @@ test('a language owed in several collections gets a link per list', async () => 
     locales: [HEALTH.locales[0], { ...HEALTH.locales[1], where: ['listings', 'pages'] }],
   };
   const root = show({ recent: [], published: null, translations: health });
-  await loaded();
+  await settle();
 
   const line = all(tile(root, 'd-tr') as ParentNode, '.locale-line')[1];
   expect(Array.from(line?.querySelectorAll('a') ?? [], (a) => a.textContent)).toEqual([
@@ -245,14 +242,14 @@ test('a language owed in several collections gets a link per list', async () => 
 // The mockup's quick actions: the same New entry dialog the list opens, one button a collection.
 test('a quick action opens the New entry dialog for that collection', async () => {
   const root = show(undefined, { collections: ['pages', 'listings'] });
-  await loaded();
+  await settle();
 
   expect(all(root, '.quick .btn').map((b) => b.textContent?.trim())).toEqual([
     'New page',
     'New listing',
   ]);
   (all(root, '.quick .btn')[1] as HTMLButtonElement).click();
-  await loaded();
+  await settle();
 
   expect(root.querySelector('.dialog h2')?.textContent).toBe('New listing');
   expect(root.querySelector<HTMLInputElement>('.dialog input#new-title')).not.toBeNull();
@@ -265,10 +262,10 @@ test('a quick action creates in the site default language', async () => {
     { recent: [], published: null, translations: null, locales: ['en', 'de'], defaultLocale: 'de' },
     { collections: ['listings'] },
   );
-  await loaded();
+  await settle();
 
   (all(root, '.quick .btn')[0] as HTMLButtonElement).click();
-  await loaded();
+  await settle();
 
   expect(root.querySelector<HTMLSelectElement>('.dialog select#new-locale')?.value).toBe('de');
 });
@@ -276,7 +273,7 @@ test('a quick action creates in the site default language', async () => {
 // Every site has a locale folder; a site with one language has nothing to report about it.
 test('a one-language site is drawn no translation tile at all', async () => {
   const root = show();
-  await loaded();
+  await settle();
 
   expect(tile(root, 'd-tr')).toBeNull();
 });
@@ -294,7 +291,7 @@ test('every id on the filled dashboard is unique', async () => {
       build: { commit_sha: 'c0ffee11', state: 'live', live_at: Date.now() - 7_000_000 },
     },
   );
-  await loaded();
+  await settle();
 
   const ids = all(root, '[id]').map((el) => el.id);
   expect(ids.length).toBeGreaterThan(4);
@@ -335,7 +332,7 @@ test('failed dashboard reads are unavailable rather than empty and retry recover
       onretryBuild: () => {},
     },
   });
-  await loaded();
+  await settle();
 
   expect(tile(document.body, 'd-recent')?.textContent).toContain('Recently edited is unavailable');
   expect(tile(document.body, 'd-recent')?.textContent).not.toContain('Nothing has been edited yet');
@@ -343,7 +340,7 @@ test('failed dashboard reads are unavailable rather than empty and retry recover
 
   tile(document.body, 'd-recent')?.querySelector<HTMLButtonElement>('button')?.click();
   tile(document.body, 'd-act')?.querySelector<HTMLButtonElement>('button')?.click();
-  await loaded();
+  await settle();
 
   expect(tile(document.body, 'd-recent')?.textContent).toContain('The Mill House');
   expect(tile(document.body, 'd-act')?.textContent).toContain('Nothing has been recorded yet');
@@ -428,7 +425,7 @@ test('the dashboard switches its live chrome and dates without rereading data', 
     },
     'de',
   );
-  await loaded();
+  await settle();
 
   expect(root.querySelector('h1')?.textContent).toBe('Übersicht');
   expect(tile(root, 'd-pending')?.textContent?.replace(/\s+/g, ' ')).toContain('2 Änderungen');
@@ -507,20 +504,20 @@ const text = (el: Element | null | undefined) => el?.textContent?.replace(/\s+/g
 const sourceCalls = () =>
   vi.mocked(fetch).mock.calls.filter(([url]) => url === '/admin/api/sources');
 const openSources = async (root: HTMLElement) => {
-  await loaded();
+  await settle();
   tile(root, 'd-src')?.querySelector<HTMLButtonElement>('.btn-primary')?.click();
   flushSync();
   return root.querySelector('.source-dialog');
 };
 const confirm = async (root: HTMLElement) => {
   root.querySelector<HTMLButtonElement>('.source-dialog button[type="submit"]')?.click();
-  await loaded();
-  await loaded();
+  await settle();
+  await settle();
 };
 
 test("an editor's dashboard neither asks about nor draws source languages", async () => {
   const root = showSources([UNRECORDED], undefined, { role: 'editor' });
-  await loaded();
+  await settle();
 
   expect(sourceCalls()).toEqual([]);
   expect(tile(root, 'd-src')).toBeNull();
@@ -528,7 +525,7 @@ test("an editor's dashboard neither asks about nor draws source languages", asyn
 
 test('an owner with nothing left to record is drawn no tile', async () => {
   const root = showSources([{ base: 'b1', entries: [] }]);
-  await loaded();
+  await settle();
 
   expect(sourceCalls()).toHaveLength(1);
   expect(tile(root, 'd-src')).toBeNull();
@@ -593,7 +590,7 @@ test('a moved repository refuses, and Review again reads the list afresh', async
     root.querySelector<HTMLButtonElement>('.source-dialog button[type="submit"]')?.disabled,
   ).toBe(true);
   alert?.querySelector<HTMLButtonElement>('button')?.click();
-  await loaded();
+  await settle();
 
   expect(sourceCalls().filter(([, init]) => init?.method !== 'POST')).toHaveLength(2);
   expect(root.querySelector('.source-dialog [role="alert"]')).toBeNull();

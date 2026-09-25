@@ -3,6 +3,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import { invalidateEntryDirectory } from '../entry-directory.js';
 import type { UiLocale } from '../i18n.js';
+import { settle } from '../test-helpers.fixture.js';
 import Menus, { type Menu } from './Menus.svelte';
 
 // Not tested: the Fields dispatch (glue) or styling.
@@ -123,7 +124,7 @@ test('an unavailable catalogue does not label stored menu targets as missing', a
     uiLocale: 'en' as UiLocale,
   });
   app = mount(Menus, { target: document.body, props });
-  await loaded();
+  await settle();
 
   expect(document.body.textContent).not.toContain('Page missing');
   expect(q('.menu-directory-error').textContent).toContain('Page details are unavailable');
@@ -133,17 +134,12 @@ test('an unavailable catalogue does not label stored menu targets as missing', a
   expect(q('.menu-directory-error').textContent).toContain('Seitendetails sind nicht verfügbar');
   expect(attempts).toBe(1);
   q<HTMLButtonElement>('.menu-directory-error button').click();
-  await loaded();
+  await settle();
 
   expect(document.body.textContent).toContain('Seite fehlt');
   expect(document.querySelector('.menu-directory-error')).toBeNull();
 });
 
-/** The list has been read, and whatever it changed on screen has settled. */
-const loaded = async () => {
-  await new Promise((r) => setTimeout(r, 0));
-  flushSync();
-};
 const q = <T extends Element = HTMLElement>(sel: string): T => {
   const found = document.querySelector<T>(sel);
   if (!found) throw new Error(`no ${sel}`);
@@ -177,7 +173,7 @@ const item = (over: Record<string, unknown>) => ({
 });
 /** The persistent library reads its entries on mount. */
 const openAdd = async () => {
-  await loaded();
+  await settle();
 };
 /** The library's sections start closed. */
 const openSections = () => {
@@ -259,7 +255,7 @@ test('a custom link is written as a url item, and a scheme that runs code is ref
 
   // An address has no title to fall back on, so the row opens for its label at once.
   expect(document.querySelector('.nav-library')).not.toBeNull();
-  await loaded();
+  await settle();
   expect(document.activeElement?.id).toBe('f-menus-ed-label');
   type('#f-menus-ed-label', 'Book a viewing');
   click(q('.item-editor .actions .btn-primary'));
@@ -283,7 +279,7 @@ test('an item the site will skip says so on the row', async () => {
     }),
     item({ _id: 'c3d4e5f6', label: 'Gone', link: { type: 'entry', ref: 'pages/nowhere' } }),
   ]);
-  await loaded();
+  await settle();
 
   const chips = Array.from(document.querySelectorAll<HTMLElement>('.menu-item .badge-warn'));
   expect(chips.map((b) => b.textContent)).toEqual(['Not in EN', 'Hidden', 'Page missing']);
@@ -312,7 +308,7 @@ test('the move buttons reorder a level, and the ends of it cannot be moved off',
   click(action('Listings', 'Move Listings up'));
   expect(labels()).toEqual(['Listings', 'Home', 'Contact']);
   expect(document.querySelector('.row-menu .menu')).toBeNull();
-  await loaded();
+  await settle();
   expect(document.activeElement).toBe(byLabel('Actions for Listings'));
   click(action('Listings', 'Move Listings down'));
   expect(labels()).toEqual(['Home', 'Listings', 'Contact']);
@@ -389,7 +385,7 @@ test('a row with sub-items is not removed until somebody says so; a leaf goes at
 
 test('the label typed over the page title is what gets stored, and Cancel puts the row back', async () => {
   show([item({ label: '', link: { type: 'entry', ref: 'pages/contact' } })]);
-  await loaded();
+  await settle();
 
   click(rowOpen());
   expect(rowOpen().getAttribute('aria-expanded')).toBe('true');
@@ -442,13 +438,13 @@ const laidOut = () =>
     const rows = Array.from(document.querySelectorAll(ROW));
     return new DOMRect(0, rows.indexOf(row) * 60, 400, 60);
   });
-const settle = async () => {
+const pause = async () => {
   await new Promise((r) => setTimeout(r, 40));
   flushSync();
 };
 const key = async (target: Element | Document, code: string) => {
   target.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true, cancelable: true }));
-  await settle();
+  await pause();
 };
 const grip = (name: string) =>
   q<HTMLButtonElement>(`[aria-label="Reorder ${name} — press space, then the arrow keys"]`);
@@ -495,7 +491,7 @@ const pointer = async (target: Element | Document, type: string, y: number, x = 
       clientY: y,
     }),
   );
-  await settle();
+  await pause();
 };
 const mouseMove = async (name: string, by: number) => {
   const handle = grip(name);
@@ -531,7 +527,7 @@ test('the library stays visible, preserves search, and marks pages already in an
       ],
     }),
   ]);
-  await loaded();
+  await settle();
   expect(document.querySelector('.nav-library')).not.toBeNull();
   expect(document.activeElement?.id).not.toBe('f-menus-pick-q');
   openSections();
@@ -554,7 +550,7 @@ test('the library reflects removal and the active menu when switching tabs', asy
     [item({ label: 'Contact', link: { type: 'entry', ref: 'pages/contact' } })],
     ['header', 'footer'],
   );
-  await loaded();
+  await settle();
   openSections();
   expect(byLabel('Add Contact again').textContent).toContain('In menu');
   click(action('Contact', 'Remove Contact'));
@@ -762,11 +758,11 @@ const boxes = () => Array.from(document.querySelectorAll<HTMLInputElement>('.men
 
 test('the second language types one label a row and cannot move anything', async () => {
   show(translated, ['header'], true);
-  await loaded();
+  await settle();
 
   expect(boxes().map((b) => b.value)).toEqual(['Kontakt', 'Angebote', '']);
-  expect(document.querySelectorAll('.grip')).toHaveLength(0);
-  expect(document.querySelectorAll('.item-actions')).toHaveLength(0);
+  expect(document.querySelector('button[aria-label^="Reorder "]')).toBeNull();
+  expect(document.querySelector('button[aria-label^="Actions for "]')).toBeNull();
   expect(document.querySelector('.nav-library')).toBeNull();
 
   type('#f-menus-lbl-a1b2c3d4', 'Kontakt und Anfahrt');
@@ -796,7 +792,7 @@ test('the second language types one label a row and cannot move anything', async
 
 test('a label box is named by the page it points at, and empty means that page’s own title', async () => {
   show(translated, ['header'], true);
-  await loaded();
+  await settle();
 
   const [, , child] = boxes();
   expect(
@@ -811,7 +807,7 @@ test('a label box is named by the page it points at, and empty means that page�
 
 test('German label fallbacks and hidden status belong to German, with clear source-language guidance', async () => {
   show(translated, ['header'], true, 'de');
-  await loaded();
+  await settle();
   expect(boxes()[2]?.placeholder).toBe('Das Mühlenhaus');
   expect(document.querySelector('.menu-item .badge-warn')).toBeNull();
   expect(q('.nav-structure-heading h2').textContent).toBe('German menu labels');
@@ -821,7 +817,7 @@ test('German label fallbacks and hidden status belong to German, with clear sour
 
 test('language visibility is an optional exception and Cancel restores the original setting', async () => {
   show([item({ label: 'Contact', link: { type: 'entry', ref: 'pages/contact' } })]);
-  await loaded();
+  await settle();
   click(rowOpen());
   const shownIn = q<HTMLSelectElement>('#f-menus-ed-loc');
   expect(shownIn.selectedOptions[0]?.textContent).toBe('All languages');
@@ -837,7 +833,7 @@ test('language visibility is an optional exception and Cancel restores the origi
 test('a live interface switch preserves the reordered tree, open editor, focus and local draft', async () => {
   laidOut();
   show(three());
-  await loaded();
+  await settle();
 
   await key(grip('Home'), 'Space');
   await until(lifted, 'lifted');
@@ -882,7 +878,7 @@ test('a live interface switch preserves the reordered tree, open editor, focus a
 
 test('retained add feedback retranslates without rereading the page directory', async () => {
   show();
-  await loaded();
+  await settle();
   pickRow('pages/contact');
   expect(q('[role="status"]').textContent).toContain('Contact added to Header.');
   const requests = vi.mocked(fetch).mock.calls.length;

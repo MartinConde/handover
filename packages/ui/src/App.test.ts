@@ -4,7 +4,7 @@ import App from './App.svelte';
 import { SIX, sixLanguageRows, sixLanguages } from './editor/six-languages.fixture';
 import { type CollectionLabels, rememberUiLocale, type UiLocale } from './i18n.js';
 import Screen from './shell/screen.fixture.svelte';
-import { settle } from './test-helpers.fixture.js';
+import { HELD, isLock, settle } from './test-helpers.fixture.js';
 
 let app: ReturnType<typeof mount>;
 const session = (role: 'owner' | 'editor' = 'owner') => ({
@@ -36,19 +36,38 @@ const pendingEntry = (key: string) => ({
 });
 // What the build endpoint answers, per test; `{}` is a site with no build status at all.
 let buildBody: Record<string, unknown> = {};
+// The shell's own reads; each router answers only what its test is about.
+const common = (url: string) => {
+  if (url === '/admin/api/ping')
+    return Response.json({ ok: true, collections: ['listings', 'pages'] });
+  if (url === '/admin/api/build') return Response.json(buildBody);
+  if (url === '/admin/api/dashboard')
+    return Response.json({ recent: [], published: null, translations: null });
+  if (url.startsWith('/admin/api/activity')) return Response.json({ events: [], cursor: null });
+  if (url === '/admin/api/members') return Response.json({ members: [] });
+};
+const entryAnswer = (over: Record<string, unknown> = {}) => ({
+  fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
+  blocks: {},
+  data: { title: 'The Mill House' },
+  pending: [],
+  published: ['en'],
+  problems: [],
+  locales: ['en'],
+  defaultLocale: 'en',
+  sourceLocale: 'en',
+  offered: ['en'],
+  translations: {},
+  stale: [],
+  drift: [],
+  ...over,
+});
 const drafts = (...keys: string[]) =>
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
-      if (url === '/admin/api/ping')
-        return Response.json({ ok: true, collections: ['listings', 'pages'] });
       if (url.startsWith('/admin/api/entries/')) return Response.json({ entries: [] });
-      if (url.startsWith('/admin/api/activity')) return Response.json({ events: [], cursor: null });
-      if (url === '/admin/api/members') return Response.json({ members: [] });
-      if (url === '/admin/api/build') return Response.json(buildBody);
-      if (url === '/admin/api/dashboard')
-        return Response.json({ recent: [], published: null, translations: null });
-      return Response.json({ entries: keys.map(pendingEntry) });
+      return common(url) ?? Response.json({ entries: keys.map(pendingEntry) });
     }),
   );
 afterEach(() => {
@@ -167,10 +186,7 @@ test('a status-only preference save switches live and writes the installation-sc
       calls.push({ url, init });
       if (url === '/admin/api/account') return Response.json({ hasPassword: true, sessions: [] });
       if (url === '/admin/api/auth/update-user') return Response.json({ status: true });
-      if (url === '/admin/api/build') return Response.json({});
-      if (url === '/admin/api/dashboard')
-        return Response.json({ recent: [], published: null, translations: null });
-      return Response.json({ entries: [] });
+      return common(url) ?? Response.json({ entries: [] });
     }),
   );
   history.replaceState({}, '', '/admin/account');
@@ -201,10 +217,7 @@ test('an uncertain save reconciles before changing the confirmed language', asyn
         ping += 1;
         return Response.json({ ...session(), user: { ...session().user, uiLocale: 'de' } });
       }
-      if (url === '/admin/api/build') return Response.json({});
-      if (url === '/admin/api/dashboard')
-        return Response.json({ recent: [], published: null, translations: null });
-      return Response.json({ entries: [] });
+      return common(url) ?? Response.json({ entries: [] });
     }),
   );
   const root = show(session(), '/admin/account');
@@ -236,8 +249,7 @@ test.each([
       }
       if (url === '/admin/api/ping') return pingResponse.clone();
       if (url === '/admin/api/account') return Response.json({ hasPassword: true, sessions: [] });
-      if (url === '/admin/api/build') return Response.json({});
-      return Response.json({ entries: [] });
+      return common(url) ?? Response.json({ entries: [] });
     }),
   );
   const root = show(session(), start);
@@ -275,11 +287,7 @@ test('an invalid later pending envelope retains the last-known count', async () 
         draftsReads += 1;
         return Response.json(draftsReads === 1 ? { entries: [pendingEntry('pages/home')] } : null);
       }
-      if (url === '/admin/api/build') return Response.json({});
-      if (url === '/admin/api/dashboard')
-        return Response.json({ recent: [], published: null, translations: null });
-      if (url === '/admin/api/activity') return Response.json({ events: [] });
-      return Response.json({});
+      return common(url) ?? Response.json({});
     }),
   );
   const root = show(session());
@@ -302,10 +310,7 @@ test('a failed preference save keeps the confirmed language and choice', async (
     vi.fn(async (url: string) => {
       if (url === '/admin/api/auth/update-user') return new Response('', { status: 500 });
       if (url === '/admin/api/account') return Response.json({ hasPassword: true, sessions: [] });
-      if (url === '/admin/api/build') return Response.json({});
-      if (url === '/admin/api/dashboard')
-        return Response.json({ recent: [], published: null, translations: null });
-      return Response.json({ entries: [] });
+      return common(url) ?? Response.json({ entries: [] });
     }),
   );
   const root = show(session(), '/admin/account');
@@ -326,10 +331,7 @@ test('a newly signed-in account preference replaces the device hint before the s
     vi.fn(async (url: string) => {
       if (url === '/admin/api/ping')
         return Response.json({ ...session(), user: { ...session().user, uiLocale: 'de' } });
-      if (url === '/admin/api/build') return Response.json({});
-      if (url === '/admin/api/dashboard')
-        return Response.json({ recent: [], published: null, translations: null });
-      return Response.json({ entries: [] });
+      return common(url) ?? Response.json({ entries: [] });
     }),
   );
   const root = show(undefined);
@@ -444,10 +446,7 @@ test('a blocked cookie read does not prevent a newly signed-in preference from l
     vi.fn(async (url: string) => {
       if (url === '/admin/api/ping')
         return Response.json({ ...session(), user: { ...session().user, uiLocale: 'de' } });
-      if (url === '/admin/api/build') return Response.json({});
-      if (url === '/admin/api/dashboard')
-        return Response.json({ recent: [], published: null, translations: null });
-      return Response.json({ entries: [] });
+      return common(url) ?? Response.json({ entries: [] });
     }),
   );
   try {
@@ -519,19 +518,16 @@ test('a remembered collapsed sidebar opens collapsed', () => {
 test('the indicator names the oldest change and how many are held', async () => {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (url: string) => {
-      if (url === '/admin/api/ping')
-        return Response.json({ ok: true, collections: ['listings', 'pages'] });
-      if (url === '/admin/api/build') return Response.json({});
-      if (url === '/admin/api/dashboard')
-        return Response.json({ recent: [], published: null, translations: null });
-      return Response.json({
-        entries: [
-          pendingEntry('listings/mill-house'),
-          { ...pendingEntry('pages/home'), held_by: { id: 'u2', name: 'Anna' } },
-        ],
-      });
-    }),
+    vi.fn(
+      async (url: string) =>
+        common(url) ??
+        Response.json({
+          entries: [
+            pendingEntry('listings/mill-house'),
+            { ...pendingEntry('pages/home'), held_by: { id: 'u2', name: 'Anna' } },
+          ],
+        }),
+    ),
   );
   const root = show(session());
   await new Promise((r) => setTimeout(r, 0));
@@ -574,11 +570,7 @@ test('without a session only the login form renders', () => {
 test('an unavailable session check is not presented as signed out and can be retried', async () => {
   const fetchMock = vi.fn(async (url: string) => {
     if (url === '/admin/api/ping') return Response.json(session());
-    if (url === '/admin/api/build') return Response.json({});
-    if (url === '/admin/api/dashboard')
-      return Response.json({ recent: [], published: null, translations: null });
-    if (url === '/admin/api/activity') return Response.json({ events: [] });
-    return Response.json({ entries: [] });
+    return common(url) ?? Response.json({ entries: [] });
   });
   vi.stubGlobal('fetch', fetchMock);
   const root = show(undefined);
@@ -612,8 +604,7 @@ test('an unidentified legacy 404 stays a generic localized entry-load failure', 
     vi.fn(async (url: string) => {
       if (url === '/admin/api/entries/pages/missing')
         return new Response('Not found', { status: 404 });
-      if (url === '/admin/api/build') return Response.json({});
-      return Response.json({ entries: [] });
+      return common(url) ?? Response.json({ entries: [] });
     }),
   );
   const root = show(session(), '/admin/c/pages/missing');
@@ -640,8 +631,7 @@ test('an entry whose files disagree about their source opens the recovery panel,
           },
           { status: 409, headers: { 'x-handover-error-code': 'ENTRY_SOURCE_CONFLICT' } },
         );
-      if (url === '/admin/api/build') return Response.json({});
-      return Response.json({ entries: [] });
+      return common(url) ?? Response.json({ entries: [] });
     }),
   );
   const root = show(session(), '/admin/c/pages/home');
@@ -694,35 +684,27 @@ test.each([
           });
         return Response.json({});
       }
-      if (url.startsWith('/admin/api/locks/'))
-        return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
-      if (url === '/admin/api/build') return Response.json({});
+      if (isLock(url)) return Response.json(HELD);
       if (url === '/admin/api/drafts') return Response.json({ entries: [] });
       if (url === '/admin/api/entries/listings') return Response.json({ entries: [] });
-      return Response.json({});
+      return common(url) ?? Response.json({});
     });
     vi.stubGlobal('fetch', fetchMock);
     const root = show(session(), '/admin/c/listings/twoMissing');
-    const settle = async () => {
-      for (let i = 0; i < 4; i++) {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-        flushSync();
-      }
-    };
     await vi.dynamicImportSettled();
-    await settle();
+    await settle(4);
 
     const create = root.querySelector<HTMLButtonElement>('button.btn-create-all');
     expect(create?.textContent).toContain('Create all');
     create?.click();
-    await settle();
+    await settle(4);
 
     const failure = root.querySelector('.pane [role="alert"]');
     expect(failure?.textContent).toContain('could not be read again');
     expect(root.textContent).not.toContain('Could not load the entry (500)');
     const writesBeforeRetry = createCalls;
     failure?.querySelector<HTMLButtonElement>('button')?.click();
-    await settle();
+    await settle(4);
 
     expect(entryLoads).toBe(3);
     expect(createCalls).toBe(writesBeforeRetry);
@@ -735,10 +717,10 @@ test.each([
 
     history.pushState({}, '', '/admin/c/listings');
     dispatchEvent(new Event('handover:navigate'));
-    await settle();
+    await settle(4);
     history.pushState({}, '', '/admin/c/listings/twoMissing');
     dispatchEvent(new Event('handover:navigate'));
-    await settle();
+    await settle(4);
     expect(entryLoads).toBe(4);
   },
 );
@@ -752,20 +734,16 @@ test('choosing a source on the recovery panel opens the entry with the notice', 
     }
     if (url === '/admin/api/entries/pages/home')
       return chosen
-        ? Response.json({
-            fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
-            blocks: {},
-            data: { title: 'Startseite' },
-            translations: { en: { title: 'Home' } },
-            pending: ['en', 'de'],
-            problems: [],
-            locales: ['en', 'de'],
-            defaultLocale: 'en',
-            sourceLocale: 'de',
-            offered: ['en', 'de'],
-            stale: [],
-            drift: [],
-          })
+        ? Response.json(
+            entryAnswer({
+              data: { title: 'Startseite' },
+              translations: { en: { title: 'Home' } },
+              pending: ['en', 'de'],
+              locales: ['en', 'de'],
+              sourceLocale: 'de',
+              offered: ['en', 'de'],
+            }),
+          )
         : Response.json(
             {
               code: 'ENTRY_SOURCE_CONFLICT',
@@ -776,10 +754,8 @@ test('choosing a source on the recovery panel opens the entry with the notice', 
             },
             { status: 409, headers: { 'x-handover-error-code': 'ENTRY_SOURCE_CONFLICT' } },
           );
-    if (url.startsWith('/admin/api/locks/'))
-      return Response.json({ held_by: null, mine: true, expires_at: 1755864120000 });
-    if (url === '/admin/api/build') return Response.json({});
-    return Response.json({ entries: [] });
+    if (isLock(url)) return Response.json(HELD);
+    return common(url) ?? Response.json({ entries: [] });
   });
   vi.stubGlobal('fetch', fetchMock);
   const root = show(session(), '/admin/c/pages/home');
@@ -807,11 +783,7 @@ test('a failed pending read is unknown rather than fully published and retry rec
           ? new Response('Repository unavailable', { status: 503 })
           : Response.json({ entries: [pendingEntry('pages/home')] });
       }
-      if (url === '/admin/api/build') return Response.json({});
-      if (url === '/admin/api/dashboard')
-        return Response.json({ recent: [], published: null, translations: null });
-      if (url === '/admin/api/activity') return Response.json({ events: [] });
-      return Response.json({});
+      return common(url) ?? Response.json({});
     }),
   );
   const root = show(session());
@@ -838,10 +810,7 @@ test('malformed shell status reads become retryable errors', async () => {
     vi.fn(async (url: string) => {
       if (url === '/admin/api/drafts' || url === '/admin/api/build')
         return new Response('<html>not json</html>', { status: 200 });
-      if (url === '/admin/api/dashboard')
-        return Response.json({ recent: [], published: null, translations: null });
-      if (url === '/admin/api/activity') return Response.json({ events: [] });
-      return Response.json({});
+      return common(url) ?? Response.json({});
     }),
   );
   const root = show(session());
@@ -865,10 +834,7 @@ test.each([
         return Response.json({ entries: [pendingEntry('pages/home')] });
       if (url === '/admin/api/build')
         return Response.json({ state: 'live', commit_sha: 'abc123', live_at: Date.now() });
-      if (url === '/admin/api/dashboard')
-        return Response.json({ recent: [], published: null, translations: null });
-      if (url === '/admin/api/activity') return Response.json({ events: [] });
-      return Response.json({});
+      return common(url) ?? Response.json({});
     }),
   );
   const root = show(session());
@@ -973,9 +939,7 @@ test('a labelled collection is named in the interface language in the sidebar an
       if (url === '/admin/api/ping')
         return Response.json({ ok: true, collections: ['listings', 'pages'], collectionLabels });
       if (url.startsWith('/admin/api/entries/')) return Response.json({ entries: [] });
-      if (url === '/admin/api/dashboard')
-        return Response.json({ recent: [], published: null, translations: null });
-      return Response.json({ entries: [] });
+      return common(url) ?? Response.json({ entries: [] });
     }),
   );
   const root = show({ ...session(), collectionLabels }, '/admin/c/listings', 'de');
@@ -1064,24 +1028,15 @@ test('a global path opens the entry editor on the globals collection', async () 
     'fetch',
     vi.fn(async (url: string) => {
       if (url === '/admin/api/entries/globals/site')
-        return Response.json({
-          fields: [{ path: ['footerText'], label: 'Footer text', type: 'text', required: true }],
-          blocks: {},
-          data: { footerText: 'Coastal homes since 2009' },
-          pending: [],
-          problems: [],
-          locales: ['en'],
-          defaultLocale: 'en',
-          sourceLocale: 'en',
-          offered: ['en'],
-          translations: {},
-          stale: [],
-          drift: [],
-          singleton: true,
-          label: 'Site details',
-        });
-      if (url === '/admin/api/build') return Response.json({});
-      return Response.json({ entries: [] });
+        return Response.json(
+          entryAnswer({
+            fields: [{ path: ['footerText'], label: 'Footer text', type: 'text', required: true }],
+            data: { footerText: 'Coastal homes since 2009' },
+            singleton: true,
+            label: 'Site details',
+          }),
+        );
+      return common(url) ?? Response.json({ entries: [] });
     }),
   );
   const root = show(session('owner'), '/admin/site/site');
@@ -1102,27 +1057,11 @@ test('the top bar names the open entry under its collection and follows its titl
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
-      if (url === '/admin/api/entries/listings/mill-house')
-        return Response.json({
-          fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
-          blocks: {},
-          data: { title: 'The Mill House' },
-          pending: [],
-          problems: [],
-          locales: ['en'],
-          defaultLocale: 'en',
-          sourceLocale: 'en',
-          offered: ['en'],
-          translations: {},
-          stale: [],
-          drift: [],
-        });
-      if (url === '/admin/api/build') return Response.json({});
-      if (url.startsWith('/admin/api/locks/'))
-        return Response.json({ held_by: null, mine: true, expires_at: 1755864120000 });
+      if (url === '/admin/api/entries/listings/mill-house') return Response.json(entryAnswer());
+      if (isLock(url)) return Response.json(HELD);
       if (url.startsWith('/admin/api/drafts/') && init?.method === 'PUT')
         return Response.json({ updated_at: 1755864000000, pending: true, problems: [] });
-      return Response.json({ entries: [] });
+      return common(url) ?? Response.json({ entries: [] });
     }),
   );
   const root = show(session(), '/admin/c/listings/mill-house');
@@ -1162,29 +1101,13 @@ test('a save that makes an entry pending moves the count in the top bar', async 
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
-      if (url === '/admin/api/entries/listings/mill-house')
-        return Response.json({
-          fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
-          blocks: {},
-          data: { title: 'The Mill House' },
-          pending: [],
-          problems: [],
-          locales: ['en'],
-          defaultLocale: 'en',
-          sourceLocale: 'en',
-          offered: ['en'],
-          translations: {},
-          stale: [],
-          drift: [],
-        });
-      if (url === '/admin/api/build') return Response.json({});
-      if (url.startsWith('/admin/api/locks/'))
-        return Response.json({ held_by: null, mine: true, expires_at: 1755864120000 });
+      if (url === '/admin/api/entries/listings/mill-house') return Response.json(entryAnswer());
+      if (isLock(url)) return Response.json(HELD);
       if (url.startsWith('/admin/api/drafts/') && init?.method === 'PUT') {
         waiting = ['listings/mill-house'];
         return Response.json({ updated_at: 1755864000000, pending: true, problems: [] });
       }
-      return Response.json({ entries: waiting.map(pendingEntry) });
+      return common(url) ?? Response.json({ entries: waiting.map(pendingEntry) });
     }),
   );
   const root = show(session(), '/admin/c/listings/mill-house');
@@ -1228,39 +1151,23 @@ test('discarding a draft loads the entry again instead of leaving the old one on
       discarded = true;
       return Response.json({});
     }
-    if (url.startsWith('/admin/api/locks/'))
-      return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
+    if (isLock(url)) return Response.json(HELD);
     if (url === '/admin/api/entries/listings/mill-house') {
       entryLoads += 1;
-      return Response.json({
-        fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
-        blocks: {},
-        data: { title: entryLoads === 1 ? 'Draft title' : 'Repository title' },
-        revisions: { en: entryLoads === 1 ? 'opened' : 'reloaded' },
-        pending: discarded ? [] : ['en'],
-        published: ['en'],
-        problems: [],
-        locales: ['en'],
-        defaultLocale: 'en',
-        sourceLocale: 'en',
-        offered: ['en'],
-        translations: {},
-        stale: [],
-        drift: [],
-      });
+      return Response.json(
+        entryAnswer({
+          data: { title: entryLoads === 1 ? 'Draft title' : 'Repository title' },
+          revisions: { en: entryLoads === 1 ? 'opened' : 'reloaded' },
+          pending: discarded ? [] : ['en'],
+        }),
+      );
     }
     return Response.json({});
   });
   vi.stubGlobal('fetch', fetchMock);
-  const settle = async () => {
-    for (let i = 0; i < 3; i++) {
-      await new Promise((r) => setTimeout(r, 0));
-      flushSync();
-    }
-  };
   const root = show(session(), '/admin/c/listings/mill-house');
   await vi.dynamicImportSettled();
-  await settle();
+  await settle(3);
   expect(entryLoads).toBe(1);
   const input = root.querySelector<HTMLInputElement>('#f-title');
   if (!input) throw new Error(`Editor did not open: ${root.textContent}`);
@@ -1271,11 +1178,11 @@ test('discarding a draft loads the entry again instead of leaving the old one on
   root.querySelector<HTMLButtonElement>('button.indicator')?.click();
   flushSync();
   root.querySelector<HTMLButtonElement>('.drawer-foot .btn-primary')?.click();
-  await settle();
+  await settle(3);
   root.querySelector<HTMLButtonElement>('.change-row.is-blocked .change-actions .btn')?.click();
   flushSync();
   root.querySelector<HTMLButtonElement>('.dialog .btn-danger')?.click();
-  await settle();
+  await settle(3);
 
   expect(mutationOrder).toEqual(['save:Final local title', 'publish', 'discard']);
   expect(entryLoads).toBe(2);
@@ -1288,9 +1195,7 @@ const queueShell = (slug: string, { offline = false } = {}) => {
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
     if (url === '/admin/api/drafts') return Response.json({ entries: [] });
-    if (url === '/admin/api/build') return Response.json({});
-    if (url.startsWith('/admin/api/locks/'))
-      return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
+    if (isLock(url)) return Response.json(HELD);
     if (url.startsWith('/admin/api/source/')) return Response.json({ changed: {} });
     if (url === `/admin/api/drafts/${slug}/es` && init?.method === 'POST') {
       state.created = true;
@@ -1316,7 +1221,7 @@ const queueShell = (slug: string, { offline = false } = {}) => {
       if (state.created) entry.translations.es = { title: 'Harbour House' };
       return Response.json(entry);
     }
-    return Response.json({});
+    return common(url) ?? Response.json({});
   });
   vi.stubGlobal('fetch', fetchMock);
   return state;
@@ -1379,14 +1284,12 @@ test('the to-do run crosses between the Content and SEO tabs without losing its 
     vi.fn(async (url: string) => {
       if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
       if (url === '/admin/api/drafts') return Response.json({ entries: [] });
-      if (url === '/admin/api/build') return Response.json({});
-      if (url.startsWith('/admin/api/locks/'))
-        return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
+      if (isLock(url)) return Response.json(HELD);
       if (url.startsWith('/admin/api/source/')) return Response.json({ changed: {} });
       if (url === '/admin/api/entries/listings')
         return Response.json({ entries: sixLanguageRows(), locales: SIX });
       if (url === '/admin/api/entries/listings/structured') return Response.json(opened.entry);
-      return Response.json({});
+      return common(url) ?? Response.json({});
     }),
   );
   history.replaceState({}, '', '/admin/c/listings/structured?queue=de&owed=missing');
@@ -1416,12 +1319,10 @@ test('the problem count crosses to the SEO tab and lands on the field it is coun
     vi.fn(async (url: string) => {
       if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
       if (url === '/admin/api/drafts') return Response.json({ entries: [] });
-      if (url === '/admin/api/build') return Response.json({});
-      if (url.startsWith('/admin/api/locks/'))
-        return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
+      if (isLock(url)) return Response.json(HELD);
       if (url.startsWith('/admin/api/source/')) return Response.json({ changed: {} });
       if (url === '/admin/api/entries/listings/structured') return Response.json(opened.entry);
-      return Response.json({});
+      return common(url) ?? Response.json({});
     }),
   );
   const root = show(session(), '/admin/c/listings/structured');
@@ -1442,7 +1343,6 @@ test('a running build says so in words, inside a live region', async () => {
   await settle();
 
   const region = root.querySelector('.topbar [role="status"]');
-  expect(region?.querySelector('.pill')?.className).toContain('pill-building');
   expect(region?.textContent).toContain('Building…');
   // The elapsed time is out of the live region's reach, or every tick says the pill again.
   expect(root.querySelector('.topbar .pill .detail')?.getAttribute('aria-hidden')).toBe('true');
@@ -1464,7 +1364,6 @@ test('a failed build says so and offers a revert of that commit', async () => {
   await settle();
 
   const pill = root.querySelector('.topbar .pill');
-  expect(pill?.className).toContain('pill-failed');
   expect(pill?.textContent).toContain('Build failed');
   pill?.querySelector<HTMLButtonElement>('.btn-link')?.click();
   flushSync();
@@ -1495,7 +1394,6 @@ test('a live build says since when', async () => {
   await settle();
 
   const pill = root.querySelector('.topbar .pill');
-  expect(pill?.className).toContain('pill-live');
   expect(pill?.textContent?.replace(/\s+/g, ' ').trim()).toBe('Live since 14:02');
 });
 
@@ -1528,7 +1426,7 @@ test('a successful commit refreshes a live build and polls only until it settles
   const root = show(session(), '/admin/site/redirects');
   await vi.advanceTimersByTimeAsync(0);
   flushSync();
-  expect(root.querySelector('.topbar .pill')?.className).toContain('pill-live');
+  expect(root.querySelector('.topbar .pill')?.textContent).toContain('Live');
 
   root.querySelector<HTMLButtonElement>('.list-toolbar .btn-primary')?.click();
   flushSync();
@@ -1546,12 +1444,12 @@ test('a successful commit refreshes a live build and polls only until it settles
   await vi.advanceTimersByTimeAsync(0);
   flushSync();
 
-  expect(root.querySelector('.topbar .pill')?.className).toContain('pill-building');
+  expect(root.querySelector('.topbar .pill')?.textContent).toContain('Building…');
   expect(buildReads).toBe(2);
 
   await vi.advanceTimersByTimeAsync(10_000);
   flushSync();
-  expect(root.querySelector('.topbar .pill')?.className).toContain('pill-live');
+  expect(root.querySelector('.topbar .pill')?.textContent).toContain('Live');
   expect(buildReads).toBe(3);
 
   await vi.advanceTimersByTimeAsync(30_000);
@@ -1578,12 +1476,11 @@ test("a revert clears the drawer's account of the publish it undid", async () =>
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
       if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
-      if (url === '/admin/api/build') return Response.json(buildBody);
       if (url === '/admin/api/publish')
         return Response.json({ commit_sha: 'c0ffee11', paths: ['src/content/listings/en/a.yaml'] });
       if (url === '/admin/api/revert') return Response.json({ commit_sha: 'rev999', paths: [] });
       void init;
-      return Response.json({ entries: [pendingEntry('listings/a')] });
+      return common(url) ?? Response.json({ entries: [pendingEntry('listings/a')] });
     }),
   );
   const root = show(session());
@@ -1651,38 +1548,23 @@ test('the seo tab is an address of the same entry', async () => {
   const fetchMock = vi.fn(async (url: string) => {
     if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
     if (url === '/admin/api/drafts') return Response.json({ entries: [] });
-    if (url === '/admin/api/build') return Response.json({});
-    if (url.startsWith('/admin/api/locks/'))
-      return Response.json({ held_by: null, mine: true, expires_at: 1755864120000 });
-    return Response.json({
-      fields: [{ path: ['seo'], label: 'SEO', type: 'seo', required: false }],
-      blocks: {},
-      data: { title: 'The Mill House' },
-      seoDefaults: { en: { titlePattern: '%s · Handover demo' } },
-      pending: [],
-      published: ['en'],
-      problems: [],
-      locales: ['en'],
-      defaultLocale: 'en',
-      sourceLocale: 'en',
-      offered: ['en'],
-      translations: {},
-      stale: [],
-      drift: [],
-    });
+    if (isLock(url)) return Response.json(HELD);
+    return (
+      common(url) ??
+      Response.json(
+        entryAnswer({
+          fields: [{ path: ['seo'], label: 'SEO', type: 'seo', required: false }],
+          seoDefaults: { en: { titlePattern: '%s · Handover demo' } },
+        }),
+      )
+    );
   });
   vi.stubGlobal('fetch', fetchMock);
-  const settle = async () => {
-    for (let i = 0; i < 3; i++) {
-      await new Promise((r) => setTimeout(r, 0));
-      flushSync();
-    }
-  };
 
   const root = show(session(), '/admin/c/listings/mill-house');
-  await settle();
+  await settle(3);
   root.querySelector<HTMLAnchorElement>('.tabs a[href$="/seo"]')?.click();
-  await settle();
+  await settle(3);
 
   expect(location.pathname).toBe('/admin/c/listings/mill-house/seo');
   expect(root.querySelector('input#f-seo\\.title')).not.toBeNull();
@@ -1693,43 +1575,21 @@ test('the history tab is an address of the same entry, not a second load of it',
   const fetchMock = vi.fn(async (url: string) => {
     if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
     if (url === '/admin/api/drafts') return Response.json({ entries: [] });
-    if (url === '/admin/api/build') return Response.json({});
     if (url.startsWith('/admin/api/history/')) return Response.json({ versions: [], more: false });
-    if (url.startsWith('/admin/api/locks/'))
-      return Response.json({ held_by: null, mine: true, expires_at: 1755864120000 });
-    return Response.json({
-      fields: [],
-      blocks: {},
-      data: { title: 'The Mill House' },
-      pending: [],
-      published: ['en'],
-      problems: [],
-      locales: ['en'],
-      defaultLocale: 'en',
-      sourceLocale: 'en',
-      offered: ['en'],
-      translations: {},
-      stale: [],
-      drift: [],
-    });
+    if (isLock(url)) return Response.json(HELD);
+    return common(url) ?? Response.json(entryAnswer({ fields: [] }));
   });
   vi.stubGlobal('fetch', fetchMock);
-  const settle = async () => {
-    for (let i = 0; i < 3; i++) {
-      await new Promise((r) => setTimeout(r, 0));
-      flushSync();
-    }
-  };
   const loads = () =>
     fetchMock.mock.calls.filter(([url]) => url === '/admin/api/entries/listings/mill-house').length;
 
   const root = show(session(), '/admin/c/listings/mill-house');
-  await settle();
+  await settle(3);
   expect(loads()).toBe(1);
   expect(root.querySelector('.form')).not.toBeNull();
 
   root.querySelector<HTMLAnchorElement>('.tabs a[href$="/history"]')?.click();
-  await settle();
+  await settle(3);
 
   expect(location.pathname).toBe('/admin/c/listings/mill-house/history');
   expect(root.querySelector('.history')).not.toBeNull();
@@ -1737,22 +1597,17 @@ test('the history tab is an address of the same entry, not a second load of it',
   expect(loads()).toBe(1);
 });
 
-const historyEntry = (title: string, drift: unknown[] = []) => ({
-  fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
-  blocks: {},
-  data: { title },
-  revisions: { en: `${title}-en`, de: `${title}-de` },
-  pending: ['en'],
-  published: ['en', 'de'],
-  problems: [],
-  locales: ['en', 'de'],
-  defaultLocale: 'en',
-  sourceLocale: 'en',
-  offered: ['en', 'de'],
-  translations: { de: { title: `${title} DE` } },
-  stale: [],
-  drift,
-});
+const historyEntry = (title: string, drift: unknown[] = []) =>
+  entryAnswer({
+    data: { title },
+    revisions: { en: `${title}-en`, de: `${title}-de` },
+    pending: ['en'],
+    published: ['en', 'de'],
+    locales: ['en', 'de'],
+    offered: ['en', 'de'],
+    translations: { de: { title: `${title} DE` } },
+    drift,
+  });
 const clickRequired = (root: ParentNode, selector: string) => {
   const button = root.querySelector<HTMLButtonElement>(selector);
   if (!button) throw new Error(`${selector} missing`);
@@ -1764,7 +1619,6 @@ test('a historical restore reloads every locale and exposes drift from the resto
   const restore = vi.fn(async () => Response.json({ paths: ['content/en/mill-house.yaml'] }));
   const fetchMock = vi.fn(async (url: string) => {
     if (url === '/admin/api/drafts') return Response.json({ entries: [] });
-    if (url === '/admin/api/build') return Response.json({});
     if (url === '/admin/api/entries/listings/mill-house') {
       entryLoads += 1;
       return Response.json(
@@ -1795,9 +1649,8 @@ test('a historical restore reloads every locale and exposes drift from the resto
     if (url.startsWith('/admin/api/history/listings/mill-house/diff?'))
       return Response.json({ groups: [] });
     if (url === '/admin/api/history/listings/mill-house/restore') return restore();
-    if (url.startsWith('/admin/api/locks/'))
-      return Response.json({ held_by: null, mine: true, expires_at: 1755864120000 });
-    return Response.json({});
+    if (isLock(url)) return Response.json(HELD);
+    return common(url) ?? Response.json({});
   });
   vi.stubGlobal('fetch', fetchMock);
   const settleRestore = async () => {
@@ -1827,7 +1680,6 @@ test('an uncertain historical restore authoritatively reloads before editing res
   let entryLoads = 0;
   const fetchMock = vi.fn(async (url: string) => {
     if (url === '/admin/api/drafts') return Response.json({ entries: [] });
-    if (url === '/admin/api/build') return Response.json({});
     if (url === '/admin/api/entries/listings/mill-house') {
       entryLoads += 1;
       return Response.json(
@@ -1850,9 +1702,8 @@ test('an uncertain historical restore authoritatively reloads before editing res
       return Response.json({ groups: [] });
     if (url === '/admin/api/history/listings/mill-house/restore')
       throw new TypeError('connection ended without a response');
-    if (url.startsWith('/admin/api/locks/'))
-      return Response.json({ held_by: null, mine: true, expires_at: 1755864120000 });
-    return Response.json({});
+    if (isLock(url)) return Response.json(HELD);
+    return common(url) ?? Response.json({});
   });
   vi.stubGlobal('fetch', fetchMock);
   const settleRestore = async () => {
@@ -1883,11 +1734,10 @@ const publishing = () =>
     'fetch',
     vi.fn(async (url: string) => {
       if (url === '/admin/api/ping') return Response.json({ ok: true, collections: ['listings'] });
-      if (url === '/admin/api/build') return Response.json(buildBody);
       if (url === '/admin/api/publish')
         return Response.json({ commit_sha: 'c0ffee11', paths: ['src/content/listings/en/a.yaml'] });
       if (url === '/admin/api/revert') return Response.json({ commit_sha: 'rev999', paths: [] });
-      return Response.json({ entries: [pendingEntry('listings/a')] });
+      return common(url) ?? Response.json({ entries: [pendingEntry('listings/a')] });
     }),
   );
 const toasts = (root: ParentNode) =>
@@ -1930,24 +1780,10 @@ test('publishing one entry refreshes the shell from Live to the returned build s
     if (url === '/admin/api/drafts')
       return Response.json({ entries: published ? [] : [pendingEntry('listings/mill-house')] });
     if (url === '/admin/api/entries/listings/mill-house')
-      return Response.json({
-        fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
-        blocks: {},
-        data: { title: 'The Mill House' },
-        revisions: { en: 'opened' },
-        pending: published ? [] : ['en'],
-        published: ['en'],
-        problems: [],
-        locales: ['en'],
-        defaultLocale: 'en',
-        sourceLocale: 'en',
-        offered: ['en'],
-        translations: {},
-        stale: [],
-        drift: [],
-      });
-    if (url.startsWith('/admin/api/locks/'))
-      return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
+      return Response.json(
+        entryAnswer({ revisions: { en: 'opened' }, pending: published ? [] : ['en'] }),
+      );
+    if (isLock(url)) return Response.json(HELD);
     if (url === '/admin/api/publish/checks') return Response.json({ results: [] });
     if (url === '/admin/api/publish' && init?.method === 'POST') {
       published = true;
@@ -1962,7 +1798,7 @@ test('publishing one entry refreshes the shell from Live to the returned build s
   const root = show(session(), '/admin/c/listings/mill-house');
   await vi.dynamicImportSettled();
   await settle();
-  expect(root.querySelector('.topbar .pill')?.className).toContain('pill-live');
+  expect(root.querySelector('.topbar .pill')?.textContent).toContain('Live');
 
   Array.from(root.querySelectorAll<HTMLButtonElement>('.entry-header button'))
     .find((button) => button.textContent?.trim() === 'Publish this entry')
@@ -1971,7 +1807,7 @@ test('publishing one entry refreshes the shell from Live to the returned build s
   root.querySelector<HTMLButtonElement>('.dialog .btn-primary')?.click();
   await settle();
 
-  expect(root.querySelector('.topbar .pill')?.className).toContain('pill-building');
+  expect(root.querySelector('.topbar .pill')?.textContent).toContain('Building…');
   expect(root.querySelector('.indicator')?.textContent).toContain('No unpublished changes');
 });
 
@@ -1990,24 +1826,14 @@ test('drawer publish waits for the mounted entry to save and publishes its lates
   });
   const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
     if (url === '/admin/api/entries/listings/mill-house')
-      return Response.json({
-        fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
-        blocks: {},
-        data: { title: savedTitle },
-        revisions: { en: 'opened' },
-        pending: published ? [] : ['en'],
-        published: ['en'],
-        problems: [],
-        locales: ['en'],
-        defaultLocale: 'en',
-        sourceLocale: 'en',
-        offered: ['en'],
-        translations: {},
-        stale: [],
-        drift: [],
-      });
-    if (url.startsWith('/admin/api/locks/'))
-      return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
+      return Response.json(
+        entryAnswer({
+          data: { title: savedTitle },
+          revisions: { en: 'opened' },
+          pending: published ? [] : ['en'],
+        }),
+      );
+    if (isLock(url)) return Response.json(HELD);
     if (url === '/admin/api/drafts' && !init?.method)
       return Response.json({
         entries: published ? [] : [pendingEntry('listings/mill-house')],
@@ -2020,8 +1846,7 @@ test('drawer publish waits for the mounted entry to save and publishes its lates
     }
     if (url === '/admin/api/publish/checks') return Response.json({ results: [] });
     if (url === '/admin/api/publish') return publish();
-    if (url === '/admin/api/build') return Response.json({});
-    return Response.json({});
+    return common(url) ?? Response.json({});
   });
   vi.stubGlobal('fetch', fetchMock);
   const root = show(session(), start);
@@ -2094,32 +1919,17 @@ test.each(['link', 'back'])(
       'fetch',
       vi.fn(async (url: string, init?: RequestInit) => {
         if (url === '/admin/api/entries/listings/mill-house')
-          return Response.json({
-            fields: [{ path: ['title'], label: 'Title', type: 'text', required: true }],
-            blocks: {},
-            data: { title: 'Home' },
-            revisions: { en: 'opened' },
-            pending: [],
-            published: ['en'],
-            problems: [],
-            locales: ['en'],
-            defaultLocale: 'en',
-            sourceLocale: 'en',
-            offered: ['en'],
-            translations: {},
-            stale: [],
-            drift: [],
-          });
-        if (url.startsWith('/admin/api/locks/'))
-          return Response.json({ held_by: null, mine: true, expires_at: Date.now() + 120000 });
+          return Response.json(
+            entryAnswer({ data: { title: 'Home' }, revisions: { en: 'opened' } }),
+          );
+        if (isLock(url)) return Response.json(HELD);
         if (init?.method === 'PUT') {
           stored = JSON.parse(String(init.body)).data.title;
           return new Promise<Response>((r) => {
             saving = r;
           });
         }
-        if (url === '/admin/api/build') return Response.json({});
-        return Response.json({ entries: [] });
+        return common(url) ?? Response.json({ entries: [] });
       }),
     );
     const root = show(session(), start);

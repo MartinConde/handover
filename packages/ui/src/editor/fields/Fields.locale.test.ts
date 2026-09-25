@@ -296,3 +296,25 @@ test.each([
     expect(q('#f-video-paste').textContent ?? '').toBe(expected);
   },
 );
+
+const german = async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => Response.json({ entries: [], locales: ['en', 'de'] })),
+  );
+  app = mount(FieldsLocaleFixture, { target: document.body, props: { initialUiLocale: 'de' } });
+  await settle();
+};
+
+test('empty link selection uses complete German copy', async () => {
+  await german();
+  click('#f-button-field .seg button');
+  expect(q('#f-button-field .list-empty button').textContent).toBe('Seite oder Eintrag auswählen');
+});
+
+test('row controls translate their owned row noun', async () => {
+  await german();
+  const label = q('#f-rooms .row-controls .handle').getAttribute('aria-label') ?? '';
+  expect(label).toContain('Rooms');
+  expect(label).not.toContain(' row ');
+});

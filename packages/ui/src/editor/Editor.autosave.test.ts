@@ -51,7 +51,6 @@ test('a file somebody changed in the repository badges the header and names the 
   expect($(root, '.entry-header .subline')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
     'Somebody changed this in the repository after you opened it. Open Unpublished changes to resolve it field by field, or to discard yours and take what is there now.',
   );
-  vi.unstubAllGlobals();
 });
 
 // A field renamed in schemas.ts before its migration would otherwise lose its value on first save.
@@ -78,7 +77,6 @@ test('a key no descriptor mentions is written back, not dropped', async () => {
       }),
     });
   });
-  vi.unstubAllGlobals();
 });
 
 test('an edit that could not be stored does not open the drawer', async () => {
@@ -97,7 +95,6 @@ test('an edit that could not be stored does not open the drawer', async () => {
   expect($(root, '.dialog')).toBeNull();
   expect(fetchMock.mock.calls.some(([url]) => url === '/admin/api/publish')).toBe(false);
   expect($(root, '.autosave')?.textContent).toBe('Not saved');
-  vi.unstubAllGlobals();
 });
 
 test('editing the title input updates the title in the header', () => {
@@ -128,8 +125,6 @@ test('an edit is sent as a draft two seconds after the last keystroke', async ()
     }),
   });
   expect($(root, '.autosave')?.textContent).toBe('Saved');
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 // The drawer counts entries, not keystrokes, so the shell hears only when pending flips.
@@ -146,8 +141,6 @@ test('the first save that makes an entry pending tells the shell; the next does 
   type(root, 'input#f-title', 'Seaview Cottage House');
   await vi.advanceTimersByTimeAsync(2000);
   expect(pending).toHaveBeenCalledTimes(1);
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 test('a save of an entry that was already pending tells the shell nothing', async () => {
@@ -160,25 +153,6 @@ test('a save of an entry that was already pending tells the shell nothing', asyn
   await vi.advanceTimersByTimeAsync(2000);
 
   expect(pending).not.toHaveBeenCalled();
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
-});
-
-test('each keystroke restarts the two seconds, so one pause is one draft write', async () => {
-  vi.useFakeTimers();
-  const fetchMock = autosaved();
-  vi.stubGlobal('fetch', fetchMock);
-  const root = show();
-  type(root, 'input#f-title', 'Seaview H');
-  await vi.advanceTimersByTimeAsync(1500);
-  type(root, 'input#f-title', 'Seaview House');
-  await vi.advanceTimersByTimeAsync(1500);
-  expect(wrote(fetchMock)).toEqual([]);
-
-  await vi.advanceTimersByTimeAsync(500);
-  expect(wrote(fetchMock)).toHaveLength(1);
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 test('opening an entry and changing nothing writes no draft', async () => {
@@ -188,8 +162,6 @@ test('opening an entry and changing nothing writes no draft', async () => {
   show();
   await vi.advanceTimersByTimeAsync(10_000);
   expect(wrote(fetchMock)).toEqual([]);
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 // The restore is over before the form draws, so the banner is the only trace of it.
@@ -219,7 +191,6 @@ test('an entry somebody else is editing reads, and says who has it', async () =>
   expect($(root, '.lock-banner .when')?.textContent).toContain('active a few seconds ago');
   expect($<HTMLFieldSetElement>(root, '.form > fieldset')?.disabled).toBe(true);
   expect($<HTMLButtonElement>(root, 'button.btn-primary')?.disabled).toBe(true);
-  vi.unstubAllGlobals();
 });
 
 // The lock belongs to the tab, so the same person's second tab is refused too.
@@ -232,7 +203,6 @@ test('the same person in a second tab is told it is open in another tab', async 
   expect($(root, '.lock-banner')?.textContent).toContain('You have this open in another tab');
   expect($(root, '.lock-banner')?.textContent).not.toContain('Being edited by');
   expect($<HTMLFieldSetElement>(root, '.form > fieldset')?.disabled).toBe(true);
-  vi.unstubAllGlobals();
 });
 
 // What tells the tabs apart: a token this tab made up, on every beat and on every save.
@@ -250,8 +220,6 @@ test('the beat and the save carry the same tab token', async () => {
   const save = wrote(fetchMock)[0];
   expect(sent(beat ?? [])).toMatch(/\S/);
   expect(sent(save ?? [])).toBe(sent(beat ?? []));
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 // A holder who stopped typing is a minute from losing the lock; one mid-sentence is not.
@@ -262,7 +230,6 @@ test('the banner says how long ago the holder last typed', async () => {
   flushSync();
 
   expect($(root, '.lock-banner .when')?.textContent).toContain('nothing typed for a minute');
-  vi.unstubAllGlobals();
 });
 
 test('a lock that has run out leaves the screen reading, with a way back in', async () => {
@@ -276,7 +243,6 @@ test('a lock that has run out leaves the screen reading, with a way back in', as
   expect($<HTMLFieldSetElement>(root, '.form > fieldset')?.disabled).toBe(true);
   $<HTMLButtonElement>(root, '.lock-banner .btn-link')?.click();
   expect(changed).toHaveBeenCalled();
-  vi.unstubAllGlobals();
 });
 
 test('the entry this screen opened is taken as it opens', async () => {
@@ -289,7 +255,6 @@ test('the entry this screen opened is taken as it opens', async () => {
     '/admin/api/locks/listings/seaview-cottage',
     expect.objectContaining({ method: 'POST', body: expect.stringContaining('"tab":') }),
   );
-  vi.unstubAllGlobals();
 });
 
 test('a draft that is ahead of the published file can be published on load', () => {
@@ -316,8 +281,6 @@ test('a draft write that fails says so instead of claiming it is saved', async (
   await vi.advanceTimersByTimeAsync(2000);
   flushSync();
   expect($(root, '.autosave')?.textContent).toBe('Not saved');
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 test('a draft that matches the published file again leaves nothing to publish', async () => {
@@ -345,8 +308,6 @@ test('a draft that matches the published file again leaves nothing to publish', 
   await vi.advanceTimersByTimeAsync(2000);
   flushSync();
   expect($<HTMLButtonElement>(root, 'button.btn-primary')?.disabled).toBe(true);
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 const withProblems = (problems: { path: string; message: string }[]) => {
@@ -409,8 +370,6 @@ test('an autosave that stores an entry the schema refuses says so instead of Not
   flushSync();
   expect($(root, '.autosave')?.textContent).toBe('Saved');
   expect($(root, '.problems')?.textContent).toBe('1 problem');
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 // State 10: the form is about a structure the languages have not agreed on, so it is not drawn.
@@ -470,7 +429,6 @@ test('applying drift answers reloads the entry instead of reopening an old local
   await tick();
 
   expect(changed).toHaveBeenCalledOnce();
-  vi.unstubAllGlobals();
 });
 
 // The file wins over `_locales`, and the disagreement is said above the form.
@@ -515,8 +473,6 @@ test('a save refused by a take-over says where the work went and stops the tab',
   expect($(root, '.lock-banner.is-lost')?.textContent).toContain('Anna Berg took over this entry');
   expect($<HTMLFieldSetElement>(root, '.form > fieldset')?.disabled).toBe(true);
   expect($<HTMLButtonElement>(root, 'button.btn-primary')?.disabled).toBe(true);
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 // Somebody who opened the entry while this tab's lock had lapsed is named on the next edit.
@@ -546,8 +502,6 @@ test('a lapsed lock somebody else took is named on the next edit and nothing is 
 
   expect($(root, '.lock-banner.is-lost')?.textContent).toContain('Anna Berg took over this entry');
   expect(wrote(fetchMock)).toHaveLength(0);
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 test('lock loss before the debounce cancels the pending save', async () => {
@@ -576,8 +530,6 @@ test('lock loss before the debounce cancels the pending save', async () => {
   expect(wrote(fetchMock)).toHaveLength(0);
   expect($(root, '.lock-banner.is-lost')).not.toBeNull();
   expect($<HTMLInputElement>(root, 'input#f-title')?.value).toBe('Keep this locally');
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 test('lock loss stops a queued locale save from dispatching', async () => {
@@ -627,8 +579,6 @@ test('lock loss stops a queued locale save from dispatching', async () => {
 
   expect(drafts).toEqual(['/admin/api/drafts/listings/seaview-cottage']);
   expect($(root, '.lock-banner.is-lost')).not.toBeNull();
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 test('lock loss during a request acknowledges its sent version without draining a later edit', async () => {
@@ -667,8 +617,6 @@ test('lock loss during a request acknowledges its sent version without draining 
   ]);
   expect($<HTMLInputElement>(root, 'input#f-title')?.value).toBe('Still local');
   expect($(root, '.lock-banner.is-lost')).not.toBeNull();
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 // The holder polls on its own and on refocus, rather than learning of a take-over only on save.
@@ -698,8 +646,6 @@ test('a holder who types nothing still learns of a take-over within the poll', a
 
   expect($(root, '.lock-banner.is-lost')?.textContent).toContain('Anna Berg took over this entry');
   expect($<HTMLFieldSetElement>(root, '.form > fieldset')?.disabled).toBe(true);
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 test('a tab coming back to the front asks about its lock at once', async () => {
@@ -718,8 +664,6 @@ test('a tab coming back to the front asks about its lock at once', async () => {
 
   expect(reads()).toBe(1);
   expect($(root, '.lock-banner.is-lost')).not.toBeNull();
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 // Stopping to read is not losing the entry: an idle lock lapses quietly and typing takes it back.
@@ -750,8 +694,6 @@ test('a lapsed idle lock stays released without a banner until the next save cla
   expect(wrote(fetchMock)).toHaveLength(1);
   expect(claims()).toBe(2);
   expect($(root, '.lock-banner')).toBeNull();
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 test('Take over asks first, and reads the entry again once it is yours', async () => {
@@ -775,7 +717,6 @@ test('Take over asks first, and reads the entry again once it is yours', async (
     expect.objectContaining({ method: 'POST', body: expect.stringContaining('"take":true') }),
   );
   expect(changed).toHaveBeenCalled();
-  vi.unstubAllGlobals();
 });
 
 // The hold is stored on the draft rows, so the form's words have to be saved first.
@@ -802,7 +743,6 @@ test('Not ready yet stores the edit, then holds the entry', async () => {
   expect(wrote(fetchMock)[1]?.[1]).toMatchObject({ body: JSON.stringify({ hold: true }) });
   expect($(root, '.hold-toggle')?.getAttribute('aria-checked')).toBe('false');
   expect($(root, '.entry-header')?.classList.contains('is-held')).toBe(true);
-  vi.unstubAllGlobals();
 });
 
 test('an entry with nothing unpublished has nothing to hold back', () => {
@@ -810,7 +750,7 @@ test('an entry with nothing unpublished has nothing to hold back', () => {
   expect($<HTMLButtonElement>(root, '.hold-toggle')?.disabled).toBe(true);
 });
 
-test('an entry somebody is already holding back opens with the toggle on', () => {
+test('an entry somebody is already holding back opens with Ready off', () => {
   const root = show({ entry: { ...entry, pending: ['en'], held: true } });
   expect($(root, '.hold-toggle')?.getAttribute('aria-checked')).toBe('false');
 });
@@ -828,8 +768,6 @@ test('a refused save in the second language loses the entry too', async () => {
   flushSync();
 
   expect($(root, '.lock-banner.is-lost')?.textContent).toContain('Anna Berg took over this entry');
-  vi.unstubAllGlobals();
-  vi.useRealTimers();
 });
 
 test('the take-over confirm closes on Escape and hands focus back', async () => {
@@ -847,7 +785,6 @@ test('the take-over confirm closes on Escape and hands focus back', async () => 
 
   expect($(root, '.dialog')).toBeNull();
   expect(document.activeElement).toBe(trigger);
-  vi.unstubAllGlobals();
 });
 
 test('the take-over dialog exposes the modal boundary it now enforces', async () => {
@@ -861,7 +798,6 @@ test('the take-over dialog exposes the modal boundary it now enforces', async ()
   const dialog = $(root, '[aria-labelledby="take-h"]');
   expect(dialog).not.toBeNull();
   expect(dialog?.getAttribute('aria-modal')).toBe('true');
-  vi.unstubAllGlobals();
 });
 
 // F05–F07: the mounted editor must keep the actual form, not merely report a failed helper.
@@ -898,7 +834,6 @@ test.each([500, 409])(
     await tick();
     expect(wrote(requests).every((c) => (c[1] as RequestInit).method === 'PUT')).toBe(true);
     expect(changed).not.toHaveBeenCalled();
-    vi.unstubAllGlobals();
   },
 );
 
@@ -941,7 +876,6 @@ test('a slow save drains the latest source edit with the returned revision befor
   expect(
     $(root, '.editor-header .autosave')?.textContent ?? $(root, '.autosave')?.textContent,
   ).toContain('Saved');
-  vi.unstubAllGlobals();
 });
 
 test('a rejected network save settles, preserves the edit, warns on unload, and can retry', async () => {
@@ -970,7 +904,6 @@ test('a rejected network save settles, preserves the edit, warns on unload, and 
   const savedUnload = new Event('beforeunload', { cancelable: true });
   dispatchEvent(savedUnload);
   expect(savedUnload.defaultPrevented).toBe(false);
-  vi.unstubAllGlobals();
 });
 
 test.each([500, 409])(
@@ -1001,7 +934,6 @@ test.each([500, 409])(
     expect(wrote(requests).every((c) => (c[1] as RequestInit).method === 'PUT')).toBe(true);
     expect(changed).not.toHaveBeenCalled();
     expect($<HTMLInputElement>(root, 'input#f-title')?.value).toBe('Keep the source edit');
-    vi.unstubAllGlobals();
   },
 );
 
@@ -1042,7 +974,6 @@ test('the source and translation share a save lane and propagate sibling revisio
     { url: '/admin/api/drafts/listings/seaview-cottage', revision: 'en-opened' },
     { url: '/admin/api/drafts/listings/seaview-cottage/de', revision: 'de-synced' },
   ]);
-  vi.unstubAllGlobals();
 });
 
 test.each(['source', 'translation'])(
@@ -1110,7 +1041,6 @@ test.each(['source', 'translation'])(
     expect(await flushNavigation()).toBe(true);
     flushSync();
     expect(root.textContent).not.toContain('Not saved');
-    vi.unstubAllGlobals();
   },
 );
 
@@ -1141,5 +1071,4 @@ test('a rejected status action becomes retryable without discarding the editor',
   await tick();
   flushSync();
   expect(changed).toHaveBeenCalledOnce();
-  vi.unstubAllGlobals();
 });

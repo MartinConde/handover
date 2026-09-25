@@ -1,7 +1,10 @@
 import { type Drift, type Field, LOCK_TTL } from '@handover/core';
 import { type ComponentProps, flushSync, mount, unmount } from 'svelte';
 import { afterEach, vi } from 'vitest';
+import { HELD, isLock } from '../test-helpers.fixture.js';
 import Editor from './Editor.svelte';
+
+export { HELD, isLock, settle } from '../test-helpers.fixture.js';
 
 export const entry = {
   fields: [
@@ -86,9 +89,6 @@ export const type = (root: ParentNode, sel: string, value: string) => {
 };
 export const tick = () => new Promise((r) => setTimeout(r, 0));
 
-// Every editor takes the lock on open; any other answer shape reads as somebody else holding it.
-export const HELD = { held_by: null, mine: true, expires_at: 1755864120000 };
-export const isLock = (url: unknown) => String(url).startsWith('/admin/api/locks/');
 /** The checks pass a save that left a draft asks for; it rides on the same fetch as the save. */
 export const isLint = (url: unknown) => url === '/admin/api/publish/checks';
 /** The writes a test is about, with the lock beats and lint passes filtered out. */
@@ -102,12 +102,6 @@ export const autosaved = () =>
     if (isLint(url)) return Response.json({ results: [], readiness: {} });
     throw new Error(`Unexpected editor request: ${url}`);
   });
-
-export const settled = async () => {
-  await tick();
-  await tick();
-  flushSync();
-};
 
 // The lock is the entry's, so what it takes away is everything that writes to any of its files.
 export const heldBy = (over: Record<string, unknown> = {}) =>
@@ -140,13 +134,6 @@ export const addressed = {
 };
 
 export const at = (address: string) => history.replaceState({}, '', address);
-
-export const settle = async () => {
-  for (let i = 0; i < 3; i++) {
-    await tick();
-    flushSync();
-  }
-};
 
 // Hooks register on the file that calls this, so each Editor test file calls it once.
 export const useEditorSetup = () => {

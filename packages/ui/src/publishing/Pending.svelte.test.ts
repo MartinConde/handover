@@ -1,7 +1,7 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { UiLocale } from '../i18n.js';
-import { deferred } from '../test-helpers.fixture.js';
+import { deferred, settle } from '../test-helpers.fixture.js';
 import Pending from './Pending.svelte';
 
 // Not testing Select all / none: they set the same state a checkbox does.
@@ -772,11 +772,6 @@ const checking = (publishing: () => Response = () => Response.json({ paths: [] }
     url === '/admin/api/publish/checks' ? Response.json(CHECKS) : publishing(),
   );
 
-const settled = async () => {
-  await tick();
-  flushSync();
-};
-
 const messages = (root: ParentNode) =>
   Array.from(root.querySelectorAll('.check-group .notice .msg'), (n) => n.textContent);
 
@@ -808,7 +803,7 @@ test('a merged check line links to the default language, not the first it lists'
     ),
   );
   const root = show([ENTRIES[0] as (typeof ENTRIES)[0]], 'en');
-  await settled();
+  await settle();
 
   const link = q<HTMLAnchorElement>(root, '.check-group .notice a');
   expect(link?.getAttribute('href')).toBe('/admin/c/pages/home?field=photo.alt&locale=en');
@@ -817,7 +812,7 @@ test('a merged check line links to the default language, not the first it lists'
 test('the checks are grouped under the entry they are about, worst first', async () => {
   vi.stubGlobal('fetch', checking());
   const root = show();
-  await settled();
+  await settle();
 
   expect(
     Array.from(root.querySelectorAll('.check-group h4'), (n) => n.textContent?.trim()),
@@ -849,7 +844,7 @@ test('the checks are grouped under the entry they are about, worst first', async
 test('notes fold under a count while errors and warnings stay listed', async () => {
   vi.stubGlobal('fetch', checking());
   const root = show();
-  await settled();
+  await settle();
 
   expect(
     Array.from(root.querySelectorAll('.check-group > .notice .sev'), (n) => n.textContent),
@@ -864,7 +859,7 @@ test('an error stops the publish and warnings never do', async () => {
   const fetchMock = checking();
   vi.stubGlobal('fetch', fetchMock);
   const root = show();
-  await settled();
+  await settle();
 
   const button = q<HTMLButtonElement>(root, '.drawer-foot .btn-primary');
   expect(button?.disabled).toBe(true);
@@ -872,7 +867,7 @@ test('an error stops the publish and warnings never do', async () => {
 
   // Unchecking the entry takes its checks with it; a warning and a note publish anyway.
   boxes(root)[1]?.click();
-  await settled();
+  await settle();
 
   expect(messages(root)).toEqual([
     'Photo has no alt text — a reader using a screen reader is told nothing',
@@ -899,7 +894,7 @@ test('the same problem in two languages is one line naming both', async () => {
     ),
   );
   const root = show();
-  await settled();
+  await settle();
 
   expect(messages(root)).toEqual([
     'Photo has no alt text — a reader using a screen reader is told nothing',
@@ -921,12 +916,12 @@ test('Publish runs the checks again and an error stops the commit', async () => 
   );
   vi.stubGlobal('fetch', fetchMock);
   const root = show();
-  await settled();
+  await settle();
   expect(q(root, '.checks')).toBeNull();
 
   answer = CHECKS;
   q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.click();
-  await settled();
+  await settle();
 
   expect(fetchMock).toHaveBeenLastCalledWith('/admin/api/publish/checks', expect.anything());
   expect(published).not.toHaveBeenCalled();
@@ -963,9 +958,9 @@ test('final checks freeze their selected set and block its publish on an error',
   });
   vi.stubGlobal('fetch', fetchMock);
   const root = show();
-  await settled();
+  await settle();
   boxes(root)[1]?.click();
-  await settled();
+  await settle();
 
   holdFinalChecks = true;
   q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.click();
@@ -979,7 +974,7 @@ test('final checks freeze their selected set and block its publish on an error',
 
   boxes(root)[0]?.click();
   finalChecks.resolve();
-  await settled();
+  await settle();
 
   expect(fetchMock.mock.calls.filter(([url]) => url === '/admin/api/publish')).toHaveLength(0);
   expect(q(root, '[role="alert"]')?.textContent).toContain('checks found something in the way');
@@ -1001,11 +996,11 @@ test('an obsolete check response cannot replace the latest A to B to A result', 
   flushSync();
 
   requests[2]?.resolve(Response.json({ results: [] }));
-  await settled();
+  await settle();
   requests[1]?.resolve(Response.json({ results: [] }));
-  await settled();
+  await settle();
   requests[0]?.resolve(Response.json({ results: [CHECKS.results[2]] }));
-  await settled();
+  await settle();
 
   expect(q(root, '.checks')).toBeNull();
   expect(q<HTMLButtonElement>(root, '.drawer-foot .btn-primary')?.textContent?.trim()).toBe(
@@ -1022,14 +1017,14 @@ test('a second press while the checks are running commits nothing twice', async 
   );
   vi.stubGlobal('fetch', fetchMock);
   const root = show();
-  await settled();
+  await settle();
 
   const button = q<HTMLButtonElement>(root, '.drawer-foot .btn-primary');
   button?.click();
   flushSync();
   expect(button?.disabled).toBe(true);
   button?.click();
-  await settled();
+  await settle();
 
   expect(fetchMock.mock.calls.filter(([url]) => url === '/admin/api/publish')).toHaveLength(1);
 });
@@ -1043,7 +1038,7 @@ test('checks that could not be run leave the publish where it was', async () => 
   );
   vi.stubGlobal('fetch', fetchMock);
   const root = show();
-  await settled();
+  await settle();
 
   expect(q(root, '.checks-sum')?.textContent).toBe(
     'The checks could not be run this time, so nothing on this list has been looked at.',
@@ -1051,7 +1046,7 @@ test('checks that could not be run leave the publish where it was', async () => 
   const button = q<HTMLButtonElement>(root, '.drawer-foot .btn-primary');
   expect(button?.disabled).toBe(false);
   button?.click();
-  await settled();
+  await settle();
 
   expect(published).toHaveBeenCalled();
 });
@@ -1077,7 +1072,7 @@ test('a note about a page outside the set is listed under its own heading', asyn
     ),
   );
   const root = show();
-  await settled();
+  await settle();
 
   expect(
     Array.from(root.querySelectorAll('.check-group h4'), (n) => n.textContent?.trim()),

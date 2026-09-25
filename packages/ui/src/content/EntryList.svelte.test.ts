@@ -2,6 +2,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import { SIX, sixLanguageRows } from '../editor/six-languages.fixture';
 import type { UiLocale } from '../i18n.js';
+import { settle } from '../test-helpers.fixture.js';
 import EntryList from './EntryList.svelte';
 
 // Not tested: how one answer becomes a rule per language, which api.test.ts holds the route to.
@@ -72,13 +73,9 @@ afterEach(() => {
 });
 
 const q = <T extends Element>(root: ParentNode, sel: string) => root.querySelector<T>(sel);
-const tick = async () => {
-  await new Promise((r) => setTimeout(r, 0));
-  flushSync();
-};
 const click = async (root: ParentNode, sel: string) => {
   q<HTMLButtonElement>(root, sel)?.click();
-  await tick();
+  await settle();
 };
 // The row's actions live behind one ⋯, as on Members: open it, then press the item by its words.
 const menuItems = (root: ParentNode) =>
@@ -92,7 +89,7 @@ const act = async (root: ParentNode, title: string, item: string) => {
   );
   if (!found) throw new Error(`no ${item} for ${title}`);
   found.click();
-  await tick();
+  await settle();
 };
 const input = (root: ParentNode, sel: string) => {
   const found = q<HTMLInputElement>(root, sel);
@@ -109,7 +106,7 @@ const type = (root: ParentNode, sel: string, value: string) => {
 test('the list is one row per entry, titled and linked by file name', async () => {
   api(ENTRIES);
   const root = show();
-  await tick();
+  await settle();
   expect(q(root, '.list-toolbar .count')?.textContent).toBe('2');
   expect(Array.from(root.querySelectorAll('.row .td.title a'), (a) => a.textContent)).toEqual([
     'The Mill House',
@@ -136,7 +133,7 @@ test('under the Status filter the heading counts what is shown, of the total', a
     },
   ]);
   const root = show();
-  await tick();
+  await settle();
   expect(q(root, '.list-toolbar .count')?.textContent).toBe('3');
 
   const filter = q<HTMLSelectElement>(root, '#list-status');
@@ -155,7 +152,7 @@ test('under the Status filter the heading counts what is shown, of the total', a
 test('a collection with no entries offers the one action that makes sense', async () => {
   api([]);
   const root = show();
-  await tick();
+  await settle();
   expect(root.querySelectorAll('.row').length).toBe(0);
   expect(q(root, '.empty h2')?.textContent).toBe('No listings yet');
   expect(q(root, '.empty .btn-primary')?.textContent?.trim()).toBe('New listing');
@@ -164,7 +161,7 @@ test('a collection with no entries offers the one action that makes sense', asyn
 test('a German empty collection uses localized presentation around its authored name', async () => {
   api([]);
   const root = show(undefined, 'de');
-  await tick();
+  await settle();
 
   expect(q(root, '.empty h2')?.textContent).toBe('Noch keine Einträge in listings');
   expect(q(root, '.empty p')?.textContent).toBe(
@@ -176,7 +173,7 @@ test('a German empty collection uses localized presentation around its authored 
 test('the new entry dialog shows the file name the title will produce', async () => {
   api(ENTRIES);
   const root = show();
-  await tick();
+  await settle();
   await click(root, '.list-toolbar .btn-primary');
   type(root, '.dialog input#new-title', 'Café & Bar / 2026');
   expect(q(root, '.dialog .filename')?.textContent).toBe('cafe-bar-2026');
@@ -185,11 +182,11 @@ test('the new entry dialog shows the file name the title will produce', async ()
 test('Escape closes creation and restores its trigger', async () => {
   api(ENTRIES);
   const root = show();
-  await tick();
+  await settle();
   const trigger = q<HTMLButtonElement>(root, '.list-toolbar .btn-primary');
   trigger?.focus();
   trigger?.click();
-  await tick();
+  await settle();
   expect(document.activeElement?.id).toBe('new-title');
 
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
@@ -202,7 +199,7 @@ test('Escape closes creation and restores its trigger', async () => {
 test('a title already used in the collection previews the collision suffix', async () => {
   api(ENTRIES);
   const root = show();
-  await tick();
+  await settle();
   await click(root, '.list-toolbar .btn-primary');
   type(root, '.dialog input#new-title', 'Seaview Cottage');
   expect(q(root, '.dialog .filename')?.textContent).toBe('seaview-cottage-2');
@@ -211,7 +208,7 @@ test('a title already used in the collection previews the collision suffix', asy
 test('creating sends the title and opens the entry the server named', async () => {
   const fetcher = api(ENTRIES, { slug: 'cafe-bar-2026' });
   const root = show();
-  await tick();
+  await settle();
   await click(root, '.list-toolbar .btn-primary');
   type(root, '.dialog input#new-title', 'Café & Bar / 2026');
   await click(root, '.dialog .btn-primary');
@@ -226,7 +223,7 @@ test('creating sends the title and opens the entry the server named', async () =
 test("the collection's starters are offered beside Blank, and the chosen one is sent", async () => {
   const fetcher = api(ENTRIES, { slug: 'strandhaus-nord' }, ['en'], ['house', 'flat-by-the-sea']);
   const root = show();
-  await tick();
+  await settle();
   await click(root, '.list-toolbar .btn-primary');
 
   expect(
@@ -250,7 +247,7 @@ test("the collection's starters are offered beside Blank, and the chosen one is 
 test('a collection with no starters has no Start from choice', async () => {
   api(ENTRIES);
   const root = show();
-  await tick();
+  await settle();
   await click(root, '.list-toolbar .btn-primary');
   expect(q(root, '.dialog fieldset')).toBeNull();
 });
@@ -258,7 +255,7 @@ test('a collection with no starters has no Start from choice', async () => {
 test('duplicating sends the pre-filled copy name and opens the copy', async () => {
   const fetcher = api(ENTRIES, { slug: 'mill-house-copy' });
   const root = show();
-  await tick();
+  await settle();
   await act(root, 'The Mill House', 'Duplicate');
   expect(input(root, '.dialog input#copy-to').value).toBe('mill-house-copy');
   await click(root, '.dialog .btn-primary');
@@ -274,13 +271,13 @@ test('duplicating sends the pre-filled copy name and opens the copy', async () =
 test('an owner can save a row as a template under a derived name', async () => {
   const fetcher = api(ENTRIES, { name: 'mill-house' }, ['en'], ['house']);
   const root = show('owner');
-  await tick();
+  await settle();
   await click(root, '.row [aria-label="Actions for The Mill House"]');
   expect(menuItems(root)).toEqual(['Duplicate', 'Rename', 'Save as template', 'Hide', 'Delete']);
   Array.from(root.querySelectorAll<HTMLButtonElement>('.row .menu button'))
     .find((b) => b.textContent?.trim() === 'Save as template')
     ?.click();
-  await tick();
+  await settle();
   expect(input(root, '.dialog input#template-to').value).toBe('mill-house');
   type(root, '.dialog input#template-to', 'House');
   expect(q(root, '.dialog .hint .filename')?.textContent).toBe('house-2');
@@ -300,7 +297,7 @@ test('an owner can save a row as a template under a derived name', async () => {
 test('only an entry with unpublished changes is asked whether to include them', async () => {
   const fetcher = api([{ ...ENTRIES[0], pending: true }, ENTRIES[1]], { slug: 'x' });
   const root = show();
-  await tick();
+  await settle();
   await act(root, 'Seaview Cottage', 'Duplicate');
   expect(q(root, '.dialog input[type="checkbox"]')).toBeNull();
   await click(root, '.dialog .btn:not(.btn-primary)');
@@ -319,7 +316,7 @@ test('only an entry with unpublished changes is asked whether to include them', 
 test('renaming sends the new file name, reloads the list and announces its commit', async () => {
   const fetcher = api(ENTRIES, { slug: 'the-old-mill', commit_sha: 'rename123' });
   const root = show();
-  await tick();
+  await settle();
   await act(root, 'The Mill House', 'Rename');
   expect(input(root, '.dialog input#rename-to').value).toBe('mill-house');
   type(root, '.dialog input#rename-to', 'The Old Mill');
@@ -339,7 +336,7 @@ test('renaming sends the new file name, reloads the list and announces its commi
 test('deleting asks where its readers go, sends the answer and announces its commit', async () => {
   const fetcher = api(ENTRIES, { commit_sha: 'delete123' });
   const root = show();
-  await tick();
+  await settle();
   await act(root, 'The Mill House', 'Delete');
   expect(q(root, '.dialog h2')?.textContent).toBe('Where should visitors to this page go now?');
   expect(q(root, '.dialog .btn-danger')?.textContent?.trim()).toBe('Delete this listing');
@@ -358,7 +355,7 @@ test('deleting asks where its readers go, sends the answer and announces its com
 test('the delete dialog leads with Hide it instead?, and Hide instead asks the hide question', async () => {
   const fetcher = api(ENTRIES);
   const root = show();
-  await tick();
+  await settle();
   await act(root, 'The Mill House', 'Delete');
   expect(q(root, '.dialog p')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
     'Hide it instead? Hidden entries come off the site but can be brought back.',
@@ -366,7 +363,7 @@ test('the delete dialog leads with Hide it instead?, and Hide instead asks the h
   Array.from(root.querySelectorAll<HTMLButtonElement>('.dialog button'))
     .find((b) => b.textContent?.trim() === 'Hide instead')
     ?.click();
-  await tick();
+  await settle();
 
   expect(q(root, '.dialog p')?.textContent).not.toContain('Hide it instead?');
   expect(q(root, '.dialog .btn-primary')?.textContent?.trim()).toBe('Hide this listing');
@@ -382,13 +379,13 @@ test('the delete dialog leads with Hide it instead?, and Hide instead asks the h
 test('a delete answered "nowhere" says so in the body', async () => {
   const fetcher = api(ENTRIES);
   const root = show();
-  await tick();
+  await settle();
   await act(root, 'The Mill House', 'Delete');
   const nowhere = Array.from(
     root.querySelectorAll<HTMLInputElement>('.dialog input[type="radio"]'),
   ).at(-1);
   nowhere?.click();
-  await tick();
+  await settle();
   await click(root, '.dialog .btn-danger');
 
   expect(fetcher).toHaveBeenCalledWith('/admin/api/entries/listings/mill-house', {
@@ -408,7 +405,7 @@ test('a refused rename says so and keeps the dialog open', async () => {
     ),
   );
   const root = show();
-  await tick();
+  await settle();
   await act(root, 'The Mill House', 'Rename');
   await click(root, '.dialog .btn-primary');
 
@@ -428,19 +425,15 @@ test('a row says which languages it has been written in', async () => {
     ['en', 'de'],
   );
   const root = show();
-  await tick();
+  await settle();
 
   expect(
     Array.from(root.querySelectorAll('.row'), (row) =>
-      Array.from(
-        row.querySelectorAll('.chips .chip'),
-        (chip) =>
-          `${chip.textContent?.trim()}${chip.classList.contains('chip-missing') ? '?' : ''}`,
-      ),
+      Array.from(row.querySelectorAll('.chips .chip'), (chip) => chip.getAttribute('title')),
     ),
   ).toEqual([
-    ['EN', 'DE?'],
-    ['EN?', 'DE'],
+    ['en: written', 'de: not written yet'],
+    ['en: not written yet', 'de: written'],
   ]);
 });
 
@@ -448,27 +441,17 @@ test('a row says which languages it has been written in', async () => {
 test('the language chips are introduced by a word, not labelled on a span', async () => {
   api(ENTRIES, {}, ['en', 'de']);
   const root = show();
-  await tick();
+  await settle();
 
   const chips = q(root, '.row .chips');
   expect(chips?.hasAttribute('aria-label')).toBe(false);
   expect(chips?.previousElementSibling?.textContent).toBe('Languages:');
 });
 
-test('a language turned off for an entry is struck through, not counted as missing', async () => {
-  api([{ ...ENTRIES[0], offered: ['en'] }], {}, ['en', 'de']);
-  const root = show();
-  await tick();
-
-  const de = root.querySelectorAll('.chips .chip')[1];
-  expect(de?.classList.contains('chip-disabled')).toBe(true);
-  expect(de?.classList.contains('chip-missing')).toBe(false);
-});
-
 test('a site that declares one language has no languages column', async () => {
   api(ENTRIES);
   const root = show();
-  await tick();
+  await settle();
 
   expect(q(root, '.chips')).toBeNull();
   expect(Array.from(root.querySelectorAll('.th'), (th) => th.textContent)).not.toContain(
@@ -483,7 +466,7 @@ test('an entry written only in a second language is listed by the words it has',
     ['en', 'de'],
   );
   const root = show();
-  await tick();
+  await settle();
 
   expect(q(root, '.row .td.title a')?.textContent).toBe('Impressum');
 });
@@ -506,7 +489,7 @@ const HIDDEN = [
 test('a row somebody has open says who is editing it', async () => {
   api([{ ...ENTRIES[0], editing: { id: 'u2', name: 'Anna Berg' } }, ENTRIES[1] as object]);
   const root = show();
-  await tick();
+  await settle();
 
   expect(
     Array.from(
@@ -524,7 +507,7 @@ test('each row says who last touched it, and with which verb', async () => {
     { ...ENTRIES[1], edited: { at: now - 30 * 60_000, by: null, kind: 'publish' } },
   ]);
   const root = show();
-  await tick();
+  await settle();
 
   expect(
     Array.from(root.querySelectorAll('.row .td.edited'), (td) =>
@@ -539,18 +522,18 @@ const titles = (root: ParentNode) =>
 test('the status filter narrows the list to the hidden rows, or to the live ones', async () => {
   api(HIDDEN);
   const root = show();
-  await tick();
+  await settle();
   const status = q<HTMLSelectElement>(root, 'select#list-status');
   if (!status) throw new Error('status filter missing');
 
   status.value = 'hidden';
   status.dispatchEvent(new Event('change'));
-  await tick();
+  await settle();
   expect(titles(root)).toEqual(['The Mill House']);
 
   status.value = 'live';
   status.dispatchEvent(new Event('change'));
-  await tick();
+  await settle();
   expect(titles(root)).toEqual(['Seaview Cottage']);
 });
 
@@ -580,7 +563,7 @@ test('the language filter narrows to the rows a language is missing or stale in'
   );
   history.replaceState({}, '', '/admin/c/listings?locale=de');
   const root = show();
-  await tick();
+  await settle();
 
   expect(q<HTMLSelectElement>(root, 'select#list-locale')?.value).toBe('de');
   expect(titles(root)).toEqual(['The Mill House', 'Seaview Cottage', 'The Old Barn']);
@@ -588,7 +571,9 @@ test('the language filter narrows to the rows a language is missing or stale in'
   expect(
     Array.from(
       root.querySelectorAll('.row'),
-      (row) => row.querySelector('.chip-stale')?.textContent,
+      (row) =>
+        row.querySelector('.chip[title="de: behind the language it was translated from"]')
+          ?.textContent,
     ),
   ).toEqual([undefined, undefined, 'DE']);
 
@@ -596,7 +581,7 @@ test('the language filter narrows to the rows a language is missing or stale in'
   if (!language) throw new Error('language filter missing');
   language.value = '';
   language.dispatchEvent(new Event('change'));
-  await tick();
+  await settle();
   expect(titles(root).length).toBe(4);
 });
 
@@ -604,10 +589,10 @@ test('a new entry starts in the language the list is filtered to', async () => {
   api(ENTRIES, {}, ['en', 'de']);
   history.replaceState({}, '', '/admin/c/listings?locale=de');
   const root = show();
-  await tick();
+  await settle();
 
   q<HTMLButtonElement>(root, '.list-toolbar .btn-primary')?.click();
-  await tick();
+  await settle();
 
   expect(q<HTMLSelectElement>(document.body, 'select#new-locale')?.value).toBe('de');
 });
@@ -634,7 +619,7 @@ const summary = (root: ParentNode, id: string) =>
 test('above four languages a row counts its files and names at most three owed', async () => {
   sixRows();
   const root = show();
-  await tick();
+  await settle();
 
   expect(compact(root, 'base')).toEqual(['4/5', 'FR', 'IT', 'ES']);
   expect(compact(root, 'twoMissing')).toEqual(['3/5', 'FR', 'IT', 'ES']);
@@ -645,7 +630,7 @@ test('above four languages a row counts its files and names at most three owed',
 test('the compact row gives its whole state in words, not only on hover', async () => {
   sixRows();
   const root = show();
-  await tick();
+  await settle();
 
   const words =
     'Languages: 4 of 5 language files created. English: written; German: written; ' +
@@ -670,19 +655,19 @@ test('four languages still draw one chip each', async () => {
     ['en', 'de', 'fr', 'it'],
   );
   const root = show();
-  await tick();
+  await settle();
 
   expect(
-    Array.from(root.querySelectorAll('.chips .chip'), (chip) => [chip.textContent, chip.className]),
+    Array.from(root.querySelectorAll('.chips .chip'), (chip) => chip.getAttribute('title')),
   ).toEqual([
-    ['EN', 'chip'],
-    ['DE', 'chip chip-missing'],
-    ['FR', 'chip chip-missing'],
-    ['IT', 'chip chip-disabled'],
-    ['EN', 'chip'],
-    ['DE', 'chip chip-partial'],
-    ['FR', 'chip chip-missing'],
-    ['IT', 'chip chip-missing'],
+    'en: written',
+    'de: not written yet',
+    'fr: not written yet',
+    'it: turned off for this entry',
+    'en: written',
+    'de: partly written, 1 of 2 texts',
+    'fr: not written yet',
+    'it: not written yet',
   ]);
 });
 
@@ -690,7 +675,7 @@ test('the address can ask for one kind of work in a language', async () => {
   sixRows();
   history.replaceState({}, '', '/admin/c/listings?locale=fr&owed=stale');
   const root = show();
-  await tick();
+  await settle();
 
   expect(q<HTMLSelectElement>(root, 'select#list-owed')?.value).toBe('stale');
   expect(names(root)).toEqual(['base', 'twoMissing', 'machine', 'staleAndPartial', 'sourceDraft']);
@@ -699,7 +684,7 @@ test('the address can ask for one kind of work in a language', async () => {
   if (!owed) throw new Error('work filter missing');
   owed.value = 'missing';
   owed.dispatchEvent(new Event('change'));
-  await tick();
+  await settle();
   expect(names(root)).toEqual([
     'germanFirst',
     'legacy',
@@ -713,30 +698,27 @@ test('a partly written file is owed, and its chip is partial unless the file is 
   sixRows();
   history.replaceState({}, '', '/admin/c/listings?locale=de');
   const root = show();
-  await tick();
+  await settle();
 
   expect(names(root)).toContain('untouchedInvalid');
-  const chip = (id: string, text: string) =>
-    Array.from(rowOf(root, id)?.querySelectorAll('.chips .chip') ?? []).find(
-      (c) => c.textContent === text,
-    )?.className;
   expect(compact(root, 'untouchedInvalid')).toEqual(['2/6', 'DE', 'FR', 'IT', '+2']);
-  expect(chip('untouchedInvalid', 'DE')).toBe('chip chip-partial');
+  expect(summary(root, 'untouchedInvalid')).toContain('German: partly written, 0 of 2 texts;');
 
   const language = q<HTMLSelectElement>(root, 'select#list-locale');
   if (!language) throw new Error('language filter missing');
   language.value = '';
   language.dispatchEvent(new Event('change'));
-  await tick();
-  expect(chip('staleAndPartial', 'FR')).toBe('chip chip-stale');
-  expect(chip('staleAndPartial', 'IT')).toBe('chip chip-partial');
+  await settle();
+  expect(summary(root, 'staleAndPartial')).toContain(
+    'French: behind the language it was translated from; Italian: partly written, 0 of 2 texts;',
+  );
 });
 
 test('partly written and machine translated are kinds of work of their own', async () => {
   sixRows();
   history.replaceState({}, '', '/admin/c/listings?locale=fr&owed=unfinished');
   const root = show();
-  await tick();
+  await settle();
 
   expect(q<HTMLSelectElement>(root, 'select#list-owed')?.value).toBe('unfinished');
   // Stale and partly written, so it is in both lists.
@@ -746,7 +728,7 @@ test('partly written and machine translated are kinds of work of their own', asy
   if (!owed) throw new Error('work filter missing');
   owed.value = 'stale';
   owed.dispatchEvent(new Event('change'));
-  await tick();
+  await settle();
   expect(names(root)).toContain('staleAndPartial');
 
   const language = q<HTMLSelectElement>(root, 'select#list-locale');
@@ -755,12 +737,12 @@ test('partly written and machine translated are kinds of work of their own', asy
   language.dispatchEvent(new Event('change'));
   owed.value = 'machine';
   owed.dispatchEvent(new Event('change'));
-  await tick();
+  await settle();
   expect(names(root)).toEqual(['machine']);
 
   language.value = 'nl';
   language.dispatchEvent(new Event('change'));
-  await tick();
+  await settle();
   expect(q(root, '.placeholder')?.textContent?.trim()).toBe(
     'Nothing in Dutch is machine translated.',
   );
@@ -770,7 +752,7 @@ test('a filtered row opens its entry as a queue for that language and work; an u
   sixRows();
   history.replaceState({}, '', '/admin/c/listings?locale=fr&owed=stale');
   const root = show();
-  await tick();
+  await settle();
 
   const title = () => q<HTMLAnchorElement>(root, '.row .title a')?.getAttribute('href');
   expect(title()).toBe('/admin/c/listings/base?queue=fr&owed=stale');
@@ -784,7 +766,7 @@ test('a language turned off for an entry is never owed in it', async () => {
   sixRows();
   history.replaceState({}, '', '/admin/c/listings?locale=nl&owed=missing');
   const root = show();
-  await tick();
+  await settle();
 
   expect(names(root)).toEqual([
     'germanFirst',
@@ -799,7 +781,7 @@ test('an unknown kind of work asks for everything owed', async () => {
   sixRows();
   history.replaceState({}, '', '/admin/c/listings?locale=fr&owed=later');
   const root = show();
-  await tick();
+  await settle();
 
   expect(q<HTMLSelectElement>(root, 'select#list-owed')?.value).toBe('owed');
   expect(names(root)).not.toContain('partlyMarked');
@@ -810,7 +792,7 @@ test('without a declared language nothing is filtered and the work filter is off
   sixRows();
   history.replaceState({}, '', '/admin/c/listings?locale=xx&owed=stale');
   const root = show();
-  await tick();
+  await settle();
 
   expect(q<HTMLSelectElement>(root, 'select#list-locale')?.value).toBe('');
   expect(q<HTMLSelectElement>(root, 'select#list-owed')?.disabled).toBe(true);
@@ -828,7 +810,7 @@ test('switching the interface language keeps both filters and renames them', asy
     uiLocale: 'en',
   });
   app = mount(EntryList, { target: document.body, props });
-  await tick();
+  await settle();
 
   props.uiLocale = 'de';
   flushSync();
@@ -845,7 +827,7 @@ test('switching the interface language keeps both filters and renames them', asy
 test('a hidden entry is badged and offers to be shown again', async () => {
   api(HIDDEN);
   const root = show();
-  await tick();
+  await settle();
 
   expect(Array.from(root.querySelectorAll('.row .td.title .badge'), (b) => b.textContent)).toEqual([
     'Hidden',
@@ -860,7 +842,7 @@ test('a hidden entry is badged and offers to be shown again', async () => {
 test("a row's actions are one menu, closed by Escape and by a click outside", async () => {
   api(ENTRIES);
   const root = show();
-  await tick();
+  await settle();
   expect(root.querySelectorAll('.row .menu-cell button')).toHaveLength(2);
 
   await click(root, '.row [aria-label="Actions for The Mill House"]');
@@ -882,7 +864,7 @@ test("a row's actions are one menu, closed by Escape and by a click outside", as
 test('hiding a row asks where its readers go and sends the answer', async () => {
   const fetcher = api(ENTRIES);
   const root = show();
-  await tick();
+  await settle();
 
   await act(root, 'The Mill House', 'Hide');
   expect(q(root, '.dialog h2')?.textContent).toBe('Where should visitors to this page go now?');
@@ -902,7 +884,7 @@ test('hiding a row asks where its readers go and sends the answer', async () => 
 test('showing an entry again asks nothing', async () => {
   const fetcher = api(HIDDEN);
   const root = show();
-  await tick();
+  await settle();
 
   await act(root, 'The Mill House', 'Show');
 
@@ -918,7 +900,7 @@ test('showing an entry again asks nothing', async () => {
 test('a bulk hide asks once and names every selected entry', async () => {
   const fetcher = api(ENTRIES);
   const root = show();
-  await tick();
+  await settle();
 
   for (const box of Array.from(
     root.querySelectorAll<HTMLInputElement>('.row input[type="checkbox"]'),
@@ -926,7 +908,7 @@ test('a bulk hide asks once and names every selected entry', async () => {
     box.checked = true;
     box.dispatchEvent(new Event('change', { bubbles: true }));
   }
-  await tick();
+  await settle();
   expect(q(root, '.bulk-bar')?.textContent).toContain('2 selected');
 
   await click(root, '.bulk-bar .btn-sm:not(.btn-ghost)');
@@ -983,9 +965,9 @@ const withDeleted = (reply: Record<string, unknown> = {}) => {
 test('the deleted view says what went and who took it away', async () => {
   withDeleted();
   const root = show();
-  await tick();
+  await settle();
   await click(root, '.tabs button:last-child');
-  await tick();
+  await settle();
 
   const rows = Array.from(root.querySelectorAll('.table .row:not(.row-note)'));
   expect(q(rows[0] as ParentNode, '.td.title')?.textContent).toBe('old-mill-house');
@@ -997,16 +979,16 @@ test('the deleted view says what went and who took it away', async () => {
 test('a row whose file is there again keeps its button and says why', async () => {
   const fetcher = withDeleted();
   const root = show();
-  await tick();
+  await settle();
   await click(root, '.tabs button:last-child');
-  await tick();
+  await settle();
 
   const blocked = root.querySelectorAll('.table .row:not(.row-note)')[1] as ParentNode;
   const button = q<HTMLButtonElement>(blocked, 'button');
   expect(button?.getAttribute('aria-disabled')).toBe('true');
   expect(q(root, '.row-note .notice')?.textContent).toContain("Can't be restored");
   button?.click();
-  await tick();
+  await settle();
   expect(q(root, '.dialog')).toBeNull();
   expect(fetcher).not.toHaveBeenCalledWith('/admin/api/restore', expect.anything());
 });
@@ -1014,9 +996,9 @@ test('a row whose file is there again keeps its button and says why', async () =
 test('restoring undoes the commit the row names', async () => {
   const fetcher = withDeleted({ commit_sha: 'res888' });
   const root = show();
-  await tick();
+  await settle();
   await click(root, '.tabs button:last-child');
-  await tick();
+  await settle();
   await click(root, '.table .row .menu-cell button');
   expect(q(root, '.dialog h2')?.textContent).toBe('Restore old-mill-house?');
   await click(root, '.dialog .btn-primary');
@@ -1043,7 +1025,7 @@ test('search matches titles in any language and file names, and can be cleared',
     ['en', 'de'],
   );
   const root = show();
-  await tick();
+  await settle();
   type(root, '#entry-search', ' KÜSTENHAUS ');
   expect(q(root, '.list-toolbar .count')?.textContent).toBe('1 of 2');
   expect(q(root, '.td.title a')?.getAttribute('href')).toContain('seaview-cottage');

@@ -1,5 +1,6 @@
 import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
+import { settle } from '../test-helpers.fixture.js';
 import Diagnostics from './Diagnostics.svelte';
 
 let app: ReturnType<typeof mount>;
@@ -67,14 +68,8 @@ const show = async (
   server(answers, config, keys);
   app = mount(Diagnostics, { target: document.body, props });
   flushSync();
-  await settle();
+  await settle(2);
   return document.body;
-};
-const settle = async () => {
-  await new Promise((r) => setTimeout(r, 0));
-  flushSync();
-  await new Promise((r) => setTimeout(r, 0));
-  flushSync();
 };
 const text = (root: ParentNode) => root.textContent?.replace(/\s+/g, ' ').trim() ?? '';
 const card = (root: HTMLElement, name: string) => {
@@ -125,7 +120,7 @@ test('the test email is sent only when its own button is pressed', async () => {
   expect(text(card(root, 'Email'))).not.toContain('martin@example.com');
 
   press(card(root, 'Email'), 'Send a test email');
-  await settle();
+  await settle(2);
 
   expect(requests).toContain('/admin/api/checks/email');
   expect(text(card(root, 'Email'))).toContain('Sent to martin@example.com.');
@@ -175,7 +170,7 @@ test('with nothing failing the page says everything works', async () => {
 test('Check again runs every check but the email one a second time', async () => {
   const root = await show();
   press(root.querySelector('.health') as HTMLElement, 'Check again');
-  await settle();
+  await settle(2);
   const checks = requests.filter((url) => url.startsWith('/admin/api/checks/'));
   expect(checks.filter((url) => url === '/admin/api/checks/github')).toHaveLength(2);
   expect(checks.filter((url) => url === '/admin/api/checks/translation')).toHaveLength(2);
@@ -187,7 +182,7 @@ test('a row opened by hand stays open through Check again', async () => {
   const details = card(root, 'Publishing').querySelector('details') as HTMLDetailsElement;
   details.open = true;
   press(root.querySelector('.health') as HTMLElement, 'Check again');
-  await settle();
+  await settle(2);
   expect(details.open).toBe(true);
 });
 
@@ -236,7 +231,7 @@ test('simulating a conflict is offered in development and nowhere else', async (
   const root = await show({}, { dev: true });
   expect(text(root)).toContain('Developer tools');
   press(root, 'Simulate a conflict');
-  await settle();
+  await settle(2);
   expect(text(root)).toContain('Open Unpublished changes to resolve it');
   expect(committed).toHaveBeenCalledOnce();
 });
@@ -322,7 +317,7 @@ test('a saved key goes to its own endpoint and the list is read again', async ()
   press(cardOr(root, 'DeepL'), 'Replace');
   type(dialog() as HTMLElement, 'fx-1111-9zQp');
   submit(dialog() as HTMLElement);
-  await settle();
+  await settle(2);
 
   const put = sent.find((call) => call.init?.method === 'PUT');
   expect(put?.url).toBe('/admin/api/settings/deepl');
@@ -341,7 +336,7 @@ test('what was typed is gone from the page once it is saved', async () => {
   press(cardOr(root, 'DeepL'), 'Replace');
   type(dialog() as HTMLElement, 'fx-1111-9zQp');
   submit(dialog() as HTMLElement);
-  await settle();
+  await settle(2);
   expect(text(root)).not.toContain('fx-1111-9zQp');
   expect(root.querySelector('input')).toBeNull();
 });
@@ -358,7 +353,7 @@ test('a key the service refuses keeps the dialog open and says what refused it',
   press(cardOr(root, 'DeepL'), 'Replace');
   type(dialog() as HTMLElement, 'wrong');
   submit(dialog() as HTMLElement);
-  await settle();
+  await settle(2);
 
   const open = dialog();
   expect(open).not.toBeNull();
@@ -376,14 +371,14 @@ test('removing a key asks first, then asks the route to and reads the list again
     SET_HERE,
   );
   press(cardOr(root, 'DeepL'), 'Remove');
-  await settle();
+  await settle(2);
 
   expect(sent.find((call) => call.init?.method === 'DELETE')).toBeUndefined();
   const dialog = root.querySelector('.dialog') as HTMLElement;
   expect(dialog.querySelector('h2')?.textContent).toBe('Remove the DeepL key?');
   expect(text(dialog)).toContain('Removing it hides the Translate button everywhere.');
   press(dialog, 'Remove');
-  await settle();
+  await settle(2);
 
   const gone = sent.find((call) => call.init?.method === 'DELETE');
   expect(gone?.url).toBe('/admin/api/settings/deepl');
@@ -398,7 +393,7 @@ test('a removal refusal remains visible after the integration list is refreshed'
   );
   press(cardOr(root, 'DeepL'), 'Remove');
   press(root.querySelector('.dialog') as HTMLElement, 'Remove');
-  await settle();
+  await settle(2);
 
   expect(text(root)).toContain('The key was not removed (503).');
   expect(requests.filter((url) => url === '/admin/api/settings')).toHaveLength(2);
