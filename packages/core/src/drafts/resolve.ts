@@ -1,5 +1,5 @@
-import { type Change, type DiffGroup, diffEntry, joinedName, rowAddress } from '../content/diff.js';
-import { isObject, rowKey, TRANSLATED_PROPS } from '../content/entry-format.js';
+import { type Change, type DiffGroup, diffEntry, joinedName } from '../content/diff.js';
+import { isObject, rowAddress, rowKey, TRANSLATED_PROPS } from '../content/entry-format.js';
 import { type Field, type Form, rowFields } from '../content/schema.js';
 import type { Labels } from '../content/ui-locale.js';
 

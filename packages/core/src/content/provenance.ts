@@ -3,6 +3,7 @@ import {
   isObject,
   overlay,
   parseEntry,
+  rowAddress,
   rowKey,
   stringifyEntry,
   TRANSLATED_PROPS,
@@ -298,16 +299,7 @@ function valuesInRows(
     if (!isObject(row)) continue;
     const key = rowKey(row, i);
     const fields = fieldsOf(row);
-    if (fields)
-      valuesIn(
-        form,
-        fields,
-        row,
-        `${at}[${key.startsWith('#') ? key.slice(1) : `_id=${key}`}]`,
-        mode,
-        found,
-        want,
-      );
+    if (fields) valuesIn(form, fields, row, rowAddress(at, key), mode, found, want);
   }
 }
 
@@ -409,7 +401,7 @@ function answeredIn(
         if (scalar || !isObject(row)) continue;
         const id = rowKey(row, i);
         const inner = field.type === 'blocks' ? form.blocks[String(row._type)] : field.item;
-        const rowAt = `${path}[${id.startsWith('#') ? id.slice(1) : `_id=${id}`}]`;
+        const rowAt = rowAddress(path, id);
         present.push(rowAt);
         if (Array.isArray(row._locales)) rows[rowAt] = row._locales.map(String);
         if (inner) answeredIn(form, inner, row, rowAt, mode, rows, found, present);
@@ -484,14 +476,6 @@ function textInRows(
     if (!isObject(row)) continue;
     const key = rowKey(row, i);
     const fields = fieldsOf(row);
-    if (fields)
-      textIn(
-        form,
-        fields,
-        row,
-        `${at}[${key.startsWith('#') ? key.slice(1) : `_id=${key}`}]`,
-        mode,
-        found,
-      );
+    if (fields) textIn(form, fields, row, rowAddress(at, key), mode, found);
   }
 }

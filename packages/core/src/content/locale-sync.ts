@@ -4,6 +4,7 @@ import {
   type LocaleSeed,
   overlay,
   overlayProps,
+  rowAddress,
   rowKey,
   type SeedState,
   skeletonOf,
@@ -218,7 +219,7 @@ function applyRows(
       if (!ids.includes(id)) ids.push(id);
     }
   for (const id of ids) {
-    const path = `${at}[${id.startsWith('#') ? id.slice(1) : `_id=${id}`}]`;
+    const path = rowAddress(at, id);
     const answer = ctx.answers.get(path);
     if (answer) answerRow(form, fieldsOf, copies, key, id, answer, mode, ctx.locales);
     // The languages that have the row now, an answer having just moved it about.
@@ -370,7 +371,7 @@ function driftRows(
       }
   for (const [key, row] of rows) {
     const first = row[0]?.data;
-    const path = `${at}[${key.startsWith('#') ? key.slice(1) : `_id=${key}`}]`;
+    const path = rowAddress(at, key);
     const named = row.flatMap((c) =>
       isObject(c.data) && Array.isArray(c.data._locales) ? (c.data._locales as string[]) : [],
     );

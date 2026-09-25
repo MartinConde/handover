@@ -1,4 +1,4 @@
-import { isObject, rowKey, TRANSLATED_PROPS } from './entry-format.js';
+import { isObject, rowAddress, rowKey, TRANSLATED_PROPS } from './entry-format.js';
 import { translatedValues } from './provenance.js';
 import { type Field, type Form, humanise, rowFields, type Translation } from './schema.js';
 import { type Labels, labelIn, labelsOf, UI_LOCALES } from './ui-locale.js';
@@ -265,9 +265,6 @@ function rowsIn(
 
 const keyed = (rows: unknown): Map<string, unknown> =>
   new Map(Array.isArray(rows) ? rows.map((row, i) => [rowKey(row, i), row]) : []);
-
-export const rowAddress = (at: string, key: string) =>
-  `${at}[${key.startsWith('#') ? key.slice(1) : `_id=${key}`}]`;
 
 const asRow = (row: unknown): Record<string, unknown> => (isObject(row) ? row : {});
 

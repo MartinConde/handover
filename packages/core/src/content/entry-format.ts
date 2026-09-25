@@ -280,6 +280,9 @@ function normalise(text: string): string {
 export const rowKey = (row: unknown, i: number) =>
   isObject(row) && typeof row._id === 'string' ? row._id : `#${i}`;
 
+export const rowAddress = (at: string, key: string) =>
+  `${at}[${key.startsWith('#') ? key.slice(1) : `_id=${key}`}]`;
+
 // A row is written to the languages `_locales` names, and to all of them when it names none.
 const inLocale = (row: unknown, locale: string) =>
   !isObject(row) || !Array.isArray(row._locales) || row._locales.includes(locale);
@@ -367,7 +370,7 @@ function syncRows(
   for (const { row, key } of source) {
     const fields = isObject(row) ? fieldsOf(row) : undefined;
     const there = target.get(key);
-    const address = `${sync.at ?? ''}[${key.startsWith('#') ? key.slice(1) : `_id=${key}`}]`;
+    const address = rowAddress(sync.at ?? '', key);
     const candidate =
       sync.state && !key.startsWith('#') && !before.has(key) && there === undefined
         ? sync.state.seeds.get(address)

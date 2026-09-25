@@ -2,7 +2,7 @@
 
 import { and, eq, inArray } from 'drizzle-orm';
 import { type ContentIndex, entryParts, type IndexEntry } from '../content/entries.js';
-import { isObject, parseEntry } from '../content/entry-format.js';
+import { isObject, parseEntry, rowAddress, rowKey } from '../content/entry-format.js';
 import { type I18nRouting, previewTarget } from '../content/names.js';
 import { type EntrySource, entrySource, staleLocales } from '../content/provenance.js';
 import { richtextLinks } from '../content/richtext.js';
@@ -233,9 +233,6 @@ function fieldsIn(
   }
 }
 
-const rowAt = (row: Record<string, unknown>, i: number) =>
-  typeof row._id === 'string' ? `_id=${row._id}` : String(i);
-
 function rowsIn(
   w: Walk,
   fieldsOf: (row: Record<string, unknown>) => readonly Field[] | undefined,
@@ -247,7 +244,7 @@ function rowsIn(
   for (const [i, row] of rows.entries()) {
     if (!isObject(row)) continue;
     const fields = fieldsOf(row);
-    if (fields) fieldsIn(w, fields, row, `${at}[${rowAt(row, i)}]`, mode);
+    if (fields) fieldsIn(w, fields, row, rowAddress(at, rowKey(row, i)), mode);
   }
 }
 
@@ -406,7 +403,7 @@ function menusIn(w: Walk, value: unknown, at: string): void {
   if (!Array.isArray(value)) return;
   for (const [i, menu] of value.entries()) {
     if (!isObject(menu)) continue;
-    itemsIn(w, menu.items, `${at}[${rowAt(menu, i)}].items`, String(menu.key ?? ''));
+    itemsIn(w, menu.items, `${rowAddress(at, rowKey(menu, i))}.items`, String(menu.key ?? ''));
   }
 }
 
@@ -414,7 +411,7 @@ function itemsIn(w: Walk, items: unknown, at: string, menu: string): void {
   if (!Array.isArray(items)) return;
   for (const [i, item] of items.entries()) {
     if (!isObject(item)) continue;
-    const path = `${at}[${rowAt(item, i)}]`;
+    const path = rowAddress(at, rowKey(item, i));
     const link = item.link;
     const ref = isObject(link) && typeof link.ref === 'string' ? link.ref : undefined;
     if (ref) {
