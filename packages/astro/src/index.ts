@@ -33,21 +33,4 @@ export type {
 } from './canvas.js';
 export { createEditContext, isCanvas } from './canvas.js';
 export * from './config.js';
-export {
-  buildIndex,
-  buildMediaUses,
-  buildStale,
-  buildTemplates,
-  contentErrors,
-  contentFiles,
-  default,
-  emitRedirects,
-  emitSitemap,
-  entryForm,
-  loadersModule,
-  modifiedAt,
-  NO_ADAPTER_MESSAGE,
-  screensModule,
-  uiAssetsModule,
-  uiDir,
-} from './integration.js';
+export { default, entryForm } from './integration.js';

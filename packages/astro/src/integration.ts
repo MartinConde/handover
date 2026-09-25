@@ -299,8 +299,10 @@ export async function contentErrors(
 }
 
 /** Titles are read at build because git is slow to list. */
-export async function buildIndex(root: URL, titleFields: TitleFields = {}): Promise<ContentIndex> {
-  const files = await contentFiles(root);
+export async function buildIndex(
+  files: ContentFile[],
+  titleFields: TitleFields = {},
+): Promise<ContentIndex> {
   const errors = contentPathErrors(
     'default',
     files.map((f) => f.path),
@@ -310,13 +312,13 @@ export async function buildIndex(root: URL, titleFields: TitleFields = {}): Prom
 }
 
 /** Read at build with everything under `src/content/`, so the admin needs no git listing. */
-export async function buildTemplates(root: URL): Promise<Record<string, Template[]>> {
-  return templatesFrom('default', await contentFiles(root));
+export async function buildTemplates(files: ContentFile[]): Promise<Record<string, Template[]>> {
+  return templatesFrom('default', files);
 }
 
 /** Read at build so the library never reads the repository per page load. */
-export async function buildMediaUses(root: URL): Promise<MediaUses> {
-  return mediaUsesFrom('default', await contentFiles(root));
+export async function buildMediaUses(files: ContentFile[]): Promise<MediaUses> {
+  return mediaUsesFrom('default', files);
 }
 
 /** Built the same way in the build and the Worker; a localized `slug` stays out of the hash. */
@@ -328,16 +330,6 @@ export function entryForm(cms: HandoverConfig, collection: string, name: string)
   const form = formOf('default', formSchema(schema));
   if (!cms.collections[collection]?.localizedSlugs) return form;
   return { ...form, fields: form.fields.filter((f) => f.path[0] !== 'slug') };
-}
-
-/** Taken at build, where the files are already on disk, so the dashboard does not read git. */
-export async function buildStale(
-  root: URL,
-  cms: HandoverConfig,
-): Promise<Record<string, string[]>> {
-  return staleFrom('default', cms.i18n, await contentFiles(root), (collection, name) =>
-    entryForm(cms, collection, name),
-  );
 }
 
 // A locale is either the folder name or `{ path, codes }`, where the path is the folder.
@@ -543,14 +535,9 @@ export default function handover(cms: HandoverConfig): AstroIntegration {
                   // One immutable snapshot per load keeps dev invalidation explicit and makes every
                   // generated view describe the same filesystem state.
                   const files = await contentFiles(config.root);
-                  const errors = contentPathErrors(
-                    'default',
-                    files.map((file) => file.path),
-                  );
-                  if (errors.length) throw new Error(errors.join('\n'));
-                  const index = indexFrom('default', files, titleFields);
-                  const templates = templatesFrom('default', files);
-                  const uses = mediaUsesFrom('default', files);
+                  const index = await buildIndex(files, titleFields);
+                  const templates = await buildTemplates(files);
+                  const uses = await buildMediaUses(files);
                   const formFor = (collection: string, name: string) =>
                     entryForm(cms, collection, name);
                   const stale = await staleFrom('default', cms.i18n, files, formFor);
