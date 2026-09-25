@@ -3,6 +3,7 @@ import {
   beginOperation,
   collapseRedirects,
   editRedirects,
+  entryUrl,
   finalizeOperation,
   logActivity,
   markOperationCommitted,
@@ -17,7 +18,21 @@ import {
 } from '@handover/core';
 import type { RequestContext } from '../../environment.js';
 import { readJson } from './body.js';
-import { pickable, sitePages } from './content.js';
+import { pickable } from './content.js';
+
+/** What a `from` is held against: a redirect over a live page takes it off the site silently. */
+function sitePages(entries: Awaited<ReturnType<typeof pickable>>): Record<string, string> {
+  const pages: Record<string, string> = {};
+  for (const [collection, collected] of Object.entries(config.collections))
+    for (const locale of config.i18n.locales) {
+      const url = entryUrl('default', config.i18n, collected.index, '', locale);
+      // An entry beats an index at the same address, being the more specific thing to name.
+      if (url) pages[url] = `the ${collection} index`;
+    }
+  for (const entry of entries)
+    for (const url of Object.values(entry.urls)) pages[url] = entry.title || entry.path;
+  return pages;
+}
 
 /** Committed rules in file order, then the rules waiting on an entry's draft, flagged. */
 export async function redirectList(ctx: RequestContext): Promise<Response> {

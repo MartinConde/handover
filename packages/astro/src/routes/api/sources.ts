@@ -24,7 +24,7 @@ import {
 } from '@handover/core';
 import type { RequestContext } from '../../environment.js';
 import { readJson } from './body.js';
-import { entryHref, entryPath, formFor } from './content.js';
+import { entryHref, entryPath, formFor, object } from './content.js';
 import { entryTitles } from './dashboard.js';
 
 const KIND = 'sources-recorded';
@@ -44,7 +44,7 @@ interface Unrecorded {
 type Data = Record<string, unknown>;
 const asData = (contents: string): Data => {
   const data = parseEntry('default', contents);
-  return data && typeof data === 'object' && !Array.isArray(data) ? (data as Data) : {};
+  return object(data) ? data : {};
 };
 // Only a complete mark is judged stale, as in core's `staleLocales`.
 const namedSource = (data: Data | undefined) => {

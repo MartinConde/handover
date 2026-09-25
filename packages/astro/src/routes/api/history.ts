@@ -35,6 +35,7 @@ import {
   formFor,
   heldByAnother,
   NAME,
+  object,
   pendingLocales,
   SHA,
   schemaOf,
@@ -281,9 +282,7 @@ export async function restoreVersion(
       const file = await git.getFile(entryPath(collection, name, locale), sha);
       const entry = file ? parseEntry('default', file.contents) : undefined;
       // An empty file at that commit parses to nothing, which is not a version of anything.
-      return entry && typeof entry === 'object' && !Array.isArray(entry)
-        ? { path: entryPath(collection, slug, locale), entry: entry as Record<string, unknown> }
-        : undefined;
+      return object(entry) ? { path: entryPath(collection, slug, locale), entry } : undefined;
     }),
   );
   const found = read.filter((f) => f !== undefined);

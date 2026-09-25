@@ -7,6 +7,7 @@ import type {
   EntrySource,
   Form,
   GitClient,
+  IndexEntry,
   SourceOf,
   Translate,
   TranslationSource,
@@ -58,9 +59,6 @@ export function entryTitle(entry: string): string {
 // No language is implied: every caller says which file it means.
 export const entryPath = (collection: string, slug: string, locale: string) =>
   `src/content/${collection}/${locale}/${slug}.yaml`;
-
-/** The baseline order: which published file a template copies where the files disagree about their source. */
-export const sourceOrder = () => [...new Set([config.i18n.defaultLocale, ...config.i18n.locales])];
 
 /** One read of every language answers both what the entry holds and which language it is written in. */
 export async function entrySourceFor(
@@ -130,14 +128,6 @@ export async function translationSource(
   const file = await ctx.git().getFile(path, head);
   return file ? { locale, contents: file.contents, blob_sha: file.blob_sha } : undefined;
 }
-
-// Empty on a one-language site, which keeps that site's save exactly the write it was.
-export const siblingPaths = (collection: string, slug: string, source: string) =>
-  Object.fromEntries(
-    config.i18n.locales
-      .filter((locale) => locale !== source)
-      .map((locale) => [locale, entryPath(collection, slug, locale)]),
-  );
 
 // Every file must be recorded in D1 too, or a draft at the old path publishes it back.
 export const entryFiles = async (
@@ -365,20 +355,6 @@ export async function pickable(ctx: RequestContext) {
   );
 }
 
-/** What a `from` is held against: a redirect over a live page takes it off the site silently. */
-export function sitePages(entries: Awaited<ReturnType<typeof pickable>>): Record<string, string> {
-  const pages: Record<string, string> = {};
-  for (const [collection, collected] of Object.entries(config.collections))
-    for (const locale of config.i18n.locales) {
-      const url = entryUrl('default', config.i18n, collected.index, '', locale);
-      // An entry beats an index at the same address, being the more specific thing to name.
-      if (url) pages[url] = `the ${collection} index`;
-    }
-  for (const entry of entries)
-    for (const url of Object.values(entry.urls)) pages[url] = entry.title || entry.path;
-  return pages;
-}
-
 /** Every name the collection already uses, published or only drafted. */
 export async function takenNames(collection: string, database: Db): Promise<string[]> {
   const rows = await overlayRows('default', database, index);
@@ -451,3 +427,43 @@ export function entryHref(entry: string): string {
   const [collection = '', slug = ''] = entry.split('/');
   return collection === 'globals' ? `/admin/site/${slug}` : `/admin/c/${collection}/${slug}`;
 }
+
+// For the routes that write without reading the entry; a one-language site still reads nothing.
+export async function unresolvedSource(ctx: RequestContext, collection: string, slug: string) {
+  if (config.i18n.locales.length < 2) return undefined;
+  const { loaded, source } = await entrySourceFor(ctx, collection, slug);
+  return source && 'problem' in source ? sourceRefusal(source, localeData(loaded)) : undefined;
+}
+
+/** Resolved per language; a picked entry missing there falls back to its index, then home. */
+export function redirectTarget(
+  target: { kind?: unknown; value?: unknown } | undefined,
+  collected: { index?: string },
+  entries: IndexEntry[] | undefined,
+  locale: string,
+): string | undefined {
+  const value = typeof target?.value === 'string' ? target.value : '';
+  if (target?.kind === 'url') return value || undefined;
+  if (target?.kind === 'index')
+    return entryUrl('default', config.i18n, collected.index, '', locale);
+  if (target?.kind !== 'entry') return undefined;
+  const [name = '', id = ''] = value.split('/');
+  const picked = config.collections[name];
+  if (!picked) return undefined;
+  const found = entries?.find((e) => e.id === id);
+  const address = picked.localizedSlugs ? (found?.locales[locale]?.slug ?? id) : id;
+  return (
+    (found?.locales[locale] && entryUrl('default', config.i18n, picked.route, address, locale)) ||
+    entryUrl('default', config.i18n, picked.index, '', locale) ||
+    entryUrl('default', config.i18n, '/', '', locale)
+  );
+}
+
+export const entryNotFound = () =>
+  new Response('Not found', {
+    status: 404,
+    headers: { 'x-handover-error-code': 'ENTRY_NOT_FOUND' },
+  });
+
+export const object = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === 'object' && !Array.isArray(value);

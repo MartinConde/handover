@@ -14,6 +14,7 @@ import type { RequestContext } from '../../../environment.js';
 import { entryProblems } from '../../../problems.js';
 import {
   type entryLocales,
+  entryNotFound,
   entryPath,
   entrySourceFor,
   formFor,
@@ -48,12 +49,6 @@ async function hideTargets(
 }
 
 // The draft wins over the file; no sha goes to the browser, bases are compared server-side.
-export const entryNotFound = () =>
-  new Response('Not found', {
-    status: 404,
-    headers: { 'x-handover-error-code': 'ENTRY_NOT_FOUND' },
-  });
-
 export async function getEntry(
   ctx: RequestContext,
   collection: string,

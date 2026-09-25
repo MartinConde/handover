@@ -36,6 +36,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   upload key pattern with the media routes.
 - Internal: the Worker bindings helpers moved to `src/environment.ts`; auth and preview open D1
   through them.
+- Internal: the entry helpers the admin API routes share live in `routes/api/content.ts`.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth

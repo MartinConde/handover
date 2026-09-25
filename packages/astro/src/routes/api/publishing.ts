@@ -31,6 +31,7 @@ import {
   entrySubject,
   formFor,
   localeData,
+  object,
   publishSources,
   schemaOf,
   siteSeoDefaults,
@@ -97,7 +98,7 @@ function selection(
   if (raw === '') return { without: [] };
   if (body === undefined)
     return codedError(400, 'PUBLISH_SELECTION_INVALID', 'Invalid publish JSON');
-  const named = body && typeof body === 'object' && !Array.isArray(body) ? body : undefined;
+  const named = object(body) ? body : undefined;
   if (
     !named ||
     Object.keys(named).some((key) => key !== 'entries' && key !== 'without') ||

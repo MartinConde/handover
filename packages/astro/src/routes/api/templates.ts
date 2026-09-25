@@ -24,7 +24,10 @@ import {
 import type { RequestContext } from '../../environment.js';
 import { formSchema } from '../../index.js';
 import { readJson } from './body.js';
-import { entryFiles, entryPath, sourceOrder, takenNames } from './content.js';
+import { entryFiles, entryPath, takenNames } from './content.js';
+
+/** The baseline order: which published file a template copies where the files disagree about their source. */
+const sourceOrder = () => [...new Set([config.i18n.defaultLocale, ...config.i18n.locales])];
 
 const templatePath = (collection: string, name: string) =>
   `src/content/_templates/${collection}/${name}.yaml`;

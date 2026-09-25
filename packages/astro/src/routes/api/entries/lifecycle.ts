@@ -36,11 +36,11 @@ import {
   heldByAnother,
   locationOf,
   pendingLocales,
+  redirectTarget,
   schemaOf,
   takenNames,
+  unresolvedSource,
 } from '../content.js';
-import { unresolvedSource } from './editing.js';
-import { redirectTarget } from './locales.js';
 
 // Same derivation as a new entry's: a rename cannot produce a name the CMS could not create.
 export async function rename(

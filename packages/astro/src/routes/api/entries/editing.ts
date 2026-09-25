@@ -23,11 +23,12 @@ import {
   formFor,
   isHolder,
   localeData,
+  object,
   schemaOf,
-  siblingPaths,
   sourceRefusal,
   tabOf,
   translationSource,
+  unresolvedSource,
 } from '../content.js';
 
 /** One lock per entry: `read` never takes it, `beat` extends ours, `take` moves it. */
@@ -83,13 +84,6 @@ async function takeOver(
   };
 }
 
-// For the routes that write without reading the entry; a one-language site still reads nothing.
-export async function unresolvedSource(ctx: RequestContext, collection: string, slug: string) {
-  if (config.i18n.locales.length < 2) return undefined;
-  const { loaded, source } = await entrySourceFor(ctx, collection, slug);
-  return source && 'problem' in source ? sourceRefusal(source, localeData(loaded)) : undefined;
-}
-
 /** Every possible language in one statement; a language with no draft has no row to hit. */
 export async function hold(
   ctx: RequestContext,
@@ -135,8 +129,13 @@ type StructuralSave = {
   seeds: Record<string, LocaleSeed[]>;
 };
 
-export const object = (value: unknown): value is Record<string, unknown> =>
-  !!value && typeof value === 'object' && !Array.isArray(value);
+// Empty on a one-language site, which keeps that site's save exactly the write it was.
+const siblingPaths = (collection: string, slug: string, source: string) =>
+  Object.fromEntries(
+    config.i18n.locales
+      .filter((locale) => locale !== source)
+      .map((locale) => [locale, entryPath(collection, slug, locale)]),
+  );
 
 const rowField = (type: string) => type === 'blocks' || type === 'array' || type === 'menus';
 

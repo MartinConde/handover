@@ -1,6 +1,5 @@
 import config from 'virtual:handover/config';
 import index from 'virtual:handover/index';
-import type { IndexEntry } from '@handover/core';
 import {
   addressError,
   beginOperation,
@@ -43,6 +42,7 @@ import {
   codedError,
   entryFiles,
   entryLocales,
+  entryNotFound,
   entryPath,
   entrySourceFor,
   entrySubject,
@@ -51,13 +51,14 @@ import {
   isHolder,
   localeData,
   locationOf,
+  object,
   offeredIn,
+  redirectTarget,
   schemaOf,
   sourceRefusal,
   tabOf,
+  unresolvedSource,
 } from '../content.js';
-import { object, unresolvedSource } from './editing.js';
-import { entryNotFound } from './reading.js';
 
 /** The mark lives in the files, so turning off a published language commits a delete. */
 export async function offering(
@@ -316,30 +317,6 @@ export async function address(
     session?.user.id,
   );
   return Response.json({});
-}
-
-/** Resolved per language; a picked entry missing there falls back to its index, then home. */
-export function redirectTarget(
-  target: { kind?: unknown; value?: unknown } | undefined,
-  collected: { index?: string },
-  entries: IndexEntry[] | undefined,
-  locale: string,
-): string | undefined {
-  const value = typeof target?.value === 'string' ? target.value : '';
-  if (target?.kind === 'url') return value || undefined;
-  if (target?.kind === 'index')
-    return entryUrl('default', config.i18n, collected.index, '', locale);
-  if (target?.kind !== 'entry') return undefined;
-  const [name = '', id = ''] = value.split('/');
-  const picked = config.collections[name];
-  if (!picked) return undefined;
-  const found = entries?.find((e) => e.id === id);
-  const address = picked.localizedSlugs ? (found?.locales[locale]?.slug ?? id) : id;
-  return (
-    (found?.locales[locale] && entryUrl('default', config.i18n, picked.route, address, locale)) ||
-    entryUrl('default', config.i18n, picked.index, '', locale) ||
-    entryUrl('default', config.i18n, '/', '', locale)
-  );
 }
 
 /** Nothing commits here: the redirects wait on the rows and go out with the publish. */
