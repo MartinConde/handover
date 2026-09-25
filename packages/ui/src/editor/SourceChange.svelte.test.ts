@@ -3,7 +3,7 @@ import { flushSync, mount, unmount } from 'svelte';
 import { afterEach, expect, test, vi } from 'vitest';
 import SourceChangeLocaleFixture from './SourceChangeLocaleFixture.svelte';
 
-// Not testing: the request and the reload, which Editor.test.ts drives through the menu.
+// Not testing: the request and the reload, which Editor.languages.test.ts drives through the menu.
 
 const fields = [
   { path: ['title'], label: 'Title', type: 'text', required: true },
