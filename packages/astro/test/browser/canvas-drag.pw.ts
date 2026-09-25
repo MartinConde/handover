@@ -1,12 +1,12 @@
 import { expect, test } from '@playwright/test';
+import { loadCanvasScript } from './canvas-helpers';
 
 for (const reducedMotion of ['no-preference', 'reduce'] as const) {
   test(`Canvas centers the blocks overview inside a fixed canvas (${reducedMotion})`, async ({
     page,
   }, testInfo) => {
     await page.emulateMedia({ reducedMotion });
-    await page.goto('/canvas-assets');
-    const entries = JSON.parse((await page.locator('body').getAttribute('data-entries')) ?? '{}');
+    const canvasScript = await loadCanvasScript(page);
     await page.evaluate(() => {
       const iframe = document.createElement('iframe');
       iframe.style.cssText = 'width:100%;height:800px;border:0';
@@ -71,7 +71,7 @@ for (const reducedMotion of ['no-preference', 'reduce'] as const) {
       });
       selectBlock();
       scrollTo(0, 860);
-    }, `http://127.0.0.1:4329/admin/_assets/${entries.canvas.script}`);
+    }, `http://127.0.0.1:4329${canvasScript}`);
     const handle = frame.getByRole('button', { name: /Drag Block 1|Block 1 ziehen/ });
     await expect(handle).toBeVisible();
     const row = frame.locator('.action-row');

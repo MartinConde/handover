@@ -1,4 +1,5 @@
 import { expect, type Page, test } from '@playwright/test';
+import { loadCanvasScript, serveCanvasPreview } from './canvas-helpers';
 
 test('saved interface language wins before first paint and an Account switch preserves work', async ({
   context,
@@ -631,11 +632,7 @@ test('Canvas mediates Interact links through saves, new sessions, previews, and 
   page,
   context,
 }) => {
-  await page.goto('/canvas-assets');
-  const entries = JSON.parse(
-    (await page.locator('body').getAttribute('data-entries')) ?? '{}',
-  ) as Record<string, { script: string }>;
-  const canvasScript = `/admin/_assets/${entries.canvas?.script ?? ''}`;
+  const canvasScript = await loadCanvasScript(page);
   let previewGets = 0;
   let canvasPosts = 0;
   await context.route('**/_preview/**', async (route) => {
@@ -754,57 +751,11 @@ test('Canvas mediates Interact links through saves, new sessions, previews, and 
 test('Canvas Inspector and acknowledged plain-text editing share the entry session', async ({
   page,
 }) => {
-  await page.goto('/canvas-assets');
-  const entries = JSON.parse(
-    (await page.locator('body').getAttribute('data-entries')) ?? '{}',
-  ) as Record<string, { script: string; styles: string[] }>;
-  const canvasScript = `/admin/_assets/${entries.canvas?.script ?? ''}`;
-  await page.route('**/_preview/canvas-fixture', async (route) => {
-    const encoded = new URLSearchParams(route.request().postData() ?? '');
-    const snapshot = JSON.parse(encoded.get('snapshot') ?? '{}') as {
-      protocol: number;
-      requestId: string;
-      epoch: string;
-      entry: { collection: string; id: string };
-      locale: string;
-      contentVersion: number;
-      snapshots: Record<
-        string,
-        { title?: string; button?: { type?: string; href?: string; label?: string } }
-      >;
-    };
-    const target = JSON.stringify({
-      document: snapshot.entry,
-      locale: snapshot.locale,
-      address: 'title',
-    })
-      .replace(/&/g, '&amp;')
-      .replace(/'/g, '&#39;');
-    const buttonTarget = JSON.stringify({
-      document: snapshot.entry,
-      locale: snapshot.locale,
-      address: 'button',
-    })
-      .replace(/&/g, '&amp;')
-      .replace(/'/g, '&#39;');
-    const manifest = JSON.stringify({
-      mode: 'canvas',
-      status: 'success',
-      protocol: snapshot.protocol,
-      requestId: snapshot.requestId,
-      epoch: snapshot.epoch,
-      entry: snapshot.entry,
-      locale: snapshot.locale,
-      contentVersion: snapshot.contentVersion,
-    }).replace(/</g, '\\u003c');
-    const title = snapshot.snapshots[snapshot.locale]?.title ?? '';
-    const button = snapshot.snapshots[snapshot.locale]?.button;
-    await route.fulfill({
-      contentType: 'text/html',
-      body: `<!doctype html><html><body><h1 data-handover-field='${target}'>${title}</h1>${button ? `<a data-handover-field='${buttonTarget}' href="${button.href ?? '#'}">${button.label ?? ''}</a>` : ''}<script type="application/json" data-handover-canvas-manifest>${manifest}</script><script type="module" src="${canvasScript}"></script></body></html>`,
-    });
-  });
-  await page.goto('/canvas-shell');
+  await serveCanvasPreview(
+    page,
+    ({ title = '', button }, marker) =>
+      `<h1 data-handover-field='${marker('title')}'>${title}</h1>${button ? `<a data-handover-field='${marker('button')}' href="${button.href ?? '#'}">${button.label ?? ''}</a>` : ''}`,
+  );
   await page.getByRole('button', { name: 'Canvas', exact: true }).click();
 
   const inlineHeading = page
@@ -1012,44 +963,11 @@ test('Canvas Inspector and acknowledged plain-text editing share the entry sessi
 test('drift blocks editing until reconciliation reloads a fresh Canvas session', async ({
   page,
 }) => {
-  await page.goto('/canvas-assets');
-  const entries = JSON.parse(
-    (await page.locator('body').getAttribute('data-entries')) ?? '{}',
-  ) as Record<string, { script: string }>;
-  const canvasScript = `/admin/_assets/${entries.canvas?.script ?? ''}`;
-  await page.route('**/_preview/canvas-fixture', async (route) => {
-    const encoded = new URLSearchParams(route.request().postData() ?? '');
-    const snapshot = JSON.parse(encoded.get('snapshot') ?? '{}') as {
-      protocol: number;
-      requestId: string;
-      epoch: string;
-      entry: { collection: string; id: string };
-      locale: string;
-      contentVersion: number;
-      snapshots: Record<string, { title?: string }>;
-    };
-    const target = JSON.stringify({
-      document: snapshot.entry,
-      locale: snapshot.locale,
-      address: 'title',
-    }).replace(/'/g, '&#39;');
-    const manifest = JSON.stringify({
-      mode: 'canvas',
-      status: 'success',
-      protocol: snapshot.protocol,
-      requestId: snapshot.requestId,
-      epoch: snapshot.epoch,
-      entry: snapshot.entry,
-      locale: snapshot.locale,
-      contentVersion: snapshot.contentVersion,
-    }).replace(/</g, '\\u003c');
-    const title = snapshot.snapshots[snapshot.locale]?.title ?? '';
-    await route.fulfill({
-      contentType: 'text/html',
-      body: `<!doctype html><html><body><h1 data-handover-field='${target}'>${title}</h1><script type="application/json" data-handover-canvas-manifest>${manifest}</script><script type="module" src="${canvasScript}"></script></body></html>`,
-    });
-  });
-  await page.goto('/canvas-shell?c33-drift');
+  await serveCanvasPreview(
+    page,
+    ({ title = '' }, marker) => `<h1 data-handover-field='${marker('title')}'>${title}</h1>`,
+    { shell: '/canvas-shell?c33-drift' },
+  );
 
   await expect(
     page.getByRole('heading', { name: "The languages disagree about this entry's blocks" }),
@@ -1070,11 +988,6 @@ test('drift blocks editing until reconciliation reloads a fresh Canvas session',
 test('Canvas rich text lazily reuses formatting, selection, composition, and Form history', async ({
   page,
 }) => {
-  await page.goto('/canvas-assets');
-  const entries = JSON.parse(
-    (await page.locator('body').getAttribute('data-entries')) ?? '{}',
-  ) as Record<string, { script: string; styles: string[] }>;
-  const canvasScript = `/admin/_assets/${entries.canvas?.script ?? ''}`;
   const escaped = (value: string) =>
     value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const prose = (value: string) => {
@@ -1083,42 +996,11 @@ test('Canvas rich text lazily reuses formatting, selection, composition, and For
     const marked = linked.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     return marked.startsWith('# ') ? `<h1>${marked.slice(2)}</h1>` : `<p>${marked || '<br>'}</p>`;
   };
-  await page.route('**/_preview/canvas-fixture', async (route) => {
-    const encoded = new URLSearchParams(route.request().postData() ?? '');
-    const snapshot = JSON.parse(encoded.get('snapshot') ?? '{}') as {
-      protocol: number;
-      requestId: string;
-      epoch: string;
-      entry: { collection: string; id: string };
-      locale: string;
-      contentVersion: number;
-      snapshots: Record<
-        string,
-        { title?: string; summary?: string; body?: string; legacy?: string }
-      >;
-    };
-    const marker = (address: string) =>
-      JSON.stringify({ document: snapshot.entry, locale: snapshot.locale, address })
-        .replace(/&/g, '&amp;')
-        .replace(/'/g, '&#39;');
-    const manifest = JSON.stringify({
-      mode: 'canvas',
-      status: 'success',
-      protocol: snapshot.protocol,
-      requestId: snapshot.requestId,
-      epoch: snapshot.epoch,
-      entry: snapshot.entry,
-      locale: snapshot.locale,
-      contentVersion: snapshot.contentVersion,
-    }).replace(/</g, '\\u003c');
-    const data = snapshot.snapshots[snapshot.locale] ?? {};
-    await route.fulfill({
-      contentType: 'text/html',
-      body: `<!doctype html><html><body><h1 data-handover-field='${marker('title')}'>${escaped(data.title ?? '')}</h1><div data-rich-summary data-handover-field='${marker('summary')}'>${prose(data.summary ?? '')}</div><div data-rich-body data-handover-field='${marker('body')}'>${prose(data.body ?? '')}</div><div data-rich-legacy data-handover-field='${marker('legacy')}'>${prose(data.legacy ?? '')}</div><script type="application/json" data-handover-canvas-manifest>${manifest}</script><script type="module" src="${canvasScript}"></script></body></html>`,
-    });
-  });
-
-  await page.goto('/canvas-shell');
+  await serveCanvasPreview(
+    page,
+    (data, marker) =>
+      `<h1 data-handover-field='${marker('title')}'>${escaped(data.title ?? '')}</h1><div data-rich-summary data-handover-field='${marker('summary')}'>${prose(data.summary ?? '')}</div><div data-rich-body data-handover-field='${marker('body')}'>${prose(data.body ?? '')}</div><div data-rich-legacy data-handover-field='${marker('legacy')}'>${prose(data.legacy ?? '')}</div>`,
+  );
   await page.getByRole('button', { name: 'Canvas', exact: true }).click();
   const frame = page.locator('iframe[data-handover-canvas-frame="active"]').contentFrame();
   const summary = frame.locator('[data-rich-summary]');
@@ -1205,11 +1087,7 @@ test('Canvas rich text lazily reuses formatting, selection, composition, and For
 
 // Serves the block-controls page from the POSTed snapshot so each command re-renders for real.
 async function openBlockControls(page: Page) {
-  await page.goto('/canvas-assets');
-  const entries = JSON.parse(
-    (await page.locator('body').getAttribute('data-entries')) ?? '{}',
-  ) as Record<string, { script: string }>;
-  const canvasScript = `/admin/_assets/${entries.canvas?.script ?? ''}`;
+  const canvasScript = await loadCanvasScript(page);
   let failNext = false;
   let posts = 0;
   await page.route('**/_preview/canvas-fixture', async (route) => {
