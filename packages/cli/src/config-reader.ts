@@ -294,24 +294,18 @@ export function wranglerConfig(env: Env): WranglerConfig | undefined {
   }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
     throw new Error(`${file}: expected a configuration object`);
+  const { vars, d1_databases: databases, r2_buckets: buckets } = parsed;
+  if (vars !== undefined && (!vars || typeof vars !== 'object' || Array.isArray(vars)))
+    throw new Error(`${file}: vars must be an object/table`);
+  if (databases !== undefined && !Array.isArray(databases))
+    throw new Error(`${file}: d1_databases must be an array of bindings`);
+  if (buckets !== undefined && !Array.isArray(buckets))
+    throw new Error(`${file}: r2_buckets must be an array of bindings`);
   return {
     file,
-    vars:
-      parsed.vars && typeof parsed.vars === 'object' && !Array.isArray(parsed.vars)
-        ? (parsed.vars as Record<string, unknown>)
-        : parsed.vars === undefined
-          ? undefined
-          : { __invalid: parsed.vars },
-    databases: Array.isArray(parsed.d1_databases)
-      ? (parsed.d1_databases as Record<string, unknown>[])
-      : parsed.d1_databases === undefined
-        ? undefined
-        : [{ __invalid: parsed.d1_databases }],
-    buckets: Array.isArray(parsed.r2_buckets)
-      ? (parsed.r2_buckets as Record<string, unknown>[])
-      : parsed.r2_buckets === undefined
-        ? undefined
-        : [{ __invalid: parsed.r2_buckets }],
+    vars: vars as Record<string, unknown> | undefined,
+    databases: databases as Record<string, unknown>[] | undefined,
+    buckets: buckets as Record<string, unknown>[] | undefined,
   };
 }
 
@@ -322,12 +316,6 @@ export function validateWranglerConfig(
   account?: string,
   databaseId?: string,
 ): string[] {
-  if (config.vars?.__invalid !== undefined)
-    throw new Error(`${config.file}: vars must be an object/table`);
-  if (config.databases?.[0]?.__invalid !== undefined)
-    throw new Error(`${config.file}: d1_databases must be an array of bindings`);
-  if (config.buckets?.[0]?.__invalid !== undefined)
-    throw new Error(`${config.file}: r2_buckets must be an array of bindings`);
   const uploads = (config.buckets ?? []).filter((item) => item.binding === 'MEDIA_UPLOADS');
   if (uploads.length > 1)
     throw new Error(`${config.file}: more than one R2 binding is named MEDIA_UPLOADS`);

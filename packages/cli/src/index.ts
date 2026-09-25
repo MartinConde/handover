@@ -14,7 +14,7 @@ export interface Env {
   /** The same, but returns what it wrote to stdout. */
   capture: (argv: string[]) => string;
   /** Returns stdout on success and undefined on failure, without printing an expected miss. */
-  probe?: (argv: string[]) => string | undefined;
+  probe: (argv: string[]) => string | undefined;
 }
 
 export async function main(argv: string[], env: Env): Promise<number> {

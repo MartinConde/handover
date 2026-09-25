@@ -271,13 +271,7 @@ function provisionDatabase(env: Env, record: InitRecord, configuredId?: string):
 
 function provisionBucket(env: Env, record: InitRecord): void {
   const argv = ['wrangler', 'r2', 'bucket', 'info', record.bucketName, '--json'];
-  let output: string | undefined;
-  if (env.probe) output = env.probe(argv);
-  else {
-    try {
-      output = env.capture(argv);
-    } catch {}
-  }
+  const output = env.probe(argv);
   if (output !== undefined) {
     const info = JSON.parse(output) as { name?: unknown };
     if (info.name !== record.bucketName)
