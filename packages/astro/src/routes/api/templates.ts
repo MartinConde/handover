@@ -1,5 +1,6 @@
 import config from 'virtual:handover/config';
 import { templates } from 'virtual:handover/index';
+import type { Db } from '@handover/core';
 import {
   beginOperation,
   createDraft,
@@ -16,13 +17,13 @@ import {
   parseEntry,
   recoverOperationCommit,
   regenerateIds,
+  savedTemplates,
   stringifyEntry,
   withSource,
 } from '@handover/core';
 import { formSchema } from '../../index.js';
 import { entryFiles, entryPath, sourceOrder, takenNames } from './content.js';
 import type { RequestContext } from './context.js';
-import { templateNames } from './entries.js';
 
 const templatePath = (collection: string, name: string) =>
   `src/content/_templates/${collection}/${name}.yaml`;
@@ -54,6 +55,13 @@ const withoutIds = (value: unknown): unknown =>
             .map(([k, v]) => [k, withoutIds(v)]),
         )
       : value;
+
+// The starters the dialog offers: the build's, and the ones saved from the admin since it ran.
+export async function templateNames(collection: string, database: Db): Promise<string[]> {
+  const built = (templates[collection] ?? []).map((t) => t.name);
+  const saved = await savedTemplates('default', database, collection);
+  return [...new Set([...built, ...saved])].sort((a, b) => a.localeCompare(b));
+}
 
 /** Committed now so the next build offers it, and logged so the dialog offers it before then. */
 export async function saveTemplate(

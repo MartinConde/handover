@@ -1,29 +1,29 @@
 import { texts } from 'virtual:handover/index';
 import {
-  claimResource,
   DraftRevisionError,
   loadDraft,
   type PublishFile,
   RepoUnreachableError,
-  ResourceLimitError,
-  releaseResource,
 } from '@handover/core';
 import { afterEach, expect, test, vi } from 'vitest';
 import { DELETE, GET, POST, PUT } from '../api.js';
 import {
+  addressed,
   beats,
   createDraft,
   ctx,
   deletedEntries,
   discardDraft,
+  drifted,
   dropped,
   editor,
   files,
+  germanOnly,
   getFile,
-  heldDrafts,
   holdEntry,
   home,
   logged,
+  machine,
   moved,
   overlayRows,
   owner,
@@ -39,15 +39,12 @@ import {
   resolveDrift,
   rows,
   saveDraft,
-  savedTemplates,
-  saveTranslated,
   setEntryAddress,
   setEntryLocales,
   setEntryStatus,
   state,
-  stored,
   taken,
-  translate,
+  untranslated,
 } from './harness.js';
 
 const { workerMailerMock, configMock, indexMock, cloudflareMock, authMock, coreMock } =
@@ -70,27 +67,6 @@ afterEach(() => {
   resetMocks();
   resetState();
   for (const key of Object.keys(texts)) delete texts[key];
-});
-
-// The whole point of the section: the key the client pasted is the one that translates.
-test('the key stored here is the one DeepL is called with, over the one on the Worker', async () => {
-  machine();
-  state.translator = undefined;
-  state.deeplKey = 'env-key';
-  stored.deepl = { value: 'fx-client-key', hint: '-key', updatedAt: 1, updatedBy: 'u1' };
-  const calls: { init: RequestInit }[] = [];
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (_url: string, init: RequestInit) => {
-      calls.push({ init });
-      const sent = JSON.parse(String(init.body)) as { text: string[] };
-      return Response.json({ translations: sent.text.map((t) => ({ text: `[de] ${t}` })) });
-    }),
-  );
-
-  expect((await POST(post('translate/pages/home/de', ''))).status).toBe(200);
-  const headers = calls[0]?.init.headers as Record<string, string> | undefined;
-  expect(headers?.authorization).toBe('DeepL-Auth-Key fx-client-key');
 });
 
 test('an entry returns its fields and its parsed data, and no sha', async () => {
@@ -288,63 +264,6 @@ test('a global takes a draft through the same autosave as an entry', async () =>
   delete files['src/content/globals/en/site.yaml'];
 });
 
-// The site settings list: the cards, in cms.config.ts order.
-test('the globals list names each global and the languages it has a file in', async () => {
-  state.locales = ['en', 'de'];
-  pendingDrafts.mockImplementationOnce(async () => []);
-
-  const res = await GET(ctx('globals'));
-
-  expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({
-    globals: [
-      {
-        key: 'site',
-        label: 'Site details',
-        labels: { en: 'Site details', de: 'Website-Angaben' },
-        description: 'Contact details and footer text',
-        locales: ['en'],
-        pending: false,
-        edited: null,
-      },
-    ],
-    locales: ['en', 'de'],
-  });
-  state.locales = ['en'];
-});
-
-test('a global with a draft ahead of the repository carries the pending dot', async () => {
-  state.locales = ['en', 'de'];
-  const row = {
-    path: 'src/content/globals/de/site.yaml',
-    contents: 'footerText: "Küstenhäuser"\n',
-    updatedAt: 1755864000000,
-  };
-  overlayRows.mockImplementationOnce(async () => [row]);
-  pendingDrafts.mockImplementationOnce(async () => [row]);
-
-  const res = await GET(ctx('globals'));
-
-  const { globals } = (await res.json()) as {
-    globals: { locales: string[]; pending: boolean }[];
-  };
-  const [global] = globals;
-  expect(global?.pending).toBe(true);
-  // The German file is a draft and has never been committed, and the card counts it all the same.
-  expect(global?.locales).toEqual(['en', 'de']);
-  state.locales = ['en'];
-});
-
-test('a global somebody has open says who', async () => {
-  state.holders = { 'globals/site': { id: 'u2', name: 'Anna Berg' } };
-
-  const res = await GET(ctx('globals'));
-
-  const { globals } = (await res.json()) as { globals: { editing?: unknown }[] };
-  expect(globals[0]?.editing).toEqual({ id: 'u2', name: 'Anna Berg' });
-  state.holders = {};
-});
-
 // A file with nothing in it is still a file.
 test('a language whose file is empty opens as an empty entry', async () => {
   state.locales = ['en', 'de'];
@@ -529,264 +448,6 @@ test('an autosave for an entry that is not in the repo is 404', async () => {
   expect((await PUT(put('drafts/listings/gone', JSON.stringify({ data })))).status).toBe(404);
 });
 
-test('the pending list is what the drafts hold that the repository does not', async () => {
-  const res = await GET(ctx('drafts'));
-  expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({
-    defaultLocale: 'en',
-    entries: [
-      {
-        key: 'listings/mill-house',
-        title: 'The Mill House',
-        collection: 'listings',
-        locales: ['en'],
-        files: ['src/content/listings/en/mill-house.yaml'],
-        updated_at: 1755864000000,
-        held_by: null,
-      },
-    ],
-  });
-});
-
-// The landing page.
-test('the dashboard lists what was edited and what was published, newest first', async () => {
-  state.publishes = [{ entry: 'posts/hello', at: 1755950000000, by: 'Martin Conde' }];
-  state.editors = { 'src/content/listings/en/mill-house.yaml': 'Anna Berg' };
-
-  const res = await GET(ctx('dashboard'));
-
-  expect(res.status).toBe(200);
-  const { recent } = (await res.json()) as { recent: Record<string, unknown>[] };
-  expect(recent).toEqual([
-    {
-      key: 'posts/hello',
-      title: 'Hello',
-      collection: 'posts',
-      href: '/admin/c/posts/hello',
-      at: 1755950000000,
-      by: 'Martin Conde',
-      kind: 'publish',
-    },
-    {
-      key: 'listings/mill-house',
-      title: 'The Mill House',
-      collection: 'listings',
-      href: '/admin/c/listings/mill-house',
-      at: 1755864000000,
-      // Who typed it, which is not who published it: the two rows carry different verbs.
-      by: 'Anna Berg',
-      kind: 'edit',
-    },
-  ]);
-});
-
-// The draft is what the client is looking at; the publish it was last in is behind it.
-test('an entry with unpublished changes is described by the edit and not by the publish', async () => {
-  state.publishes = [{ entry: 'listings/mill-house', at: 1755950000000, by: 'Martin Conde' }];
-  state.holders = { 'listings/mill-house': { id: 'u2', name: 'Anna Berg' } };
-
-  const { recent } = (await (await GET(ctx('dashboard'))).json()) as {
-    recent: Record<string, unknown>[];
-  };
-
-  expect(recent).toEqual([
-    expect.objectContaining({
-      key: 'listings/mill-house',
-      at: 1755864000000,
-      kind: 'edit',
-      editing: { id: 'u2', name: 'Anna Berg' },
-    }),
-  ]);
-  state.holders = {};
-});
-
-// A global is edited at its own address, not under /admin/c/.
-test('a global on the dashboard is named and addressed the way Site settings names it', async () => {
-  pendingDrafts.mockImplementationOnce(async () => [
-    {
-      path: 'src/content/globals/en/site.yaml',
-      contents: 'footerText: "Coastal homes since 2009"\n',
-      updatedAt: 1755864000000,
-    },
-  ]);
-
-  const { recent } = (await (await GET(ctx('dashboard'))).json()) as {
-    recent: Record<string, unknown>[];
-  };
-
-  expect(recent[0]).toMatchObject({
-    title: 'Site details',
-    labels: { en: 'Site details', de: 'Website-Angaben' },
-    href: '/admin/site/site',
-  });
-});
-
-test('translation health counts the languages an entry owes and the ones behind their source', async () => {
-  state.locales = ['en', 'de'];
-
-  const { translations } = (await (await GET(ctx('dashboard'))).json()) as {
-    translations: { defaultLocale: string; locales: { locale: string }[] };
-  };
-
-  expect(translations).toEqual({
-    defaultLocale: 'en',
-    locales: [
-      { locale: 'en', missing: 0, stale: 0, unfinished: 0, machine: 0, where: [] },
-      // Everything the index holds but `posts/taken`, which is the one entry with two files.
-      {
-        locale: 'de',
-        missing: 5,
-        stale: 1,
-        unfinished: 0,
-        machine: 0,
-        where: ['listings', 'presenters', 'posts'],
-      },
-    ],
-  });
-  state.locales = ['en'];
-});
-
-// The build's inventories with the drafts over them; a global counts though it has no list.
-test('translation health counts unfinished and machine-written languages, drafts and globals included', async () => {
-  state.locales = ['en', 'de'];
-  Object.assign(texts, {
-    'posts/taken': { en: { paths: ['title', 'seo.title'] }, de: { paths: ['title'] } },
-    'globals/site': { en: { paths: ['footerText'] } },
-  });
-  overlayRows.mockImplementationOnce(async () => [
-    {
-      path: 'src/content/globals/de/site.yaml',
-      contents: '_version: 1\n_machine: [footerText]\nfooterText: "Häuser an der Küste"\n',
-    },
-  ]);
-
-  const { translations } = (await (await GET(ctx('dashboard'))).json()) as {
-    translations: { locales: { locale: string }[] };
-  };
-
-  expect(translations.locales).toEqual([
-    expect.objectContaining({ locale: 'en', unfinished: 0, machine: 0 }),
-    expect.objectContaining({ locale: 'de', unfinished: 1, machine: 1 }),
-  ]);
-});
-
-// Show opens the list filtered to what is owed, and a partly written file is owed.
-test('translation health sends Show to a collection whose only debt is a partly written file', async () => {
-  state.locales = ['en', 'de'];
-  Object.assign(texts, { 'presenters/rosa-hale': { en: { paths: ['name', 'portrait.alt'] } } });
-  overlayRows.mockImplementationOnce(async () => [
-    {
-      path: 'src/content/presenters/de/rosa-hale.yaml',
-      contents: '_version: 1\nname: Rosa Hale\n',
-    },
-  ]);
-
-  const { translations } = (await (await GET(ctx('dashboard'))).json()) as {
-    translations: { locales: { locale: string; where: string[] }[] };
-  };
-
-  expect(translations.locales[1]).toMatchObject({
-    locale: 'de',
-    unfinished: 1,
-    where: ['listings', 'presenters', 'posts'],
-  });
-});
-
-test('a one-language site has nothing to report about its languages', async () => {
-  const { translations } = (await (await GET(ctx('dashboard'))).json()) as { translations: null };
-
-  expect(translations).toBe(null);
-});
-
-test('the build line names who published, and says nothing over a commit that was not one', async () => {
-  const line = async () =>
-    ((await (await GET(ctx('dashboard'))).json()) as { published: unknown }).published;
-
-  expect(await line()).toEqual({ at: 1755864000000, by: 'Anna Berg' });
-
-  state.lastCommitRow = { sha: 'def456', at: 1755864000000, kind: 'entry-rename', by: 'Anna Berg' };
-  expect(await line()).toBe(null);
-});
-
-// One entry, one name, on every screen.
-test('a global waiting to be published is listed under its label', async () => {
-  pendingDrafts.mockImplementationOnce(async () => [
-    {
-      path: 'src/content/globals/en/site.yaml',
-      contents: 'footerText: "Coastal homes since 2009"\n',
-      updatedAt: 1755864000000,
-    },
-  ]);
-
-  const res = await GET(ctx('drafts'));
-
-  expect(await res.json()).toEqual({
-    defaultLocale: 'en',
-    entries: [
-      {
-        key: 'globals/site',
-        title: 'Site details',
-        labels: { en: 'Site details', de: 'Website-Angaben' },
-        collection: 'globals',
-        locales: ['en'],
-        files: ['src/content/globals/en/site.yaml'],
-        updated_at: 1755864000000,
-        held_by: null,
-      },
-    ],
-  });
-});
-
-// The drawer picks entries, so the grouping is done where the titles are.
-test('the pending list is one row per entry, whatever languages of it are waiting', async () => {
-  state.locales = ['en', 'de'];
-  pendingDrafts.mockImplementationOnce(async () => [
-    { path: 'src/content/listings/de/mill-house.yaml', contents: 'x', updatedAt: 1755864000000 },
-    {
-      path: 'src/content/listings/en/mill-house.yaml',
-      contents: 'y',
-      updatedAt: 1755863000000,
-      pendingRedirects: [{ from: '/listings/mill', to: '/listings/mill-house' }],
-    },
-    { path: 'src/content/pages/en/home.yaml', contents: 'z', updatedAt: 1755862000000 },
-  ]);
-  heldDrafts.mockImplementationOnce(async () => ({
-    'pages/home': { id: 'u2', name: 'Martin' },
-  }));
-  const res = await GET(ctx('drafts'));
-  expect(await res.json()).toEqual({
-    defaultLocale: 'en',
-    entries: [
-      {
-        key: 'listings/mill-house',
-        title: 'The Mill House',
-        collection: 'listings',
-        // In the order the site declares them, not the order the rows came back in.
-        locales: ['en', 'de'],
-        files: [
-          'src/content/listings/de/mill-house.yaml',
-          'src/content/listings/en/mill-house.yaml',
-        ],
-        // What the address change on one of its rows owes; the file itself is never a row.
-        redirects: 1,
-        updated_at: 1755864000000,
-        held_by: null,
-      },
-      {
-        key: 'pages/home',
-        // Nothing in the index and nothing published: the file name is what there is to call it.
-        title: 'home',
-        collection: 'pages',
-        locales: ['en'],
-        files: ['src/content/pages/en/home.yaml'],
-        updated_at: 1755862000000,
-        // The hold is the entry's, so it is read once rather than per file.
-        held_by: { id: 'u2', name: 'Martin' },
-      },
-    ],
-  });
-});
-
 test('discarding a draft drops the row and commits nothing', async () => {
   discardDraft.mockClear();
   publish.mockClear();
@@ -806,116 +467,6 @@ test('discarding a draft of a collection that is not configured is 404', async (
   expect(discardDraft).not.toHaveBeenCalled();
 });
 
-test('the entry list is the built index with the pending drafts over it', async () => {
-  overlayRows.mockImplementationOnce(async () => [
-    {
-      path: 'src/content/listings/en/mill-house.yaml',
-      contents: 'title: "The Mill House, renamed"\n',
-    },
-  ]);
-  const res = await GET(ctx('entries/listings'));
-  expect(res.status).toBe(200);
-  const listed = (await res.json()) as { entries: unknown; templates: unknown };
-  expect(listed.entries).toEqual([
-    {
-      id: 'mill-house',
-      locales: {
-        en: {
-          title: 'The Mill House, renamed',
-          path: 'src/content/listings/en/mill-house.yaml',
-        },
-      },
-      // Which rows the duplicate dialog can offer "including unpublished changes?" about.
-      pending: true,
-      // The draft row is the last touch; nobody is signed in on this request, so no name.
-      edited: { key: 'listings/mill-house', at: 1755864000000, by: null, kind: 'edit' },
-    },
-    {
-      id: 'seaview-cottage',
-      locales: {
-        en: {
-          title: 'Seaview Cottage',
-          path: 'src/content/listings/en/seaview-cottage.yaml',
-        },
-      },
-      edited: null,
-    },
-  ]);
-  // The starters the New entry dialog offers beside Blank, read at build with the index.
-  expect(listed.templates).toEqual(['house']);
-});
-
-// The list's language filter narrows to the rows a language is missing or stale in.
-test('a row names the languages the build marked stale', async () => {
-  const { entries } = (await (await GET(ctx('entries/posts'))).json()) as {
-    entries: { id: string; stale?: string[] }[];
-  };
-
-  expect(entries.map((e) => [e.id, e.stale])).toEqual([
-    ['hello', undefined],
-    ['taken', ['de']],
-  ]);
-});
-
-// Stale is the build's and partial is counted now, so one language can be both.
-test('a row carries partial and machine languages beside stale, and none of the paths', async () => {
-  state.locales = ['en', 'de'];
-  Object.assign(texts, {
-    'posts/taken': {
-      en: { paths: ['title', 'seo.title'] },
-      de: { paths: ['title'], machine: true },
-    },
-  });
-
-  const { entries } = (await (await GET(ctx('entries/posts'))).json()) as {
-    entries: Record<string, unknown>[];
-  };
-
-  expect(entries.find((e) => e.id === 'taken')).toMatchObject({
-    stale: ['de'],
-    partial: { de: [1, 2] },
-    machine: ['de'],
-  });
-  expect(JSON.stringify(entries)).not.toContain('seo.title');
-});
-
-// The dashboard's line, on every row: the draft's editor where there is a draft.
-test('the entry list says who last touched each row, and whether that is out yet', async () => {
-  state.publishes = [{ entry: 'listings/seaview-cottage', at: 1755950000000, by: 'Martin Conde' }];
-  state.editors = { 'src/content/listings/en/mill-house.yaml': 'Anna Berg' };
-
-  const { entries } = (await (await GET(ctx('entries/listings'))).json()) as {
-    entries: { id: string; edited: unknown }[];
-  };
-
-  expect(entries.map((e) => [e.id, e.edited])).toEqual([
-    [
-      'mill-house',
-      { key: 'listings/mill-house', at: 1755864000000, by: 'Anna Berg', kind: 'edit' },
-    ],
-    [
-      'seaview-cottage',
-      { key: 'listings/seaview-cottage', at: 1755950000000, by: 'Martin Conde', kind: 'publish' },
-    ],
-  ]);
-  state.publishes = [];
-  state.editors = {};
-});
-
-// The badge on the row: the same answer the members screen gives, seen from the entry's side.
-test('the entry list says who is editing a row, and nothing on the rows nobody is in', async () => {
-  state.holders = { 'listings/mill-house': { id: 'u2', name: 'Anna Berg' } };
-
-  const res = await GET(ctx('entries/listings'));
-
-  const { entries } = (await res.json()) as { entries: { id: string; editing?: unknown }[] };
-  expect(entries.map((e) => [e.id, e.editing])).toEqual([
-    ['mill-house', { id: 'u2', name: 'Anna Berg' }],
-    ['seaview-cottage', undefined],
-  ]);
-  state.holders = {};
-});
-
 test('opening an entry names the field its collection is keyed on', async () => {
   state.draft = { contents: 'name: "Rosa Hale"\n', baseSha: 'head789', baseBlob: '' };
   const keyed = (await (await GET(ctx('entries/presenters/rosa-hale'))).json()) as {
@@ -927,154 +478,6 @@ test('opening an entry names the field its collection is keyed on', async () => 
   };
   expect(plain.titleField).toBeUndefined();
   state.draft = undefined;
-});
-
-test('a collection keyed on another field lists its drafts by that field', async () => {
-  overlayRows.mockImplementationOnce(async () => [
-    {
-      path: 'src/content/presenters/en/ada-fenwick.yaml',
-      contents: 'name: "Ada Fenwick"\n',
-    },
-  ]);
-  const res = await GET(ctx('entries/presenters'));
-  expect(((await res.json()) as { entries: unknown }).entries).toEqual([
-    {
-      id: 'ada-fenwick',
-      locales: {
-        en: { title: 'Ada Fenwick', path: 'src/content/presenters/en/ada-fenwick.yaml' },
-      },
-      edited: null,
-    },
-    {
-      id: 'rosa-hale',
-      locales: { en: { title: 'Rosa Hale', path: 'src/content/presenters/en/rosa-hale.yaml' } },
-      edited: null,
-    },
-  ]);
-});
-
-test('listing an unknown collection is 404', async () => {
-  expect((await GET(ctx('entries/nope'))).status).toBe(404);
-});
-
-test('creating an entry derives its file name and stores it as a draft, uncommitted', async () => {
-  createDraft.mockClear();
-  publish.mockClear();
-  const res = await POST(post('entries/listings', JSON.stringify({ title: 'Café & Bar / 2026' })));
-  expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ slug: 'cafe-bar-2026' });
-  expect(createDraft).toHaveBeenCalledWith(
-    'default',
-    expect.anything(),
-    expect.anything(),
-    'src/content/listings/en/cafe-bar-2026.yaml',
-    // Only the title: a required field is left absent rather than guessed at.
-    { _version: 1, title: 'Café & Bar / 2026' },
-  );
-  expect(publish).not.toHaveBeenCalled();
-});
-
-test('a new entry keeps the title that named its file, under the declared field', async () => {
-  createDraft.mockClear();
-  const res = await POST(post('entries/presenters', JSON.stringify({ title: 'Ada Fenwick' })));
-  expect(await res.json()).toEqual({ slug: 'ada-fenwick' });
-  expect(createDraft).toHaveBeenCalledWith(
-    'default',
-    expect.anything(),
-    expect.anything(),
-    'src/content/presenters/en/ada-fenwick.yaml',
-    { _version: 1, name: 'Ada Fenwick' },
-  );
-});
-
-test('a title already used in the collection gets the collision suffix', async () => {
-  const res = await POST(post('entries/listings', JSON.stringify({ title: 'Seaview Cottage' })));
-  expect(await res.json()).toEqual({ slug: 'seaview-cottage-2' });
-});
-
-test('a name already taken by an unpublished entry counts as taken too', async () => {
-  overlayRows.mockImplementationOnce(async () => [
-    {
-      path: 'src/content/listings/en/strandhaus-nord.yaml',
-      contents: 'title: "Strandhaus Nord"\n',
-    },
-  ]);
-  const res = await POST(post('entries/listings', JSON.stringify({ title: 'Strandhaus Nord' })));
-  expect(await res.json()).toEqual({ slug: 'strandhaus-nord-2' });
-});
-
-test('the language a new entry is created in is the one it is written in', async () => {
-  createDraft.mockClear();
-  state.locales = ['en', 'de'];
-
-  const res = await POST(
-    post('entries/listings', JSON.stringify({ title: 'Strandhaus', locale: 'de' })),
-  );
-
-  expect(res.status).toBe(200);
-  expect(createDraft).toHaveBeenCalledWith(
-    'default',
-    expect.anything(),
-    expect.anything(),
-    'src/content/listings/de/strandhaus.yaml',
-    { _version: 1, _source: 'de', title: 'Strandhaus' },
-  );
-});
-
-test('a template creates its entry in the chosen language and records it there', async () => {
-  createDraft.mockClear();
-  state.locales = ['en', 'de'];
-
-  await POST(
-    post(
-      'entries/pages',
-      JSON.stringify({ title: 'Nach Devon', template: 'landing', locale: 'de' }),
-    ),
-  );
-
-  const [, , , path, values] = createDraft.mock.calls[0] as [
-    string,
-    unknown,
-    unknown,
-    string,
-    Record<string, unknown>,
-  ];
-  expect(path).toBe('src/content/pages/de/nach-devon.yaml');
-  expect(values._source).toBe('de');
-  expect(values.title).toBe('Nach Devon');
-});
-
-test('a new entry in a language the site does not declare is refused whole', async () => {
-  createDraft.mockClear();
-  state.locales = ['en', 'de'];
-
-  const res = await POST(
-    post('entries/listings', JSON.stringify({ title: 'Strandhaus', locale: 'fr' })),
-  );
-
-  expect(res.status).toBe(400);
-  expect(await res.text()).toBe('fr is not a language this site declares');
-  expect(createDraft).not.toHaveBeenCalled();
-});
-
-test('the one language of a one-language site is a valid choice and records nothing', async () => {
-  createDraft.mockClear();
-
-  const res = await POST(
-    post('entries/listings', JSON.stringify({ title: 'Strandhaus', locale: 'en' })),
-  );
-
-  expect(res.status).toBe(200);
-  expect(createDraft.mock.calls[0]?.[4]).not.toHaveProperty('_source');
-  expect(
-    (await POST(post('entries/listings', JSON.stringify({ title: 'x', locale: 'de' })))).status,
-  ).toBe(400);
-});
-
-test('creating in an unknown collection is 404', async () => {
-  createDraft.mockClear();
-  expect((await POST(post('entries/nope', JSON.stringify({ title: 'x' })))).status).toBe(404);
-  expect(createDraft).not.toHaveBeenCalled();
 });
 
 test('an entry that exists only as a draft opens from it', async () => {
@@ -1176,135 +579,6 @@ test('an entry that was never published cannot be duplicated', async () => {
 
 test('duplicating in an unknown collection is 404', async () => {
   expect((await POST(post('entries/nope/home/duplicate', JSON.stringify({})))).status).toBe(404);
-});
-
-// A starter is a file with no ids in it.
-test('creating from a template fills the entry from it and gives its blocks ids', async () => {
-  createDraft.mockClear();
-  const res = await POST(
-    post('entries/pages', JSON.stringify({ title: 'Move to Devon', template: 'landing' })),
-  );
-
-  expect(await res.json()).toEqual({ slug: 'move-to-devon' });
-  const values = createDraft.mock.calls[0]?.[4] as Record<string, unknown>;
-  const [block] = values.blocks as { _type: string; _id: string; heading: string }[];
-  expect(block?._id).toMatch(/^[0-9a-z]{8}$/);
-  expect(block?.heading).toBe('Move to the coast');
-  // The title typed into the dialog, not the one the starter carries.
-  expect(values.title).toBe('Move to Devon');
-  expect(values._version).toBe(1);
-});
-
-test('a template that names a language gives a one-language entry none', async () => {
-  createDraft.mockClear();
-  await POST(
-    post('entries/pages', JSON.stringify({ title: 'Move to Devon', template: 'landing' })),
-  );
-
-  expect(createDraft.mock.calls[0]?.[4]).not.toHaveProperty('_source');
-});
-
-test('creating from a template no collection declares is 404', async () => {
-  createDraft.mockClear();
-  const res = await POST(
-    post('entries/listings', JSON.stringify({ title: 'Strandhaus', template: 'palace' })),
-  );
-  expect(res.status).toBe(404);
-  expect(createDraft).not.toHaveBeenCalled();
-});
-
-// A template is the entry's own file in the language it was written in.
-test('saving as a template commits one stripped file and logs it', async () => {
-  publish.mockClear();
-  files['src/content/pages/en/home.yaml'] =
-    '_version: 1\n_i18n:\n  sourceLocale: "en"\n_status: "hidden"\nslug: "start"\ntitle: "Home"\nblocks:\n  - _type: "hero"\n    _id: "k3nf9a2p"\n    heading: "Hi"\n';
-
-  const res = await POST(
-    post('entries/pages/home/template', JSON.stringify({ to: 'Landing page' }), owner),
-  );
-
-  expect(res.status).toBe(200);
-  expect(await res.json()).toEqual({ name: 'landing-page' });
-  expect(publish).toHaveBeenCalledTimes(1);
-  expect(publish).toHaveBeenCalledWith(
-    [
-      {
-        path: 'src/content/_templates/pages/landing-page.yaml',
-        contents: '_version: 1\ntitle: "Home"\nblocks:\n  - _type: "hero"\n    heading: "Hi"\n',
-      },
-    ],
-    {
-      base_sha: 'head789',
-      message: expect.stringContaining('Save pages/home as the template landing-page'),
-    },
-  );
-  expect(logged).toEqual([
-    {
-      userId: 'u1',
-      kind: 'template-saved',
-      subject: 'src/content/pages/en/home.yaml',
-      detail: { template: 'landing-page' },
-      commitSha: 'def456',
-    },
-  ]);
-});
-
-// The name goes through the same derivation as a new entry's.
-test('a template name already taken gets the next free one', async () => {
-  publish.mockClear();
-  files['src/content/pages/en/home.yaml'] = '_version: 1\ntitle: "Home"\n';
-  savedTemplates.mockImplementationOnce(async () => ['home']);
-
-  const res = await POST(post('entries/pages/home/template', JSON.stringify({}), owner));
-
-  expect(await res.json()).toEqual({ name: 'home-2' });
-  expect(publish.mock.calls[0]?.[0]).toEqual([
-    { path: 'src/content/_templates/pages/home-2.yaml', contents: '_version: 1\ntitle: "Home"\n' },
-  ]);
-});
-
-test('an entry that was never published cannot be saved as a template', async () => {
-  publish.mockClear();
-  const res = await POST(
-    post('entries/listings/strandhaus-nord/template', JSON.stringify({}), owner),
-  );
-  expect(res.status).toBe(409);
-  expect(await res.text()).toBe('Publish this entry before saving it as a template');
-  expect(publish).not.toHaveBeenCalled();
-});
-
-// A template shapes every entry made after it.
-test('an editor cannot save a template', async () => {
-  publish.mockClear();
-  files['src/content/pages/en/home.yaml'] = '_version: 1\ntitle: "Home"\n';
-  const res = await POST(post('entries/pages/home/template', JSON.stringify({}), editor));
-  expect(res.status).toBe(403);
-  expect(publish).not.toHaveBeenCalled();
-});
-
-// Until the next build the repository's own list does not have a saved template.
-test('the entry list offers the saved templates beside the built ones', async () => {
-  savedTemplates.mockImplementationOnce(async () => ['flat', 'house']);
-  const res = await GET(ctx('entries/listings'));
-  expect(((await res.json()) as { templates: string[] }).templates).toEqual(['flat', 'house']);
-});
-
-test('creating from a saved template reads its file from the repository', async () => {
-  createDraft.mockClear();
-  savedTemplates.mockImplementationOnce(async () => ['landing-page']);
-  files['src/content/_templates/pages/landing-page.yaml'] =
-    '_version: 1\ntitle: "Home"\nblocks:\n  - _type: "hero"\n    heading: "Hi"\n';
-
-  const res = await POST(
-    post('entries/pages', JSON.stringify({ title: 'Move to Devon', template: 'landing-page' })),
-  );
-
-  expect(await res.json()).toEqual({ slug: 'move-to-devon' });
-  const values = createDraft.mock.calls[0]?.[4] as Record<string, unknown>;
-  const [block] = values.blocks as { _id: string; heading: string }[];
-  expect(block?.heading).toBe('Hi');
-  expect(block?._id).toMatch(/^[0-9a-z]{8}$/);
-  expect(values.title).toBe('Move to Devon');
 });
 
 test('renaming moves the entry in one commit and takes its unpublished edits with it', async () => {
@@ -1549,12 +823,6 @@ const alignedHome = () => {
     .replace('title: "Startseite"', 'title: "Home"');
 };
 
-const drifted = () => {
-  state.locales = ['en', 'de'];
-  files['src/content/pages/en/home.yaml'] = home.en;
-  files['src/content/pages/de/home.yaml'] = home.de;
-};
-
 test('opening an entry reports the blocks its languages disagree about', async () => {
   drifted();
 
@@ -1589,131 +857,6 @@ test('an entry carries the languages it has a file in beside the one it opens on
       ],
     },
   });
-});
-
-test('the entry list says which languages the site declares', async () => {
-  state.locales = ['en', 'de'];
-
-  const body = (await (await GET(ctx('entries/listings'))).json()) as {
-    locales: unknown;
-    defaultLocale: unknown;
-  };
-
-  expect(body.locales).toEqual(['en', 'de']);
-  // Which of them a new entry is written in when nothing else is chosen.
-  expect(body.defaultLocale).toBe('en');
-});
-
-// A menu can point at a collection's index, which is not an entry.
-test('the picker list carries each collection with an index page, in every language', async () => {
-  state.locales = ['en', 'de'];
-
-  const body = (await (await GET(ctx('entries'))).json()) as { indexes: unknown[] };
-
-  expect(body.indexes).toEqual([
-    {
-      collection: 'listings',
-      index: true,
-      path: 'listings',
-      title: 'Listings',
-      // What the site calls an unlabelled item pointing here, in each language it serves.
-      titles: { en: 'Homes', de: 'Häuser' },
-      // The collection's own label, capitalised for a picker row, in every interface language.
-      labels: { en: 'Homes', de: 'Häuser' },
-      locales: ['en', 'de'],
-      urls: { en: '/listings', de: '/de/listings' },
-    },
-    {
-      collection: 'posts',
-      index: true,
-      path: 'posts',
-      title: 'Posts',
-      titles: { en: 'Posts', de: 'Posts' },
-      locales: ['en', 'de'],
-      urls: { en: '/blog', de: '/de/blog' },
-    },
-  ]);
-});
-
-// The page picker's one read.
-test('the picker list carries every collection with the address each language serves', async () => {
-  state.locales = ['en', 'de'];
-
-  const body = (await (await GET(ctx('entries'))).json()) as {
-    entries: unknown[];
-    locales: unknown;
-  };
-
-  expect(body.locales).toEqual(['en', 'de']);
-  expect(body.entries).toEqual([
-    {
-      collection: 'listings',
-      hidden: false,
-      path: 'listings/mill-house',
-      title: 'The Mill House',
-      titles: { en: 'The Mill House' },
-      hiddenLocales: [],
-      locales: ['en'],
-      urls: { en: '/listings/mill-house' },
-    },
-    {
-      collection: 'listings',
-      hidden: false,
-      path: 'listings/seaview-cottage',
-      title: 'Seaview Cottage',
-      titles: { en: 'Seaview Cottage' },
-      hiddenLocales: [],
-      locales: ['en'],
-      urls: { en: '/listings/seaview-cottage' },
-    },
-    {
-      collection: 'presenters',
-      hidden: false,
-      path: 'presenters/rosa-hale',
-      title: 'Rosa Hale',
-      titles: { en: 'Rosa Hale' },
-      hiddenLocales: [],
-      locales: ['en'],
-      urls: {},
-    },
-    {
-      collection: 'posts',
-      hidden: false,
-      path: 'posts/hello',
-      title: 'Hello',
-      titles: { en: 'Hello' },
-      hiddenLocales: [],
-      locales: ['en'],
-      urls: { en: '/blog/hello' },
-    },
-    {
-      collection: 'posts',
-      hidden: false,
-      path: 'posts/taken',
-      title: 'Taken',
-      titles: { en: 'Taken', de: 'Belegt' },
-      hiddenLocales: [],
-      locales: ['en', 'de'],
-      urls: { en: '/blog/taken', de: '/de/blog/belegt' },
-    },
-  ]);
-});
-
-// 3.26 listed a hidden entry with nothing to say about it.
-test('the picker says which of its rows is off the site', async () => {
-  overlayRows.mockResolvedValueOnce([
-    {
-      path: 'src/content/listings/en/mill-house.yaml',
-      contents: '_version: 1\n_status: "hidden"\ntitle: "The Mill House"\n',
-    },
-  ]);
-
-  const body = (await (await GET(ctx('entries'))).json()) as {
-    entries: { hidden: boolean; hiddenLocales: string[] }[];
-  };
-
-  expect(body.entries.map((e) => e.hidden)).toEqual([true, false, false, false, false]);
-  expect(body.entries.map((e) => e.hiddenLocales)).toEqual([['en'], [], [], [], []]);
 });
 
 test('a save of a translation goes to that language and takes only the words it owns', async () => {
@@ -2071,70 +1214,6 @@ test('an answer about a block the languages agree on is refused rather than writ
   expect((await POST(answer([]))).status).toBe(409);
 });
 
-// An entry with no German file: the two things the editor offers there.
-const untranslated = (english = home.en) => {
-  state.locales = ['en', 'de'];
-  files['src/content/pages/en/home.yaml'] = english;
-};
-
-test('creating a language copies the structure and the shared values, not the words', async () => {
-  untranslated(home.en.replace('title: "Home"', 'title: "Home"\nlayout: "wide"'));
-  createDraft.mockClear();
-
-  const res = await POST(post('drafts/pages/home/de', ''));
-
-  expect(res.status).toBe(200);
-  expect(createDraft).toHaveBeenCalledWith(
-    'default',
-    expect.anything(),
-    expect.anything(),
-    'src/content/pages/de/home.yaml',
-    {
-      _version: 1,
-      _source: 'en',
-      layout: 'wide',
-      blocks: [{ _type: 'hero', _id: 'k3nf9a2p' }],
-    },
-    {
-      'src/content/pages/en/home.yaml': undefined,
-      'src/content/pages/de/home.yaml': undefined,
-    },
-  );
-});
-
-test('the new language is offered in the same ones the entry already is', async () => {
-  state.locales = ['en', 'de', 'fr'];
-  files['src/content/pages/en/home.yaml'] = home.en.replace(
-    '_version: 1',
-    '_version: 1\n_locales:\n  - "en"\n  - "de"',
-  );
-  createDraft.mockClear();
-
-  await POST(post('drafts/pages/home/de', ''));
-
-  expect(createDraft.mock.calls[0]?.[4]).toMatchObject({ _locales: ['en', 'de'] });
-});
-
-test('creating a language the entry already has is refused', async () => {
-  drifted();
-  createDraft.mockClear();
-
-  const res = await POST(post('drafts/pages/home/de', ''));
-
-  expect(res.status).toBe(409);
-  expect(createDraft).not.toHaveBeenCalled();
-});
-
-// The site's default language is no longer a language this route refuses on sight.
-test('the language an entry is written in is refused for the file it has, not for being it', async () => {
-  untranslated();
-  createDraft.mockClear();
-
-  expect((await POST(post('drafts/pages/home/en', ''))).status).toBe(409);
-  expect((await POST(post('drafts/pages/home/fr', ''))).status).toBe(404);
-  expect(createDraft).not.toHaveBeenCalled();
-});
-
 // Create from English writes a draft in a language the entry's form does not draw.
 test('an entry names every language whose draft is ahead of the repository', async () => {
   untranslated();
@@ -2332,21 +1411,6 @@ test('a _locales the files contradict is reported, and the file wins', async () 
   ]);
 });
 
-test('creating a language is refused over a _locales naming one the site does not declare', async () => {
-  state.locales = ['en', 'de'];
-  files['src/content/pages/en/home.yaml'] = home.en.replace(
-    '_version: 1',
-    '_version: 1\n_locales:\n  - "en"\n  - "fr"',
-  );
-  createDraft.mockClear();
-
-  const res = await POST(post('drafts/pages/home/de', ''));
-
-  expect(res.status).toBe(409);
-  expect(await res.text()).toContain('"fr"');
-  expect(createDraft).not.toHaveBeenCalled();
-});
-
 test('an entry says which languages it is offered in', async () => {
   state.locales = ['en', 'de'];
   files['src/content/pages/en/home.yaml'] = home.en.replace(
@@ -2359,183 +1423,6 @@ test('an entry says which languages it is offered in', async () => {
   expect(body.offered).toEqual(['en']);
 });
 
-// The `translate(from, to)` hook: whatever answers.
-const machine = () => {
-  state.locales = ['en', 'de'];
-  files['src/content/pages/en/home.yaml'] = home.en;
-  files['src/content/pages/de/home.yaml'] = [
-    '_version: 1',
-    'title: "Startseite"',
-    'blocks:',
-    '  - _type: "hero"',
-    '    _id: "k3nf9a2p"',
-    '',
-  ].join('\n');
-};
-
-test('a machine is asked for the fields the translation has not got, and no others', async () => {
-  machine();
-  translate.mockClear();
-  saveTranslated.mockClear();
-
-  const res = await POST(post('translate/pages/home/de', ''));
-
-  expect(res.status).toBe(200);
-  // `title` is there in German already; the hero's heading is the gap.
-  expect(translate).toHaveBeenCalledWith(
-    ['Move to the coast'],
-    'en',
-    'de',
-    expect.any(AbortSignal),
-  );
-  expect(saveTranslated).toHaveBeenCalledWith(
-    'default',
-    expect.anything(),
-    expect.anything(),
-    'src/content/pages/de/home.yaml',
-    { 'blocks[_id=k3nf9a2p].heading': '[de] Move to the coast' },
-    undefined,
-    undefined,
-    {
-      form: expect.anything(),
-      source: {
-        locale: 'en',
-        contents: home.en,
-        blob_sha: 'blob-src/content/pages/en/home.yaml',
-      },
-    },
-  );
-});
-
-test('a machine fill keeps the source snapshot sent before the provider round trip', async () => {
-  machine();
-  saveTranslated.mockClear();
-  const moved = home.en.replace('Move to the coast', 'Move to the water');
-  translate.mockImplementationOnce(async (texts: string[], _from: string, to: string) => {
-    files['src/content/pages/en/home.yaml'] = moved;
-    return texts.map((text) => `[${to}] ${text}`);
-  });
-
-  const res = await POST(post('translate/pages/home/de', ''));
-
-  expect(res.status).toBe(200);
-  expect(saveTranslated).toHaveBeenCalledWith(
-    'default',
-    expect.anything(),
-    expect.anything(),
-    'src/content/pages/de/home.yaml',
-    { 'blocks[_id=k3nf9a2p].heading': '[de] Move to the coast' },
-    undefined,
-    undefined,
-    {
-      form: expect.anything(),
-      source: {
-        locale: 'en',
-        contents: home.en,
-        blob_sha: 'blob-src/content/pages/en/home.yaml',
-      },
-    },
-  );
-  expect(files['src/content/pages/en/home.yaml']).toBe(moved);
-});
-
-test('a named field is translated whether it is empty or not', async () => {
-  machine();
-  translate.mockClear();
-  saveTranslated.mockClear();
-
-  const res = await POST(post('translate/pages/home/de', JSON.stringify({ paths: ['title'] })));
-
-  expect(res.status).toBe(200);
-  expect(translate).toHaveBeenCalledWith(['Home'], 'en', 'de', expect.any(AbortSignal));
-  expect(saveTranslated).toHaveBeenCalledWith(
-    'default',
-    expect.anything(),
-    expect.anything(),
-    'src/content/pages/de/home.yaml',
-    { title: '[de] Home' },
-    undefined,
-    undefined,
-    {
-      form: expect.anything(),
-      source: {
-        locale: 'en',
-        contents: home.en,
-        blob_sha: 'blob-src/content/pages/en/home.yaml',
-      },
-    },
-  );
-});
-
-test('a translation with nothing left to fill asks no machine anything', async () => {
-  machine();
-  files['src/content/pages/de/home.yaml'] = home.en.replace('Home', 'Startseite');
-  translate.mockClear();
-
-  expect((await POST(post('translate/pages/home/de', ''))).status).toBe(200);
-  expect(translate).not.toHaveBeenCalled();
-});
-
-// Every other test here supplies `i18n.translate`, so the fallback.
-test('a site with no hook of its own translates with the DEEPL_API_KEY it holds', async () => {
-  machine();
-  state.translator = undefined;
-  state.deeplKey = 'key-123';
-  const calls: { url: string; init: RequestInit }[] = [];
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string, init: RequestInit) => {
-      calls.push({ url, init });
-      const sent = JSON.parse(String(init.body)) as { text: string[] };
-      return Response.json({ translations: sent.text.map((t) => ({ text: `[de] ${t}` })) });
-    }),
-  );
-  saveTranslated.mockClear();
-
-  const res = await POST(post('translate/pages/home/de', ''));
-
-  expect(res.status).toBe(200);
-  expect(calls[0]?.url).toBe('https://api.deepl.com/v2/translate');
-  const headers = calls[0]?.init.headers as Record<string, string> | undefined;
-  expect(headers?.authorization).toBe('DeepL-Auth-Key key-123');
-  expect(saveTranslated).toHaveBeenCalledWith(
-    'default',
-    expect.anything(),
-    expect.anything(),
-    'src/content/pages/de/home.yaml',
-    { 'blocks[_id=k3nf9a2p].heading': '[de] Move to the coast' },
-    undefined,
-    undefined,
-    {
-      form: expect.anything(),
-      source: {
-        locale: 'en',
-        contents: home.en,
-        blob_sha: 'blob-src/content/pages/en/home.yaml',
-      },
-    },
-  );
-});
-
-test('a site with nothing to translate with says so rather than failing quietly', async () => {
-  machine();
-  state.translator = undefined;
-
-  const res = await POST(post('translate/pages/home/de', ''));
-
-  expect(res.status).toBe(409);
-  expect(await res.text()).toContain('DEEPL_API_KEY');
-});
-
-test('the default language and a language with no file are both refused', async () => {
-  machine();
-
-  expect((await POST(post('translate/pages/home/en', ''))).status).toBe(404);
-  expect((await POST(post('translate/pages/home/fr', ''))).status).toBe(404);
-  delete files['src/content/pages/de/home.yaml'];
-  expect((await POST(post('translate/pages/home/de', ''))).status).toBe(404);
-});
-
 test('an entry says whether there is anything to translate with', async () => {
   machine();
   expect(
@@ -2545,15 +1432,6 @@ test('an entry says whether there is anything to translate with', async () => {
   expect(
     ((await (await GET(ctx('entries/pages/home'))).json()) as { translator: unknown }).translator,
   ).toBe(false);
-});
-
-// Having nothing to translate with is about the site and not about this entry.
-test('nothing to translate with outranks the entry having no file in that language', async () => {
-  machine();
-  state.translator = undefined;
-  delete files['src/content/pages/de/home.yaml'];
-
-  expect((await POST(post('translate/pages/home/de', ''))).status).toBe(409);
 });
 
 // A collection with an address per language.
@@ -2672,12 +1550,6 @@ test('a collection the site does not declare has no status route', async () => {
   expect((await POST(post('status/nope', '{"entries":["x"],"hidden":true}'))).status).toBe(404);
 });
 
-const addressed = () => {
-  state.locales = ['en', 'de'];
-  files['src/content/posts/en/hello.yaml'] = '_version: 1\ntitle: "Hello"\nslug: "hello-world"\n';
-  files['src/content/posts/de/hello.yaml'] = '_version: 1\ntitle: "Hallo"\nslug: "hallo"\n';
-};
-
 test('the address is not a field of the form and comes beside it instead', async () => {
   addressed();
 
@@ -2704,17 +1576,6 @@ test('a collection without localized slugs draws no address at all', async () =>
 
   expect(body.localizedSlugs).toBe(undefined);
   expect(body.addresses).toBe(undefined);
-});
-
-// URLs are never machine-translated.
-test('a machine is never asked to translate the address', async () => {
-  addressed();
-  translate.mockClear();
-
-  const res = await POST(post('translate/posts/hello/de', JSON.stringify({ paths: ['slug'] })));
-
-  expect(res.status).toBe(200);
-  expect(translate).not.toHaveBeenCalled();
 });
 
 test('an address that is not one is refused with the reason', async () => {
@@ -2844,20 +1705,6 @@ test('a collection without localized slugs has no address to set', async () => {
   expect(res.status).toBe(404);
 });
 
-// An entry with no file in the site's default language — the demo's German-only Impressum.
-const germanOnly = () => {
-  state.locales = ['en', 'de'];
-  files['src/content/pages/de/impressum.yaml'] = [
-    '_version: 1',
-    'title: "Impressum"',
-    'blocks:',
-    '  - _type: "hero"',
-    '    _id: "b7t4x1m9"',
-    '    heading: "Impressum"',
-    '',
-  ].join('\n');
-};
-
 test('an entry with no file in the site default opens on the language it has', async () => {
   germanOnly();
 
@@ -2880,26 +1727,6 @@ test('an entry with no file in the site default opens on the language it has', a
   expect(body.translations).toEqual({});
   // No `_locales`, so English is a gap somebody can fill and not a decision.
   expect(body.offered).toEqual(['en', 'de']);
-});
-
-test('the missing default language is created from the language the entry has', async () => {
-  germanOnly();
-  createDraft.mockClear();
-
-  const res = await POST(post('drafts/pages/impressum/en', ''));
-
-  expect(res.status).toBe(200);
-  expect(createDraft).toHaveBeenCalledWith(
-    'default',
-    expect.anything(),
-    expect.anything(),
-    'src/content/pages/en/impressum.yaml',
-    { _version: 1, _source: 'de', blocks: [{ _type: 'hero', _id: 'b7t4x1m9' }] },
-    {
-      'src/content/pages/en/impressum.yaml': undefined,
-      'src/content/pages/de/impressum.yaml': undefined,
-    },
-  );
 });
 
 test("a save of the entry's own language carries the structure, whichever language it is", async () => {
@@ -3173,29 +2000,6 @@ test('taking a hold off clears the column and is logged', async () => {
   ]);
 });
 
-test('the drawer reads the hold as the entry\u2019s, whichever of its files carries it', async () => {
-  heldDrafts.mockResolvedValueOnce({
-    'listings/mill-house': { id: 'u1', name: 'Anna Berg' },
-  });
-
-  const res = await GET(ctx('drafts'));
-
-  expect(await res.json()).toEqual({
-    defaultLocale: 'en',
-    entries: [
-      {
-        key: 'listings/mill-house',
-        title: 'The Mill House',
-        collection: 'listings',
-        locales: ['en'],
-        files: ['src/content/listings/en/mill-house.yaml'],
-        updated_at: 1755864000000,
-        held_by: { id: 'u1', name: 'Anna Berg' },
-      },
-    ],
-  });
-});
-
 // The row the Deleted view and the activity log are both built on.
 test('turning a language off is a row in the log naming the languages that went', async () => {
   bilingualPost();
@@ -3276,54 +2080,4 @@ test('lock reads, renewals and takeovers omit bases and do not read draft rows',
     ]);
   }
   expect(loadDraft).not.toHaveBeenCalled();
-});
-
-test('a plain collection label is available to the picker without changing menu titles', async () => {
-  const { default: config } = await import('virtual:handover/config');
-  const collection = config.collections.listings;
-  if (!collection) throw new Error('listings collection missing');
-  const original = collection.label;
-  try {
-    collection.label = 'homes';
-    const body = (await (await GET(ctx('entries'))).json()) as {
-      indexes: { collection: string; title: string; labels?: unknown }[];
-    };
-    expect(body.indexes.find((row) => row.collection === 'listings')).toMatchObject({
-      title: 'Listings',
-      labels: { en: 'Homes' },
-    });
-  } finally {
-    collection.label = original;
-  }
-});
-
-test('a failed save after translation keeps the provider charge in the budget', async () => {
-  machine();
-  vi.mocked(releaseResource).mockClear();
-  saveTranslated.mockRejectedValueOnce(new Error('revision changed after provider started'));
-  await expect(POST(post('translate/pages/home/de', ''))).rejects.toThrow('revision changed');
-  expect(releaseResource).not.toHaveBeenCalled();
-});
-
-test('a user budget refusal refunds the unused site reservation before calling a provider', async () => {
-  machine();
-  translate.mockClear();
-  vi.mocked(releaseResource).mockClear();
-  vi.mocked(claimResource)
-    .mockResolvedValueOnce({
-      subject: 'site',
-      kind: 'translation-characters',
-      windowAt: 0,
-      cost: 17,
-    })
-    .mockRejectedValueOnce(new ResourceLimitError('Account limit reached'));
-  const response = await POST(post('translate/pages/home/de', ''));
-  expect(response.status).toBe(429);
-  expect(translate).not.toHaveBeenCalled();
-  expect(releaseResource).toHaveBeenCalledExactlyOnceWith('default', expect.anything(), {
-    subject: 'site',
-    kind: 'translation-characters',
-    windowAt: 0,
-    cost: 17,
-  });
 });

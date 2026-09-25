@@ -1008,6 +1008,52 @@ export const translated = [
   '',
 ].join('\n');
 
+// The `translate(from, to)` hook: whatever answers.
+export const machine = () => {
+  state.locales = ['en', 'de'];
+  files['src/content/pages/en/home.yaml'] = home.en;
+  files['src/content/pages/de/home.yaml'] = [
+    '_version: 1',
+    'title: "Startseite"',
+    'blocks:',
+    '  - _type: "hero"',
+    '    _id: "k3nf9a2p"',
+    '',
+  ].join('\n');
+};
+
+// An entry with no German file: the two things the editor offers there.
+export const untranslated = (english = home.en) => {
+  state.locales = ['en', 'de'];
+  files['src/content/pages/en/home.yaml'] = english;
+};
+
+export const drifted = () => {
+  state.locales = ['en', 'de'];
+  files['src/content/pages/en/home.yaml'] = home.en;
+  files['src/content/pages/de/home.yaml'] = home.de;
+};
+
+// An entry with no file in the site's default language — the demo's German-only Impressum.
+export const germanOnly = () => {
+  state.locales = ['en', 'de'];
+  files['src/content/pages/de/impressum.yaml'] = [
+    '_version: 1',
+    'title: "Impressum"',
+    'blocks:',
+    '  - _type: "hero"',
+    '    _id: "b7t4x1m9"',
+    '    heading: "Impressum"',
+    '',
+  ].join('\n');
+};
+
+export const addressed = () => {
+  state.locales = ['en', 'de'];
+  files['src/content/posts/en/hello.yaml'] = '_version: 1\ntitle: "Hello"\nslug: "hello-world"\n';
+  files['src/content/posts/de/hello.yaml'] = '_version: 1\ntitle: "Hallo"\nslug: "hallo"\n';
+};
+
 export const ctx = (path: string, request?: Request, locals: Record<string, unknown> = {}) =>
   ({
     params: { path },

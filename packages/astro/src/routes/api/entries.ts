@@ -1,6 +1,6 @@
 import config from 'virtual:handover/config';
-import index, { templates } from 'virtual:handover/index';
-import type { Db, Form, IndexEntry, LocaleSeed } from '@handover/core';
+import index from 'virtual:handover/index';
+import type { Form, IndexEntry, LocaleSeed } from '@handover/core';
 import {
   addressError,
   beginOperation,
@@ -50,7 +50,6 @@ import {
   resolveFieldTarget,
   rewriteDrafts,
   saveDraft,
-  savedTemplates,
   setEntryAddress,
   setEntryLocales,
   setEntryStatus,
@@ -1059,13 +1058,6 @@ export async function changeEntrySource(
     detail: { from: from ?? null, to },
   });
   return Response.json({ source: to });
-}
-
-// The starters the dialog offers: the build's, and the ones saved from the admin since it ran.
-export async function templateNames(collection: string, database: Db): Promise<string[]> {
-  const built = (templates[collection] ?? []).map((t) => t.name);
-  const saved = await savedTemplates('default', database, collection);
-  return [...new Set([...built, ...saved])].sort((a, b) => a.localeCompare(b));
 }
 
 // Same derivation as a new entry's: a rename cannot produce a name the CMS could not create.
