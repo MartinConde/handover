@@ -20,22 +20,6 @@ export function hasWords(markdown: string): boolean {
   );
 }
 
-// The editor-facing names; each one is one round-trip test in richtext.test.ts.
-export const RICHTEXT_CONSTRUCTS = {
-  basic: ['paragraph', 'bold', 'italic', 'link', 'bulletList', 'numberedList'],
-  full: [
-    'paragraph',
-    'bold',
-    'italic',
-    'link',
-    'bulletList',
-    'numberedList',
-    'h2',
-    'h3',
-    'blockquote',
-  ],
-} as const satisfies Record<RichtextTier, readonly string[]>;
-
 // Browsers drop ASCII whitespace and controls inside a URL, so `java<tab>script:` is live.
 const LINK_SCHEMES = new Set(['http', 'https', 'mailto', 'tel']);
 

@@ -56,16 +56,6 @@ export function cropWidth(width: number, height: number, ratio?: string): number
   return Math.floor(r ? Math.min(width, height * r) : width);
 }
 
-export function tooSmall(preset: Preset, width: number, height: number): string | undefined {
-  if (!preset.min) return undefined;
-  const crop = cropWidth(width, height, preset.ratio);
-  if (crop >= preset.min) return undefined;
-  const what = preset.ratio
-    ? `its widest ${preset.ratio} crop is ${crop} px`
-    : `it is ${crop} px wide`;
-  return `Too small for this field — ${what}, this field needs ${preset.min}`;
-}
-
 // The extension comes from the verified type, never from the client's filename.
 const EXTENSIONS: Record<string, string> = {
   'image/webp': 'webp',
@@ -246,20 +236,6 @@ const signer = (store: R2Store) =>
     service: 's3',
     region: 'auto',
   });
-
-/** R2 signs the declared type; finalization still verifies the size, hash and real bytes. */
-export async function presignUpload(store: R2Store, key: string, mime: string): Promise<string> {
-  if (!/^uploads\/[0-9a-f-]{36}\/(?:media|files)\/[0-9a-f]{64}\.[a-z]+$/.test(key))
-    throw new UploadRefusedError('Only temporary upload keys may be signed');
-  const url = new URL(objectUrl(store, key));
-  url.searchParams.set('X-Amz-Expires', String(TTL));
-  const signed = await signer(store).sign(url.toString(), {
-    method: 'PUT',
-    headers: { 'content-type': mime },
-    aws: { signQuery: true, allHeaders: true },
-  });
-  return signed.url;
-}
 
 /** The key is deliberately not `mediaKey`'s shape, or the reconciliation job would adopt it. */
 export async function checkStore(

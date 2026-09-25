@@ -1,10 +1,21 @@
 import { expect, test } from 'vitest';
-import {
-  RICHTEXT_CONSTRUCTS,
-  renderRichtext,
-  richtextErrors,
-  unsafeLinkScheme,
-} from './richtext.js';
+import { type RichtextTier, renderRichtext, richtextErrors, unsafeLinkScheme } from './richtext.js';
+
+// The editor-facing names; each one is one round-trip test below.
+const RICHTEXT_CONSTRUCTS = {
+  basic: ['paragraph', 'bold', 'italic', 'link', 'bulletList', 'numberedList'],
+  full: [
+    'paragraph',
+    'bold',
+    'italic',
+    'link',
+    'bulletList',
+    'numberedList',
+    'h2',
+    'h3',
+    'blockquote',
+  ],
+} as const satisfies Record<RichtextTier, readonly string[]>;
 
 // One fixture per allowed construct, exactly as the editor will store it.
 const basic: Record<string, string> = {

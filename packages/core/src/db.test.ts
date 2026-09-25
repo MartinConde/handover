@@ -49,7 +49,6 @@ import {
   pendingDrafts,
   recordDelete,
   recordOffer,
-  recordRename,
   recordRenames,
   restoreDraft,
   saveDraft,
@@ -253,7 +252,12 @@ test('a rename shows the new name in the list before the build that carries it',
   const db = await fresh();
   const index = indexOf({ [PATH]: FILE, [OTHER]: OTHER_FILE });
 
-  await recordRename('default', db, PATH, RENAMED, FILE, 'commit-rename');
+  await recordRenames(
+    'default',
+    db,
+    [{ from: PATH, to: RENAMED, contents: FILE }],
+    'commit-rename',
+  );
 
   expect(await listed(db, index)).toEqual([
     ['barn', 'The Barn'],
@@ -266,7 +270,12 @@ test('a rename carries the unpublished edits rather than the committed bytes', a
   const repo = fakeRepo({ [PATH]: FILE });
   await saveDraft('default', db, repo, PATH, { ...VALUES, title: 'The Old Mill' });
 
-  await recordRename('default', db, PATH, RENAMED, FILE, 'commit-rename');
+  await recordRenames(
+    'default',
+    db,
+    [{ from: PATH, to: RENAMED, contents: FILE }],
+    'commit-rename',
+  );
 
   expect(await listed(db, indexOf({ [PATH]: FILE }))).toEqual([['the-old-mill', 'The Old Mill']]);
   const [row] = await pendingDrafts('default', db);
@@ -376,7 +385,13 @@ test('a rename stamps who renamed onto the draft it carries over', async () => {
   const repo = fakeRepo({ [PATH]: FILE });
   await saveDraft('default', db, repo, PATH, { ...VALUES, title: 'The Old Mill' }, undefined, 'u1');
 
-  await recordRename('default', db, PATH, RENAMED, FILE, 'commit-rename', 'u2');
+  await recordRenames(
+    'default',
+    db,
+    [{ from: PATH, to: RENAMED, contents: FILE }],
+    'commit-rename',
+    'u2',
+  );
 
   expect((await only(db))?.updatedBy).toBe('u2');
 });
@@ -395,7 +410,12 @@ test('a delete takes the entry out of the list and leaves nothing to publish', a
 // The row carrying the file's own bytes waits for the build status, not for a title to agree.
 test('the row a rename left at the old path is dropped by the build that catches up', async () => {
   const db = await fresh();
-  await recordRename('default', db, PATH, RENAMED, FILE, 'commit-rename');
+  await recordRenames(
+    'default',
+    db,
+    [{ from: PATH, to: RENAMED, contents: FILE }],
+    'commit-rename',
+  );
 
   const built = indexOf({ [RENAMED]: FILE });
   expect(await listed(db, built)).toEqual([['the-old-mill', 'The Mill House']]);

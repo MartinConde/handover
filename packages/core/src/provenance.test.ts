@@ -5,8 +5,8 @@ import { expect, test } from 'vitest';
 import { article, listing, localeFile } from './content.fixtures.js';
 import { parseEntry, stringifyEntry } from './entry-format.js';
 import {
+  answeredCount,
   answeredPaths,
-  answeredText,
   answeredWork,
   changeSource,
   entrySource,
@@ -19,6 +19,19 @@ import {
 } from './provenance.js';
 import type { Form } from './schema.js';
 import { fieldAddress } from './translate.js';
+
+const answeredText = (
+  _siteId: string,
+  form: Form,
+  source: unknown,
+  target: unknown,
+  locale: string,
+) =>
+  answeredCount(
+    answeredPaths('default', form, source),
+    answeredPaths('default', form, target),
+    locale,
+  );
 
 const blobSha = (text: string) =>
   createHash('sha1')

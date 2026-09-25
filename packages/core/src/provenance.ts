@@ -322,21 +322,6 @@ export function translatableText(
   return found;
 }
 
-/** How much of the source's own words `target` answers; a metric, not publish readiness. */
-export function answeredText(
-  siteId: string,
-  form: Form,
-  source: unknown,
-  target: unknown,
-  locale: string,
-): { written: number; of: number } {
-  return answeredCount(
-    answeredPaths(siteId, form, source),
-    answeredPaths(siteId, form, target),
-    locale,
-  );
-}
-
 /** A file's answered text paths; `rows` holds the `_locales` of each row that names some. */
 export interface AnsweredPaths {
   paths: string[];

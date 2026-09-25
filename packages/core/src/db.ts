@@ -665,19 +665,6 @@ export async function recordDelete(
     });
 }
 
-/** An open draft moves over: the commit carried its loaded bytes, so `base_blob` still holds. */
-export async function recordRename(
-  siteId: string,
-  db: Db,
-  from: string,
-  to: string,
-  contents: string,
-  commitSha: string,
-  by?: string,
-): Promise<void> {
-  await recordRenames(siteId, db, [{ from, to, contents }], commitSha, by);
-}
-
 /** Every repository file and unpublished locale changes identity in one D1 transaction. */
 export async function recordRenames(
   siteId: string,

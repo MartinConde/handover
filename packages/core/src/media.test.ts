@@ -16,11 +16,9 @@ import {
   mediaUsage,
   mediaUsesFrom,
   namedBy,
-  presignUpload,
   type R2Store,
   reconcileMedia,
   setMediaDetails,
-  tooSmall,
   type Upload,
 } from './media.js';
 import * as tables from './tables.js';
@@ -150,18 +148,6 @@ function fixture(tag: string, mime = 'image/png') {
   return { data, upload, key, objects, fetch, calls };
 }
 
-test('only a temporary key can receive a five-minute client PUT', async () => {
-  const key = temporary(`media/${HASH}.webp`);
-  const url = new URL(await presignUpload(store, key, 'image/webp'));
-  expect(url.pathname).toBe(`/${store.bucket}/${key}`);
-  expect(url.searchParams.get('X-Amz-Expires')).toBe('300');
-  expect(url.searchParams.get('X-Amz-SignedHeaders')).toBe('content-type;host');
-  expect(url.searchParams.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/);
-  await expect(presignUpload(store, `media/${HASH}.webp`, 'image/webp')).rejects.toThrow(
-    UploadRefusedError,
-  );
-});
-
 test.each(['size', 'mime', 'hash', 'image'])(
   'a wrong %s is refused before finalization',
   async (wrong) => {
@@ -237,7 +223,7 @@ test('finalization derives dimensions and replaying the upload URL cannot change
     createdAt: 1700,
   });
   expect(f.objects.has(f.upload.key ?? '')).toBe(false);
-  const url = await presignUpload(store, f.upload.key ?? '', f.upload.mime);
+  const url = `https://${store.accountId}.r2.cloudflarestorage.com/${store.bucket}/${f.upload.key}`;
   await f.fetch(
     new Request(url, { method: 'PUT', body: 'replaced', headers: { 'content-type': 'text/html' } }),
   );
@@ -289,26 +275,6 @@ test('the widest crop at a ratio is what a picture is measured by, not its longe
   expect(cropWidth(1000, 2000, '1:1')).toBe(1000);
   // No ratio to crop to: the picture is as wide as it is.
   expect(cropWidth(900, 1600, undefined)).toBe(900);
-});
-
-test('a source under the field floor is refused in both numbers, naming the crop', () => {
-  const hero = { ratio: '16:9', max: 2400, min: 1600 };
-  expect(tooSmall(hero, 800, 450)).toBe(
-    'Too small for this field — its widest 16:9 crop is 800 px, this field needs 1600',
-  );
-  expect(tooSmall(hero, 900, 1600)).toBe(
-    'Too small for this field — its widest 16:9 crop is 900 px, this field needs 1600',
-  );
-  expect(tooSmall(hero, 2400, 1600)).toBeUndefined();
-  // Exactly the floor is not under it.
-  expect(tooSmall(hero, 1600, 900)).toBeUndefined();
-});
-
-test('a field with no floor refuses nothing, and one with no ratio measures the file', () => {
-  expect(tooSmall({ max: 2400 }, 40, 30)).toBeUndefined();
-  expect(tooSmall({ max: 1600, min: 1600 }, 800, 600)).toBe(
-    'Too small for this field — it is 800 px wide, this field needs 1600',
-  );
 });
 
 test('the library is newest first, and pictures and files are two lists', async () => {

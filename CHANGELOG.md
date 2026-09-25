@@ -8,6 +8,10 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `buildStale`, `buildTemplates`, `contentErrors`, `contentFiles`, `emitRedirects`,
   `emitSitemap`, `loadersModule`, `modifiedAt`, `NO_ADAPTER_MESSAGE`, `screensModule`,
   `uiAssetsModule` and `uiDir`.
+- `@handover/core` no longer exports `answeredText`, `appendRedirects`, `authOptions`,
+  `findHiddenLong`, `JOB_NAMES`, `machineFilled`, `mergeEntry`, `MIGRATIONS`, `objectExists`,
+  `presignUpload`, `recordRename`, `REDIRECTS`, `RESERVED_KEYS`, `revertRedirects`,
+  `RICHTEXT_CONSTRUCTS`, `richtextLinks`, `runJob`, `seoMeter`, `sweepOrphans` and `tooSmall`.
 - `@handover/cli` no longer exports a root entry; only `@handover/cli/bin` remains.
 - Internal only: large core, route and test files are split into smaller modules. No
   public import, route or behaviour changes.

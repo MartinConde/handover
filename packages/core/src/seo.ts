@@ -61,11 +61,3 @@ export function resolveSeo(
 // An absent key rather than an undefined one.
 const pick = <K extends string, V>(key: K, value: V | undefined) =>
   (value === undefined ? {} : { [key]: value }) as { [P in K]?: V };
-
-/** The line beside the label: what is typed, against the length Google starts cutting at. */
-export function seoMeter(text: string, limit: number): string {
-  const count = text.trim().length;
-  if (count === 0) return `Up to about ${limit} characters`;
-  const said = `About ${count} of ≈${limit} characters`;
-  return count > limit ? `${said} — may be cut off` : said;
-}

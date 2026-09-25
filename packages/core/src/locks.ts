@@ -104,7 +104,7 @@ export async function takeLock(
   return expiresAt;
 }
 
-/** The row a free name might still carry goes first, the way `recordRename` clears the draft. */
+/** The row a free name might still carry goes first, the way `recordRenames` clears the draft. */
 export async function moveLock(siteId: string, db: Db, from: string, to: string): Promise<void> {
   const [source] = await db
     .select({ entry: locks.entry })

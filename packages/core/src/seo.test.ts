@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { resolveSeo, SEO_DESCRIPTION_LIMIT, SEO_TITLE_LIMIT, seoMeter } from './seo.js';
+import { resolveSeo } from './seo.js';
 
 const defaults = {
   titlePattern: '%s · Coastal Homes',
@@ -65,18 +65,4 @@ test('a search title emptied by hand falls back like one never typed', () => {
   expect(resolveSeo({ title: '' }, defaults, 'Seaview Cottage').title).toBe(
     'Seaview Cottage · Coastal Homes',
   );
-});
-
-test('the meter counts what is typed against the guidance length', () => {
-  expect(seoMeter('Move to the coast', SEO_TITLE_LIMIT)).toBe('About 17 of ≈60 characters');
-});
-
-test('over the guidance length the meter says what happens, and still blocks nothing', () => {
-  expect(seoMeter('x'.repeat(160), SEO_DESCRIPTION_LIMIT)).toBe(
-    'About 160 of ≈155 characters — may be cut off',
-  );
-});
-
-test('an empty field is guidance rather than a count of nothing', () => {
-  expect(seoMeter('   ', SEO_TITLE_LIMIT)).toBe('Up to about 60 characters');
 });

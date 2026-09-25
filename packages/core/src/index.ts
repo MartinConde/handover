@@ -20,7 +20,6 @@ export type { AccountFacts, Auth, AuthConfig, Member, MemberApi, Role } from './
 export {
   AUTH_BASE_PATH,
   accountFacts,
-  authOptions,
   createAuth,
   demoteOwner,
   memberApi,
@@ -39,7 +38,7 @@ export type {
   CheckSite,
   HiddenLong,
 } from './checks.js';
-export { CHECKS, findHiddenLong, lastHiddenLong, runChecks } from './checks.js';
+export { CHECKS, lastHiddenLong, runChecks } from './checks.js';
 export type { EntryConflict } from './conflicts.js';
 export { entryConflict, resolveConflict, resolveDrift } from './conflicts.js';
 export type {
@@ -63,7 +62,7 @@ export {
   staticSource,
 } from './content.js';
 export type { CronReport, JobDeps } from './cron.js';
-export { JOB_NAMES, runDue, runJob } from './cron.js';
+export { runDue } from './cron.js';
 export type { Db, Draft } from './db.js';
 export {
   createDraft,
@@ -83,7 +82,6 @@ export {
   pendingDrafts,
   recordDelete,
   recordOffer,
-  recordRename,
   recordRenames,
   recordSource,
   restoreDraft,
@@ -93,7 +91,6 @@ export {
   setEntryAddress,
   setEntryLocales,
   setEntryStatus,
-  sweepOrphans,
 } from './db.js';
 export type { Change, DiffGroup, RowAt, WordPart } from './diff.js';
 export { diffEntry, sourceChanges } from './diff.js';
@@ -125,7 +122,6 @@ export {
 export type { LocaleSeed } from './entry-format.js';
 export {
   FORMAT_VERSION,
-  mergeEntry,
   parseEntry,
   stringifyEntry,
   TRANSLATED_PROPS,
@@ -191,15 +187,12 @@ export {
   mediaUsesFrom,
   mimeForMediaKey,
   namedBy,
-  objectExists,
-  presignUpload,
   ratioOf,
   SOCIAL_CARD,
   setMediaDetails,
-  tooSmall,
 } from './media.js';
 export type { MigrationStep } from './migrate.js';
-export { MIGRATIONS, migrateDocument, versionOf } from './migrate.js';
+export { migrateDocument, versionOf } from './migrate.js';
 export type { CollectionRoutes, I18nConfig, I18nRouting, PreviewTarget } from './names.js';
 export {
   addressError,
@@ -228,7 +221,6 @@ export type { AnsweredPaths, EntrySource, I18nMark, TranslationSource } from './
 export {
   answeredCount,
   answeredPaths,
-  answeredText,
   answeredWork,
   changeSource,
   entrySource,
@@ -249,10 +241,8 @@ export {
 } from './publish.js';
 export type { RedirectRule, RedirectSite } from './redirects.js';
 export {
-  appendRedirects,
   collapseRedirects,
   editRedirects,
-  REDIRECTS,
   readRedirects,
   redirectDestinationError,
   redirectError,
@@ -260,7 +250,7 @@ export {
   redirectSourceError,
   redirectsText,
 } from './redirects.js';
-export { filterLive, isLive, newId, RESERVED_KEYS, regenerateIds } from './reserved.js';
+export { filterLive, isLive, newId, regenerateIds } from './reserved.js';
 export type { Answer, MergedChange, Question, ThreeWay } from './resolve.js';
 export {
   abandonCostlyOperation,
@@ -277,14 +267,11 @@ export {
   RevertConflictError,
   restoreCommit,
   revertCommit,
-  revertRedirects,
 } from './revert.js';
 export type { RichtextTier } from './richtext.js';
 export {
-  RICHTEXT_CONSTRUCTS,
   renderRichtext,
   richtextErrors,
-  richtextLinks,
   unsafeLinkScheme,
 } from './richtext.js';
 export type { Field, Form, JsonSchema, Preset, Translation } from './schema.js';
@@ -294,7 +281,6 @@ export {
   resolveSeo,
   SEO_DESCRIPTION_LIMIT,
   SEO_TITLE_LIMIT,
-  seoMeter,
 } from './seo.js';
 export type { Integration, SettingFact } from './settings.js';
 export {
@@ -338,7 +324,6 @@ export {
   fieldAddress,
   fieldPosition,
   keptMachine,
-  machineFilled,
   resolveFieldTarget,
 } from './translate.js';
 export type { Labels, UiLocale } from './ui-locale.js';
