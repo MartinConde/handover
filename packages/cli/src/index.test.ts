@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { SCHEMA_VERSION } from '@handover/core';
 import { expect, test } from 'vitest';
-import { main } from './index.js';
+import { type Env, main } from './index.js';
 
 function site(files: Record<string, string>) {
   const cwd = mkdtempSync(join(tmpdir(), 'handover-cli-'));
@@ -52,13 +52,17 @@ function generateMigration(cwd: string, directory = '.handover-migrations') {
   writeFileSync(join(cwd, directory, '0000_generated.sql'), '-- generated\n');
 }
 
-async function run(argv: string[], cwd: string, ran: string[][] = [], cloud: CloudState = {}) {
-  const out: string[] = [];
-  const code = await main(argv, {
-    cwd,
-    log: (l) => out.push(l),
+// `before` sees each command `run` is given, ahead of the effect it has on the fake cloud.
+function fakeCloud(
+  cwd: string,
+  cloud: CloudState,
+  ran: string[][],
+  before?: (argv: string[]) => void,
+): Pick<Env, 'run' | 'capture' | 'probe'> {
+  return {
     run: (a) => {
       ran.push(a);
+      before?.(a);
       if (a.slice(0, 3).join(' ') === 'wrangler d1 create') cloud.database = true;
       if (a.slice(0, 4).join(' ') === 'wrangler r2 bucket create') {
         if (a[4] === 'my-site-media') cloud.bucket = true;
@@ -78,7 +82,12 @@ async function run(argv: string[], cwd: string, ran: string[][] = [], cloud: Clo
         ? JSON.stringify({ name: a[4] })
         : undefined;
     },
-  });
+  };
+}
+
+async function run(argv: string[], cwd: string, ran: string[][] = [], cloud: CloudState = {}) {
+  const out: string[] = [];
+  const code = await main(argv, { cwd, log: (l) => out.push(l), ...fakeCloud(cwd, cloud, ran) });
   return { code, out: out.join('\n') };
 }
 
@@ -454,44 +463,27 @@ test.each([
   const calls: string[][] = [];
   const cloud: CloudState = {};
   let interrupt = true;
+  const cloudEnv = fakeCloud(cwd, cloud, calls);
   const invoke = async () => {
     const out: string[] = [];
     const code = await main(['init', 'you@example.com'], {
       cwd,
       log: (line) => out.push(line),
+      ...cloudEnv,
       run: (argv) => {
-        calls.push(argv);
         const command = argv.slice(0, argv[2] === 'execute' ? 5 : undefined).join(' ');
-        if (argv.slice(0, 3).join(' ') === 'wrangler d1 create') cloud.database = true;
-        if (argv.slice(0, 4).join(' ') === 'wrangler r2 bucket create') {
-          if (argv[4] === 'my-site-media') cloud.bucket = true;
-          else cloud.uploads = true;
-        }
-        if (argv[3] === 'lifecycle' && argv[4] === 'add') cloud.lifecycle = UPLOAD_LIFECYCLE;
-        if (argv[0] === 'drizzle-kit' && argv[2] === '--config') {
-          if (interrupt && command === boundary) {
-            mkdirSync(join(cwd, '.handover-migrations/meta'), { recursive: true });
-            writeFileSync(
-              join(cwd, '.handover-migrations/meta/_journal.json'),
-              JSON.stringify({ entries: [{ tag: '0000_missing_sql' }] }),
-            );
-          } else generateMigration(cwd);
-        }
-        if (interrupt && command === boundary) {
-          interrupt = false;
-          throw new Error('connection lost after the command');
-        }
-      },
-      capture: (argv) => {
-        calls.push(argv);
-        if (argv.includes('whoami')) return WHOAMI;
-        return cloudOutput(argv, cloud);
-      },
-      probe: (argv) => {
-        calls.push(argv);
-        return (argv[4] === 'my-site-media' ? cloud.bucket : cloud.uploads)
-          ? JSON.stringify({ name: argv[4] })
-          : undefined;
+        if (!interrupt || command !== boundary) return cloudEnv.run(argv);
+        interrupt = false;
+        // The generate is cut off before it writes its SQL; every other command has done its work.
+        if (argv[0] === 'drizzle-kit') {
+          calls.push(argv);
+          mkdirSync(join(cwd, '.handover-migrations/meta'), { recursive: true });
+          writeFileSync(
+            join(cwd, '.handover-migrations/meta/_journal.json'),
+            JSON.stringify({ entries: [{ tag: '0000_missing_sql' }] }),
+          );
+        } else cloudEnv.run(argv);
+        throw new Error('connection lost after the command');
       },
     });
     return { code, out: out.join('\n') };
@@ -813,46 +805,16 @@ test('init prints the App link and the secrets that are still owed', async () =>
 
 test('init scaffolds before it creates anything, so a nothing is left behind to trip over', async () => {
   const cwd = site({ 'package.json': '{ "name": "my-site" }' });
-  const order: string[] = [];
-  let database = false;
-  let bucket = false;
-  let uploads = false;
-  let lifecycle: string | undefined;
-  const note = (a: string[]) => {
-    order.push(a.join(' '));
-    if (a.slice(0, 3).join(' ') === 'wrangler d1 create') {
-      order.push(`scaffolded=${existsSync(join(cwd, 'cms.config.ts'))}`);
-      database = true;
-    }
-    if (a.slice(0, 4).join(' ') === 'wrangler r2 bucket create') {
-      if (a[4] === 'my-site-media') bucket = true;
-      else uploads = true;
-    }
-    if (a[3] === 'lifecycle' && a[4] === 'add') lifecycle = UPLOAD_LIFECYCLE;
-    if (a[0] === 'drizzle-kit' && a[2] === '--config') generateMigration(cwd);
-  };
+  let scaffolded: boolean | undefined;
   await main(['init', 'you@example.com'], {
     cwd,
     log: () => {},
-    run: note,
-    capture: (a) => {
-      note(a);
-      if (a.includes('whoami')) return WHOAMI;
-      return cloudOutput(a, { database, bucket, uploads, lifecycle });
-    },
-    probe: (a) => {
-      note(a);
-      return (a[4] === 'my-site-media' ? bucket : uploads)
-        ? JSON.stringify({ name: a[4] })
-        : undefined;
-    },
+    ...fakeCloud(cwd, {}, [], (a) => {
+      if (a.slice(0, 3).join(' ') === 'wrangler d1 create')
+        scaffolded = existsSync(join(cwd, 'cms.config.ts'));
+    }),
   });
-  expect(
-    order.slice(
-      order.indexOf('wrangler d1 create my-site'),
-      2 + order.indexOf('wrangler d1 create my-site'),
-    ),
-  ).toEqual(['wrangler d1 create my-site', 'scaffolded=true']);
+  expect(scaffolded).toBe(true);
 });
 
 test.each([

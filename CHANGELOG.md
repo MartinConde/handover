@@ -39,6 +39,7 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Internal: the entry helpers the admin API routes share live in `routes/api/content.ts`.
 - Internal: the integration's template and media-use wrappers are inlined, and its tests drop
   checks core already makes and the form-descriptor snapshot.
+- Internal: the cli tests share one fake Cloudflare.
 - `@handover/core`: `setEntryStatus` no longer takes a `deps` argument, and `claimResource` no
   longer takes `windowMs`; the window is always one hour.
 - `@handover/core`: `clearPublished` now requires the deployment's git client as its fourth
