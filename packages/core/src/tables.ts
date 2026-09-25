@@ -9,7 +9,7 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core';
-import type { RedirectRule } from './lifecycle.js';
+import type { RedirectRule } from './redirects.js';
 
 // Better Auth owns those five; `auth-schema.ts` is committed as `npx auth generate` emits it.
 export * from './auth-schema.js';

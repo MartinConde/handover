@@ -1,9 +1,10 @@
 import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/api';
 import { Miniflare } from 'miniflare';
 import { afterAll, vi } from 'vitest';
+import { parse } from 'yaml';
 import { openDb, overlayRows } from './db.js';
 import { type ContentIndex, collectionEntries, indexFrom } from './entries.js';
-import { blobSha } from './git.js';
+import { blobSha, type GitClient, type PublishFile } from './git.js';
 import type { Form } from './schema.js';
 import * as tables from './tables.js';
 import { drafts } from './tables.js';
@@ -337,3 +338,40 @@ export function afterRead(
   });
   return openDb('default', wrapped);
 }
+
+// Records every publish call and every read, with the commit it named.
+export function fakeGit(files: Record<string, string>) {
+  const published: { files: PublishFile[]; message: string; base_sha: string }[] = [];
+  const read: { path: string; at?: string }[] = [];
+  const git: GitClient = {
+    request: () => Promise.reject(new Error('not used')),
+    getHead: async () => 'commit-A',
+    getCommit: () => Promise.reject(new Error('not used')),
+    getBlob: () => Promise.reject(new Error('not used')),
+    contentFiles: () => Promise.reject(new Error('not used')),
+    compareCommits: () => Promise.reject(new Error('not used')),
+    fileCommits: () => Promise.reject(new Error('not used')),
+    getFile: async (path, at) => {
+      read.push({ path, at });
+      const contents = files[path];
+      return contents === undefined ? undefined : { contents, blob_sha: `sha-of-${path}` };
+    },
+    publish: async (list, opts) => {
+      published.push({ files: list, ...opts });
+      return { commit_sha: 'commit-B' };
+    },
+  };
+  return { git, published, read };
+}
+
+export const redirects = (files: PublishFile[]) =>
+  parse(files.find((f) => f.path === 'src/content/redirects.yaml')?.contents ?? '');
+
+export const RULE = { _id: 'aaaaaaaa', status: 301 as const, createdAt: '2026-01-01T00:00:00Z' };
+export const manual = (from: string, to: string, _id = 'bbbbbbbb') => ({
+  ...RULE,
+  _id,
+  from,
+  to,
+  reason: 'manual' as const,
+});

@@ -12,9 +12,9 @@ import {
   writtenEntry,
 } from './entry-format.js';
 import { blobSha, type GitClient } from './git.js';
-import { type RedirectRule, redirectRule } from './lifecycle.js';
 import { syncLocale } from './locale-sync.js';
 import { markTranslation, type TranslationSource } from './provenance.js';
+import { type RedirectRule, redirectRule } from './redirects.js';
 import { checkReserved } from './reserved.js';
 import type { Form } from './schema.js';
 import { drafts, media, pathReservations, user } from './tables.js';

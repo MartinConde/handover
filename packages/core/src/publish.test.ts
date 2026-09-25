@@ -44,7 +44,6 @@ import {
 } from './db.js';
 import { parseEntry, stringifyEntry } from './entry-format.js';
 import { blobSha, RefMovedError } from './git.js';
-import type { RedirectRule } from './lifecycle.js';
 import {
   beginOperation,
   OperationFinalizationError,
@@ -53,6 +52,7 @@ import {
 } from './operations.js';
 import { staleLocales } from './provenance.js';
 import { commitScope, DraftConflictError, publishDrafts, readyDrafts } from './publish.js';
+import type { RedirectRule } from './redirects.js';
 import * as tables from './tables.js';
 import { drafts } from './tables.js';
 

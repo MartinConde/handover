@@ -61,10 +61,10 @@ import {
 } from './db.js';
 import { parseEntry } from './entry-format.js';
 import { blobSha } from './git.js';
-import type { RedirectRule } from './lifecycle.js';
 import { driftReport } from './locale-sync.js';
 import { claimLock } from './locks.js';
 import { publishDrafts } from './publish.js';
+import type { RedirectRule } from './redirects.js';
 import type { Form } from './schema.js';
 import { drafts } from './tables.js';
 

@@ -4,7 +4,6 @@ import { type Db, type Draft, keptSource, loadDraft, nextRevision } from './db.j
 import { entryKey } from './entries.js';
 import { parseEntry, stringifyEntry, writtenEntry } from './entry-format.js';
 import { blobSha, type GitClient, type PublishFile } from './git.js';
-import { REDIRECTS, RevertConflictError, revertRedirects } from './lifecycle.js';
 import {
   beginOperation,
   finalizeOperationStatement,
@@ -15,9 +14,65 @@ import {
   recoverOperationCommit,
 } from './operations.js';
 import { CommitScopeError, commitScope } from './publish.js';
+import { REDIRECTS, type RedirectRule } from './redirects.js';
 import { drafts, locks } from './tables.js';
 
-export { RevertConflictError } from './lifecycle.js';
+/** A file the revert would write has changed since the commit it is undoing. */
+export class RevertConflictError extends Error {
+  override name = 'RevertConflictError';
+  constructor(readonly paths: string[]) {
+    super(
+      paths.length === 1
+        ? `${paths[0]} has changed since that commit, so it cannot be put back`
+        : `${paths.length} files have changed since that commit, so they cannot be put back — ${paths.join(', ')}`,
+    );
+  }
+}
+
+/** Invert only the rules this commit changed; overlapping later edits refuse the whole undo. */
+export async function revertRedirects(
+  siteId: string,
+  git: Pick<GitClient, 'getFile'>,
+  at: { commit: string; parent: string; head: string },
+): Promise<PublishFile | undefined> {
+  const doc = async (ref: string) => {
+    const file = await git.getFile(REDIRECTS, ref);
+    return file ? (parseEntry(siteId, file.contents) as { rules?: RedirectRule[] }) : undefined;
+  };
+  const [before, after, head] = await Promise.all([doc(at.parent), doc(at.commit), doc(at.head)]);
+  const byId = (rules: readonly RedirectRule[]) => new Map(rules.map((r) => [r._id, r]));
+  const was = byId(before?.rules ?? []);
+  const wrote = byId(after?.rules ?? []);
+  const current = byId(head?.rules ?? []);
+  const equal = (a: RedirectRule | undefined, b: RedirectRule | undefined) =>
+    JSON.stringify(a && Object.entries(a).sort(([a], [b]) => a.localeCompare(b))) ===
+    JSON.stringify(b && Object.entries(b).sort(([a], [b]) => a.localeCompare(b)));
+  const changed = [...new Set([...was.keys(), ...wrote.keys()])].filter(
+    (id) => !equal(was.get(id), wrote.get(id)),
+  );
+  if (!changed.length) return undefined;
+  for (const id of changed) {
+    if (!equal(current.get(id), wrote.get(id))) throw new RevertConflictError([REDIRECTS]);
+    const restored = was.get(id);
+    // A later rule can claim an address under a different ID too.
+    if (
+      restored &&
+      [...current.values()].some(
+        (r) => r._id !== id && !changed.includes(r._id) && r.from === restored.from,
+      )
+    )
+      throw new RevertConflictError([REDIRECTS]);
+  }
+  for (const id of changed) {
+    const restored = was.get(id);
+    if (restored) current.set(id, restored);
+    else current.delete(id);
+  }
+  return {
+    path: REDIRECTS,
+    contents: stringifyEntry(siteId, { ...(head ?? before), rules: [...current.values()] }),
+  };
+}
 
 /** Not `git revert`: the trees API has no three-way merge, so the inverse is composed here. */
 export async function revertCommit(

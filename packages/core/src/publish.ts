@@ -3,7 +3,6 @@ import { type Db, type Draft, heldDrafts, pendingDrafts, SOURCE_CHANGE_REVISION 
 import { entryKey } from './entries.js';
 import { parseEntry } from './entry-format.js';
 import { blobSha, type GitClient, type PublishFile, RefMovedError } from './git.js';
-import { appendRedirects, REDIRECTS, type RedirectRule } from './lifecycle.js';
 import {
   beginOperation,
   finalizeOperationStatement,
@@ -15,6 +14,7 @@ import {
   recoverOperationCommit,
 } from './operations.js';
 import { markTranslation } from './provenance.js';
+import { appendRedirects, REDIRECTS, type RedirectRule } from './redirects.js';
 import { isLive } from './reserved.js';
 import type { Form } from './schema.js';
 import { activity, drafts, operations } from './tables.js';

@@ -1,5 +1,6 @@
 import type { Miniflare } from 'miniflare';
 import { beforeAll, expect, test } from 'vitest';
+import { parse } from 'yaml';
 import { logActivity } from './activity.js';
 import {
   afterRead,
@@ -9,6 +10,7 @@ import {
   indexOf,
   listed,
   MILL_DE_FILE,
+  manual,
   migrateTestD1,
   newTestD1,
   OTHER,
@@ -31,7 +33,14 @@ import { entryKey } from './entries.js';
 import { offeredEntry, parseEntry, stringifyEntry } from './entry-format.js';
 import { claimLock } from './locks.js';
 import { publishDrafts } from './publish.js';
-import { clearPublished, RevertConflictError, restoreCommit, revertCommit } from './revert.js';
+import type { RedirectRule } from './redirects.js';
+import {
+  clearPublished,
+  RevertConflictError,
+  restoreCommit,
+  revertCommit,
+  revertRedirects,
+} from './revert.js';
 import * as tables from './tables.js';
 import { drafts } from './tables.js';
 
@@ -403,3 +412,39 @@ test('chunked cleanup preserves a newer save and lock that arrive between chunks
   expect(await loadDraft('default', db, lockedPath)).toBeDefined();
   await db.delete(tables.locks);
 });
+
+const undoRules = (before: RedirectRule[], after: RedirectRule[], head: RedirectRule[]) =>
+  revertRedirects(
+    'default',
+    {
+      getFile: async (_path, at) => ({
+        contents: JSON.stringify({
+          rules: at === 'before' ? before : at === 'after' ? after : head,
+        }),
+        blob_sha: 'blob',
+      }),
+    },
+    { parent: 'before', commit: 'after', head: 'head' },
+  );
+
+test('redirect undo restores edits and deletions and keeps later independent rules', async () => {
+  const original = manual('/old', '/before', 'original');
+  const removed = manual('/deleted', '/target', 'removed1');
+  const added = manual('/before', '/after', 'added111');
+  const later = manual('/later', '/elsewhere', 'later111');
+  const rewritten = { ...original, to: '/after' };
+  const file = await undoRules([original, removed], [rewritten, added], [rewritten, added, later]);
+  expect(parse(file?.contents ?? '').rules).toEqual([original, later, removed]);
+});
+
+test.each(['edit', 'delete', 'addition'])(
+  'redirect undo refuses a later overlapping %s',
+  async (kind) => {
+    const original = manual('/old', '/before', 'original');
+    const changed = { ...original, to: '/after' };
+    const later = { ...changed, to: '/later' };
+    await expect(
+      undoRules(kind === 'addition' ? [] : [original], kind === 'delete' ? [] : [changed], [later]),
+    ).rejects.toMatchObject({ name: 'RevertConflictError', paths: ['src/content/redirects.yaml'] });
+  },
+);

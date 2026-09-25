@@ -150,25 +150,14 @@ export {
   RefMovedError,
   RepoUnreachableError,
 } from './git.js';
-export type { EntryLocation, RedirectRule, RedirectSite } from './lifecycle.js';
+export type { EntryLocation } from './lifecycle.js';
 export {
-  appendRedirects,
-  collapseRedirects,
   deleteEntry,
   deleteLocales,
   duplicateEntry,
-  editRedirects,
-  REDIRECTS,
   RenameCollisionError,
-  readRedirects,
-  redirectDestinationError,
-  redirectError,
-  redirectRule,
-  redirectSourceError,
-  redirectsText,
   renamedFrom,
   renameEntry,
-  revertRedirects,
 } from './lifecycle.js';
 export type { Drift, DriftChoice, LocaleSyncOptions } from './locale-sync.js';
 export { applyDrift, driftReport, syncLocale, syncLocaleField } from './locale-sync.js';
@@ -260,6 +249,19 @@ export {
   publishDrafts,
   readyDrafts,
 } from './publish.js';
+export type { RedirectRule, RedirectSite } from './redirects.js';
+export {
+  appendRedirects,
+  collapseRedirects,
+  editRedirects,
+  REDIRECTS,
+  readRedirects,
+  redirectDestinationError,
+  redirectError,
+  redirectRule,
+  redirectSourceError,
+  redirectsText,
+} from './redirects.js';
 export { filterLive, isLive, newId, RESERVED_KEYS, regenerateIds } from './reserved.js';
 export type { Answer, MergedChange, Question, ThreeWay } from './resolve.js';
 export {
@@ -272,7 +274,13 @@ export {
   ResourceLimitError,
   releaseResource,
 } from './resource-limits.js';
-export { clearPublished, RevertConflictError, restoreCommit, revertCommit } from './revert.js';
+export {
+  clearPublished,
+  RevertConflictError,
+  restoreCommit,
+  revertCommit,
+  revertRedirects,
+} from './revert.js';
 export type { RichtextTier } from './richtext.js';
 export {
   RICHTEXT_CONSTRUCTS,
