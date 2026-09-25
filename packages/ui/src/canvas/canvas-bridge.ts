@@ -1084,12 +1084,13 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
     connected: () => connected && !disposed,
     receive,
     select(value: CanvasSelection, settings: { scroll?: boolean } = {}) {
-      if (disposed || !connected || !selection(value)) return false;
+      const selected = copySelection(value);
+      if (disposed || !connected || !selection(selected)) return false;
       frame.postMessage(
         {
           ...base(manifest, options.contentVersion()),
           type: 'handover:canvas:select',
-          selection: copySelection(value),
+          selection: selected,
           ...(settings.scroll === undefined ? {} : { scroll: settings.scroll }),
         },
         origin,
@@ -1111,10 +1112,11 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
       return true;
     },
     actions(value: CanvasSelection, actions: CanvasBlockAction[]) {
+      const selected = copySelection(value);
       if (
         disposed ||
         !connected ||
-        !selection(value) ||
+        !selection(selected) ||
         actions.length > 11 ||
         !actions.every(blockAction) ||
         new Set(actions).size !== actions.length
@@ -1124,7 +1126,7 @@ export function createCanvasParentBridge(options: CanvasParentBridgeOptions) {
         {
           ...base(manifest, options.contentVersion()),
           type: 'handover:canvas:actions',
-          selection: copySelection(value),
+          selection: selected,
           actions: [...actions],
         },
         origin,

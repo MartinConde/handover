@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Canvas: **Review fields** scrolls the page to the problem field again, and inserting or moving
+  a block from Structure keeps the page's selection and its action buttons.
 - Internal: a raw NUL byte in core's conflict resolver is written as `\u0000`, so git and grep
   read the file as text.
 - `handover init` reads Wrangler JSONC and TOML with standard parsers, preserving comment

@@ -1,6 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import {
   type CanvasCommandMessage,
+  type CanvasStructureNode,
   type CanvasSuccessManifest,
   type CanvasTarget,
   createCanvasChildBridge,
@@ -321,6 +322,50 @@ test('parent controls copy reactive values before crossing the structured-clone 
       actions: ['undo', 'redo'],
     }),
   ]);
+});
+
+test('select and actions accept a Structure node and send only kind and target', () => {
+  const candidate = frame();
+  const bridge = createCanvasParentBridge({
+    manifest,
+    frame: candidate,
+    origin: 'https://cms.example',
+    contentVersion: () => 4,
+    currentTarget: () => target,
+    onCommand: vi.fn(),
+    listen: false,
+  });
+  bridge.receive(event(candidate, 'https://cms.example', ready));
+  const node: CanvasStructureNode = {
+    kind: 'block',
+    target,
+    id: 'hero-1',
+    label: 'Hero',
+    depth: 0,
+    position: 1,
+    setSize: 3,
+    occurrences: 1,
+  };
+
+  expect(bridge.select(node)).toBe(true);
+  expect(bridge.actions(node, ['delete'])).toBe(true);
+  expect(candidate.postMessage).toHaveBeenNthCalledWith(
+    1,
+    expect.objectContaining({
+      type: 'handover:canvas:select',
+      selection: { kind: 'block', target },
+    }),
+    'https://cms.example',
+  );
+  expect(candidate.postMessage).toHaveBeenNthCalledWith(
+    2,
+    expect.objectContaining({
+      type: 'handover:canvas:actions',
+      selection: { kind: 'block', target },
+      actions: ['delete'],
+    }),
+    'https://cms.example',
+  );
 });
 
 test('the child accepts a current parent selection and publishes validated navigation state', () => {
