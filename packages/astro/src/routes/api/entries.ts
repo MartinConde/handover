@@ -62,6 +62,7 @@ import { formSchema } from '../../index.js';
 import { entryProblems } from '../../problems.js';
 import { readJson } from './body.js';
 import {
+  codedError,
   entryFiles,
   entryLocales,
   entryPath,
@@ -922,14 +923,6 @@ export async function reconcile(
   return Response.json({});
 }
 
-const sourceAnswer = (
-  status: number,
-  code: string,
-  error: string,
-  more: Record<string, unknown> = {},
-) =>
-  Response.json({ code, error, ...more }, { status, headers: { 'x-handover-error-code': code } });
-
 /** Drafts only: the site and the build keep the old source until the entry publishes whole. */
 export async function changeEntrySource(
   ctx: RequestContext,
@@ -965,7 +958,7 @@ export async function changeEntrySource(
   if (!schema || !source) return entryNotFound();
   const to = body?.locale;
   if (typeof to !== 'string' || !config.i18n.locales.includes(to))
-    return sourceAnswer(
+    return codedError(
       400,
       'ENTRY_SOURCE_TARGET_UNDECLARED',
       `${String(to)} is not a language this site declares`,
@@ -973,14 +966,14 @@ export async function changeEntrySource(
   // Without one (the files disagree or name a language they cannot have) this is the recovery.
   const from = 'locale' in source ? source.locale : undefined;
   if (to === from)
-    return sourceAnswer(409, 'ENTRY_SOURCE_UNCHANGED', `This entry is already written in ${to}`);
+    return codedError(409, 'ENTRY_SOURCE_UNCHANGED', `This entry is already written in ${to}`);
   const files = localeData(loaded);
   const present = config.i18n.locales.filter((locale) => locale in files);
   // Off before missing: a language turned off has no file either, and "off" is why.
   if (!offeredIn(files[from ?? present[0] ?? ''], present).offered.includes(to))
-    return sourceAnswer(409, 'ENTRY_SOURCE_TARGET_OFF', `This entry is not offered in ${to}`);
+    return codedError(409, 'ENTRY_SOURCE_TARGET_OFF', `This entry is not offered in ${to}`);
   if (!(to in files))
-    return sourceAnswer(
+    return codedError(
       409,
       'ENTRY_SOURCE_TARGET_MISSING',
       `This entry has no ${to} file yet: create it before making it the source`,
@@ -990,7 +983,7 @@ export async function changeEntrySource(
     | Record<string, string>
     | undefined;
   const moved = () =>
-    sourceAnswer(
+    codedError(
       409,
       'ENTRY_SOURCE_REVISION',
       'This entry changed since it was opened. Reload it and choose again.',
@@ -1004,14 +997,14 @@ export async function changeEntrySource(
     return moved();
   const form = formFor(collection, slug);
   if (from !== undefined && driftReport('default', form, files).length)
-    return sourceAnswer(
+    return codedError(
       409,
       'ENTRY_SOURCE_DRIFT',
       "This entry's languages disagree about which blocks it has. Reconcile them first.",
     );
   const paths = from === undefined ? [] : sourceOnlyConflicts(form, files[from], files[to]);
   if (paths.length)
-    return sourceAnswer(
+    return codedError(
       409,
       'ENTRY_SOURCE_ONLY_CONFLICT',
       `The ${to} file has its own values in fields only the source keeps: clear them first`,
@@ -1024,7 +1017,7 @@ export async function changeEntrySource(
   });
   const problems = from === undefined ? [] : entryProblems(schema, changed[to]);
   if (problems.length)
-    return sourceAnswer(
+    return codedError(
       422,
       'ENTRY_SOURCE_TARGET_INVALID',
       `The ${to} file would not pass the site's checks as the source: fix it first`,

@@ -39,6 +39,7 @@ import {
 } from '@handover/core';
 import { entryProblems } from '../../problems.js';
 import {
+  codedError,
   ENTRY_FILE,
   entryLocales,
   entryPath,
@@ -485,12 +486,6 @@ async function refusedPaths(ctx: RequestContext, paths: string[]) {
   return { drifted, unresolved };
 }
 
-const refused = (status: number, code: string, error: string, paths?: string[]) =>
-  Response.json(
-    { code, error, ...(paths ? { paths } : {}) },
-    { status, headers: { 'x-handover-error-code': code } },
-  );
-
 const ENTRY_KEY = /^[\w-]+\/[\w-]+$/;
 const EXCLUSION = /^([\w-]+\/[\w-]+):([\w-]+)$/;
 
@@ -501,7 +496,7 @@ function selection(raw: string): { chosen?: string[]; without: string[] } | Resp
   try {
     body = JSON.parse(raw);
   } catch {
-    return refused(400, 'PUBLISH_SELECTION_INVALID', 'Invalid publish JSON');
+    return codedError(400, 'PUBLISH_SELECTION_INVALID', 'Invalid publish JSON');
   }
   const named = body && typeof body === 'object' && !Array.isArray(body) ? body : undefined;
   if (
@@ -511,7 +506,7 @@ function selection(raw: string): { chosen?: string[]; without: string[] } | Resp
     !Array.isArray(named.entries) ||
     named.entries.some((key: unknown) => typeof key !== 'string' || !ENTRY_KEY.test(key))
   )
-    return refused(400, 'PUBLISH_SELECTION_INVALID', 'Publish requires an array of entry keys');
+    return codedError(400, 'PUBLISH_SELECTION_INVALID', 'Publish requires an array of entry keys');
   const chosen = [...new Set(named.entries as string[])];
   const without = 'without' in named ? named.without : [];
   const bad = (item: unknown) => {
@@ -519,7 +514,7 @@ function selection(raw: string): { chosen?: string[]; without: string[] } | Resp
     return !chosen.includes(key) || !config.i18n.locales.includes(locale);
   };
   if (!Array.isArray(without) || without.some(bad))
-    return refused(
+    return codedError(
       400,
       'PUBLISH_SELECTION_INVALID',
       'without lists "collection/name:locale" items, each a declared language of an entry in entries',
@@ -588,11 +583,11 @@ async function resolveSelection(ctx: RequestContext, raw: string, readiness = fa
   const left = new Set(without.map(draftPath));
   const missing = [...left].filter((path) => !pending.some((row) => row.path === path));
   if (missing.length)
-    return refused(
+    return codedError(
       400,
       'PUBLISH_EXCLUDE_NOT_PENDING',
       `${missing.join(', ')} ${missing.length === 1 ? 'has' : 'have'} no unpublished changes to leave out`,
-      missing,
+      { paths: missing },
     );
   const keys = new Set(without.map((item) => item.split(':')[0] ?? ''));
   if (readiness && chosen)
@@ -612,23 +607,27 @@ async function resolveSelection(ctx: RequestContext, raw: string, readiness = fa
     const at = read.get(key);
     const why = at && whyKept(at, locale);
     if (why === 'published')
-      return refused(
+      return codedError(
         422,
         'PUBLISH_EXCLUDE_PUBLISHED',
         `${draftPath(item)} is already published; its languages publish together`,
-        [draftPath(item)],
+        { paths: [draftPath(item)] },
       );
     if (why === 'source')
-      return refused(
+      return codedError(
         422,
         'PUBLISH_EXCLUDE_SOURCE',
         `${draftPath(item)} is the language the entry is written in and publishes with it`,
-        [draftPath(item)],
+        { paths: [draftPath(item)] },
       );
   }
   const retained = pending.filter((row) => !left.has(row.path));
   if (left.size && !retained.length)
-    return refused(400, 'PUBLISH_EXCLUDE_ALL', 'Leaving these files out leaves nothing to publish');
+    return codedError(
+      400,
+      'PUBLISH_EXCLUDE_ALL',
+      'Leaving these files out leaves nothing to publish',
+    );
   return {
     chosen,
     head: without.length ? head : undefined,
@@ -768,13 +767,11 @@ export async function publish(
   );
   // The drawer's check says the same; a request that skips the drawer is held here.
   if (unresolved.length)
-    return Response.json(
-      {
-        code: 'PUBLISH_SOURCE_UNRESOLVED',
-        error: `${unresolved.join(', ')} belong to entries whose files disagree about the language they are written in — make their _source agree in the repository`,
-        paths: unresolved,
-      },
-      { status: 409, headers: { 'x-handover-error-code': 'PUBLISH_SOURCE_UNRESOLVED' } },
+    return codedError(
+      409,
+      'PUBLISH_SOURCE_UNRESOLVED',
+      `${unresolved.join(', ')} belong to entries whose files disagree about the language they are written in — make their _source agree in the repository`,
+      { paths: unresolved },
     );
   if (drifted.length) {
     return Response.json(

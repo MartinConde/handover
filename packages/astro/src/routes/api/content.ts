@@ -87,6 +87,15 @@ const SOURCE_PROBLEMS = {
   missing: 'ENTRY_SOURCE_MISSING',
 } as const;
 
+// The header carries the code too, so a client can branch on it without parsing the body.
+export const codedError = (
+  status: number,
+  code: string,
+  error: string,
+  more: Record<string, unknown> = {},
+) =>
+  Response.json({ code, error, ...more }, { status, headers: { 'x-handover-error-code': code } });
+
 /** Never promoted automatically: somebody has to say which language the entry is written in. */
 export function sourceRefusal(
   answer: Extract<EntrySource, { problem: string }>,
@@ -103,10 +112,7 @@ export function sourceRefusal(
       : answer.problem === 'undeclared'
         ? `This entry says it is written in ${named}, which the site does not declare`
         : `This entry says it is written in ${named}, which has no file`;
-  return Response.json(
-    { code, error, marks: answer.marks, files, offered },
-    { status: 409, headers: { 'x-handover-error-code': code } },
-  );
+  return codedError(409, code, error, { marks: answer.marks, files, offered });
 }
 
 /** Exact source bytes a translated save or provider request is based on. */
