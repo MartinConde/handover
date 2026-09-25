@@ -4,6 +4,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## Unreleased
 
+- Internal: a raw NUL byte in core's conflict resolver is written as `\u0000`, so git and grep
+  read the file as text.
 - `handover init` reads Wrangler JSONC and TOML with standard parsers, preserving comment
   characters inside quoted values and reporting invalid configuration before provisioning.
 - The published `astro-handover` package excludes route test fixtures. Core modules are
