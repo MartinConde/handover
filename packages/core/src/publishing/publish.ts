@@ -7,6 +7,8 @@ import { isLive } from '../content/reserved.js';
 import type { Form } from '../content/schema.js';
 import type { Db, Draft } from '../db.js';
 import { heldDrafts, pendingDrafts, SOURCE_CHANGE_REVISION } from '../drafts/drafts.js';
+import { activity, drafts, operations } from '../tables.js';
+import { blobSha, type GitClient, type PublishFile, RefMovedError } from './git.js';
 import {
   beginOperation,
   finalizeOperationStatement,
@@ -16,9 +18,7 @@ import {
   operationMessage,
   recentOperations,
   recoverOperationCommit,
-} from '../drafts/operations.js';
-import { activity, drafts, operations } from '../tables.js';
-import { blobSha, type GitClient, type PublishFile, RefMovedError } from './git.js';
+} from './operations.js';
 
 /** Picking a held entry releases its hold; the unit of selection is the entry, never the file. */
 export async function readyDrafts(

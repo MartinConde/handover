@@ -1,5 +1,5 @@
-import { operationMessage } from '../drafts/operations.js';
 import type { GitClient, PublishFile } from '../publishing/git.js';
+import { operationMessage } from '../publishing/operations.js';
 import { parseEntry, stringifyEntry } from './entry-format.js';
 import { withSlash } from './names.js';
 import { newId } from './reserved.js';

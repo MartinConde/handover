@@ -1,7 +1,7 @@
 import { and, desc, eq, ne } from 'drizzle-orm';
 import type { Db } from '../db.js';
-import { type GitClient, RefMovedError } from '../publishing/git.js';
 import { operations } from '../tables.js';
+import { type GitClient, RefMovedError } from './git.js';
 
 export type Operation = typeof operations.$inferSelect;
 

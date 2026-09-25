@@ -10,10 +10,14 @@ import {
   PATH,
   VALUES,
 } from '../db.fixtures.js';
+import {
+  beginOperation,
+  finalizeOperation,
+  markOperationCommitted,
+} from '../publishing/operations.js';
 import * as tables from '../tables.js';
 import { drafts } from '../tables.js';
 import { createDraft, loadDraft } from './drafts.js';
-import { beginOperation, finalizeOperation, markOperationCommitted } from './operations.js';
 
 const mf = newTestD1();
 let binding: Awaited<ReturnType<Miniflare['getD1Database']>>;

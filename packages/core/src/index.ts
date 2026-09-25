@@ -100,7 +100,6 @@ export {
   redirectsText,
 } from './content/redirects.js';
 export { filterLive, isLive, newId, regenerateIds } from './content/reserved.js';
-export type { Answer, MergedChange, Question, ThreeWay } from './content/resolve.js';
 export type { RichtextTier } from './content/richtext.js';
 export {
   renderRichtext,
@@ -182,15 +181,6 @@ export {
   setEntryLocales,
   setEntryStatus,
 } from './drafts/drafts.js';
-export type { EntryLocation } from './drafts/lifecycle.js';
-export {
-  deleteEntry,
-  deleteLocales,
-  duplicateEntry,
-  RenameCollisionError,
-  renamedFrom,
-  renameEntry,
-} from './drafts/lifecycle.js';
 export type { Lock } from './drafts/locks.js';
 export {
   claimLock,
@@ -203,19 +193,9 @@ export {
   releaseLocks,
   takeLock,
 } from './drafts/locks.js';
-export type { Operation, OperationIntent } from './drafts/operations.js';
-export {
-  beginOperation,
-  finalizeOperation,
-  findOperation,
-  markOperationCommitted,
-  OperationFinalizationError,
-  operationMessage,
-  recentOperations,
-  recoverOperationCommit,
-} from './drafts/operations.js';
 export type { PathReservation } from './drafts/paths.js';
 export { releaseOperationPaths, releasePaths, reservePaths } from './drafts/paths.js';
+export type { Answer, MergedChange, Question, ThreeWay } from './drafts/resolve.js';
 export type { AccountFacts, Auth, AuthConfig, Member, MemberApi, Role } from './identity/auth.js';
 export {
   AUTH_BASE_PATH,
@@ -317,6 +297,26 @@ export {
   RefMovedError,
   RepoUnreachableError,
 } from './publishing/git.js';
+export type { EntryLocation } from './publishing/lifecycle.js';
+export {
+  deleteEntry,
+  deleteLocales,
+  duplicateEntry,
+  RenameCollisionError,
+  renamedFrom,
+  renameEntry,
+} from './publishing/lifecycle.js';
+export type { Operation, OperationIntent } from './publishing/operations.js';
+export {
+  beginOperation,
+  finalizeOperation,
+  findOperation,
+  markOperationCommitted,
+  OperationFinalizationError,
+  operationMessage,
+  recentOperations,
+  recoverOperationCommit,
+} from './publishing/operations.js';
 export type { SourceOf } from './publishing/publish.js';
 export {
   CommitScopeError,

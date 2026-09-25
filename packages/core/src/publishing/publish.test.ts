@@ -45,15 +45,15 @@ import {
   setEntryAddress,
   setEntryStatus,
 } from '../drafts/drafts.js';
+import * as tables from '../tables.js';
+import { drafts } from '../tables.js';
+import { blobSha, RefMovedError } from './git.js';
 import {
   beginOperation,
   OperationFinalizationError,
   operationMessage,
   recoverOperationCommit,
-} from '../drafts/operations.js';
-import * as tables from '../tables.js';
-import { drafts } from '../tables.js';
-import { blobSha, RefMovedError } from './git.js';
+} from './operations.js';
 import { commitScope, DraftConflictError, publishDrafts, readyDrafts } from './publish.js';
 
 const mf = newTestD1();

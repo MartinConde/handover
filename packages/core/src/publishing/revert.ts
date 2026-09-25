@@ -4,6 +4,8 @@ import { parseEntry, stringifyEntry, writtenEntry } from '../content/entry-forma
 import { REDIRECTS, type RedirectRule } from '../content/redirects.js';
 import { chunksOf, D1_MAX_BOUND_PARAMETERS, type Db, type Draft } from '../db.js';
 import { keptSource, loadDraft, nextRevision } from '../drafts/drafts.js';
+import { drafts, locks } from '../tables.js';
+import { blobSha, type GitClient, type PublishFile } from './git.js';
 import {
   beginOperation,
   finalizeOperationStatement,
@@ -12,9 +14,7 @@ import {
   OperationFinalizationError,
   operationMessage,
   recoverOperationCommit,
-} from '../drafts/operations.js';
-import { drafts, locks } from '../tables.js';
-import { blobSha, type GitClient, type PublishFile } from './git.js';
+} from './operations.js';
 import { CommitScopeError, commitScope } from './publish.js';
 
 /** A file the revert would write has changed since the commit it is undoing. */

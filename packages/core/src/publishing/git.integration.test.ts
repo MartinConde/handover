@@ -7,9 +7,9 @@ import type { Form } from '../content/schema.js';
 import { openDb } from '../db.js';
 import { entryConflict, resolveConflict } from '../drafts/conflicts.js';
 import { loadDraft, pendingDrafts, saveDraft } from '../drafts/drafts.js';
-import { deleteEntry, renameEntry } from '../drafts/lifecycle.js';
 import * as tables from '../tables.js';
 import { createGitClient, type GitClient, RefMovedError } from './git.js';
+import { deleteEntry, renameEntry } from './lifecycle.js';
 import { DraftConflictError, publishDrafts } from './publish.js';
 
 // Opt-in: needs a real GitHub App installed on the throwaway repo, see .env.test.example.

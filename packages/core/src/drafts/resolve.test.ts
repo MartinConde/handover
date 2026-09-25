@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
+import type { Form } from '../content/schema.js';
 import { applyResolution, conflictReport } from './resolve.js';
-import type { Form } from './schema.js';
 
 // The same listing the diff is read on: a shared price, a summary in each language's own words.
 const listing: Form = {

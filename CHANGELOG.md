@@ -13,6 +13,8 @@ Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Internal: the dated September security review is removed from the repository.
 - Internal: core's D1 chunking helpers live in `db.ts`, and the schema-version tests sit with
   the table tests.
+- Internal: core's operation records and entry rename, delete and duplicate moved to
+  `publishing/`, and the conflict resolver to `drafts/`.
 - `handover init` reads Wrangler JSONC and TOML with standard parsers, preserving comment
   characters inside quoted values and reporting invalid configuration before provisioning.
 - The published `astro-handover` package excludes route test fixtures. Core modules are

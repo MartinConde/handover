@@ -1,6 +1,11 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { parseEntry, stringifyEntry, writtenEntry } from '../content/entry-format.js';
 import { applyDrift, type DriftChoice } from '../content/locale-sync.js';
+import type { Form } from '../content/schema.js';
+import type { Db } from '../db.js';
+import { blobSha, type GitClient } from '../publishing/git.js';
+import { drafts } from '../tables.js';
+import { availableContents, load, loadDraft, nextRevision, stampOf, upsert } from './drafts.js';
 import {
   type Answer,
   applyResolution,
@@ -8,12 +13,7 @@ import {
   type MergedChange,
   type Question,
   type ThreeWay,
-} from '../content/resolve.js';
-import type { Form } from '../content/schema.js';
-import type { Db } from '../db.js';
-import { blobSha, type GitClient } from '../publishing/git.js';
-import { drafts } from '../tables.js';
-import { availableContents, load, loadDraft, nextRevision, stampOf, upsert } from './drafts.js';
+} from './resolve.js';
 
 /** One entry's conflict as it was read: the three sides, and the questions they raise. */
 export interface EntryConflict {

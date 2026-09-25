@@ -3,7 +3,7 @@ import { offeredEntry, parseEntry, stringifyEntry, writtenEntry } from '../conte
 import { entryAddress, entryUrl, type I18nRouting } from '../content/names.js';
 import { appendRedirects, type RedirectRule, redirectRule } from '../content/redirects.js';
 import { regenerateIds } from '../content/reserved.js';
-import type { GitClient, PublishFile } from '../publishing/git.js';
+import type { GitClient, PublishFile } from './git.js';
 import { operationMessage } from './operations.js';
 
 export interface EntryLocation {

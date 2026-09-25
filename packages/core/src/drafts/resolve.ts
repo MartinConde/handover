@@ -1,7 +1,7 @@
-import { type Change, type DiffGroup, diffEntry, joinedName, rowAddress } from './diff.js';
-import { isObject, rowKey, TRANSLATED_PROPS } from './entry-format.js';
-import { type Field, type Form, rowFields } from './schema.js';
-import type { Labels } from './ui-locale.js';
+import { type Change, type DiffGroup, diffEntry, joinedName, rowAddress } from '../content/diff.js';
+import { isObject, rowKey, TRANSLATED_PROPS } from '../content/entry-format.js';
+import { type Field, type Form, rowFields } from '../content/schema.js';
+import type { Labels } from '../content/ui-locale.js';
 
 /** One file of an entry as the three sides have it: what it was, what we wrote, what is in git. */
 export interface ThreeWay {
