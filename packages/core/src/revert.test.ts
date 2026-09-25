@@ -2,6 +2,7 @@ import type { Miniflare } from 'miniflare';
 import { beforeAll, expect, test } from 'vitest';
 import { logActivity } from './activity.js';
 import {
+  afterRead,
   draftDb,
   FILE,
   fakeHistory,
@@ -18,7 +19,14 @@ import {
   seedPublishedRows,
   VALUES,
 } from './db.fixtures.js';
-import { createDraft, pendingDrafts, recordDelete, recordOffer, saveDraft } from './db.js';
+import {
+  createDraft,
+  loadDraft,
+  pendingDrafts,
+  recordDelete,
+  recordOffer,
+  saveDraft,
+} from './db.js';
 import { entryKey } from './entries.js';
 import { offeredEntry, parseEntry, stringifyEntry } from './entry-format.js';
 import { claimLock } from './locks.js';
@@ -329,4 +337,69 @@ test('a row that says a path has gone is not cleared by the build going live', a
 
   expect(await clearPublished('default', db, 'commit-9')).toEqual([]);
   expect((await only(db))?.path).toBe(PATH);
+});
+
+test('cleanup rechecks the revision when a newer save arrives after selecting candidates', async () => {
+  const db = await fresh(),
+    repo = fakeHistory({ [PATH]: FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  const published = await publishDrafts('default', db, repo);
+  const raced = afterRead(
+    binding,
+    (q) => q.includes('from "locks"'),
+    async () => {
+      await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 5 });
+    },
+  );
+  await clearPublished('default', raced, published?.commit_sha ?? '');
+  expect((await loadDraft('default', db, PATH))?.contents).toContain('rooms: 5');
+  expect((await loadDraft('default', db, PATH))?.publishedSha).toBeNull();
+});
+
+test('cleanup rechecks a lock acquired after its lock read', async () => {
+  const db = await fresh(),
+    repo = fakeHistory({ [PATH]: FILE });
+  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
+  const published = await publishDrafts('default', db, repo);
+  const raced = afterRead(
+    binding,
+    (q) => q.includes('from "locks"'),
+    async () => {
+      await claimLock('default', db, 'listings/mill-house', 'editing', 'tab');
+    },
+  );
+  await clearPublished('default', raced, published?.commit_sha ?? '');
+  expect(await loadDraft('default', db, PATH)).toBeDefined();
+  await db.delete(tables.locks);
+});
+
+test('chunked cleanup preserves a newer save and lock that arrive between chunks', async () => {
+  const db = await fresh();
+  const { publishedSha } = await seedPublishedRows(db, 20);
+  let savedPath = '';
+  let lockedPath = '';
+  const raced = afterRead(
+    binding,
+    (q) => q.startsWith('delete from "drafts"'),
+    async () => {
+      const remaining = await db.select({ path: drafts.path }).from(drafts);
+      savedPath = remaining[0]?.path ?? '';
+      lockedPath = remaining.find((row) => entryKey(row.path) !== entryKey(savedPath))?.path ?? '';
+      if (!savedPath || !lockedPath) throw new Error('Expected a second cleanup chunk');
+      await binding
+        .prepare(
+          `UPDATE drafts SET revision = 'newer-save', contents = '_version: 1\ntitle: "Newer"\n', published_sha = NULL WHERE site_id = 'default' AND path = ?`,
+        )
+        .bind(savedPath)
+        .run();
+      await claimLock('default', db, entryKey(lockedPath) ?? '', 'editing', 'tab');
+    },
+  );
+
+  const removed = await clearPublished('default', raced, publishedSha);
+
+  expect(removed).toHaveLength(18);
+  expect((await loadDraft('default', db, savedPath))?.revision).toBe('newer-save');
+  expect(await loadDraft('default', db, lockedPath)).toBeDefined();
+  await db.delete(tables.locks);
 });

@@ -2,6 +2,7 @@ import type { Miniflare } from 'miniflare';
 import { beforeAll, expect, test } from 'vitest';
 import {
   ADDRESSED,
+  afterRead,
   BLOB,
   bilingual,
   block,
@@ -33,7 +34,6 @@ import {
   RENAMED,
   ruleFor,
   SYNC,
-  seedPublishedRows,
   VALUES,
 } from './db.fixtures.js';
 import {
@@ -59,16 +59,13 @@ import {
   setEntryStatus,
   sweepOrphans,
 } from './db.js';
-import { entryKey } from './entries.js';
 import { parseEntry } from './entry-format.js';
 import { blobSha } from './git.js';
 import type { RedirectRule } from './lifecycle.js';
 import { driftReport } from './locale-sync.js';
 import { claimLock } from './locks.js';
 import { publishDrafts } from './publish.js';
-import { clearPublished } from './revert.js';
 import type { Form } from './schema.js';
-import * as tables from './tables.js';
 import { drafts } from './tables.js';
 
 const mf = newTestD1();
@@ -1281,107 +1278,11 @@ test('who typed each draft is read path by path, and a row nobody signed for is 
   expect(await draftEditors('default', db)).toEqual({ [PATH]: 'Anna Berg' });
 });
 
-/** Pause a real D1 read after it completes; subsequent SQL still runs against the same DB. */
-function afterRead(match: (query: string) => boolean, work: () => Promise<void>) {
-  let waiting = true;
-  const wrapped = new Proxy(binding, {
-    get(target, key) {
-      if (key !== 'prepare') {
-        const value = Reflect.get(target, key, target);
-        return typeof value === 'function' ? value.bind(target) : value;
-      }
-      return (query: string) => {
-        const wrap = (
-          statement: ReturnType<typeof binding.prepare>,
-        ): ReturnType<typeof binding.prepare> =>
-          new Proxy(statement, {
-            get(stmt, method) {
-              if (method === 'bind') return (...args: unknown[]) => wrap(stmt.bind(...args));
-              const value = Reflect.get(stmt, method, stmt);
-              if (typeof value !== 'function') return value;
-              return async (...args: unknown[]) => {
-                const result = await value.apply(stmt, args);
-                if (waiting && match(query) && (method === 'raw' || method === 'all')) {
-                  waiting = false;
-                  await work();
-                }
-                return result;
-              };
-            },
-          });
-        return wrap(target.prepare(query));
-      };
-    },
-  });
-  return openDb('default', wrapped);
-}
-
-test('cleanup rechecks the revision when a newer save arrives after selecting candidates', async () => {
-  const db = await fresh(),
-    repo = fakeHistory({ [PATH]: FILE });
-  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
-  const published = await publishDrafts('default', db, repo);
-  const raced = afterRead(
-    (q) => q.includes('from "locks"'),
-    async () => {
-      await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 5 });
-    },
-  );
-  await clearPublished('default', raced, published?.commit_sha ?? '');
-  expect((await loadDraft('default', db, PATH))?.contents).toContain('rooms: 5');
-  expect((await loadDraft('default', db, PATH))?.publishedSha).toBeNull();
-});
-
-test('cleanup rechecks a lock acquired after its lock read', async () => {
-  const db = await fresh(),
-    repo = fakeHistory({ [PATH]: FILE });
-  await saveDraft('default', db, repo, PATH, { ...VALUES, rooms: 4 });
-  const published = await publishDrafts('default', db, repo);
-  const raced = afterRead(
-    (q) => q.includes('from "locks"'),
-    async () => {
-      await claimLock('default', db, 'listings/mill-house', 'editing', 'tab');
-    },
-  );
-  await clearPublished('default', raced, published?.commit_sha ?? '');
-  expect(await loadDraft('default', db, PATH)).toBeDefined();
-  await db.delete(tables.locks);
-});
-
-test('chunked cleanup preserves a newer save and lock that arrive between chunks', async () => {
-  const db = await fresh();
-  const { publishedSha } = await seedPublishedRows(db, 20);
-  let savedPath = '';
-  let lockedPath = '';
-  const raced = afterRead(
-    (q) => q.startsWith('delete from "drafts"'),
-    async () => {
-      const remaining = await db.select({ path: drafts.path }).from(drafts);
-      savedPath = remaining[0]?.path ?? '';
-      lockedPath = remaining.find((row) => entryKey(row.path) !== entryKey(savedPath))?.path ?? '';
-      if (!savedPath || !lockedPath) throw new Error('Expected a second cleanup chunk');
-      await binding
-        .prepare(
-          `UPDATE drafts SET revision = 'newer-save', contents = '_version: 1\ntitle: "Newer"\n', published_sha = NULL WHERE site_id = 'default' AND path = ?`,
-        )
-        .bind(savedPath)
-        .run();
-      await claimLock('default', db, entryKey(lockedPath) ?? '', 'editing', 'tab');
-    },
-  );
-
-  const removed = await clearPublished('default', raced, publishedSha);
-
-  expect(removed).toHaveLength(18);
-  expect((await loadDraft('default', db, savedPath))?.revision).toBe('newer-save');
-  expect(await loadDraft('default', db, lockedPath)).toBeDefined();
-  await db.delete(tables.locks);
-});
-
 test('overlay cleanup cannot delete a recreated entry after reading its deletion marker', async () => {
   const db = await fresh();
   await recordDelete('default', db, PATH, 'removed');
   const raced = afterRead(
+    binding,
     (q) => q.includes('from "drafts"'),
     async () => {
       await createDraft('default', db, git, PATH, { title: 'Recreated' });

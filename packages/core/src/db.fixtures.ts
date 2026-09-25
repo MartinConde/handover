@@ -283,3 +283,42 @@ export async function seedPublishedRows(db: ReturnType<typeof openDb>, count: nu
 
 export const MILL_DE_FILE =
   '_version: 1\ntitle: "Die Muehle"\nprice: "950 GBP pro Woche"\nrooms: 3\n';
+
+/** Pause a real D1 read after it completes; subsequent SQL still runs against the same DB. */
+export function afterRead(
+  binding: Awaited<ReturnType<Miniflare['getD1Database']>>,
+  match: (query: string) => boolean,
+  work: () => Promise<void>,
+) {
+  let waiting = true;
+  const wrapped = new Proxy(binding, {
+    get(target, key) {
+      if (key !== 'prepare') {
+        const value = Reflect.get(target, key, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      }
+      return (query: string) => {
+        const wrap = (
+          statement: ReturnType<typeof binding.prepare>,
+        ): ReturnType<typeof binding.prepare> =>
+          new Proxy(statement, {
+            get(stmt, method) {
+              if (method === 'bind') return (...args: unknown[]) => wrap(stmt.bind(...args));
+              const value = Reflect.get(stmt, method, stmt);
+              if (typeof value !== 'function') return value;
+              return async (...args: unknown[]) => {
+                const result = await value.apply(stmt, args);
+                if (waiting && match(query) && (method === 'raw' || method === 'all')) {
+                  waiting = false;
+                  await work();
+                }
+                return result;
+              };
+            },
+          });
+        return wrap(target.prepare(query));
+      };
+    },
+  });
+  return openDb('default', wrapped);
+}
